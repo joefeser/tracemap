@@ -200,6 +200,38 @@ public sealed class PortablePdbExtractorTests
     }
 
     [Fact]
+    public void Source_checksum_index_observes_scan_cancellation_before_hashing()
+    {
+        var fixture = Fixture("csharp", "CompiledEvidence.CSharp");
+        using var temp = new TempDirectory();
+        var receipt = Path.Combine(temp.Path, "binding.json");
+        WriteBoundReceipt(fixture.Source, fixture.Assembly, receipt);
+        var options = new ScanOptions(
+            fixture.Source,
+            TempOutput(),
+            CompiledInputPaths: [fixture.Assembly],
+            CompiledBindingReceiptPaths: [receipt],
+            PdbInputPaths: [fixture.Pdb]);
+        var baseline = Scan(options);
+        var compiledEvaluation = ManagedMetadataExtractor.Evaluate(fixture.Source, baseline.Manifest.CommitSha, options);
+        var pdbEvaluation = PortablePdbExtractor.Evaluate(fixture.Source, options, compiledEvaluation);
+        var compiledFacts = ManagedMetadataExtractor.MaterializeFacts(baseline.Manifest, compiledEvaluation);
+        var sourcePath = Path.Combine(fixture.Source, "FixtureShapes.cs");
+        var inventory = new[]
+        {
+            new FileInventoryItem("FixtureShapes.cs", "CSharp", new FileInfo(sourcePath).Length)
+        };
+
+        Assert.Throws<OperationCanceledException>(() => PortablePdbExtractor.MaterializeFacts(
+            fixture.Source,
+            baseline.Manifest,
+            pdbEvaluation,
+            compiledFacts,
+            inventory,
+            new CancellationToken(canceled: true)));
+    }
+
+    [Fact]
     public void Pdb_expected_inputs_and_outcomes_remain_within_the_published_artifact_bound()
     {
         var fixture = Fixture("csharp", "CompiledEvidence.CSharp");

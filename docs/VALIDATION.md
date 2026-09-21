@@ -2525,8 +2525,10 @@ Task 9 activates `dotnet.compiled.pdb-input.v1`,
 candidate explicitly with `--pdb-input`; the scanner applies the positive
 artifact, byte, document, method, sequence-point, source-file, source-byte,
 text, and total reconciliation-work limits controlled by the `--pdb-max-*`
-options. Source files are streamed once into reusable SHA-1/SHA-256 indexes;
-they are never reread once per PDB document. The manifest and execution
+options. Every SRM and Cecil method-row inspection and retained sequence point
+is charged before work proceeds. Source files are streamed once into reusable
+SHA-1/SHA-256 indexes, poll scan cancellation during file reads, and are never
+reread once per PDB document. The manifest and execution
 receipt retain `pdb-input-provenance.v1`, including the exact generator SHA-256,
 canonical bounded-input SHA-256, safe locators, effective limits, per-input
 outcomes, omissions, and coverage state. They also retain the bounded

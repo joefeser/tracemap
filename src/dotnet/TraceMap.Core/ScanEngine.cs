@@ -715,7 +715,7 @@ public static class ScanEngine
 
         var compiledFacts = ManagedMetadataExtractor.MaterializeFacts(manifest, compiledEvaluation);
         facts.AddRange(compiledFacts);
-        facts.AddRange(PortablePdbExtractor.MaterializeFacts(repoPath, manifest, pdbEvaluation, compiledFacts, inventory));
+        facts.AddRange(PortablePdbExtractor.MaterializeFacts(repoPath, manifest, pdbEvaluation, compiledFacts, inventory, cancellationToken));
 
         foreach (var item in inventory)
         {

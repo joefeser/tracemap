@@ -134,8 +134,8 @@ internal static class PortablePdbExtractor
                     continue;
                 }
 
-                var observations = ReadPortablePdb(reader, contentIdentity, limits, workBudget);
-                var cecilShapes = ReadCecilShapes(match.Bytes, bytes, workBudget);
+                var observations = ReadPortablePdb(reader, contentIdentity, limits, workBudget, cancellationToken);
+                var cecilShapes = ReadCecilShapes(match.Bytes, bytes, workBudget, cancellationToken);
                 var srmShapes = CanonicalShapes(observations.Documents, observations.Methods);
                 if (!cecilShapes.SequenceEqual(srmShapes, StringComparer.Ordinal))
                 {
@@ -227,11 +227,18 @@ internal static class PortablePdbExtractor
         ScanManifest manifest,
         PdbInputEvaluation evaluation,
         IReadOnlyList<CodeFact> compiledFacts,
-        IReadOnlyList<FileInventoryItem> inventory)
+        IReadOnlyList<FileInventoryItem> inventory,
+        CancellationToken cancellationToken = default)
     {
         if (evaluation.Provenance is null)
             return [];
-        var sourceIndex = BuildSourceChecksumIndex(repoPath, inventory, evaluation.Inputs, evaluation.Provenance.EffectiveLimits, evaluation.ConsumedWorkUnits);
+        var sourceIndex = BuildSourceChecksumIndex(
+            repoPath,
+            inventory,
+            evaluation.Inputs,
+            evaluation.Provenance.EffectiveLimits,
+            evaluation.ConsumedWorkUnits,
+            cancellationToken);
         var plans = evaluation.Inputs.Select(input =>
         {
             var sourceMatches = MatchSourceDocuments(sourceIndex, input.Documents);
@@ -554,13 +561,15 @@ internal static class PortablePdbExtractor
         MetadataReader reader,
         string contentIdentity,
         PdbInputLimits limits,
-        PdbWorkBudget workBudget)
+        PdbWorkBudget workBudget,
+        CancellationToken cancellationToken)
     {
         if (reader.Documents.Count > limits.MaxDocumentCount)
             throw new PdbInputException("PdbDocumentCountExceeded");
         var documents = new List<PdbDocumentObservation>();
         foreach (var handle in reader.Documents)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             workBudget.Consume("PdbInputTotalWorkLimitExceeded");
             var document = reader.GetDocument(handle);
             var rowId = MetadataTokens.GetRowNumber(handle);
@@ -579,6 +588,8 @@ internal static class PortablePdbExtractor
         var documentRows = documents.Select(item => item.RowId).ToHashSet();
         for (var rowId = 1; rowId <= reader.MethodDebugInformation.Count; rowId++)
         {
+            cancellationToken.ThrowIfCancellationRequested();
+            workBudget.Consume("PdbInputTotalWorkLimitExceeded");
             var handle = MetadataTokens.MethodDebugInformationHandle(rowId);
             var information = reader.GetMethodDebugInformation(handle);
             var methodIdentity = $"pdb:format:portable|id:{contentIdentity}|method:{rowId.ToString(CultureInfo.InvariantCulture)}";
@@ -591,8 +602,8 @@ internal static class PortablePdbExtractor
                 {
                     if (methods.Count >= limits.MaxMethodCount)
                         throw new PdbInputException("PdbMethodCountExceeded");
-                    workBudget.Consume("PdbInputTotalWorkLimitExceeded");
                 }
+                cancellationToken.ThrowIfCancellationRequested();
                 if (++sequencePointCount > limits.MaxSequencePointCount)
                     throw new PdbInputException("PdbSequencePointCountExceeded");
                 workBudget.Consume("PdbInputTotalWorkLimitExceeded");
@@ -621,7 +632,11 @@ internal static class PortablePdbExtractor
         return (documents, methods);
     }
 
-    private static IReadOnlyList<string> ReadCecilShapes(byte[] peBytes, byte[] pdbBytes, PdbWorkBudget workBudget)
+    private static IReadOnlyList<string> ReadCecilShapes(
+        byte[] peBytes,
+        byte[] pdbBytes,
+        PdbWorkBudget workBudget,
+        CancellationToken cancellationToken)
     {
         using var peStream = new MemoryStream(peBytes, writable: false);
         using var pdbStream = new MemoryStream(pdbBytes, writable: false);
@@ -636,12 +651,16 @@ internal static class PortablePdbExtractor
             AssemblyResolver = resolver
         });
         var shapes = new List<string>();
-        foreach (var method in AllTypes(module.Types).SelectMany(type => type.Methods).Where(method => method.DebugInformation.HasSequencePoints))
+        foreach (var method in AllTypes(module.Types).SelectMany(type => type.Methods))
         {
+            cancellationToken.ThrowIfCancellationRequested();
             workBudget.Consume("PdbInputTotalWorkLimitExceeded");
+            if (!method.DebugInformation.HasSequencePoints)
+                continue;
             var ordinal = 0;
             foreach (var point in method.DebugInformation.SequencePoints)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 workBudget.Consume("PdbInputTotalWorkLimitExceeded");
                 var checksum = point.Document.Hash is { Length: > 0 } ? Convert.ToHexString(point.Document.Hash).ToLowerInvariant() : string.Empty;
                 shapes.Add(Shape(
@@ -734,7 +753,8 @@ internal static class PortablePdbExtractor
         IReadOnlyList<FileInventoryItem> inventory,
         IReadOnlyList<EvaluatedPdbInput> inputs,
         PdbInputLimits limits,
-        long consumedWorkUnits)
+        long consumedWorkUnits,
+        CancellationToken cancellationToken)
     {
         var algorithms = inputs.Where(input => input.Outcome.Outcome == "admitted")
             .SelectMany(input => input.Documents)
@@ -755,6 +775,7 @@ internal static class PortablePdbExtractor
         long totalBytes = 0;
         foreach (var source in sources)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             if (source.SizeBytes > limits.MaxSourceFileSizeBytes)
                 return SourceChecksumIndex.Gap("PdbSourceFileSizeExceeded");
             try
@@ -777,6 +798,7 @@ internal static class PortablePdbExtractor
         long actualTotalBytes = 0;
         foreach (var source in sources)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var path = Path.Combine(repoPath, source.RelativePath.Replace('/', Path.DirectorySeparatorChar));
             try
             {
@@ -789,6 +811,7 @@ internal static class PortablePdbExtractor
                 int read;
                 while ((read = stream.Read(buffer, 0, buffer.Length)) != 0)
                 {
+                    cancellationToken.ThrowIfCancellationRequested();
                     actualFileBytes = checked(actualFileBytes + read);
                     actualTotalBytes = checked(actualTotalBytes + read);
                     if (actualFileBytes > limits.MaxSourceFileSizeBytes)

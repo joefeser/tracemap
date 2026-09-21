@@ -269,12 +269,12 @@ build validation, or C++/CLI.
 
 Final local macOS Task 9 validation on 2026-09-20:
 
-- focused `PortablePdbExtractorTests`: 24 passed, zero failed, zero skipped;
+- focused `PortablePdbExtractorTests`: 25 passed, zero failed, zero skipped;
 - combined PDB, source/metadata reconciliation, managed metadata, and receipt
-  contract filter: 84 passed, zero failed, zero skipped;
+  contract filter: 85 passed, zero failed, zero skipped;
 - `dotnet build src/dotnet/TraceMap.sln --no-restore`: passed with zero warnings
   and zero errors;
-- `dotnet test src/dotnet/TraceMap.sln --no-restore`: 2,025 passed, zero failed,
+- `dotnet test src/dotnet/TraceMap.sln --no-restore`: 2,026 passed, zero failed,
   zero skipped;
 - two bound C# CLI scans emitted all five required scan artifacts plus the
   execution receipt; `facts.ndjson` and `report.md` were byte-identical, PDB
@@ -292,7 +292,9 @@ dependency inputs. Sibling hardening adds streaming single-pass source checksum
 indexes with explicit file/byte/work bounds, incremental SRM and Cecil work
 accounting, exact native MSF classification, bounded expected-input receipts,
 source-snapshot-bound endpoint summaries with direct file/line/commit context,
-and zero sequence-point facts without a one-candidate metadata-method edge.
+zero sequence-point facts without a one-candidate metadata-method edge, work
+charges for every SRM/Cecil method-row inspection, and cancellation polling
+through source checksum streaming.
 
 PR #774 implementation-head CI at
 `34ded8aef9b60b6f7db225d1c8af5df6b96ea159`
