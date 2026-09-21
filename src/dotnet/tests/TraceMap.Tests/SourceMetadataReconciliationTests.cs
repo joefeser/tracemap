@@ -41,7 +41,10 @@ public sealed class SourceMetadataReconciliationTests
                      "CS-RECON-DECIMAL-SCOPE-010",
                      "CS-RECON-CONSTRUCTED-NESTED-011",
                      "CS-RECON-DATETIME-SCOPE-012",
-                     "CS-RECON-NONGENERIC-NESTED-013"
+                     "CS-RECON-NONGENERIC-NESTED-013",
+                     "CS-RECON-PRIMARY-CONSTRUCTOR-014",
+                     "CS-RECON-REF-FIELD-015",
+                     "CS-RECON-TYPEDREFERENCE-016"
                  })
         {
             var expected = ReadCase(caseId);
@@ -255,6 +258,46 @@ public sealed class SourceMetadataReconciliationTests
 
         Assert.NotEmpty(candidates);
         Assert.DoesNotContain(candidates, candidate => candidate.RelationshipProof == "syntax-located-unresolved-declaration");
+    }
+
+    [Theory]
+    [InlineData("public class Primary(int value) { }")]
+    [InlineData("public struct Primary(int value) { }")]
+    [InlineData("public record class Primary(int value);")]
+    [InlineData("public record struct Primary(int value);")]
+    public void Csharp_primary_constructor_declaration_matrix_collects_complete_constructor_identity(string declaration)
+    {
+        var candidates = CollectCsharpCandidates(declaration);
+
+        var constructor = Assert.Single(candidates, candidate => candidate.RelationshipProof == "roslyn-primary-constructor");
+        Assert.Equal("constructor", constructor.MemberKind);
+        Assert.Null(constructor.IncompleteReason);
+        Assert.Contains("|constructor:5:.ctor|", constructor.MetadataIdentity, StringComparison.Ordinal);
+        Assert.Contains("names:5:Int32", constructor.MetadataIdentity, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Csharp_field_signature_matrix_encodes_plain_ref_and_fails_closed_for_custom_modifier()
+    {
+        var candidates = CollectCsharpCandidates("""
+            public ref struct Holder
+            {
+                private ref int writable;
+                private volatile int guarded;
+                public Holder(ref int value)
+                {
+                    writable = ref value;
+                }
+            }
+            """);
+
+        var writable = Assert.Single(candidates, candidate => candidate.SourceDeclarationIdentity.Contains("writable", StringComparison.Ordinal));
+        Assert.Null(writable.IncompleteReason);
+        Assert.EndsWith("names:5:Int32)&", writable.MetadataIdentity, StringComparison.Ordinal);
+
+        var guarded = Assert.Single(candidates, candidate => candidate.SourceDeclarationIdentity.Contains("guarded", StringComparison.Ordinal));
+        Assert.Null(guarded.MetadataIdentity);
+        Assert.Equal("SourceCustomModifierIdentityUnsupported", guarded.IncompleteReason);
     }
 
     [Fact]
@@ -487,6 +530,30 @@ public sealed class SourceMetadataReconciliationTests
             current = Directory.GetParent(current)?.FullName;
         }
         throw new InvalidOperationException("Repository root not found.");
+    }
+
+    private static IReadOnlyList<SourceMetadataIdentityCandidate> CollectCsharpCandidates(string declaration)
+    {
+        var source = $"""
+            [assembly:System.Runtime.Versioning.TargetFramework(".NETCoreApp,Version=v10.0")]
+            namespace Fixture;
+            {declaration}
+            """;
+        var tree = CSharpSyntaxTree.ParseText(source, new CSharpParseOptions(LanguageVersion.Preview));
+        var compilation = CSharpCompilation.Create(
+            "DeclarationMatrixFixture",
+            [tree],
+            [MetadataReference.CreateFromFile(typeof(object).Assembly.Location)],
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true));
+        var candidates = new List<SourceMetadataIdentityCandidate>();
+        SourceMetadataIdentityCollector.Collect(
+            tree.GetRoot(),
+            compilation.GetSemanticModel(tree, ignoreAccessibility: true),
+            "Fixture.csproj",
+            "Fixture.cs",
+            LanguageNames.CSharp,
+            candidates);
+        return candidates;
     }
 
     private static (string? SourceIdentity, string MetadataIdentity) ReadCase(string caseId)

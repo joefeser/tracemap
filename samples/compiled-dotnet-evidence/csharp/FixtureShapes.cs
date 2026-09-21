@@ -43,6 +43,7 @@ namespace TraceMap.CompiledFixtures.CSharp.Alpha
         public TResult Generic<TResult>(TResult value) => value;
         public decimal DecimalShape(decimal value) => value;
         public DateTime DateShape(DateTime value) => value;
+        public void TypedReferenceShape(TypedReference value) { }
         public Widget<int>.Nested<string> ConstructedNested(Widget<int>.Nested<string> value) => value;
         public Widget<int>.NonGenericNested ConstructedNonGenericNested(Widget<int>.NonGenericNested value) => value;
         public void Shapes(ref int byRef, out string output, in Guid readOnly, int[] values, int? nullable)
@@ -72,6 +73,18 @@ namespace TraceMap.CompiledFixtures.CSharp.Alpha
     public sealed class DerivedWidget : Widget<string>
     {
         public override string Name { get; set; } = "derived";
+    }
+
+    public sealed class PrimaryConstructorShape(int value)
+    {
+        public int Value => value;
+    }
+
+    public ref struct RefFieldShape
+    {
+        private ref int value;
+
+        public RefFieldShape(ref int value) => this.value = ref value;
     }
 }
 

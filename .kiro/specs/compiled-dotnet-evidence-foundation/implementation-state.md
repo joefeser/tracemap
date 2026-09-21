@@ -1,6 +1,6 @@
 # Compiled .NET Evidence Foundation Implementation State
 
-Status: Task 8 exact source-to-metadata reconciliation implemented and locally accepted; PR creation and exact-head ACK review pending
+Status: Task 8 exact source-to-metadata reconciliation implemented and locally accepted; PR #773 exact-head ACK review in progress
 
 Branch: `codex/source-metadata-reconciliation`
 
@@ -165,7 +165,9 @@ scoped decimal signatures, constructed nested generic signatures with their
 enclosing arguments, scoped non-primitive special types, non-generic nested
 types inside constructed generic containers, same-looking cross-assembly/language
 declarations, exact zero candidates, exact multiple candidates, unbound inputs,
-and the F# unsupported source lane. Optional-parameter mismatch gaps retain the
+class/struct/record primary constructors, C# ref fields, intrinsic
+`System.TypedReference`, and the F# unsupported source lane. Source custom
+modifiers fail closed. Optional-parameter mismatch gaps retain the
 rejected metadata candidate's compiled provenance and receipt-binding digest.
 Top-level C# statements are excluded from declaration collection, and
 syntax-located declarations without a Roslyn symbol emit Tier3 observations
@@ -173,15 +175,15 @@ plus Tier4 incomplete gaps rather than claiming Tier1 semantic identity.
 
 Local macOS Task 8 validation on 2026-09-20:
 
-- focused `SourceMetadataReconciliationTests`: 14 passed, zero failed, zero
+- focused `SourceMetadataReconciliationTests`: 19 passed, zero failed, zero
   skipped;
 - existing `ManagedMetadataExtractorTests`: 22 passed, zero failed, zero
   skipped;
 - `dotnet build src/dotnet/TraceMap.sln --no-restore`: passed with zero warnings
   and zero errors;
-- `dotnet test src/dotnet/TraceMap.sln --no-restore`: 1,996 passed, zero failed,
+- `dotnet test src/dotnet/TraceMap.sln --no-restore`: 2,001 passed, zero failed,
   zero skipped;
-- two bound C# fixture CLI scans: 333 facts each, 52 exact reconciliation edges,
+- two bound C# fixture CLI scans: 371 facts each, 60 exact reconciliation edges,
   and two explicit incomplete source-identity gaps; `facts.ndjson`, report,
   reconciliation manifest summary, and normalized SQLite fact rows matched;
   both output directories contained all five required artifacts and passed
