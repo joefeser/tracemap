@@ -338,6 +338,32 @@ Finding URLs: https://github.com/joefeser/tracemap/pull/774#discussion_r40628505
 https://github.com/joefeser/tracemap/pull/774#discussion_r4062850521
 (cancellation during binding reads).
 
+The next settled exact-head batch has three findings with two independent
+correctness invariants. The input provenance digest must describe only its
+bounded PDB/assembly admission inputs; source and method reconciliation may
+change final coverage, but not the provenance object or its commitment.
+`PdbEvidenceSummary` carries the final source-bound coverage and digest, and
+the report displays that final coverage separately from input coverage. The
+second invariant is linear, charged post-admission evidence work: the bounded
+summary retains only its configured prefix and incrementally hashes omitted
+entries in canonical order; independent reader shapes are compared as exact
+duplicate-sensitive counts, charging each comparison rather than sorting.
+The PDB regression matrix now includes:
+
+| Case | Expected evidence |
+| --- | --- |
+| Same bound PE/PDB, exact then changed source bytes | Input provenance object and digest unchanged; source-bound summary digest changes and unmatched source emits a gap. |
+| Bounded summary with omitted endpoints | Retained prefix only; incremental omitted digest equals canonical JSON array digest, including zero-omission case. |
+| Same shapes in different order, duplicate mismatch | Order-independent exact agreement; duplicate mismatch disputes reader evidence. |
+| Shape comparison exceeds remaining work units | `PdbInputTotalWorkLimitExceeded` before positive facts. |
+
+Finding URLs: https://github.com/joefeser/tracemap/pull/774#discussion_r4063129385
+(input provenance commitment),
+https://github.com/joefeser/tracemap/pull/774#discussion_r4063129409
+(summary allocation), and
+https://github.com/joefeser/tracemap/pull/774#discussion_r4063129423
+(shape comparison work).
+
 PR #774 implementation-head CI at
 `34ded8aef9b60b6f7db225d1c8af5df6b96ea159`
 passed the .NET, JVM, Python, Swift, TypeScript, five-adapter combine, private

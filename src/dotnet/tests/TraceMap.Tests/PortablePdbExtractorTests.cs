@@ -16,7 +16,8 @@ public sealed class PortablePdbExtractorTests
 
         Assert.NotNull(result.Manifest.PdbInputProvenance);
         Assert.NotNull(result.Manifest.PdbEvidenceSummary);
-        Assert.Equal("pdb-partial", result.Manifest.PdbInputProvenance.CoverageState);
+        Assert.Equal("pdb-complete", result.Manifest.PdbInputProvenance.CoverageState);
+        Assert.Equal("pdb-partial", result.Manifest.PdbEvidenceSummary.CoverageState);
         Assert.Single(result.Facts, fact => fact.FactType == FactTypes.PdbInputAdmitted);
         Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.PdbDocumentDeclared);
         Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.PdbMethodDeclared);
@@ -258,7 +259,8 @@ public sealed class PortablePdbExtractorTests
         Assert.DoesNotContain(result.Facts, fact => fact.FactType == FactTypes.PdbSourceDocumentReconciled);
         Assert.Contains(result.Facts, fact => fact.RuleId == RuleIds.DotNetPdbGap
             && fact.Properties.GetValueOrDefault("gapKind") == "PdbSourceFileCountExceeded");
-        Assert.Equal("pdb-partial", result.Manifest.PdbInputProvenance!.CoverageState);
+        Assert.Equal("pdb-complete", result.Manifest.PdbInputProvenance!.CoverageState);
+        Assert.Equal("pdb-partial", result.Manifest.PdbEvidenceSummary!.CoverageState);
     }
 
     [Fact]
@@ -590,6 +592,24 @@ public sealed class PortablePdbExtractorTests
     }
 
     [Fact]
+    public void Shape_comparison_is_order_independent_duplicate_sensitive_and_work_bounded()
+    {
+        Assert.True(PortablePdbExtractor.ShapeCountsAgree(
+            new Dictionary<string, int>(StringComparer.Ordinal) { ["first"] = 2, ["second"] = 1 },
+            ["second", "first", "first"],
+            new PortablePdbExtractor.PdbWorkBudget(3)));
+        Assert.False(PortablePdbExtractor.ShapeCountsAgree(
+            new Dictionary<string, int>(StringComparer.Ordinal) { ["first"] = 2, ["second"] = 1 },
+            ["second", "first", "second"],
+            new PortablePdbExtractor.PdbWorkBudget(3)));
+        var exception = Assert.Throws<PortablePdbExtractor.PdbInputException>(() => PortablePdbExtractor.ShapeCountsAgree(
+            new Dictionary<string, int>(StringComparer.Ordinal) { ["first"] = 2, ["second"] = 1 },
+            ["second", "first", "first"],
+            new PortablePdbExtractor.PdbWorkBudget(2)));
+        Assert.Equal("PdbInputTotalWorkLimitExceeded", exception.Message);
+    }
+
+    [Fact]
     public void Windows_produced_native_pdb_lane_fails_closed_without_independent_reader()
     {
         if (!OperatingSystem.IsWindows())
@@ -651,6 +671,12 @@ public sealed class PortablePdbExtractorTests
         Assert.True(first.OmittedEntryCount > 0);
         Assert.Matches("^[0-9a-f]{64}$", first.OmittedEntrySha256);
         Assert.Equal(JsonSerializer.Serialize(first), JsonSerializer.Serialize(second));
+        var exhaustive = PortablePdbExtractor.BuildSummary(result.Manifest, result.Facts, maximumEntries: int.MaxValue)!;
+        var omittedBytes = JsonSerializer.SerializeToUtf8Bytes(
+            exhaustive.Entries.Skip(1).ToArray(),
+            new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
+        Assert.Equal(Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(omittedBytes)).ToLowerInvariant(), first.OmittedEntrySha256);
+        Assert.Null(exhaustive.OmittedEntrySha256);
     }
 
     [Fact]
@@ -673,6 +699,33 @@ public sealed class PortablePdbExtractorTests
         Assert.Equal(first.Manifest.PdbInputProvenance!.BoundedInputSha256, second.Manifest.PdbInputProvenance!.BoundedInputSha256);
         Assert.NotEqual(first.Manifest.SourceSnapshotDigest, second.Manifest.SourceSnapshotDigest);
         Assert.NotEqual(first.Manifest.PdbEvidenceSummary!.BoundedInputSha256, second.Manifest.PdbEvidenceSummary!.BoundedInputSha256);
+    }
+
+    [Fact]
+    public void Source_reconciliation_changes_summary_coverage_without_rewriting_input_provenance()
+    {
+        var fixture = Fixture("csharp", "CompiledEvidence.CSharp");
+        using var repo = new TempDirectory();
+        var source = Path.Combine(repo.Path, "FixtureShapes.cs");
+        File.Copy(Path.Combine(fixture.Source, "FixtureShapes.cs"), source);
+        RunGit(repo.Path, "init", "-b", "main");
+        RunGit(repo.Path, "config", "user.email", "fixtures@tracemap.invalid");
+        RunGit(repo.Path, "config", "user.name", "TraceMap Fixtures");
+        RunGit(repo.Path, "add", ".");
+        RunGit(repo.Path, "commit", "-m", "fixture");
+
+        var matched = ScanBound(repo.Path, fixture.Assembly, fixture.Pdb);
+        File.AppendAllText(source, "\n// changed source snapshot\n");
+        var unmatched = ScanBound(repo.Path, fixture.Assembly, fixture.Pdb);
+
+        Assert.Contains(matched.Facts, fact => fact.FactType == FactTypes.PdbSourceDocumentReconciled);
+        Assert.DoesNotContain(unmatched.Facts, fact => fact.FactType == FactTypes.PdbSourceDocumentReconciled);
+        Assert.Equal(
+            JsonSerializer.Serialize(matched.Manifest.PdbInputProvenance),
+            JsonSerializer.Serialize(unmatched.Manifest.PdbInputProvenance));
+        Assert.Equal("pdb-complete", unmatched.Manifest.PdbInputProvenance!.CoverageState);
+        Assert.Equal("pdb-partial", unmatched.Manifest.PdbEvidenceSummary!.CoverageState);
+        Assert.NotEqual(matched.Manifest.PdbEvidenceSummary!.BoundedInputSha256, unmatched.Manifest.PdbEvidenceSummary.BoundedInputSha256);
     }
 
     [Fact]
@@ -709,8 +762,9 @@ public sealed class PortablePdbExtractorTests
         Assert.Equal(provenance.GetRawText(), secondManifest.RootElement.GetProperty("pdbInputProvenance").GetRawText());
         Assert.Equal(summary.GetRawText(), secondManifest.RootElement.GetProperty("pdbEvidenceSummary").GetRawText());
         Assert.Equal("pdb-input-provenance.v1", provenance.GetProperty("schemaVersion").GetString());
-        Assert.Equal("pdb-partial", provenance.GetProperty("coverageState").GetString());
+        Assert.Equal("pdb-complete", provenance.GetProperty("coverageState").GetString());
         Assert.Equal("pdb-evidence-summary.v1", summary.GetProperty("schemaVersion").GetString());
+        Assert.Equal("pdb-partial", summary.GetProperty("coverageState").GetString());
         Assert.Contains(summary.GetProperty("entries").EnumerateArray(), entry =>
             !string.IsNullOrWhiteSpace(entry.GetProperty("sourceIdentity").GetString())
             && !string.IsNullOrWhiteSpace(entry.GetProperty("targetIdentity").GetString())

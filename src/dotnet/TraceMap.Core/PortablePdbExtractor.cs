@@ -142,9 +142,8 @@ internal static class PortablePdbExtractor
                     continue;
                 }
                 var observations = ReadPortablePdb(reader, contentIdentity, limits, workBudget, cancellationToken);
-                var cecilShapes = ReadCecilShapes(matchedAssemblyBytes, bytes, workBudget, cancellationToken);
-                var srmShapes = CanonicalShapes(observations.Documents, observations.Methods);
-                if (!cecilShapes.SequenceEqual(srmShapes, StringComparer.Ordinal))
+                var cecilShapes = ReadCecilShapeCounts(matchedAssemblyBytes, bytes, workBudget, cancellationToken);
+                if (!ShapeCountsAgree(cecilShapes, EnumerateCanonicalShapes(observations.Documents, observations.Methods), workBudget, cancellationToken))
                 {
                     evaluated.Add(Gap(safeLocator, "disputed", "portable", "PdbReaderDisagreement", rawSha256, contentIdentity, match));
                     continue;
@@ -274,15 +273,7 @@ internal static class PortablePdbExtractor
                         : []);
             return new PdbMaterializationPlan(input, sourceMatches, metadataCandidates);
         }).ToArray();
-        var reconciliationIncomplete = plans.Any(plan => plan.Input.Outcome.Outcome == "admitted"
-            && (plan.SourceMatches.Values.Any(match => match.Candidates.Count != 1)
-                || plan.MetadataCandidates.Values.Any(candidates => candidates.Length != 1)));
-        var provenance = evaluation.Provenance with
-        {
-            CoverageState = evaluation.Provenance.CoverageState == "pdb-complete" && !reconciliationIncomplete
-                ? "pdb-complete"
-                : "pdb-partial"
-        };
+        var provenance = evaluation.Provenance;
         var facts = new List<CodeFact>();
         foreach (var plan in plans.OrderBy(item => item.Input.Outcome.SafeLocator, StringComparer.Ordinal))
         {
@@ -446,14 +437,19 @@ internal static class PortablePdbExtractor
         if (maximumEntries < 0)
             throw new ArgumentOutOfRangeException(nameof(maximumEntries));
         var pdbFacts = facts.Where(fact => fact.RuleId is
-                RuleIds.DotNetPdbInput or RuleIds.DotNetPdbIdentity or RuleIds.DotNetPdbSequencePoint or RuleIds.DotNetPdbGap)
-            .ToArray();
-        var allEntries = pdbFacts
+            RuleIds.DotNetPdbInput or RuleIds.DotNetPdbIdentity or RuleIds.DotNetPdbSequencePoint or RuleIds.DotNetPdbGap);
+        var orderedEndpointFacts = pdbFacts
             .Where(fact => fact.FactType is FactTypes.MetadataPdbMethodReconciled
                 or FactTypes.PdbSourceDocumentReconciled or FactTypes.PdbSequencePointDeclared)
             .OrderBy(fact => fact.FactType, StringComparer.Ordinal)
-            .ThenBy(fact => fact.FactId, StringComparer.Ordinal)
-            .Select(fact => new PdbEvidenceSummaryEntry(
+            .ThenBy(fact => fact.FactId, StringComparer.Ordinal);
+        var retained = new List<PdbEvidenceSummaryEntry>(Math.Min(maximumEntries, 256));
+        using var omittedHash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        omittedHash.AppendData("["u8);
+        var omittedCount = 0;
+        foreach (var fact in orderedEndpointFacts)
+        {
+            var entry = new PdbEvidenceSummaryEntry(
                 fact.FactType,
                 fact.SourceSymbol ?? string.Empty,
                 fact.TargetSymbol ?? string.Empty,
@@ -468,10 +464,17 @@ internal static class PortablePdbExtractor
                 fact.Evidence.StartLine,
                 fact.Evidence.EndLine,
                 fact.CommitSha,
-                fact.Properties.GetValueOrDefault("limitation") ?? Limitation))
-            .ToArray();
-        var retained = allEntries.Take(maximumEntries).ToArray();
-        var omitted = allEntries.Skip(maximumEntries).ToArray();
+                fact.Properties.GetValueOrDefault("limitation") ?? Limitation);
+            if (retained.Count < maximumEntries)
+            {
+                retained.Add(entry);
+                continue;
+            }
+            if (omittedCount++ > 0)
+                omittedHash.AppendData(","u8);
+            omittedHash.AppendData(JsonSerializer.SerializeToUtf8Bytes(entry, CanonicalJsonOptions));
+        }
+        omittedHash.AppendData("]"u8);
         var coverage = pdbFacts.Any(fact => fact.FactType == FactTypes.AnalysisGap)
             ? "pdb-partial"
             : provenance.CoverageState;
@@ -494,8 +497,8 @@ internal static class PortablePdbExtractor
             pdbFacts.Count(fact => fact.FactType == FactTypes.PdbSourceDocumentReconciled),
             pdbFacts.Count(fact => fact.FactType == FactTypes.AnalysisGap),
             retained,
-            omitted.Length,
-            omitted.Length == 0 ? null : CanonicalDigest(omitted));
+            omittedCount,
+            omittedCount == 0 ? null : Convert.ToHexString(omittedHash.GetHashAndReset()).ToLowerInvariant());
     }
 
     internal static ScanManifest FinalizeManifest(ScanManifest manifest, IReadOnlyList<CodeFact> facts)
@@ -509,12 +512,8 @@ internal static class PortablePdbExtractor
             .Distinct(StringComparer.Ordinal)
             .Order(StringComparer.Ordinal)
             .ToArray();
-        var coverage = gapKinds.Length == 0 && provenance.CoverageState == "pdb-complete"
-            ? "pdb-complete"
-            : "pdb-partial";
         return manifest with
         {
-            PdbInputProvenance = provenance with { CoverageState = coverage },
             KnownGaps = manifest.KnownGaps
                 .Concat(gapKinds.Select(value => $"PDB coverage reduced: {value}."))
                 .Distinct(StringComparer.Ordinal)
@@ -655,7 +654,7 @@ internal static class PortablePdbExtractor
         return (documents, methods);
     }
 
-    private static IReadOnlyList<string> ReadCecilShapes(
+    private static Dictionary<string, int> ReadCecilShapeCounts(
         byte[] peBytes,
         byte[] pdbBytes,
         PdbWorkBudget workBudget,
@@ -673,7 +672,7 @@ internal static class PortablePdbExtractor
             SymbolStream = pdbStream,
             AssemblyResolver = resolver
         });
-        var shapes = new List<string>();
+        var shapes = new Dictionary<string, int>(StringComparer.Ordinal);
         foreach (var type in AllTypes(module.Types, workBudget, cancellationToken))
         {
             foreach (var method in type.Methods)
@@ -688,7 +687,7 @@ internal static class PortablePdbExtractor
                     cancellationToken.ThrowIfCancellationRequested();
                     workBudget.Consume("PdbInputTotalWorkLimitExceeded");
                     var checksum = point.Document.Hash is { Length: > 0 } ? Convert.ToHexString(point.Document.Hash).ToLowerInvariant() : string.Empty;
-                    shapes.Add(Shape(
+                    var shape = Shape(
                         $"0x{method.MetadataToken.ToUInt32():x8}",
                         ordinal++,
                         point.Offset,
@@ -697,25 +696,29 @@ internal static class PortablePdbExtractor
                         point.StartLine,
                         point.StartColumn,
                         point.EndLine,
-                        point.EndColumn));
+                        point.EndColumn);
+                    shapes[shape] = shapes.GetValueOrDefault(shape) + 1;
                 }
             }
         }
-        return shapes.Order(StringComparer.Ordinal).ToArray();
+        return shapes;
     }
 
     internal static IReadOnlyList<string> CanonicalShapes(
         IReadOnlyList<PdbDocumentObservation> documents,
+        IReadOnlyList<PdbMethodObservation> methods) => EnumerateCanonicalShapes(documents, methods).ToArray();
+
+    private static IEnumerable<string> EnumerateCanonicalShapes(
+        IReadOnlyList<PdbDocumentObservation> documents,
         IReadOnlyList<PdbMethodObservation> methods)
     {
         var byRow = documents.ToDictionary(item => item.RowId);
-        var shapes = new List<string>();
         foreach (var method in methods)
         foreach (var point in method.SequencePoints)
         {
             if (!byRow.TryGetValue(point.DocumentRowId, out var document))
                 throw new InvalidDataException("Portable PDB sequence point references an undeclared document row.");
-            shapes.Add(Shape(
+            yield return Shape(
                 method.MetadataToken,
                 point.Ordinal,
                 point.Offset,
@@ -724,9 +727,28 @@ internal static class PortablePdbExtractor
                 point.StartLine,
                 point.StartColumn,
                 point.EndLine,
-                point.EndColumn));
+                point.EndColumn);
         }
-        return shapes.Order(StringComparer.Ordinal).ToArray();
+    }
+
+    internal static bool ShapeCountsAgree(
+        IDictionary<string, int> expected,
+        IEnumerable<string> observed,
+        PdbWorkBudget workBudget,
+        CancellationToken cancellationToken = default)
+    {
+        foreach (var shape in observed)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            workBudget.Consume("PdbInputTotalWorkLimitExceeded");
+            if (!expected.TryGetValue(shape, out var count) || count == 0)
+                return false;
+            if (count == 1)
+                expected.Remove(shape);
+            else
+                expected[shape] = count - 1;
+        }
+        return expected.Count == 0;
     }
 
     private static string Shape(string token, int ordinal, int offset, string checksum, bool hidden, int startLine, int startColumn, int endLine, int endColumn) =>
@@ -1108,10 +1130,12 @@ internal static class PortablePdbExtractor
         return Sha256(File.ReadAllBytes(path));
     }
 
+    private static readonly JsonSerializerOptions CanonicalJsonOptions = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
+
     private static string CanonicalDigest<T>(T value)
     {
         using var stream = new MemoryStream();
-        JsonSerializer.Serialize(stream, value, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
+        JsonSerializer.Serialize(stream, value, CanonicalJsonOptions);
         return Sha256(stream.ToArray());
     }
 
