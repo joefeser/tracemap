@@ -65,6 +65,7 @@ rules:
       - Admission proves only that the explicitly supplied bounded bytes were inspected; it does not prove source ownership, build freshness, authenticity, runtime behavior, or completeness.
       - Input provenance coverage and its digest describe only admitted PDB/assembly inputs; final source and method reconciliation coverage is recorded separately in the source-bound PDB evidence summary.
       - File name, path proximity, timestamp, and metadata token alone never bind a PDB to an assembly.
+      - Binding requires exactly one matching CodeView directory entry in exactly one admitted assembly; duplicate identical entries remain ambiguous.
       - Missing, malformed, over-budget, unsupported, unbound, mismatched, or ambiguously matched inputs emit Tier4Unknown gaps and no positive identity edge.
       - Native Windows PDB classification requires the complete MSF 7.00 signature; arbitrary non-portable bytes remain malformed input.
 
@@ -77,6 +78,7 @@ rules:
     limitations:
       - PDB method rows and metadata tokens are module-local locations and cannot establish identity without the exact PDB-to-assembly binding.
       - Document names are not emitted by default; source correspondence requires one exact checksum candidate and never uses basename or path proximity to select a file.
+      - Checksum candidates include already-inventoried C# and VB source kinds, including code-behind, designer, generated, and assembly-info files; this does not add legacy-framework source analysis.
       - Exact source checksum correspondence is Tier2Structural evidence, not compiler-resolved Tier1 semantic evidence.
       - Metadata-to-PDB reconciliation does not prove execution, reachability, behavioral equivalence, IL ownership beyond the bound method location, or rewrite preservation.
 

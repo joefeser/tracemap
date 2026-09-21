@@ -364,6 +364,30 @@ https://github.com/joefeser/tracemap/pull/774#discussion_r4063129409
 https://github.com/joefeser/tracemap/pull/774#discussion_r4063129423
 (shape comparison work).
 
+The next exact-head batch exposed one shared candidate-completeness invariant:
+an exact-one join must count every eligible source path and every matching
+CodeView directory entry before accepting a positive edge. The checksum index
+now uses the existing C#/VB inventory-kind classifiers; F# remains explicitly
+unsupported for source reconciliation, so specialized source kinds cannot silently
+disappear. CodeView identities retain duplicate entries; two matching entries
+within one PE or matching entries across two admitted PEs are ambiguous. The
+audit found no other candidate-thinning PDB path: normalized PDB path aliases
+identify one physical input, supported checksum algorithms are capabilities
+rather than candidate identities, and metadata/source candidate lists retain
+multiplicity. No legacy parser or source adapter was added. Regression matrix:
+
+| Case | Expected evidence |
+| --- | --- |
+| Existing C#/VB/F# source-kind matrix | All C#/VB inventory source kinds are checksum candidates; non-source markup/Razor are excluded; F# still has no guessed source join. |
+| Two same-checksum specialized C# or VB files | Exact multiple-candidate gap with count 2 and zero selected source edge. |
+| One, zero, or duplicate matching CodeView identities in one PE | Counts 1, 0, or 2 without collapsing identical entries. |
+| Two admitted same-CodeView PEs | `AmbiguousPdbAssemblyMatch` and zero positive PDB facts. |
+
+Finding URLs: https://github.com/joefeser/tracemap/pull/774#discussion_r4063521136
+(source-kind candidate completeness) and
+https://github.com/joefeser/tracemap/pull/774#discussion_r4063521146
+(CodeView entry multiplicity).
+
 PR #774 implementation-head CI at
 `34ded8aef9b60b6f7db225d1c8af5df6b96ea159`
 passed the .NET, JVM, Python, Swift, TypeScript, five-adapter combine, private

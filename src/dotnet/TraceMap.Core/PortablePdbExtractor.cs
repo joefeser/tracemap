@@ -115,18 +115,21 @@ internal static class PortablePdbExtractor
                 }
                 var contentId = new BlobContentId(reader.DebugMetadataHeader.Id);
                 var contentIdentity = ContentIdentity(contentId.Guid, contentId.Stamp);
-                var matches = compiledBindings.Where(binding => binding.CodeViewIdentities.Contains(contentIdentity, StringComparer.Ordinal)).ToArray();
+                var matches = compiledBindings
+                    .Select(binding => (Binding: binding, EntryCount: CountMatchingCodeViewEntries(binding.CodeViewIdentities, contentIdentity)))
+                    .Where(candidate => candidate.EntryCount > 0)
+                    .ToArray();
                 if (matches.Length == 0)
                 {
                     evaluated.Add(Gap(safeLocator, "mismatched", "portable", "PdbAssemblyIdentityMismatch", rawSha256, contentIdentity));
                     continue;
                 }
-                if (matches.Length > 1)
+                if (matches.Length > 1 || matches[0].EntryCount > 1)
                 {
                     evaluated.Add(Gap(safeLocator, "ambiguous", "portable", "AmbiguousPdbAssemblyMatch", rawSha256, contentIdentity));
                     continue;
                 }
-                var match = matches[0];
+                var match = matches[0].Binding;
                 if (!string.Equals(match.ProvenanceState, "bound", StringComparison.Ordinal)
                     || !string.Equals(match.Outcome, "admitted", StringComparison.Ordinal))
                 {
@@ -818,7 +821,7 @@ internal static class PortablePdbExtractor
         if (algorithms.Length == 0)
             return SourceChecksumIndex.Empty;
 
-        var sources = inventory.Where(item => item.Kind is "CSharp" or "VisualBasic" or "FSharp")
+        var sources = inventory.Where(item => IsSourceChecksumCandidateKind(item.Kind))
             .OrderBy(item => item.RelativePath, StringComparer.Ordinal)
             .ToArray();
         if (sources.Length > limits.MaxSourceFileCount)
@@ -946,10 +949,16 @@ internal static class PortablePdbExtractor
                 artifact.ProvenanceBindingInputSha256,
                 fullPath,
                 digest,
-                identities.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray()));
+                identities.Order(StringComparer.Ordinal).ToArray()));
         }
         return result;
     }
+
+    internal static int CountMatchingCodeViewEntries(IReadOnlyList<string> identities, string contentIdentity) =>
+        identities.Count(identity => string.Equals(identity, contentIdentity, StringComparison.Ordinal));
+
+    internal static bool IsSourceChecksumCandidateKind(string kind) =>
+        FileInventory.IsCSharpKind(kind) || FileInventory.IsVisualBasicKind(kind);
 
     internal static byte[]? ReadVerifiedCompiledBytes(
         string path,
