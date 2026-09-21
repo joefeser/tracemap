@@ -2647,3 +2647,94 @@ remain non-evidence diagnostics. Task 9 performs no IL body/call extraction,
 rewrite analysis, private or `dotnetperf` corpus execution, legacy
 Framework/Web Forms build, C++/CLI work, graph database work, fuzzy matching,
 or AI classification.
+
+### IL body and call evidence (Task 10 first slice)
+
+The first Task 10 slice activates `dotnet.compiled.il-body.v1`,
+`dotnet.compiled.il-call.v1`, and `dotnet.compiled.il-gap.v1` behind the
+explicit `--il-body-evidence` flag. The lane is otherwise inert: without the
+flag a scan produces no IL facts, no `ilBodyProvenance` manifest section, no IL
+known gaps, and unchanged source, compiled-metadata, and PDB behavior. IL
+inputs are never discovered; the lane processes only the artifacts the
+compiled evaluator itself admitted, rereads each one under the compiled
+file-size bound, reverifies its admitted SHA-256 immediately, and emits
+`IlCompiledArtifactChangedOrUnreadable` when the bytes changed, went missing,
+or grew too large. Requesting the flag without any admitted compiled input
+emits the rule-backed `IlCompiledEvidenceUnavailable` gap.
+
+The canonical body identity is operand-aware by construction:
+`<exact metadata method identity>|il-body:instructions:<n>:sha256:<digest>`,
+where the digest commits the complete canonical encoding — opcode sequence,
+resolved direct-call target identities with module-local tokens, branch and
+switch target offsets, string-literal length and SHA-256 digests, numeric
+constant bit patterns, variable and argument indexes, raw non-call token
+operands, ordered local-variable signatures, exception-region boundaries with
+catch-type identities and filter offsets, and max stack. Equal opcode
+sequences with different member, string, constant, or branch-target operands
+therefore produce different identities, and the fixture matrix proves each
+pair. The digest is byte-layout sensitive by design; this slice makes no
+semantic-equivalence or rewrite claim in either direction.
+
+Mono.Cecil is not the sole oracle. Mono.Cecil and an independent
+System.Reflection.Metadata single-pass raw-IL reader (opcode tables plus
+metadata token resolution) each rebuild the complete canonical encoding for
+every admitted input, and the two results must agree on the assembly and
+module identity, the method identity, every body digest, every call-site
+offset, opcode, reference kind, reference token, and target identity, the
+locals, the exception regions, and max stack. Any disagreement withholds that
+input's positive IL facts behind `IlReaderDisagreement`. Fields that cannot
+yet be independently verified are not promoted to positive evidence:
+non-call token operands such as field and signature tokens are committed by
+raw module-local token only, and string literals are committed by digest only
+and never retained verbatim because literal text is unbounded and may contain
+secrets.
+
+Positive facts keep every required commitment: exact assembly identity, module
+name and MVID, module-local MethodDef token, `evidenceLocationKind=
+managed-il-v1` with the documented `1..1` non-source sentinel, provenance
+state, compiled receipt-binding digest when bound, extractor version,
+generator SHA-256, IL bounded-input SHA-256, and the rule limitation. Body
+facts additionally retain instruction, local, and exception-region counts and
+digests and the supporting compiled `ManagedMethodDeclared` fact ID when
+exactly one candidate exists; call facts retain the IL offset, opcode,
+reference kind, raw reference token, complete member-reference identity as
+encoded in the containing module, and the supporting IL body fact ID. IL user
+strings are digested, not stored. Body facts are separate evidence nodes from
+source, metadata, PDB, and future rewritten-member identities, and no
+source-to-IL or rewrite-equivalence edge is emitted.
+
+Body, instruction-per-body, local-per-body, exception-region-per-body, and
+total-work limits are enforced before retention, with every body,
+instruction, local, region, and call charged to the shared work budget across
+both readers. Exhaustion, malformed IL, unsupported operand encodings, and
+unreadable inputs emit Tier4 `dotnet.compiled.il-gap.v1` gaps for that input
+with no partial positive set. Abstract, external, PInvoke, and bodyless
+methods emit no body fact as a structural observation, not an absence claim.
+
+Run the focused lane with:
+
+```bash
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj   --no-restore --filter FullyQualifiedName~IlBodyEvidenceExtractorTests
+```
+
+For a positive CLI scan, pass an admitted assembly plus the flag:
+
+```bash
+dotnet run --project src/dotnet/TraceMap.Cli -- scan   --repo samples/modern-sample   --out /tmp/tracemap-il-scan   --compiled-input "$(pwd)/samples/compiled-dotnet-evidence/csharp/bin/Debug/net10.0/CompiledEvidence.CSharp.dll"   --il-body-evidence
+```
+
+Repeat scans must produce byte-identical `facts.ndjson` and `report.md`,
+identical `ilBodyProvenance` (schema `il-body-provenance.v1`) in the manifest
+and execution receipt, and matching `dotnet.compiled.il-*` rows in
+`index.sqlite`. The IL bounded-input digest participates in `scanId`. The
+fixture catalog records stable IL case IDs under
+`samples/compiled-dotnet-evidence/fixture-cases.json` schema v4, covering
+operand-distinct pairs, signature and assembly scoping, call kinds, locals and
+exception regions, hostile corrupted IL, and limit exhaustion.
+
+This slice explicitly defers and makes no claim about: rewritten-member
+identity, metadata-token retargeting across rewrites, rewritten PDB offsets,
+ILAsm/ILDAsm parity, and the extended ECMA-335 mutation matrix from #766. It
+performs no rewrite generation, no call-graph or transitive reachability
+analysis, no runtime loading or execution, and no cross-assembly resolution
+beyond the reference rows encoded in the containing module.

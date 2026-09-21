@@ -400,3 +400,61 @@ exact-head ACK review terminal state and was merged into `dev` as
 `ed2fdf1c028b034a9a6013908e8f5b8c29d900a7` on 2026-09-21 (merge commit
 confirmed against `origin/dev`); the earlier "final current-head ACK pending"
 note is closed and no longer describes repository state.
+
+## Task 10 first slice: bounded operand-aware IL body and call evidence
+
+Branch: `codex/il-body-call-evidence` from `origin/dev` at
+`ed2fdf1c028b034a9a6013908e8f5b8c29d900a7`. Tracking #766.
+
+The first Task 10 slice activates `dotnet.compiled.il-body.v1`,
+`dotnet.compiled.il-call.v1`, and `dotnet.compiled.il-gap.v1` behind the
+explicit `--il-body-evidence` flag with `--il-max-bodies`,
+`--il-max-instructions-per-body`, `--il-max-locals-per-body`,
+`--il-max-exception-regions-per-body`, `--il-max-text`, and `--il-max-work`
+limits. The lane is inert without the flag: no IL facts, no
+`ilBodyProvenance` manifest section, and no change to source, compiled
+metadata, or PDB behavior.
+
+The canonical body identity is
+`<exact metadata method identity>|il-body:instructions:<n>:sha256:<digest>`
+where the digest commits the full operand-aware encoding: opcodes with
+resolved direct-call target identities and module-local tokens, branch and
+switch target offsets, string-literal digests (never verbatim literals),
+numeric constant bit patterns, variable indexes, raw non-call token operands,
+ordered local signatures, exception-region boundaries with catch-type
+identities and filter offsets, and max stack. The public C# fixture proves
+that identical opcode streams with different member, string, constant, or
+branch-target operands produce distinct identities, that `Twice(int)` and
+`Twice(long)` share a body digest yet stay distinct identities, that an
+identical trivial body in the C# and VB fixtures stays distinct, and that
+call/callvirt/newobj/ldftn/MethodSpec/interface targets carry exact scoped
+reference identities. F# and VB fixtures add minimal cross-language bodies.
+
+Mono.Cecil is not the sole oracle: a System.Reflection.Metadata single-pass
+raw-IL reader rebuilds the complete canonical encoding independently, and any
+difference in assembly/module identity, method identity, body digests, call
+sites, locals, regions, or max stack withholds the input behind
+`IlReaderDisagreement`. Non-call token operands (field/signature tokens) are
+committed by raw token only and their member identities are not resolved or
+promoted in this slice. Bodyless methods (abstract, external, PInvoke) emit no
+body fact as a structural observation. Manifest and execution receipt retain
+`il-body-provenance.v1` with generator SHA-256, canonical bounded-input
+SHA-256, effective limits, and per-input outcomes; the digest participates in
+`scanId`; the report gains a bounded IL evidence section. A requested lane
+with no admitted compiled input emits the `IlCompiledEvidenceUnavailable`
+Tier4 gap, never a clean absence.
+
+Explicitly deferred to later Task 10 slices: rewritten-member identity,
+metadata-token retargeting, rewritten PDB offsets, ILAsm/ILDAsm parity, and
+the extended ECMA-335/rewrite mutation matrix from #766. Task 11's legacy
+Windows, `dotnetperf`, and C++/CLI lanes remain entirely separate. The Task 10
+checkbox stays open until the public rewrite suite and its acceptance criteria
+land.
+
+Local macOS validation on 2026-09-21:
+
+- focused `IlBodyEvidenceExtractorTests`: 26 passed, zero failed, zero skipped;
+- neighbor suites: `ManagedMetadataExtractorTests` + `PortablePdbExtractorTests`
+  + `SourceMetadataReconciliationTests`: 91 passed, zero failed;
+- full `dotnet build`/`dotnet test` results recorded in the PR validation
+  summary below.
