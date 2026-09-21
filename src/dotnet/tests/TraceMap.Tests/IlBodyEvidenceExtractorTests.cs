@@ -158,6 +158,10 @@ public sealed class IlBodyEvidenceExtractorTests
         var interfaceCall = calls.Single(call => call.Properties.GetValueOrDefault("opcode") == "callvirt"
             && call.Properties["targetIdentity"].Contains("names:10:ICallShape", StringComparison.Ordinal));
         Assert.Contains("method:5:Apply|", interfaceCall.Properties["targetIdentity"], StringComparison.Ordinal);
+        var constrainedCall = calls.Single(call => call.Properties.GetValueOrDefault("opcode") == "constrained.");
+        Assert.Equal("constrainedtype", constrainedCall.Properties["referenceKind"]);
+        Assert.Equal("-", constrainedCall.Properties["referenceToken"]);
+        Assert.False(string.IsNullOrWhiteSpace(constrainedCall.Properties["targetIdentity"]));
     }
 
     [Fact]
@@ -177,6 +181,71 @@ public sealed class IlBodyEvidenceExtractorTests
         Assert.Equal(64, body.Properties["exceptionRegionsSha256"]!.Length);
         Assert.Contains("|il-body:instructions:", body.TargetSymbol, StringComparison.Ordinal);
         Assert.Contains(":sha256:", body.TargetSymbol, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Multi_target_switch_opcode_produces_complete_evidence_without_disagreement()
+    {
+        var fixture = Fixture("csharp", "CompiledEvidence.CSharp");
+        var result = Scan(new ScanOptions(
+            fixture.Source,
+            TempOutput(),
+            CompiledInputPaths: [fixture.Assembly],
+            IlBodyEvidence: true));
+
+        // The dense fixture case set compiles to a genuine five-target switch
+        // opcode whose deltas are all relative to the shared post-table base.
+        var switchBody = BodyFact(result, "SwitchTable");
+        Assert.True(int.Parse(switchBody.Properties["instructionCount"], CultureInfo.InvariantCulture) > 10);
+        var provenance = result.Manifest.IlBodyProvenance;
+        Assert.NotNull(provenance);
+        Assert.Equal("il-complete", provenance.CoverageState);
+        Assert.DoesNotContain(result.Facts, fact => fact.RuleId == RuleIds.DotNetIlGap
+            && fact.Properties.GetValueOrDefault("gapKind") == "IlReaderDisagreement");
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.ManagedIlCallObserved);
+    }
+
+    [Fact]
+    public void Hostile_switch_table_fails_closed()
+    {
+        var fixture = Fixture("csharp", "CompiledEvidence.CSharp");
+        using var truncated = new TempDirectory();
+        using var oversized = new TempDirectory();
+        var truncatedPath = Path.Combine(truncated.Path, "CompiledEvidence.CSharp.dll");
+        File.WriteAllBytes(truncatedPath, CorruptSwitchTable(fixture.Assembly, declareCount: 0x00ff_0000));
+        var oversizedPath = Path.Combine(oversized.Path, "CompiledEvidence.CSharp.dll");
+        File.WriteAllBytes(oversizedPath, CorruptSwitchTable(fixture.Assembly, declareCount: 0x0fff_fff0));
+        foreach (var hostile in new[] { truncatedPath, oversizedPath })
+        {
+            var result = Scan(new ScanOptions(
+                fixture.Source,
+                TempOutput(),
+                CompiledInputPaths: [hostile],
+                IlBodyEvidence: true));
+            var provenance = result.Manifest.IlBodyProvenance;
+            Assert.NotNull(provenance);
+            Assert.Equal("il-partial", provenance.CoverageState);
+            Assert.Contains(result.Facts, fact => fact.RuleId == RuleIds.DotNetIlGap
+                && fact.Properties.GetValueOrDefault("gapKind") is "MalformedIlBody" or "IlReaderDisagreement");
+            Assert.DoesNotContain(result.Facts, fact => fact.FactType is FactTypes.ManagedIlBodyDeclared or FactTypes.ManagedIlCallObserved);
+        }
+    }
+
+    [Fact]
+    public void Oversized_user_string_fails_closed_to_the_text_limit_gap()
+    {
+        var fixture = Fixture("csharp", "CompiledEvidence.CSharp");
+        var result = Scan(new ScanOptions(
+            fixture.Source,
+            TempOutput(),
+            CompiledInputPaths: [fixture.Assembly],
+            IlBodyEvidence: true,
+            IlBodyLimits: new IlBodyLimits(MaxTextLength: 4)));
+
+        Assert.Contains(result.Facts, fact => fact.RuleId == RuleIds.DotNetIlGap
+            && fact.Properties.GetValueOrDefault("gapKind") == "IlTextLimitExceeded");
+        Assert.DoesNotContain(result.Facts, fact => fact.FactType is FactTypes.ManagedIlBodyDeclared or FactTypes.ManagedIlCallObserved);
+        Assert.Contains(result.Manifest.KnownGaps, gap => gap.StartsWith("IL body evidence coverage reduced: IlTextLimitExceeded", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -549,6 +618,32 @@ public sealed class IlBodyEvidenceExtractorTests
             return bytes;
         }
         throw new InvalidOperationException("No method body found to corrupt.");
+    }
+
+    private static byte[] CorruptSwitchTable(string assembly, int declareCount)
+    {
+        var bytes = File.ReadAllBytes(assembly);
+        using var stream = new MemoryStream(bytes, writable: false);
+        using var pe = new PEReader(stream);
+        var reader = pe.GetMetadataReader();
+        foreach (var handle in reader.MethodDefinitions)
+        {
+            var method = reader.GetMethodDefinition(handle);
+            if (method.RelativeVirtualAddress == 0 || reader.GetString(method.Name) != "SwitchTable")
+                continue;
+            var ilStart = FileOffset(pe, method.RelativeVirtualAddress) + ((bytes[FileOffset(pe, method.RelativeVirtualAddress)] & 0x03) == 0x02 ? 1 : 12);
+            var position = ilStart;
+            // Skip nops/locals prologue opcodes until the switch opcode (0x45).
+            while (bytes[position] != 0x45)
+                position += bytes[position] == 0x00 ? 1 : 2;
+            var countOffset = position + 1;
+            bytes[countOffset] = (byte)(declareCount & 0xff);
+            bytes[countOffset + 1] = (byte)((declareCount >> 8) & 0xff);
+            bytes[countOffset + 2] = (byte)((declareCount >> 16) & 0xff);
+            bytes[countOffset + 3] = (byte)((declareCount >> 24) & 0xff);
+            return bytes;
+        }
+        throw new InvalidOperationException("SwitchTable body not found.");
     }
 
     private static int FileOffset(PEReader pe, int rva)

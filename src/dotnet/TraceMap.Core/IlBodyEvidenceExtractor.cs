@@ -91,8 +91,11 @@ internal static class IlBodyEvidenceExtractor
 
             try
             {
-                var cecil = ReadCecilBodies(bytes, limits, workBudget, cancellationToken);
+                // The raw reader runs first so every bound (opcode table,
+                // operand extent, switch table, string limit) is validated
+                // before Mono.Cecil materializes the same operand.
                 var srm = ReadSystemReflectionMetadataBodies(bytes, limits, workBudget, cancellationToken);
+                var cecil = ReadCecilBodies(bytes, limits, workBudget, cancellationToken);
                 var disagreements = CompareBodies(cecil, srm);
                 if (disagreements.Count > 0)
                 {
@@ -363,6 +366,8 @@ internal static class IlBodyEvidenceExtractor
             method.HasThis,
             method.ExplicitThis);
         var methodIdentity = $"{ManagedMetadataExtractor.TypeIdentity(assemblyIdentity, (CecilTypeDefinition)method.DeclaringType!)}|{memberKind}:{ManagedMetadataExtractor.EncodeIdentityComponent(method.Name)}|{signature}";
+        if (methodIdentity.Length > limits.MaxTextLength)
+            throw new IlEvidenceException("IlTextLimitExceeded");
         var instructions = new List<string>();
         var calls = new List<IlCallObservation>();
         foreach (var instruction in body.Instructions)
@@ -371,7 +376,7 @@ internal static class IlBodyEvidenceExtractor
                 throw new IlEvidenceException("IlInstructionLimitExceeded");
             if (!budget.TryConsume(1))
                 throw new IlEvidenceException("IlTotalWorkLimitExceeded");
-            var operand = CecilOperand(instruction, calls, budget, assemblyIdentity);
+            var operand = CecilOperand(instruction, calls, budget, assemblyIdentity, limits);
             instructions.Add($"{instructions.Count.ToString(CultureInfo.InvariantCulture)}:{instruction.Offset.ToString("x", CultureInfo.InvariantCulture)}:{instruction.OpCode.Name}:{operand}");
         }
         var locals = body.Variables
@@ -398,6 +403,9 @@ internal static class IlBodyEvidenceExtractor
         var exceptionRegionsSha256 = DigestLines(handlers);
         var canonical = CanonicalBody(body.MaxStackSize, body.InitLocals, instructions.Count, instructionsSha256, locals.Length, localsSha256, handlers.Length, exceptionRegionsSha256);
         var bodySha256 = ManagedMetadataExtractor.Sha256(Encoding.UTF8.GetBytes(canonical));
+        var bodyIdentity = $"{methodIdentity}|il-body:instructions:{instructions.Count.ToString(CultureInfo.InvariantCulture)}:sha256:{bodySha256}";
+        if (bodyIdentity.Length > limits.MaxTextLength)
+            throw new IlEvidenceException("IlTextLimitExceeded");
         return new IlBodyObservation(
             ManagedMetadataExtractor.Token(unchecked((int)method.MetadataToken.ToUInt32())),
             methodIdentity,
@@ -409,12 +417,12 @@ internal static class IlBodyEvidenceExtractor
             exceptionRegionsSha256,
             body.MaxStackSize.ToString(CultureInfo.InvariantCulture),
             body.InitLocals,
-            $"{methodIdentity}|il-body:instructions:{instructions.Count.ToString(CultureInfo.InvariantCulture)}:sha256:{bodySha256}",
+            bodyIdentity,
             bodySha256,
             calls);
     }
 
-    private static string CecilOperand(Instruction instruction, List<IlCallObservation> calls, IlWorkBudget budget, string selfAssemblyIdentity)
+    private static string CecilOperand(Instruction instruction, List<IlCallObservation> calls, IlWorkBudget budget, string selfAssemblyIdentity, IlBodyLimits limits)
     {
         switch (instruction.OpCode.OperandType)
         {
@@ -424,6 +432,8 @@ internal static class IlBodyEvidenceExtractor
                 return $"br:0x{((Instruction)instruction.Operand!).Offset:x}";
             case OperandType.InlineSwitch:
                 var targets = (Instruction[])instruction.Operand!;
+                if (!budget.TryConsume(targets.Length))
+                    throw new IlEvidenceException("IlTotalWorkLimitExceeded");
                 return $"sw:{targets.Length.ToString(CultureInfo.InvariantCulture)}[{string.Join(",", targets.Select(target => $"0x{target.Offset:x}"))}]";
             case OperandType.ShortInlineI:
                 return $"i:{((sbyte)instruction.Operand!).ToString(CultureInfo.InvariantCulture)}";
@@ -437,17 +447,33 @@ internal static class IlBodyEvidenceExtractor
                 return $"r:{BitConverter.DoubleToInt64Bits((double)instruction.Operand!).ToString("x16", CultureInfo.InvariantCulture)}";
             case OperandType.InlineString:
                 var text = (string)instruction.Operand!;
+                if (text.Length > limits.MaxTextLength)
+                    throw new IlEvidenceException("IlTextLimitExceeded");
                 return $"str:{text.Length.ToString(CultureInfo.InvariantCulture)}:{UserStringDigest(text)}";
             case OperandType.ShortInlineVar or OperandType.InlineVar or OperandType.ShortInlineArg or OperandType.InlineArg:
                 return $"v:{CecilVariableIndex(instruction.Operand!)}";
             case OperandType.InlineMethod:
                 if (!budget.TryConsume(1))
                     throw new IlEvidenceException("IlTotalWorkLimitExceeded");
-                var target = CecilMethodTarget((MethodReference)instruction.Operand!, selfAssemblyIdentity);
+                var target = CecilMethodTarget((MethodReference)instruction.Operand!, selfAssemblyIdentity, limits);
                 calls.Add(new IlCallObservation(instruction.Offset, instruction.OpCode.Name, target.Kind, target.Token, target.Identity));
                 return $"m:{target.Kind}:{target.Token}:{target.Identity}";
             case OperandType.InlineType:
-                return $"t:{CecilTypeOperandIdentity((Mono.Cecil.TypeReference)instruction.Operand!)}";
+                var typeIdentity = CecilTypeOperandIdentity((Mono.Cecil.TypeReference)instruction.Operand!);
+                if (typeIdentity.Length > limits.MaxTextLength)
+                    throw new IlEvidenceException("IlTextLimitExceeded");
+                if (instruction.OpCode.Name == "constrained.")
+                {
+                    if (!budget.TryConsume(1))
+                        throw new IlEvidenceException("IlTotalWorkLimitExceeded");
+                    calls.Add(new IlCallObservation(
+                        instruction.Offset,
+                        instruction.OpCode.Name,
+                        "constrainedtype",
+                        "-",
+                        typeIdentity));
+                }
+                return $"t:{typeIdentity}";
             case OperandType.InlineField or OperandType.InlineTok or OperandType.InlineSig:
                 return $"tok:{RawCecilToken(instruction.Operand)}";
             default:
@@ -455,13 +481,17 @@ internal static class IlBodyEvidenceExtractor
         }
     }
 
-    private static (string Kind, string Token, string Identity) CecilMethodTarget(MethodReference reference, string selfAssemblyIdentity)
+    private static (string Kind, string Token, string Identity) CecilMethodTarget(MethodReference reference, string selfAssemblyIdentity, IlBodyLimits limits)
     {
         if (reference is GenericInstanceMethod generic)
         {
-            var element = CecilMethodTarget(generic.ElementMethod, selfAssemblyIdentity);
+            var element = CecilMethodTarget(generic.ElementMethod, selfAssemblyIdentity, limits);
             var arguments = string.Join(",", generic.GenericArguments.Select(argument => ManagedMetadataExtractor.FormatType(argument)));
-            return ("methodspec", ManagedMetadataExtractor.Token(generic.MetadataToken.ToUInt32()), $"{element.Identity}|gargs:<{arguments}>");
+            return BoundedTarget(
+                "methodspec",
+                ManagedMetadataExtractor.Token(generic.MetadataToken.ToUInt32()),
+                $"{element.Identity}|gargs:<{arguments}>",
+                limits);
         }
         var callingConvention = reference.CallingConvention == MethodCallingConvention.VarArg ? "vararg" : "default";
         if (reference is CecilMethodDefinition definition)
@@ -474,9 +504,11 @@ internal static class IlBodyEvidenceExtractor
                 callingConvention,
                 definition.HasThis,
                 definition.ExplicitThis);
-            return ("methoddef",
+            return BoundedTarget(
+                "methoddef",
                 ManagedMetadataExtractor.Token(definition.MetadataToken.ToUInt32()),
-                $"{ManagedMetadataExtractor.TypeIdentity(selfAssemblyIdentity, (CecilTypeDefinition)definition.DeclaringType!)}|{memberKind}:{ManagedMetadataExtractor.EncodeIdentityComponent(definition.Name)}|{signature}");
+                $"{ManagedMetadataExtractor.TypeIdentity(selfAssemblyIdentity, (CecilTypeDefinition)definition.DeclaringType!)}|{memberKind}:{ManagedMetadataExtractor.EncodeIdentityComponent(definition.Name)}|{signature}",
+                limits);
         }
         var referenceSignature = ManagedMetadataExtractor.MethodSignature(
             ManagedMetadataExtractor.FormatType(reference.ReturnType),
@@ -485,9 +517,18 @@ internal static class IlBodyEvidenceExtractor
             callingConvention,
             reference.HasThis,
             reference.ExplicitThis);
-        return ("memberref",
+        return BoundedTarget(
+            "memberref",
             ManagedMetadataExtractor.Token(reference.MetadataToken.ToUInt32()),
-            $"memberref|type:{CecilTypeOperandIdentity(reference.DeclaringType!)}|member:{ManagedMetadataExtractor.EncodeIdentityComponent(reference.Name)}|{referenceSignature}");
+            $"memberref|type:{CecilTypeOperandIdentity(reference.DeclaringType!)}|member:{ManagedMetadataExtractor.EncodeIdentityComponent(reference.Name)}|{referenceSignature}",
+            limits);
+    }
+
+    private static (string Kind, string Token, string Identity) BoundedTarget(string kind, string token, string identity, IlBodyLimits limits)
+    {
+        if (identity.Length > limits.MaxTextLength)
+            throw new IlEvidenceException("IlTextLimitExceeded");
+        return (kind, token, identity);
     }
 
     /// <summary>
@@ -541,7 +582,7 @@ internal static class IlBodyEvidenceExtractor
             ? (parameter.Index + 1).ToString(CultureInfo.InvariantCulture)
             : parameter.Index.ToString(CultureInfo.InvariantCulture),
         int value => value.ToString(CultureInfo.InvariantCulture),
-        _ => throw new IlEvidenceException("IlOperandEncodingUnsupported")
+        _ => throw new IlEvidenceException("IlOperandEncodingUnsupported:RawCecilToken:" + operand?.GetType().Name)
     };
 
     private static string CecilLocalType(Mono.Cecil.TypeReference type) => type is PinnedType pinned
@@ -623,6 +664,8 @@ internal static class IlBodyEvidenceExtractor
             decoded.Header.IsInstance,
             (decoded.Header.RawValue & 0x40) != 0);
         var methodIdentity = $"{declaringIdentity}|{memberKind}:{ManagedMetadataExtractor.EncodeIdentityComponent(name)}|{signature}";
+        if (methodIdentity.Length > limits.MaxTextLength)
+            throw new IlEvidenceException("IlTextLimitExceeded");
 
         var instructions = new List<string>();
         var calls = new List<IlCallObservation>();
@@ -640,7 +683,7 @@ internal static class IlBodyEvidenceExtractor
             if (first == 0xfe ? !multi.ContainsKey(il[position]) : !single.ContainsKey(first))
                 throw new IlEvidenceException("MalformedIlBody");
             var opcode = first == 0xfe ? multi[il[position++]] : single[first];
-            var operand = SrmOperand(reader, provider, il, ref position, offset, opcode, calls, budget, assemblyIdentity);
+            var operand = SrmOperand(reader, provider, il, ref position, offset, opcode, calls, budget, assemblyIdentity, limits);
             instructions.Add($"{instructions.Count.ToString(CultureInfo.InvariantCulture)}:{offset.ToString("x", CultureInfo.InvariantCulture)}:{opcode.Name!.ToString()}:{operand}");
         }
 
@@ -670,6 +713,9 @@ internal static class IlBodyEvidenceExtractor
         var exceptionRegionsSha256 = DigestLines(handlers);
         var canonical = CanonicalBody(body.MaxStack, body.LocalVariablesInitialized, instructions.Count, instructionsSha256, locals.Length, localsSha256, handlers.Length, exceptionRegionsSha256);
         var bodySha256 = ManagedMetadataExtractor.Sha256(Encoding.UTF8.GetBytes(canonical));
+        var bodyIdentity = $"{methodIdentity}|il-body:instructions:{instructions.Count.ToString(CultureInfo.InvariantCulture)}:sha256:{bodySha256}";
+        if (bodyIdentity.Length > limits.MaxTextLength)
+            throw new IlEvidenceException("IlTextLimitExceeded");
         return new IlBodyObservation(
             ManagedMetadataExtractor.Token(MetadataTokens.GetToken(handle)),
             methodIdentity,
@@ -681,9 +727,16 @@ internal static class IlBodyEvidenceExtractor
             exceptionRegionsSha256,
             body.MaxStack.ToString(CultureInfo.InvariantCulture),
             body.LocalVariablesInitialized,
-            $"{methodIdentity}|il-body:instructions:{instructions.Count.ToString(CultureInfo.InvariantCulture)}:sha256:{bodySha256}",
+            bodyIdentity,
             bodySha256,
             calls);
+    }
+
+    private static (string Kind, string Token, string Identity) SrmBoundedTarget(string kind, string token, string identity, IlBodyLimits limits)
+    {
+        if (identity.Length > limits.MaxTextLength)
+            throw new IlEvidenceException("IlTextLimitExceeded");
+        return (kind, token, identity);
     }
 
     private static string SrmTypeIdentity(MetadataReader reader, TypeDefinitionHandle handle, string assemblyIdentity)
@@ -701,7 +754,8 @@ internal static class IlBodyEvidenceExtractor
         System.Reflection.Emit.OpCode opcode,
         List<IlCallObservation> calls,
         IlWorkBudget budget,
-        string assemblyIdentity)
+        string assemblyIdentity,
+        IlBodyLimits limits)
     {
         switch (opcode.OperandType)
         {
@@ -715,13 +769,22 @@ internal static class IlBodyEvidenceExtractor
                 return $"br:0x{(position + longDelta):x}";
             case System.Reflection.Emit.OperandType.InlineSwitch:
                 var count = ReadInt32(il, ref position);
-                if (count < 0)
+                if (count < 0 || (long)position + checked((long)count * sizeof(int)) > il.Length)
                     throw new IlEvidenceException("MalformedIlBody");
+                if (!budget.TryConsume(count))
+                    throw new IlEvidenceException("IlTotalWorkLimitExceeded");
+                var deltas = new int[count];
+                for (var index = 0; index < count; index++)
+                    deltas[index] = ReadInt32(il, ref position);
+                // Every switch delta is relative to the shared offset
+                // immediately after the complete jump table.
                 var targets = new string[count];
                 for (var index = 0; index < count; index++)
                 {
-                    var delta = ReadInt32(il, ref position);
-                    targets[index] = $"0x{(position + delta):x}";
+                    var target = (long)position + deltas[index];
+                    if (target < 0 || target > il.Length)
+                        throw new IlEvidenceException("MalformedIlBody");
+                    targets[index] = $"0x{target:x}";
                 }
                 return $"sw:{count.ToString(CultureInfo.InvariantCulture)}[{string.Join(",", targets)}]";
             case System.Reflection.Emit.OperandType.ShortInlineI:
@@ -739,6 +802,8 @@ internal static class IlBodyEvidenceExtractor
                 if ((stringToken & 0xff000000) != 0x70000000)
                     throw new IlEvidenceException("MalformedIlBody");
                 var text = reader.GetUserString(MetadataTokens.UserStringHandle(stringToken));
+                if (text.Length > limits.MaxTextLength)
+                    throw new IlEvidenceException("IlTextLimitExceeded");
                 return $"str:{text.Length.ToString(CultureInfo.InvariantCulture)}:{UserStringDigest(text)}";
             case System.Reflection.Emit.OperandType.ShortInlineVar or System.Reflection.Emit.OperandType.InlineVar:
                 var variable = opcode.OperandType == System.Reflection.Emit.OperandType.ShortInlineVar
@@ -749,12 +814,26 @@ internal static class IlBodyEvidenceExtractor
                 if (!budget.TryConsume(1))
                     throw new IlEvidenceException("IlTotalWorkLimitExceeded");
                 var methodToken = ReadInt32(il, ref position);
-                var target = SrmMethodTarget(reader, provider, methodToken, assemblyIdentity);
-                calls.Add(new IlCallObservation(offset, opcode.Name!.ToString(), target.Kind, target.Token, target.Identity));
-                return $"m:{target.Kind}:{target.Token}:{target.Identity}";
+                var methodTarget = SrmMethodTarget(reader, provider, methodToken, assemblyIdentity, limits);
+                calls.Add(new IlCallObservation(offset, opcode.Name!.ToString(), methodTarget.Kind, methodTarget.Token, methodTarget.Identity));
+                return $"m:{methodTarget.Kind}:{methodTarget.Token}:{methodTarget.Identity}";
             case System.Reflection.Emit.OperandType.InlineType:
                 var typeToken = ReadInt32(il, ref position);
-                return $"t:{provider.GetTypeFromEntityHandle(MetadataTokens.EntityHandle(typeToken))}";
+                var typeIdentity = provider.GetTypeFromEntityHandle(MetadataTokens.EntityHandle(typeToken));
+                if (typeIdentity.Length > limits.MaxTextLength)
+                    throw new IlEvidenceException("IlTextLimitExceeded");
+                if (opcode.Name!.ToString() == "constrained.")
+                {
+                    if (!budget.TryConsume(1))
+                        throw new IlEvidenceException("IlTotalWorkLimitExceeded");
+                    calls.Add(new IlCallObservation(
+                        offset,
+                        opcode.Name.ToString(),
+                        "constrainedtype",
+                        "-",
+                        typeIdentity));
+                }
+                return $"t:{typeIdentity}";
             case System.Reflection.Emit.OperandType.InlineField or System.Reflection.Emit.OperandType.InlineTok or System.Reflection.Emit.OperandType.InlineSig:
                 var rawToken = ReadInt32(il, ref position);
                 return $"tok:0x{rawToken:x8}";
@@ -767,16 +846,21 @@ internal static class IlBodyEvidenceExtractor
         MetadataReader reader,
         ManagedMetadataExtractor.MetadataTypeProvider provider,
         int token,
-        string assemblyIdentity)
+        string assemblyIdentity,
+        IlBodyLimits limits)
     {
         var handle = MetadataTokens.EntityHandle(token);
         switch (handle.Kind)
         {
             case HandleKind.MethodSpecification:
                 var specification = reader.GetMethodSpecification((MethodSpecificationHandle)handle);
-                var element = SrmMethodTarget(reader, provider, MetadataTokens.GetToken(specification.Method), assemblyIdentity);
+                var element = SrmMethodTarget(reader, provider, MetadataTokens.GetToken(specification.Method), assemblyIdentity, limits);
                 var arguments = string.Join(",", specification.DecodeSignature(provider, null));
-                return ("methodspec", ManagedMetadataExtractor.Token(unchecked((uint)token)), $"{element.Identity}|gargs:<{arguments}>");
+                return SrmBoundedTarget(
+                    "methodspec",
+                    ManagedMetadataExtractor.Token(unchecked((uint)token)),
+                    $"{element.Identity}|gargs:<{arguments}>",
+                    limits);
             case HandleKind.MethodDefinition:
                 var definition = reader.GetMethodDefinition((MethodDefinitionHandle)handle);
                 var name = reader.GetString(definition.Name);
@@ -791,9 +875,11 @@ internal static class IlBodyEvidenceExtractor
                     decoded.Header.CallingConvention == SignatureCallingConvention.VarArgs ? "vararg" : "default",
                     decoded.Header.IsInstance,
                     (decoded.Header.RawValue & 0x40) != 0);
-                return ("methoddef",
+                return SrmBoundedTarget(
+                    "methoddef",
                     ManagedMetadataExtractor.Token(unchecked((uint)token)),
-                    $"{declaringIdentity}|{memberKind}:{ManagedMetadataExtractor.EncodeIdentityComponent(name)}|{signature}");
+                    $"{declaringIdentity}|{memberKind}:{ManagedMetadataExtractor.EncodeIdentityComponent(name)}|{signature}",
+                    limits);
             case HandleKind.MemberReference:
                 var reference = reader.GetMemberReference((MemberReferenceHandle)handle);
                 if (reference.Parent.Kind is not (HandleKind.TypeReference or HandleKind.TypeDefinition or HandleKind.TypeSpecification))
@@ -807,9 +893,11 @@ internal static class IlBodyEvidenceExtractor
                     referenceDecoded.Header.CallingConvention == SignatureCallingConvention.VarArgs ? "vararg" : "default",
                     referenceDecoded.Header.IsInstance,
                     (referenceDecoded.Header.RawValue & 0x40) != 0);
-                return ("memberref",
+                return SrmBoundedTarget(
+                    "memberref",
                     ManagedMetadataExtractor.Token(unchecked((uint)token)),
-                    $"memberref|type:{parent}|member:{ManagedMetadataExtractor.EncodeIdentityComponent(reader.GetString(reference.Name))}|{referenceSignature}");
+                    $"memberref|type:{parent}|member:{ManagedMetadataExtractor.EncodeIdentityComponent(reader.GetString(reference.Name))}|{referenceSignature}",
+                    limits);
             default:
                 throw new IlEvidenceException("IlCallTargetIdentityUnavailable");
         }
