@@ -84,3 +84,25 @@ Namespace TraceMap.CompiledFixtures.VisualBasic.Other
         End Function
     End Class
 End Namespace
+
+Namespace TraceMap.CompiledFixtures.VisualBasic.Il
+    Public Module IlBodyShapes
+        ' VB-IL-ASSEMBLY-007: identical trivial body shape to the C# fixture
+        ' method of the same name; assembly and signature scoping must keep the
+        ' body identities distinct.
+        Public Function IlIdentity(value As Integer) As Integer
+            Return value
+        End Function
+
+        ' VB-IL-BODY-013: direct call, typed catch, and finally region.
+        Public Function IlCallShape(value As Integer) As Integer
+            Try
+                Return IlIdentity(value)
+            Catch ex As InvalidOperationException
+                Return -1
+            Finally
+                Dim ignored = value.ToString()
+            End Try
+        End Function
+    End Module
+End Namespace

@@ -103,6 +103,44 @@ rules:
     limitations:
       - The gap reduces only the explicitly requested PDB lane; it does not prove source, metadata, document, method, or sequence-point absence and never alters source analysis level.
 
+  - id: dotnet.compiled.il-body.v1
+    status: active
+    name: Bounded operand-aware IL method-body identity
+    description: Records an exact IL method-body identity for an admitted managed assembly where the canonical body digest commits every instruction opcode together with its operand: resolved direct call targets, branch and switch target offsets, string digests, numeric constant bit patterns, variable indexes, and raw non-call token operands.
+    evidenceTier: Tier2Structural
+    emits: [ManagedIlBodyDeclared, AnalysisGap]
+    limitations:
+      - An IL body identity proves only that the admitted assembly contains this exact bounded instruction stream at this module-local method row; it does not prove execution, dispatch, reachability, behavior, source ownership, semantic equivalence with any source construct, or preservation under rewriting.
+      - The canonical digest is byte-layout sensitive by design. Equal opcode sequences with different member, string, constant, branch, or switch operands therefore produce different identities, and this rule makes no claim that differently laid out bodies are semantically different or equivalent; rewrite equivalence is a separate deferred contract.
+      - Mono.Cecil is not the sole oracle. Mono.Cecil and an independent System.Reflection.Metadata raw-IL reader must agree on the complete canonical body encoding, including call-target identities, locals, exception-region boundaries, and max stack, or the input's positive IL facts are withheld.
+      - Non-call token operands such as field and signature tokens are committed by raw module-local token only; their member identities are not resolved in this rule and must not be promoted to positive member evidence.
+      - IL user-string literals are committed by length and SHA-256 digest of exact little-endian UTF-16 code units, preserving unpaired surrogates without replacement fallback; literals are never retained verbatim, because literal text is unbounded and may contain secrets.
+      - Abstract, external, PInvoke, runtime-implemented, and bodyless methods emit no body fact; this is a structural observation about the method row, not a claim that no code exists.
+      - Rewritten-member identity, metadata-token retargeting across rewrites, rewritten PDB offsets, ILAsm/ILDAsm parity, and the extended mutation matrix from #766 remain explicitly deferred and out of scope.
+
+  - id: dotnet.compiled.il-call.v1
+    status: active
+    name: Direct IL call-site evidence
+    description: Records one evidence row per direct call-related instruction operand (call, callvirt, newobj, ldftn, ldvirtftn, and the constrained. prefix target) with the exact containing body identity, IL offset, opcode, module-local reference token, and the complete member-reference identity as encoded in the containing module.
+    evidenceTier: Tier2Structural
+    emits: [ManagedIlCallObserved, AnalysisGap]
+    limitations:
+      - A call site records the static member reference encoded in this module's IL. It does not prove the target is ever executed, that a virtual dispatch resolves to that member, that the referenced external assembly is present, or that the target body exists.
+      - Member-reference identities are resolved only against metadata encoded inside the containing module (MethodDef rows, MemberRef rows with assembly-reference scope, and MethodSpec instantiations). No cross-assembly resolution, host probing, or ambient Mono.Cecil resolution is performed.
+      - Unresolved or unsupported operand encodings on a call-family opcode fail closed to a gap for that input; no partial call list is emitted.
+      - The constrained. prefix records its exact cross-checked type identity with reference kind constrainedtype, but no module-local token claim: Mono.Cecil cannot reproduce the raw TypeSpec token for a resolved constrained operand, so the field stays explicitly unclaimed rather than single-sourced.
+      - The same target member reached from many sites remains many call facts; this rule emits no call graph, transitive reachability, impact, or rewrite-equivalence conclusion.
+
+  - id: dotnet.compiled.il-gap.v1
+    status: active
+    name: IL body and call coverage gap
+    description: Records bounded missing, changed, unreadable, malformed, unsupported, ambiguous, reader-disagreed, or limit-exhausted IL body and call evidence coverage.
+    evidenceTier: Tier4Unknown
+    emits: [AnalysisGap]
+    limitations:
+      - The gap reduces only the explicitly requested IL body/call lane; it does not prove body or call absence, does not alter source-derived or metadata evidence, and never upgrades itself to a clean absence conclusion.
+      - An IL input gap never retires or rewrites existing source, compiled-metadata, or PDB facts from the same scan.
+
   - id: adapter.scan-truth.conformance.v1
     name: Cross-adapter scan truth conformance
     description: Validates bounded synthetic adapter outputs against the shared v1 repository authority, analyzed-byte identity, determinism, artifact, coverage, exclusion, gap, path, and persistence contract.

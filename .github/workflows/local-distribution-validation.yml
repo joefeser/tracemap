@@ -41,6 +41,8 @@ jobs:
         run: dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter FullyQualifiedName~ManagedMetadataExtractorTests
       - name: Run portable PDB fixture matrix
         run: dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter FullyQualifiedName~PortablePdbExtractorTests
+      - name: Run IL body evidence fixture matrix
+        run: dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter FullyQualifiedName~IlBodyEvidenceExtractorTests
       - name: Build native Windows PDB fixtures
         if: runner.os == 'Windows'
         shell: pwsh
