@@ -280,7 +280,20 @@ public static class ManagedMetadataExtractor
             .OrderBy(value => value, StringComparer.Ordinal)
             .Select(value => $"Compiled metadata coverage reduced: {value}.")
             .ToArray();
-        return new CompiledInputEvaluation(provenance, candidatesWithProvenance, knownGaps);
+        var bindingArtifacts = evaluated
+            .Where(item => item.Outcome == "admitted")
+            .Select(item => new CompiledInputBindingArtifact(
+                item.Descriptor.FullPath,
+                item.Descriptor.SafeLocator,
+                item.Outcome,
+                item.ProvenanceState,
+                item.RawSha256,
+                item.AssemblyIdentity,
+                item.BindingDigest))
+            .OrderBy(item => item.SafeLocator, StringComparer.Ordinal)
+            .ThenBy(item => item.FullPath, StringComparer.Ordinal)
+            .ToArray();
+        return new CompiledInputEvaluation(provenance, candidatesWithProvenance, knownGaps, bindingArtifacts);
     }
 
     internal static IReadOnlyList<CodeFact> MaterializeFacts(ScanManifest manifest, CompiledInputEvaluation evaluation) =>

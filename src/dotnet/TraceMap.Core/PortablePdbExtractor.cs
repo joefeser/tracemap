@@ -50,8 +50,6 @@ internal static class PortablePdbExtractor
             .ToArray();
         var omittedDigest = omitted.Length == 0 ? null : CanonicalDigest(omitted);
         var compiledBindings = ReadCompiledBindings(
-            repoPath,
-            options,
             compiledEvaluation,
             options.CompiledInputLimits?.MaxFileSizeBytes ?? new CompiledInputLimits().MaxFileSizeBytes);
         var evaluated = new List<EvaluatedPdbInput>();
@@ -651,28 +649,31 @@ internal static class PortablePdbExtractor
             AssemblyResolver = resolver
         });
         var shapes = new List<string>();
-        foreach (var method in AllTypes(module.Types).SelectMany(type => type.Methods))
+        foreach (var type in AllTypes(module.Types, workBudget, cancellationToken))
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            workBudget.Consume("PdbInputTotalWorkLimitExceeded");
-            if (!method.DebugInformation.HasSequencePoints)
-                continue;
-            var ordinal = 0;
-            foreach (var point in method.DebugInformation.SequencePoints)
+            foreach (var method in type.Methods)
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 workBudget.Consume("PdbInputTotalWorkLimitExceeded");
-                var checksum = point.Document.Hash is { Length: > 0 } ? Convert.ToHexString(point.Document.Hash).ToLowerInvariant() : string.Empty;
-                shapes.Add(Shape(
-                    $"0x{method.MetadataToken.ToUInt32():x8}",
-                    ordinal++,
-                    point.Offset,
-                    checksum,
-                    point.IsHidden,
-                    point.StartLine,
-                    point.StartColumn,
-                    point.EndLine,
-                    point.EndColumn));
+                if (!method.DebugInformation.HasSequencePoints)
+                    continue;
+                var ordinal = 0;
+                foreach (var point in method.DebugInformation.SequencePoints)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    workBudget.Consume("PdbInputTotalWorkLimitExceeded");
+                    var checksum = point.Document.Hash is { Length: > 0 } ? Convert.ToHexString(point.Document.Hash).ToLowerInvariant() : string.Empty;
+                    shapes.Add(Shape(
+                        $"0x{method.MetadataToken.ToUInt32():x8}",
+                        ordinal++,
+                        point.Offset,
+                        checksum,
+                        point.IsHidden,
+                        point.StartLine,
+                        point.StartColumn,
+                        point.EndLine,
+                        point.EndColumn));
+                }
             }
         }
         return shapes.Order(StringComparer.Ordinal).ToArray();
@@ -706,13 +707,16 @@ internal static class PortablePdbExtractor
     private static string Shape(string token, int ordinal, int offset, string checksum, bool hidden, int startLine, int startColumn, int endLine, int endColumn) =>
         $"{token}|{ordinal.ToString(CultureInfo.InvariantCulture)}|{offset.ToString(CultureInfo.InvariantCulture)}|{checksum}|{hidden.ToString().ToLowerInvariant()}|{startLine.ToString(CultureInfo.InvariantCulture)}:{startColumn.ToString(CultureInfo.InvariantCulture)}-{endLine.ToString(CultureInfo.InvariantCulture)}:{endColumn.ToString(CultureInfo.InvariantCulture)}";
 
-    private static IEnumerable<CecilTypeDefinition> AllTypes(IEnumerable<CecilTypeDefinition> roots)
+    internal static IEnumerable<CecilTypeDefinition> AllTypes(
+        IEnumerable<CecilTypeDefinition> roots,
+        PdbWorkBudget workBudget,
+        CancellationToken cancellationToken = default)
     {
-        foreach (var type in roots)
+        foreach (var type in ManagedMetadataExtractor.FlattenTypes(roots))
         {
+            cancellationToken.ThrowIfCancellationRequested();
+            workBudget.Consume("PdbInputTotalWorkLimitExceeded");
             yield return type;
-            foreach (var nested in AllTypes(type.NestedTypes))
-                yield return nested;
         }
     }
 
@@ -847,17 +851,15 @@ internal static class PortablePdbExtractor
     }
 
     private static IReadOnlyList<CompiledBinding> ReadCompiledBindings(
-        string repoPath,
-        ScanOptions options,
         CompiledInputEvaluation evaluation,
         long maximumBytes)
     {
         if (evaluation.Provenance is null)
             return [];
         var result = new List<CompiledBinding>();
-        foreach (var path in CleanPaths((options.CompiledInputPaths ?? []).Concat(options.CompiledDependencyPaths ?? []).ToArray()))
+        foreach (var artifact in evaluation.BindingArtifacts)
         {
-            var fullPath = ResolvePath(repoPath, path);
+            var fullPath = artifact.FullPath;
             if (!File.Exists(fullPath) || new FileInfo(fullPath).Length > maximumBytes)
                 continue;
             byte[] bytes;
@@ -870,10 +872,8 @@ internal static class PortablePdbExtractor
                 continue;
             }
             var digest = Sha256(bytes);
-            var outcomes = evaluation.Provenance.Outcomes.Where(item => string.Equals(item.RawFileSha256, digest, StringComparison.Ordinal)).ToArray();
-            if (outcomes.Length != 1)
+            if (!string.Equals(artifact.RawFileSha256, digest, StringComparison.Ordinal))
                 continue;
-            var outcome = outcomes[0];
             var identities = new List<string>();
             try
             {
@@ -889,11 +889,11 @@ internal static class PortablePdbExtractor
                 continue;
             }
             result.Add(new CompiledBinding(
-                outcome.SafeLocator,
-                outcome.Outcome,
-                outcome.ProvenanceState,
-                outcome.AssemblyIdentity,
-                outcome.ProvenanceBindingInputSha256,
+                artifact.SafeLocator,
+                artifact.Outcome,
+                artifact.ProvenanceState,
+                artifact.AssemblyIdentity,
+                artifact.ProvenanceBindingInputSha256,
                 bytes,
                 identities.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray()));
         }
@@ -1086,7 +1086,7 @@ internal static class PortablePdbExtractor
         IReadOnlyDictionary<int, SourceDocumentMatch> SourceMatches,
         IReadOnlyDictionary<int, CodeFact[]> MetadataCandidates);
 
-    private sealed class PdbWorkBudget(long maximum)
+    internal sealed class PdbWorkBudget(long maximum)
     {
         public long Consumed { get; private set; }
 
@@ -1107,5 +1107,5 @@ internal static class PortablePdbExtractor
         }
     }
 
-    private sealed class PdbInputException(string message) : Exception(message);
+    internal sealed class PdbInputException(string message) : Exception(message);
 }

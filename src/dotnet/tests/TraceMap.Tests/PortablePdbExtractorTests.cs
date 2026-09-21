@@ -129,6 +129,65 @@ public sealed class PortablePdbExtractorTests
     }
 
     [Fact]
+    public void Omitted_duplicate_compiled_input_cannot_reenter_pdb_binding()
+    {
+        var fixture = Fixture("csharp", "CompiledEvidence.CSharp");
+        using var repo = new TempDirectory();
+        var source = Path.Combine(repo.Path, "FixtureShapes.cs");
+        var admitted = Path.Combine(repo.Path, "a-admitted.dll");
+        var omitted = Path.Combine(repo.Path, "z-omitted-duplicate.dll");
+        File.Copy(Path.Combine(fixture.Source, "FixtureShapes.cs"), source);
+        File.Copy(fixture.Assembly, admitted);
+        File.Copy(fixture.Assembly, omitted);
+        RunGit(repo.Path, "init", "-b", "main");
+        RunGit(repo.Path, "config", "user.email", "fixtures@tracemap.invalid");
+        RunGit(repo.Path, "config", "user.name", "TraceMap Fixtures");
+        RunGit(repo.Path, "add", ".");
+        RunGit(repo.Path, "commit", "-m", "fixture");
+        var receipt = Path.Combine(repo.Path, "binding.json");
+        WriteBoundReceipt(repo.Path, admitted, receipt);
+
+        var result = Scan(new ScanOptions(
+            repo.Path,
+            TempOutput(),
+            CompiledInputPaths: [omitted, admitted],
+            CompiledBindingReceiptPaths: [receipt],
+            CompiledInputLimits: new CompiledInputLimits(MaxArtifactCount: 1),
+            PdbInputPaths: [fixture.Pdb]));
+
+        Assert.Equal(1, result.Manifest.CompiledInputProvenance!.OmittedInputCount);
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.PdbInputAdmitted);
+        Assert.DoesNotContain(result.Facts, fact => fact.RuleId == RuleIds.DotNetPdbGap
+            && fact.Properties.GetValueOrDefault("gapKind") == "AmbiguousPdbAssemblyMatch");
+    }
+
+    [Fact]
+    public void Cecil_type_traversal_is_iterative_and_charges_empty_nested_types()
+    {
+        const int nestedTypeCount = 10_000;
+        var root = new Mono.Cecil.TypeDefinition("Fixture", "Root", Mono.Cecil.TypeAttributes.Public);
+        var current = root;
+        for (var index = 0; index < nestedTypeCount; index++)
+        {
+            var nested = new Mono.Cecil.TypeDefinition(string.Empty, $"Nested{index:D5}", Mono.Cecil.TypeAttributes.NestedPublic);
+            current.NestedTypes.Add(nested);
+            current = nested;
+        }
+
+        var budget = new PortablePdbExtractor.PdbWorkBudget(nestedTypeCount + 1);
+        var flattened = PortablePdbExtractor.AllTypes([root], budget).ToArray();
+
+        Assert.Equal(nestedTypeCount + 1, flattened.Length);
+        Assert.Equal(nestedTypeCount + 1, budget.Consumed);
+        Assert.Equal($"Nested{nestedTypeCount - 1:D5}", flattened[^1].Name);
+
+        var bounded = new PortablePdbExtractor.PdbWorkBudget(1);
+        var exception = Assert.Throws<PortablePdbExtractor.PdbInputException>(() =>
+            PortablePdbExtractor.AllTypes([root], bounded).ToArray());
+        Assert.Equal("PdbInputTotalWorkLimitExceeded", exception.Message);
+    }
+
+    [Fact]
     public void Pdb_with_different_codeview_identity_emits_mismatch_gap_without_candidate_selection()
     {
         var csharp = Fixture("csharp", "CompiledEvidence.CSharp");
