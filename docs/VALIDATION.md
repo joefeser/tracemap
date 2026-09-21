@@ -2549,7 +2549,8 @@ points use a per-PDB document-row index. Neither lookup repeatedly scans the
 full fact or document collection. The manifest and execution
 receipt retain `pdb-input-provenance.v1`, including the exact generator SHA-256,
 canonical bounded-input SHA-256, safe locators, effective limits, per-input
-outcomes, omissions, and coverage state. They also retain the bounded
+outcomes, omissions, and input-only coverage state. Source or metadata
+reconciliation never rewrites this input commitment. They also retain the bounded
 `pdb-evidence-summary.v1` endpoint/support summary and its omitted-entry digest.
 The summary input digest additionally commits the source snapshot, scan commit,
 and retained PDB fact set because source-document edges depend on those inputs.
@@ -2564,7 +2565,9 @@ document, method-debug-information, and ordered sequence-point rows; Mono.Cecil
 independently reads the bound assembly/PDB pair. TraceMap compares complete
 per-method sequence-point shapes including token, ordinal, IL offset, document
 checksum, hidden state, and exact source range. Reader disagreement withholds
-all positive PDB facts for that input and emits `PdbReaderDisagreement`.
+all positive PDB facts for that input and emits `PdbReaderDisagreement`. The
+comparison uses duplicate-sensitive shape counts, not uncharged sorting;
+each observed comparison consumes a PDB work unit.
 
 An admitted input emits separate document and method facts. A
 `MetadataPdbMethodReconciled` edge requires exactly one eligible metadata
@@ -2590,7 +2593,13 @@ adapter exists, it emits `PdbSourceReconciliationUnsupportedLanguage` and zero
 guessed source-document joins. PDB coverage and source `analysisLevel` remain
 independent, and missing or partial PDB evidence never changes source facts.
 Any source-, method-, reader-, or input-reconciliation gap makes final PDB
-coverage `pdb-partial` in the manifest, report, summary, and receipt.
+coverage `pdb-partial` in the manifest's evidence summary, report, and receipt.
+`PdbInputProvenance.CoverageState` describes only the admitted PDB/assembly
+inputs committed by its bounded-input digest; it can remain `pdb-complete`
+when source or method reconciliation is partial. The summary commits the
+source snapshot, scan commit, and retained PDB fact IDs. Its omitted endpoints
+are digested incrementally in the same canonical JSON order without retaining
+exhaustive summary records.
 
 The v3 public fixture catalog adds stable PDB case IDs, expected identity
 formats, rule/tier expectations, gaps, and non-claims. The portable C#/VB/F#

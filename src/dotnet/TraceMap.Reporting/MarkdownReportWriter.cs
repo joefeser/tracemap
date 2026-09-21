@@ -505,7 +505,8 @@ public static class MarkdownReportWriter
         lines.Add("");
         lines.Add("## Compiled .NET PDB Evidence");
         lines.Add("");
-        lines.Add($"- Coverage: `{pdb.CoverageState}`");
+        lines.Add($"- Coverage: `{result.Manifest.PdbEvidenceSummary?.CoverageState ?? pdb.CoverageState}`");
+        lines.Add($"- PDB input coverage: `{pdb.CoverageState}`");
         lines.Add($"- Artifact visibility: `{pdb.ArtifactVisibility}`");
         lines.Add($"- Bounded input SHA-256: `{pdb.BoundedInputSha256}`");
         lines.Add($"- Generator SHA-256: `{pdb.GeneratorSha256}`");

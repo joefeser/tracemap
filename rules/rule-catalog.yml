@@ -63,6 +63,7 @@ rules:
     emits: [PdbInputAdmitted, AnalysisGap]
     limitations:
       - Admission proves only that the explicitly supplied bounded bytes were inspected; it does not prove source ownership, build freshness, authenticity, runtime behavior, or completeness.
+      - Input provenance coverage and its digest describe only admitted PDB/assembly inputs; final source and method reconciliation coverage is recorded separately in the source-bound PDB evidence summary.
       - File name, path proximity, timestamp, and metadata token alone never bind a PDB to an assembly.
       - Missing, malformed, over-budget, unsupported, unbound, mismatched, or ambiguously matched inputs emit Tier4Unknown gaps and no positive identity edge.
       - Native Windows PDB classification requires the complete MSF 7.00 signature; arbitrary non-portable bytes remain malformed input.
@@ -89,6 +90,7 @@ rules:
       - A sequence point is compiler-produced debug metadata; it does not prove statement execution, control flow, branch behavior, call relationships, or source semantics.
       - A positive sequence point requires exactly one supporting metadata-to-PDB method reconciliation; zero or multiple candidates emit a gap and no sequence-point fact.
       - Hidden points and repeated or non-monotonic source ranges remain explicit data and are not rewritten into convenient source claims.
+      - Independent reader shape comparison is duplicate-sensitive and consumes bounded PDB work units; exceeding the limit emits a gap rather than a partial positive sequence-point set.
 
   - id: dotnet.compiled.pdb-gap.v1
     status: active
