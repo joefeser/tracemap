@@ -410,14 +410,16 @@ public sealed class IlBodyEvidenceExtractorTests
     {
         var fixture = Fixture("csharp", "CompiledEvidence.CSharp");
         var output = Path.Combine(Directory.CreateTempSubdirectory("tracemap-il-artifacts-").FullName, "out");
-        Assert.Equal(0, await TraceMapCommand.RunAsync(
+        var cliError = new StringWriter();
+        var cliExit = await TraceMapCommand.RunAsync(
         [
             "scan",
             "--repo", fixture.Source,
             "--out", output,
             "--compiled-input", fixture.Assembly,
             "--il-body-evidence"
-        ], TextWriter.Null, TextWriter.Null));
+        ], TextWriter.Null, cliError);
+        Assert.True(cliExit == 0, $"CLI scan failed with exit {cliExit}: {cliError}");
 
         Assert.True(File.Exists(Path.Combine(output, "facts.ndjson")));
         Assert.True(File.Exists(Path.Combine(output, "index.sqlite")));
