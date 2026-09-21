@@ -2534,6 +2534,13 @@ reopened or allowed to reenter candidate selection. Every SRM document/method
 row and sequence point is charged before work proceeds. Cecil type traversal is
 iterative, and every type, method, and retained sequence point is charged so
 deep empty nesting cannot bypass the work budget or consume the process stack.
+Binding admission retains only a verified artifact path, digest, and CodeView
+identities, not every compiled assembly's bytes. The uniquely matched assembly
+is reread under the compiled file-size bound and its admitted digest is
+reverified immediately before the independent Cecil comparison. A changed,
+missing, oversized, or unreadable matched assembly emits
+`PdbCompiledArtifactChangedOrUnreadable` and no positive PDB facts. Compiled
+binding and PDB file reads poll scan cancellation between bounded chunks.
 Source files are streamed once into reusable
 SHA-1/SHA-256 indexes, poll scan cancellation during file reads, and are never
 reread once per PDB document. Post-admission metadata-method reconciliation

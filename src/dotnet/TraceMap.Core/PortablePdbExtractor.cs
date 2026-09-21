@@ -49,9 +49,11 @@ internal static class PortablePdbExtractor
             .Select(path => new PdbExpectedInput(BoundedSafeLocator(repoPath, ResolvePath(repoPath, path), limits.MaxTextLength)))
             .ToArray();
         var omittedDigest = omitted.Length == 0 ? null : CanonicalDigest(omitted);
+        var compiledMaximumBytes = options.CompiledInputLimits?.MaxFileSizeBytes ?? new CompiledInputLimits().MaxFileSizeBytes;
         var compiledBindings = ReadCompiledBindings(
             compiledEvaluation,
-            options.CompiledInputLimits?.MaxFileSizeBytes ?? new CompiledInputLimits().MaxFileSizeBytes);
+            compiledMaximumBytes,
+            cancellationToken);
         var evaluated = new List<EvaluatedPdbInput>();
         var workBudget = new PdbWorkBudget(limits.MaxTotalWorkUnits);
 
@@ -75,7 +77,7 @@ internal static class PortablePdbExtractor
             byte[] bytes;
             try
             {
-                bytes = ReadBoundedFile(fullPath, limits.MaxFileSizeBytes);
+                bytes = ReadBoundedFile(fullPath, limits.MaxFileSizeBytes, cancellationToken);
             }
             catch (PdbInputException exception)
             {
@@ -132,8 +134,15 @@ internal static class PortablePdbExtractor
                     continue;
                 }
 
+                var matchedAssemblyBytes = ReadVerifiedCompiledBytes(
+                    match.FullPath, match.RawFileSha256, compiledMaximumBytes, cancellationToken);
+                if (matchedAssemblyBytes is null)
+                {
+                    evaluated.Add(Gap(safeLocator, "unbound", "portable", "PdbCompiledArtifactChangedOrUnreadable", rawSha256, contentIdentity, match));
+                    continue;
+                }
                 var observations = ReadPortablePdb(reader, contentIdentity, limits, workBudget, cancellationToken);
-                var cecilShapes = ReadCecilShapes(match.Bytes, bytes, workBudget, cancellationToken);
+                var cecilShapes = ReadCecilShapes(matchedAssemblyBytes, bytes, workBudget, cancellationToken);
                 var srmShapes = CanonicalShapes(observations.Documents, observations.Methods);
                 if (!cecilShapes.SequenceEqual(srmShapes, StringComparer.Ordinal))
                 {
@@ -868,20 +877,22 @@ internal static class PortablePdbExtractor
 
     private static IReadOnlyList<CompiledBinding> ReadCompiledBindings(
         CompiledInputEvaluation evaluation,
-        long maximumBytes)
+        long maximumBytes,
+        CancellationToken cancellationToken)
     {
         if (evaluation.Provenance is null)
             return [];
         var result = new List<CompiledBinding>();
         foreach (var artifact in evaluation.BindingArtifacts)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var fullPath = artifact.FullPath;
             if (!File.Exists(fullPath) || new FileInfo(fullPath).Length > maximumBytes)
                 continue;
             byte[] bytes;
             try
             {
-                bytes = ReadBoundedFile(fullPath, maximumBytes);
+                bytes = ReadBoundedFile(fullPath, maximumBytes, cancellationToken);
             }
             catch (Exception exception) when (exception is PdbInputException or IOException or UnauthorizedAccessException)
             {
@@ -896,6 +907,7 @@ internal static class PortablePdbExtractor
                 using var pe = new PEReader(new MemoryStream(bytes, writable: false));
                 foreach (var entry in pe.ReadDebugDirectory().Where(entry => entry.Type == DebugDirectoryEntryType.CodeView))
                 {
+                    cancellationToken.ThrowIfCancellationRequested();
                     var data = pe.ReadCodeViewDebugDirectoryData(entry);
                     identities.Add(ContentIdentity(data.Guid, entry.Stamp));
                 }
@@ -910,10 +922,29 @@ internal static class PortablePdbExtractor
                 artifact.ProvenanceState,
                 artifact.AssemblyIdentity,
                 artifact.ProvenanceBindingInputSha256,
-                bytes,
+                fullPath,
+                digest,
                 identities.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray()));
         }
         return result;
+    }
+
+    internal static byte[]? ReadVerifiedCompiledBytes(
+        string path,
+        string expectedSha256,
+        long maximumBytes,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        try
+        {
+            var bytes = ReadBoundedFile(path, maximumBytes, cancellationToken);
+            return string.Equals(Sha256(bytes), expectedSha256, StringComparison.Ordinal) ? bytes : null;
+        }
+        catch (Exception exception) when (exception is PdbInputException or IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
     }
 
     private static EvaluatedPdbInput Gap(
@@ -1039,17 +1070,28 @@ internal static class PortablePdbExtractor
             throw new ArgumentException($"PDB input maximum text length must be at least {MinimumProjectedTextLength} characters.");
     }
 
-    private static byte[] ReadBoundedFile(string path, long maximumBytes)
+    private static byte[] ReadBoundedFile(string path, long maximumBytes, CancellationToken cancellationToken)
     {
         using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 81_920, FileOptions.SequentialScan);
+        return ReadBoundedStream(stream, maximumBytes, cancellationToken);
+    }
+
+    internal static byte[] ReadBoundedStream(Stream stream, long maximumBytes, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
         if (stream.Length > maximumBytes)
             throw new PdbInputException("PdbInputFileSizeExceeded");
         using var output = new MemoryStream((int)Math.Min(stream.Length, 1_048_576));
         var buffer = new byte[81_920];
         long total = 0;
         int read;
-        while ((read = stream.Read(buffer, 0, buffer.Length)) != 0)
+        while (true)
         {
+            cancellationToken.ThrowIfCancellationRequested();
+            read = stream.Read(buffer, 0, buffer.Length);
+            cancellationToken.ThrowIfCancellationRequested();
+            if (read == 0)
+                break;
             total = checked(total + read);
             if (total > maximumBytes)
                 throw new PdbInputException("PdbInputFileSizeExceeded");
@@ -1083,7 +1125,8 @@ internal static class PortablePdbExtractor
         string ProvenanceState,
         string? AssemblyIdentity,
         string ProvenanceBindingInputSha256,
-        byte[] Bytes,
+        string FullPath,
+        string RawFileSha256,
         IReadOnlyList<string> CodeViewIdentities);
 
     private sealed record SourceDocumentMatch(IReadOnlyList<string> Candidates, string? GapKind)

@@ -317,6 +317,27 @@ candidates, a same-token member in another assembly, multi-document
 sequence-point support IDs, and both present and missing PDB aliases; an
 aliased positive CLI scan completes without duplicate fact IDs.
 
+The subsequent exact-head Codex batch exposed one shared resource-admission
+invariant across two findings: compiled binding discovery must be cancelable
+without retaining all admitted PE byte arrays. The consolidated correction
+keeps only path, admitted digest, and CodeView identities, then boundedly
+rereads and rehashes the unique matched assembly before Cecil comparison. A
+changed, missing, oversized, or unreadable match fails closed with
+`PdbCompiledArtifactChangedOrUnreadable`. The same cancellation polling applies
+to PDB file reads. Regression matrix:
+
+| Case | Expected evidence |
+| --- | --- |
+| Normal bound C#/VB/F# fixture | Existing exact PDB/metadata facts remain unchanged in shape. |
+| Changed, missing, or oversized matched PE on reread | Verification returns no bytes; no positive PDB evidence may use it. |
+| Cancellation before compiled binding admission | `OperationCanceledException`, not a PDB gap. |
+| Cancellation after a bounded input read chunk | `OperationCanceledException` before the next chunk or positive evidence. |
+
+Finding URLs: https://github.com/joefeser/tracemap/pull/774#discussion_r4062850503
+(PE byte retention) and
+https://github.com/joefeser/tracemap/pull/774#discussion_r4062850521
+(cancellation during binding reads).
+
 PR #774 implementation-head CI at
 `34ded8aef9b60b6f7db225d1c8af5df6b96ea159`
 passed the .NET, JVM, Python, Swift, TypeScript, five-adapter combine, private

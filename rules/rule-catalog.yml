@@ -93,7 +93,7 @@ rules:
   - id: dotnet.compiled.pdb-gap.v1
     status: active
     name: PDB coverage gap
-    description: Records bounded missing, malformed, mismatched, ambiguous, unsupported, reader-disagreed, source-unmatched, or limit-exhausted PDB coverage.
+    description: Records bounded missing, malformed, mismatched, ambiguous, unsupported, reader-disagreed, source-unmatched, changed or unreadable bound-assembly, or limit-exhausted PDB coverage.
     evidenceTier: Tier4Unknown
     emits: [AnalysisGap]
     limitations:
