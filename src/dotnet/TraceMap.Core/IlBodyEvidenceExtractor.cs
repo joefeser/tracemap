@@ -709,16 +709,29 @@ internal static class IlBodyEvidenceExtractor
         if (branchTargets.Any(target => !instructionOffsets.Contains(target)))
             throw new IlEvidenceException("MalformedIlBody");
 
+        var declaredLocalCount = 0;
+        if (!body.LocalSignature.IsNil)
+        {
+            var localSignature = reader.GetStandaloneSignature(body.LocalSignature);
+            var blob = reader.GetBlobReader(localSignature.Signature);
+            if (blob.ReadSignatureHeader().Kind != SignatureKind.LocalVariables)
+                throw new IlEvidenceException("MalformedIlBody");
+            declaredLocalCount = blob.ReadCompressedInteger();
+        }
+        if (declaredLocalCount < 0)
+            throw new IlEvidenceException("MalformedIlBody");
+        if (declaredLocalCount > limits.MaxLocalsPerBody)
+            throw new IlEvidenceException("IlLocalLimitExceeded");
+        if (!budget.TryConsume(declaredLocalCount))
+            throw new IlEvidenceException("IlTotalWorkLimitExceeded");
         var locals = body.LocalSignature.IsNil
             ? []
             : reader.GetStandaloneSignature(body.LocalSignature)
                 .DecodeLocalSignature(provider, genericContext: null)
                 .Select((type, index) => (Index: index, Type: type))
                 .ToArray();
-        if (locals.Length > limits.MaxLocalsPerBody)
-            throw new IlEvidenceException("IlLocalLimitExceeded");
-        if (!budget.TryConsume(locals.Length))
-            throw new IlEvidenceException("IlTotalWorkLimitExceeded");
+        if (locals.Length != declaredLocalCount)
+            throw new IlEvidenceException("MalformedIlBody");
         var handlers = body.ExceptionRegions
             .Select(region => $"kind:{region.Kind.ToString().ToLowerInvariant()}"
                 + $":try:{region.TryOffset:x}+{region.TryLength:x}"
