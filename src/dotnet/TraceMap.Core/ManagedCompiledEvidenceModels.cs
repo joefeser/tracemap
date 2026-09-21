@@ -89,7 +89,17 @@ internal sealed record CompiledEvidenceCandidate(
 internal sealed record CompiledInputEvaluation(
     CompiledInputProvenance? Provenance,
     IReadOnlyList<CompiledEvidenceCandidate> Candidates,
-    IReadOnlyList<string> KnownGaps)
+    IReadOnlyList<string> KnownGaps,
+    IReadOnlyList<CompiledInputBindingArtifact> BindingArtifacts)
 {
-    public static readonly CompiledInputEvaluation Disabled = new(null, [], []);
+    public static readonly CompiledInputEvaluation Disabled = new(null, [], [], []);
 }
+
+internal sealed record CompiledInputBindingArtifact(
+    string FullPath,
+    string SafeLocator,
+    string Outcome,
+    string ProvenanceState,
+    string? RawFileSha256,
+    string? AssemblyIdentity,
+    string ProvenanceBindingInputSha256);
