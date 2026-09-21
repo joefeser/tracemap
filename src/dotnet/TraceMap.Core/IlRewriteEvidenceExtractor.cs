@@ -51,14 +51,13 @@ internal static class IlRewriteEvidenceExtractor
         }
         else
         {
+            // Every declared ordinal is its own pair: identical (before,
+            // after) tuples are not deduplicated, so repeated declarations
+            // keep their own outcomes and the bounded-input digest stays
+            // distinct from a single-declaration scan.
             var declared = new List<(string Before, string After)>();
-            var seen = new HashSet<(string, string)>();
             for (var index = 0; index < beforePaths.Count; index++)
-            {
-                var candidate = (beforePaths[index], afterPaths[index]);
-                if (seen.Add(candidate))
-                    declared.Add(candidate);
-            }
+                declared.Add((beforePaths[index], afterPaths[index]));
 
             var workBudget = new IlBodyEvidenceExtractor.IlWorkBudget(bodyLimits.MaxTotalWorkUnits);
             var ordinal = 0;
@@ -94,6 +93,7 @@ internal static class IlRewriteEvidenceExtractor
             extractorIdentities = new[] { ScannerVersions.IlRewriteEvidenceExtractor, "system-reflection-metadata/10.0.0", "mono-cecil/0.11.6" },
             effectiveLimits = limits,
             effectiveBodyLimits = bodyLimits,
+            effectiveCompiledLimits = compiledLimits,
             expectedPairs = expected,
             outcomes = outcomes.Select(item => new
             {
@@ -177,18 +177,16 @@ internal static class IlRewriteEvidenceExtractor
                 edges.AddRange(join.Edges);
                 deltas.AddRange(join.Deltas);
                 gapKinds.AddRange(join.GapKinds);
-                if (join.WorkExhausted)
-                    gapKinds.Add("IlRewriteTotalWorkLimitExceeded");
             }
         }
 
         var distinctGapKinds = gapKinds.Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray();
-        // Descriptors always exist: admission computes the safe locator before
-        // touching the file, so outcomes never fall back to a raw path.
+        // Outcomes never contain a raw path: valid declarations carry the
+        // bounded safe locator and invalid ones a privacy-projected digest.
         var outcome = new IlRewritePairOutcome(
             pairId,
-            before.Descriptor!.SafeLocator,
-            after.Descriptor!.SafeLocator,
+            before.Descriptor?.SafeLocator ?? before.FallbackSafeLocator!,
+            after.Descriptor?.SafeLocator ?? after.FallbackSafeLocator!,
             distinctGapKinds.Length == 0 ? "admitted" : GapOutcome(distinctGapKinds[0]),
             before.RawFileSha256,
             after.RawFileSha256,
@@ -285,7 +283,14 @@ internal static class IlRewriteEvidenceExtractor
         ManagedMetadataExtractor.InputDescriptor? Descriptor,
         byte[]? Bytes,
         string? RawFileSha256,
-        string? Error);
+        string? Error,
+        string? FallbackSafeLocator = null);
+
+    private static string ProjectInvalidDeclarationLocator(string role, string path)
+    {
+        var projected = $"__external__/{role}/invalid-{ManagedMetadataExtractor.CanonicalDigest(new { role, path })[..12]}";
+        return projected.Length > 256 ? projected[..256] : projected;
+    }
 
     private static SideAdmission AdmitSide(
         string repoPath,
@@ -295,7 +300,23 @@ internal static class IlRewriteEvidenceExtractor
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        var descriptor = ManagedMetadataExtractor.CreateDescriptor(repoPath, path, role, limits);
+        ManagedMetadataExtractor.InputDescriptor? descriptor;
+        try
+        {
+            descriptor = ManagedMetadataExtractor.CreateDescriptor(repoPath, path, role, limits);
+        }
+        catch (Exception exception) when (exception is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            // A malformed declared path must fail closed to a bounded side
+            // gap with a privacy-projected locator, never abort the scan.
+            return new SideAdmission(
+                null,
+                null,
+                null,
+                "IlRewriteSideDeclarationInvalid",
+                ProjectInvalidDeclarationLocator(role, path));
+        }
+
         if (descriptor.SafeLocatorTextLimitExceeded)
             return new SideAdmission(descriptor, null, null, "IlRewriteSideTextLimitExceeded");
         if (!File.Exists(descriptor.FullPath))
@@ -341,8 +362,10 @@ internal static class IlRewriteEvidenceExtractor
         {
             if (!budget.TryConsume(1))
             {
-                workExhausted = true;
-                break;
+                // Joining is atomic: a pair whose join work is exhausted
+                // retains no partial edges, membership deltas, or gap kinds,
+                // only the limit gap itself.
+                return new JoinResult([], [], ["IlRewriteTotalWorkLimitExceeded"], WorkExhausted: true);
             }
 
             beforeByIdentity.TryGetValue(identity, out var beforeBodies);

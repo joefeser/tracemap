@@ -542,6 +542,126 @@ public sealed class IlRewriteEvidenceExtractorTests
     }
 
     [Fact]
+    public void Join_phase_budget_exhaustion_is_atomic_with_no_partial_edges()
+    {
+        var first = new IlBodyObservation(
+            "0x06000001",
+            "identity-a",
+            1,
+            "aaaa",
+            "eeee",
+            0,
+            "bbbb",
+            0,
+            "cccc",
+            "8",
+            false,
+            "identity-a|il-body:instructions:1:sha256:dddd",
+            "dddd",
+            []);
+        var second = new IlBodyObservation(
+            "0x06000002",
+            "identity-b",
+            1,
+            "aaaa",
+            "eeee",
+            0,
+            "bbbb",
+            0,
+            "cccc",
+            "8",
+            false,
+            "identity-b|il-body:instructions:1:sha256:dddd",
+            "dddd",
+            []);
+        var before = new IlBodyEvidenceExtractor.IlReaderResult("assembly", "module", "mvid", [first, second]);
+        var after = new IlBodyEvidenceExtractor.IlReaderResult(
+            "assembly",
+            "module",
+            "mvid",
+            [first with { MetadataToken = "0x06000009" }, second with { MetadataToken = "0x0600000a" }]);
+
+        // Budget covers exactly one join: the second identity exhausts the
+        // budget after one edge was accumulated, and the whole pair must
+        // retain no partial evidence.
+        var join = IlRewriteEvidenceExtractor.JoinPair("rewrite-pair-001", before, after, new IlBodyEvidenceExtractor.IlWorkBudget(1));
+
+        Assert.True(join.WorkExhausted);
+        Assert.Empty(join.Edges);
+        Assert.Empty(join.Deltas);
+        Assert.Equal(["IlRewriteTotalWorkLimitExceeded"], join.GapKinds);
+    }
+
+    [Fact]
+    public void Repeated_pair_declarations_keep_distinct_outcomes_and_digests()
+    {
+        using var temp = new TempDirectory();
+        var before = Path.Combine(temp.Path, "RewriteShapes.dll");
+        var after = Path.Combine(temp.Path, "RewriteShapes.after.dll");
+        WriteBeforeAssembly(before);
+        MutateConstantOperand(before, after);
+        var repeated = ScanEngine.Scan(new ScanOptions(
+            RepoRoot(),
+            TempOutput(),
+            IlRewriteEvidence: true,
+            IlRewriteBeforePaths: [before, before],
+            IlRewriteAfterPaths: [after, after]));
+        var single = Scan(PairOptions(before, after));
+
+        var provenance = repeated.Manifest.IlRewriteProvenance!;
+        Assert.Equal(2, provenance.Outcomes.Count);
+        Assert.All(provenance.Outcomes, outcome => Assert.Equal("admitted", outcome.Outcome));
+        Assert.Equal("rewrite-pair-002", provenance.Outcomes[1].PairId);
+        Assert.Equal(
+            2 * repeated.Facts.Count(fact => fact.FactType == FactTypes.ManagedIlRewriteObserved
+                && fact.Properties.GetValueOrDefault("pairId") == "rewrite-pair-001"),
+            repeated.Facts.Count(fact => fact.FactType == FactTypes.ManagedIlRewriteObserved));
+        Assert.NotEqual(single.Manifest.IlRewriteProvenance!.BoundedInputSha256, provenance.BoundedInputSha256);
+    }
+
+    [Fact]
+    public void Malformed_declared_path_fails_closed_to_a_side_gap_without_aborting()
+    {
+        var result = Scan(new ScanOptions(
+            RepoRoot(),
+            TempOutput(),
+            IlRewriteEvidence: true,
+            IlRewriteBeforePaths: ["before invalid"],
+            IlRewriteAfterPaths: ["after invalid"]));
+
+        var provenance = result.Manifest.IlRewriteProvenance!;
+        Assert.Equal("rewrite-partial", provenance.CoverageState);
+        var outcome = Assert.Single(provenance.Outcomes);
+        Assert.Equal("IlRewriteSideUnavailable", Assert.Single(outcome.GapKinds));
+        Assert.Equal("IlRewriteSideDeclarationInvalid", outcome.Cause);
+        Assert.StartsWith("__external__/rewrite-before/invalid-", outcome.BeforeSafeLocator, StringComparison.Ordinal);
+        Assert.StartsWith("__external__/rewrite-after/invalid-", outcome.AfterSafeLocator, StringComparison.Ordinal);
+        Assert.DoesNotContain(result.Facts, fact => fact.FactType is FactTypes.ManagedIlRewriteObserved or FactTypes.ManagedIlCallRetargetObserved);
+    }
+
+    [Fact]
+    public void Bounded_input_digest_commits_the_compiled_admission_policy()
+    {
+        using var temp = new TempDirectory();
+        var before = Path.Combine(temp.Path, "RewriteShapes.dll");
+        var after = Path.Combine(temp.Path, "RewriteShapes.after.dll");
+        WriteBeforeAssembly(before);
+        MutateConstantOperand(before, after);
+        var baseline = IlRewriteEvidenceExtractor.Evaluate(PairOptions(before, after));
+        var tighter = IlRewriteEvidenceExtractor.Evaluate(new ScanOptions(
+            RepoRoot(),
+            TempOutput(),
+            IlRewriteEvidence: true,
+            IlRewriteBeforePaths: [before],
+            IlRewriteAfterPaths: [after],
+            CompiledInputLimits: new CompiledInputLimits(MaxFileSizeBytes: 1_024)));
+
+        Assert.NotNull(baseline.Provenance);
+        Assert.NotNull(tighter.Provenance);
+        Assert.NotEqual(baseline.Provenance.BoundedInputSha256, tighter.Provenance.BoundedInputSha256);
+    }
+
+    [Fact]
     public void Rule_catalog_documents_the_rewrite_rules_with_limitations()
     {
         var catalog = File.ReadAllText(Path.Combine(FindRepoRoot(), "rules", "rule-catalog.yml"));
