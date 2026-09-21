@@ -456,7 +456,8 @@ internal static class IlBodyEvidenceExtractor
                 if (!budget.TryConsume(1))
                     throw new IlEvidenceException("IlTotalWorkLimitExceeded");
                 var target = CecilMethodTarget((MethodReference)instruction.Operand!, selfAssemblyIdentity, limits);
-                calls.Add(new IlCallObservation(instruction.Offset, instruction.OpCode.Name, target.Kind, target.Token, target.Identity));
+                if (IsCallObservationOpcode(instruction.OpCode.Name))
+                    calls.Add(new IlCallObservation(instruction.Offset, instruction.OpCode.Name, target.Kind, target.Token, target.Identity));
                 return $"m:{target.Kind}:{target.Token}:{target.Identity}";
             case OperandType.InlineType:
                 var typeIdentity = CecilTypeOperandIdentity((Mono.Cecil.TypeReference)instruction.Operand!);
@@ -669,6 +670,8 @@ internal static class IlBodyEvidenceExtractor
 
         var instructions = new List<string>();
         var calls = new List<IlCallObservation>();
+        var instructionOffsets = new HashSet<int>();
+        var branchTargets = new List<int>();
         var single = SingleByteOpcodes();
         var multi = MultiByteOpcodes();
         var position = 0;
@@ -679,13 +682,16 @@ internal static class IlBodyEvidenceExtractor
             if (!budget.TryConsume(1))
                 throw new IlEvidenceException("IlTotalWorkLimitExceeded");
             var offset = position;
+            instructionOffsets.Add(offset);
             var first = il[position++];
             if (first == 0xfe ? !multi.ContainsKey(il[position]) : !single.ContainsKey(first))
                 throw new IlEvidenceException("MalformedIlBody");
             var opcode = first == 0xfe ? multi[il[position++]] : single[first];
-            var operand = SrmOperand(reader, provider, il, ref position, offset, opcode, calls, budget, assemblyIdentity, limits);
+            var operand = SrmOperand(reader, provider, il, ref position, offset, opcode, calls, branchTargets, budget, assemblyIdentity, limits);
             instructions.Add($"{instructions.Count.ToString(CultureInfo.InvariantCulture)}:{offset.ToString("x", CultureInfo.InvariantCulture)}:{opcode.Name!.ToString()}:{operand}");
         }
+        if (branchTargets.Any(target => !instructionOffsets.Contains(target)))
+            throw new IlEvidenceException("MalformedIlBody");
 
         var locals = body.LocalSignature.IsNil
             ? []
@@ -753,6 +759,7 @@ internal static class IlBodyEvidenceExtractor
         int offset,
         System.Reflection.Emit.OpCode opcode,
         List<IlCallObservation> calls,
+        List<int> branchTargets,
         IlWorkBudget budget,
         string assemblyIdentity,
         IlBodyLimits limits)
@@ -763,10 +770,10 @@ internal static class IlBodyEvidenceExtractor
                 return "-";
             case System.Reflection.Emit.OperandType.ShortInlineBrTarget:
                 var shortDelta = ReadSByte(il, ref position);
-                return $"br:0x{(position + shortDelta):x}";
+                return $"br:0x{RecordBranchTarget((long)position + shortDelta, il.Length, branchTargets):x}";
             case System.Reflection.Emit.OperandType.InlineBrTarget:
                 var longDelta = ReadInt32(il, ref position);
-                return $"br:0x{(position + longDelta):x}";
+                return $"br:0x{RecordBranchTarget((long)position + longDelta, il.Length, branchTargets):x}";
             case System.Reflection.Emit.OperandType.InlineSwitch:
                 var count = ReadInt32(il, ref position);
                 if (count < 0 || (long)position + checked((long)count * sizeof(int)) > il.Length)
@@ -782,9 +789,7 @@ internal static class IlBodyEvidenceExtractor
                 for (var index = 0; index < count; index++)
                 {
                     var target = (long)position + deltas[index];
-                    if (target < 0 || target > il.Length)
-                        throw new IlEvidenceException("MalformedIlBody");
-                    targets[index] = $"0x{target:x}";
+                    targets[index] = $"0x{RecordBranchTarget(target, il.Length, branchTargets):x}";
                 }
                 return $"sw:{count.ToString(CultureInfo.InvariantCulture)}[{string.Join(",", targets)}]";
             case System.Reflection.Emit.OperandType.ShortInlineI:
@@ -815,7 +820,8 @@ internal static class IlBodyEvidenceExtractor
                     throw new IlEvidenceException("IlTotalWorkLimitExceeded");
                 var methodToken = ReadInt32(il, ref position);
                 var methodTarget = SrmMethodTarget(reader, provider, methodToken, assemblyIdentity, limits);
-                calls.Add(new IlCallObservation(offset, opcode.Name!.ToString(), methodTarget.Kind, methodTarget.Token, methodTarget.Identity));
+                if (IsCallObservationOpcode(opcode.Name!.ToString()))
+                    calls.Add(new IlCallObservation(offset, opcode.Name.ToString(), methodTarget.Kind, methodTarget.Token, methodTarget.Identity));
                 return $"m:{methodTarget.Kind}:{methodTarget.Token}:{methodTarget.Identity}";
             case System.Reflection.Emit.OperandType.InlineType:
                 var typeToken = ReadInt32(il, ref position);
@@ -934,6 +940,18 @@ internal static class IlBodyEvidenceExtractor
                 result[single ? value : value & 0xff] = opcode;
         }
         return result;
+    }
+
+    private static bool IsCallObservationOpcode(string opcode) => opcode is
+        "call" or "callvirt" or "newobj" or "ldftn" or "ldvirtftn";
+
+    private static int RecordBranchTarget(long target, int bodyLength, List<int> branchTargets)
+    {
+        if (target < 0 || target >= bodyLength)
+            throw new IlEvidenceException("MalformedIlBody");
+        var offset = (int)target;
+        branchTargets.Add(offset);
+        return offset;
     }
 
     private static sbyte ReadSByte(byte[] il, ref int position)
