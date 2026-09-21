@@ -442,6 +442,7 @@ public static class MarkdownReportWriter
         if (provenance is null)
         {
             AddPdbEvidence(lines, result);
+            AddIlBodyEvidence(lines, result);
             return;
         }
 
@@ -493,6 +494,7 @@ public static class MarkdownReportWriter
         }
 
         AddPdbEvidence(lines, result);
+        AddIlBodyEvidence(lines, result);
     }
 
     private static void AddPdbEvidence(List<string> lines, ScanResult result)
@@ -525,6 +527,35 @@ public static class MarkdownReportWriter
             if (summary.OmittedEntryCount > 0)
                 lines.Add($"- {summary.OmittedEntryCount} PDB endpoint entries omitted from the bounded manifest summary; omitted-entry SHA-256: `{summary.OmittedEntrySha256}`; exhaustive rows remain in `facts.ndjson` and `index.sqlite`.");
         }
+    }
+
+    private static void AddIlBodyEvidence(List<string> lines, ScanResult result)
+    {
+        if (result.Manifest.IlBodyProvenance is not { } il)
+            return;
+        var ilFacts = result.Facts.Where(fact => fact.RuleId is
+                RuleIds.DotNetIlBody or RuleIds.DotNetIlCall or RuleIds.DotNetIlGap)
+            .ToArray();
+        lines.Add("");
+        lines.Add("## Compiled .NET IL Body Evidence");
+        lines.Add("");
+        lines.Add($"- Coverage: `{il.CoverageState}`");
+        lines.Add($"- Artifact visibility: `{il.ArtifactVisibility}`");
+        lines.Add($"- Bounded input SHA-256: `{il.BoundedInputSha256}`");
+        lines.Add($"- Generator SHA-256: `{il.GeneratorSha256}`");
+        lines.Add($"- Method bodies: `{ilFacts.Count(fact => fact.FactType == FactTypes.ManagedIlBodyDeclared)}`; direct call sites: `{ilFacts.Count(fact => fact.FactType == FactTypes.ManagedIlCallObserved)}`; gaps: `{ilFacts.Count(fact => fact.FactType == FactTypes.AnalysisGap)}`.");
+        lines.Add("- Body identities commit every instruction operand (call targets, branch and switch targets, string digests, constants, locals, and exception regions) and are cross-checked between Mono.Cecil and a raw System.Reflection.Metadata IL reader.");
+        lines.Add("- IL evidence does not prove execution, dispatch, reachability, behavior, source ownership, semantic equivalence, or rewrite preservation.");
+        foreach (var outcome in il.Outcomes.OrderBy(item => item.SafeLocator, StringComparer.Ordinal))
+            lines.Add($"- IL input `{outcome.SafeLocator}`: `{outcome.Outcome}`, provenance `{outcome.ProvenanceState}`, gaps `{(outcome.GapKinds.Count == 0 ? "none" : string.Join(",", outcome.GapKinds))}`.");
+        foreach (var fact in ilFacts.Where(fact => fact.FactType == FactTypes.ManagedIlBodyDeclared)
+                     .OrderBy(fact => fact.Evidence.FilePath, StringComparer.Ordinal)
+                     .ThenBy(fact => fact.TargetSymbol, StringComparer.Ordinal)
+                     .Take(CompiledMetadataFactLimit))
+            lines.Add($"- Body `{fact.TargetSymbol}` ({fact.Properties.GetValueOrDefault("instructionCount")} instructions, `{fact.Properties.GetValueOrDefault("localCount")}` locals, `{fact.Properties.GetValueOrDefault("exceptionRegionCount")}` exception regions).");
+        var bodyOmitted = Math.Max(0, ilFacts.Count(fact => fact.FactType == FactTypes.ManagedIlBodyDeclared) - CompiledMetadataFactLimit);
+        if (bodyOmitted > 0)
+            lines.Add($"- {bodyOmitted} additional IL body rows omitted from this report display; exhaustive rows remain in `facts.ndjson` and `index.sqlite`.");
     }
 
     private static void AddFactSection(List<string> lines, string title, IEnumerable<CodeFact> facts, Func<CodeFact, string> format)

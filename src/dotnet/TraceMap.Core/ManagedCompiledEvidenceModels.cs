@@ -98,6 +98,7 @@ internal sealed record CompiledInputEvaluation(
 internal sealed record CompiledInputBindingArtifact(
     string FullPath,
     string SafeLocator,
+    string Role,
     string Outcome,
     string ProvenanceState,
     string? RawFileSha256,
