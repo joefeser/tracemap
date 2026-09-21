@@ -2787,10 +2787,17 @@ with an omitted-count digest commitment) rather than guessed insertion or
 removal edges; more than one candidate on either side emits
 `IlRewriteIdentityAmbiguous`; differing assembly identities emit
 `IlRewriteAssemblyIdentityMismatch` with no joins. Join work is charged to the
-shared `--il-max-work` budget; exhaustion emits
-`IlRewriteTotalWorkLimitExceeded` instead of guessed edges. Requesting the
-flag without pairs emits `IlRewritePairUnavailable`; count mismatches emit
-`IlRewritePairDeclarationInvalid`.
+shared `--il-max-work` budget; exhaustion is atomic per pair and emits only
+`IlRewriteTotalWorkLimitExceeded` — no partial edges, membership deltas, or
+other gap kinds survive a join-phase exhaustion. Requesting the flag without
+pairs emits `IlRewritePairUnavailable`; count mismatches emit
+`IlRewritePairDeclarationInvalid`; malformed declared paths fail closed to
+`IlRewriteSideUnavailable` with cause `IlRewriteSideDeclarationInvalid` and a
+privacy-projected locator instead of aborting the scan. Repeated identical
+`(before, after)` declarations are not deduplicated: every declared ordinal
+keeps its own outcome, and the bounded-input digest — which also commits the
+effective `CompiledInputLimits` admission policy alongside the rewrite and
+body limits — stays distinct from a single-declaration scan.
 
 The lane is otherwise inert: without the flag a scan produces no rewrite
 facts, no `ilRewriteProvenance` manifest section, no rewrite known gaps, and

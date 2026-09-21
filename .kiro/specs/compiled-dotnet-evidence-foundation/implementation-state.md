@@ -608,3 +608,15 @@ assembly identities, insertion/removal relationship edges, and the extended
 ECMA-335 mutation matrix from #766. Task 11's legacy Windows, `dotnetperf`,
 and C++/CLI lanes remain separate. The Task 10 checkbox stays open until
 #766's full public rewrite-suite acceptance is met.
+
+Review remediation on 2026-09-21: the Qodo review of PR #776 head
+`1d41d3af3dcac554b693db7106c40ab75b9c89ab` filed four findings; all are
+patched. Join-phase budget exhaustion is now atomic (no partial edges,
+membership deltas, or gap kinds survive), malformed declared paths fail
+closed to `IlRewriteSideUnavailable` with cause
+`IlRewriteSideDeclarationInvalid` and a privacy-projected locator instead of
+aborting the scan, repeated identical pair declarations keep their own
+ordinal outcomes without dedupe, and the bounded-input digest commits the
+effective `CompiledInputLimits` admission policy. Four regression tests
+cover the behaviors. Local re-validation: focused
+`IlRewriteEvidenceExtractorTests` 27 passed; build zero warnings/errors.
