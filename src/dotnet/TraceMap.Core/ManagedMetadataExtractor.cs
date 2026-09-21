@@ -884,7 +884,7 @@ public static class ManagedMetadataExtractor
             assemblyReferenceIdentity);
     }
 
-    private static long PreflightManagedInput(byte[] bytes, CompiledInputLimits limits)
+    internal static long PreflightManagedInput(byte[] bytes, CompiledInputLimits limits)
     {
         using var stream = new MemoryStream(bytes, writable: false);
         using var pe = new PEReader(stream, PEStreamOptions.LeaveOpen);

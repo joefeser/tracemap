@@ -58,7 +58,12 @@ internal static class IlRewriteEvidenceExtractor
             evaluated.Add(SyntheticPairGap(
                 "rewrite-input-set",
                 "IlRewritePairDeclarationInvalid",
-                detail: $"before={beforePaths.Count.ToString(CultureInfo.InvariantCulture)},after={afterPaths.Count.ToString(CultureInfo.InvariantCulture)},blankSlots={(hasBlankSlot ? "present" : "none")}"));
+                detail: $"before={declaredBefore.Count.ToString(CultureInfo.InvariantCulture)},after={declaredAfter.Count.ToString(CultureInfo.InvariantCulture)},blankSlots={(hasBlankSlot ? "present" : "none")}",
+                declarationSha256: ManagedMetadataExtractor.CanonicalDigest(new
+                {
+                    before = ProjectDeclaredSlots(options.RepoPath, declaredBefore, "rewrite-before", compiledLimits),
+                    after = ProjectDeclaredSlots(options.RepoPath, declaredAfter, "rewrite-after", compiledLimits)
+                })));
         }
         else
         {
@@ -71,6 +76,7 @@ internal static class IlRewriteEvidenceExtractor
                 declared.Add((beforePaths[index], afterPaths[index]));
 
             var workBudget = new IlBodyEvidenceExtractor.IlWorkBudget(bodyLimits.MaxTotalWorkUnits);
+            var metadataBudget = new IlBodyEvidenceExtractor.IlWorkBudget(compiledLimits.MaxTotalWorkUnits);
             var ordinal = 0;
             foreach (var (beforePath, afterPath) in declared.Take(limits.MaxPairCount))
             {
@@ -78,7 +84,7 @@ internal static class IlRewriteEvidenceExtractor
                 ordinal++;
                 var pairId = $"rewrite-pair-{ordinal.ToString("D3", CultureInfo.InvariantCulture)}";
                 evaluated.Add(EvaluatePair(
-                    options.RepoPath, pairId, beforePath, afterPath, compiledLimits, bodyLimits, workBudget, cancellationToken));
+                    options.RepoPath, pairId, beforePath, afterPath, compiledLimits, bodyLimits, workBudget, metadataBudget, cancellationToken));
             }
 
             for (var index = limits.MaxPairCount; index < declared.Count; index++)
@@ -160,6 +166,7 @@ internal static class IlRewriteEvidenceExtractor
         CompiledInputLimits compiledLimits,
         IlBodyLimits bodyLimits,
         IlBodyEvidenceExtractor.IlWorkBudget workBudget,
+        IlBodyEvidenceExtractor.IlWorkBudget metadataBudget,
         CancellationToken cancellationToken)
     {
         var before = AdmitSide(repoPath, beforePath, "rewrite-before", compiledLimits, cancellationToken);
@@ -175,8 +182,8 @@ internal static class IlRewriteEvidenceExtractor
             sideFailures.Add(new IlRewriteSideFailure("after", "IlRewriteSideUnavailable", afterError, after.Descriptor?.SafeLocator ?? after.FallbackSafeLocator!));
         gapKinds.AddRange(sideFailures.Select(failure => failure.GapKind));
 
-        IlBodyEvidenceExtractor.IlReaderResult? beforeResult = ReadAdmittedSide(before.Bytes, bodyLimits, workBudget, cancellationToken, "before", before.Descriptor?.SafeLocator ?? before.FallbackSafeLocator!, sideFailures, gapKinds);
-        IlBodyEvidenceExtractor.IlReaderResult? afterResult = ReadAdmittedSide(after.Bytes, bodyLimits, workBudget, cancellationToken, "after", after.Descriptor?.SafeLocator ?? after.FallbackSafeLocator!, sideFailures, gapKinds);
+        IlBodyEvidenceExtractor.IlReaderResult? beforeResult = ReadAdmittedSide(before.Bytes, compiledLimits, metadataBudget, bodyLimits, workBudget, cancellationToken, "before", before.Descriptor?.SafeLocator ?? before.FallbackSafeLocator!, sideFailures, gapKinds);
+        IlBodyEvidenceExtractor.IlReaderResult? afterResult = ReadAdmittedSide(after.Bytes, compiledLimits, metadataBudget, bodyLimits, workBudget, cancellationToken, "after", after.Descriptor?.SafeLocator ?? after.FallbackSafeLocator!, sideFailures, gapKinds);
 
         var edges = new List<IlRewriteEdge>();
         var deltas = new List<IlRewriteMembershipDelta>();
@@ -230,6 +237,8 @@ internal static class IlRewriteEvidenceExtractor
 
     private static IlBodyEvidenceExtractor.IlReaderResult? ReadAdmittedSide(
         byte[]? bytes,
+        CompiledInputLimits compiledLimits,
+        IlBodyEvidenceExtractor.IlWorkBudget metadataBudget,
         IlBodyLimits bodyLimits,
         IlBodyEvidenceExtractor.IlWorkBudget budget,
         CancellationToken cancellationToken,
@@ -242,6 +251,12 @@ internal static class IlRewriteEvidenceExtractor
             return null;
         try
         {
+            // Unlike the standalone body lane, these inputs have not passed
+            // compiled-metadata admission. Reject unsupported assembly shapes
+            // and enforce metadata row/work bounds before either body reader.
+            var metadataWork = ManagedMetadataExtractor.PreflightManagedInput(bytes, compiledLimits);
+            if (!metadataBudget.TryConsume(metadataWork))
+                throw new ManagedMetadataExtractor.ManagedInputException("limit-exhausted", "ManagedInputTotalWorkLimitExceeded");
             // The raw System.Reflection.Metadata reader runs first so every
             // bound (opcode table, operand extent, switch table, text limit)
             // is validated before Mono.Cecil materializes the same operands,
@@ -283,7 +298,11 @@ internal static class IlRewriteEvidenceExtractor
 
     private static string RewriteGapKind(string readingGapKind) => readingGapKind switch
     {
-        "IlTotalWorkLimitExceeded" => "IlRewriteTotalWorkLimitExceeded",
+        "IlTotalWorkLimitExceeded" or "ManagedInputTotalWorkLimitExceeded" => "IlRewriteTotalWorkLimitExceeded",
+        "ManagedInputTypeCountLimitExceeded" => "IlRewriteTypeCountLimitExceeded",
+        "ManagedInputMemberCountLimitExceeded" => "IlRewriteMemberCountLimitExceeded",
+        "ManagedInputTextLimitExceeded" => "IlRewriteTextLimitExceeded",
+        "ManagedInputSignatureNestingLimitExceeded" => "IlRewriteSignatureNestingLimitExceeded",
         "IlBodyCountLimitExceeded" => "IlRewriteBodyCountLimitExceeded",
         "IlInstructionLimitExceeded" => "IlRewriteInstructionLimitExceeded",
         "IlLocalLimitExceeded" => "IlRewriteLocalLimitExceeded",
@@ -361,6 +380,11 @@ internal static class IlRewriteEvidenceExtractor
             return admitted.SafeLocatorTextLimitExceeded
                 ? new SideAdmission(admitted, null, null, "IlRewriteSideTextLimitExceeded")
                 : new SideAdmission(admitted, bytes, rawSha256, null);
+        }
+        catch (ManagedMetadataExtractor.ManagedInputException exception)
+        {
+            // The file may grow between the length precheck and bounded read.
+            return new SideAdmission(descriptor, null, null, exception.GapKind);
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or InvalidOperationException)
         {
@@ -696,7 +720,8 @@ internal static class IlRewriteEvidenceExtractor
         string gapKind,
         string? detail = null,
         string? beforeSafeLocator = null,
-        string? afterSafeLocator = null) => new(
+        string? afterSafeLocator = null,
+        string? declarationSha256 = null) => new(
         new IlRewritePairOutcome(
             pairId,
             beforeSafeLocator ?? "none",
@@ -706,7 +731,7 @@ internal static class IlRewriteEvidenceExtractor
             null,
             null,
             null,
-            ManagedMetadataExtractor.CanonicalDigest(new { pairId, outcome = "gap", gapKind, detail }),
+            ManagedMetadataExtractor.CanonicalDigest(new { pairId, outcome = "gap", gapKind, detail, declarationSha256 }),
             [gapKind],
             null,
             detail),
@@ -737,6 +762,9 @@ internal static class IlRewriteEvidenceExtractor
         var nonMembership = gapKinds.Where(kind => kind is not ("IlRewriteMethodBeforeOnly" or "IlRewriteMethodAfterOnly")).ToArray();
         return GapOutcome(nonMembership.Length > 0 ? nonMembership[0] : gapKinds[0]);
     }
+
+    private static string?[] ProjectDeclaredSlots(string repoPath, IReadOnlyList<string> paths, string role, CompiledInputLimits limits) =>
+        paths.Select(path => string.IsNullOrWhiteSpace(path) ? null : DeclaredLocator(repoPath, path.Trim(), role, limits)).ToArray();
 
     private static IReadOnlyList<string> CleanOrderedPaths(IReadOnlyList<string>? values) =>
         (values ?? [])

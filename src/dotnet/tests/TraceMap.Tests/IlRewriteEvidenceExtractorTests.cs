@@ -16,6 +16,124 @@ namespace TraceMap.Tests;
 public sealed class IlRewriteEvidenceExtractorTests
 {
     [Fact]
+    public void Mixed_mode_side_is_unsupported_even_when_its_IL_bodies_agree()
+    {
+        using var temp = new TempDirectory();
+        var path = Path.Combine(temp.Path, "mixed.dll");
+        WriteBeforeAssembly(path);
+        var bytes = File.ReadAllBytes(path);
+        using (var pe = new System.Reflection.PortableExecutable.PEReader(new MemoryStream(bytes)))
+        {
+            var flagsOffset = pe.PEHeaders.CorHeaderStartOffset + 16;
+            bytes[flagsOffset] &= 0xfe; // Clear COMIMAGE_FLAGS_ILONLY without changing any IL.
+        }
+        File.WriteAllBytes(path, bytes);
+
+        var evaluation = IlRewriteEvidenceExtractor.Evaluate(PairOptions(path, path));
+
+        Assert.Equal("rewrite-partial", evaluation.Provenance!.CoverageState);
+        var pair = Assert.Single(evaluation.Pairs);
+        Assert.Empty(pair.Edges);
+        Assert.Equal("unsupported", pair.Outcome.Outcome);
+        Assert.All(pair.SideFailures, failure => Assert.Equal("NativeOrMixedModeManagedInput", failure.Cause));
+        Assert.Equal(2, pair.SideFailures.Count);
+    }
+
+    [Fact]
+    public void Multi_module_manifest_cannot_claim_complete_rewrite_coverage()
+    {
+        using var temp = new TempDirectory();
+        var path = Path.Combine(temp.Path, "multi.dll");
+        var metadata = new System.Reflection.Metadata.Ecma335.MetadataBuilder();
+        metadata.AddModule(0, metadata.GetOrAddString("multi.dll"), metadata.GetOrAddGuid(Guid.Empty), default, default);
+        metadata.AddAssembly(metadata.GetOrAddString("Multi"), new Version(1, 0), default, default,
+            (System.Reflection.AssemblyFlags)0, System.Reflection.AssemblyHashAlgorithm.Sha256);
+        metadata.AddAssemblyFile(metadata.GetOrAddString("secondary.netmodule"), default, containsMetadata: true);
+        metadata.AddTypeDefinition(System.Reflection.TypeAttributes.NotPublic, default, metadata.GetOrAddString("<Module>"), default,
+            System.Reflection.Metadata.Ecma335.MetadataTokens.FieldDefinitionHandle(1),
+            System.Reflection.Metadata.Ecma335.MetadataTokens.MethodDefinitionHandle(1));
+        var pe = new System.Reflection.PortableExecutable.ManagedPEBuilder(
+            new System.Reflection.PortableExecutable.PEHeaderBuilder(),
+            new System.Reflection.Metadata.Ecma335.MetadataRootBuilder(metadata), new BlobBuilder(),
+            flags: System.Reflection.PortableExecutable.CorFlags.ILOnly);
+        var blob = new BlobBuilder();
+        pe.Serialize(blob);
+        File.WriteAllBytes(path, blob.ToArray());
+
+        var pair = Assert.Single(IlRewriteEvidenceExtractor.Evaluate(PairOptions(path, path)).Pairs);
+
+        Assert.Empty(pair.Edges);
+        Assert.Equal("unsupported", pair.Outcome.Outcome);
+        Assert.Equal(2, pair.SideFailures.Count);
+        Assert.All(pair.SideFailures, failure => Assert.Equal("MultiModuleManagedAssemblyUnsupported", failure.Cause));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Rewrite_sides_enforce_compiled_metadata_admission_limits(bool workLimit)
+    {
+        using var temp = new TempDirectory();
+        var path = Path.Combine(temp.Path, "bounded.dll");
+        WriteBeforeAssembly(path);
+        var options = PairOptions(path, path) with
+        {
+            CompiledInputLimits = workLimit
+                ? new CompiledInputLimits(MaxTotalWorkUnits: 1)
+                : new CompiledInputLimits(MaxMemberCount: 1)
+        };
+
+        var pair = Assert.Single(IlRewriteEvidenceExtractor.Evaluate(options).Pairs);
+
+        Assert.Empty(pair.Edges);
+        Assert.Equal("limit-exhausted", pair.Outcome.Outcome);
+        Assert.Equal(2, pair.SideFailures.Count);
+        Assert.All(pair.SideFailures, failure => Assert.Equal(workLimit
+            ? "ManagedInputTotalWorkLimitExceeded" : "ManagedInputMemberCountLimitExceeded", failure.Cause));
+    }
+
+    [Fact]
+    public void Metadata_work_budget_is_shared_across_sides_and_pairs()
+    {
+        using var temp = new TempDirectory();
+        var path = Path.Combine(temp.Path, "bounded.dll");
+        WriteBeforeAssembly(path);
+        var workPerSide = ManagedMetadataExtractor.PreflightManagedInput(File.ReadAllBytes(path), new CompiledInputLimits());
+        var options = PairOptions(path, path) with
+        {
+            IlRewriteBeforePaths = [path, path],
+            IlRewriteAfterPaths = [path, path],
+            CompiledInputLimits = new CompiledInputLimits(MaxTotalWorkUnits: 3 * workPerSide)
+        };
+
+        var evaluation = IlRewriteEvidenceExtractor.Evaluate(options);
+
+        Assert.Equal("admitted", evaluation.Pairs[0].Outcome.Outcome);
+        Assert.Empty(evaluation.Pairs[1].Edges);
+        var failure = Assert.Single(evaluation.Pairs[1].SideFailures);
+        Assert.Equal("after", failure.Side);
+        Assert.Equal("ManagedInputTotalWorkLimitExceeded", failure.Cause);
+    }
+
+    [Fact]
+    public void Invalid_declaration_digest_preserves_projected_paths_and_blank_ordinals()
+    {
+        var options = PairOptions("first.dll", "after.dll") with
+        {
+            IlRewriteBeforePaths = ["first.dll", ""],
+            IlRewriteAfterPaths = ["after.dll", "after.dll"]
+        };
+        var first = IlRewriteEvidenceExtractor.Evaluate(options).Provenance!;
+        var movedBlank = IlRewriteEvidenceExtractor.Evaluate(options with { IlRewriteBeforePaths = ["", "first.dll"] }).Provenance!;
+        var changedPath = IlRewriteEvidenceExtractor.Evaluate(options with { IlRewriteBeforePaths = ["other.dll", ""] }).Provenance!;
+
+        Assert.NotEqual(first.BoundedInputSha256, movedBlank.BoundedInputSha256);
+        Assert.NotEqual(first.BoundedInputSha256, changedPath.BoundedInputSha256);
+        Assert.Equal("IlRewritePairDeclarationInvalid", Assert.Single(first.Outcomes[0].GapKinds));
+        Assert.DoesNotContain(RepoRoot(), JsonSerializer.Serialize(first), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Changed_constant_operand_with_same_opcodes_emits_operand_only_change_edge()
     {
         using var temp = new TempDirectory();
