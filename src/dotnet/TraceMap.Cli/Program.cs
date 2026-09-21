@@ -280,6 +280,9 @@ public static class TraceMapCommand
                 ParsePositiveInt(values, "--pdb-max-documents", 50_000),
                 ParsePositiveInt(values, "--pdb-max-methods", 250_000),
                 ParsePositiveInt(values, "--pdb-max-sequence-points", 1_000_000),
+                ParsePositiveInt(values, "--pdb-max-source-files", 50_000),
+                ParsePositiveLong(values, "--pdb-max-source-file-bytes", 67_108_864),
+                ParsePositiveLong(values, "--pdb-max-source-total-bytes", 1_073_741_824),
                 ParsePositiveInt(values, "--pdb-max-text", 4_096),
                 ParsePositiveLong(values, "--pdb-max-work", 1_500_000)));
         var receiptRecorder = new ScanReceiptRecorder(
@@ -2741,6 +2744,9 @@ public static class TraceMapCommand
               --pdb-max-documents <count>
               --pdb-max-methods <count>
               --pdb-max-sequence-points <count>
+              --pdb-max-source-files <count>
+              --pdb-max-source-file-bytes <count>
+              --pdb-max-source-total-bytes <count>
               --pdb-max-text <count>
               --pdb-max-work <count>
                                        Positive deterministic PDB-input limits; max-text must be at least 71.

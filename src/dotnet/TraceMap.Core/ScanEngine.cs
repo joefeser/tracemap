@@ -414,6 +414,7 @@ public static class ScanEngine
         }
         cancellationToken.ThrowIfCancellationRequested();
 
+        manifest = PortablePdbExtractor.FinalizeManifest(manifest, facts);
         manifest = manifest with
         {
             SourceMetadataReconciliation = SourceMetadataReconciler.BuildSummary(manifest, facts),

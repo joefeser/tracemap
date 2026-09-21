@@ -22,10 +22,12 @@ internal static class PortablePdbExtractor
     internal const string PdbLocationKind = "portable-pdb-v1";
     internal const string Limitation = "PDB evidence proves only bounded compiler-produced debug metadata bound to one admitted assembly; it does not prove execution, reachability, behavior, source semantics, IL calls, or rewrite preservation.";
     internal const string GapLimitation = "This categorical gap reduces only the explicitly bounded PDB lane; it does not prove absence and never alters source-derived evidence.";
+    internal const int MaximumArtifactCount = 32;
 
     private static readonly Guid Sha1DocumentHashAlgorithm = new("ff1816ec-aa5e-4d10-87f7-6f4963833460");
     private static readonly Guid Sha256DocumentHashAlgorithm = new("8829d00f-11b8-4213-878b-770e8597ac16");
     private static readonly Guid FSharpLanguage = new("ab4f38c9-b6e6-43ba-be3b-58080b2ccce3");
+    private static readonly byte[] WindowsPdbSignature = "Microsoft C/C++ MSF 7.00\r\n\u001aDS\0\0\0"u8.ToArray();
 
     internal static PdbInputEvaluation Evaluate(
         string repoPath,
@@ -40,8 +42,12 @@ internal static class PortablePdbExtractor
         var limits = options.PdbInputLimits ?? new PdbInputLimits();
         ValidateLimits(limits);
         var generatorSha256 = GeneratorSha256();
-        var expected = paths.Select(path => new PdbExpectedInput(BoundedSafeLocator(repoPath, ResolvePath(repoPath, path), limits.MaxTextLength))).ToArray();
-        var omitted = expected.Skip(limits.MaxArtifactCount).ToArray();
+        var expected = paths.Take(limits.MaxArtifactCount)
+            .Select(path => new PdbExpectedInput(BoundedSafeLocator(repoPath, ResolvePath(repoPath, path), limits.MaxTextLength)))
+            .ToArray();
+        var omitted = paths.Skip(limits.MaxArtifactCount)
+            .Select(path => new PdbExpectedInput(BoundedSafeLocator(repoPath, ResolvePath(repoPath, path), limits.MaxTextLength)))
+            .ToArray();
         var omittedDigest = omitted.Length == 0 ? null : CanonicalDigest(omitted);
         var compiledBindings = ReadCompiledBindings(
             repoPath,
@@ -49,7 +55,7 @@ internal static class PortablePdbExtractor
             compiledEvaluation,
             options.CompiledInputLimits?.MaxFileSizeBytes ?? new CompiledInputLimits().MaxFileSizeBytes);
         var evaluated = new List<EvaluatedPdbInput>();
-        long work = 0;
+        var workBudget = new PdbWorkBudget(limits.MaxTotalWorkUnits);
 
         foreach (var path in paths.Take(limits.MaxArtifactCount))
         {
@@ -87,12 +93,14 @@ internal static class PortablePdbExtractor
             var rawSha256 = Sha256(bytes);
             if (!IsPortablePdb(bytes))
             {
-                evaluated.Add(Gap(
-                    safeLocator,
-                    OperatingSystem.IsWindows() ? "unsupported" : "unsupported-platform",
-                    "windows-pdb",
-                    OperatingSystem.IsWindows() ? "WindowsPdbIndependentReaderUnavailable" : "WindowsPdbRequiresWindows",
-                    rawSha256));
+                evaluated.Add(IsWindowsPdb(bytes)
+                    ? Gap(
+                        safeLocator,
+                        OperatingSystem.IsWindows() ? "unsupported" : "unsupported-platform",
+                        "windows-pdb",
+                        OperatingSystem.IsWindows() ? "WindowsPdbIndependentReaderUnavailable" : "WindowsPdbRequiresWindows",
+                        rawSha256)
+                    : Gap(safeLocator, "malformed", "unknown", "MalformedPdbInput", rawSha256));
                 continue;
             }
 
@@ -126,23 +134,8 @@ internal static class PortablePdbExtractor
                     continue;
                 }
 
-                var observations = ReadPortablePdb(reader, contentIdentity, limits);
-                if (observations.Documents.Any(item => item.Identity.Length > limits.MaxTextLength
-                        || item.NameHash.Length > limits.MaxTextLength || item.Checksum.Length > limits.MaxTextLength)
-                    || observations.Methods.Any(item => item.Identity.Length > limits.MaxTextLength
-                        || item.SequencePoints.Any(point => point.Identity.Length > limits.MaxTextLength)))
-                {
-                    evaluated.Add(Gap(safeLocator, "limit-exhausted", "portable", "PdbInputTextLimitExceeded", rawSha256, contentIdentity, match));
-                    continue;
-                }
-                work += observations.Documents.Count + observations.Methods.Count
-                    + observations.Methods.Sum(method => method.SequencePoints.Count);
-                if (work > limits.MaxTotalWorkUnits)
-                {
-                    evaluated.Add(Gap(safeLocator, "limit-exhausted", "portable", "PdbInputTotalWorkLimitExceeded", rawSha256, contentIdentity, match));
-                    continue;
-                }
-                var cecilShapes = ReadCecilShapes(match.Bytes, bytes);
+                var observations = ReadPortablePdb(reader, contentIdentity, limits, workBudget);
+                var cecilShapes = ReadCecilShapes(match.Bytes, bytes, workBudget);
                 var srmShapes = CanonicalShapes(observations.Documents, observations.Methods);
                 if (!cecilShapes.SequenceEqual(srmShapes, StringComparer.Ordinal))
                 {
@@ -226,7 +219,7 @@ internal static class PortablePdbExtractor
             .OrderBy(value => value, StringComparer.Ordinal)
             .Select(value => $"PDB coverage reduced: {value}.")
             .ToArray();
-        return new PdbInputEvaluation(provenance, evaluated, gaps);
+        return new PdbInputEvaluation(provenance, evaluated, gaps, workBudget.Consumed);
     }
 
     internal static IReadOnlyList<CodeFact> MaterializeFacts(
@@ -238,11 +231,35 @@ internal static class PortablePdbExtractor
     {
         if (evaluation.Provenance is null)
             return [];
-        var facts = new List<CodeFact>();
-        foreach (var input in evaluation.Inputs.OrderBy(item => item.Outcome.SafeLocator, StringComparer.Ordinal))
+        var sourceIndex = BuildSourceChecksumIndex(repoPath, inventory, evaluation.Inputs, evaluation.Provenance.EffectiveLimits, evaluation.ConsumedWorkUnits);
+        var plans = evaluation.Inputs.Select(input =>
         {
+            var sourceMatches = MatchSourceDocuments(sourceIndex, input.Documents);
+            var metadataCandidates = input.Methods.ToDictionary(
+                method => method.MethodRowId,
+                method => compiledFacts.Where(fact =>
+                        fact.FactType == FactTypes.ManagedMethodDeclared
+                        && string.Equals(fact.Evidence.FilePath, input.Outcome.MatchedAssemblySafeLocator, StringComparison.Ordinal)
+                        && string.Equals(fact.Properties.GetValueOrDefault("metadataToken"), method.MetadataToken, StringComparison.Ordinal)
+                        && string.Equals(fact.Properties.GetValueOrDefault("sourceReconciliationEligibility"), "eligible", StringComparison.Ordinal))
+                    .ToArray());
+            return new PdbMaterializationPlan(input, sourceMatches, metadataCandidates);
+        }).ToArray();
+        var reconciliationIncomplete = plans.Any(plan => plan.Input.Outcome.Outcome == "admitted"
+            && (plan.SourceMatches.Values.Any(match => match.Candidates.Count != 1)
+                || plan.MetadataCandidates.Values.Any(candidates => candidates.Length != 1)));
+        var provenance = evaluation.Provenance with
+        {
+            CoverageState = evaluation.Provenance.CoverageState == "pdb-complete" && !reconciliationIncomplete
+                ? "pdb-complete"
+                : "pdb-partial"
+        };
+        var facts = new List<CodeFact>();
+        foreach (var plan in plans.OrderBy(item => item.Input.Outcome.SafeLocator, StringComparer.Ordinal))
+        {
+            var input = plan.Input;
             var outcome = input.Outcome;
-            var common = CommonProperties(evaluation.Provenance, outcome);
+            var common = CommonProperties(provenance, outcome);
             if (outcome.Outcome != "admitted")
             {
                 foreach (var gapKind in outcome.GapKinds.OrderBy(value => value, StringComparer.Ordinal))
@@ -264,7 +281,7 @@ internal static class PortablePdbExtractor
                 }));
             facts.Add(inputFact);
 
-            var sourceMatches = MatchSourceDocuments(repoPath, inventory, input.Documents);
+            var sourceMatches = plan.SourceMatches;
             var documentFacts = new Dictionary<int, CodeFact>();
             foreach (var document in input.Documents.OrderBy(item => item.RowId))
             {
@@ -297,7 +314,7 @@ internal static class PortablePdbExtractor
                         manifest,
                         FactTypes.PdbSourceDocumentReconciled,
                         RuleIds.DotNetPdbIdentity,
-                        EvidenceTiers.Tier1Semantic,
+                        EvidenceTiers.Tier2Structural,
                         new EvidenceSpan(sourcePath, 1, 1, null, nameof(PortablePdbExtractor), ScannerVersions.PortablePdbExtractor),
                         sourceSymbol: document.Identity,
                         targetSymbol: $"source-file:{ManagedMetadataExtractor.EncodeIdentityComponent(sourcePath)}",
@@ -344,12 +361,7 @@ internal static class PortablePdbExtractor
                     }));
                 facts.Add(methodFact);
 
-                var metadataCandidates = compiledFacts.Where(fact =>
-                        fact.FactType == FactTypes.ManagedMethodDeclared
-                        && string.Equals(fact.Evidence.FilePath, outcome.MatchedAssemblySafeLocator, StringComparison.Ordinal)
-                        && string.Equals(fact.Properties.GetValueOrDefault("metadataToken"), method.MetadataToken, StringComparison.Ordinal)
-                        && string.Equals(fact.Properties.GetValueOrDefault("sourceReconciliationEligibility"), "eligible", StringComparison.Ordinal))
-                    .ToArray();
+                var metadataCandidates = plan.MetadataCandidates[method.MethodRowId];
                 if (metadataCandidates.Length == 1)
                 {
                     var metadata = metadataCandidates[0];
@@ -388,8 +400,6 @@ internal static class PortablePdbExtractor
                             ["pdbMethodIdentity"] = method.Identity,
                             ["candidateCount"] = metadataCandidates.Length.ToString(CultureInfo.InvariantCulture)
                         })));
-                    foreach (var point in method.SequencePoints.OrderBy(item => item.Ordinal))
-                        AddSequencePointFact(facts, manifest, outcome, common, input, sourceMatches, documentFacts, methodFact, null, point);
                 }
             }
         }
@@ -424,14 +434,28 @@ internal static class PortablePdbExtractor
                 fact.Evidence.ExtractorVersion,
                 fact.Properties.GetValueOrDefault("pdbProvenanceState") ?? string.Empty,
                 fact.Properties.GetValueOrDefault("provenanceBindingInputSha256") ?? string.Empty,
+                fact.Evidence.FilePath,
+                fact.Evidence.StartLine,
+                fact.Evidence.EndLine,
+                fact.CommitSha,
                 fact.Properties.GetValueOrDefault("limitation") ?? Limitation))
             .ToArray();
         var retained = allEntries.Take(maximumEntries).ToArray();
         var omitted = allEntries.Skip(maximumEntries).ToArray();
+        var coverage = pdbFacts.Any(fact => fact.FactType == FactTypes.AnalysisGap)
+            ? "pdb-partial"
+            : provenance.CoverageState;
+        var summaryInputSha256 = CanonicalDigest(new
+        {
+            provenance.BoundedInputSha256,
+            manifest.SourceSnapshotDigest,
+            manifest.CommitSha,
+            factIds = pdbFacts.Select(fact => fact.FactId).Order(StringComparer.Ordinal).ToArray()
+        });
         return new PdbEvidenceSummary(
             SummarySchemaVersion,
-            provenance.CoverageState,
-            provenance.BoundedInputSha256,
+            coverage,
+            summaryInputSha256,
             provenance.GeneratorSha256,
             pdbFacts.Count(fact => fact.FactType == FactTypes.PdbDocumentDeclared),
             pdbFacts.Count(fact => fact.FactType == FactTypes.PdbMethodDeclared),
@@ -442,6 +466,31 @@ internal static class PortablePdbExtractor
             retained,
             omitted.Length,
             omitted.Length == 0 ? null : CanonicalDigest(omitted));
+    }
+
+    internal static ScanManifest FinalizeManifest(ScanManifest manifest, IReadOnlyList<CodeFact> facts)
+    {
+        if (manifest.PdbInputProvenance is not { } provenance)
+            return manifest;
+        var gapKinds = facts.Where(fact => fact.RuleId == RuleIds.DotNetPdbGap && fact.FactType == FactTypes.AnalysisGap)
+            .Select(fact => fact.Properties.GetValueOrDefault("gapKind"))
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Select(value => value!)
+            .Distinct(StringComparer.Ordinal)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+        var coverage = gapKinds.Length == 0 && provenance.CoverageState == "pdb-complete"
+            ? "pdb-complete"
+            : "pdb-partial";
+        return manifest with
+        {
+            PdbInputProvenance = provenance with { CoverageState = coverage },
+            KnownGaps = manifest.KnownGaps
+                .Concat(gapKinds.Select(value => $"PDB coverage reduced: {value}."))
+                .Distinct(StringComparer.Ordinal)
+                .Order(StringComparer.Ordinal)
+                .ToArray()
+        };
     }
 
     private static IReadOnlyList<string> SupportingFactIds(CodeFact fact)
@@ -504,13 +553,15 @@ internal static class PortablePdbExtractor
     private static (IReadOnlyList<PdbDocumentObservation> Documents, IReadOnlyList<PdbMethodObservation> Methods) ReadPortablePdb(
         MetadataReader reader,
         string contentIdentity,
-        PdbInputLimits limits)
+        PdbInputLimits limits,
+        PdbWorkBudget workBudget)
     {
         if (reader.Documents.Count > limits.MaxDocumentCount)
             throw new PdbInputException("PdbDocumentCountExceeded");
         var documents = new List<PdbDocumentObservation>();
         foreach (var handle in reader.Documents)
         {
+            workBudget.Consume("PdbInputTotalWorkLimitExceeded");
             var document = reader.GetDocument(handle);
             var rowId = MetadataTokens.GetRowNumber(handle);
             var algorithm = document.HashAlgorithm.IsNil ? Guid.Empty : reader.GetGuid(document.HashAlgorithm);
@@ -518,38 +569,49 @@ internal static class PortablePdbExtractor
             var language = document.Language.IsNil ? Guid.Empty : reader.GetGuid(document.Language);
             var name = reader.GetString(document.Name);
             var identity = $"pdb:format:portable|id:{contentIdentity}|document:{rowId.ToString(CultureInfo.InvariantCulture)}|hashAlgorithm:{algorithm:D}|checksum:{checksum}|language:{language:D}";
+            if (identity.Length > limits.MaxTextLength || checksum.Length > limits.MaxTextLength)
+                throw new PdbInputException("PdbInputTextLimitExceeded");
             documents.Add(new PdbDocumentObservation(rowId, identity, Sha256(Encoding.UTF8.GetBytes(name)), algorithm.ToString("D"), checksum, language.ToString("D")));
         }
 
         var methods = new List<PdbMethodObservation>();
         var sequencePointCount = 0;
+        var documentRows = documents.Select(item => item.RowId).ToHashSet();
         for (var rowId = 1; rowId <= reader.MethodDebugInformation.Count; rowId++)
         {
             var handle = MetadataTokens.MethodDebugInformationHandle(rowId);
             var information = reader.GetMethodDebugInformation(handle);
-            var points = information.GetSequencePoints().ToArray();
-            if (points.Length == 0)
-                continue;
-            if (methods.Count >= limits.MaxMethodCount)
-                throw new PdbInputException("PdbMethodCountExceeded");
-            sequencePointCount += points.Length;
-            if (sequencePointCount > limits.MaxSequencePointCount)
-                throw new PdbInputException("PdbSequencePointCountExceeded");
             var methodIdentity = $"pdb:format:portable|id:{contentIdentity}|method:{rowId.ToString(CultureInfo.InvariantCulture)}";
             var observations = new List<PdbSequencePointObservation>();
             var currentDocument = information.Document;
-            for (var ordinal = 0; ordinal < points.Length; ordinal++)
+            var ordinal = 0;
+            foreach (var point in information.GetSequencePoints())
             {
-                var point = points[ordinal];
+                if (observations.Count == 0)
+                {
+                    if (methods.Count >= limits.MaxMethodCount)
+                        throw new PdbInputException("PdbMethodCountExceeded");
+                    workBudget.Consume("PdbInputTotalWorkLimitExceeded");
+                }
+                if (++sequencePointCount > limits.MaxSequencePointCount)
+                    throw new PdbInputException("PdbSequencePointCountExceeded");
+                workBudget.Consume("PdbInputTotalWorkLimitExceeded");
                 if (!point.Document.IsNil)
                     currentDocument = point.Document;
                 if (currentDocument.IsNil)
                     throw new InvalidDataException("Portable PDB sequence point has no document.");
                 var documentRow = MetadataTokens.GetRowNumber(currentDocument);
+                if (!documentRows.Contains(documentRow))
+                    throw new InvalidDataException("Portable PDB sequence point references an undeclared document row.");
                 var hidden = point.IsHidden;
                 var identity = $"{methodIdentity}|sequence:{ordinal.ToString(CultureInfo.InvariantCulture)}|offset:{point.Offset.ToString(CultureInfo.InvariantCulture)}|document:{documentRow.ToString(CultureInfo.InvariantCulture)}|hidden:{hidden.ToString().ToLowerInvariant()}|range:{point.StartLine.ToString(CultureInfo.InvariantCulture)}:{point.StartColumn.ToString(CultureInfo.InvariantCulture)}-{point.EndLine.ToString(CultureInfo.InvariantCulture)}:{point.EndColumn.ToString(CultureInfo.InvariantCulture)}";
+                if (identity.Length > limits.MaxTextLength)
+                    throw new PdbInputException("PdbInputTextLimitExceeded");
                 observations.Add(new PdbSequencePointObservation(ordinal, point.Offset, documentRow, hidden, point.StartLine, point.StartColumn, point.EndLine, point.EndColumn, identity));
+                ordinal++;
             }
+            if (observations.Count == 0)
+                continue;
             methods.Add(new PdbMethodObservation(
                 rowId,
                 $"0x{(0x06000000u | (uint)rowId):x8}",
@@ -559,7 +621,7 @@ internal static class PortablePdbExtractor
         return (documents, methods);
     }
 
-    private static IReadOnlyList<string> ReadCecilShapes(byte[] peBytes, byte[] pdbBytes)
+    private static IReadOnlyList<string> ReadCecilShapes(byte[] peBytes, byte[] pdbBytes, PdbWorkBudget workBudget)
     {
         using var peStream = new MemoryStream(peBytes, writable: false);
         using var pdbStream = new MemoryStream(pdbBytes, writable: false);
@@ -576,9 +638,11 @@ internal static class PortablePdbExtractor
         var shapes = new List<string>();
         foreach (var method in AllTypes(module.Types).SelectMany(type => type.Methods).Where(method => method.DebugInformation.HasSequencePoints))
         {
+            workBudget.Consume("PdbInputTotalWorkLimitExceeded");
             var ordinal = 0;
             foreach (var point in method.DebugInformation.SequencePoints)
             {
+                workBudget.Consume("PdbInputTotalWorkLimitExceeded");
                 var checksum = point.Document.Hash is { Length: > 0 } ? Convert.ToHexString(point.Document.Hash).ToLowerInvariant() : string.Empty;
                 shapes.Add(Shape(
                     $"0x{method.MetadataToken.ToUInt32():x8}",
@@ -595,23 +659,29 @@ internal static class PortablePdbExtractor
         return shapes.Order(StringComparer.Ordinal).ToArray();
     }
 
-    private static IReadOnlyList<string> CanonicalShapes(
+    internal static IReadOnlyList<string> CanonicalShapes(
         IReadOnlyList<PdbDocumentObservation> documents,
         IReadOnlyList<PdbMethodObservation> methods)
     {
         var byRow = documents.ToDictionary(item => item.RowId);
-        return methods.SelectMany(method => method.SequencePoints.Select(point => Shape(
+        var shapes = new List<string>();
+        foreach (var method in methods)
+        foreach (var point in method.SequencePoints)
+        {
+            if (!byRow.TryGetValue(point.DocumentRowId, out var document))
+                throw new InvalidDataException("Portable PDB sequence point references an undeclared document row.");
+            shapes.Add(Shape(
                 method.MetadataToken,
                 point.Ordinal,
                 point.Offset,
-                byRow[point.DocumentRowId].Checksum,
+                document.Checksum,
                 point.Hidden,
                 point.StartLine,
                 point.StartColumn,
                 point.EndLine,
-                point.EndColumn)))
-            .Order(StringComparer.Ordinal)
-            .ToArray();
+                point.EndColumn));
+        }
+        return shapes.Order(StringComparer.Ordinal).ToArray();
     }
 
     private static string Shape(string token, int ordinal, int offset, string checksum, bool hidden, int startLine, int startColumn, int endLine, int endColumn) =>
@@ -628,8 +698,7 @@ internal static class PortablePdbExtractor
     }
 
     private static IReadOnlyDictionary<int, SourceDocumentMatch> MatchSourceDocuments(
-        string repoPath,
-        IReadOnlyList<FileInventoryItem> inventory,
+        SourceChecksumIndex index,
         IReadOnlyList<PdbDocumentObservation> documents)
     {
         var result = new Dictionary<int, SourceDocumentMatch>();
@@ -646,32 +715,112 @@ internal static class PortablePdbExtractor
                 result[document.RowId] = new SourceDocumentMatch([], "PdbDocumentChecksumAlgorithmUnsupported");
                 continue;
             }
-            var candidates = new List<string>();
-            foreach (var item in inventory.Where(item => item.Kind is "CSharp" or "VisualBasic" or "FSharp"))
+            if (index.GapKind is not null)
             {
-                var path = Path.Combine(repoPath, item.RelativePath.Replace('/', Path.DirectorySeparatorChar));
-                byte[] bytes;
-                try
-                {
-                    bytes = File.ReadAllBytes(path);
-                }
-                catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
-                {
-                    continue;
-                }
-                var checksum = algorithm == Sha1DocumentHashAlgorithm
-                    ? Convert.ToHexString(SHA1.HashData(bytes)).ToLowerInvariant()
-                    : Sha256(bytes);
-                if (string.Equals(checksum, document.Checksum, StringComparison.Ordinal))
-                    candidates.Add(item.RelativePath);
+                result[document.RowId] = new SourceDocumentMatch([], index.GapKind);
+                continue;
             }
-            var ordered = candidates.Order(StringComparer.Ordinal).ToArray();
+            var ordered = index.Candidates.GetValueOrDefault((algorithm, document.Checksum)) ?? [];
             result[document.RowId] = new SourceDocumentMatch(
                 ordered,
-                ordered.Length == 0 ? "PdbSourceDocumentZeroCandidate"
-                    : ordered.Length > 1 ? "PdbSourceDocumentMultipleCandidates" : null);
+                ordered.Count == 0 ? "PdbSourceDocumentZeroCandidate"
+                    : ordered.Count > 1 ? "PdbSourceDocumentMultipleCandidates" : null);
         }
         return result;
+    }
+
+    private static SourceChecksumIndex BuildSourceChecksumIndex(
+        string repoPath,
+        IReadOnlyList<FileInventoryItem> inventory,
+        IReadOnlyList<EvaluatedPdbInput> inputs,
+        PdbInputLimits limits,
+        long consumedWorkUnits)
+    {
+        var algorithms = inputs.Where(input => input.Outcome.Outcome == "admitted")
+            .SelectMany(input => input.Documents)
+            .Where(document => Guid.Parse(document.Language) != FSharpLanguage)
+            .Select(document => Guid.Parse(document.HashAlgorithm))
+            .Where(algorithm => algorithm == Sha1DocumentHashAlgorithm || algorithm == Sha256DocumentHashAlgorithm)
+            .Distinct()
+            .OrderBy(value => value)
+            .ToArray();
+        if (algorithms.Length == 0)
+            return SourceChecksumIndex.Empty;
+
+        var sources = inventory.Where(item => item.Kind is "CSharp" or "VisualBasic" or "FSharp")
+            .OrderBy(item => item.RelativePath, StringComparer.Ordinal)
+            .ToArray();
+        if (sources.Length > limits.MaxSourceFileCount)
+            return SourceChecksumIndex.Gap("PdbSourceFileCountExceeded");
+        long totalBytes = 0;
+        foreach (var source in sources)
+        {
+            if (source.SizeBytes > limits.MaxSourceFileSizeBytes)
+                return SourceChecksumIndex.Gap("PdbSourceFileSizeExceeded");
+            try
+            {
+                totalBytes = checked(totalBytes + source.SizeBytes);
+            }
+            catch (OverflowException)
+            {
+                return SourceChecksumIndex.Gap("PdbSourceTotalBytesExceeded");
+            }
+            if (totalBytes > limits.MaxSourceTotalBytes)
+                return SourceChecksumIndex.Gap("PdbSourceTotalBytesExceeded");
+        }
+        var requiredWork = checked((long)sources.Length * algorithms.Length);
+        if (requiredWork > limits.MaxTotalWorkUnits - consumedWorkUnits)
+            return SourceChecksumIndex.Gap("PdbSourceReconciliationWorkLimitExceeded");
+
+        var candidates = new Dictionary<(Guid Algorithm, string Checksum), List<string>>();
+        var buffer = new byte[81_920];
+        long actualTotalBytes = 0;
+        foreach (var source in sources)
+        {
+            var path = Path.Combine(repoPath, source.RelativePath.Replace('/', Path.DirectorySeparatorChar));
+            try
+            {
+                using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, buffer.Length, FileOptions.SequentialScan);
+                if (stream.Length > limits.MaxSourceFileSizeBytes)
+                    return SourceChecksumIndex.Gap("PdbSourceFileSizeExceeded");
+                using var sha1 = algorithms.Contains(Sha1DocumentHashAlgorithm) ? IncrementalHash.CreateHash(HashAlgorithmName.SHA1) : null;
+                using var sha256 = algorithms.Contains(Sha256DocumentHashAlgorithm) ? IncrementalHash.CreateHash(HashAlgorithmName.SHA256) : null;
+                long actualFileBytes = 0;
+                int read;
+                while ((read = stream.Read(buffer, 0, buffer.Length)) != 0)
+                {
+                    actualFileBytes = checked(actualFileBytes + read);
+                    actualTotalBytes = checked(actualTotalBytes + read);
+                    if (actualFileBytes > limits.MaxSourceFileSizeBytes)
+                        return SourceChecksumIndex.Gap("PdbSourceFileSizeExceeded");
+                    if (actualTotalBytes > limits.MaxSourceTotalBytes)
+                        return SourceChecksumIndex.Gap("PdbSourceTotalBytesExceeded");
+                    sha1?.AppendData(buffer, 0, read);
+                    sha256?.AppendData(buffer, 0, read);
+                }
+                Add(Sha1DocumentHashAlgorithm, sha1);
+                Add(Sha256DocumentHashAlgorithm, sha256);
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            {
+                return SourceChecksumIndex.Gap("PdbSourceInputUnreadable");
+            }
+
+            void Add(Guid algorithm, IncrementalHash? hash)
+            {
+                if (hash is null)
+                    return;
+                var checksum = Convert.ToHexString(hash.GetHashAndReset()).ToLowerInvariant();
+                if (!candidates.TryGetValue((algorithm, checksum), out var paths))
+                    candidates[(algorithm, checksum)] = paths = [];
+                paths.Add(source.RelativePath);
+            }
+        }
+        return new SourceChecksumIndex(
+            candidates.ToDictionary(
+                pair => pair.Key,
+                pair => (IReadOnlyList<string>)pair.Value.Order(StringComparer.Ordinal).ToArray()),
+            null);
     }
 
     private static IReadOnlyList<CompiledBinding> ReadCompiledBindings(
@@ -683,12 +832,20 @@ internal static class PortablePdbExtractor
         if (evaluation.Provenance is null)
             return [];
         var result = new List<CompiledBinding>();
-        foreach (var path in CleanPaths(options.CompiledInputPaths))
+        foreach (var path in CleanPaths((options.CompiledInputPaths ?? []).Concat(options.CompiledDependencyPaths ?? []).ToArray()))
         {
             var fullPath = ResolvePath(repoPath, path);
             if (!File.Exists(fullPath) || new FileInfo(fullPath).Length > maximumBytes)
                 continue;
-            var bytes = File.ReadAllBytes(fullPath);
+            byte[] bytes;
+            try
+            {
+                bytes = ReadBoundedFile(fullPath, maximumBytes);
+            }
+            catch (Exception exception) when (exception is PdbInputException or IOException or UnauthorizedAccessException)
+            {
+                continue;
+            }
             var digest = Sha256(bytes);
             var outcomes = evaluation.Provenance.Outcomes.Where(item => string.Equals(item.RawFileSha256, digest, StringComparison.Ordinal)).ToArray();
             if (outcomes.Length != 1)
@@ -804,6 +961,7 @@ internal static class PortablePdbExtractor
 
     private static string ContentIdentity(Guid guid, uint stamp) => $"{guid:D}:{stamp:x8}";
     private static bool IsPortablePdb(byte[] bytes) => bytes.Length >= 4 && bytes[0] == (byte)'B' && bytes[1] == (byte)'S' && bytes[2] == (byte)'J' && bytes[3] == (byte)'B';
+    internal static bool IsWindowsPdb(byte[] bytes) => bytes.AsSpan().StartsWith(WindowsPdbSignature);
     private static string ResolvePath(string repoPath, string path) => Path.GetFullPath(Path.IsPathRooted(path) ? path : Path.Combine(repoPath, path));
 
     private static string SafeLocator(string repoPath, string fullPath)
@@ -827,8 +985,11 @@ internal static class PortablePdbExtractor
 
     private static void ValidateLimits(PdbInputLimits limits)
     {
-        if (limits.MaxArtifactCount <= 0 || limits.MaxFileSizeBytes <= 0 || limits.MaxDocumentCount <= 0
-            || limits.MaxMethodCount <= 0 || limits.MaxSequencePointCount <= 0 || limits.MaxTextLength <= 0 || limits.MaxTotalWorkUnits <= 0)
+        if (limits.MaxArtifactCount <= 0 || limits.MaxArtifactCount > MaximumArtifactCount
+            || limits.MaxFileSizeBytes <= 0 || limits.MaxDocumentCount <= 0
+            || limits.MaxMethodCount <= 0 || limits.MaxSequencePointCount <= 0
+            || limits.MaxSourceFileCount <= 0 || limits.MaxSourceFileSizeBytes <= 0 || limits.MaxSourceTotalBytes <= 0
+            || limits.MaxTextLength <= 0 || limits.MaxTotalWorkUnits <= 0)
             throw new ArgumentException("PDB input limits must all be positive.");
         if (limits.MaxTextLength < MinimumProjectedTextLength)
             throw new ArgumentException($"PDB input maximum text length must be at least {MinimumProjectedTextLength} characters.");
@@ -840,7 +1001,16 @@ internal static class PortablePdbExtractor
         if (stream.Length > maximumBytes)
             throw new PdbInputException("PdbInputFileSizeExceeded");
         using var output = new MemoryStream((int)Math.Min(stream.Length, 1_048_576));
-        stream.CopyTo(output);
+        var buffer = new byte[81_920];
+        long total = 0;
+        int read;
+        while ((read = stream.Read(buffer, 0, buffer.Length)) != 0)
+        {
+            total = checked(total + read);
+            if (total > maximumBytes)
+                throw new PdbInputException("PdbInputFileSizeExceeded");
+            output.Write(buffer, 0, read);
+        }
         return output.ToArray();
     }
 
@@ -860,7 +1030,7 @@ internal static class PortablePdbExtractor
     }
 
     private static string Sha256(byte[] bytes) => Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
-    private static bool IsRecoverable(Exception exception) => exception is BadImageFormatException or IOException or InvalidDataException
+    internal static bool IsRecoverable(Exception exception) => exception is BadImageFormatException or IOException or InvalidDataException
         or InvalidOperationException or ArgumentException or NotSupportedException or FormatException or IndexOutOfRangeException;
 
     private sealed record CompiledBinding(
@@ -875,6 +1045,34 @@ internal static class PortablePdbExtractor
     private sealed record SourceDocumentMatch(IReadOnlyList<string> Candidates, string? GapKind)
     {
         public static readonly SourceDocumentMatch Zero = new([], "PdbSourceDocumentZeroCandidate");
+    }
+
+    private sealed record SourceChecksumIndex(
+        IReadOnlyDictionary<(Guid Algorithm, string Checksum), IReadOnlyList<string>> Candidates,
+        string? GapKind)
+    {
+        public static readonly SourceChecksumIndex Empty = new(
+            new Dictionary<(Guid Algorithm, string Checksum), IReadOnlyList<string>>(), null);
+
+        public static SourceChecksumIndex Gap(string gapKind) => new(
+            new Dictionary<(Guid Algorithm, string Checksum), IReadOnlyList<string>>(), gapKind);
+    }
+
+    private sealed record PdbMaterializationPlan(
+        EvaluatedPdbInput Input,
+        IReadOnlyDictionary<int, SourceDocumentMatch> SourceMatches,
+        IReadOnlyDictionary<int, CodeFact[]> MetadataCandidates);
+
+    private sealed class PdbWorkBudget(long maximum)
+    {
+        public long Consumed { get; private set; }
+
+        public void Consume(string gapKind)
+        {
+            if (Consumed >= maximum)
+                throw new PdbInputException(gapKind);
+            Consumed++;
+        }
     }
 
     private sealed class RejectingAssemblyResolver : IAssemblyResolver

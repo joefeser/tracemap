@@ -45,8 +45,15 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          dotnet build samples/compiled-dotnet-evidence/csharp/CompiledEvidence.CSharp.csproj --no-restore -p:DebugType=windows -p:DebugSymbols=true -p:Deterministic=true -o "${{ runner.temp }}/tracemap-windows-pdb/csharp"
-          dotnet build samples/compiled-dotnet-evidence/vb/CompiledEvidence.VisualBasic.vbproj --no-restore -p:DebugType=windows -p:DebugSymbols=true -p:Deterministic=true -o "${{ runner.temp }}/tracemap-windows-pdb/vb"
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $installation = & $vswhere -latest -products * -requires Microsoft.Component.MSBuild -property installationPath
+          $roslyn = Join-Path $installation "MSBuild\Current\Bin\Roslyn"
+          $root = "${{ runner.temp }}/tracemap-windows-pdb"
+          New-Item -ItemType Directory -Force -Path "$root/csharp", "$root/vb" | Out-Null
+          & "$roslyn/csc.exe" /nologo /target:library /debug:full "/out:$root/csharp/CompiledEvidence.CSharp.dll" "/pdb:$root/csharp/CompiledEvidence.CSharp.pdb" samples/compiled-dotnet-evidence/windows-pdb/NativePdbFixture.cs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & "$roslyn/vbc.exe" /nologo /target:library /debug:full "/out:$root/vb/CompiledEvidence.VisualBasic.dll" "/pdb:$root/vb/CompiledEvidence.VisualBasic.pdb" samples/compiled-dotnet-evidence/windows-pdb/NativePdbFixture.vb
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Validate native Windows PDB fail-closed lane
         if: runner.os == 'Windows'
         shell: pwsh

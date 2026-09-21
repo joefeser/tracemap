@@ -2523,12 +2523,16 @@ Task 9 activates `dotnet.compiled.pdb-input.v1`,
 `dotnet.compiled.pdb-identity.v1`, `dotnet.compiled.sequence-point.v1`, and
 `dotnet.compiled.pdb-gap.v1`. PDB discovery is never ambient. Supply each
 candidate explicitly with `--pdb-input`; the scanner applies the positive
-artifact, byte, document, method, sequence-point, text, and total metadata-work
-limits controlled by the `--pdb-max-*` options. The manifest and execution
+artifact, byte, document, method, sequence-point, source-file, source-byte,
+text, and total reconciliation-work limits controlled by the `--pdb-max-*`
+options. Source files are streamed once into reusable SHA-1/SHA-256 indexes;
+they are never reread once per PDB document. The manifest and execution
 receipt retain `pdb-input-provenance.v1`, including the exact generator SHA-256,
 canonical bounded-input SHA-256, safe locators, effective limits, per-input
 outcomes, omissions, and coverage state. They also retain the bounded
 `pdb-evidence-summary.v1` endpoint/support summary and its omitted-entry digest.
+The summary input digest additionally commits the source snapshot, scan commit,
+and retained PDB fact set because source-document edges depend on those inputs.
 The PDB digest participates in `scanId` before PDB fact IDs are derived.
 
 A portable PDB is admitted only when its exact portable content GUID/stamp
@@ -2551,18 +2555,22 @@ locator, compiled receipt-binding digest, provenance state, rule, tier,
 extractor version, and limitation. Document, method, and sequence-point rows
 also retain their supporting PDB input/document/method fact IDs; method edges
 retain the exact compiled fact ID; sequence points retain the exact
-metadata/PDB reconciliation fact ID. These are evidence relationships, not IL
+metadata/PDB reconciliation fact ID. No sequence-point fact is emitted unless
+that exact one-candidate method reconciliation exists. Summary endpoints also
+retain file path, structured line span, and commit SHA directly. These are evidence relationships, not IL
 body or call extraction.
 
 PDB document names are not emitted. Source-document reconciliation compares a
 supported SHA-1 or SHA-256 document checksum to inventoried source bytes and
-emits a Tier1 checksum edge only for exactly one candidate. Zero candidates,
+emits a Tier2 structural checksum edge only for exactly one candidate. Zero candidates,
 multiple candidates, unsupported checksum algorithms, and F# source documents
 emit explicit gaps and no edge. F# still retains its compiled PDB document,
 method, metadata reconciliation, and sequence-point facts; because no F# source
 adapter exists, it emits `PdbSourceReconciliationUnsupportedLanguage` and zero
 guessed source-document joins. PDB coverage and source `analysisLevel` remain
 independent, and missing or partial PDB evidence never changes source facts.
+Any source-, method-, reader-, or input-reconciliation gap makes final PDB
+coverage `pdb-partial` in the manifest, report, summary, and receipt.
 
 The v3 public fixture catalog adds stable PDB case IDs, expected identity
 formats, rule/tier expectations, gaps, and non-claims. The portable C#/VB/F#
@@ -2573,10 +2581,13 @@ missing inputs, limit exhaustion, and deterministic repeat output. Generated
 state-machine and lambda members retain their own metadata/PDB identities and
 are not collapsed back to a source declaration.
 
-Native Windows PDBs are intentionally fail-closed in this contract. On macOS
+Native Windows PDBs are recognized only by the complete MSF 7.00 container
+signature and are intentionally fail-closed in this contract. Other
+non-portable bytes are `MalformedPdbInput`. On macOS
 and Linux they emit `WindowsPdbRequiresWindows`; on Windows they emit
 `WindowsPdbIndependentReaderUnavailable`. The Windows CI lane builds real C#
-and VB native PDBs with `DebugType=full` and proves that no positive document,
+and VB native PDBs with the Windows desktop Roslyn compilers and `/debug:full`,
+then proves that no positive document,
 method, or sequence-point facts escape that gap. Mono.Cecil's native reader is
 not accepted as a sole identity oracle. Positive native Windows PDB support
 requires a separately documented independent reader/cross-check contract; no
