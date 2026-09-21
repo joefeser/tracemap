@@ -40,19 +40,25 @@ internal static class IlRewriteEvidenceExtractor
         IlBodyEvidenceExtractor.ValidateLimits(bodyLimits);
         ManagedMetadataExtractor.ValidateLimits(compiledLimits);
         var generatorSha256 = GeneratorSha256();
-        var beforePaths = CleanOrderedPaths(options.IlRewriteBeforePaths);
-        var afterPaths = CleanOrderedPaths(options.IlRewriteAfterPaths);
+        var declaredBefore = options.IlRewriteBeforePaths ?? [];
+        var declaredAfter = options.IlRewriteAfterPaths ?? [];
+        // Blank slots are preserved, never dropped: filtering them would
+        // silently re-pair later ordinals, so any blank slot in a declared
+        // list invalidates the whole declaration.
+        var hasBlankSlot = declaredBefore.Concat(declaredAfter).Any(value => string.IsNullOrWhiteSpace(value));
+        var beforePaths = CleanOrderedPaths(declaredBefore);
+        var afterPaths = CleanOrderedPaths(declaredAfter);
         var evaluated = new List<EvaluatedIlRewritePair>();
-        if (beforePaths.Count == 0 && afterPaths.Count == 0)
+        if (declaredBefore.Count == 0 && declaredAfter.Count == 0)
         {
             evaluated.Add(SyntheticPairGap("rewrite-input-set", "IlRewritePairUnavailable"));
         }
-        else if (beforePaths.Count != afterPaths.Count)
+        else if (hasBlankSlot || beforePaths.Count != afterPaths.Count)
         {
             evaluated.Add(SyntheticPairGap(
                 "rewrite-input-set",
                 "IlRewritePairDeclarationInvalid",
-                detail: $"before={beforePaths.Count.ToString(CultureInfo.InvariantCulture)},after={afterPaths.Count.ToString(CultureInfo.InvariantCulture)}"));
+                detail: $"before={beforePaths.Count.ToString(CultureInfo.InvariantCulture)},after={afterPaths.Count.ToString(CultureInfo.InvariantCulture)},blankSlots={(hasBlankSlot ? "present" : "none")}"));
         }
         else
         {
@@ -118,6 +124,8 @@ internal static class IlRewriteEvidenceExtractor
                 item.BeforeAssemblyIdentity,
                 item.AfterAssemblyIdentity,
                 item.PrivacyProjectedPairSha256,
+                item.Side,
+                item.Cause,
                 item.GapKinds
             })
         });
