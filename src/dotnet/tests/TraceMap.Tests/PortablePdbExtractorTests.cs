@@ -166,6 +166,100 @@ public sealed class PortablePdbExtractorTests
     }
 
     [Fact]
+    public void Two_admitted_assemblies_with_the_same_codeview_identity_remain_ambiguous()
+    {
+        var fixture = Fixture("csharp", "CompiledEvidence.CSharp");
+        using var repo = new TempDirectory();
+        var firstAssembly = Path.Combine(repo.Path, "first.dll");
+        var secondAssembly = Path.Combine(repo.Path, "second.dll");
+        File.Copy(Path.Combine(fixture.Source, "FixtureShapes.cs"), Path.Combine(repo.Path, "FixtureShapes.cs"));
+        File.Copy(fixture.Assembly, firstAssembly);
+        File.Copy(fixture.Assembly, secondAssembly);
+        RunGit(repo.Path, "init", "-b", "main");
+        RunGit(repo.Path, "config", "user.email", "fixtures@tracemap.invalid");
+        RunGit(repo.Path, "config", "user.name", "TraceMap Fixtures");
+        RunGit(repo.Path, "add", ".");
+        RunGit(repo.Path, "commit", "-m", "fixture");
+        var firstReceipt = Path.Combine(repo.Path, "first-binding.json");
+        var secondReceipt = Path.Combine(repo.Path, "second-binding.json");
+        WriteBoundReceipt(repo.Path, firstAssembly, firstReceipt);
+        WriteBoundReceipt(repo.Path, secondAssembly, secondReceipt);
+
+        var result = Scan(new ScanOptions(
+            repo.Path,
+            TempOutput(),
+            CompiledInputPaths: [firstAssembly, secondAssembly],
+            CompiledBindingReceiptPaths: [firstReceipt, secondReceipt],
+            PdbInputPaths: [fixture.Pdb]));
+
+        Assert.Contains(result.Facts, fact => fact.RuleId == RuleIds.DotNetPdbGap
+            && fact.Properties.GetValueOrDefault("gapKind") == "AmbiguousPdbAssemblyMatch");
+        Assert.DoesNotContain(result.Facts, fact => fact.FactType is FactTypes.PdbInputAdmitted
+            or FactTypes.PdbDocumentDeclared or FactTypes.MetadataPdbMethodReconciled);
+    }
+
+    [Fact]
+    public void Duplicate_codeview_entries_are_not_collapsed_into_one_candidate()
+    {
+        const string contentIdentity = "content-id";
+        Assert.Equal(0, PortablePdbExtractor.CountMatchingCodeViewEntries(["other"], contentIdentity));
+        Assert.Equal(1, PortablePdbExtractor.CountMatchingCodeViewEntries([contentIdentity], contentIdentity));
+        Assert.Equal(2, PortablePdbExtractor.CountMatchingCodeViewEntries(
+            [contentIdentity, "other", contentIdentity], contentIdentity));
+    }
+
+    [Theory]
+    [InlineData("CSharp", true)]
+    [InlineData("WebFormsCodeBehind", true)]
+    [InlineData("WebFormsDesigner", true)]
+    [InlineData("WinFormsDesigner", true)]
+    [InlineData("VisualBasic", true)]
+    [InlineData("VisualBasicCodeBehind", true)]
+    [InlineData("VisualBasicDesigner", true)]
+    [InlineData("VisualBasicGenerated", true)]
+    [InlineData("VisualBasicAssemblyInfo", true)]
+    [InlineData("FSharp", false)]
+    [InlineData("WebFormsMarkup", false)]
+    [InlineData("Razor", false)]
+    public void Checksum_source_candidate_kinds_follow_the_inventory_source_classification(string kind, bool expected)
+    {
+        Assert.Equal(expected, PortablePdbExtractor.IsSourceChecksumCandidateKind(kind));
+    }
+
+    [Theory]
+    [InlineData("csharp", "CompiledEvidence.CSharp", "Page.aspx.cs", "Page.aspx.designer.cs", "WebFormsCodeBehind", "WebFormsDesigner")]
+    [InlineData("vb", "CompiledEvidence.VisualBasic", "Shape.generated.vb", "AssemblyInfo.vb", "VisualBasicGenerated", "VisualBasicAssemblyInfo")]
+    public void Specialized_source_kinds_remain_distinct_exact_checksum_candidates(
+        string language,
+        string assemblyName,
+        string firstName,
+        string secondName,
+        string firstKind,
+        string secondKind)
+    {
+        var fixture = Fixture(language, assemblyName);
+        using var repo = new TempDirectory();
+        var bytes = File.ReadAllBytes(Path.Combine(fixture.Source, language == "csharp" ? "FixtureShapes.cs" : "FixtureShapes.vb"));
+        File.WriteAllBytes(Path.Combine(repo.Path, firstName), bytes);
+        File.WriteAllBytes(Path.Combine(repo.Path, secondName), bytes);
+        RunGit(repo.Path, "init", "-b", "main");
+        RunGit(repo.Path, "config", "user.email", "fixtures@tracemap.invalid");
+        RunGit(repo.Path, "config", "user.name", "TraceMap Fixtures");
+        RunGit(repo.Path, "add", ".");
+        RunGit(repo.Path, "commit", "-m", "fixture");
+
+        var inventory = FileInventory.Collect(repo.Path, TempOutput());
+        Assert.Contains(inventory, item => item.RelativePath == firstName && item.Kind == firstKind);
+        Assert.Contains(inventory, item => item.RelativePath == secondName && item.Kind == secondKind);
+        var result = ScanBound(repo.Path, fixture.Assembly, fixture.Pdb);
+        Assert.Contains(result.Facts, fact => fact.RuleId == RuleIds.DotNetPdbGap
+            && fact.Properties.GetValueOrDefault("gapKind") == "PdbSourceDocumentMultipleCandidates"
+            && fact.Properties.GetValueOrDefault("candidateCount") == "2");
+        Assert.DoesNotContain(result.Facts, fact => fact.FactType == FactTypes.PdbSourceDocumentReconciled
+            && (fact.Evidence.FilePath == firstName || fact.Evidence.FilePath == secondName));
+    }
+
+    [Fact]
     public void Cecil_type_traversal_is_iterative_and_charges_empty_nested_types()
     {
         const int nestedTypeCount = 10_000;

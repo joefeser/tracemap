@@ -2557,10 +2557,12 @@ and retained PDB fact set because source-document edges depend on those inputs.
 The PDB digest participates in `scanId` before PDB fact IDs are derived.
 
 A portable PDB is admitted only when its exact portable content GUID/stamp
-matches exactly one CodeView entry from one explicitly admitted managed
+matches exactly one CodeView directory entry from exactly one explicitly admitted managed
 assembly and that assembly has acceptable `bound` compiled provenance. File
 names, path proximity, timestamps, display strings, and metadata tokens alone
-never establish this binding. System.Reflection.Metadata reads the portable
+never establish this binding. Duplicate matching CodeView entries in one PE
+remain multiple candidates and emit `AmbiguousPdbAssemblyMatch`; they are not
+collapsed by identical identity text. System.Reflection.Metadata reads the portable
 document, method-debug-information, and ordered sequence-point rows; Mono.Cecil
 independently reads the bound assembly/PDB pair. TraceMap compares complete
 per-method sequence-point shapes including token, ordinal, IL offset, document
@@ -2584,7 +2586,10 @@ retain file path, structured line span, and commit SHA directly. These are evide
 body or call extraction.
 
 PDB document names are not emitted. Source-document reconciliation compares a
-supported SHA-1 or SHA-256 document checksum to inventoried source bytes and
+supported SHA-1 or SHA-256 document checksum to inventoried C# and VB
+source bytes, including the specialized C#/VB source kinds already classified
+by `FileInventory` such as code-behind, designer, generated, and assembly-info
+files. This is checksum indexing, not additional legacy-framework analysis, and
 emits a Tier2 structural checksum edge only for exactly one candidate. Zero candidates,
 multiple candidates, unsupported checksum algorithms, and F# source documents
 emit explicit gaps and no edge. F# still retains its compiled PDB document,
