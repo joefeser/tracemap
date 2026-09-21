@@ -443,6 +443,7 @@ public static class MarkdownReportWriter
         {
             AddPdbEvidence(lines, result);
             AddIlBodyEvidence(lines, result);
+            AddIlRewriteEvidence(lines, result);
             return;
         }
 
@@ -495,6 +496,7 @@ public static class MarkdownReportWriter
 
         AddPdbEvidence(lines, result);
         AddIlBodyEvidence(lines, result);
+        AddIlRewriteEvidence(lines, result);
     }
 
     private static void AddPdbEvidence(List<string> lines, ScanResult result)
@@ -556,6 +558,35 @@ public static class MarkdownReportWriter
         var bodyOmitted = Math.Max(0, ilFacts.Count(fact => fact.FactType == FactTypes.ManagedIlBodyDeclared) - CompiledMetadataFactLimit);
         if (bodyOmitted > 0)
             lines.Add($"- {bodyOmitted} additional IL body rows omitted from this report display; exhaustive rows remain in `facts.ndjson` and `index.sqlite`.");
+    }
+
+    private static void AddIlRewriteEvidence(List<string> lines, ScanResult result)
+    {
+        if (result.Manifest.IlRewriteProvenance is not { } rewrite)
+            return;
+        var rewriteFacts = result.Facts.Where(fact => fact.RuleId is
+                RuleIds.DotNetIlRewrite or RuleIds.DotNetIlRewriteGap)
+            .ToArray();
+        lines.Add("");
+        lines.Add("## Compiled .NET IL Rewrite Evidence");
+        lines.Add("");
+        lines.Add($"- Coverage: `{rewrite.CoverageState}`");
+        lines.Add($"- Artifact visibility: `{rewrite.ArtifactVisibility}`");
+        lines.Add($"- Bounded input SHA-256: `{rewrite.BoundedInputSha256}`");
+        lines.Add($"- Generator SHA-256: `{rewrite.GeneratorSha256}`");
+        lines.Add($"- Rewrite edges: `{rewriteFacts.Count(fact => fact.FactType == FactTypes.ManagedIlRewriteObserved)}`; call-site retargets: `{rewriteFacts.Count(fact => fact.FactType == FactTypes.ManagedIlCallRetargetObserved)}`; gaps: `{rewriteFacts.Count(fact => fact.FactType == FactTypes.AnalysisGap)}`.");
+        lines.Add("- Every edge joins one exact method identity across an operator-declared before/after pair whose sides independently satisfy the dual-reader IL body contract; ambiguity, one-side-only membership, mismatch, disagreement, and budget exhaustion fail closed to Tier4 gaps.");
+        lines.Add("- Rewrite evidence does not prove semantic equivalence, behavior preservation, compilation provenance, source ownership, PDB offset validity, or safe applicability.");
+        foreach (var outcome in rewrite.Outcomes.OrderBy(item => item.PairId, StringComparer.Ordinal))
+            lines.Add($"- Rewrite pair `{outcome.PairId}` (`{outcome.BeforeSafeLocator}` -> `{outcome.AfterSafeLocator}`): `{outcome.Outcome}`, gaps `{(outcome.GapKinds.Count == 0 ? "none" : string.Join(",", outcome.GapKinds))}`.");
+        foreach (var fact in rewriteFacts.Where(fact => fact.FactType == FactTypes.ManagedIlRewriteObserved)
+                     .OrderBy(fact => fact.Evidence.FilePath, StringComparer.Ordinal)
+                     .ThenBy(fact => fact.TargetSymbol, StringComparer.Ordinal)
+                     .Take(CompiledMetadataFactLimit))
+            lines.Add($"- Edge `{fact.Properties.GetValueOrDefault("methodIdentity")}` ({fact.Properties.GetValueOrDefault("relationshipKind")}, token retargeted `{fact.Properties.GetValueOrDefault("tokenRetargeted")}`, `{fact.Properties.GetValueOrDefault("callRetargetCount")}` call retargets).");
+        var edgeOmitted = Math.Max(0, rewriteFacts.Count(fact => fact.FactType == FactTypes.ManagedIlRewriteObserved) - CompiledMetadataFactLimit);
+        if (edgeOmitted > 0)
+            lines.Add($"- {edgeOmitted} additional rewrite edge rows omitted from this report display; exhaustive rows remain in `facts.ndjson` and `index.sqlite`.");
     }
 
     private static void AddFactSection(List<string> lines, string title, IEnumerable<CodeFact> facts, Func<CodeFact, string> format)

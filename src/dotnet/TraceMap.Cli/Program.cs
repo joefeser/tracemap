@@ -249,6 +249,20 @@ public static class TraceMapCommand
             return 1;
         }
 
+        var rewriteBefore = values.GetMany("--il-rewrite-before");
+        var rewriteAfter = values.GetMany("--il-rewrite-after");
+        if (!values.HasFlag("--il-rewrite-evidence") && (rewriteBefore.Count > 0 || rewriteAfter.Count > 0))
+        {
+            await error.WriteLineAsync("error: --il-rewrite-before/--il-rewrite-after require --il-rewrite-evidence.");
+            return 1;
+        }
+
+        if (values.HasFlag("--il-rewrite-evidence") && rewriteBefore.Count != rewriteAfter.Count)
+        {
+            await error.WriteLineAsync("error: --il-rewrite-before and --il-rewrite-after must be declared as equal-length ordinal pairs.");
+            return 1;
+        }
+
         var sqlValidationSummaryPaths = values.GetMany("--sql-validation-summary");
         var sqlValidationAsOf = ParseSqlValidationAsOf(values, sqlValidationSummaryPaths);
 
@@ -292,7 +306,12 @@ public static class TraceMapCommand
                 ParsePositiveInt(values, "--il-max-locals-per-body", 10_000),
                 ParsePositiveInt(values, "--il-max-exception-regions-per-body", 10_000),
                 ParsePositiveInt(values, "--il-max-text", 4_096),
-                ParsePositiveLong(values, "--il-max-work", 2_000_000)));
+                ParsePositiveLong(values, "--il-max-work", 2_000_000)),
+            IlRewriteEvidence: values.HasFlag("--il-rewrite-evidence"),
+            IlRewriteBeforePaths: values.GetMany("--il-rewrite-before"),
+            IlRewriteAfterPaths: values.GetMany("--il-rewrite-after"),
+            IlRewriteLimits: new IlRewriteLimits(
+                ParsePositiveInt(values, "--il-max-rewrite-pairs", 16)));
         var receiptRecorder = new ScanReceiptRecorder(
             scanOptions,
             sqlValidationSummaryPaths.Append(sqlValidationAsOf?.ToString("O") ?? string.Empty));
@@ -2264,7 +2283,7 @@ public static class TraceMapCommand
                 throw new ArgumentException($"Unexpected argument: {arg}");
             }
 
-            if (arg is "--restore" or "--include-paths" or "--include-reverse" or "--include-impact" or "--allow-identity-mismatch" or "--exit-code" or "--allow-mixed-inputs" or "--release-review" or "--il-body-evidence"
+            if (arg is "--restore" or "--include-paths" or "--include-reverse" or "--include-impact" or "--allow-identity-mismatch" or "--exit-code" or "--allow-mixed-inputs" or "--release-review" or "--il-body-evidence" or "--il-rewrite-evidence"
                 || additionalFlags.Contains(arg, StringComparer.Ordinal))
             {
                 flags.Add(arg);
