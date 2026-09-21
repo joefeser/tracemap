@@ -2439,7 +2439,11 @@ properties/indexers, events and accessors, `ref`/`ByRef`, optional parameters,
 explicit interfaces where representable, scoped decimal signatures,
 scoped non-primitive special types, constructed nested signatures with
 outermost-first arguments even when the nested type declares no parameters, and
-same-looking declarations across assemblies and languages. F# has no source adapter: its compiled identities
+same-looking declarations across assemblies and languages. The C# matrix also
+pins class, struct, record-class, and record-struct primary constructors, ref
+field signatures, and the intrinsic `System.TypedReference` metadata shape.
+Source custom modifiers fail closed rather than producing a partial identity.
+F# has no source adapter: its compiled identities
 remain available, one explicit unsupported-source-adapter gap is emitted, and
 no source join is guessed.
 

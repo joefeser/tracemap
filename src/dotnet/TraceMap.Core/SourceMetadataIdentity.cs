@@ -46,7 +46,18 @@ internal static class SourceMetadataIdentityCollector
                 continue;
 
             Add(symbol, node, "source-declaration");
-            if (symbol is IPropertySymbol property)
+            if (symbol is INamedTypeSymbol namedType
+                && node is TypeDeclarationSyntax { ParameterList: not null })
+            {
+                foreach (var constructor in namedType.InstanceConstructors
+                    .Where(constructor => constructor.DeclaringSyntaxReferences.Any(reference =>
+                        reference.SyntaxTree == node.SyntaxTree && reference.Span == node.Span))
+                    .OrderBy(constructor => constructor.MetadataName, StringComparer.Ordinal))
+                {
+                    Add(constructor, node, "roslyn-primary-constructor");
+                }
+            }
+            else if (symbol is IPropertySymbol property)
             {
                 if (property.GetMethod is not null)
                     Add(property.GetMethod, node, "roslyn-associated-property-accessor");
@@ -159,6 +170,29 @@ internal static class SourceMetadataIdentityCollector
 
 internal static class SourceMetadataIdentityProvider
 {
+    private static readonly IReadOnlyDictionary<SpecialType, (string Namespace, string Name)> CliPrimitiveSpecialTypes =
+        new Dictionary<SpecialType, (string Namespace, string Name)>
+        {
+            [SpecialType.System_Void] = ("System", "Void"),
+            [SpecialType.System_Object] = ("System", "Object"),
+            [SpecialType.System_Boolean] = ("System", "Boolean"),
+            [SpecialType.System_Char] = ("System", "Char"),
+            [SpecialType.System_SByte] = ("System", "SByte"),
+            [SpecialType.System_Byte] = ("System", "Byte"),
+            [SpecialType.System_Int16] = ("System", "Int16"),
+            [SpecialType.System_UInt16] = ("System", "UInt16"),
+            [SpecialType.System_Int32] = ("System", "Int32"),
+            [SpecialType.System_UInt32] = ("System", "UInt32"),
+            [SpecialType.System_Int64] = ("System", "Int64"),
+            [SpecialType.System_UInt64] = ("System", "UInt64"),
+            [SpecialType.System_Single] = ("System", "Single"),
+            [SpecialType.System_Double] = ("System", "Double"),
+            [SpecialType.System_String] = ("System", "String"),
+            [SpecialType.System_IntPtr] = ("System", "IntPtr"),
+            [SpecialType.System_UIntPtr] = ("System", "UIntPtr"),
+            [SpecialType.System_TypedReference] = ("System", "TypedReference")
+        };
+
     public static string? TryCreate(ISymbol symbol, out string memberKind, out string? incompleteReason)
     {
         memberKind = MemberKind(symbol);
@@ -220,9 +254,10 @@ internal static class SourceMetadataIdentityProvider
     private static string? FieldIdentity(string assemblyIdentity, IFieldSymbol field, out string? incompleteReason)
     {
         incompleteReason = null;
-        if (!field.CustomModifiers.IsDefaultOrEmpty)
+        if (HasCustomModifiers(field.CustomModifiers, field.RefCustomModifiers))
             return Incomplete("SourceCustomModifierIdentityUnsupported", out incompleteReason);
-        return $"{TypeIdentity(assemblyIdentity, field.ContainingType)}|field:{ManagedMetadataExtractor.EncodeIdentityComponent(field.MetadataName)}|type:{FormatType(field.Type)}";
+        var fieldType = FormatType(field.Type) + (field.RefKind == RefKind.None ? string.Empty : "&");
+        return $"{TypeIdentity(assemblyIdentity, field.ContainingType)}|field:{ManagedMetadataExtractor.EncodeIdentityComponent(field.MetadataName)}|type:{fieldType}";
     }
 
     private static string? EventIdentity(string assemblyIdentity, IEventSymbol eventSymbol, out string? incompleteReason)
@@ -300,24 +335,7 @@ internal static class SourceMetadataIdentityProvider
             : result;
     }
 
-    private static bool IsCliPrimitiveSpecialType(SpecialType specialType) => specialType is
-        SpecialType.System_Void
-        or SpecialType.System_Object
-        or SpecialType.System_Boolean
-        or SpecialType.System_Char
-        or SpecialType.System_SByte
-        or SpecialType.System_Byte
-        or SpecialType.System_Int16
-        or SpecialType.System_UInt16
-        or SpecialType.System_Int32
-        or SpecialType.System_UInt32
-        or SpecialType.System_Int64
-        or SpecialType.System_UInt64
-        or SpecialType.System_Single
-        or SpecialType.System_Double
-        or SpecialType.System_String
-        or SpecialType.System_IntPtr
-        or SpecialType.System_UIntPtr;
+    private static bool IsCliPrimitiveSpecialType(SpecialType specialType) => CliPrimitiveSpecialTypes.ContainsKey(specialType);
 
     private static IEnumerable<ITypeSymbol> CompleteTypeArguments(INamedTypeSymbol named)
     {
@@ -329,28 +347,9 @@ internal static class SourceMetadataIdentityProvider
 
     private static string FormatSpecialType(SpecialType specialType)
     {
-        var metadataName = specialType switch
-        {
-            SpecialType.System_Void => ("System", "Void"),
-            SpecialType.System_Object => ("System", "Object"),
-            SpecialType.System_Boolean => ("System", "Boolean"),
-            SpecialType.System_Char => ("System", "Char"),
-            SpecialType.System_SByte => ("System", "SByte"),
-            SpecialType.System_Byte => ("System", "Byte"),
-            SpecialType.System_Int16 => ("System", "Int16"),
-            SpecialType.System_UInt16 => ("System", "UInt16"),
-            SpecialType.System_Int32 => ("System", "Int32"),
-            SpecialType.System_UInt32 => ("System", "UInt32"),
-            SpecialType.System_Int64 => ("System", "Int64"),
-            SpecialType.System_UInt64 => ("System", "UInt64"),
-            SpecialType.System_Single => ("System", "Single"),
-            SpecialType.System_Double => ("System", "Double"),
-            SpecialType.System_String => ("System", "String"),
-            SpecialType.System_IntPtr => ("System", "IntPtr"),
-            SpecialType.System_UIntPtr => ("System", "UIntPtr"),
-            _ => throw new NotSupportedException("SourceSpecialTypeIdentityUnsupported")
-        };
-        return $"type(namespace:{ManagedMetadataExtractor.EncodeIdentityComponent(metadataName.Item1)}|names:{ManagedMetadataExtractor.EncodeIdentityComponent(metadataName.Item2)})";
+        if (!CliPrimitiveSpecialTypes.TryGetValue(specialType, out var metadataName))
+            throw new NotSupportedException("SourceSpecialTypeIdentityUnsupported");
+        return $"type(namespace:{ManagedMetadataExtractor.EncodeIdentityComponent(metadataName.Namespace)}|names:{ManagedMetadataExtractor.EncodeIdentityComponent(metadataName.Name)})";
     }
 
     private static string AssemblyArtifactIdentity(IAssemblySymbol assembly, string moduleName, string targetFramework)
