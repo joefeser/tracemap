@@ -50,7 +50,7 @@ slices and require an implementation-state update before work begins.
   with zero/multiple-candidate gaps and both endpoint identities; consume the
   independent source canonical-identity matrix from `docs/VALIDATION.md`
   without replacing it with compiled fixtures.
-- [ ] 9. Later slice: add PDB identity and sequence-point contracts and portable
+- [x] 9. Later slice: add PDB identity and sequence-point contracts and portable
   versus Windows validation lanes.
 - [ ] 10. Later slice: add operand-aware IL body/call evidence and the public
   ECMA-335/rewrite suite from #766.

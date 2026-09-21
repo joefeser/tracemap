@@ -1,6 +1,6 @@
 # Compiled .NET Evidence Foundation Implementation State
 
-Status: Task 8 exact source-to-metadata reconciliation merged in PR #773; Task 9 local acceptance complete, Windows CI and exact-head review pending
+Status: Task 8 exact source-to-metadata reconciliation merged in PR #773; Task 9 implemented in PR #774 with local and cross-platform acceptance green, final exact-head ACK pending
 
 Branch: `codex/pdb-sequence-point-evidence`
 
@@ -200,8 +200,9 @@ compiled identities remain available, but source reconciliation intentionally
 fails closed as `SourceFunctionPointerIdentityUnsupported` until a separately
 documented complete Roslyn custom-calling-convention identity contract exists.
 Task 8 makes no PDB/sequence-point, IL body/call, rewrite, `dotnetperf`/private
-corpus, legacy Framework/Web Forms, or C++/CLI claim. Tasks 9-11 remain
-deferred. Operational `scannedAt` and receipt durations remain wall-clock
+corpus, legacy Framework/Web Forms, or C++/CLI claim. PDB work was deferred
+from that slice; Task 9 is documented below and Tasks 10-11 remain open.
+Operational `scannedAt` and receipt durations remain wall-clock
 diagnostics rather than deterministic evidence identifiers; deterministic
 evidence payloads and normalized artifact content were compared instead.
 
@@ -266,14 +267,14 @@ cross-check the result. Task 9 does not begin IL body/call extraction, rewrite
 analysis, private or `dotnetperf` corpus execution, legacy Framework/Web Forms
 build validation, or C++/CLI.
 
-Local macOS Task 9 validation on 2026-09-20:
+Final local macOS Task 9 validation on 2026-09-20:
 
-- focused `PortablePdbExtractorTests`: 18 passed, zero failed, zero skipped;
-- combined PDB, source/metadata reconciliation, and managed metadata filter: 59
-  passed, zero failed, zero skipped;
+- focused `PortablePdbExtractorTests`: 24 passed, zero failed, zero skipped;
+- combined PDB, source/metadata reconciliation, managed metadata, and receipt
+  contract filter: 84 passed, zero failed, zero skipped;
 - `dotnet build src/dotnet/TraceMap.sln --no-restore`: passed with zero warnings
   and zero errors;
-- `dotnet test src/dotnet/TraceMap.sln --no-restore`: 2,019 passed, zero failed,
+- `dotnet test src/dotnet/TraceMap.sln --no-restore`: 2,025 passed, zero failed,
   zero skipped;
 - two bound C# CLI scans emitted all five required scan artifacts plus the
   execution receipt; `facts.ndjson` and `report.md` were byte-identical, PDB
@@ -283,7 +284,22 @@ Local macOS Task 9 validation on 2026-09-20:
 - `node scripts/kiro-review.mjs --self-test`: passed; and
 - `git diff --check`: passed.
 
-The Task 9 checkbox remains open until the pull request's Windows job has built
-and validated real native C# and VB PDBs and current-head review has confirmed
-the implementation. That is an evidence gate, not an implied native-Windows
-support claim.
+The consolidated review correction enforces three subsystem-wide invariants:
+resource admission occurs before retention or expensive work; positive evidence
+requires a complete deterministic support chain with truthful coverage and
+input commitments; and format/assembly binding is exact across primary and
+dependency inputs. Sibling hardening adds streaming single-pass source checksum
+indexes with explicit file/byte/work bounds, incremental SRM and Cecil work
+accounting, exact native MSF classification, bounded expected-input receipts,
+source-snapshot-bound endpoint summaries with direct file/line/commit context,
+and zero sequence-point facts without a one-candidate metadata-method edge.
+
+PR #774 implementation-head CI at
+`34ded8aef9b60b6f7db225d1c8af5df6b96ea159`
+passed the .NET, JVM, Python, Swift, TypeScript, five-adapter combine, private
+path, and package-smoke jobs on macOS, Ubuntu, and Windows. The Windows lane
+used desktop Roslyn C# and VB compilers to produce real MSF PDBs, recognized the
+complete native signature, emitted only the bounded unsupported-reader gap, and
+produced zero positive native PDB facts. This is not a native-Windows support
+claim. The Task 9 checkbox is complete; final current-head ACK remains the PR
+terminal gate, and the PR must not be merged by this task.
