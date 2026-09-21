@@ -664,3 +664,46 @@ digest) still changes the provenance digest and scan identity. Blank declared
 pair slots invalidate the whole declaration instead of being silently
 dropped, which had shifted ordinal pairing. Two regressions pin the
 behaviors (37 focused rewrite tests total).
+
+Full independent PR #776 review on 2026-09-21, from exact head
+`bff7413e50981d76d438a351c1411bb5ca59e1dc`, on local branch
+`codex/pr776-full-review` (pushed back to `codex/task10-rewrite-evidence`):
+
+- P1: rewrite sides bypassed the compiled-input shape preflight, admitting
+  mixed-mode IL and reporting complete coverage for multi-module manifests.
+  Both sides now pass the shared preflight before either body reader, with
+  categorical unsupported gaps and no pair edges.
+- P2: compiled metadata row/work limits were committed but not enforced on
+  rewrite inputs. Preflight now enforces type/member row bounds and charges
+  the compiled metadata work budget across both sides and every pair. Pair
+  count remains governed by the explicit rewrite-pair limit.
+- P2: rejected pair declarations committed counts but lost projected paths
+  and blank positions. Their commitment now includes both ordered projected
+  slot lists, preserving the fail-closed rejection without identity aliasing.
+- P2: receipt scope hashing sorted each side independently, so different
+  ordinal pairings shared an authorized-scope fingerprint. Ordered JSON
+  framing now retains slot order, blanks, duplicates, and embedded newlines.
+- P2: a file growing beyond its byte bound between the size precheck and
+  bounded read could throw out of the scan. The admission boundary now
+  translates that bounded-reader exception into the side's categorical gap.
+
+Six new regression cases were run against the original head and all failed,
+then passed with the fixes. A seventh regression pins the shared metadata
+budget across sides and pairs. Focused body/rewrite/metadata/receipt tests
+passed (125 tests before adding the seventh case). Existing Task 10 deferred
+scope and checkbox remain unchanged; this review does not complete #766.
+
+Validation: repeated C#/VB/F# CLI scans passed the artifact validator with
+155 unchanged rewrite edges, zero rewrite gaps, matching SQLite/receipt
+provenance, byte-identical facts/report, and manifests identical except
+`scannedAt`. The private-path guard, Kiro self-test, and diff whitespace check
+passed. Pinned public OSS source-adapter smokes remain deferred under the
+compiled-lane guidance in `docs/VALIDATION.md`; the synthetic compiled and
+full solution suites are the validation surfaces for these changes.
+
+Final local validation: `dotnet test src/dotnet/TraceMap.sln --no-restore`
+passed 2,136 tests, zero failed/skipped, with no compiler/analyzer warnings
+or errors in the build/test output. The final ACK readback is recorded in
+`.agent-control/pr-loop-handoffs/pr-776-full-review.json` in the review
+worktree; local review and test results do not substitute for hosted-review
+freshness or authorize a merge.

@@ -11,6 +11,24 @@ public sealed class ScanExecutionReceiptTests
     private const string CommitSha = "0123456789abcdef0123456789abcdef01234567";
 
     [Fact]
+    public void Authorized_scope_preserves_rewrite_pair_order_and_blank_slots()
+    {
+        var options = new ScanOptions("repo", "out", IlRewriteEvidence: true,
+            IlRewriteBeforePaths: ["a.dll", "b.dll"], IlRewriteAfterPaths: ["c.dll", "d.dll"]);
+        string Fingerprint(ScanOptions input)
+        {
+            var recorder = new ScanReceiptRecorder(input);
+            recorder.Bind(new GitMetadata("repo", null, "dev", CommitSha, []));
+            return recorder.CreateReceipt().AuthorizedScopeFingerprint;
+        }
+
+        Assert.NotEqual(Fingerprint(options), Fingerprint(options with { IlRewriteAfterPaths = ["d.dll", "c.dll"] }));
+        Assert.NotEqual(Fingerprint(options), Fingerprint(options with { IlRewriteBeforePaths = ["a.dll", "", "b.dll"] }));
+        Assert.NotEqual(Fingerprint(options with { IlRewriteBeforePaths = ["a.dll\nb.dll"] }), Fingerprint(options));
+        Assert.Equal(Fingerprint(options), Fingerprint(options));
+    }
+
+    [Fact]
     public async Task Receipt_is_canonical_bounded_and_omits_protected_inputs()
     {
         using var temp = new TempDirectory();

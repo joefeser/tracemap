@@ -154,6 +154,7 @@ rules:
       - Per-call retarget detail requires equal instruction counts and identical opcode sequences on both sides; otherwise the edge records instruction-stream-change with no per-instruction claim. Call retargets record module-local tokens, which are locations within their own module, never stable cross-build identities.
       - Relationship kinds are exact classifications, not equivalence claims. operand-only-change additionally requires every non-instruction body component (locals, exception regions, max stack, and init-locals) to match; a change limited to those components is body-structure-change, and a change to both instruction operands and those components is operand-and-body-structure-change. No kind proves semantic equivalence or behavior preservation.
       - Both sides must independently satisfy the dotnet.compiled.il-body.v1 dual-reader agreement before any edge is emitted; a disputed or withheld side withholds the whole pair.
+      - Before body decoding, shared compiled-input preflight rejects native/mixed-mode assemblies, netmodules, and multi-module manifests and enforces metadata type/member row bounds and a metadata work budget shared across all declared pairs. The separate rewrite-pair limit bounds the number of pairs; this lane does not infer or load secondary modules.
       - Rewritten PDB offsets and sequence-point validity, ILAsm/ILDAsm parity, evaluation-stack-sensitive rewrites, and the broader ECMA-335 mutation matrix from #766 remain explicitly deferred and out of scope.
 
   - id: dotnet.compiled.il-rewrite-gap.v1

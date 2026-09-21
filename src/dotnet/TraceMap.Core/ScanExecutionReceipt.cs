@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text;
@@ -132,8 +133,8 @@ public sealed class ScanReceiptRecorder
             options.IlBodyEvidence ? "il-body-evidence" : "no-il-body-evidence",
             options.IlBodyLimits?.ToString() ?? string.Empty,
             options.IlRewriteEvidence ? "il-rewrite-evidence" : "no-il-rewrite-evidence",
-            Normalize(options.IlRewriteBeforePaths),
-            Normalize(options.IlRewriteAfterPaths),
+            NormalizeOrdered(options.IlRewriteBeforePaths),
+            NormalizeOrdered(options.IlRewriteAfterPaths),
             options.IlRewriteLimits?.ToString() ?? string.Empty,
             Normalize(additionalAuthorizedInputs)));
     }
@@ -379,6 +380,11 @@ public sealed class ScanReceiptRecorder
             return true;
         return value.Length == 24 && value.All(character => character is (>= '0' and <= '9') or (>= 'a' and <= 'f'));
     }
+
+    // Rewrite declarations are ordinal slots, including blanks in rejected
+    // requests. JSON frames each slot so embedded newlines cannot alias lists.
+    private static string NormalizeOrdered(IEnumerable<string>? values) =>
+        JsonSerializer.Serialize((values ?? []).Select(value => value?.Trim()).ToArray());
 
     private static string Normalize(IEnumerable<string>? values) => string.Join('\n',
         (values ?? []).Where(value => !string.IsNullOrWhiteSpace(value)).Select(value => value.Trim().Replace('\\', '/')).OrderBy(value => value, StringComparer.Ordinal));

@@ -2764,7 +2764,13 @@ The second Task 10 slice activates `dotnet.compiled.il-rewrite.v1` and
 or unpaired declarations) and `--il-max-rewrite-pairs`. The scanner never
 performs or attributes a rewrite: both sides are operator-declared bounded
 inputs, admitted under the compiled file-size/text bounds with safe external
-locators and raw SHA-256 commitments, and each side must independently pass
+locators and raw SHA-256 commitments. The shared compiled-input preflight
+rejects native/mixed-mode inputs, netmodules, and multi-module manifests, and
+enforces type/member row limits plus a compiled metadata work budget shared
+across both sides and all pairs. Pair count is governed by
+`--il-max-rewrite-pairs`; metadata work and IL body work have separate budgets.
+A file that grows past its byte limit during reading produces a side gap.
+Each side must independently pass
 the full first-slice dual-reader IL body contract (raw
 System.Reflection.Metadata decode first, then Mono.Cecil, then exact
 comparison) before any join is attempted. A side that is missing, unreadable,
@@ -2809,7 +2815,11 @@ privacy-projected locator instead of aborting the scan. Repeated identical
 `(before, after)` declarations are not deduplicated: every declared ordinal
 keeps its own outcome, and the bounded-input digest — which also commits the
 effective `CompiledInputLimits` admission policy alongside the rewrite and
-body limits — stays distinct from a single-declaration scan.
+body limits — stays distinct from a single-declaration scan. Rejected blank
+or unequal-length declarations also commit the ordered privacy-projected
+slots, so changed paths or blank positions cannot share a bounded-input
+digest. Execution-receipt scope fingerprints preserve the same declaration
+order and blank slots with unambiguous framing.
 
 The lane is otherwise inert: without the flag a scan produces no rewrite
 facts, no `ilRewriteProvenance` manifest section, no rewrite known gaps, and
