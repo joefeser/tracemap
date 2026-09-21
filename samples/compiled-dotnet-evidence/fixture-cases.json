@@ -1,5 +1,5 @@
 {
-  "schemaVersion": "compiled-dotnet-fixture-cases.v4",
+  "schemaVersion": "compiled-dotnet-fixture-cases.v5",
   "cases": [
     { "id": "CS-OVERLOAD-001", "language": "csharp", "shape": "same-name overloads retain complete parameter and return signatures" },
     { "id": "CS-GENERIC-002", "language": "csharp", "shape": "generic type, generic method, and nested generic type retain arity" },
@@ -271,5 +271,170 @@
     { "id": "FS-IL-ASSEMBLY-007", "language": "fsharp", "shape": "a compiled F# body and direct call retain IL body and call identities without any source-adapter claim", "expectedIdentity": "il:assembly:<exact-fs-assembly>|method:<exact-method>|body:instructions:<n>:sha256:<digest>", "expectedRuleIds": ["dotnet.compiled.il-body.v1","dotnet.compiled.il-call.v1"], "expectedTier": "Tier2Structural", "expectedGaps": [], "nonClaims": ["source-identity","guessed-join","fsharp-source-adapter"] },
     { "id": "IL-HOSTILE-001", "language": "cross-language", "shape": "a truncated or corrupted method-body IL region inside an admitted assembly fails closed to a rule-backed gap with no positive IL facts", "expectedIdentity": null, "expectedRuleIds": ["dotnet.compiled.il-gap.v1"], "expectedTier": "Tier4Unknown", "expectedGaps": ["IlMethodBodyUnreadable"], "nonClaims": ["clean-absence","partial-body-evidence"] },
     { "id": "IL-LIMIT-002", "language": "cross-language", "shape": "instruction, local, exception-region, body-count, or total-work limit exhaustion emits a rule-backed gap and withholds that input's positive IL facts", "expectedIdentity": null, "expectedRuleIds": ["dotnet.compiled.il-gap.v1"], "expectedTier": "Tier4Unknown", "expectedGaps": ["IlInstructionLimitExceeded"], "nonClaims": ["clean-absence","partial-body-evidence"] }
+  ]
+,
+  "ilRewriteCases": [
+    {
+      "id": "CS-ILRW-OPERAND-001",
+      "language": "csharp",
+      "shape": "same opcode sequence with a changed ldc.i4 constant operand on one method of a declared before/after pair",
+      "expectedIdentity": "rewrite:<exact-method-identity>|before:sha256:<operand-aware-body-digest>:after:sha256:<operand-aware-body-digest>",
+      "expectedRuleIds": [
+        "dotnet.compiled.il-rewrite.v1"
+      ],
+      "expectedTier": "Tier2Structural",
+      "expectedRelationshipKind": "operand-only-change",
+      "expectedGaps": [],
+      "nonClaims": [
+        "semantic-equivalence",
+        "behavior-preservation",
+        "source-ownership",
+        "rewrite-attribution",
+        "pdb-offset-validity"
+      ]
+    },
+    {
+      "id": "CS-ILRW-TOKEN-002",
+      "language": "csharp",
+      "shape": "member inserted before existing methods retargets module-local MethodDef tokens while the joined member identity and its call target identity stay identical",
+      "expectedIdentity": "rewrite:<exact-method-identity>|before:sha256:<digest>:after:sha256:<digest> with before/after metadata tokens and call-site tokens recorded",
+      "expectedRuleIds": [
+        "dotnet.compiled.il-rewrite.v1",
+        "dotnet.compiled.il-rewrite-gap.v1"
+      ],
+      "expectedTier": "Tier2Structural",
+      "expectedRelationshipKind": "unchanged-or-operand-only-change",
+      "expectedGaps": [
+        "IlRewriteMethodAfterOnly"
+      ],
+      "nonClaims": [
+        "stable-cross-build-token-identity",
+        "insertion-relationship",
+        "semantic-equivalence"
+      ]
+    },
+    {
+      "id": "CS-ILRW-CALLRETARGET-003",
+      "language": "csharp",
+      "shape": "call operand rewired from one member to another with identical opcode streams records a call-site retarget with both tokens and both target identities",
+      "expectedIdentity": "rewrite:<exact-method-identity>|call-retarget:<ordinal>:<opcode>",
+      "expectedRuleIds": [
+        "dotnet.compiled.il-rewrite.v1"
+      ],
+      "expectedTier": "Tier2Structural",
+      "expectedRelationshipKind": "operand-only-change",
+      "expectedGaps": [],
+      "nonClaims": [
+        "dispatch",
+        "execution",
+        "target-body-existence",
+        "cross-assembly-resolution"
+      ]
+    },
+    {
+      "id": "CS-ILRW-UNCHANGED-004",
+      "language": "csharp",
+      "shape": "untouched method in a rewritten pair keeps an identical canonical body identity and emits an unchanged edge",
+      "expectedIdentity": "rewrite:<exact-method-identity>|before:sha256:<digest>:after:sha256:<same-digest>",
+      "expectedRuleIds": [
+        "dotnet.compiled.il-rewrite.v1"
+      ],
+      "expectedTier": "Tier2Structural",
+      "expectedRelationshipKind": "unchanged",
+      "expectedGaps": [],
+      "nonClaims": [
+        "semantic-equivalence",
+        "pair-completeness",
+        "insertion-or-removal-absence"
+      ]
+    },
+    {
+      "id": "CS-ILRW-AMBIGUOUS-005",
+      "language": "csharp",
+      "shape": "after side carries two MethodDef rows with one identical complete method identity; the join fails closed",
+      "expectedIdentity": "gap:IlRewriteIdentityAmbiguous",
+      "expectedRuleIds": [
+        "dotnet.compiled.il-rewrite-gap.v1"
+      ],
+      "expectedTier": "Tier4Unknown",
+      "expectedGaps": [
+        "IlRewriteIdentityAmbiguous"
+      ],
+      "nonClaims": [
+        "guessed-join",
+        "majority-vote",
+        "first-row-selection"
+      ]
+    },
+    {
+      "id": "ILRW-HOSTILE-006",
+      "language": "csharp",
+      "shape": "malformed or corrupted after-side body withholds the whole pair without edges",
+      "expectedIdentity": "gap:IlRewriteMalformedInput",
+      "expectedRuleIds": [
+        "dotnet.compiled.il-rewrite-gap.v1"
+      ],
+      "expectedTier": "Tier4Unknown",
+      "expectedGaps": [
+        "IlRewriteMalformedInput"
+      ],
+      "nonClaims": [
+        "partial-edge-emission",
+        "absence-of-change",
+        "crash"
+      ]
+    },
+    {
+      "id": "ILRW-DISAGREE-007",
+      "language": "csharp",
+      "shape": "a side whose Mono.Cecil and System.Reflection.Metadata readings disagree withholds the pair",
+      "expectedIdentity": "gap:IlRewriteReaderDisagreement",
+      "expectedRuleIds": [
+        "dotnet.compiled.il-rewrite-gap.v1"
+      ],
+      "expectedTier": "Tier4Unknown",
+      "expectedGaps": [
+        "IlRewriteReaderDisagreement"
+      ],
+      "nonClaims": [
+        "majority-vote",
+        "single-oracle-trust",
+        "partial-edge-emission"
+      ]
+    },
+    {
+      "id": "CS-ILRW-STRUCTURE-009",
+      "language": "csharp",
+      "shape": "a new local variable changes only non-instruction body structure while the opcode stream and operands stay identical",
+      "expectedIdentity": "rewrite:<exact-method-identity>|before:sha256:<digest>:after:sha256:<digest>",
+      "expectedRuleIds": [
+        "dotnet.compiled.il-rewrite.v1"
+      ],
+      "expectedTier": "Tier2Structural",
+      "expectedRelationshipKind": "body-structure-change",
+      "expectedGaps": [],
+      "nonClaims": [
+        "semantic-equivalence",
+        "operand-change",
+        "behavior-preservation"
+      ]
+    },
+    {
+      "id": "ILRW-BUDGET-008",
+      "language": "csharp",
+      "shape": "exhausted shared work budget stops joining and emits a limit gap instead of guessed edges",
+      "expectedIdentity": "gap:IlRewriteTotalWorkLimitExceeded",
+      "expectedRuleIds": [
+        "dotnet.compiled.il-rewrite-gap.v1"
+      ],
+      "expectedTier": "Tier4Unknown",
+      "expectedGaps": [
+        "IlRewriteTotalWorkLimitExceeded"
+      ],
+      "nonClaims": [
+        "complete-join",
+        "absence-of-relationship"
+      ]
+    }
   ]
 }

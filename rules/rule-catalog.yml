@@ -141,6 +141,32 @@ rules:
       - The gap reduces only the explicitly requested IL body/call lane; it does not prove body or call absence, does not alter source-derived or metadata evidence, and never upgrades itself to a clean absence conclusion.
       - An IL input gap never retires or rewrites existing source, compiled-metadata, or PDB facts from the same scan.
 
+  - id: dotnet.compiled.il-rewrite.v1
+    status: active
+    name: Bounded before/after IL rewrite identity edge
+    description: Records an exact edge between the original and rewritten form of one metadata method identity across an explicitly declared before/after assembly pair, where both sides are independently proven under the dual-reader IL body contract and the complete assembly-scoped method identity occurs exactly once on each side; the edge carries both assembly, member, body, and module-local token identities plus a relationship kind (unchanged, operand-only-change, body-structure-change, operand-and-body-structure-change, or instruction-stream-change) and ordinal-aligned call-site retargets.
+    evidenceTier: Tier2Structural
+    emits: [ManagedIlRewriteObserved, ManagedIlCallRetargetObserved]
+    limitations:
+      - An edge proves only that the same complete method identity exists once on each admitted side and that its canonical operand-aware body identity and module-local token are exactly as recorded. It does not prove semantic equivalence, behavior preservation, compilation provenance, source ownership, safe applicability, or that any other member of the pair survived rewriting.
+      - The scanner never performs or attributes the rewrite. Before and after assemblies are explicit operator-declared inputs; the edge makes no claim about what tool produced the change or why.
+      - Joins use complete exact assembly-scoped method identity text only. Zero or one-side-only membership, more than one candidate on either side, differing assembly/module identities, disagreement, malformed shapes, and budget exhaustion emit Tier4 gaps and never guessed joins; insertion and removal relationships are detected only as bounded one-side-only gaps, not edges.
+      - Per-call retarget detail requires equal instruction counts and identical opcode sequences on both sides; otherwise the edge records instruction-stream-change with no per-instruction claim. Call retargets record module-local tokens, which are locations within their own module, never stable cross-build identities.
+      - Relationship kinds are exact classifications, not equivalence claims. operand-only-change additionally requires every non-instruction body component (locals, exception regions, max stack, and init-locals) to match; a change limited to those components is body-structure-change, and a change to both instruction operands and those components is operand-and-body-structure-change. No kind proves semantic equivalence or behavior preservation.
+      - Both sides must independently satisfy the dotnet.compiled.il-body.v1 dual-reader agreement before any edge is emitted; a disputed or withheld side withholds the whole pair.
+      - Before body decoding, shared compiled-input preflight rejects native/mixed-mode assemblies, netmodules, and multi-module manifests and enforces metadata type/member row bounds and a metadata work budget shared across all declared pairs. The separate rewrite-pair limit bounds the number of pairs; this lane does not infer or load secondary modules.
+      - Rewritten PDB offsets and sequence-point validity, ILAsm/ILDAsm parity, evaluation-stack-sensitive rewrites, and the broader ECMA-335 mutation matrix from #766 remain explicitly deferred and out of scope.
+
+  - id: dotnet.compiled.il-rewrite-gap.v1
+    status: active
+    name: IL rewrite coverage gap
+    description: Records bounded missing, mismatched, unreadable, malformed, unsupported, ambiguous, one-side-only, reader-disagreed, or limit-exhausted before/after rewrite evidence coverage.
+    evidenceTier: Tier4Unknown
+    emits: [AnalysisGap]
+    limitations:
+      - The gap reduces only the explicitly requested rewrite lane; it does not prove rewrite absence or membership absence, does not alter source, compiled-metadata, PDB, or IL body/call evidence, and never upgrades itself to a clean absence conclusion.
+      - A one-side-only method identity is a bounded unsupported shape in this slice, not a proven insertion or removal relationship.
+
   - id: adapter.scan-truth.conformance.v1
     name: Cross-adapter scan truth conformance
     description: Validates bounded synthetic adapter outputs against the shared v1 repository authority, analyzed-byte identity, determinism, artifact, coverage, exclusion, gap, path, and persistence contract.

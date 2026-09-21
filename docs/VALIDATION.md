@@ -2743,13 +2743,125 @@ identical `ilBodyProvenance` (schema `il-body-provenance.v1`) in the manifest
 and execution receipt, and matching `dotnet.compiled.il-*` rows in
 `index.sqlite`. The IL bounded-input digest participates in `scanId`. The
 fixture catalog records stable IL case IDs under
-`samples/compiled-dotnet-evidence/fixture-cases.json` schema v4, covering
-operand-distinct pairs, signature and assembly scoping, call kinds, locals and
-exception regions, hostile corrupted IL, and limit exhaustion.
+`samples/compiled-dotnet-evidence/fixture-cases.json` (schema v5 or later),
+covering operand-distinct pairs, signature and assembly scoping, call kinds,
+locals and exception regions, hostile corrupted IL, and limit exhaustion.
 
 This slice explicitly defers and makes no claim about: rewritten-member
 identity, metadata-token retargeting across rewrites, rewritten PDB offsets,
 ILAsm/ILDAsm parity, and the extended ECMA-335 mutation matrix from #766. It
 performs no rewrite generation, no call-graph or transitive reachability
 analysis, no runtime loading or execution, and no cross-assembly resolution
-beyond the reference rows encoded in the containing module.
+beyond the reference rows encoded in the containing module. The next slice
+below begins the bounded rewrite work; everything else stays deferred.
+
+### IL rewrite evidence (Task 10 second slice)
+
+The second Task 10 slice activates `dotnet.compiled.il-rewrite.v1` and
+`dotnet.compiled.il-rewrite-gap.v1` behind the explicit
+`--il-rewrite-evidence` flag with ordinal `--il-rewrite-before` and
+`--il-rewrite-after` inputs (equal counts required; the CLI rejects unflagged
+or unpaired declarations) and `--il-max-rewrite-pairs`. The scanner never
+performs or attributes a rewrite: both sides are operator-declared bounded
+inputs, admitted under the compiled file-size/text bounds with safe external
+locators and raw SHA-256 commitments. The shared compiled-input preflight
+rejects native/mixed-mode inputs, netmodules, and multi-module manifests, and
+enforces type/member row limits plus a compiled metadata work budget shared
+across both sides and all pairs. Pair count is governed by
+`--il-max-rewrite-pairs`; metadata work and IL body work have separate budgets.
+A file that grows past its byte limit during reading produces a side gap.
+Each side must independently pass
+the full first-slice dual-reader IL body contract (raw
+System.Reflection.Metadata decode first, then Mono.Cecil, then exact
+comparison) before any join is attempted. A side that is missing, unreadable,
+oversized, malformed, disputed, unsupported, or over-limit withholds the whole
+pair behind Tier4 gaps; every side-scoped failure is emitted as its own gap
+fact carrying that failing side's `side`, `cause`, and evidence locator, and
+outcome summaries retain the exact `side:cause` pairing. No partial edge set
+is emitted, positive edges always keep the `managed-il-rewrite-v1` location
+kind, and pair outcome labels are exact (`unavailable`, `malformed`,
+`disputed`, `mismatched`, `ambiguous`, `unsupported`, `invalid`,
+`membership-delta`, or `limit-exhausted`) rather than a generic fallback.
+The lane validates the reused body and compiled limits identically to their
+owning extractors before any provenance exists, and the omitted-membership
+digest commits exactly the identities beyond the retained prefix.
+
+An edge is emitted only when the complete exact assembly-scoped method
+identity text occurs exactly once on each side. The edge records both assembly
+identities, both module-local tokens (with `tokenRetargeted`), both canonical
+body identities and digests, a relationship kind — `unchanged`,
+`operand-only-change`, `body-structure-change`,
+`operand-and-body-structure-change`, or `instruction-stream-change` — and
+`opcodeSequencePreserved`. `operand-only-change` additionally requires every
+non-instruction body component (locals, exception regions, max stack,
+init-locals) to match, so structural body changes are never mislabeled as
+operand-only. Call-site retargets are recorded per ordinal
+alignment (both tokens, both target identities, both IL offsets) only when
+instruction counts and opcode sequences are exactly equal; the shared
+opcode-name digest computed by both readers proves the alignment. Zero or
+one-side-only membership emits bounded `IlRewriteMethodBeforeOnly` /
+`IlRewriteMethodAfterOnly` gaps (retained identities capped at eight per side
+with an omitted-count digest commitment) rather than guessed insertion or
+removal edges; more than one candidate on either side emits
+`IlRewriteIdentityAmbiguous`; differing assembly identities emit
+`IlRewriteAssemblyIdentityMismatch` with no joins. Join work is charged to the
+shared `--il-max-work` budget; exhaustion is atomic per pair and emits only
+`IlRewriteTotalWorkLimitExceeded` — no partial edges, membership deltas, or
+other gap kinds survive a join-phase exhaustion. Requesting the flag without
+pairs emits `IlRewritePairUnavailable`; count mismatches emit
+`IlRewritePairDeclarationInvalid`; malformed declared paths fail closed to
+`IlRewriteSideUnavailable` with cause `IlRewriteSideDeclarationInvalid` and a
+privacy-projected locator instead of aborting the scan. Repeated identical
+`(before, after)` declarations are not deduplicated: every declared ordinal
+keeps its own outcome, and the bounded-input digest — which also commits the
+effective `CompiledInputLimits` admission policy alongside the rewrite and
+body limits — stays distinct from a single-declaration scan. Rejected blank
+or unequal-length declarations also commit the ordered privacy-projected
+slots, so changed paths or blank positions cannot share a bounded-input
+digest. Execution-receipt scope fingerprints preserve the same declaration
+order and blank slots with unambiguous framing.
+
+The lane is otherwise inert: without the flag a scan produces no rewrite
+facts, no `ilRewriteProvenance` manifest section, no rewrite known gaps, and
+unchanged source, compiled-metadata, PDB, and IL body/call behavior including
+declared-but-unused pair paths. The manifest, execution receipt, and report
+gain `il-rewrite-provenance.v1` with generator SHA-256, canonical
+bounded-input SHA-256, effective limits, and per-pair outcomes; the digest
+participates in `scanId`. Outcomes never contain raw paths; external inputs
+use the established privacy-projected `__external__/<role>/` locators, and the
+local-only visibility contract is unchanged.
+
+Mono.Cecil is used only to generate deterministic synthetic mutations in the
+public test suite (constant operand change, inserted member that renumbers
+MethodDef tokens, rewired call target, duplicated identity, renamed
+assembly); the scanner itself only verifies. Identical before/after inputs
+must prove every body `unchanged` with zero gaps. Run the focused lane with:
+
+```bash
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj   --no-restore --filter FullyQualifiedName~IlRewriteEvidenceExtractorTests
+```
+
+For a positive CLI scan, pass an explicit pair:
+
+```bash
+dotnet run --project src/dotnet/TraceMap.Cli -- scan   --repo samples/compiled-dotnet-evidence/csharp   --out /tmp/tracemap-ilrewrite-scan   --il-rewrite-evidence   --il-rewrite-before "<before.dll>"   --il-rewrite-after "<after.dll>"
+```
+
+Repeat scans must produce byte-identical `facts.ndjson` and `report.md`,
+identical `ilRewriteProvenance` in the manifest and execution receipt, and
+matching `dotnet.compiled.il-rewrite*` rows in `index.sqlite`. The fixture
+catalog records stable rewrite case IDs under `ilRewriteCases` in
+`samples/compiled-dotnet-evidence/fixture-cases.json` schema v5, covering
+same-opcode operand changes, token retargeting, call retargeting, unchanged
+bodies, duplicate identity, hostile malformed sides, reader disagreement, and
+budget exhaustion.
+
+This slice explicitly defers and makes no claim about: rewritten PDB offsets
+and sequence-point validity after a rewrite, ILAsm/ILDAsm parity,
+evaluation-stack-sensitive rewrites, netmodules, type forwarding, duplicate
+assembly identities, insertion/removal relationships, the extended ECMA-335
+mutation matrix from #766, and Task 11's legacy Windows, `dotnetperf`, and
+C++/CLI lanes. It performs no rewrite generation by the scanner, no semantic
+equivalence or behavior-preservation conclusion, no runtime loading or
+execution, and no cross-assembly resolution beyond the rows encoded in each
+containing module.
