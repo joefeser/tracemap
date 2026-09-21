@@ -654,3 +654,13 @@ Fourth review remediation on 2026-09-21: a follow-on Codex P2 on head
 gaps still used the before locator; one-side-only membership gaps are now
 evidenced on the input that carries the identity, pinned by both the
 inserted-member and omitted-suffix regressions.
+
+Fifth review remediation on 2026-09-21: the Codex re-review of head
+`950390728d6b6b59f16fed335de8e9b39ad434e9` filed one P1 and one P2; both are
+patched. Admission side/cause mappings now participate in the canonical
+bounded-input digest projection, so an in-repo locator that changes only from
+missing to over-limit (identical gap kind, outcome, locator, and null raw
+digest) still changes the provenance digest and scan identity. Blank declared
+pair slots invalidate the whole declaration instead of being silently
+dropped, which had shifted ordinal pairing. Two regressions pin the
+behaviors (37 focused rewrite tests total).

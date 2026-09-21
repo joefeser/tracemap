@@ -490,6 +490,66 @@ public sealed class IlRewriteEvidenceExtractorTests
     }
 
     [Fact]
+    public void Blank_pair_slots_invalidate_the_declaration_instead_of_repairing_it()
+    {
+        using var temp = new TempDirectory();
+        var before = Path.Combine(temp.Path, "RewriteShapes.dll");
+        WriteBeforeAssembly(before);
+        var result = Scan(new ScanOptions(
+            RepoRoot(),
+            TempOutput(),
+            IlRewriteEvidence: true,
+            IlRewriteBeforePaths: [before, "   "],
+            IlRewriteAfterPaths: [before]));
+
+        var provenance = result.Manifest.IlRewriteProvenance!;
+        Assert.Equal("rewrite-partial", provenance.CoverageState);
+        Assert.Contains(result.Facts, fact => fact.RuleId == RuleIds.DotNetIlRewriteGap
+            && fact.Properties.GetValueOrDefault("gapKind") == "IlRewritePairDeclarationInvalid");
+        Assert.DoesNotContain(result.Facts, fact => fact.FactType is FactTypes.ManagedIlRewriteObserved or FactTypes.ManagedIlCallRetargetObserved);
+    }
+
+    [Fact]
+    public void Admission_causes_participate_in_the_bounded_input_digest()
+    {
+        // An in-repo locator stays identical whether the file is missing or
+        // over the size limit; only the admission cause distinguishes the two
+        // scans, so the cause must reach the bounded-input digest.
+        var probe = Path.Combine(RepoRoot(), "bin", "Debug", "net10.0", "rewrite-digest-probe.dll");
+        var options = new ScanOptions(
+            RepoRoot(),
+            TempOutput(),
+            IlRewriteEvidence: true,
+            IlRewriteBeforePaths: [probe],
+            IlRewriteAfterPaths: [probe]);
+        try
+        {
+            var missing = IlRewriteEvidenceExtractor.Evaluate(options);
+            File.WriteAllBytes(probe, new byte[64]);
+            var oversized = IlRewriteEvidenceExtractor.Evaluate(options with
+            {
+                CompiledInputLimits = new CompiledInputLimits(MaxFileSizeBytes: 8)
+            });
+
+            var missingOutcome = Assert.Single(missing.Provenance!.Outcomes);
+            var oversizedOutcome = Assert.Single(oversized.Provenance!.Outcomes);
+            Assert.Equal("IlRewriteSideUnavailable", Assert.Single(missingOutcome.GapKinds));
+            Assert.Equal("IlRewriteSideUnavailable", Assert.Single(oversizedOutcome.GapKinds));
+            Assert.Equal(missingOutcome.BeforeSafeLocator, oversizedOutcome.BeforeSafeLocator);
+            Assert.Equal(missingOutcome.Outcome, oversizedOutcome.Outcome);
+            Assert.Null(missingOutcome.BeforeRawFileSha256);
+            Assert.Null(oversizedOutcome.BeforeRawFileSha256);
+            Assert.Equal("after:IlRewriteSideMissing+before:IlRewriteSideMissing", missingOutcome.Cause);
+            Assert.Equal("after:IlRewriteSideFileSizeLimitExceeded+before:IlRewriteSideFileSizeLimitExceeded", oversizedOutcome.Cause);
+            Assert.NotEqual(missing.Provenance.BoundedInputSha256, oversized.Provenance.BoundedInputSha256);
+        }
+        finally
+        {
+            File.Delete(probe);
+        }
+    }
+
+    [Fact]
     public void Disabled_lane_is_inert_even_with_declared_pairs()
     {
         using var temp = new TempDirectory();
