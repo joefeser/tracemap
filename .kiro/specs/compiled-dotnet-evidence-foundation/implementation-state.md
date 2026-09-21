@@ -269,12 +269,12 @@ build validation, or C++/CLI.
 
 Final local macOS Task 9 validation on 2026-09-21:
 
-- focused `PortablePdbExtractorTests`: 27 passed, zero failed, zero skipped;
+- focused `PortablePdbExtractorTests`: 29 passed, zero failed, zero skipped;
 - combined PDB, source/metadata reconciliation, managed metadata, and receipt
-  contract filter: 87 passed, zero failed, zero skipped;
+  contract filter: 89 passed, zero failed, zero skipped;
 - `dotnet build src/dotnet/TraceMap.sln --no-restore`: passed with zero warnings
   and zero errors;
-- `dotnet test src/dotnet/TraceMap.sln --no-restore`: 2,028 passed, zero failed,
+- `dotnet test src/dotnet/TraceMap.sln --no-restore`: 2,030 passed, zero failed,
   zero skipped;
 - two bound C# CLI scans emitted all five required scan artifacts plus the
   execution receipt; `facts.ndjson` and `report.md` were byte-identical, PDB
@@ -296,7 +296,7 @@ zero sequence-point facts without a one-candidate metadata-method edge, work
 charges for every SRM/Cecil method-row inspection, and cancellation polling
 through source checksum streaming.
 
-The final current-head review found two sibling violations of the same
+An earlier exact-head review found two sibling violations of the same
 admission/work-bound invariant. PDB assembly binding now consumes only exact
 artifacts retained by the compiled evaluator's admitted prefix, so an omitted
 byte-identical assembly cannot reenter matching or manufacture an ambiguous
@@ -305,6 +305,17 @@ walker and charges every type before its methods, so deeply nested empty types
 cannot overflow the stack or evade the PDB work budget. The regression matrix
 covers the omitted duplicate, 10,000 nested empty types, and type-budget
 exhaustion before any method visit.
+
+The next settled three-finding review batch exposed two independent
+post-admission invariants. First, exact method and document joins must be
+linear in the bounded evidence set: compiled methods are indexed once by
+assembly locator and MethodDef token, and PDB documents are indexed once by
+row ID before sequence-point facts are emitted. Second, PDB input identity is
+the normalized path under the checkout filesystem's case semantics, not the
+raw option spelling. The regression matrix covers zero/one/multiple method
+candidates, a same-token member in another assembly, multi-document
+sequence-point support IDs, and both present and missing PDB aliases; an
+aliased positive CLI scan completes without duplicate fact IDs.
 
 PR #774 implementation-head CI at
 `34ded8aef9b60b6f7db225d1c8af5df6b96ea159`

@@ -35,7 +35,7 @@ internal static class PortablePdbExtractor
         CompiledInputEvaluation compiledEvaluation,
         CancellationToken cancellationToken = default)
     {
-        var paths = CleanPaths(options.PdbInputPaths);
+        var paths = CleanPaths(repoPath, options.PdbInputPaths);
         if (paths.Count == 0)
             return PdbInputEvaluation.Disabled;
 
@@ -237,17 +237,32 @@ internal static class PortablePdbExtractor
             evaluation.Provenance.EffectiveLimits,
             evaluation.ConsumedWorkUnits,
             cancellationToken);
+        var compiledMethodsByAssemblyAndToken = new Dictionary<(string AssemblyLocator, string MetadataToken), List<CodeFact>>();
+        foreach (var fact in compiledFacts)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (fact.FactType != FactTypes.ManagedMethodDeclared
+                || !string.Equals(fact.Properties.GetValueOrDefault("sourceReconciliationEligibility"), "eligible", StringComparison.Ordinal)
+                || !fact.Properties.TryGetValue("metadataToken", out var token))
+                continue;
+            var key = (fact.Evidence.FilePath, token);
+            if (!compiledMethodsByAssemblyAndToken.TryGetValue(key, out var candidates))
+                compiledMethodsByAssemblyAndToken[key] = candidates = [];
+            candidates.Add(fact);
+        }
+        var compiledMethodIndex = compiledMethodsByAssemblyAndToken.ToDictionary(
+            pair => pair.Key,
+            pair => pair.Value.ToArray());
         var plans = evaluation.Inputs.Select(input =>
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var sourceMatches = MatchSourceDocuments(sourceIndex, input.Documents);
             var metadataCandidates = input.Methods.ToDictionary(
                 method => method.MethodRowId,
-                method => compiledFacts.Where(fact =>
-                        fact.FactType == FactTypes.ManagedMethodDeclared
-                        && string.Equals(fact.Evidence.FilePath, input.Outcome.MatchedAssemblySafeLocator, StringComparison.Ordinal)
-                        && string.Equals(fact.Properties.GetValueOrDefault("metadataToken"), method.MetadataToken, StringComparison.Ordinal)
-                        && string.Equals(fact.Properties.GetValueOrDefault("sourceReconciliationEligibility"), "eligible", StringComparison.Ordinal))
-                    .ToArray());
+                method => input.Outcome.MatchedAssemblySafeLocator is { } assemblyLocator
+                    && compiledMethodIndex.TryGetValue((assemblyLocator, method.MetadataToken), out var candidates)
+                        ? candidates
+                        : []);
             return new PdbMaterializationPlan(input, sourceMatches, metadataCandidates);
         }).ToArray();
         var reconciliationIncomplete = plans.Any(plan => plan.Input.Outcome.Outcome == "admitted"
@@ -288,6 +303,7 @@ internal static class PortablePdbExtractor
 
             var sourceMatches = plan.SourceMatches;
             var documentFacts = new Dictionary<int, CodeFact>();
+            var documentsByRow = input.Documents.ToDictionary(document => document.RowId);
             foreach (var document in input.Documents.OrderBy(item => item.RowId))
             {
                 var documentFact = FactFactory.Create(
@@ -391,7 +407,7 @@ internal static class PortablePdbExtractor
                     facts.Add(reconciliationFact);
 
                     foreach (var point in method.SequencePoints.OrderBy(item => item.Ordinal))
-                        AddSequencePointFact(facts, manifest, outcome, common, input, sourceMatches, documentFacts, methodFact, reconciliationFact, point);
+                        AddSequencePointFact(facts, manifest, outcome, common, documentsByRow, sourceMatches, documentFacts, methodFact, reconciliationFact, point);
                 }
                 else
                 {
@@ -518,14 +534,14 @@ internal static class PortablePdbExtractor
         ScanManifest manifest,
         PdbInputOutcome outcome,
         IReadOnlyDictionary<string, string> common,
-        EvaluatedPdbInput input,
+        IReadOnlyDictionary<int, PdbDocumentObservation> documentsByRow,
         IReadOnlyDictionary<int, SourceDocumentMatch> sourceMatches,
         IReadOnlyDictionary<int, CodeFact> documentFacts,
         CodeFact methodFact,
         CodeFact? reconciliationFact,
         PdbSequencePointObservation point)
     {
-        var document = input.Documents.Single(item => item.RowId == point.DocumentRowId);
+        var document = documentsByRow[point.DocumentRowId];
         var match = sourceMatches.GetValueOrDefault(document.RowId) ?? SourceDocumentMatch.Zero;
         var evidence = match.Candidates.Count == 1 && !point.Hidden
             ? new EvidenceSpan(match.Candidates[0], Math.Max(1, point.StartLine), Math.Max(1, point.EndLine), null, nameof(PortablePdbExtractor), ScannerVersions.PortablePdbExtractor)
@@ -1003,8 +1019,13 @@ internal static class PortablePdbExtractor
     private static string ProjectBoundedText(string value, int maximumLength) =>
         value.Length <= maximumLength ? value : "sha256:" + Sha256(Encoding.UTF8.GetBytes(value));
 
-    private static IReadOnlyList<string> CleanPaths(IReadOnlyList<string>? paths) =>
-        (paths ?? []).Where(path => !string.IsNullOrWhiteSpace(path)).Select(path => path.Trim()).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+    private static IReadOnlyList<string> CleanPaths(string repoPath, IReadOnlyList<string>? paths) =>
+        (paths ?? [])
+            .Where(path => !string.IsNullOrWhiteSpace(path))
+            .Select(path => ResolvePath(repoPath, path.Trim()))
+            .Order(StringComparer.Ordinal)
+            .Distinct(CSharpSemanticExtractor.CreateSourcePathComparer(repoPath))
+            .ToArray();
 
     private static void ValidateLimits(PdbInputLimits limits)
     {

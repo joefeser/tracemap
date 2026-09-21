@@ -47,7 +47,10 @@ public sealed class PortablePdbExtractorTests
         Assert.All(result.Facts.Where(fact => fact.FactType == FactTypes.PdbSequencePointDeclared), fact =>
         {
             Assert.Equal(FactTypes.PdbMethodDeclared, byId[fact.Properties["pdbMethodFactId"]].FactType);
-            Assert.Equal(FactTypes.PdbDocumentDeclared, byId[fact.Properties["pdbDocumentFactId"]].FactType);
+            var document = byId[fact.Properties["pdbDocumentFactId"]];
+            Assert.Equal(FactTypes.PdbDocumentDeclared, document.FactType);
+            Assert.Equal(document.TargetSymbol, fact.TargetSymbol);
+            Assert.Contains($"|document:{document.Properties["documentRowId"]}|", fact.ContractElement, StringComparison.Ordinal);
             Assert.Equal(FactTypes.MetadataPdbMethodReconciled, byId[fact.Properties["metadataPdbReconciliationFactId"]].FactType);
         });
         var serialized = JsonSerializer.Serialize(result);
@@ -412,6 +415,75 @@ public sealed class PortablePdbExtractorTests
             && fact.Properties.GetValueOrDefault("gapKind") == "PdbMetadataMethodMultipleCandidates");
         Assert.DoesNotContain(multiple, fact => fact.FactType == FactTypes.PdbSequencePointDeclared
             && fact.SourceSymbol == multipleGap.Properties["pdbMethodIdentity"]);
+
+        var otherAssembly = compiledFacts.ToList();
+        otherAssembly.Add(duplicate with
+        {
+            FactId = "fact-00000000000000000001",
+            Evidence = duplicate.Evidence with { FilePath = "another-assembly.dll" }
+        });
+        var exactAssembly = PortablePdbExtractor.MaterializeFacts(
+            fixture.Source,
+            baseline.Manifest,
+            pdbEvaluation,
+            otherAssembly,
+            []);
+        Assert.Equal(
+            baseline.Facts.Count(fact => fact.FactType == FactTypes.MetadataPdbMethodReconciled),
+            exactAssembly.Count(fact => fact.FactType == FactTypes.MetadataPdbMethodReconciled));
+        Assert.DoesNotContain(exactAssembly, fact => fact.RuleId == RuleIds.DotNetPdbGap
+            && fact.Properties.GetValueOrDefault("gapKind") == "PdbMetadataMethodMultipleCandidates");
+    }
+
+    [Fact]
+    public async Task Present_pdb_path_aliases_are_one_admitted_input_and_one_cli_fact_set()
+    {
+        var fixture = Fixture("csharp", "CompiledEvidence.CSharp");
+        using var temp = new TempDirectory(Path.GetDirectoryName(FindRepoRoot()));
+        var receipt = Path.Combine(temp.Path, "binding.json");
+        WriteBoundReceipt(fixture.Source, fixture.Assembly, receipt);
+        var relative = Path.GetRelativePath(fixture.Source, fixture.Pdb);
+        var output = Path.Combine(temp.Path, "out");
+        var options = new ScanOptions(
+            fixture.Source,
+            output,
+            CompiledInputPaths: [fixture.Assembly],
+            CompiledBindingReceiptPaths: [receipt],
+            PdbInputPaths: [fixture.Pdb, relative, $".{Path.DirectorySeparatorChar}{relative}"]);
+        var result = Scan(options);
+
+        Assert.Single(result.Manifest.PdbInputProvenance!.ExpectedInputs);
+        Assert.Single(result.Manifest.PdbInputProvenance.Outcomes);
+        Assert.Single(result.Facts, fact => fact.FactType == FactTypes.PdbInputAdmitted);
+        Assert.Equal(result.Facts.Count, result.Facts.Select(fact => fact.FactId).Distinct(StringComparer.Ordinal).Count());
+
+        var stdout = new StringWriter();
+        var stderr = new StringWriter();
+        var exitCode = await TraceMapCommand.RunAsync([
+            "scan", "--repo", fixture.Source, "--out", Path.Combine(temp.Path, "cli"),
+            "--compiled-input", fixture.Assembly,
+            "--compiled-binding-receipt", receipt,
+            "--pdb-input", fixture.Pdb,
+            "--pdb-input", relative
+        ], stdout, stderr);
+        Assert.True(exitCode == 0, $"stdout: {stdout}{Environment.NewLine}stderr: {stderr}");
+    }
+
+    [Fact]
+    public void Missing_pdb_path_aliases_emit_one_gap()
+    {
+        var fixture = Fixture("csharp", "CompiledEvidence.CSharp");
+        var missing = Path.Combine(fixture.Source, "missing-pdb-alias.pdb");
+        var result = Scan(new ScanOptions(
+            fixture.Source,
+            TempOutput(),
+            PdbInputPaths: [missing, "missing-pdb-alias.pdb", $".{Path.DirectorySeparatorChar}missing-pdb-alias.pdb"]));
+
+        Assert.Single(result.Manifest.PdbInputProvenance!.ExpectedInputs);
+        Assert.Single(result.Manifest.PdbInputProvenance.Outcomes);
+        Assert.Single(result.Facts, fact => fact.RuleId == RuleIds.DotNetPdbGap
+            && fact.Properties.GetValueOrDefault("gapKind") == "MissingPdbInput");
+        Assert.Equal(result.Facts.Count, result.Facts.Select(fact => fact.FactId).Distinct(StringComparer.Ordinal).Count());
     }
 
     [Fact]
