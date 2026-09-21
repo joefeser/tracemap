@@ -48,7 +48,9 @@ public sealed record ScanExecutionReceipt(
     IReadOnlyList<string> SupportingFactIds,
     IReadOnlyList<string> SupportingGapIds,
     IReadOnlyList<string> Limitations,
-    SourceMetadataReconciliationSummary? SourceMetadataReconciliation = null);
+    SourceMetadataReconciliationSummary? SourceMetadataReconciliation = null,
+    PdbInputProvenance? PdbInputProvenance = null,
+    PdbEvidenceSummary? PdbEvidenceSummary = null);
 
 /// <summary>
 /// Collects bounded, sanitized operational observations. Receipts describe the
@@ -103,6 +105,8 @@ public sealed class ScanReceiptRecorder
     private string outcome = "failed";
     private IReadOnlyList<string> extractorVersions = [ScannerVersions.TraceMap];
     private SourceMetadataReconciliationSummary? sourceMetadataReconciliation;
+    private PdbInputProvenance? pdbInputProvenance;
+    private PdbEvidenceSummary? pdbEvidenceSummary;
 
     public ScanReceiptRecorder(ScanOptions options, IEnumerable<string>? additionalAuthorizedInputs = null)
     {
@@ -119,6 +123,8 @@ public sealed class ScanReceiptRecorder
             Normalize(options.CompiledDependencyPaths),
             Normalize(options.CompiledBindingReceiptPaths),
             options.CompiledInputLimits?.ToString() ?? string.Empty,
+            Normalize(options.PdbInputPaths),
+            options.PdbInputLimits?.ToString() ?? string.Empty,
             Normalize(additionalAuthorizedInputs)));
     }
 
@@ -140,6 +146,8 @@ public sealed class ScanReceiptRecorder
         sourceMetadataReconciliation = result.Manifest.SourceMetadataReconciliation is null
             ? null
             : SourceMetadataReconciler.BuildSummary(result.Manifest, result.Facts, ScanReceiptSchema.MaxSupportingIds);
+        pdbInputProvenance = result.Manifest.PdbInputProvenance;
+        pdbEvidenceSummary = PortablePdbExtractor.BuildSummary(result.Manifest, result.Facts, ScanReceiptSchema.MaxSupportingIds);
         extractorVersions = result.Facts
             .Select(fact => fact.Evidence?.ExtractorVersion)
             .Where(value => !string.IsNullOrWhiteSpace(value))
@@ -235,7 +243,9 @@ public sealed class ScanReceiptRecorder
             finalFactIds,
             finalGapIds,
             ReceiptLimitations,
-            sourceMetadataReconciliation);
+            sourceMetadataReconciliation,
+            pdbInputProvenance,
+            pdbEvidenceSummary);
     }
 
     internal void Record(
