@@ -677,6 +677,78 @@ public sealed class IlBodyEvidenceExtractorTests
         Assert.Contains("rewrite equivalence is a separate deferred contract", bodyRule, StringComparison.Ordinal);
     }
 
+    [Theory]
+    [InlineData((byte)1)]
+    [InlineData((byte)2)]
+    [InlineData((byte)4)]
+    public void Unaligned_prefix_keeps_complete_body_evidence(byte alignment)
+    {
+        var fixture = Fixture("csharp", "CompiledEvidence.CSharp");
+        using var temp = new TempDirectory();
+        var path = Path.Combine(temp.Path, "Unaligned.dll");
+        using (var assembly = CecilAssemblyDefinition.CreateAssembly(
+            new AssemblyNameDefinition("Unaligned", new Version(1, 0)), "Unaligned", ModuleKind.Dll))
+        {
+            var module = assembly.MainModule;
+            var type = new CecilTypeDefinition("Fixture", "IlShapes", Mono.Cecil.TypeAttributes.Public, module.TypeSystem.Object);
+            module.Types.Add(type);
+            var method = new CecilMethodDefinition("Read", Mono.Cecil.MethodAttributes.Public | Mono.Cecil.MethodAttributes.Static, module.TypeSystem.Int32);
+            method.Parameters.Add(new ParameterDefinition(new ByReferenceType(module.TypeSystem.Int32)));
+            method.Body.Instructions.Add(Mono.Cecil.Cil.Instruction.Create(Mono.Cecil.Cil.OpCodes.Ldarg_0));
+            method.Body.Instructions.Add(Mono.Cecil.Cil.Instruction.Create(Mono.Cecil.Cil.OpCodes.Unaligned, alignment));
+            method.Body.Instructions.Add(Mono.Cecil.Cil.Instruction.Create(Mono.Cecil.Cil.OpCodes.Ldind_I4));
+            method.Body.Instructions.Add(Mono.Cecil.Cil.Instruction.Create(Mono.Cecil.Cil.OpCodes.Ret));
+            type.Methods.Add(method);
+            var signedConstant = new CecilMethodDefinition("SignedConstant", Mono.Cecil.MethodAttributes.Public | Mono.Cecil.MethodAttributes.Static, module.TypeSystem.Int32);
+            signedConstant.Body.Instructions.Add(Mono.Cecil.Cil.Instruction.Create(Mono.Cecil.Cil.OpCodes.Ldc_I4_S, (sbyte)-7));
+            signedConstant.Body.Instructions.Add(Mono.Cecil.Cil.Instruction.Create(Mono.Cecil.Cil.OpCodes.Ret));
+            type.Methods.Add(signedConstant);
+            assembly.Write(path);
+        }
+
+        var result = Scan(new ScanOptions(fixture.Source, TempOutput(), CompiledInputPaths: [path], IlBodyEvidence: true));
+
+        Assert.Equal("il-complete", result.Manifest.IlBodyProvenance!.CoverageState);
+        Assert.Equal("4", BodyFact(result, "Read").Properties["instructionCount"]);
+        Assert.Equal("2", BodyFact(result, "SignedConstant").Properties["instructionCount"]);
+        Assert.DoesNotContain(result.Facts, fact => fact.RuleId == RuleIds.DotNetIlGap);
+    }
+
+    [Theory]
+    [InlineData(0xd800, 0xd801)]
+    [InlineData(0xdc00, 0xdc01)]
+    [InlineData(0xd800, 0xfffd)]
+    public void Distinct_utf16_code_units_keep_distinct_string_operand_digests(int firstCodeUnit, int secondCodeUnit)
+    {
+        var fixture = Fixture("csharp", "CompiledEvidence.CSharp");
+        using var temp = new TempDirectory();
+        var path = Path.Combine(temp.Path, "CompiledEvidence.CSharp.dll");
+        var original = File.ReadAllBytes(fixture.Assembly);
+        var literal = System.Text.Encoding.Unicode.GetBytes("il-alpha");
+        var literalOffset = original.AsSpan().IndexOf(literal);
+        Assert.True(literalOffset >= 0);
+        Assert.Equal(-1, original.AsSpan(literalOffset + literal.Length).IndexOf(literal));
+
+        ScanResult ScanWithCodeUnit(int codeUnit)
+        {
+            var bytes = original.ToArray();
+            System.Buffers.Binary.BinaryPrimitives.WriteUInt16LittleEndian(bytes.AsSpan(literalOffset, 2), (ushort)codeUnit);
+            // ECMA-335 #US terminal flag: a code unit has a nonzero high byte.
+            bytes[literalOffset + literal.Length] = 1;
+            File.WriteAllBytes(path, bytes);
+            return Scan(new ScanOptions(fixture.Source, TempOutput(), CompiledInputPaths: [path], IlBodyEvidence: true));
+        }
+
+        var first = ScanWithCodeUnit(firstCodeUnit);
+        var second = ScanWithCodeUnit(secondCodeUnit);
+        Assert.Equal("il-complete", first.Manifest.IlBodyProvenance!.CoverageState);
+        Assert.Equal("il-complete", second.Manifest.IlBodyProvenance!.CoverageState);
+        Assert.NotEqual(BodyFact(first, "StringAlpha").Properties["instructionsSha256"],
+            BodyFact(second, "StringAlpha").Properties["instructionsSha256"]);
+        Assert.NotEqual(BodyFact(first, "StringAlpha").TargetSymbol, BodyFact(second, "StringAlpha").TargetSymbol);
+        Assert.Equal(BodyFact(first, "StringBeta").TargetSymbol, BodyFact(second, "StringBeta").TargetSymbol);
+    }
+
     private static CodeFact BodyFact(ScanResult result, string methodName, string? signatureFragment = null, string? assemblyIdentity = null)
     {
         var matches = result.Facts.Where(fact => fact.FactType == FactTypes.ManagedIlBodyDeclared

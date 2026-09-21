@@ -492,3 +492,26 @@ actionable findings, merge state CLEAN), and the one remaining step - granting
 the extra exact-head Codex review request - requires the owner-issued signed
 execution authorization that the lane deliberately makes unforgeable. The PR
 is not merged by this task.
+
+## PR #775 owner-requested P1/P2 review follow-up
+
+Reviewed head `1ae5564921852e0e780f68839b04fde525a5adca` on 2026-09-21.
+Two P2 defects reproduced in six regression cases before patching:
+
+- Valid `unaligned.` operands (alignments 1, 2, and 4) are boxed as unsigned
+  bytes by Cecil. Casting every ShortInlineI operand to `sbyte` threw an
+  uncaught `InvalidCastException` and aborted the entire scan. Both readers
+  now distinguish signed `ldc.i4.s` constants from unsigned prefix bytes.
+- `Encoding.Unicode` replaced unpaired surrogates with U+FFFD before hashing,
+  assigning identical instruction/body identities to distinct string
+  operands. Hashing now serializes exact little-endian UTF-16 code units.
+  Regression pairs cover high surrogates, low surrogates, and U+FFFD.
+
+Validation: all 41 focused IL tests and all 2,092 solution tests passed;
+the solution build had zero warnings and errors. A three-language CLI smoke
+scan against `samples/modern-sample` produced `il-complete`, 155 body facts,
+and 126 call facts; adapter artifact validation passed. The private-path
+guard, Kiro review self-test, and whitespace check passed. Local validation
+is macOS only; hosted checks and exact-head review remain ACK's authority.
+Task 10 remains open for the already-deferred rewrite suite, and Task 11 is
+unchanged. This follow-up does not authorize merge or waive review freshness.
