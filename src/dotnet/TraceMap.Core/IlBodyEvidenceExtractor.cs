@@ -119,6 +119,12 @@ internal static class IlBodyEvidenceExtractor
             {
                 evaluated.Add(InputGap(artifact, exception.GapKind));
             }
+            catch (ManagedMetadataExtractor.ManagedInputException exception)
+            {
+                evaluated.Add(InputGap(artifact, exception.GapKind == "ManagedInputSignatureNestingLimitExceeded"
+                    ? "IlSignatureNestingLimitExceeded"
+                    : "IlMetadataIdentityUnavailable"));
+            }
             catch (BadImageFormatException)
             {
                 evaluated.Add(InputGap(artifact, "MalformedIlBody"));
@@ -387,13 +393,7 @@ internal static class IlBodyEvidenceExtractor
             throw new IlEvidenceException("IlLocalLimitExceeded");
         if (!budget.TryConsume(locals.Length))
             throw new IlEvidenceException("IlTotalWorkLimitExceeded");
-        var handlers = body.ExceptionHandlers
-            .Select(handler => $"kind:{CanonicalHandlerKind(handler.HandlerType)}"
-                + $":try:{handler.TryStart?.Offset.ToString("x", CultureInfo.InvariantCulture)}+{handler.TryEnd!.Offset - handler.TryStart!.Offset:x}"
-                + $":handler:{handler.HandlerStart?.Offset.ToString("x", CultureInfo.InvariantCulture)}+{handler.HandlerEnd!.Offset - handler.HandlerStart!.Offset:x}"
-                + $":filter:{(handler.FilterStart is { } filterStart ? filterStart.Offset.ToString("x", CultureInfo.InvariantCulture) : "-1")}"
-                + $":catch:{(handler.CatchType is null ? "-" : CecilTypeOperandIdentity(handler.CatchType))}")
-            .ToArray();
+        var handlers = body.ExceptionHandlers.Select(handler => CecilHandler(handler, body.CodeSize)).ToArray();
         if (handlers.Length > limits.MaxExceptionRegionsPerBody)
             throw new IlEvidenceException("IlExceptionRegionLimitExceeded");
         if (!budget.TryConsume(handlers.Length))
@@ -598,6 +598,22 @@ internal static class IlBodyEvidenceExtractor
         ExceptionHandlerType.Fault => "fault",
         _ => throw new IlEvidenceException("IlExceptionRegionKindUnsupported")
     };
+
+    private static string CecilHandler(ExceptionHandler handler, int codeSize)
+    {
+        if (handler.TryStart is null || handler.HandlerStart is null)
+            throw new IlEvidenceException("MalformedIlBody");
+        var tryEnd = handler.TryEnd?.Offset ?? codeSize;
+        var handlerEnd = handler.HandlerEnd?.Offset ?? codeSize;
+        if (tryEnd < handler.TryStart.Offset || tryEnd > codeSize
+            || handlerEnd < handler.HandlerStart.Offset || handlerEnd > codeSize)
+            throw new IlEvidenceException("MalformedIlBody");
+        return $"kind:{CanonicalHandlerKind(handler.HandlerType)}"
+            + $":try:{handler.TryStart.Offset:x}+{tryEnd - handler.TryStart.Offset:x}"
+            + $":handler:{handler.HandlerStart.Offset:x}+{handlerEnd - handler.HandlerStart.Offset:x}"
+            + $":filter:{(handler.FilterStart is { } filterStart ? filterStart.Offset.ToString("x", CultureInfo.InvariantCulture) : "-1")}"
+            + $":catch:{(handler.CatchType is null ? "-" : CecilTypeOperandIdentity(handler.CatchType))}";
+    }
 
     private static IlReaderResult ReadSystemReflectionMetadataBodies(
         byte[] bytes,

@@ -1560,7 +1560,7 @@ public static class ManagedMetadataExtractor
         string? BinarySourceCommitRelation,
         string? BinaryBuildIdentity);
 
-    private sealed class ManagedInputException(string outcome, string gapKind) : Exception(gapKind)
+    internal sealed class ManagedInputException(string outcome, string gapKind) : Exception(gapKind)
     {
         public string Outcome { get; } = outcome;
         public string GapKind { get; } = gapKind;

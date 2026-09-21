@@ -281,6 +281,45 @@ public sealed class IlBodyEvidenceExtractorTests
     }
 
     [Fact]
+    public void Handler_ending_at_code_size_has_complete_evidence()
+    {
+        var fixture = Fixture("csharp", "CompiledEvidence.CSharp");
+        using var temp = new TempDirectory();
+        var assemblyPath = Path.Combine(temp.Path, "TerminalHandler.dll");
+        WriteTerminalHandlerAssembly(assemblyPath);
+
+        var result = Scan(new ScanOptions(
+            fixture.Source,
+            TempOutput(),
+            CompiledInputPaths: [assemblyPath],
+            IlBodyEvidence: true));
+
+        Assert.Equal("il-complete", result.Manifest.IlBodyProvenance!.CoverageState);
+        Assert.Equal("1", BodyFact(result, "TerminalHandler").Properties["exceptionRegionCount"]);
+        Assert.DoesNotContain(result.Facts, fact => fact.RuleId == RuleIds.DotNetIlGap);
+    }
+
+    [Fact]
+    public void Deep_standalone_local_signature_becomes_a_partial_il_gap()
+    {
+        var fixture = Fixture("csharp", "CompiledEvidence.CSharp");
+        using var temp = new TempDirectory();
+        var assemblyPath = Path.Combine(temp.Path, "DeepLocal.dll");
+        WriteDeepLocalAssembly(assemblyPath);
+
+        var result = Scan(new ScanOptions(
+            fixture.Source,
+            TempOutput(),
+            CompiledInputPaths: [assemblyPath],
+            IlBodyEvidence: true));
+
+        Assert.Equal("il-partial", result.Manifest.IlBodyProvenance!.CoverageState);
+        Assert.Contains(result.Facts, fact => fact.RuleId == RuleIds.DotNetIlGap
+            && fact.Properties.GetValueOrDefault("gapKind") == "IlSignatureNestingLimitExceeded");
+        Assert.DoesNotContain(result.Facts, fact => fact.FactType is FactTypes.ManagedIlBodyDeclared or FactTypes.ManagedIlCallObserved);
+    }
+
+    [Fact]
     public void Oversized_user_string_fails_closed_to_the_text_limit_gap()
     {
         var fixture = Fixture("csharp", "CompiledEvidence.CSharp");
@@ -723,6 +762,55 @@ public sealed class IlBodyEvidenceExtractorTests
         branch.Body.Instructions.Add(Mono.Cecil.Cil.Instruction.Create(Mono.Cecil.Cil.OpCodes.Pop));
         branch.Body.Instructions.Add(ret);
         type.Methods.Add(branch);
+        assembly.Write(path);
+    }
+
+    private static void WriteTerminalHandlerAssembly(string path)
+    {
+        using var assembly = CecilAssemblyDefinition.CreateAssembly(
+            new AssemblyNameDefinition("TerminalHandler", new Version(1, 0)),
+            "TerminalHandler",
+            ModuleKind.Dll);
+        var module = assembly.MainModule;
+        var type = new CecilTypeDefinition("Fixture", "IlShapes", Mono.Cecil.TypeAttributes.Public, module.TypeSystem.Object);
+        module.Types.Add(type);
+        var method = new CecilMethodDefinition("TerminalHandler", Mono.Cecil.MethodAttributes.Public | Mono.Cecil.MethodAttributes.Static, module.TypeSystem.Void);
+        var tryStart = Mono.Cecil.Cil.Instruction.Create(Mono.Cecil.Cil.OpCodes.Ldnull);
+        var throwInstruction = Mono.Cecil.Cil.Instruction.Create(Mono.Cecil.Cil.OpCodes.Throw);
+        var handlerStart = Mono.Cecil.Cil.Instruction.Create(Mono.Cecil.Cil.OpCodes.Pop);
+        method.Body.Instructions.Add(tryStart);
+        method.Body.Instructions.Add(throwInstruction);
+        method.Body.Instructions.Add(handlerStart);
+        method.Body.Instructions.Add(Mono.Cecil.Cil.Instruction.Create(Mono.Cecil.Cil.OpCodes.Ret));
+        method.Body.ExceptionHandlers.Add(new Mono.Cecil.Cil.ExceptionHandler(Mono.Cecil.Cil.ExceptionHandlerType.Catch)
+        {
+            TryStart = tryStart,
+            TryEnd = handlerStart,
+            HandlerStart = handlerStart,
+            HandlerEnd = null,
+            CatchType = module.ImportReference(typeof(Exception))
+        });
+        type.Methods.Add(method);
+        assembly.Write(path);
+    }
+
+    private static void WriteDeepLocalAssembly(string path)
+    {
+        using var assembly = CecilAssemblyDefinition.CreateAssembly(
+            new AssemblyNameDefinition("DeepLocal", new Version(1, 0)),
+            "DeepLocal",
+            ModuleKind.Dll);
+        var module = assembly.MainModule;
+        var type = new CecilTypeDefinition("Fixture", "IlShapes", Mono.Cecil.TypeAttributes.Public, module.TypeSystem.Object);
+        module.Types.Add(type);
+        var method = new CecilMethodDefinition("DeepLocal", Mono.Cecil.MethodAttributes.Public | Mono.Cecil.MethodAttributes.Static, module.TypeSystem.Void);
+        Mono.Cecil.TypeReference localType = module.TypeSystem.Int32;
+        for (var index = 0; index <= ManagedMetadataExtractor.MaximumSignatureTypeNesting; index++)
+            localType = new Mono.Cecil.ArrayType(localType);
+        method.Body.InitLocals = true;
+        method.Body.Variables.Add(new Mono.Cecil.Cil.VariableDefinition(localType));
+        method.Body.Instructions.Add(Mono.Cecil.Cil.Instruction.Create(Mono.Cecil.Cil.OpCodes.Ret));
+        type.Methods.Add(method);
         assembly.Write(path);
     }
 
