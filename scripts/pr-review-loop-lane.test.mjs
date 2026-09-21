@@ -39,8 +39,8 @@ function boundedCurrentHeadRecoveryEligible({ codexCurrent, qodoReturnedOnce, qo
     && codexCurrent && qodoReturnedOnce && qodoRequestCountZero
 }
 
-test('TraceMap admits stable ACK v0.4.4 through v0.5.x with required review capabilities', () => {
-  assert.match(lane, /requiredVersion:\s*">=0\.4\.4 <0\.6\.0"/)
+test('TraceMap admits stable ACK v0.5.2 through v0.5.x with required review capabilities', () => {
+  assert.match(lane, /requiredVersion:\s*">=0\.5\.2 <0\.6\.0"/)
   assert.match(lane, /- reviewQuorum/)
   assert.match(lane, /- requiredReviewerBatching/)
   assert.equal(boundedCurrentHeadRecoveryEligible({
