@@ -320,6 +320,27 @@ public sealed class IlBodyEvidenceExtractorTests
     }
 
     [Fact]
+    public void Declared_local_count_over_limit_becomes_a_partial_il_gap()
+    {
+        var fixture = Fixture("csharp", "CompiledEvidence.CSharp");
+        using var temp = new TempDirectory();
+        var assemblyPath = Path.Combine(temp.Path, "ManyLocals.dll");
+        WriteManyLocalsAssembly(assemblyPath);
+
+        var result = Scan(new ScanOptions(
+            fixture.Source,
+            TempOutput(),
+            CompiledInputPaths: [assemblyPath],
+            IlBodyEvidence: true,
+            IlBodyLimits: new IlBodyLimits(MaxLocalsPerBody: 4)));
+
+        Assert.Equal("il-partial", result.Manifest.IlBodyProvenance!.CoverageState);
+        Assert.Contains(result.Facts, fact => fact.RuleId == RuleIds.DotNetIlGap
+            && fact.Properties.GetValueOrDefault("gapKind") == "IlLocalLimitExceeded");
+        Assert.DoesNotContain(result.Facts, fact => fact.FactType is FactTypes.ManagedIlBodyDeclared or FactTypes.ManagedIlCallObserved);
+    }
+
+    [Fact]
     public void Oversized_user_string_fails_closed_to_the_text_limit_gap()
     {
         var fixture = Fixture("csharp", "CompiledEvidence.CSharp");
@@ -809,6 +830,24 @@ public sealed class IlBodyEvidenceExtractorTests
             localType = new Mono.Cecil.ArrayType(localType);
         method.Body.InitLocals = true;
         method.Body.Variables.Add(new Mono.Cecil.Cil.VariableDefinition(localType));
+        method.Body.Instructions.Add(Mono.Cecil.Cil.Instruction.Create(Mono.Cecil.Cil.OpCodes.Ret));
+        type.Methods.Add(method);
+        assembly.Write(path);
+    }
+
+    private static void WriteManyLocalsAssembly(string path)
+    {
+        using var assembly = CecilAssemblyDefinition.CreateAssembly(
+            new AssemblyNameDefinition("ManyLocals", new Version(1, 0)),
+            "ManyLocals",
+            ModuleKind.Dll);
+        var module = assembly.MainModule;
+        var type = new CecilTypeDefinition("Fixture", "IlShapes", Mono.Cecil.TypeAttributes.Public, module.TypeSystem.Object);
+        module.Types.Add(type);
+        var method = new CecilMethodDefinition("ManyLocals", Mono.Cecil.MethodAttributes.Public | Mono.Cecil.MethodAttributes.Static, module.TypeSystem.Void);
+        method.Body.InitLocals = true;
+        for (var index = 0; index < 128; index++)
+            method.Body.Variables.Add(new Mono.Cecil.Cil.VariableDefinition(module.TypeSystem.Int32));
         method.Body.Instructions.Add(Mono.Cecil.Cil.Instruction.Create(Mono.Cecil.Cil.OpCodes.Ret));
         type.Methods.Add(method);
         assembly.Write(path);
