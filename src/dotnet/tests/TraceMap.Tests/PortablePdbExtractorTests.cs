@@ -122,30 +122,23 @@ public sealed class PortablePdbExtractorTests
     public void Duplicate_exact_document_checksums_emit_multiple_candidate_gap_without_selecting_a_path()
     {
         var fixture = Fixture("csharp", "CompiledEvidence.CSharp");
-        var temp = Directory.CreateTempSubdirectory("tracemap-pdb-duplicate-source-");
-        try
-        {
-            var bytes = File.ReadAllBytes(Path.Combine(fixture.Source, "FixtureShapes.cs"));
-            File.WriteAllBytes(Path.Combine(temp.FullName, "First.cs"), bytes);
-            File.WriteAllBytes(Path.Combine(temp.FullName, "Second.cs"), bytes);
-            RunGit(temp.FullName, "init", "-b", "main");
-            RunGit(temp.FullName, "config", "user.email", "fixtures@tracemap.invalid");
-            RunGit(temp.FullName, "config", "user.name", "TraceMap Fixtures");
-            RunGit(temp.FullName, "add", ".");
-            RunGit(temp.FullName, "commit", "-m", "fixture");
+        using var temp = new TempDirectory();
+        var bytes = File.ReadAllBytes(Path.Combine(fixture.Source, "FixtureShapes.cs"));
+        File.WriteAllBytes(Path.Combine(temp.Path, "First.cs"), bytes);
+        File.WriteAllBytes(Path.Combine(temp.Path, "Second.cs"), bytes);
+        RunGit(temp.Path, "init", "-b", "main");
+        RunGit(temp.Path, "config", "user.email", "fixtures@tracemap.invalid");
+        RunGit(temp.Path, "config", "user.name", "TraceMap Fixtures");
+        RunGit(temp.Path, "add", ".");
+        RunGit(temp.Path, "commit", "-m", "fixture");
 
-            var result = ScanBound(temp.FullName, fixture.Assembly, fixture.Pdb);
+        var result = ScanBound(temp.Path, fixture.Assembly, fixture.Pdb);
 
-            Assert.Contains(result.Facts, fact => fact.RuleId == RuleIds.DotNetPdbGap
-                && fact.Properties.GetValueOrDefault("gapKind") == "PdbSourceDocumentMultipleCandidates"
-                && fact.Properties.GetValueOrDefault("candidateCount") == "2");
-            Assert.DoesNotContain(result.Facts, fact => fact.FactType == FactTypes.PdbSourceDocumentReconciled
-                && (fact.Evidence.FilePath == "First.cs" || fact.Evidence.FilePath == "Second.cs"));
-        }
-        finally
-        {
-            temp.Delete(recursive: true);
-        }
+        Assert.Contains(result.Facts, fact => fact.RuleId == RuleIds.DotNetPdbGap
+            && fact.Properties.GetValueOrDefault("gapKind") == "PdbSourceDocumentMultipleCandidates"
+            && fact.Properties.GetValueOrDefault("candidateCount") == "2");
+        Assert.DoesNotContain(result.Facts, fact => fact.FactType == FactTypes.PdbSourceDocumentReconciled
+            && (fact.Evidence.FilePath == "First.cs" || fact.Evidence.FilePath == "Second.cs"));
     }
 
     [Fact]
@@ -329,70 +322,73 @@ public sealed class PortablePdbExtractorTests
     public async Task Cli_repeat_scans_preserve_pdb_provenance_and_endpoints_in_all_artifacts()
     {
         var fixture = Fixture("csharp", "CompiledEvidence.CSharp");
-        var temp = Directory.CreateTempSubdirectory("tracemap-pdb-cli-");
-        try
+        using var temp = new TempDirectory();
+        var binding = Path.Combine(temp.Path, "binding.json");
+        WriteBoundReceipt(fixture.Source, fixture.Assembly, binding);
+        var first = Path.Combine(temp.Path, "first");
+        var second = Path.Combine(temp.Path, "second");
+        await Run(first);
+        await Run(second);
+
+        foreach (var output in new[] { first, second })
         {
-            var binding = Path.Combine(temp.FullName, "binding.json");
-            WriteBoundReceipt(fixture.Source, fixture.Assembly, binding);
-            var first = Path.Combine(temp.FullName, "first");
-            var second = Path.Combine(temp.FullName, "second");
-            Assert.Equal(0, await Run(first));
-            Assert.Equal(0, await Run(second));
-
-            foreach (var output in new[] { first, second })
-            {
-                Assert.True(File.Exists(Path.Combine(output, "scan-manifest.json")));
-                Assert.True(File.Exists(Path.Combine(output, "facts.ndjson")));
-                Assert.True(File.Exists(Path.Combine(output, "index.sqlite")));
-                Assert.True(File.Exists(Path.Combine(output, "report.md")));
-                Assert.True(File.Exists(Path.Combine(output, "logs", "analyzer.log")));
-                Assert.True(File.Exists(Path.Combine(output, "scan-receipt.json")));
-            }
-            Assert.Equal(await File.ReadAllBytesAsync(Path.Combine(first, "facts.ndjson")), await File.ReadAllBytesAsync(Path.Combine(second, "facts.ndjson")));
-            Assert.Equal(await File.ReadAllBytesAsync(Path.Combine(first, "report.md")), await File.ReadAllBytesAsync(Path.Combine(second, "report.md")));
-
-            using var manifest = JsonDocument.Parse(await File.ReadAllTextAsync(Path.Combine(first, "scan-manifest.json")));
-            using var secondManifest = JsonDocument.Parse(await File.ReadAllTextAsync(Path.Combine(second, "scan-manifest.json")));
-            var provenance = manifest.RootElement.GetProperty("pdbInputProvenance");
-            var summary = manifest.RootElement.GetProperty("pdbEvidenceSummary");
-            Assert.Equal(provenance.GetRawText(), secondManifest.RootElement.GetProperty("pdbInputProvenance").GetRawText());
-            Assert.Equal(summary.GetRawText(), secondManifest.RootElement.GetProperty("pdbEvidenceSummary").GetRawText());
-            Assert.Equal("pdb-input-provenance.v1", provenance.GetProperty("schemaVersion").GetString());
-            Assert.Equal("pdb-complete", provenance.GetProperty("coverageState").GetString());
-            Assert.Equal("pdb-evidence-summary.v1", summary.GetProperty("schemaVersion").GetString());
-            Assert.Contains(summary.GetProperty("entries").EnumerateArray(), entry =>
-                !string.IsNullOrWhiteSpace(entry.GetProperty("sourceIdentity").GetString())
-                && !string.IsNullOrWhiteSpace(entry.GetProperty("targetIdentity").GetString())
-                && !string.IsNullOrWhiteSpace(entry.GetProperty("evidenceFactId").GetString())
-                && entry.GetProperty("supportingFactIds").GetArrayLength() > 0
-                && !string.IsNullOrWhiteSpace(entry.GetProperty("provenanceBindingInputSha256").GetString()));
-            Assert.Contains("Compiled .NET PDB Evidence", await File.ReadAllTextAsync(Path.Combine(first, "report.md")), StringComparison.Ordinal);
-
-            var operationalReceipt = JsonSerializer.Deserialize<ScanExecutionReceipt>(
-                await File.ReadAllTextAsync(Path.Combine(first, "scan-receipt.json")),
-                TraceMap.Storage.JsonOptions.Stable)!;
-            Assert.Equal(provenance.GetProperty("boundedInputSha256").GetString(), operationalReceipt.PdbInputProvenance!.BoundedInputSha256);
-            Assert.Contains(operationalReceipt.PdbEvidenceSummary!.Entries, entry =>
-                !string.IsNullOrWhiteSpace(entry.SourceIdentity) && !string.IsNullOrWhiteSpace(entry.TargetIdentity));
-
-            using var connection = new SqliteConnection($"Data Source={Path.Combine(first, "index.sqlite")}");
-            connection.Open();
-            using var command = connection.CreateCommand();
-            command.CommandText = "select count(*) from facts where rule_id = $rule and fact_type = $type and source_symbol is not null and target_symbol is not null and properties_json like '%pdbMethodFactId%' and properties_json like '%pdbDocumentFactId%'";
-            command.Parameters.AddWithValue("$rule", RuleIds.DotNetPdbSequencePoint);
-            command.Parameters.AddWithValue("$type", FactTypes.PdbSequencePointDeclared);
-            Assert.True(Convert.ToInt32(command.ExecuteScalar()) > 0);
-
-            async Task<int> Run(string output) => await TraceMapCommand.RunAsync([
-                "scan", "--repo", fixture.Source, "--out", output,
-                "--compiled-input", fixture.Assembly,
-                "--compiled-binding-receipt", binding,
-                "--pdb-input", fixture.Pdb
-            ], TextWriter.Null, TextWriter.Null);
+            Assert.True(File.Exists(Path.Combine(output, "scan-manifest.json")));
+            Assert.True(File.Exists(Path.Combine(output, "facts.ndjson")));
+            Assert.True(File.Exists(Path.Combine(output, "index.sqlite")));
+            Assert.True(File.Exists(Path.Combine(output, "report.md")));
+            Assert.True(File.Exists(Path.Combine(output, "logs", "analyzer.log")));
+            Assert.True(File.Exists(Path.Combine(output, "scan-receipt.json")));
         }
-        finally
+        Assert.Equal(await File.ReadAllBytesAsync(Path.Combine(first, "facts.ndjson")), await File.ReadAllBytesAsync(Path.Combine(second, "facts.ndjson")));
+        Assert.Equal(await File.ReadAllBytesAsync(Path.Combine(first, "report.md")), await File.ReadAllBytesAsync(Path.Combine(second, "report.md")));
+
+        using var manifest = JsonDocument.Parse(await File.ReadAllTextAsync(Path.Combine(first, "scan-manifest.json")));
+        using var secondManifest = JsonDocument.Parse(await File.ReadAllTextAsync(Path.Combine(second, "scan-manifest.json")));
+        var provenance = manifest.RootElement.GetProperty("pdbInputProvenance");
+        var summary = manifest.RootElement.GetProperty("pdbEvidenceSummary");
+        Assert.Equal(provenance.GetRawText(), secondManifest.RootElement.GetProperty("pdbInputProvenance").GetRawText());
+        Assert.Equal(summary.GetRawText(), secondManifest.RootElement.GetProperty("pdbEvidenceSummary").GetRawText());
+        Assert.Equal("pdb-input-provenance.v1", provenance.GetProperty("schemaVersion").GetString());
+        Assert.Equal("pdb-complete", provenance.GetProperty("coverageState").GetString());
+        Assert.Equal("pdb-evidence-summary.v1", summary.GetProperty("schemaVersion").GetString());
+        Assert.Contains(summary.GetProperty("entries").EnumerateArray(), entry =>
+            !string.IsNullOrWhiteSpace(entry.GetProperty("sourceIdentity").GetString())
+            && !string.IsNullOrWhiteSpace(entry.GetProperty("targetIdentity").GetString())
+            && !string.IsNullOrWhiteSpace(entry.GetProperty("evidenceFactId").GetString())
+            && entry.GetProperty("supportingFactIds").GetArrayLength() > 0
+            && !string.IsNullOrWhiteSpace(entry.GetProperty("provenanceBindingInputSha256").GetString()));
+        Assert.Contains("Compiled .NET PDB Evidence", await File.ReadAllTextAsync(Path.Combine(first, "report.md")), StringComparison.Ordinal);
+
+        var operationalReceipt = JsonSerializer.Deserialize<ScanExecutionReceipt>(
+            await File.ReadAllTextAsync(Path.Combine(first, "scan-receipt.json")),
+            TraceMap.Storage.JsonOptions.Stable)!;
+        Assert.Equal(provenance.GetProperty("boundedInputSha256").GetString(), operationalReceipt.PdbInputProvenance!.BoundedInputSha256);
+        Assert.Contains(operationalReceipt.PdbEvidenceSummary!.Entries, entry =>
+            !string.IsNullOrWhiteSpace(entry.SourceIdentity) && !string.IsNullOrWhiteSpace(entry.TargetIdentity));
+
+        using var connection = new SqliteConnection($"Data Source={Path.Combine(first, "index.sqlite")}");
+        connection.Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = "select count(*) from facts where rule_id = $rule and fact_type = $type and source_symbol is not null and target_symbol is not null and properties_json like '%pdbMethodFactId%' and properties_json like '%pdbDocumentFactId%'";
+        command.Parameters.AddWithValue("$rule", RuleIds.DotNetPdbSequencePoint);
+        command.Parameters.AddWithValue("$type", FactTypes.PdbSequencePointDeclared);
+        Assert.True(Convert.ToInt32(command.ExecuteScalar()) > 0);
+
+        async Task Run(string output)
         {
-            temp.Delete(recursive: true);
+            var stdout = new StringWriter();
+            var stderr = new StringWriter();
+            var exitCode = await TraceMapCommand.RunAsync([
+                "scan", "--repo", fixture.Source, "--out", output,
+                    "--compiled-input", fixture.Assembly,
+                    "--compiled-binding-receipt", binding,
+                    "--pdb-input", fixture.Pdb
+            ], stdout, stderr);
+            var receipt = Directory.Exists(output)
+                ? Directory.EnumerateFiles(output, "scan-receipt.json", SearchOption.AllDirectories).FirstOrDefault()
+                : null;
+            var receiptText = receipt is null ? string.Empty : await File.ReadAllTextAsync(receipt);
+            Assert.True(exitCode == 0, $"stdout: {stdout}{Environment.NewLine}stderr: {stderr}{Environment.NewLine}receipt: {receiptText}");
         }
     }
 
