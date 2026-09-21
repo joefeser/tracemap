@@ -648,3 +648,9 @@ kind even when the same pair carries gaps. Pair outcome labels are exact
 generic malformed/limit fallback. The lane validates the reused body and
 compiled limits identically to their owning extractors. Six regression tests
 cover the behaviors (35 focused rewrite tests total).
+
+Fourth review remediation on 2026-09-21: a follow-on Codex P2 on head
+`80c0b4ba19b3fdd4c28e4944f9b1d4bb37856b2c` noted that after-only membership
+gaps still used the before locator; one-side-only membership gaps are now
+evidenced on the input that carries the identity, pinned by both the
+inserted-member and omitted-suffix regressions.

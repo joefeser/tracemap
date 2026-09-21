@@ -601,7 +601,10 @@ internal static class IlRewriteEvidenceExtractor
                     properties[$"identity[{index++}]"] = identity;
                 properties.Remove("beforeAssemblyIdentity");
                 properties.Remove("afterAssemblyIdentity");
-                facts.Add(GapFact(manifest, outcome.BeforeSafeLocator, $"membership:{delta.Side}", properties));
+                // A one-side-only membership gap is evidenced on the input
+                // that carries the identity, not on the opposite side.
+                var deltaLocator = delta.Side == "after" ? outcome.AfterSafeLocator : outcome.BeforeSafeLocator;
+                facts.Add(GapFact(manifest, deltaLocator, $"membership:{delta.Side}", properties));
             }
 
             foreach (var edge in pair.Edges.OrderBy(item => item.MethodIdentity, StringComparer.Ordinal))

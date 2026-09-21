@@ -72,6 +72,8 @@ public sealed class IlRewriteEvidenceExtractorTests
         var membership = Assert.Single(result.Facts, fact => fact.RuleId == RuleIds.DotNetIlRewriteGap
             && fact.Properties.GetValueOrDefault("gapKind") == "IlRewriteMethodAfterOnly");
         Assert.Equal("after", membership.Properties["side"]);
+        // The after-only identity is evidenced on the after input.
+        Assert.Equal(result.Manifest.IlRewriteProvenance!.Outcomes[0].AfterSafeLocator, membership.Evidence.FilePath);
         Assert.Equal("1", membership.Properties["identityCount"]);
         Assert.Contains("method:8:Inserted|", membership.Properties["identity[0]"], StringComparison.Ordinal);
         // Untouched memberless-of-calls body stays provably identical.
@@ -387,6 +389,7 @@ public sealed class IlRewriteEvidenceExtractorTests
         Assert.Equal(
             ManagedMetadataExtractor.CanonicalDigest(identities.Skip(8).ToArray()),
             gap.Properties["omittedIdentitySha256"]);
+        Assert.Equal(result.Manifest.IlRewriteProvenance!.Outcomes[0].BeforeSafeLocator, gap.Evidence.FilePath);
     }
 
     [Fact]
