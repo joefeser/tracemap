@@ -1469,7 +1469,9 @@ public static class ManagedMetadataExtractor
     }
     internal static IReadOnlyList<string> CleanPaths(IReadOnlyList<string>? values) =>
         (values ?? []).Where(value => !string.IsNullOrWhiteSpace(value)).Select(value => value.Trim()).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray();
-    private static void ValidateLimits(CompiledInputLimits limits)
+    // Internal so the rewrite lane applies the identical validation to the
+    // compiled admission limits it reuses before generating any provenance.
+    internal static void ValidateLimits(CompiledInputLimits limits)
     {
         if (limits.MaxArtifactCount <= 0 || limits.MaxFileSizeBytes <= 0 || limits.MaxTypeCount <= 0 || limits.MaxMemberCount <= 0 || limits.MaxTextLength <= 0 || limits.MaxTotalWorkUnits <= 0)
             throw new ArgumentException("Compiled input limits must all be positive.");

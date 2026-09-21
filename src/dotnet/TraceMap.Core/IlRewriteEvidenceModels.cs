@@ -65,10 +65,17 @@ internal sealed record IlRewriteMembershipDelta(
     int OmittedIdentityCount,
     string? OmittedIdentitySha256);
 
+internal sealed record IlRewriteSideFailure(
+    string Side,
+    string GapKind,
+    string Cause,
+    string SideLocator);
+
 internal sealed record EvaluatedIlRewritePair(
     IlRewritePairOutcome Outcome,
     IReadOnlyList<IlRewriteEdge> Edges,
-    IReadOnlyList<IlRewriteMembershipDelta> MembershipDeltas)
+    IReadOnlyList<IlRewriteMembershipDelta> MembershipDeltas,
+    IReadOnlyList<IlRewriteSideFailure> SideFailures)
 {
     public string PairId => Outcome.PairId;
 }

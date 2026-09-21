@@ -271,12 +271,144 @@ public sealed class IlRewriteEvidenceExtractorTests
         Assert.Equal("rewrite-partial", provenance.CoverageState);
         var outcome = Assert.Single(provenance.Outcomes);
         Assert.Equal("IlRewriteSideUnavailable", Assert.Single(outcome.GapKinds));
+        Assert.Equal("unavailable", outcome.Outcome);
         Assert.Equal("after", outcome.Side);
-        Assert.Equal("IlRewriteSideMissing", outcome.Cause);
+        Assert.Equal("after:IlRewriteSideMissing", outcome.Cause);
         var gap = Assert.Single(result.Facts, fact => fact.RuleId == RuleIds.DotNetIlRewriteGap);
         Assert.Equal("after", gap.Properties["side"]);
         Assert.Equal("IlRewriteSideMissing", gap.Properties["cause"]);
+        // The gap is evidenced on the failing input, not the healthy side.
+        Assert.Equal(outcome.AfterSafeLocator, gap.Evidence.FilePath);
         Assert.DoesNotContain(result.Facts, fact => fact.FactType is FactTypes.ManagedIlRewriteObserved or FactTypes.ManagedIlCallRetargetObserved);
+    }
+
+    [Fact]
+    public void Distinct_side_failures_keep_their_own_side_cause_and_locator()
+    {
+        using var temp = new TempDirectory();
+        var before = Path.Combine(temp.Path, "RewriteShapes.dll");
+        var after = Path.Combine(temp.Path, "RewriteShapes.after.dll");
+        WriteBeforeAssembly(before);
+        MutateConstantOperand(before, after);
+        CorruptMethodBody(after, "Constant");
+
+        var result = Scan(new ScanOptions(
+            RepoRoot(),
+            TempOutput(),
+            IlRewriteEvidence: true,
+            IlRewriteBeforePaths: [Path.Combine(temp.Path, "absent.dll")],
+            IlRewriteAfterPaths: [after]));
+
+        var provenance = result.Manifest.IlRewriteProvenance!;
+        var outcome = Assert.Single(provenance.Outcomes);
+        Assert.Equal(["IlRewriteMalformedInput", "IlRewriteSideUnavailable"], outcome.GapKinds);
+        Assert.Equal("after+before", outcome.Side);
+        Assert.Equal("after:MalformedIlBody+before:IlRewriteSideMissing", outcome.Cause);
+        var sideGaps = result.Facts.Where(fact => fact.RuleId == RuleIds.DotNetIlRewriteGap
+            && fact.Properties.ContainsKey("side")).OrderBy(fact => fact.Properties["side"], StringComparer.Ordinal).ToArray();
+        Assert.Equal(2, sideGaps.Length);
+        var afterGap = sideGaps[0];
+        Assert.Equal("after", afterGap.Properties["side"]);
+        Assert.Equal("IlRewriteMalformedInput", afterGap.Properties["gapKind"]);
+        Assert.Equal("MalformedIlBody", afterGap.Properties["cause"]);
+        Assert.Equal(outcome.AfterSafeLocator, afterGap.Evidence.FilePath);
+        var beforeGap = sideGaps[1];
+        Assert.Equal("before", beforeGap.Properties["side"]);
+        Assert.Equal("IlRewriteSideUnavailable", beforeGap.Properties["gapKind"]);
+        Assert.Equal("IlRewriteSideMissing", beforeGap.Properties["cause"]);
+        Assert.Equal(outcome.BeforeSafeLocator, beforeGap.Evidence.FilePath);
+    }
+
+    [Fact]
+    public void Positive_edges_keep_the_rewrite_location_kind_alongside_pair_gaps()
+    {
+        using var temp = new TempDirectory();
+        var before = Path.Combine(temp.Path, "RewriteShapes.dll");
+        var after = Path.Combine(temp.Path, "RewriteShapes.after.dll");
+        WriteBeforeAssembly(before);
+        MutateInsertMethodFirst(before, after);
+
+        var result = Scan(PairOptions(before, after));
+
+        Assert.Contains(result.Facts, fact => fact.FactType is FactTypes.ManagedIlRewriteObserved or FactTypes.ManagedIlCallRetargetObserved
+            && fact.Properties.GetValueOrDefault("evidenceLocationKind") == "managed-il-rewrite-v1");
+        Assert.DoesNotContain(result.Facts, fact => fact.FactType is FactTypes.ManagedIlRewriteObserved or FactTypes.ManagedIlCallRetargetObserved
+            && fact.Properties.GetValueOrDefault("evidenceLocationKind") != "managed-il-rewrite-v1");
+        Assert.Contains(result.Facts, fact => fact.RuleId == RuleIds.DotNetIlRewriteGap
+            && fact.Properties.GetValueOrDefault("evidenceLocationKind") == "managed-input-v1");
+    }
+
+    [Fact]
+    public void Membership_only_gaps_label_the_outcome_as_a_membership_delta()
+    {
+        using var temp = new TempDirectory();
+        var before = Path.Combine(temp.Path, "RewriteShapes.dll");
+        var after = Path.Combine(temp.Path, "RewriteShapes.after.dll");
+        WriteBeforeAssembly(before);
+        MutateInsertMethodFirst(before, after);
+
+        var result = Scan(PairOptions(before, after));
+
+        var outcome = Assert.Single(result.Manifest.IlRewriteProvenance!.Outcomes);
+        Assert.Equal(["IlRewriteMethodAfterOnly"], outcome.GapKinds);
+        Assert.Equal("membership-delta", outcome.Outcome);
+    }
+
+    [Fact]
+    public void Omitted_membership_digest_covers_only_the_omitted_suffix()
+    {
+        using var temp = new TempDirectory();
+        var before = Path.Combine(temp.Path, "RewriteShapesMany.dll");
+        var after = Path.Combine(temp.Path, "RewriteShapesMany.after.dll");
+        WriteManyMethodsAssembly(before, 10);
+        MutateRemoveAllMethods(after, before);
+
+        // The IL body lane independently reports every before-side method
+        // identity, so the commitment is recomputed from reader-proven rows.
+        var ilScan = Scan(new ScanOptions(
+            RepoRoot(),
+            TempOutput(),
+            CompiledInputPaths: [before],
+            IlBodyEvidence: true));
+        var identities = ilScan.Facts
+            .Where(fact => fact.FactType == FactTypes.ManagedIlBodyDeclared)
+            .Select(fact => fact.TargetSymbol!.Split("|il-body:", 2)[0])
+            .OrderBy(value => value, StringComparer.Ordinal)
+            .ToArray();
+        Assert.Equal(10, identities.Length);
+
+        var result = Scan(PairOptions(before, after));
+        var gap = Assert.Single(result.Facts, fact => fact.RuleId == RuleIds.DotNetIlRewriteGap
+            && fact.Properties.GetValueOrDefault("gapKind") == "IlRewriteMethodBeforeOnly");
+        Assert.Equal("10", gap.Properties["identityCount"]);
+        Assert.Equal("2", gap.Properties["omittedIdentityCount"]);
+        for (var index = 0; index < 8; index++)
+            Assert.Equal(identities[index], gap.Properties[$"identity[{index}]"]);
+        Assert.Equal(
+            ManagedMetadataExtractor.CanonicalDigest(identities.Skip(8).ToArray()),
+            gap.Properties["omittedIdentitySha256"]);
+    }
+
+    [Fact]
+    public void Invalid_reused_limits_are_rejected()
+    {
+        using var temp = new TempDirectory();
+        var before = Path.Combine(temp.Path, "RewriteShapes.dll");
+        WriteBeforeAssembly(before);
+        Assert.Throws<ArgumentException>(() => Scan(new ScanOptions(
+            RepoRoot(),
+            TempOutput(),
+            IlRewriteEvidence: true,
+            IlRewriteBeforePaths: [before],
+            IlRewriteAfterPaths: [before],
+            IlBodyLimits: new IlBodyLimits(MaxTextLength: 0))));
+        Assert.Throws<ArgumentException>(() => Scan(new ScanOptions(
+            RepoRoot(),
+            TempOutput(),
+            IlRewriteEvidence: true,
+            IlRewriteBeforePaths: [before],
+            IlRewriteAfterPaths: [before],
+            CompiledInputLimits: new CompiledInputLimits(MaxFileSizeBytes: 0))));
     }
 
     [Fact]
@@ -693,7 +825,9 @@ public sealed class IlRewriteEvidenceExtractorTests
         Assert.Equal("rewrite-partial", provenance.CoverageState);
         var outcome = Assert.Single(provenance.Outcomes);
         Assert.Equal("IlRewriteSideUnavailable", Assert.Single(outcome.GapKinds));
-        Assert.Equal("IlRewriteSideDeclarationInvalid", outcome.Cause);
+        Assert.Equal(
+            "after:IlRewriteSideDeclarationInvalid+before:IlRewriteSideDeclarationInvalid",
+            outcome.Cause);
         Assert.StartsWith("__external__/rewrite-before/invalid-", outcome.BeforeSafeLocator, StringComparison.Ordinal);
         Assert.StartsWith("__external__/rewrite-after/invalid-", outcome.AfterSafeLocator, StringComparison.Ordinal);
         Assert.DoesNotContain(result.Facts, fact => fact.FactType is FactTypes.ManagedIlRewriteObserved or FactTypes.ManagedIlCallRetargetObserved);
@@ -847,6 +981,36 @@ public sealed class IlRewriteEvidenceExtractorTests
 
     private static CecilMethodDefinition FindMethod(CecilTypeDefinition type, string name) =>
         type.Methods.Single(method => method.Name == name);
+
+    private static void WriteManyMethodsAssembly(string path, int count)
+    {
+        using var assembly = CecilAssemblyDefinition.CreateAssembly(
+            new AssemblyNameDefinition("RewriteShapesMany", new Version(1, 0)),
+            "RewriteShapesMany",
+            ModuleKind.Dll);
+        var module = assembly.MainModule;
+        var type = new CecilTypeDefinition("Fixture", "RewriteShapes", Mono.Cecil.TypeAttributes.Public, module.TypeSystem.Object);
+        module.Types.Add(type);
+        for (var index = 0; index < count; index++)
+        {
+            var method = new CecilMethodDefinition(
+                $"Named{index.ToString("D2", CultureInfo.InvariantCulture)}",
+                Mono.Cecil.MethodAttributes.Public | Mono.Cecil.MethodAttributes.Static,
+                module.TypeSystem.Void);
+            method.Body.Instructions.Add(Instruction.Create(OpCodes.Ret));
+            type.Methods.Add(method);
+        }
+
+        assembly.Write(path);
+    }
+
+    private static void MutateRemoveAllMethods(string after, string before)
+    {
+        using var assembly = CecilAssemblyDefinition.ReadAssembly(before);
+        var type = (CecilTypeDefinition)assembly.MainModule.Types.Single(item => item.Name == "RewriteShapes");
+        type.Methods.Clear();
+        assembly.Write(after);
+    }
 
     private static void Mutate(string before, string after, Action<CecilAssemblyDefinition, CecilTypeDefinition> mutate)
     {

@@ -634,3 +634,17 @@ catalog, fixture catalog (`CS-ILRW-STRUCTURE-009`), and docs document the
 exact-kind contract. `tracemap scan --help` documents the four rewrite
 options including the equal-length ordinal pair requirement. Three
 regression tests cover the behaviors (30 focused rewrite tests total).
+
+Third review remediation on 2026-09-21: the Codex re-review of PR #776 head
+`49ee4db970985faf8698ccc29c1b6a379663a4f4` filed five P2 findings; all are
+patched. Side-scoped failures now emit one Tier4 gap per failing side with
+that side's own `side`, `cause`, and evidence locator, and the outcome
+summary preserves the exact `side:cause` pairing. The omitted-membership
+digest commits exactly the identities beyond the retained eight-entry prefix
+so consumers can recompute it from reader-proven rows. Positive edges and
+call retargets always keep the `managed-il-rewrite-v1` evidence location
+kind even when the same pair carries gaps. Pair outcome labels are exact
+(`unavailable`, `invalid`, `unsupported`, `membership-delta`) instead of a
+generic malformed/limit fallback. The lane validates the reused body and
+compiled limits identically to their owning extractors. Six regression tests
+cover the behaviors (35 focused rewrite tests total).

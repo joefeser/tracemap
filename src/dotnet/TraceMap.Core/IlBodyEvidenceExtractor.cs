@@ -1190,7 +1190,9 @@ internal static class IlBodyEvidenceExtractor
         return ManagedMetadataExtractor.Sha256(File.ReadAllBytes(path));
     }
 
-    private static void ValidateLimits(IlBodyLimits limits)
+    // Internal so the rewrite lane applies the identical validation to the
+    // body limits it reuses before generating any provenance.
+    internal static void ValidateLimits(IlBodyLimits limits)
     {
         if (limits.MaxBodyCount <= 0
             || limits.MaxInstructionsPerBody <= 0
