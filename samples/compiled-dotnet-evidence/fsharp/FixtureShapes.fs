@@ -18,3 +18,8 @@ module Functions =
 
     [<CompiledName("RenamedForMetadata")>]
     let compiledName value = value
+
+/// FS-IL-ASSEMBLY-007: trivial compiled body with a direct call shape.
+module IlBodyShapes =
+    let ilIdentity (value: int) = value
+    let ilCallShape (value: int) = Functions.tupled (value, value)

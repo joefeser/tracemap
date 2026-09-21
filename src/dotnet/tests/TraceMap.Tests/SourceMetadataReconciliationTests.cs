@@ -560,7 +560,7 @@ public sealed class SourceMetadataReconciliationTests
     {
         using var document = JsonDocument.Parse(File.ReadAllText(Path.Combine(
             FindRepoRoot(), "samples", "compiled-dotnet-evidence", "fixture-cases.json")));
-        Assert.Equal("compiled-dotnet-fixture-cases.v3", document.RootElement.GetProperty("schemaVersion").GetString());
+        Assert.Equal("compiled-dotnet-fixture-cases.v4", document.RootElement.GetProperty("schemaVersion").GetString());
         var item = document.RootElement.GetProperty("reconciliationCases").EnumerateArray()
             .Single(candidate => candidate.GetProperty("id").GetString() == caseId);
         Assert.Equal(RuleIds.DotNetCompiledSourceIdentity, item.GetProperty("expectedRuleId").GetString());
