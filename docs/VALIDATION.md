@@ -2481,9 +2481,10 @@ joins; this does not change compiled-input coverage.
 
 Reconciliation coverage is independent of `analysisLevel`. Missing or partial
 compiled inputs never erase, re-tier, or otherwise change source-derived facts.
-This slice does not read PDBs or sequence points, inspect IL bodies or calls,
+Task 8 does not itself read PDBs or sequence points, inspect IL bodies or calls,
 perform rewrite analysis, execute private or historical corpora, add legacy
-Framework/Web Forms or C++/CLI support, or introduce fuzzy/AI matching.
+Framework/Web Forms or C++/CLI support, or introduce fuzzy/AI matching. The
+separate Task 9 contract below adds only the PDB layer.
 
 The C# and Visual Basic changes in this slice are restricted to the internal
 candidate lane activated by explicit compiled inputs. The full .NET suite and
@@ -2515,3 +2516,89 @@ the matrix must assert explicit unsupported coverage and zero inferred source
 joins. Task 8 of the compiled-evidence foundation may consume these source
 fixtures for reconciliation, but it must not redefine or remove their
 source-only acceptance contract.
+
+### PDB identity and sequence-point evidence
+
+Task 9 activates `dotnet.compiled.pdb-input.v1`,
+`dotnet.compiled.pdb-identity.v1`, `dotnet.compiled.sequence-point.v1`, and
+`dotnet.compiled.pdb-gap.v1`. PDB discovery is never ambient. Supply each
+candidate explicitly with `--pdb-input`; the scanner applies the positive
+artifact, byte, document, method, sequence-point, text, and total metadata-work
+limits controlled by the `--pdb-max-*` options. The manifest and execution
+receipt retain `pdb-input-provenance.v1`, including the exact generator SHA-256,
+canonical bounded-input SHA-256, safe locators, effective limits, per-input
+outcomes, omissions, and coverage state. They also retain the bounded
+`pdb-evidence-summary.v1` endpoint/support summary and its omitted-entry digest.
+The PDB digest participates in `scanId` before PDB fact IDs are derived.
+
+A portable PDB is admitted only when its exact portable content GUID/stamp
+matches exactly one CodeView entry from one explicitly admitted managed
+assembly and that assembly has acceptable `bound` compiled provenance. File
+names, path proximity, timestamps, display strings, and metadata tokens alone
+never establish this binding. System.Reflection.Metadata reads the portable
+document, method-debug-information, and ordered sequence-point rows; Mono.Cecil
+independently reads the bound assembly/PDB pair. TraceMap compares complete
+per-method sequence-point shapes including token, ordinal, IL offset, document
+checksum, hidden state, and exact source range. Reader disagreement withholds
+all positive PDB facts for that input and emits `PdbReaderDisagreement`.
+
+An admitted input emits separate document and method facts. A
+`MetadataPdbMethodReconciled` edge requires exactly one eligible metadata
+method from the same bound assembly and the exact module-local MethodDef row.
+Every positive fact retains the PDB content identity, raw local PDB digest,
+bounded-input and generator digests, matched assembly identity and safe
+locator, compiled receipt-binding digest, provenance state, rule, tier,
+extractor version, and limitation. Document, method, and sequence-point rows
+also retain their supporting PDB input/document/method fact IDs; method edges
+retain the exact compiled fact ID; sequence points retain the exact
+metadata/PDB reconciliation fact ID. These are evidence relationships, not IL
+body or call extraction.
+
+PDB document names are not emitted. Source-document reconciliation compares a
+supported SHA-1 or SHA-256 document checksum to inventoried source bytes and
+emits a Tier1 checksum edge only for exactly one candidate. Zero candidates,
+multiple candidates, unsupported checksum algorithms, and F# source documents
+emit explicit gaps and no edge. F# still retains its compiled PDB document,
+method, metadata reconciliation, and sequence-point facts; because no F# source
+adapter exists, it emits `PdbSourceReconciliationUnsupportedLanguage` and zero
+guessed source-document joins. PDB coverage and source `analysisLevel` remain
+independent, and missing or partial PDB evidence never changes source facts.
+
+The v3 public fixture catalog adds stable PDB case IDs, expected identity
+formats, rule/tier expectations, gaps, and non-claims. The portable C#/VB/F#
+matrix covers exact binding, mismatched/unbound inputs, zero and multiple
+source-checksum candidates, hidden points, multi-document methods,
+non-monotonic ranges, async/iterator/lambda generated members, malformed and
+missing inputs, limit exhaustion, and deterministic repeat output. Generated
+state-machine and lambda members retain their own metadata/PDB identities and
+are not collapsed back to a source declaration.
+
+Native Windows PDBs are intentionally fail-closed in this contract. On macOS
+and Linux they emit `WindowsPdbRequiresWindows`; on Windows they emit
+`WindowsPdbIndependentReaderUnavailable`. The Windows CI lane builds real C#
+and VB native PDBs with `DebugType=full` and proves that no positive document,
+method, or sequence-point facts escape that gap. Mono.Cecil's native reader is
+not accepted as a sole identity oracle. Positive native Windows PDB support
+requires a separately documented independent reader/cross-check contract; no
+portable-equivalence claim is made.
+
+Run the PDB lane with:
+
+```bash
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj \
+  --no-restore --filter FullyQualifiedName~PortablePdbExtractorTests
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj \
+  --no-restore --filter FullyQualifiedName~SourceMetadataReconciliationTests
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj \
+  --no-restore --filter FullyQualifiedName~ManagedMetadataExtractorTests
+```
+
+For a positive CLI scan, pass the exact fixture assembly, its validated
+`compiled-input-binding-set.v1` receipt, and the matching portable PDB. Verify
+all five required scan artifacts plus `scan-receipt.json`. Repeat scans must
+have byte-identical `facts.ndjson` and `report.md`, identical PDB provenance,
+and equivalent indexed PDB rows. Operational timestamps and receipt durations
+remain non-evidence diagnostics. Task 9 performs no IL body/call extraction,
+rewrite analysis, private or `dotnetperf` corpus execution, legacy
+Framework/Web Forms build, C++/CLI work, graph database work, fuzzy matching,
+or AI classification.

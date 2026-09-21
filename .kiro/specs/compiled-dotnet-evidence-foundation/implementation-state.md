@@ -1,16 +1,19 @@
 # Compiled .NET Evidence Foundation Implementation State
 
-Status: Task 8 exact source-to-metadata reconciliation implemented and locally accepted; PR #773 exact-head ACK review in progress
+Status: Task 8 exact source-to-metadata reconciliation merged in PR #773; Task 9 local acceptance complete, Windows CI and exact-head review pending
 
-Branch: `codex/source-metadata-reconciliation`
+Branch: `codex/pdb-sequence-point-evidence`
 
-Base: `origin/dev` at `532fccfb0a7588ab64397f672ca6a8dddef8d083`
+Base: `origin/dev` at `7dc943f2f9d5de82b0963e3e1b8aa9196116b51c`
 
 Tracking: #759, #766, #767, #768, #769
 
 Task 8 implementation commits: `010502ef` (`feat: reconcile exact source and
 metadata identities`) and `55fefd48` (`test: prove source metadata
 reconciliation matrix`).
+
+PR #773 merged into `dev` as
+`7dc943f2f9d5de82b0963e3e1b8aa9196116b51c` on 2026-09-20.
 
 ## Scope decision
 
@@ -156,7 +159,7 @@ relationship. F# compiled identities remain available, but its `.fsproj` lane
 emits `SourceMetadataReconciliationUnsupportedLanguage` and zero guessed joins.
 Compiled coverage remains independent from source `analysisLevel`.
 
-The v2 public fixture contract records stable reconciliation case IDs, exact
+The v3 public fixture contract retains the stable reconciliation case IDs, exact
 source and metadata identities, expected rule/tier/outcome/gaps, and non-claims.
 The matrix covers namespaces, nested/generic declarations, complete overload
 signatures, constructors, properties/indexers, events/accessors, C# ref and VB
@@ -222,3 +225,65 @@ scope in both source and Cecil/SRM metadata identities, so same-looking types
 from different assemblies cannot compare equal. Roslyn `IErrorTypeSymbol`
 values emit `SourceErrorTypeIdentityUnavailable` rather than a plausible
 namespace/name identity. Focused regressions cover all three behaviors.
+
+## Task 9 PDB identity and sequence points
+
+Task 9 activates the explicit bounded PDB input, PDB identity,
+sequence-point, and PDB gap rules. Portable PDBs bind to exactly one admitted
+assembly only through the exact portable content GUID/stamp and PE CodeView
+entry, with `bound` compiled receipt provenance required before any positive
+fact. System.Reflection.Metadata and Mono.Cecil independently read the complete
+portable method/sequence-point shape; disagreement withholds the input. PDB
+documents and method rows remain distinct from metadata and source identities.
+
+Positive facts preserve the PDB input, document, method, compiled method, and
+metadata/PDB reconciliation supporting fact IDs as applicable, plus content
+identity, both endpoint identities, matched assembly identity, compiled
+receipt-binding digest, rule, tier, extractor version, generator and bounded
+input SHA-256 values, provenance state, and limitation. Source documents join
+only by one exact supported checksum candidate. Zero/multiple candidates,
+unsupported checksums, missing/malformed/over-budget inputs, CodeView mismatch,
+ambiguous assembly binding, unacceptable compiled provenance, and reader
+disagreement remain explicit Tier4 gaps.
+
+The v3 public fixture catalog adds six PDB cases. C# proves hidden,
+multi-document, non-monotonic, async, iterator, lambda, and separate generated
+member shapes; VB proves exact portable document/method evidence; F# retains
+compiled PDB facts while emitting
+`PdbSourceReconciliationUnsupportedLanguage` and zero guessed source joins.
+Duplicate exact source bytes prove the multiple-checksum-candidate gap without
+path selection. Focused CLI tests retain PDB provenance and endpoints across
+the manifest, facts, SQLite index, Markdown report, and execution receipt and
+compare deterministic repeat output.
+
+Native Windows PDBs remain explicitly unsupported rather than trusting
+Mono.Cecil as a sole oracle. Windows emits
+`WindowsPdbIndependentReaderUnavailable`; non-Windows hosts emit
+`WindowsPdbRequiresWindows`. The Windows CI lane builds real C# and VB native
+PDBs and proves zero positive PDB facts for that bounded gap. Positive native
+Windows PDB reading is deferred until an independent deterministic reader can
+cross-check the result. Task 9 does not begin IL body/call extraction, rewrite
+analysis, private or `dotnetperf` corpus execution, legacy Framework/Web Forms
+build validation, or C++/CLI.
+
+Local macOS Task 9 validation on 2026-09-20:
+
+- focused `PortablePdbExtractorTests`: 18 passed, zero failed, zero skipped;
+- combined PDB, source/metadata reconciliation, and managed metadata filter: 59
+  passed, zero failed, zero skipped;
+- `dotnet build src/dotnet/TraceMap.sln --no-restore`: passed with zero warnings
+  and zero errors;
+- `dotnet test src/dotnet/TraceMap.sln --no-restore`: 2,019 passed, zero failed,
+  zero skipped;
+- two bound C# CLI scans emitted all five required scan artifacts plus the
+  execution receipt; `facts.ndjson` and `report.md` were byte-identical, PDB
+  provenance and bounded endpoint summaries were identical, and SQLite retained
+  exact source/target identities with supporting document/method fact IDs;
+- `scripts/check-private-paths.sh`: passed;
+- `node scripts/kiro-review.mjs --self-test`: passed; and
+- `git diff --check`: passed.
+
+The Task 9 checkbox remains open until the pull request's Windows job has built
+and validated real native C# and VB PDBs and current-head review has confirmed
+the implementation. That is an evidence gate, not an implied native-Windows
+support claim.
