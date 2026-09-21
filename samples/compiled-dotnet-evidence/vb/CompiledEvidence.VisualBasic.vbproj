@@ -3,5 +3,7 @@
     <TargetFramework>net10.0</TargetFramework>
     <RootNamespace></RootNamespace>
     <OptionStrict>On</OptionStrict>
+    <DebugType>portable</DebugType>
+    <Deterministic>true</Deterministic>
   </PropertyGroup>
 </Project>

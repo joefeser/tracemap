@@ -2,6 +2,8 @@
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <DebugType>portable</DebugType>
+    <Deterministic>true</Deterministic>
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="FixtureShapes.fs" />

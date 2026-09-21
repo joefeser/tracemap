@@ -1,5 +1,5 @@
 {
-  "schemaVersion": "compiled-dotnet-fixture-cases.v2",
+  "schemaVersion": "compiled-dotnet-fixture-cases.v3",
   "cases": [
     { "id": "CS-OVERLOAD-001", "language": "csharp", "shape": "same-name overloads retain complete parameter and return signatures" },
     { "id": "CS-GENERIC-002", "language": "csharp", "shape": "generic type, generic method, and nested generic type retain arity" },
@@ -188,6 +188,74 @@
       "expectedOutcome": "exact-one-candidate",
       "expectedGaps": [],
       "nonClaims": ["scoped-typedreference-equivalence", "runtime-typedreference-safety"]
+    }
+  ],
+  "pdbCases": [
+    {
+      "id": "CS-PDB-PORTABLE-001",
+      "language": "csharp",
+      "shape": "portable PDB documents, multi-document and non-monotonic ranges, hidden points, async state machine, iterator state machine, lambda, and generated members remain separate",
+      "expectedPdbIdentity": "pdb:format:portable|id:<exact-content-id>|method:<exact-method-row>|sequence:<ordinal>|offset:<il-offset>|document:<document-row>|hidden:<boolean>|range:<exact-range>",
+      "expectedMetadataIdentity": "the exact admitted ManagedMethodDeclared identity selected through the bound module-local MethodDef row",
+      "expectedRuleIds": ["dotnet.compiled.pdb-input.v1", "dotnet.compiled.pdb-identity.v1", "dotnet.compiled.sequence-point.v1"],
+      "expectedTier": "Tier2Structural",
+      "expectedGaps": ["PdbSourceDocumentZeroCandidate"],
+      "nonClaims": ["execution", "reachability", "source-semantic-ownership", "generated-member-source-collapse", "il-call-identity"]
+    },
+    {
+      "id": "VB-PDB-PORTABLE-002",
+      "language": "visualbasic",
+      "shape": "portable PDB document checksums and method rows reconcile without using display names or paths",
+      "expectedPdbIdentity": "pdb:format:portable|id:<exact-content-id>|method:<exact-method-row>",
+      "expectedMetadataIdentity": "the exact admitted Visual Basic ManagedMethodDeclared identity selected through the bound module-local MethodDef row",
+      "expectedRuleIds": ["dotnet.compiled.pdb-input.v1", "dotnet.compiled.pdb-identity.v1", "dotnet.compiled.sequence-point.v1"],
+      "expectedTier": "Tier2Structural",
+      "expectedGaps": [],
+      "nonClaims": ["execution", "path-based-document-join", "display-name-join", "source-analysis-level-upgrade"]
+    },
+    {
+      "id": "FS-PDB-PORTABLE-003",
+      "language": "fsharp",
+      "shape": "portable PDB compiled identities and sequence points remain available while source document reconciliation is unsupported",
+      "expectedPdbIdentity": "pdb:format:portable|id:<exact-content-id>|method:<exact-method-row>",
+      "expectedMetadataIdentity": "the exact admitted FSharp ManagedMethodDeclared identity selected through the bound module-local MethodDef row",
+      "expectedRuleIds": ["dotnet.compiled.pdb-input.v1", "dotnet.compiled.pdb-identity.v1", "dotnet.compiled.sequence-point.v1", "dotnet.compiled.pdb-gap.v1"],
+      "expectedTier": "Tier2Structural",
+      "expectedGaps": ["PdbSourceReconciliationUnsupportedLanguage"],
+      "nonClaims": ["source-identity", "source-document-join", "guessed-join", "fsharp-source-adapter"]
+    },
+    {
+      "id": "PDB-BINDING-ZERO-004",
+      "language": "cross-language",
+      "shape": "a PDB whose exact content identity matches no admitted PE CodeView entry remains unjoined",
+      "expectedPdbIdentity": "the exact PDB content ID read from the supplied bytes",
+      "expectedMetadataIdentity": null,
+      "expectedRuleIds": ["dotnet.compiled.pdb-gap.v1"],
+      "expectedTier": "Tier4Unknown",
+      "expectedGaps": ["PdbAssemblyIdentityMismatch"],
+      "nonClaims": ["filename-match", "path-proximity-match", "timestamp-match", "candidate-selection"]
+    },
+    {
+      "id": "PDB-SOURCE-MULTIPLE-005",
+      "language": "cross-language",
+      "shape": "two inventory files with the exact same supported PDB document checksum produce an explicit multiple-candidate gap",
+      "expectedPdbIdentity": "the exact bound PDB document identity including content ID, document row, hash algorithm, checksum, and language",
+      "expectedMetadataIdentity": null,
+      "expectedRuleIds": ["dotnet.compiled.pdb-gap.v1"],
+      "expectedTier": "Tier4Unknown",
+      "expectedGaps": ["PdbSourceDocumentMultipleCandidates"],
+      "nonClaims": ["basename-preference", "path-preference", "first-candidate-selection", "source-ownership"]
+    },
+    {
+      "id": "PDB-WINDOWS-LANE-006",
+      "language": "csharp-visualbasic",
+      "shape": "native Windows PDB bytes are validated on Windows and remain fail-closed until an independent deterministic Windows PDB reader is available",
+      "expectedPdbIdentity": null,
+      "expectedMetadataIdentity": null,
+      "expectedRuleIds": ["dotnet.compiled.pdb-gap.v1"],
+      "expectedTier": "Tier4Unknown",
+      "expectedGaps": ["WindowsPdbIndependentReaderUnavailable"],
+      "nonClaims": ["portable-pdb-equivalence", "native-windows-sequence-points", "single-reader-trust", "cross-platform-support"]
     }
   ]
 }
