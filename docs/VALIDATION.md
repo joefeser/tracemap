@@ -2525,7 +2525,10 @@ Task 9 activates `dotnet.compiled.pdb-input.v1`,
 candidate explicitly with `--pdb-input`; the scanner applies the positive
 artifact, byte, document, method, sequence-point, source-file, source-byte,
 text, and total reconciliation-work limits controlled by the `--pdb-max-*`
-options. PDB binding reads are derived only from the admitted compiled-input
+options. Paths are resolved and deduplicated using the checkout filesystem's
+case semantics before admission, so relative, absolute, and `./` aliases of
+one present or missing PDB count as one input. PDB binding reads are derived
+only from the admitted compiled-input
 descriptors retained by the compiled evaluator; omitted paths are never
 reopened or allowed to reenter candidate selection. Every SRM document/method
 row and sequence point is charged before work proceeds. Cecil type traversal is
@@ -2533,7 +2536,10 @@ iterative, and every type, method, and retained sequence point is charged so
 deep empty nesting cannot bypass the work budget or consume the process stack.
 Source files are streamed once into reusable
 SHA-1/SHA-256 indexes, poll scan cancellation during file reads, and are never
-reread once per PDB document. The manifest and execution
+reread once per PDB document. Post-admission metadata-method reconciliation
+uses a single index keyed by assembly locator and MethodDef token; sequence
+points use a per-PDB document-row index. Neither lookup repeatedly scans the
+full fact or document collection. The manifest and execution
 receipt retain `pdb-input-provenance.v1`, including the exact generator SHA-256,
 canonical bounded-input SHA-256, safe locators, effective limits, per-input
 outcomes, omissions, and coverage state. They also retain the bounded
