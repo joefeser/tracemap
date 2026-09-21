@@ -45,8 +45,8 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          dotnet build samples/compiled-dotnet-evidence/csharp/CompiledEvidence.CSharp.csproj --no-restore -p:DebugType=full -p:DebugSymbols=true -p:Deterministic=true -o "${{ runner.temp }}/tracemap-windows-pdb/csharp"
-          dotnet build samples/compiled-dotnet-evidence/vb/CompiledEvidence.VisualBasic.vbproj --no-restore -p:DebugType=full -p:DebugSymbols=true -p:Deterministic=true -o "${{ runner.temp }}/tracemap-windows-pdb/vb"
+          dotnet build samples/compiled-dotnet-evidence/csharp/CompiledEvidence.CSharp.csproj --no-restore -p:DebugType=windows -p:DebugSymbols=true -p:Deterministic=true -o "${{ runner.temp }}/tracemap-windows-pdb/csharp"
+          dotnet build samples/compiled-dotnet-evidence/vb/CompiledEvidence.VisualBasic.vbproj --no-restore -p:DebugType=windows -p:DebugSymbols=true -p:Deterministic=true -o "${{ runner.temp }}/tracemap-windows-pdb/vb"
       - name: Validate native Windows PDB fail-closed lane
         if: runner.os == 'Windows'
         shell: pwsh
