@@ -22,7 +22,8 @@ public sealed record ScanManifest(
     string? ScanRootPathHash = null,
     string? GitRootHash = null,
     string? SourceSnapshotDigest = null,
-    CompiledInputProvenance? CompiledInputProvenance = null) : IJsonOnDeserialized
+    CompiledInputProvenance? CompiledInputProvenance = null,
+    SourceMetadataReconciliationSummary? SourceMetadataReconciliation = null) : IJsonOnDeserialized
 {
     public string? SourceSnapshotDigest { get; init; } = ValidateSourceSnapshotDigest(SourceSnapshotDigest);
 
@@ -73,7 +74,8 @@ public sealed record ScanManifest(
             ScanRootPathHash,
             GitRootHash,
             SourceSnapshotDigest: null,
-            CompiledInputProvenance: null)
+            CompiledInputProvenance: null,
+            SourceMetadataReconciliation: null)
     {
     }
 }
@@ -384,6 +386,8 @@ public static class FactTypes
     public const string ManagedFieldDeclared = nameof(ManagedFieldDeclared);
     public const string ManagedPropertyDeclared = nameof(ManagedPropertyDeclared);
     public const string ManagedEventDeclared = nameof(ManagedEventDeclared);
+    public const string SourceMetadataIdentityObserved = nameof(SourceMetadataIdentityObserved);
+    public const string SourceMetadataIdentityReconciled = nameof(SourceMetadataIdentityReconciled);
 }
 
 public static class RuleIds
@@ -599,6 +603,7 @@ public static class RuleIds
     public const string DotNetCompiledAssembly = "dotnet.compiled.assembly.v1";
     public const string DotNetCompiledMember = "dotnet.compiled.member.v1";
     public const string DotNetCompiledGap = "dotnet.compiled.gap.v1";
+    public const string DotNetCompiledSourceIdentity = "dotnet.compiled.source-identity.v1";
 }
 
 public static class ScannerVersions
@@ -620,6 +625,7 @@ public static class ScannerVersions
     public const string FrameworkMigrationEvidenceExtractor = "framework-migration/0.1.0";
     public const string FrameworkMigrationSyntaxFallbackExtractor = "framework-migration-syntax-fallback/0.1.0";
     public const string ManagedMetadataExtractor = "managed-metadata/0.1.0+cecil-0.11.6";
+    public const string SourceMetadataReconciliationExtractor = "source-metadata-reconciliation/0.1.0";
     public const string ConfigExtractor = "config/0.1.0";
     public const string SqlTextExtractor = "sql-text/0.1.0";
     public const string SqlShapeExtractor = "sql-shape/0.1.0";

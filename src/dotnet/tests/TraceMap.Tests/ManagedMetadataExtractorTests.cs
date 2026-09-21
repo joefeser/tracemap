@@ -669,8 +669,11 @@ public sealed class ManagedMetadataExtractorTests
             Assert.Contains("compiledInputProvenance", machineReadable, StringComparison.Ordinal);
         }
 
-        var baseline = ReadFacts(baselineOut).Where(IsSourceEvidence).Select(NormalizeFact).ToArray();
-        var compiled = ReadFacts(firstOut).Where(IsSourceEvidence).Select(NormalizeFact).ToArray();
+        // Compiled facts may change their interleaving with source facts in the complete
+        // scan output. Compare the canonical source-evidence projection so this assertion
+        // proves content and cardinality are unchanged without depending on that interleaving.
+        var baseline = ReadFacts(baselineOut).Where(IsSourceEvidence).Select(NormalizeFact).Order(StringComparer.Ordinal).ToArray();
+        var compiled = ReadFacts(firstOut).Where(IsSourceEvidence).Select(NormalizeFact).Order(StringComparer.Ordinal).ToArray();
         Assert.Equal(baseline, compiled);
 
         using var connection = new SqliteConnection($"Data Source={Path.Combine(firstOut, "index.sqlite")}");
@@ -689,15 +692,16 @@ public sealed class ManagedMetadataExtractorTests
     }
 
     [Fact]
-    public void Rule_catalog_registers_active_compiled_rules_and_defers_reconciliation()
+    public void Rule_catalog_registers_active_compiled_and_reconciliation_rules()
     {
         var catalog = File.ReadAllText(Path.Combine(FindRepoRoot(), "rules", "rule-catalog.yml"));
         Assert.Contains("- id: dotnet.compiled.input.v1", catalog, StringComparison.Ordinal);
         Assert.Contains("- id: dotnet.compiled.assembly.v1", catalog, StringComparison.Ordinal);
         Assert.Contains("- id: dotnet.compiled.member.v1", catalog, StringComparison.Ordinal);
         Assert.Contains("- id: dotnet.compiled.gap.v1", catalog, StringComparison.Ordinal);
-        var deferred = catalog[catalog.IndexOf("- id: dotnet.compiled.source-identity.v1", StringComparison.Ordinal)..];
-        Assert.Contains("status: deferred", deferred[..Math.Min(deferred.Length, 500)], StringComparison.Ordinal);
+        var reconciliation = catalog[catalog.IndexOf("- id: dotnet.compiled.source-identity.v1", StringComparison.Ordinal)..];
+        Assert.Contains("status: active", reconciliation[..Math.Min(reconciliation.Length, 1_000)], StringComparison.Ordinal);
+        Assert.Contains("SourceMetadataIdentityReconciled", reconciliation[..Math.Min(reconciliation.Length, 1_000)], StringComparison.Ordinal);
     }
 
     private static void WriteMultiModuleManifest(string path)

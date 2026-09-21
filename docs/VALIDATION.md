@@ -2387,6 +2387,112 @@ Receipt paths use the same file/count/text/work budget and a maximum nesting
 depth of 16; metadata-row work for both independent readers is charged from the
 total-work budget before either reader materializes observations.
 
+### Exact source-to-metadata reconciliation
+
+Task 8 activates `dotnet.compiled.source-identity.v1`. The reconciler consumes
+compiler-resolved C# and Visual Basic declaration identities without changing
+their ordinary source facts, and compares them only to the complete normalized
+managed metadata identity. A positive `SourceMetadataIdentityReconciled` edge
+is Tier1 semantic evidence and requires exactly one metadata candidate plus a
+validated `bound` compiled-input receipt. The edge retains the source and
+metadata endpoint identities, source and compiled supporting fact IDs, rule
+and extractor versions, bounded-input and generator SHA-256 values, receipt
+binding SHA-256, compiled provenance state, relationship proof, and limitation.
+The reconciliation-only source endpoint is a complete source-derived normalized
+metadata shape, including enclosing generic arity, generic-parameter ordinals,
+method arity, ref/ByRef modes, constructed enclosing-type arguments, and the
+complete signature. The original Roslyn
+declaration identity is retained separately as `sourceDeclarationIdentity`;
+source-only scans and their ordinary source fact identities are unchanged.
+Named signature types include their full assembly-reference scope on both the
+Roslyn and managed-metadata paths, preventing same namespace/name types from
+different assemblies from comparing equal. Primitive signature codes retain
+their intrinsic ECMA identity; `System.Decimal`, which metadata encodes as a
+scoped value-type reference rather than a CLI primitive, retains that scope.
+Other Roslyn special types that lack CLI primitive signature codes, including
+`System.DateTime`, also follow the scoped named-type path.
+Roslyn error types and unavailable type scopes
+fail closed as incomplete identities and can never produce a Tier1 edge.
+Top-level C# statements are not declarations and do not enter the candidate
+lane. If Roslyn cannot resolve a declaration symbol, its syntax-located
+observation is Tier3 rather than Tier1 and remains paired with an explicit
+Tier4 incomplete-identity gap.
+
+The following never select a candidate: display strings, simple names,
+equal arity, path proximity, timestamps, or metadata tokens. Zero candidates,
+multiple candidates, incomplete source identities, optional-parameter state
+disagreement, and unbound, stale, mismatched, ambiguous, disputed, unsupported,
+or incomplete compiled evidence emit Tier4 `AnalysisGap` facts and no edge.
+When an exact metadata candidate is rejected for optional-parameter mismatch,
+the gap retains that candidate's compiled provenance state and receipt-binding
+digest.
+Compiler-generated members remain separate except for Roslyn's explicit
+associated property/event accessor relationship. State machines, lambda
+methods, backing fields, and generated types are not inferred back to source.
+
+The public cases are versioned in
+`samples/compiled-dotnet-evidence/fixture-cases.json`. They record stable case
+IDs, exact expected source and metadata identities, expected rule and tier,
+expected gaps, and non-claims. The focused tests cover namespaces, nested and
+generic types, overloads with complete signatures, constructors,
+properties/indexers, events and accessors, `ref`/`ByRef`, optional parameters,
+explicit interfaces where representable, scoped decimal signatures,
+scoped non-primitive special types, constructed nested signatures with
+outermost-first arguments even when the nested type declares no parameters, and
+same-looking declarations across assemblies and languages. The C# matrix also
+pins class, struct, record-class, and record-struct primary constructors, ref
+field signatures, and the intrinsic `System.TypedReference` metadata shape.
+Source custom modifiers fail closed rather than producing a partial identity.
+F# has no source adapter: its compiled identities
+remain available, one explicit unsupported-source-adapter gap is emitted, and
+no source join is guessed.
+
+Run the reconciliation lane with:
+
+```bash
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj \
+  --no-restore --filter FullyQualifiedName~SourceMetadataReconciliationTests
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj \
+  --no-restore --filter FullyQualifiedName~ManagedMetadataExtractorTests
+```
+
+For positive CLI scans, pass the exact fixture assembly and its validated
+`compiled-input-binding-set.v1` receipt. Inspect `facts.ndjson` and
+`index.sqlite` for the exhaustive edge/gap rows. `scan-manifest.json`,
+`report.md`, and `scan-receipt.json` carry the bounded
+`source-metadata-reconciliation.v1` summary; each retained entry keeps both
+endpoint identities and provenance, while any receipt-view overflow is
+committed by omitted count and SHA-256. Repeated-scan checks compare
+`facts.ndjson`, the human report, the reconciliation summary, and the indexed
+fact rows byte-for-byte; the operational wall-clock `scannedAt` field and
+receipt stage durations are intentionally not evidence identifiers.
+
+Summary entries also retain their own evidence fact ID, source file and line
+span, commit SHA, exact total join/gap counts, and known rejected-provenance
+state. Per-entry compiled supporting IDs are bounded to 256 with an omitted
+count and digest; summary overflow hashing uses length-framed canonical values
+for every serialized entry field. The Markdown report independently discloses
+its 50-row display bound and points to exhaustive `facts.ndjson` and
+`index.sqlite` rows. If semantic source identity collection is unavailable,
+reconciliation coverage is `source-metadata-partial` even when no candidate row
+could be emitted. `Level1SemanticAnalysisReduced` is also partial because a
+failed project may have omitted declarations even when every retained candidate
+joins; this does not change compiled-input coverage.
+
+Reconciliation coverage is independent of `analysisLevel`. Missing or partial
+compiled inputs never erase, re-tier, or otherwise change source-derived facts.
+This slice does not read PDBs or sequence points, inspect IL bodies or calls,
+perform rewrite analysis, execute private or historical corpora, add legacy
+Framework/Web Forms or C++/CLI support, or introduce fuzzy/AI matching.
+
+The C# and Visual Basic changes in this slice are restricted to the internal
+candidate lane activated by explicit compiled inputs. The full .NET suite and
+source-only partial-compilation regression are required to prove ordinary
+adapter facts stay unchanged. The pinned C#/VB public OSS smoke is explicitly
+deferred for this slice because it does not supply admitted compiled inputs and
+therefore cannot exercise source-to-metadata reconciliation; no public-smoke
+coverage claim is made.
+
 ### Independent source canonical-identity matrix
 
 The compiled-evidence matrix does not replace the existing source-side adapter

@@ -46,7 +46,7 @@ slices and require an implementation-state update before work begins.
   metadata-location round trips, cross-namespace identity collisions,
   pre-digest recursion guards, and private-output non-shareability checks.
   Update docs and implementation state with exact results.
-- [ ] 8. Later slice: add exact deterministic source-to-metadata reconciliation
+- [x] 8. Later slice: add exact deterministic source-to-metadata reconciliation
   with zero/multiple-candidate gaps and both endpoint identities; consume the
   independent source canonical-identity matrix from `docs/VALIDATION.md`
   without replacing it with compiled fixtures.

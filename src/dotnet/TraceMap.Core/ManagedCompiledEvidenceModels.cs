@@ -41,6 +41,40 @@ public sealed record CompiledInputProvenance(
     int OmittedInputCount = 0,
     string? OmittedInputSha256 = null);
 
+public sealed record SourceMetadataReconciliationEntry(
+    string ReconciliationState,
+    string SourceIdentity,
+    string MetadataIdentity,
+    string SourceFactId,
+    IReadOnlyList<string> CompiledFactIds,
+    string RuleId,
+    string EvidenceTier,
+    string ExtractorVersion,
+    string CompiledProvenanceState,
+    string ProvenanceBindingInputSha256,
+    string GapKind,
+    string Limitation,
+    string EvidenceFactId,
+    string FilePath,
+    int StartLine,
+    int EndLine,
+    string CommitSha,
+    int OmittedCompiledFactIdCount,
+    string? OmittedCompiledFactIdSha256);
+
+public sealed record SourceMetadataReconciliationSummary(
+    string SchemaVersion,
+    string RuleId,
+    string ExtractorVersion,
+    string CoverageState,
+    string BoundedInputSha256,
+    string CompiledGeneratorSha256,
+    int ExactJoinCount,
+    int ExplicitGapCount,
+    IReadOnlyList<SourceMetadataReconciliationEntry> Entries,
+    int OmittedEntryCount,
+    string? OmittedEntrySha256);
+
 internal sealed record CompiledEvidenceCandidate(
     string SafeLocator,
     string FactType,

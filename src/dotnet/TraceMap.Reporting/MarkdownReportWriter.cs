@@ -454,6 +454,21 @@ public static class MarkdownReportWriter
         lines.Add("- Binary locations use admitted safe locators and metadata tokens; the serialized `1..1` span is a non-source sentinel, not a source line.");
         lines.Add("- Metadata declarations do not prove source ownership, build freshness, runtime loading, execution, dispatch, or reachability.");
 
+        if (result.Manifest.SourceMetadataReconciliation is { } reconciliation)
+        {
+            lines.Add($"- Source/metadata reconciliation: `{reconciliation.CoverageState}`; exact joins `{reconciliation.ExactJoinCount}`; explicit gaps `{reconciliation.ExplicitGapCount}`; rule `{reconciliation.RuleId}`; extractor `{reconciliation.ExtractorVersion}`.");
+            lines.Add("- Every positive join requires one exact complete identity candidate and bound compiled provenance; zero, multiple, unacceptable, incomplete, and unsupported cases remain unjoined.");
+            foreach (var entry in reconciliation.Entries.Take(CompiledMetadataFactLimit))
+            {
+                lines.Add($"- Reconciliation `{entry.ReconciliationState}`: source `{entry.SourceIdentity}`, metadata `{entry.MetadataIdentity}`, tier `{entry.EvidenceTier}`, provenance `{entry.CompiledProvenanceState}`, gap `{(string.IsNullOrEmpty(entry.GapKind) ? "none" : entry.GapKind)}`.");
+            }
+            var reportOmitted = Math.Max(0, reconciliation.Entries.Count - CompiledMetadataFactLimit);
+            if (reportOmitted > 0)
+                lines.Add($"- {reportOmitted} retained reconciliation entries omitted from this report display; exhaustive rows remain in `facts.ndjson` and `index.sqlite`.");
+            if (reconciliation.OmittedEntryCount > 0)
+                lines.Add($"- {reconciliation.OmittedEntryCount} reconciliation entries omitted from the bounded manifest summary; omitted-entry SHA-256: `{reconciliation.OmittedEntrySha256}`; exhaustive rows remain in `facts.ndjson` and `index.sqlite`.");
+        }
+
         foreach (var outcome in provenance.Outcomes.OrderBy(item => item.SafeLocator, StringComparer.Ordinal).ThenBy(item => item.Role, StringComparer.Ordinal))
         {
             lines.Add($"- Input `{outcome.SafeLocator}` ({outcome.Role}): `{outcome.Outcome}`, provenance `{outcome.ProvenanceState}`, gaps `{(outcome.GapKinds.Count == 0 ? "none" : string.Join(",", outcome.GapKinds))}`.");
