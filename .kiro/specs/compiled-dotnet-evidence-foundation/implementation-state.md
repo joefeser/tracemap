@@ -451,14 +451,14 @@ Windows, `dotnetperf`, and C++/CLI lanes remain entirely separate. The Task 10
 checkbox stays open until the public rewrite suite and its acceptance criteria
 land.
 
-Local macOS validation on 2026-09-21:
+Local macOS validation on 2026-09-21 (after review remediation `5c047abd`):
 
-- focused `IlBodyEvidenceExtractorTests`: 26 passed, zero failed, zero skipped;
+- focused `IlBodyEvidenceExtractorTests`: 29 passed, zero failed, zero skipped;
 - neighbor suites: `ManagedMetadataExtractorTests` + `PortablePdbExtractorTests`
   + `SourceMetadataReconciliationTests`: 91 passed, zero failed, zero skipped;
 - `dotnet build src/dotnet/TraceMap.sln --no-restore`: passed with zero
   warnings and zero errors;
-- `dotnet test src/dotnet/TraceMap.sln --no-restore`: 2,077 passed, zero
+- `dotnet test src/dotnet/TraceMap.sln --no-restore`: 2,080 passed, zero
   failed, zero skipped (one early concurrent run showed two transient
   failures that did not reproduce on the immediate clean rerun);
 - three-language CLI scan (C# primary, VB and F# dependencies) with
@@ -470,3 +470,25 @@ Local macOS validation on 2026-09-21:
 - `scripts/check-private-paths.sh`: passed;
 - `node scripts/kiro-review.mjs --self-test`: passed; and
 - `git diff --check`: passed.
+
+Review remediation on 2026-09-21: the exact-head review batch (Codex plus the
+Qodo single return) filed four findings on head `5e0e4464`; all are patched in
+`5c047abd`. Switch jump-table targets are computed from the shared post-table
+base with overflow-safe extent validation and per-target work charges; the raw
+System.Reflection.Metadata reader now runs before Mono.Cecil materializes
+operands; `--il-max-text` is enforced for user strings, target identities,
+method identities, and body identities in both readers; and the `constrained.`
+prefix now emits a cross-checked `constrainedtype` call observation whose
+module-local token stays explicitly unclaimed because Mono.Cecil cannot
+reproduce the raw TypeSpec token. A genuine five-target `switch` fixture,
+hostile truncated and oversized switch-table tests, a text-limit gap test, and
+a constrained-call assertion cover the remediation; CI is green on macOS,
+Ubuntu, and Windows including the Windows cross-volume `--out` fix in
+ScanOutputTransaction. All review threads are resolved and the stale Qodo
+summary finding is dispositioned. The ACK loop stopped at
+`CURRENT_HEAD_REQUIRED_REVIEW_MISSING` with `owner_decision_required`: every
+mechanical gate is clean (zero failed checks, zero unresolved threads, zero
+actionable findings, merge state CLEAN), and the one remaining step - granting
+the extra exact-head Codex review request - requires the owner-issued signed
+execution authorization that the lane deliberately makes unforgeable. The PR
+is not merged by this task.
