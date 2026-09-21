@@ -294,6 +294,57 @@ public sealed class PortablePdbExtractorTests
     }
 
     [Fact]
+    public void Compiled_binding_admission_observes_scan_cancellation()
+    {
+        var fixture = Fixture("csharp", "CompiledEvidence.CSharp");
+        var options = new ScanOptions(
+            fixture.Source,
+            TempOutput(),
+            CompiledInputPaths: [fixture.Assembly],
+            PdbInputPaths: [fixture.Pdb]);
+        var compiled = ManagedMetadataExtractor.Evaluate(
+            fixture.Source,
+            GitMetadataProvider.Detect(fixture.Source).CommitSha,
+            options);
+
+        Assert.Throws<OperationCanceledException>(() => PortablePdbExtractor.Evaluate(
+            fixture.Source,
+            options,
+            compiled,
+            new CancellationToken(canceled: true)));
+    }
+
+    [Fact]
+    public void Bounded_input_read_observes_cancellation_between_chunks()
+    {
+        using var cancellation = new CancellationTokenSource();
+        using var stream = new CancellingReadStream(new byte[200_000], cancellation);
+
+        Assert.Throws<OperationCanceledException>(() => PortablePdbExtractor.ReadBoundedStream(
+            stream,
+            200_000,
+            cancellation.Token));
+        Assert.Equal(1, stream.ReadCount);
+    }
+
+    [Fact]
+    public void Matched_compiled_artifact_is_reverified_before_pdb_evidence()
+    {
+        using var temp = new TempDirectory();
+        var path = Path.Combine(temp.Path, "bound.dll");
+        var original = new byte[] { 1, 2, 3, 4 };
+        var expectedDigest = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(original)).ToLowerInvariant();
+        File.WriteAllBytes(path, original);
+
+        Assert.Equal(original, PortablePdbExtractor.ReadVerifiedCompiledBytes(path, expectedDigest, 4));
+        File.WriteAllBytes(path, [4, 3, 2, 1]);
+        Assert.Null(PortablePdbExtractor.ReadVerifiedCompiledBytes(path, expectedDigest, 4));
+        Assert.Null(PortablePdbExtractor.ReadVerifiedCompiledBytes(path, expectedDigest, 3));
+        File.Delete(path);
+        Assert.Null(PortablePdbExtractor.ReadVerifiedCompiledBytes(path, expectedDigest, 4));
+    }
+
+    [Fact]
     public void Pdb_expected_inputs_and_outcomes_remain_within_the_published_artifact_bound()
     {
         var fixture = Fixture("csharp", "CompiledEvidence.CSharp");
@@ -814,5 +865,18 @@ public sealed class PortablePdbExtractorTests
         var standardError = process.StandardError.ReadToEnd();
         process.WaitForExit();
         Assert.True(process.ExitCode == 0, $"git {string.Join(' ', arguments)} failed: {standardOutput}{standardError}");
+    }
+
+    private sealed class CancellingReadStream(byte[] bytes, CancellationTokenSource cancellation) : MemoryStream(bytes)
+    {
+        public int ReadCount { get; private set; }
+
+        public override int Read(byte[] buffer, int offset, int count)
+        {
+            ReadCount++;
+            var read = base.Read(buffer, offset, count);
+            cancellation.Cancel();
+            return read;
+        }
     }
 }
