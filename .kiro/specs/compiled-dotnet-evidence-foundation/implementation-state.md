@@ -1,10 +1,10 @@
 # Compiled .NET Evidence Foundation Implementation State
 
-Status: Task 8 exact source-to-metadata reconciliation merged in PR #773; Task 9 implemented in PR #774 with local and cross-platform acceptance green, final exact-head ACK pending
+Status: Tasks 1-9 are merged into `dev`; PR #774 completed its authorized exact-head ACK review and was merged into `dev` as `ed2fdf1c028b034a9a6013908e8f5b8c29d900a7` on 2026-09-21. Task 10 (operand-aware IL body/call evidence plus the public ECMA-335/rewrite suite from #766) and Task 11 remain open.
 
-Branch: `codex/pdb-sequence-point-evidence`
+Branch: `codex/il-body-call-evidence`
 
-Base: `origin/dev` at `7dc943f2f9d5de82b0963e3e1b8aa9196116b51c`
+Base: `origin/dev` at `ed2fdf1c028b034a9a6013908e8f5b8c29d900a7`
 
 Tracking: #759, #766, #767, #768, #769
 
@@ -395,5 +395,8 @@ path, and package-smoke jobs on macOS, Ubuntu, and Windows. The Windows lane
 used desktop Roslyn C# and VB compilers to produce real MSF PDBs, recognized the
 complete native signature, emitted only the bounded unsupported-reader gap, and
 produced zero positive native PDB facts. This is not a native-Windows support
-claim. The Task 9 checkbox is complete; final current-head ACK remains the PR
-terminal gate, and the PR must not be merged by this task.
+claim. The Task 9 checkbox is complete. PR #774 then completed its authorized
+exact-head ACK review terminal state and was merged into `dev` as
+`ed2fdf1c028b034a9a6013908e8f5b8c29d900a7` on 2026-09-21 (merge commit
+confirmed against `origin/dev`); the earlier "final current-head ACK pending"
+note is closed and no longer describes repository state.
