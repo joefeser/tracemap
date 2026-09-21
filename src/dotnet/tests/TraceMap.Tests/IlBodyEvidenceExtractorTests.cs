@@ -231,6 +231,55 @@ public sealed class IlBodyEvidenceExtractorTests
         }
     }
 
+    [Theory]
+    [InlineData((byte)1)]
+    [InlineData((byte)127)]
+    public void Branch_to_non_instruction_or_outside_body_fails_closed(byte delta)
+    {
+        var fixture = Fixture("csharp", "CompiledEvidence.CSharp");
+        using var temp = new TempDirectory();
+        var assemblyPath = Path.Combine(temp.Path, "BranchAndJmp.dll");
+        WriteBranchAndJmpAssembly(assemblyPath);
+        var bytes = File.ReadAllBytes(assemblyPath);
+        RewriteShortBranchDelta(bytes, "Branch", delta);
+        File.WriteAllBytes(assemblyPath, bytes);
+
+        var result = Scan(new ScanOptions(
+            fixture.Source,
+            TempOutput(),
+            CompiledInputPaths: [assemblyPath],
+            IlBodyEvidence: true));
+
+        Assert.Equal("il-partial", result.Manifest.IlBodyProvenance!.CoverageState);
+        Assert.Contains(result.Facts, fact => fact.RuleId == RuleIds.DotNetIlGap
+            && fact.Properties.GetValueOrDefault("gapKind") == "MalformedIlBody");
+        Assert.DoesNotContain(result.Facts, fact => fact.FactType is FactTypes.ManagedIlBodyDeclared or FactTypes.ManagedIlCallObserved);
+    }
+
+    [Fact]
+    public void Jmp_operand_is_hashed_but_not_reported_as_a_direct_call()
+    {
+        var fixture = Fixture("csharp", "CompiledEvidence.CSharp");
+        using var temp = new TempDirectory();
+        var assemblyPath = Path.Combine(temp.Path, "BranchAndJmp.dll");
+        WriteBranchAndJmpAssembly(assemblyPath);
+
+        var result = Scan(new ScanOptions(
+            fixture.Source,
+            TempOutput(),
+            CompiledInputPaths: [assemblyPath],
+            IlBodyEvidence: true));
+
+        Assert.Equal("il-complete", result.Manifest.IlBodyProvenance!.CoverageState);
+        var jump = BodyFact(result, "Jump");
+        var jumpOther = BodyFact(result, "JumpOther");
+        Assert.NotEqual(jump.Properties["ilBodySha256"], jumpOther.Properties["ilBodySha256"]);
+        Assert.DoesNotContain(result.Facts, fact => fact.FactType == FactTypes.ManagedIlCallObserved
+            && fact.Properties.GetValueOrDefault("ilBodyFactId") is var bodyId
+            && (bodyId == jump.FactId || bodyId == jumpOther.FactId));
+        Assert.DoesNotContain(result.Facts, fact => fact.RuleId == RuleIds.DotNetIlGap);
+    }
+
     [Fact]
     public void Oversized_user_string_fails_closed_to_the_text_limit_gap()
     {
@@ -644,6 +693,57 @@ public sealed class IlBodyEvidenceExtractorTests
             return bytes;
         }
         throw new InvalidOperationException("SwitchTable body not found.");
+    }
+
+    private static void WriteBranchAndJmpAssembly(string path)
+    {
+        using var assembly = CecilAssemblyDefinition.CreateAssembly(
+            new AssemblyNameDefinition("BranchAndJmp", new Version(1, 0)),
+            "BranchAndJmp",
+            ModuleKind.Dll);
+        var module = assembly.MainModule;
+        var type = new CecilTypeDefinition("Fixture", "IlShapes", Mono.Cecil.TypeAttributes.Public, module.TypeSystem.Object);
+        module.Types.Add(type);
+        var target = new CecilMethodDefinition("Target", Mono.Cecil.MethodAttributes.Public | Mono.Cecil.MethodAttributes.Static, module.TypeSystem.Void);
+        target.Body.Instructions.Add(Mono.Cecil.Cil.Instruction.Create(Mono.Cecil.Cil.OpCodes.Ret));
+        type.Methods.Add(target);
+        var jump = new CecilMethodDefinition("Jump", Mono.Cecil.MethodAttributes.Public | Mono.Cecil.MethodAttributes.Static, module.TypeSystem.Void);
+        jump.Body.Instructions.Add(Mono.Cecil.Cil.Instruction.Create(Mono.Cecil.Cil.OpCodes.Jmp, target));
+        type.Methods.Add(jump);
+        var otherTarget = new CecilMethodDefinition("OtherTarget", Mono.Cecil.MethodAttributes.Public | Mono.Cecil.MethodAttributes.Static, module.TypeSystem.Void);
+        otherTarget.Body.Instructions.Add(Mono.Cecil.Cil.Instruction.Create(Mono.Cecil.Cil.OpCodes.Ret));
+        type.Methods.Add(otherTarget);
+        var jumpOther = new CecilMethodDefinition("JumpOther", Mono.Cecil.MethodAttributes.Public | Mono.Cecil.MethodAttributes.Static, module.TypeSystem.Void);
+        jumpOther.Body.Instructions.Add(Mono.Cecil.Cil.Instruction.Create(Mono.Cecil.Cil.OpCodes.Jmp, otherTarget));
+        type.Methods.Add(jumpOther);
+        var branch = new CecilMethodDefinition("Branch", Mono.Cecil.MethodAttributes.Public | Mono.Cecil.MethodAttributes.Static, module.TypeSystem.Void);
+        var ret = Mono.Cecil.Cil.Instruction.Create(Mono.Cecil.Cil.OpCodes.Ret);
+        branch.Body.Instructions.Add(Mono.Cecil.Cil.Instruction.Create(Mono.Cecil.Cil.OpCodes.Br_S, ret));
+        branch.Body.Instructions.Add(Mono.Cecil.Cil.Instruction.Create(Mono.Cecil.Cil.OpCodes.Ldc_I4, 123456));
+        branch.Body.Instructions.Add(Mono.Cecil.Cil.Instruction.Create(Mono.Cecil.Cil.OpCodes.Pop));
+        branch.Body.Instructions.Add(ret);
+        type.Methods.Add(branch);
+        assembly.Write(path);
+    }
+
+    private static void RewriteShortBranchDelta(byte[] bytes, string methodName, byte delta)
+    {
+        using var stream = new MemoryStream(bytes, writable: false);
+        using var pe = new PEReader(stream);
+        var reader = pe.GetMetadataReader();
+        foreach (var handle in reader.MethodDefinitions)
+        {
+            var method = reader.GetMethodDefinition(handle);
+            if (reader.GetString(method.Name) != methodName)
+                continue;
+            var bodyOffset = FileOffset(pe, method.RelativeVirtualAddress);
+            var headerSize = (bytes[bodyOffset] & 0x03) == 0x02 ? 1 : 12;
+            var ilOffset = bodyOffset + headerSize;
+            Assert.Equal((byte)Mono.Cecil.Cil.OpCodes.Br_S.Value, bytes[ilOffset]);
+            bytes[ilOffset + 1] = delta;
+            return;
+        }
+        throw new InvalidOperationException($"{methodName} body not found.");
     }
 
     private static int FileOffset(PEReader pe, int rva)
