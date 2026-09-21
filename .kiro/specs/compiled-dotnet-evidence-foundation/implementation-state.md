@@ -1,6 +1,6 @@
 # Compiled .NET Evidence Foundation Implementation State
 
-Status: Tasks 1-9 are merged into `dev`; PR #774 completed its authorized exact-head ACK review and was merged into `dev` as `ed2fdf1c028b034a9a6013908e8f5b8c29d900a7` on 2026-09-21. Task 10 (operand-aware IL body/call evidence plus the public ECMA-335/rewrite suite from #766) and Task 11 remain open.
+Status: Tasks 1-9 are merged into `dev`; PR #774 completed its authorized exact-head ACK review and was merged into `dev` as `ed2fdf1c028b034a9a6013908e8f5b8c29d900a7` on 2026-09-21. The first Task 10 slice (bounded operand-aware IL body/call evidence, PR #775) is also merged into `dev` as `46b2baa125bed00ee9ac1964ce50febd55c3e68e` on 2026-09-21, including the owner-requested P1/P2 follow-up `2d20b4a3` (prefix-operand signed/unsigned distinction and exact UTF-16 literal hashing). The remaining Task 10 public rewrite suite from #766 and Task 11 remain open.
 
 Branch: `codex/il-body-call-evidence`
 
@@ -485,13 +485,13 @@ hostile truncated and oversized switch-table tests, a text-limit gap test, and
 a constrained-call assertion cover the remediation; CI is green on macOS,
 Ubuntu, and Windows including the Windows cross-volume `--out` fix in
 ScanOutputTransaction. All review threads are resolved and the stale Qodo
-summary finding is dispositioned. The ACK loop stopped at
-`CURRENT_HEAD_REQUIRED_REVIEW_MISSING` with `owner_decision_required`: every
-mechanical gate is clean (zero failed checks, zero unresolved threads, zero
-actionable findings, merge state CLEAN), and the one remaining step - granting
-the extra exact-head Codex review request - requires the owner-issued signed
-execution authorization that the lane deliberately makes unforgeable. The PR
-is not merged by this task.
+summary finding is dispositioned. The earlier ACK loop had stopped at
+`CURRENT_HEAD_REQUIRED_REVIEW_MISSING` with `owner_decision_required`; the
+owner subsequently issued the exact-head review authorization, and the
+resulting findings were patched and merged. PR #775 was merged into `dev` as
+`46b2baa125bed00ee9ac1964ce50febd55c3e68e` on 2026-09-21 (merge commit
+confirmed against `origin/dev`). The Task 10 checkbox remains open for the
+public rewrite suite.
 
 ## PR #775 owner-requested P1/P2 review follow-up
 
@@ -513,5 +513,197 @@ scan against `samples/modern-sample` produced `il-complete`, 155 body facts,
 and 126 call facts; adapter artifact validation passed. The private-path
 guard, Kiro review self-test, and whitespace check passed. Local validation
 is macOS only; hosted checks and exact-head review remain ACK's authority.
-Task 10 remains open for the already-deferred rewrite suite, and Task 11 is
-unchanged. This follow-up does not authorize merge or waive review freshness.
+The Astra follow-up `2d20b4a3` (prefix operands and exact UTF-16 hashing)
+landed before merge and is part of merge commit `46b2baa1`; those regression
+guarantees must be preserved by later Task 10 slices. Task 10 remains open
+for the deferred rewrite suite, and Task 11 is unchanged.
+
+## Task 10 second slice: bounded before/after IL rewrite identity evidence
+
+Branch: `codex/task10-rewrite-evidence` from `origin/dev` at
+`46b2baa125bed00ee9ac1964ce50febd55c3e68e` (PR #775 merge). Tracking #766.
+
+The second Task 10 slice activates `dotnet.compiled.il-rewrite.v1` and
+`dotnet.compiled.il-rewrite-gap.v1` behind the explicit
+`--il-rewrite-evidence` flag with ordinal `--il-rewrite-before` and
+`--il-rewrite-after` inputs and `--il-max-rewrite-pairs`. The scanner never
+performs or attributes a rewrite: both sides are operator-declared bounded
+inputs, each admitted under the compiled file-size/text bounds with
+privacy-projected external locators and raw SHA-256 commitments, and each
+side must independently pass the complete first-slice dual-reader IL body
+contract before any join. A missing, unreadable, oversized, malformed,
+disputed, unsupported, or over-limit side withholds the whole pair behind a
+Tier4 gap with `side`/`cause` properties and no partial edge set.
+
+An edge is emitted only when the complete exact assembly-scoped method
+identity text occurs exactly once on each side. The edge records both
+assembly identities, both module-local tokens with `tokenRetargeted`, both
+canonical body identities and digests, the relationship kind (`unchanged`,
+`operand-only-change`, or `instruction-stream-change`), and
+`opcodeSequencePreserved`. Call-site retargets (both tokens, both target
+identities, both IL offsets, ordinal alignment) are recorded only when
+instruction counts and opcode-name digests are exactly equal; the shared
+opcode-name digest computed by both readers proves the alignment. One-side-only
+membership emits bounded `IlRewriteMethodBeforeOnly`/`IlRewriteMethodAfterOnly`
+gaps (eight retained identities per side plus an omitted-count digest
+commitment), never guessed insertion/removal edges; duplicate identity on a
+side emits `IlRewriteIdentityAmbiguous`; differing assembly identities emit
+`IlRewriteAssemblyIdentityMismatch` with no joins; join work is charged to
+the shared `--il-max-work` budget and exhaustion emits
+`IlRewriteTotalWorkLimitExceeded`. Requesting the flag without pairs emits
+`IlRewritePairUnavailable`; count mismatches emit
+`IlRewritePairDeclarationInvalid`; the CLI additionally rejects unflagged or
+unpaired declarations. The lane is inert without the flag: no rewrite facts,
+no `ilRewriteProvenance` section, no known gaps, and unchanged source,
+compiled-metadata, PDB, and IL body/call behavior (the focused suite pins
+non-rewrite facts byte for byte against a baseline scan with normalized
+derived fact IDs). The manifest, execution receipt, and report gain
+`il-rewrite-provenance.v1` with generator SHA-256, canonical bounded-input
+SHA-256, effective limits, and per-pair outcomes; the digest participates in
+`scanId`; artifact visibility stays local-only and outputs never contain raw
+absolute paths.
+
+Mono.Cecil generates the deterministic synthetic mutations only inside the
+public test suite: changed `ldc.i4` constant operand (same opcode), a member
+inserted before existing MethodDef rows (token renumbering with identical
+target identity), a rewired call operand to a different existing member,
+duplicated complete method identity on the after side, renamed assembly
+identity, corrupted after-side IL, and exhausted budgets. Identical
+before/after inputs must prove every body `unchanged` with zero gaps. The
+fixture catalog moves to `compiled-dotnet-fixture-cases.v5` with a new
+`ilRewriteCases` section recording stable IDs, expected rules/tiers,
+relationship kinds, gaps, and non-claims.
+
+Local macOS validation on 2026-09-21:
+
+- focused `IlRewriteEvidenceExtractorTests`: 23 passed, zero failed, zero
+  skipped;
+- focused `IlBodyEvidenceExtractorTests`: 41 passed, zero failed, zero
+  skipped (opcode-name digest addition keeps all first-slice guarantees,
+  including the Astra prefix-operand and UTF-16 regressions);
+- combined compiled-lane filter (IL body, rewrite, managed metadata, PDB,
+  source reconciliation): 155 passed, zero failed, zero skipped;
+- `dotnet build src/dotnet/TraceMap.sln --no-restore`: zero warnings, zero
+  errors;
+- `dotnet test src/dotnet/TraceMap.sln --no-restore`: 2,115 passed, zero
+  failed, zero skipped;
+- three-language CLI smoke (C# primary with mutated after side, VB and F#
+  identical after sides, `--il-body-evidence --il-rewrite-evidence`):
+  `rewrite-complete`, 155 rewrite edges (110 unchanged, 45
+  operand-only-change), 51 call-site retargets showing Cecil round-trip token
+  renumbering with identical target identities, zero gaps; all five artifacts
+  plus `scan-receipt.json` present; repeat scan produced byte-identical
+  `facts.ndjson` and `report.md` and an identical manifest except
+  `scannedAt`; 206 `dotnet.compiled.il-rewrite*` rows in `index.sqlite`;
+  `scripts/validate-adapter-artifacts.py` passed and no output contained a
+  local absolute path;
+- `scripts/check-private-paths.sh`: passed;
+- `node scripts/kiro-review.mjs --self-test`: passed; and
+- `git diff --check`: passed.
+
+Explicitly deferred by this slice and still open for later Task 10 work:
+rewritten PDB offsets and sequence-point validity, ILAsm/ILDAsm parity,
+evaluation-stack-sensitive rewrites, netmodules, type forwarding, duplicate
+assembly identities, insertion/removal relationship edges, and the extended
+ECMA-335 mutation matrix from #766. Task 11's legacy Windows, `dotnetperf`,
+and C++/CLI lanes remain separate. The Task 10 checkbox stays open until
+#766's full public rewrite-suite acceptance is met.
+
+Review remediation on 2026-09-21: the Qodo review of PR #776 head
+`1d41d3af3dcac554b693db7106c40ab75b9c89ab` filed four findings; all are
+patched. Join-phase budget exhaustion is now atomic (no partial edges,
+membership deltas, or gap kinds survive), malformed declared paths fail
+closed to `IlRewriteSideUnavailable` with cause
+`IlRewriteSideDeclarationInvalid` and a privacy-projected locator instead of
+aborting the scan, repeated identical pair declarations keep their own
+ordinal outcomes without dedupe, and the bounded-input digest commits the
+effective `CompiledInputLimits` admission policy. Four regression tests
+cover the behaviors. Local re-validation: focused
+`IlRewriteEvidenceExtractorTests` 27 passed; build zero warnings/errors.
+
+Second review remediation on 2026-09-21: the Codex review of PR #776 filed
+two P1 findings and one P3; all are patched. Omitted overflow pairs now
+commit their declared privacy-projected locators to the synthetic outcome
+and therefore the bounded-input digest, so scans omitting different declared
+pairs never share a rewrite provenance digest or scan identity. The
+relationship classifier no longer labels non-instruction structural body
+changes (locals, exception regions, max stack, init-locals) as
+`operand-only-change`: those are `body-structure-change`, combined operand
+and structural changes are `operand-and-body-structure-change`, and the rule
+catalog, fixture catalog (`CS-ILRW-STRUCTURE-009`), and docs document the
+exact-kind contract. `tracemap scan --help` documents the four rewrite
+options including the equal-length ordinal pair requirement. Three
+regression tests cover the behaviors (30 focused rewrite tests total).
+
+Third review remediation on 2026-09-21: the Codex re-review of PR #776 head
+`49ee4db970985faf8698ccc29c1b6a379663a4f4` filed five P2 findings; all are
+patched. Side-scoped failures now emit one Tier4 gap per failing side with
+that side's own `side`, `cause`, and evidence locator, and the outcome
+summary preserves the exact `side:cause` pairing. The omitted-membership
+digest commits exactly the identities beyond the retained eight-entry prefix
+so consumers can recompute it from reader-proven rows. Positive edges and
+call retargets always keep the `managed-il-rewrite-v1` evidence location
+kind even when the same pair carries gaps. Pair outcome labels are exact
+(`unavailable`, `invalid`, `unsupported`, `membership-delta`) instead of a
+generic malformed/limit fallback. The lane validates the reused body and
+compiled limits identically to their owning extractors. Six regression tests
+cover the behaviors (35 focused rewrite tests total).
+
+Fourth review remediation on 2026-09-21: a follow-on Codex P2 on head
+`80c0b4ba19b3fdd4c28e4944f9b1d4bb37856b2c` noted that after-only membership
+gaps still used the before locator; one-side-only membership gaps are now
+evidenced on the input that carries the identity, pinned by both the
+inserted-member and omitted-suffix regressions.
+
+Fifth review remediation on 2026-09-21: the Codex re-review of head
+`950390728d6b6b59f16fed335de8e9b39ad434e9` filed one P1 and one P2; both are
+patched. Admission side/cause mappings now participate in the canonical
+bounded-input digest projection, so an in-repo locator that changes only from
+missing to over-limit (identical gap kind, outcome, locator, and null raw
+digest) still changes the provenance digest and scan identity. Blank declared
+pair slots invalidate the whole declaration instead of being silently
+dropped, which had shifted ordinal pairing. Two regressions pin the
+behaviors (37 focused rewrite tests total).
+
+Full independent PR #776 review on 2026-09-21, from exact head
+`bff7413e50981d76d438a351c1411bb5ca59e1dc`, on local branch
+`codex/pr776-full-review` (pushed back to `codex/task10-rewrite-evidence`):
+
+- P1: rewrite sides bypassed the compiled-input shape preflight, admitting
+  mixed-mode IL and reporting complete coverage for multi-module manifests.
+  Both sides now pass the shared preflight before either body reader, with
+  categorical unsupported gaps and no pair edges.
+- P2: compiled metadata row/work limits were committed but not enforced on
+  rewrite inputs. Preflight now enforces type/member row bounds and charges
+  the compiled metadata work budget across both sides and every pair. Pair
+  count remains governed by the explicit rewrite-pair limit.
+- P2: rejected pair declarations committed counts but lost projected paths
+  and blank positions. Their commitment now includes both ordered projected
+  slot lists, preserving the fail-closed rejection without identity aliasing.
+- P2: receipt scope hashing sorted each side independently, so different
+  ordinal pairings shared an authorized-scope fingerprint. Ordered JSON
+  framing now retains slot order, blanks, duplicates, and embedded newlines.
+- P2: a file growing beyond its byte bound between the size precheck and
+  bounded read could throw out of the scan. The admission boundary now
+  translates that bounded-reader exception into the side's categorical gap.
+
+Six new regression cases were run against the original head and all failed,
+then passed with the fixes. A seventh regression pins the shared metadata
+budget across sides and pairs. Focused body/rewrite/metadata/receipt tests
+passed (125 tests before adding the seventh case). Existing Task 10 deferred
+scope and checkbox remain unchanged; this review does not complete #766.
+
+Validation: repeated C#/VB/F# CLI scans passed the artifact validator with
+155 unchanged rewrite edges, zero rewrite gaps, matching SQLite/receipt
+provenance, byte-identical facts/report, and manifests identical except
+`scannedAt`. The private-path guard, Kiro self-test, and diff whitespace check
+passed. Pinned public OSS source-adapter smokes remain deferred under the
+compiled-lane guidance in `docs/VALIDATION.md`; the synthetic compiled and
+full solution suites are the validation surfaces for these changes.
+
+Final local validation: `dotnet test src/dotnet/TraceMap.sln --no-restore`
+passed 2,136 tests, zero failed/skipped, with no compiler/analyzer warnings
+or errors in the build/test output. The final ACK readback is recorded in
+`.agent-control/pr-loop-handoffs/pr-776-full-review.json` in the review
+worktree; local review and test results do not substitute for hosted-review
+freshness or authorize a merge.

@@ -318,7 +318,9 @@ internal static class IlBodyEvidenceExtractor
         return disagreements;
     }
 
-    private static IlReaderResult ReadCecilBodies(
+    // Internal so the rewrite lane can rebuild the same dual-reader contract
+    // over its own paired inputs instead of duplicating IL decoding.
+    internal static IlReaderResult ReadCecilBodies(
         byte[] bytes,
         IlBodyLimits limits,
         IlWorkBudget budget,
@@ -375,6 +377,7 @@ internal static class IlBodyEvidenceExtractor
         if (methodIdentity.Length > limits.MaxTextLength)
             throw new IlEvidenceException("IlTextLimitExceeded");
         var instructions = new List<string>();
+        var opcodes = new List<string>();
         var calls = new List<IlCallObservation>();
         foreach (var instruction in body.Instructions)
         {
@@ -384,6 +387,7 @@ internal static class IlBodyEvidenceExtractor
                 throw new IlEvidenceException("IlTotalWorkLimitExceeded");
             var operand = CecilOperand(instruction, calls, budget, assemblyIdentity, limits);
             instructions.Add($"{instructions.Count.ToString(CultureInfo.InvariantCulture)}:{instruction.Offset.ToString("x", CultureInfo.InvariantCulture)}:{instruction.OpCode.Name}:{operand}");
+            opcodes.Add(instruction.OpCode.Name.ToString());
         }
         var locals = body.Variables
             .Select(variable => (variable.Index, Type: CecilLocalType(variable.VariableType)))
@@ -399,6 +403,7 @@ internal static class IlBodyEvidenceExtractor
         if (!budget.TryConsume(handlers.Length))
             throw new IlEvidenceException("IlTotalWorkLimitExceeded");
         var instructionsSha256 = DigestLines(instructions);
+        var opcodesSha256 = DigestLines(opcodes);
         var localsSha256 = DigestLines(locals.Select(local => $"{local.Index.ToString(CultureInfo.InvariantCulture)}:{local.Type}"));
         var exceptionRegionsSha256 = DigestLines(handlers);
         var canonical = CanonicalBody(body.MaxStackSize, body.InitLocals, instructions.Count, instructionsSha256, locals.Length, localsSha256, handlers.Length, exceptionRegionsSha256);
@@ -411,6 +416,7 @@ internal static class IlBodyEvidenceExtractor
             methodIdentity,
             instructions.Count,
             instructionsSha256,
+            opcodesSha256,
             locals.Length,
             localsSha256,
             handlers.Length,
@@ -623,7 +629,9 @@ internal static class IlBodyEvidenceExtractor
             + $":catch:{(handler.CatchType is null ? "-" : CecilTypeOperandIdentity(handler.CatchType))}";
     }
 
-    private static IlReaderResult ReadSystemReflectionMetadataBodies(
+    // Internal so the rewrite lane can independently verify each paired side
+    // before any join is attempted; see ReadCecilBodies.
+    internal static IlReaderResult ReadSystemReflectionMetadataBodies(
         byte[] bytes,
         IlBodyLimits limits,
         IlWorkBudget budget,
@@ -693,6 +701,7 @@ internal static class IlBodyEvidenceExtractor
             throw new IlEvidenceException("IlTextLimitExceeded");
 
         var instructions = new List<string>();
+        var opcodes = new List<string>();
         var calls = new List<IlCallObservation>();
         var instructionOffsets = new HashSet<int>();
         var branchTargets = new List<int>();
@@ -713,6 +722,7 @@ internal static class IlBodyEvidenceExtractor
             var opcode = first == 0xfe ? multi[il[position++]] : single[first];
             var operand = SrmOperand(reader, provider, il, ref position, offset, opcode, calls, branchTargets, budget, assemblyIdentity, limits);
             instructions.Add($"{instructions.Count.ToString(CultureInfo.InvariantCulture)}:{offset.ToString("x", CultureInfo.InvariantCulture)}:{opcode.Name!.ToString()}:{operand}");
+            opcodes.Add(opcode.Name!.ToString());
         }
         if (branchTargets.Any(target => !instructionOffsets.Contains(target)))
             throw new IlEvidenceException("MalformedIlBody");
@@ -752,6 +762,7 @@ internal static class IlBodyEvidenceExtractor
         if (!budget.TryConsume(handlers.Length))
             throw new IlEvidenceException("IlTotalWorkLimitExceeded");
         var instructionsSha256 = DigestLines(instructions);
+        var opcodesSha256 = DigestLines(opcodes);
         var localsSha256 = DigestLines(locals.Select(local => $"{local.Index.ToString(CultureInfo.InvariantCulture)}:{local.Type}"));
         var exceptionRegionsSha256 = DigestLines(handlers);
         var canonical = CanonicalBody(body.MaxStack, body.LocalVariablesInitialized, instructions.Count, instructionsSha256, locals.Length, localsSha256, handlers.Length, exceptionRegionsSha256);
@@ -764,6 +775,7 @@ internal static class IlBodyEvidenceExtractor
             methodIdentity,
             instructions.Count,
             instructionsSha256,
+            opcodesSha256,
             locals.Length,
             localsSha256,
             handlers.Length,
@@ -1178,7 +1190,9 @@ internal static class IlBodyEvidenceExtractor
         return ManagedMetadataExtractor.Sha256(File.ReadAllBytes(path));
     }
 
-    private static void ValidateLimits(IlBodyLimits limits)
+    // Internal so the rewrite lane applies the identical validation to the
+    // body limits it reuses before generating any provenance.
+    internal static void ValidateLimits(IlBodyLimits limits)
     {
         if (limits.MaxBodyCount <= 0
             || limits.MaxInstructionsPerBody <= 0
