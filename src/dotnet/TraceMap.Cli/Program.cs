@@ -272,7 +272,16 @@ public static class TraceMapCommand
                 ParsePositiveInt(values, "--compiled-max-types", 50_000),
                 ParsePositiveInt(values, "--compiled-max-members", 250_000),
                 ParsePositiveInt(values, "--compiled-max-text", 4_096),
-                ParsePositiveLong(values, "--compiled-max-work", 500_000)));
+                ParsePositiveLong(values, "--compiled-max-work", 500_000)),
+            PdbInputPaths: values.GetMany("--pdb-input"),
+            PdbInputLimits: new PdbInputLimits(
+                ParsePositiveInt(values, "--pdb-max-artifacts", 32),
+                ParsePositiveLong(values, "--pdb-max-file-bytes", 67_108_864),
+                ParsePositiveInt(values, "--pdb-max-documents", 50_000),
+                ParsePositiveInt(values, "--pdb-max-methods", 250_000),
+                ParsePositiveInt(values, "--pdb-max-sequence-points", 1_000_000),
+                ParsePositiveInt(values, "--pdb-max-text", 4_096),
+                ParsePositiveLong(values, "--pdb-max-work", 1_500_000)));
         var receiptRecorder = new ScanReceiptRecorder(
             scanOptions,
             sqlValidationSummaryPaths.Append(sqlValidationAsOf?.ToString("O") ?? string.Empty));
@@ -2698,7 +2707,7 @@ public static class TraceMapCommand
     {
         return """
             Usage:
-              tracemap scan --repo <path> --out <path> [--solution <path>] [--project <path>] [--include <glob>] [--exclude <glob>] [--target-framework <tfm>] [--restore] [--binlog <path> --binlog-commit-sha <sha>] [--compiled-input <assembly>] [--compiled-dependency <assembly>] [--compiled-binding-receipt <json>] [--sql-validation-summary <path>]
+              tracemap scan --repo <path> --out <path> [--solution <path>] [--project <path>] [--include <glob>] [--exclude <glob>] [--target-framework <tfm>] [--restore] [--binlog <path> --binlog-commit-sha <sha>] [--compiled-input <assembly>] [--compiled-dependency <assembly>] [--compiled-binding-receipt <json>] [--pdb-input <pdb>] [--sql-validation-summary <path>]
 
             Required:
               --repo <path>   Repository or folder to scan.
@@ -2719,6 +2728,7 @@ public static class TraceMapCommand
                                        Explicit dependency candidate admitted under the same bounded policy. Repeatable.
               --compiled-binding-receipt <path>
                                        Optional compiled-input-binding-set.v1 receipt. Repeatable.
+              --pdb-input <path>       Explicit portable or Windows PDB input. Repeatable; never discovered.
               --compiled-max-artifacts <count>
               --compiled-max-file-bytes <count>
               --compiled-max-types <count>
@@ -2726,6 +2736,14 @@ public static class TraceMapCommand
               --compiled-max-text <count>
               --compiled-max-work <count>
                                        Positive deterministic compiled-input limits; max-text must be at least 71.
+              --pdb-max-artifacts <count>
+              --pdb-max-file-bytes <count>
+              --pdb-max-documents <count>
+              --pdb-max-methods <count>
+              --pdb-max-sequence-points <count>
+              --pdb-max-text <count>
+              --pdb-max-work <count>
+                                       Positive deterministic PDB-input limits; max-text must be at least 71.
               --sql-validation-summary <path>
                                        Explicit sql-validation-summary/v1 input. Repeatable; never executed.
               --sql-validation-as-of <timestamp>

@@ -215,6 +215,7 @@ public static class ScanEngine
             .OrderBy(path => path, StringComparer.Ordinal)
             .ToArray();
         var compiledEvaluation = ManagedMetadataExtractor.Evaluate(repoPath, git.CommitSha, options, cancellationToken);
+        var pdbEvaluation = PortablePdbExtractor.Evaluate(repoPath, options, compiledEvaluation, cancellationToken);
         var projects = inventory
             .Where(item => item.Kind is "Project" or "SqlProject" or "VisualBasicProject")
             .Select(item => item.RelativePath)
@@ -261,12 +262,19 @@ public static class ScanEngine
         var provisionalBuildStatus = nugetLockfileReducedCoverage ? "FailedOrPartial" : semanticBuildStatus;
         var provisionalKnownGaps = semanticKnownGaps
             .Concat(nugetLockfileGaps)
+            .Concat(pdbEvaluation.KnownGaps)
             .OrderBy(gap => gap, StringComparer.Ordinal)
             .Distinct(StringComparer.Ordinal)
             .ToArray();
 
         var provisionalManifest = new ScanManifest(
-            CreateScanId(git, inventory, sourceSnapshotDigest, options, compiledEvaluation.Provenance?.BoundedInputSha256),
+            CreateScanId(
+                git,
+                inventory,
+                sourceSnapshotDigest,
+                options,
+                compiledEvaluation.Provenance?.BoundedInputSha256,
+                pdbEvaluation.Provenance?.BoundedInputSha256),
             git.RepoName,
             git.RemoteUrl,
             git.Branch,
@@ -283,7 +291,10 @@ public static class ScanEngine
             FactFactory.Hash(repoPath, 32),
             string.IsNullOrWhiteSpace(git.GitRootPath) ? null : FactFactory.Hash(Path.GetFullPath(git.GitRootPath), 32),
             sourceSnapshotDigest,
-            compiledEvaluation.Provenance);
+            compiledEvaluation.Provenance,
+            SourceMetadataReconciliation: null,
+            PdbInputProvenance: pdbEvaluation.Provenance,
+            PdbEvidenceSummary: null);
 
         var binlogFacts = MsBuildBinlogExtractor.Extract(repoPath, provisionalManifest, options.BinlogPaths);
         var binlogGaps = binlogFacts
@@ -331,6 +342,7 @@ public static class ScanEngine
                     binlogFacts,
                     migrationSyntaxFallback,
                     compiledEvaluation,
+                    pdbEvaluation,
                     progress,
                     cancellationToken);
                 cancellationToken.ThrowIfCancellationRequested();
@@ -404,7 +416,8 @@ public static class ScanEngine
 
         manifest = manifest with
         {
-            SourceMetadataReconciliation = SourceMetadataReconciler.BuildSummary(manifest, facts)
+            SourceMetadataReconciliation = SourceMetadataReconciler.BuildSummary(manifest, facts),
+            PdbEvidenceSummary = PortablePdbExtractor.BuildSummary(manifest, facts)
         };
 
         scanOperation.RecordItems(facts.Count);
@@ -425,6 +438,15 @@ public static class ScanEngine
         string sourceSnapshotDigest,
         ScanOptions options,
         string? compiledBoundedInputSha256)
+        => CreateScanId(git, inventory, sourceSnapshotDigest, options, compiledBoundedInputSha256, null);
+
+    private static string CreateScanId(
+        GitMetadata git,
+        IReadOnlyList<FileInventoryItem> inventory,
+        string sourceSnapshotDigest,
+        ScanOptions options,
+        string? compiledBoundedInputSha256,
+        string? pdbBoundedInputSha256)
     {
         var signature = string.Join('\n', inventory.Select(item => $"{item.RelativePath}|{item.Kind}|{item.SizeBytes}"));
         var binlogSignature = MsBuildBinlogExtractor.CreateInputSignature(options.BinlogPaths, repoPath: options.RepoPath);
@@ -436,7 +458,8 @@ public static class ScanEngine
             FrameValues(string.IsNullOrWhiteSpace(options.TargetFramework) ? [] : [options.TargetFramework.Trim()]),
             $"restore={options.Restore.ToString().ToLowerInvariant()}",
             FrameValues(string.IsNullOrWhiteSpace(options.BinlogCommitSha) ? [] : [options.BinlogCommitSha.Trim()]),
-            $"compiled={compiledBoundedInputSha256 ?? string.Empty}");
+            $"compiled={compiledBoundedInputSha256 ?? string.Empty}",
+            $"pdb={pdbBoundedInputSha256 ?? string.Empty}");
         var repoIdentity = string.IsNullOrWhiteSpace(git.RemoteUrl) ? git.RepoName : git.RemoteUrl;
         return "scan-" + FactFactory.Hash($"{repoIdentity}|{git.CommitSha}|{sourceSnapshotDigest}|{signature}|{optionSignature}|{binlogSignature}", 20);
     }
@@ -635,6 +658,7 @@ public static class ScanEngine
         IReadOnlyList<CodeFact> binlogFacts,
         FrameworkMigrationEvidenceExtractor.SyntaxProtectionResult migrationSyntaxFallback,
         CompiledInputEvaluation compiledEvaluation,
+        PdbInputEvaluation pdbEvaluation,
         ScanProgressReporter? progress = null,
         CancellationToken cancellationToken = default)
     {
@@ -673,7 +697,8 @@ public static class ScanEngine
 
         foreach (var gap in knownGaps)
         {
-            if (gap.StartsWith("Compiled metadata coverage reduced:", StringComparison.Ordinal))
+            if (gap.StartsWith("Compiled metadata coverage reduced:", StringComparison.Ordinal)
+                || gap.StartsWith("PDB coverage reduced:", StringComparison.Ordinal))
                 continue;
             facts.Add(FactFactory.Create(
                 manifest,
@@ -689,6 +714,7 @@ public static class ScanEngine
 
         var compiledFacts = ManagedMetadataExtractor.MaterializeFacts(manifest, compiledEvaluation);
         facts.AddRange(compiledFacts);
+        facts.AddRange(PortablePdbExtractor.MaterializeFacts(repoPath, manifest, pdbEvaluation, compiledFacts, inventory));
 
         foreach (var item in inventory)
         {
