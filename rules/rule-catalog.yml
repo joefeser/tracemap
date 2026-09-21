@@ -55,6 +55,47 @@ rules:
       - An exact edge proves identity reconciliation only for this scan; it does not prove PDB correspondence, IL ownership, rewrite equivalence, runtime loading, execution, dispatch, reachability, behavior, or impact.
       - Reconciliation coverage is independent of source analysis level and never erases, upgrades, or otherwise changes source-derived facts.
 
+  - id: dotnet.compiled.pdb-input.v1
+    status: active
+    name: Explicit bounded PDB input
+    description: Records an explicitly declared PDB admitted under deterministic byte, format, work, and artifact limits and bound to exactly one admitted managed assembly through its exact CodeView and PDB content identity.
+    evidenceTier: Tier2Structural
+    emits: [PdbInputAdmitted, AnalysisGap]
+    limitations:
+      - Admission proves only that the explicitly supplied bounded bytes were inspected; it does not prove source ownership, build freshness, authenticity, runtime behavior, or completeness.
+      - File name, path proximity, timestamp, and metadata token alone never bind a PDB to an assembly.
+      - Missing, malformed, over-budget, unsupported, unbound, mismatched, or ambiguously matched inputs emit Tier4Unknown gaps and no positive identity edge.
+
+  - id: dotnet.compiled.pdb-identity.v1
+    status: active
+    name: Metadata to PDB identity reconciliation
+    description: Records PDB document and method identities and links a PDB method to exactly one admitted metadata method only when the PDB content identity, PE CodeView entry, module-local method row, and acceptable compiled provenance all agree.
+    evidenceTier: Tier2Structural
+    emits: [PdbDocumentDeclared, PdbMethodDeclared, MetadataPdbMethodReconciled, PdbSourceDocumentReconciled, AnalysisGap]
+    limitations:
+      - PDB method rows and metadata tokens are module-local locations and cannot establish identity without the exact PDB-to-assembly binding.
+      - Document names are not emitted by default; source correspondence requires one exact checksum candidate and never uses basename or path proximity to select a file.
+      - Metadata-to-PDB reconciliation does not prove execution, reachability, behavioral equivalence, IL ownership beyond the bound method location, or rewrite preservation.
+
+  - id: dotnet.compiled.sequence-point.v1
+    status: active
+    name: Portable PDB sequence-point evidence
+    description: Records exact ordered PDB sequence points with method identity, IL offset, document identity, hidden state, and source range under a bound PDB input.
+    evidenceTier: Tier2Structural
+    emits: [PdbSequencePointDeclared, AnalysisGap]
+    limitations:
+      - A sequence point is compiler-produced debug metadata; it does not prove statement execution, control flow, branch behavior, call relationships, or source semantics.
+      - Hidden points and repeated or non-monotonic source ranges remain explicit data and are not rewritten into convenient source claims.
+
+  - id: dotnet.compiled.pdb-gap.v1
+    status: active
+    name: PDB coverage gap
+    description: Records bounded missing, malformed, mismatched, ambiguous, unsupported, reader-disagreed, source-unmatched, or limit-exhausted PDB coverage.
+    evidenceTier: Tier4Unknown
+    emits: [AnalysisGap]
+    limitations:
+      - The gap reduces only the explicitly requested PDB lane; it does not prove source, metadata, document, method, or sequence-point absence and never alters source analysis level.
+
   - id: adapter.scan-truth.conformance.v1
     name: Cross-adapter scan truth conformance
     description: Validates bounded synthetic adapter outputs against the shared v1 repository authority, analyzed-byte identity, determinism, artifact, coverage, exclusion, gap, path, and persistence contract.
