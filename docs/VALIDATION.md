@@ -2675,6 +2675,13 @@ therefore produce different identities, and the fixture matrix proves each
 pair. The digest is byte-layout sensitive by design; this slice makes no
 semantic-equivalence or rewrite claim in either direction.
 
+Short integer operands preserve signed `ldc.i4.s` constants and unsigned
+prefix bytes such as `unaligned.`. User-string digests hash the exact UTF-16
+code units in little-endian order, including unpaired surrogates; replacement
+fallback must not collapse distinct literal operands. Regression fixtures
+cover all three valid `unaligned.` alignments and distinct high-surrogate,
+low-surrogate, and replacement-character operands.
+
 Mono.Cecil is not the sole oracle. Mono.Cecil and an independent
 System.Reflection.Metadata single-pass raw-IL reader (opcode tables plus
 metadata token resolution) each rebuild the complete canonical encoding for

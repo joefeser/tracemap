@@ -114,7 +114,7 @@ rules:
       - The canonical digest is byte-layout sensitive by design. Equal opcode sequences with different member, string, constant, branch, or switch operands therefore produce different identities, and this rule makes no claim that differently laid out bodies are semantically different or equivalent; rewrite equivalence is a separate deferred contract.
       - Mono.Cecil is not the sole oracle. Mono.Cecil and an independent System.Reflection.Metadata raw-IL reader must agree on the complete canonical body encoding, including call-target identities, locals, exception-region boundaries, and max stack, or the input's positive IL facts are withheld.
       - Non-call token operands such as field and signature tokens are committed by raw module-local token only; their member identities are not resolved in this rule and must not be promoted to positive member evidence.
-      - IL user-string literals are committed by length and SHA-256 digest only and are never retained verbatim, because literal text is unbounded and may contain secrets.
+      - IL user-string literals are committed by length and SHA-256 digest of exact little-endian UTF-16 code units, preserving unpaired surrogates without replacement fallback; literals are never retained verbatim, because literal text is unbounded and may contain secrets.
       - Abstract, external, PInvoke, runtime-implemented, and bodyless methods emit no body fact; this is a structural observation about the method row, not a claim that no code exists.
       - Rewritten-member identity, metadata-token retargeting across rewrites, rewritten PDB offsets, ILAsm/ILDAsm parity, and the extended mutation matrix from #766 remain explicitly deferred and out of scope.
 

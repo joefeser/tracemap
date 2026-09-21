@@ -436,7 +436,15 @@ internal static class IlBodyEvidenceExtractor
                     throw new IlEvidenceException("IlTotalWorkLimitExceeded");
                 return $"sw:{targets.Length.ToString(CultureInfo.InvariantCulture)}[{string.Join(",", targets.Select(target => $"0x{target.Offset:x}"))}]";
             case OperandType.ShortInlineI:
-                return $"i:{((sbyte)instruction.Operand!).ToString(CultureInfo.InvariantCulture)}";
+                // ldc.i4.s is signed; prefix operands such as unaligned.
+                // are stored by Cecil as unsigned bytes.
+                var shortInteger = instruction.Operand switch
+                {
+                    sbyte signed => (int)signed,
+                    byte unsigned => unsigned,
+                    _ => throw new IlEvidenceException("MalformedIlBody")
+                };
+                return $"i:{shortInteger.ToString(CultureInfo.InvariantCulture)}";
             case OperandType.InlineI:
                 return $"i:{((int)instruction.Operand!).ToString(CultureInfo.InvariantCulture)}";
             case OperandType.InlineI8:
@@ -822,7 +830,11 @@ internal static class IlBodyEvidenceExtractor
                 }
                 return $"sw:{count.ToString(CultureInfo.InvariantCulture)}[{string.Join(",", targets)}]";
             case System.Reflection.Emit.OperandType.ShortInlineI:
-                return $"i:{ReadSByte(il, ref position).ToString(CultureInfo.InvariantCulture)}";
+                var shortInteger = ReadSByte(il, ref position);
+                var integer = opcode == System.Reflection.Emit.OpCodes.Ldc_I4_S
+                    ? (int)shortInteger
+                    : unchecked((byte)shortInteger);
+                return $"i:{integer.ToString(CultureInfo.InvariantCulture)}";
             case System.Reflection.Emit.OperandType.InlineI:
                 return $"i:{ReadInt32(il, ref position).ToString(CultureInfo.InvariantCulture)}";
             case System.Reflection.Emit.OperandType.InlineI8:
@@ -1019,8 +1031,16 @@ internal static class IlBodyEvidenceExtractor
             throw new IlEvidenceException("MalformedIlBody");
     }
 
-    private static string UserStringDigest(string value) =>
-        ManagedMetadataExtractor.Sha256(Encoding.Unicode.GetBytes(value));
+    private static string UserStringDigest(string value)
+    {
+        // User strings contain UTF-16 code units, including unpaired
+        // surrogates. Encoding.Unicode replaces those with U+FFFD and would
+        // collapse distinct literal operands into the same body identity.
+        var bytes = new byte[checked(value.Length * sizeof(char))];
+        for (var index = 0; index < value.Length; index++)
+            BinaryPrimitives.WriteUInt16LittleEndian(bytes.AsSpan(index * sizeof(char), sizeof(char)), value[index]);
+        return ManagedMetadataExtractor.Sha256(bytes);
+    }
 
     private static string DigestLines(IEnumerable<string> lines) =>
         ManagedMetadataExtractor.Sha256(Encoding.UTF8.GetBytes(string.Join(";\n", lines)));
