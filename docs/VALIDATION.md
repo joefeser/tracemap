@@ -2776,8 +2776,12 @@ An edge is emitted only when the complete exact assembly-scoped method
 identity text occurs exactly once on each side. The edge records both assembly
 identities, both module-local tokens (with `tokenRetargeted`), both canonical
 body identities and digests, a relationship kind — `unchanged`,
-`operand-only-change`, or `instruction-stream-change` — and
-`opcodeSequencePreserved`. Call-site retargets are recorded per ordinal
+`operand-only-change`, `body-structure-change`,
+`operand-and-body-structure-change`, or `instruction-stream-change` — and
+`opcodeSequencePreserved`. `operand-only-change` additionally requires every
+non-instruction body component (locals, exception regions, max stack,
+init-locals) to match, so structural body changes are never mislabeled as
+operand-only. Call-site retargets are recorded per ordinal
 alignment (both tokens, both target identities, both IL offsets) only when
 instruction counts and opcode sequences are exactly equal; the shared
 opcode-name digest computed by both readers proves the alignment. Zero or

@@ -2773,6 +2773,13 @@ public static class TraceMapCommand
               --il-max-exception-regions-per-body <count>
               --il-max-text <count>
               --il-max-work <count>
+                                       Positive deterministic IL body/call limits shared with the rewrite lane.
+              --il-rewrite-evidence     Compare operator-declared before/after managed assembly pairs and emit bounded IL rewrite identity edges. The scanner never performs or attributes the rewrite; both sides must independently pass the dual-reader IL body contract.
+              --il-rewrite-before <path>
+              --il-rewrite-after <path>
+                                       Explicit paired inputs. Repeatable; the nth before and after declarations form one ordinal pair and both lists must have equal length.
+              --il-max-rewrite-pairs <count>
+                                       Positive deterministic rewrite-pair limit; declared pairs beyond it emit bounded limit gaps.
               --pdb-max-artifacts <count>
               --pdb-max-file-bytes <count>
               --pdb-max-documents <count>

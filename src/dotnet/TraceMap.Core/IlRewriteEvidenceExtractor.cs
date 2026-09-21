@@ -72,9 +72,16 @@ internal static class IlRewriteEvidenceExtractor
 
             for (var index = limits.MaxPairCount; index < declared.Count; index++)
             {
+                var overflow = declared[index];
+                // The omitted pair's declared locators participate in the
+                // outcome and therefore the bounded-input digest, so two
+                // scans that omit different declared pairs never share a
+                // rewrite provenance digest or scan identity.
                 evaluated.Add(SyntheticPairGap(
                     $"rewrite-pair-{(index + 1).ToString("D3", CultureInfo.InvariantCulture)}",
-                    "IlRewritePairCountLimitExceeded"));
+                    "IlRewritePairCountLimitExceeded",
+                    beforeSafeLocator: DeclaredLocator(options.RepoPath, overflow.Before, "rewrite-before", compiledLimits),
+                    afterSafeLocator: DeclaredLocator(options.RepoPath, overflow.After, "rewrite-after", compiledLimits)));
             }
         }
 
@@ -292,6 +299,18 @@ internal static class IlRewriteEvidenceExtractor
         return projected.Length > 256 ? projected[..256] : projected;
     }
 
+    private static string DeclaredLocator(string repoPath, string path, string role, CompiledInputLimits limits)
+    {
+        try
+        {
+            return ManagedMetadataExtractor.CreateDescriptor(repoPath, path, role, limits).SafeLocator;
+        }
+        catch (Exception exception) when (exception is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            return ProjectInvalidDeclarationLocator(role, path);
+        }
+    }
+
     private static SideAdmission AdmitSide(
         string repoPath,
         string path,
@@ -422,9 +441,28 @@ internal static class IlRewriteEvidenceExtractor
         var unchanged = string.Equals(before.BodyIdentity, after.BodyIdentity, StringComparison.Ordinal);
         var opcodeSequencePreserved = before.InstructionCount == after.InstructionCount
             && string.Equals(before.OpcodesSha256, after.OpcodesSha256, StringComparison.Ordinal);
-        var relationshipKind = unchanged
-            ? "unchanged"
-            : opcodeSequencePreserved ? "operand-only-change" : "instruction-stream-change";
+        // Non-instruction body components (locals, exception regions, max
+        // stack, init-locals) can change while every opcode stays equal. A
+        // changed body must never be labeled operand-only unless the complete
+        // non-instruction structure also matches.
+        var nonInstructionStructureEqual = before.LocalCount == after.LocalCount
+            && string.Equals(before.LocalsSha256, after.LocalsSha256, StringComparison.Ordinal)
+            && before.ExceptionRegionCount == after.ExceptionRegionCount
+            && string.Equals(before.ExceptionRegionsSha256, after.ExceptionRegionsSha256, StringComparison.Ordinal)
+            && string.Equals(before.MaxStack, after.MaxStack, StringComparison.Ordinal)
+            && before.InitLocals == after.InitLocals;
+        var instructionsEqual = string.Equals(before.InstructionsSha256, after.InstructionsSha256, StringComparison.Ordinal);
+        string relationshipKind;
+        if (unchanged)
+            relationshipKind = "unchanged";
+        else if (!opcodeSequencePreserved)
+            relationshipKind = "instruction-stream-change";
+        else if (!instructionsEqual && nonInstructionStructureEqual)
+            relationshipKind = "operand-only-change";
+        else if (instructionsEqual)
+            relationshipKind = "body-structure-change";
+        else
+            relationshipKind = "operand-and-body-structure-change";
         // Equal opcode-name streams produce exactly one call observation per
         // call-family instruction in both readers, so the ordinal alignment
         // below is exact; any count mismatch means the streams were not equal
@@ -622,11 +660,16 @@ internal static class IlRewriteEvidenceExtractor
         nameof(IlRewriteEvidenceExtractor),
         ScannerVersions.IlRewriteEvidenceExtractor);
 
-    private static EvaluatedIlRewritePair SyntheticPairGap(string pairId, string gapKind, string? detail = null) => new(
+    private static EvaluatedIlRewritePair SyntheticPairGap(
+        string pairId,
+        string gapKind,
+        string? detail = null,
+        string? beforeSafeLocator = null,
+        string? afterSafeLocator = null) => new(
         new IlRewritePairOutcome(
             pairId,
-            "none",
-            "none",
+            beforeSafeLocator ?? "none",
+            afterSafeLocator ?? "none",
             GapOutcome(gapKind),
             null,
             null,

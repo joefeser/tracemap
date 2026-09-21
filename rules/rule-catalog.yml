@@ -144,7 +144,7 @@ rules:
   - id: dotnet.compiled.il-rewrite.v1
     status: active
     name: Bounded before/after IL rewrite identity edge
-    description: Records an exact edge between the original and rewritten form of one metadata method identity across an explicitly declared before/after assembly pair, where both sides are independently proven under the dual-reader IL body contract and the complete assembly-scoped method identity occurs exactly once on each side; the edge carries both assembly, member, body, and module-local token identities plus a relationship kind (unchanged, operand-only-change, or instruction-stream-change) and ordinal-aligned call-site retargets.
+    description: Records an exact edge between the original and rewritten form of one metadata method identity across an explicitly declared before/after assembly pair, where both sides are independently proven under the dual-reader IL body contract and the complete assembly-scoped method identity occurs exactly once on each side; the edge carries both assembly, member, body, and module-local token identities plus a relationship kind (unchanged, operand-only-change, body-structure-change, operand-and-body-structure-change, or instruction-stream-change) and ordinal-aligned call-site retargets.
     evidenceTier: Tier2Structural
     emits: [ManagedIlRewriteObserved, ManagedIlCallRetargetObserved]
     limitations:
@@ -152,6 +152,7 @@ rules:
       - The scanner never performs or attributes the rewrite. Before and after assemblies are explicit operator-declared inputs; the edge makes no claim about what tool produced the change or why.
       - Joins use complete exact assembly-scoped method identity text only. Zero or one-side-only membership, more than one candidate on either side, differing assembly/module identities, disagreement, malformed shapes, and budget exhaustion emit Tier4 gaps and never guessed joins; insertion and removal relationships are detected only as bounded one-side-only gaps, not edges.
       - Per-call retarget detail requires equal instruction counts and identical opcode sequences on both sides; otherwise the edge records instruction-stream-change with no per-instruction claim. Call retargets record module-local tokens, which are locations within their own module, never stable cross-build identities.
+      - Relationship kinds are exact classifications, not equivalence claims. operand-only-change additionally requires every non-instruction body component (locals, exception regions, max stack, and init-locals) to match; a change limited to those components is body-structure-change, and a change to both instruction operands and those components is operand-and-body-structure-change. No kind proves semantic equivalence or behavior preservation.
       - Both sides must independently satisfy the dotnet.compiled.il-body.v1 dual-reader agreement before any edge is emitted; a disputed or withheld side withholds the whole pair.
       - Rewritten PDB offsets and sequence-point validity, ILAsm/ILDAsm parity, evaluation-stack-sensitive rewrites, and the broader ECMA-335 mutation matrix from #766 remain explicitly deferred and out of scope.
 

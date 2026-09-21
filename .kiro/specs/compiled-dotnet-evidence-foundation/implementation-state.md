@@ -620,3 +620,17 @@ ordinal outcomes without dedupe, and the bounded-input digest commits the
 effective `CompiledInputLimits` admission policy. Four regression tests
 cover the behaviors. Local re-validation: focused
 `IlRewriteEvidenceExtractorTests` 27 passed; build zero warnings/errors.
+
+Second review remediation on 2026-09-21: the Codex review of PR #776 filed
+two P1 findings and one P3; all are patched. Omitted overflow pairs now
+commit their declared privacy-projected locators to the synthetic outcome
+and therefore the bounded-input digest, so scans omitting different declared
+pairs never share a rewrite provenance digest or scan identity. The
+relationship classifier no longer labels non-instruction structural body
+changes (locals, exception regions, max stack, init-locals) as
+`operand-only-change`: those are `body-structure-change`, combined operand
+and structural changes are `operand-and-body-structure-change`, and the rule
+catalog, fixture catalog (`CS-ILRW-STRUCTURE-009`), and docs document the
+exact-kind contract. `tracemap scan --help` documents the four rewrite
+options including the equal-length ordinal pair requirement. Three
+regression tests cover the behaviors (30 focused rewrite tests total).
