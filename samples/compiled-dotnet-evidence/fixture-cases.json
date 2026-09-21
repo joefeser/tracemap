@@ -1,201 +1,116 @@
 {
   "schemaVersion": "compiled-dotnet-fixture-cases.v4",
   "cases": [
-    {
-      "id": "CS-OVERLOAD-001",
-      "language": "csharp",
-      "shape": "same-name overloads retain complete parameter and return signatures"
-    },
-    {
-      "id": "CS-GENERIC-002",
-      "language": "csharp",
-      "shape": "generic type, generic method, and nested generic type retain arity"
-    },
-    {
-      "id": "CS-INTERFACE-003",
-      "language": "csharp",
-      "shape": "interface, explicit implementation, virtual member, and override remain distinct declarations"
-    },
-    {
-      "id": "CS-SIGNATURE-004",
-      "language": "csharp",
-      "shape": "ref, out, in, array, nullable, and pointer shapes survive metadata normalization"
-    },
-    {
-      "id": "CS-GENERATED-005",
-      "language": "csharp",
-      "shape": "event, lambda, async, and iterator compiler-generated declarations are labeled without source reconciliation"
-    },
-    {
-      "id": "VB-OVERLOAD-001",
-      "language": "visualbasic",
-      "shape": "overloads, default indexed property, interface implementation, override, ByRef, array, module, and generic member"
-    },
-    {
-      "id": "FS-SHAPES-001",
-      "language": "fsharp",
-      "shape": "curried, tupled, record, union, generic, and CompiledName metadata shapes"
-    },
-    {
-      "id": "NS-COLLISION-001",
-      "language": "cross-language",
-      "shape": "same simple type and member names in distinct metadata namespaces remain distinct"
-    },
-    {
-      "id": "CS-RECON-SHAPES-006",
-      "language": "csharp",
-      "shape": "constructors, indexer, explicit event accessors, optional parameter, and exact complete source identities"
-    },
-    {
-      "id": "VB-RECON-SHAPES-002",
-      "language": "visualbasic",
-      "shape": "constructors and optional parameters retain exact source and metadata declaration state"
-    }
+    { "id": "CS-OVERLOAD-001", "language": "csharp", "shape": "same-name overloads retain complete parameter and return signatures" },
+    { "id": "CS-GENERIC-002", "language": "csharp", "shape": "generic type, generic method, and nested generic type retain arity" },
+    { "id": "CS-INTERFACE-003", "language": "csharp", "shape": "interface, explicit implementation, virtual member, and override remain distinct declarations" },
+    { "id": "CS-SIGNATURE-004", "language": "csharp", "shape": "ref, out, in, array, nullable, and pointer shapes survive metadata normalization" },
+    { "id": "CS-GENERATED-005", "language": "csharp", "shape": "event, lambda, async, and iterator compiler-generated declarations are labeled without source reconciliation" },
+    { "id": "VB-OVERLOAD-001", "language": "visualbasic", "shape": "overloads, default indexed property, interface implementation, override, ByRef, array, module, and generic member" },
+    { "id": "FS-SHAPES-001", "language": "fsharp", "shape": "curried, tupled, record, union, generic, and CompiledName metadata shapes" },
+    { "id": "NS-COLLISION-001", "language": "cross-language", "shape": "same simple type and member names in distinct metadata namespaces remain distinct" },
+    { "id": "CS-RECON-SHAPES-006", "language": "csharp", "shape": "constructors, indexer, explicit event accessors, optional parameter, and exact complete source identities" },
+    { "id": "VB-RECON-SHAPES-002", "language": "visualbasic", "shape": "constructors and optional parameters retain exact source and metadata declaration state" }
   ],
   "reconciliationCases": [
     {
       "id": "CS-RECON-EXACT-001",
       "language": "csharp",
-      "expectedSourceIdentity": "source:C#|assembly:name:23:CompiledEvidence.CSharp|version:7:1.0.0.0|culture:7:neutral|publicKeyToken:4:null|module:27:CompiledEvidence.CSharp.dll|targetFramework:25:.NETCoreApp,Version=v10.0|type:namespace:38:TraceMap.CompiledFixtures.CSharp.Alpha|names:8:Widget`1|arity:1|method:8:Overload|arity:0|call:default|hasThis:true|explicitThis:false|(type(namespace:6:System|names:5:Int32))->type(namespace:6:System|names:5:Int32)",
-      "expectedMetadataIdentity": "assembly:name:23:CompiledEvidence.CSharp|version:7:1.0.0.0|culture:7:neutral|publicKeyToken:4:null|module:27:CompiledEvidence.CSharp.dll|targetFramework:25:.NETCoreApp,Version=v10.0|type:namespace:38:TraceMap.CompiledFixtures.CSharp.Alpha|names:8:Widget`1|arity:1|method:8:Overload|arity:0|call:default|hasThis:true|explicitThis:false|(type(namespace:6:System|names:5:Int32))->type(namespace:6:System|names:5:Int32)",
+      "expectedSourceIdentity": "source:C#|assembly:name:23:CompiledEvidence.CSharp|version:7:1.0.0.0|culture:7:neutral|publicKeyToken:4:null|module:27:CompiledEvidence.CSharp.dll|targetFramework:25:.NETCoreApp,Version=v10.0|type:namespace:38:TraceMap.CompiledFixtures.CSharp.Alpha|names:8:Widget`1|arity:1|method:8:Overload|arity:0|call:default|hasThis:true|explicitThis:false|(type(namespace:6:System|names:5:Int32))-\u003Etype(namespace:6:System|names:5:Int32)",
+      "expectedMetadataIdentity": "assembly:name:23:CompiledEvidence.CSharp|version:7:1.0.0.0|culture:7:neutral|publicKeyToken:4:null|module:27:CompiledEvidence.CSharp.dll|targetFramework:25:.NETCoreApp,Version=v10.0|type:namespace:38:TraceMap.CompiledFixtures.CSharp.Alpha|names:8:Widget`1|arity:1|method:8:Overload|arity:0|call:default|hasThis:true|explicitThis:false|(type(namespace:6:System|names:5:Int32))-\u003Etype(namespace:6:System|names:5:Int32)",
       "expectedRuleId": "dotnet.compiled.source-identity.v1",
       "expectedTier": "Tier1Semantic",
       "expectedOutcome": "exact-one-candidate",
       "expectedGaps": [],
-      "nonClaims": [
-        "runtime-execution",
-        "dispatch",
-        "reachability",
-        "pdb-correspondence",
-        "il-ownership",
-        "rewrite-equivalence"
-      ]
+      "nonClaims": ["runtime-execution", "dispatch", "reachability", "pdb-correspondence", "il-ownership", "rewrite-equivalence"]
     },
     {
       "id": "VB-RECON-EXACT-002",
       "language": "visualbasic",
-      "expectedSourceIdentity": "source:Visual Basic|assembly:name:28:CompiledEvidence.VisualBasic|version:7:1.0.0.0|culture:7:neutral|publicKeyToken:4:null|module:32:CompiledEvidence.VisualBasic.dll|targetFramework:25:.NETCoreApp,Version=v10.0|type:namespace:37:TraceMap.CompiledFixtures.VisualBasic|names:6:Widget|arity:0|method:6:Shapes|arity:0|call:default|hasThis:true|explicitThis:false|(type(namespace:6:System|names:5:Int32)&,type(namespace:6:System|names:5:Int32)[])->type(namespace:6:System|names:4:Void)",
-      "expectedMetadataIdentity": "assembly:name:28:CompiledEvidence.VisualBasic|version:7:1.0.0.0|culture:7:neutral|publicKeyToken:4:null|module:32:CompiledEvidence.VisualBasic.dll|targetFramework:25:.NETCoreApp,Version=v10.0|type:namespace:37:TraceMap.CompiledFixtures.VisualBasic|names:6:Widget|arity:0|method:6:Shapes|arity:0|call:default|hasThis:true|explicitThis:false|(type(namespace:6:System|names:5:Int32)&,type(namespace:6:System|names:5:Int32)[])->type(namespace:6:System|names:4:Void)",
+      "expectedSourceIdentity": "source:Visual Basic|assembly:name:28:CompiledEvidence.VisualBasic|version:7:1.0.0.0|culture:7:neutral|publicKeyToken:4:null|module:32:CompiledEvidence.VisualBasic.dll|targetFramework:25:.NETCoreApp,Version=v10.0|type:namespace:37:TraceMap.CompiledFixtures.VisualBasic|names:6:Widget|arity:0|method:6:Shapes|arity:0|call:default|hasThis:true|explicitThis:false|(type(namespace:6:System|names:5:Int32)\u0026,type(namespace:6:System|names:5:Int32)[])-\u003Etype(namespace:6:System|names:4:Void)",
+      "expectedMetadataIdentity": "assembly:name:28:CompiledEvidence.VisualBasic|version:7:1.0.0.0|culture:7:neutral|publicKeyToken:4:null|module:32:CompiledEvidence.VisualBasic.dll|targetFramework:25:.NETCoreApp,Version=v10.0|type:namespace:37:TraceMap.CompiledFixtures.VisualBasic|names:6:Widget|arity:0|method:6:Shapes|arity:0|call:default|hasThis:true|explicitThis:false|(type(namespace:6:System|names:5:Int32)\u0026,type(namespace:6:System|names:5:Int32)[])-\u003Etype(namespace:6:System|names:4:Void)",
       "expectedRuleId": "dotnet.compiled.source-identity.v1",
       "expectedTier": "Tier1Semantic",
       "expectedOutcome": "exact-one-candidate",
       "expectedGaps": [],
-      "nonClaims": [
-        "runtime-execution",
-        "dispatch",
-        "reachability",
-        "pdb-correspondence",
-        "il-ownership",
-        "rewrite-equivalence"
-      ]
+      "nonClaims": ["runtime-execution", "dispatch", "reachability", "pdb-correspondence", "il-ownership", "rewrite-equivalence"]
     },
     {
       "id": "FS-RECON-UNSUPPORTED-003",
       "language": "fsharp",
       "expectedSourceIdentity": null,
-      "expectedMetadataIdentity": "assembly:name:23:CompiledEvidence.FSharp|version:7:1.0.0.0|culture:7:neutral|publicKeyToken:4:null|module:27:CompiledEvidence.FSharp.dll|targetFramework:25:.NETCoreApp,Version=v10.0|type:namespace:32:TraceMap.CompiledFixtures.FSharp|names:9:Functions|arity:0|method:18:RenamedForMetadata|arity:1|call:default|hasThis:false|explicitThis:false|(!!0)->!!0",
+      "expectedMetadataIdentity": "assembly:name:23:CompiledEvidence.FSharp|version:7:1.0.0.0|culture:7:neutral|publicKeyToken:4:null|module:27:CompiledEvidence.FSharp.dll|targetFramework:25:.NETCoreApp,Version=v10.0|type:namespace:32:TraceMap.CompiledFixtures.FSharp|names:9:Functions|arity:0|method:18:RenamedForMetadata|arity:1|call:default|hasThis:false|explicitThis:false|(!!0)-\u003E!!0",
       "expectedRuleId": "dotnet.compiled.source-identity.v1",
       "expectedTier": "Tier4Unknown",
       "expectedOutcome": "unsupported-source-adapter",
-      "expectedGaps": [
-        "SourceMetadataReconciliationUnsupportedLanguage"
-      ],
-      "nonClaims": [
-        "source-identity",
-        "source-ownership",
-        "guessed-join"
-      ]
+      "expectedGaps": ["SourceMetadataReconciliationUnsupportedLanguage"],
+      "nonClaims": ["source-identity", "source-ownership", "guessed-join"]
     },
     {
       "id": "CS-RECON-ZERO-004",
       "language": "csharp",
-      "expectedSourceIdentity": "source:C#|assembly:name:23:CompiledEvidence.CSharp|version:7:1.0.0.0|culture:7:neutral|publicKeyToken:4:null|module:27:CompiledEvidence.CSharp.dll|targetFramework:25:.NETCoreApp,Version=v10.0|type:namespace:38:TraceMap.CompiledFixtures.CSharp.Alpha|names:8:Widget`1|arity:1|method:8:Overload|arity:0|call:default|hasThis:true|explicitThis:false|(type(namespace:6:System|names:5:Int32))->type(namespace:6:System|names:5:Int32)",
-      "expectedMetadataIdentity": "assembly:name:23:CompiledEvidence.CSharp|version:7:1.0.0.0|culture:7:neutral|publicKeyToken:4:null|module:27:CompiledEvidence.CSharp.dll|targetFramework:25:.NETCoreApp,Version=v10.0|type:namespace:38:TraceMap.CompiledFixtures.CSharp.Alpha|names:8:Widget`1|arity:1|method:8:Overload|arity:0|call:default|hasThis:true|explicitThis:false|(type(namespace:6:System|names:5:Int32))->type(namespace:6:System|names:5:Int32)",
+      "expectedSourceIdentity": "source:C#|assembly:name:23:CompiledEvidence.CSharp|version:7:1.0.0.0|culture:7:neutral|publicKeyToken:4:null|module:27:CompiledEvidence.CSharp.dll|targetFramework:25:.NETCoreApp,Version=v10.0|type:namespace:38:TraceMap.CompiledFixtures.CSharp.Alpha|names:8:Widget`1|arity:1|method:8:Overload|arity:0|call:default|hasThis:true|explicitThis:false|(type(namespace:6:System|names:5:Int32))-\u003Etype(namespace:6:System|names:5:Int32)",
+      "expectedMetadataIdentity": "assembly:name:23:CompiledEvidence.CSharp|version:7:1.0.0.0|culture:7:neutral|publicKeyToken:4:null|module:27:CompiledEvidence.CSharp.dll|targetFramework:25:.NETCoreApp,Version=v10.0|type:namespace:38:TraceMap.CompiledFixtures.CSharp.Alpha|names:8:Widget`1|arity:1|method:8:Overload|arity:0|call:default|hasThis:true|explicitThis:false|(type(namespace:6:System|names:5:Int32))-\u003Etype(namespace:6:System|names:5:Int32)",
       "expectedRuleId": "dotnet.compiled.source-identity.v1",
       "expectedTier": "Tier4Unknown",
       "expectedOutcome": "unjoined",
-      "expectedGaps": [
-        "SourceMetadataReconciliationZeroCandidate"
-      ],
-      "nonClaims": [
-        "absence",
-        "fuzzy-match",
-        "cross-assembly-equivalence"
-      ]
+      "expectedGaps": ["SourceMetadataReconciliationZeroCandidate"],
+      "nonClaims": ["absence", "fuzzy-match", "cross-assembly-equivalence"]
     },
     {
       "id": "CS-RECON-MULTIPLE-005",
       "language": "csharp",
-      "expectedSourceIdentity": "source:C#|assembly:name:23:CompiledEvidence.CSharp|version:7:1.0.0.0|culture:7:neutral|publicKeyToken:4:null|module:27:CompiledEvidence.CSharp.dll|targetFramework:25:.NETCoreApp,Version=v10.0|type:namespace:38:TraceMap.CompiledFixtures.CSharp.Alpha|names:8:Widget`1|arity:1|method:8:Overload|arity:0|call:default|hasThis:true|explicitThis:false|(type(namespace:6:System|names:5:Int32))->type(namespace:6:System|names:5:Int32)",
-      "expectedMetadataIdentity": "assembly:name:23:CompiledEvidence.CSharp|version:7:1.0.0.0|culture:7:neutral|publicKeyToken:4:null|module:27:CompiledEvidence.CSharp.dll|targetFramework:25:.NETCoreApp,Version=v10.0|type:namespace:38:TraceMap.CompiledFixtures.CSharp.Alpha|names:8:Widget`1|arity:1|method:8:Overload|arity:0|call:default|hasThis:true|explicitThis:false|(type(namespace:6:System|names:5:Int32))->type(namespace:6:System|names:5:Int32)",
+      "expectedSourceIdentity": "source:C#|assembly:name:23:CompiledEvidence.CSharp|version:7:1.0.0.0|culture:7:neutral|publicKeyToken:4:null|module:27:CompiledEvidence.CSharp.dll|targetFramework:25:.NETCoreApp,Version=v10.0|type:namespace:38:TraceMap.CompiledFixtures.CSharp.Alpha|names:8:Widget`1|arity:1|method:8:Overload|arity:0|call:default|hasThis:true|explicitThis:false|(type(namespace:6:System|names:5:Int32))-\u003Etype(namespace:6:System|names:5:Int32)",
+      "expectedMetadataIdentity": "assembly:name:23:CompiledEvidence.CSharp|version:7:1.0.0.0|culture:7:neutral|publicKeyToken:4:null|module:27:CompiledEvidence.CSharp.dll|targetFramework:25:.NETCoreApp,Version=v10.0|type:namespace:38:TraceMap.CompiledFixtures.CSharp.Alpha|names:8:Widget`1|arity:1|method:8:Overload|arity:0|call:default|hasThis:true|explicitThis:false|(type(namespace:6:System|names:5:Int32))-\u003Etype(namespace:6:System|names:5:Int32)",
       "expectedRuleId": "dotnet.compiled.source-identity.v1",
       "expectedTier": "Tier4Unknown",
       "expectedOutcome": "unjoined",
-      "expectedGaps": [
-        "SourceMetadataReconciliationMultipleCandidates",
-        "AmbiguousDuplicateManagedAssembly"
-      ],
-      "nonClaims": [
-        "candidate-selection",
-        "path-preference",
-        "token-preference"
-      ]
+      "expectedGaps": ["SourceMetadataReconciliationMultipleCandidates", "AmbiguousDuplicateManagedAssembly"],
+      "nonClaims": ["candidate-selection", "path-preference", "token-preference"]
     },
     {
       "id": "CS-RECON-REF-006",
       "language": "csharp",
-      "expectedSourceIdentity": "source:C#|assembly:name:23:CompiledEvidence.CSharp|version:7:1.0.0.0|culture:7:neutral|publicKeyToken:4:null|module:27:CompiledEvidence.CSharp.dll|targetFramework:25:.NETCoreApp,Version=v10.0|type:namespace:38:TraceMap.CompiledFixtures.CSharp.Alpha|names:8:Widget`1|arity:1|method:8:RefShape|arity:0|call:default|hasThis:true|explicitThis:false|(type(namespace:6:System|names:5:Int32)&)->type(namespace:6:System|names:5:Int32)",
-      "expectedMetadataIdentity": "assembly:name:23:CompiledEvidence.CSharp|version:7:1.0.0.0|culture:7:neutral|publicKeyToken:4:null|module:27:CompiledEvidence.CSharp.dll|targetFramework:25:.NETCoreApp,Version=v10.0|type:namespace:38:TraceMap.CompiledFixtures.CSharp.Alpha|names:8:Widget`1|arity:1|method:8:RefShape|arity:0|call:default|hasThis:true|explicitThis:false|(type(namespace:6:System|names:5:Int32)&)->type(namespace:6:System|names:5:Int32)",
+      "expectedSourceIdentity": "source:C#|assembly:name:23:CompiledEvidence.CSharp|version:7:1.0.0.0|culture:7:neutral|publicKeyToken:4:null|module:27:CompiledEvidence.CSharp.dll|targetFramework:25:.NETCoreApp,Version=v10.0|type:namespace:38:TraceMap.CompiledFixtures.CSharp.Alpha|names:8:Widget`1|arity:1|method:8:RefShape|arity:0|call:default|hasThis:true|explicitThis:false|(type(namespace:6:System|names:5:Int32)\u0026)-\u003Etype(namespace:6:System|names:5:Int32)",
+      "expectedMetadataIdentity": "assembly:name:23:CompiledEvidence.CSharp|version:7:1.0.0.0|culture:7:neutral|publicKeyToken:4:null|module:27:CompiledEvidence.CSharp.dll|targetFramework:25:.NETCoreApp,Version=v10.0|type:namespace:38:TraceMap.CompiledFixtures.CSharp.Alpha|names:8:Widget`1|arity:1|method:8:RefShape|arity:0|call:default|hasThis:true|explicitThis:false|(type(namespace:6:System|names:5:Int32)\u0026)-\u003Etype(namespace:6:System|names:5:Int32)",
       "expectedRuleId": "dotnet.compiled.source-identity.v1",
       "expectedTier": "Tier1Semantic",
       "expectedOutcome": "exact-one-candidate",
       "expectedGaps": [],
-      "nonClaims": [
-        "same-display-string-equivalence",
-        "same-arity-equivalence"
-      ]
+      "nonClaims": ["same-display-string-equivalence", "same-arity-equivalence"]
     },
     {
       "id": "CS-RECON-NESTED-GENERIC-007",
       "language": "csharp",
-      "expectedSourceIdentity": "source:C#|assembly:name:23:CompiledEvidence.CSharp|version:7:1.0.0.0|culture:7:neutral|publicKeyToken:4:null|module:27:CompiledEvidence.CSharp.dll|targetFramework:25:.NETCoreApp,Version=v10.0|type:namespace:38:TraceMap.CompiledFixtures.CSharp.Alpha|names:8:Widget`18:Nested`1|arity:2|method:4:Echo|arity:0|call:default|hasThis:true|explicitThis:false|(!0,!1)->!1",
-      "expectedMetadataIdentity": "assembly:name:23:CompiledEvidence.CSharp|version:7:1.0.0.0|culture:7:neutral|publicKeyToken:4:null|module:27:CompiledEvidence.CSharp.dll|targetFramework:25:.NETCoreApp,Version=v10.0|type:namespace:38:TraceMap.CompiledFixtures.CSharp.Alpha|names:8:Widget`18:Nested`1|arity:2|method:4:Echo|arity:0|call:default|hasThis:true|explicitThis:false|(!0,!1)->!1",
+      "expectedSourceIdentity": "source:C#|assembly:name:23:CompiledEvidence.CSharp|version:7:1.0.0.0|culture:7:neutral|publicKeyToken:4:null|module:27:CompiledEvidence.CSharp.dll|targetFramework:25:.NETCoreApp,Version=v10.0|type:namespace:38:TraceMap.CompiledFixtures.CSharp.Alpha|names:8:Widget`18:Nested`1|arity:2|method:4:Echo|arity:0|call:default|hasThis:true|explicitThis:false|(!0,!1)-\u003E!1",
+      "expectedMetadataIdentity": "assembly:name:23:CompiledEvidence.CSharp|version:7:1.0.0.0|culture:7:neutral|publicKeyToken:4:null|module:27:CompiledEvidence.CSharp.dll|targetFramework:25:.NETCoreApp,Version=v10.0|type:namespace:38:TraceMap.CompiledFixtures.CSharp.Alpha|names:8:Widget`18:Nested`1|arity:2|method:4:Echo|arity:0|call:default|hasThis:true|explicitThis:false|(!0,!1)-\u003E!1",
       "expectedRuleId": "dotnet.compiled.source-identity.v1",
       "expectedTier": "Tier1Semantic",
       "expectedOutcome": "exact-one-candidate",
       "expectedGaps": [],
-      "nonClaims": [
-        "simple-name-join",
-        "containing-generic-parameter-collapse"
-      ]
+      "nonClaims": ["simple-name-join", "containing-generic-parameter-collapse"]
     },
     {
       "id": "VB-RECON-OPTIONAL-PROPERTY-008",
       "language": "visualbasic",
-      "expectedSourceIdentity": "source:Visual Basic|assembly:name:28:CompiledEvidence.VisualBasic|version:7:1.0.0.0|culture:7:neutral|publicKeyToken:4:null|module:32:CompiledEvidence.VisualBasic.dll|targetFramework:25:.NETCoreApp,Version=v10.0|type:namespace:37:TraceMap.CompiledFixtures.VisualBasic|names:6:Widget|arity:0|property:12:OptionalItem|call:default|hasThis:true|(type(namespace:6:System|names:5:Int32))->type(namespace:6:System|names:6:String)",
-      "expectedMetadataIdentity": "assembly:name:28:CompiledEvidence.VisualBasic|version:7:1.0.0.0|culture:7:neutral|publicKeyToken:4:null|module:32:CompiledEvidence.VisualBasic.dll|targetFramework:25:.NETCoreApp,Version=v10.0|type:namespace:37:TraceMap.CompiledFixtures.VisualBasic|names:6:Widget|arity:0|property:12:OptionalItem|call:default|hasThis:true|(type(namespace:6:System|names:5:Int32))->type(namespace:6:System|names:6:String)",
+      "expectedSourceIdentity": "source:Visual Basic|assembly:name:28:CompiledEvidence.VisualBasic|version:7:1.0.0.0|culture:7:neutral|publicKeyToken:4:null|module:32:CompiledEvidence.VisualBasic.dll|targetFramework:25:.NETCoreApp,Version=v10.0|type:namespace:37:TraceMap.CompiledFixtures.VisualBasic|names:6:Widget|arity:0|property:12:OptionalItem|call:default|hasThis:true|(type(namespace:6:System|names:5:Int32))-\u003Etype(namespace:6:System|names:6:String)",
+      "expectedMetadataIdentity": "assembly:name:28:CompiledEvidence.VisualBasic|version:7:1.0.0.0|culture:7:neutral|publicKeyToken:4:null|module:32:CompiledEvidence.VisualBasic.dll|targetFramework:25:.NETCoreApp,Version=v10.0|type:namespace:37:TraceMap.CompiledFixtures.VisualBasic|names:6:Widget|arity:0|property:12:OptionalItem|call:default|hasThis:true|(type(namespace:6:System|names:5:Int32))-\u003Etype(namespace:6:System|names:6:String)",
       "expectedRuleId": "dotnet.compiled.source-identity.v1",
       "expectedTier": "Tier1Semantic",
       "expectedOutcome": "exact-one-candidate",
       "expectedGaps": [],
-      "nonClaims": [
-        "optional-default-value-equivalence",
-        "accessor-call-equivalence"
-      ]
+      "nonClaims": ["optional-default-value-equivalence", "accessor-call-equivalence"]
     },
     {
       "id": "VB-RECON-GENERIC-ARITY-009",
       "language": "visualbasic",
-      "expectedSourceIdentity": "source:Visual Basic|assembly:name:28:CompiledEvidence.VisualBasic|version:7:1.0.0.0|culture:7:neutral|publicKeyToken:4:null|module:32:CompiledEvidence.VisualBasic.dll|targetFramework:25:.NETCoreApp,Version=v10.0|type:namespace:37:TraceMap.CompiledFixtures.VisualBasic|names:6:Widget|arity:0|method:12:GenericArity|arity:2|call:default|hasThis:true|explicitThis:false|()->type(namespace:6:System|names:5:Int32)",
-      "expectedMetadataIdentity": "assembly:name:28:CompiledEvidence.VisualBasic|version:7:1.0.0.0|culture:7:neutral|publicKeyToken:4:null|module:32:CompiledEvidence.VisualBasic.dll|targetFramework:25:.NETCoreApp,Version=v10.0|type:namespace:37:TraceMap.CompiledFixtures.VisualBasic|names:6:Widget|arity:0|method:12:GenericArity|arity:2|call:default|hasThis:true|explicitThis:false|()->type(namespace:6:System|names:5:Int32)",
+      "expectedSourceIdentity": "source:Visual Basic|assembly:name:28:CompiledEvidence.VisualBasic|version:7:1.0.0.0|culture:7:neutral|publicKeyToken:4:null|module:32:CompiledEvidence.VisualBasic.dll|targetFramework:25:.NETCoreApp,Version=v10.0|type:namespace:37:TraceMap.CompiledFixtures.VisualBasic|names:6:Widget|arity:0|method:12:GenericArity|arity:2|call:default|hasThis:true|explicitThis:false|()-\u003Etype(namespace:6:System|names:5:Int32)",
+      "expectedMetadataIdentity": "assembly:name:28:CompiledEvidence.VisualBasic|version:7:1.0.0.0|culture:7:neutral|publicKeyToken:4:null|module:32:CompiledEvidence.VisualBasic.dll|targetFramework:25:.NETCoreApp,Version=v10.0|type:namespace:37:TraceMap.CompiledFixtures.VisualBasic|names:6:Widget|arity:0|method:12:GenericArity|arity:2|call:default|hasThis:true|explicitThis:false|()-\u003Etype(namespace:6:System|names:5:Int32)",
       "expectedRuleId": "dotnet.compiled.source-identity.v1",
       "expectedTier": "Tier1Semantic",
       "expectedOutcome": "exact-one-candidate",
       "expectedGaps": [],
-      "nonClaims": [
-        "same-name-join",
-        "same-parameter-count-equivalence"
-      ]
+      "nonClaims": ["same-name-join", "same-parameter-count-equivalence"]
     },
     {
       "id": "CS-RECON-DECIMAL-SCOPE-010",
@@ -206,10 +121,7 @@
       "expectedTier": "Tier1Semantic",
       "expectedOutcome": "exact-one-candidate",
       "expectedGaps": [],
-      "nonClaims": [
-        "primitive-encoding-equivalence",
-        "scope-free-decimal-equivalence"
-      ]
+      "nonClaims": ["primitive-encoding-equivalence", "scope-free-decimal-equivalence"]
     },
     {
       "id": "CS-RECON-CONSTRUCTED-NESTED-011",
@@ -220,10 +132,7 @@
       "expectedTier": "Tier1Semantic",
       "expectedOutcome": "exact-one-candidate",
       "expectedGaps": [],
-      "nonClaims": [
-        "inner-argument-only-equivalence",
-        "open-constructed-type-equivalence"
-      ]
+      "nonClaims": ["inner-argument-only-equivalence", "open-constructed-type-equivalence"]
     },
     {
       "id": "CS-RECON-DATETIME-SCOPE-012",
@@ -234,10 +143,7 @@
       "expectedTier": "Tier1Semantic",
       "expectedOutcome": "exact-one-candidate",
       "expectedGaps": [],
-      "nonClaims": [
-        "special-type-implies-cli-primitive",
-        "scope-free-datetime-equivalence"
-      ]
+      "nonClaims": ["special-type-implies-cli-primitive", "scope-free-datetime-equivalence"]
     },
     {
       "id": "CS-RECON-NONGENERIC-NESTED-013",
@@ -248,10 +154,7 @@
       "expectedTier": "Tier1Semantic",
       "expectedOutcome": "exact-one-candidate",
       "expectedGaps": [],
-      "nonClaims": [
-        "nested-isgeneric-gate",
-        "containing-argument-omission"
-      ]
+      "nonClaims": ["nested-isgeneric-gate", "containing-argument-omission"]
     },
     {
       "id": "CS-RECON-PRIMARY-CONSTRUCTOR-014",
@@ -262,10 +165,7 @@
       "expectedTier": "Tier1Semantic",
       "expectedOutcome": "exact-one-candidate",
       "expectedGaps": [],
-      "nonClaims": [
-        "implicit-default-constructor-equivalence",
-        "constructor-omission"
-      ]
+      "nonClaims": ["implicit-default-constructor-equivalence", "constructor-omission"]
     },
     {
       "id": "CS-RECON-REF-FIELD-015",
@@ -276,10 +176,7 @@
       "expectedTier": "Tier1Semantic",
       "expectedOutcome": "exact-one-candidate",
       "expectedGaps": [],
-      "nonClaims": [
-        "by-value-field-equivalence",
-        "ref-custom-modifier-support"
-      ]
+      "nonClaims": ["by-value-field-equivalence", "ref-custom-modifier-support"]
     },
     {
       "id": "CS-RECON-TYPEDREFERENCE-016",
@@ -290,10 +187,7 @@
       "expectedTier": "Tier1Semantic",
       "expectedOutcome": "exact-one-candidate",
       "expectedGaps": [],
-      "nonClaims": [
-        "scoped-typedreference-equivalence",
-        "runtime-typedreference-safety"
-      ]
+      "nonClaims": ["scoped-typedreference-equivalence", "runtime-typedreference-safety"]
     }
   ],
   "pdbCases": [
@@ -303,22 +197,10 @@
       "shape": "portable PDB documents, multi-document and non-monotonic ranges, hidden points, async state machine, iterator state machine, lambda, and generated members remain separate",
       "expectedPdbIdentity": "pdb:format:portable|id:<exact-content-id>|method:<exact-method-row>|sequence:<ordinal>|offset:<il-offset>|document:<document-row>|hidden:<boolean>|range:<exact-range>",
       "expectedMetadataIdentity": "the exact admitted ManagedMethodDeclared identity selected through the bound module-local MethodDef row",
-      "expectedRuleIds": [
-        "dotnet.compiled.pdb-input.v1",
-        "dotnet.compiled.pdb-identity.v1",
-        "dotnet.compiled.sequence-point.v1"
-      ],
+      "expectedRuleIds": ["dotnet.compiled.pdb-input.v1", "dotnet.compiled.pdb-identity.v1", "dotnet.compiled.sequence-point.v1"],
       "expectedTier": "Tier2Structural",
-      "expectedGaps": [
-        "PdbSourceDocumentZeroCandidate"
-      ],
-      "nonClaims": [
-        "execution",
-        "reachability",
-        "source-semantic-ownership",
-        "generated-member-source-collapse",
-        "il-call-identity"
-      ]
+      "expectedGaps": ["PdbSourceDocumentZeroCandidate"],
+      "nonClaims": ["execution", "reachability", "source-semantic-ownership", "generated-member-source-collapse", "il-call-identity"]
     },
     {
       "id": "VB-PDB-PORTABLE-002",
@@ -326,19 +208,10 @@
       "shape": "portable PDB document checksums and method rows reconcile without using display names or paths",
       "expectedPdbIdentity": "pdb:format:portable|id:<exact-content-id>|method:<exact-method-row>",
       "expectedMetadataIdentity": "the exact admitted Visual Basic ManagedMethodDeclared identity selected through the bound module-local MethodDef row",
-      "expectedRuleIds": [
-        "dotnet.compiled.pdb-input.v1",
-        "dotnet.compiled.pdb-identity.v1",
-        "dotnet.compiled.sequence-point.v1"
-      ],
+      "expectedRuleIds": ["dotnet.compiled.pdb-input.v1", "dotnet.compiled.pdb-identity.v1", "dotnet.compiled.sequence-point.v1"],
       "expectedTier": "Tier2Structural",
       "expectedGaps": [],
-      "nonClaims": [
-        "execution",
-        "path-based-document-join",
-        "display-name-join",
-        "source-analysis-level-upgrade"
-      ]
+      "nonClaims": ["execution", "path-based-document-join", "display-name-join", "source-analysis-level-upgrade"]
     },
     {
       "id": "FS-PDB-PORTABLE-003",
@@ -346,22 +219,10 @@
       "shape": "portable PDB compiled identities and sequence points remain available while source document reconciliation is unsupported",
       "expectedPdbIdentity": "pdb:format:portable|id:<exact-content-id>|method:<exact-method-row>",
       "expectedMetadataIdentity": "the exact admitted FSharp ManagedMethodDeclared identity selected through the bound module-local MethodDef row",
-      "expectedRuleIds": [
-        "dotnet.compiled.pdb-input.v1",
-        "dotnet.compiled.pdb-identity.v1",
-        "dotnet.compiled.sequence-point.v1",
-        "dotnet.compiled.pdb-gap.v1"
-      ],
+      "expectedRuleIds": ["dotnet.compiled.pdb-input.v1", "dotnet.compiled.pdb-identity.v1", "dotnet.compiled.sequence-point.v1", "dotnet.compiled.pdb-gap.v1"],
       "expectedTier": "Tier2Structural",
-      "expectedGaps": [
-        "PdbSourceReconciliationUnsupportedLanguage"
-      ],
-      "nonClaims": [
-        "source-identity",
-        "source-document-join",
-        "guessed-join",
-        "fsharp-source-adapter"
-      ]
+      "expectedGaps": ["PdbSourceReconciliationUnsupportedLanguage"],
+      "nonClaims": ["source-identity", "source-document-join", "guessed-join", "fsharp-source-adapter"]
     },
     {
       "id": "PDB-BINDING-ZERO-004",
@@ -369,19 +230,10 @@
       "shape": "a PDB whose exact content identity matches no admitted PE CodeView entry remains unjoined",
       "expectedPdbIdentity": "the exact PDB content ID read from the supplied bytes",
       "expectedMetadataIdentity": null,
-      "expectedRuleIds": [
-        "dotnet.compiled.pdb-gap.v1"
-      ],
+      "expectedRuleIds": ["dotnet.compiled.pdb-gap.v1"],
       "expectedTier": "Tier4Unknown",
-      "expectedGaps": [
-        "PdbAssemblyIdentityMismatch"
-      ],
-      "nonClaims": [
-        "filename-match",
-        "path-proximity-match",
-        "timestamp-match",
-        "candidate-selection"
-      ]
+      "expectedGaps": ["PdbAssemblyIdentityMismatch"],
+      "nonClaims": ["filename-match", "path-proximity-match", "timestamp-match", "candidate-selection"]
     },
     {
       "id": "PDB-SOURCE-MULTIPLE-005",
@@ -389,19 +241,10 @@
       "shape": "two inventory files with the exact same supported PDB document checksum produce an explicit multiple-candidate gap",
       "expectedPdbIdentity": "the exact bound PDB document identity including content ID, document row, hash algorithm, checksum, and language",
       "expectedMetadataIdentity": null,
-      "expectedRuleIds": [
-        "dotnet.compiled.pdb-gap.v1"
-      ],
+      "expectedRuleIds": ["dotnet.compiled.pdb-gap.v1"],
       "expectedTier": "Tier4Unknown",
-      "expectedGaps": [
-        "PdbSourceDocumentMultipleCandidates"
-      ],
-      "nonClaims": [
-        "basename-preference",
-        "path-preference",
-        "first-candidate-selection",
-        "source-ownership"
-      ]
+      "expectedGaps": ["PdbSourceDocumentMultipleCandidates"],
+      "nonClaims": ["basename-preference", "path-preference", "first-candidate-selection", "source-ownership"]
     },
     {
       "id": "PDB-WINDOWS-LANE-006",
@@ -409,203 +252,23 @@
       "shape": "native Windows PDB bytes are validated on Windows and remain fail-closed until an independent deterministic Windows PDB reader is available",
       "expectedPdbIdentity": null,
       "expectedMetadataIdentity": null,
-      "expectedRuleIds": [
-        "dotnet.compiled.pdb-gap.v1"
-      ],
+      "expectedRuleIds": ["dotnet.compiled.pdb-gap.v1"],
       "expectedTier": "Tier4Unknown",
-      "expectedGaps": [
-        "WindowsPdbIndependentReaderUnavailable"
-      ],
-      "nonClaims": [
-        "portable-pdb-equivalence",
-        "native-windows-sequence-points",
-        "single-reader-trust",
-        "cross-platform-support"
-      ]
+      "expectedGaps": ["WindowsPdbIndependentReaderUnavailable"],
+      "nonClaims": ["portable-pdb-equivalence", "native-windows-sequence-points", "single-reader-trust", "cross-platform-support"]
     }
   ],
   "ilCases": [
-    {
-      "id": "CS-IL-OPERAND-001",
-      "language": "csharp",
-      "shape": "same call/ret opcode sequence with different direct-call member operands keeps distinct body identities",
-      "expectedIdentity": "il:assembly:<exact-assembly>|method:<exact-method>|body:instructions:<n>:sha256:<operand-aware-digest>",
-      "expectedRuleIds": [
-        "dotnet.compiled.il-body.v1",
-        "dotnet.compiled.il-call.v1"
-      ],
-      "expectedTier": "Tier2Structural",
-      "expectedGaps": [],
-      "nonClaims": [
-        "execution",
-        "dispatch",
-        "reachability",
-        "source-ownership",
-        "rewrite-equivalence"
-      ]
-    },
-    {
-      "id": "CS-IL-OPERAND-002",
-      "language": "csharp",
-      "shape": "same ldstr/ret opcode sequence with different string literals keeps distinct body identities; literals are digested, never retained verbatim",
-      "expectedIdentity": "il:assembly:<exact-assembly>|method:<exact-method>|body:instructions:<n>:sha256:<operand-aware-digest>",
-      "expectedRuleIds": [
-        "dotnet.compiled.il-body.v1"
-      ],
-      "expectedTier": "Tier2Structural",
-      "expectedGaps": [],
-      "nonClaims": [
-        "literal-retention",
-        "secret-retention",
-        "execution"
-      ]
-    },
-    {
-      "id": "CS-IL-OPERAND-003",
-      "language": "csharp",
-      "shape": "same ldc.i4.s/ret opcode sequence with different numeric constant operands keeps distinct body identities",
-      "expectedIdentity": "il:assembly:<exact-assembly>|method:<exact-method>|body:instructions:<n>:sha256:<operand-aware-digest>",
-      "expectedRuleIds": [
-        "dotnet.compiled.il-body.v1"
-      ],
-      "expectedTier": "Tier2Structural",
-      "expectedGaps": [],
-      "nonClaims": [
-        "semantic-equivalence",
-        "execution"
-      ]
-    },
-    {
-      "id": "CS-IL-BRANCH-005",
-      "language": "csharp",
-      "shape": "reordered switch case blocks produce one identical opcode and constant stream while swapping brfalse/beq target offsets",
-      "expectedIdentity": "il:assembly:<exact-assembly>|method:<exact-method>|body:instructions:<n>:sha256:<operand-aware-digest>",
-      "expectedRuleIds": [
-        "dotnet.compiled.il-body.v1"
-      ],
-      "expectedTier": "Tier2Structural",
-      "expectedGaps": [],
-      "nonClaims": [
-        "control-flow-equivalence",
-        "semantic-equivalence",
-        "execution"
-      ]
-    },
-    {
-      "id": "CS-IL-SIGNATURE-004",
-      "language": "csharp",
-      "shape": "same method name and identical body opcode sequence under different full signatures keeps distinct body identities",
-      "expectedIdentity": "il:assembly:<exact-assembly>|method:<exact-signature>|body:instructions:<n>:sha256:<digest>",
-      "expectedRuleIds": [
-        "dotnet.compiled.il-body.v1"
-      ],
-      "expectedTier": "Tier2Structural",
-      "expectedGaps": [],
-      "nonClaims": [
-        "overload-equivalence",
-        "source-ownership"
-      ]
-    },
-    {
-      "id": "CS-IL-CALL-008",
-      "language": "csharp",
-      "shape": "call, callvirt, newobj, ldftn, interface callvirt, generic-instance receiver, MethodSpec instantiation, and constrained. prefix targets carry exact member and type identities with module-local tokens",
-      "expectedIdentity": "il:assembly:<exact-assembly>|method:<exact-method>|body:<digest>|call:<offset>:<opcode>:<target-identity>",
-      "expectedRuleIds": [
-        "dotnet.compiled.il-body.v1",
-        "dotnet.compiled.il-call.v1"
-      ],
-      "expectedTier": "Tier2Structural",
-      "expectedGaps": [],
-      "nonClaims": [
-        "call-graph",
-        "transitive-reachability",
-        "virtual-dispatch-resolution",
-        "cross-assembly-resolution"
-      ]
-    },
-    {
-      "id": "CS-IL-BODY-012",
-      "language": "csharp",
-      "shape": "locals of assorted shapes and catch, filter, and finally exception-region boundaries are committed by digest with counts",
-      "expectedIdentity": "il:assembly:<exact-assembly>|method:<exact-method>|body:instructions:<n>:sha256:<digest>",
-      "expectedRuleIds": [
-        "dotnet.compiled.il-body.v1"
-      ],
-      "expectedTier": "Tier2Structural",
-      "expectedGaps": [],
-      "nonClaims": [
-        "local-value-flow",
-        "exception-behavior",
-        "execution"
-      ]
-    },
-    {
-      "id": "VB-IL-ASSEMBLY-007",
-      "language": "visualbasic",
-      "shape": "an identical trivial Visual Basic body keeps a distinct identity from the same-named C# body in a different assembly",
-      "expectedIdentity": "il:assembly:<exact-vb-assembly>|method:<exact-method>|body:instructions:<n>:sha256:<digest>",
-      "expectedRuleIds": [
-        "dotnet.compiled.il-body.v1",
-        "dotnet.compiled.il-call.v1"
-      ],
-      "expectedTier": "Tier2Structural",
-      "expectedGaps": [],
-      "nonClaims": [
-        "cross-assembly-equivalence",
-        "source-ownership"
-      ]
-    },
-    {
-      "id": "FS-IL-ASSEMBLY-007",
-      "language": "fsharp",
-      "shape": "a compiled F# body and direct call retain IL body and call identities without any source-adapter claim",
-      "expectedIdentity": "il:assembly:<exact-fs-assembly>|method:<exact-method>|body:instructions:<n>:sha256:<digest>",
-      "expectedRuleIds": [
-        "dotnet.compiled.il-body.v1",
-        "dotnet.compiled.il-call.v1"
-      ],
-      "expectedTier": "Tier2Structural",
-      "expectedGaps": [],
-      "nonClaims": [
-        "source-identity",
-        "guessed-join",
-        "fsharp-source-adapter"
-      ]
-    },
-    {
-      "id": "IL-HOSTILE-001",
-      "language": "cross-language",
-      "shape": "a truncated or corrupted method-body IL region inside an admitted assembly fails closed to a rule-backed gap with no positive IL facts",
-      "expectedIdentity": null,
-      "expectedRuleIds": [
-        "dotnet.compiled.il-gap.v1"
-      ],
-      "expectedTier": "Tier4Unknown",
-      "expectedGaps": [
-        "IlMethodBodyUnreadable"
-      ],
-      "nonClaims": [
-        "clean-absence",
-        "partial-body-evidence"
-      ]
-    },
-    {
-      "id": "IL-LIMIT-002",
-      "language": "cross-language",
-      "shape": "instruction, local, exception-region, body-count, or total-work limit exhaustion emits a rule-backed gap and withholds that input's positive IL facts",
-      "expectedIdentity": null,
-      "expectedRuleIds": [
-        "dotnet.compiled.il-gap.v1"
-      ],
-      "expectedTier": "Tier4Unknown",
-      "expectedGaps": [
-        "IlInstructionLimitExceeded"
-      ],
-      "nonClaims": [
-        "clean-absence",
-        "partial-body-evidence"
-      ]
-    }
+    { "id": "CS-IL-OPERAND-001", "language": "csharp", "shape": "same call/ret opcode sequence with different direct-call member operands keeps distinct body identities", "expectedIdentity": "il:assembly:<exact-assembly>|method:<exact-method>|body:instructions:<n>:sha256:<operand-aware-digest>", "expectedRuleIds": ["dotnet.compiled.il-body.v1","dotnet.compiled.il-call.v1"], "expectedTier": "Tier2Structural", "expectedGaps": [], "nonClaims": ["execution","dispatch","reachability","source-ownership","rewrite-equivalence"] },
+    { "id": "CS-IL-OPERAND-002", "language": "csharp", "shape": "same ldstr/ret opcode sequence with different string literals keeps distinct body identities; literals are digested, never retained verbatim", "expectedIdentity": "il:assembly:<exact-assembly>|method:<exact-method>|body:instructions:<n>:sha256:<operand-aware-digest>", "expectedRuleIds": ["dotnet.compiled.il-body.v1"], "expectedTier": "Tier2Structural", "expectedGaps": [], "nonClaims": ["literal-retention","secret-retention","execution"] },
+    { "id": "CS-IL-OPERAND-003", "language": "csharp", "shape": "same ldc.i4.s/ret opcode sequence with different numeric constant operands keeps distinct body identities", "expectedIdentity": "il:assembly:<exact-assembly>|method:<exact-method>|body:instructions:<n>:sha256:<operand-aware-digest>", "expectedRuleIds": ["dotnet.compiled.il-body.v1"], "expectedTier": "Tier2Structural", "expectedGaps": [], "nonClaims": ["semantic-equivalence","execution"] },
+    { "id": "CS-IL-BRANCH-005", "language": "csharp", "shape": "reordered switch case blocks produce one identical opcode and constant stream while swapping brfalse/beq target offsets", "expectedIdentity": "il:assembly:<exact-assembly>|method:<exact-method>|body:instructions:<n>:sha256:<operand-aware-digest>", "expectedRuleIds": ["dotnet.compiled.il-body.v1"], "expectedTier": "Tier2Structural", "expectedGaps": [], "nonClaims": ["control-flow-equivalence","semantic-equivalence","execution"] },
+    { "id": "CS-IL-SIGNATURE-004", "language": "csharp", "shape": "same method name and identical body opcode sequence under different full signatures keeps distinct body identities", "expectedIdentity": "il:assembly:<exact-assembly>|method:<exact-signature>|body:instructions:<n>:sha256:<digest>", "expectedRuleIds": ["dotnet.compiled.il-body.v1"], "expectedTier": "Tier2Structural", "expectedGaps": [], "nonClaims": ["overload-equivalence","source-ownership"] },
+    { "id": "CS-IL-CALL-008", "language": "csharp", "shape": "call, callvirt, newobj, ldftn, interface callvirt, generic-instance receiver, MethodSpec instantiation, and constrained. prefix targets carry exact member and type identities with module-local tokens", "expectedIdentity": "il:assembly:<exact-assembly>|method:<exact-method>|body:<digest>|call:<offset>:<opcode>:<target-identity>", "expectedRuleIds": ["dotnet.compiled.il-body.v1","dotnet.compiled.il-call.v1"], "expectedTier": "Tier2Structural", "expectedGaps": [], "nonClaims": ["call-graph","transitive-reachability","virtual-dispatch-resolution","cross-assembly-resolution"] },
+    { "id": "CS-IL-BODY-012", "language": "csharp", "shape": "locals of assorted shapes and catch, filter, and finally exception-region boundaries are committed by digest with counts", "expectedIdentity": "il:assembly:<exact-assembly>|method:<exact-method>|body:instructions:<n>:sha256:<digest>", "expectedRuleIds": ["dotnet.compiled.il-body.v1"], "expectedTier": "Tier2Structural", "expectedGaps": [], "nonClaims": ["local-value-flow","exception-behavior","execution"] },
+    { "id": "VB-IL-ASSEMBLY-007", "language": "visualbasic", "shape": "an identical trivial Visual Basic body keeps a distinct identity from the same-named C# body in a different assembly", "expectedIdentity": "il:assembly:<exact-vb-assembly>|method:<exact-method>|body:instructions:<n>:sha256:<digest>", "expectedRuleIds": ["dotnet.compiled.il-body.v1","dotnet.compiled.il-call.v1"], "expectedTier": "Tier2Structural", "expectedGaps": [], "nonClaims": ["cross-assembly-equivalence","source-ownership"] },
+    { "id": "FS-IL-ASSEMBLY-007", "language": "fsharp", "shape": "a compiled F# body and direct call retain IL body and call identities without any source-adapter claim", "expectedIdentity": "il:assembly:<exact-fs-assembly>|method:<exact-method>|body:instructions:<n>:sha256:<digest>", "expectedRuleIds": ["dotnet.compiled.il-body.v1","dotnet.compiled.il-call.v1"], "expectedTier": "Tier2Structural", "expectedGaps": [], "nonClaims": ["source-identity","guessed-join","fsharp-source-adapter"] },
+    { "id": "IL-HOSTILE-001", "language": "cross-language", "shape": "a truncated or corrupted method-body IL region inside an admitted assembly fails closed to a rule-backed gap with no positive IL facts", "expectedIdentity": null, "expectedRuleIds": ["dotnet.compiled.il-gap.v1"], "expectedTier": "Tier4Unknown", "expectedGaps": ["IlMethodBodyUnreadable"], "nonClaims": ["clean-absence","partial-body-evidence"] },
+    { "id": "IL-LIMIT-002", "language": "cross-language", "shape": "instruction, local, exception-region, body-count, or total-work limit exhaustion emits a rule-backed gap and withholds that input's positive IL facts", "expectedIdentity": null, "expectedRuleIds": ["dotnet.compiled.il-gap.v1"], "expectedTier": "Tier4Unknown", "expectedGaps": ["IlInstructionLimitExceeded"], "nonClaims": ["clean-absence","partial-body-evidence"] }
   ]
 }
