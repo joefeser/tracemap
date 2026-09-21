@@ -15,6 +15,13 @@ Namespace TraceMap.CompiledFixtures.VisualBasic
 
         Private ReadOnly items(9) As String
 
+        Public Sub New()
+        End Sub
+
+        Public Sub New(seed As Integer)
+            items(0) = seed.ToString()
+        End Sub
+
         Default Public Property Item(index As Integer) As String
             Get
                 Return items(index)
@@ -24,11 +31,29 @@ Namespace TraceMap.CompiledFixtures.VisualBasic
             End Set
         End Property
 
+        Public ReadOnly Property OptionalItem(Optional index As Integer = 0) As String
+            Get
+                Return items(index)
+            End Get
+        End Property
+
         Public Overloads Function SelectValue(value As Integer) As Integer
             Return value
         End Function
 
         Public Overloads Function SelectValue(value As String) As String
+            Return value
+        End Function
+
+        Public Overloads Function GenericArity(Of TOne)() As Integer
+            Return 1
+        End Function
+
+        Public Overloads Function GenericArity(Of TOne, TTwo)() As Integer
+            Return 2
+        End Function
+
+        Public Function OptionalValue(Optional value As Integer = 7) As Integer
             Return value
         End Function
 

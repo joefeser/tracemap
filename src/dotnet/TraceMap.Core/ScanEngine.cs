@@ -402,6 +402,11 @@ public static class ScanEngine
         }
         cancellationToken.ThrowIfCancellationRequested();
 
+        manifest = manifest with
+        {
+            SourceMetadataReconciliation = SourceMetadataReconciler.BuildSummary(manifest, facts)
+        };
+
         scanOperation.RecordItems(facts.Count);
         scanOperation.Complete(
             manifest.BuildStatus == "FailedOrPartial"
@@ -682,7 +687,8 @@ public static class ScanEngine
                 }));
         }
 
-        facts.AddRange(ManagedMetadataExtractor.MaterializeFacts(manifest, compiledEvaluation));
+        var compiledFacts = ManagedMetadataExtractor.MaterializeFacts(manifest, compiledEvaluation);
+        facts.AddRange(compiledFacts);
 
         foreach (var item in inventory)
         {
@@ -933,6 +939,11 @@ public static class ScanEngine
             () => ConfigExtractor.Extract(repoPath, manifest, inventory)));
         facts.AddRange(CSharpSemanticExtractor.MaterializeFacts(manifest, semanticResult.GapFacts));
         facts.AddRange(materializedSemanticFacts);
+        facts.AddRange(SourceMetadataReconciler.Reconcile(
+            manifest,
+            semanticResult.SourceMetadataCandidates,
+            compiledFacts,
+            inventory));
         facts.AddRange(Observe(
             ScanPerformanceExtractors.LegacyData,
             () => FilterProtectedEvidence(LegacyDataMetadataExtractor.Extract(repoPath, manifest, inventory, facts), protectedLineRanges).ToArray()));
