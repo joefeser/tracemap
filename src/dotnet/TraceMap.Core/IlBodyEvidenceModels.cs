@@ -54,7 +54,10 @@ internal sealed record IlBodyObservation(
     string MaxStack,
     bool InitLocals,
     string BodyIdentity,
-    IReadOnlyList<IlCallObservation> Calls);
+    string BodySha256,
+    IReadOnlyList<IlCallObservation> Calls)
+{
+}
 
 internal sealed record EvaluatedIlInput(
     IlInputOutcome Outcome,
