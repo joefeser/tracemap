@@ -54,18 +54,21 @@ Operational boundaries:
   approval.
 
 The one-pass Qodo lifecycle, bounded current-head Codex recovery, and trusted
-local-review fallback require the immutable Agent Control Kit `v0.5.0` release
-at `a09a10ecf62bfb673bbcc54c4157aeef9e90467a`. Before a loop, verify the exact
-checkout, stable identity, release receipt, and consumer lane:
+local-review fallback use the immutable Agent Control Kit `v0.5.2` release
+at `949f31b733de89c1019939ca07f8399c1e170d59`. Before a loop, verify the exact
+checkout, stable identity, release receipt, and consumer lane. The lane requires
+ACK `>=0.5.2 <0.6.0` for consolidated invariant-audit repair briefs. This example
+uses the verified local release installation; set `ACK_ROOT` to the actual
+release checkout and retain its matching receipt when installing elsewhere:
 
 ```bash
-ACK_ROOT=../agent-control-kit-v0.5.0
-ACK_RELEASE_RECEIPT="$ACK_ROOT/.agent-control/tmp/releases/0.5.0-a09a10ecf62bfb673bbcc54c4157aeef9e90467a.json"
-ACK_SHA=a09a10ecf62bfb673bbcc54c4157aeef9e90467a
+ACK_ROOT="$HOME/.local/share/agent-control-kit/releases/v0.5.2"
+ACK_RELEASE_RECEIPT="$ACK_ROOT/.agent-control/tmp/releases/v0.5.2.json"
+ACK_SHA=949f31b733de89c1019939ca07f8399c1e170d59
 
 git -C "$ACK_ROOT" fetch origin --tags
 test "$(git -C "$ACK_ROOT" rev-parse HEAD)" = "$ACK_SHA"
-test "$(git -C "$ACK_ROOT" rev-parse 'v0.5.0^{commit}')" = "$ACK_SHA"
+test "$(git -C "$ACK_ROOT" rev-parse 'v0.5.2^{commit}')" = "$ACK_SHA"
 npm --prefix "$ACK_ROOT" run build
 node "$ACK_ROOT/dist/cli.js" version --json
 node "$ACK_ROOT/dist/cli.js" release verify \
@@ -88,11 +91,19 @@ available to Agent Control, such as `GITHUB_TOKEN`:
 
 ```bash
 node "$ACK_ROOT/dist/cli.js" pr-loop \
-  --repo joefeser/tracemap --pr <number> --base <branch> --json
+  --repo joefeser/tracemap --pr <number> --base <branch> --quiet --json-decision
 ```
 
-The JSON readback should include `evidence.configSource.laneConfig` showing
-whether the lane file was loaded, missing, disabled, or invalid.
+Read the named patch brief or handoff for full evidence. Use full `--json` when
+you need `evidence.configSource.laneConfig` to inspect whether the lane was
+loaded, missing, disabled, or invalid.
+
+After ACK authorizes patching a settled review batch, read the whole patch brief
+and its `invariantAudit` plan. Verify the shared invariant against repository
+evidence, include demonstrated sibling defects, and validate a regression
+matrix before one consolidated patch and push. Settle each covered finding
+individually and rerun ACK on the new head. The plan grants no extra scope,
+review budget, reviewer requests, or merge authority.
 
 Run the consumer lane regression with:
 
