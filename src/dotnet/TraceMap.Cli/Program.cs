@@ -284,7 +284,15 @@ public static class TraceMapCommand
                 ParsePositiveLong(values, "--pdb-max-source-file-bytes", 67_108_864),
                 ParsePositiveLong(values, "--pdb-max-source-total-bytes", 1_073_741_824),
                 ParsePositiveInt(values, "--pdb-max-text", 4_096),
-                ParsePositiveLong(values, "--pdb-max-work", 1_500_000)));
+                ParsePositiveLong(values, "--pdb-max-work", 1_500_000)),
+            IlBodyEvidence: values.HasFlag("--il-body-evidence"),
+            IlBodyLimits: new IlBodyLimits(
+                ParsePositiveInt(values, "--il-max-bodies", 50_000),
+                ParsePositiveInt(values, "--il-max-instructions-per-body", 100_000),
+                ParsePositiveInt(values, "--il-max-locals-per-body", 10_000),
+                ParsePositiveInt(values, "--il-max-exception-regions-per-body", 10_000),
+                ParsePositiveInt(values, "--il-max-text", 4_096),
+                ParsePositiveLong(values, "--il-max-work", 2_000_000)));
         var receiptRecorder = new ScanReceiptRecorder(
             scanOptions,
             sqlValidationSummaryPaths.Append(sqlValidationAsOf?.ToString("O") ?? string.Empty));
@@ -2256,7 +2264,7 @@ public static class TraceMapCommand
                 throw new ArgumentException($"Unexpected argument: {arg}");
             }
 
-            if (arg is "--restore" or "--include-paths" or "--include-reverse" or "--include-impact" or "--allow-identity-mismatch" or "--exit-code" or "--allow-mixed-inputs" or "--release-review"
+            if (arg is "--restore" or "--include-paths" or "--include-reverse" or "--include-impact" or "--allow-identity-mismatch" or "--exit-code" or "--allow-mixed-inputs" or "--release-review" or "--il-body-evidence"
                 || additionalFlags.Contains(arg, StringComparer.Ordinal))
             {
                 flags.Add(arg);
@@ -2739,6 +2747,13 @@ public static class TraceMapCommand
               --compiled-max-text <count>
               --compiled-max-work <count>
                                        Positive deterministic compiled-input limits; max-text must be at least 71.
+              --il-body-evidence        Extract bounded operand-aware IL method-body and direct-call evidence from admitted compiled inputs. Never discovered.
+              --il-max-bodies <count>
+              --il-max-instructions-per-body <count>
+              --il-max-locals-per-body <count>
+              --il-max-exception-regions-per-body <count>
+              --il-max-text <count>
+              --il-max-work <count>
               --pdb-max-artifacts <count>
               --pdb-max-file-bytes <count>
               --pdb-max-documents <count>

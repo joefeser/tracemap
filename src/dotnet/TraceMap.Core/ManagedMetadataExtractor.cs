@@ -285,6 +285,7 @@ public static class ManagedMetadataExtractor
             .Select(item => new CompiledInputBindingArtifact(
                 item.Descriptor.FullPath,
                 item.Descriptor.SafeLocator,
+                item.Descriptor.Role,
                 item.Outcome,
                 item.ProvenanceState,
                 item.RawSha256,
@@ -1030,7 +1031,7 @@ public static class ManagedMetadataExtractor
     private static MetadataObservation Observation(string kind, int token, string factType, string ruleId, string identity, string memberKind, IReadOnlyDictionary<string, string> properties) =>
         new($"{kind}:{Token(token)}", identity, factType, ruleId, memberKind, Token(token), properties);
 
-    private static string TypeIdentity(string assemblyIdentity, CecilTypeDefinition type)
+    internal static string TypeIdentity(string assemblyIdentity, CecilTypeDefinition type)
     {
         var (ns, names) = CecilTypeName(type);
         return $"{assemblyIdentity}|type:{MetadataTypePath(ns, names)}|arity:{type.GenericParameters.Count}";
@@ -1042,7 +1043,7 @@ public static class ManagedMetadataExtractor
         return $"{assemblyIdentity}|type:{MetadataTypePath(ns, names)}|arity:{arity}";
     }
 
-    private static (string Namespace, IReadOnlyList<string> Names) CecilTypeName(CecilTypeReference type)
+    internal static (string Namespace, IReadOnlyList<string> Names) CecilTypeName(CecilTypeReference type)
     {
         var names = new Stack<string>();
         CecilTypeReference? current = type;
@@ -1057,7 +1058,7 @@ public static class ManagedMetadataExtractor
         return (outer.Namespace ?? string.Empty, names.ToArray());
     }
 
-    private static (string Namespace, IReadOnlyList<string> Names, int Arity) MetadataTypeName(MetadataReader reader, TypeDefinitionHandle handle)
+    internal static (string Namespace, IReadOnlyList<string> Names, int Arity) MetadataTypeName(MetadataReader reader, TypeDefinitionHandle handle)
     {
         var names = new Stack<string>();
         var current = handle;
@@ -1074,7 +1075,7 @@ public static class ManagedMetadataExtractor
         return (ns, names.ToArray(), arity);
     }
 
-    private static string MethodSignature<T>(T returnType, IEnumerable<T> parameters, int genericArity, string callingConvention, bool hasThis, bool explicitThis) =>
+    internal static string MethodSignature<T>(T returnType, IEnumerable<T> parameters, int genericArity, string callingConvention, bool hasThis, bool explicitThis) =>
         $"arity:{genericArity}|call:{callingConvention}|hasThis:{hasThis.ToString().ToLowerInvariant()}|explicitThis:{explicitThis.ToString().ToLowerInvariant()}|({string.Join(",", parameters)})->{returnType}";
 
     private static string PropertySignature<T>(T propertyType, IEnumerable<T> parameters, string callingConvention, bool hasThis) =>
@@ -1116,7 +1117,7 @@ public static class ManagedMetadataExtractor
         return materialized.Length == 0 ? "-" : string.Join(",", materialized.Select(value => value.ToString(CultureInfo.InvariantCulture)));
     }
 
-    private static string FormatType(CecilTypeReference type) => FormatType(type, 0);
+    internal static string FormatType(CecilTypeReference type) => FormatType(type, 0);
 
     private static string FormatType(CecilTypeReference type, int nesting)
     {
@@ -1169,7 +1170,7 @@ public static class ManagedMetadataExtractor
         or MetadataType.String or MetadataType.TypedByReference or MetadataType.IntPtr or MetadataType.UIntPtr
         or MetadataType.Object;
 
-    private static string CecilAssemblyScope(CecilTypeReference type)
+    internal static string CecilAssemblyScope(CecilTypeReference type)
     {
         var assemblyName = type.Scope switch
         {
@@ -1292,7 +1293,7 @@ public static class ManagedMetadataExtractor
         }
     }
 
-    private static string? TargetFramework(Mono.Cecil.AssemblyDefinition? assembly)
+    internal static string? TargetFramework(Mono.Cecil.AssemblyDefinition? assembly)
     {
         if (assembly is null)
             return null;
@@ -1300,7 +1301,7 @@ public static class ManagedMetadataExtractor
         return attribute?.ConstructorArguments.Count == 1 && attribute.ConstructorArguments[0].Value is string value ? value : null;
     }
 
-    private static string? TargetFramework(MetadataReader reader)
+    internal static string? TargetFramework(MetadataReader reader)
     {
         foreach (var handle in reader.GetAssemblyDefinition().GetCustomAttributes())
         {
@@ -1377,7 +1378,7 @@ public static class ManagedMetadataExtractor
         return Sha256(File.ReadAllBytes(path));
     }
 
-    private static string CanonicalDigest<T>(T value)
+    internal static string CanonicalDigest<T>(T value)
     {
         var json = JsonSerializer.Serialize(value, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
         using var document = JsonDocument.Parse(json);
@@ -1412,15 +1413,15 @@ public static class ManagedMetadataExtractor
         }
     }
 
-    private static string AssemblyReferenceIdentity(string name, string version, string? culture, byte[]? publicKeyToken) =>
+    internal static string AssemblyReferenceIdentity(string name, string version, string? culture, byte[]? publicKeyToken) =>
         $"assembly:name:{EncodeIdentityComponent(name)}|version:{EncodeIdentityComponent(version)}|culture:{EncodeIdentityComponent(NormalizeCulture(culture))}|publicKeyToken:{EncodeIdentityComponent(PublicKeyToken(publicKeyToken))}";
 
-    private static string AssemblyArtifactIdentity(string referenceIdentity, string moduleName, string? targetFramework) =>
+    internal static string AssemblyArtifactIdentity(string referenceIdentity, string moduleName, string? targetFramework) =>
         $"{referenceIdentity}|module:{EncodeIdentityComponent(moduleName)}|targetFramework:{EncodeIdentityComponent(string.IsNullOrWhiteSpace(targetFramework) ? "unknown" : targetFramework)}";
 
     internal static string EncodeIdentityComponent(string value) => $"{value.Length.ToString(CultureInfo.InvariantCulture)}:{value}";
 
-    private static string MetadataTypePath(string @namespace, IEnumerable<string> names) =>
+    internal static string MetadataTypePath(string @namespace, IEnumerable<string> names) =>
         $"namespace:{EncodeIdentityComponent(@namespace)}|names:{string.Concat(names.Select(EncodeIdentityComponent))}";
 
     private static string NormalizeCulture(string? culture) => string.IsNullOrWhiteSpace(culture) ? "neutral" : culture;
@@ -1432,9 +1433,9 @@ public static class ManagedMetadataExtractor
         var hash = SHA1.HashData(key);
         return hash[^8..].Reverse().ToArray();
     }
-    private static string Token(int token) => $"0x{unchecked((uint)token):x8}";
-    private static string Token(uint token) => $"0x{token:x8}";
-    private static string Sha256(byte[] value) => Convert.ToHexString(SHA256.HashData(value)).ToLowerInvariant();
+    internal static string Token(int token) => $"0x{unchecked((uint)token):x8}";
+    internal static string Token(uint token) => $"0x{token:x8}";
+    internal static string Sha256(byte[] value) => Convert.ToHexString(SHA256.HashData(value)).ToLowerInvariant();
     private static bool IsSha256(string? value) => value is { Length: 64 } && value.All(character => character is (>= '0' and <= '9') or (>= 'a' and <= 'f'));
 
     private static bool IsCommitSha(string? value) => value is { Length: 40 } && value.All(character => character is (>= '0' and <= '9') or (>= 'a' and <= 'f') or (>= 'A' and <= 'F'));
@@ -1559,7 +1560,7 @@ public static class ManagedMetadataExtractor
         string? BinarySourceCommitRelation,
         string? BinaryBuildIdentity);
 
-    private sealed class ManagedInputException(string outcome, string gapKind) : Exception(gapKind)
+    internal sealed class ManagedInputException(string outcome, string gapKind) : Exception(gapKind)
     {
         public string Outcome { get; } = outcome;
         public string GapKind { get; } = gapKind;
@@ -1578,14 +1579,14 @@ public static class ManagedMetadataExtractor
         }
     }
 
-    private sealed class RejectingAssemblyResolver : IAssemblyResolver
+    internal sealed class RejectingAssemblyResolver : IAssemblyResolver
     {
         public Mono.Cecil.AssemblyDefinition Resolve(AssemblyNameReference name) => throw new AssemblyResolutionException(name);
         public Mono.Cecil.AssemblyDefinition Resolve(AssemblyNameReference name, ReaderParameters parameters) => throw new AssemblyResolutionException(name);
         public void Dispose() { }
     }
 
-    private sealed class MetadataTypeProvider(MetadataReader reader) : ISignatureTypeProvider<string, object?>
+    internal sealed class MetadataTypeProvider(MetadataReader reader) : ISignatureTypeProvider<string, object?>
     {
         private readonly string _definitionScope = DefinitionScope(reader);
         public string GetArrayType(string elementType, ArrayShape shape) => elementType + FormatArrayShape(shape.Rank, shape.Sizes, shape.LowerBounds);

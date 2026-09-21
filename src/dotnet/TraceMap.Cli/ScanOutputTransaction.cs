@@ -94,8 +94,15 @@ internal static class ScanOutputTransaction
     private static bool IsSameOrAncestor(string candidate, string path)
     {
         var relative = Path.GetRelativePath(candidate, path);
-        return relative is "." or ""
-            || !(relative == ".." || relative.StartsWith($"..{Path.DirectorySeparatorChar}", StringComparison.Ordinal));
+        if (relative is "." or "")
+            return true;
+        // On Windows, GetRelativePath across volumes returns the absolute
+        // target path; paths on distinct volumes are never in an ancestor
+        // relationship, so a cross-volume output must not be rejected as if
+        // it contained the repository.
+        if (Path.IsPathRooted(relative))
+            return false;
+        return !(relative == ".." || relative.StartsWith($"..{Path.DirectorySeparatorChar}", StringComparison.Ordinal));
     }
 
     private static bool CanReplace(string outputPath)

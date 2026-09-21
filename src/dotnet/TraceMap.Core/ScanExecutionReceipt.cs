@@ -50,7 +50,8 @@ public sealed record ScanExecutionReceipt(
     IReadOnlyList<string> Limitations,
     SourceMetadataReconciliationSummary? SourceMetadataReconciliation = null,
     PdbInputProvenance? PdbInputProvenance = null,
-    PdbEvidenceSummary? PdbEvidenceSummary = null);
+    PdbEvidenceSummary? PdbEvidenceSummary = null,
+    IlBodyProvenance? IlBodyProvenance = null);
 
 /// <summary>
 /// Collects bounded, sanitized operational observations. Receipts describe the
@@ -107,6 +108,7 @@ public sealed class ScanReceiptRecorder
     private SourceMetadataReconciliationSummary? sourceMetadataReconciliation;
     private PdbInputProvenance? pdbInputProvenance;
     private PdbEvidenceSummary? pdbEvidenceSummary;
+    private IlBodyProvenance? ilBodyProvenance;
 
     public ScanReceiptRecorder(ScanOptions options, IEnumerable<string>? additionalAuthorizedInputs = null)
     {
@@ -125,6 +127,8 @@ public sealed class ScanReceiptRecorder
             options.CompiledInputLimits?.ToString() ?? string.Empty,
             Normalize(options.PdbInputPaths),
             options.PdbInputLimits?.ToString() ?? string.Empty,
+            options.IlBodyEvidence ? "il-body-evidence" : "no-il-body-evidence",
+            options.IlBodyLimits?.ToString() ?? string.Empty,
             Normalize(additionalAuthorizedInputs)));
     }
 
@@ -148,6 +152,7 @@ public sealed class ScanReceiptRecorder
             : SourceMetadataReconciler.BuildSummary(result.Manifest, result.Facts, ScanReceiptSchema.MaxSupportingIds);
         pdbInputProvenance = result.Manifest.PdbInputProvenance;
         pdbEvidenceSummary = PortablePdbExtractor.BuildSummary(result.Manifest, result.Facts, ScanReceiptSchema.MaxSupportingIds);
+        ilBodyProvenance = result.Manifest.IlBodyProvenance;
         extractorVersions = result.Facts
             .Select(fact => fact.Evidence?.ExtractorVersion)
             .Where(value => !string.IsNullOrWhiteSpace(value))
@@ -245,7 +250,8 @@ public sealed class ScanReceiptRecorder
             ReceiptLimitations,
             sourceMetadataReconciliation,
             pdbInputProvenance,
-            pdbEvidenceSummary);
+            pdbEvidenceSummary,
+            ilBodyProvenance);
     }
 
     internal void Record(

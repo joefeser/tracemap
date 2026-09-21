@@ -1,10 +1,10 @@
 # Compiled .NET Evidence Foundation Implementation State
 
-Status: Task 8 exact source-to-metadata reconciliation merged in PR #773; Task 9 implemented in PR #774 with local and cross-platform acceptance green, final exact-head ACK pending
+Status: Tasks 1-9 are merged into `dev`; PR #774 completed its authorized exact-head ACK review and was merged into `dev` as `ed2fdf1c028b034a9a6013908e8f5b8c29d900a7` on 2026-09-21. Task 10 (operand-aware IL body/call evidence plus the public ECMA-335/rewrite suite from #766) and Task 11 remain open.
 
-Branch: `codex/pdb-sequence-point-evidence`
+Branch: `codex/il-body-call-evidence`
 
-Base: `origin/dev` at `7dc943f2f9d5de82b0963e3e1b8aa9196116b51c`
+Base: `origin/dev` at `ed2fdf1c028b034a9a6013908e8f5b8c29d900a7`
 
 Tracking: #759, #766, #767, #768, #769
 
@@ -395,5 +395,123 @@ path, and package-smoke jobs on macOS, Ubuntu, and Windows. The Windows lane
 used desktop Roslyn C# and VB compilers to produce real MSF PDBs, recognized the
 complete native signature, emitted only the bounded unsupported-reader gap, and
 produced zero positive native PDB facts. This is not a native-Windows support
-claim. The Task 9 checkbox is complete; final current-head ACK remains the PR
-terminal gate, and the PR must not be merged by this task.
+claim. The Task 9 checkbox is complete. PR #774 then completed its authorized
+exact-head ACK review terminal state and was merged into `dev` as
+`ed2fdf1c028b034a9a6013908e8f5b8c29d900a7` on 2026-09-21 (merge commit
+confirmed against `origin/dev`); the earlier "final current-head ACK pending"
+note is closed and no longer describes repository state.
+
+## Task 10 first slice: bounded operand-aware IL body and call evidence
+
+Branch: `codex/il-body-call-evidence` from `origin/dev` at
+`ed2fdf1c028b034a9a6013908e8f5b8c29d900a7`. Tracking #766.
+
+The first Task 10 slice activates `dotnet.compiled.il-body.v1`,
+`dotnet.compiled.il-call.v1`, and `dotnet.compiled.il-gap.v1` behind the
+explicit `--il-body-evidence` flag with `--il-max-bodies`,
+`--il-max-instructions-per-body`, `--il-max-locals-per-body`,
+`--il-max-exception-regions-per-body`, `--il-max-text`, and `--il-max-work`
+limits. The lane is inert without the flag: no IL facts, no
+`ilBodyProvenance` manifest section, and no change to source, compiled
+metadata, or PDB behavior.
+
+The canonical body identity is
+`<exact metadata method identity>|il-body:instructions:<n>:sha256:<digest>`
+where the digest commits the full operand-aware encoding: opcodes with
+resolved direct-call target identities and module-local tokens, branch and
+switch target offsets, string-literal digests (never verbatim literals),
+numeric constant bit patterns, variable indexes, raw non-call token operands,
+ordered local signatures, exception-region boundaries with catch-type
+identities and filter offsets, and max stack. The public C# fixture proves
+that identical opcode streams with different member, string, constant, or
+branch-target operands produce distinct identities, that `Twice(int)` and
+`Twice(long)` share a body digest yet stay distinct identities, that an
+identical trivial body in the C# and VB fixtures stays distinct, and that
+call/callvirt/newobj/ldftn/MethodSpec/interface targets carry exact scoped
+reference identities. F# and VB fixtures add minimal cross-language bodies.
+
+Mono.Cecil is not the sole oracle: a System.Reflection.Metadata single-pass
+raw-IL reader rebuilds the complete canonical encoding independently, and any
+difference in assembly/module identity, method identity, body digests, call
+sites, locals, regions, or max stack withholds the input behind
+`IlReaderDisagreement`. Non-call token operands (field/signature tokens) are
+committed by raw token only and their member identities are not resolved or
+promoted in this slice. Bodyless methods (abstract, external, PInvoke) emit no
+body fact as a structural observation. Manifest and execution receipt retain
+`il-body-provenance.v1` with generator SHA-256, canonical bounded-input
+SHA-256, effective limits, and per-input outcomes; the digest participates in
+`scanId`; the report gains a bounded IL evidence section. A requested lane
+with no admitted compiled input emits the `IlCompiledEvidenceUnavailable`
+Tier4 gap, never a clean absence.
+
+Explicitly deferred to later Task 10 slices: rewritten-member identity,
+metadata-token retargeting, rewritten PDB offsets, ILAsm/ILDAsm parity, and
+the extended ECMA-335/rewrite mutation matrix from #766. Task 11's legacy
+Windows, `dotnetperf`, and C++/CLI lanes remain entirely separate. The Task 10
+checkbox stays open until the public rewrite suite and its acceptance criteria
+land.
+
+Local macOS validation on 2026-09-21 (after review remediation `5c047abd`):
+
+- focused `IlBodyEvidenceExtractorTests`: 29 passed, zero failed, zero skipped;
+- neighbor suites: `ManagedMetadataExtractorTests` + `PortablePdbExtractorTests`
+  + `SourceMetadataReconciliationTests`: 91 passed, zero failed, zero skipped;
+- `dotnet build src/dotnet/TraceMap.sln --no-restore`: passed with zero
+  warnings and zero errors;
+- `dotnet test src/dotnet/TraceMap.sln --no-restore`: 2,080 passed, zero
+  failed, zero skipped (one early concurrent run showed two transient
+  failures that did not reproduce on the immediate clean rerun);
+- three-language CLI scan (C# primary, VB and F# dependencies) with
+  `--il-body-evidence`: `il-complete`, all five artifacts plus the execution
+  receipt present, byte-identical `facts.ndjson` and `report.md` on repeat,
+  154 IL body and 125 IL call rows in `facts.ndjson` and `index.sqlite`;
+  `scripts/validate-adapter-artifacts.py` passed and no output contained a
+  local absolute path or an IL string literal;
+- `scripts/check-private-paths.sh`: passed;
+- `node scripts/kiro-review.mjs --self-test`: passed; and
+- `git diff --check`: passed.
+
+Review remediation on 2026-09-21: the exact-head review batch (Codex plus the
+Qodo single return) filed four findings on head `5e0e4464`; all are patched in
+`5c047abd`. Switch jump-table targets are computed from the shared post-table
+base with overflow-safe extent validation and per-target work charges; the raw
+System.Reflection.Metadata reader now runs before Mono.Cecil materializes
+operands; `--il-max-text` is enforced for user strings, target identities,
+method identities, and body identities in both readers; and the `constrained.`
+prefix now emits a cross-checked `constrainedtype` call observation whose
+module-local token stays explicitly unclaimed because Mono.Cecil cannot
+reproduce the raw TypeSpec token. A genuine five-target `switch` fixture,
+hostile truncated and oversized switch-table tests, a text-limit gap test, and
+a constrained-call assertion cover the remediation; CI is green on macOS,
+Ubuntu, and Windows including the Windows cross-volume `--out` fix in
+ScanOutputTransaction. All review threads are resolved and the stale Qodo
+summary finding is dispositioned. The ACK loop stopped at
+`CURRENT_HEAD_REQUIRED_REVIEW_MISSING` with `owner_decision_required`: every
+mechanical gate is clean (zero failed checks, zero unresolved threads, zero
+actionable findings, merge state CLEAN), and the one remaining step - granting
+the extra exact-head Codex review request - requires the owner-issued signed
+execution authorization that the lane deliberately makes unforgeable. The PR
+is not merged by this task.
+
+## PR #775 owner-requested P1/P2 review follow-up
+
+Reviewed head `1ae5564921852e0e780f68839b04fde525a5adca` on 2026-09-21.
+Two P2 defects reproduced in six regression cases before patching:
+
+- Valid `unaligned.` operands (alignments 1, 2, and 4) are boxed as unsigned
+  bytes by Cecil. Casting every ShortInlineI operand to `sbyte` threw an
+  uncaught `InvalidCastException` and aborted the entire scan. Both readers
+  now distinguish signed `ldc.i4.s` constants from unsigned prefix bytes.
+- `Encoding.Unicode` replaced unpaired surrogates with U+FFFD before hashing,
+  assigning identical instruction/body identities to distinct string
+  operands. Hashing now serializes exact little-endian UTF-16 code units.
+  Regression pairs cover high surrogates, low surrogates, and U+FFFD.
+
+Validation: all 41 focused IL tests and all 2,092 solution tests passed;
+the solution build had zero warnings and errors. A three-language CLI smoke
+scan against `samples/modern-sample` produced `il-complete`, 155 body facts,
+and 126 call facts; adapter artifact validation passed. The private-path
+guard, Kiro review self-test, and whitespace check passed. Local validation
+is macOS only; hosted checks and exact-head review remain ACK's authority.
+Task 10 remains open for the already-deferred rewrite suite, and Task 11 is
+unchanged. This follow-up does not authorize merge or waive review freshness.
