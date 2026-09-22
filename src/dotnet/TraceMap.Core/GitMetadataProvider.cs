@@ -43,6 +43,21 @@ public static class GitMetadataProvider
 
     private static string? RunGit(string workingDirectory, bool allowEmpty, params string[] arguments)
     {
+        var result = TryRunGit(workingDirectory, allowEmpty, arguments);
+        // A failed process invocation is retried exactly once: concurrent
+        // scans spawn many git processes, and a transient spawn or timeout
+        // failure must not flip repository identity to the directory-name
+        // fallback. A genuine non-repository exits nonzero on both attempts
+        // and keeps its null result.
+        if (result.Failed)
+            result = TryRunGit(workingDirectory, allowEmpty, arguments);
+        return result.Output;
+    }
+
+    private sealed record GitResult(string? Output, bool Failed);
+
+    private static GitResult TryRunGit(string workingDirectory, bool allowEmpty, params string[] arguments)
+    {
         try
         {
             using var process = new Process();
@@ -61,7 +76,7 @@ public static class GitMetadataProvider
 
             if (!process.Start())
             {
-                return null;
+                return new GitResult(null, Failed: true);
             }
 
             var outputTask = process.StandardOutput.ReadToEndAsync();
@@ -77,21 +92,21 @@ public static class GitMetadataProvider
                     // Best-effort cleanup only.
                 }
 
-                return null;
+                return new GitResult(null, Failed: true);
             }
 
             if (process.ExitCode != 0)
             {
-                return null;
+                return new GitResult(null, Failed: true);
             }
 
             Task.WaitAll([outputTask, errorTask], TimeSpan.FromSeconds(1));
             var output = outputTask.IsCompletedSuccessfully ? outputTask.Result.Trim() : string.Empty;
-            return allowEmpty || !string.IsNullOrWhiteSpace(output) ? output : null;
+            return new GitResult(allowEmpty || !string.IsNullOrWhiteSpace(output) ? output : null, Failed: false);
         }
         catch
         {
-            return null;
+            return new GitResult(null, Failed: true);
         }
     }
 }
