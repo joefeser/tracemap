@@ -229,7 +229,9 @@ public sealed class BuildEnvironmentDiagnosticTests
             await File.ReadAllTextAsync(Path.Combine(outputPath, "logs", "analyzer.log")));
         Assert.DoesNotContain(unsafeFeed, artifactText);
         Assert.DoesNotContain("private-feed-with-token-abc123", artifactText);
-        Assert.Contains("NuGetRestoreFailed", artifactText);
+        // Native restore output can select a more specific sanitized category.
+        // Require the restore-failure contract without pinning that incidental category.
+        Assert.Contains("ReviewSanitizedRestoreFailure", artifactText);
         Assert.Contains("Build Environment Diagnostics", artifactText);
 
         await using var connection = new SqliteConnection($"Data Source={Path.Combine(outputPath, "index.sqlite")}");
@@ -239,7 +241,7 @@ public sealed class BuildEnvironmentDiagnosticTests
             "select group_concat(properties_json, char(10)) from facts where fact_type in ('AnalysisGap', 'BuildEnvironmentDiagnostic');");
         Assert.DoesNotContain(unsafeFeed, sqliteText);
         Assert.DoesNotContain("private-feed-with-token-abc123", sqliteText);
-        Assert.Contains("NuGetRestoreFailed", sqliteText);
+        Assert.Contains("ReviewSanitizedRestoreFailure", sqliteText);
     }
 
     [Fact]
