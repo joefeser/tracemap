@@ -821,3 +821,17 @@ both fixture projects are registered in the test build graph via
 `ReferenceOutputAssembly="false"` ProjectReferences (the compiled-evidence
 precedent) with the deliberate `DbCommand` shadowing suppressed by a
 documented fixture-local `NoWarn CS0436`.
+
+Second review remediation on 2026-09-22 (Codex exact-head re-review of
+`9b81303c`): the folder-spread test is synchronous (no async without await),
+and the merged-roots rejection now validates complete (source label, caller,
+callee) tuples for every Process call edge instead of callee presence alone.
+All eleven review threads (five Qodo inline, four Codex inline, one Codex
+follow-up pair) are settled with durable ACK dispositions at
+`d11f35e5546ba74a7eab30d6a4115ed7a0740411`; the stale Qodo summary carries a
+posted disposition. Final ACK readback: unresolved threads 0, actionable
+findings 0, stale findings 0, pending/failed checks 0, merge state CLEAN;
+decision `not_merge_ready` with `CURRENT_HEAD_REQUIRED_REVIEW_MISSING` — the
+exact-head hosted-review freshness gate at `d11f35e5` is an owner decision
+and local validation does not substitute for it. All CI checks pass on the
+final head. No manual bot retagging, force-push, or merge was performed.
