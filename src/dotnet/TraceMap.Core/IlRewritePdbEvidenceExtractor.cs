@@ -688,13 +688,17 @@ internal static class IlRewritePdbEvidenceExtractor
             var bytes = ManagedMetadataExtractor.ReadBoundedFile(descriptor.FullPath, limits.MaxFileSizeBytes, "IlRewritePdbSideFileSizeLimitExceeded");
             var rawSha256 = ManagedMetadataExtractor.Sha256(bytes);
             var admitted = ManagedMetadataExtractor.FinalizeSafeLocator(descriptor, rawSha256, compiledLimits);
+            // Every branch that read the bytes retains the raw digest: a
+            // rejected PDB replaced by different malformed or Windows PDB
+            // bytes must still change the provenance digest and scan
+            // identity, exactly like an admitted-input change would.
             if (admitted.SafeLocatorTextLimitExceeded)
-                return new PdbSideAdmission(admitted, null, null, "IlRewritePdbSideTextLimitExceeded");
+                return new PdbSideAdmission(admitted, null, rawSha256, "IlRewritePdbSideTextLimitExceeded");
             if (!PortablePdbExtractor.IsPortablePdb(bytes))
             {
                 return PortablePdbExtractor.IsWindowsPdb(bytes)
-                    ? new PdbSideAdmission(admitted, null, null, OperatingSystem.IsWindows() ? "WindowsPdbIndependentReaderUnavailable" : "WindowsPdbRequiresWindows")
-                    : new PdbSideAdmission(admitted, null, null, "IlRewritePdbSideMalformed");
+                    ? new PdbSideAdmission(admitted, null, rawSha256, OperatingSystem.IsWindows() ? "WindowsPdbIndependentReaderUnavailable" : "WindowsPdbRequiresWindows")
+                    : new PdbSideAdmission(admitted, null, rawSha256, "IlRewritePdbSideMalformed");
             }
 
             return new PdbSideAdmission(admitted, bytes, rawSha256, null);
