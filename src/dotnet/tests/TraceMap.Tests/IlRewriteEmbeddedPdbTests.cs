@@ -29,7 +29,17 @@ public sealed class IlRewriteEmbeddedPdbTests
         Assert.Equal("embedded-portable", Assert.Single(recorder.CreateReceipt().PdbInputProvenance!.Outcomes).Format);
         var provenance = Assert.IsType<PdbInputProvenance>(result.Manifest.PdbInputProvenance);
         var outcome = Assert.Single(provenance.Outcomes);
-        Assert.Equal("admitted", outcome.Outcome);
+        Assert.True(outcome.Outcome == "admitted", JsonSerializer.Serialize(new
+        {
+            outcome.Outcome,
+            outcome.GapKinds,
+            compiled = result.Manifest.CompiledInputProvenance?.Outcomes.Select(item => new
+            {
+                item.Outcome,
+                item.ProvenanceState,
+                item.GapKinds
+            })
+        }));
         Assert.Equal("embedded-portable", outcome.Format);
         Assert.NotNull(outcome.PdbContentId);
         Assert.Equal("pdb-complete", provenance.CoverageState);

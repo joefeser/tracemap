@@ -3213,11 +3213,15 @@ On the 2026-09-22 macOS arm64 host, .NET SDK `10.0.302` is installed, but
 `ilasm`, `ildasm`, and `mono` are absent from PATH and the checked SDK,
 Homebrew, and local .NET locations. `brew info mono` offered version `6.14.1`
 but it was not installed. An available bottle does not pin an independent
-disassembly oracle or prove parity. The Windows runner image manifest names
-Visual Studio and Windows SDK versions, but does not establish that either
-binary is present. The smallest remaining Windows action is to run the
-extended workflow for this PR, inspect its discovered absolute executable
-paths and file versions, then pin the actual ILAsm/ILDAsm toolchain and execute
+disassembly oracle or prove parity. The PR #782 Windows 2025 VS2026 runner
+discovery on 2026-09-22 found `ildasm.exe` 4.8.3928.0 in both x86 and x64
+directories under `C:\Program Files (x86)\Microsoft SDKs\Windows\v10.0A\bin\NETFX
+4.8 Tools` and `NETFX 4.8.1 Tools`; `ilasm.exe` was unavailable in the
+searched SDK, Visual Studio, and PATH locations. The exact discovery command
+is in `.github/workflows/compiled-dotnet-extended-validation.yml`; the runner
+log is https://github.com/joefeser/tracemap/actions/runs/35782144244/job/106929998051.
+The smallest remaining Windows action is to identify or install a pinned
+`ilasm.exe` compatible with the discovered `ildasm.exe`, then execute
 the same public before/after matrix through assembly and disassembly. Record
 exact invocation commands, independently compare IL operands, offsets, and
 PDB sequence points to SRM and TraceMap, and leave a typed gap for any

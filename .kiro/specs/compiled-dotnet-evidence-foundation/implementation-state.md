@@ -1326,3 +1326,15 @@ Private-path guard, Kiro self-test, catalog/receipt JSON parsing, workflow
 YAML parsing, and diff checks passed. These are local repair bytes with
 pre-push scan commit `17e5bf86`; they are not a substitute for new-head CI
 or ACK.
+
+Current-head `f9aaf8cc` CI on 2026-09-22: the extended public suite passed
+on Ubuntu and macOS but Windows reported 117/118, with the positive embedded
+Portable PDB input admission case returning `unbound` rather than `admitted`.
+The bounded package smoke passed on Ubuntu and macOS; its Windows job was
+still running when this note was updated. Windows runner discovery found
+`ildasm.exe` 4.8.3928.0 under the .NET Framework 4.8 and 4.8.1 SDK tools
+(x86 and x64), but no `ilasm.exe` in the searched SDK, Visual Studio, or PATH
+locations. The Windows failure remains a required public-suite defect to
+diagnose; Task 10 remains unchecked. ACK on this head had zero unresolved
+threads but stopped at `STALE_CODEX_REVIEW_RISKY_CHANGES`, requiring an exact
+head fresh Codex review or owner override after CI is clean.
