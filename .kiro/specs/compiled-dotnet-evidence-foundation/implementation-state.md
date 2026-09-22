@@ -961,3 +961,28 @@ PDBs, and the extended ECMA-335 mutation matrix from #766. Task 11's legacy
 Windows, `dotnetperf`, and C++/CLI lanes remain separate. The Task 10
 checkbox stays open until #766's full public rewrite-suite acceptance is
 met.
+
+Review remediation on 2026-09-22 (ACK 0.5.2 loop, Qodo + Codex findings,
+patch authorized at exact head `06ed3f3c`): the paired-assembly
+re-verification now reads under the compiled-input limit that admitted the
+assembly instead of the PDB-side file bound (an admitted assembly can never
+be falsely rejected by a smaller PDB limit; pinned by a padded-assembly
+regression where the after dll exceeds its PDB by design); join-phase budget
+exhaustion after successful side reads is now atomic — relationships and
+debug deltas are discarded, the bound PDB content identities survive on the
+outcome, and `IlRewritePdbTotalWorkLimitExceeded` fails closed instead of
+aborting the scan (pinned by a consumed-units-derived regression; the
+outcome now records deterministic `consumedWorkUnits`); the bounded-input
+digest commits the parent rewrite provenance digest plus both paired
+assembly raw hashes, so the same PDBs reused against differently rewritten
+assemblies never share a provenance digest; admission limit and declaration
+causes keep their specific gap kinds (`IlRewritePdbSideFileSizeLimitExceeded`,
+`IlRewritePdbTextLimitExceeded`, `IlRewritePdbSideDeclarationInvalid`) instead
+of collapsing to `IlRewritePdbSideUnavailable`; and the VALIDATION.md
+inertness text now states the pin runs through the `ScanOptions` API because
+the CLI rejects unflagged declarations. Three regression tests were added
+(26 focused rewrite-PDB tests total; full suite 2,170). A separate CI-only
+flake in the compiled-metadata CLI determinism test was traced to a
+transient git spawn failure flipping `repoName` between identical scans;
+`GitMetadataProvider` now retries a failed git invocation exactly once
+(non-repository exits nonzero on both attempts and keeps its null result).

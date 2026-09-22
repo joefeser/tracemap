@@ -2947,8 +2947,11 @@ and `dotnet.compiled.il-rewrite-pdb-gap.v1` behind the explicit
 ordinal `--il-rewrite-pdb-before`/`--il-rewrite-pdb-after` declarations that
 must align with the declared assembly pairs. The lane is inert without the
 flag: no `ilRewritePdbProvenance` manifest section, no rewrite-PDB facts or
-known gaps, no receipt provenance, and byte-identical facts, report, and
-scan identity versus a scan that declares the PDB lists without the flag.
+known gaps, and no receipt provenance. The CLI additionally rejects declared
+PDB lists without the flag, so the inertness pin — an identical scan
+identity, rewrite digest, and fact bytes between a disabled-lane scan and one
+that carries the unflagged declarations — is asserted through the
+`ScanOptions` API in the focused suite, not through a CLI invocation.
 
 Each declared PDB side must bind its own paired assembly through the exact
 portable content GUID/stamp against the re-read and re-hashed assembly's PE
