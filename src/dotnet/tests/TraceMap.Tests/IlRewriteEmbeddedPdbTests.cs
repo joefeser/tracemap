@@ -9,6 +9,7 @@ using TraceMap.Core;
 
 namespace TraceMap.Tests;
 
+[Collection("Git metadata sensitive")]
 public sealed class IlRewriteEmbeddedPdbTests
 {
     [Fact]
