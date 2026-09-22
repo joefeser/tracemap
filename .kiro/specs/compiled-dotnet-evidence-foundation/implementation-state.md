@@ -1338,3 +1338,14 @@ locations. The Windows failure remains a required public-suite defect to
 diagnose; Task 10 remains unchecked. ACK on this head had zero unresolved
 threads but stopped at `STALE_CODEX_REVIEW_RISKY_CHANGES`, requiring an exact
 head fresh Codex review or owner override after CI is clean.
+
+Diagnostic head `dcb1e875` reproduced the extended Windows 117/118 result.
+The positive embedded-PDB test's compiled input was `admitted` but its
+provenance was `unknown`, with `ManagedInputBindingIncomplete`; the PDB
+extractor correctly emitted `PdbCompiledEvidenceUnacceptable`. The fixture
+had used `GitMetadataProvider.Detect`, whose intentionally labeled `unknown`
+fallback can produce a malformed synthetic binding receipt when Git process
+discovery is transient under CI load. The fixture now obtains `rev-parse HEAD`
+directly, requires a 40-hex SHA, and leaves the scanner's fail-closed behavior
+intact. The seven embedded-PDB tests passed locally after this change;
+cross-platform exact-head validation is pending.

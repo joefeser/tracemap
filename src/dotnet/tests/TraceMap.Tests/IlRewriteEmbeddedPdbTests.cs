@@ -209,7 +209,8 @@ public sealed class IlRewriteEmbeddedPdbTests
 
         public ScanResult Scan(string compiledAssembly, string declaredPdb)
         {
-            var commit = GitMetadataProvider.Detect(root).CommitSha;
+            var commit = RunGit("rev-parse", "HEAD").Trim();
+            Assert.Matches("^[0-9a-fA-F]{40}$", commit);
             var initial = ManagedMetadataExtractor.Evaluate(root, commit, new ScanOptions(root, "unused", CompiledInputPaths: [compiledAssembly]));
             var receipt = Path.Combine(root, "binding.json");
             File.WriteAllText(receipt, JsonSerializer.Serialize(new
@@ -248,7 +249,7 @@ public sealed class IlRewriteEmbeddedPdbTests
                 IlRewriteAfterPdbPaths: [afterPdb],
                 IlRewritePdbLimits: pdbLimits));
 
-        private void RunGit(params string[] arguments)
+        private string RunGit(params string[] arguments)
         {
             var start = new ProcessStartInfo("git") { WorkingDirectory = root, RedirectStandardOutput = true, RedirectStandardError = true };
             foreach (var argument in arguments) start.ArgumentList.Add(argument);
@@ -256,6 +257,7 @@ public sealed class IlRewriteEmbeddedPdbTests
             var output = process.StandardOutput.ReadToEnd() + process.StandardError.ReadToEnd();
             process.WaitForExit();
             Assert.True(process.ExitCode == 0, output);
+            return output;
         }
 
         public void Dispose() => temp.Dispose();
