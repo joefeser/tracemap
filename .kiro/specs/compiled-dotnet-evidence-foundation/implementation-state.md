@@ -1349,3 +1349,16 @@ discovery is transient under CI load. The fixture now obtains `rev-parse HEAD`
 directly, requires a 40-hex SHA, and leaves the scanner's fail-closed behavior
 intact. The seven embedded-PDB tests passed locally after this change;
 cross-platform exact-head validation is pending.
+
+Head `e508cff9` exposed the second part of that CI contention: Windows
+extended validation again reported 117/118, now because the scan's bounded
+Git probe could not establish a SHA and `ScanReceiptRecorder` refused to
+create a receipt. The macOS ordinary package job separately reported 49/50
+for an existing repeated bound-PDB scan whose two scan IDs differed.
+`PortablePdbExtractorTests` and `IlRewriteEmbeddedPdbTests` now share a
+non-parallel xUnit collection so these Git-sensitive identity assertions run
+without competing test collections. The fixture continues to reject an
+invalid SHA; scanner behavior remains fail-closed. Local validation after
+the collection change: 57/57 focused PDB tests, 2,219/2,219 full solution
+tests with zero skips, and a zero-warning/error solution build. Exact-head CI
+and ACK remain pending; Task 10 stays unchecked.
