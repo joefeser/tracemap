@@ -124,7 +124,7 @@ public sealed class MessyWorkspaceRegressionTests
     }
 
     [Fact]
-    public async Task Folder_spread_extraction_covers_nested_folders_and_roots()
+    public void Folder_spread_extraction_covers_nested_folders_and_roots()
     {
         using var temp = new TempDirectory();
         var (alpha, alphaIndex) = ScanRoot(temp, "root-alpha", "alpha-site");
@@ -494,22 +494,44 @@ public sealed class MessyWorkspaceRegressionTests
                 $"combined symbol count {combinedSymbols} != sum {expectedSymbols}; symbols were merged or lost");
 
             // MW-MERGED-ROOTS-001 [reconciliation]: the eleven same-named Process
-            // identities across roots stay distinct rows; nothing cross-joins.
-            var processCallees = QueryStrings(connection,
-                "SELECT DISTINCT callee_symbol FROM combined_call_edges WHERE callee_symbol LIKE '%.Process()'");
+            // identities across roots stay distinct rows; nothing cross-joins. The
+            // complete (source label, caller, callee) tuple is validated so an edge
+            // imported under the wrong source or a caller from the other root fails.
+            using var processCommand = connection.CreateCommand();
+            processCommand.CommandText = """
+                SELECT s.label, e.caller_symbol, e.callee_symbol
+                FROM combined_call_edges e
+                JOIN index_sources s ON s.source_index_id = e.source_index_id
+                WHERE e.callee_symbol LIKE '%.Process()'
+                ORDER BY s.label, e.caller_symbol, e.callee_symbol
+                """;
+            var processTuples = new List<(string Label, string Caller, string Callee)>();
+            using (var processReader = processCommand.ExecuteReader())
+            {
+                while (processReader.Read())
+                {
+                    processTuples.Add((processReader.GetString(0), processReader.GetString(1), processReader.GetString(2)));
+                }
+            }
+
             foreach (var engine in Enumerable.Range(1, 10).Select(number => number.ToString("00", System.Globalization.CultureInfo.InvariantCulture)))
             {
                 Require("MW-MERGED-ROOTS-001", "reconciliation",
-                    processCallees.Contains($"global::Alpha.Services.Engine{engine}.Process()"),
+                    processTuples.Any(tuple => tuple.Callee == $"global::Alpha.Services.Engine{engine}.Process()"),
                     $"alpha Engine{engine}.Process disappeared from the merged call edges");
             }
 
             Require("MW-MERGED-ROOTS-001", "reconciliation",
-                processCallees.Contains("global::Beta.Services.Gateway.Process()"),
+                processTuples.Any(tuple => tuple.Callee == "global::Beta.Services.Gateway.Process()"),
                 "beta Gateway.Process disappeared from the merged call edges");
             Require("MW-MERGED-ROOTS-001", "reconciliation",
-                !processCallees.Any(callee => callee.Contains("Engine", StringComparison.Ordinal) && callee.Contains("Beta.", StringComparison.Ordinal)),
-                "no identity may blend the alpha and beta namespaces");
+                processTuples.All(tuple =>
+                    (tuple.Callee.Contains("Engine", StringComparison.Ordinal) || tuple.Callee.Contains("DeepChain", StringComparison.Ordinal) || tuple.Callee.Contains("Alpha.Services", StringComparison.Ordinal)
+                        ? tuple.Label == "alpha-site" && tuple.Caller.Contains("global::Alpha.", StringComparison.Ordinal)
+                        : tuple.Callee.Contains("Beta.", StringComparison.Ordinal)
+                            ? tuple.Label == "beta-site" && tuple.Caller.Contains("global::Beta.", StringComparison.Ordinal)
+                            : true)),
+                "a Process call edge crosses roots through its source label, caller, or callee namespace");
         }
 
         // MW-MERGED-ROOTS-001 [reconciliation]: every merged terminal keeps its own
@@ -658,7 +680,7 @@ public sealed class MessyWorkspaceRegressionTests
 
     private static string? EngineNumber(string? symbol)
     {
-        var match = System.Text.RegularExpressions.Regex.Match(symbol, @"Engine(\d\d)\.");
+        var match = System.Text.RegularExpressions.Regex.Match(symbol ?? string.Empty, @"Engine(\d\d)\.");
         return match.Success ? match.Groups[1].Value : null;
     }
 
