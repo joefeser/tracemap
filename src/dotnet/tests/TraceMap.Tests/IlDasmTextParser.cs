@@ -9,8 +9,9 @@ namespace TraceMap.Tests;
 /// <c>/out=</c>. It exists only as the independent observation layer of the
 /// public ILAsm/ILDAsm parity gate: TraceMap's identities come from its own
 /// dual-reader contract, and this parser turns the disassembly of the very
-/// same assemblies into comparable counts, offsets, and line directives.
-/// It never feeds a scanner input and never writes binaries.
+/// same assemblies into comparable counts, offsets, exception-region
+/// extents, and line directives. It never feeds a scanner input and never
+/// writes binaries.
 /// </summary>
 internal static partial class IlDasmTextParser
 {
@@ -22,16 +23,43 @@ internal static partial class IlDasmTextParser
         int EndColumn,
         string Document);
 
+    // Extents are exclusive ends on instruction boundaries, which is exactly
+    // how ECMA-335 scopes exception clauses; the disassembler's own
+    // instruction offsets define them without any byte arithmetic here.
+    internal sealed record IlDasmExceptionRegion(
+        string Kind,
+        int TryStart,
+        int TryEnd,
+        int HandlerStart,
+        int HandlerEnd);
+
     internal sealed record IlDasmMethodText(
         string TypeName,
         string MethodName,
         int MaxStack,
         int LocalCount,
-        int ExceptionRegionCount,
-        int TryBlockCount,
+        int CodeSize,
+        IReadOnlyList<IlDasmExceptionRegion> ExceptionRegions,
         IReadOnlyList<(int Offset, string Opcode, string Operand)> Instructions,
         IReadOnlyList<(int Offset, string Opcode)> CallSites,
-        IReadOnlyList<IlDasmLineDirective> LineDirectives);
+        IReadOnlyList<IlDasmLineDirective> LineDirectives)
+    {
+        public int ExceptionRegionCount => ExceptionRegions.Count;
+
+        // Order-sensitive inside the body, order-insensitive across members:
+        // ILAsm legitimately reorders metadata row emission (observed for
+        // assembly-level custom attributes), so whole-file text equality is
+        // not the parity claim; identical canonical bodies are.
+        public string Canonical() =>
+            $"{TypeName}|{MethodName}|maxstack:{MaxStack.ToString(CultureInfo.InvariantCulture)}"
+            + $"|locals:{LocalCount.ToString(CultureInfo.InvariantCulture)}"
+            + $"|codesize:{CodeSize.ToString(CultureInfo.InvariantCulture)}\n"
+            + string.Join(string.Empty, Instructions.Select(instruction =>
+                $"{instruction.Offset.ToString("x4", CultureInfo.InvariantCulture)}:{instruction.Opcode}:{instruction.Operand}\n"))
+            + string.Join(string.Empty, ExceptionRegions.Select(region =>
+                $"eh:{region.Kind}:try{region.TryStart.ToString("x4", CultureInfo.InvariantCulture)}-{region.TryEnd.ToString("x4", CultureInfo.InvariantCulture)}"
+                + $":handler{region.HandlerStart.ToString("x4", CultureInfo.InvariantCulture)}-{region.HandlerEnd.ToString("x4", CultureInfo.InvariantCulture)}\n"));
+    }
 
     internal sealed record IlDasmTextFile(
         IReadOnlyList<IlDasmMethodText> Methods,
@@ -41,6 +69,11 @@ internal static partial class IlDasmTextParser
             Methods.Single(method =>
                 method.TypeName == typeName
                 && method.MethodName == methodName);
+
+        public string CanonicalMethodsText() => string.Join(string.Empty,
+            Methods.OrderBy(method => method.TypeName, StringComparer.Ordinal)
+                .ThenBy(method => method.MethodName, StringComparer.Ordinal)
+                .Select(method => method.Canonical()));
     }
 
     // TraceMap's call observations cover exactly these opcodes (calli and
@@ -54,6 +87,14 @@ internal static partial class IlDasmTextParser
 
     [GeneratedRegex(@"^\.line\s+(\d+),(\d+)\s*:\s*(\d+),(\d+)\s+'(.*)'\s*$")]
     private static partial Regex LineDirectiveRegex();
+
+    [GeneratedRegex(@"^//\s*Code size\s+(\d+)")]
+    private static partial Regex CodeSizeRegex();
+
+    // Switch jump tables print their targets on continuation lines that
+    // consist solely of IL_XXXX tokens with commas and the closing paren.
+    [GeneratedRegex(@"^\s*(?:IL_[0-9a-f]{4}\s*[,\)]?\s*)+$")]
+    private static partial Regex SwitchContinuationRegex();
 
     internal static IlDasmTextFile Parse(string path) => ParseText(File.ReadAllText(path));
 
@@ -80,6 +121,8 @@ internal static partial class IlDasmTextParser
         {
             var line = raw.TrimEnd();
             var trimmed = line.Trim();
+            if (builder is not null && CodeSizeRegex().Match(trimmed) is { Success: true } sizeMatch)
+                builder.CodeSize = int.Parse(sizeMatch.Groups[1].Value, CultureInfo.InvariantCulture);
             // Comment-only lines (code size, MVID, token and byte comments)
             // are the disassembler's annotations, not disassembled content.
             if (!trimmed.StartsWith("//", StringComparison.Ordinal))
@@ -148,6 +191,10 @@ internal static partial class IlDasmTextParser
                     builder = null;
                     methodClosingDepth = -1;
                 }
+                else if (builder is not null && builder.HasOpenBlocks)
+                {
+                    builder.CloseBlock();
+                }
                 else if (typeStack.Count > 0 && classClosingDepths.Count > 0 && braceDepth == classClosingDepths.Peek())
                 {
                     typeStack.RemoveAt(typeStack.Count - 1);
@@ -185,15 +232,15 @@ internal static partial class IlDasmTextParser
             }
             if (trimmed.StartsWith(".try", StringComparison.Ordinal))
             {
-                builder.TryBlockCount++;
+                builder.OpenBlock(".try");
                 continue;
             }
-            if (IsHandlerKeywordLine(trimmed))
+            if (HandlerKind(trimmed) is { } handlerKind)
             {
-                // Every printed handler keyword corresponds to one ECMA-335
-                // exception-handling clause; ILDasm nests shared-try clauses
-                // rather than duplicating instructions.
-                builder.ExceptionRegionCount++;
+                // The handler keyword follows its try's closing brace with no
+                // instruction between them, so the pending try block is the
+                // one this handler completes.
+                builder.OpenHandlerBlock(handlerKind);
                 continue;
             }
             if (LineDirectiveRegex().Match(trimmed) is { Success: true } lineMatch)
@@ -212,14 +259,12 @@ internal static partial class IlDasmTextParser
                 var offset = int.Parse(instruction.Groups[1].Value, NumberStyles.HexNumber, CultureInfo.InvariantCulture);
                 var opcode = instruction.Groups[2].Value;
                 var operand = instruction.Groups[3].Success ? instruction.Groups[3].Value : string.Empty;
-                if (builder.PendingLine is { } directive)
-                {
-                    builder.LineDirectives.Add(directive with { Offset = offset });
-                    builder.PendingLine = null;
-                }
-                builder.Instructions.Add((offset, opcode, operand));
-                if (CallFamilyOpcodes.Contains(opcode))
-                    builder.CallSites.Add((offset, opcode));
+                builder.AddInstruction(offset, opcode, operand, pendingLine: builder.PendingLine);
+                continue;
+            }
+            if (builder.SwitchTargetsPending && SwitchContinuationRegex().IsMatch(trimmed))
+            {
+                builder.AppendSwitchTargets(trimmed);
                 continue;
             }
         }
@@ -232,9 +277,9 @@ internal static partial class IlDasmTextParser
         return new IlDasmTextFile(methods, Normalized(normalized.ToString()));
     }
 
-    // Whitespace-insensitive canonical form for whole-file comparison between
-    // two disassemblies: blank lines collapse and every remaining line keeps
-    // its content with trailing blanks trimmed.
+    // Whitespace-insensitive canonical form kept for diagnostics; the parity
+    // comparison uses CanonicalMethodsText, which tolerates metadata row
+    // reordering that ILAsm legitimately performs.
     internal static string Normalized(string text)
     {
         var builder = new StringBuilder();
@@ -248,12 +293,12 @@ internal static partial class IlDasmTextParser
         return builder.ToString();
     }
 
-    private static bool IsHandlerKeywordLine(string trimmed)
+    private static string? HandlerKind(string trimmed)
     {
         foreach (var keyword in new[] { "catch", "finally", "fault", "filter" })
             if (trimmed == keyword || trimmed.StartsWith(keyword + " ", StringComparison.Ordinal))
-                return true;
-        return false;
+                return keyword;
+        return null;
     }
 
     private static string InnerLocals(string directive)
@@ -309,7 +354,7 @@ internal static partial class IlDasmTextParser
         var tokens = classLine.Split(' ');
         var name = tokens[^1];
         if (name == "extends" || name.StartsWith("implements", StringComparison.Ordinal))
-            throw new InvalidOperationException("Unexpected trailing token as class name in ILDasm text.");
+            throw new InvalidOperationException($"Unexpected trailing token as class name in ILDasm text: {classLine}");
         return name;
     }
 
@@ -333,32 +378,141 @@ internal static partial class IlDasmTextParser
 
     private sealed class IlDasmMethodTextBuilder
     {
+        private readonly List<(int Offset, string Opcode, string Operand)> instructions = [];
+        private readonly List<(int Offset, string Opcode)> callSites = [];
+        private readonly List<IlDasmLineDirective> lineDirectives = [];
+        private readonly List<IlDasmExceptionRegion> regions = [];
+        // Blocks whose closing brace was seen but whose exclusive end (the
+        // next instruction offset, or the code size at the method end) is not
+        // yet known.
+        private readonly List<Block> closedBlocks = [];
+
         public IlDasmMethodTextBuilder(string typeName, string methodName)
         {
             TypeName = typeName;
             MethodName = methodName;
         }
 
+        private sealed class Block(string kind)
+        {
+            public string Kind { get; } = kind;
+            public int Start { get; set; } = -1;
+            public int End { get; set; } = -1;
+            // The try block this handler completes, captured when the handler
+            // keyword appears directly after the try's closing brace.
+            public Block? PairedTry { get; set; }
+        }
+
         public string TypeName { get; }
         public string MethodName { get; }
         public int MaxStack { get; set; }
         public int LocalCount { get; set; }
-        public int TryBlockCount { get; set; }
-        public int ExceptionRegionCount { get; set; }
-        public List<(int Offset, string Opcode, string Operand)> Instructions { get; } = [];
-        public List<(int Offset, string Opcode)> CallSites { get; } = [];
-        public List<IlDasmLineDirective> LineDirectives { get; } = [];
+        public int CodeSize { get; set; }
+        public bool HasOpenBlocks => OpenBlocks.Count > 0;
         public IlDasmLineDirective? PendingLine { get; set; }
+        public bool SwitchTargetsPending { get; private set; }
+        private List<Block> OpenBlocks { get; } = [];
 
-        public IlDasmMethodText Build() => new(
-            TypeName,
-            MethodName,
-            MaxStack,
-            LocalCount,
-            ExceptionRegionCount,
-            TryBlockCount,
-            Instructions.ToArray(),
-            CallSites.ToArray(),
-            LineDirectives.ToArray());
+        public void OpenBlock(string kind)
+        {
+            if (kind != ".try")
+                throw new InvalidOperationException($"Unsupported ILDasm block keyword: {kind}");
+            OpenBlocks.Add(new Block(".try"));
+        }
+
+        public void OpenHandlerBlock(string kind)
+        {
+            var handler = new Block(kind);
+            // The most recently closed block must be the try this handler
+            // completes; ildasm never puts an instruction between them.
+            var lastClosed = closedBlocks.LastOrDefault(block => block.End == -1);
+            if (lastClosed is null || lastClosed.Kind != ".try")
+                throw new InvalidOperationException($"Handler '{kind}' in {TypeName}.{MethodName} follows no open try region.");
+            handler.PairedTry = lastClosed;
+            OpenBlocks.Add(handler);
+        }
+
+        public void CloseBlock()
+        {
+            var block = OpenBlocks[^1];
+            OpenBlocks.RemoveAt(OpenBlocks.Count - 1);
+            closedBlocks.Add(block);
+        }
+
+        public void AddInstruction(int offset, string opcode, string operand, IlDasmLineDirective? pendingLine)
+        {
+            if (pendingLine is not null)
+            {
+                lineDirectives.Add(pendingLine with { Offset = offset });
+                PendingLine = null;
+            }
+            // The first instruction at or after a closed block's brace fixes
+            // that block's exclusive end on an instruction boundary; later
+            // instructions must not move it.
+            foreach (var block in closedBlocks)
+                block.End = block.End == -1 ? offset : block.End;
+            FinalizeCompletedClauses();
+            foreach (var open in OpenBlocks)
+                open.Start = open.Start < 0 ? offset : open.Start;
+            instructions.Add((offset, opcode, operand));
+            if (CallFamilyOpcodes.Contains(opcode))
+                callSites.Add((offset, opcode));
+            SwitchTargetsPending = opcode == "switch";
+        }
+
+        // A clause is complete once its handler's end is known; ECMA-335
+        // scopes both the try and the handler on instruction boundaries.
+        private void FinalizeCompletedClauses()
+        {
+            foreach (var handler in closedBlocks
+                         .Where(block => block.Kind != ".try" && block.PairedTry is not null && block.End != -1)
+                         .ToArray())
+            {
+                regions.Add(new IlDasmExceptionRegion(
+                    handler.Kind,
+                    handler.PairedTry!.Start,
+                    handler.PairedTry.End,
+                    handler.Start,
+                    handler.End));
+                closedBlocks.Remove(handler.PairedTry);
+                closedBlocks.Remove(handler);
+            }
+        }
+
+        public void AppendSwitchTargets(string continuation)
+        {
+            if (instructions.Count == 0)
+                return;
+            var last = instructions[^1];
+            var targets = Regex.Matches(continuation, @"IL_([0-9a-f]{4})")
+                .Select(match => match.Groups[1].Value)
+                .ToArray();
+            instructions[^1] = (last.Offset, last.Opcode, last.Operand + ":" + string.Join(",", targets));
+            if (continuation.Contains(')'))
+                SwitchTargetsPending = false;
+        }
+
+        public IlDasmMethodText Build()
+        {
+            if (OpenBlocks.Count > 0)
+                throw new InvalidOperationException($"Unclosed exception block '{OpenBlocks[^1].Kind}' in {TypeName}.{MethodName}.");
+            foreach (var block in closedBlocks)
+                block.End = CodeSize;
+            FinalizeCompletedClauses();
+            if (closedBlocks.Count > 0)
+                throw new InvalidOperationException($"Unpaired exception block '{closedBlocks[0].Kind}' in {TypeName}.{MethodName}.");
+            return new IlDasmMethodText(
+                TypeName,
+                MethodName,
+                MaxStack,
+                LocalCount,
+                CodeSize,
+                regions.OrderBy(region => region.TryStart, Comparer<int>.Default)
+                    .ThenBy(region => region.HandlerStart, Comparer<int>.Default)
+                    .ToArray(),
+                instructions.ToArray(),
+                callSites.ToArray(),
+                lineDirectives.ToArray());
+        }
     }
 }

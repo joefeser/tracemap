@@ -71,7 +71,7 @@ public sealed class IlAsmIldasmParityGateTests
 
         using var workspace = new ParityWorkspace(ControlFlowFixture());
         var parsed = RoundTrip(toolchain, workspace);
-        output.WriteLine($"[ILASM-PARITY] control-flow round trip: {parsed.Before.Methods.Count} methods, normalized text {parsed.Before.NormalizedText.Length} chars");
+        output.WriteLine($"[ILASM-PARITY] control-flow round trip: {parsed.Before.Methods.Count} methods, canonical text {parsed.Before.CanonicalMethodsText().Length} chars");
 
         var result = ScanBoundRewritePair(workspace.Fixture, workspace.BeforePath, workspace.AfterPath);
         AssertRoundTripParity(result, parsed.Before, parsed.After);
@@ -82,14 +82,18 @@ public sealed class IlAsmIldasmParityGateTests
         {
             var before = parsed.Before.Method(ControlFlowType, methodName);
             var after = parsed.After.Method(ControlFlowType, methodName);
-            Assert.True(before.ExceptionRegionCount == before.TryBlockCount,
-                $"{methodName}: ILDasm printed {before.ExceptionRegionCount} handler clauses but {before.TryBlockCount} .try blocks.");
-            Assert.Equal(before.ExceptionRegionCount, after.ExceptionRegionCount);
+            Assert.All(before.ExceptionRegions, region =>
+            {
+                Assert.True(region.TryEnd > region.TryStart, $"{methodName}: try extent is not increasing.");
+                Assert.True(region.HandlerEnd > region.HandlerStart, $"{methodName}: handler extent is not increasing.");
+            });
+            Assert.Equal(before.ExceptionRegions, after.ExceptionRegions);
         }
         Assert.True(parsed.Before.Method(ControlFlowType, "NestedTryRegions").ExceptionRegionCount >= 2,
             "The nested-region fixture must exercise at least two exception clauses.");
-        Assert.True(parsed.Before.Method(ControlFlowType, "DenseSwitch").Instructions.Any(instruction => instruction.Opcode == "switch"),
-            "The dense-switch fixture must exercise a switch jump table.");
+        var denseSwitch = parsed.Before.Method(ControlFlowType, "DenseSwitch");
+        Assert.Contains(denseSwitch.Instructions, instruction => instruction.Opcode == "switch"
+            && instruction.Operand.Contains(':', StringComparison.Ordinal));
     }
 
     [Fact]
@@ -102,7 +106,7 @@ public sealed class IlAsmIldasmParityGateTests
 
         using var workspace = new ParityWorkspace(MemberShapesFixture());
         var parsed = RoundTrip(toolchain, workspace);
-        output.WriteLine($"[ILASM-PARITY] member-shape round trip: {parsed.Before.Methods.Count} methods, normalized text {parsed.Before.NormalizedText.Length} chars");
+        output.WriteLine($"[ILASM-PARITY] member-shape round trip: {parsed.Before.Methods.Count} methods, canonical text {parsed.Before.CanonicalMethodsText().Length} chars");
 
         var result = ScanBoundRewritePair(workspace.Fixture, workspace.BeforePath, workspace.AfterPath);
         AssertRoundTripParity(result, parsed.Before, parsed.After);
@@ -140,15 +144,16 @@ public sealed class IlAsmIldasmParityGateTests
             // no Cecil input stream is ever its own output file.
             MutateControlFlow(before, rawAfter, mutation.Mutate);
 
-            var rawIl = Disassemble(toolchain, rawAfter, Path.Combine(temp.Path, $"{mutation.Role}.raw.il"));
+            var rawIlPath = Path.Combine(temp.Path, $"{mutation.Role}.raw.il");
+            var rawIl = Disassemble(toolchain, rawAfter, rawIlPath);
             // The ILAsm output keeps the fixture's assembly file name inside
             // its own directory so the reassembled module identity joins the
             // original regardless of how ILAsm derives the module name.
-            var roundTripped = Assemble(toolchain, rawIl, Path.Combine(temp.Path, mutation.Role, "rt", Path.GetFileName(ControlFlowFixture())));
+            var roundTripped = Assemble(toolchain, rawIlPath, Path.Combine(temp.Path, mutation.Role, "rt", Path.GetFileName(ControlFlowFixture())));
             var roundTrippedIl = Disassemble(toolchain, roundTripped, Path.Combine(temp.Path, $"{mutation.Role}.rt.il"));
             Assert.Equal(
-                IlDasmTextParser.ParseText(rawIl).NormalizedText,
-                IlDasmTextParser.ParseText(roundTrippedIl).NormalizedText);
+                IlDasmTextParser.ParseText(rawIl).CanonicalMethodsText(),
+                IlDasmTextParser.ParseText(roundTrippedIl).CanonicalMethodsText());
 
             var rawScan = ScanRewritePair(before, rawAfter, temp);
             var roundTrippedScan = ScanRewritePair(before, roundTripped, temp);
@@ -399,9 +404,15 @@ public sealed class IlAsmIldasmParityGateTests
         IlDasmTextParser.IlDasmTextFile after)
     {
         // Independent oracle first: ILDAsm's own disassembly of the original
-        // and of the ILAsm-reassembled assembly must be identical once the
-        // disassembler's annotations (comments, blank lines) are dropped.
-        Assert.Equal(before.NormalizedText, after.NormalizedText);
+        // and of the ILAsm-reassembled assembly must agree on every method's
+        // canonical body (instructions, operands, switch targets, locals,
+        // max stack, code size, and exception-clause extents; each canonical
+        // block also names its type and method, so the member set agrees).
+        // Whole-file text equality is deliberately not asserted: ILAsm
+        // legitimately reorders metadata row emission (observed for
+        // assembly-level custom attributes), which TraceMap's identities do
+        // not depend on.
+        Assert.Equal(before.CanonicalMethodsText(), after.CanonicalMethodsText());
 
         Assert.Equal("rewrite-complete", result.Manifest.IlRewriteProvenance!.CoverageState);
         var edges = result.Facts.Where(fact => fact.FactType == FactTypes.ManagedIlRewriteObserved).ToArray();
@@ -454,15 +465,23 @@ public sealed class IlAsmIldasmParityGateTests
     private static ScanResult ScanBoundRewritePair(BoundFixture fixture, string before, string after) =>
         ScanEngine.Scan(BoundPairOptions(fixture, before, after, Path.GetRandomFileName()));
 
-    private static ScanOptions BoundPairOptions(BoundFixture fixture, string before, string after, string run) => new(
-        fixture.Root,
-        Path.Combine(fixture.Root, $"scan-{run}", "out"),
-        CompiledInputPaths: [before, after],
-        CompiledBindingReceiptPaths: [fixture.ReceiptPath([before, after])],
-        IlBodyEvidence: true,
-        IlRewriteEvidence: true,
-        IlRewriteBeforePaths: [before],
-        IlRewriteAfterPaths: [after]);
+    private static ScanOptions BoundPairOptions(BoundFixture fixture, string before, string after, string run)
+    {
+        // Scan outputs and binding receipts stay OUTSIDE the scanned fixture
+        // repository: artifacts inside the repo would change the file
+        // inventory every scan and make repeat-scan determinism
+        // self-defeating.
+        var runRoot = Path.Combine(Path.GetTempPath(), "tracemap-parity-scans", run);
+        return new ScanOptions(
+            fixture.Root,
+            Path.Combine(runRoot, "out"),
+            CompiledInputPaths: [before, after],
+            CompiledBindingReceiptPaths: [fixture.ReceiptPath([before, after], runRoot)],
+            IlBodyEvidence: true,
+            IlRewriteEvidence: true,
+            IlRewriteBeforePaths: [before],
+            IlRewriteAfterPaths: [after]);
+    }
 
     private static ScanResult ScanRewritePair(string before, string after, TempDirectory temp) => ScanEngine.Scan(new ScanOptions(
         RepoRoot(),
@@ -491,12 +510,15 @@ public sealed class IlAsmIldasmParityGateTests
 
         public string Root => temp.Path;
 
-        public string ReceiptPath(IReadOnlyList<string> assemblies)
+        public string ReceiptPath(IReadOnlyList<string> assemblies, string directory)
         {
             var commit = RunGit("rev-parse", "HEAD").Trim();
             Assert.Matches("^[0-9a-fA-F]{40}$", commit);
             var initial = ManagedMetadataExtractor.Evaluate(Root, commit, new ScanOptions(Root, "unused", CompiledInputPaths: assemblies));
-            var receipt = Path.Combine(Root, $"binding-{Path.GetRandomFileName()}.json");
+            // Receipts live outside the scanned repository so repeat scans
+            // always observe an identical working tree.
+            Directory.CreateDirectory(directory);
+            var receipt = Path.Combine(directory, $"binding-{Path.GetRandomFileName()}.json");
             File.WriteAllText(receipt, JsonSerializer.Serialize(new
             {
                 schemaVersion = "compiled-input-binding-set.v1",
@@ -570,11 +592,14 @@ public sealed class IlAsmIldasmParityGateTests
             return assembly;
         }
 
-        public ScanResult Scan(string compiledAssembly, string declaredPdb) =>
-            ScanEngine.Scan(new ScanOptions(Root, Path.Combine(Root, "scan-" + Guid.NewGuid().ToString("N")),
+        public ScanResult Scan(string compiledAssembly, string declaredPdb)
+        {
+            var runRoot = Path.Combine(Path.GetTempPath(), "tracemap-parity-scans", "pdb-" + Guid.NewGuid().ToString("N"));
+            return ScanEngine.Scan(new ScanOptions(Root, Path.Combine(runRoot, "out"),
                 CompiledInputPaths: [compiledAssembly],
-                CompiledBindingReceiptPaths: [ReceiptPath([compiledAssembly])],
+                CompiledBindingReceiptPaths: [ReceiptPath([compiledAssembly], runRoot)],
                 PdbInputPaths: [declaredPdb]));
+        }
     }
 
     private sealed class ParityWorkspace : IDisposable
