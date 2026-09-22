@@ -218,6 +218,7 @@ public static class ScanEngine
         var pdbEvaluation = PortablePdbExtractor.Evaluate(repoPath, options, compiledEvaluation, cancellationToken);
         var ilEvaluation = IlBodyEvidenceExtractor.Evaluate(options, compiledEvaluation, cancellationToken);
         var ilRewriteEvaluation = IlRewriteEvidenceExtractor.Evaluate(options, cancellationToken);
+        var ilRewritePdbEvaluation = IlRewritePdbEvidenceExtractor.Evaluate(options, ilRewriteEvaluation, cancellationToken);
         var projects = inventory
             .Where(item => item.Kind is "Project" or "SqlProject" or "VisualBasicProject")
             .Select(item => item.RelativePath)
@@ -267,6 +268,7 @@ public static class ScanEngine
             .Concat(pdbEvaluation.KnownGaps)
             .Concat(ilEvaluation.KnownGaps)
             .Concat(ilRewriteEvaluation.KnownGaps)
+            .Concat(ilRewritePdbEvaluation.KnownGaps)
             .OrderBy(gap => gap, StringComparer.Ordinal)
             .Distinct(StringComparer.Ordinal)
             .ToArray();
@@ -280,7 +282,8 @@ public static class ScanEngine
                 compiledEvaluation.Provenance?.BoundedInputSha256,
                 pdbEvaluation.Provenance?.BoundedInputSha256,
                 ilEvaluation.Provenance?.BoundedInputSha256,
-                ilRewriteEvaluation.Provenance?.BoundedInputSha256),
+                ilRewriteEvaluation.Provenance?.BoundedInputSha256,
+                ilRewritePdbEvaluation.Provenance?.BoundedInputSha256),
             git.RepoName,
             git.RemoteUrl,
             git.Branch,
@@ -302,7 +305,8 @@ public static class ScanEngine
             PdbInputProvenance: pdbEvaluation.Provenance,
             PdbEvidenceSummary: null,
             IlBodyProvenance: ilEvaluation.Provenance,
-            IlRewriteProvenance: ilRewriteEvaluation.Provenance);
+            IlRewriteProvenance: ilRewriteEvaluation.Provenance,
+            IlRewritePdbProvenance: ilRewritePdbEvaluation.Provenance);
 
         var binlogFacts = MsBuildBinlogExtractor.Extract(repoPath, provisionalManifest, options.BinlogPaths);
         var binlogGaps = binlogFacts
@@ -353,6 +357,7 @@ public static class ScanEngine
                     pdbEvaluation,
                     ilEvaluation,
                     ilRewriteEvaluation,
+                    ilRewritePdbEvaluation,
                     progress,
                     cancellationToken);
                 cancellationToken.ThrowIfCancellationRequested();
@@ -478,7 +483,8 @@ public static class ScanEngine
         string? compiledBoundedInputSha256,
         string? pdbBoundedInputSha256,
         string? ilBoundedInputSha256,
-        string? ilRewriteBoundedInputSha256)
+        string? ilRewriteBoundedInputSha256,
+        string? ilRewritePdbBoundedInputSha256 = null)
     {
         var signature = string.Join('\n', inventory.Select(item => $"{item.RelativePath}|{item.Kind}|{item.SizeBytes}"));
         var binlogSignature = MsBuildBinlogExtractor.CreateInputSignature(options.BinlogPaths, repoPath: options.RepoPath);
@@ -493,7 +499,8 @@ public static class ScanEngine
             $"compiled={compiledBoundedInputSha256 ?? string.Empty}",
             $"pdb={pdbBoundedInputSha256 ?? string.Empty}",
             $"il={ilBoundedInputSha256 ?? string.Empty}",
-            $"ilrewrite={ilRewriteBoundedInputSha256 ?? string.Empty}");
+            $"ilrewrite={ilRewriteBoundedInputSha256 ?? string.Empty}",
+            $"ilrewritepdb={ilRewritePdbBoundedInputSha256 ?? string.Empty}");
         var repoIdentity = string.IsNullOrWhiteSpace(git.RemoteUrl) ? git.RepoName : git.RemoteUrl;
         return "scan-" + FactFactory.Hash($"{repoIdentity}|{git.CommitSha}|{sourceSnapshotDigest}|{signature}|{optionSignature}|{binlogSignature}", 20);
     }
@@ -695,6 +702,7 @@ public static class ScanEngine
         PdbInputEvaluation pdbEvaluation,
         IlBodyEvaluation ilEvaluation,
         IlRewriteEvaluation ilRewriteEvaluation,
+        IlRewritePdbEvaluation ilRewritePdbEvaluation,
         ScanProgressReporter? progress = null,
         CancellationToken cancellationToken = default)
     {
@@ -736,7 +744,8 @@ public static class ScanEngine
             if (gap.StartsWith("Compiled metadata coverage reduced:", StringComparison.Ordinal)
                 || gap.StartsWith("PDB coverage reduced:", StringComparison.Ordinal)
                 || gap.StartsWith("IL body evidence coverage reduced:", StringComparison.Ordinal)
-                || gap.StartsWith("IL rewrite evidence coverage reduced:", StringComparison.Ordinal))
+                || gap.StartsWith("IL rewrite evidence coverage reduced:", StringComparison.Ordinal)
+                || gap.StartsWith("IL rewrite PDB evidence coverage reduced:", StringComparison.Ordinal))
                 continue;
             facts.Add(FactFactory.Create(
                 manifest,
@@ -754,7 +763,9 @@ public static class ScanEngine
         facts.AddRange(compiledFacts);
         facts.AddRange(PortablePdbExtractor.MaterializeFacts(repoPath, manifest, pdbEvaluation, compiledFacts, inventory, cancellationToken));
         facts.AddRange(IlBodyEvidenceExtractor.MaterializeFacts(manifest, ilEvaluation, compiledFacts, cancellationToken));
-        facts.AddRange(IlRewriteEvidenceExtractor.MaterializeFacts(manifest, ilRewriteEvaluation, cancellationToken));
+        var ilRewriteFacts = IlRewriteEvidenceExtractor.MaterializeFacts(manifest, ilRewriteEvaluation, cancellationToken);
+        facts.AddRange(ilRewriteFacts);
+        facts.AddRange(IlRewritePdbEvidenceExtractor.MaterializeFacts(manifest, ilRewritePdbEvaluation, ilRewriteFacts, cancellationToken));
 
         foreach (var item in inventory)
         {

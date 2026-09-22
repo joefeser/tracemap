@@ -582,7 +582,9 @@ internal static class PortablePdbExtractor
             })));
     }
 
-    private static (IReadOnlyList<PdbDocumentObservation> Documents, IReadOnlyList<PdbMethodObservation> Methods) ReadPortablePdb(
+    // Internal so the IL rewrite PDB lane can rebuild the identical SRM
+    // method/sequence-point observation contract over its declared PDB sides.
+    internal static (IReadOnlyList<PdbDocumentObservation> Documents, IReadOnlyList<PdbMethodObservation> Methods) ReadPortablePdb(
         MetadataReader reader,
         string contentIdentity,
         PdbInputLimits limits,
@@ -657,7 +659,7 @@ internal static class PortablePdbExtractor
         return (documents, methods);
     }
 
-    private static Dictionary<string, int> ReadCecilShapeCounts(
+    internal static Dictionary<string, int> ReadCecilShapeCounts(
         byte[] peBytes,
         byte[] pdbBytes,
         PdbWorkBudget workBudget,
@@ -1061,7 +1063,7 @@ internal static class PortablePdbExtractor
         });
 
     private static string ContentIdentity(Guid guid, uint stamp) => $"{guid:D}:{stamp:x8}";
-    private static bool IsPortablePdb(byte[] bytes) => bytes.Length >= 4 && bytes[0] == (byte)'B' && bytes[1] == (byte)'S' && bytes[2] == (byte)'J' && bytes[3] == (byte)'B';
+    internal static bool IsPortablePdb(byte[] bytes) => bytes.Length >= 4 && bytes[0] == (byte)'B' && bytes[1] == (byte)'S' && bytes[2] == (byte)'J' && bytes[3] == (byte)'B';
     internal static bool IsWindowsPdb(byte[] bytes) => bytes.AsSpan().StartsWith(WindowsPdbSignature);
     private static string ResolvePath(string repoPath, string path) => Path.GetFullPath(Path.IsPathRooted(path) ? path : Path.Combine(repoPath, path));
 

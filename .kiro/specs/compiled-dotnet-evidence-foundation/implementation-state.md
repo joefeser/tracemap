@@ -861,3 +861,103 @@ validator self-tests passed 7/7, lane tests 3/3, private-path guard and
 `git diff --check` passed. Restoring the old merged-root catalog rule separately
 fails the new produced-evidence assertion. The temporary catalog mutation was
 also removed before final validation.
+
+## Task 10 fourth slice: bounded rewrite PDB identity evidence
+
+Branch: `codex/task10-ppdb-rewrite-identity` from `origin/dev` at
+`381f93db88156d941efc22a9a39cb470083599f1` (PR #778 merge). Tracking #766.
+The slice proves what happens to Portable PDB method and sequence-point
+identities when an admitted method body is rewritten; it was inspected
+against the existing source→metadata, PDB, IL-body, rewrite, and
+messy-workspace contracts before any contract changed, and the two new rule
+IDs (`dotnet.compiled.il-rewrite-pdb.v1`,
+`dotnet.compiled.il-rewrite-pdb-gap.v1`) were documented with limitations in
+`rules/rule-catalog.yml` before any fact was emitted.
+
+`dotnet.compiled.il-rewrite-pdb.v1` activates behind
+`--il-rewrite-pdb-evidence` (requires `--il-rewrite-evidence`) with ordinal
+`--il-rewrite-pdb-before`/`--il-rewrite-pdb-after` declarations that must
+align with the declared assembly pairs, plus
+`--il-rewrite-pdb-max-{file-bytes,documents,methods,sequence-points,text,work}`
+limits. Each PDB side binds only its own paired assembly through the exact
+portable content GUID/stamp against the CodeView entries of the re-read,
+re-hashed assembly bytes; duplicate entries, cross-side matches, and changed
+or unreadable matched assemblies fail closed. Both sides independently
+satisfy the standalone PDB dual-reader contract (SRM observations
+cross-checked against Cecil shape counts), every PDB method row must map to
+a dual-reader-proven body on its own side, and every sequence-point IL
+offset must fall inside that body's proven extent
+(`IlRewritePdbMethodRowInconsistent` otherwise). Positive
+`ManagedIlRewritePdbObserved` facts record the original and rewritten
+member identity, both body identities and operand-aware digests, both PDB
+method identities, both content ids, per-side sequence-point digests, the
+parent rewrite fact id, and the exact offset classification
+(`sequence-point-offsets-unchanged` iff the ordered IL offset vectors are
+equal). The classification compares IL offset vectors only and never claims
+behavioral equivalence, source ownership, preserved debugging behavior, or
+rewrite attribution. One-side-only debug information emits a bounded
+`IlRewritePdbMethodDebugInformationAbsent` gap (8 retained identities plus an
+omitted-suffix digest); neither-side methods emit nothing. The lane is inert
+without the flag — a scan declaring the PDB lists without it keeps an
+identical scan identity, rewrite digest, and fact bytes (pinned by test).
+
+Mono.Cecil 0.11.6 generates the deterministic after sides inside the public
+test suite by reading the compiler-produced
+`samples/compiled-dotnet-evidence/csharp` fixture with portable symbols and
+writing mutated assembly+PDB pairs; Cecil coordinates the written PDB content
+id with the after assembly's CodeView entry (verified empirically and pinned
+by the positive tests), so pairs bind by construction. The before side is
+the genuine deterministic compiler pair, so positive evidence spans a real
+cross-writer identity divergence. System.Reflection.Metadata independently
+reads PDB observations, CodeView entries, and body extents; Cecil is never
+the sole oracle. The fixture catalog moves to
+`compiled-dotnet-fixture-cases.v6` with a 13-entry `ilRewritePdbCases`
+section (11 implemented shapes, 2 deferred with exact prerequisites).
+Notable identity finding pinned by the tests: an operand-only rewrite leaves
+the PDB byte-identical (same content id as a pristine rewrite), and the
+Cecil-written CodeView entry contains the local output path — the lane uses
+GUID/stamp only and never emits the path.
+
+ILAsm/ILDAsm parity was assessed on 2026-09-22 and deferred
+(`ILRWPDB-ILASM-PARITY-012`): absent from PATH, the .NET SDK 10.0.201
+installation, and the NuGet cache; Homebrew bottles mono 6.14.1 but it was
+not installed, and no pinned ILAsm toolchain exists in ordinary CI.
+Prerequisites: Windows SDK/Visual Studio `ilasm.exe`+`ildasm.exe` on the
+Windows CI lane, or a pinned mono/dotnet-runtime ILAsm build on macOS/Linux,
+plus an independent disassembly oracle. Embedded portable PDBs are likewise
+deferred (`ILRWPDB-EMBEDDED-PORTABLE-013`). No ILAsm/ILDAsm or Windows PDB
+parity claim is made from Cecil-based tests.
+
+Local macOS validation on 2026-09-22:
+
+- focused `IlRewritePdbEvidenceExtractorTests`: 23 passed, zero failed, zero
+  skipped;
+- combined compiled-lane filter (rewrite PDB, rewrite, PDB, IL body, managed
+  metadata): 179 passed, zero failed, zero skipped (sibling fixture-catalog
+  pins updated v5→v6 in the rewrite, PDB, IL body, and source-reconciliation
+  suites);
+- `dotnet test src/dotnet/TraceMap.sln --no-restore`: 2,167 passed, zero
+  failed, zero skipped;
+- clean full rebuild: zero warnings, zero errors;
+- two repeat CLI scans (compiler before pair vs Cecil nop-insertion after
+  pair): byte-identical `facts.ndjson` and `report.md`, manifest identical
+  except `scannedAt`, 71 `dotnet.compiled.il-rewrite-pdb%` rows in
+  `index.sqlite`, receipt carries `ilRewritePdbProvenance`, 90 joined
+  methods, 71 relationships (70 offsets-unchanged, 1 offsets-changed);
+  operand-only variant: 71/71 offsets-unchanged; mismatched after PDB:
+  side-scoped `IlRewritePdbAssemblyBindingMismatch`;
+- `scripts/validate-adapter-artifacts.py` passed on all scanned outputs; no
+  output contained a local absolute path, a temp path, or an IL string
+  literal;
+- `scripts/check-private-paths.sh`, `node scripts/kiro-review.mjs
+  --self-test`, and `git diff --check` passed;
+- plain `samples/modern-sample` source scan unchanged
+  (Level1SemanticAnalysis, no new provenance section).
+
+Explicitly deferred and still open for Task 10: ILAsm/ILDAsm parity,
+evaluation-stack-sensitive rewrites, netmodules, type forwarding, duplicate
+assembly identities, insertion/removal relationship edges, embedded portable
+PDBs, and the extended ECMA-335 mutation matrix from #766. Task 11's legacy
+Windows, `dotnetperf`, and C++/CLI lanes remain separate. The Task 10
+checkbox stays open until #766's full public rewrite-suite acceptance is
+met.

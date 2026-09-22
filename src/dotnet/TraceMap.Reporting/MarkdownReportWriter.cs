@@ -444,6 +444,7 @@ public static class MarkdownReportWriter
             AddPdbEvidence(lines, result);
             AddIlBodyEvidence(lines, result);
             AddIlRewriteEvidence(lines, result);
+            AddIlRewritePdbEvidence(lines, result);
             return;
         }
 
@@ -497,6 +498,7 @@ public static class MarkdownReportWriter
         AddPdbEvidence(lines, result);
         AddIlBodyEvidence(lines, result);
         AddIlRewriteEvidence(lines, result);
+        AddIlRewritePdbEvidence(lines, result);
     }
 
     private static void AddPdbEvidence(List<string> lines, ScanResult result)
@@ -587,6 +589,35 @@ public static class MarkdownReportWriter
         var edgeOmitted = Math.Max(0, rewriteFacts.Count(fact => fact.FactType == FactTypes.ManagedIlRewriteObserved) - CompiledMetadataFactLimit);
         if (edgeOmitted > 0)
             lines.Add($"- {edgeOmitted} additional rewrite edge rows omitted from this report display; exhaustive rows remain in `facts.ndjson` and `index.sqlite`.");
+    }
+
+    private static void AddIlRewritePdbEvidence(List<string> lines, ScanResult result)
+    {
+        if (result.Manifest.IlRewritePdbProvenance is not { } rewritePdb)
+            return;
+        var rewritePdbFacts = result.Facts.Where(fact => fact.RuleId is
+                RuleIds.DotNetIlRewritePdb or RuleIds.DotNetIlRewritePdbGap)
+            .ToArray();
+        lines.Add("");
+        lines.Add("## Compiled .NET IL Rewrite PDB Evidence");
+        lines.Add("");
+        lines.Add($"- Coverage: `{rewritePdb.CoverageState}`");
+        lines.Add($"- Artifact visibility: `{rewritePdb.ArtifactVisibility}`");
+        lines.Add($"- Bounded input SHA-256: `{rewritePdb.BoundedInputSha256}`");
+        lines.Add($"- Generator SHA-256: `{rewritePdb.GeneratorSha256}`");
+        lines.Add($"- PDB identity relationships: `{rewritePdbFacts.Count(fact => fact.FactType == FactTypes.ManagedIlRewritePdbObserved)}`; gaps: `{rewritePdbFacts.Count(fact => fact.FactType == FactTypes.AnalysisGap)}`.");
+        lines.Add("- Every relationship joins one exact method identity already proven across the before/after assembly pair, with each PDB bound to its own paired assembly by exact portable content identity and every sequence-point offset validated against the proven body extent; missing, malformed, ambiguous, mismatched, row-inconsistent, reader-disputed, and over-budget sides fail closed to Tier4 gaps.");
+        lines.Add("- Rewrite PDB evidence never claims behavioral equivalence, source ownership, preserved debugging behavior, or rewrite attribution; the offset classification compares IL offset vectors only.");
+        foreach (var outcome in rewritePdb.Outcomes.OrderBy(item => item.PairId, StringComparer.Ordinal))
+            lines.Add($"- Rewrite PDB pair `{outcome.PairId}` (`{outcome.BeforePdbSafeLocator}` -> `{outcome.AfterPdbSafeLocator}`): `{outcome.Outcome}`, joined methods `{outcome.JoinedMethodCount}`, relationships `{outcome.PdbRelationshipCount}` (`{outcome.OffsetsUnchangedCount}` offsets-unchanged, `{outcome.OffsetsChangedCount}` offsets-changed), gaps `{(outcome.GapKinds.Count == 0 ? "none" : string.Join(",", outcome.GapKinds))}`.");
+        foreach (var fact in rewritePdbFacts.Where(fact => fact.FactType == FactTypes.ManagedIlRewritePdbObserved)
+                     .OrderBy(fact => fact.Evidence.FilePath, StringComparer.Ordinal)
+                     .ThenBy(fact => fact.TargetSymbol, StringComparer.Ordinal)
+                     .Take(CompiledMetadataFactLimit))
+            lines.Add($"- PDB edge `{fact.Properties.GetValueOrDefault("methodIdentity")}` ({fact.Properties.GetValueOrDefault("sequencePointOffsets")}, rewrite `{fact.Properties.GetValueOrDefault("rewriteRelationshipKind")}`, `{fact.Properties.GetValueOrDefault("beforeSequencePointCount")}` -> `{fact.Properties.GetValueOrDefault("afterSequencePointCount")}` sequence points).");
+        var pdbEdgeOmitted = Math.Max(0, rewritePdbFacts.Count(fact => fact.FactType == FactTypes.ManagedIlRewritePdbObserved) - CompiledMetadataFactLimit);
+        if (pdbEdgeOmitted > 0)
+            lines.Add($"- {pdbEdgeOmitted} additional rewrite PDB relationship rows omitted from this report display; exhaustive rows remain in `facts.ndjson` and `index.sqlite`.");
     }
 
     private static void AddFactSection(List<string> lines, string title, IEnumerable<CodeFact> facts, Func<CodeFact, string> format)
