@@ -296,6 +296,54 @@ public sealed class IlRewritePdbEvidenceExtractorTests
     }
 
     [Fact]
+    public void Parent_join_exhaustion_withholds_the_pdb_pair_instead_of_claiming_completeness()
+    {
+        using var temp = new TempDirectory();
+        var (beforeDll, beforePdb, afterDll, afterPdb) = PreparePair(temp, OperandOnlyMutation);
+        // A parent pair whose join was atomically exhausted keeps both side
+        // artifacts but zero edges; the PDB lane must not relabel that
+        // partial parent analysis as an admitted, complete PDB pair.
+        var outcome = new IlRewritePairOutcome(
+            "rewrite-pair-001",
+            beforeDll,
+            afterDll,
+            "limit-exhausted",
+            ManagedMetadataExtractor.Sha256(File.ReadAllBytes(beforeDll)),
+            ManagedMetadataExtractor.Sha256(File.ReadAllBytes(afterDll)),
+            "assembly",
+            "assembly",
+            "digest",
+            ["IlRewriteTotalWorkLimitExceeded"]);
+        var pair = new EvaluatedIlRewritePair(
+            outcome,
+            [],
+            [],
+            [],
+            new IlRewriteSideArtifact(beforeDll, outcome.BeforeRawFileSha256, null),
+            new IlRewriteSideArtifact(afterDll, outcome.AfterRawFileSha256, null));
+        var provenance = new IlRewriteProvenance(
+            "il-rewrite-provenance.v1",
+            "explicit-il-rewrite-evidence.v1",
+            "generator",
+            [],
+            [],
+            new IlRewriteLimits(),
+            [outcome],
+            "bounded",
+            "local-only",
+            "rewrite-partial");
+        var evaluation = IlRewritePdbEvidenceExtractor.Evaluate(
+            PairOptions(beforeDll, afterDll, beforePdb, afterPdb),
+            new IlRewriteEvaluation(provenance, [pair], []));
+
+        var pdbOutcome = Assert.Single(evaluation.Pairs).Outcome;
+        Assert.Equal("rewrite-unavailable", pdbOutcome.Outcome);
+        Assert.Contains("IlRewritePdbRewritePairUnavailable", pdbOutcome.GapKinds);
+        Assert.Equal("IlRewriteTotalWorkLimitExceeded", pdbOutcome.Cause);
+        Assert.Equal("rewrite-pdb-partial", evaluation.Provenance!.CoverageState);
+    }
+
+    [Fact]
     public void Exhausted_pdb_work_budget_emits_limit_gap_instead_of_guessed_relationships()
     {
         using var temp = new TempDirectory();
