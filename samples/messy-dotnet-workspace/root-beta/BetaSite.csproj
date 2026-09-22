@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Deterministic>true</Deterministic>
+    <EnableDefaultCompileItems>true</EnableDefaultCompileItems>
+    <!-- The ADO.NET stub in Data/AdoStubs.cs deliberately shadows the framework
+         System.Data.Common.DbCommand so ExecuteReader call patterns resolve to the
+         known ADO.NET shape; CS0436 documents exactly that shadowing. -->
+    <NoWarn>CS0436</NoWarn>
+  </PropertyGroup>
+</Project>

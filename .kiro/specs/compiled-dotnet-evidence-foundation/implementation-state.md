@@ -707,3 +707,157 @@ or errors in the build/test output. The final ACK readback is recorded in
 `.agent-control/pr-loop-handoffs/pr-776-full-review.json` in the review
 worktree; local review and test results do not substitute for hosted-review
 freshness or authorize a merge.
+
+## Task 10 third slice: public messy .NET workspace regression (begin-work note)
+
+Started 2026-09-21 on branch `codex/task10-messy-workspace-regression`
+cut from `origin/dev` at `bdbc31cabd75a5021fd47c1ac3ea1db116183e01` (post #776,
+post #777). PR #776 is merged into `dev`; this slice does not build on its
+feature branch.
+
+Scope decision: build the first bounded, public-safe "messy .NET workspace"
+regression slice under `samples/messy-dotnet-workspace/` that reproduces the
+failure shapes observed in real Web Forms/.NET scans using synthetic code
+only — no private source, names, paths, or artifacts. A stable case catalog
+(`case-catalog.json`, schema `messy-workspace-case-catalog.v1`) records the
+eventual matrix with implemented/deferred status; deferred cases carry their
+exact blocker or next-slice owner.
+
+Implemented subset for this PR (all ordinary-CI portable):
+
+- `MW-DEEP-CHAIN-D10-001`: 14-hop handler chain with a supported SQL terminal
+  beyond depths 8 and 10; terminal inventory must stay complete with no false
+  absence from depth truncation.
+- `MW-CYCLE-001` and `MW-CYCLE-SELF-002`: 3-node call cycle plus self-cycle;
+  traversal must terminate and surface cycle truncation honestly.
+- `MW-SAME-NAME-TEN-001`: the same method names in ten classes in one file;
+  identities must stay container-distinct and must not cross-join.
+- `MW-MERGED-ROOTS-001`: two C# roots scanned separately, combined with
+  labels, reviewed as one merged report; no invented cross-source joins.
+- `MW-VB-PROJECTLESS-001`: loose projectless VB files (no `.vbproj`/`.sln`)
+  scanned through the portable Roslyn syntax fallback. No blocker exists:
+  `VisualBasicSyntaxExtractor` is deterministic on macOS/Linux CI and pinned
+  by existing tests, so this case is implemented rather than deferred.
+- `MW-FOLDER-SPREAD-001`: source spread across nested folders inside each
+  root and across independently scanned roots.
+
+Deferred cases and owners: overload ambiguity and receiver ambiguity (next
+fixture slice; identity retention is already pinned by compiled-lane
+`CS-OVERLOAD-001`/`VB-OVERLOAD-001` and receiver fixture tests), C#/VB/F#
+cross-language boundaries (no F# source adapter exists; cross-language
+identity needs the compiled lane), generated members (compiled-lane
+`CS-GENERATED-005` covers identity labeling; traversal variant deferred), and
+source → metadata → IL/PDB identity on messy roots (owned by the remaining
+#766 ILAsm/rewritten-PDB matrix, explicitly not this slice).
+
+Failure identification contract for the new tests: every assertion names the
+catalog case ID and the pipeline stage — `extraction`, `combining`,
+`reconciliation`, or `traversal`. Determinism contract: repeat scans of each
+root must produce byte-identical `facts.ndjson`; the messy-workspace slice
+adds no new derived machine-readable artifact (no new schema), so generator /
+bounded-input hash pinning stays with the existing manifest provenance rather
+than a new digest artifact.
+
+Task 10's checkbox stays open regardless of this slice's outcome; #766's
+remaining ILAsm/rewritten-PDB matrix and Task 11's private Windows/`dotnetperf`
+lane remain out of scope.
+
+Task 10 third slice delivered 2026-09-21 on
+`codex/task10-messy-workspace-regression`:
+
+- `samples/messy-dotnet-workspace/` with three synthetic roots
+  (`root-alpha`, `root-beta`, `vb-projectless`), a README, and the stable
+  case catalog `case-catalog.json` (`messy-workspace-case-catalog.v1`, 7
+  implemented / 5 deferred cases with exact blockers).
+- `MessyWorkspaceRegressionTests` (8 tests): catalog conformance, folder
+  spread, deep chain beyond depth 10, cycles, ten same-name members, merged
+  roots without invented joins, projectless VB, and repeat-scan
+  byte-identical `facts.ndjson` per root. Every assertion names its case id
+  and pipeline stage.
+
+Two fixture-shape decisions recorded for future slices:
+
+- The deep chain ends in an ADO.NET-style `ExecuteReader` call pattern over a
+  stubbed `System.Data.Common.DbCommand` (the established stub-a-namespace
+  fixture pattern). SQL string literals alone attach their
+  `QueryPatternDetected` evidence to bare containing-method names; on
+  semantic C# scans those bare names reconcile only when unambiguous, which
+  the ten-same-name engines case deliberately pressures. The call-pattern
+  terminal attaches with the exact compiler identity and is the battle-tested
+  attachment path.
+- The deep chain pins the documented retained-closure contract: at
+  `--max-depth 10` a terminal at traversal distance 12 is inventoried with
+  complete reachability and honest `depth` truncation, while at depth 8 it
+  falls outside the depth-bounded retained symbol closure and the observation
+  scopes its completeness claim to the retained graph (a longer 16-hop chain
+  was verified to surface the same boundary at depths 8-12 before the fixture
+  was fixed at ten steps; widening that closure or adding an explicit
+  beyond-retained-closure gap kind is candidate follow-up scope, not a defect
+  fix in this slice).
+
+Validation on this branch: messy-workspace focused lane 8/8; neighboring
+WebFormsModernizationPacket/Combine/projectless-VB/VisualBasicWebFormsComposition
+suites 63/63; full `dotnet test src/dotnet/TraceMap.sln --no-restore`
+2,144/2,144, zero failed/skipped; all four PowerShell Web Forms regression
+scripts PASS; `samples/modern-sample` CLI scan passed
+`validate-adapter-artifacts.py` plus its self-test; the private-path guard
+and `git diff --check` passed; `dotnet build src/dotnet/TraceMap.sln` reports
+0 warnings/0 errors; `node --test scripts/pr-review-loop-lane.test.mjs` 3/3.
+The Task 10 checkbox remains open; #766's ILAsm/rewritten-PDB matrix and
+Task 11's private Windows/`dotnetperf` lane are untouched.
+
+Review remediation on 2026-09-22 (ACK 0.5.2 loop, Qodo + Codex exact-head
+findings on `8f86147f`): the deep chain was lengthened from ten to twelve
+call edges so the terminal at graph distance 14 is unambiguously beyond the
+configured depth (inventory pinned at depths 12/16; retained-closure boundary
+pinned at depth 10); the self-cycle got its own page handler and its own
+traversal assertions under MW-CYCLE-SELF-002; same-name isolation now rejects
+any cross-engine semantic edge and correlates each engine boundary to its own
+terminal fact and class line range instead of a file-subset check; catalog
+conformance now consumes expectedRuleIds against rules/rule-catalog.yml plus
+expectedTiers/expectedGaps vocabularies; the commit-SHA assertion accepts
+SHA-1 (40) and SHA-256 (64) hex; the scan helper is synchronous (CS1998); and
+both fixture projects are registered in the test build graph via
+`ReferenceOutputAssembly="false"` ProjectReferences (the compiled-evidence
+precedent) with the deliberate `DbCommand` shadowing suppressed by a
+documented fixture-local `NoWarn CS0436`.
+
+Second review remediation on 2026-09-22 (Codex exact-head re-review of
+`9b81303c`): the folder-spread test is synchronous (no async without await),
+and the merged-roots rejection now validates complete (source label, caller,
+callee) tuples for every Process call edge instead of callee presence alone.
+All eleven review threads (five Qodo inline, four Codex inline, one Codex
+follow-up pair) are settled with durable ACK dispositions at
+`d11f35e5546ba74a7eab30d6a4115ed7a0740411`; the stale Qodo summary carries a
+posted disposition. Final ACK readback: unresolved threads 0, actionable
+findings 0, stale findings 0, pending/failed checks 0, merge state CLEAN;
+decision `not_merge_ready` with `CURRENT_HEAD_REQUIRED_REVIEW_MISSING` — the
+exact-head hosted-review freshness gate at `d11f35e5` is an owner decision
+and local validation does not substitute for it. All CI checks pass on the
+final head. No manual bot retagging, force-push, or merge was performed.
+
+
+Full PR #778 review follow-up (2026-09-22, based on `1a196ea3`): two P2
+regression-proof defects were confirmed and corrected; no new P1 was found.
+The merged-roots test previously accepted a wrong caller within the same
+namespace and replacement of `engine_10_queue` with `engine_09_queue` because
+it checked broad namespace/table substrings. Temporary corruption of the
+combined index reproduced both false passes together; after replacing those
+checks with exact original-scan tuples, each corruption independently fails
+at reconciliation. The injected mutations were removed from the final code.
+
+Catalog validation previously checked vocabulary only, allowing declared rules,
+tiers, and gaps to diverge from produced evidence. Each implemented case now
+consumes its catalog expectations against actual scan, packet, or combined-edge
+evidence. The merged-root expectation is corrected to Tier1 semantic callgraph
+evidence: this case preserves separate-source identities and does not produce
+`combined.paths.symbol-reconciliation.v1`. Its Process identity count is eleven.
+The scanner/reducer behavior and open Task 10 scope remain unchanged.
+
+Validation of the completed follow-up: focused suite 8/8; final full .NET suite
+2,144/2,144, zero failed/skipped; solution build zero warnings/errors. The modern
+sample CLI scan produced Level1SemanticAnalysis and passed artifact validation;
+validator self-tests passed 7/7, lane tests 3/3, private-path guard and
+`git diff --check` passed. Restoring the old merged-root catalog rule separately
+fails the new produced-evidence assertion. The temporary catalog mutation was
+also removed before final validation.
