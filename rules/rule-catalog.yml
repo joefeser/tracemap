@@ -126,7 +126,7 @@ rules:
     emits: [ManagedIlCallObserved, AnalysisGap]
     limitations:
       - A call site records the static member reference encoded in this module's IL. It does not prove the target is ever executed, that a virtual dispatch resolves to that member, that the referenced external assembly is present, or that the target body exists.
-      - A calli site records the complete static StandAloneSig calling convention, this flags, return type, and parameter types; that signature is not a target-member identity and does not prove the function pointer is valid or invoked.
+      - A calli site records the complete static StandAloneSig calling convention, this flags, required-parameter boundary, return type, and parameter types; that signature is not a target-member identity and does not prove the function pointer is valid or invoked.
       - Member-reference identities are resolved only against metadata encoded inside the containing module (MethodDef rows, MemberRef rows with assembly-reference scope, and MethodSpec instantiations). No cross-assembly resolution, host probing, or ambient Mono.Cecil resolution is performed.
       - Unresolved or unsupported operand encodings on a call-family opcode fail closed to a gap for that input; no partial call list is emitted.
       - The constrained. prefix records its exact cross-checked type identity with reference kind constrainedtype, but no module-local token claim: Mono.Cecil cannot reproduce the raw TypeSpec token for a resolved constrained operand, so the field stays explicitly unclaimed rather than single-sourced.

@@ -85,9 +85,10 @@ public sealed class IlRewriteMemberShapeEvidenceExtractorTests
                 || (item.GetProperty("id").GetString() ?? "").EndsWith("-028", StringComparison.Ordinal)
                 || (item.GetProperty("id").GetString() ?? "").EndsWith("-029", StringComparison.Ordinal)
                 || (item.GetProperty("id").GetString() ?? "").EndsWith("-030", StringComparison.Ordinal)
-                || (item.GetProperty("id").GetString() ?? "").EndsWith("-031", StringComparison.Ordinal)).ToArray();
-        Assert.Equal(11, cases.Length);
-        Assert.Equal(11, cases.Select(item => item.GetProperty("id").GetString()).Distinct().Count());
+                || (item.GetProperty("id").GetString() ?? "").EndsWith("-031", StringComparison.Ordinal)
+                || (item.GetProperty("id").GetString() ?? "").EndsWith("-032", StringComparison.Ordinal)).ToArray();
+        Assert.Equal(12, cases.Length);
+        Assert.Equal(12, cases.Select(item => item.GetProperty("id").GetString()).Distinct().Count());
         Assert.All(cases, item =>
         {
             Assert.False(string.IsNullOrWhiteSpace(item.GetProperty("expectedClrShape").GetString()));
@@ -271,6 +272,35 @@ public sealed class IlRewriteMemberShapeEvidenceExtractorTests
         Assert.DoesNotContain(result.Facts, fact => fact.RuleId == RuleIds.DotNetIlRewriteGap);
         Assert.Equal(SignatureCallingConvention.Default, CalliConvention(before));
         Assert.Equal(SignatureCallingConvention.CDecl, CalliConvention(after));
+    }
+
+    [Fact]
+    public void Vararg_calli_boundary_changes_with_equal_tokens_and_parameter_types()
+    {
+        using var temp = new TempDirectory();
+        var (before, after) = Pair(temp, "calli-vararg-boundary");
+        foreach (var (path, optional) in new[] { (before, false), (after, true) })
+            Mutate(Fixture(), path, type =>
+            {
+                var calli = Find(type, "Indirect").Body.Instructions.Single(item => item.OpCode == OpCodes.Calli);
+                var signature = (CallSite)calli.Operand;
+                signature.CallingConvention = MethodCallingConvention.VarArg;
+                if (optional)
+                    signature.Parameters[0].ParameterType = new SentinelType(signature.Parameters[0].ParameterType);
+            });
+        var result = Scan(before, after, temp);
+        Assert.Equal("rewrite-complete", result.Manifest.IlRewriteProvenance!.CoverageState);
+        var edge = Edge(result, "Indirect");
+        Assert.Equal("operand-only-change", edge.Properties["relationshipKind"]);
+        var retarget = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.ManagedIlCallRetargetObserved
+            && fact.Properties.GetValueOrDefault("rewriteFactId") == edge.FactId);
+        Assert.Equal("calli", retarget.Properties["opcode"]);
+        Assert.Equal(retarget.Properties["beforeToken"], retarget.Properties["afterToken"]);
+        Assert.Contains("callconv:5", retarget.Properties["beforeTargetIdentity"], StringComparison.Ordinal);
+        Assert.Contains("callconv:5", retarget.Properties["afterTargetIdentity"], StringComparison.Ordinal);
+        Assert.Contains("required:1", retarget.Properties["beforeTargetIdentity"], StringComparison.Ordinal);
+        Assert.Contains("required:0", retarget.Properties["afterTargetIdentity"], StringComparison.Ordinal);
+        Assert.DoesNotContain(result.Facts, fact => fact.RuleId == RuleIds.DotNetIlRewriteGap);
     }
 
     [Fact]

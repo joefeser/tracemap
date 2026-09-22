@@ -3111,7 +3111,7 @@ PDBs, the extended mutation matrix, and ILAsm parity) stays open, and Task
 
 The public compiler fixture `CompiledEvidence.CSharp.MemberShapes` plus bounded
 Mono.Cecil mutations exercises case IDs `CS-ILRW-MEMBER-TOKEN-021` through
-`CS-ILRW-SAME-TOKEN-SIGNATURE-031` in `fixture-cases.json` schema v8. A separate
+`CS-ILRW-CALLI-VARARG-BOUNDARY-032` in `fixture-cases.json` schema v8. A separate
 compiler variant `CompiledEvidence.CSharp.VarArgCall` pins
 `CS-ILRW-VARARG-CALL-028`. No fixture loads or executes an after
 assembly. The scanner reports static, exact assembly/module and full
@@ -3124,14 +3124,16 @@ token operands bind the full decoded type/member identity as well as the
 module-local row number; a field signature change at the same row changes
 the body digest. `calli` standalone
 signatures preserve calling-convention number, `hasThis`, `explicitThis`,
-return type, and parameter types in the canonical body operand and call-site
+required-parameter count, return type, and parameter types in the canonical body operand and call-site
 retarget fact, cross-checked by both readers. The compiler fixture supplies MethodSpec, TypeSpec, generic
 type/method, function pointer, property/event, accessor, and vararg
 declaration shapes. Same-opcode field, InlineTok member, TypeSpec,
 MethodSpec, and `calli` convention changes are paired with exact unchanged
 method identities. A compiler-produced vararg MemberRef call with a
 MethodDef parent retains its required-parameter boundary in its full static
-signature after both readers agree. Corrupted field/signature token row IDs
+signature after both readers agree. A vararg `calli` sentinel-only boundary
+change keeps its token and parameter types but changes the body identity.
+Corrupted field/signature token row IDs
 withhold the entire pair as `IlRewriteMalformedInput`; a reserved `calli`
 calling convention withholds the pair as a malformed signature gap.
 
