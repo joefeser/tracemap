@@ -1,6 +1,6 @@
 # Compiled .NET Evidence Foundation Implementation State
 
-Status: Tasks 1-9 are merged into `dev`; PR #774 completed its authorized exact-head ACK review and was merged into `dev` as `ed2fdf1c028b034a9a6013908e8f5b8c29d900a7` on 2026-09-21. The first Task 10 slice (bounded operand-aware IL body/call evidence, PR #775) is also merged into `dev` as `46b2baa125bed00ee9ac1964ce50febd55c3e68e` on 2026-09-21, including the owner-requested P1/P2 follow-up `2d20b4a3` (prefix-operand signed/unsigned distinction and exact UTF-16 literal hashing). The remaining Task 10 public rewrite suite from #766 and Task 11 remain open.
+Status: Tasks 1-9 are merged into `dev`; PR #774 completed its authorized exact-head ACK review and was merged into `dev` as `ed2fdf1c028b034a9a6013908e8f5b8c29d900a7` on 2026-09-21. The first Task 10 slice (bounded operand-aware IL body/call evidence, PR #775) is also merged into `dev` as `46b2baa125bed00ee9ac1964ce50febd55c3e68e` on 2026-09-21, including the owner-requested P1/P2 follow-up `2d20b4a3` (prefix-operand signed/unsigned distinction and exact UTF-16 literal hashing). PR #779 (slice 4, bounded rewrite PDB identity evidence) merged into `dev` as `7be1f51c0360a7f80e3b7304aee9677fe3c92ddc` on 2026-09-22. The remaining Task 10 public rewrite suite from #766 and Task 11 remain open.
 
 Branch: `codex/il-body-call-evidence`
 
@@ -1009,4 +1009,102 @@ zero failed/skipped, zero build warnings; decision `not_merge_ready` with
 `CURRENT_HEAD_REQUIRED_REVIEW_MISSING` — the exact-head hosted-review
 freshness gate is an owner decision and local validation does not
 substitute for it. This docs commit sits on top of the code head; do not
-merge, force-push, or retag bots without the owner.
+merge, force-push, or retag bots without the owner. (PR #779 was
+subsequently merged into `dev` as `7be1f51c` on 2026-09-22.)
+
+## Task 10 fifth slice: public ECMA-335 control-flow and exception-handling rewrite suite (begin-work note)
+
+Branch: `codex/task10-rewrite-cflow-suite` from `origin/dev` at
+`7be1f51c0360a7f80e3b7304aee9677fe3c92ddc` (PR #779 merge). Tracking #766.
+Scope: the control-flow and exception-handling portion of #766's public
+rewrite matrix — before/after rewrite edges for branch/`switch`/`leave`
+operand retargets, nested exception-region rebinding and handler-kind
+changes, max-stack-only header changes, and evaluation-stack-sensitive
+instruction-stream rewrites, plus bounded malformed control-flow operands
+(out-of-range branch delta, oversized `switch` table count) and an
+exception-region limit gap. The before sides are the deterministic
+compiler-produced fixture assembly; the after sides are deterministic
+Mono.Cecil-generated mutations or bounded byte patches produced inside the
+public test suite. Existing IL body, rewrite, and rewrite-PDB tests were
+inspected first: the single-side identity lane already covers switch
+reordering and dense jump tables (CS-IL-BRANCH-005/007) and locals/EH
+digests (CS-IL-BODY-012), and the rewrite lane already covers constant,
+call, token, locals, unchanged, ambiguous, malformed-opcode, disagreement,
+and budget shapes — none of the before/after control-flow, exception-region,
+max-stack, or evaluation-stack shapes below duplicate that coverage. A new
+fixture assembly (`CompiledEvidence.CSharp.ControlFlow`) keeps sibling
+pinned row counts stable. ILAsm/ILDAsm parity remains deferred with the
+slice-4 prerequisites; ordinary CI must not depend on an unpinned
+ILAsm/ILDAsm installation.
+
+The slice landed as: a new
+`samples/compiled-dotnet-evidence/csharp/CompiledEvidence.CSharp.ControlFlow.csproj`
+building only `IlRewriteControlFlowShapes.cs` (`Deterministic=true`,
+referenced build-only from the test project like the sibling fixtures); a
+`compiled-dotnet-fixture-cases.v7` catalog with 11 new `ilRewriteCases`
+entries (CS-ILRW-CFLOW-010..017, ILRW-CFLOW-HOSTILE-018/019,
+ILRW-CFLOW-LIMIT-020), each with a stable ID, expected identity/outcome,
+rule IDs, tier, relationship kind, gaps, and non-claims; a new
+`IlRewriteControlFlowEvidenceExtractorTests` suite where every after side is
+a deterministic Cecil mutation (branch/switch/leave retargets, nested
+try-start rebinding, catch→fault kind change, dup/pop and constant/add
+insertions) or a bounded single-byte patch (max-stack bump in the fat
+header, out-of-range short-branch delta, oversized switch count), plus
+catalog, determinism/privacy, generator/bounded-input digest, and CLI
+artifact tests; v6→v7 pin updates in the five sibling fixture-catalog tests;
+and rule-catalog limitation updates recording that the control-flow/
+exception-handling matrix and evaluation-stack-sensitive rewrites are now
+exercised while ILAsm parity and the remaining #766 matrix stay deferred.
+No scanner/reducer code changed: classification falls out of the existing
+operand-aware digests (branch targets as absolute offsets, switch target
+vectors, exception-region digests, recorded max-stack) already proven by
+the first slice. Notable pinned findings: a switch jump-table permutation is
+operand-only because the fixed-size table keeps every instruction offset
+stable; a max-stack-only byte patch proves the digest reads the fat-header
+field rather than a writer's model; and the malformed switch-count patch
+must target the count byte (one past the 0x45 opcode) — patching the opcode
+byte itself decodes to an unsupported operand encoding instead of a
+malformed body.
+
+Local macOS validation on 2026-09-22:
+
+- focused `IlRewriteControlFlowEvidenceExtractorTests`: 16 passed, zero
+  failed, zero skipped;
+- combined compiled-lane filter (rewrite PDB, rewrite, PDB, IL body,
+  managed metadata, source/metadata reconciliation): 221 passed, zero
+  failed, zero skipped;
+- `dotnet test src/dotnet/TraceMap.sln --no-restore`: 2,190 passed, zero
+  failed, zero skipped;
+- clean full rebuild: zero warnings, zero errors;
+- two repeat CLI scans of a branch-retarget pair (compiler before side,
+  Cecil after side): byte-identical `facts.ndjson` and `report.md`,
+  manifest identical except `scannedAt`, 434 facts with 7
+  `dotnet.compiled.il-rewrite.v1` rows (one `operand-only-change`, six
+  `unchanged`), zero `dotnet.compiled.il-rewrite-gap%` rows, admitted pair
+  under `rewrite-complete` coverage;
+- `scripts/validate-adapter-artifacts.py` passed on both scanned outputs and
+  no output contained a local absolute path or temp path;
+- `scripts/check-private-paths.sh`, `node scripts/kiro-review.mjs
+  --self-test`, and `git diff --check` passed;
+- plain `samples/modern-sample` source scan unchanged
+  (Level1SemanticAnalysis, 27 facts, null `ilRewriteProvenance`);
+- the new tests run in the ordinary ubuntu `dotnet` CI lane with no
+  ILAsm/ILDAsm dependency (byte patches index the PE array directly, so
+  they are host-endianness independent); the windows/ubuntu/macos
+  local-distribution matrix is unaffected.
+
+ILAsm/ILDAsm parity was re-assessed on 2026-09-22 and stays deferred with
+the slice-4 prerequisites (`ILRWPDB-ILASM-PARITY-012`): absent from PATH,
+the .NET SDK 10.0.201 installation, and Homebrew (mono not installed); no
+pinned toolchain exists in ordinary CI, and no ILAsm/ILDAsm parity claim is
+made from Cecil-based or byte-patched tests.
+
+Explicitly still open for Task 10 after this slice: ILAsm/ILDAsm parity,
+member/type token, constant, string, signature, generics, custom modifiers,
+function-pointer/`calli`, property/event-accessor rewrite shapes,
+netmodules, type forwarding, duplicate assembly identities,
+insertion/removal relationship edges, embedded portable PDBs, and the
+remainder of the extended ECMA-335 mutation matrix from #766. Task 11's
+legacy Windows, `dotnetperf`, and C++/CLI lanes remain separate. The Task
+10 checkbox stays open until #766's full public rewrite-suite acceptance is
+met.
