@@ -3016,3 +3016,93 @@ remaining #766 evaluation-stack-sensitive rewrites, netmodules, type
 forwarding, duplicate assembly identities, insertion/removal relationship
 edges, the extended ECMA-335 mutation matrix, and ILAsm parity stay open, and
 Task 11's private Windows/`dotnetperf` lane remains separate.
+
+### Control-flow and exception-handling rewrite suite (Task 10 fifth slice)
+
+The public ECMA-335 control-flow/exception-handling rewrite matrix extends
+the `dotnet.compiled.il-rewrite.v1` and `dotnet.compiled.il-rewrite-gap.v1`
+coverage without changing either rule's join, admission, or classification
+behavior. The before side of every pair is the deterministic
+compiler-produced fixture assembly
+`samples/compiled-dotnet-evidence/csharp/bin/Debug/net10.0/CompiledEvidence.CSharp.ControlFlow.dll`
+(built from `IlRewriteControlFlowShapes.cs` with `Deterministic=true`); the
+after sides are deterministic Mono.Cecil 0.11.6 mutations or bounded
+single-byte patches produced inside the public test suite
+(`IlRewriteControlFlowEvidenceExtractorTests`), never hand-written binaries.
+Both sides still pass through the dual-reader IL body contract
+(System.Reflection.Metadata first, Mono.Cecil second, disagreement fails
+closed), so Cecil is never the sole oracle.
+
+Covered shapes (`samples/compiled-dotnet-evidence/fixture-cases.json` schema
+v7, `ilRewriteCases`):
+
+- `CS-ILRW-CFLOW-010` branch retarget: a for-loop's forward branch operand
+  changes to a different in-range instruction boundary; classified
+  `operand-only-change` with the opcode stream preserved.
+- `CS-ILRW-CFLOW-011` switch jump-table permutation: the five-target `switch`
+  vector reorders; classified `operand-only-change` (the fixed-size table
+  keeps every offset stable).
+- `CS-ILRW-CFLOW-012` leave retarget: a try-region `leave.s` retargets to the
+  post-region code; classified `operand-only-change`.
+- `CS-ILRW-CFLOW-013` nested exception-region rebinding: the inner catch's
+  try start rebinds to the outer finally's try start (regions stay properly
+  nested); classified `body-structure-change` with identical instructions.
+- `CS-ILRW-CFLOW-014` handler-kind change: the nested catch becomes a fault
+  handler with the catch-type token removed; classified
+  `body-structure-change`.
+- `CS-ILRW-CFLOW-015` max-stack-only header change: a byte patch bumps the
+  recorded max-stack in the fat method-body header; classified
+  `body-structure-change` with every other component identical.
+- `CS-ILRW-CFLOW-016`/`017` evaluation-stack-sensitive rewrites: an inserted
+  `dup`/`pop` pair (transiently deeper, net stack-neutral) and an inserted
+  constant/`add` sequence (depth-profile reshaping) both classify as
+  `instruction-stream-change` with `opcodeSequencePreserved=false`, no
+  per-instruction claim, and no runtime-equivalence or stack-neutrality
+  conclusion.
+- `ILRW-CFLOW-HOSTILE-018`/`019` bounded malformed operands: a patched short
+  branch delta pushing the target past the body extent and a patched
+  `switch` count overrunning the jump table each withhold the whole pair as
+  an `IlRewriteMalformedInput` Tier4 gap.
+- `ILRW-CFLOW-LIMIT-020` exception-region limit: an
+  `IlBodyLimits(MaxExceptionRegionsPerBody: 1)` scan over the fixture fails
+  closed per side with `IlRewriteExceptionRegionLimitExceeded`.
+
+Every rewrite fact carries `ilRewriteGeneratorSha256` (SHA-256 of the exact
+extractor assembly) and `ilRewriteBoundedInputSha256` (canonical digest over
+the schema, policy, generator, extractor identities, effective limits,
+declared pairs, and per-pair outcomes), pinned by test along with the rule
+ID, tier, limitation text, and extractor version. Repeat scans of the same
+declared pair are byte-identical in `facts.ndjson` and `report.md`, the
+manifest differs only in `scannedAt`, and no artifact contains a local
+absolute path. The plain `samples/modern-sample` source scan is unchanged:
+`Level1SemanticAnalysis` with a null `ilRewriteProvenance` when the lane is
+not declared.
+
+Pinned local validation on 2026-09-22 (macOS): focused
+`IlRewriteControlFlowEvidenceExtractorTests` 16/16; combined compiled-lane
+filter (rewrite PDB, rewrite, PDB, IL body, managed metadata,
+source/metadata reconciliation) 221/221; full `dotnet test
+src/dotnet/TraceMap.sln` 2,190/2,190 with zero failed/skipped and zero build
+warnings; two repeat CLI scans of a branch-retarget pair produced 434 facts
+with 7 `dotnet.compiled.il-rewrite.v1` rows (one `operand-only-change`, six
+`unchanged`), zero gap rows, and byte-identical artifacts;
+`scripts/validate-adapter-artifacts.py`, `scripts/check-private-paths.sh`,
+`node scripts/kiro-review.mjs --self-test`, and `git diff --check` all
+passed. The suite runs in ordinary CI with no ILAsm/ILDAsm dependency: all
+mutations are Cecil-based or single-byte patches that index into the PE
+byte array directly, so they are host-endianness independent.
+
+ILAsm/ILDAsm parity was re-assessed on 2026-09-22 and remains deferred with
+the slice-4 prerequisites (`ILRWPDB-ILASM-PARITY-012`): neither tool is on
+PATH, present in the .NET SDK 10.0.201 installation, or installed via
+Homebrew (mono is not installed), and no pinned ILAsm toolchain exists in
+ordinary CI. Ordinary CI must not depend on an unpinned ILAsm/ILDAsm
+installation; a pinned Windows SDK/Visual Studio `ilasm.exe`+`ildasm.exe`
+lane or a pinned mono/dotnet-runtime ILAsm build plus an independent
+disassembly oracle is the separately documented prerequisite. This slice
+does not complete Task 10: the remaining #766 scope (member/type token,
+constant, string, signature, generic, custom-modifier, function-pointer/
+`calli`, property/event-accessor shapes, netmodules, type forwarding,
+duplicate assembly identities, insertion/removal edges, embedded portable
+PDBs, the extended mutation matrix, and ILAsm parity) stays open, and Task
+11's private Windows/`dotnetperf` lane remains separate.
