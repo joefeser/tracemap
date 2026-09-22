@@ -1469,3 +1469,25 @@ oracle-availability gap with the precise work-machine command and expected
 receipt and makes no PDB parity claim (catalog case `ILASM-PARITY-PDB-006`
 and `docs/VALIDATION.md` state this contract). Exact-head CI reruns on the
 repair head remain pending; Task 10 stays unchecked.
+
+Second CI round on the repair head: Ubuntu, macOS, and all ordinary lanes
+passed; the Windows job failed only inside the gate with three new findings,
+again all gate-side. (1) ILAsm re-emits assembly-level custom attributes in a
+different metadata row order than the originals (observed:
+`RefSafetySafetyAttribute` and `AssemblyCompanyAttribute` swapped), so
+whole-file normalized-text equality is not the parity claim; the parser now
+retains per-method exception-clause extents (kind plus try/handler
+instruction-boundary ends), switch jump-table targets from continuation
+lines, and the `// Code size` annotation, and the gate compares a canonical
+per-method body text that is order-insensitive across members and strictly
+order-sensitive inside bodies. (2) The mutation leg passed the disassembly
+text where the IL file path was expected, producing ILAsm's "Input file name
+exceeds 2047 characters"; the leg now passes the path. (3) The determinism
+leg wrote scan outputs and binding receipts inside the scanned fixture
+repository, so the second scan inventoried the first scan's artifacts;
+outputs and receipts now live under a temp root outside the repository.
+Local validation after the second repair: 14/14 focused parser+gate tests,
+full solution suite green, zero-warning build. Third exact-head CI run
+pending; Task 10 stays unchecked until the Windows extended lane passes and
+the PDB oracle outcome (observed `.line` directives, or the recorded typed
+gap) is known.
