@@ -35,11 +35,23 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          $roots = @('C:\Program Files\Microsoft SDKs', 'C:\Program Files (x86)\Microsoft SDKs', 'C:\Program Files\Microsoft Visual Studio')
+          Write-Output "runner image: ImageOS=$env:ImageOS ImageVersion=$env:ImageVersion arch=$env:PROCESSOR_ARCHITECTURE"
+          # ILAsm ships with the .NET Framework runtime itself under
+          # Framework/Framework64; ILDAsm ships with the Windows SDK NETFX
+          # tools. Windows Kits and Visual Studio cover the remaining
+          # Microsoft-owned installs, then PATH.
+          $roots = @(
+            "$env:WINDIR\Microsoft.NET\Framework64",
+            "$env:WINDIR\Microsoft.NET\Framework",
+            'C:\Program Files\Microsoft SDKs',
+            'C:\Program Files (x86)\Microsoft SDKs',
+            'C:\Program Files (x86)\Windows Kits',
+            'C:\Program Files\Microsoft Visual Studio'
+          )
           $candidates = @(Get-ChildItem $roots -Recurse -File -Include ilasm.exe,ildasm.exe -ErrorAction SilentlyContinue)
           $candidates += @(Get-Command ilasm.exe,ildasm.exe -All -ErrorAction SilentlyContinue | ForEach-Object { Get-Item $_.Source })
           $candidates | Sort-Object FullName -Unique | ForEach-Object {
-            Write-Output "$($_.Name) path: $($_.FullName) version: $($_.VersionInfo.FileVersion)"
+            Write-Output "$($_.Name) path: $($_.FullName) version: $($_.VersionInfo.FileVersion) product: $($_.VersionInfo.ProductVersion)"
             & $_.FullName /? 2>&1 | Select-Object -First 12
           }
           foreach ($name in @('ilasm.exe', 'ildasm.exe')) {
@@ -52,4 +64,4 @@ jobs:
             Write-Output 'vswhere unavailable'
           }
       - name: Run extended public rewrite matrix
-        run: dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter "FullyQualifiedName~IlRewriteEvidenceExtractorTests|FullyQualifiedName~IlRewriteControlFlowEvidenceExtractorTests|FullyQualifiedName~IlRewriteMemberShapeEvidenceExtractorTests|FullyQualifiedName~IlRewritePdbEvidenceExtractorTests|FullyQualifiedName~IlRewriteAssemblyTopologyTests|FullyQualifiedName~IlRewriteEmbeddedPdbTests|FullyQualifiedName~IlRewritePublicIntegrationTests"
+        run: dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter "FullyQualifiedName~IlRewriteEvidenceExtractorTests|FullyQualifiedName~IlRewriteControlFlowEvidenceExtractorTests|FullyQualifiedName~IlRewriteMemberShapeEvidenceExtractorTests|FullyQualifiedName~IlRewritePdbEvidenceExtractorTests|FullyQualifiedName~IlRewriteAssemblyTopologyTests|FullyQualifiedName~IlRewriteEmbeddedPdbTests|FullyQualifiedName~IlRewritePublicIntegrationTests|FullyQualifiedName~IlAsmIldasmParityGateTests|FullyQualifiedName~IlDasmTextParserTests"

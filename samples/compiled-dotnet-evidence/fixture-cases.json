@@ -1,5 +1,5 @@
 {
-  "schemaVersion": "compiled-dotnet-fixture-cases.v8",
+  "schemaVersion": "compiled-dotnet-fixture-cases.v9",
   "cases": [
     {
       "id": "CS-OVERLOAD-001",
@@ -1456,17 +1456,23 @@
     {
       "id": "ILRWPDB-ILASM-PARITY-012",
       "language": "csharp",
-      "status": "deferred",
-      "shape": "assemble the same before/after mutation matrix with ILAsm and cross-check the disassembled IL offsets and portable PDB sequence points against the admitted TraceMap evidence",
-      "expectedIdentity": "deferred",
-      "expectedRuleIds": [],
-      "expectedTier": "Tier4Unknown",
+      "status": "implemented",
+      "shape": "assemble the same before/after mutation matrix with the pinned Microsoft ILAsm and cross-check the disassembled IL offsets and portable PDB sequence points against the admitted TraceMap evidence using the pinned ILDAsm as the independent oracle",
+      "expectedIdentity": "unchanged il-rewrite edges for every round-tripped method with matching ILDAsm handler-clause, instruction, local, and max-stack counts",
+      "expectedRuleIds": ["dotnet.compiled.il-rewrite.v1", "dotnet.compiled.il-rewrite-pdb.v1"],
+      "expectedTier": "Tier2Structural",
       "expectedGaps": [],
-      "nonClaims": [
-        "ilasm-parity",
-        "ildasm-parity"
+      "satisfiedBy": [
+        "ILASM-PARITY-CFLOW-002",
+        "ILASM-PARITY-EH-003",
+        "ILASM-PARITY-MUTATE-005",
+        "ILASM-PARITY-PDB-006"
       ],
-      "prerequisites": "ILAsm/ILDAsm were absent from PATH, the .NET SDK 10.0.201 installation, and the NuGet cache on the 2026-09-22 assessment host (macOS arm64); Homebrew bottles mono 6.14.1 (provides ilasm/ildasm) but it was not installed. Requires a separately documented extended lane with a pinned toolchain: Windows SDK/Visual Studio ilasm.exe + ildasm.exe on the Windows CI lane, or a pinned mono/dotnet-runtime ILAsm build on macOS/Linux, plus an independent disassembly oracle for sequence-point parity."
+      "nonClaims": [
+        "ilasm-general-equivalence",
+        "ildasm-general-equivalence",
+        "mono-cecil-oracle"
+      ]
     },
     {
       "id": "ILRWPDB-EMBEDDED-PORTABLE-013",
@@ -1521,6 +1527,81 @@
       "boundedInputSha256Property": "ilRewritePdbBoundedInputSha256",
       "limitations": "the rewrite-PDB locator bound applies independently of the compiled-input text bound",
       "nonClaims": ["partial-edge-emission", "unbounded-locator", "rewrite-authorship"]
+    }
+  ],
+  "ilasmParityCases": [
+    {
+      "id": "ILASM-PARITY-TOOLS-001",
+      "language": "csharp",
+      "status": "covered",
+      "proofLane": "compiled-dotnet-extended-validation.yml:public-mutation-matrix(windows-latest)",
+      "shape": "ordered Windows discovery pins Microsoft .NET Framework 4.8 ILAsm from the Framework/Framework64 v4.0.30319 runtime directories and Windows SDK NETFX ILDAsm by absolute path, records exact file versions and the runner image, and fails when either pinned 4.8.x tool is missing or not invocable",
+      "expectedIdentity": "pinned absolute tool paths with recorded 4.8.x file versions and runner identity",
+      "expectedRuleIds": [],
+      "expectedTier": "Tier4Unknown",
+      "expectedGaps": [],
+      "prerequisites": "ILAsm ships with the .NET Framework runtime under C:\\Windows\\Microsoft.NET\\Framework64\\v4.0.30319 and the x86 C:\\Windows\\Microsoft.NET\\Framework twin; ILDAsm ships with the Windows SDK NETFX 4.8/4.8.1 Tools (x64 first); both must report a 4.8.x file version",
+      "nonClaims": ["tool-version-portability", "no-general-il-equivalence-claim", "mono-cecil-oracle"]
+    },
+    {
+      "id": "ILASM-PARITY-CFLOW-002",
+      "language": "csharp",
+      "status": "covered",
+      "proofLane": "compiled-dotnet-extended-validation.yml:public-mutation-matrix(windows-latest)",
+      "shape": "the public control-flow fixture assembly disassembles with the pinned ILDAsm, reassembles with the pinned ILAsm, and disassembles again to identical normalized IL text while TraceMap joins every method of the bound before/after pair as unchanged with instruction, local, max-stack, and call-offset counts equal to the ILDAsm observation on both sides",
+      "expectedIdentity": "unchanged il-rewrite edges for every method with tokenRetargeted=false and zero gaps",
+      "expectedRuleIds": ["dotnet.compiled.il-rewrite.v1", "dotnet.compiled.il-body.v1", "dotnet.compiled.il-call.v1"],
+      "expectedTier": "Tier2Structural",
+      "expectedGaps": [],
+      "nonClaims": ["no-general-il-equivalence-claim", "behavior-preservation", "mono-cecil-oracle"]
+    },
+    {
+      "id": "ILASM-PARITY-EH-003",
+      "language": "csharp",
+      "status": "covered",
+      "proofLane": "compiled-dotnet-extended-validation.yml:public-mutation-matrix(windows-latest)",
+      "shape": "nested try regions, catch/fault handler kinds, leave targets, and the dense switch table of the public fixtures keep identical exception-clause structure across the independent round trip, with ILDAsm handler-clause counts equal to TraceMap exception-region counts on both sides",
+      "expectedIdentity": "unchanged il-rewrite edges whose exception-region digests are identical on both sides",
+      "expectedRuleIds": ["dotnet.compiled.il-rewrite.v1", "dotnet.compiled.il-body.v1"],
+      "expectedTier": "Tier2Structural",
+      "expectedGaps": [],
+      "nonClaims": ["no-general-il-equivalence-claim", "execution-observability", "mono-cecil-oracle"]
+    },
+    {
+      "id": "ILASM-PARITY-MEMBER-004",
+      "language": "csharp",
+      "status": "covered",
+      "proofLane": "compiled-dotnet-extended-validation.yml:public-mutation-matrix(windows-latest)",
+      "shape": "the public member-shape fixture with generic method specifications, ldtoken type tokens, calli standalone signatures, static field operands, custom-modifier-bearing parameters, property and event accessors, and vararg declarations round trips unchanged through the pinned tools with symbolic operands preserved verbatim in the normalized ILDAsm text",
+      "expectedIdentity": "unchanged il-rewrite edges for every member-shape method with zero gaps",
+      "expectedRuleIds": ["dotnet.compiled.il-rewrite.v1", "dotnet.compiled.il-body.v1"],
+      "expectedTier": "Tier2Structural",
+      "expectedGaps": [],
+      "nonClaims": ["no-general-il-equivalence-claim", "cross-assembly-resolution", "mono-cecil-oracle"]
+    },
+    {
+      "id": "ILASM-PARITY-MUTATE-005",
+      "language": "csharp",
+      "status": "covered",
+      "proofLane": "compiled-dotnet-extended-validation.yml:public-mutation-matrix(windows-latest)",
+      "shape": "the public branch-retarget, handler-kind, and stack-neutral insertion mutations keep their exact TraceMap relationship classification when the mutated after side passes through ILDAsm and ILAsm before scanning, with identical normalized disassembly of the raw and round-tripped after sides",
+      "expectedIdentity": "operand-only-change, body-structure-change, and instruction-stream-change edges identical for the raw and round-tripped after sides",
+      "expectedRuleIds": ["dotnet.compiled.il-rewrite.v1"],
+      "expectedTier": "Tier2Structural",
+      "expectedGaps": [],
+      "nonClaims": ["no-general-il-equivalence-claim", "behavior-preservation", "mono-cecil-oracle"]
+    },
+    {
+      "id": "ILASM-PARITY-PDB-006",
+      "language": "csharp",
+      "status": "covered",
+      "proofLane": "compiled-dotnet-extended-validation.yml:public-mutation-matrix(windows-latest)",
+      "shape": "the non-hidden sequence points of an embedded portable PDB fixture observed independently as ILDAsm .line directives equal TraceMap declared sequence points for IL offsets and line/column spans; an unavailable ILDAsm PDB observation fails the case with a work-machine reproduction command instead of claiming parity",
+      "expectedIdentity": "equal sorted (offset, startLine, endLine, startColumn, endColumn) tuples from both observers",
+      "expectedRuleIds": ["dotnet.compiled.sequence-point.v1", "dotnet.compiled.pdb-identity.v1"],
+      "expectedTier": "Tier2Structural",
+      "expectedGaps": [],
+      "nonClaims": ["debug-behavior-preservation", "hidden-sequence-point-parity", "no-general-il-equivalence-claim"]
     }
   ]
 }

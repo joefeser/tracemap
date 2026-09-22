@@ -635,11 +635,11 @@ public sealed class IlRewritePdbEvidenceExtractorTests
     }
 
     [Fact]
-    public void Fixture_catalog_records_stable_rewrite_pdb_cases_and_deferred_prerequisites()
+    public void Fixture_catalog_records_stable_rewrite_pdb_cases_and_the_satisfied_ilasm_prerequisite()
     {
         var catalog = JsonSerializer.Deserialize<JsonElement>(
             File.ReadAllText(Path.Combine(FindRepoRoot(), "samples", "compiled-dotnet-evidence", "fixture-cases.json")));
-        Assert.Equal("compiled-dotnet-fixture-cases.v8", catalog.GetProperty("schemaVersion").GetString());
+        Assert.Equal("compiled-dotnet-fixture-cases.v9", catalog.GetProperty("schemaVersion").GetString());
         var cases = catalog.GetProperty("ilRewritePdbCases").EnumerateArray().ToArray();
         Assert.True(cases.Length >= 11);
         var ids = cases.Select(item => item.GetProperty("id").GetString()!).ToArray();
@@ -658,19 +658,16 @@ public sealed class IlRewritePdbEvidenceExtractorTests
             Assert.True(item.GetProperty("nonClaims").GetArrayLength() > 0);
             Assert.Contains(item.GetProperty("expectedTier").GetString()!, new[] { "Tier2Structural", "Tier4Unknown" });
         });
-        var deferred = cases.Where(item => item.TryGetProperty("status", out var status) && status.GetString() == "deferred").ToArray();
-        Assert.Single(deferred);
-        Assert.All(deferred, item =>
-        {
-            Assert.True(item.GetProperty("expectedRuleIds").GetArrayLength() == 0);
-            Assert.False(string.IsNullOrWhiteSpace(item.GetProperty("prerequisites").GetString()));
-        });
+        // ILRWPDB-ILASM-PARITY-012 is no longer deferred: its satisfiedBy
+        // list binds it to the implemented parity-gate cases.
         Assert.Contains(ids, id => id == "ILRWPDB-ILASM-PARITY-012");
         Assert.Contains(ids, id => id == "ILRWPDB-EMBEDDED-PORTABLE-013");
         Assert.Contains(ids, id => id == "ILRWPDB-EMBEDDED-MISSING-014");
         Assert.Contains(ids, id => id == "ILRWPDB-EMBEDDED-MISMATCH-015");
         var ilasm = cases.Single(item => item.GetProperty("id").GetString() == "ILRWPDB-ILASM-PARITY-012");
-        Assert.Contains("ILAsm", ilasm.GetProperty("prerequisites").GetString(), StringComparison.Ordinal);
+        Assert.Equal("implemented", ilasm.GetProperty("status").GetString());
+        Assert.NotEmpty(ilasm.GetProperty("satisfiedBy").EnumerateArray());
+        Assert.Contains("ILASM-PARITY-CFLOW-002", ilasm.GetProperty("satisfiedBy").EnumerateArray().Select(value => value.GetString()));
     }
 
 
