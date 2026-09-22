@@ -27,7 +27,8 @@ public sealed record ScanManifest(
     PdbInputProvenance? PdbInputProvenance = null,
     PdbEvidenceSummary? PdbEvidenceSummary = null,
     IlBodyProvenance? IlBodyProvenance = null,
-    IlRewriteProvenance? IlRewriteProvenance = null) : IJsonOnDeserialized
+    IlRewriteProvenance? IlRewriteProvenance = null,
+    IlRewritePdbProvenance? IlRewritePdbProvenance = null) : IJsonOnDeserialized
 {
     public string? SourceSnapshotDigest { get; init; } = ValidateSourceSnapshotDigest(SourceSnapshotDigest);
 
@@ -83,7 +84,8 @@ public sealed record ScanManifest(
             PdbInputProvenance: null,
             PdbEvidenceSummary: null,
             IlBodyProvenance: null,
-            IlRewriteProvenance: null)
+            IlRewriteProvenance: null,
+            IlRewritePdbProvenance: null)
     {
     }
 }
@@ -160,7 +162,11 @@ public sealed record ScanOptions(
     bool IlRewriteEvidence = false,
     IReadOnlyList<string>? IlRewriteBeforePaths = null,
     IReadOnlyList<string>? IlRewriteAfterPaths = null,
-    IlRewriteLimits? IlRewriteLimits = null);
+    IlRewriteLimits? IlRewriteLimits = null,
+    bool IlRewritePdbEvidence = false,
+    IReadOnlyList<string>? IlRewriteBeforePdbPaths = null,
+    IReadOnlyList<string>? IlRewriteAfterPdbPaths = null,
+    IlRewritePdbLimits? IlRewritePdbLimits = null);
 
 public sealed record FileInventoryItem(
     string RelativePath,
@@ -414,6 +420,7 @@ public static class FactTypes
     public const string ManagedIlCallObserved = nameof(ManagedIlCallObserved);
     public const string ManagedIlRewriteObserved = nameof(ManagedIlRewriteObserved);
     public const string ManagedIlCallRetargetObserved = nameof(ManagedIlCallRetargetObserved);
+    public const string ManagedIlRewritePdbObserved = nameof(ManagedIlRewritePdbObserved);
 }
 
 public static class RuleIds
@@ -639,6 +646,8 @@ public static class RuleIds
     public const string DotNetIlGap = "dotnet.compiled.il-gap.v1";
     public const string DotNetIlRewrite = "dotnet.compiled.il-rewrite.v1";
     public const string DotNetIlRewriteGap = "dotnet.compiled.il-rewrite-gap.v1";
+    public const string DotNetIlRewritePdb = "dotnet.compiled.il-rewrite-pdb.v1";
+    public const string DotNetIlRewritePdbGap = "dotnet.compiled.il-rewrite-pdb-gap.v1";
 }
 
 public static class ScannerVersions
@@ -664,6 +673,7 @@ public static class ScannerVersions
     public const string PortablePdbExtractor = "portable-pdb/0.1.0+srm-10.0.0+cecil-0.11.6";
     public const string IlBodyEvidenceExtractor = "il-body-evidence/0.1.0+srm-10.0.0+cecil-0.11.6";
     public const string IlRewriteEvidenceExtractor = "il-rewrite-evidence/0.1.0+srm-10.0.0+cecil-0.11.6";
+    public const string IlRewritePdbEvidenceExtractor = "il-rewrite-pdb-evidence/0.1.0+srm-10.0.0+cecil-0.11.6";
     public const string ConfigExtractor = "config/0.1.0";
     public const string SqlTextExtractor = "sql-text/0.1.0";
     public const string SqlShapeExtractor = "sql-shape/0.1.0";
