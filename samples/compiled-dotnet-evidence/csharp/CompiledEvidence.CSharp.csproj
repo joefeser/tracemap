@@ -13,5 +13,6 @@
          project's default Compile glob so this fixture assembly's identity
          never changes when the control-flow suite grows. -->
     <Compile Remove="IlRewriteControlFlowShapes.cs" />
+    <Compile Remove="IlRewriteMemberShapes.cs" />
   </ItemGroup>
 </Project>
