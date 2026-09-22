@@ -85,6 +85,22 @@ internal static class IlRewritePdbEvidenceExtractor
                 var pairId = $"rewrite-pair-{(index + 1).ToString("D3", CultureInfo.InvariantCulture)}";
                 if (pairsById.TryGetValue(pairId, out var pair) && pair.BeforeSide is not null && pair.AfterSide is not null)
                 {
+                    if (pair.Edges.Count == 0
+                        && pair.Outcome.GapKinds.Contains("IlRewriteTotalWorkLimitExceeded"))
+                    {
+                        // The parent join was atomically exhausted: both sides
+                        // were read, but no edge exists, so a zero-relationship
+                        // "admitted" outcome here would relabel partial parent
+                        // analysis as complete coverage.
+                        evaluated.Add(SyntheticPairGap(
+                            pairId,
+                            "IlRewritePdbRewritePairUnavailable",
+                            beforeSafeLocator: DeclaredLocator(options.RepoPath, beforePaths[index], "rewrite-pdb-before", compiledLimits),
+                            afterSafeLocator: DeclaredLocator(options.RepoPath, afterPaths[index], "rewrite-pdb-after", compiledLimits),
+                            cause: "IlRewriteTotalWorkLimitExceeded"));
+                        continue;
+                    }
+
                     evaluated.Add(EvaluatePdbPair(
                         options.RepoPath,
                         pair,
