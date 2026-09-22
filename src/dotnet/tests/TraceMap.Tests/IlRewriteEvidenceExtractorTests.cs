@@ -289,7 +289,11 @@ public sealed class IlRewriteEvidenceExtractorTests
         var after = Path.Combine(temp.Path, "RewriteShapes.after.dll");
         WriteBeforeAssembly(before);
         MutateConstantOperand(before, after);
-        MutateAddLocal(after, after, "Constant");
+        // Cecil keeps the input PE open until disposal on Windows. Write the
+        // second mutation to a distinct path before replacing the first.
+        var staged = Path.Combine(temp.Path, "RewriteShapes.after.staged.dll");
+        MutateAddLocal(after, staged, "Constant");
+        File.Move(staged, after, overwrite: true);
 
         var result = Scan(PairOptions(before, after));
 
