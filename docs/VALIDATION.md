@@ -2938,3 +2938,81 @@ bounded-input hash pinning stay with the existing manifest provenance; the
 catalog's `artifactPinning` contract records this decision. This slice does
 not complete Task 10: the remaining #766 ILAsm/rewritten-PDB matrix and
 Task 11's private Windows/`dotnetperf` lane stay out of scope.
+
+### IL rewrite PDB evidence (Task 10 fourth slice)
+
+The bounded rewrite-PDB lane activates `dotnet.compiled.il-rewrite-pdb.v1`
+and `dotnet.compiled.il-rewrite-pdb-gap.v1` behind the explicit
+`--il-rewrite-pdb-evidence` flag, which requires `--il-rewrite-evidence` and
+ordinal `--il-rewrite-pdb-before`/`--il-rewrite-pdb-after` declarations that
+must align with the declared assembly pairs. The lane is inert without the
+flag: no `ilRewritePdbProvenance` manifest section, no rewrite-PDB facts or
+known gaps, and no receipt provenance. The CLI additionally rejects declared
+PDB lists without the flag, so the inertness pin — an identical scan
+identity, rewrite digest, and fact bytes between a disabled-lane scan and one
+that carries the unflagged declarations — is asserted through the
+`ScanOptions` API in the focused suite, not through a CLI invocation.
+
+Each declared PDB side must bind its own paired assembly through the exact
+portable content GUID/stamp against the re-read and re-hashed assembly's PE
+CodeView entries; duplicate matching entries, cross-side matches, and changed
+or unreadable matched assemblies fail closed. Both PDB sides must
+independently satisfy the standalone PDB dual-reader contract
+(System.Reflection.Metadata method/sequence-point observations cross-checked
+against Mono.Cecil shape counts), every PDB method row must correspond to a
+dual-reader-proven body on its own side, and every sequence-point IL offset
+must fall inside that body's proven extent. Only fully proven pairs emit
+per-method `ManagedIlRewritePdbObserved` relationships recording the original
+and rewritten member identity, both body identities and digests, both PDB
+method identities and content ids, per-side sequence-point digests, and an
+exact offset classification: `sequence-point-offsets-unchanged` when the
+ordered IL offset vectors are equal, `sequence-point-offsets-changed`
+otherwise. The classification compares IL offset vectors only; lines,
+columns, documents, and hidden flags are committed by per-side digests and
+never imply preserved or correct debugging behavior, behavioral equivalence,
+source ownership, or rewrite attribution. Methods whose debug information
+exists on exactly one side emit a bounded
+`IlRewritePdbMethodDebugInformationAbsent` gap with a retained identity
+prefix and omitted-identity digest; methods with no debug information on
+either side emit nothing, mirroring the bodyless-method structural
+observation.
+
+The public synthetic matrix lives in
+`samples/compiled-dotnet-evidence/fixture-cases.json`
+(`compiled-dotnet-fixture-cases.v6`, `ilRewritePdbCases`): the deterministic
+compiler-produced `CompiledEvidence.CSharp` pair is the before side, and
+Mono.Cecil 0.11.6 — reading and writing portable PDBs, never used as the
+sole oracle — generates the after side inside the test suite. The matrix
+proves operand-only rewrites with stable instruction offsets (every
+relationship offsets-unchanged), IL insertions that shift later offsets
+(exactly one offsets-changed plus unaffected methods unchanged),
+byte-identical pairs, a missing after PDB, a content-identity mismatch
+without cross-side re-binding, a stripped one-side debug-information delta,
+truncated and native-Windows PDB sides, an unavailable parent rewrite pair,
+budget exhaustion, and declaration validation. Windows-native PDBs remain
+unsupported on every host
+(`WindowsPdbRequiresWindows`/`WindowsPdbIndependentReaderUnavailable`).
+
+Pinned local commands:
+
+```bash
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter FullyQualifiedName~IlRewritePdbEvidenceExtractorTests
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter "FullyQualifiedName~IlRewritePdbEvidenceExtractorTests|FullyQualifiedName~IlRewriteEvidenceExtractorTests|FullyQualifiedName~PortablePdbExtractorTests|FullyQualifiedName~IlBodyEvidenceExtractorTests|FullyQualifiedName~ManagedMetadataExtractorTests"
+tracemap scan --repo samples/compiled-dotnet-evidence/csharp --out <out> \
+  --il-rewrite-evidence --il-rewrite-before <before.dll> --il-rewrite-after <after.dll> \
+  --il-rewrite-pdb-evidence --il-rewrite-pdb-before <before.pdb> --il-rewrite-pdb-after <after.pdb>
+python3 scripts/validate-adapter-artifacts.py <out>
+```
+
+ILAsm/ILDAsm parity was assessed on 2026-09-22 and is deferred with exact
+prerequisites recorded in the fixture catalog
+(`ILRWPDB-ILASM-PARITY-012`): the tools were absent from PATH, the .NET SDK
+10.0.201 installation, and the NuGet cache on the assessment host, Homebrew
+bottles mono 6.14.1 but it was not installed, and ordinary CI provides no
+pinned ILAsm toolchain. No ILAsm or ILDAsm parity claim is made by any test
+in this slice, and embedded portable PDBs remain unclaimed
+(`ILRWPDB-EMBEDDED-PORTABLE-013`). This slice does not complete Task 10: the
+remaining #766 evaluation-stack-sensitive rewrites, netmodules, type
+forwarding, duplicate assembly identities, insertion/removal relationship
+edges, the extended ECMA-335 mutation matrix, and ILAsm parity stay open, and
+Task 11's private Windows/`dotnetperf` lane remains separate.

@@ -232,7 +232,16 @@ internal static class IlRewriteEvidenceExtractor
                     .Select(failure => $"{failure.Side}:{failure.Cause}")
                     .Distinct(StringComparer.Ordinal)
                     .OrderBy(value => value, StringComparer.Ordinal)));
-        return new EvaluatedIlRewritePair(outcome, edges, deltas, sideFailures);
+        // Side artifacts stay in memory only: they let the PDB sub-lane
+        // re-verify and reuse the admitted bytes and dual-reader results
+        // without re-running admission, and never enter provenance or facts.
+        return new EvaluatedIlRewritePair(
+            outcome,
+            edges,
+            deltas,
+            sideFailures,
+            before.Bytes is null || beforeResult is null ? null : new IlRewriteSideArtifact(before.Descriptor!.FullPath, before.RawFileSha256, beforeResult),
+            after.Bytes is null || afterResult is null ? null : new IlRewriteSideArtifact(after.Descriptor!.FullPath, after.RawFileSha256, afterResult));
     }
 
     private static IlBodyEvidenceExtractor.IlReaderResult? ReadAdmittedSide(

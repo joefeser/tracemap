@@ -263,6 +263,35 @@ public static class TraceMapCommand
             return 1;
         }
 
+        var rewritePdbBefore = values.GetMany("--il-rewrite-pdb-before");
+        var rewritePdbAfter = values.GetMany("--il-rewrite-pdb-after");
+        if (!values.HasFlag("--il-rewrite-pdb-evidence") && (rewritePdbBefore.Count > 0 || rewritePdbAfter.Count > 0))
+        {
+            await error.WriteLineAsync("error: --il-rewrite-pdb-before/--il-rewrite-pdb-after require --il-rewrite-pdb-evidence.");
+            return 1;
+        }
+
+        if (values.HasFlag("--il-rewrite-pdb-evidence"))
+        {
+            if (!values.HasFlag("--il-rewrite-evidence"))
+            {
+                await error.WriteLineAsync("error: --il-rewrite-pdb-evidence requires --il-rewrite-evidence.");
+                return 1;
+            }
+
+            if (rewritePdbBefore.Count != rewritePdbAfter.Count)
+            {
+                await error.WriteLineAsync("error: --il-rewrite-pdb-before and --il-rewrite-pdb-after must be declared as equal-length ordinal pairs.");
+                return 1;
+            }
+
+            if (rewritePdbBefore.Count != rewriteBefore.Count)
+            {
+                await error.WriteLineAsync("error: --il-rewrite-pdb-before/--il-rewrite-pdb-after must align ordinally with the declared --il-rewrite-before/--il-rewrite-after pairs.");
+                return 1;
+            }
+        }
+
         var sqlValidationSummaryPaths = values.GetMany("--sql-validation-summary");
         var sqlValidationAsOf = ParseSqlValidationAsOf(values, sqlValidationSummaryPaths);
 
@@ -311,7 +340,17 @@ public static class TraceMapCommand
             IlRewriteBeforePaths: values.GetMany("--il-rewrite-before"),
             IlRewriteAfterPaths: values.GetMany("--il-rewrite-after"),
             IlRewriteLimits: new IlRewriteLimits(
-                ParsePositiveInt(values, "--il-max-rewrite-pairs", 16)));
+                ParsePositiveInt(values, "--il-max-rewrite-pairs", 16)),
+            IlRewritePdbEvidence: values.HasFlag("--il-rewrite-pdb-evidence"),
+            IlRewriteBeforePdbPaths: values.GetMany("--il-rewrite-pdb-before"),
+            IlRewriteAfterPdbPaths: values.GetMany("--il-rewrite-pdb-after"),
+            IlRewritePdbLimits: new IlRewritePdbLimits(
+                ParsePositiveLong(values, "--il-rewrite-pdb-max-file-bytes", 67_108_864),
+                ParsePositiveInt(values, "--il-rewrite-pdb-max-documents", 50_000),
+                ParsePositiveInt(values, "--il-rewrite-pdb-max-methods", 250_000),
+                ParsePositiveInt(values, "--il-rewrite-pdb-max-sequence-points", 1_000_000),
+                ParsePositiveInt(values, "--il-rewrite-pdb-max-text", 4_096),
+                ParsePositiveLong(values, "--il-rewrite-pdb-max-work", 1_500_000)));
         var receiptRecorder = new ScanReceiptRecorder(
             scanOptions,
             sqlValidationSummaryPaths.Append(sqlValidationAsOf?.ToString("O") ?? string.Empty));
@@ -2283,7 +2322,7 @@ public static class TraceMapCommand
                 throw new ArgumentException($"Unexpected argument: {arg}");
             }
 
-            if (arg is "--restore" or "--include-paths" or "--include-reverse" or "--include-impact" or "--allow-identity-mismatch" or "--exit-code" or "--allow-mixed-inputs" or "--release-review" or "--il-body-evidence" or "--il-rewrite-evidence"
+            if (arg is "--restore" or "--include-paths" or "--include-reverse" or "--include-impact" or "--allow-identity-mismatch" or "--exit-code" or "--allow-mixed-inputs" or "--release-review" or "--il-body-evidence" or "--il-rewrite-evidence" or "--il-rewrite-pdb-evidence"
                 || additionalFlags.Contains(arg, StringComparer.Ordinal))
             {
                 flags.Add(arg);
@@ -2780,6 +2819,18 @@ public static class TraceMapCommand
                                        Explicit paired inputs. Repeatable; the nth before and after declarations form one ordinal pair and both lists must have equal length.
               --il-max-rewrite-pairs <count>
                                        Positive deterministic rewrite-pair limit; declared pairs beyond it emit bounded limit gaps.
+              --il-rewrite-pdb-evidence
+                                       Prove Portable PDB method and sequence-point identities across declared before/after rewrite pairs. Requires --il-rewrite-evidence; each PDB side must bind its own paired assembly by exact portable content identity, and only fully proven pairs emit per-method offset-classified relationships. Never claims behavioral equivalence, source ownership, or preserved debugging behavior.
+              --il-rewrite-pdb-before <path>
+              --il-rewrite-pdb-after <path>
+                                       Explicit paired Portable PDB inputs. Repeatable; the nth PDB declarations pair with the nth declared assembly pair and both lists must match the assembly pair count.
+              --il-rewrite-pdb-max-file-bytes <count>
+              --il-rewrite-pdb-max-documents <count>
+              --il-rewrite-pdb-max-methods <count>
+              --il-rewrite-pdb-max-sequence-points <count>
+              --il-rewrite-pdb-max-text <count>
+              --il-rewrite-pdb-max-work <count>
+                                       Positive deterministic rewrite PDB limits; max-text must be at least 71.
               --pdb-max-artifacts <count>
               --pdb-max-file-bytes <count>
               --pdb-max-documents <count>
