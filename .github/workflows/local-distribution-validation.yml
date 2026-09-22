@@ -45,6 +45,8 @@ jobs:
         run: dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter FullyQualifiedName~IlBodyEvidenceExtractorTests
       - name: Run IL rewrite member and signature fixture matrix
         run: dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter FullyQualifiedName~IlRewriteMemberShapeEvidenceExtractorTests
+      - name: Run bounded public ECMA-335 topology and debug-evidence matrix
+        run: dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter "FullyQualifiedName~IlRewriteAssemblyTopologyTests|FullyQualifiedName~IlRewriteEmbeddedPdbTests|FullyQualifiedName~IlRewritePublicIntegrationTests"
       - name: Build native Windows PDB fixtures
         if: runner.os == 'Windows'
         shell: pwsh

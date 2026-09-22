@@ -371,7 +371,19 @@ internal static class IlRewritePdbEvidenceExtractor
                 return null;
             }
 
-            using var provider = MetadataReaderProvider.FromPortablePdbStream(new MemoryStream(bytes, writable: false), MetadataStreamOptions.LeaveOpen);
+            var embedded = PortablePdbExtractor.IsPortableExecutable(bytes);
+            if (embedded && !verifiedBytes.AsSpan().SequenceEqual(bytes))
+            {
+                Fail("IlRewritePdbAssemblyBindingMismatch", "EmbeddedPdbAssemblyArtifactMismatch", pdbLocator);
+                return null;
+            }
+            var pdbBytes = embedded ? PortablePdbExtractor.ReadEmbeddedPortablePdb(bytes, limits.MaxFileSizeBytes) : bytes;
+            if (pdbBytes is null)
+            {
+                Fail("IlRewritePdbSideUnavailable", "EmbeddedPortablePdbMissing", pdbLocator);
+                return null;
+            }
+            using var provider = MetadataReaderProvider.FromPortablePdbStream(new MemoryStream(pdbBytes, writable: false), MetadataStreamOptions.LeaveOpen);
             var reader = provider.GetMetadataReader();
             if (reader.DebugMetadataHeader is null)
             {
@@ -412,7 +424,7 @@ internal static class IlRewritePdbEvidenceExtractor
                 MaxTextLength: limits.MaxTextLength,
                 MaxTotalWorkUnits: limits.MaxTotalWorkUnits);
             var observations = PortablePdbExtractor.ReadPortablePdb(reader, contentIdentity, view, budget, cancellationToken);
-            var cecilShapes = PortablePdbExtractor.ReadCecilShapeCounts(verifiedBytes, bytes, budget, cancellationToken);
+            var cecilShapes = PortablePdbExtractor.ReadCecilShapeCounts(verifiedBytes, pdbBytes, budget, cancellationToken);
             if (!PortablePdbExtractor.ShapeCountsAgree(cecilShapes, PortablePdbExtractor.CanonicalShapes(observations.Documents, observations.Methods), budget, cancellationToken))
             {
                 Fail("IlRewritePdbReaderDisagreement", "PdbReaderDisagreement", pdbLocator);
@@ -723,7 +735,7 @@ internal static class IlRewritePdbEvidenceExtractor
             // identity, exactly like an admitted-input change would.
             if (admitted.SafeLocatorTextLimitExceeded)
                 return new PdbSideAdmission(admitted, null, rawSha256, "IlRewritePdbSideTextLimitExceeded");
-            if (!PortablePdbExtractor.IsPortablePdb(bytes))
+            if (!PortablePdbExtractor.IsPortablePdb(bytes) && !PortablePdbExtractor.IsPortableExecutable(bytes))
             {
                 return PortablePdbExtractor.IsWindowsPdb(bytes)
                     ? new PdbSideAdmission(admitted, null, rawSha256, OperatingSystem.IsWindows() ? "WindowsPdbIndependentReaderUnavailable" : "WindowsPdbRequiresWindows")

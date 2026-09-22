@@ -884,7 +884,7 @@ public static class ManagedMetadataExtractor
             assemblyReferenceIdentity);
     }
 
-    internal static long PreflightManagedInput(byte[] bytes, CompiledInputLimits limits)
+    internal static long PreflightManagedInput(byte[] bytes, CompiledInputLimits limits, bool rejectTypeForwarders = false)
     {
         using var stream = new MemoryStream(bytes, writable: false);
         using var pe = new PEReader(stream, PEStreamOptions.LeaveOpen);
@@ -897,6 +897,11 @@ public static class ManagedMetadataExtractor
             throw new ManagedInputException("unsupported", "ManagedNetmoduleInputUnsupported");
         if (reader.AssemblyFiles.Any(handle => reader.GetAssemblyFile(handle).ContainsMetadata))
             throw new ManagedInputException("unsupported", "MultiModuleManagedAssemblyUnsupported");
+        // ECMA-335 II.23.1.15 ExportedType.TypeAttributes Forwarder bit.
+        const System.Reflection.TypeAttributes exportedTypeForwarder = (System.Reflection.TypeAttributes)0x00200000;
+        if (rejectTypeForwarders && reader.ExportedTypes.Any(handle =>
+                (reader.GetExportedType(handle).Attributes & exportedTypeForwarder) != 0))
+            throw new ManagedInputException("unsupported", "TypeForwardingManagedAssemblyUnsupported");
         var typeCount = Math.Max(0, reader.TypeDefinitions.Count - 1);
         var memberCount = (long)reader.GetTableRowCount(TableIndex.MethodDef)
             + reader.GetTableRowCount(TableIndex.Field)
