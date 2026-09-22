@@ -106,26 +106,27 @@ rules:
   - id: dotnet.compiled.il-body.v1
     status: active
     name: Bounded operand-aware IL method-body identity
-    description: Records an exact IL method-body identity for an admitted managed assembly where the canonical body digest commits every instruction opcode together with its operand: resolved direct call targets, branch and switch target offsets, string digests, numeric constant bit patterns, variable indexes, and raw non-call token operands.
+    description: Records an exact IL method-body identity for an admitted managed assembly where the canonical body digest commits every instruction opcode together with its operand: resolved direct call targets, branch and switch target offsets, string digests, numeric constant bit patterns, variable indexes, full field/type/member token identities, and calli standalone signatures.
     evidenceTier: Tier2Structural
     emits: [ManagedIlBodyDeclared, AnalysisGap]
     limitations:
       - An IL body identity proves only that the admitted assembly contains this exact bounded instruction stream at this module-local method row; it does not prove execution, dispatch, reachability, behavior, source ownership, semantic equivalence with any source construct, or preservation under rewriting.
       - The canonical digest is byte-layout sensitive by design. Equal opcode sequences with different member, string, constant, branch, or switch operands therefore produce different identities, and this rule makes no claim that differently laid out bodies are semantically different or equivalent; rewrite equivalence is a separate deferred contract.
       - Mono.Cecil is not the sole oracle. Mono.Cecil and an independent System.Reflection.Metadata raw-IL reader must agree on the complete canonical body encoding, including call-target identities, locals, exception-region boundaries, and max stack, or the input's positive IL facts are withheld.
-      - Non-call token operands such as field and signature tokens are committed by raw module-local token only; their member identities are not resolved in this rule and must not be promoted to positive member evidence.
+      - Field and general token operands commit both their raw module-local token and full decoded type/member identity; calli commits its standalone calling-convention signature. The containing module is the only resolution scope. None of these operands proves target presence, execution, or cross-assembly resolution.
       - IL user-string literals are committed by length and SHA-256 digest of exact little-endian UTF-16 code units, preserving unpaired surrogates without replacement fallback; literals are never retained verbatim, because literal text is unbounded and may contain secrets.
       - Abstract, external, PInvoke, runtime-implemented, and bodyless methods emit no body fact; this is a structural observation about the method row, not a claim that no code exists.
-      - Rewritten-member identity, metadata-token retargeting across rewrites, rewritten PDB offsets, ILAsm/ILDAsm parity, and the extended mutation matrix from #766 remain explicitly deferred and out of scope.
+      - Paired before/after identities and retargets use the separate dotnet.compiled.il-rewrite.v1 rule. ILAsm/ILDAsm parity, netmodules, type forwarding, duplicate assembly identities, and embedded portable PDBs remain deferred.
 
   - id: dotnet.compiled.il-call.v1
     status: active
     name: Direct IL call-site evidence
-    description: Records one evidence row per direct call-related instruction operand (call, callvirt, newobj, ldftn, ldvirtftn, and the constrained. prefix target) with the exact containing body identity, IL offset, opcode, module-local reference token, and the complete member-reference identity as encoded in the containing module.
+    description: Records one evidence row per direct call-related instruction operand (call, callvirt, newobj, ldftn, ldvirtftn, calli standalone signature, and the constrained. prefix target) with the exact containing body identity, IL offset, opcode, module-local reference token, and complete member-reference or standalone-signature identity as encoded in the containing module.
     evidenceTier: Tier2Structural
     emits: [ManagedIlCallObserved, AnalysisGap]
     limitations:
       - A call site records the static member reference encoded in this module's IL. It does not prove the target is ever executed, that a virtual dispatch resolves to that member, that the referenced external assembly is present, or that the target body exists.
+      - A calli site records the complete static StandAloneSig calling convention, this flags, required-parameter boundary, return type, and parameter types; that signature is not a target-member identity and does not prove the function pointer is valid or invoked.
       - Member-reference identities are resolved only against metadata encoded inside the containing module (MethodDef rows, MemberRef rows with assembly-reference scope, and MethodSpec instantiations). No cross-assembly resolution, host probing, or ambient Mono.Cecil resolution is performed.
       - Unresolved or unsupported operand encodings on a call-family opcode fail closed to a gap for that input; no partial call list is emitted.
       - The constrained. prefix records its exact cross-checked type identity with reference kind constrainedtype, but no module-local token claim: Mono.Cecil cannot reproduce the raw TypeSpec token for a resolved constrained operand, so the field stays explicitly unclaimed rather than single-sourced.
@@ -150,12 +151,13 @@ rules:
     limitations:
       - An edge proves only that the same complete method identity exists once on each admitted side and that its canonical operand-aware body identity and module-local token are exactly as recorded. It does not prove semantic equivalence, behavior preservation, compilation provenance, source ownership, safe applicability, or that any other member of the pair survived rewriting.
       - The scanner never performs or attributes the rewrite. Before and after assemblies are explicit operator-declared inputs; the edge makes no claim about what tool produced the change or why.
-      - Joins use complete exact assembly-scoped method identity text only. Zero or one-side-only membership, more than one candidate on either side, differing assembly/module identities, disagreement, malformed shapes, and budget exhaustion emit Tier4 gaps and never guessed joins; insertion and removal relationships are detected only as bounded one-side-only gaps, not edges.
+      - Joins use complete exact assembly-scoped method identity text only. One-side-only membership emits an explicit bounded before-only or after-only relationship fact; it is never an ambiguous join or clean absence. More than one candidate on either side, differing assembly/module identities, disagreement, malformed shapes, and budget exhaustion emit Tier4 gaps and never guessed joins. Membership does not prove rewrite authorship or why a method changed.
       - Per-call retarget detail requires equal instruction counts and identical opcode sequences on both sides; otherwise the edge records instruction-stream-change with no per-instruction claim. Call retargets record module-local tokens, which are locations within their own module, never stable cross-build identities.
       - Relationship kinds are exact classifications, not equivalence claims. operand-only-change additionally requires every non-instruction body component (locals, exception regions, max stack, and init-locals) to match; a change limited to those components is body-structure-change, and a change to both instruction operands and those components is operand-and-body-structure-change. No kind proves semantic equivalence or behavior preservation.
       - Both sides must independently satisfy the dotnet.compiled.il-body.v1 dual-reader agreement before any edge is emitted; a disputed or withheld side withholds the whole pair.
       - Before body decoding, shared compiled-input preflight rejects native/mixed-mode assemblies, netmodules, and multi-module manifests and enforces metadata type/member row bounds and a metadata work budget shared across all declared pairs. The separate rewrite-pair limit bounds the number of pairs; this lane does not infer or load secondary modules.
-      - Rewritten PDB offsets and sequence-point validity are covered by dotnet.compiled.il-rewrite-pdb.v1, and the public control-flow/exception-handling rewrite matrix (branch, switch, and leave operand retargets; nested exception-region rebinding and handler-kind changes; max-stack-only header changes; evaluation-stack-sensitive instruction-stream rewrites, plus bounded malformed branch-delta, switch-table, and exception-region-limit shapes) is exercised by the CompiledEvidence.CSharp.ControlFlow fixture suite. ILAsm/ILDAsm parity and the remaining broader ECMA-335 mutation matrix from #766 (netmodules, type forwarding, duplicate assembly identities, member/token/constant/string/signature/generics/calli shapes, and insertion/removal edges) remain explicitly deferred and out of scope.
+      - Rewritten PDB offsets and sequence-point validity are covered by dotnet.compiled.il-rewrite-pdb.v1. Public compiler/Cecil fixtures exercise control flow, member and type tokens, MethodSpec and TypeSpec, calli standalone-signature calling conventions, vararg MemberRef calls with a MethodDef parent and required-parameter boundary, custom modifiers, accessor bodies, and one-sided membership. InlineField, InlineTok, and InlineSig tokens require independent System.Reflection.Metadata row/signature admission before the Cecil body can agree. ILAsm/ILDAsm parity, netmodules, type forwarding, duplicate assembly identities, and embedded portable PDBs remain deferred.
+      - Field and general token operands bind the full decoded type/member identity as well as their module-local row number. Equal raw tokens with differing field signatures do not produce equal body identities. Both readers must agree on this canonical operand identity before a rewrite edge is emitted.
 
   - id: dotnet.compiled.il-rewrite-gap.v1
     status: active
@@ -165,7 +167,7 @@ rules:
     emits: [AnalysisGap]
     limitations:
       - The gap reduces only the explicitly requested rewrite lane; it does not prove rewrite absence or membership absence, does not alter source, compiled-metadata, PDB, or IL body/call evidence, and never upgrades itself to a clean absence conclusion.
-      - A one-side-only method identity is a bounded unsupported shape in this slice, not a proven insertion or removal relationship.
+      - A one-side-only method identity is a bounded before-only or after-only relationship, with its full stable assembly/module and signature identity retained. It does not prove rewrite authorship, runtime effect, or clean absence outside the admitted pair.
 
   - id: dotnet.compiled.il-rewrite-pdb.v1
     status: active
