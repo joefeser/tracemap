@@ -7,4 +7,11 @@
     <DebugType>portable</DebugType>
     <Deterministic>true</Deterministic>
   </PropertyGroup>
+  <ItemGroup>
+    <!-- IlRewriteControlFlowShapes.cs belongs exclusively to
+         CompiledEvidence.CSharp.ControlFlow.csproj; keep it out of this
+         project's default Compile glob so this fixture assembly's identity
+         never changes when the control-flow suite grows. -->
+    <Compile Remove="IlRewriteControlFlowShapes.cs" />
+  </ItemGroup>
 </Project>
