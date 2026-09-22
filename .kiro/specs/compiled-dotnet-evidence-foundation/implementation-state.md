@@ -835,3 +835,29 @@ decision `not_merge_ready` with `CURRENT_HEAD_REQUIRED_REVIEW_MISSING` — the
 exact-head hosted-review freshness gate at `d11f35e5` is an owner decision
 and local validation does not substitute for it. All CI checks pass on the
 final head. No manual bot retagging, force-push, or merge was performed.
+
+
+Full PR #778 review follow-up (2026-09-22, based on `1a196ea3`): two P2
+regression-proof defects were confirmed and corrected; no new P1 was found.
+The merged-roots test previously accepted a wrong caller within the same
+namespace and replacement of `engine_10_queue` with `engine_09_queue` because
+it checked broad namespace/table substrings. Temporary corruption of the
+combined index reproduced both false passes together; after replacing those
+checks with exact original-scan tuples, each corruption independently fails
+at reconciliation. The injected mutations were removed from the final code.
+
+Catalog validation previously checked vocabulary only, allowing declared rules,
+tiers, and gaps to diverge from produced evidence. Each implemented case now
+consumes its catalog expectations against actual scan, packet, or combined-edge
+evidence. The merged-root expectation is corrected to Tier1 semantic callgraph
+evidence: this case preserves separate-source identities and does not produce
+`combined.paths.symbol-reconciliation.v1`. Its Process identity count is eleven.
+The scanner/reducer behavior and open Task 10 scope remain unchanged.
+
+Validation of the completed follow-up: focused suite 8/8; final full .NET suite
+2,144/2,144, zero failed/skipped; solution build zero warnings/errors. The modern
+sample CLI scan produced Level1SemanticAnalysis and passed artifact validation;
+validator self-tests passed 7/7, lane tests 3/3, private-path guard and
+`git diff --check` passed. Restoring the old merged-root catalog rule separately
+fails the new produced-evidence assertion. The temporary catalog mutation was
+also removed before final validation.

@@ -2907,7 +2907,10 @@ Pinned behaviors, asserted per catalog case id and pipeline stage
   with per-source namespacing, no symbol deduplication, and no identity that
   blends namespaces; every terminal stays attributed to its own source label
   (11 alpha, 1 beta, 1 vb); the merged dependency report lists all three
-  labeled sources. The Web Forms packet stays single-page-source by design
+  labeled sources. Call edges are compared to the original scans as exact
+  (label, caller, callee) tuples, and terminals as exact (label, original fact
+  id, source symbol, table name) tuples, including multiplicity. The Web Forms
+  packet stays single-page-source by design
   (`WebFormsModernizationPrimarySourceAmbiguous` for multi-page-source
   combined indexes), so cross-source attribution is asserted over the merged
   index directly.
@@ -2918,6 +2921,11 @@ Pinned behaviors, asserted per catalog case id and pipeline stage
   projectless VB in ordinary CI.
 - Determinism: repeat CLI scans of each root produce byte-identical
   `facts.ndjson`.
+
+Each implemented case also checks the catalog's expected rules, tiers, and
+positive gap expectations against its produced evidence. The merged-roots case
+checks preserved Tier1 callgraph evidence; it does not claim to exercise the
+cross-source symbol-reconciliation rule.
 
 Run the focused lane with:
 
