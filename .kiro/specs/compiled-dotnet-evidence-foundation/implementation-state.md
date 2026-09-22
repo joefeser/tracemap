@@ -1440,3 +1440,32 @@ zero-warning/error `dotnet build src/dotnet/TraceMap.sln --no-restore
 extended-lane operating systems (Windows is the load-bearing one) and the
 ACK review; until the Windows extended lane passes with the pinned toolchain
 recorded, no parity claim is final and Task 10 stays unchecked.
+
+First pushed head `e9af9740` CI on 2026-09-22: the extended lane passed on
+Ubuntu and macOS (125 tests each) and the Windows job confirmed the central
+toolchain hypothesis — `C:\Windows\Microsoft.NET\Framework64\v4.0.30319\ilasm.exe`
+exists (the in-test probes recorded exists=True and the toolchain test
+passed), the runner image is `win25-vs2026`/`20260907.229.1`/AMD64, and the
+workflow discovery additionally surfaced a legacy
+`Framework\v2.0.50727\ilasm.exe` 2.0.50727.9157 (not pinned; the ordered
+discovery takes Framework64 v4.0.30319 first). ILDAsm 4.8.3928.0 was found in
+all four NETFX tool directories. Five Windows gate tests failed with three
+distinct defects, all in the gate itself: (1) ILDAsm wraps long `.method`
+headers across lines, so the parser must join header continuation lines until
+the parameter-list parenthesis appears (the embedded PDB fixture's 76-char
+single-line header parsed, the public fixtures' 80+ char headers did not);
+(2) the mutation leg assembled into a `rt` subdirectory that was never
+created, so ILAsm could not start ("The directory name is invalid");
+(3) `/pdbpath` does not exist in ILDAsm 4.8.3928.0 — its captured usage text
+documents `/LINENUM` ("Include references to original source lines") and
+`/UTF8` instead, and the plain adjacent-PDB invocation without `/linenum`
+emitted no `.line` directives. The repair joins wrapped headers (with the
+offending text now included in every parser failure for future diagnosis),
+creates output directories before invoking ILAsm, adds `/utf8` to every
+ILDAsm invocation, and runs the PDB leg with the documented `/linenum`
+switch; if that ILDAsm accepts the switch, disassembles the carrier, and
+still emits no `.line` directives, the test records the typed
+oracle-availability gap with the precise work-machine command and expected
+receipt and makes no PDB parity claim (catalog case `ILASM-PARITY-PDB-006`
+and `docs/VALIDATION.md` state this contract). Exact-head CI reruns on the
+repair head remain pending; Task 10 stays unchecked.

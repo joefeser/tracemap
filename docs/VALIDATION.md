@@ -3274,13 +3274,15 @@ readers. The six catalog cases live in `fixture-cases.json` schema v9
   round trip first, with identical normalized disassembly of the raw and
   round-tripped after sides.
 - `ILASM-PARITY-PDB-006` — the non-hidden sequence points of an embedded
-  portable PDB fixture, observed independently as ILDAsm `.line` directives
-  (adjacent extracted PDB, with `/pdbpath=` as the recorded retry), equal
-  TraceMap's declared sequence-point tuples (offset, start/end line,
-  start/end column). If ILDAsm produces no `.line` observation at all, the
-  case fails with a precise work-machine reproduction command and expected
-  receipt instead of claiming parity; hidden (`0xfeefee`) points are outside
-  the claim.
+  portable PDB fixture, observed independently via ILDAsm's documented
+  `/linenum` switch with the extracted PDB adjacent to the carrier copy,
+  must equal TraceMap's declared sequence-point tuples (offset, start/end
+  line, start/end column). ILDAsm 4.8.3928.0 has no `/pdbpath` option. If
+  that ILDAsm accepts `/linenum`, disassembles the carrier, and still emits
+  no `.line` directives, the test records the typed oracle-availability gap
+  with a precise work-machine reproduction command and expected receipt and
+  makes no PDB parity claim; hidden (`0xfeefee`) points are outside the
+  claim either way.
 
 Every round-trip leg scans a bound compiled-input pair (binding receipt over
 a temporary git fixture repository) with both `il-body` and `il-rewrite`

@@ -176,9 +176,33 @@ public sealed class IlDasmTextParserTests
     }
 
     [Fact]
+    public void Wrapped_method_headers_join_until_the_parameter_parenthesis()
+    {
+        var text = """
+            .class public Wrapped
+            {
+              .method public hidebysig static int32
+                      LongSignatureAcrossLines(int32 value) cil managed
+              {
+                .maxstack  1
+                IL_0000:  ldarg.0
+                IL_0001:  ret
+              } // end of method Wrapped::LongSignatureAcrossLines
+            } // end of class Wrapped
+            """;
+        var parsed = IlDasmTextParser.ParseText(text);
+
+        var method = parsed.Method("Wrapped", "LongSignatureAcrossLines");
+        Assert.Equal(2, method.Instructions.Count);
+        Assert.Equal(0, method.LocalCount);
+    }
+
+    [Fact]
     public void Malformed_method_headers_and_missing_locals_fail_loudly()
     {
         Assert.Throws<InvalidOperationException>(() => IlDasmTextParser.ParseText(".method public static\n"));
         Assert.Throws<InvalidOperationException>(() => IlDasmTextParser.ParseText(".method public static void  NoBody cil managed\n"));
+        var thrown = Assert.Throws<InvalidOperationException>(() => IlDasmTextParser.ParseText(".method public static void  NeverCompletes cil managed\n.more lines without a parenthesis\n"));
+        Assert.Contains("NeverCompletes", thrown.Message, StringComparison.Ordinal);
     }
 }

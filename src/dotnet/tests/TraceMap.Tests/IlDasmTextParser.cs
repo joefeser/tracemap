@@ -73,6 +73,9 @@ internal static partial class IlDasmTextParser
         IlDasmMethodTextBuilder? builder = null;
         StringBuilder? localsBuilder = null;
         var localsBalance = 0;
+        // ILDasm wraps long .method headers across lines; a header is
+        // complete only when its parameter-list parenthesis appears.
+        StringBuilder? methodHeaderBuffer = null;
         foreach (var raw in lines)
         {
             var line = raw.TrimEnd();
@@ -96,6 +99,20 @@ internal static partial class IlDasmTextParser
                 continue;
             }
 
+            if (methodHeaderBuffer is not null)
+            {
+                methodHeaderBuffer.Append(' ').Append(trimmed);
+                if (trimmed.Contains('('))
+                {
+                    builder = new IlDasmMethodTextBuilder(CurrentTypeName(typeStack), MethodName(methodHeaderBuffer.ToString()));
+                    methodClosingDepth = braceDepth + 1;
+                    methodHeaderBuffer = null;
+                }
+                else if (methodHeaderBuffer.Length > 8192)
+                    throw new InvalidOperationException($"Malformed .method header in ILDasm text: {methodHeaderBuffer}");
+                continue;
+            }
+
             if (trimmed.StartsWith(".class ", StringComparison.Ordinal))
             {
                 typeStack.Add(ClassName(trimmed));
@@ -104,8 +121,18 @@ internal static partial class IlDasmTextParser
             }
             if (trimmed.StartsWith(".method ", StringComparison.Ordinal))
             {
-                builder = new IlDasmMethodTextBuilder(CurrentTypeName(typeStack), MethodName(trimmed));
-                methodClosingDepth = braceDepth + 1;
+                if (trimmed.Contains('('))
+                {
+                    builder = new IlDasmMethodTextBuilder(CurrentTypeName(typeStack), MethodName(trimmed));
+                    methodClosingDepth = braceDepth + 1;
+                }
+                else
+                {
+                    // The header continues on the following line(s); the
+                    // method's opening brace can only be counted once the
+                    // complete header has been consumed.
+                    methodHeaderBuffer = new StringBuilder(trimmed);
+                }
                 continue;
             }
             if (trimmed.Length > 0 && trimmed[0] == '{')
@@ -197,8 +224,11 @@ internal static partial class IlDasmTextParser
             }
         }
 
-        if (builder is not null || localsBuilder is not null)
-            throw new InvalidOperationException("Unterminated .method block in ILDasm text.");
+        if (builder is not null || localsBuilder is not null || methodHeaderBuffer is not null)
+        {
+            var state = builder is not null ? "body open" : "header incomplete";
+            throw new InvalidOperationException($"Unterminated .method block in ILDasm text: {state} {methodHeaderBuffer}");
+        }
         return new IlDasmTextFile(methods, Normalized(normalized.ToString()));
     }
 
@@ -287,7 +317,7 @@ internal static partial class IlDasmTextParser
     {
         var parenthesis = methodLine.IndexOf('(');
         if (parenthesis < 0)
-            throw new InvalidOperationException("Malformed .method header in ILDasm text.");
+            throw new InvalidOperationException($"Malformed .method header in ILDasm text: {methodLine}");
         var before = methodLine[..parenthesis].TrimEnd();
         var lastSpace = before.LastIndexOf(' ');
         var token = lastSpace < 0 ? before : before[(lastSpace + 1)..];
