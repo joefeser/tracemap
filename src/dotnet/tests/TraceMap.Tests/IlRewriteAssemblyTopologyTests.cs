@@ -54,6 +54,37 @@ public sealed class IlRewriteAssemblyTopologyTests
     }
 
     [Fact]
+    public void Non_forwarded_exported_types_are_charged_before_scanning_the_table()
+    {
+        using var temp = new TempDirectory();
+        var path = Path.Combine(temp.Path, "ExportedBudget.dll");
+        WriteMetadataAssembly(path, "exported-overbudget");
+        using (var pe = new PEReader(File.OpenRead(path)))
+            Assert.Equal(40, pe.GetMetadataReader().ExportedTypes.Count);
+
+        var options = Options(path, path) with
+        {
+            CompiledInputLimits = new CompiledInputLimits(MaxTotalWorkUnits: 20)
+        };
+        var evaluation = IlRewriteEvidenceExtractor.Evaluate(options);
+        var pair = Assert.Single(evaluation.Pairs);
+        Assert.Empty(pair.Edges);
+        Assert.Equal("limit-exhausted", pair.Outcome.Outcome);
+        Assert.Equal(2, pair.SideFailures.Count);
+        Assert.All(pair.SideFailures, failure =>
+        {
+            Assert.Equal("IlRewriteTotalWorkLimitExceeded", failure.GapKind);
+            Assert.Equal("ManagedInputTotalWorkLimitExceeded", failure.Cause);
+        });
+        AssertDigest(evaluation.Provenance!);
+        var scan = ScanEngine.Scan(options);
+        var gaps = scan.Facts.Where(fact => fact.RuleId == RuleIds.DotNetIlRewriteGap).ToArray();
+        Assert.Equal(2, gaps.Length);
+        Assert.All(gaps, gap => AssertGapFact(gap, evaluation.Provenance!, "IlRewriteTotalWorkLimitExceeded", "ManagedInputTotalWorkLimitExceeded"));
+        Assert.DoesNotContain(scan.Facts, fact => fact.RuleId == RuleIds.DotNetIlRewrite);
+    }
+
+    [Fact]
     public void Duplicate_complete_method_identity_is_ambiguous_even_when_readers_agree()
     {
         using var temp = new TempDirectory();
@@ -189,6 +220,13 @@ public sealed class IlRewriteAssemblyTopologyTests
                 new Version(1, 0), default, default, (System.Reflection.AssemblyFlags)0, default);
             metadata.AddExportedType(System.Reflection.TypeAttributes.Public | ExportedTypeForwarder,
                 metadata.GetOrAddString("Synthetic"), metadata.GetOrAddString("Forwarded"), target, 0);
+        }
+        if (shape == "exported-overbudget")
+        {
+            var file = metadata.AddAssemblyFile(metadata.GetOrAddString("secondary.dll"), default, containsMetadata: false);
+            for (var index = 0; index < 40; index++)
+                metadata.AddExportedType(System.Reflection.TypeAttributes.Public,
+                    metadata.GetOrAddString("Synthetic"), metadata.GetOrAddString($"Exported{index:D2}"), file, 0);
         }
         metadata.AddTypeDefinition(System.Reflection.TypeAttributes.NotPublic, default,
             metadata.GetOrAddString("<Module>"), default,

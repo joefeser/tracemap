@@ -24,6 +24,9 @@ public sealed class IlRewriteEmbeddedPdbTests
 
         var result = fixture.Scan(assembly, assembly);
         AssertPdbEnvelope(result);
+        var recorder = new ScanReceiptRecorder(new ScanOptions("public-fixture", "unused"));
+        recorder.Bind(result);
+        Assert.Equal("embedded-portable", Assert.Single(recorder.CreateReceipt().PdbInputProvenance!.Outcomes).Format);
         var provenance = Assert.IsType<PdbInputProvenance>(result.Manifest.PdbInputProvenance);
         var outcome = Assert.Single(provenance.Outcomes);
         Assert.Equal("admitted", outcome.Outcome);
@@ -121,6 +124,22 @@ public sealed class IlRewriteEmbeddedPdbTests
         Assert.DoesNotContain(result.Facts, fact => fact.RuleId == RuleIds.DotNetIlRewritePdb);
     }
 
+    [Fact]
+    public void Embedded_carrier_locator_obeys_the_stricter_rewrite_pdb_text_limit()
+    {
+        using var fixture = new Fixture();
+        var compiled = fixture.Compile("return input + 1;");
+        var carrier = Path.Combine(Path.GetDirectoryName(compiled)!, new string('x', 80) + ".dll");
+        File.Copy(compiled, carrier);
+        var result = fixture.ScanRewrite(carrier, carrier, carrier, carrier,
+            new IlRewritePdbLimits(MaxTextLength: 71));
+        AssertPdbEnvelope(result);
+        var outcome = Assert.Single(result.Manifest.IlRewritePdbProvenance!.Outcomes);
+        Assert.Equal("limit-exhausted", outcome.Outcome);
+        Assert.Contains("IlRewritePdbTextLimitExceeded", outcome.GapKinds);
+        Assert.DoesNotContain(result.Facts, fact => fact.RuleId == RuleIds.DotNetIlRewritePdb);
+    }
+
     private static void AssertPdbEnvelope(ScanResult result)
     {
         var pdbRules = new HashSet<string>(StringComparer.Ordinal)
@@ -150,7 +169,8 @@ public sealed class IlRewriteEmbeddedPdbTests
 
     private sealed class Fixture : IDisposable
     {
-        private readonly string root = Directory.CreateTempSubdirectory("tracemap-embedded-pdb-").FullName;
+        private readonly TempDirectory temp = new();
+        private string root => temp.Path;
         public Fixture()
         {
             File.WriteAllText(Path.Combine(root, "Fixture.cs"), "public static class Fixture { public static int Compute(int input) => input + 1; }");
@@ -207,14 +227,16 @@ public sealed class IlRewriteEmbeddedPdbTests
             return target;
         }
 
-        public ScanResult ScanRewrite(string before, string after, string beforePdb, string afterPdb) =>
+        public ScanResult ScanRewrite(string before, string after, string beforePdb, string afterPdb,
+            IlRewritePdbLimits? pdbLimits = null) =>
             ScanEngine.Scan(new ScanOptions(root, Path.Combine(root, "rewrite-" + Guid.NewGuid().ToString("N")),
                 IlRewriteEvidence: true,
                 IlRewriteBeforePaths: [before],
                 IlRewriteAfterPaths: [after],
                 IlRewritePdbEvidence: true,
                 IlRewriteBeforePdbPaths: [beforePdb],
-                IlRewriteAfterPdbPaths: [afterPdb]));
+                IlRewriteAfterPdbPaths: [afterPdb],
+                IlRewritePdbLimits: pdbLimits));
 
         private void RunGit(params string[] arguments)
         {
@@ -226,6 +248,6 @@ public sealed class IlRewriteEmbeddedPdbTests
             Assert.True(process.ExitCode == 0, output);
         }
 
-        public void Dispose() => Directory.Delete(root, recursive: true);
+        public void Dispose() => temp.Dispose();
     }
 }

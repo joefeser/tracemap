@@ -1244,6 +1244,21 @@
       "boundedInputSha256Property": "ilRewriteBoundedInputSha256",
       "limitations": "pair ordinal isolates identical assembly identities; it does not resolve runtime load context",
       "nonClaims": ["cross-pair-join", "runtime-binding", "rewrite-authorship"]
+    },
+    {
+      "id": "ILRW-TOPO-006",
+      "language": "ecma335",
+      "shape": "many non-forwarded ExportedType rows exhaust the rewrite metadata work budget before traversal",
+      "expectedClrShape": "manifest with 40 non-forwarded exported types",
+      "expectedIdentity": "gap:IlRewriteTotalWorkLimitExceeded:ManagedInputTotalWorkLimitExceeded",
+      "expectedOutcome": "limit-exhausted",
+      "expectedRuleIds": ["dotnet.compiled.il-rewrite-gap.v1"],
+      "expectedTier": "Tier4Unknown",
+      "expectedGaps": ["IlRewriteTotalWorkLimitExceeded"],
+      "generatorSha256Property": "ilRewriteGeneratorSha256",
+      "boundedInputSha256Property": "ilRewriteBoundedInputSha256",
+      "limitations": "exported-type row traversal is charged before admission and cannot produce a partial edge",
+      "nonClaims": ["complete-topology", "partial-edge-emission", "clean-absence"]
     }
   ],
   "ilRewritePdbCases": [
@@ -1493,6 +1508,19 @@
       "boundedInputSha256Property": "ilRewritePdbBoundedInputSha256",
       "limitations": "byte mismatch withholds the PDB relationship; name or matching content identity alone cannot rebind it",
       "nonClaims": ["cross-side-binding", "partial-edge-emission", "rewrite-authorship"]
+    },
+    {
+      "id": "ILRWPDB-EMBEDDED-TEXT-LIMIT-016",
+      "language": "csharp",
+      "shape": "an embedded-PDB carrier whose safe locator exceeds the declared rewrite-PDB text limit fails before admission",
+      "expectedIdentity": "gap:IlRewritePdbTextLimitExceeded",
+      "expectedRuleIds": ["dotnet.compiled.il-rewrite-pdb-gap.v1"],
+      "expectedTier": "Tier4Unknown",
+      "expectedGaps": ["IlRewritePdbTextLimitExceeded"],
+      "generatorSha256Property": "ilRewritePdbGeneratorSha256",
+      "boundedInputSha256Property": "ilRewritePdbBoundedInputSha256",
+      "limitations": "the rewrite-PDB locator bound applies independently of the compiled-input text bound",
+      "nonClaims": ["partial-edge-emission", "unbounded-locator", "rewrite-authorship"]
     }
   ]
 }

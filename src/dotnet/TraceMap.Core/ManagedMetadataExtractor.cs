@@ -897,11 +897,6 @@ public static class ManagedMetadataExtractor
             throw new ManagedInputException("unsupported", "ManagedNetmoduleInputUnsupported");
         if (reader.AssemblyFiles.Any(handle => reader.GetAssemblyFile(handle).ContainsMetadata))
             throw new ManagedInputException("unsupported", "MultiModuleManagedAssemblyUnsupported");
-        // ECMA-335 II.23.1.15 ExportedType.TypeAttributes Forwarder bit.
-        const System.Reflection.TypeAttributes exportedTypeForwarder = (System.Reflection.TypeAttributes)0x00200000;
-        if (rejectTypeForwarders && reader.ExportedTypes.Any(handle =>
-                (reader.GetExportedType(handle).Attributes & exportedTypeForwarder) != 0))
-            throw new ManagedInputException("unsupported", "TypeForwardingManagedAssemblyUnsupported");
         var typeCount = Math.Max(0, reader.TypeDefinitions.Count - 1);
         var memberCount = (long)reader.GetTableRowCount(TableIndex.MethodDef)
             + reader.GetTableRowCount(TableIndex.Field)
@@ -910,7 +905,18 @@ public static class ManagedMetadataExtractor
         EnforceMetadataLimits(typeCount, memberCount, limits);
         try
         {
-            return checked(2L * (1L + typeCount + memberCount + reader.AssemblyReferences.Count));
+            // The rewrite-only forwarder scan is charged before traversing
+            // ExportedType rows, including non-forwarder rows.
+            var exportedTypeCount = rejectTypeForwarders ? reader.ExportedTypes.Count : 0;
+            var workUnits = checked(2L * (1L + typeCount + memberCount + reader.AssemblyReferences.Count + exportedTypeCount));
+            if (workUnits > limits.MaxTotalWorkUnits)
+                throw new ManagedInputException("limit-exhausted", "ManagedInputTotalWorkLimitExceeded");
+            // ECMA-335 II.23.1.15 ExportedType.TypeAttributes Forwarder bit.
+            const System.Reflection.TypeAttributes exportedTypeForwarder = (System.Reflection.TypeAttributes)0x00200000;
+            if (rejectTypeForwarders && reader.ExportedTypes.Any(handle =>
+                    (reader.GetExportedType(handle).Attributes & exportedTypeForwarder) != 0))
+                throw new ManagedInputException("unsupported", "TypeForwardingManagedAssemblyUnsupported");
+            return workUnits;
         }
         catch (OverflowException)
         {
