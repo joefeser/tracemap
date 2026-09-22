@@ -1288,3 +1288,41 @@ and rewrite-PDB bounded-input SHA-256
 `995704a6cb2ff3a6df0aabba15d75fc2f3660087f12ced0e57bda3aa098cb84a`.
 These are local pre-commit validation identities; PR CI and ACK must be read
 at the pushed head before any review-state claim.
+
+PR #782 review follow-up on first pushed head
+`17e5bf86fe2dff0046e112e01f2ef048c306594b`: ACK returned
+`actionable_findings` / `UNRESOLVED_REVIEW_THREADS`, with four unresolved
+threads, one actionable Qodo finding, and failed Windows checks. The Windows
+extended and bounded jobs exposed two test-fixture file-lock problems: the
+new fixture's recursive cleanup failed on Git's read-only object files, and
+an older rewrite test used one Cecil file as input and output while it was
+still open. The repair adopts the existing `TempDirectory` cleanup convention
+and stages the second Cecil write at a distinct path. The review also found
+that the receipt schema omitted `embedded-portable`, rewrite-PDB safe
+locators could exceed their own stricter text limit, and exported-type rows
+were not charged before the rewrite preflight traversal. Each has a bounded
+code/schema correction and focused regression test. A Qodo locked-restore
+claim is contradicted by the first-head CI logs: all three extended jobs
+completed the restore step and entered test execution. This is evidence for
+an ACK disposition, not a claim that a reviewer thread is resolved. The
+post-repair exact-head CI and ACK decision remain to be recorded; Task 10
+is still unchecked.
+
+Post-review local repair validation: focused defect matrix 16/16; full
+`dotnet test src/dotnet/TraceMap.sln --no-build --verbosity quiet --
+RunConfiguration.MaxCpuCount=1` 2,219/2,219, zero failed/skipped;
+zero-warning/error `dotnet build src/dotnet/TraceMap.sln --no-restore
+-warnaserror`. Two repeated CLI scans of the same public assembly/PDB pair
+each produced 636 facts (90 rewrite, 71 rewrite-PDB, zero rewrite gaps),
+byte-identical facts/report and equal manifests after removing only
+`scannedAt`; both artifact trees passed the validator. The repair extractor
+generator SHA-256 was
+`3bbcfc79268b9bcbd9c5c5ad5dcb9d376a3bc6b68157f0b2947490b571fc1869`,
+rewrite bounded-input SHA-256
+`9cf35f0477dc3a2e7e49fc6e4b3fbda8b0d15ca53f7a0d7951e17dac6028077d`,
+and rewrite-PDB bounded-input SHA-256
+`ec5b233a657c4fb79799e409b9c36c788030195113a3beef12d77879432741bb`.
+Private-path guard, Kiro self-test, catalog/receipt JSON parsing, workflow
+YAML parsing, and diff checks passed. These are local repair bytes with
+pre-push scan commit `17e5bf86`; they are not a substitute for new-head CI
+or ACK.

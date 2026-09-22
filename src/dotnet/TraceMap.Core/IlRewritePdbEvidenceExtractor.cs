@@ -39,6 +39,13 @@ internal static class IlRewritePdbEvidenceExtractor
         var limits = options.IlRewritePdbLimits ?? new IlRewritePdbLimits();
         ValidateLimits(limits);
         var compiledLimits = options.CompiledInputLimits ?? new CompiledInputLimits();
+        // PDB declarations have their own text bound. Preserve the compiled
+        // assembly byte bound while applying the stricter locator limit to
+        // every declared, projected, and admitted PDB-side path.
+        var pdbDescriptorLimits = compiledLimits with
+        {
+            MaxTextLength = Math.Min(compiledLimits.MaxTextLength, limits.MaxTextLength)
+        };
         var generatorSha256 = GeneratorSha256();
         var declaredBefore = options.IlRewriteBeforePdbPaths ?? [];
         var declaredAfter = options.IlRewriteAfterPdbPaths ?? [];
@@ -62,8 +69,8 @@ internal static class IlRewritePdbEvidenceExtractor
                 cause: "IlRewriteEvidenceDisabled",
                 declarationSha256: ManagedMetadataExtractor.CanonicalDigest(new
                 {
-                    before = ProjectDeclaredSlots(options.RepoPath, declaredBefore, "rewrite-pdb-before", compiledLimits),
-                    after = ProjectDeclaredSlots(options.RepoPath, declaredAfter, "rewrite-pdb-after", compiledLimits)
+                    before = ProjectDeclaredSlots(options.RepoPath, declaredBefore, "rewrite-pdb-before", pdbDescriptorLimits),
+                    after = ProjectDeclaredSlots(options.RepoPath, declaredAfter, "rewrite-pdb-after", pdbDescriptorLimits)
                 })));
         }
         else if (declaredBefore.Count == 0 && declaredAfter.Count == 0)
@@ -83,8 +90,8 @@ internal static class IlRewritePdbEvidenceExtractor
                 detail: $"before={declaredBefore.Count.ToString(CultureInfo.InvariantCulture)},after={declaredAfter.Count.ToString(CultureInfo.InvariantCulture)},declaredPairs={declaredPairSlots.Count.ToString(CultureInfo.InvariantCulture)},blankSlots={(hasBlankSlot ? "present" : "none")}",
                 declarationSha256: ManagedMetadataExtractor.CanonicalDigest(new
                 {
-                    before = ProjectDeclaredSlots(options.RepoPath, declaredBefore, "rewrite-pdb-before", compiledLimits),
-                    after = ProjectDeclaredSlots(options.RepoPath, declaredAfter, "rewrite-pdb-after", compiledLimits)
+                    before = ProjectDeclaredSlots(options.RepoPath, declaredBefore, "rewrite-pdb-before", pdbDescriptorLimits),
+                    after = ProjectDeclaredSlots(options.RepoPath, declaredAfter, "rewrite-pdb-after", pdbDescriptorLimits)
                 })));
         }
         else
@@ -108,8 +115,8 @@ internal static class IlRewritePdbEvidenceExtractor
                         evaluated.Add(SyntheticPairGap(
                             pairId,
                             "IlRewritePdbRewritePairUnavailable",
-                            beforeSafeLocator: DeclaredLocator(options.RepoPath, beforePaths[index], "rewrite-pdb-before", compiledLimits),
-                            afterSafeLocator: DeclaredLocator(options.RepoPath, afterPaths[index], "rewrite-pdb-after", compiledLimits),
+                            beforeSafeLocator: DeclaredLocator(options.RepoPath, beforePaths[index], "rewrite-pdb-before", pdbDescriptorLimits),
+                            afterSafeLocator: DeclaredLocator(options.RepoPath, afterPaths[index], "rewrite-pdb-after", pdbDescriptorLimits),
                             cause: string.Join("+", pair.Outcome.GapKinds)));
                         continue;
                     }
@@ -120,7 +127,7 @@ internal static class IlRewritePdbEvidenceExtractor
                         beforePaths[index],
                         afterPaths[index],
                         limits,
-                        compiledLimits,
+                        pdbDescriptorLimits,
                         budget,
                         cancellationToken));
                     continue;
@@ -139,8 +146,8 @@ internal static class IlRewritePdbEvidenceExtractor
                 evaluated.Add(SyntheticPairGap(
                     pairId,
                     "IlRewritePdbRewritePairUnavailable",
-                    beforeSafeLocator: DeclaredLocator(options.RepoPath, beforePaths[index], "rewrite-pdb-before", compiledLimits),
-                    afterSafeLocator: DeclaredLocator(options.RepoPath, afterPaths[index], "rewrite-pdb-after", compiledLimits),
+                    beforeSafeLocator: DeclaredLocator(options.RepoPath, beforePaths[index], "rewrite-pdb-before", pdbDescriptorLimits),
+                    afterSafeLocator: DeclaredLocator(options.RepoPath, afterPaths[index], "rewrite-pdb-after", pdbDescriptorLimits),
                     cause: cause));
             }
         }
