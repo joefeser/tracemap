@@ -71,11 +71,24 @@ internal sealed record IlRewriteSideFailure(
     string Cause,
     string SideLocator);
 
+/// <summary>
+/// In-memory retention of one admitted assembly side for the PDB sub-lane:
+/// the private full path (never serialized into any provenance or fact), the
+/// admitted raw SHA-256 for re-verification before reuse, and the dual-reader
+/// IL body result the join already proved.
+/// </summary>
+internal sealed record IlRewriteSideArtifact(
+    string FullPath,
+    string? RawFileSha256,
+    IlBodyEvidenceExtractor.IlReaderResult? Reader);
+
 internal sealed record EvaluatedIlRewritePair(
     IlRewritePairOutcome Outcome,
     IReadOnlyList<IlRewriteEdge> Edges,
     IReadOnlyList<IlRewriteMembershipDelta> MembershipDeltas,
-    IReadOnlyList<IlRewriteSideFailure> SideFailures)
+    IReadOnlyList<IlRewriteSideFailure> SideFailures,
+    IlRewriteSideArtifact? BeforeSide = null,
+    IlRewriteSideArtifact? AfterSide = null)
 {
     public string PairId => Outcome.PairId;
 }
