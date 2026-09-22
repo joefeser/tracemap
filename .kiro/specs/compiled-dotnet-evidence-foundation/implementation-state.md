@@ -1155,7 +1155,7 @@ without new duplicates.
 
 This slice adds deterministic public C# `MemberShapes` and `VarArgCall`
 compiler fixtures plus bounded Mono.Cecil rewrites, catalog schema v8 and
-case IDs 021-031. It covers InlineField and InlineTok member operands,
+case IDs 021-032. It covers InlineField and InlineTok member operands,
 TypeSpec, MethodSpec, constructed generic types and methods, `calli`
 StandAloneSig calling-convention changes, a compiler-produced vararg
 MemberRef call with MethodDef parent and required-parameter boundary,
@@ -1179,9 +1179,9 @@ version, exact generator SHA-256, and privacy-projected bounded-input
 SHA-256. The public catalog binds each stable fixture ID to its expected
 CLR shape, outcome, rule, tier, limitations, and digest property names.
 
-Validation on the local macOS host: focused suite 14/14 and combined
-compiled evidence suite 235/235, and the final serial full solution suite
-2,204/2,204, all with zero failures or skips. A concurrent full run had one
+Validation on the local macOS host before review remediation: focused suite
+14/14, combined compiled evidence suite 235/235, and the serial full solution
+suite 2,204/2,204, all with zero failures or skips. A concurrent full run had one
 unrelated docs-export test failure (2,203/2,204); that test passed alone and
 the serial full rerun passed. Cross-platform CI results will be read from the
 PR checks. A zero-warning, zero-error `dotnet build
@@ -1189,7 +1189,7 @@ src/dotnet/TraceMap.sln --no-restore -warnaserror` passed. Two repeat CLI
 scans of the compiler fixture produced byte-identical
 `facts.ndjson` and `report.md`, matching manifests apart from `scannedAt`,
 494 facts with 19 rewrite rows and zero rewrite gaps. The exact generator
-SHA-256 was `29e142e3f84aec1c4eda370310a6e6f70c4ecd35d3d960e25be412f50f8cd605`
+SHA-256 on the reviewed head was `29e142e3f84aec1c4eda370310a6e6f70c4ecd35d3d960e25be412f50f8cd605`
 and the privacy-projected bounded-input SHA-256 was
 `89261c462248d788283eacccee4c05fce2b8d4221461dd79f60e580caa70d855`
 for that declared pair. Both artifact trees
@@ -1205,3 +1205,28 @@ portable PDBs, pinned ILAsm/ILDAsm parity, and the extended Windows matrix.
 Task 10 remains unchecked: #766 also asks for a complete extended public
 suite and safe runtime/ILAsm corroboration where available; the current
 static evidence does not claim those acceptance items.
+
+ACK review remediation for PR #781 at reviewed head `7f199c866f7fb49303b0618bc2d22733e127f535`:
+Qodo and Codex independently identified the same canonical-identity defect.
+`calli` StandAloneSig decoding retained vararg parameter types and calling
+convention but omitted the required/optional sentinel boundary. The
+existing function-pointer and vararg MemberRef formatters already retain
+that boundary; the repair adds `required` to both Cecil and SRM calli
+canonicalization, rejects inconsistent sentinel shapes, and adds public
+case `CS-ILRW-CALLI-VARARG-BOUNDARY-032`. Its before/after pair keeps the
+same StandAloneSig token, opcode, calling convention, and parameter types
+while only the required count changes from one to zero; the independently
+checked rewrite relationship becomes `operand-only-change` and the calli
+retarget fact records both complete signatures. This is a static signature
+observation, not a safe invocation or equivalence claim.
+
+Post-repair local checks: focused suite 15/15; combined compiled evidence
+suite 236/236; serial full solution 2,205/2,205, all with zero failures or
+skips; zero-warning build; private-path guard, Kiro self-test,
+artifact validation and byte-identical repeat scans all passed (494 facts,
+19 rewrite rows, zero rewrite gaps; generator SHA-256
+`4b3c8c00e95fef9f1a762809129ebba1e6c826a0f0c51d6e736adb6530f76d8c`,
+privacy-projected bounded-input SHA-256
+`bdfdbda438917fa46d691bddedda92fdd1a6527251fcbfc023edc680f0ca1ec5`).
+The Linux, macOS, and Windows checks are read from PR #781 on the pushed
+repair head.

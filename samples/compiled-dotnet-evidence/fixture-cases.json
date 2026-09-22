@@ -1154,6 +1154,21 @@
       "boundedInputSha256Property": "ilRewriteBoundedInputSha256",
       "limitations": "same raw token does not establish unchanged member semantics or execution",
       "nonClaims": ["execution", "runtime-equivalence", "rewrite-authorship"]
+    },
+    {
+      "id": "CS-ILRW-CALLI-VARARG-BOUNDARY-032",
+      "language": "csharp",
+      "shape": "vararg calli moves only the sentinel boundary while token, opcode, and parameter types remain equal",
+      "expectedClrShape": "StandAloneSig vararg with required parameter count one versus zero",
+      "expectedIdentity": "exact calli signature with calling convention and required-parameter count",
+      "expectedOutcome": "operand-only-change",
+      "expectedRuleIds": ["dotnet.compiled.il-rewrite.v1"],
+      "expectedTier": "Tier2Structural",
+      "expectedGaps": [],
+      "generatorSha256Property": "ilRewriteGeneratorSha256",
+      "boundedInputSha256Property": "ilRewriteBoundedInputSha256",
+      "limitations": "static calli signature boundary only, not target, execution, or equivalence",
+      "nonClaims": ["execution", "runtime-equivalence", "rewrite-authorship"]
     }
   ],
   "ilRewritePdbCases": [

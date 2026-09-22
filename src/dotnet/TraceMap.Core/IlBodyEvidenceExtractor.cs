@@ -504,8 +504,12 @@ internal static class IlBodyEvidenceExtractor
             case OperandType.InlineSig:
                 if (instruction.Operand is not CallSite callSite)
                     throw new IlEvidenceException("IlOperandEncodingUnsupported");
+                var sentinelCount = callSite.Parameters.Count(parameter => parameter.ParameterType is SentinelType);
+                if (sentinelCount > 1 || sentinelCount == 1 && ((int)callSite.CallingConvention & 0x0f) != 5)
+                    throw new IlEvidenceException("IlOperandEncodingUnsupported");
                 var cecilSignature = CanonicalCallSite(
                     ((int)callSite.CallingConvention & 0x0f), callSite.HasThis, callSite.ExplicitThis,
+                    callSite.Parameters.TakeWhile(parameter => parameter.ParameterType is not SentinelType).Count(),
                     ManagedMetadataExtractor.FormatType(callSite.ReturnType),
                     callSite.Parameters.Select(parameter => ManagedMetadataExtractor.FormatType(parameter.ParameterType)));
                 if (cecilSignature.Length > limits.MaxTextLength)
@@ -944,6 +948,7 @@ internal static class IlBodyEvidenceExtractor
                     (int)decodedSignature.Header.CallingConvention,
                     decodedSignature.Header.IsInstance,
                     (decodedSignature.Header.RawValue & 0x40) != 0,
+                    decodedSignature.RequiredParameterCount,
                     decodedSignature.ReturnType,
                     decodedSignature.ParameterTypes);
                 if (srmSignature.Length > limits.MaxTextLength)
@@ -958,8 +963,13 @@ internal static class IlBodyEvidenceExtractor
     }
 
     private static string CanonicalCallSite(int convention, bool hasThis, bool explicitThis,
-        string returnType, IEnumerable<string> parameters) =>
-        $"callconv:{convention.ToString(CultureInfo.InvariantCulture)}|hasThis:{hasThis.ToString().ToLowerInvariant()}|explicitThis:{explicitThis.ToString().ToLowerInvariant()}|({string.Join(",", parameters)})->{returnType}";
+        int requiredParameterCount, string returnType, IEnumerable<string> parameters)
+    {
+        var types = parameters.ToArray();
+        if (requiredParameterCount < 0 || requiredParameterCount > types.Length)
+            throw new IlEvidenceException("MalformedIlBody");
+        return $"callconv:{convention.ToString(CultureInfo.InvariantCulture)}|hasThis:{hasThis.ToString().ToLowerInvariant()}|explicitThis:{explicitThis.ToString().ToLowerInvariant()}|required:{requiredParameterCount.ToString(CultureInfo.InvariantCulture)}|({string.Join(",", types)})->{returnType}";
+    }
 
     private static string SrmMetadataOperand(MetadataReader reader,
         ManagedMetadataExtractor.MetadataTypeProvider provider, int token,
