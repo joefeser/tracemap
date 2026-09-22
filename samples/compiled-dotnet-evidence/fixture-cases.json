@@ -1596,11 +1596,12 @@
       "language": "csharp",
       "status": "covered",
       "proofLane": "compiled-dotnet-extended-validation.yml:public-mutation-matrix(windows-latest)",
-      "shape": "the non-hidden sequence points of an embedded portable PDB fixture observed independently as ILDAsm .line directives equal TraceMap declared sequence points for IL offsets and line/column spans; an unavailable ILDAsm PDB observation fails the case with a work-machine reproduction command instead of claiming parity",
-      "expectedIdentity": "equal sorted (offset, startLine, endLine, startColumn, endColumn) tuples from both observers",
+      "shape": "the non-hidden sequence points of an embedded portable PDB fixture observed independently as ILDAsm .line directives (the documented /linenum switch with the extracted PDB adjacent) equal TraceMap declared sequence points for IL offsets and line/column spans; an ILDAsm that accepts /linenum yet emits no .line directives records the typed oracle-availability gap with a precise work-machine reproduction command and expected receipt instead of claiming parity",
+      "expectedIdentity": "equal sorted (offset, startLine, endLine, startColumn, endColumn) tuples from both observers, or the recorded typed gap with no parity claim",
       "expectedRuleIds": ["dotnet.compiled.sequence-point.v1", "dotnet.compiled.pdb-identity.v1"],
       "expectedTier": "Tier2Structural",
       "expectedGaps": [],
+      "prerequisites": "ILDAsm 4.8.3928.0 documents /LINENUM for source-line references and has no /pdbpath option; a hosted ILDAsm that emits no .line directives for the adjacent extracted portable PDB leaves this case unclaimed pending a work-machine receipt",
       "nonClaims": ["debug-behavior-preservation", "hidden-sequence-point-parity", "no-general-il-equivalence-claim"]
     }
   ]
