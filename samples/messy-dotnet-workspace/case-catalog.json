@@ -21,7 +21,7 @@
       "roots": [
         "root-alpha"
       ],
-      "shape": "handler chain of ten chained steps across Pages/, Services/, and Data/ folders ending in an ADO.NET-style supported SQL terminal at traversal distance 12, beyond depths 8 and 10",
+      "shape": "handler chain of twelve call edges across Pages/, Services/, and Data/ folders ending in an ADO.NET-style supported SQL terminal at graph distance 14, beyond depths 8, 10, and 12",
       "stages": [
         "extraction",
         "traversal"
@@ -38,7 +38,7 @@
       "expectedGaps": [
         "TruncatedByLimit:depth"
       ],
-      "assertions": "terminal inventory is complete at depths 10 and 14 with identical boundary identity sets and minimum terminal distance 12; path enumeration honestly truncates with the depth reason while the terminal stays inventoried (no false absence); at depth 8 the distance-12 terminal falls outside the depth-bounded retained closure and the observation must scope its completeness claim to the retained graph instead of implying or inventing a terminal"
+      "assertions": "at max depth 12 the terminal inventory is complete with identical boundary identity sets at depths 12 and 16 and minimum terminal distance 14; path enumeration honestly truncates with the depth reason while the terminal stays inventoried (no false absence); at depth 10 the distance-14 terminal falls outside the depth-bounded retained closure and the observation must scope its completeness claim to the retained graph instead of implying or inventing a terminal"
     },
     {
       "id": "MW-CYCLE-001",
@@ -71,7 +71,7 @@
       "roots": [
         "root-alpha"
       ],
-      "shape": "self-recursive method (Self calls Self) entered from a page handler",
+      "shape": "self-recursive method (Self calls Self) entered from its own dedicated page handler",
       "stages": [
         "extraction",
         "traversal"
@@ -85,7 +85,7 @@
       "expectedGaps": [
         "DownstreamWithoutSupportedTerminal"
       ],
-      "assertions": "self-recursion terminates and is reported without a terminal; no hang, no depth false-absence claim"
+      "assertions": "the self-cycle handler's own chain is selected independently of the three-node cycle: traversal terminates, records cycle truncation, inventories zero terminals, and surfaces its own scoped downstream-without-terminal gap"
     },
     {
       "id": "MW-SAME-NAME-TEN-001",

@@ -2871,10 +2871,10 @@ containing module.
 Public-safe synthetic fixtures under `samples/messy-dotnet-workspace/`
 reproduce the workspace shapes observed in real Web Forms/.NET scans without
 copying any private source, names, paths, or artifacts. Three roots are
-scanned independently: `root-alpha` (C# Web Forms site with a ten-step deep
-chain ending in an ADO.NET-style SQL terminal at traversal distance 12, a
-three-node cycle plus a self-cycle, and ten same-name `Process`/`Core`
-members in one file), `root-beta` (a second C# root reusing those simple
+scanned independently: `root-alpha` (C# Web Forms site with a twelve-call-edge deep
+chain ending in an ADO.NET-style SQL terminal at graph distance 14, a
+three-node cycle plus a self-cycle with its own handler, and ten same-name
+`Process`/`Core` members in one file), `root-beta` (a second C# root reusing those simple
 names), and `vb-projectless` (loose VB files with no `.vbproj`/`.sln`).
 
 The stable case catalog is `samples/messy-dotnet-workspace/case-catalog.json`
@@ -2888,19 +2888,21 @@ Pinned behaviors, asserted per catalog case id and pipeline stage
 (extraction, combining, reconciliation, traversal) by
 `MessyWorkspaceRegressionTests`:
 
-- Deep chain: at `--max-depth 10` path enumeration truncates with the
+- Deep chain: at `--max-depth 12` path enumeration truncates with the
   `depth` reason while the terminal inventory stays complete with minimum
-  terminal distance 12 and identical boundary identity sets at depths 10 and
-  14 — no false absence from depth truncation. At depth 8 the distance-12
+  terminal distance 14 and identical boundary identity sets at depths 12 and
+  16 — no false absence from depth truncation. At depth 10 the distance-14
   terminal falls outside the depth-bounded retained closure; the observation
   scopes its completeness claim to the retained graph and invents nothing.
-- Cycles: the cyclic and self-recursive branches terminate, record `cycle`
-  truncation honestly, inventory zero terminals, and surface an explicit
-  `DownstreamWithoutSupportedTerminal` gap.
-- Same-name members: ten container-distinct Tier1 identities, each `Core`
-  edge and terminal staying inside its own engine with distinct table
-  identities and query shape hashes; the handler inventories exactly ten
-  distinct terminal witnesses with no cross-joined evidence.
+- Cycles: the three-node cycle and the self-recursive branch each get their
+  own handler chain; both terminate, record `cycle` truncation honestly,
+  inventory zero terminals, and surface an explicit
+  `DownstreamWithoutSupportedTerminal` gap scoped to their own binding.
+- Same-name members: ten container-distinct Tier1 identities, no semantic
+  edge crossing engines, each boundary supporting exactly its own engine's
+  terminal fact and class line range with distinct tables and query shape
+  hashes; the handler inventories exactly ten distinct terminal witnesses
+  with no cross-joined evidence.
 - Merged roots: combine preserves the union of sources, facts, and symbols
   with per-source namespacing, no symbol deduplication, and no identity that
   blends namespaces; every terminal stays attributed to its own source label

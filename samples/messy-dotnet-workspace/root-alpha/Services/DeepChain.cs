@@ -14,5 +14,7 @@ public static class DeepChain
     private static void Step05() { Step06(); }
     private static void Step06() { Step07(); }
     private static void Step07() { Step08(); }
-    private static void Step08() { Alpha.Data.DeepQueries.FinalStep(); }
+    private static void Step08() { Step09(); }
+    private static void Step09() { Step10(); }
+    private static void Step10() { Alpha.Data.DeepQueries.FinalStep(); }
 }
