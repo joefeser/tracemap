@@ -32,7 +32,7 @@ public sealed class IlRewriteControlFlowEvidenceExtractorTests
         var (before, after) = FixturePair(temp, "branch");
         MutateBranchRetarget(before, after);
 
-        var result = Scan(PairOptions(before, after));
+        var result = Scan(PairOptions(before, after, temp));
 
         Assert.Equal("rewrite-complete", result.Manifest.IlRewriteProvenance!.CoverageState);
         var edge = EdgeFact(result, "LoopWithBranches");
@@ -58,7 +58,7 @@ public sealed class IlRewriteControlFlowEvidenceExtractorTests
         var (before, after) = FixturePair(temp, "switch");
         MutateSwitchTargets(before, after);
 
-        var result = Scan(PairOptions(before, after));
+        var result = Scan(PairOptions(before, after, temp));
 
         Assert.Equal("rewrite-complete", result.Manifest.IlRewriteProvenance!.CoverageState);
         var edge = EdgeFact(result, "DenseSwitch");
@@ -77,7 +77,7 @@ public sealed class IlRewriteControlFlowEvidenceExtractorTests
         var (before, after) = FixturePair(temp, "leave");
         MutateLeaveTarget(before, after);
 
-        var result = Scan(PairOptions(before, after));
+        var result = Scan(PairOptions(before, after, temp));
 
         Assert.Equal("rewrite-complete", result.Manifest.IlRewriteProvenance!.CoverageState);
         var edge = EdgeFact(result, "TryCatchFinallyWithLeave");
@@ -95,7 +95,7 @@ public sealed class IlRewriteControlFlowEvidenceExtractorTests
         var (before, after) = FixturePair(temp, "eh-rebind");
         MutateNestedTryRebinding(before, after);
 
-        var result = Scan(PairOptions(before, after));
+        var result = Scan(PairOptions(before, after, temp));
 
         Assert.Equal("rewrite-complete", result.Manifest.IlRewriteProvenance!.CoverageState);
         var edge = EdgeFact(result, "NestedTryRegions");
@@ -114,7 +114,7 @@ public sealed class IlRewriteControlFlowEvidenceExtractorTests
         var (before, after) = FixturePair(temp, "eh-kind");
         MutateHandlerKind(before, after);
 
-        var result = Scan(PairOptions(before, after));
+        var result = Scan(PairOptions(before, after, temp));
 
         Assert.Equal("rewrite-complete", result.Manifest.IlRewriteProvenance!.CoverageState);
         var edge = EdgeFact(result, "NestedTryRegions");
@@ -132,7 +132,7 @@ public sealed class IlRewriteControlFlowEvidenceExtractorTests
         var (before, after) = FixturePair(temp, "maxstack");
         BumpRecordedMaxStack(after, "LocalsAndMaxStack");
 
-        var result = Scan(PairOptions(before, after));
+        var result = Scan(PairOptions(before, after, temp));
 
         Assert.Equal("rewrite-complete", result.Manifest.IlRewriteProvenance!.CoverageState);
         var edge = EdgeFact(result, "LocalsAndMaxStack");
@@ -153,7 +153,7 @@ public sealed class IlRewriteControlFlowEvidenceExtractorTests
         var (before, after) = FixturePair(temp, "stack-neutral");
         MutateStackNeutralInsertion(before, after);
 
-        var result = Scan(PairOptions(before, after));
+        var result = Scan(PairOptions(before, after, temp));
 
         Assert.Equal("rewrite-complete", result.Manifest.IlRewriteProvenance!.CoverageState);
         var edge = EdgeFact(result, "StackShape");
@@ -171,7 +171,7 @@ public sealed class IlRewriteControlFlowEvidenceExtractorTests
         var (before, after) = FixturePair(temp, "stack-reshape");
         MutateStackReshapingInsertion(before, after);
 
-        var result = Scan(PairOptions(before, after));
+        var result = Scan(PairOptions(before, after, temp));
 
         Assert.Equal("rewrite-complete", result.Manifest.IlRewriteProvenance!.CoverageState);
         var edge = EdgeFact(result, "StackShape");
@@ -189,7 +189,7 @@ public sealed class IlRewriteControlFlowEvidenceExtractorTests
         var (before, after) = FixturePair(temp, "branch");
         MutateBranchRetarget(before, after);
 
-        var result = Scan(PairOptions(before, after));
+        var result = Scan(PairOptions(before, after, temp));
 
         Assert.All(result.Facts.Where(fact => fact.RuleId == RuleIds.DotNetIlRewrite), fact =>
         {
@@ -209,7 +209,7 @@ public sealed class IlRewriteControlFlowEvidenceExtractorTests
         var (before, after) = FixturePair(temp, "hostile-branch");
         CorruptBranchDelta(after, "LoopWithBranches");
 
-        var evaluation = IlRewriteEvidenceExtractor.Evaluate(PairOptions(before, after));
+        var evaluation = IlRewriteEvidenceExtractor.Evaluate(PairOptions(before, after, temp));
 
         Assert.Equal("rewrite-partial", evaluation.Provenance!.CoverageState);
         var pair = Assert.Single(evaluation.Pairs);
@@ -228,7 +228,7 @@ public sealed class IlRewriteControlFlowEvidenceExtractorTests
         var (before, after) = FixturePair(temp, "hostile-switch");
         CorruptSwitchCount(after, "DenseSwitch");
 
-        var evaluation = IlRewriteEvidenceExtractor.Evaluate(PairOptions(before, after));
+        var evaluation = IlRewriteEvidenceExtractor.Evaluate(PairOptions(before, after, temp));
 
         Assert.Equal("rewrite-partial", evaluation.Provenance!.CoverageState);
         var pair = Assert.Single(evaluation.Pairs);
@@ -245,7 +245,7 @@ public sealed class IlRewriteControlFlowEvidenceExtractorTests
     {
         using var temp = new TempDirectory();
         var (before, after) = FixturePair(temp, "limit");
-        var result = Scan(PairOptions(before, after, new IlBodyLimits(MaxExceptionRegionsPerBody: 1)));
+        var result = Scan(PairOptions(before, after, temp, new IlBodyLimits(MaxExceptionRegionsPerBody: 1)));
 
         Assert.Equal("rewrite-partial", result.Manifest.IlRewriteProvenance!.CoverageState);
         Assert.DoesNotContain(result.Facts, fact => fact.FactType == FactTypes.ManagedIlRewriteObserved);
@@ -268,7 +268,7 @@ public sealed class IlRewriteControlFlowEvidenceExtractorTests
         var (before, after) = FixturePair(temp, "hostile-branch");
         CorruptBranchDelta(after, "LoopWithBranches");
 
-        var result = Scan(PairOptions(before, after));
+        var result = Scan(PairOptions(before, after, temp));
 
         var gap = Assert.Single(result.Facts, fact => fact.RuleId == RuleIds.DotNetIlRewriteGap);
         Assert.Equal(FactTypes.AnalysisGap, gap.FactType);
@@ -311,8 +311,8 @@ public sealed class IlRewriteControlFlowEvidenceExtractorTests
         using var temp = new TempDirectory();
         var (before, after) = FixturePair(temp, "determinism");
         MutateBranchRetarget(before, after);
-        var first = Scan(PairOptions(before, after));
-        var second = ScanEngine.Scan(PairOptions(before, after));
+        var first = Scan(PairOptions(before, after, temp));
+        var second = ScanEngine.Scan(PairOptions(before, after, temp));
 
         Assert.Equal(
             JsonSerializer.Serialize(first.Facts),
@@ -338,7 +338,7 @@ public sealed class IlRewriteControlFlowEvidenceExtractorTests
         using var temp = new TempDirectory();
         var (before, after) = FixturePair(temp, "artifacts");
         MutateSwitchTargets(before, after);
-        var output = Path.Combine(Directory.CreateTempSubdirectory("tracemap-ilrewrite-cflow-artifacts-").FullName, "out");
+        var output = Path.Combine(temp.Path, "cli-out");
         var cliError = new StringWriter();
         var cliExit = await TraceMapCommand.RunAsync(
         [
@@ -379,14 +379,28 @@ public sealed class IlRewriteControlFlowEvidenceExtractorTests
         return (before, after);
     }
 
-    private static string ControlFlowFixture() => Path.Combine(
-        FindRepoRoot(),
-        "samples", "compiled-dotnet-evidence", "csharp", "bin", "Debug", "net10.0",
-        "CompiledEvidence.CSharp.ControlFlow.dll");
+    private static string ControlFlowFixture()
+    {
+        // The fixture builds per-configuration like every sibling compiled
+        // fixture; probe Debug then Release so `dotnet test -c Release`
+        // still locates the assembly.
+        foreach (var configuration in new[] { "Debug", "Release" })
+        {
+            var candidate = Path.Combine(
+                FindRepoRoot(),
+                "samples", "compiled-dotnet-evidence", "csharp", "bin", configuration, "net10.0",
+                "CompiledEvidence.CSharp.ControlFlow.dll");
+            if (File.Exists(candidate))
+                return candidate;
+        }
 
-    private static ScanOptions PairOptions(string before, string after, IlBodyLimits? bodyLimits = null) => new(
+        throw new InvalidOperationException(
+            "CompiledEvidence.CSharp.ControlFlow.dll was not found in bin/Debug/net10.0 or bin/Release/net10.0 under samples/compiled-dotnet-evidence/csharp; build the fixture project first.");
+    }
+
+    private static ScanOptions PairOptions(string before, string after, TempDirectory temp, IlBodyLimits? bodyLimits = null) => new(
         RepoRoot(),
-        TempOutput(),
+        TempOutput(temp),
         IlRewriteEvidence: true,
         IlRewriteBeforePaths: [before],
         IlRewriteAfterPaths: [after],
@@ -403,7 +417,11 @@ public sealed class IlRewriteControlFlowEvidenceExtractorTests
 
     private static ScanResult Scan(ScanOptions options) => ScanEngine.Scan(options);
 
-    private static string TempOutput() => Path.Combine(Directory.CreateTempSubdirectory("tracemap-ilrewrite-cflow-output-").FullName, "out");
+    // Scan outputs live beneath the test's disposable TempDirectory so every
+    // artifact tree is removed when the test ends; the random leaf keeps two
+    // scans of one test from sharing an output directory.
+    private static string TempOutput(TempDirectory temp) =>
+        Path.Combine(temp.Path, $"scan-{Path.GetRandomFileName()}", "out");
 
     private static string RepoRoot() => Path.Combine(FindRepoRoot(), "samples", "compiled-dotnet-evidence", "csharp");
 
@@ -507,13 +525,14 @@ public sealed class IlRewriteControlFlowEvidenceExtractorTests
         processor.InsertAfter(duplicate, pop);
     });
 
-    // CS-ILRW-CFLOW-017: insert an extra constant before the first add so the
-    // evaluation-stack depth profile changes while the body stays well-formed
-    // decodable IL.
+    // CS-ILRW-CFLOW-017: insert a balanced constant/add pair before the
+    // existing add so the evaluation-stack depth profile changes while the
+    // body stays well-formed decodable IL (the stack is empty at ret).
     private static void MutateStackReshapingInsertion(string before, string after) => MutateControlFlow(before, after, type =>
     {
         var processor = FindMethod(type, "StackShape").Body.GetILProcessor();
         var add = processor.Body.Instructions.Single(instruction => instruction.OpCode == OpCodes.Add);
+        processor.InsertBefore(add, Instruction.Create(OpCodes.Add));
         processor.InsertBefore(add, Instruction.Create(OpCodes.Ldc_I4_1));
     });
 
