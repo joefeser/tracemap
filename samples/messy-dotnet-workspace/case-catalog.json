@@ -1,0 +1,255 @@
+{
+  "schemaVersion": "messy-workspace-case-catalog.v1",
+  "description": "Stable case catalog for the public-safe messy .NET workspace regression slice. Cases are marked implemented or deferred; this catalog is an inventory and does not claim deferred cases are proven. Implemented cases are pinned by src/dotnet/tests/TraceMap.Tests/MessyWorkspaceRegressionTests.cs.",
+  "nonClaims": [
+    "runtime-execution",
+    "dynamic-dispatch-resolution",
+    "cross-source-symbol-equivalence",
+    "private-source-reproduction",
+    "fsharp-source-adapter-coverage",
+    "ilasm-rewritten-pdb-parity"
+  ],
+  "artifactPinning": {
+    "determinismContract": "repeat CLI scans of each root produce byte-identical facts.ndjson",
+    "generatorAndInputHashes": "no new derived machine-readable artifact is introduced by this slice; provenance stays in the existing scan manifest (scanner version, commit SHA) and rule-catalog extractor versions",
+    "failureIdentification": "every test assertion names the catalog case id and the pipeline stage: extraction, combining, reconciliation, or traversal"
+  },
+  "cases": [
+    {
+      "id": "MW-DEEP-CHAIN-D10-001",
+      "status": "implemented",
+      "roots": [
+        "root-alpha"
+      ],
+      "shape": "handler chain of ten chained steps across Pages/, Services/, and Data/ folders ending in an ADO.NET-style supported SQL terminal at traversal distance 12, beyond depths 8 and 10",
+      "stages": [
+        "extraction",
+        "traversal"
+      ],
+      "expectedRuleIds": [
+        "csharp.semantic.callgraph.v1",
+        "database.operation.call-pattern.v1",
+        "combined.paths.surface-evidence.v1"
+      ],
+      "expectedTiers": [
+        "Tier1Semantic",
+        "Tier3SyntaxOrTextual"
+      ],
+      "expectedGaps": [
+        "TruncatedByLimit:depth"
+      ],
+      "assertions": "terminal inventory is complete at depths 10 and 14 with identical boundary identity sets and minimum terminal distance 12; path enumeration honestly truncates with the depth reason while the terminal stays inventoried (no false absence); at depth 8 the distance-12 terminal falls outside the depth-bounded retained closure and the observation must scope its completeness claim to the retained graph instead of implying or inventing a terminal"
+    },
+    {
+      "id": "MW-CYCLE-001",
+      "status": "implemented",
+      "roots": [
+        "root-alpha"
+      ],
+      "shape": "three-node call cycle (First -> Second -> Third -> First) entered from a page handler",
+      "stages": [
+        "extraction",
+        "traversal"
+      ],
+      "expectedRuleIds": [
+        "csharp.semantic.callgraph.v1",
+        "combined.paths.truncation-gap.v1"
+      ],
+      "expectedTiers": [
+        "Tier1Semantic",
+        "Tier4Unknown"
+      ],
+      "expectedGaps": [
+        "TruncatedByLimit:cycle",
+        "DownstreamWithoutSupportedTerminal"
+      ],
+      "assertions": "traversal terminates on the cycle branch, records cycle truncation honestly, and reports the branch as downstream-without-supported-terminal rather than inventing a terminal"
+    },
+    {
+      "id": "MW-CYCLE-SELF-002",
+      "status": "implemented",
+      "roots": [
+        "root-alpha"
+      ],
+      "shape": "self-recursive method (Self calls Self) entered from a page handler",
+      "stages": [
+        "extraction",
+        "traversal"
+      ],
+      "expectedRuleIds": [
+        "csharp.semantic.callgraph.v1"
+      ],
+      "expectedTiers": [
+        "Tier1Semantic"
+      ],
+      "expectedGaps": [
+        "DownstreamWithoutSupportedTerminal"
+      ],
+      "assertions": "self-recursion terminates and is reported without a terminal; no hang, no depth false-absence claim"
+    },
+    {
+      "id": "MW-SAME-NAME-TEN-001",
+      "status": "implemented",
+      "roots": [
+        "root-alpha"
+      ],
+      "shape": "the same method names Process and Core in ten classes in one file, each ending in a distinct SQL terminal",
+      "stages": [
+        "extraction",
+        "reconciliation",
+        "traversal"
+      ],
+      "expectedRuleIds": [
+        "csharp.semantic.callgraph.v1",
+        "database.sql.shape.v1"
+      ],
+      "expectedTiers": [
+        "Tier1Semantic",
+        "Tier3SyntaxOrTextual"
+      ],
+      "expectedGaps": [],
+      "assertions": "ten container-distinct identities survive extraction; traversal inventories ten distinct terminal witnesses; no call edge joins one engine's Process or Core to another engine's container"
+    },
+    {
+      "id": "MW-MERGED-ROOTS-001",
+      "status": "implemented",
+      "roots": [
+        "root-alpha",
+        "root-beta",
+        "vb-projectless"
+      ],
+      "shape": "three independently scanned roots combined into one merged review with explicit labels",
+      "stages": [
+        "combining",
+        "reconciliation"
+      ],
+      "expectedRuleIds": [
+        "combined.paths.symbol-reconciliation.v1"
+      ],
+      "expectedTiers": [
+        "Tier3SyntaxOrTextual"
+      ],
+      "expectedGaps": [],
+      "assertions": "combined sources, facts, and symbols are the union of the inputs with per-source namespacing and no symbol deduplication; root-beta reuses the Process/Core simple names from root-alpha and all twelve identities stay distinct rows; every DatabaseOperationCandidate terminal stays attributed to its own source label (11 alpha, 1 beta, 1 vb) with its own table identity; the merged dependency report lists all three labeled sources; the Web Forms packet stays single-page-source by design, so cross-source attribution is asserted over the merged index directly"
+    },
+    {
+      "id": "MW-VB-PROJECTLESS-001",
+      "status": "implemented",
+      "roots": [
+        "vb-projectless"
+      ],
+      "shape": "loose VB files with no .vbproj or .sln, including an App_Code folder, scanned through the portable Roslyn syntax fallback",
+      "stages": [
+        "extraction"
+      ],
+      "expectedRuleIds": [
+        "vb.semantic.workspace.v1",
+        "vb.syntax.database-operation.v1"
+      ],
+      "expectedTiers": [
+        "Tier3SyntaxOrTextual",
+        "Tier4Unknown"
+      ],
+      "expectedGaps": [
+        "NoVisualBasicProjectOrSolution",
+        "SemanticAnalysisUnavailable"
+      ],
+      "assertions": "analysis level is Level3SyntaxAnalysis; the fail-closed workspace gap is present at Tier4; the data-adapter fill produces a Tier3 database operation attached to the handler; no blocker exists for projectless VB in ordinary CI",
+      "blocker": null
+    },
+    {
+      "id": "MW-FOLDER-SPREAD-001",
+      "status": "implemented",
+      "roots": [
+        "root-alpha",
+        "vb-projectless"
+      ],
+      "shape": "source spread across nested folders (Pages/, Services/, Data/, App_Code/) inside one root and across independently scanned roots",
+      "stages": [
+        "extraction"
+      ],
+      "expectedRuleIds": [
+        "csharp.semantic.callgraph.v1"
+      ],
+      "expectedTiers": [
+        "Tier1Semantic"
+      ],
+      "expectedGaps": [],
+      "assertions": "call edges span folders with folder-relative file paths and the deep chain crosses the Services/ to Data/ boundary"
+    },
+    {
+      "id": "MW-OVERLOAD-001",
+      "status": "deferred",
+      "roots": [],
+      "shape": "same-name overloads with distinct signatures invoked ambiguously during traversal",
+      "stages": [
+        "extraction",
+        "reconciliation"
+      ],
+      "expectedRuleIds": [],
+      "expectedTiers": [],
+      "expectedGaps": [],
+      "assertions": null,
+      "blocker": "identity retention for overloads is already pinned by compiled-lane CS-OVERLOAD-001 and VB-OVERLOAD-001; a traversal-level overload ambiguity fixture is the next fixture slice, not this PR"
+    },
+    {
+      "id": "MW-RECEIVER-AMBIGUITY-001",
+      "status": "deferred",
+      "roots": [],
+      "shape": "bare or dynamic receivers that could bind to any of several same-name members during traversal",
+      "stages": [
+        "reconciliation"
+      ],
+      "expectedRuleIds": [],
+      "expectedTiers": [],
+      "expectedGaps": [],
+      "assertions": null,
+      "blocker": "receiver forms are partially covered by the C# identity receiver fixture tests and the projectless VB receiver fail-closed gaps; a dedicated ambiguous-receiver traversal fixture is the next fixture slice"
+    },
+    {
+      "id": "MW-CROSSLANGUAGE-001",
+      "status": "deferred",
+      "roots": [],
+      "shape": "call chains crossing C#/VB/F# language boundaries in one merged review",
+      "stages": [
+        "combining",
+        "reconciliation"
+      ],
+      "expectedRuleIds": [],
+      "expectedTiers": [],
+      "expectedGaps": [],
+      "assertions": null,
+      "blocker": "no F# source adapter exists; cross-language identity joins require the compiled-lane source-to-metadata reconciliation, which is separate from this slice"
+    },
+    {
+      "id": "MW-GENERATED-MEMBERS-001",
+      "status": "deferred",
+      "roots": [],
+      "shape": "compiler-generated and designer-generated members participating in traversal",
+      "stages": [
+        "extraction",
+        "traversal"
+      ],
+      "expectedRuleIds": [],
+      "expectedTiers": [],
+      "expectedGaps": [],
+      "assertions": null,
+      "blocker": "generated-member identity labeling is pinned by compiled-lane CS-GENERATED-005; the messy-workspace traversal variant is deferred to a later slice"
+    },
+    {
+      "id": "MW-SOURCE-METADATA-IL-PDB-001",
+      "status": "deferred",
+      "roots": [],
+      "shape": "source to metadata to IL/PDB identity chain over messy workspace roots",
+      "stages": [
+        "extraction",
+        "reconciliation"
+      ],
+      "expectedRuleIds": [],
+      "expectedTiers": [],
+      "expectedGaps": [],
+      "assertions": null,
+      "blocker": "owned by the remaining #766 ILAsm/rewritten-PDB public rewrite-suite matrix under the open Task 10 checkbox; explicitly not this integration slice"
+    }
+  ]
+}
