@@ -1345,6 +1345,7 @@ export async function run(runtimeFlags) {
     const { packet, result } = await buildBase44Evidence(options(repo, out));
 
     expect(packet.schemaVersion).toBe("tracemap.base44.static-evidence.v1");
+    expect(packet.scanner.artifactProfile).toBe("tracemap.base44.deterministic-artifacts.v1");
     expect(packet.source.acceptedSourceSha256).toBe(shaA);
     expect(packet.source.acceptedTreeSha256).toBe(shaB);
     expect(packet.facts).toEqual(expect.arrayContaining([
@@ -1374,6 +1375,21 @@ export async function run(runtimeFlags) {
       factType: FactTypes.Base44SdkImport,
       contractElement: "@base44/sdk/dist/utils/axios-client"
     }));
+    for (const [authorityPath, importKind] of [
+      ["package.json", "package-manifest"],
+      ["package-lock.json", "package-lock-resolution"]
+    ]) {
+      expect(packet.facts).toContainEqual(expect.objectContaining({
+        factType: FactTypes.Base44SdkImport,
+        evidence: expect.objectContaining({ filePath: authorityPath }),
+        properties: expect.objectContaining({
+          requestedPackage: "@base44/sdk",
+          requestedVersion: "0.8.5",
+          importKind,
+          sourceFileSha256: expect.stringMatching(/^[0-9a-f]{64}$/)
+        })
+      }));
+    }
     expect(packet.facts).toContainEqual(expect.objectContaining({
       factType: FactTypes.Base44EntityOperation,
       targetSymbol: "Order",

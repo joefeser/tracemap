@@ -24,6 +24,22 @@ export async function extractBase44Facts(manifest: ScanManifest, inventory: read
   const migrationItems = inventory.filter((file) => !file.skipped && file.relativePath.endsWith(".sql") && isMigrationPath(file.relativePath));
   const aliasDiscovery = await buildAliasMaps(sourceItems);
   const frontendPackageAuthority = await loadFrontendPackageAuthority(inventory);
+  if (frontendPackageAuthority.version && frontendPackageAuthority.identityEvidence) {
+    for (const authority of frontendPackageAuthority.identityEvidence) {
+      const item = inventory.find((candidate) => !candidate.skipped
+        && candidate.relativePath === authority.authorityPath);
+      if (!item) continue;
+      const text = await fs.readFile(item.absolutePath, "utf8");
+      const source = ts.createSourceFile(item.absolutePath, text, ts.ScriptTarget.Latest, true, ts.ScriptKind.JSON);
+      facts.push(fact(manifest, FactTypes.Base44SdkImport, RuleIds.Base44SdkImport,
+        source, source, item.relativePath, "@base44/sdk", {
+          requestedPackage: "@base44/sdk",
+          requestedVersion: frontendPackageAuthority.version,
+          importKind: authority.kind,
+          sourceFileSha256: authority.authoritySha256
+        }));
+    }
+  }
   for (const item of inventory.filter((file) => !file.skipped)) {
     if (item.relativePath.endsWith(".sql")) {
       continue;

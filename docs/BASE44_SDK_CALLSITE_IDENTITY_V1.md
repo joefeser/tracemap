@@ -48,6 +48,14 @@ lock, manifest, and direct SDK-import source file. An indirect helper call
 retains the direct import root; helper/intermediary files are not identity
 authority.
 
+When the root manifest and lock agree, the packet emits separate
+`Base44SdkImport` facts for `package.json` (`importKind=package-manifest`) and
+`package-lock.json` (`importKind=package-lock-resolution`). Each fact carries
+the exact file SHA-256 used by the frontend identity. Consumers can therefore
+check package authority without treating the identity JSON as its own
+corroboration. Missing or conflicting package authority produces no such
+facts and remains a gap.
+
 The same identity is copied exactly to the operation's payload or query fact.
 Packet validation rejects shape/operation disagreement, extra keys, invalid or
 duplicate evidence, non-deterministic ordering, a source digest that is not
