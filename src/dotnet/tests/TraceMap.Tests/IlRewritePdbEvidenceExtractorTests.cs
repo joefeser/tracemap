@@ -259,6 +259,43 @@ public sealed class IlRewritePdbEvidenceExtractorTests
     }
 
     [Fact]
+    public void Rejected_pdb_bytes_participate_in_the_bounded_input_digest()
+    {
+        using var temp = new TempDirectory();
+        var (beforeDll, beforePdb, afterDll, afterPdb) = PreparePair(temp, OperandOnlyMutation);
+        // An in-repo locator carries no raw digest by itself, so two
+        // different rejected Windows-PDB byte sequences at the same declared
+        // path must still produce distinct provenance digests and scan ids.
+        var probe = Path.Combine(RepoRoot(), "bin", "Debug", "net10.0", "rewrite-pdb-digest-probe.pdb");
+        try
+        {
+            ScanResult ScanProbe(byte[] bytes)
+            {
+                File.WriteAllBytes(probe, bytes);
+                return Scan(PairOptions(beforeDll, afterDll, beforePdb, probe));
+            }
+
+            var first = ScanProbe("Microsoft C/C++ MSF 7.00\r\n\u001aDS\0\0\0first"u8.ToArray());
+            var second = ScanProbe("Microsoft C/C++ MSF 7.00\r\n\u001aDS\0\0\0second"u8.ToArray());
+            foreach (var result in new[] { first, second })
+            {
+                var outcome = Assert.Single(result.Manifest.IlRewritePdbProvenance!.Outcomes);
+                Assert.Contains("IlRewritePdbUnsupportedShape", outcome.GapKinds);
+                Assert.NotNull(outcome.AfterRawFileSha256);
+            }
+
+            Assert.NotEqual(
+                first.Manifest.IlRewritePdbProvenance!.BoundedInputSha256,
+                second.Manifest.IlRewritePdbProvenance!.BoundedInputSha256);
+            Assert.NotEqual(first.Manifest.ScanId, second.Manifest.ScanId);
+        }
+        finally
+        {
+            File.Delete(probe);
+        }
+    }
+
+    [Fact]
     public void Exhausted_pdb_work_budget_emits_limit_gap_instead_of_guessed_relationships()
     {
         using var temp = new TempDirectory();
