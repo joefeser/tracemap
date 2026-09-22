@@ -52,7 +52,19 @@ internal static class IlRewritePdbEvidenceExtractor
 
         if (rewriteEvaluation.Provenance is null)
         {
-            evaluated.Add(SyntheticPairGap("rewrite-pdb-input-set", "IlRewritePdbRewritePairUnavailable", cause: "IlRewriteEvidenceDisabled"));
+            // The disabled-parent outcome still commits both ordered
+            // projected slot lists, so two scans declaring different PDB
+            // sets never share a provenance digest or scan identity even
+            // though both fail identically for the missing parent lane.
+            evaluated.Add(SyntheticPairGap(
+                "rewrite-pdb-input-set",
+                "IlRewritePdbRewritePairUnavailable",
+                cause: "IlRewriteEvidenceDisabled",
+                declarationSha256: ManagedMetadataExtractor.CanonicalDigest(new
+                {
+                    before = ProjectDeclaredSlots(options.RepoPath, declaredBefore, "rewrite-pdb-before", compiledLimits),
+                    after = ProjectDeclaredSlots(options.RepoPath, declaredAfter, "rewrite-pdb-after", compiledLimits)
+                })));
         }
         else if (declaredBefore.Count == 0 && declaredAfter.Count == 0)
         {
@@ -85,19 +97,20 @@ internal static class IlRewritePdbEvidenceExtractor
                 var pairId = $"rewrite-pair-{(index + 1).ToString("D3", CultureInfo.InvariantCulture)}";
                 if (pairsById.TryGetValue(pairId, out var pair) && pair.BeforeSide is not null && pair.AfterSide is not null)
                 {
-                    if (pair.Edges.Count == 0
-                        && pair.Outcome.GapKinds.Contains("IlRewriteTotalWorkLimitExceeded"))
+                    if (pair.Edges.Count == 0 && pair.Outcome.GapKinds.Count > 0)
                     {
-                        // The parent join was atomically exhausted: both sides
-                        // were read, but no edge exists, so a zero-relationship
-                        // "admitted" outcome here would relabel partial parent
-                        // analysis as complete coverage.
+                        // No parent join exists to build on — atomic join
+                        // exhaustion, assembly identity mismatch, or a fully
+                        // one-sided membership outcome. Both sides may have
+                        // been read, but a zero-relationship "admitted"
+                        // outcome here would relabel a failed parent join as
+                        // complete PDB coverage.
                         evaluated.Add(SyntheticPairGap(
                             pairId,
                             "IlRewritePdbRewritePairUnavailable",
                             beforeSafeLocator: DeclaredLocator(options.RepoPath, beforePaths[index], "rewrite-pdb-before", compiledLimits),
                             afterSafeLocator: DeclaredLocator(options.RepoPath, afterPaths[index], "rewrite-pdb-after", compiledLimits),
-                            cause: "IlRewriteTotalWorkLimitExceeded"));
+                            cause: string.Join("+", pair.Outcome.GapKinds)));
                         continue;
                     }
 

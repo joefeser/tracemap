@@ -295,8 +295,30 @@ public sealed class IlRewritePdbEvidenceExtractorTests
         }
     }
 
+
     [Fact]
-    public void Parent_join_exhaustion_withholds_the_pdb_pair_instead_of_claiming_completeness()
+    public void Disabled_parent_declarations_participate_in_the_bounded_input_digest()
+    {
+        using var temp = new TempDirectory();
+        var (beforeDll, beforePdb, afterDll, afterPdb) = PreparePair(temp, OperandOnlyMutation);
+        var first = Scan(PairOptions(beforeDll, afterDll, beforePdb, afterPdb) with { IlRewriteEvidence = false });
+        var second = Scan(PairOptions(beforeDll, afterDll, beforePdb, Path.Combine(temp.Path, "other.pdb")) with { IlRewriteEvidence = false });
+        Assert.All(new[] { first, second }, result =>
+        {
+            var outcome = Assert.Single(result.Manifest.IlRewritePdbProvenance!.Outcomes);
+            Assert.Contains("IlRewritePdbRewritePairUnavailable", outcome.GapKinds);
+            Assert.Equal("IlRewriteEvidenceDisabled", outcome.Cause);
+        });
+        Assert.NotEqual(
+            first.Manifest.IlRewritePdbProvenance!.BoundedInputSha256,
+            second.Manifest.IlRewritePdbProvenance!.BoundedInputSha256);
+        Assert.NotEqual(first.Manifest.ScanId, second.Manifest.ScanId);
+    }
+
+    [Theory]
+    [InlineData("IlRewriteTotalWorkLimitExceeded")]
+    [InlineData("IlRewriteAssemblyIdentityMismatch")]
+    public void Zero_edge_failed_parent_withholds_the_pdb_pair_instead_of_claiming_completeness(string parentGapKind)
     {
         using var temp = new TempDirectory();
         var (beforeDll, beforePdb, afterDll, afterPdb) = PreparePair(temp, OperandOnlyMutation);
@@ -313,7 +335,7 @@ public sealed class IlRewritePdbEvidenceExtractorTests
             "assembly",
             "assembly",
             "digest",
-            ["IlRewriteTotalWorkLimitExceeded"]);
+            [parentGapKind]);
         var pair = new EvaluatedIlRewritePair(
             outcome,
             [],
@@ -339,7 +361,7 @@ public sealed class IlRewritePdbEvidenceExtractorTests
         var pdbOutcome = Assert.Single(evaluation.Pairs).Outcome;
         Assert.Equal("rewrite-unavailable", pdbOutcome.Outcome);
         Assert.Contains("IlRewritePdbRewritePairUnavailable", pdbOutcome.GapKinds);
-        Assert.Equal("IlRewriteTotalWorkLimitExceeded", pdbOutcome.Cause);
+        Assert.Equal(parentGapKind, pdbOutcome.Cause);
         Assert.Equal("rewrite-pdb-partial", evaluation.Provenance!.CoverageState);
     }
 
