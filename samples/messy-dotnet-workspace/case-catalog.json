@@ -124,13 +124,13 @@
         "reconciliation"
       ],
       "expectedRuleIds": [
-        "combined.paths.symbol-reconciliation.v1"
+        "csharp.semantic.callgraph.v1"
       ],
       "expectedTiers": [
-        "Tier3SyntaxOrTextual"
+        "Tier1Semantic"
       ],
       "expectedGaps": [],
-      "assertions": "combined sources, facts, and symbols are the union of the inputs with per-source namespacing and no symbol deduplication; root-beta reuses the Process/Core simple names from root-alpha and all twelve identities stay distinct rows; every DatabaseOperationCandidate terminal stays attributed to its own source label (11 alpha, 1 beta, 1 vb) with its own table identity; the merged dependency report lists all three labeled sources; the Web Forms packet stays single-page-source by design, so cross-source attribution is asserted over the merged index directly"
+      "assertions": "combined sources, facts, and symbols are the union of the inputs with per-source namespacing and no symbol deduplication; root-beta reuses the Process/Core simple names from root-alpha and all eleven identities stay distinct rows; every DatabaseOperationCandidate terminal stays attributed to its own source label (11 alpha, 1 beta, 1 vb) with its own table identity; the merged dependency report lists all three labeled sources; the Web Forms packet stays single-page-source by design, so cross-source attribution is asserted over the merged index directly"
     },
     {
       "id": "MW-VB-PROJECTLESS-001",

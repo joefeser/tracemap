@@ -156,6 +156,8 @@ public sealed class MessyWorkspaceRegressionTests
         Require("MW-FOLDER-SPREAD-001", "extraction",
             commitSha.Length is 40 or 64 && commitSha.All(char.IsAsciiHexDigit),
             $"in-repo roots must record a full SHA-1 or SHA-256 commit SHA, found {commitSha}");
+        RequireCatalogEvidence("MW-FOLDER-SPREAD-001", "extraction",
+            alpha.Facts.Select(fact => fact.RuleId), alpha.Facts.Select(fact => fact.EvidenceTier), []);
     }
 
     [Fact]
@@ -227,6 +229,10 @@ public sealed class MessyWorkspaceRegressionTests
                 .SequenceEqual(boundaries16.Select(boundary => boundary.TerminalEvidenceId).OrderBy(id => id, StringComparer.Ordinal)),
             "terminal boundary identity must not change between depth 12 and depth 16");
         var deepBoundary = boundaries12[0];
+        RequireCatalogEvidence("MW-DEEP-CHAIN-D10-001", "traversal",
+            deepBoundary.RuleIds.Concat(depth12.Gaps.Select(gap => gap.RuleId)),
+            deepBoundary.EvidenceTiers.Concat(depth12.Gaps.Select(gap => gap.EvidenceTier)),
+            depth12.Gaps.Select(gap => gap.TruncationReason is null ? gap.Classification : $"{gap.Classification}:{gap.TruncationReason}"));
         Require("MW-DEEP-CHAIN-D10-001", "traversal", deepBoundary.BoundaryKind == "sql-query", $"deep boundary kind was {deepBoundary.BoundaryKind}");
         Require("MW-DEEP-CHAIN-D10-001", "traversal", deepBoundary.BoundaryCategory == "database", $"deep boundary category was {deepBoundary.BoundaryCategory}");
         Require("MW-DEEP-CHAIN-D10-001", "traversal", deepBoundary.RuleIds.Contains(RuleIds.DatabaseOperationCallPattern),
@@ -285,6 +291,14 @@ public sealed class MessyWorkspaceRegressionTests
         // honestly, and never invents a terminal for the cyclic branch.
         var first = await WebFormsModernizationPacketReporter.BuildAsync(new(alphaIndex, Path.Combine(temp.Path, "cycle-a")));
         var second = await WebFormsModernizationPacketReporter.BuildAsync(new(alphaIndex, Path.Combine(temp.Path, "cycle-b")));
+        RequireCatalogEvidence("MW-CYCLE-001", "traversal",
+            cycleEdges.Select(fact => fact.RuleId).Concat(first.Gaps.Select(gap => gap.RuleId)),
+            cycleEdges.Select(fact => fact.EvidenceTier).Concat(first.Gaps.Select(gap => gap.EvidenceTier)),
+            first.Gaps.Select(gap => gap.TruncationReason is null ? gap.Classification : $"{gap.Classification}:{gap.TruncationReason}"));
+        RequireCatalogEvidence("MW-CYCLE-SELF-002", "traversal",
+            cycleEdges.Where(fact => fact.SourceSymbol == "global::Alpha.Services.Loop.Self()").Select(fact => fact.RuleId),
+            cycleEdges.Where(fact => fact.SourceSymbol == "global::Alpha.Services.Loop.Self()").Select(fact => fact.EvidenceTier),
+            first.Gaps.Select(gap => gap.Classification));
         Require("MW-CYCLE-001", "traversal",
             JsonSerializer.Serialize(first) == JsonSerializer.Serialize(second),
             "cycle traversal must be deterministic across repeated packets");
@@ -387,6 +401,10 @@ public sealed class MessyWorkspaceRegressionTests
             engineShapes.Select(fact => fact.Properties.GetValueOrDefault("tableName")).Distinct(StringComparer.Ordinal).Count() == 10,
             "each engine's terminal table must stay distinct");
 
+        RequireCatalogEvidence("MW-SAME-NAME-TEN-001", "reconciliation",
+            engineInternalEdges.Concat(engineShapes).Select(fact => fact.RuleId),
+            engineInternalEdges.Concat(engineShapes).Select(fact => fact.EvidenceTier), []);
+
         // MW-SAME-NAME-TEN-001 [traversal]: the handler inventories ten distinct
         // terminal witnesses and no engine chain touches another engine's evidence.
         var packet = await WebFormsModernizationPacketReporter.BuildAsync(new(alphaIndex, Path.Combine(temp.Path, "packet")));
@@ -485,6 +503,9 @@ public sealed class MessyWorkspaceRegressionTests
         {
             connection.Open();
             var labels = QueryStrings(connection, "SELECT label FROM index_sources ORDER BY label");
+            RequireCatalogEvidence("MW-MERGED-ROOTS-001", "reconciliation",
+                QueryStrings(connection, "SELECT DISTINCT rule_id FROM combined_call_edges"),
+                QueryStrings(connection, "SELECT DISTINCT evidence_tier FROM combined_call_edges"), []);
             Require("MW-MERGED-ROOTS-001", "combining",
                 labels.SequenceEqual(["alpha-site", "beta-site", "vb-site"]),
                 $"combined labels were [{string.Join(",", labels)}]");
@@ -505,33 +526,31 @@ public sealed class MessyWorkspaceRegressionTests
                 WHERE e.callee_symbol LIKE '%.Process()'
                 ORDER BY s.label, e.caller_symbol, e.callee_symbol
                 """;
-            var processTuples = new List<(string Label, string Caller, string Callee)>();
+            var processTuples = new List<(string Label, string? Caller, string? Callee)>();
             using (var processReader = processCommand.ExecuteReader())
             {
                 while (processReader.Read())
                 {
-                    processTuples.Add((processReader.GetString(0), processReader.GetString(1), processReader.GetString(2)));
+                    processTuples.Add((processReader.GetString(0),
+                        processReader.IsDBNull(1) ? null : processReader.GetString(1),
+                        processReader.IsDBNull(2) ? null : processReader.GetString(2)));
                 }
             }
 
-            foreach (var engine in Enumerable.Range(1, 10).Select(number => number.ToString("00", System.Globalization.CultureInfo.InvariantCulture)))
-            {
-                Require("MW-MERGED-ROOTS-001", "reconciliation",
-                    processTuples.Any(tuple => tuple.Callee == $"global::Alpha.Services.Engine{engine}.Process()"),
-                    $"alpha Engine{engine}.Process disappeared from the merged call edges");
-            }
-
+            var expectedProcessTuples = new[] { (Label: "alpha-site", Scan: alpha), (Label: "beta-site", Scan: beta), (Label: "vb-site", Scan: vb) }
+                .SelectMany(source => source.Scan.Facts
+                    .Where(fact => fact.FactType == FactTypes.CallEdge
+                        && fact.TargetSymbol?.EndsWith(".Process()", StringComparison.Ordinal) == true)
+                    .Select(fact => (source.Label, Caller: fact.SourceSymbol, Callee: fact.TargetSymbol)))
+                .OrderBy(tuple => tuple.Label, StringComparer.Ordinal)
+                .ThenBy(tuple => tuple.Caller, StringComparer.Ordinal)
+                .ThenBy(tuple => tuple.Callee, StringComparer.Ordinal)
+                .ToArray();
+            Require("MW-MERGED-ROOTS-001", "reconciliation", expectedProcessTuples.Length == 11,
+                $"expected eleven original Process edges, found {expectedProcessTuples.Length}");
             Require("MW-MERGED-ROOTS-001", "reconciliation",
-                processTuples.Any(tuple => tuple.Callee == "global::Beta.Services.Gateway.Process()"),
-                "beta Gateway.Process disappeared from the merged call edges");
-            Require("MW-MERGED-ROOTS-001", "reconciliation",
-                processTuples.All(tuple =>
-                    (tuple.Callee.Contains("Engine", StringComparison.Ordinal) || tuple.Callee.Contains("DeepChain", StringComparison.Ordinal) || tuple.Callee.Contains("Alpha.Services", StringComparison.Ordinal)
-                        ? tuple.Label == "alpha-site" && tuple.Caller.Contains("global::Alpha.", StringComparison.Ordinal)
-                        : tuple.Callee.Contains("Beta.", StringComparison.Ordinal)
-                            ? tuple.Label == "beta-site" && tuple.Caller.Contains("global::Beta.", StringComparison.Ordinal)
-                            : true)),
-                "a Process call edge crosses roots through its source label, caller, or callee namespace");
+                processTuples.SequenceEqual(expectedProcessTuples),
+                "merged Process edges must preserve every original (source label, caller, callee) tuple exactly, including multiplicity");
         }
 
         // MW-MERGED-ROOTS-001 [reconciliation]: every merged terminal keeps its own
@@ -544,42 +563,38 @@ public sealed class MessyWorkspaceRegressionTests
             connection.Open();
             using var command = connection.CreateCommand();
             command.CommandText = """
-                SELECT s.label, f.properties_json
+                SELECT s.label, f.original_fact_id, f.source_symbol, json_extract(f.properties_json, '$.tableName')
                 FROM combined_facts f
                 JOIN index_sources s ON s.source_index_id = f.source_index_id
                 WHERE f.fact_type = 'DatabaseOperationCandidate'
-                ORDER BY s.label, f.properties_json
+                ORDER BY s.label, f.original_fact_id
                 """;
-            var terminalsByLabel = new Dictionary<string, List<string>>(StringComparer.Ordinal);
+            var terminalTuples = new List<(string Label, string FactId, string? SourceSymbol, string? TableName)>();
             using (var reader = command.ExecuteReader())
             {
                 while (reader.Read())
                 {
-                    var label = reader.GetString(0);
-                    if (!terminalsByLabel.TryGetValue(label, out var tables))
-                    {
-                        terminalsByLabel[label] = tables = [];
-                    }
-
-                    tables.Add(reader.GetString(1));
+                    terminalTuples.Add((reader.GetString(0), reader.GetString(1),
+                        reader.IsDBNull(2) ? null : reader.GetString(2),
+                        reader.IsDBNull(3) ? null : reader.GetString(3)));
                 }
             }
 
-            Require("MW-MERGED-ROOTS-001", "reconciliation", terminalsByLabel.Count == 3,
-                $"expected terminals from three sources, found [{string.Join(",", terminalsByLabel.Keys)}]");
-            var alphaTerminals = terminalsByLabel["alpha-site"];
-            Require("MW-MERGED-ROOTS-001", "reconciliation", alphaTerminals.Count == 11,
-                $"alpha must keep its eleven terminals through the merge, found {alphaTerminals.Count}");
+            var expectedTerminalTuples = new[] { (Label: "alpha-site", Scan: alpha), (Label: "beta-site", Scan: beta), (Label: "vb-site", Scan: vb) }
+                .SelectMany(source => source.Scan.Facts
+                    .Where(fact => fact.FactType == FactTypes.DatabaseOperationCandidate)
+                    .Select(fact => (source.Label, fact.FactId, fact.SourceSymbol, TableName: fact.Properties.GetValueOrDefault("tableName"))))
+                .OrderBy(tuple => tuple.Label, StringComparer.Ordinal)
+                .ThenBy(tuple => tuple.FactId, StringComparer.Ordinal)
+                .ToArray();
             Require("MW-MERGED-ROOTS-001", "reconciliation",
-                alphaTerminals.Count(table => table.Contains("engine_", StringComparison.Ordinal)) == 10
-                && alphaTerminals.Any(table => table.Contains("deep_orders", StringComparison.Ordinal)),
-                "alpha's engine and deep terminals must stay alpha-attributed");
+                expectedTerminalTuples.Count(tuple => tuple.Label == "alpha-site") == 11
+                && expectedTerminalTuples.Count(tuple => tuple.Label == "beta-site") == 1
+                && expectedTerminalTuples.Count(tuple => tuple.Label == "vb-site") == 1,
+                "original scans must supply eleven alpha, one beta, and one VB terminal");
             Require("MW-MERGED-ROOTS-001", "reconciliation",
-                terminalsByLabel["beta-site"].Count == 1 && terminalsByLabel["beta-site"][0].Contains("beta_status", StringComparison.Ordinal),
-                "beta's single terminal must stay beta-attributed");
-            Require("MW-MERGED-ROOTS-001", "reconciliation",
-                terminalsByLabel["vb-site"].Count == 1 && terminalsByLabel["vb-site"][0].Contains("data-adapter-fill", StringComparison.Ordinal),
-                "vb's single terminal must stay vb-attributed");
+                terminalTuples.SequenceEqual(expectedTerminalTuples),
+                "merged terminals must preserve every original (source label, fact id, source symbol, table name) tuple exactly, including multiplicity");
         }
 
         // MW-MERGED-ROOTS-001 [combining]: the merged review report lists every
@@ -632,6 +647,11 @@ public sealed class MessyWorkspaceRegressionTests
                     && fact.Evidence.FilePath == file),
                 $"per-file SemanticAnalysisUnavailable gap missing for {file}");
         }
+
+        RequireCatalogEvidence("MW-VB-PROJECTLESS-001", "extraction",
+            scan.Facts.Select(fact => fact.RuleId), scan.Facts.Select(fact => fact.EvidenceTier),
+            scan.Facts.Where(fact => fact.FactType == FactTypes.AnalysisGap)
+                .Select(fact => fact.Properties.GetValueOrDefault("gapKind") ?? string.Empty));
 
         var operation = scan.Facts.SingleOrDefault(fact =>
             fact.FactType == FactTypes.DatabaseOperationCandidate
@@ -775,6 +795,26 @@ public sealed class MessyWorkspaceRegressionTests
         }
 
         return values;
+    }
+
+    private static void RequireCatalogEvidence(string caseId, string stage,
+        IEnumerable<string> ruleIds, IEnumerable<string> tiers, IEnumerable<string> gaps)
+    {
+        using var catalog = JsonDocument.Parse(File.ReadAllText(Path.Combine(FindRepoRoot(), CatalogPath)));
+        var entry = catalog.RootElement.GetProperty("cases").EnumerateArray()
+            .Single(item => item.GetProperty("id").GetString() == caseId);
+        foreach (var (property, observed) in new[]
+        {
+            ("expectedRuleIds", ruleIds), ("expectedTiers", tiers), ("expectedGaps", gaps),
+        })
+        {
+            var actual = observed.ToHashSet(StringComparer.Ordinal);
+            foreach (var expected in entry.GetProperty(property).EnumerateArray().Select(item => item.GetString()!))
+            {
+                Require(caseId, stage, actual.Contains(expected),
+                    $"catalog {property} value {expected} is missing from the case's produced evidence");
+            }
+        }
     }
 
     private static void Require(string caseId, string stage, bool condition, string detail)
