@@ -986,3 +986,27 @@ flake in the compiled-metadata CLI determinism test was traced to a
 transient git spawn failure flipping `repoName` between identical scans;
 `GitMetadataProvider` now retries a failed git invocation exactly once
 (non-repository exits nonzero on both attempts and keeps its null result).
+
+Final review remediation rounds on 2026-09-22: a Codex P1 at head
+`202b26ca` showed that rejected PDB admission branches (malformed and
+native-Windows formats, finalized text-limit) discarded the already-computed
+raw SHA-256, so swapping an in-repo PDB's rejected bytes kept an identical
+provenance digest and scan id; every branch that read the bytes now retains
+the digest, pinned by a two-variant rejected-bytes regression (`baf55ae6`).
+A Codex P2 at `baf55ae6` showed that a parent pair whose join phase was
+atomically exhausted keeps both side artifacts with zero edges, which the
+PDB lane mislabeled as an admitted, complete pair; the lane now detects the
+parent join-exhaustion marker and emits `IlRewritePdbRewritePairUnavailable`
+with the parent cause, pinned by a synthetic parent-exhaustion regression
+(`627bdecd`, code head). All eight review threads (three Qodo inline, one
+Qodo summary, four Codex inline) are settled with durable ACK dispositions.
+
+Final ACK readback at code head
+`627bdecd0b7d8879fd948398aceeb3ee9ac9757d`: unresolved threads 0,
+actionable findings 0, stale findings 0, pending/failed checks 0, merge
+state CLEAN, focused rewrite-PDB suite 28/28, full .NET suite 2,172/2,172
+zero failed/skipped, zero build warnings; decision `not_merge_ready` with
+`CURRENT_HEAD_REQUIRED_REVIEW_MISSING` — the exact-head hosted-review
+freshness gate is an owner decision and local validation does not
+substitute for it. This docs commit sits on top of the code head; do not
+merge, force-push, or retag bots without the owner.
