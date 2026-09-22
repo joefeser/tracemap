@@ -2865,3 +2865,76 @@ C++/CLI lanes. It performs no rewrite generation by the scanner, no semantic
 equivalence or behavior-preservation conclusion, no runtime loading or
 execution, and no cross-assembly resolution beyond the rows encoded in each
 containing module.
+
+### Messy .NET workspace regression (Task 10 third slice)
+
+Public-safe synthetic fixtures under `samples/messy-dotnet-workspace/`
+reproduce the workspace shapes observed in real Web Forms/.NET scans without
+copying any private source, names, paths, or artifacts. Three roots are
+scanned independently: `root-alpha` (C# Web Forms site with a twelve-call-edge deep
+chain ending in an ADO.NET-style SQL terminal at graph distance 14, a
+three-node cycle plus a self-cycle with its own handler, and ten same-name
+`Process`/`Core` members in one file), `root-beta` (a second C# root reusing those simple
+names), and `vb-projectless` (loose VB files with no `.vbproj`/`.sln`).
+
+The stable case catalog is `samples/messy-dotnet-workspace/case-catalog.json`
+(schema `messy-workspace-case-catalog.v1`). Cases are marked `implemented` or
+`deferred`; deferred cases record their exact blocker or next-slice owner
+(overload ambiguity, receiver ambiguity, C#/VB/F# boundaries, generated
+members, and the source→metadata→IL/PDB chain owned by #766). The catalog is
+an inventory and does not claim deferred cases are proven.
+
+Pinned behaviors, asserted per catalog case id and pipeline stage
+(extraction, combining, reconciliation, traversal) by
+`MessyWorkspaceRegressionTests`:
+
+- Deep chain: at `--max-depth 12` path enumeration truncates with the
+  `depth` reason while the terminal inventory stays complete with minimum
+  terminal distance 14 and identical boundary identity sets at depths 12 and
+  16 — no false absence from depth truncation. At depth 10 the distance-14
+  terminal falls outside the depth-bounded retained closure; the observation
+  scopes its completeness claim to the retained graph and invents nothing.
+- Cycles: the three-node cycle and the self-recursive branch each get their
+  own handler chain; both terminate, record `cycle` truncation honestly,
+  inventory zero terminals, and surface an explicit
+  `DownstreamWithoutSupportedTerminal` gap scoped to their own binding.
+- Same-name members: ten container-distinct Tier1 identities, no semantic
+  edge crossing engines, each boundary supporting exactly its own engine's
+  terminal fact and class line range with distinct tables and query shape
+  hashes; the handler inventories exactly ten distinct terminal witnesses
+  with no cross-joined evidence.
+- Merged roots: combine preserves the union of sources, facts, and symbols
+  with per-source namespacing, no symbol deduplication, and no identity that
+  blends namespaces; every terminal stays attributed to its own source label
+  (11 alpha, 1 beta, 1 vb); the merged dependency report lists all three
+  labeled sources. Call edges are compared to the original scans as exact
+  (label, caller, callee) tuples, and terminals as exact (label, original fact
+  id, source symbol, table name) tuples, including multiplicity. The Web Forms
+  packet stays single-page-source by design
+  (`WebFormsModernizationPrimarySourceAmbiguous` for multi-page-source
+  combined indexes), so cross-source attribution is asserted over the merged
+  index directly.
+- Projectless VB: `Level3SyntaxAnalysis` with the fail-closed
+  `NoVisualBasicProjectOrSolution` and per-file `SemanticAnalysisUnavailable`
+  Tier4 gaps, a Tier3 `vb.syntax.database-operation.v1` terminal, and a
+  handler chain that reaches its `sql-query` boundary. No blocker exists for
+  projectless VB in ordinary CI.
+- Determinism: repeat CLI scans of each root produce byte-identical
+  `facts.ndjson`.
+
+Each implemented case also checks the catalog's expected rules, tiers, and
+positive gap expectations against its produced evidence. The merged-roots case
+checks preserved Tier1 callgraph evidence; it does not claim to exercise the
+cross-source symbol-reconciliation rule.
+
+Run the focused lane with:
+
+```bash
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj   --no-restore --filter FullyQualifiedName~MessyWorkspaceRegressionTests
+```
+
+The slice adds no new derived machine-readable artifact, so generator and
+bounded-input hash pinning stay with the existing manifest provenance; the
+catalog's `artifactPinning` contract records this decision. This slice does
+not complete Task 10: the remaining #766 ILAsm/rewritten-PDB matrix and
+Task 11's private Windows/`dotnetperf` lane stay out of scope.
