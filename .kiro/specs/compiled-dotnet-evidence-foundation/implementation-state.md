@@ -1108,3 +1108,36 @@ remainder of the extended ECMA-335 mutation matrix from #766. Task 11's
 legacy Windows, `dotnetperf`, and C++/CLI lanes remain separate. The Task
 10 checkbox stays open until #766's full public rewrite-suite acceptance is
 met.
+
+Review remediation on 2026-09-22 (ACK 0.5.2 loop, PR #780, Qodo + Codex
+findings, two patch rounds): the first round at code head `b27f0860`
+(1) made `ControlFlowFixture` probe the fixture assembly's Debug then
+Release output so `dotnet test -c Release` locates it (verified by running
+the branch-retarget case under `-c Release`), (2) moved every scan output
+and the CLI artifact tree under each test's disposable `TempDirectory` so
+runs leave no unmanaged temp trees, and (3) fixed
+`MutateStackReshapingInsertion` to insert a balanced `ldc.i4.1`+`add` pair
+(Codex P2: the lone constant left an extra value on the evaluation stack
+at `ret`, so the after body was stack-invalid while the catalog documents
+a well-formed constant/add sequence). The second round at code head
+`9129da30` (Codex P2) excluded `IlRewriteControlFlowShapes.cs` from
+`CompiledEvidence.CSharp.csproj`'s default Compile glob so the
+shared-directory source builds only in the ControlFlow project and the
+original fixture assembly's identity is unaffected (Cecil readback of the
+rebuilt `CompiledEvidence.CSharp.dll` shows the type absent, 14 top-level
+types). After each round the focused suite (16/16), the full .NET suite
+(2,190/2,190, zero failed/skipped), and a zero-warning rebuild were
+rerun; all three threads and the stale Qodo summary carry durable ACK
+settle/comment dispositions. Note: the pre-existing `TempOutput` leak and
+Debug-only fixture-path patterns in the merged sibling suites predate this
+PR and were left untouched as out of this patch's authorized scope.
+
+Final ACK readback at code head
+`9129da3074075bc0ccc5ff35980ad188b3a0d67f`: unresolved threads 0,
+actionable findings 0, stale findings 0, pending/failed checks 0, merge
+state CLEAN, decision `merge_ready` (`MERGE_READY_DEV`, `workerMayStop`
+true) — including the ubuntu .NET adapter job (full suite), the
+windows/ubuntu/macos package-smoke matrix, and the five-adapter combine,
+all green on the final head. Per the slice protocol the worker stopped
+without merging, force-pushing, or retagging bots; the merge decision
+belongs to the owner. This docs commit sits on top of the code head.
