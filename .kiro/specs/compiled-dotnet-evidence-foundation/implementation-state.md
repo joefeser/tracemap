@@ -1,6 +1,6 @@
 # Compiled .NET Evidence Foundation Implementation State
 
-Status: Tasks 1-9 are merged into `dev`; PR #774 completed its authorized exact-head ACK review and was merged into `dev` as `ed2fdf1c028b034a9a6013908e8f5b8c29d900a7` on 2026-09-21. The first Task 10 slice (bounded operand-aware IL body/call evidence, PR #775) is also merged into `dev` as `46b2baa125bed00ee9ac1964ce50febd55c3e68e` on 2026-09-21, including the owner-requested P1/P2 follow-up `2d20b4a3` (prefix-operand signed/unsigned distinction and exact UTF-16 literal hashing). PR #779 (slice 4, bounded rewrite PDB identity evidence) merged into `dev` as `7be1f51c0360a7f80e3b7304aee9677fe3c92ddc` on 2026-09-22. PR #780 (slice 5, public control-flow and exception-handling rewrite suite) merged into `dev` as `2766de6933d4d60bb632389eff24bc4bfc2313f0` on 2026-09-22; verified against current `origin/dev` before starting the next slice. The remaining Task 10 public rewrite suite from #766 and Task 11 remain open.
+Status: Tasks 1-9 are merged into `dev`; PR #774 completed its authorized exact-head ACK review and was merged into `dev` as `ed2fdf1c028b034a9a6013908e8f5b8c29d900a7` on 2026-09-21. The first Task 10 slice (bounded operand-aware IL body/call evidence, PR #775) is also merged into `dev` as `46b2baa125bed00ee9ac1964ce50febd55c3e68e` on 2026-09-21, including the owner-requested P1/P2 follow-up `2d20b4a3` (prefix-operand signed/unsigned distinction and exact UTF-16 literal hashing). PR #779 (slice 4, bounded rewrite PDB identity evidence) merged into `dev` as `7be1f51c0360a7f80e3b7304aee9677fe3c92ddc` on 2026-09-22. PR #780 (slice 5, public control-flow and exception-handling rewrite suite) merged into `dev` as `2766de6933d4d60bb632389eff24bc4bfc2313f0` on 2026-09-22. PR #781 (slice 6, public metadata operands and member shapes) merged into `dev` as `dbb4f10aef8201da7e046b428b7a5c4a2e5105c2` on 2026-09-22; GitHub reported `MERGED` with this exact merge commit, and current `origin/dev` resolved to the same SHA before this integration branch was created. The remaining Task 10 public rewrite suite from #766 and Task 11 remain open.
 
 Branch: `codex/il-body-call-evidence`
 
@@ -1230,3 +1230,61 @@ privacy-projected bounded-input SHA-256
 `bdfdbda438917fa46d691bddedda92fdd1a6527251fcbfc023edc680f0ca1ec5`).
 The Linux, macOS, and Windows checks are read from PR #781 on the pushed
 repair head.
+
+## Task 10 public ECMA-335 integration continuation (in progress)
+
+Branch: `codex/task10-public-ecma335-suite`, an isolated worktree created
+from current `origin/dev` at `dbb4f10aef8201da7e046b428b7a5c4a2e5105c2`
+after verifying that PR #781 was merged to `dev` with that exact commit.
+The original checkout's unrelated TypeScript changes and the prior Task 10
+worktree remain untouched. Scope is public synthetic #766 fixtures and
+validation; Task 11's private `dotnetperf`, legacy Web Forms, and C++/CLI
+work-machine runs remain separate.
+
+The topology suite now pins `ILRW-TOPO-001`–`005`: netmodules, secondary
+metadata modules, and exported-type forwarders produce named unsupported
+gaps; duplicate complete member identities produce an ambiguity gap; equal
+assembly identities in separately declared pair ordinals do not cross-join.
+The forwarder preflight checks the ECMA-335 `ExportedType` forwarder flag
+before admitting any rewrite side. Embedded portable PDB input is bounded
+before decompression and requires exact assembly-byte identity, CodeView
+content identity, SRM/Cecil shape agreement, and method/offset binding.
+Missing or mismatched embedded debug evidence emits a typed Tier4 gap and
+withholds the PDB relationship. `ILRWPDB-EMBEDDED-PORTABLE-013`–`015` bind
+the public catalog to those positive and negative cases.
+
+The one safe runtime corroboration invokes only a synthetic parameterless
+constant method after an independently read SRM before/after IL comparison.
+It is one observed fixture behavior, never the authority for a TraceMap
+identity edge or a general equivalence claim. Ordinary CI has a bounded
+topology/PDB/runtime subset across Linux, macOS, and Windows; the separate PR/manual
+extended public workflow runs all rewrite suites and discovers Windows
+ILAsm/ILDAsm candidates. See `docs/VALIDATION.md` for the requirement ledger
+and exact lane commands. The macOS host has no installed ILAsm/ILDAsm, and
+the Windows runner's actual executable paths and versions are unverified.
+Therefore the `ILRWPDB-ILASM-PARITY-012` prerequisite remains open and Task
+10's checkbox must stay unchecked pending pinned independent parity proof.
+
+Local integration validation on macOS 2026-09-22: the combined compiled
+matrix passed 229/229 with zero skips; the new topology/PDB/runtime subset
+passed 12/12 after the final evidence-envelope assertions; a focused
+topology rerun after pinning the complete method signature passed 5/5. The
+full .NET solution passed 2,217/2,217 twice, with zero failed/skipped; the
+second full run included the evidence-envelope assertions and preceded only
+the focused topology assertion tightening. The final focused topology run
+passed after that change. `dotnet build src/dotnet/TraceMap.sln --no-restore
+-warnaserror` had zero warnings and errors. Two repeated CLI scans of the
+same public compiler assembly/PDB pair produced 636 facts each, including 90
+rewrite and 71 rewrite-PDB relationships, with zero rewrite gaps; their
+`facts.ndjson` and `report.md` were byte-identical and their normalized
+manifests matched after removing only `scannedAt`. Both artifact trees passed
+`scripts/validate-adapter-artifacts.py`; `scripts/check-private-paths.sh`,
+`node scripts/kiro-review.mjs --self-test`, JSON parsing, and
+`git diff --check` passed. The scanned rewrite provenance recorded generator
+SHA-256 `e879a1baed3b711dfe8e68aebf09d7cbd166463ea46868a10b98e29271300471`,
+rewrite bounded-input SHA-256
+`bbfa10ada888bf4cd179d35cb57064f02fa60df85497f220ca4adc608a063c77`,
+and rewrite-PDB bounded-input SHA-256
+`995704a6cb2ff3a6df0aabba15d75fc2f3660087f12ced0e57bda3aa098cb84a`.
+These are local pre-commit validation identities; PR CI and ACK must be read
+at the pushed head before any review-state claim.

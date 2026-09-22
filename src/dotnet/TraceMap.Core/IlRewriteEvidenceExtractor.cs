@@ -263,7 +263,7 @@ internal static class IlRewriteEvidenceExtractor
             // Unlike the standalone body lane, these inputs have not passed
             // compiled-metadata admission. Reject unsupported assembly shapes
             // and enforce metadata row/work bounds before either body reader.
-            var metadataWork = ManagedMetadataExtractor.PreflightManagedInput(bytes, compiledLimits);
+            var metadataWork = ManagedMetadataExtractor.PreflightManagedInput(bytes, compiledLimits, rejectTypeForwarders: true);
             if (!metadataBudget.TryConsume(metadataWork))
                 throw new ManagedMetadataExtractor.ManagedInputException("limit-exhausted", "ManagedInputTotalWorkLimitExceeded");
             // The raw System.Reflection.Metadata reader runs first so every

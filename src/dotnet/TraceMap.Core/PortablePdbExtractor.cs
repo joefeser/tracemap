@@ -1,5 +1,7 @@
 using System.Collections.Immutable;
+using System.Buffers.Binary;
 using System.Globalization;
+using System.IO.Compression;
 using System.Reflection.Metadata;
 using System.Reflection.Metadata.Ecma335;
 using System.Reflection.PortableExecutable;
@@ -91,7 +93,7 @@ internal static class PortablePdbExtractor
             }
 
             var rawSha256 = Sha256(bytes);
-            if (!IsPortablePdb(bytes))
+            if (!IsPortablePdb(bytes) && !IsPortableExecutable(bytes))
             {
                 evaluated.Add(IsWindowsPdb(bytes)
                     ? Gap(
@@ -106,11 +108,19 @@ internal static class PortablePdbExtractor
 
             try
             {
-                using var provider = MetadataReaderProvider.FromPortablePdbStream(new MemoryStream(bytes, writable: false), MetadataStreamOptions.LeaveOpen);
+                var embedded = !IsPortablePdb(bytes);
+                var format = embedded ? "embedded-portable" : "portable";
+                var pdbBytes = embedded ? ReadEmbeddedPortablePdb(bytes, limits.MaxFileSizeBytes) : bytes;
+                if (pdbBytes is null)
+                {
+                    evaluated.Add(Gap(safeLocator, "missing", format, "EmbeddedPortablePdbMissing", rawSha256));
+                    continue;
+                }
+                using var provider = MetadataReaderProvider.FromPortablePdbStream(new MemoryStream(pdbBytes, writable: false), MetadataStreamOptions.LeaveOpen);
                 var reader = provider.GetMetadataReader();
                 if (reader.DebugMetadataHeader is null)
                 {
-                    evaluated.Add(Gap(safeLocator, "malformed", "portable", "PortablePdbContentIdUnavailable", rawSha256));
+                    evaluated.Add(Gap(safeLocator, "malformed", format, "PortablePdbContentIdUnavailable", rawSha256));
                     continue;
                 }
                 var contentId = new BlobContentId(reader.DebugMetadataHeader.Id);
@@ -121,19 +131,19 @@ internal static class PortablePdbExtractor
                     .ToArray();
                 if (matches.Length == 0)
                 {
-                    evaluated.Add(Gap(safeLocator, "mismatched", "portable", "PdbAssemblyIdentityMismatch", rawSha256, contentIdentity));
+                    evaluated.Add(Gap(safeLocator, "mismatched", format, "PdbAssemblyIdentityMismatch", rawSha256, contentIdentity));
                     continue;
                 }
                 if (matches.Length > 1 || matches[0].EntryCount > 1)
                 {
-                    evaluated.Add(Gap(safeLocator, "ambiguous", "portable", "AmbiguousPdbAssemblyMatch", rawSha256, contentIdentity));
+                    evaluated.Add(Gap(safeLocator, "ambiguous", format, "AmbiguousPdbAssemblyMatch", rawSha256, contentIdentity));
                     continue;
                 }
                 var match = matches[0].Binding;
                 if (!string.Equals(match.ProvenanceState, "bound", StringComparison.Ordinal)
                     || !string.Equals(match.Outcome, "admitted", StringComparison.Ordinal))
                 {
-                    evaluated.Add(Gap(safeLocator, "unbound", "portable", "PdbCompiledEvidenceUnacceptable", rawSha256, contentIdentity, match));
+                    evaluated.Add(Gap(safeLocator, "unbound", format, "PdbCompiledEvidenceUnacceptable", rawSha256, contentIdentity, match));
                     continue;
                 }
 
@@ -141,21 +151,26 @@ internal static class PortablePdbExtractor
                     match.FullPath, match.RawFileSha256, compiledMaximumBytes, cancellationToken);
                 if (matchedAssemblyBytes is null)
                 {
-                    evaluated.Add(Gap(safeLocator, "unbound", "portable", "PdbCompiledArtifactChangedOrUnreadable", rawSha256, contentIdentity, match));
+                    evaluated.Add(Gap(safeLocator, "unbound", format, "PdbCompiledArtifactChangedOrUnreadable", rawSha256, contentIdentity, match));
+                    continue;
+                }
+                if (embedded && !string.Equals(Sha256(matchedAssemblyBytes), rawSha256, StringComparison.Ordinal))
+                {
+                    evaluated.Add(Gap(safeLocator, "mismatched", format, "EmbeddedPdbAssemblyArtifactMismatch", rawSha256, contentIdentity, match));
                     continue;
                 }
                 var observations = ReadPortablePdb(reader, contentIdentity, limits, workBudget, cancellationToken);
-                var cecilShapes = ReadCecilShapeCounts(matchedAssemblyBytes, bytes, workBudget, cancellationToken);
+                var cecilShapes = ReadCecilShapeCounts(matchedAssemblyBytes, pdbBytes, workBudget, cancellationToken);
                 if (!ShapeCountsAgree(cecilShapes, EnumerateCanonicalShapes(observations.Documents, observations.Methods), workBudget, cancellationToken))
                 {
-                    evaluated.Add(Gap(safeLocator, "disputed", "portable", "PdbReaderDisagreement", rawSha256, contentIdentity, match));
+                    evaluated.Add(Gap(safeLocator, "disputed", format, "PdbReaderDisagreement", rawSha256, contentIdentity, match));
                     continue;
                 }
 
                 var outcome = new PdbInputOutcome(
                     safeLocator,
                     "admitted",
-                    "portable",
+                    format,
                     rawSha256,
                     PrivacyProjectedDigest(safeLocator, rawSha256, contentIdentity, match.SafeLocator, "bound", []),
                     contentIdentity,
@@ -168,11 +183,11 @@ internal static class PortablePdbExtractor
             }
             catch (PdbInputException exception)
             {
-                evaluated.Add(Gap(safeLocator, "limit-exhausted", "portable", exception.Message, rawSha256));
+                evaluated.Add(Gap(safeLocator, "limit-exhausted", IsPortablePdb(bytes) ? "portable" : "embedded-portable", exception.Message, rawSha256));
             }
             catch (Exception exception) when (IsRecoverable(exception))
             {
-                evaluated.Add(Gap(safeLocator, "malformed", "portable", "MalformedPortablePdb", rawSha256));
+                evaluated.Add(Gap(safeLocator, "malformed", IsPortablePdb(bytes) ? "portable" : "embedded-portable", "MalformedPortablePdb", rawSha256));
             }
         }
 
@@ -1064,6 +1079,37 @@ internal static class PortablePdbExtractor
 
     private static string ContentIdentity(Guid guid, uint stamp) => $"{guid:D}:{stamp:x8}";
     internal static bool IsPortablePdb(byte[] bytes) => bytes.Length >= 4 && bytes[0] == (byte)'B' && bytes[1] == (byte)'S' && bytes[2] == (byte)'J' && bytes[3] == (byte)'B';
+
+    internal static bool IsPortableExecutable(byte[] bytes) =>
+        bytes.Length >= 2 && bytes[0] == (byte)'M' && bytes[1] == (byte)'Z';
+
+    /// <summary>Reads exactly one embedded portable PDB, bounding the expanded payload.</summary>
+    internal static byte[]? ReadEmbeddedPortablePdb(byte[] peBytes, long maximumPdbBytes)
+    {
+        using var pe = new PEReader(new MemoryStream(peBytes, writable: false));
+        var entries = pe.ReadDebugDirectory()
+            .Where(entry => entry.Type == DebugDirectoryEntryType.EmbeddedPortablePdb)
+            .ToArray();
+        if (entries.Length == 0)
+            return null;
+        if (entries.Length != 1)
+            throw new InvalidDataException("Ambiguous embedded portable PDB entries.");
+        var entry = entries[0];
+        if (entry.DataPointer < 0 || entry.DataSize < 8 || (long)entry.DataPointer + entry.DataSize > peBytes.Length)
+            throw new InvalidDataException("Invalid embedded portable PDB extent.");
+        var data = peBytes.AsSpan(entry.DataPointer, entry.DataSize);
+        if (!data[..4].SequenceEqual("MPDB"u8))
+            throw new InvalidDataException("Invalid embedded portable PDB signature.");
+        var uncompressedSize = BinaryPrimitives.ReadInt32LittleEndian(data[4..8]);
+        if (uncompressedSize < 4 || uncompressedSize > maximumPdbBytes)
+            throw new PdbInputException("PdbInputFileSizeExceeded");
+        using var deflate = new DeflateStream(new MemoryStream(peBytes, entry.DataPointer + 8, entry.DataSize - 8, writable: false), CompressionMode.Decompress);
+        var result = new byte[uncompressedSize];
+        deflate.ReadExactly(result);
+        if (deflate.ReadByte() != -1 || !IsPortablePdb(result))
+            throw new InvalidDataException("Invalid embedded portable PDB payload.");
+        return result;
+    }
     internal static bool IsWindowsPdb(byte[] bytes) => bytes.AsSpan().StartsWith(WindowsPdbSignature);
     private static string ResolvePath(string repoPath, string path) => Path.GetFullPath(Path.IsPathRooted(path) ? path : Path.Combine(repoPath, path));
 
