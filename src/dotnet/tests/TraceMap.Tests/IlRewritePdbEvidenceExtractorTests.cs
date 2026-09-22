@@ -187,6 +187,78 @@ public sealed class IlRewritePdbEvidenceExtractorTests
     }
 
     [Fact]
+    public void Join_budget_exhaustion_is_atomic_after_successful_side_reads()
+    {
+        using var temp = new TempDirectory();
+        var (beforeDll, beforePdb, afterDll, afterPdb) = PreparePair(temp, OperandOnlyMutation);
+
+        // A large budget proves the full cost C of the pair; C - 1 then lets
+        // both PDB sides complete and expires exactly inside the joined-edge
+        // enumeration, which must fail closed atomically.
+        var complete = Scan(PairOptions(beforeDll, afterDll, beforePdb, afterPdb));
+        var completeOutcome = Assert.Single(complete.Manifest.IlRewritePdbProvenance!.Outcomes);
+        Assert.Equal("admitted", completeOutcome.Outcome);
+        var consumed = completeOutcome.ConsumedWorkUnits;
+        Assert.True(consumed > completeOutcome.PdbRelationshipCount, "Expected side reads to consume budget before the join.");
+
+        var exhausted = Scan(PairOptions(beforeDll, afterDll, beforePdb, afterPdb, new IlRewritePdbLimits(MaxTotalWorkUnits: consumed - 1)));
+        var outcome = Assert.Single(exhausted.Manifest.IlRewritePdbProvenance!.Outcomes);
+        Assert.Equal("limit-exhausted", outcome.Outcome);
+        Assert.Contains("IlRewritePdbTotalWorkLimitExceeded", outcome.GapKinds);
+        // The sides were bound before exhaustion: their content identities
+        // survive on the outcome, but no relationship or debug delta does.
+        Assert.NotNull(outcome.BeforePdbContentId);
+        Assert.NotNull(outcome.AfterPdbContentId);
+        Assert.Equal(0, outcome.PdbRelationshipCount);
+        Assert.Equal(0, outcome.OffsetsUnchangedCount + outcome.OffsetsChangedCount + outcome.MethodDebugInformationAbsentCount);
+        Assert.Empty(PdbRelationshipFacts(exhausted));
+        Assert.Empty(PdbGapFacts(exhausted, "IlRewritePdbMethodDebugInformationAbsent"));
+    }
+
+    [Fact]
+    public void Assembly_reread_uses_the_compiled_input_limit_not_the_pdb_limit()
+    {
+        using var temp = new TempDirectory();
+        // Padding the after side with debug-info-free methods grows the
+        // assembly far beyond its PDB, so a PDB-side file bound between the
+        // two sizes would falsely reject the assembly if it were applied to
+        // the assembly re-read.
+        var (beforeDll, beforePdb, afterDll, afterPdb) = PreparePair(temp, PadWithBodylessMethods);
+        var assemblySize = new FileInfo(afterDll).Length;
+        var pdbSize = new FileInfo(afterPdb).Length;
+        Assert.True(assemblySize > pdbSize + 1_024, $"Expected the padded assembly ({assemblySize} bytes) to exceed its PDB ({pdbSize} bytes) by more than 1 KiB.");
+        var pdbBound = pdbSize + 1_024;
+        Assert.True(pdbBound < assemblySize, "The PDB bound must stay below the paired assembly size for this regression.");
+
+        var result = Scan(PairOptions(beforeDll, afterDll, beforePdb, afterPdb, new IlRewritePdbLimits(MaxFileSizeBytes: pdbBound)));
+
+        var outcome = Assert.Single(result.Manifest.IlRewritePdbProvenance!.Outcomes);
+        Assert.DoesNotContain("IlRewritePdbAssemblyArtifactChangedOrUnreadable", outcome.GapKinds);
+        Assert.True(outcome.PdbRelationshipCount > 0);
+        Assert.Contains(PdbRelationshipFacts(result), fact => fact.Properties["methodIdentity"].Contains("method:11:StringAlpha|", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Admission_limit_and_declaration_causes_keep_specific_gap_kinds()
+    {
+        using var temp = new TempDirectory();
+        var (beforeDll, beforePdb, afterDll, afterPdb) = PreparePair(temp, OperandOnlyMutation);
+
+        var oversized = Scan(PairOptions(beforeDll, afterDll, beforePdb, afterPdb, new IlRewritePdbLimits(MaxFileSizeBytes: 16)));
+        var oversizedOutcome = Assert.Single(oversized.Manifest.IlRewritePdbProvenance!.Outcomes);
+        Assert.Equal("limit-exhausted", oversizedOutcome.Outcome);
+        Assert.Contains("IlRewritePdbSideFileSizeLimitExceeded", oversizedOutcome.GapKinds);
+        Assert.DoesNotContain("IlRewritePdbSideUnavailable", oversizedOutcome.GapKinds);
+
+        var invalidDeclaration = Scan(PairOptions(beforeDll, afterDll, beforePdb, "after\0invalid"));
+        var invalidOutcome = Assert.Single(invalidDeclaration.Manifest.IlRewritePdbProvenance!.Outcomes);
+        Assert.Equal("invalid", invalidOutcome.Outcome);
+        Assert.Contains("IlRewritePdbSideDeclarationInvalid", invalidOutcome.GapKinds);
+        var invalidGap = Assert.Single(PdbGapFacts(invalidDeclaration, "IlRewritePdbSideDeclarationInvalid"));
+        Assert.Equal("after", invalidGap.Properties["side"]);
+    }
+
+    [Fact]
     public void Exhausted_pdb_work_budget_emits_limit_gap_instead_of_guessed_relationships()
     {
         using var temp = new TempDirectory();
@@ -491,6 +563,8 @@ public sealed class IlRewritePdbEvidenceExtractorTests
         Assert.Contains("ILAsm", ilasm.GetProperty("prerequisites").GetString(), StringComparison.Ordinal);
     }
 
+
+
     private static string FindRepoRoot()
     {
         var current = AppContext.BaseDirectory;
@@ -584,6 +658,26 @@ public sealed class IlRewritePdbEvidenceExtractorTests
     private static void StripStringAlphaDebugInformation(CecilAssemblyDefinition assembly)
     {
         Method(assembly, "StringAlpha").DebugInformation.SequencePoints.Clear();
+    }
+
+    /// <summary>
+    /// Appends debug-info-free filler methods so the after assembly grows far
+    /// beyond its own PDB without touching any joined method identity.
+    /// </summary>
+    private static void PadWithBodylessMethods(CecilAssemblyDefinition assembly)
+    {
+        var module = assembly.MainModule;
+        var type = (CecilTypeDefinition)Method(assembly, "StringAlpha").DeclaringType!;
+        for (var index = 0; index < 300; index++)
+        {
+            var method = new CecilMethodDefinition(
+                $"Pad{index.ToString("D3", CultureInfo.InvariantCulture)}",
+                Mono.Cecil.MethodAttributes.Public | Mono.Cecil.MethodAttributes.Static,
+                module.TypeSystem.Void);
+            var worker = method.Body.GetILProcessor();
+            worker.Append(worker.Create(OpCodes.Ret));
+            type.Methods.Add(method);
+        }
     }
 
     private static CecilMethodDefinition Method(CecilAssemblyDefinition assembly, string name)

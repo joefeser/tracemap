@@ -35,7 +35,8 @@ public sealed record IlRewritePdbPairOutcome(
     int PdbRelationshipCount = 0,
     int OffsetsUnchangedCount = 0,
     int OffsetsChangedCount = 0,
-    int MethodDebugInformationAbsentCount = 0);
+    int MethodDebugInformationAbsentCount = 0,
+    long ConsumedWorkUnits = 0);
 
 public sealed record IlRewritePdbProvenance(
     string SchemaVersion,

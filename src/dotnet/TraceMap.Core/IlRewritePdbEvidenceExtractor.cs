@@ -129,6 +129,14 @@ internal static class IlRewritePdbEvidenceExtractor
             policyVersion = PolicyVersion,
             generatorSha256,
             extractorIdentities = new[] { ScannerVersions.IlRewritePdbEvidenceExtractor, "system-reflection-metadata/10.0.0", "mono-cecil/0.11.6" },
+            // The derived artifact commits the parent rewrite provenance and
+            // both paired assembly hashes: the same PDBs reused against
+            // differently rewritten assemblies must never share this digest.
+            parentRewriteBoundedInputSha256 = rewriteEvaluation.Provenance?.BoundedInputSha256,
+            parentPairAssemblySha256 = rewriteEvaluation.Pairs
+                .OrderBy(item => item.PairId, StringComparer.Ordinal)
+                .Select(item => new { item.PairId, item.Outcome.BeforeRawFileSha256, item.Outcome.AfterRawFileSha256 })
+                .ToArray(),
             effectiveLimits = limits,
             expectedPairs = expected,
             outcomes = outcomes.Select(item => new
@@ -151,7 +159,8 @@ internal static class IlRewritePdbEvidenceExtractor
                 item.PdbRelationshipCount,
                 item.OffsetsUnchangedCount,
                 item.OffsetsChangedCount,
-                item.MethodDebugInformationAbsentCount
+                item.MethodDebugInformationAbsentCount,
+                item.ConsumedWorkUnits
             })
         });
         var coverage = outcomes.Length > 0 && outcomes.All(item => item.GapKinds.Count == 0)
@@ -187,6 +196,7 @@ internal static class IlRewritePdbEvidenceExtractor
         PortablePdbExtractor.PdbWorkBudget budget,
         CancellationToken cancellationToken)
     {
+        var consumedBeforePair = budget.Consumed;
         var before = AdmitPdbSide(repoPath, beforePdbPath, "rewrite-pdb-before", limits, compiledLimits, cancellationToken);
         var after = AdmitPdbSide(repoPath, afterPdbPath, "rewrite-pdb-after", limits, compiledLimits, cancellationToken);
         var gapKinds = new List<string>();
@@ -201,8 +211,11 @@ internal static class IlRewritePdbEvidenceExtractor
         PdbSideEvidence? afterEvidence = null;
         if (before.Bytes is not null && after.Bytes is not null)
         {
-            beforeEvidence = BindAndReadPdbSide("before", before, pair.BeforeSide!, pair.Outcome.BeforeSafeLocator, limits, budget, gapKinds, sideFailures, cancellationToken);
-            afterEvidence = BindAndReadPdbSide("after", after, pair.AfterSide!, pair.Outcome.AfterSafeLocator, limits, budget, gapKinds, sideFailures, cancellationToken);
+            // The paired assemblies were admitted under the compiled-input
+            // bounds, so their re-verification reads use that same limit; the
+            // rewrite-PDB file-size bound applies only to declared PDB inputs.
+            beforeEvidence = BindAndReadPdbSide("before", before, pair.BeforeSide!, pair.Outcome.BeforeSafeLocator, limits, compiledLimits.MaxFileSizeBytes, budget, gapKinds, sideFailures, cancellationToken);
+            afterEvidence = BindAndReadPdbSide("after", after, pair.AfterSide!, pair.Outcome.AfterSafeLocator, limits, compiledLimits.MaxFileSizeBytes, budget, gapKinds, sideFailures, cancellationToken);
         }
 
         var relationships = new List<IlRewritePdbRelationship>();
@@ -210,24 +223,37 @@ internal static class IlRewritePdbEvidenceExtractor
         var afterOnlyDebug = new List<string>();
         if (beforeEvidence is not null && afterEvidence is not null)
         {
-            foreach (var edge in pair.Edges.OrderBy(item => item.MethodIdentity, StringComparer.Ordinal))
+            try
             {
-                budget.Consume("PdbInputTotalWorkLimitExceeded");
-                var beforeBody = pair.BeforeSide!.Reader!.Bodies.Single(body => string.Equals(body.MethodIdentity, edge.MethodIdentity, StringComparison.Ordinal));
-                var afterBody = pair.AfterSide!.Reader!.Bodies.Single(body => string.Equals(body.MethodIdentity, edge.MethodIdentity, StringComparison.Ordinal));
-                var beforeMethod = beforeEvidence.MethodsByToken.GetValueOrDefault(beforeBody.MetadataToken);
-                var afterMethod = afterEvidence.MethodsByToken.GetValueOrDefault(afterBody.MetadataToken);
-                if (beforeMethod is null && afterMethod is null)
-                    continue;
-                if (beforeMethod is null || afterMethod is null)
+                foreach (var edge in pair.Edges.OrderBy(item => item.MethodIdentity, StringComparer.Ordinal))
                 {
-                    // The identity's debug information exists on exactly one
-                    // side: record it on the side that carries it.
-                    (afterMethod is null ? beforeOnlyDebug : afterOnlyDebug).Add(edge.MethodIdentity);
-                    continue;
-                }
+                    budget.Consume("PdbInputTotalWorkLimitExceeded");
+                    var beforeBody = pair.BeforeSide!.Reader!.Bodies.Single(body => string.Equals(body.MethodIdentity, edge.MethodIdentity, StringComparison.Ordinal));
+                    var afterBody = pair.AfterSide!.Reader!.Bodies.Single(body => string.Equals(body.MethodIdentity, edge.MethodIdentity, StringComparison.Ordinal));
+                    var beforeMethod = beforeEvidence.MethodsByToken.GetValueOrDefault(beforeBody.MetadataToken);
+                    var afterMethod = afterEvidence.MethodsByToken.GetValueOrDefault(afterBody.MetadataToken);
+                    if (beforeMethod is null && afterMethod is null)
+                        continue;
+                    if (beforeMethod is null || afterMethod is null)
+                    {
+                        // The identity's debug information exists on exactly one
+                        // side: record it on the side that carries it.
+                        (afterMethod is null ? beforeOnlyDebug : afterOnlyDebug).Add(edge.MethodIdentity);
+                        continue;
+                    }
 
-                relationships.Add(BuildRelationship(pair.PairId, edge, beforeBody, afterBody, beforeMethod, afterMethod));
+                    relationships.Add(BuildRelationship(pair.PairId, edge, beforeBody, afterBody, beforeMethod, afterMethod));
+                }
+            }
+            catch (PortablePdbExtractor.PdbInputException exception)
+            {
+                // Join exhaustion is atomic exactly like the parent rewrite
+                // lane: no partial relationships or debug deltas survive, and
+                // the pair keeps its bound PDB identities behind the limit gap.
+                relationships.Clear();
+                beforeOnlyDebug.Clear();
+                afterOnlyDebug.Clear();
+                gapKinds.Add(PdbGapKind(exception.Message));
             }
 
             if (beforeOnlyDebug.Count > 0)
@@ -278,7 +304,8 @@ internal static class IlRewritePdbEvidenceExtractor
             relationships.Count,
             relationships.Count(relationship => relationship.SequencePointOffsetsUnchanged),
             relationships.Count(relationship => !relationship.SequencePointOffsetsUnchanged),
-            beforeOnlyDebug.Count + afterOnlyDebug.Count);
+            beforeOnlyDebug.Count + afterOnlyDebug.Count,
+            budget.Consumed - consumedBeforePair);
         return new EvaluatedIlRewritePdbPair(outcome, relationships, deltas, sideFailures);
     }
 
@@ -293,6 +320,7 @@ internal static class IlRewritePdbEvidenceExtractor
         IlRewriteSideArtifact assemblySide,
         string assemblySafeLocator,
         IlRewritePdbLimits limits,
+        long assemblyMaximumBytes,
         PortablePdbExtractor.PdbWorkBudget budget,
         List<string> gapKinds,
         List<IlRewritePdbSideFailure> sideFailures,
@@ -307,7 +335,7 @@ internal static class IlRewritePdbEvidenceExtractor
             // use; only path and admitted digest were retained after the
             // rewrite join, and a changed file can never back PDB evidence.
             budget.Consume("PdbInputTotalWorkLimitExceeded");
-            var verifiedBytes = PortablePdbExtractor.ReadVerifiedCompiledBytes(assemblySide.FullPath, assemblySide.RawFileSha256!, limits.MaxFileSizeBytes, cancellationToken);
+            var verifiedBytes = PortablePdbExtractor.ReadVerifiedCompiledBytes(assemblySide.FullPath, assemblySide.RawFileSha256!, assemblyMaximumBytes, cancellationToken);
             if (verifiedBytes is null)
             {
                 Fail("IlRewritePdbAssemblyArtifactChangedOrUnreadable", "IlRewritePdbAssemblyArtifactChangedOrUnreadable", assemblySafeLocator);
@@ -685,8 +713,13 @@ internal static class IlRewritePdbEvidenceExtractor
     private static string AdmissionGapKind(string cause) => cause switch
     {
         // A native Windows PDB is a categorical unsupported shape on every
-        // host, not a generic unavailable side.
+        // host, not a generic unavailable side; limit and declaration causes
+        // keep their specific kinds so consumers can distinguish an
+        // adjustable limit or a bad declaration from an I/O failure.
         "WindowsPdbIndependentReaderUnavailable" or "WindowsPdbRequiresWindows" => "IlRewritePdbUnsupportedShape",
+        "IlRewritePdbSideDeclarationInvalid" => "IlRewritePdbSideDeclarationInvalid",
+        "IlRewritePdbSideTextLimitExceeded" => "IlRewritePdbTextLimitExceeded",
+        "IlRewritePdbSideFileSizeLimitExceeded" => "IlRewritePdbSideFileSizeLimitExceeded",
         _ => "IlRewritePdbSideUnavailable"
     };
 
