@@ -30,7 +30,7 @@ internal static class IlBodyEvidenceExtractor
     internal const string PolicyVersion = "explicit-il-body-evidence.v1";
     internal const string IlLocationKind = "managed-il-v1";
     internal const string BodyLimitation = "IL body evidence proves only that the admitted assembly contains this exact bounded operand-aware instruction stream at this module-local method row; it does not prove execution, dispatch, reachability, behavior, source ownership, semantic equivalence, or rewrite preservation.";
-    internal const string CallLimitation = "A call site records the static member reference encoded in this module's IL; it does not prove execution, virtual dispatch resolution, target presence, cross-assembly resolution, call-graph reachability, or rewrite equivalence.";
+    internal const string CallLimitation = "A call site records the static member reference or calli standalone signature encoded in this module's IL; a calli signature does not identify a target member. No call site proves execution, virtual dispatch resolution, target presence, cross-assembly resolution, call-graph reachability, or rewrite equivalence.";
     internal const string GapLimitation = "This categorical gap reduces only the explicitly requested IL body/call lane; it does not prove absence and never alters source, compiled-metadata, or PDB evidence.";
 
     private static readonly object OpcodeTableGate = new();
@@ -489,8 +489,31 @@ internal static class IlBodyEvidenceExtractor
                         typeIdentity));
                 }
                 return $"t:{typeIdentity}";
-            case OperandType.InlineField or OperandType.InlineTok or OperandType.InlineSig:
-                return $"tok:{RawCecilToken(instruction.Operand)}";
+            case OperandType.InlineField:
+                if (instruction.Operand is not FieldReference field)
+                    throw new IlEvidenceException("IlOperandEncodingUnsupported");
+                return BoundedOperand("field", RawCecilToken(field), CecilFieldIdentity(field), limits);
+            case OperandType.InlineTok:
+                return instruction.Operand switch
+                {
+                    Mono.Cecil.TypeReference type => BoundedOperand("type", RawCecilToken(type), CecilTypeOperandIdentity(type), limits),
+                    FieldReference tokenField => BoundedOperand("field", RawCecilToken(tokenField), CecilFieldIdentity(tokenField), limits),
+                    MethodReference tokenMethod => BoundedOperand("method", RawCecilToken(tokenMethod), CecilMethodTarget(tokenMethod, selfAssemblyIdentity, limits).Identity, limits),
+                    _ => throw new IlEvidenceException("IlOperandEncodingUnsupported")
+                };
+            case OperandType.InlineSig:
+                if (instruction.Operand is not CallSite callSite)
+                    throw new IlEvidenceException("IlOperandEncodingUnsupported");
+                var cecilSignature = CanonicalCallSite(
+                    ((int)callSite.CallingConvention & 0x0f), callSite.HasThis, callSite.ExplicitThis,
+                    ManagedMetadataExtractor.FormatType(callSite.ReturnType),
+                    callSite.Parameters.Select(parameter => ManagedMetadataExtractor.FormatType(parameter.ParameterType)));
+                if (cecilSignature.Length > limits.MaxTextLength)
+                    throw new IlEvidenceException("IlTextLimitExceeded");
+                if (instruction.OpCode.Name == "calli")
+                    calls.Add(new IlCallObservation(instruction.Offset, "calli", "standalonesig",
+                        RawCecilToken(callSite), cecilSignature));
+                return $"sig:{RawCecilToken(callSite)}:{cecilSignature}";
             default:
                 throw new IlEvidenceException("IlOperandEncodingUnsupported");
         }
@@ -531,7 +554,10 @@ internal static class IlBodyEvidenceExtractor
             reference.GenericParameters.Count,
             callingConvention,
             reference.HasThis,
-            reference.ExplicitThis);
+            reference.ExplicitThis)
+            + (callingConvention == "vararg"
+                ? $"|required:{reference.Parameters.TakeWhile(parameter => parameter.ParameterType is not SentinelType).Count().ToString(CultureInfo.InvariantCulture)}"
+                : "");
         return BoundedTarget(
             "memberref",
             ManagedMetadataExtractor.Token(reference.MetadataToken.ToUInt32()),
@@ -587,6 +613,16 @@ internal static class IlBodyEvidenceExtractor
         IMetadataTokenProvider provider => ManagedMetadataExtractor.Token(provider.MetadataToken.ToUInt32()),
         _ => throw new IlEvidenceException("IlOperandEncodingUnsupported")
     };
+
+    private static string CecilFieldIdentity(FieldReference field) =>
+        $"{(field is Mono.Cecil.FieldDefinition ? "fielddef" : "memberref")}|type:{CecilTypeOperandIdentity(field.DeclaringType)}|member:{ManagedMetadataExtractor.EncodeIdentityComponent(field.Name)}|{ManagedMetadataExtractor.FormatType(field.FieldType)}";
+
+    private static string BoundedOperand(string kind, string token, string identity, IlBodyLimits limits)
+    {
+        if (identity.Length > limits.MaxTextLength)
+            throw new IlEvidenceException("IlTextLimitExceeded");
+        return $"tok:{kind}:{token}:{identity}";
+    }
 
     private static string CecilVariableIndex(object operand) => operand switch
     {
@@ -893,12 +929,127 @@ internal static class IlBodyEvidenceExtractor
                         typeIdentity));
                 }
                 return $"t:{typeIdentity}";
-            case System.Reflection.Emit.OperandType.InlineField or System.Reflection.Emit.OperandType.InlineTok or System.Reflection.Emit.OperandType.InlineSig:
+            case System.Reflection.Emit.OperandType.InlineField or System.Reflection.Emit.OperandType.InlineTok:
                 var rawToken = ReadInt32(il, ref position);
-                return $"tok:0x{rawToken:x8}";
+                ValidateMetadataOperand(reader, provider, rawToken, opcode.OperandType);
+                return SrmMetadataOperand(reader, provider, rawToken, opcode.OperandType, assemblyIdentity, limits);
+            case System.Reflection.Emit.OperandType.InlineSig:
+                var signatureToken = ReadInt32(il, ref position);
+                ValidateMetadataOperand(reader, provider, signatureToken, opcode.OperandType);
+                var standalone = reader.GetStandaloneSignature((StandaloneSignatureHandle)MetadataTokens.EntityHandle(signatureToken));
+                var decodedSignature = standalone.DecodeMethodSignature(provider, null);
+                if (decodedSignature.GenericParameterCount != 0)
+                    throw new IlEvidenceException("IlOperandEncodingUnsupported");
+                var srmSignature = CanonicalCallSite(
+                    (int)decodedSignature.Header.CallingConvention,
+                    decodedSignature.Header.IsInstance,
+                    (decodedSignature.Header.RawValue & 0x40) != 0,
+                    decodedSignature.ReturnType,
+                    decodedSignature.ParameterTypes);
+                if (srmSignature.Length > limits.MaxTextLength)
+                    throw new IlEvidenceException("IlTextLimitExceeded");
+                if (opcode.Name!.ToString() == "calli")
+                    calls.Add(new IlCallObservation(offset, "calli", "standalonesig",
+                        ManagedMetadataExtractor.Token(unchecked((uint)signatureToken)), srmSignature));
+                return $"sig:0x{signatureToken:x8}:{srmSignature}";
             default:
                 throw new IlEvidenceException("IlOperandEncodingUnsupported");
         }
+    }
+
+    private static string CanonicalCallSite(int convention, bool hasThis, bool explicitThis,
+        string returnType, IEnumerable<string> parameters) =>
+        $"callconv:{convention.ToString(CultureInfo.InvariantCulture)}|hasThis:{hasThis.ToString().ToLowerInvariant()}|explicitThis:{explicitThis.ToString().ToLowerInvariant()}|({string.Join(",", parameters)})->{returnType}";
+
+    private static string SrmMetadataOperand(MetadataReader reader,
+        ManagedMetadataExtractor.MetadataTypeProvider provider, int token,
+        System.Reflection.Emit.OperandType operandType, string assemblyIdentity, IlBodyLimits limits)
+    {
+        var handle = MetadataTokens.EntityHandle(token);
+        var raw = ManagedMetadataExtractor.Token(unchecked((uint)token));
+        var isField = handle.Kind == HandleKind.FieldDefinition
+            || handle.Kind == HandleKind.MemberReference
+                && reader.GetMemberReference((MemberReferenceHandle)handle).GetKind() == MemberReferenceKind.Field;
+        if (operandType == System.Reflection.Emit.OperandType.InlineField || isField)
+            return BoundedOperand("field", raw, SrmFieldIdentity(reader, provider, handle), limits);
+        if (handle.Kind is HandleKind.TypeDefinition or HandleKind.TypeReference or HandleKind.TypeSpecification)
+            return BoundedOperand("type", raw, provider.GetTypeFromEntityHandle(handle), limits);
+        if (handle.Kind is HandleKind.MethodDefinition or HandleKind.MethodSpecification or HandleKind.MemberReference)
+            return BoundedOperand("method", raw, SrmMethodTarget(reader, provider, token, assemblyIdentity, limits).Identity, limits);
+        throw new IlEvidenceException("IlOperandEncodingUnsupported");
+    }
+
+    private static string SrmFieldIdentity(MetadataReader reader,
+        ManagedMetadataExtractor.MetadataTypeProvider provider, EntityHandle handle)
+    {
+        if (handle.Kind == HandleKind.MemberReference)
+        {
+            var member = reader.GetMemberReference((MemberReferenceHandle)handle);
+            if (member.Parent.Kind is not (HandleKind.TypeDefinition or HandleKind.TypeReference or HandleKind.TypeSpecification))
+                throw new IlEvidenceException("IlOperandEncodingUnsupported");
+            return $"memberref|type:{provider.GetTypeFromEntityHandle(member.Parent)}|member:{ManagedMetadataExtractor.EncodeIdentityComponent(reader.GetString(member.Name))}|{member.DecodeFieldSignature(provider, null)}";
+        }
+        if (handle.Kind == HandleKind.FieldDefinition)
+        {
+            var definitionHandle = (FieldDefinitionHandle)handle;
+            var field = reader.GetFieldDefinition(definitionHandle);
+            var typeHandle = field.GetDeclaringType();
+            return $"fielddef|type:{provider.GetTypeFromEntityHandle(typeHandle)}|member:{ManagedMetadataExtractor.EncodeIdentityComponent(reader.GetString(field.Name))}|{field.DecodeSignature(provider, null)}";
+        }
+        throw new IlEvidenceException("IlOperandEncodingUnsupported");
+    }
+
+    // Raw token values remain part of the body digest, but a valid row and a
+    // decodable signature are required before that digest is admitted. This
+    // check runs in the independent SRM pass, before Cecil sees the input.
+    private static void ValidateMetadataOperand(
+        MetadataReader reader,
+        ManagedMetadataExtractor.MetadataTypeProvider provider,
+        int token,
+        System.Reflection.Emit.OperandType operandType)
+    {
+        EntityHandle handle;
+        try
+        {
+            handle = MetadataTokens.EntityHandle(token);
+            switch (handle.Kind)
+            {
+                case HandleKind.FieldDefinition when operandType != System.Reflection.Emit.OperandType.InlineSig:
+                    _ = reader.GetFieldDefinition((FieldDefinitionHandle)handle).DecodeSignature(provider, null);
+                    return;
+                case HandleKind.MemberReference when operandType != System.Reflection.Emit.OperandType.InlineSig:
+                    var member = reader.GetMemberReference((MemberReferenceHandle)handle);
+                    if (member.GetKind() == MemberReferenceKind.Field)
+                    {
+                        _ = member.DecodeFieldSignature(provider, null);
+                        return;
+                    }
+                    if (operandType == System.Reflection.Emit.OperandType.InlineField)
+                        break;
+                    _ = member.DecodeMethodSignature(provider, null);
+                    return;
+                case HandleKind.TypeDefinition or HandleKind.TypeReference or HandleKind.TypeSpecification
+                    when operandType == System.Reflection.Emit.OperandType.InlineTok:
+                    _ = provider.GetTypeFromEntityHandle(handle);
+                    return;
+                case HandleKind.MethodDefinition when operandType == System.Reflection.Emit.OperandType.InlineTok:
+                    _ = reader.GetMethodDefinition((MethodDefinitionHandle)handle).DecodeSignature(provider, null);
+                    return;
+                case HandleKind.MethodSpecification when operandType == System.Reflection.Emit.OperandType.InlineTok:
+                    var specification = reader.GetMethodSpecification((MethodSpecificationHandle)handle);
+                    _ = specification.DecodeSignature(provider, null);
+                    return;
+                case HandleKind.StandaloneSignature when operandType == System.Reflection.Emit.OperandType.InlineSig:
+                    _ = reader.GetStandaloneSignature((StandaloneSignatureHandle)handle).DecodeMethodSignature(provider, null);
+                    return;
+            }
+        }
+        catch (Exception exception) when (exception is ArgumentException or BadImageFormatException or InvalidOperationException
+            or IndexOutOfRangeException or OverflowException)
+        {
+            throw new IlEvidenceException("MalformedIlBody");
+        }
+        throw new IlEvidenceException("IlOperandEncodingUnsupported");
     }
 
     private static (string Kind, string Token, string Identity) SrmMethodTarget(
@@ -941,9 +1092,16 @@ internal static class IlBodyEvidenceExtractor
                     limits);
             case HandleKind.MemberReference:
                 var reference = reader.GetMemberReference((MemberReferenceHandle)handle);
-                if (reference.Parent.Kind is not (HandleKind.TypeReference or HandleKind.TypeDefinition or HandleKind.TypeSpecification))
+                // ECMA-335 also permits a MethodDef parent for a vararg
+                // MemberRef carrying optional call-site arguments. Resolve
+                // only the declaring type encoded by that local MethodDef;
+                // never infer a target from the display name.
+                if (reference.Parent.Kind is not (HandleKind.TypeReference or HandleKind.TypeDefinition
+                    or HandleKind.TypeSpecification or HandleKind.MethodDefinition))
                     throw new IlEvidenceException("IlCallTargetIdentityUnavailable");
-                var parent = provider.GetTypeFromEntityHandle(reference.Parent);
+                var parent = reference.Parent.Kind == HandleKind.MethodDefinition
+                    ? provider.GetTypeFromEntityHandle(reader.GetMethodDefinition((MethodDefinitionHandle)reference.Parent).GetDeclaringType())
+                    : provider.GetTypeFromEntityHandle(reference.Parent);
                 var referenceDecoded = reference.DecodeMethodSignature(provider, genericContext: null);
                 var referenceSignature = ManagedMetadataExtractor.MethodSignature(
                     referenceDecoded.ReturnType,
@@ -951,7 +1109,10 @@ internal static class IlBodyEvidenceExtractor
                     referenceDecoded.GenericParameterCount,
                     referenceDecoded.Header.CallingConvention == SignatureCallingConvention.VarArgs ? "vararg" : "default",
                     referenceDecoded.Header.IsInstance,
-                    (referenceDecoded.Header.RawValue & 0x40) != 0);
+                    (referenceDecoded.Header.RawValue & 0x40) != 0)
+                    + (referenceDecoded.Header.CallingConvention == SignatureCallingConvention.VarArgs
+                        ? $"|required:{referenceDecoded.RequiredParameterCount.ToString(CultureInfo.InvariantCulture)}"
+                        : "");
                 return SrmBoundedTarget(
                     "memberref",
                     ManagedMetadataExtractor.Token(unchecked((uint)token)),

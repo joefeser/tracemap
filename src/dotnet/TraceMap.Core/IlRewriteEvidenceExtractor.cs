@@ -18,7 +18,7 @@ internal static class IlRewriteEvidenceExtractor
     internal const string PolicyVersion = "explicit-il-rewrite-evidence.v1";
     internal const string RewriteLocationKind = "managed-il-rewrite-v1";
     internal const string EdgeLimitation = "A rewrite edge proves only that the same complete method identity exists exactly once on each admitted side and that its canonical operand-aware body identity and module-local token are exactly as recorded; it does not prove semantic equivalence, behavior preservation, compilation provenance, source ownership, safe applicability, or that any other member of the pair survived rewriting.";
-    internal const string RetargetLimitation = "A call-site retarget records the module-local reference tokens and complete member-reference identities of one ordinal-aligned call-family instruction on both sides; tokens are locations within their own module, never stable cross-build identities, and the retarget proves no dispatch, execution, or equivalence claim.";
+    internal const string RetargetLimitation = "A call-site retarget records the module-local reference tokens and complete member-reference or calli standalone-signature identities of one ordinal-aligned call-family instruction on both sides; a calli signature does not identify a target member. Tokens are locations within their own module, never stable cross-build identities, and the retarget proves no dispatch, execution, or equivalence claim.";
     internal const string GapLimitation = "This categorical gap reduces only the explicitly requested before/after rewrite lane; it does not prove rewrite or membership absence and never alters source, compiled-metadata, PDB, or IL body/call evidence.";
     internal const int MembershipRetainedIdentityCount = 8;
 

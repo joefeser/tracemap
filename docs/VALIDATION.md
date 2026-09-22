@@ -3106,3 +3106,48 @@ constant, string, signature, generic, custom-modifier, function-pointer/
 duplicate assembly identities, insertion/removal edges, embedded portable
 PDBs, the extended mutation matrix, and ILAsm parity) stays open, and Task
 11's private Windows/`dotnetperf` lane remains separate.
+
+### Metadata operands and member shapes (Task 10 sixth slice)
+
+The public compiler fixture `CompiledEvidence.CSharp.MemberShapes` plus bounded
+Mono.Cecil mutations exercises case IDs `CS-ILRW-MEMBER-TOKEN-021` through
+`CS-ILRW-SAME-TOKEN-SIGNATURE-031` in `fixture-cases.json` schema v8. A separate
+compiler variant `CompiledEvidence.CSharp.VarArgCall` pins
+`CS-ILRW-VARARG-CALL-028`. No fixture loads or executes an after
+assembly. The scanner reports static, exact assembly/module and full
+method-signature relationships; it does not attribute the rewrite.
+
+`InlineField`, `InlineTok`, and `InlineSig` require the independent
+System.Reflection.Metadata reader to validate the referenced row kind and
+decode its signature before the Cecil body is admitted. Field and general
+token operands bind the full decoded type/member identity as well as the
+module-local row number; a field signature change at the same row changes
+the body digest. `calli` standalone
+signatures preserve calling-convention number, `hasThis`, `explicitThis`,
+return type, and parameter types in the canonical body operand and call-site
+retarget fact, cross-checked by both readers. The compiler fixture supplies MethodSpec, TypeSpec, generic
+type/method, function pointer, property/event, accessor, and vararg
+declaration shapes. Same-opcode field, InlineTok member, TypeSpec,
+MethodSpec, and `calli` convention changes are paired with exact unchanged
+method identities. A compiler-produced vararg MemberRef call with a
+MethodDef parent retains its required-parameter boundary in its full static
+signature after both readers agree. Corrupted field/signature token row IDs
+withhold the entire pair as `IlRewriteMalformedInput`; a reserved `calli`
+calling convention withholds the pair as a malformed signature gap.
+
+Required and optional custom modifiers alter complete method signatures,
+so the pair reports explicit before-only and after-only memberships. The
+same relationship represents an inserted and removed MethodDef in one
+pair. Property and event metadata accessor handles are independently checked
+with System.Reflection.Metadata on both sides of getter and adder body
+mutations. These are declaration and body observations, not event delivery
+or runtime behavior claims.
+
+The focused suite is
+`dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj
+--filter FullyQualifiedName~IlRewriteMemberShapeEvidenceExtractorTests`.
+Ordinary `local-distribution-validation.yml` runs it on Windows, Ubuntu,
+and macOS using the SDK compiler and Mono.Cecil only; ILAsm/ILDAsm remains
+outside ordinary CI. Each emitted rewrite fact retains the exact generator
+SHA-256 and privacy-projected bounded-input SHA-256, with rule ID, tier,
+limitations, and a corresponding stable public fixture case ID.

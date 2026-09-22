@@ -650,7 +650,7 @@ public sealed class IlBodyEvidenceExtractorTests
     {
         using var document = JsonDocument.Parse(File.ReadAllText(Path.Combine(
             FindRepoRoot(), "samples", "compiled-dotnet-evidence", "fixture-cases.json")));
-        Assert.Equal("compiled-dotnet-fixture-cases.v7", document.RootElement.GetProperty("schemaVersion").GetString());
+        Assert.Equal("compiled-dotnet-fixture-cases.v8", document.RootElement.GetProperty("schemaVersion").GetString());
         var cases = document.RootElement.GetProperty("ilCases").EnumerateArray().ToArray();
         Assert.True(cases.Length >= 11);
         Assert.Equal(cases.Length, cases.Select(item => item.GetProperty("id").GetString()).Distinct(StringComparer.Ordinal).Count());

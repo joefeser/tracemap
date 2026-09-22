@@ -1,6 +1,6 @@
 # Compiled .NET Evidence Foundation Implementation State
 
-Status: Tasks 1-9 are merged into `dev`; PR #774 completed its authorized exact-head ACK review and was merged into `dev` as `ed2fdf1c028b034a9a6013908e8f5b8c29d900a7` on 2026-09-21. The first Task 10 slice (bounded operand-aware IL body/call evidence, PR #775) is also merged into `dev` as `46b2baa125bed00ee9ac1964ce50febd55c3e68e` on 2026-09-21, including the owner-requested P1/P2 follow-up `2d20b4a3` (prefix-operand signed/unsigned distinction and exact UTF-16 literal hashing). PR #779 (slice 4, bounded rewrite PDB identity evidence) merged into `dev` as `7be1f51c0360a7f80e3b7304aee9677fe3c92ddc` on 2026-09-22. The remaining Task 10 public rewrite suite from #766 and Task 11 remain open.
+Status: Tasks 1-9 are merged into `dev`; PR #774 completed its authorized exact-head ACK review and was merged into `dev` as `ed2fdf1c028b034a9a6013908e8f5b8c29d900a7` on 2026-09-21. The first Task 10 slice (bounded operand-aware IL body/call evidence, PR #775) is also merged into `dev` as `46b2baa125bed00ee9ac1964ce50febd55c3e68e` on 2026-09-21, including the owner-requested P1/P2 follow-up `2d20b4a3` (prefix-operand signed/unsigned distinction and exact UTF-16 literal hashing). PR #779 (slice 4, bounded rewrite PDB identity evidence) merged into `dev` as `7be1f51c0360a7f80e3b7304aee9677fe3c92ddc` on 2026-09-22. PR #780 (slice 5, public control-flow and exception-handling rewrite suite) merged into `dev` as `2766de6933d4d60bb632389eff24bc4bfc2313f0` on 2026-09-22; verified against current `origin/dev` before starting the next slice. The remaining Task 10 public rewrite suite from #766 and Task 11 remain open.
 
 Branch: `codex/il-body-call-evidence`
 
@@ -1141,3 +1141,67 @@ windows/ubuntu/macos package-smoke matrix, and the five-adapter combine,
 all green on the final head. Per the slice protocol the worker stopped
 without merging, force-pushing, or retagging bots; the merge decision
 belongs to the owner. This docs commit sits on top of the code head.
+
+## Task 10 sixth slice: public metadata operands and member shapes
+
+Branch: `codex/task10-ecma335-rewrite-slice`, isolated from `origin/dev` at
+`2766de6933d4d60bb632389eff24bc4bfc2313f0` after verifying PR #780
+merged as that exact commit. Tracking #766. The worktree is separate from
+the original checkout's unrelated TypeScript edits. Before implementation,
+the IL body, rewrite, rewrite-PDB, and control-flow suites were inspected:
+existing constant, UTF-16 string, direct call-token, branch/switch/leave,
+exception-handler, max-stack, and stack-sensitive cases were retained
+without new duplicates.
+
+This slice adds deterministic public C# `MemberShapes` and `VarArgCall`
+compiler fixtures plus bounded Mono.Cecil rewrites, catalog schema v8 and
+case IDs 021-031. It covers InlineField and InlineTok member operands,
+TypeSpec, MethodSpec, constructed generic types and methods, `calli`
+StandAloneSig calling-convention changes, a compiler-produced vararg
+MemberRef call with MethodDef parent and required-parameter boundary,
+required and optional custom modifiers, property/event accessor metadata
+and rewritten bodies, and explicit before-only/after-only method membership.
+The same opcode stream can now differ by field, type, generic method, or
+calli signature operand; even an unchanged field row number with a changed
+full field signature changes the body digest. Hostile field/signature token row IDs and a
+reserved calli signature convention withhold the whole pair as malformed.
+
+`IlBodyEvidenceExtractor` still reads SRM before Cecil. It now validates
+InlineField/InlineTok/InlineSig row kind and decodable signature in SRM,
+binds full field/type/member operand identities alongside local row numbers,
+cross-checks calli calling convention, this flags, return and parameter
+types against Cecil, exposes the static calli signature in call-site and
+retarget facts, and retains the required-parameter count for vararg
+MemberRef call identities. The scanner does not rewrite, load, or execute
+the assemblies and makes no equivalence or rewrite-authorship claim. Every
+positive and gap fact retains the rule ID, tier, limitation, extractor
+version, exact generator SHA-256, and privacy-projected bounded-input
+SHA-256. The public catalog binds each stable fixture ID to its expected
+CLR shape, outcome, rule, tier, limitations, and digest property names.
+
+Validation on the local macOS host: focused suite 14/14 and combined
+compiled evidence suite 235/235, and the final serial full solution suite
+2,204/2,204, all with zero failures or skips. A concurrent full run had one
+unrelated docs-export test failure (2,203/2,204); that test passed alone and
+the serial full rerun passed. Cross-platform CI results will be read from the
+PR checks. A zero-warning, zero-error `dotnet build
+src/dotnet/TraceMap.sln --no-restore -warnaserror` passed. Two repeat CLI
+scans of the compiler fixture produced byte-identical
+`facts.ndjson` and `report.md`, matching manifests apart from `scannedAt`,
+494 facts with 19 rewrite rows and zero rewrite gaps. The exact generator
+SHA-256 was `29e142e3f84aec1c4eda370310a6e6f70c4ecd35d3d960e25be412f50f8cd605`
+and the privacy-projected bounded-input SHA-256 was
+`89261c462248d788283eacccee4c05fce2b8d4221461dd79f60e580caa70d855`
+for that declared pair. Both artifact trees
+passed `scripts/validate-adapter-artifacts.py`; no local absolute path
+appeared in facts, report, or manifest. The private-path guard, Kiro
+self-test, JSON parse, and `git diff --check` passed. The
+`local-distribution-validation.yml` matrix now runs this focused suite on
+Linux, macOS, and Windows with no ILAsm/ILDAsm dependency.
+
+Remaining #766 coverage explicitly deferred to the following slice:
+netmodules, type forwarding, duplicate assembly identities, embedded
+portable PDBs, pinned ILAsm/ILDAsm parity, and the extended Windows matrix.
+Task 10 remains unchecked: #766 also asks for a complete extended public
+suite and safe runtime/ILAsm corroboration where available; the current
+static evidence does not claim those acceptance items.
