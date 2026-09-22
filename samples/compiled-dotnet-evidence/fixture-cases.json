@@ -1169,6 +1169,96 @@
       "boundedInputSha256Property": "ilRewriteBoundedInputSha256",
       "limitations": "static calli signature boundary only, not target, execution, or equivalence",
       "nonClaims": ["execution", "runtime-equivalence", "rewrite-authorship"]
+    },
+    {
+      "id": "ILRW-TOPO-001",
+      "language": "ecma335",
+      "shape": "a metadata-bearing netmodule cannot supply an assembly-scoped rewrite identity",
+      "expectedClrShape": "Module metadata without an Assembly row",
+      "expectedIdentity": "gap:IlRewriteUnsupportedShape:ManagedNetmoduleInputUnsupported",
+      "expectedOutcome": "unsupported",
+      "expectedRuleIds": ["dotnet.compiled.il-rewrite-gap.v1"],
+      "expectedTier": "Tier4Unknown",
+      "expectedGaps": ["IlRewriteUnsupportedShape"],
+      "generatorSha256Property": "ilRewriteGeneratorSha256",
+      "boundedInputSha256Property": "ilRewriteBoundedInputSha256",
+      "limitations": "netmodule lacks an independently admitted assembly identity; no pair edge is emitted",
+      "nonClaims": ["module-linking", "rewrite-identity", "clean-absence"]
+    },
+    {
+      "id": "ILRW-TOPO-002",
+      "language": "ecma335",
+      "shape": "a manifest with a metadata-bearing AssemblyFile is rejected before a partial single-module rewrite claim",
+      "expectedClrShape": "Assembly manifest with secondary metadata module",
+      "expectedIdentity": "gap:IlRewriteUnsupportedShape:MultiModuleManagedAssemblyUnsupported",
+      "expectedOutcome": "unsupported",
+      "expectedRuleIds": ["dotnet.compiled.il-rewrite-gap.v1"],
+      "expectedTier": "Tier4Unknown",
+      "expectedGaps": ["IlRewriteUnsupportedShape"],
+      "generatorSha256Property": "ilRewriteGeneratorSha256",
+      "boundedInputSha256Property": "ilRewriteBoundedInputSha256",
+      "limitations": "secondary module is not resolved, loaded, or joined; no partial pair edge is emitted",
+      "nonClaims": ["secondary-module-coverage", "rewrite-identity", "clean-absence"]
+    },
+    {
+      "id": "ILRW-TOPO-003",
+      "language": "ecma335",
+      "shape": "an ExportedType forwarder is rejected before a local-only type inventory can look complete",
+      "expectedClrShape": "ExportedType row with ECMA-335 forwarder flag",
+      "expectedIdentity": "gap:IlRewriteUnsupportedShape:TypeForwardingManagedAssemblyUnsupported",
+      "expectedOutcome": "unsupported",
+      "expectedRuleIds": ["dotnet.compiled.il-rewrite-gap.v1"],
+      "expectedTier": "Tier4Unknown",
+      "expectedGaps": ["IlRewriteUnsupportedShape"],
+      "generatorSha256Property": "ilRewriteGeneratorSha256",
+      "boundedInputSha256Property": "ilRewriteBoundedInputSha256",
+      "limitations": "forwarded target assembly is not resolved; no local rewrite edge is inferred",
+      "nonClaims": ["forwarded-target-identity", "rewrite-identity", "clean-absence"]
+    },
+    {
+      "id": "ILRW-TOPO-004",
+      "language": "ecma335",
+      "shape": "duplicate complete method identities within a declared side make the pair ambiguous",
+      "expectedClrShape": "two MethodDef rows with the same complete assembly/module/type/signature identity",
+      "expectedIdentity": "gap:IlRewriteIdentityAmbiguous",
+      "expectedOutcome": "disputed",
+      "expectedRuleIds": ["dotnet.compiled.il-rewrite-gap.v1"],
+      "expectedTier": "Tier4Unknown",
+      "expectedGaps": ["IlRewriteIdentityAmbiguous"],
+      "generatorSha256Property": "ilRewriteGeneratorSha256",
+      "boundedInputSha256Property": "ilRewriteBoundedInputSha256",
+      "limitations": "multiple exact candidates withhold the pair; no first-candidate selection",
+      "nonClaims": ["guessed-join", "rewrite-identity", "clean-absence"]
+    },
+    {
+      "id": "ILRW-TOPO-005",
+      "language": "ecma335",
+      "shape": "two declared pair ordinals may share an assembly identity without cross-pair joins",
+      "expectedClrShape": "same complete assembly/module/member identity in two explicitly separate pair ordinals",
+      "expectedIdentity": "one exact unchanged member edge per admitted pair ordinal",
+      "expectedOutcome": "admitted",
+      "expectedRuleIds": ["dotnet.compiled.il-rewrite.v1"],
+      "expectedTier": "Tier2Structural",
+      "expectedGaps": [],
+      "generatorSha256Property": "ilRewriteGeneratorSha256",
+      "boundedInputSha256Property": "ilRewriteBoundedInputSha256",
+      "limitations": "pair ordinal isolates identical assembly identities; it does not resolve runtime load context",
+      "nonClaims": ["cross-pair-join", "runtime-binding", "rewrite-authorship"]
+    },
+    {
+      "id": "ILRW-TOPO-006",
+      "language": "ecma335",
+      "shape": "many non-forwarded ExportedType rows exhaust the rewrite metadata work budget before traversal",
+      "expectedClrShape": "manifest with 40 non-forwarded exported types",
+      "expectedIdentity": "gap:IlRewriteTotalWorkLimitExceeded:ManagedInputTotalWorkLimitExceeded",
+      "expectedOutcome": "limit-exhausted",
+      "expectedRuleIds": ["dotnet.compiled.il-rewrite-gap.v1"],
+      "expectedTier": "Tier4Unknown",
+      "expectedGaps": ["IlRewriteTotalWorkLimitExceeded"],
+      "generatorSha256Property": "ilRewriteGeneratorSha256",
+      "boundedInputSha256Property": "ilRewriteBoundedInputSha256",
+      "limitations": "exported-type row traversal is charged before admission and cannot produce a partial edge",
+      "nonClaims": ["complete-topology", "partial-edge-emission", "clean-absence"]
     }
   ],
   "ilRewritePdbCases": [
@@ -1381,16 +1471,56 @@
     {
       "id": "ILRWPDB-EMBEDDED-PORTABLE-013",
       "language": "csharp",
-      "status": "deferred",
-      "shape": "an assembly with an embedded portable PDB (no separate declared PDB file) and its rewrite pair",
-      "expectedIdentity": "deferred",
-      "expectedRuleIds": [],
-      "expectedTier": "Tier4Unknown",
+      "shape": "an assembly with an embedded portable PDB is declared as its own PDB artifact and paired with a rewrite side",
+      "expectedIdentity": "exact embedded portable content identity and method/sequence-point identity bound to the declared assembly bytes",
+      "expectedRuleIds": ["dotnet.compiled.pdb-input.v1", "dotnet.compiled.pdb-identity.v1", "dotnet.compiled.sequence-point.v1", "dotnet.compiled.il-rewrite-pdb.v1"],
+      "expectedTier": "Tier2Structural",
       "expectedGaps": [],
+      "generatorSha256Property": "ilRewritePdbGeneratorSha256",
+      "boundedInputSha256Property": "ilRewritePdbBoundedInputSha256",
+      "limitations": "embedded debug identity and offset comparison do not prove debugging behavior or runtime equivalence",
       "nonClaims": [
-        "embedded-pdb-splitting"
-      ],
-      "prerequisites": "This slice admits only separately declared portable PDB files; embedded portable PDB extraction and re-embedding across a Cecil rewrite needs a separately documented extraction contract before any identity claim."
+        "debugging-behavior-preservation", "runtime-equivalence", "rewrite-authorship"
+      ]
+    },
+    {
+      "id": "ILRWPDB-EMBEDDED-MISSING-014",
+      "language": "csharp",
+      "shape": "a declared assembly PDB artifact with no embedded portable debug entry fails closed",
+      "expectedIdentity": "gap:IlRewritePdbSideUnavailable:EmbeddedPortablePdbMissing",
+      "expectedRuleIds": ["dotnet.compiled.il-rewrite-pdb-gap.v1"],
+      "expectedTier": "Tier4Unknown",
+      "expectedGaps": ["IlRewritePdbSideUnavailable"],
+      "generatorSha256Property": "ilRewritePdbGeneratorSha256",
+      "boundedInputSha256Property": "ilRewritePdbBoundedInputSha256",
+      "limitations": "missing embedded debug evidence withholds the PDB relationship without changing the parent IL rewrite result",
+      "nonClaims": ["debug-information-absence", "partial-edge-emission"]
+    },
+    {
+      "id": "ILRWPDB-EMBEDDED-MISMATCH-015",
+      "language": "csharp",
+      "shape": "declared embedded PDB assembly artifact differs from its paired admitted assembly bytes",
+      "expectedIdentity": "gap:IlRewritePdbAssemblyBindingMismatch:EmbeddedPdbAssemblyArtifactMismatch",
+      "expectedRuleIds": ["dotnet.compiled.il-rewrite-pdb-gap.v1"],
+      "expectedTier": "Tier4Unknown",
+      "expectedGaps": ["IlRewritePdbAssemblyBindingMismatch"],
+      "generatorSha256Property": "ilRewritePdbGeneratorSha256",
+      "boundedInputSha256Property": "ilRewritePdbBoundedInputSha256",
+      "limitations": "byte mismatch withholds the PDB relationship; name or matching content identity alone cannot rebind it",
+      "nonClaims": ["cross-side-binding", "partial-edge-emission", "rewrite-authorship"]
+    },
+    {
+      "id": "ILRWPDB-EMBEDDED-TEXT-LIMIT-016",
+      "language": "csharp",
+      "shape": "an embedded-PDB carrier whose safe locator exceeds the declared rewrite-PDB text limit fails before admission",
+      "expectedIdentity": "gap:IlRewritePdbTextLimitExceeded",
+      "expectedRuleIds": ["dotnet.compiled.il-rewrite-pdb-gap.v1"],
+      "expectedTier": "Tier4Unknown",
+      "expectedGaps": ["IlRewritePdbTextLimitExceeded"],
+      "generatorSha256Property": "ilRewritePdbGeneratorSha256",
+      "boundedInputSha256Property": "ilRewritePdbBoundedInputSha256",
+      "limitations": "the rewrite-PDB locator bound applies independently of the compiled-input text bound",
+      "nonClaims": ["partial-edge-emission", "unbounded-locator", "rewrite-authorship"]
     }
   ]
 }

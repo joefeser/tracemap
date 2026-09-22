@@ -182,6 +182,9 @@ public sealed class ScanExecutionReceiptTests
         using var schema = JsonDocument.Parse(File.ReadAllText(Path.Combine(root, "docs", "contracts", "scan-execution-receipt.v1.schema.json")));
         Assert.Equal(ScanReceiptSchema.Version, schema.RootElement.GetProperty("properties").GetProperty("schemaVersion").GetProperty("const").GetString());
         Assert.Equal(RuleIds.ScannerStageReceipt, schema.RootElement.GetProperty("properties").GetProperty("ruleId").GetProperty("const").GetString());
+        Assert.Contains(schema.RootElement.GetProperty("$defs").GetProperty("pdbInputOutcome").GetProperty("properties")
+                .GetProperty("format").GetProperty("enum").EnumerateArray(),
+            value => value.GetString() == "embedded-portable");
         Assert.Contains(
             schema.RootElement.GetProperty("$defs").GetProperty("stage").GetProperty("properties").GetProperty("operationCode").GetProperty("enum").EnumerateArray(),
             value => value.GetString() == "receipt-write");

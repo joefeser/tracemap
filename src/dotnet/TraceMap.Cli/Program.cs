@@ -2797,7 +2797,7 @@ public static class TraceMapCommand
                                        Explicit dependency candidate admitted under the same bounded policy. Repeatable.
               --compiled-binding-receipt <path>
                                        Optional compiled-input-binding-set.v1 receipt. Repeatable.
-              --pdb-input <path>       Explicit portable or Windows PDB input. Repeatable; never discovered.
+              --pdb-input <path>       Explicit portable PDB, assembly with embedded portable PDB, or Windows PDB input. Repeatable; never discovered.
               --compiled-max-artifacts <count>
               --compiled-max-file-bytes <count>
               --compiled-max-types <count>
@@ -2823,7 +2823,7 @@ public static class TraceMapCommand
                                        Prove Portable PDB method and sequence-point identities across declared before/after rewrite pairs. Requires --il-rewrite-evidence; each PDB side must bind its own paired assembly by exact portable content identity, and only fully proven pairs emit per-method offset-classified relationships. Never claims behavioral equivalence, source ownership, or preserved debugging behavior.
               --il-rewrite-pdb-before <path>
               --il-rewrite-pdb-after <path>
-                                       Explicit paired Portable PDB inputs. Repeatable; the nth PDB declarations pair with the nth declared assembly pair and both lists must match the assembly pair count.
+                                       Explicit paired Portable PDB files or assemblies carrying embedded portable PDBs. Repeatable; the nth PDB declarations pair with the nth declared assembly pair and both lists must match the assembly pair count.
               --il-rewrite-pdb-max-file-bytes <count>
               --il-rewrite-pdb-max-documents <count>
               --il-rewrite-pdb-max-methods <count>

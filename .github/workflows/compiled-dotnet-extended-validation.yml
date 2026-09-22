@@ -1,0 +1,55 @@
+name: Compiled .NET extended public validation
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/compiled-dotnet-extended-validation.yml"
+      - "src/dotnet/**"
+      - "samples/compiled-dotnet-evidence/**"
+      - "rules/rule-catalog.yml"
+      - "docs/VALIDATION.md"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  public-mutation-matrix:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - name: Record SDK identity
+        run: dotnet --info
+      - name: Restore locked dependencies
+        run: dotnet restore src/dotnet/TraceMap.sln --locked-mode
+      - name: Discover Windows ILAsm and ILDAsm candidates
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $roots = @('C:\Program Files\Microsoft SDKs', 'C:\Program Files (x86)\Microsoft SDKs', 'C:\Program Files\Microsoft Visual Studio')
+          $candidates = @(Get-ChildItem $roots -Recurse -File -Include ilasm.exe,ildasm.exe -ErrorAction SilentlyContinue)
+          $candidates += @(Get-Command ilasm.exe,ildasm.exe -All -ErrorAction SilentlyContinue | ForEach-Object { Get-Item $_.Source })
+          $candidates | Sort-Object FullName -Unique | ForEach-Object {
+            Write-Output "$($_.Name) path: $($_.FullName) version: $($_.VersionInfo.FileVersion)"
+            & $_.FullName /? 2>&1 | Select-Object -First 12
+          }
+          foreach ($name in @('ilasm.exe', 'ildasm.exe')) {
+            if (-not @($candidates | Where-Object Name -EQ $name).Count) { Write-Output "$name unavailable" }
+          }
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          if (Test-Path $vswhere) {
+            & $vswhere -latest -products * -property installationPath
+          } else {
+            Write-Output 'vswhere unavailable'
+          }
+      - name: Run extended public rewrite matrix
+        run: dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter "FullyQualifiedName~IlRewriteEvidenceExtractorTests|FullyQualifiedName~IlRewriteControlFlowEvidenceExtractorTests|FullyQualifiedName~IlRewriteMemberShapeEvidenceExtractorTests|FullyQualifiedName~IlRewritePdbEvidenceExtractorTests|FullyQualifiedName~IlRewriteAssemblyTopologyTests|FullyQualifiedName~IlRewriteEmbeddedPdbTests|FullyQualifiedName~IlRewritePublicIntegrationTests"

@@ -659,13 +659,16 @@ public sealed class IlRewritePdbEvidenceExtractorTests
             Assert.Contains(item.GetProperty("expectedTier").GetString()!, new[] { "Tier2Structural", "Tier4Unknown" });
         });
         var deferred = cases.Where(item => item.TryGetProperty("status", out var status) && status.GetString() == "deferred").ToArray();
-        Assert.Equal(2, deferred.Length);
+        Assert.Single(deferred);
         Assert.All(deferred, item =>
         {
             Assert.True(item.GetProperty("expectedRuleIds").GetArrayLength() == 0);
             Assert.False(string.IsNullOrWhiteSpace(item.GetProperty("prerequisites").GetString()));
         });
         Assert.Contains(ids, id => id == "ILRWPDB-ILASM-PARITY-012");
+        Assert.Contains(ids, id => id == "ILRWPDB-EMBEDDED-PORTABLE-013");
+        Assert.Contains(ids, id => id == "ILRWPDB-EMBEDDED-MISSING-014");
+        Assert.Contains(ids, id => id == "ILRWPDB-EMBEDDED-MISMATCH-015");
         var ilasm = cases.Single(item => item.GetProperty("id").GetString() == "ILRWPDB-ILASM-PARITY-012");
         Assert.Contains("ILAsm", ilasm.GetProperty("prerequisites").GetString(), StringComparison.Ordinal);
     }

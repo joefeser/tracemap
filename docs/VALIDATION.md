@@ -3153,3 +3153,77 @@ and macOS using the SDK compiler and Mono.Cecil only; ILAsm/ILDAsm remains
 outside ordinary CI. Each emitted rewrite fact retains the exact generator
 SHA-256 and privacy-projected bounded-input SHA-256, with rule ID, tier,
 limitations, and a corresponding stable public fixture case ID.
+
+### Public ECMA-335 rewrite integration matrix (Task 10, #766)
+
+The ordinary CI subset runs `IlRewriteAssemblyTopologyTests`,
+`IlRewriteEmbeddedPdbTests`, and `IlRewritePublicIntegrationTests` on Linux,
+macOS, and Windows through `local-distribution-validation.yml`. The separate
+PR and manual `compiled-dotnet-extended-validation.yml` lane runs those tests together with
+all prior public rewrite, control-flow, member-shape, and rewrite-PDB suites.
+Its Windows job discovers `ilasm.exe` and `ildasm.exe` by absolute path and
+records file versions and help output. Discovery is evidence, not parity.
+The extended lane uses only synthetic public fixtures and has no private
+`dotnetperf`, Web Forms, or C++/CLI input.
+
+Local commands for the bounded and extended public lanes are:
+
+```bash
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter 'FullyQualifiedName~IlRewriteAssemblyTopologyTests|FullyQualifiedName~IlRewriteEmbeddedPdbTests|FullyQualifiedName~IlRewritePublicIntegrationTests'
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter 'FullyQualifiedName~IlRewriteEvidenceExtractorTests|FullyQualifiedName~IlRewriteControlFlowEvidenceExtractorTests|FullyQualifiedName~IlRewriteMemberShapeEvidenceExtractorTests|FullyQualifiedName~IlRewritePdbEvidenceExtractorTests|FullyQualifiedName~IlRewriteAssemblyTopologyTests|FullyQualifiedName~IlRewriteEmbeddedPdbTests|FullyQualifiedName~IlRewritePublicIntegrationTests'
+tracemap scan --repo <public-fixture-repo> --out <out> --il-rewrite-evidence --il-rewrite-before <before.dll> --il-rewrite-after <after.dll> --il-rewrite-pdb-evidence --il-rewrite-pdb-before <before-embedded.dll> --il-rewrite-pdb-after <after-embedded.dll>
+```
+
+The embedded PDB declarations name assembly carriers, not extracted private
+`.pdb` files. Each carrier must be byte-identical to its paired declared
+assembly. On Windows, discover candidate tools and their exact file versions
+before invoking them:
+
+```powershell
+Get-ChildItem 'C:\Program Files\Microsoft SDKs','C:\Program Files (x86)\Microsoft SDKs','C:\Program Files\Microsoft Visual Studio' -Recurse -File -Include ilasm.exe,ildasm.exe -ErrorAction SilentlyContinue | Select-Object FullName,@{N='Version';E={$_.VersionInfo.FileVersion}}
+& '<discovered-absolute-ilasm.exe>' /?
+& '<discovered-absolute-ildasm.exe>' /?
+```
+
+| #766 requirement | Public case or explicit gap | Admission limit |
+| --- | --- | --- |
+| Branch, `switch`, `leave`, nested exception/filter/finally/fault regions, locals, max stack, and stack-sensitive edits | `CS-ILRW-CFLOW-010`–`020` and existing IL body/rewrite suites | Static body relationship; no behavioral equivalence claim. |
+| Member/type tokens, strings, constants, signatures, generics, custom modifiers, function pointers/`calli`, properties/events/accessors | `CS-ILRW-MEMBER-TOKEN-021`–`CS-ILRW-CALLI-VARARG-BOUNDARY-032` and earlier operand cases | Complete assembly/module/member signatures and operands require SRM/Cecil agreement. |
+| Netmodules and metadata-bearing multi-module manifests | `ILRW-TOPO-001` and `002`: `IlRewriteUnsupportedShape` | Secondary modules are not loaded or inferred. |
+| Type forwarding and exported-type work limits | `ILRW-TOPO-003`: `TypeForwardingManagedAssemblyUnsupported`; `006`: `IlRewriteTotalWorkLimitExceeded` | Forwarded targets are not resolved or joined; every exported-type row is charged before traversal. |
+| Duplicate assembly/member identities | `ILRW-TOPO-004` ambiguity gap; `005` proves ordinal pair isolation | No first-candidate or cross-pair join. |
+| Portable PDB document/method/sequence-point identity and rewritten offsets | Existing portable and rewrite-PDB suites plus `ILRWPDB-EMBEDDED-PORTABLE-013` | Offset classifications and hashes do not prove debug behavior. |
+| Missing, mismatched, or over-limit debug evidence | `ILRWPDB-EMBEDDED-MISSING-014`, `MISMATCH-015`, and `TEXT-LIMIT-016`, plus existing PDB binding and reader-disagreement gaps | Withhold the disputed PDB relationship while retaining independent parent IL evidence; the rewrite-PDB locator limit applies independently. |
+| Windows-native PDB | Existing `CS-ILRWPDB-WINDOWS-009` unsupported gap | Requires an independent Windows PDB reader before admission. |
+| Same opcodes, different operands; token retargets and one-sided members | `CS-ILRW-OPERAND-001`, token/member cases, and SRM raw-IL/runtime integration case | Operand-insensitive hashes are non-unique heuristics; no identity edge from them. |
+| Valid, invalid, and hostile bounded PE/metadata shapes | Existing malformed/limit cases and topology unsupported/ambiguous cases | Reader disagreement withholds the entire disputed relationship. |
+| ILAsm/ILDAsm parity | `ILRWPDB-ILASM-PARITY-012` remains a prerequisite gap | A pinned toolchain and independent disassembly comparison are required; Mono.Cecil is not an oracle for this claim. |
+
+Each new positive assertion and gap uses the existing rule ID and evidence
+tier, complete assembly/module/member signature where applicable, locations,
+extractor version, documented limitation, exact extractor generator SHA-256,
+and privacy-projected bounded-input SHA-256. The fixture catalog binds stable
+case IDs to expected outcomes. SRM reads the admitted PE/PDB independently of
+Mono.Cecil; a disagreement never votes in a relationship. The sole runtime
+corroboration invokes a synthetic parameterless constant method in a
+collectible load context after static admission; it proves only the observed
+return values of that one fixture.
+
+On the 2026-09-22 macOS arm64 host, .NET SDK `10.0.302` is installed, but
+`ilasm`, `ildasm`, and `mono` are absent from PATH and the checked SDK,
+Homebrew, and local .NET locations. `brew info mono` offered version `6.14.1`
+but it was not installed. An available bottle does not pin an independent
+disassembly oracle or prove parity. The PR #782 Windows 2025 VS2026 runner
+discovery on 2026-09-22 found `ildasm.exe` 4.8.3928.0 in both x86 and x64
+directories under `C:\Program Files (x86)\Microsoft SDKs\Windows\v10.0A\bin\NETFX
+4.8 Tools` and `NETFX 4.8.1 Tools`; `ilasm.exe` was unavailable in the
+searched SDK, Visual Studio, and PATH locations. The exact discovery command
+is in `.github/workflows/compiled-dotnet-extended-validation.yml`; the runner
+log is https://github.com/joefeser/tracemap/actions/runs/35782144244/job/106929998051.
+The smallest remaining Windows action is to identify or install a pinned
+`ilasm.exe` compatible with the discovered `ildasm.exe`, then execute
+the same public before/after matrix through assembly and disassembly. Record
+exact invocation commands, independently compare IL operands, offsets, and
+PDB sequence points to SRM and TraceMap, and leave a typed gap for any
+unavailable or disagreeing shape. Task 10 stays open until that evidence
+exists; Task 11's private work-machine lane is separate.

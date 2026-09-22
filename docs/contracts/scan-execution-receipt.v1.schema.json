@@ -205,7 +205,7 @@
       "properties": {
         "safeLocator": { "type": "string", "minLength": 1, "maxLength": 4096 },
         "outcome": { "enum": ["admitted", "missing", "unreadable", "malformed", "mismatched", "ambiguous", "unbound", "unsupported", "unsupported-platform", "disputed", "limit-exhausted"] },
-        "format": { "enum": ["portable", "windows-pdb", "unknown"] },
+        "format": { "enum": ["portable", "embedded-portable", "windows-pdb", "unknown"] },
         "rawFileSha256": { "oneOf": [{ "$ref": "#/$defs/sha256" }, { "type": "null" }] },
         "privacyProjectedInputSha256": { "$ref": "#/$defs/sha256" },
         "pdbContentId": { "oneOf": [{ "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}:[0-9a-f]{8}$" }, { "type": "null" }] },
