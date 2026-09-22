@@ -40,6 +40,7 @@
     <ProjectReference Include="..\..\TraceMap.SqlValidation.Cli\TraceMap.SqlValidation.Cli.csproj" />
     <ProjectReference Include="..\..\..\..\samples\vb-modern-sample\VbModernSample.vbproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="..\..\..\..\samples\compiled-dotnet-evidence\csharp\CompiledEvidence.CSharp.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\..\..\..\samples\compiled-dotnet-evidence\csharp\CompiledEvidence.CSharp.ControlFlow.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="..\..\..\..\samples\compiled-dotnet-evidence\vb\CompiledEvidence.VisualBasic.vbproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="..\..\..\..\samples\compiled-dotnet-evidence\fsharp\CompiledEvidence.FSharp.fsproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="..\..\..\..\samples\messy-dotnet-workspace\root-alpha\AlphaSite.csproj" ReferenceOutputAssembly="false" />

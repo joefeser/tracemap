@@ -155,7 +155,7 @@ rules:
       - Relationship kinds are exact classifications, not equivalence claims. operand-only-change additionally requires every non-instruction body component (locals, exception regions, max stack, and init-locals) to match; a change limited to those components is body-structure-change, and a change to both instruction operands and those components is operand-and-body-structure-change. No kind proves semantic equivalence or behavior preservation.
       - Both sides must independently satisfy the dotnet.compiled.il-body.v1 dual-reader agreement before any edge is emitted; a disputed or withheld side withholds the whole pair.
       - Before body decoding, shared compiled-input preflight rejects native/mixed-mode assemblies, netmodules, and multi-module manifests and enforces metadata type/member row bounds and a metadata work budget shared across all declared pairs. The separate rewrite-pair limit bounds the number of pairs; this lane does not infer or load secondary modules.
-      - Rewritten PDB offsets and sequence-point validity, ILAsm/ILDAsm parity, evaluation-stack-sensitive rewrites, and the broader ECMA-335 mutation matrix from #766 remain explicitly deferred and out of scope.
+      - Rewritten PDB offsets and sequence-point validity are covered by dotnet.compiled.il-rewrite-pdb.v1, and the public control-flow/exception-handling rewrite matrix (branch, switch, and leave operand retargets; nested exception-region rebinding and handler-kind changes; max-stack-only header changes; evaluation-stack-sensitive instruction-stream rewrites, plus bounded malformed branch-delta, switch-table, and exception-region-limit shapes) is exercised by the CompiledEvidence.CSharp.ControlFlow fixture suite. ILAsm/ILDAsm parity and the remaining broader ECMA-335 mutation matrix from #766 (netmodules, type forwarding, duplicate assembly identities, member/token/constant/string/signature/generics/calli shapes, and insertion/removal edges) remain explicitly deferred and out of scope.
 
   - id: dotnet.compiled.il-rewrite-gap.v1
     status: active
@@ -181,7 +181,7 @@ rules:
       - Both PDB sides must independently satisfy the dual-reader shape agreement required by dotnet.compiled.pdb-identity.v1 and every sequence-point offset must fall inside the dual-reader-proven body extent; a disputed, malformed, native-Windows, oversized, or over-limit side withholds the whole pair's PDB evidence.
       - Only Windows-native PDBs are explicitly unsupported (WindowsPdbRequiresWindows outside Windows; WindowsPdbIndependentReaderUnavailable on Windows). Embedded portable PDBs are not split or claimed in this rule; only a separately declared portable PDB file is an admitted input.
       - Methods joined by the parent lane whose debug information exists on exactly one side emit a bounded Tier4 method-debug-information gap with retained identity prefix and omitted-identity digest commitment, never a guessed preservation or removal claim; methods with no debug information on either side emit nothing, mirroring the bodyless-method structural observation.
-      - ILAsm/ILDAsm parity, evaluation-stack-sensitive rewrites, netmodules, type forwarding, and the broader ECMA-335 mutation matrix from #766 remain explicitly deferred and out of scope.
+      - ILAsm/ILDAsm parity, netmodules, type forwarding, embedded portable PDBs, and the broader ECMA-335 mutation matrix from #766 remain explicitly deferred and out of scope.
 
   - id: dotnet.compiled.il-rewrite-pdb-gap.v1
     status: active
