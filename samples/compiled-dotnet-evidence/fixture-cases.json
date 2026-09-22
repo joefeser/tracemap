@@ -1,5 +1,5 @@
 {
-  "schemaVersion": "compiled-dotnet-fixture-cases.v6",
+  "schemaVersion": "compiled-dotnet-fixture-cases.v7",
   "cases": [
     {
       "id": "CS-OVERLOAD-001",
@@ -784,6 +784,210 @@
       "nonClaims": [
         "complete-join",
         "absence-of-relationship"
+      ]
+    },
+    {
+      "id": "CS-ILRW-CFLOW-010",
+      "language": "csharp",
+      "shape": "a compiler-produced for-loop's forward unconditional branch retargets to a different in-range instruction boundary while the opcode stream, every other operand, and the non-instruction body structure stay identical",
+      "expectedIdentity": "rewrite:<exact-method-identity>|before:sha256:<operand-aware-body-digest>:after:sha256:<operand-aware-body-digest> with the branch operand recorded on both sides",
+      "expectedRuleIds": [
+        "dotnet.compiled.il-rewrite.v1"
+      ],
+      "expectedTier": "Tier2Structural",
+      "expectedRelationshipKind": "operand-only-change",
+      "expectedGaps": [],
+      "nonClaims": [
+        "semantic-equivalence",
+        "behavior-preservation",
+        "reachability",
+        "execution",
+        "loop-termination",
+        "source-ownership"
+      ]
+    },
+    {
+      "id": "CS-ILRW-CFLOW-011",
+      "language": "csharp",
+      "shape": "a compiler-produced five-target switch jump-table entry permutation reorders only the recorded target operands of the switch instruction",
+      "expectedIdentity": "rewrite:<exact-method-identity>|before:sha256:<operand-aware-body-digest>:after:sha256:<operand-aware-body-digest> with both switch target vectors digested",
+      "expectedRuleIds": [
+        "dotnet.compiled.il-rewrite.v1"
+      ],
+      "expectedTier": "Tier2Structural",
+      "expectedRelationshipKind": "operand-only-change",
+      "expectedGaps": [],
+      "nonClaims": [
+        "semantic-equivalence",
+        "case-mapping-preservation",
+        "dispatch",
+        "execution",
+        "runtime-equivalence"
+      ]
+    },
+    {
+      "id": "CS-ILRW-CFLOW-012",
+      "language": "csharp",
+      "shape": "a try-region leave retargets from the shared post-handler offset to the post-region code while every other instruction, the leave opcode, and the body structure stay identical",
+      "expectedIdentity": "rewrite:<exact-method-identity>|before:sha256:<operand-aware-body-digest>:after:sha256:<operand-aware-body-digest> with both leave target offsets recorded",
+      "expectedRuleIds": [
+        "dotnet.compiled.il-rewrite.v1"
+      ],
+      "expectedTier": "Tier2Structural",
+      "expectedRelationshipKind": "operand-only-change",
+      "expectedGaps": [],
+      "nonClaims": [
+        "semantic-equivalence",
+        "exception-behavior-preservation",
+        "execution",
+        "runtime-equivalence"
+      ]
+    },
+    {
+      "id": "CS-ILRW-CFLOW-013",
+      "language": "csharp",
+      "shape": "the nested catch region's try start rebinds to the outer finally's try start so the regions stay properly nested while no instruction changes",
+      "expectedIdentity": "rewrite:<exact-method-identity>|before:sha256:<operand-aware-body-digest>:after:sha256:<operand-aware-body-digest> with both exception-region digests changed and both instruction digests equal",
+      "expectedRuleIds": [
+        "dotnet.compiled.il-rewrite.v1"
+      ],
+      "expectedTier": "Tier2Structural",
+      "expectedRelationshipKind": "body-structure-change",
+      "expectedGaps": [],
+      "nonClaims": [
+        "semantic-equivalence",
+        "exception-behavior-preservation",
+        "operand-change",
+        "nesting-validity-proof"
+      ]
+    },
+    {
+      "id": "CS-ILRW-CFLOW-014",
+      "language": "csharp",
+      "shape": "the nested catch handler becomes a fault handler over identical region extents with the catch-type token removed and no instruction change",
+      "expectedIdentity": "rewrite:<exact-method-identity>|before:sha256:<operand-aware-body-digest>:after:sha256:<operand-aware-body-digest> with the handler-kind change committed by digest",
+      "expectedRuleIds": [
+        "dotnet.compiled.il-rewrite.v1"
+      ],
+      "expectedTier": "Tier2Structural",
+      "expectedRelationshipKind": "body-structure-change",
+      "expectedGaps": [],
+      "nonClaims": [
+        "semantic-equivalence",
+        "exception-behavior-preservation",
+        "handler-kind-equivalence"
+      ]
+    },
+    {
+      "id": "CS-ILRW-CFLOW-015",
+      "language": "csharp",
+      "shape": "the fat method-body header's recorded max-stack increases by one while the instructions, locals, exception regions, and init-locals flag are byte-identical",
+      "expectedIdentity": "rewrite:<exact-method-identity>|before:sha256:<operand-aware-body-digest>:after:sha256:<operand-aware-body-digest> with only the recorded max-stack differing",
+      "expectedRuleIds": [
+        "dotnet.compiled.il-rewrite.v1"
+      ],
+      "expectedTier": "Tier2Structural",
+      "expectedRelationshipKind": "body-structure-change",
+      "expectedGaps": [],
+      "nonClaims": [
+        "semantic-equivalence",
+        "evaluation-stack-depth-claim",
+        "operand-change",
+        "behavior-preservation"
+      ]
+    },
+    {
+      "id": "CS-ILRW-CFLOW-016",
+      "language": "csharp",
+      "shape": "an inserted dup/pop pair adds a transient evaluation-stack depth change with a net-neutral stack effect and a changed opcode stream",
+      "expectedIdentity": "rewrite:<exact-method-identity>|before:sha256:<operand-aware-body-digest>:after:sha256:<operand-aware-body-digest> with opcodeSequencePreserved false and no per-instruction claim",
+      "expectedRuleIds": [
+        "dotnet.compiled.il-rewrite.v1"
+      ],
+      "expectedTier": "Tier2Structural",
+      "expectedRelationshipKind": "instruction-stream-change",
+      "expectedGaps": [],
+      "nonClaims": [
+        "semantic-equivalence",
+        "behavior-preservation",
+        "stack-neutrality-proof",
+        "runtime-equivalence",
+        "execution"
+      ]
+    },
+    {
+      "id": "CS-ILRW-CFLOW-017",
+      "language": "csharp",
+      "shape": "an inserted constant/add sequence reshapes the evaluation-stack depth profile of the opcode stream while remaining well-formed decodable IL",
+      "expectedIdentity": "rewrite:<exact-method-identity>|before:sha256:<operand-aware-body-digest>:after:sha256:<operand-aware-body-digest> with opcodeSequencePreserved false and no per-instruction claim",
+      "expectedRuleIds": [
+        "dotnet.compiled.il-rewrite.v1"
+      ],
+      "expectedTier": "Tier2Structural",
+      "expectedRelationshipKind": "instruction-stream-change",
+      "expectedGaps": [],
+      "nonClaims": [
+        "semantic-equivalence",
+        "behavior-preservation",
+        "value-equivalence",
+        "runtime-equivalence",
+        "execution"
+      ]
+    },
+    {
+      "id": "ILRW-CFLOW-HOSTILE-018",
+      "language": "csharp",
+      "shape": "a patched short-branch delta pushes the branch target past the method-body extent on the declared after side",
+      "expectedIdentity": "gap:IlRewriteMalformedInput",
+      "expectedRuleIds": [
+        "dotnet.compiled.il-rewrite-gap.v1"
+      ],
+      "expectedTier": "Tier4Unknown",
+      "expectedGaps": [
+        "IlRewriteMalformedInput"
+      ],
+      "nonClaims": [
+        "partial-edge-emission",
+        "absence-of-change",
+        "crash",
+        "per-method-recovery"
+      ]
+    },
+    {
+      "id": "ILRW-CFLOW-HOSTILE-019",
+      "language": "csharp",
+      "shape": "a patched switch count overruns the bounded jump-table extent on the declared after side",
+      "expectedIdentity": "gap:IlRewriteMalformedInput",
+      "expectedRuleIds": [
+        "dotnet.compiled.il-rewrite-gap.v1"
+      ],
+      "expectedTier": "Tier4Unknown",
+      "expectedGaps": [
+        "IlRewriteMalformedInput"
+      ],
+      "nonClaims": [
+        "partial-edge-emission",
+        "absence-of-change",
+        "crash",
+        "per-method-recovery"
+      ]
+    },
+    {
+      "id": "ILRW-CFLOW-LIMIT-020",
+      "language": "csharp",
+      "shape": "an exception-region limit below a nested-region method's clause count exhausts that side and withholds the whole pair",
+      "expectedIdentity": "gap:IlRewriteExceptionRegionLimitExceeded",
+      "expectedRuleIds": [
+        "dotnet.compiled.il-rewrite-gap.v1"
+      ],
+      "expectedTier": "Tier4Unknown",
+      "expectedGaps": [
+        "IlRewriteExceptionRegionLimitExceeded"
+      ],
+      "nonClaims": [
+        "complete-join",
+        "absence-of-relationship",
+        "per-method-recovery"
       ]
     }
   ],

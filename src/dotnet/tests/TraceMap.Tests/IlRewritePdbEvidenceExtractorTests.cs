@@ -639,7 +639,7 @@ public sealed class IlRewritePdbEvidenceExtractorTests
     {
         var catalog = JsonSerializer.Deserialize<JsonElement>(
             File.ReadAllText(Path.Combine(FindRepoRoot(), "samples", "compiled-dotnet-evidence", "fixture-cases.json")));
-        Assert.Equal("compiled-dotnet-fixture-cases.v6", catalog.GetProperty("schemaVersion").GetString());
+        Assert.Equal("compiled-dotnet-fixture-cases.v7", catalog.GetProperty("schemaVersion").GetString());
         var cases = catalog.GetProperty("ilRewritePdbCases").EnumerateArray().ToArray();
         Assert.True(cases.Length >= 11);
         var ids = cases.Select(item => item.GetProperty("id").GetString()!).ToArray();
