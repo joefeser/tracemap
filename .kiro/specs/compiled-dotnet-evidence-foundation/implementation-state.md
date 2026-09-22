@@ -1,6 +1,6 @@
 # Compiled .NET Evidence Foundation Implementation State
 
-Status: Tasks 1-9 are merged into `dev`; PR #774 completed its authorized exact-head ACK review and was merged into `dev` as `ed2fdf1c028b034a9a6013908e8f5b8c29d900a7` on 2026-09-21. The first Task 10 slice (bounded operand-aware IL body/call evidence, PR #775) is also merged into `dev` as `46b2baa125bed00ee9ac1964ce50febd55c3e68e` on 2026-09-21, including the owner-requested P1/P2 follow-up `2d20b4a3` (prefix-operand signed/unsigned distinction and exact UTF-16 literal hashing). PR #779 (slice 4, bounded rewrite PDB identity evidence) merged into `dev` as `7be1f51c0360a7f80e3b7304aee9677fe3c92ddc` on 2026-09-22. PR #780 (slice 5, public control-flow and exception-handling rewrite suite) merged into `dev` as `2766de6933d4d60bb632389eff24bc4bfc2313f0` on 2026-09-22. PR #781 (slice 6, public metadata operands and member shapes) merged into `dev` as `dbb4f10aef8201da7e046b428b7a5c4a2e5105c2` on 2026-09-22; GitHub reported `MERGED` with this exact merge commit, and current `origin/dev` resolved to the same SHA before this integration branch was created. The remaining Task 10 public rewrite suite from #766 and Task 11 remain open.
+Status: Tasks 1-9 are merged into `dev`; PR #774 completed its authorized exact-head ACK review and was merged into `dev` as `ed2fdf1c028b034a9a6013908e8f5b8c29d900a7` on 2026-09-21. The first Task 10 slice (bounded operand-aware IL body/call evidence, PR #775) is also merged into `dev` as `46b2baa125bed00ee9ac1964ce50febd55c3e68e` on 2026-09-21, including the owner-requested P1/P2 follow-up `2d20b4a3` (prefix-operand signed/unsigned distinction and exact UTF-16 literal hashing). PR #779 (slice 4, bounded rewrite PDB identity evidence) merged into `dev` as `7be1f51c0360a7f80e3b7304aee9677fe3c92ddc` on 2026-09-22. PR #780 (slice 5, public control-flow and exception-handling rewrite suite) merged into `dev` as `2766de6933d4d60bb632389eff24bc4bfc2313f0` on 2026-09-22. PR #781 (slice 6, public metadata operands and member shapes) merged into `dev` as `dbb4f10aef8201da7e046b428b7a5c4a2e5105c2` on 2026-09-22; GitHub reported `MERGED` with this exact merge commit, and current `origin/dev` resolved to the same SHA before this integration branch was created. PR #782 (the public ECMA-335 integration continuation: topology suite, embedded portable PDB binding, Git-SHA fixture hardening) merged into `dev` as the true merge commit `dc446ab560c7badf1f1518814685b33ccb9c375d` on 2026-09-22 (second parent `a52d239d7c1e3abb32eb6c1d20ba7a466a2508f1`); every PR check passed on that head, including `public-mutation-matrix (windows-latest)` at 118/118 and all three `package-smoke` operating systems. The remaining Task 10 public rewrite suite from #766 and Task 11 remain open.
 
 Branch: `codex/il-body-call-evidence`
 
@@ -1362,3 +1362,81 @@ invalid SHA; scanner behavior remains fail-closed. Local validation after
 the collection change: 57/57 focused PDB tests, 2,219/2,219 full solution
 tests with zero skips, and a zero-warning/error solution build. Exact-head CI
 and ACK remain pending; Task 10 stays unchecked.
+
+Final head `a52d239d` ("Serialize Git-sensitive PDB identity tests") cleared
+both flaky lanes: exact-head `public-mutation-matrix` passed on Linux, macOS,
+and Windows (Windows 118/118) and all three `package-smoke` jobs passed, with
+every other required check green. The owner merged PR #782 into `dev` as
+`dc446ab560c7badf1f1518814685b33ccb9c375d` on 2026-09-22. Task 10 remains
+unchecked: `ILRWPDB-ILASM-PARITY-012` still has no pinned `ilasm.exe`, and
+the Windows runner discovery to date never searched the .NET Framework
+runtime `Framework`/`Framework64` directories that ship `ILAsm.exe` with the
+OS itself.
+
+## Task 10 ILAsm/ILDAsm parity gate (begin-work note)
+
+Branch: `codex/task10-ilasm-parity-gate`, an isolated worktree created from
+`origin/dev` at `dc446ab560c7badf1f1518814685b33ccb9c375d` after verifying
+GitHub reported PR #782 `MERGED` with that exact merge commit (second parent
+`a52d239d`). Scope is the public Windows ILAsm/ILDAsm parity gate from #766:
+tool discovery on the hosted Windows runner including the .NET Framework
+`Framework`/`Framework64` runtime directories, Windows SDK, Visual Studio,
+and PATH; a pinned-toolchain public parity matrix through
+ILAsm → assembly → ILDAsm compared against TraceMap identities and gaps; and
+reproducibility in the extended Windows CI lane. Mono.Cecil must not be the
+independent parity oracle; ILDAsm text and ILAsm round-trip assembly are. The
+private `dotnetperf` checkout, work-source scans, and Task 11's work-machine
+lanes stay out of this PR. If the hosted runner truly lacks a usable ILAsm
+toolchain even after runtime-directory discovery, the slice must instead
+produce a precise work-machine command plus expected receipt for the missing
+public parity cases and leave Task 10 unchecked without claiming parity.
+
+Implementation on this branch: the missing prerequisite was the search scope,
+not the tool — `ILAsm.exe` ships with the .NET Framework runtime under
+`C:\Windows\Microsoft.NET\Framework[64]\v4.0.30319\`, which the PR #782
+discovery never searched. Both the extended workflow's discovery step and the
+in-test discovery now search the runtime directories first (Framework64, then
+Framework), then the Windows SDK NETFX 4.8/4.8.1 Tools directories (x64
+first), Windows Kits, Visual Studio, and PATH, recording the runner image
+(`ImageOS`/`ImageVersion`/architecture), absolute paths, file versions,
+product versions, and `/?` invocability; a hit without a file version or a
+pinned tool that fails `/?` fails the case. The gate itself is
+`IlAsmIldasmParityGateTests` (extended Windows lane only; non-Windows hosts
+return without claiming anything, and ordinary CI filters never include it).
+ILDAsm `/out= /nobar` text and ILAsm `/dll /nologo /output=` round trip are
+the independent oracles, parsed by the test-local `IlDasmTextParser` whose
+own platform-neutral tests (`IlDasmTextParserTests`) pin the parsing of
+method headers, try/catch structure, switch tables, multi-line locals, and
+`.line` directives. Six catalog cases were added as
+`fixture-cases.json` schema v9 `ilasmParityCases`
+(`ILASM-PARITY-TOOLS-001`, `CFLOW-002`, `EH-003`, `MEMBER-004`,
+`MUTATE-005`, `PDB-006`), and `ILRWPDB-ILASM-PARITY-012` flipped from
+deferred to implemented with an explicit `satisfiedBy` list. The
+round-trip legs scan a bound compiled-input pair (binding receipt over a
+temporary git fixture repository, `il-body` plus `il-rewrite` evidence) and
+require: identical normalized ILDAsm text of original and reassembled
+assembly; every joined method `unchanged` with `tokenRetargeted=false` and
+zero gaps; and per-side instruction, local, exception-region, max-stack, and
+call-offset counts equal between the ILDAsm observation and TraceMap facts.
+The mutation leg requires the branch-retarget, handler-kind, and
+stack-neutral-insertion classifications to be identical for the raw and
+round-tripped after sides. The PDB leg requires an embedded portable PDB's
+non-hidden sequence points to equal ILDAsm `.line` directives (adjacent
+extracted PDB, `/pdbpath=` retry, and a precise work-machine reproduction
+command plus expected receipt on total unavailability instead of a parity
+claim). ILAsm outputs keep the fixture's assembly file name in their own
+directories so the reassembled module identity joins the original regardless
+of how ILAsm derives the module name. Rule-catalog limitations for
+`il-body`, `il-rewrite`, and `il-rewrite-pdb` now state the exact proven
+scope (public fixture matrix, pinned .NET Framework 4.8 ILAsm + Windows SDK
+NETFX ILDAsm, ILDAsm as oracle, no general equivalence claim), and
+`docs/VALIDATION.md` gained the parity-gate section with the updated #766
+requirement row and discovery command.
+
+Local macOS validation (the Windows legs return early by design):
+zero-warning/error `dotnet build src/dotnet/TraceMap.sln --no-restore
+-warnaserror`; focused `IlAsmIldasmParityGateTests` + `IlDasmTextParserTests`
+12/12. The remaining checks for this slice are exact-head CI on all three
+extended-lane operating systems (Windows is the load-bearing one) and the
+ACK review; until the Windows extended lane passes with the pinned toolchain
+recorded, no parity claim is final and Task 10 stays unchecked.

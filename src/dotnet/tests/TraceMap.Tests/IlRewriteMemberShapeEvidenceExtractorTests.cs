@@ -73,7 +73,7 @@ public sealed class IlRewriteMemberShapeEvidenceExtractorTests
     {
         using var document = JsonDocument.Parse(File.ReadAllText(Path.Combine(
             FindRepoRoot(), "samples", "compiled-dotnet-evidence", "fixture-cases.json")));
-        Assert.Equal("compiled-dotnet-fixture-cases.v8", document.RootElement.GetProperty("schemaVersion").GetString());
+        Assert.Equal("compiled-dotnet-fixture-cases.v9", document.RootElement.GetProperty("schemaVersion").GetString());
         var cases = document.RootElement.GetProperty("ilRewriteCases").EnumerateArray()
             .Where(item => (item.GetProperty("id").GetString() ?? "").EndsWith("-021", StringComparison.Ordinal)
                 || (item.GetProperty("id").GetString() ?? "").EndsWith("-022", StringComparison.Ordinal)
