@@ -1,6 +1,6 @@
 namespace Alpha.Pages;
 
-public sealed class EnginesPage
+public class EnginesPage
 {
     protected void DeepButton_Click(object sender, System.EventArgs e)
     {
@@ -10,6 +10,10 @@ public sealed class EnginesPage
     protected void LoopButton_Click(object sender, System.EventArgs e)
     {
         Alpha.Services.Loop.Enter();
+    }
+
+    protected void SelfButton_Click(object sender, System.EventArgs e)
+    {
         Alpha.Services.Loop.Self();
     }
 

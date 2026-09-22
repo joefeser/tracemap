@@ -15,8 +15,8 @@ proven.
 Roots:
 
 - `root-alpha/` — C# Web Forms-shaped site (SDK project) with pages, services,
-  and data folders: a ten-step handler chain ending in an ADO.NET-style SQL
-  terminal at traversal distance 12 (beyond depths 8 and 10), a three-node
+  and data folders: a twelve-call-edge handler chain ending in an ADO.NET-style SQL
+  terminal at graph distance 14 (beyond depths 8, 10, and 12), a three-node
   call cycle plus a self-cycle, and ten same-name `Process`/`Core` members in
   one file that must stay distinct.
 - `root-beta/` — second independently scanned C# root with an `.ashx` handler

@@ -24,6 +24,7 @@ public sealed class MessyWorkspaceRegressionTests
     private const string DeepHandler = "DeepButton_Click";
     private const string LoopHandler = "LoopButton_Click";
     private const string EnginesHandler = "EnginesButton_Click";
+    private const string SelfHandler = "SelfButton_Click";
     private const string VbHandler = "SubmitButton_Click";
 
     [Fact]
@@ -73,14 +74,61 @@ public sealed class MessyWorkspaceRegressionTests
 
         Require("MW-CATALOG", "extraction", implemented >= 6, $"expected at least six implemented cases, found {implemented}");
         Require("MW-CATALOG", "extraction", deferred >= 4, $"expected at least four deferred cases with blockers, found {deferred}");
+
+        // Catalog evidence annotations are load-bearing: every expected rule id must
+        // exist in the rule catalog, tiers must be real evidence tiers, and gap
+        // entries must use the documented Kind[:reason] vocabulary.
+        var catalogRules = new HashSet<string>(
+            System.Text.RegularExpressions.Regex.Matches(
+                File.ReadAllText(Path.Combine(FindRepoRoot(), "rules", "rule-catalog.yml")),
+                @"- id:\s*(\S+)").Select(match => match.Groups[1].Value),
+            StringComparer.Ordinal);
+        var validTiers = new HashSet<string>([EvidenceTiers.Tier1Semantic, EvidenceTiers.Tier2Structural, EvidenceTiers.Tier3SyntaxOrTextual, EvidenceTiers.Tier4Unknown], StringComparer.Ordinal);
+        var validTruncationReasons = new HashSet<string>(["depth", "frontier", "path", "cycle", "work"], StringComparer.Ordinal);
+        foreach (var entry in root.GetProperty("cases").EnumerateArray())
+        {
+            var id = entry.GetProperty("id").GetString()!;
+            if (entry.TryGetProperty("expectedRuleIds", out var ruleIds))
+            {
+                foreach (var rule in ruleIds.EnumerateArray())
+                {
+                    Require("MW-CATALOG", "extraction", catalogRules.Contains(rule.GetString()!),
+                        $"case {id} expects rule {rule.GetString()} which is not in rules/rule-catalog.yml");
+                }
+            }
+
+            if (entry.TryGetProperty("expectedTiers", out var tiers))
+            {
+                foreach (var tier in tiers.EnumerateArray())
+                {
+                    Require("MW-CATALOG", "extraction", validTiers.Contains(tier.GetString()!),
+                        $"case {id} expects tier {tier.GetString()} which is not a valid evidence tier");
+                }
+            }
+
+            if (entry.TryGetProperty("expectedGaps", out var gaps))
+            {
+                foreach (var gap in gaps.EnumerateArray())
+                {
+                    var value = gap.GetString()!;
+                    var separator = value.IndexOf(':', StringComparison.Ordinal);
+                    var kind = separator < 0 ? value : value[..separator];
+                    var reason = separator < 0 ? null : value[(separator + 1)..];
+                    Require("MW-CATALOG", "extraction", kind.Length > 0, $"case {id} has an empty gap kind");
+                    Require("MW-CATALOG", "extraction",
+                        kind != "TruncatedByLimit" || (reason is not null && validTruncationReasons.Contains(reason)),
+                        $"case {id} gap {value} must carry a documented truncation reason");
+                }
+            }
+        }
     }
 
     [Fact]
     public async Task Folder_spread_extraction_covers_nested_folders_and_roots()
     {
         using var temp = new TempDirectory();
-        var (alpha, alphaIndex) = await ScanRootAsync(temp, "root-alpha", "alpha-site");
-        var (vb, vbIndex) = await ScanRootAsync(temp, "vb-projectless", "vb-site");
+        var (alpha, alphaIndex) = ScanRoot(temp, "root-alpha", "alpha-site");
+        var (vb, vbIndex) = ScanRoot(temp, "vb-projectless", "vb-site");
         Assert.True(File.Exists(alphaIndex) && File.Exists(vbIndex));
 
         // MW-FOLDER-SPREAD-001 [extraction]: facts span the nested folders.
@@ -100,19 +148,21 @@ public sealed class MessyWorkspaceRegressionTests
         Require("MW-FOLDER-SPREAD-001", "extraction", crossFolderEdge is not null,
             "no semantic call edge reaches Data/DeepQueries.cs from Services/");
         Require("MW-FOLDER-SPREAD-001", "extraction",
-            crossFolderEdge!.SourceSymbol == "global::Alpha.Services.DeepChain.Step08()",
+            crossFolderEdge!.SourceSymbol == "global::Alpha.Services.DeepChain.Step10()",
             $"unexpected cross-folder edge source {crossFolderEdge.SourceSymbol}");
         Require("MW-FOLDER-SPREAD-001", "extraction", crossFolderEdge.Evidence.FilePath == "Services/DeepChain.cs",
             "cross-folder edge must carry its call-site file path");
-        Require("MW-FOLDER-SPREAD-001", "extraction", alpha.Manifest.CommitSha.Length == 40,
-            "in-repo roots must record a full commit SHA");
+        var commitSha = alpha.Manifest.CommitSha;
+        Require("MW-FOLDER-SPREAD-001", "extraction",
+            commitSha.Length is 40 or 64 && commitSha.All(char.IsAsciiHexDigit),
+            $"in-repo roots must record a full SHA-1 or SHA-256 commit SHA, found {commitSha}");
     }
 
     [Fact]
     public async Task Deep_chain_terminal_survives_beyond_depth_10_without_false_absence()
     {
         using var temp = new TempDirectory();
-        var (_, alphaIndex) = await ScanRootAsync(temp, "root-alpha", "alpha-site");
+        var (_, alphaIndex) = ScanRoot(temp, "root-alpha", "alpha-site");
 
         // MW-DEEP-CHAIN-D10-001 [extraction]: exact identities of the chain and terminal.
         using (var connection = new SqliteConnection($"Data Source={alphaIndex}"))
@@ -122,7 +172,7 @@ public sealed class MessyWorkspaceRegressionTests
             {
                 ("global::Alpha.Pages.EnginesPage.DeepButton_Click(object sender, global::System.EventArgs e)", "global::Alpha.Services.DeepChain.Run()"),
                 ("global::Alpha.Services.DeepChain.Run()", "global::Alpha.Services.DeepChain.Step01()"),
-                ("global::Alpha.Services.DeepChain.Step08()", "global::Alpha.Data.DeepQueries.FinalStep()"),
+                ("global::Alpha.Services.DeepChain.Step10()", "global::Alpha.Data.DeepQueries.FinalStep()"),
             };
             foreach (var (source, target) in hops)
             {
@@ -138,44 +188,45 @@ public sealed class MessyWorkspaceRegressionTests
                 $"deep terminal must attach to the chain identity, found {terminal}");
         }
 
-        // MW-DEEP-CHAIN-D10-001 [traversal]: enumeration truncates at depth 10 but the
-        // terminal inventory stays complete with no false absence.
+        // MW-DEEP-CHAIN-D10-001 [traversal]: twelve call edges put the terminal at
+        // graph distance 14; enumeration truncates at depth 12 but the terminal
+        // inventory stays complete with no false absence.
+        var depth12 = await WebFormsModernizationPacketReporter.BuildAsync(new(alphaIndex, Path.Combine(temp.Path, "depth12"), MaxDepth: 12));
+        var depth16 = await WebFormsModernizationPacketReporter.BuildAsync(new(alphaIndex, Path.Combine(temp.Path, "depth16"), MaxDepth: 16));
         var depth10 = await WebFormsModernizationPacketReporter.BuildAsync(new(alphaIndex, Path.Combine(temp.Path, "depth10"), MaxDepth: 10));
-        var depth14 = await WebFormsModernizationPacketReporter.BuildAsync(new(alphaIndex, Path.Combine(temp.Path, "depth14"), MaxDepth: 14));
-        var depth8 = await WebFormsModernizationPacketReporter.BuildAsync(new(alphaIndex, Path.Combine(temp.Path, "depth8"), MaxDepth: 8));
 
+        var deep12 = depth12.EventChains.Where(chain => chain.HandlerSymbol?.Contains(DeepHandler, StringComparison.Ordinal) == true).ToArray();
+        var deep16 = depth16.EventChains.Where(chain => chain.HandlerSymbol?.Contains(DeepHandler, StringComparison.Ordinal) == true).ToArray();
         var deep10 = depth10.EventChains.Where(chain => chain.HandlerSymbol?.Contains(DeepHandler, StringComparison.Ordinal) == true).ToArray();
-        var deep14 = depth14.EventChains.Where(chain => chain.HandlerSymbol?.Contains(DeepHandler, StringComparison.Ordinal) == true).ToArray();
-        var deep8 = depth8.EventChains.Where(chain => chain.HandlerSymbol?.Contains(DeepHandler, StringComparison.Ordinal) == true).ToArray();
-        Require("MW-DEEP-CHAIN-D10-001", "traversal", deep10.Length == 1 && deep14.Length == 1 && deep8.Length == 1,
-            $"expected exactly one deep handler chain per packet, found {deep10.Length}/{deep14.Length}/{deep8.Length}");
+        Require("MW-DEEP-CHAIN-D10-001", "traversal", deep12.Length == 1 && deep16.Length == 1 && deep10.Length == 1,
+            $"expected exactly one deep handler chain per packet, found {deep12.Length}/{deep16.Length}/{deep10.Length}");
 
-        var observation10 = deep10[0].TraversalObservation;
-        Require("MW-DEEP-CHAIN-D10-001", "traversal", observation10 is not null, "deep chain has no traversal observation");
-        Require("MW-DEEP-CHAIN-D10-001", "traversal", deep10[0].TerminalKind == "sql-query", $"deep terminal kind was {deep10[0].TerminalKind}");
-        Require("MW-DEEP-CHAIN-D10-001", "traversal", observation10!.TerminalReachabilityComplete, "terminal inventory must be complete at depth 10");
-        Require("MW-DEEP-CHAIN-D10-001", "traversal", observation10.DistinctReachableTerminalCount == 1,
-            $"deep chain must inventory its single terminal, found {observation10.DistinctReachableTerminalCount}");
-        Require("MW-DEEP-CHAIN-D10-001", "traversal", observation10.MinimumTerminalDistance == 12,
-            $"terminal sits at distance 12 from the handler, found {observation10.MinimumTerminalDistance}");
-        Require("MW-DEEP-CHAIN-D10-001", "traversal", observation10.MinimumTerminalDistance > 10,
-            "terminal must sit beyond depth 10 for this case");
-        Require("MW-DEEP-CHAIN-D10-001", "traversal", observation10.PathEnumerationTruncated, "enumeration must honestly truncate before distance 12");
-        Require("MW-DEEP-CHAIN-D10-001", "traversal", observation10.PathEnumerationTruncationReasons.Contains("depth"),
+        var observation12 = deep12[0].TraversalObservation;
+        Require("MW-DEEP-CHAIN-D10-001", "traversal", observation12 is not null, "deep chain has no traversal observation");
+        Require("MW-DEEP-CHAIN-D10-001", "traversal", deep12[0].TerminalKind == "sql-query", $"deep terminal kind was {deep12[0].TerminalKind}");
+        Require("MW-DEEP-CHAIN-D10-001", "traversal", observation12!.TerminalReachabilityComplete, "terminal inventory must be complete at depth 12");
+        Require("MW-DEEP-CHAIN-D10-001", "traversal", observation12.DistinctReachableTerminalCount == 1,
+            $"deep chain must inventory its single terminal, found {observation12.DistinctReachableTerminalCount}");
+        Require("MW-DEEP-CHAIN-D10-001", "traversal", observation12.MinimumTerminalDistance == 14,
+            $"terminal sits at graph distance 14 from the handler, found {observation12.MinimumTerminalDistance}");
+        Require("MW-DEEP-CHAIN-D10-001", "traversal", observation12.MinimumTerminalDistance > 12,
+            "terminal must sit beyond the configured depth for this case");
+        Require("MW-DEEP-CHAIN-D10-001", "traversal", observation12.PathEnumerationTruncated, "enumeration must honestly truncate before distance 14");
+        Require("MW-DEEP-CHAIN-D10-001", "traversal", observation12.PathEnumerationTruncationReasons.Contains("depth"),
             "truncation must record the depth reason");
         Require("MW-DEEP-CHAIN-D10-001", "traversal",
-            observation10.StopState == "supported-terminal-reached",
-            $"deep chain stop state was {observation10.StopState}");
+            observation12.StopState == "supported-terminal-reached",
+            $"deep chain stop state was {observation12.StopState}");
 
-        var boundaries10 = TerminalBoundaries(depth10, DeepHandler);
-        var boundaries14 = TerminalBoundaries(depth14, DeepHandler);
-        Require("MW-DEEP-CHAIN-D10-001", "traversal", boundaries10.Count == 1, "deep handler must own one terminal boundary at depth 10");
-        Require("MW-DEEP-CHAIN-D10-001", "traversal", boundaries14.Count == 1, "deep handler must own one terminal boundary at depth 14");
+        var boundaries12 = TerminalBoundaries(depth12, DeepHandler);
+        var boundaries16 = TerminalBoundaries(depth16, DeepHandler);
+        Require("MW-DEEP-CHAIN-D10-001", "traversal", boundaries12.Count == 1, "deep handler must own one terminal boundary at depth 12");
+        Require("MW-DEEP-CHAIN-D10-001", "traversal", boundaries16.Count == 1, "deep handler must own one terminal boundary at depth 16");
         Require("MW-DEEP-CHAIN-D10-001", "traversal",
-            boundaries10.Select(boundary => boundary.TerminalEvidenceId).OrderBy(id => id, StringComparer.Ordinal)
-                .SequenceEqual(boundaries14.Select(boundary => boundary.TerminalEvidenceId).OrderBy(id => id, StringComparer.Ordinal)),
-            "terminal boundary identity must not change between depth 10 and depth 14");
-        var deepBoundary = boundaries10[0];
+            boundaries12.Select(boundary => boundary.TerminalEvidenceId).OrderBy(id => id, StringComparer.Ordinal)
+                .SequenceEqual(boundaries16.Select(boundary => boundary.TerminalEvidenceId).OrderBy(id => id, StringComparer.Ordinal)),
+            "terminal boundary identity must not change between depth 12 and depth 16");
+        var deepBoundary = boundaries12[0];
         Require("MW-DEEP-CHAIN-D10-001", "traversal", deepBoundary.BoundaryKind == "sql-query", $"deep boundary kind was {deepBoundary.BoundaryKind}");
         Require("MW-DEEP-CHAIN-D10-001", "traversal", deepBoundary.BoundaryCategory == "database", $"deep boundary category was {deepBoundary.BoundaryCategory}");
         Require("MW-DEEP-CHAIN-D10-001", "traversal", deepBoundary.RuleIds.Contains(RuleIds.DatabaseOperationCallPattern),
@@ -183,28 +234,29 @@ public sealed class MessyWorkspaceRegressionTests
         Require("MW-DEEP-CHAIN-D10-001", "traversal", deepBoundary.EvidenceTiers.Contains(EvidenceTiers.Tier1Semantic),
             "deep boundary must retain Tier1 evidence");
         Require("MW-DEEP-CHAIN-D10-001", "traversal",
-            !depth10.Gaps.Any(gap => gap.Classification is "DownstreamWithoutSupportedTerminal" or "NoBackendEvidence"
-                && gap.ScopeKind == "event-chain" && gap.ScopeId == deep10[0].BindingFactId),
+            !depth12.Gaps.Any(gap => gap.Classification is "DownstreamWithoutSupportedTerminal" or "NoBackendEvidence"
+                && gap.ScopeKind == "event-chain" && gap.ScopeId == deep12[0].BindingFactId),
             "the deep handler must not be reported as terminal-less while its terminal is inventoried");
 
-        // Documented retained-closure boundary: at depth 8 the distance-12 terminal
-        // falls outside the depth-bounded retained closure, so the observation must
-        // scope its completeness claim rather than invent or imply a terminal.
-        var observation8 = deep8[0].TraversalObservation!;
-        Require("MW-DEEP-CHAIN-D10-001", "traversal", observation8.DistinctReachableTerminalCount == 0,
-            "distance-12 terminal must not be claimed inside the depth-8 retained closure");
-        Require("MW-DEEP-CHAIN-D10-001", "traversal", observation8.TerminalReachabilityComplete,
-            "depth-8 observation must stay complete for the retained graph");
+        // Documented retained-closure boundary: at depth 10 the distance-14
+        // terminal falls outside the depth-bounded retained closure, so the
+        // observation must scope its completeness claim rather than invent or
+        // imply a terminal.
+        var observation10 = deep10[0].TraversalObservation!;
+        Require("MW-DEEP-CHAIN-D10-001", "traversal", observation10.DistinctReachableTerminalCount == 0,
+            "the distance-14 terminal must not be claimed inside the depth-10 retained closure");
+        Require("MW-DEEP-CHAIN-D10-001", "traversal", observation10.TerminalReachabilityComplete,
+            "depth-10 observation must stay complete for the retained graph");
         Require("MW-DEEP-CHAIN-D10-001", "traversal",
-            observation8.Limitations.Any(limitation => limitation.Contains("retained graph", StringComparison.Ordinal)),
-            "depth-8 observation must scope completeness to the retained graph");
+            observation10.Limitations.Any(limitation => limitation.Contains("retained graph", StringComparison.Ordinal)),
+            "depth-10 observation must scope completeness to the retained graph");
     }
 
     [Fact]
     public async Task Cycles_terminate_and_report_truncation_without_invented_terminals()
     {
         using var temp = new TempDirectory();
-        var (alpha, alphaIndex) = await ScanRootAsync(temp, "root-alpha", "alpha-site");
+        var (alpha, alphaIndex) = ScanRoot(temp, "root-alpha", "alpha-site");
 
         // MW-CYCLE-001 [extraction]: the three-node cycle and the self-cycle edges.
         var cycleEdges = alpha.Facts.Where(fact =>
@@ -237,31 +289,34 @@ public sealed class MessyWorkspaceRegressionTests
             JsonSerializer.Serialize(first) == JsonSerializer.Serialize(second),
             "cycle traversal must be deterministic across repeated packets");
 
-        var loopChains = first.EventChains.Where(chain => chain.HandlerSymbol?.Contains(LoopHandler, StringComparison.Ordinal) == true).ToArray();
-        Require("MW-CYCLE-001", "traversal", loopChains.Length == 1, $"expected one loop handler chain, found {loopChains.Length}");
-        var observation = loopChains[0].TraversalObservation;
-        Require("MW-CYCLE-001", "traversal", observation is not null, "loop chain has no traversal observation");
-        Require("MW-CYCLE-001", "traversal", observation!.PathEnumerationTruncationReasons.Contains("cycle"),
-            $"cycle truncation must be recorded, found [{string.Join(",", observation.PathEnumerationTruncationReasons)}]");
-        Require("MW-CYCLE-001", "traversal", observation.DistinctReachableTerminalCount == 0,
-            "the cyclic branch has no terminal and none may be invented");
-        Require("MW-CYCLE-001", "traversal", observation.TerminalReachabilityComplete,
-            "cycle traversal must terminate and complete its inventory");
-        Require("MW-CYCLE-001", "traversal",
-            observation.StopState == "observed-downstream-without-supported-terminal",
-            $"loop chain stop state was {observation.StopState}");
-        Require("MW-CYCLE-001", "traversal", loopChains[0].TerminalKind is null, "loop chain must not claim a terminal kind");
-        Require("MW-CYCLE-001", "traversal",
-            first.Gaps.Any(gap => gap.Classification == "DownstreamWithoutSupportedTerminal"
-                && gap.ScopeKind == "event-chain" && gap.ScopeId == loopChains[0].BindingFactId),
-            "the terminal-less cyclic branch must surface an explicit gap");
+        foreach (var (caseId, handlers) in new (string CaseId, string[] Handlers)[] { ("MW-CYCLE-001", [LoopHandler]), ("MW-CYCLE-SELF-002", [SelfHandler]) })
+        {
+            var chains = first.EventChains.Where(chain => handlers.Any(handler => chain.HandlerSymbol?.Contains(handler, StringComparison.Ordinal) == true)).ToArray();
+            Require(caseId, "traversal", chains.Length == 1, $"expected one {handlers[0]} handler chain, found {chains.Length}");
+            var observation = chains[0].TraversalObservation;
+            Require(caseId, "traversal", observation is not null, $"{handlers[0]} chain has no traversal observation");
+            Require(caseId, "traversal", observation!.PathEnumerationTruncationReasons.Contains("cycle"),
+                $"cycle truncation must be recorded for {handlers[0]}, found [{string.Join(",", observation.PathEnumerationTruncationReasons)}]");
+            Require(caseId, "traversal", observation.DistinctReachableTerminalCount == 0,
+                $"the {handlers[0]} branch has no terminal and none may be invented");
+            Require(caseId, "traversal", observation.TerminalReachabilityComplete,
+                $"{handlers[0]} traversal must terminate and complete its inventory");
+            Require(caseId, "traversal",
+                observation.StopState == "observed-downstream-without-supported-terminal",
+                $"{handlers[0]} chain stop state was {observation.StopState}");
+            Require(caseId, "traversal", chains[0].TerminalKind is null, $"{handlers[0]} chain must not claim a terminal kind");
+            Require(caseId, "traversal",
+                first.Gaps.Any(gap => gap.Classification == "DownstreamWithoutSupportedTerminal"
+                    && gap.ScopeKind == "event-chain" && gap.ScopeId == chains[0].BindingFactId),
+                $"the terminal-less {handlers[0]} branch must surface an explicit gap");
+        }
     }
 
     [Fact]
     public async Task Same_name_members_in_ten_classes_never_cross_join()
     {
         using var temp = new TempDirectory();
-        var (alpha, alphaIndex) = await ScanRootAsync(temp, "root-alpha", "alpha-site");
+        var (alpha, alphaIndex) = ScanRoot(temp, "root-alpha", "alpha-site");
 
         // MW-SAME-NAME-TEN-001 [extraction]: ten container-distinct Process and Core
         // identities; every Core call stays inside its own engine.
@@ -304,6 +359,20 @@ public sealed class MessyWorkspaceRegressionTests
                 $"Engine{number} terminal tier was {terminal.EvidenceTier}");
         }
 
+        // MW-SAME-NAME-TEN-001 [extraction]: no semantic edge may cross engines at
+        // all; an erroneous EngineX.Process -> EngineY.Core edge must fail here.
+        var engineInternalEdges = alpha.Facts.Where(fact =>
+            fact.FactType == FactTypes.CallEdge
+            && fact.EvidenceTier == EvidenceTiers.Tier1Semantic
+            && fact.SourceSymbol!.StartsWith("global::Alpha.Services.Engine", StringComparison.Ordinal)
+            && fact.TargetSymbol!.StartsWith("global::Alpha.Services.Engine", StringComparison.Ordinal)).ToArray();
+        Require("MW-SAME-NAME-TEN-001", "extraction", engineInternalEdges.Length == 10,
+            $"expected exactly ten engine-internal semantic edges, found {engineInternalEdges.Length}");
+        Require("MW-SAME-NAME-TEN-001", "extraction",
+            engineInternalEdges.All(edge =>
+                EngineNumber(edge.SourceSymbol) is { } source && EngineNumber(edge.TargetSymbol) is { } target && source == target),
+            $"a semantic edge crossed from one engine into another engine's member: [{string.Join(",", engineInternalEdges.Where(edge => !(EngineNumber(edge.SourceSymbol) is { } s && EngineNumber(edge.TargetSymbol) is { } t && s == t)).Select(edge => $"{edge.SourceSymbol}->{edge.TargetSymbol}"))}]");
+
         // MW-SAME-NAME-TEN-001 [reconciliation]: each engine's SQL literal keeps its
         // own shape identity; distinct hashes and tables prove no shared/fuzzy identity.
         var engineShapes = alpha.Facts
@@ -327,16 +396,47 @@ public sealed class MessyWorkspaceRegressionTests
         Require("MW-SAME-NAME-TEN-001", "traversal",
             engineBoundaries.Select(boundary => boundary.TerminalEvidenceId).Distinct(StringComparer.Ordinal).Count() == 10,
             "engine terminal identities must not collapse");
+        var factsById = alpha.Facts.ToDictionary(fact => fact.FactId, fact => fact);
+        var engineLineRanges = EngineClassLineRanges(Path.Combine(MessyRoot("root-alpha"), "Services", "TenEngines.cs"));
         foreach (var boundary in engineBoundaries)
         {
             Require("MW-SAME-NAME-TEN-001", "traversal", boundary.BoundaryKind == "sql-query",
                 $"engine boundary kind was {boundary.BoundaryKind}");
             Require("MW-SAME-NAME-TEN-001", "traversal", boundary.RuleIds.Contains(RuleIds.DatabaseOperationCallPattern),
                 "engine boundary must cite the database call-pattern rule");
-            var files = boundary.PathEvidence.Select(evidence => evidence.FilePath).ToHashSet(StringComparer.Ordinal);
+
+            var supportingFacts = boundary.SupportingFactIds
+                .Select(NormalizeFactId)
+                .Where(factsById.ContainsKey)
+                .Select(id => factsById[id])
+                .ToArray();
+            var terminalFacts = supportingFacts.Where(fact => fact.FactType == FactTypes.DatabaseOperationCandidate).ToArray();
+            Require("MW-SAME-NAME-TEN-001", "traversal", terminalFacts.Length == 1,
+                $"engine boundary must support exactly one database terminal, found {terminalFacts.Length}");
+            var engineNumber = terminalFacts[0].Properties.GetValueOrDefault("tableName")?.Replace("engine_", string.Empty, StringComparison.Ordinal).Replace("_queue", string.Empty, StringComparison.Ordinal);
+            Require("MW-SAME-NAME-TEN-001", "traversal", engineNumber is { Length: 2 },
+                $"engine boundary terminal table was {terminalFacts[0].Properties.GetValueOrDefault("tableName")}");
             Require("MW-SAME-NAME-TEN-001", "traversal",
-                files.SetEquals(["Pages/Engines.aspx.cs", "Services/TenEngines.cs"]) || files.IsSubsetOf(["Pages/Engines.aspx.cs", "Services/TenEngines.cs"]),
-                $"engine boundary evidence leaked outside its own files: [{string.Join(",", files)}]");
+                NormalizeFactId(boundary.TerminalEvidenceId) == terminalFacts[0].FactId,
+                $"boundary terminal evidence must be its own engine's terminal fact for engine {engineNumber}");
+            Require("MW-SAME-NAME-TEN-001", "traversal",
+                !supportingFacts.Any(fact => fact.FactType == FactTypes.DatabaseOperationCandidate
+                    && fact.FactId != terminalFacts[0].FactId),
+                $"engine {engineNumber} boundary supports another engine's terminal");
+            var foreignEdges = supportingFacts.Where(fact =>
+                fact.FactType == FactTypes.CallEdge
+                && fact.EvidenceTier == EvidenceTiers.Tier1Semantic
+                && (EngineNumber(fact.SourceSymbol ?? string.Empty), EngineNumber(fact.TargetSymbol ?? string.Empty)) is ({ } source, { } target)
+                && (source != engineNumber || target != engineNumber)).ToArray();
+            Require("MW-SAME-NAME-TEN-001", "traversal", foreignEdges.Length == 0,
+                $"engine {engineNumber} boundary carries call evidence from another engine: [{string.Join(",", foreignEdges.Select(fact => $"{fact.SourceSymbol}->{fact.TargetSymbol}"))}]");
+            var range = engineLineRanges[engineNumber!];
+            var foreignLines = boundary.PathEvidence
+                .Where(evidence => evidence.FilePath == "Services/TenEngines.cs" && evidence.StartLine is not null)
+                .Where(evidence => evidence.StartLine < range.Start || evidence.StartLine > range.End)
+                .ToArray();
+            Require("MW-SAME-NAME-TEN-001", "traversal", foreignLines.Length == 0,
+                $"engine {engineNumber} boundary cites lines outside its own class block: [{string.Join(",", foreignLines.Select(evidence => evidence.StartLine))}]");
         }
 
         var engineChains = packet.EventChains.Where(chain => chain.HandlerSymbol?.Contains(EnginesHandler, StringComparison.Ordinal) == true).ToArray();
@@ -353,9 +453,9 @@ public sealed class MessyWorkspaceRegressionTests
     public async Task Separately_scanned_roots_merge_without_invented_joins()
     {
         using var temp = new TempDirectory();
-        var (alpha, alphaIndex) = await ScanRootAsync(temp, "root-alpha", "alpha-site");
-        var (beta, betaIndex) = await ScanRootAsync(temp, "root-beta", "beta-site");
-        var (vb, vbIndex) = await ScanRootAsync(temp, "vb-projectless", "vb-site");
+        var (alpha, alphaIndex) = ScanRoot(temp, "root-alpha", "alpha-site");
+        var (beta, betaIndex) = ScanRoot(temp, "root-beta", "beta-site");
+        var (vb, vbIndex) = ScanRoot(temp, "vb-projectless", "vb-site");
 
         // MW-MERGED-ROOTS-001 [extraction]: root-beta reuses the Process/Core simple
         // names with its own independent identities and terminal.
@@ -488,7 +588,7 @@ public sealed class MessyWorkspaceRegressionTests
             !Directory.EnumerateFiles(repo, "*.sln", SearchOption.AllDirectories).Any(),
             "the projectless VB root must not contain a solution");
 
-        var (scan, index) = await ScanRootAsync(temp, "vb-projectless", "vb-site");
+        var (scan, index) = ScanRoot(temp, "vb-projectless", "vb-site");
         Require("MW-VB-PROJECTLESS-001", "extraction", scan.Manifest.AnalysisLevel == "Level3SyntaxAnalysis",
             $"projectless VB analysis level was {scan.Manifest.AnalysisLevel}");
 
@@ -553,6 +653,44 @@ public sealed class MessyWorkspaceRegressionTests
         }
     }
 
+    private static string NormalizeFactId(string factId) =>
+        factId.StartsWith("single:", StringComparison.Ordinal) ? factId["single:".Length..] : factId;
+
+    private static string? EngineNumber(string? symbol)
+    {
+        var match = System.Text.RegularExpressions.Regex.Match(symbol, @"Engine(\d\d)\.");
+        return match.Success ? match.Groups[1].Value : null;
+    }
+
+    private static Dictionary<string, (int Start, int End)> EngineClassLineRanges(string tenEnginesPath)
+    {
+        var ranges = new Dictionary<string, (int Start, int End)>(StringComparer.Ordinal);
+        var lines = File.ReadAllLines(tenEnginesPath);
+        string? current = null;
+        var start = 0;
+        for (var index = 0; index < lines.Length; index++)
+        {
+            var match = System.Text.RegularExpressions.Regex.Match(lines[index], @"sealed class Engine(\d\d)");
+            if (match.Success)
+            {
+                if (current is not null)
+                {
+                    ranges[current] = (start, index);
+                }
+
+                current = match.Groups[1].Value;
+                start = index + 1;
+            }
+        }
+
+        if (current is not null)
+        {
+            ranges[current] = (start, lines.Length);
+        }
+
+        return ranges;
+    }
+
     private static IReadOnlyList<WebFormsModernizationDownstreamBoundary> TerminalBoundaries(
         WebFormsModernizationPacket packet, string handlerName) =>
         packet.DownstreamBoundaries
@@ -561,7 +699,7 @@ public sealed class MessyWorkspaceRegressionTests
             .ToList();
 
 
-    private static async Task<(ScanResult Scan, string IndexPath)> ScanRootAsync(TempDirectory temp, string rootName, string label)
+    private static (ScanResult Scan, string IndexPath) ScanRoot(TempDirectory temp, string rootName, string label)
     {
         var repo = MessyRoot(rootName);
         var outDir = Path.Combine(temp.Path, $"{rootName}-{label}-scan");

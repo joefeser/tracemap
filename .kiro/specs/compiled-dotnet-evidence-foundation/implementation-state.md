@@ -805,3 +805,19 @@ and `git diff --check` passed; `dotnet build src/dotnet/TraceMap.sln` reports
 0 warnings/0 errors; `node --test scripts/pr-review-loop-lane.test.mjs` 3/3.
 The Task 10 checkbox remains open; #766's ILAsm/rewritten-PDB matrix and
 Task 11's private Windows/`dotnetperf` lane are untouched.
+
+Review remediation on 2026-09-22 (ACK 0.5.2 loop, Qodo + Codex exact-head
+findings on `8f86147f`): the deep chain was lengthened from ten to twelve
+call edges so the terminal at graph distance 14 is unambiguously beyond the
+configured depth (inventory pinned at depths 12/16; retained-closure boundary
+pinned at depth 10); the self-cycle got its own page handler and its own
+traversal assertions under MW-CYCLE-SELF-002; same-name isolation now rejects
+any cross-engine semantic edge and correlates each engine boundary to its own
+terminal fact and class line range instead of a file-subset check; catalog
+conformance now consumes expectedRuleIds against rules/rule-catalog.yml plus
+expectedTiers/expectedGaps vocabularies; the commit-SHA assertion accepts
+SHA-1 (40) and SHA-256 (64) hex; the scan helper is synchronous (CS1998); and
+both fixture projects are registered in the test build graph via
+`ReferenceOutputAssembly="false"` ProjectReferences (the compiled-evidence
+precedent) with the deliberate `DbCommand` shadowing suppressed by a
+documented fixture-local `NoWarn CS0436`.
