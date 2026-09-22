@@ -1,8 +1,7 @@
-# The one-pass Qodo posture and bounded current-head Codex recovery require a
-# reviewed ACK stable line: v0.4.4 or the released v0.5.0. Do not accept an
-# older or prerelease build.
+# ACK 0.5.2 supplies invariant-audit repair briefs for consolidated fixes.
+# Keep the supported stable 0.5 line bounded; older workers must upgrade.
 agentControl:
-  requiredVersion: ">=0.4.4 <0.6.0"
+  requiredVersion: ">=0.5.2 <0.6.0"
   channel: stable
   allowPrerelease: false
   requiredCapabilities:
@@ -31,6 +30,7 @@ lane:
 
 # agent-control lane config key; not an inter-agent coordination packet payload.
 prLoopPacket:
+  repo: joefeser/tracemap
   reviewFreshnessPolicy:
     maxFreshReviewFixCycles: 2
     # Repo-specific risky files. Overrides the ACK hard-coded defaults which
