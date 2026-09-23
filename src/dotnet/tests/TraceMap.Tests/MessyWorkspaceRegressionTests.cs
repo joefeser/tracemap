@@ -10,7 +10,7 @@ using TraceMap.Storage;
 namespace TraceMap.Tests;
 
 /// <summary>
-/// Messy .NET workspace regression slice (Task 10 third slice). Synthetic,
+/// Messy .NET workspace regression slice. Synthetic,
 /// public-safe fixtures under <c>samples/messy-dotnet-workspace</c> reproduce
 /// the workspace shapes observed in real Web Forms/.NET scans. The stable
 /// case catalog is <c>samples/messy-dotnet-workspace/case-catalog.json</c>;
@@ -77,10 +77,10 @@ public sealed class MessyWorkspaceRegressionTests
             Require("MW-CATALOG", "extraction", entry.GetProperty("shape").GetString() is { Length: > 0 }, $"case {id} must describe its shape");
         }
 
-        Require("MW-CATALOG", "extraction", ids.Count == 12,
-            $"expected the twelve pinned fixture cases, found {ids.Count}");
-        Require("MW-CATALOG", "extraction", implemented == 12 && deferred == 0,
-            $"all twelve pinned fixture cases must remain implemented; found {implemented} implemented and {deferred} deferred");
+        Require("MW-CATALOG", "extraction", ids.Count == 16,
+            $"expected the sixteen pinned fixture cases, found {ids.Count}");
+        Require("MW-CATALOG", "extraction", implemented == 16 && deferred == 0,
+            $"all sixteen pinned fixture cases must remain implemented; found {implemented} implemented and {deferred} deferred");
 
         // Catalog evidence annotations are load-bearing: every expected rule id must
         // exist in the rule catalog, tiers must be real evidence tiers, and gap
@@ -928,10 +928,135 @@ public sealed class MessyWorkspaceRegressionTests
     }
 
     [Fact]
+    public async Task Compound_projectless_vb_pages_retain_same_name_calls_and_terminal_inventory()
+    {
+        using var temp = new TempDirectory();
+        var (scan, index) = ScanRoot(temp, "vb-compound-pages", "compound-pages");
+        Require("MW-COMPOUND-PAGETWO-001", "extraction",
+            scan.Manifest.AnalysisLevel == "Level3SyntaxAnalysis",
+            "the projectless VB fixture must remain syntax-only");
+
+        var pageTwoCalls = scan.Facts.Where(fact =>
+            fact.FactType == FactTypes.CallEdge
+            && fact.SourceSymbol == "AcceptanceRoutes.DispatchTwo()"
+            && fact.Properties.GetValueOrDefault("calleeName") == "Process").ToArray();
+        Require("MW-COMPOUND-PAGETWO-001", "extraction", pageTwoCalls.Length == 5,
+            $"expected five same-name calls, found {pageTwoCalls.Length}");
+        Require("MW-COMPOUND-PAGETWO-001", "extraction",
+            pageTwoCalls.Select(fact => fact.Properties.GetValueOrDefault("receiverType"))
+                .ToHashSet(StringComparer.Ordinal).SetEquals(
+                    Enumerable.Range(1, 5).Select(number => $"TwoLane{number:00}")),
+            "the five Process calls lost their distinct receiver types");
+
+        var packets = new Dictionary<int, WebFormsModernizationPacket>();
+        foreach (var depth in new[] { 8, 10 })
+        {
+            packets[depth] = await WebFormsModernizationPacketReporter.BuildAsync(
+                new(index, Path.Combine(temp.Path, $"compound-depth-{depth}"), MaxDepth: depth));
+        }
+        var (_, betaIndex) = ScanRoot(temp, "root-beta", "unrelated-beta");
+        var combinedIndex = Path.Combine(temp.Path, "compound-combined.sqlite");
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions(
+            [index, betaIndex], combinedIndex, ["compound", "unrelated"]));
+        var graphInventory = await CombinedDependencyPathReporter.BuildGraphInventoryAsync(combinedIndex);
+        var combinedPacket = await WebFormsModernizationPacketReporter.BuildAsync(
+            new(combinedIndex, Path.Combine(temp.Path, "compound-combined-packet"), MaxDepth: 10));
+        var nodesById = graphInventory.Nodes.ToDictionary(node => node.NodeId, StringComparer.Ordinal);
+        var pageTwoBridges = graphInventory.Edges
+            .Where(edge => edge.EdgeKind == "projectless-vb-receiver-bridge"
+                && nodesById[edge.FromNodeId].DisplayName == "AcceptanceRoutes.DispatchTwo()")
+            .Select(edge => nodesById[edge.ToNodeId].DisplayName)
+            .ToHashSet(StringComparer.Ordinal);
+        Require("MW-COMPOUND-PAGETWO-001", "reconciliation",
+            pageTwoBridges.SetEquals(Enumerable.Range(1, 5).Select(number => $"TwoLane{number:00}.Process()")),
+            $"the five receiver bridges were [{string.Join(",", pageTwoBridges)}]");
+
+        foreach (var (page, expectedTerminals) in new (string Page, int Terminals)[]
+        {
+            ("PageTwo", 2), ("PageThree", 0), ("PageEleven", 1)
+        })
+        {
+            var caseId = $"MW-COMPOUND-{page.ToUpperInvariant()}-001";
+            var terminalSets = new List<HashSet<string>>();
+            foreach (var (depth, packet) in packets)
+            {
+                var chains = packet.EventChains.Where(chain =>
+                    chain.HandlerSymbol?.Contains($"{page}.RunButton_Click", StringComparison.Ordinal) == true).ToArray();
+                Require(caseId, "traversal", chains.Length >= 1,
+                    $"depth {depth}: missing handler chain");
+                foreach (var chain in chains)
+                {
+                    var observation = chain.TraversalObservation;
+                    Require(caseId, "traversal", observation is not null && observation.TerminalReachabilityComplete,
+                        $"depth {depth}: terminal reachability is unavailable or incomplete");
+                    Require(caseId, "traversal", observation!.DistinctReachableTerminalCount == expectedTerminals,
+                        $"depth {depth}: expected {expectedTerminals} terminals, found {observation.DistinctReachableTerminalCount}");
+                    Require(caseId, "traversal",
+                        observation.TraversedRuleIds.Contains("combined.paths.projectless-vb-receiver-bridge.v1"),
+                        $"depth {depth}: no receiver bridge was traversed");
+                }
+                var terminalIds = chains[0].TraversalObservation!.ReachableTerminalIds.ToHashSet(StringComparer.Ordinal);
+                terminalSets.Add(terminalIds);
+                var boundaries = TerminalBoundaries(packet, $"{page}.RunButton_Click");
+                Require(caseId, "traversal", boundaries.Count == expectedTerminals,
+                    $"depth {depth}: expected {expectedTerminals} supported boundaries, found {boundaries.Count}");
+                Require(caseId, "traversal",
+                    boundaries.Select(boundary => boundary.TerminalEvidenceId).Distinct(StringComparer.Ordinal).Count() == expectedTerminals,
+                    $"depth {depth}: terminal evidence identities collapsed or crossed page routes");
+                if (expectedTerminals == 0)
+                    Require(caseId, "traversal",
+                        packet.Gaps.Any(gap => gap.Classification == "DownstreamWithoutSupportedTerminal"
+                            && chains.Any(chain => gap.ScopeId == chain.BindingFactId)),
+                        $"depth {depth}: the complete terminal-free route lacks its scoped gap");
+            }
+            Require(caseId, "traversal", terminalSets[0].SetEquals(terminalSets[1]),
+                "depth 8 and depth 10 returned different terminal inventories");
+            var combinedChains = combinedPacket.EventChains.Where(chain =>
+                chain.HandlerSymbol?.Contains($"{page}.RunButton_Click", StringComparison.Ordinal) == true).ToArray();
+            Require(caseId, "combining", combinedChains.Length >= 1
+                && combinedChains.All(chain => chain.TraversalObservation?.TerminalReachabilityComplete == true
+                    && chain.TraversalObservation.DistinctReachableTerminalCount == expectedTerminals),
+                "the merged-index packet changed or lost the page's terminal inventory");
+            var observedPacket = packets[10];
+            var observedChains = observedPacket.EventChains.Where(chain =>
+                chain.HandlerSymbol?.Contains($"{page}.RunButton_Click", StringComparison.Ordinal) == true).ToArray();
+            RequireCatalogEvidence(caseId, "traversal",
+                scan.Facts.Select(fact => fact.RuleId)
+                    .Concat(observedChains.SelectMany(chain => chain.TraversalObservation?.TraversedRuleIds ?? []))
+                    .Concat(observedPacket.Gaps.Select(gap => gap.RuleId)),
+                scan.Facts.Select(fact => fact.EvidenceTier)
+                    .Concat(observedPacket.Gaps.Select(gap => gap.EvidenceTier)),
+                observedPacket.Gaps.Select(gap => gap.Classification));
+        }
+    }
+
+    [Fact]
+    public async Task Compound_vb_syntax_closure_work_limit_never_reports_clean_absence()
+    {
+        using var temp = new TempDirectory();
+        var (_, index) = ScanRoot(temp, "vb-compound-pages", "compound-limited");
+        var packet = await WebFormsModernizationPacketReporter.BuildAsync(
+            new(index, Path.Combine(temp.Path, "compound-limited-packet"), MaxTraversalWork: 10));
+        Require("MW-COMPOUND-LIMIT-001", "traversal", packet.Summary.Truncated,
+            "a bounded syntax-closure interruption must mark the packet truncated");
+        Require("MW-COMPOUND-LIMIT-001", "traversal",
+            packet.Summary.TruncationReasons.Any(reason => reason.Contains("graph-syntax-closure-work", StringComparison.Ordinal)),
+            $"the specific syntax-closure work limit was not retained: [{string.Join(",", packet.Summary.TruncationReasons)}]");
+        Require("MW-COMPOUND-LIMIT-001", "traversal",
+            packet.EventChains.Where(chain => chain.HandlerSymbol?.Contains("PageThree.RunButton_Click", StringComparison.Ordinal) == true)
+                .All(chain => chain.TraversalObservation?.TerminalReachabilityComplete != true),
+            "an incomplete graph must not present page three as a clean terminal absence");
+        RequireCatalogEvidence("MW-COMPOUND-LIMIT-001", "traversal",
+            packet.Gaps.Select(gap => gap.RuleId),
+            packet.Gaps.Select(gap => gap.EvidenceTier),
+            packet.Gaps.Select(gap => gap.Classification));
+    }
+
+    [Fact]
     public async Task Repeat_scans_pin_byte_identical_facts_per_root()
     {
         using var temp = new TempDirectory();
-        foreach (var root in (string[])["root-alpha", "root-beta", "vb-projectless", "root-generated", "root-crosslanguage"])
+        foreach (var root in (string[])["root-alpha", "root-beta", "vb-projectless", "vb-compound-pages", "root-generated", "root-crosslanguage"])
         {
             var first = Path.Combine(temp.Path, $"{root}-first");
             var second = Path.Combine(temp.Path, $"{root}-second");

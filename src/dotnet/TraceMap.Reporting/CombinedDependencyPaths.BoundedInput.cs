@@ -54,7 +54,8 @@ public static partial class CombinedDependencyPathReporter
                 budget,
                 options.StartingFactIds,
                 options.MaxDepth,
-                options.MaxFrontier);
+                options.MaxFrontier,
+                options.MaxTraversalWork);
             var endpoints = CombinedDependencyReporter.MatchEndpoints(read.Sources, read.Facts);
             var surfaces = CombinedDependencyReporter.BuildSurfaces(read.Facts, read.Sources);
             var graph = BuildGraph(read, endpoints, surfaces, null, includeLegacyRoots: true, budget);
@@ -239,7 +240,9 @@ public static partial class CombinedDependencyPathReporter
         SqliteConnection connection, CombinedReportSource source, bool hasExtractorVersion,
         ReportInputBudget budget, CancellationToken cancellationToken,
         IReadOnlySet<string>? selectedFactIds = null,
-        IReadOnlySet<string>? selectedSymbols = null)
+        IReadOnlySet<string>? selectedSymbols = null,
+        int maxFrontier = 10000,
+        int maxTraversalWork = 100_000)
     {
         var rows = new List<CombinedFactRow>();
         var symbols = new HashSet<string>(StringComparer.Ordinal);
@@ -312,19 +315,33 @@ public static partial class CombinedDependencyPathReporter
         // Admit semantic method candidates plus the compact syntax declaration
         // metadata needed to prove a typed field and its bounded base chain.
         // The graph rule still requires unique receiver and target identities.
-        var bridgeMethodNames = rows
-            .Where(row => row.FactType == FactTypes.CallEdge
-                && row.RuleId == RuleIds.VisualBasicSyntaxCallGraph
-                && string.Equals(row.Properties.GetValueOrDefault("callKind"), "SyntaxInvocation", StringComparison.Ordinal)
-                && !string.IsNullOrWhiteSpace(row.Properties.GetValueOrDefault("receiverName")))
-            .Select(row => row.Properties.GetValueOrDefault("calleeName"))
-            .Where(name => !string.IsNullOrWhiteSpace(name))
-            .Select(name => name!)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .OrderBy(name => name, StringComparer.OrdinalIgnoreCase)
-            .ToArray();
-        if (bridgeMethodNames.Length > 0)
+        var inspectedBridgeNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var syntaxClosureWork = 0;
+        void CountSyntaxClosureWork()
         {
+            if (++syntaxClosureWork > maxTraversalWork)
+                throw new ReportInputLimitException("graph-syntax-closure-work");
+        }
+        while (true)
+        {
+            var bridgeMethodNames = rows
+                .Where(row => row.FactType == FactTypes.CallEdge
+                    && row.RuleId == RuleIds.VisualBasicSyntaxCallGraph
+                    && string.Equals(row.Properties.GetValueOrDefault("callKind"), "SyntaxInvocation", StringComparison.Ordinal)
+                    && !string.IsNullOrWhiteSpace(row.Properties.GetValueOrDefault("receiverName")))
+                .Select(row => row.Properties.GetValueOrDefault("calleeName"))
+                .Where(name => !string.IsNullOrWhiteSpace(name))
+                .Select(name => name!)
+                .Where(name => !inspectedBridgeNames.Contains(name))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(name => name, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+            if (bridgeMethodNames.Length == 0) break;
+            if (bridgeMethodNames.Length > maxFrontier
+                || inspectedBridgeNames.Count > budget.MaxFacts - bridgeMethodNames.Length)
+                throw new ReportInputLimitException("handler-call-target-frontier");
+            foreach (var _ in bridgeMethodNames) CountSyntaxClosureWork();
+            inspectedBridgeNames.UnionWith(bridgeMethodNames);
             await using var command = connection.CreateCommand();
             command.CommandText = CompactFactQuery(hasExtractorVersion, $$"""
                 json_valid(properties_json) and (
@@ -346,6 +363,7 @@ public static partial class CombinedDependencyPathReporter
             await using var reader = await command.ExecuteReaderAsync(cancellationToken);
             while (await reader.ReadAsync(cancellationToken))
             {
+                CountSyntaxClosureWork();
                 budget.VisitFact();
                 var bytes = reader.GetInt64(16);
                 budget.CheckRow(bytes);
@@ -388,10 +406,14 @@ public static partial class CombinedDependencyPathReporter
                         + "where instr(lower(source_symbol), lower(cast(names.value as text))) > 0) "
                         + "order by source_symbol collate binary limit $candidate_limit;";
                     bodyCommand.Parameters.AddWithValue("$method_names", JsonSerializer.Serialize(bridgeMethodNames));
-                    bodyCommand.Parameters.AddWithValue("$candidate_limit", budget.MaxFacts + 1L);
+                    bodyCommand.Parameters.AddWithValue("$candidate_limit", Math.Min(budget.MaxFacts, maxFrontier) + 1L);
                     await using var bodyReader = await bodyCommand.ExecuteReaderAsync(cancellationToken);
+                    var bodyCandidates = 0;
                     while (await bodyReader.ReadAsync(cancellationToken))
                     {
+                        CountSyntaxClosureWork();
+                        if (++bodyCandidates > Math.Min(budget.MaxFacts, maxFrontier))
+                            throw new ReportInputLimitException("handler-call-target-frontier");
                         var symbol = bodyReader.GetString(0);
                         var member = VisualBasicQualifiedMemberKey(symbol);
                         if (member is not null && syntaxMembers.Any(candidate =>
@@ -400,7 +422,7 @@ public static partial class CombinedDependencyPathReporter
                             && VisualBasicTypeMatches(candidate.Type, member.Value.Type)))
                         {
                             bodySymbols.Add(symbol);
-                            if (bodySymbols.Count > budget.MaxFacts)
+                            if (bodySymbols.Count > maxFrontier)
                                 throw new ReportInputLimitException("handler-call-target-frontier");
                         }
                     }
@@ -415,6 +437,7 @@ public static partial class CombinedDependencyPathReporter
                     await using var bodyFactsReader = await bodyFactsCommand.ExecuteReaderAsync(cancellationToken);
                     while (await bodyFactsReader.ReadAsync(cancellationToken))
                     {
+                        CountSyntaxClosureWork();
                         var factType = bodyFactsReader.GetString(4);
                         var symbolOnly = bodyFactsReader.GetBoolean(15);
                         if (symbolOnly && factType != FactTypes.MethodInvoked) continue;

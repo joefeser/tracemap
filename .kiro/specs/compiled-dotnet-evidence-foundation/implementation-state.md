@@ -1899,3 +1899,28 @@ passed with zero warnings/errors; the private-path guard, Kiro self-test, and
 and passed with a private local receipt at code commit `7d4c748d97bafa00ef936f14ca3a0afd130911b9`.
 The PR head will receive a fresh exact-head smoke run. No full .NET suite or
 private corpus scan is claimed by these checks.
+
+## Compound projectless VB Web Forms chains (2026-09-23)
+
+Branch `codex/webforms-page-chain-repro` starts from `origin/dev` at
+`9c136d6b` after PR #788 merged. Issue #789 records the unresolved private
+pages 2, 3, and 11 acceptance failure without publishing private artifacts.
+The new public-safe `vb-compound-pages` fixture has five same-name receiver
+methods in one file, two further call levels, and two/zero/one supported SQL
+terminals by page. Before the fix, the scan retained downstream VB call and
+SQL facts, and the unbounded graph retained receiver bridges, but the bounded
+single-index packet reader admitted only its first wave of projectless VB
+method bodies. It therefore reported zero terminals for the page-two analogue
+even with a large display depth. The reader now admits newly discovered method
+bodies until no new syntax call names remain, subject to explicit input work,
+frontier, fact, and text limits; an interrupted closure is marked partial.
+Regression tests pin exact same-name bridges, depth-8/depth-10 inventory,
+a two-root merged-index packet, no-terminal page-three scope, and a deliberately
+exhausted work limit. Private page improvement remains unverified pending a
+fresh merged-index rerun; Task 10 and Task 11 remain open.
+
+Public local validation: focused compound regression passed, full .NET suite
+2,269/2,269 passed, zero-warning solution build under `-warnaserror` passed,
+and the focused page traversal, depth, completed-depth-summary, and targeted
+depth-comparison PowerShell tests passed. JSON parsing, `git diff --check`,
+and the private-path guard passed. No private work-corpus scan was performed.
