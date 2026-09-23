@@ -69,17 +69,32 @@ try {
         $null = & pwsh -NoProfile -File $runner -Lane FullCorpus -EnableFullCorpus -BoundedReceiptPath $oldReceipt -TraceMapRoot $repo -TraceMapCommit $sha -OutputRoot $fullOut 2>&1
         if ($LASTEXITCODE -eq 0 -or (Test-Path -LiteralPath $fullOut)) { throw 'UNBOUNDED_PRIOR_RECEIPT_ACCEPTED' }
         $wrongProfileReceipt = Join-Path $root 'wrong-profile-receipt.json'
-        @{
+        $profileReceipt = @{
             schemaVersion = 2; kind = 'Bounded'; status = 'passed'; runnerSha256 = $RunnerSha256; traceMapCommit = $sha
             corpusProfile = 'HistoricalMaster'; corpusCommit = '642bdaede0b97a400c24266e30670ed5c1c98689'
             admissionPolicy = @{ maxFiles = 427; maxBytes = 64MB; maxCandidateEntries = 4096 }
-            boundedSelection = @{ fileCount = 1; sourceBytes = 14; maxFiles = 427; maxBytes = 64MB; maxCandidateEntries = 4096 }
+            boundedSelection = @{
+                fileCount = $bounded.fileCount; sourceBytes = $bounded.sourceBytes
+                maxFiles = 427; maxBytes = 64MB; maxCandidateEntries = 4096
+                candidateEntries = (Get-Task11CandidateEntryCount $repo)
+                candidateEntriesAfterTests = (Get-Task11CandidateEntryCount $repo)
+            }
             boundedPaths = @('README.txt')
             provenance = @{ generatorSha256 = ('a' * 64); generatorPayloadSha256 = ('b' * 64); boundedInputSha256 = ('c' * 64) }
-        } | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $wrongProfileReceipt
+        }
+        $profileReceipt | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $wrongProfileReceipt
         $wrongProfileOutput = & pwsh -NoProfile -File $runner -Lane FullCorpus -CorpusProfile BuildableFix -EnableFullCorpus -BoundedReceiptPath $wrongProfileReceipt -TraceMapRoot $repo -TraceMapCommit $sha -OutputRoot $fullOut 2>&1 | Out-String
         if ($LASTEXITCODE -eq 0 -or (Test-Path -LiteralPath $fullOut) -or
             -not $wrongProfileOutput.Contains('BOUNDED_RECEIPT_INVALID')) { throw 'CROSS_PROFILE_RECEIPT_ACCEPTED' }
+        $validProfileReceipt = Join-Path $root 'valid-profile-receipt.json'
+        $profileReceipt.corpusProfile = 'BuildableFix'
+        $profileReceipt | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $validProfileReceipt
+        $validProfileOut = Join-Path $root 'valid-profile-output'
+        $missingIlAsm = Join-Path $root 'missing-ilasm.exe'
+        $validProfileOutput = & pwsh -NoProfile -File $runner -Lane FullCorpus -CorpusProfile buildablefix -EnableFullCorpus -BoundedReceiptPath $validProfileReceipt -TraceMapRoot $repo -TraceMapCommit $sha -OutputRoot $validProfileOut -IlAsmPath $missingIlAsm 2>&1 | Out-String
+        if ($LASTEXITCODE -eq 0 -or -not (Test-Path -LiteralPath $validProfileOut) -or
+            -not $validProfileOutput.Contains('ILASM_UNAVAILABLE') -or
+            $validProfileOutput.Contains('BOUNDED_RECEIPT_INVALID')) { throw 'VALID_PROFILE_RECEIPT_REJECTED' }
     }
     Expect-Block { Assert-Task11Checkout $repo ('0' * 40) 'CORPUS' } 'CORPUS_COMMIT_MISMATCH'
     Assert-Task11Checkout $repo $sha 'CORPUS'

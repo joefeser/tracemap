@@ -31,6 +31,11 @@ $CorpusProfiles = @{
     HistoricalMaster = [ordered]@{ commit = 'db8c3359badfec620ccdc6df062b1756ef9607f8'; maxFiles = 256 }
     BuildableFix = [ordered]@{ commit = '642bdaede0b97a400c24266e30670ed5c1c98689'; maxFiles = 427 }
 }
+$CorpusProfile = switch ($CorpusProfile.ToLowerInvariant()) {
+    'historicalmaster' { 'HistoricalMaster' }
+    'buildablefix' { 'BuildableFix' }
+    default { throw 'CORPUS_PROFILE_INVALID' }
+}
 $CorpusCommit = $CorpusProfiles[$CorpusProfile].commit
 $MaxBoundedFiles = $CorpusProfiles[$CorpusProfile].maxFiles
 $MaxBoundedBytes = 64MB

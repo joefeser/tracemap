@@ -65,6 +65,7 @@ old, cross-profile, or different-runner receipts fail closed. The fix profile do
 the #769 historical pin or claim the build and tests have passed. Select it
 explicitly with `-CorpusProfile BuildableFix` and keep all private arguments,
 outputs, and receipts local.
+Profile input is case-insensitive; receipts record the canonical profile name.
 
 Supply the smallest viable historical project as `-SliceProject` (absolute or
 relative to the corpus root) and its resulting test assembly as
