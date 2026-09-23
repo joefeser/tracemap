@@ -299,6 +299,12 @@ public sealed class IlAsmIldasmParityGateTests
         var tools = cases.Single(item => item.GetProperty("id").GetString() == "ILASM-PARITY-TOOLS-001");
         Assert.Empty(tools.GetProperty("expectedRuleIds").EnumerateArray());
         Assert.Contains("Framework64", tools.GetProperty("prerequisites").GetString(), StringComparison.Ordinal);
+        var controlFlow = cases.Single(item => item.GetProperty("id").GetString() == "ILASM-PARITY-CFLOW-002");
+        Assert.Contains("identical canonical method bodies", controlFlow.GetProperty("shape").GetString(), StringComparison.Ordinal);
+        Assert.DoesNotContain("identical normalized IL text", controlFlow.GetProperty("shape").GetString(), StringComparison.Ordinal);
+        var validation = File.ReadAllText(Path.Combine(FindRepoRoot(), "docs", "VALIDATION.md"));
+        Assert.Contains("`TRACEMAP_PARITY_ILASM`/`TRACEMAP_PARITY_ILDASM`", validation, StringComparison.Ordinal);
+        Assert.DoesNotContain("`TRACEMAP_PARITY_ILASM`/`TRACEMAP_ILDASM`", validation, StringComparison.Ordinal);
         var pdbCase = cases.Single(item => item.GetProperty("id").GetString() == "ILASM-PARITY-PDB-006");
         Assert.Equal(EvidenceTiers.Tier4Unknown, pdbCase.GetProperty("expectedTier").GetString());
         Assert.Contains("IldasmPortablePdbLineOracleUnavailable",

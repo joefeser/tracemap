@@ -3239,7 +3239,7 @@ discovery step searches, in order: the .NET Framework `Framework64`/
 4.8/4.8.1 Tools directories (x64 first), Windows Kits, Visual Studio, and
 PATH; it then selects one ILAsm and one ILDAsm by that same order and hands
 their absolute paths to the test process through
-`TRACEMAP_PARITY_ILASM`/`TRACEMAP_ILDASM`. The in-test discovery consumes
+`TRACEMAP_PARITY_ILASM`/`TRACEMAP_PARITY_ILDASM`. The in-test discovery consumes
 and re-validates that handoff first, then its own ordered candidates
 (runtime directories, NETFX tools, PATH). Both tools are pinned by absolute
 path with a recorded `4.8.`-prefixed file version AND a non-empty product

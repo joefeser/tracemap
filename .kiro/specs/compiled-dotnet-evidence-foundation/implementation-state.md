@@ -1578,3 +1578,11 @@ not implemented, until that PDB half is independently observed. The broader
 Windows tool discovery already flows through the
 workflow environment handoff on this head; no second discovery path was
 added to the test.
+
+The next exact-head review found two claim/documentation slips, not scanner
+defects: `ILASM-PARITY-CFLOW-002` still said whole-file normalized IL text
+where the gate compares canonical method bodies, and `docs/VALIDATION.md`
+spelled the ILDAsm handoff variable without `_PARITY_`. Both are corrected
+and covered by the fixture-catalog test. The prior head's complete CI matrix
+was green, including the Windows parity job; this follow-up needs its own
+exact-head checks and ACK decision.
