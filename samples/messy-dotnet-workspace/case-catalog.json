@@ -216,9 +216,13 @@
         "extraction",
         "reconciliation"
       ],
-      "expectedRuleIds": ["csharp.syntax.callgraph.v1", "vb.semantic.callgraph.v1", "dotnet.compiled.member.v1", "dotnet.compiled.source-identity.v1"],
-      "expectedTiers": ["Tier1Semantic", "Tier3SyntaxOrTextual", "Tier4Unknown"],
-      "expectedGaps": ["CompilationDiagnostic", "SourceMetadataReconciliationUnsupportedLanguage"],
+      "expectedRuleIds": ["vb.semantic.callgraph.v1", "dotnet.compiled.member.v1", "dotnet.compiled.source-identity.v1"],
+      "expectedTiers": ["Tier1Semantic", "Tier2Structural", "Tier4Unknown"],
+      "expectedGaps": ["SourceMetadataReconciliationUnsupportedLanguage"],
+      "alternativeEvidence": [
+        {"expectedRuleIds": ["csharp.semantic.callgraph.v1"], "expectedTiers": ["Tier1Semantic"], "expectedGaps": []},
+        {"expectedRuleIds": ["csharp.syntax.callgraph.v1"], "expectedTiers": ["Tier3SyntaxOrTextual"], "expectedGaps": ["CompilationDiagnostic"]}
+      ],
       "assertions": "the public projects build, the C# to VB hop is either semantic or explicitly downgraded to syntax plus a compilation gap, the VB to F# call is semantic, the F# compiled method is inventoried, and unsupported F# source ownership emits a gap rather than a guessed join; no complete cross-language source traversal is claimed"
     },
     {
