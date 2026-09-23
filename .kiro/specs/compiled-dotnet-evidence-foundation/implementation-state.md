@@ -1518,3 +1518,22 @@ gap branch executed with the work-machine command and expected receipt
 recorded in the run log, and no PDB parity is claimed — Task 10's checkbox
 stays open on exactly that one prerequisite. The fifth exact-head CI run
 (the constructor-marker repair) is pending at this note's head.
+
+Fifth exact-head CI run at `24100420` on 2026-09-23 is green everywhere:
+`public-mutation-matrix` passed on Ubuntu (133 tests), macOS, and Windows
+(133 tests including all eight gate tests and seven parser tests; run
+https://github.com/joefeser/tracemap/actions/runs/35802803285/job/106996742841),
+and every ordinary lane including all three `package-smoke` jobs passed.
+The gate's public parity claims now stand proven on the pinned toolchain:
+toolchain pinning with exact versions, control-flow and exception-region
+round trip fully `unchanged` with count-level oracle agreement, the
+member-shape round trip with symbolic operands preserved and renumbered
+raw tokens classified exactly `operand-only-change` with
+identity-preserving retargets, mutation-classification parity through the
+independent round trip, and repeat-scan determinism. The one open
+prerequisite is PDB sequence-point parity: the hosted ILDAsm 4.8.3928.0
+observes no portable PDB through `/linenum`, so `ILASM-PARITY-PDB-006`
+records the typed oracle-availability gap with the work-machine command
+and expected receipt, no PDB parity is claimed, and Task 10's checkbox
+stays open on exactly that gap pending a work-machine run. ACK review on
+this head follows; Task 11 (#768/#769) remains separate.
