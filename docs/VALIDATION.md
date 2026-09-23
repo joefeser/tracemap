@@ -3254,7 +3254,20 @@ depends on ILAsm or ILDAsm. ILDAsm `/out=... /nobar` text and an ILAsm
 `/dll /nologo /output=...` round trip are the independent oracles, parsed by
 the test-local `IlDasmTextParser` (whose own tests run on every OS); Mono.Cecil
 is never the parity oracle because it is one of TraceMap's two internal
-readers. The six catalog cases live in `fixture-cases.json` schema v9
+readers.
+
+The canonical comparison retains complete method declarations (including
+calling conventions, generic constraints and custom modifiers), local
+signatures and initialization, and wrapped instruction operands. Quoted
+literal whitespace stays significant. Exception ends already observed at an
+instruction boundary are never extended to the method end; sibling handlers
+share their protected range, and lexical-scope braces do not close EH blocks.
+Parser regressions cover offsets beyond `0xffff` and reject unsupported
+offset-form EH clauses, malformed `.line` directives and incomplete switches.
+This remains a parser for the bounded public fixtures, not a general ILAsm
+grammar or an ECMA-335 verifier.
+
+The six catalog cases live in `fixture-cases.json` schema v9
 (`ilasmParityCases`):
 
 - `ILASM-PARITY-TOOLS-001` — pinned discovery, versions, and invocability.
@@ -3276,7 +3289,8 @@ readers. The six catalog cases live in `fixture-cases.json` schema v9
   sides. The parser also retains filter start offsets when present.
 - `ILASM-PARITY-MEMBER-004` — the member-shape fixture's generic method
   specifications, `ldtoken` type tokens, `calli` standalone signatures,
-  static field operands, custom-modifier parameters, accessors, and vararg
+  static field operands, explicit `modopt` parameters and `modreq` returns,
+  accessors, and vararg
   declarations round trip with every symbolic operand preserved verbatim in
   the canonical ILDAsm body. ILAsm renumbers raw module-local reference rows
   on re-emission (observed for cross-assembly MemberRefs), and TraceMap's
@@ -3284,6 +3298,10 @@ readers. The six catalog cases live in `fixture-cases.json` schema v9
   methods classify exactly `operand-only-change` with every call-retarget
   identity preserved; constructors are joined under their own
   `constructor:` identity kind.
+  The modifier-bearing input is constructed before disassembly: C#'s
+  non-virtual `in int` alone does not supply a custom-modifier signature.
+  A platform-neutral test checks fixture construction; only the Windows
+  ILDAsm observation establishes independent modifier preservation.
 - `ILASM-PARITY-MUTATE-005` — the branch-retarget, handler-kind, and
   stack-neutral insertion mutations keep their exact TraceMap relationship
   classification when the mutated after side passes through the independent

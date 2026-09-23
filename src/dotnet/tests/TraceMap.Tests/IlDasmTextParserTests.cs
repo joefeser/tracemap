@@ -10,6 +10,129 @@ namespace TraceMap.Tests;
 /// </summary>
 public sealed class IlDasmTextParserTests
 {
+    [Theory]
+    [InlineData(".locals init (int32 V_0)", ".locals init (int64 V_0)")]
+    [InlineData(".locals init (int32 V_0)", ".locals (int32 V_0)")]
+    [InlineData("Loop(int32 count)", "Loop(int64 count)")]
+    [InlineData("static int32  Loop", "static int64  Loop")]
+    [InlineData("static int32  Loop", "static vararg int32  Loop")]
+    public void Canonical_comparison_preserves_signatures_and_local_initialization(string original, string replacement)
+    {
+        Assert.Contains(original, Sample, StringComparison.Ordinal);
+        Assert.NotEqual(IlDasmTextParser.ParseText(Sample).CanonicalMethodsText(),
+            IlDasmTextParser.ParseText(Sample.Replace(original, replacement, StringComparison.Ordinal)).CanonicalMethodsText());
+    }
+
+    [Fact]
+    public void Canonical_comparison_preserves_wrapped_symbolic_operands()
+    {
+        var wrapped = Sample.Replace("void [System.Runtime]System.Console::WriteLine(string)",
+            "void [System.Runtime]System.Console::WriteLine(\n                     string)", StringComparison.Ordinal);
+        var changed = wrapped.Replace("                     string)", "                     int32)", StringComparison.Ordinal);
+        Assert.NotEqual(IlDasmTextParser.ParseText(wrapped).CanonicalMethodsText(),
+            IlDasmTextParser.ParseText(changed).CanonicalMethodsText());
+    }
+
+    [Fact]
+    public void Handler_at_end_of_method_keeps_the_already_observed_try_end()
+    {
+        const string text = """
+            .class public X
+            {
+              .method public static void M() cil managed
+              {
+                // Code size 5 (0x5)
+                .maxstack 1
+                .try
+                {
+                  IL_0000: ldnull
+                  IL_0001: throw
+                }
+                catch [System.Runtime]System.Exception
+                {
+                  IL_0002: pop
+                  IL_0003: rethrow
+                }
+              }
+            }
+            """;
+        var region = Assert.Single(IlDasmTextParser.ParseText(text).Method("X", "M").ExceptionRegions);
+        Assert.Equal(2, region.TryEnd);
+        Assert.Equal(5, region.HandlerEnd);
+    }
+
+    [Fact]
+    public void Consecutive_catches_share_the_same_protected_range()
+    {
+        var text = Sample.Replace("} // end handler", "} // end handler\ncatch [System.Runtime]System.ArgumentException\n{\nIL_0015: throw\n}", StringComparison.Ordinal);
+        var regions = IlDasmTextParser.ParseText(text).Method("TraceMap.CompiledFixtures.CSharp.Il.SampleShapes", "Guarded").ExceptionRegions;
+        Assert.Equal(2, regions.Count);
+        Assert.All(regions, region => { Assert.Equal(1, region.TryStart); Assert.Equal(8, region.TryEnd); });
+        Assert.Equal(0x15, regions[0].HandlerEnd);
+        Assert.Equal(0x15, regions[1].HandlerStart);
+        Assert.Equal(0x16, regions[1].HandlerEnd);
+    }
+
+    [Fact]
+    public void Lexical_scope_braces_do_not_close_the_enclosing_exception_region()
+    {
+        var scoped = Sample.Replace("IL_0002:  ldc.i4.s   41", "{\nIL_0002:  ldc.i4.s   41\n}", StringComparison.Ordinal);
+        Assert.Equal(IlDasmTextParser.ParseText(Sample).CanonicalMethodsText(),
+            IlDasmTextParser.ParseText(scoped).CanonicalMethodsText());
+    }
+
+    [Theory]
+    [InlineData("int32 modreq([System.Runtime]System.Runtime.CompilerServices.IsVolatile) M(int32 value)", "M")]
+    [InlineData("void M<(class [System.Runtime]System.IDisposable) T>(!!T value)", "M")]
+    [InlineData("method int32 *(int32) M()", "M")]
+    [InlineData("void 'A name'(int32 value)", "A name")]
+    public void Method_names_ignore_parentheses_in_modifiers_constraints_and_function_pointers(string signature, string name)
+    {
+        var text = $".class public X\n{{\n.method public static {signature} cil managed\n{{\n// Code size 1\n.maxstack 8\nIL_0000: ret\n}}\n}}";
+        Assert.Equal(name, Assert.Single(IlDasmTextParser.ParseText(text).Methods).MethodName);
+    }
+
+    [Fact]
+    public void Wrapped_header_preserves_parameter_modifiers_and_generic_constraints()
+    {
+        const string header = ".method public static void M<(class [System.Runtime]System.IDisposable) T>(\n!!T modopt([System.Runtime]System.Runtime.CompilerServices.IsConst) arg) cil managed";
+        var text = $".class public X\n{{\n{header}\n{{\n// Code size 1\n.maxstack 8\nIL_0000: ret\n}}\n}}";
+        var original = IlDasmTextParser.ParseText(text);
+        Assert.Equal("M", Assert.Single(original.Methods).MethodName);
+        foreach (var changed in new[] { text.Replace("modopt", "modreq"), text.Replace("IDisposable", "ICloneable") })
+            Assert.NotEqual(original.CanonicalMethodsText(), IlDasmTextParser.ParseText(changed).CanonicalMethodsText());
+    }
+
+    [Fact]
+    public void Large_offsets_and_switch_targets_are_not_truncated()
+    {
+        var text = Sample.Replace("IL_001a", "IL_1001a", StringComparison.Ordinal)
+            .Replace("IL_001b", "IL_1001b", StringComparison.Ordinal)
+            .Replace("40 (0x28)", "65564 (0x1001c)", StringComparison.Ordinal);
+        var method = IlDasmTextParser.ParseText(text).Method("TraceMap.CompiledFixtures.CSharp.Il.SampleShapes", "Choose");
+        Assert.Contains(method.Instructions, instruction => instruction.Offset == 0x1001a);
+        Assert.Contains("1001a", Assert.Single(method.Instructions, instruction => instruction.Opcode == "switch").Operand, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Quoted_whitespace_in_operands_is_significant()
+    {
+        var first = Sample.Replace("\"done\"", "\"two  spaces\"", StringComparison.Ordinal);
+        var second = first.Replace("two  spaces", "two spaces", StringComparison.Ordinal);
+        Assert.NotEqual(IlDasmTextParser.ParseText(first).CanonicalMethodsText(), IlDasmTextParser.ParseText(second).CanonicalMethodsText());
+        var catchType = Sample.Replace("catch [System.Runtime]System.Exception", "catch [Sample]'Two  spaces'", StringComparison.Ordinal);
+        Assert.NotEqual(IlDasmTextParser.ParseText(catchType).CanonicalMethodsText(),
+            IlDasmTextParser.ParseText(catchType.Replace("Two  spaces", "Two spaces", StringComparison.Ordinal)).CanonicalMethodsText());
+    }
+
+    [Fact]
+    public void Unsupported_line_and_exception_directives_and_unterminated_switches_fail_closed()
+    {
+        Assert.Throws<InvalidOperationException>(() => IlDasmTextParser.ParseText(Sample.Replace(".maxstack  2", ".line unexpected")));
+        Assert.Throws<InvalidOperationException>(() => IlDasmTextParser.ParseText(Sample.Replace(".try", ".try IL_0001 to IL_0008 catch X handler IL_0008 to IL_0016")));
+        Assert.Throws<InvalidOperationException>(() => IlDasmTextParser.ParseText(Sample.Replace("IL_001a)", "IL_001a,")));
+    }
+
     private const string Sample = """
         .assembly extern System.Runtime
         {

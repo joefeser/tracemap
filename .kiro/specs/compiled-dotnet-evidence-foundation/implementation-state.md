@@ -1586,3 +1586,60 @@ spelled the ILDAsm handoff variable without `_PARITY_`. Both are corrected
 and covered by the fixture-catalog test. The prior head's complete CI matrix
 was green, including the Windows parity job; this follow-up needs its own
 exact-head checks and ACK decision.
+
+### PR #783 independent ECMA review (2026-09-23)
+
+Reviewed the full PR delta at `e3c0ff7ca5a7c4e6ef0114ed76c076878bff0abe`,
+including the Windows workflow, independent parser, parity assertions,
+fixture catalog, rule limitations and validation claims. Work branch:
+`codex/review-pr783-ecma`, isolated from the existing implementation worktree.
+The owner requested an independent review, without a PR review loop.
+
+Four P2 defect families were repaired; no P1 defect was established:
+
+1. **Incomplete canonical identity.** Method declarations were reduced to a
+   short name and locals to a count. Changing parameter/return types, vararg
+   calling convention, local types or local initialization could leave the
+   independent comparison equal. Preserve full wrapped declarations and local
+   signatures, including constraints/modifiers, and parse the method name
+   without mistaking modifier/function-pointer parentheses for parameters.
+2. **Dropped instruction evidence.** Wrapped non-switch operands were ignored,
+   and four-digit offset patterns discarded instructions/targets above
+   `0xffff`. Retain operand continuation text and complete offsets. Keep quoted
+   whitespace significant; reject malformed line directives and incomplete
+   switches instead of silently omitting observations.
+3. **Incorrect EH boundaries.** A handler ending at the method boundary caused
+   `Build()` to overwrite its already-observed try end with code size. Preserve
+   resolved ends, pair sibling handlers with the same protected range, and
+   distinguish PDB lexical-scope braces from EH braces. Unsupported offset-form
+   clauses fail explicitly rather than producing guessed regions.
+4. **Missing claimed modifier coverage.** The compiler fixture's non-virtual
+   `in int` parameter did not exercise custom-modifier signatures. Construct
+   explicit optional parameter and required return modifiers before the parity
+   round trip; assert their presence in the independent ILDAsm declarations.
+   Cecil checks fixture construction only, never parity.
+
+Seven newly added regression cases were run against the original parser and
+failed as expected (five signature/local mutations, a wrapped operand mutation,
+and the terminal-handler boundary). The expanded matrix also covers generic
+constraints, function pointers, quoted names, multiple handlers, lexical scopes,
+large offsets, literal whitespace and malformed observations. The rule catalog
+now states the portable-PDB oracle gap explicitly, matching the existing
+partial/deferred fixture statuses. Task 10 remains unchecked on that gap.
+
+Reference boundaries: ECMA-335 Partition II specifies method/local signatures
+and exception regions; Microsoft's ILDAsm implementation emits wrapped operands,
+lexical scopes and minimum-width (not fixed-width) hexadecimal offsets.
+Sources: https://ecma-international.org/publications-and-standards/standards/ecma-335/
+and https://github.com/dotnet/runtime/blob/main/src/coreclr/ildasm/dis.cpp.
+No core scanner/reducer implementation changed. Windows parity must be checked
+on the pushed repair head; local macOS early returns are not Windows proof.
+
+Local validation: locked restore; solution build with `-warnaserror` (zero
+warnings/errors); full .NET suite 2,253/2,253 passed; sample CLI scan emitted
+101 facts and passed `validate-adapter-artifacts.py`; private-path guard,
+fixture JSON parse, Kiro review self-test and `git diff --check` passed. The
+final quoted-catch-identity regression and synthetic offset/code-size
+corrections were checked by a focused rebuild after the full suite. Windows
+parity cases return early on macOS and are excluded from any local parity
+claim; the pushed-head Windows extended job is the required proof.
