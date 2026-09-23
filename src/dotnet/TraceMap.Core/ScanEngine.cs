@@ -52,8 +52,10 @@ public static class ScanEngine
                     outputPath,
                     options.ExcludeGlobs,
                     sourcePathComparer,
-                    options.IncludeGlobs);
+                    options.IncludeGlobs,
+                    ExactSourceEnumerationLimit(options));
                 inventory = ApplyScope(fullInventory, repoPath, options);
+                ValidateExactSourceScope(fullInventory, inventory, options, sourcePathComparer);
                 cancellationToken.ThrowIfCancellationRequested();
                 progress?.FinishStage(
                     ScanProgressReporter.ScanOperation,
@@ -155,6 +157,11 @@ public static class ScanEngine
 
         inventory = IncludeSemanticallyAnalyzedFiles(inventory, fullInventory, semanticResult);
         var discoveredSnapshotInventory = IncludeSemanticInputs(inventory, fullInventory, semanticResult);
+        if (options.ExactSourceScope)
+        {
+            ValidateExactSourceScope(fullInventory, discoveredSnapshotInventory, options,
+                CSharpSemanticExtractor.CreateSourcePathComparer(repoPath));
+        }
         IReadOnlyList<FileInventoryItem> authoritativeSnapshotInventory;
         string sourceSnapshotDigest;
         using var preVerificationReceipt = receiptRecorder?.StartStage("source-verification", "pre-extraction-snapshot-verification");
@@ -167,7 +174,8 @@ public static class ScanEngine
                 outputPath,
                 options.ExcludeGlobs,
                 sourcePathComparer,
-                options.IncludeGlobs);
+                options.IncludeGlobs,
+                ExactSourceEnumerationLimit(options));
             var refreshedInventory = ApplyScope(refreshedFullInventory, repoPath, options);
             refreshedInventory = IncludeSemanticallyAnalyzedFiles(
                 refreshedInventory,
@@ -177,6 +185,11 @@ public static class ScanEngine
                 refreshedInventory,
                 refreshedFullInventory,
                 semanticResult);
+            if (options.ExactSourceScope)
+            {
+                ValidateExactSourceScope(refreshedFullInventory, refreshedSnapshotInventory, options,
+                    sourcePathComparer);
+            }
             VerifySourceSnapshotInventoryMembership(discoveredSnapshotInventory, refreshedSnapshotInventory);
             VerifySemanticInputSnapshot(
                 repoPath,
@@ -392,7 +405,8 @@ public static class ScanEngine
                 outputPath,
                 options.ExcludeGlobs,
                 sourcePathComparer,
-                options.IncludeGlobs);
+                options.IncludeGlobs,
+                ExactSourceEnumerationLimit(options));
             var verificationInventory = ApplyScope(verificationFullInventory, repoPath, options);
             verificationInventory = IncludeSemanticallyAnalyzedFiles(
                 verificationInventory,
@@ -402,6 +416,11 @@ public static class ScanEngine
                 verificationInventory,
                 verificationFullInventory,
                 semanticResult);
+            if (options.ExactSourceScope)
+            {
+                ValidateExactSourceScope(verificationFullInventory, verificationSnapshotInventory, options,
+                    sourcePathComparer);
+            }
             VerifySourceSnapshotInventory(authoritativeSnapshotInventory, verificationSnapshotInventory);
             verificationDigest = CreateSourceSnapshotDigest(repoPath, verificationSnapshotInventory);
             cancellationToken.ThrowIfCancellationRequested();
@@ -1234,6 +1253,47 @@ public static class ScanEngine
             || value.Contains("${", StringComparison.Ordinal)
             || value.Contains("$(", StringComparison.Ordinal)
             || value.Contains("%", StringComparison.Ordinal);
+    }
+
+    private static int? ExactSourceEnumerationLimit(ScanOptions options) =>
+        options.ExactSourceScope
+            ? (int)Math.Clamp((long)options.ExactSourceMaxFiles * 16, 1024, 65536)
+            : null;
+
+    private static void ValidateExactSourceScope(
+        IReadOnlyList<FileInventoryItem> fullInventory,
+        IReadOnlyList<FileInventoryItem> selectedInventory,
+        ScanOptions options,
+        StringComparer comparer)
+    {
+        if (!options.ExactSourceScope)
+            return;
+
+        var includes = options.IncludeGlobs ?? [];
+        if (includes.Count == 0 || (options.ExcludeGlobs?.Count ?? 0) != 0
+            || options.ExactSourceMaxFiles <= 0 || options.ExactSourceMaxBytes <= 0)
+            throw new InvalidOperationException("ExactSourceScopeInvalidOptions");
+
+        var declared = new HashSet<string>(comparer);
+        foreach (var include in includes)
+        {
+            var normalized = FileInventory.NormalizeRelativePath(include.Replace('\\', '/'));
+            if (string.IsNullOrWhiteSpace(normalized)
+                || Path.IsPathRooted(include)
+                || normalized.Split('/').Any(part => part is "" or "." or "..")
+                || normalized.IndexOfAny(['*', '?', '[', ']']) >= 0
+                || !declared.Add(normalized))
+                throw new InvalidOperationException("ExactSourceScopeInvalidPath");
+        }
+
+        var actual = fullInventory.Select(item => item.RelativePath).ToHashSet(comparer);
+        if (!declared.SetEquals(actual)
+            || selectedInventory.Count != fullInventory.Count
+            || selectedInventory.Any(item => !actual.Contains(item.RelativePath)))
+            throw new InvalidOperationException("ExactSourceScopeInventoryMismatch");
+        if (fullInventory.Count > options.ExactSourceMaxFiles
+            || fullInventory.Sum(item => item.SizeBytes) > options.ExactSourceMaxBytes)
+            throw new InvalidOperationException("ExactSourceScopeLimitExceeded");
     }
 
     private static IReadOnlyList<FileInventoryItem> ApplyScope(

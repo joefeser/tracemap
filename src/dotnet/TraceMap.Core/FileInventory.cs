@@ -97,7 +97,8 @@ public static class FileInventory
         string? outputPath,
         IReadOnlyList<string>? excludeGlobs,
         StringComparer? pathComparer,
-        IReadOnlyList<string>? includeGlobs)
+        IReadOnlyList<string>? includeGlobs,
+        int? maxEnumerationEntries = null)
     {
         var root = Path.GetFullPath(repoPath);
         var outputFullPath = string.IsNullOrWhiteSpace(outputPath)
@@ -120,7 +121,8 @@ public static class FileInventory
                 outputFullPath,
                 excludeGlobs ?? [],
                 pathComparer ?? StringComparer.Ordinal,
-                includeGlobs ?? []).ToArray();
+                includeGlobs ?? [],
+                maxEnumerationEntries).ToArray();
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -152,15 +154,19 @@ public static class FileInventory
         string? outputFullPath,
         IReadOnlyList<string> excludeGlobs,
         StringComparer pathComparer,
-        IReadOnlyList<string> includeGlobs)
+        IReadOnlyList<string> includeGlobs,
+        int? maxEnumerationEntries)
     {
         var pending = new Stack<string>();
+        var enumeratedEntries = 0;
         pending.Push(root);
         while (pending.Count > 0)
         {
             var directory = pending.Pop();
             foreach (var childDirectory in Directory.EnumerateDirectories(directory, "*", options))
             {
+                if (maxEnumerationEntries is int directoryLimit && ++enumeratedEntries > directoryLimit)
+                    throw new InvalidOperationException("ExactSourceScopeEnumerationLimitExceeded");
                 if (ShouldExclude(root, childDirectory, outputFullPath)
                     || IsExplicitlyExcludedDirectory(root, childDirectory, excludeGlobs, pathComparer))
                 {
@@ -180,6 +186,8 @@ public static class FileInventory
 
             foreach (var file in Directory.EnumerateFiles(directory, "*", options))
             {
+                if (maxEnumerationEntries is int fileLimit && ++enumeratedEntries > fileLimit)
+                    throw new InvalidOperationException("ExactSourceScopeEnumerationLimitExceeded");
                 if (!ShouldExclude(root, file, outputFullPath)
                     && !IsExplicitlyExcludedFile(root, file, excludeGlobs, pathComparer))
                 {

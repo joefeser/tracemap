@@ -5,10 +5,19 @@ $runner = Join-Path $PSScriptRoot 'Invoke-Task11Windows.ps1'
 $root = Join-Path ([IO.Path]::GetTempPath()) ('task11-tests-' + [guid]::NewGuid().ToString('N'))
 [void](New-Item -ItemType Directory -Path $root)
 function Expect-Block([scriptblock]$Action, [string]$Code) {
-    try { & $Action; throw "EXPECTED_BLOCK_MISSING:$Code" }
-    catch { if (-not $_.Exception.Message.Contains($Code)) { throw } }
+    $threw = $false
+    try { & $Action }
+    catch {
+        $threw = $true
+        if (-not $_.Exception.Message.Contains($Code)) { throw }
+    }
+    if (-not $threw) { throw "EXPECTED_BLOCK_MISSING:$Code" }
 }
 try {
+    $helperRejectedSuccess = $false
+    try { Expect-Block { } 'SELF_TEST' }
+    catch { $helperRejectedSuccess = $_.Exception.Message -ceq 'EXPECTED_BLOCK_MISSING:SELF_TEST' }
+    if (-not $helperRejectedSuccess) { throw 'EXPECT_BLOCK_SELF_TEST_FAILED' }
     . $runner -TraceMapRoot $root -TraceMapCommit ('a' * 40) -OutputRoot (Join-Path $root 'unused')
     [void](New-Item -ItemType Directory -Path (Join-Path $root 'rules'))
     "rules:`r`n  - id: synthetic.valid.v1`r`n" | Set-Content -LiteralPath (Join-Path $root 'rules/rule-catalog.yml') -NoNewline
@@ -22,6 +31,20 @@ try {
     & git -C $repo add .
     & git -C $repo -c user.name=Task11 -c user.email=task11@example.invalid commit -qm fixture
     $sha = (& git -C $repo rev-parse HEAD).Trim()
+    if ($IsWindows) {
+        $fallbackReceipt = New-Task11FallbackReceiptPath @($repo)
+        if (-not (Test-Path -LiteralPath (Split-Path $fallbackReceipt) -PathType Container)) {
+            throw 'PREFLIGHT_RECEIPT_LOCATION_MISSING'
+        }
+        Remove-Item -LiteralPath (Split-Path $fallbackReceipt) -Recurse -Force
+    }
+    $projectPath = Join-Path $repo 'nested/project.csproj'
+    if ((Resolve-Task11CorpusPath $repo 'nested/project.csproj') -cne [IO.Path]::GetFullPath($projectPath)) {
+        throw 'CORPUS_RELATIVE_PATH_RESOLUTION_FAILED'
+    }
+    Expect-Block { Resolve-Task11CorpusPath $repo '../outside.csproj' } 'CORPUS_PATH_OUTSIDE_ROOT'
+    Expect-Block { Assert-Task11BoundedProjectSelection $repo $projectPath @('README.txt') } 'BOUNDED_PROJECT_NOT_SELECTED'
+    Assert-Task11BoundedProjectSelection $repo $projectPath @('nested/project.csproj')
     $bounded = Assert-Task11BoundedPaths $repo @('README.txt')
     if ($bounded.fileCount -ne 1 -or $bounded.sourceBytes -le 0) { throw 'BOUNDED_FILE_SELECTION_INVALID' }
     Expect-Block { Assert-Task11BoundedPaths $repo @('*') } 'BOUNDED_PATH_NOT_EXACT_FILE'
@@ -51,6 +74,10 @@ try {
     'dirty' | Set-Content -LiteralPath (Join-Path $repo 'dirty.txt')
     Expect-Block { Assert-Task11Checkout $repo $sha 'CORPUS' } 'CORPUS_DIRTY'
     Remove-Item -LiteralPath (Join-Path $repo 'dirty.txt')
+    'ignored.cs' | Add-Content -LiteralPath (Join-Path $repo '.git/info/exclude')
+    'ignored source' | Set-Content -LiteralPath (Join-Path $repo 'ignored.cs')
+    Expect-Block { Assert-Task11Checkout $repo $sha 'CORPUS' } 'CORPUS_DIRTY'
+    Remove-Item -LiteralPath (Join-Path $repo 'ignored.cs')
     Expect-Block { Assert-Task11Checkout (Join-Path $root 'missing') $sha 'CORPUS' } 'CORPUS_UNAVAILABLE'
     Expect-Block { Assert-Task11Tool (Join-Path $root 'no-tool.exe') 'MSBUILD' } 'MSBUILD_UNAVAILABLE'
     if ($IsWindows) {
@@ -62,23 +89,48 @@ try {
     $script:Receipt = [ordered]@{ artifacts = @{}; provenance = $null }
     $scan = Join-Path $root 'scan'
     [void](New-Item -ItemType Directory -Path $scan)
-    $generator = Join-Path $repo 'README.txt'
+    $generator = Join-Path $scan 'tracemap.dll'
+    'generator' | Set-Content -LiteralPath $generator
     Expect-Block { Assert-Task11Artifacts $scan $sha $generator } 'ARTIFACT_MISSING'
     foreach ($path in @('facts.ndjson','index.sqlite','report.md','logs/analyzer.log')) {
         $file = Join-Path $scan $path
         [void](New-Item -ItemType Directory -Path (Split-Path $file) -Force)
-        '' | Set-Content -LiteralPath $file
+        [IO.File]::WriteAllBytes($file, [byte[]]::new(0))
     }
-    @{ commitSha = $sha; scannerVersion = 'synthetic'; sourceSnapshotDigest = 'bad'; knownGaps = @() } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $scan 'scan-manifest.json')
+    Expect-Block { Assert-Task11Artifacts $scan $sha $generator } 'ARTIFACT_MISSING:scan-manifest.json'
+    @{ commitSha = $sha; scannerVersion = 'synthetic'; sourceSnapshotDigest = 'bad'; knownGaps = @(); analysisLevel = 'Level1SemanticAnalysis'; buildStatus = 'Succeeded' } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $scan 'scan-manifest.json')
+    Expect-Block { Assert-Task11Artifacts $scan $sha $generator } 'ARTIFACT_EMPTY:facts.ndjson'
+    'invalid fact' | Set-Content -LiteralPath (Join-Path $scan 'facts.ndjson')
+    Expect-Block { Assert-Task11Artifacts $scan $sha $generator } 'ARTIFACT_EMPTY:index.sqlite'
+    [IO.File]::WriteAllBytes((Join-Path $scan 'index.sqlite'), [Text.Encoding]::ASCII.GetBytes("SQLite format 3`0"))
+    Expect-Block { Assert-Task11Artifacts $scan $sha $generator } 'ARTIFACT_EMPTY:report.md'
+    'Synthetic report' | Set-Content -LiteralPath (Join-Path $scan 'report.md')
     Expect-Block { Assert-Task11Artifacts $scan $sha $generator } 'PROVENANCE_BOUNDED_INPUT_INVALID'
-    @{ commitSha = $sha; scannerVersion = 'synthetic'; sourceSnapshotDigest = ('a' * 64); knownGaps = @() } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $scan 'scan-manifest.json')
+    [IO.File]::WriteAllBytes((Join-Path $scan 'index.sqlite'), [Text.Encoding]::ASCII.GetBytes('not a sqlite file'))
+    Expect-Block { Assert-Task11Artifacts $scan $sha $generator } 'INDEX_SQLITE_HEADER_INVALID'
+    [IO.File]::WriteAllBytes((Join-Path $scan 'index.sqlite'), [Text.Encoding]::ASCII.GetBytes("SQLite format 3`0"))
+    @{ commitSha = $sha; scannerVersion = 'synthetic'; sourceSnapshotDigest = ('a' * 64); knownGaps = @(); analysisLevel = 'Level1SemanticAnalysis'; buildStatus = 'Succeeded' } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $scan 'scan-manifest.json')
     @{ commitSha = $sha; factType = 'AnalysisGap'; ruleId = ''; evidenceTier = 'Tier4Unknown'; evidence = @{ extractorId = 'test'; extractorVersion = '1' } } | ConvertTo-Json -Compress | Set-Content -LiteralPath (Join-Path $scan 'facts.ndjson')
     Expect-Block { Assert-Task11Artifacts $scan $sha $generator } 'FACT_PROVENANCE_INVALID'
     $validEvidence = @{ extractorId = 'test'; extractorVersion = '1'; filePath = 'README.txt'; startLine = 1; endLine = 1 }
     @{ commitSha = $sha; factId = 'synthetic-fact'; factType = 'AnalysisGap'; ruleId = 'synthetic.valid'; evidenceTier = 'Tier4Unknown'; evidence = $validEvidence } | ConvertTo-Json -Compress | Set-Content -LiteralPath (Join-Path $scan 'facts.ndjson')
     Expect-Block { Assert-Task11Artifacts $scan $sha $generator } 'FACT_RULE_UNREGISTERED'
     @{ commitSha = $sha; factId = 'synthetic-fact'; factType = 'AnalysisGap'; ruleId = 'synthetic.valid.v1'; evidenceTier = 'Tier4Unknown'; evidence = $validEvidence } | ConvertTo-Json -Compress | Set-Content -LiteralPath (Join-Path $scan 'facts.ndjson')
-    Assert-Task11Artifacts $scan $sha $generator
+    if ((Assert-Task11Artifacts $scan $sha $generator) -cne 'partial') { throw 'ANALYSIS_GAP_NOT_PARTIAL' }
+    @{ commitSha = $sha; factId = 'synthetic-fact'; factType = 'Project'; ruleId = 'synthetic.valid.v1'; evidenceTier = 'Tier2Structural'; evidence = $validEvidence } | ConvertTo-Json -Compress | Set-Content -LiteralPath (Join-Path $scan 'facts.ndjson')
+    if ((Assert-Task11Artifacts $scan $sha $generator) -cne 'passed') { throw 'CLEAN_SCAN_NOT_PASSED' }
+    @{ commitSha = $sha; scannerVersion = 'synthetic'; sourceSnapshotDigest = ('a' * 64); knownGaps = @(); analysisLevel = 'Level3SyntaxAnalysis'; buildStatus = 'NotRun' } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $scan 'scan-manifest.json')
+    if ((Assert-Task11Artifacts $scan $sha $generator) -cne 'partial') { throw 'REDUCED_BUILD_NOT_PARTIAL' }
+    @{ commitSha = $sha; scannerVersion = 'synthetic'; sourceSnapshotDigest = ('a' * 64); knownGaps = @('synthetic-gap'); analysisLevel = 'Level1SemanticAnalysis'; buildStatus = 'Succeeded' } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $scan 'scan-manifest.json')
+    if ((Assert-Task11Artifacts $scan $sha $generator) -cne 'partial') { throw 'KNOWN_GAP_NOT_PARTIAL' }
+    $beforePayload = Get-Task11GeneratorPayloadSha256 $generator
+    'dependency' | Set-Content -LiteralPath (Join-Path $scan 'TraceMap.Core.dll')
+    $afterPayload = Get-Task11GeneratorPayloadSha256 $generator
+    if ($beforePayload -ceq $afterPayload) { throw 'GENERATOR_DEPENDENCY_NOT_HASHED' }
+    $generatorDigest = (Get-FileHash -LiteralPath $generator -Algorithm SHA256).Hash.ToLowerInvariant()
+    $priorReceipt = @{ provenance = @{ generatorSha256 = $generatorDigest; generatorPayloadSha256 = $beforePayload } }
+    Expect-Block { Assert-Task11GeneratorMatchesReceipt $afterPayload $generatorDigest $priorReceipt } 'BOUNDED_GENERATOR_MISMATCH'
+    Assert-Task11GeneratorMatchesReceipt $beforePayload $generatorDigest $priorReceipt
     $windowsOnly = if ($IsWindows) { 'full-corpus opt-in/prior receipt and output reuse/overlap passed' } else { 'Windows-only full-corpus and output guards not run' }
     Write-Output "Task 11 synthetic guards passed: bounded exact tracked file/count/bytes selection, exact rule ID, wrong commit, dirty checkout, missing corpus/tool/artifact, invalid provenance; $windowsOnly."
 } finally {

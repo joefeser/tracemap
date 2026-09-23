@@ -17,7 +17,10 @@ input; this lane generates no such summary.
 All invocations require a clean TraceMap checkout at the exact 40-character
 commit passed as `-TraceMapCommit` and a fresh `-OutputRoot`. Paths are
 canonicalized and may not overlap either checkout. An existing output tree is
-rejected, including one created by a failed run. The `FullCorpus` lane requires
+rejected, including one created by a failed run. If preflight rejects the
+output before creating it, the runner attempts a separate fresh,
+non-overlapping local temporary receipt and includes its path in the error.
+The `FullCorpus` lane requires
 `-EnableFullCorpus` and `-BoundedReceiptPath` pointing to a previously passed
 bounded receipt for the same exact commits and an exact tracked-file selection
 within the lane's hard limits. The runner rechecks that selection against the
@@ -45,34 +48,49 @@ credentials. It also requires explicit paths to the installed Visual Studio,
 MSBuild, test runner, ILAsm, ILDAsm, and Framework assemblies and records their
 versions or fails preflight.
 
-Supply the smallest viable historical project as `-SliceProject` and its
-resulting test assembly as `-TestAssembly`. Declare exactly one concrete test
+Supply the smallest viable historical project as `-SliceProject` (absolute or
+relative to the corpus root) and its resulting test assembly as
+`-TestAssembly` (absolute or relative to the fresh slice build output).
+Declare exactly one concrete test
 per category using `-RepresentativeCases` entries of the form
 `category=Fully.Qualified.TestName`: `branch`, `switch`, `exception-region`,
 `leave`, `instrumentation`, `nested-generic`, and `duplicate-identity`. These
 names are deliberately supplied from the authorized pinned checkout rather
 than committed into this public repository. A zero-test TRX fails the stage.
-Declare relative `-BoundedPaths` as exact tracked source and project **files**
-in the selected scan slice. Directories and globs (including `*`) are rejected:
+Declare relative `-BoundedPaths` as exact tracked source and project **files**.
+For a bounded run, this selection must equal the scanner's complete eligible
+inventory for the pinned checkout. Unsupported selections and omitted eligible
+files fail closed. Directories and globs (including `*`) are rejected:
 the scanner's literal directory include would otherwise admit a whole subtree
 under a `Bounded` receipt. The runner rejects duplicate, missing, and reparse
 point selections and caps admission at 256 files and 64 MiB of selected source
 bytes before building or scanning. The bounded scan passes each admitted file
-as `--include`; the full-corpus lane omits them only with its explicit opt-in.
-These caps bound the selected scan files, not MSBuild's transitive project-load
-work or the runner's process memory. A project-load gap remains a gap, not a
-claim that the whole build graph was exhaustively analyzed.
+as `--include` and enables the scanner's exact-source-scope check; the
+full-corpus lane omits them only with its explicit opt-in. The scanner checks
+inventory equality and limits before semantic extraction, then rejects any
+newly discovered local semantic input outside that inventory before hashing
+the authoritative source snapshot. Candidate enumeration itself is capped at
+4,096 directory/file entries for the default 256-file bound; exceeding it is
+an explicit non-passing error, not a complete inventory. These caps bound
+repository source inputs retained by the scanner, not external SDK/package imports, MSBuild's process
+memory, or the representative test run. A project-load gap produces a
+non-passing `partial` receipt and cannot authorize the full lane.
 
 The order is: preflight; independent public ILAsm smoke; smallest project
-build; each named test; Release TraceMap CLI build; pinned scan; required
-artifact and provenance checks. Any failure stops the chain and writes a
+rebuild; each named test; non-incremental Release TraceMap CLI build; pinned
+scan; required artifact and provenance checks. Any failure after safe output
+creation stops the chain and writes a
 private receipt with the exact command arguments, working directories, exit
 codes, captured output, stage results, selected tests, versions, paths, and
 blocker. The scan checks `scan-manifest.json`, `facts.ndjson`, `index.sqlite`,
 `report.md`, and `logs/analyzer.log`; commit, scanner version, source snapshot
 digest, nonempty facts, registered rule IDs, evidence tiers, extractor IDs and
-versions, and explicit manifest/fact gaps. It records the SHA-256 of the
-invoked CLI DLL. The source snapshot digest is the local bounded-input digest;
+versions, and explicit manifest/fact gaps. The analyzer log may legitimately be
+empty; its presence is required. The required index must pass SQLite
+integrity, schema, commit, and fact-count checks. The receipt retains the exact
+CLI DLL SHA-256 and separately records a deterministic SHA-256 of the complete
+built CLI output payload; a later full run must reproduce both digests before
+scanning. The source snapshot digest is the local bounded-input digest;
 it must never be republished from a private scan.
 
 Test the public guards without the historical corpus:
