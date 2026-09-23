@@ -8,6 +8,11 @@ interaction-query workflow, see
 
 TraceMap validation must stay deterministic and evidence-backed. Do not add LLM calls, embeddings, or prompt-based classification to validation.
 
+The first bounded Windows Task 11 lane, its independent public ILAsm smoke,
+private receipt contract, and C++/CLI feasibility inventory are documented in
+[Task 11 Windows lane](validation/TASK11_WINDOWS_LANE.md). It is local-only and
+does not make the historical corpus a public CI dependency.
+
 ## Required Matrix
 
 Every language adapter should have:
