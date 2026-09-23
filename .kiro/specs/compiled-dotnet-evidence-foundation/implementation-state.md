@@ -1823,3 +1823,33 @@ The private-path guard, Kiro self-test, and `git diff --check` passed. The
 Windows-only entry point and private corpus have not been rerun for this patch;
 no private validation is claimed. The unrelated base-equivalent Windows
 full-suite failures remain separately recorded above.
+
+## Messy .NET workspace continuation (2026-09-23)
+
+This section supersedes the *current-status* reading of the 2026-09-21
+begin-work/deferred list and 7-implemented/5-deferred count above; those lines
+remain as the historical first-slice record. PR #786 merged into `dev` as
+`bb3e7ca806e037ce4c2a37be6c43ed724c4475cd`, pinning the overload and
+receiver-dispatch identity cases. PR #787, branch
+`codex/messy-dotnet-remaining-fixtures`, adds the remaining generated-member,
+C#/VB/F# boundary, and source-to-metadata-to-IL/PDB cases. Its public catalog
+now records **12 implemented, 0 deferred** cases across **five synthetic
+roots**, backed by 12 `MessyWorkspaceRegressionTests` methods. These are
+public fixture outcomes, not private-corpus or runtime-equivalence claims.
+
+The #787 review repair makes catalog rule/tier/gap expectations executable
+against each new case's produced evidence. The C# cross-language hop has two
+explicit, mutually exclusive outcomes: Tier1 semantic call, or Tier3 syntax
+call with a Tier4 compilation gap; VB-to-F# requires a Tier1 VB semantic call.
+The F# compiled member requires Tier2 metadata evidence while F# source
+ownership remains an explicit unsupported-language gap. The generated handler
+requires exactly one source-to-metadata reconciliation edge and one IL body
+and PDB method on its compiled identity. The fixture does not claim that the
+entire three-language source path is traversable or that compiled evidence
+proves execution.
+
+Local review-repair validation: focused messy-workspace suite 12/12, full
+`dotnet test src/dotnet/TraceMap.sln --no-restore` 2,266/2,266, and the
+private-path guard passed. Task 10's remaining public #766 matrix and Task
+11's Windows/private validation remain separate; neither checkbox is closed
+by these synthetic fixtures.

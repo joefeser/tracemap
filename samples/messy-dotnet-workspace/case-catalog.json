@@ -209,48 +209,49 @@
     },
     {
       "id": "MW-CROSSLANGUAGE-001",
-      "status": "deferred",
-      "roots": [],
-      "shape": "call chains crossing C#/VB/F# language boundaries in one merged review",
+      "status": "implemented",
+      "roots": ["root-crosslanguage"],
+      "shape": "one buildable three-project C# to VB to F# call chain, with F# compiled metadata admitted but F# source ownership unsupported",
       "stages": [
-        "combining",
+        "extraction",
         "reconciliation"
       ],
-      "expectedRuleIds": [],
-      "expectedTiers": [],
-      "expectedGaps": [],
-      "assertions": null,
-      "blocker": "no F# source adapter exists; cross-language identity joins require the compiled-lane source-to-metadata reconciliation, which is separate from this slice"
+      "expectedRuleIds": ["vb.semantic.callgraph.v1", "dotnet.compiled.member.v1", "dotnet.compiled.source-identity.v1"],
+      "expectedTiers": ["Tier1Semantic", "Tier2Structural", "Tier4Unknown"],
+      "expectedGaps": ["SourceMetadataReconciliationUnsupportedLanguage"],
+      "alternativeEvidence": [
+        {"expectedRuleIds": ["csharp.semantic.callgraph.v1"], "expectedTiers": ["Tier1Semantic"], "expectedGaps": []},
+        {"expectedRuleIds": ["csharp.syntax.callgraph.v1"], "expectedTiers": ["Tier3SyntaxOrTextual"], "expectedGaps": ["CompilationDiagnostic"]}
+      ],
+      "assertions": "the public projects build, the C# to VB hop is either semantic or explicitly downgraded to syntax plus a compilation gap, the VB to F# call is semantic, the F# compiled method is inventoried, and unsupported F# source ownership emits a gap rather than a guessed join; no complete cross-language source traversal is claimed"
     },
     {
       "id": "MW-GENERATED-MEMBERS-001",
-      "status": "deferred",
-      "roots": [],
-      "shape": "compiler-generated and designer-generated members participating in traversal",
+      "status": "implemented",
+      "roots": ["root-generated"],
+      "shape": "a Web Forms handler calls an auto-generated designer bridge that calls a hand-written SQL terminal",
       "stages": [
         "extraction",
         "traversal"
       ],
-      "expectedRuleIds": [],
-      "expectedTiers": [],
-      "expectedGaps": [],
-      "assertions": null,
-      "blocker": "generated-member identity labeling is pinned by compiled-lane CS-GENERATED-005; the messy-workspace traversal variant is deferred to a later slice"
+      "expectedRuleIds": ["csharp.semantic.callgraph.v1", "legacy.flow.static-traversal.v1"],
+      "expectedTiers": ["Tier1Semantic", "Tier4Unknown"],
+      "expectedGaps": ["DownstreamWithoutSupportedTerminal"],
+      "assertions": "the semantic handler call into the generated member is visible, but the excluded generated body is not invented as source call evidence; source traversal reports no terminal and an explicit terminal-evidence gap"
     },
     {
       "id": "MW-SOURCE-METADATA-IL-PDB-001",
-      "status": "deferred",
-      "roots": [],
-      "shape": "source to metadata to IL/PDB identity chain over messy workspace roots",
+      "status": "implemented",
+      "roots": ["root-generated"],
+      "shape": "the public generated-root handler's source method, exact admitted metadata method, operand-aware IL body, and portable PDB sequence point share one compiled fact identity",
       "stages": [
         "extraction",
         "reconciliation"
       ],
-      "expectedRuleIds": [],
-      "expectedTiers": [],
+      "expectedRuleIds": ["dotnet.compiled.source-identity.v1", "dotnet.compiled.il-body.v1", "dotnet.compiled.pdb-identity.v1", "dotnet.compiled.sequence-point.v1"],
+      "expectedTiers": ["Tier1Semantic", "Tier2Structural"],
       "expectedGaps": [],
-      "assertions": null,
-      "blocker": "owned by the remaining #766 ILAsm/rewritten-PDB public rewrite-suite matrix under the open Task 10 checkbox; explicitly not this integration slice"
+      "assertions": "a pinned public build and binding receipt yield one exact source-to-metadata handler edge; its compiled fact ID owns an IL body, one metadata-PDB method edge, and a sequence point; this does not claim rewritten PDB offset validity, ILAsm/ILDAsm parity, or runtime behavior"
     }
   ]
 }
