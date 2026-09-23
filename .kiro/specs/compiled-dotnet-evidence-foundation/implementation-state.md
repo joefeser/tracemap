@@ -1683,3 +1683,20 @@ its WSL Git worktree resolution emitted fatal path errors, so that invocation
 is not treated as a valid privacy pass. `git diff --check` passed. Public
 smoke remains to be run after committing a clean TraceMap head. The full-corpus
 opt-in has not been exercised. Do not open a PR until the required gates pass.
+
+After the clean commit `fe6f54e5`, the Windows `PublicSmoke` runner passed with
+its local private receipt reporting `status=passed`; the synthetic guard suite
+passed again. A real private preflight against the supplied local checkout
+stopped at `CORPUS_COMMIT_MISMATCH` and wrote `status=blocked`, before any build,
+test, or scan. The configured noninteractive fetch had already failed at host
+key verification, so the pinned corpus remains unavailable. A changed-file
+privacy sentinel over the branch diff passed, and `git diff --check` passed.
+The extended Windows public workflow now invokes only the synthetic guards
+and independent public ILAsm smoke; it has no private corpus dependency.
+An additional public modern-sample CLI scan completed with 27 facts and all
+five required artifacts; `validate-adapter-artifacts.py` accepted its output.
+The full-corpus no-opt-in invocation stopped with
+`FULL_CORPUS_OPT_IN_REQUIRED` before creating any output. These public checks
+do not turn the blocked private stages or failed full .NET suite green.
+The focused `IlDasmTextParserTests` .NET filter passed 26/26 on this Windows
+host; it does not address Task 10's unavailable portable-PDB line oracle.

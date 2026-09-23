@@ -72,7 +72,9 @@ pwsh -NoProfile -File scripts/validation/Test-Task11Windows.ps1
 
 The synthetic test covers wrong commit, dirty or missing checkout, missing
 tool, missing artifact, invalid provenance, and attempted output reuse and
-overlap. Default CI remains independent of the historical corpus.
+overlap. The extended public Windows workflow runs this test and `PublicSmoke`
+without access to the historical corpus. Default CI remains independent of
+the historical corpus.
 
 ## C++/CLI feasibility inventory
 
