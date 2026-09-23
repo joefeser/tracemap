@@ -18,7 +18,8 @@ Roots:
   and data folders: a twelve-call-edge handler chain ending in an ADO.NET-style SQL
   terminal at graph distance 14 (beyond depths 8, 10, and 12), a three-node
   call cycle plus a self-cycle, and ten same-name `Process`/`Core` members in
-  one file that must stay distinct.
+  one file that must stay distinct, plus two interface overloads with two
+  possible receiver implementations and four distinct SQL terminals.
 - `root-beta/` — second independently scanned C# root with an `.ashx` handler
   whose gateway deliberately reuses the `Process`/`Core` simple names from
   `root-alpha` to pressure cross-root joins.

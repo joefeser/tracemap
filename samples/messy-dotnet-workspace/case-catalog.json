@@ -130,7 +130,7 @@
         "Tier1Semantic"
       ],
       "expectedGaps": [],
-      "assertions": "combined sources, facts, and symbols are the union of the inputs with per-source namespacing and no symbol deduplication; root-beta reuses the Process/Core simple names from root-alpha and all eleven identities stay distinct rows; every DatabaseOperationCandidate terminal stays attributed to its own source label (11 alpha, 1 beta, 1 vb) with its own table identity; the merged dependency report lists all three labeled sources; the Web Forms packet stays single-page-source by design, so cross-source attribution is asserted over the merged index directly"
+      "assertions": "combined sources, facts, and symbols are the union of the inputs with per-source namespacing and no symbol deduplication; root-beta reuses the Process/Core simple names from root-alpha and all eleven original Process identities stay distinct rows; every DatabaseOperationCandidate terminal stays attributed to its own source label (15 alpha, 1 beta, 1 vb) with its own table identity; the merged dependency report lists all three labeled sources; the Web Forms packet stays single-page-source by design, so cross-source attribution is asserted over the merged index directly"
     },
     {
       "id": "MW-VB-PROJECTLESS-001",
@@ -179,32 +179,33 @@
     },
     {
       "id": "MW-OVERLOAD-001",
-      "status": "deferred",
-      "roots": [],
-      "shape": "same-name overloads with distinct signatures invoked ambiguously during traversal",
+      "status": "implemented",
+      "roots": ["root-alpha"],
+      "shape": "one Web Forms handler invokes int and string interface overloads across two candidate implementations, each ending at its own SQL terminal",
       "stages": [
         "extraction",
-        "reconciliation"
+        "reconciliation",
+        "traversal"
       ],
-      "expectedRuleIds": [],
-      "expectedTiers": [],
+      "expectedRuleIds": ["csharp.semantic.callgraph.v1", "combined.dispatch-candidate.v1"],
+      "expectedTiers": ["Tier1Semantic"],
       "expectedGaps": [],
-      "assertions": null,
-      "blocker": "identity retention for overloads is already pinned by compiled-lane CS-OVERLOAD-001 and VB-OVERLOAD-001; a traversal-level overload ambiguity fixture is the next fixture slice, not this PR"
+      "assertions": "the two semantic interface call targets and four implementation relationships retain their int/string signatures without cross-overload joins; the bounded Web Forms packet inventories four distinct candidate terminals"
     },
     {
       "id": "MW-RECEIVER-AMBIGUITY-001",
-      "status": "deferred",
-      "roots": [],
-      "shape": "bare or dynamic receivers that could bind to any of several same-name members during traversal",
+      "status": "implemented",
+      "roots": ["root-alpha"],
+      "shape": "an interface-typed receiver with two possible concrete implementations per overload; runtime receiver selection is unknown",
       "stages": [
-        "reconciliation"
+        "extraction",
+        "reconciliation",
+        "traversal"
       ],
-      "expectedRuleIds": [],
-      "expectedTiers": [],
+      "expectedRuleIds": ["csharp.semantic.callgraph.v1", "combined.dispatch-candidate.v1"],
+      "expectedTiers": ["Tier1Semantic"],
       "expectedGaps": [],
-      "assertions": null,
-      "blocker": "receiver forms are partially covered by the C# identity receiver fixture tests and the projectless VB receiver fail-closed gaps; a dedicated ambiguous-receiver traversal fixture is the next fixture slice"
+      "assertions": "four relationship-backed candidate edges join the exact semantic interface call identities; all four supported terminals remain distinct and every candidate boundary is NeedsReviewStaticPath rather than a proven runtime dispatch"
     },
     {
       "id": "MW-CROSSLANGUAGE-001",
