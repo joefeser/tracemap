@@ -3234,14 +3234,18 @@ The missing prerequisite was the search scope, not the tool: `ILAsm.exe`
 ships with the .NET Framework runtime itself under
 `C:\Windows\Microsoft.NET\Framework64\v4.0.30319\` (and the x86 `Framework`
 twin), which the PR #782 discovery never searched. The extended lane's
-discovery step and the in-test discovery in `IlAsmIldasmParityGateTests` now
-search, in order: the .NET Framework `Framework64`/`Framework` runtime
-directories, the Windows SDK `Microsoft SDKs` NETFX 4.8/4.8.1 Tools
-directories (x64 first), Windows Kits, Visual Studio, and PATH. Both tools
-are pinned by absolute path with a recorded `4.8.`-prefixed file version,
-product version, and runner image identity (`ImageOS`, `ImageVersion`,
-architecture); a discovery hit without a file version, or either pinned tool
-failing its own `/?`, fails the case rather than passing silently.
+discovery step searches, in order: the .NET Framework `Framework64`/
+`Framework` runtime directories, the Windows SDK `Microsoft SDKs` NETFX
+4.8/4.8.1 Tools directories (x64 first), Windows Kits, Visual Studio, and
+PATH; it then selects one ILAsm and one ILDAsm by that same order and hands
+their absolute paths to the test process through
+`TRACEMAP_PARITY_ILASM`/`TRACEMAP_ILDASM`. The in-test discovery consumes
+and re-validates that handoff first, then its own ordered candidates
+(runtime directories, NETFX tools, PATH). Both tools are pinned by absolute
+path with a recorded `4.8.`-prefixed file version AND a non-empty product
+version, plus the runner image identity (`ImageOS`, `ImageVersion`,
+architecture); a discovery hit without either version, or either pinned
+tool failing its own `/?`, fails the case rather than passing silently.
 
 The parity matrix runs only on the extended Windows lane
 (`compiled-dotnet-extended-validation.yml`, `public-mutation-matrix

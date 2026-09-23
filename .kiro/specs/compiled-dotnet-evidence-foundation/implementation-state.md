@@ -1537,3 +1537,29 @@ records the typed oracle-availability gap with the work-machine command
 and expected receipt, no PDB parity is claimed, and Task 10's checkbox
 stays open on exactly that gap pending a work-machine run. ACK review on
 this head follows; Task 11 (#768/#769) remains separate.
+
+First ACK review on the documentation head `3ee3b33c` returned
+`actionable_findings` / `UNRESOLVED_REVIEW_THREADS` with five unresolved
+threads (two Qodo maintainability findings, three Codex P1/P2 findings).
+Five earlier findings against superseded heads (the uncreated rt
+directory, the invalid /pdbpath flag, receipts inside the scanned repo,
+the try/handler count equation) were already repaired by the CI-round
+commits. The remediation commit addresses the five live ones: the parity
+toolchain now records and requires non-empty file AND product versions;
+the workflow's discovery step selects one ILAsm and one ILDAsm by the
+documented order and hands their absolute paths to the test process via
+`TRACEMAP_PARITY_ILASM`/`TRACEMAP_PARITY_ILDASM`, which the in-test
+discovery consumes and re-validates before its own ordered fallback (a
+full Visual Studio recursion in-test costs minutes on the runner, so the
+broad search stays in the workflow); and `ILRWPDB-ILASM-PARITY-012` now
+lists only the three proven satisfiedBy cases, drops the unexercised
+`dotnet.compiled.il-rewrite-pdb.v1` rule claim, and adds the explicit
+portable-PDB non-claim, with the catalog test pinning all of it. The
+remaining Codex P1 (fail rather than record when the PDB oracle emits no
+evidence) is settled by disposition: the owner's task instruction for
+this slice defines exactly the recorded typed-gap fallback (precise
+work-machine command, expected receipt, Task 10 left open, no parity
+claim), and a permanently red extended lane would block the five proven
+cases and every future src/dotnet PR. Local validation after the
+remediation: 14/14 focused tests, full suite 2,233/2,233, zero-warning
+build. Exact-head CI and the settlement rerun of ACK follow.

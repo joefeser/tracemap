@@ -63,5 +63,25 @@ jobs:
           } else {
             Write-Output 'vswhere unavailable'
           }
+          # Hand the selected absolute paths to the parity tests. The ordered
+          # picks mirror the in-test discovery (runtime directories first for
+          # ILAsm, NETFX x64 first for ILDAsm); the tests re-validate paths,
+          # file versions, and product versions before use.
+          $pick = {
+            param($kind)
+            $ordered = @($candidates | Where-Object Name -EQ $kind | Sort-Object FullName -Unique)
+            $preferred = if ($kind -eq 'ilasm.exe') {
+              $ordered | Where-Object { $_.FullName -like '*Microsoft.NET\Framework64\v4.0.30319*' }
+            } else {
+              $ordered | Where-Object { $_.FullName -like '*NETFX 4.8.1 Tools*x64*' }
+            }
+            if ($preferred) { $preferred[0].FullName } elseif ($ordered) { $ordered[0].FullName } else { '' }
+          }
+          $ilasmPick = & $pick 'ilasm.exe'
+          $ildasmPick = & $pick 'ildasm.exe'
+          Write-Output "selected ilasm: $ilasmPick"
+          Write-Output "selected ildasm: $ildasmPick"
+          "TRACEMAP_PARITY_ILASM=$ilasmPick" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "TRACEMAP_PARITY_ILDASM=$ildasmPick" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
       - name: Run extended public rewrite matrix
         run: dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --logger "console;verbosity=detailed" --filter "FullyQualifiedName~IlRewriteEvidenceExtractorTests|FullyQualifiedName~IlRewriteControlFlowEvidenceExtractorTests|FullyQualifiedName~IlRewriteMemberShapeEvidenceExtractorTests|FullyQualifiedName~IlRewritePdbEvidenceExtractorTests|FullyQualifiedName~IlRewriteAssemblyTopologyTests|FullyQualifiedName~IlRewriteEmbeddedPdbTests|FullyQualifiedName~IlRewritePublicIntegrationTests|FullyQualifiedName~IlAsmIldasmParityGateTests|FullyQualifiedName~IlDasmTextParserTests"

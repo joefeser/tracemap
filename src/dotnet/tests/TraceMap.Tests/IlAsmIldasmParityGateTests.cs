@@ -47,10 +47,12 @@ public sealed class IlAsmIldasmParityGateTests
 
         Assert.NotNull(toolchain);
         output.WriteLine($"[ILASM-PARITY] runner={RunnerIdentity()}");
-        output.WriteLine($"[ILASM-PARITY] ilasm={toolchain.IlasmPath} fileVersion={toolchain.IlasmVersion}");
-        output.WriteLine($"[ILASM-PARITY] ildasm={toolchain.IldasmPath} fileVersion={toolchain.IldasmVersion}");
+        output.WriteLine($"[ILASM-PARITY] ilasm={toolchain.IlasmPath} fileVersion={toolchain.IlasmVersion} product={toolchain.IlasmProduct}");
+        output.WriteLine($"[ILASM-PARITY] ildasm={toolchain.IldasmPath} fileVersion={toolchain.IldasmVersion} product={toolchain.IldasmProduct}");
         Assert.StartsWith("4.8.", toolchain.IlasmVersion, StringComparison.Ordinal);
         Assert.StartsWith("4.8.", toolchain.IldasmVersion, StringComparison.Ordinal);
+        Assert.False(string.IsNullOrWhiteSpace(toolchain.IlasmProduct));
+        Assert.False(string.IsNullOrWhiteSpace(toolchain.IldasmProduct));
         // The pinned tools must be invocable exactly as the parity legs use
         // them; a discovery hit that cannot print its usage is not a toolchain.
         var ilasmHelp = RunTool(toolchain.IlasmPath, "/?", Path.GetTempPath());
@@ -294,15 +296,23 @@ public sealed class IlAsmIldasmParityGateTests
         var parity = document.RootElement.GetProperty("ilRewritePdbCases").EnumerateArray()
             .Single(item => item.GetProperty("id").GetString() == "ILRWPDB-ILASM-PARITY-012");
         Assert.Equal("implemented", parity.GetProperty("status").GetString());
-        Assert.Equal("ILASM-PARITY-CFLOW-002", parity.GetProperty("satisfiedBy")[0].GetString());
+        var satisfiedBy = parity.GetProperty("satisfiedBy").EnumerateArray().Select(value => value.GetString()).ToArray();
+        // Only the proven cases satisfy the prerequisite; the PDB oracle gap
+        // keeps ILASM-PARITY-PDB-006 out of the satisfied list, and the gate
+        // exercises the il-rewrite rule rather than the rewrite-PDB rule.
+        Assert.Equal(["ILASM-PARITY-CFLOW-002", "ILASM-PARITY-EH-003", "ILASM-PARITY-MUTATE-005"], satisfiedBy);
+        Assert.DoesNotContain("dotnet.compiled.il-rewrite-pdb.v1", parity.GetProperty("expectedRuleIds").EnumerateArray().Select(value => value.GetString()));
+        Assert.Contains("ILASM-PARITY-PDB-006", parity.GetProperty("limitations").GetString(), StringComparison.Ordinal);
     }
 
-    private sealed record ParityToolchain(string IlasmPath, string IldasmPath, string IlasmVersion, string IldasmVersion);
+    private sealed record ParityToolchain(string IlasmPath, string IldasmPath, string IlasmVersion, string IldasmVersion, string IlasmProduct, string IldasmProduct);
 
     // Ordered discovery mirrors the extended workflow's discovery step: ILAsm
     // ships with the .NET Framework runtime itself under Framework/Framework64,
-    // ILDAsm ships with the Windows SDK NETFX tools. PATH is the last resort
-    // and every probe is recorded for the run log.
+    // ILDAsm ships with the Windows SDK NETFX tools. The workflow's broader
+    // search (Windows Kits, Visual Studio, PATH) hands its selected absolute
+    // paths to the tests through TRACEMAP_PARITY_ILASM/TRACEMAP_PARITY_ILDASM,
+    // which are validated like any other candidate before use.
     private ParityToolchain? DiscoverToolchain()
     {
         if (!OperatingSystem.IsWindows())
@@ -321,23 +331,38 @@ public sealed class IlAsmIldasmParityGateTests
             Path.Combine(windows, "Microsoft.NET", "Framework64", "v4.0.30319", "ilasm.exe"),
             Path.Combine(windows, "Microsoft.NET", "Framework", "v4.0.30319", "ilasm.exe"),
         };
+        var workflowHandoff = new[]
+        {
+            ("ilasm", Environment.GetEnvironmentVariable("TRACEMAP_PARITY_ILASM")),
+            ("ildasm", Environment.GetEnvironmentVariable("TRACEMAP_PARITY_ILDASM")),
+        }
+            .Where(pair => !string.IsNullOrWhiteSpace(pair.Item2))
+            .Select(pair => (pair.Item1, Path: pair.Item2!));
+        foreach (var candidate in workflowHandoff)
+            output.WriteLine($"[ILASM-PARITY] workflow handoff {candidate.Item1}={candidate.Path} exists={File.Exists(candidate.Path)}");
         foreach (var candidate in ildasmCandidates.Concat(ilasmCandidates).Concat(PathCandidates("ilasm.exe")).Concat(PathCandidates("ildasm.exe")))
             output.WriteLine($"[ILASM-PARITY] probe {candidate} exists={File.Exists(candidate)}");
-        var ildasm = FirstPinned(ildasmCandidates.Concat(PathCandidates("ildasm.exe")), "ildasm.exe");
-        var ilasm = FirstPinned(ilasmCandidates.Concat(PathCandidates("ilasm.exe")), "ilasm.exe");
-        return ilasm is null || ildasm is null ? null : new ParityToolchain(ilasm.Value.Path, ildasm.Value.Path, ilasm.Value.Version, ildasm.Value.Version);
+        var ildasm = FirstPinned(
+            workflowHandoff.Where(pair => pair.Item1 == "ildasm").Select(pair => pair.Path)
+                .Concat(ildasmCandidates).Concat(PathCandidates("ildasm.exe")),
+            "ildasm.exe");
+        var ilasm = FirstPinned(
+            workflowHandoff.Where(pair => pair.Item1 == "ilasm").Select(pair => pair.Path)
+                .Concat(ilasmCandidates).Concat(PathCandidates("ilasm.exe")),
+            "ilasm.exe");
+        return ilasm is null || ildasm is null ? null : new ParityToolchain(ilasm.Value.Path, ildasm.Value.Path, ilasm.Value.Version, ildasm.Value.Version, ilasm.Value.Product, ildasm.Value.Product);
     }
 
-    private static (string Path, string Version)? FirstPinned(IEnumerable<string> candidates, string name)
+    private static (string Path, string Version, string Product)? FirstPinned(IEnumerable<string> candidates, string name)
     {
         foreach (var candidate in candidates)
         {
             if (!File.Exists(candidate))
                 continue;
-            var version = FileVersionInfo.GetVersionInfo(candidate).FileVersion;
-            if (string.IsNullOrWhiteSpace(version))
-                throw new InvalidOperationException($"{name} discovered at {candidate} has no file version; refusing an unpinned parity toolchain.");
-            return (candidate, version);
+            var info = FileVersionInfo.GetVersionInfo(candidate);
+            if (string.IsNullOrWhiteSpace(info.FileVersion) || string.IsNullOrWhiteSpace(info.ProductVersion))
+                throw new InvalidOperationException($"{name} discovered at {candidate} has no file or product version; refusing an unpinned parity toolchain.");
+            return (candidate, info.FileVersion, info.ProductVersion);
         }
         return null;
     }
