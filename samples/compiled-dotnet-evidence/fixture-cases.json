@@ -1602,7 +1602,7 @@
       "expectedRuleIds": ["dotnet.compiled.sequence-point.v1", "dotnet.compiled.pdb-identity.v1"],
       "expectedTier": "Tier2Structural",
       "expectedGaps": [],
-      "prerequisites": "ILDAsm 4.8.3928.0 documents /LINENUM for source-line references and has no /pdbpath option; a hosted ILDAsm that emits no .line directives for the adjacent extracted portable PDB leaves this case unclaimed pending a work-machine receipt",
+      "prerequisites": "ILDAsm 4.8.3928.0 documents /LINENUM for source-line references and has no /pdbpath option; observed on the hosted win25-vs2026 runner on 2026-09-23, that ILDAsm accepted /linenum and disassembled the carrier but emitted no .line directives for the adjacent extracted portable PDB, leaving this case unclaimed pending a work-machine receipt",
       "nonClaims": ["debug-behavior-preservation", "hidden-sequence-point-parity", "no-general-il-equivalence-claim"]
     }
   ]
