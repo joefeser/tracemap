@@ -939,6 +939,7 @@ public static class WebFormsModernizationPacketReporter
         var retainedPathIds = chains.Select(chain => chain.LegacyPathId).Where(id => id is not null).Cast<string>().ToHashSet(StringComparer.Ordinal);
         foreach (var pathGap in legacyFlow.Gaps.Where(gap =>
                      gap.RuleId?.StartsWith("legacy.webforms.", StringComparison.Ordinal) == true
+                     || gap.GapKind == "GraphInputLimitReached"
                      || gap.GapKind.Contains("Truncat", StringComparison.OrdinalIgnoreCase)
                      || gap.EffectiveSupportingFactIds.Any(id => chains.Any(chain => chain.SupportingFactIds.Contains(id, StringComparer.Ordinal)))
                      || (gap.NodeId is not null && retainedPathIds.Contains(gap.NodeId))))

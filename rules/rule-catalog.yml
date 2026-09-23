@@ -3443,6 +3443,7 @@ rules:
       - Local creation takes precedence. Field provenance requires one typed declaration on the containing type or one typed field reached through a unique retained syntax-only base-type chain; ambiguous field or inheritance evidence fails closed.
       - The bridge does not perform compiler binding for the projectless caller and does not infer properties, factories, dependency-injection, late-bound, reflection, or reassigned receiver targets.
       - Type matching uses a case-insensitive canonical declaring-type identity, method name, arity, and any available ordered argument/parameter types; zero or multiple compatible declarations remain explicit gaps.
+      - Bounded single-index packet input follows newly discovered syntax calls through method bodies only while fact, text, frontier, and traversal-work limits permit. Interrupted closure is an explicit Tier4 graph-input limit, not a complete zero-terminal inventory.
       - A bridge is static review evidence only and does not prove runtime dispatch, branch feasibility, database execution, or successful binding.
 
   - id: combined.paths.query-gap.v1
