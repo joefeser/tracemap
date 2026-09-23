@@ -1573,7 +1573,7 @@
       "language": "csharp",
       "status": "covered",
       "proofLane": "compiled-dotnet-extended-validation.yml:public-mutation-matrix(windows-latest)",
-      "shape": "the public member-shape fixture with generic method specifications, ldtoken type tokens, calli standalone signatures, static field operands, custom-modifier-bearing parameters, property and event accessors, and vararg declarations round trips through the pinned tools with every symbolic operand preserved verbatim in the canonical ILDAsm body; methods whose raw module-local reference tokens ILAsm renumbered on re-emission classify exactly operand-only-change with every call-retarget identity preserved",
+      "shape": "the public member-shape fixture with generic method specifications, ldtoken type tokens, calli standalone signatures, static field operands, explicitly constructed modopt parameters and modreq returns, property and event accessors, and vararg declarations round trips through the pinned tools with complete method declarations, local signatures, and every symbolic operand retained in the canonical ILDAsm comparison; methods whose raw module-local reference tokens ILAsm renumbered on re-emission classify exactly operand-only-change with every call-retarget identity preserved",
       "expectedIdentity": "unchanged or operand-only-change il-rewrite edges for every member-shape method with zero gaps and identity-preserving retargets",
       "expectedRuleIds": ["dotnet.compiled.il-rewrite.v1", "dotnet.compiled.il-body.v1"],
       "expectedTier": "Tier2Structural",

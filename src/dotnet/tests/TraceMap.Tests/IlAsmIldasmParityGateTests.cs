@@ -106,7 +106,8 @@ public sealed class IlAsmIldasmParityGateTests
         var toolchain = DiscoverToolchain();
         Assert.NotNull(toolchain);
 
-        using var workspace = new ParityWorkspace(MemberShapesFixture());
+        using var input = new TempDirectory();
+        using var workspace = new ParityWorkspace(MemberShapesWithModifiers(input.Path));
         var parsed = RoundTrip(toolchain, workspace);
         output.WriteLine($"[ILASM-PARITY] member-shape round trip: {parsed.Before.Methods.Count} methods, canonical text {parsed.Before.CanonicalMethodsText().Length} chars");
 
@@ -128,6 +129,20 @@ public sealed class IlAsmIldasmParityGateTests
         Assert.Contains(readField.Instructions, instruction => instruction.Opcode == "ldsfld");
         var typeToken = parsed.After.Method(MemberShapesType, "TypeToken");
         Assert.Contains(typeToken.Instructions, instruction => instruction.Opcode == "ldtoken");
+        Assert.Contains("modopt(", parsed.Before.Method(MemberShapesType, "ByReadonlyRef").Header, StringComparison.Ordinal);
+        Assert.Contains("modreq(", parsed.Before.Method(MemberShapesType, "OtherValue").Header, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Member_shape_parity_input_contains_required_and_optional_modifiers()
+    {
+        using var temp = new TempDirectory();
+        using var assembly = CecilAssemblyDefinition.ReadAssembly(MemberShapesWithModifiers(temp.Path));
+        var type = assembly.MainModule.GetType(MemberShapesType);
+        // This checks fixture construction, not parity. Only ILDAsm can
+        // independently establish preservation through the Windows round trip.
+        Assert.IsType<OptionalModifierType>(FindMethod(type, "ByReadonlyRef").Parameters[0].ParameterType);
+        Assert.IsType<RequiredModifierType>(FindMethod(type, "OtherValue").ReturnType);
     }
 
     [Fact]
@@ -760,6 +775,23 @@ public sealed class IlAsmIldasmParityGateTests
     private static string ControlFlowFixture() => FixtureAssembly("CompiledEvidence.CSharp.ControlFlow.dll", "control-flow");
 
     private static string MemberShapesFixture() => FixtureAssembly("CompiledEvidence.CSharp.MemberShapes.dll", "member-shapes");
+
+    private static string MemberShapesWithModifiers(string directory)
+    {
+        // C#'s non-virtual `in int` parameter is a byref with parameter
+        // attributes, not a custom-modifier signature. Explicitly construct
+        // both ECMA-335 modifier forms before handing the fixture to ILDAsm.
+        using var assembly = CecilAssemblyDefinition.ReadAssembly(MemberShapesFixture());
+        var type = assembly.MainModule.GetType(MemberShapesType);
+        var marker = assembly.MainModule.ImportReference(typeof(System.Runtime.CompilerServices.IsReadOnlyAttribute));
+        var optional = FindMethod(type, "ByReadonlyRef");
+        optional.Parameters[0].ParameterType = new OptionalModifierType(marker, optional.Parameters[0].ParameterType);
+        var required = FindMethod(type, "OtherValue");
+        required.ReturnType = new RequiredModifierType(marker, required.ReturnType);
+        var path = Path.Combine(directory, Path.GetFileName(MemberShapesFixture()));
+        assembly.Write(path);
+        return path;
+    }
 
     private static string FixtureAssembly(string assemblyName, string role)
     {

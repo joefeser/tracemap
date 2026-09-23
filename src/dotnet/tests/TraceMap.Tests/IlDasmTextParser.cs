@@ -47,6 +47,8 @@ internal static partial class IlDasmTextParser
         IReadOnlyList<IlDasmLineDirective> LineDirectives)
     {
         public int ExceptionRegionCount => ExceptionRegions.Count;
+        public string Header { get; init; } = string.Empty;
+        public string LocalsSignature { get; init; } = string.Empty;
 
         // Order-sensitive inside the body, order-insensitive across members:
         // ILAsm legitimately reorders metadata row emission (observed for
@@ -55,6 +57,7 @@ internal static partial class IlDasmTextParser
         public string Canonical() =>
             $"{TypeName}|{MethodName}|maxstack:{MaxStack.ToString(CultureInfo.InvariantCulture)}"
             + $"|locals:{LocalCount.ToString(CultureInfo.InvariantCulture)}"
+            + $"|header:{Header}|locals-signature:{LocalsSignature}"
             + $"|codesize:{CodeSize.ToString(CultureInfo.InvariantCulture)}\n"
             + string.Join(string.Empty, Instructions.Select(instruction =>
                 $"{instruction.Offset.ToString("x4", CultureInfo.InvariantCulture)}:{instruction.Opcode}:{instruction.Operand}\n"))
@@ -76,6 +79,7 @@ internal static partial class IlDasmTextParser
         public string CanonicalMethodsText() => string.Join(string.Empty,
             Methods.OrderBy(method => method.TypeName, StringComparer.Ordinal)
                 .ThenBy(method => method.MethodName, StringComparer.Ordinal)
+                .ThenBy(method => method.Header, StringComparer.Ordinal)
                 .Select(method => method.Canonical()));
     }
 
@@ -85,7 +89,7 @@ internal static partial class IlDasmTextParser
     private static readonly HashSet<string> CallFamilyOpcodes =
         new(StringComparer.Ordinal) { "call", "callvirt", "newobj", "ldftn", "ldvirtftn", "calli", "constrained." };
 
-    [GeneratedRegex(@"^\s*IL_([0-9a-f]{4}):\s+(\S+)(?:\s+(.+?))?\s*$")]
+    [GeneratedRegex(@"^\s*IL_([0-9a-f]{4,8}):\s+(\S+)(?:\s+(.+?))?\s*$")]
     private static partial Regex InstructionRegex();
 
     [GeneratedRegex(@"^\.line\s+(\d+),(\d+)\s*:\s*(\d+),(\d+)\s+'(.*)'\s*$")]
@@ -96,7 +100,7 @@ internal static partial class IlDasmTextParser
 
     // Switch jump tables print their targets on continuation lines that
     // consist solely of IL_XXXX tokens with commas and the closing paren.
-    [GeneratedRegex(@"^\s*(?:IL_[0-9a-f]{4}\s*[,\)]?\s*)+$")]
+    [GeneratedRegex(@"^\s*(?:IL_[0-9a-f]{4,8}\s*[,\)]?\s*)+$")]
     private static partial Regex SwitchContinuationRegex();
 
     internal static IlDasmTextFile Parse(string path) => ParseText(File.ReadAllText(path));
@@ -117,8 +121,8 @@ internal static partial class IlDasmTextParser
         IlDasmMethodTextBuilder? builder = null;
         StringBuilder? localsBuilder = null;
         var localsBalance = 0;
-        // ILDasm wraps long .method headers across lines; a header is
-        // complete only when its parameter-list parenthesis appears.
+        // Headers may wrap inside parameters, custom modifiers, or generic
+        // constraints. Only the opening body brace terminates the header.
         StringBuilder? methodHeaderBuffer = null;
         foreach (var raw in lines)
         {
@@ -130,6 +134,8 @@ internal static partial class IlDasmTextParser
             // are the disassembler's annotations, not disassembled content.
             if (!trimmed.StartsWith("//", StringComparison.Ordinal))
                 normalized.Append(line).Append('\n');
+            if (trimmed.Length == 0 || trimmed.StartsWith("//", StringComparison.Ordinal))
+                continue;
             if (localsBuilder is not null)
             {
                 localsBalance += Count(trimmed, '(') - Count(trimmed, ')');
@@ -139,7 +145,7 @@ internal static partial class IlDasmTextParser
                 {
                     if (trimmed.Length > 0)
                         localsBuilder.Append(' ').Append(trimmed);
-                    builder!.LocalCount = CountLocalEntries(InnerLocals(localsBuilder.ToString()));
+                    builder!.SetLocals(localsBuilder.ToString());
                     localsBuilder = null;
                 }
                 continue;
@@ -147,15 +153,20 @@ internal static partial class IlDasmTextParser
 
             if (methodHeaderBuffer is not null)
             {
-                methodHeaderBuffer.Append(' ').Append(trimmed);
-                if (trimmed.Contains('('))
+                if (trimmed == "{")
                 {
-                    builder = new IlDasmMethodTextBuilder(CurrentTypeName(typeStack), MethodName(methodHeaderBuffer.ToString()));
+                    var header = CanonicalText(methodHeaderBuffer.ToString());
+                    builder = new IlDasmMethodTextBuilder(CurrentTypeName(typeStack), MethodName(header), header);
                     methodClosingDepth = braceDepth + 1;
+                    braceDepth++;
                     methodHeaderBuffer = null;
                 }
-                else if (methodHeaderBuffer.Length > 8192)
-                    throw new InvalidOperationException($"Malformed .method header in ILDasm text: {methodHeaderBuffer}");
+                else
+                {
+                    methodHeaderBuffer.Append(' ').Append(trimmed);
+                    if (methodHeaderBuffer.Length > 8192 || trimmed.StartsWith('}'))
+                        throw new InvalidOperationException($"Malformed .method header in ILDasm text: {methodHeaderBuffer}");
+                }
                 continue;
             }
 
@@ -167,18 +178,9 @@ internal static partial class IlDasmTextParser
             }
             if (trimmed.StartsWith(".method ", StringComparison.Ordinal))
             {
-                if (trimmed.Contains('('))
-                {
-                    builder = new IlDasmMethodTextBuilder(CurrentTypeName(typeStack), MethodName(trimmed));
-                    methodClosingDepth = braceDepth + 1;
-                }
-                else
-                {
-                    // The header continues on the following line(s); the
-                    // method's opening brace can only be counted once the
-                    // complete header has been consumed.
-                    methodHeaderBuffer = new StringBuilder(trimmed);
-                }
+                if (builder is not null)
+                    throw new InvalidOperationException("Nested .method declaration in ILDasm text.");
+                methodHeaderBuffer = new StringBuilder(trimmed);
                 continue;
             }
             if (trimmed.Length > 0 && trimmed[0] == '{')
@@ -186,7 +188,7 @@ internal static partial class IlDasmTextParser
                 // ILDasm prints a filter's handler as a bare braced block
                 // immediately after the filter block, not as a keyword.
                 if (builder?.HasPendingFilterHandler == true)
-                    builder.OpenFilterHandlerBlock();
+                    builder.OpenFilterHandlerBlock(braceDepth + 1);
                 braceDepth++;
                 continue;
             }
@@ -200,7 +202,7 @@ internal static partial class IlDasmTextParser
                 }
                 else if (builder is not null && builder.HasOpenBlocks)
                 {
-                    builder.CloseBlock();
+                    builder.CloseBlock(braceDepth);
                 }
                 else if (typeStack.Count > 0 && classClosingDepths.Count > 0 && braceDepth == classClosingDepths.Peek())
                 {
@@ -232,14 +234,16 @@ internal static partial class IlDasmTextParser
                 localsBalance = Count(trimmed, '(') - Count(trimmed, ')');
                 if (localsBalance <= 0)
                 {
-                    builder.LocalCount = CountLocalEntries(InnerLocals(trimmed));
+                    builder.SetLocals(trimmed);
                     localsBuilder = null;
                 }
                 continue;
             }
             if (trimmed.StartsWith(".try", StringComparison.Ordinal))
             {
-                builder.OpenBlock(".try");
+                if (trimmed != ".try")
+                    throw new InvalidOperationException($"Unsupported offset-form exception clause: {trimmed}");
+                builder.OpenBlock(".try", braceDepth + 1);
                 continue;
             }
             if (HandlerKind(trimmed) is { } handlerKind)
@@ -247,7 +251,7 @@ internal static partial class IlDasmTextParser
                 // The handler keyword follows its try's closing brace with no
                 // instruction between them, so the pending try block is the
                 // one this handler completes.
-                builder.OpenHandlerBlock(handlerKind, trimmed);
+                builder.OpenHandlerBlock(handlerKind, trimmed, braceDepth + 1);
                 continue;
             }
             if (LineDirectiveRegex().Match(trimmed) is { Success: true } lineMatch)
@@ -261,6 +265,8 @@ internal static partial class IlDasmTextParser
                     lineMatch.Groups[5].Value);
                 continue;
             }
+            if (trimmed.StartsWith(".line", StringComparison.Ordinal))
+                throw new InvalidOperationException($"Unsupported ILDasm line directive: {trimmed}");
             if (InstructionRegex().Match(trimmed) is { Success: true } instruction)
             {
                 var offset = int.Parse(instruction.Groups[1].Value, NumberStyles.HexNumber, CultureInfo.InvariantCulture);
@@ -274,6 +280,11 @@ internal static partial class IlDasmTextParser
                 builder.AppendSwitchTargets(trimmed);
                 continue;
             }
+            // ILDasm wraps method/field/signature operands across lines too,
+            // not just switch tables. Retain all continuation text; dropping
+            // it can make different parameter or generic types compare equal.
+            if (!trimmed.StartsWith('.') && builder.HasInstructions)
+                builder.AppendOperand(trimmed);
         }
 
         if (builder is not null || localsBuilder is not null || methodHeaderBuffer is not null)
@@ -367,17 +378,70 @@ internal static partial class IlDasmTextParser
 
     private static string MethodName(string methodLine)
     {
-        var parenthesis = methodLine.IndexOf('(');
-        if (parenthesis < 0)
+        // A return modreq/modopt, pinvokeimpl, or function-pointer signature
+        // can precede the method's parameter list. Generic constraints can
+        // contain parentheses too. Find top-level groups, respecting quotes.
+        var depth = 0;
+        var genericDepth = 0;
+        var bracketDepth = 0;
+        var quote = '\0';
+        string? name = null;
+        for (var i = 0; i < methodLine.Length; i++)
+        {
+            var ch = methodLine[i];
+            if (quote != '\0')
+            {
+                if (ch == '\\') i++;
+                else if (ch == quote) quote = '\0';
+                continue;
+            }
+            if (ch is '\'' or '"') { quote = ch; continue; }
+            if (ch == '<') genericDepth++;
+            else if (ch == '>') genericDepth--;
+            else if (ch == '[') bracketDepth++;
+            else if (ch == ']') bracketDepth--;
+            else if (ch == '(')
+            {
+                if (depth == 0 && genericDepth == 0 && bracketDepth == 0)
+                {
+                    var prefix = methodLine[..i].TrimEnd();
+                    var match = Regex.Match(prefix, @"(?<name>'(?:\\.|[^'\\])*'|[^\s()<>'\[\]]+)(?:<.*>)?$");
+                    if (match.Success && match.Groups["name"].Value is not ("modreq" or "modopt" or "pinvokeimpl" or "*"))
+                        name = match.Groups["name"].Value.Trim('\'');
+                }
+                depth++;
+            }
+            else if (ch == ')') depth--;
+        }
+        if (name is null || depth != 0 || genericDepth != 0 || bracketDepth != 0 || quote != '\0')
             throw new InvalidOperationException($"Malformed .method header in ILDasm text: {methodLine}");
-        var before = methodLine[..parenthesis].TrimEnd();
-        var lastSpace = before.LastIndexOf(' ');
-        var token = lastSpace < 0 ? before : before[(lastSpace + 1)..];
-        // ILDasm single-quotes identifiers that need quoting; the bare name
-        // is the token without the quotes or the generic arity suffix.
-        token = token.Trim('\'');
-        var arity = token.IndexOf('<');
-        return arity < 0 ? token : token[..arity];
+        return name;
+    }
+
+    // Collapse formatting whitespace only outside quoted identifiers/strings.
+    // Literal whitespace and escaped quotes remain part of the observation.
+    private static string CanonicalText(string text)
+    {
+        var result = new StringBuilder();
+        var quote = '\0';
+        var pendingSpace = false;
+        for (var i = 0; i < text.Length; i++)
+        {
+            var ch = text[i];
+            if (quote != '\0')
+            {
+                result.Append(ch);
+                if (ch == '\\' && i + 1 < text.Length) result.Append(text[++i]);
+                else if (ch == quote) quote = '\0';
+                continue;
+            }
+            if (char.IsWhiteSpace(ch)) { pendingSpace = true; continue; }
+            if (pendingSpace && result.Length > 0) result.Append(' ');
+            pendingSpace = false;
+            result.Append(ch);
+            if (ch is '\'' or '"') quote = ch;
+        }
+        return result.ToString();
     }
 
     private static string CurrentTypeName(List<string> typeStack) => typeStack.Count == 0
@@ -395,15 +459,17 @@ internal static partial class IlDasmTextParser
         // yet known.
         private readonly List<Block> closedBlocks = [];
 
-        public IlDasmMethodTextBuilder(string typeName, string methodName)
+        public IlDasmMethodTextBuilder(string typeName, string methodName, string header)
         {
             TypeName = typeName;
             MethodName = methodName;
+            Header = header;
         }
 
-        private sealed class Block(string kind)
+        private sealed class Block(string kind, int closingDepth)
         {
             public string Kind { get; } = kind;
+            public int ClosingDepth { get; } = closingDepth;
             public int Start { get; set; } = -1;
             public int End { get; set; } = -1;
             public string? CatchType { get; set; }
@@ -415,6 +481,9 @@ internal static partial class IlDasmTextParser
 
         public string TypeName { get; }
         public string MethodName { get; }
+        public string Header { get; }
+        public string LocalsSignature { get; private set; } = string.Empty;
+        public bool HasInstructions => instructions.Count > 0;
         public int MaxStack { get; set; }
         public int LocalCount { get; set; }
         public int CodeSize { get; set; }
@@ -424,43 +493,48 @@ internal static partial class IlDasmTextParser
         public bool SwitchTargetsPending { get; private set; }
         private List<Block> OpenBlocks { get; } = [];
 
-        public void OpenBlock(string kind)
+        public void OpenBlock(string kind, int closingDepth)
         {
             if (kind != ".try")
                 throw new InvalidOperationException($"Unsupported ILDasm block keyword: {kind}");
-            OpenBlocks.Add(new Block(".try"));
+            OpenBlocks.Add(new Block(".try", closingDepth));
         }
 
-        public void OpenHandlerBlock(string kind, string declaration)
+        public void OpenHandlerBlock(string kind, string declaration, int closingDepth)
         {
-            var handler = new Block(kind);
+            var handler = new Block(kind, closingDepth);
             if (kind == "catch")
             {
                 var catchType = declaration["catch".Length..].Trim();
                 if (catchType.Length == 0)
                     throw new InvalidOperationException($"Catch handler in {TypeName}.{MethodName} has no type identity.");
-                handler.CatchType = Regex.Replace(catchType, @"\s+", " ");
+                handler.CatchType = CanonicalText(catchType);
             }
-            // The most recently closed block must be the try this handler
-            // completes; ildasm never puts an instruction between them.
+            // A later catch/filter shares its preceding handler's try. No
+            // instruction occurs between the sibling handler blocks.
             var lastClosed = closedBlocks.LastOrDefault(block => block.End == -1);
-            if (lastClosed is null || lastClosed.Kind != ".try")
+            var pairedTry = lastClosed?.Kind == ".try" ? lastClosed : lastClosed?.PairedTry;
+            if (pairedTry is null)
                 throw new InvalidOperationException($"Handler '{kind}' in {TypeName}.{MethodName} follows no open try region.");
-            handler.PairedTry = lastClosed;
+            handler.PairedTry = pairedTry;
             OpenBlocks.Add(handler);
         }
 
-        public void OpenFilterHandlerBlock()
+        public void OpenFilterHandlerBlock(int closingDepth)
         {
             var filter = closedBlocks.LastOrDefault(block => block.End == -1 && block.Kind == "filter");
             if (filter?.PairedTry is null)
                 throw new InvalidOperationException($"Filter handler in {TypeName}.{MethodName} follows no filter region.");
-            OpenBlocks.Add(new Block("filter-handler") { PairedTry = filter.PairedTry, FilterBlock = filter });
+            OpenBlocks.Add(new Block("filter-handler", closingDepth) { PairedTry = filter.PairedTry, FilterBlock = filter });
         }
 
-        public void CloseBlock()
+        public void CloseBlock(int closingDepth)
         {
             var block = OpenBlocks[^1];
+            // /linenum can include PDB lexical-scope braces inside EH blocks.
+            // Closing such a scope must not close the enclosing try/handler.
+            if (block.ClosingDepth != closingDepth)
+                return;
             OpenBlocks.RemoveAt(OpenBlocks.Count - 1);
             closedBlocks.Add(block);
         }
@@ -480,10 +554,26 @@ internal static partial class IlDasmTextParser
             FinalizeCompletedClauses();
             foreach (var open in OpenBlocks)
                 open.Start = open.Start < 0 ? offset : open.Start;
-            instructions.Add((offset, opcode, operand));
+            if (SwitchTargetsPending)
+                throw new InvalidOperationException($"Unterminated switch in {TypeName}.{MethodName}.");
+            instructions.Add((offset, opcode, CanonicalText(operand)));
             if (CallFamilyOpcodes.Contains(opcode))
                 callSites.Add((offset, opcode));
-            SwitchTargetsPending = opcode == "switch";
+            SwitchTargetsPending = opcode == "switch" && !operand.Contains(')');
+        }
+
+        public void SetLocals(string directive)
+        {
+            LocalCount = CountLocalEntries(InnerLocals(directive));
+            LocalsSignature = CanonicalText(directive);
+        }
+
+        public void AppendOperand(string continuation)
+        {
+            if (SwitchTargetsPending || continuation.StartsWith("IL_", StringComparison.Ordinal))
+                throw new InvalidOperationException($"Unsupported instruction continuation: {continuation}");
+            var last = instructions[^1];
+            instructions[^1] = (last.Offset, last.Opcode, CanonicalText(last.Operand + " " + continuation));
         }
 
         // A clause is complete once its handler's end is known; ECMA-335
@@ -514,7 +604,7 @@ internal static partial class IlDasmTextParser
             if (instructions.Count == 0)
                 return;
             var last = instructions[^1];
-            var targets = Regex.Matches(continuation, @"IL_([0-9a-f]{4})")
+            var targets = Regex.Matches(continuation, @"IL_([0-9a-f]{4,8})")
                 .Select(match => match.Groups[1].Value)
                 .ToArray();
             instructions[^1] = (last.Offset, last.Opcode, last.Operand + ":" + string.Join(",", targets));
@@ -526,8 +616,10 @@ internal static partial class IlDasmTextParser
         {
             if (OpenBlocks.Count > 0)
                 throw new InvalidOperationException($"Unclosed exception block '{OpenBlocks[^1].Kind}' in {TypeName}.{MethodName}.");
+            if (SwitchTargetsPending)
+                throw new InvalidOperationException($"Unterminated switch in {TypeName}.{MethodName}.");
             foreach (var block in closedBlocks)
-                block.End = CodeSize;
+                block.End = block.End == -1 ? CodeSize : block.End;
             FinalizeCompletedClauses();
             if (closedBlocks.Count > 0)
                 throw new InvalidOperationException($"Unpaired exception block '{closedBlocks[0].Kind}' in {TypeName}.{MethodName}.");
@@ -542,7 +634,7 @@ internal static partial class IlDasmTextParser
                     .ToArray(),
                 instructions.ToArray(),
                 callSites.ToArray(),
-                lineDirectives.ToArray());
+                lineDirectives.ToArray()) { Header = Header, LocalsSignature = LocalsSignature };
         }
     }
 }
