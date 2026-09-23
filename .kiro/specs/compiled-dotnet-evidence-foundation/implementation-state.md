@@ -1853,3 +1853,49 @@ Local review-repair validation: focused messy-workspace suite 12/12, full
 private-path guard passed. Task 10's remaining public #766 matrix and Task
 11's Windows/private validation remain separate; neither checkbox is closed
 by these synthetic fixtures.
+
+## Task 11 buildable-fix profile preparation (2026-09-23)
+
+This branch starts at `origin/dev` merge `308d76532059bb67a9d73a7e57c028c02e01ecb4`
+(PR #787). Task 10's public ECMA-335 work still lacks an independent ILDAsm
+portable-PDB `.line` oracle (`IldasmPortablePdbLineOracleUnavailable`) and the
+remaining #766 acceptance matrix; the 12/12 messy-workspace fixtures do not
+close it. Task 11 is a separate Windows/private lane. Neither Task 10 nor Task
+11 is checked complete.
+
+The Task 11 runner now has two explicit corpus profiles. The default
+`HistoricalMaster` retains #769's exact commit and 256-file admission limit.
+`BuildableFix` pins the distinct buildable-fix commit and admits at most 427
+complete eligible files. Both retain 64 MiB selected bytes and 4,096 candidate
+entries. Receipt schema 2 binds the exact runner SHA-256, profile, commit,
+effective limits, exact file selection, and candidate counts before and after
+representative tests. A
+cross-profile or older bounded receipt cannot authorize a full-corpus run.
+The runner still rejects ignored non-generated inputs and exact selections
+that are not tracked; the scanner still requires complete inventory equality.
+
+A separate clean detached Windows checkout of the fix commit was inventoried
+before building: 427 eligible tracked files, 19,241,511 bytes, 645 candidate
+entries, no ignored or untracked entries. The earlier build checkout's 858
+eligible files included ignored package/source material, so it is not the
+bounded input. The fresh checkout's independent Debug solution build did not
+reproduce: a restore-disabled MSBuild attempt exited 1 with 3 warnings and 49
+errors because the pinned SQLite assembly and PostSharp 2 targets package were
+not present. The build checkout has those version-named packages, but the
+separate clean checkout does not; its ignored x64 SQLite interop copy is also
+absent. Package and native-copy provenance sufficient for a clean, independent
+reproduction has not yet been established. The documented build command first
+attempted legacy NuGet restore and was stopped before any package directory
+appeared. No private bounded
+receipt, representative test, TraceMap scan, or FullCorpus result is claimed.
+The public profile/guard PR precedes any private Windows receipt attempt.
+
+Public local checks on this branch: Task 11 synthetic guards passed, including
+427-file admission, 428-file rejection, candidate-entry limiting, generated
+input rejection, and cross-profile receipt rejection; focused exact-source
+scope tests passed 7/7; locked restore and solution build under `-warnaserror`
+passed with zero warnings/errors; the private-path guard, Kiro self-test, and
+`git diff --check` passed. `PublicSmoke` needs a clean committed TraceMap head
+and passed with a private local receipt at code commit `7d4c748d97bafa00ef936f14ca3a0afd130911b9`.
+The PR head will receive a fresh exact-head smoke run. No full .NET suite or
+private corpus scan is claimed by these checks.

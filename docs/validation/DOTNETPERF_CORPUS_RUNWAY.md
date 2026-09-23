@@ -25,6 +25,15 @@ Pin all investigation to commit:
 db8c3359badfec620ccdc6df062b1756ef9607f8
 ```
 
+This remains #769's historical-master pin. Task 11 also has a distinct
+`BuildableFix` Windows profile at
+`642bdaede0b97a400c24266e30670ed5c1c98689` for build and bounded-scan
+validation. Its admission and receipt contract is documented in
+[TASK11_WINDOWS_LANE.md](TASK11_WINDOWS_LANE.md). Evidence from that profile
+must not be presented as evidence for the historical-master corpus or as a
+completed Task 10 public ECMA-335 suite. The fix profile has no passing private
+bounded receipt yet.
+
 ## Source and Checkout
 
 The inspected checkout records this origin:

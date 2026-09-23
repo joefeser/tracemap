@@ -28,7 +28,7 @@ try {
     [void](New-Item -ItemType Directory -Path $repo)
     & git -C $repo init -q
     'public fixture' | Set-Content -LiteralPath (Join-Path $repo 'README.txt')
-    & git -C $repo add .
+    & git -C $repo -c core.autocrlf=false add .
     & git -C $repo -c user.name=Task11 -c user.email=task11@example.invalid commit -qm fixture
     $sha = (& git -C $repo rev-parse HEAD).Trim()
     if ($IsWindows) {
@@ -68,6 +68,33 @@ try {
             ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $oldReceipt
         $null = & pwsh -NoProfile -File $runner -Lane FullCorpus -EnableFullCorpus -BoundedReceiptPath $oldReceipt -TraceMapRoot $repo -TraceMapCommit $sha -OutputRoot $fullOut 2>&1
         if ($LASTEXITCODE -eq 0 -or (Test-Path -LiteralPath $fullOut)) { throw 'UNBOUNDED_PRIOR_RECEIPT_ACCEPTED' }
+        $wrongProfileReceipt = Join-Path $root 'wrong-profile-receipt.json'
+        $profileReceipt = @{
+            schemaVersion = 2; kind = 'Bounded'; status = 'passed'; runnerSha256 = $RunnerSha256; traceMapCommit = $sha
+            corpusProfile = 'HistoricalMaster'; corpusCommit = '642bdaede0b97a400c24266e30670ed5c1c98689'
+            admissionPolicy = @{ maxFiles = 427; maxBytes = 64MB; maxCandidateEntries = 4096 }
+            boundedSelection = @{
+                fileCount = $bounded.fileCount; sourceBytes = $bounded.sourceBytes
+                maxFiles = 427; maxBytes = 64MB; maxCandidateEntries = 4096
+                candidateEntries = (Get-Task11CandidateEntryCount $repo)
+                candidateEntriesAfterTests = (Get-Task11CandidateEntryCount $repo)
+            }
+            boundedPaths = @('README.txt')
+            provenance = @{ generatorSha256 = ('a' * 64); generatorPayloadSha256 = ('b' * 64); boundedInputSha256 = ('c' * 64) }
+        }
+        $profileReceipt | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $wrongProfileReceipt
+        $wrongProfileOutput = & pwsh -NoProfile -File $runner -Lane FullCorpus -CorpusProfile BuildableFix -EnableFullCorpus -BoundedReceiptPath $wrongProfileReceipt -TraceMapRoot $repo -TraceMapCommit $sha -OutputRoot $fullOut 2>&1 | Out-String
+        if ($LASTEXITCODE -eq 0 -or (Test-Path -LiteralPath $fullOut) -or
+            -not $wrongProfileOutput.Contains('BOUNDED_RECEIPT_INVALID')) { throw 'CROSS_PROFILE_RECEIPT_ACCEPTED' }
+        $validProfileReceipt = Join-Path $root 'valid-profile-receipt.json'
+        $profileReceipt.corpusProfile = 'BuildableFix'
+        $profileReceipt | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $validProfileReceipt
+        $validProfileOut = Join-Path $root 'valid-profile-output'
+        $missingIlAsm = Join-Path $root 'missing-ilasm.exe'
+        $validProfileOutput = & pwsh -NoProfile -File $runner -Lane FullCorpus -CorpusProfile buildablefix -EnableFullCorpus -BoundedReceiptPath $validProfileReceipt -TraceMapRoot $repo -TraceMapCommit $sha -OutputRoot $validProfileOut -IlAsmPath $missingIlAsm 2>&1 | Out-String
+        if ($LASTEXITCODE -eq 0 -or -not (Test-Path -LiteralPath $validProfileOut) -or
+            -not $validProfileOutput.Contains('ILASM_UNAVAILABLE') -or
+            $validProfileOutput.Contains('BOUNDED_RECEIPT_INVALID')) { throw 'VALID_PROFILE_RECEIPT_REJECTED' }
     }
     Expect-Block { Assert-Task11Checkout $repo ('0' * 40) 'CORPUS' } 'CORPUS_COMMIT_MISMATCH'
     Assert-Task11Checkout $repo $sha 'CORPUS'
@@ -131,8 +158,42 @@ try {
     $priorReceipt = @{ provenance = @{ generatorSha256 = $generatorDigest; generatorPayloadSha256 = $beforePayload } }
     Expect-Block { Assert-Task11GeneratorMatchesReceipt $afterPayload $generatorDigest $priorReceipt } 'BOUNDED_GENERATOR_MISMATCH'
     Assert-Task11GeneratorMatchesReceipt $beforePayload $generatorDigest $priorReceipt
+    if ($CorpusProfile -cne 'HistoricalMaster' -or
+        $CorpusCommit -cne 'db8c3359badfec620ccdc6df062b1756ef9607f8' -or
+        $MaxBoundedFiles -ne 256) { throw 'HISTORICAL_PROFILE_CHANGED' }
+    $countRepo = Join-Path $root 'complete-inventory'
+    [void](New-Item -ItemType Directory -Path $countRepo)
+    & git -C $countRepo init -q
+    $paths = @(0..426 | ForEach-Object { "file$_.cs" })
+    foreach ($path in $paths) { 'public fixture' | Set-Content -LiteralPath (Join-Path $countRepo $path) }
+    & git -C $countRepo -c core.autocrlf=false add .
+    & git -C $countRepo -c user.name=Task11 -c user.email=task11@example.invalid commit -qm complete-427
+    if (@(& git -C $countRepo ls-files).Count -ne 427) { throw 'SYNTHETIC_INVENTORY_NOT_COMPLETE' }
+    Expect-Block { Assert-Task11BoundedPaths $countRepo $paths } 'BOUNDED_FILE_COUNT_LIMIT'
+    . $runner -CorpusProfile BuildableFix -TraceMapRoot $root -TraceMapCommit ('a' * 40) -OutputRoot (Join-Path $root 'unused')
+    if ($CorpusCommit -cne '642bdaede0b97a400c24266e30670ed5c1c98689' -or
+        $MaxBoundedFiles -ne 427 -or $MaxBoundedBytes -ne 64MB -or $MaxCandidateEntries -ne 4096) {
+        throw 'BUILDABLE_FIX_PROFILE_INVALID'
+    }
+    $fixSelection = Assert-Task11BoundedPaths $countRepo $paths
+    if ($fixSelection.fileCount -ne 427 -or $fixSelection.maxFiles -ne 427 -or
+        $fixSelection.maxCandidateEntries -ne 4096) { throw 'COMPLETE_427_NOT_ADMITTED' }
+    $candidateEntries = Get-Task11CandidateEntryCount $countRepo
+    if ($candidateEntries -lt 427 -or $candidateEntries -gt 4096) { throw 'CANDIDATE_COUNT_INVALID' }
+    $script:MaxCandidateEntries = $candidateEntries - 1
+    Expect-Block { Get-Task11CandidateEntryCount $countRepo } 'BOUNDED_CANDIDATE_ENTRY_LIMIT'
+    $script:MaxCandidateEntries = 4096
+    'public fixture' | Set-Content -LiteralPath (Join-Path $countRepo 'file427.cs')
+    & git -C $countRepo -c core.autocrlf=false add .
+    & git -C $countRepo -c user.name=Task11 -c user.email=task11@example.invalid commit -qm complete-428
+    Expect-Block { Assert-Task11BoundedPaths $countRepo @($paths + 'file427.cs') } 'BOUNDED_FILE_COUNT_LIMIT'
+    [void](New-Item -ItemType Directory -Path (Join-Path $countRepo 'bin'))
+    'bin/' | Add-Content -LiteralPath (Join-Path $countRepo '.git/info/exclude')
+    'ignored generated source' | Set-Content -LiteralPath (Join-Path $countRepo 'bin/ignored.cs')
+    Assert-Task11Checkout $countRepo ((& git -C $countRepo rev-parse HEAD).Trim()) 'CORPUS'
+    Expect-Block { Assert-Task11BoundedPaths $countRepo @('bin/ignored.cs') } 'GIT_FAILED'
     $windowsOnly = if ($IsWindows) { 'full-corpus opt-in/prior receipt and output reuse/overlap passed' } else { 'Windows-only full-corpus and output guards not run' }
-    Write-Output "Task 11 synthetic guards passed: bounded exact tracked file/count/bytes selection, exact rule ID, wrong commit, dirty checkout, missing corpus/tool/artifact, invalid provenance; $windowsOnly."
+    Write-Output "Task 11 synthetic guards passed: historical and fix profiles, complete 427-file admission, 428-file rejection, candidate-entry limit, ignored generated source rejection, exact rule ID, wrong commit, dirty checkout, missing corpus/tool/artifact, invalid provenance; $windowsOnly."
 } finally {
     Remove-Item -LiteralPath $root -Recurse -Force
 }
