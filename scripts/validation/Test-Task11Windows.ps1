@@ -11,7 +11,10 @@ function Expect-Block([scriptblock]$Action, [string]$Code) {
 try {
     . $runner -TraceMapRoot $root -TraceMapCommit ('a' * 40) -OutputRoot (Join-Path $root 'unused')
     [void](New-Item -ItemType Directory -Path (Join-Path $root 'rules'))
-    "rules:`n  - id: synthetic.valid.v1" | Set-Content -LiteralPath (Join-Path $root 'rules/rule-catalog.yml')
+    "rules:`r`n  - id: synthetic.valid.v1`r`n" | Set-Content -LiteralPath (Join-Path $root 'rules/rule-catalog.yml') -NoNewline
+    if (-not (Get-Task11RuleIds "rules:`n  - id: synthetic.valid.v1`n").Contains('synthetic.valid.v1')) {
+        throw 'LF_RULE_CATALOG_UNREADABLE'
+    }
     $repo = Join-Path $root 'public-repo'
     [void](New-Item -ItemType Directory -Path $repo)
     & git -C $repo init -q
