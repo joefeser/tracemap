@@ -1573,6 +1573,8 @@ disassembly. The hosted `/linenum` no-directive outcome is represented in
 the machine-readable fixture catalog as deferred/Tier4Unknown with
 `IldasmPortablePdbLineOracleUnavailable`; the test verifies that record
 before taking its no-oracle branch. This does not close Task 10 or claim
-PDB parity. The broader Windows tool discovery already flows through the
+PDB parity. The parent `ILRWPDB-ILASM-PARITY-012` prerequisite is partial,
+not implemented, until that PDB half is independently observed. The broader
+Windows tool discovery already flows through the
 workflow environment handoff on this head; no second discovery path was
 added to the test.

@@ -1456,12 +1456,12 @@
     {
       "id": "ILRWPDB-ILASM-PARITY-012",
       "language": "csharp",
-      "status": "implemented",
+      "status": "partial",
       "shape": "assemble the same before/after mutation matrix with the pinned Microsoft ILAsm and cross-check the disassembled IL offsets against the admitted TraceMap evidence using the pinned ILDAsm as the independent oracle; the portable PDB sequence-point half of the original prerequisite executes on every run but stays unclaimed while the hosted ILDAsm observes no portable PDB through /linenum",
       "expectedIdentity": "unchanged il-rewrite edges for every round-tripped method with matching ILDAsm handler-clause, instruction, local, and max-stack counts",
       "expectedRuleIds": ["dotnet.compiled.il-rewrite.v1"],
       "expectedTier": "Tier2Structural",
-      "expectedGaps": [],
+      "expectedGaps": ["IldasmPortablePdbLineOracleUnavailable"],
       "satisfiedBy": [
         "ILASM-PARITY-CFLOW-002",
         "ILASM-PARITY-EH-003",
