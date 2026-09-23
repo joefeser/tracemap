@@ -3180,7 +3180,7 @@ assembly. On Windows, discover candidate tools and their exact file versions
 before invoking them:
 
 ```powershell
-Get-ChildItem 'C:\Program Files\Microsoft SDKs','C:\Program Files (x86)\Microsoft SDKs','C:\Program Files\Microsoft Visual Studio' -Recurse -File -Include ilasm.exe,ildasm.exe -ErrorAction SilentlyContinue | Select-Object FullName,@{N='Version';E={$_.VersionInfo.FileVersion}}
+Get-ChildItem "$env:WINDIR\Microsoft.NET\Framework64","$env:WINDIR\Microsoft.NET\Framework",'C:\Program Files\Microsoft SDKs','C:\Program Files (x86)\Microsoft SDKs','C:\Program Files (x86)\Windows Kits','C:\Program Files\Microsoft Visual Studio' -Recurse -File -Include ilasm.exe,ildasm.exe -ErrorAction SilentlyContinue | Select-Object FullName,@{N='Version';E={$_.VersionInfo.FileVersion}}
 & '<discovered-absolute-ilasm.exe>' /?
 & '<discovered-absolute-ildasm.exe>' /?
 ```
@@ -3197,7 +3197,7 @@ Get-ChildItem 'C:\Program Files\Microsoft SDKs','C:\Program Files (x86)\Microsof
 | Windows-native PDB | Existing `CS-ILRWPDB-WINDOWS-009` unsupported gap | Requires an independent Windows PDB reader before admission. |
 | Same opcodes, different operands; token retargets and one-sided members | `CS-ILRW-OPERAND-001`, token/member cases, and SRM raw-IL/runtime integration case | Operand-insensitive hashes are non-unique heuristics; no identity edge from them. |
 | Valid, invalid, and hostile bounded PE/metadata shapes | Existing malformed/limit cases and topology unsupported/ambiguous cases | Reader disagreement withholds the entire disputed relationship. |
-| ILAsm/ILDAsm parity | `ILRWPDB-ILASM-PARITY-012` remains a prerequisite gap | A pinned toolchain and independent disassembly comparison are required; Mono.Cecil is not an oracle for this claim. |
+| ILAsm/ILDAsm parity | `ILASM-PARITY-TOOLS-001`, `CFLOW-002`, `EH-003`, `MEMBER-004`, and `MUTATE-005` are proven in the extended Windows lane; `ILASM-PARITY-PDB-006` records the typed PDB-oracle gap | Parity is proven only for the public fixture matrix on the pinned .NET Framework 4.8 ILAsm + Windows SDK NETFX ILDAsm toolchain, with ILDAsm as the independent oracle; sequence-point parity stays unclaimed until a work-machine ILDAsm observes portable PDBs and the recorded receipt matches; no general equivalence claim. |
 
 Each new positive assertion and gap uses the existing rule ID and evidence
 tier, complete assembly/module/member signature where applicable, locations,
@@ -3227,3 +3227,113 @@ exact invocation commands, independently compare IL operands, offsets, and
 PDB sequence points to SRM and TraceMap, and leave a typed gap for any
 unavailable or disagreeing shape. Task 10 stays open until that evidence
 exists; Task 11's private work-machine lane is separate.
+
+### Public ILAsm/ILDAsm parity gate (Task 10, #766)
+
+The missing prerequisite was the search scope, not the tool: `ILAsm.exe`
+ships with the .NET Framework runtime itself under
+`C:\Windows\Microsoft.NET\Framework64\v4.0.30319\` (and the x86 `Framework`
+twin), which the PR #782 discovery never searched. The extended lane's
+discovery step searches, in order: the .NET Framework `Framework64`/
+`Framework` runtime directories, the Windows SDK `Microsoft SDKs` NETFX
+4.8/4.8.1 Tools directories (x64 first), Windows Kits, Visual Studio, and
+PATH; it then selects one ILAsm and one ILDAsm by that same order and hands
+their absolute paths to the test process through
+`TRACEMAP_PARITY_ILASM`/`TRACEMAP_PARITY_ILDASM`. The in-test discovery consumes
+and re-validates that handoff first, then its own ordered candidates
+(runtime directories, NETFX tools, PATH). Both tools are pinned by absolute
+path with a recorded `4.8.`-prefixed file version AND a non-empty product
+version, plus the runner image identity (`ImageOS`, `ImageVersion`,
+architecture); a discovery hit without either version, or either pinned
+tool failing its own `/?`, fails the case rather than passing silently.
+
+The parity matrix runs only on the extended Windows lane
+(`compiled-dotnet-extended-validation.yml`, `public-mutation-matrix
+(windows-latest)`) through `IlAsmIldasmParityGateTests`; ordinary CI never
+depends on ILAsm or ILDAsm. ILDAsm `/out=... /nobar` text and an ILAsm
+`/dll /nologo /output=...` round trip are the independent oracles, parsed by
+the test-local `IlDasmTextParser` (whose own tests run on every OS); Mono.Cecil
+is never the parity oracle because it is one of TraceMap's two internal
+readers.
+
+The canonical comparison retains complete method declarations (including
+calling conventions, generic constraints and custom modifiers), local
+signatures and initialization, and wrapped instruction operands. Quoted
+literal whitespace stays significant. Exception ends already observed at an
+instruction boundary are never extended to the method end; sibling handlers
+share their protected range, and lexical-scope braces do not close EH blocks.
+Parser regressions cover offsets beyond `0xffff` and reject unsupported
+offset-form EH clauses, malformed `.line` directives and incomplete switches.
+This remains a parser for the bounded public fixtures, not a general ILAsm
+grammar or an ECMA-335 verifier.
+
+The six catalog cases live in `fixture-cases.json` schema v9
+(`ilasmParityCases`):
+
+- `ILASM-PARITY-TOOLS-001` — pinned discovery, versions, and invocability.
+  Observed on the `win25-vs2026` runner image `20260907.229.1` (AMD64):
+  `C:\Windows\Microsoft.NET\Framework64\v4.0.30319\ilasm.exe` file version
+  `4.8.9221.0` (built by `NET481REL1LAST_25H2`) and
+  `C:\Program Files (x86)\Microsoft SDKs\Windows\v10.0A\bin\NETFX 4.8.1
+  Tools\x64\ildasm.exe` file version `4.8.3928.0` (built by `NET48REL1`).
+- `ILASM-PARITY-CFLOW-002` — the control-flow fixture round trips through
+  ILDAsm → ILAsm → ILDAsm with identical canonical member bodies, and the
+  bound before/after scan joins every method (branches, the dense switch
+  table, leave targets, nested exception regions) as `unchanged` with
+  `tokenRetargeted=false`, zero gaps, and instruction, local, max-stack,
+  and call-offset counts equal to the ILDAsm observation on both sides.
+- `ILASM-PARITY-EH-003` — nested try regions, catch/fault handler kinds and
+  catch type identities, leave targets, and the dense switch keep identical
+  canonical exception-clause structure on instruction boundaries, with
+  ILDAsm clause counts equal to TraceMap exception-region counts on both
+  sides. The parser also retains filter start offsets when present.
+- `ILASM-PARITY-MEMBER-004` — the member-shape fixture's generic method
+  specifications, `ldtoken` type tokens, `calli` standalone signatures,
+  static field operands, explicit `modopt` parameters and `modreq` returns,
+  accessors, and vararg
+  declarations round trip with every symbolic operand preserved verbatim in
+  the canonical ILDAsm body. ILAsm renumbers raw module-local reference rows
+  on re-emission (observed for cross-assembly MemberRefs), and TraceMap's
+  operand-aware digests commit raw tokens by documented contract, so those
+  methods classify exactly `operand-only-change` with every call-retarget
+  identity preserved; constructors are joined under their own
+  `constructor:` identity kind.
+  The modifier-bearing input is constructed before disassembly: C#'s
+  non-virtual `in int` alone does not supply a custom-modifier signature.
+  A platform-neutral test checks fixture construction; only the Windows
+  ILDAsm observation establishes independent modifier preservation.
+- `ILASM-PARITY-MUTATE-005` — the branch-retarget, handler-kind, and
+  stack-neutral insertion mutations keep their exact TraceMap relationship
+  classification when the mutated after side passes through the independent
+  round trip first, with identical canonical method bodies, not whole-file
+  normalized disassembly, for the raw and round-tripped after sides.
+- `ILASM-PARITY-PDB-006` — **deferred (Tier4Unknown)**. The non-hidden sequence points of an embedded
+  portable PDB fixture, observed independently via ILDAsm's documented
+  `/linenum` switch with the extracted PDB adjacent to the carrier copy,
+  must equal TraceMap's declared sequence-point tuples (offset, start/end
+  line, start/end column). ILDAsm 4.8.3928.0 has no `/pdbpath` option, and
+  on 2026-09-23 the hosted `win25-vs2026` ILDAsm accepted `/linenum`,
+  disassembled the carrier, and emitted no `.line` directives for the
+  adjacent extracted portable PDB: the typed oracle-availability gap is
+  recorded as `IldasmPortablePdbLineOracleUnavailable` in the fixture catalog,
+  with the precise work-machine command and expected receipt and
+  no PDB parity is claimed. Hidden (`0xfeefee`) points are outside the
+  claim either way. Closing this one prerequisite requires a Windows work
+  machine whose ILDAsm symbol reader observes portable PDBs (for example a
+  Visual Studio/SDK ILDAsm bound to a portable-PDB-capable diasymreader)
+  and the same tuple comparison, or an equally independent documented
+  oracle; Task 10's checkbox stays open on exactly that gap.
+
+Every round-trip leg scans a bound compiled-input pair (binding receipt over
+a temporary git fixture repository) with both `il-body` and `il-rewrite`
+evidence, so the compared facts retain the exact generator SHA-256 and
+privacy-projected bounded-input SHA-256, rule IDs, tiers, locations, and
+limitations of the underlying rules. A repeat scan must be byte-identical.
+The parity claim is bounded to these public fixtures, that pinned 4.8
+toolchain, and those observations; it is not a general IL equivalence,
+execution, or debug-behavior claim. The green exact-head run is
+https://github.com/joefeser/tracemap/actions/runs/35802803285/job/106996742841
+(Windows, all eight gate tests and seven parser tests passed; Ubuntu and
+macOS lanes green; ordinary lanes including all three package-smoke jobs
+green). Task 10's checkbox stays open on the single PDB-prerequisite gap
+above.

@@ -35,11 +35,23 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          $roots = @('C:\Program Files\Microsoft SDKs', 'C:\Program Files (x86)\Microsoft SDKs', 'C:\Program Files\Microsoft Visual Studio')
+          Write-Output "runner image: ImageOS=$env:ImageOS ImageVersion=$env:ImageVersion arch=$env:PROCESSOR_ARCHITECTURE"
+          # ILAsm ships with the .NET Framework runtime itself under
+          # Framework/Framework64; ILDAsm ships with the Windows SDK NETFX
+          # tools. Windows Kits and Visual Studio cover the remaining
+          # Microsoft-owned installs, then PATH.
+          $roots = @(
+            "$env:WINDIR\Microsoft.NET\Framework64",
+            "$env:WINDIR\Microsoft.NET\Framework",
+            'C:\Program Files\Microsoft SDKs',
+            'C:\Program Files (x86)\Microsoft SDKs',
+            'C:\Program Files (x86)\Windows Kits',
+            'C:\Program Files\Microsoft Visual Studio'
+          )
           $candidates = @(Get-ChildItem $roots -Recurse -File -Include ilasm.exe,ildasm.exe -ErrorAction SilentlyContinue)
           $candidates += @(Get-Command ilasm.exe,ildasm.exe -All -ErrorAction SilentlyContinue | ForEach-Object { Get-Item $_.Source })
           $candidates | Sort-Object FullName -Unique | ForEach-Object {
-            Write-Output "$($_.Name) path: $($_.FullName) version: $($_.VersionInfo.FileVersion)"
+            Write-Output "$($_.Name) path: $($_.FullName) version: $($_.VersionInfo.FileVersion) product: $($_.VersionInfo.ProductVersion)"
             & $_.FullName /? 2>&1 | Select-Object -First 12
           }
           foreach ($name in @('ilasm.exe', 'ildasm.exe')) {
@@ -51,5 +63,25 @@ jobs:
           } else {
             Write-Output 'vswhere unavailable'
           }
+          # Hand the selected absolute paths to the parity tests. The ordered
+          # picks mirror the in-test discovery (runtime directories first for
+          # ILAsm, NETFX x64 first for ILDAsm); the tests re-validate paths,
+          # file versions, and product versions before use.
+          $pick = {
+            param($kind)
+            $ordered = @($candidates | Where-Object Name -EQ $kind | Sort-Object FullName -Unique)
+            $preferred = if ($kind -eq 'ilasm.exe') {
+              $ordered | Where-Object { $_.FullName -like '*Microsoft.NET\Framework64\v4.0.30319*' }
+            } else {
+              $ordered | Where-Object { $_.FullName -like '*NETFX 4.8.1 Tools*x64*' }
+            }
+            if ($preferred) { $preferred[0].FullName } elseif ($ordered) { $ordered[0].FullName } else { '' }
+          }
+          $ilasmPick = & $pick 'ilasm.exe'
+          $ildasmPick = & $pick 'ildasm.exe'
+          Write-Output "selected ilasm: $ilasmPick"
+          Write-Output "selected ildasm: $ildasmPick"
+          "TRACEMAP_PARITY_ILASM=$ilasmPick" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "TRACEMAP_PARITY_ILDASM=$ildasmPick" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
       - name: Run extended public rewrite matrix
-        run: dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter "FullyQualifiedName~IlRewriteEvidenceExtractorTests|FullyQualifiedName~IlRewriteControlFlowEvidenceExtractorTests|FullyQualifiedName~IlRewriteMemberShapeEvidenceExtractorTests|FullyQualifiedName~IlRewritePdbEvidenceExtractorTests|FullyQualifiedName~IlRewriteAssemblyTopologyTests|FullyQualifiedName~IlRewriteEmbeddedPdbTests|FullyQualifiedName~IlRewritePublicIntegrationTests"
+        run: dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --logger "console;verbosity=detailed" --filter "FullyQualifiedName~IlRewriteEvidenceExtractorTests|FullyQualifiedName~IlRewriteControlFlowEvidenceExtractorTests|FullyQualifiedName~IlRewriteMemberShapeEvidenceExtractorTests|FullyQualifiedName~IlRewritePdbEvidenceExtractorTests|FullyQualifiedName~IlRewriteAssemblyTopologyTests|FullyQualifiedName~IlRewriteEmbeddedPdbTests|FullyQualifiedName~IlRewritePublicIntegrationTests|FullyQualifiedName~IlAsmIldasmParityGateTests|FullyQualifiedName~IlDasmTextParserTests"

@@ -1,5 +1,5 @@
 {
-  "schemaVersion": "compiled-dotnet-fixture-cases.v8",
+  "schemaVersion": "compiled-dotnet-fixture-cases.v9",
   "cases": [
     {
       "id": "CS-OVERLOAD-001",
@@ -1456,17 +1456,24 @@
     {
       "id": "ILRWPDB-ILASM-PARITY-012",
       "language": "csharp",
-      "status": "deferred",
-      "shape": "assemble the same before/after mutation matrix with ILAsm and cross-check the disassembled IL offsets and portable PDB sequence points against the admitted TraceMap evidence",
-      "expectedIdentity": "deferred",
-      "expectedRuleIds": [],
-      "expectedTier": "Tier4Unknown",
-      "expectedGaps": [],
-      "nonClaims": [
-        "ilasm-parity",
-        "ildasm-parity"
+      "status": "partial",
+      "shape": "assemble the same before/after mutation matrix with the pinned Microsoft ILAsm and cross-check the disassembled IL offsets against the admitted TraceMap evidence using the pinned ILDAsm as the independent oracle; the portable PDB sequence-point half of the original prerequisite executes on every run but stays unclaimed while the hosted ILDAsm observes no portable PDB through /linenum",
+      "expectedIdentity": "unchanged il-rewrite edges for every round-tripped method with matching ILDAsm handler-clause, instruction, local, and max-stack counts",
+      "expectedRuleIds": ["dotnet.compiled.il-rewrite.v1"],
+      "expectedTier": "Tier2Structural",
+      "expectedGaps": ["IldasmPortablePdbLineOracleUnavailable"],
+      "satisfiedBy": [
+        "ILASM-PARITY-CFLOW-002",
+        "ILASM-PARITY-EH-003",
+        "ILASM-PARITY-MUTATE-005"
       ],
-      "prerequisites": "ILAsm/ILDAsm were absent from PATH, the .NET SDK 10.0.201 installation, and the NuGet cache on the 2026-09-22 assessment host (macOS arm64); Homebrew bottles mono 6.14.1 (provides ilasm/ildasm) but it was not installed. Requires a separately documented extended lane with a pinned toolchain: Windows SDK/Visual Studio ilasm.exe + ildasm.exe on the Windows CI lane, or a pinned mono/dotnet-runtime ILAsm build on macOS/Linux, plus an independent disassembly oracle for sequence-point parity."
+      "limitations": "the IL-offset cross-check is proven on the pinned hosted toolchain; the portable-PDB sequence-point half stays unclaimed because that ILDAsm emits no .line directives for portable PDBs (see ILASM-PARITY-PDB-006, which records the typed oracle-availability gap and the work-machine receipt), and no test of this gate exercises dotnet.compiled.il-rewrite-pdb.v1",
+      "nonClaims": [
+        "ilasm-general-equivalence",
+        "ildasm-general-equivalence",
+        "mono-cecil-oracle",
+        "portable-pdb-sequence-point-parity"
+      ]
     },
     {
       "id": "ILRWPDB-EMBEDDED-PORTABLE-013",
@@ -1521,6 +1528,83 @@
       "boundedInputSha256Property": "ilRewritePdbBoundedInputSha256",
       "limitations": "the rewrite-PDB locator bound applies independently of the compiled-input text bound",
       "nonClaims": ["partial-edge-emission", "unbounded-locator", "rewrite-authorship"]
+    }
+  ],
+  "ilasmParityCases": [
+    {
+      "id": "ILASM-PARITY-TOOLS-001",
+      "language": "csharp",
+      "status": "covered",
+      "proofLane": "compiled-dotnet-extended-validation.yml:public-mutation-matrix(windows-latest)",
+      "shape": "ordered Windows discovery pins Microsoft .NET Framework 4.8 ILAsm from the Framework/Framework64 v4.0.30319 runtime directories and Windows SDK NETFX ILDAsm by absolute path, records exact file versions and the runner image, and fails when either pinned 4.8.x tool is missing or not invocable",
+      "expectedIdentity": "pinned absolute tool paths with recorded 4.8.x file versions and runner identity",
+      "expectedRuleIds": [],
+      "expectedTier": "Tier4Unknown",
+      "expectedGaps": [],
+      "prerequisites": "ILAsm ships with the .NET Framework runtime under C:\\Windows\\Microsoft.NET\\Framework64\\v4.0.30319 and the x86 C:\\Windows\\Microsoft.NET\\Framework twin; ILDAsm ships with the Windows SDK NETFX 4.8/4.8.1 Tools (x64 first); both must report a 4.8.x file version",
+      "nonClaims": ["tool-version-portability", "no-general-il-equivalence-claim", "mono-cecil-oracle"]
+    },
+    {
+      "id": "ILASM-PARITY-CFLOW-002",
+      "language": "csharp",
+      "status": "covered",
+      "proofLane": "compiled-dotnet-extended-validation.yml:public-mutation-matrix(windows-latest)",
+      "shape": "the public control-flow fixture assembly disassembles with the pinned ILDAsm, reassembles with the pinned ILAsm, and disassembles again to identical canonical method bodies (not whole-file normalized IL text) while TraceMap joins every method of the bound before/after pair as unchanged with instruction, local, max-stack, and call-offset counts equal to the ILDAsm observation on both sides",
+      "expectedIdentity": "unchanged il-rewrite edges for every method with tokenRetargeted=false and zero gaps",
+      "expectedRuleIds": ["dotnet.compiled.il-rewrite.v1", "dotnet.compiled.il-body.v1", "dotnet.compiled.il-call.v1"],
+      "expectedTier": "Tier2Structural",
+      "expectedGaps": [],
+      "nonClaims": ["no-general-il-equivalence-claim", "behavior-preservation", "mono-cecil-oracle"]
+    },
+    {
+      "id": "ILASM-PARITY-EH-003",
+      "language": "csharp",
+      "status": "covered",
+      "proofLane": "compiled-dotnet-extended-validation.yml:public-mutation-matrix(windows-latest)",
+      "shape": "nested try regions, catch/fault handler kinds and catch type identities, leave targets, and the dense switch table of the public fixtures keep identical canonical exception-clause structure across the independent round trip, with ILDAsm handler-clause counts equal to TraceMap exception-region counts on both sides; the parser also retains filter start offsets when present",
+      "expectedIdentity": "unchanged il-rewrite edges whose exception-region digests are identical on both sides",
+      "expectedRuleIds": ["dotnet.compiled.il-rewrite.v1", "dotnet.compiled.il-body.v1"],
+      "expectedTier": "Tier2Structural",
+      "expectedGaps": [],
+      "nonClaims": ["no-general-il-equivalence-claim", "execution-observability", "mono-cecil-oracle"]
+    },
+    {
+      "id": "ILASM-PARITY-MEMBER-004",
+      "language": "csharp",
+      "status": "covered",
+      "proofLane": "compiled-dotnet-extended-validation.yml:public-mutation-matrix(windows-latest)",
+      "shape": "the public member-shape fixture with generic method specifications, ldtoken type tokens, calli standalone signatures, static field operands, explicitly constructed modopt parameters and modreq returns, property and event accessors, and vararg declarations round trips through the pinned tools with complete method declarations, local signatures, and every symbolic operand retained in the canonical ILDAsm comparison; methods whose raw module-local reference tokens ILAsm renumbered on re-emission classify exactly operand-only-change with every call-retarget identity preserved",
+      "expectedIdentity": "unchanged or operand-only-change il-rewrite edges for every member-shape method with zero gaps and identity-preserving retargets",
+      "expectedRuleIds": ["dotnet.compiled.il-rewrite.v1", "dotnet.compiled.il-body.v1"],
+      "expectedTier": "Tier2Structural",
+      "expectedGaps": [],
+      "limitations": "raw module-local tokens are locations, not stable cross-build identities; renumbering alone is operand-only-change by contract",
+      "nonClaims": ["no-general-il-equivalence-claim", "cross-assembly-resolution", "mono-cecil-oracle"]
+    },
+    {
+      "id": "ILASM-PARITY-MUTATE-005",
+      "language": "csharp",
+      "status": "covered",
+      "proofLane": "compiled-dotnet-extended-validation.yml:public-mutation-matrix(windows-latest)",
+      "shape": "the public branch-retarget, handler-kind, and stack-neutral insertion mutations keep their exact TraceMap relationship classification when the mutated after side passes through ILDAsm and ILAsm before scanning, with identical canonical method bodies (not whole-file normalized disassembly) for the raw and round-tripped after sides",
+      "expectedIdentity": "operand-only-change, body-structure-change, and instruction-stream-change edges identical for the raw and round-tripped after sides",
+      "expectedRuleIds": ["dotnet.compiled.il-rewrite.v1"],
+      "expectedTier": "Tier2Structural",
+      "expectedGaps": [],
+      "nonClaims": ["no-general-il-equivalence-claim", "behavior-preservation", "mono-cecil-oracle"]
+    },
+    {
+      "id": "ILASM-PARITY-PDB-006",
+      "language": "csharp",
+      "status": "deferred",
+      "proofLane": "compiled-dotnet-extended-validation.yml:public-mutation-matrix(windows-latest)",
+      "shape": "the hosted ILDAsm accepts /linenum with the extracted portable PDB adjacent but emits no .line directives; the test checks this durable typed oracle-availability gap and prints a precise work-machine reproduction command instead of claiming parity; when an independent oracle does emit directives, the test compares their non-hidden offset and line/column tuples against TraceMap",
+      "expectedIdentity": "no hosted independent PDB observation; sequence-point parity remains unclaimed until equal sorted tuples are independently observed",
+      "expectedRuleIds": ["dotnet.compiled.sequence-point.v1", "dotnet.compiled.pdb-identity.v1"],
+      "expectedTier": "Tier4Unknown",
+      "expectedGaps": ["IldasmPortablePdbLineOracleUnavailable"],
+      "prerequisites": "ILDAsm 4.8.3928.0 documents /LINENUM for source-line references and has no /pdbpath option; observed on the hosted win25-vs2026 runner on 2026-09-23, that ILDAsm accepted /linenum and disassembled the carrier but emitted no .line directives for the adjacent extracted portable PDB, leaving this case unclaimed pending a work-machine receipt",
+      "nonClaims": ["debug-behavior-preservation", "hidden-sequence-point-parity", "no-general-il-equivalence-claim"]
     }
   ]
 }
