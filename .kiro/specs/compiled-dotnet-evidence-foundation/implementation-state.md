@@ -1906,7 +1906,7 @@ Branch `codex/webforms-page-chain-repro` starts from `origin/dev` at
 `9c136d6b` after PR #788 merged. Issue #789 records the unresolved private
 pages 2, 3, and 11 acceptance failure without publishing private artifacts.
 The new public-safe `vb-compound-pages` fixture has five same-name receiver
-methods in one file, two further call levels, and two/zero/one supported SQL
+methods in one file, further call levels, and two/zero/one supported SQL
 terminals by page. Before the fix, the scan retained downstream VB call and
 SQL facts, and the unbounded graph retained receiver bridges, but the bounded
 single-index packet reader admitted only its first wave of projectless VB
@@ -1924,3 +1924,15 @@ Public local validation: focused compound regression passed, full .NET suite
 and the focused page traversal, depth, completed-depth-summary, and targeted
 depth-comparison PowerShell tests passed. JSON parsing, `git diff --check`,
 and the private-path guard passed. No private work-corpus scan was performed.
+
+PR #790 first-head review found four actionable bounded-reader issues. The
+follow-up fixes deduplicate preloaded support witnesses; use exact declared
+method identities instead of raw name-substring candidate limits; admit only
+relevant caller/receiver type and inherited-field context; and include
+unqualified/self-qualified syntax calls in closure. Public regressions now
+exercise each case. Review and private-page acceptance remain open until the
+new head is validated and the owner reruns the work pages.
+The repair validation passed the focused 40-case packet filter, the adjacent
+31-case reporting filter, the zero-warning build, and the full 2,271/2,271
+.NET suite. The four focused PowerShell checks, catalog parse, whitespace
+check, and private-path guard passed. No private corpus was scanned.

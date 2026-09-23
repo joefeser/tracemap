@@ -970,6 +970,14 @@ public sealed class MessyWorkspaceRegressionTests
         Require("MW-COMPOUND-PAGETWO-001", "reconciliation",
             pageTwoBridges.SetEquals(Enumerable.Range(1, 5).Select(number => $"TwoLane{number:00}.Process()")),
             $"the five receiver bridges were [{string.Join(",", pageTwoBridges)}]");
+        foreach (var middle in new[] { "TwoLane01Middle", "TwoLane02Middle" })
+        {
+            Require("MW-COMPOUND-PAGETWO-001", "reconciliation",
+                graphInventory.Edges.Any(edge => edge.EdgeKind == "projectless-vb-receiver-bridge"
+                    && nodesById[edge.FromNodeId].DisplayName == $"{middle}.Forward()"
+                    && nodesById[edge.ToNodeId].DisplayName == $"{middle}.ContinueRoute()"),
+                $"unqualified/self-qualified {middle}.ContinueRoute call was not bridged");
+        }
 
         foreach (var (page, expectedTerminals) in new (string Page, int Terminals)[]
         {
@@ -1050,6 +1058,67 @@ public sealed class MessyWorkspaceRegressionTests
             packet.Gaps.Select(gap => gap.RuleId),
             packet.Gaps.Select(gap => gap.EvidenceTier),
             packet.Gaps.Select(gap => gap.Classification));
+    }
+
+    [Fact]
+    public async Task Compound_vb_support_witness_cannot_duplicate_a_deep_method_fact()
+    {
+        using var temp = new TempDirectory();
+        var (scan, index) = ScanRoot(temp, "vb-compound-pages", "compound-support");
+        var declaration = scan.Facts.Single(fact => fact.FactType == FactTypes.MethodDeclared
+            && fact.Properties.GetValueOrDefault("memberIdentity") == "TwoLane01Middle.ContinueRoute()");
+        var binding = scan.Facts.First(fact => fact.FactType == FactTypes.WebFormsEventBindingDeclared
+            && fact.Evidence.FilePath == "PageTwo.aspx");
+        await using (var connection = new SqliteConnection($"Data Source={index}"))
+        {
+            await connection.OpenAsync();
+            await using var update = connection.CreateCommand();
+            update.CommandText = "update facts set properties_json = json_set(properties_json, '$.supportingFactIds', "
+                + "coalesce(json_extract(properties_json, '$.supportingFactIds'), '') || ';' || $witness) where fact_id = $binding";
+            update.Parameters.AddWithValue("$witness", declaration.FactId);
+            update.Parameters.AddWithValue("$binding", binding.FactId);
+            Assert.Equal(1, await update.ExecuteNonQueryAsync());
+        }
+        var packet = await WebFormsModernizationPacketReporter.BuildAsync(
+            new(index, Path.Combine(temp.Path, "compound-support-packet")));
+        var chains = packet.EventChains.Where(item =>
+            item.HandlerSymbol?.Contains("PageTwo.RunButton_Click", StringComparison.Ordinal) == true).ToArray();
+        Require("MW-COMPOUND-PAGETWO-001", "traversal",
+            chains.Length > 0 && chains.All(chain => chain.TraversalObservation?.TerminalReachabilityComplete == true
+                && chain.TraversalObservation.DistinctReachableTerminalCount == 2),
+            "a support witness re-admitted during syntax closure lost or duplicated the route");
+    }
+
+    [Fact]
+    public async Task Compound_vb_unrelated_method_and_type_noise_does_not_consume_the_route_frontier()
+    {
+        using var temp = new TempDirectory();
+        var (_, index) = ScanRoot(temp, "vb-compound-pages", "compound-noise");
+        await using (var connection = new SqliteConnection($"Data Source={index}"))
+        {
+            await connection.OpenAsync();
+            await using var insert = connection.CreateCommand();
+            insert.CommandText = """
+                with recursive seq(n) as (select 1 union all select n+1 from seq where n < 250)
+                insert into facts
+                select printf('zz-compound-noise-%08d', n), scan_id, repo, commit_sha, project_path,
+                       fact_type, rule_id, evidence_tier, printf('A%04d.Process()', n), target_symbol,
+                       contract_element, 'App_Code/Noise.vb', start_line, end_line, snippet_hash,
+                       extractor_id, extractor_version,
+                       json_object('name', printf('Noise%04d', n), 'qualifiedName', printf('Noise%04d', n), 'baseTypes', '')
+                from seq cross join (select * from facts where fact_type = 'TypeDeclared'
+                                     and rule_id = 'vb.syntax.declarations.v1' order by fact_id limit 1);
+                """;
+            Assert.Equal(250, await insert.ExecuteNonQueryAsync());
+        }
+        var packet = await WebFormsModernizationPacketReporter.BuildAsync(
+            new(index, Path.Combine(temp.Path, "compound-noise-packet"), MaxFrontier: 200, MaxTraversalWork: 1500));
+        var chains = packet.EventChains.Where(item =>
+            item.HandlerSymbol?.Contains("PageTwo.RunButton_Click", StringComparison.Ordinal) == true).ToArray();
+        Require("MW-COMPOUND-PAGETWO-001", "traversal",
+            chains.Length > 0 && chains.All(chain => chain.TraversalObservation?.TerminalReachabilityComplete == true
+                && chain.TraversalObservation.DistinctReachableTerminalCount == 2),
+            $"unrelated same-name symbols or declarations blocked the real route: [{string.Join(',', packet.Summary.TruncationReasons)}]");
     }
 
     [Fact]
