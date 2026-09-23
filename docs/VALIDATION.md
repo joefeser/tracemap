@@ -3254,35 +3254,51 @@ readers. The six catalog cases live in `fixture-cases.json` schema v9
 (`ilasmParityCases`):
 
 - `ILASM-PARITY-TOOLS-001` — pinned discovery, versions, and invocability.
+  Observed on the `win25-vs2026` runner image `20260907.229.1` (AMD64):
+  `C:\Windows\Microsoft.NET\Framework64\v4.0.30319\ilasm.exe` file version
+  `4.8.9221.0` (built by `NET481REL1LAST_25H2`) and
+  `C:\Program Files (x86)\Microsoft SDKs\Windows\v10.0A\bin\NETFX 4.8.1
+  Tools\x64\ildasm.exe` file version `4.8.3928.0` (built by `NET48REL1`).
 - `ILASM-PARITY-CFLOW-002` — the control-flow fixture round trips through
-  ILDAsm → ILAsm → ILDAsm with identical normalized disassembly, and the
-  bound before/after scan joins every method as `unchanged` with
-  `tokenRetargeted=false`, zero gaps, and instruction, local, max-stack, and
-  call-offset counts equal to the ILDAsm observation on both sides.
+  ILDAsm → ILAsm → ILDAsm with identical canonical member bodies, and the
+  bound before/after scan joins every method (branches, the dense switch
+  table, leave targets, nested exception regions) as `unchanged` with
+  `tokenRetargeted=false`, zero gaps, and instruction, local, max-stack,
+  and call-offset counts equal to the ILDAsm observation on both sides.
 - `ILASM-PARITY-EH-003` — nested try regions, catch/fault handler kinds,
   leave targets, and the dense switch keep identical exception-clause
-  structure, with ILDAsm handler-clause counts equal to TraceMap
-  exception-region counts on both sides.
+  extents on instruction boundaries, with ILDAsm clause counts equal to
+  TraceMap exception-region counts on both sides.
 - `ILASM-PARITY-MEMBER-004` — the member-shape fixture's generic method
   specifications, `ldtoken` type tokens, `calli` standalone signatures,
   static field operands, custom-modifier parameters, accessors, and vararg
-  declarations round trip unchanged with symbolic operands preserved
-  verbatim in the normalized ILDAsm text.
+  declarations round trip with every symbolic operand preserved verbatim in
+  the canonical ILDAsm body. ILAsm renumbers raw module-local reference rows
+  on re-emission (observed for cross-assembly MemberRefs), and TraceMap's
+  operand-aware digests commit raw tokens by documented contract, so those
+  methods classify exactly `operand-only-change` with every call-retarget
+  identity preserved; constructors are joined under their own
+  `constructor:` identity kind.
 - `ILASM-PARITY-MUTATE-005` — the branch-retarget, handler-kind, and
   stack-neutral insertion mutations keep their exact TraceMap relationship
   classification when the mutated after side passes through the independent
-  round trip first, with identical normalized disassembly of the raw and
+  round trip first, with identical canonical disassembly of the raw and
   round-tripped after sides.
 - `ILASM-PARITY-PDB-006` — the non-hidden sequence points of an embedded
   portable PDB fixture, observed independently via ILDAsm's documented
   `/linenum` switch with the extracted PDB adjacent to the carrier copy,
   must equal TraceMap's declared sequence-point tuples (offset, start/end
-  line, start/end column). ILDAsm 4.8.3928.0 has no `/pdbpath` option. If
-  that ILDAsm accepts `/linenum`, disassembles the carrier, and still emits
-  no `.line` directives, the test records the typed oracle-availability gap
-  with a precise work-machine reproduction command and expected receipt and
-  makes no PDB parity claim; hidden (`0xfeefee`) points are outside the
-  claim either way.
+  line, start/end column). ILDAsm 4.8.3928.0 has no `/pdbpath` option, and
+  on 2026-09-23 the hosted `win25-vs2026` ILDAsm accepted `/linenum`,
+  disassembled the carrier, and emitted no `.line` directives for the
+  adjacent extracted portable PDB: the typed oracle-availability gap is
+  recorded with the precise work-machine command and expected receipt and
+  no PDB parity is claimed. Hidden (`0xfeefee`) points are outside the
+  claim either way. Closing this one prerequisite requires a Windows work
+  machine whose ILDAsm symbol reader observes portable PDBs (for example a
+  Visual Studio/SDK ILDAsm bound to a portable-PDB-capable diasymreader)
+  and the same tuple comparison, or an equally independent documented
+  oracle; Task 10's checkbox stays open on exactly that gap.
 
 Every round-trip leg scans a bound compiled-input pair (binding receipt over
 a temporary git fixture repository) with both `il-body` and `il-rewrite`

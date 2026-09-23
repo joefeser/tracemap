@@ -461,9 +461,14 @@ public sealed class IlAsmIldasmParityGateTests
         Assert.Equal(2 * before.Methods.Count, bodies.Length);
         foreach (var parsed in before.Methods)
         {
-            var marker = $"method:{parsed.MethodName.Length.ToString(CultureInfo.InvariantCulture)}:{parsed.MethodName}|";
+            // TraceMap's identity encodes constructors under their own member
+            // kind, exactly like the extractor's methodIdentity contract.
+            var memberKind = parsed.MethodName is ".ctor" or ".cctor" ? "constructor" : "method";
+            var marker = $"{memberKind}:{parsed.MethodName.Length.ToString(CultureInfo.InvariantCulture)}:{parsed.MethodName}|";
             var sides = bodies.Where(body => body.TargetSymbol?.Contains(marker, StringComparison.Ordinal) == true).ToArray();
-            Assert.Equal(2, sides.Length);
+            Assert.True(sides.Length == 2,
+                $"expected exactly one IL body fact per side for {parsed.TypeName}.{parsed.MethodName} (marker '{marker}'), found {sides.Length}; "
+                + $"parsed methods: {string.Join(", ", before.Methods.Select(method => method.TypeName + "." + method.MethodName))}");
             foreach (var side in sides)
             {
                 Assert.Equal(parsed.Instructions.Count.ToString(CultureInfo.InvariantCulture), side.Properties["instructionCount"]);

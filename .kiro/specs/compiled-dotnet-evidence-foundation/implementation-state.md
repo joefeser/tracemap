@@ -1491,3 +1491,30 @@ full solution suite green, zero-warning build. Third exact-head CI run
 pending; Task 10 stays unchecked until the Windows extended lane passes and
 the PDB oracle outcome (observed `.line` directives, or the recorded typed
 gap) is known.
+
+Third and fourth CI rounds pinned the remaining behavior. Round three left
+only the member-shape leg failing: its canonical member-body comparison
+held and the control-flow fixture round tripped fully `unchanged`, but
+seven member-shape methods classified `operand-only-change`. Round four
+confirmed the cause and the fix: ILAsm renumbers raw module-local
+reference rows on re-emission (cross-assembly MemberRefs) while every
+symbolic operand stays identical, and TraceMap's operand-aware digests
+commit raw tokens by documented contract — so the member leg now asserts
+exactly that classification (kinds limited to `unchanged` or
+`operand-only-change`, opcode streams preserved, every call-retarget
+identity equal). Round four also surfaced the constructor marker: TraceMap
+encodes `.ctor`/`.cctor` under `constructor:`, not `method:`, so the gate's
+body-fact matcher (and a name quotation strip in the parser) now mirror
+that convention; the marker hypothesis was verified locally against real
+facts before pushing. The extended lane now logs with detailed console
+verbosity, and the run recorded the exact pinned toolchain: runner image
+`win25-vs2026` `20260907.229.1` AMD64, `ilasm.exe` 4.8.9221.0
+(`NET481REL1LAST_25H2`) at `Framework64\v4.0.30319`, and `ildasm.exe`
+4.8.3928.0 (`NET48REL1`) at the NETFX 4.8.1 Tools x64 directory. The PDB
+leg's definitive outcome also landed: that hosted ILDAsm accepted
+`/linenum`, disassembled the carrier, and emitted no `.line` directives
+for the adjacent extracted portable PDB, so the typed oracle-availability
+gap branch executed with the work-machine command and expected receipt
+recorded in the run log, and no PDB parity is claimed — Task 10's checkbox
+stays open on exactly that one prerequisite. The fifth exact-head CI run
+(the constructor-marker repair) is pending at this note's head.

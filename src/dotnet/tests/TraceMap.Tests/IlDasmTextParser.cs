@@ -366,8 +366,9 @@ internal static partial class IlDasmTextParser
         var before = methodLine[..parenthesis].TrimEnd();
         var lastSpace = before.LastIndexOf(' ');
         var token = lastSpace < 0 ? before : before[(lastSpace + 1)..];
-        // Generic method declarations print Ignore<T>; the bare name is the
-        // token before the arity suffix.
+        // ILDasm single-quotes identifiers that need quoting; the bare name
+        // is the token without the quotes or the generic arity suffix.
+        token = token.Trim('\'');
         var arity = token.IndexOf('<');
         return arity < 0 ? token : token[..arity];
     }
