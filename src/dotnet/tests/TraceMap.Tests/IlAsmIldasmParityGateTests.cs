@@ -74,7 +74,7 @@ public sealed class IlAsmIldasmParityGateTests
         output.WriteLine($"[ILASM-PARITY] control-flow round trip: {parsed.Before.Methods.Count} methods, canonical text {parsed.Before.CanonicalMethodsText().Length} chars");
 
         var result = ScanBoundRewritePair(workspace.Fixture, workspace.BeforePath, workspace.AfterPath);
-        AssertRoundTripParity(result, parsed.Before, parsed.After);
+        AssertRoundTripParity(result, parsed.Before, parsed.After, allowTokenRenumbering: false);
         // Control-flow specifics: the loop, the dense switch, the leave-bearing
         // try body, the nested regions, and the recorded max stack must all be
         // observed identically by the oracle and by TraceMap.
@@ -109,7 +109,14 @@ public sealed class IlAsmIldasmParityGateTests
         output.WriteLine($"[ILASM-PARITY] member-shape round trip: {parsed.Before.Methods.Count} methods, canonical text {parsed.Before.CanonicalMethodsText().Length} chars");
 
         var result = ScanBoundRewritePair(workspace.Fixture, workspace.BeforePath, workspace.AfterPath);
-        AssertRoundTripParity(result, parsed.Before, parsed.After);
+        // ILDAsm prints symbolic operands, so a canonically identical body
+        // proves every resolved operand survived the round trip. TraceMap's
+        // operand-aware digest also commits raw module-local tokens, which
+        // ILAsm legitimately renumbers on re-emission (observed for
+        // cross-assembly MemberRef rows): those methods must classify
+        // exactly operand-only-change with every call-retarget identity
+        // preserved, never a structural or instruction-stream change.
+        AssertRoundTripParity(result, parsed.Before, parsed.After, allowTokenRenumbering: true);
         // Metadata-operand specifics: symbolic generic, calli, field, and
         // token operands must survive the independent round trip verbatim.
         Assert.Contains("Ignore<int32>", parsed.After.NormalizedText, StringComparison.Ordinal);
@@ -401,15 +408,16 @@ public sealed class IlAsmIldasmParityGateTests
     private static void AssertRoundTripParity(
         ScanResult result,
         IlDasmTextParser.IlDasmTextFile before,
-        IlDasmTextParser.IlDasmTextFile after)
+        IlDasmTextParser.IlDasmTextFile after,
+        bool allowTokenRenumbering)
     {
         // Independent oracle first: ILDAsm's own disassembly of the original
         // and of the ILAsm-reassembled assembly must agree on every method's
-        // canonical body (instructions, operands, switch targets, locals,
-        // max stack, code size, and exception-clause extents; each canonical
-        // block also names its type and method, so the member set agrees).
-        // Whole-file text equality is deliberately not asserted: ILAsm
-        // legitimately reorders metadata row emission (observed for
+        // canonical body (instructions, symbolic operands, switch targets,
+        // locals, max stack, code size, and exception-clause extents; each
+        // canonical block also names its type and method, so the member set
+        // agrees). Whole-file text equality is deliberately not asserted:
+        // ILAsm legitimately reorders metadata row emission (observed for
         // assembly-level custom attributes), which TraceMap's identities do
         // not depend on.
         Assert.Equal(before.CanonicalMethodsText(), after.CanonicalMethodsText());
@@ -419,8 +427,20 @@ public sealed class IlAsmIldasmParityGateTests
         Assert.Equal(before.Methods.Count, edges.Length);
         Assert.All(edges, edge =>
         {
-            Assert.Equal("unchanged", edge.Properties["relationshipKind"]);
-            Assert.Equal("false", edge.Properties["tokenRetargeted"]);
+            var kind = edge.Properties["relationshipKind"];
+            if (allowTokenRenumbering)
+            {
+                // With canonically identical bodies, operand-only-change is
+                // exactly raw module-local token renumbering by re-emission;
+                // nothing else may differ.
+                Assert.True(kind is "unchanged" or "operand-only-change",
+                    $"unexpected relationship kind '{kind}' for {edge.Properties["methodIdentity"]}");
+            }
+            else
+            {
+                Assert.Equal("unchanged", kind);
+                Assert.Equal("false", edge.Properties["tokenRetargeted"]);
+            }
             Assert.Equal("true", edge.Properties["opcodeSequencePreserved"]);
             Assert.Matches("^[0-9a-f]{64}$", edge.Properties["ilRewriteGeneratorSha256"]);
             Assert.Matches("^[0-9a-f]{64}$", edge.Properties["ilRewriteBoundedInputSha256"]);
@@ -428,6 +448,14 @@ public sealed class IlAsmIldasmParityGateTests
             Assert.Equal(ScannerVersions.IlRewriteEvidenceExtractor, edge.Evidence.ExtractorVersion);
         });
         Assert.DoesNotContain(result.Facts, fact => fact.RuleId == RuleIds.DotNetIlRewriteGap);
+        if (allowTokenRenumbering)
+        {
+            // Every recorded retarget must keep the resolved target identity
+            // and move only the module-local token number.
+            var retargets = result.Facts.Where(fact => fact.FactType == FactTypes.ManagedIlCallRetargetObserved).ToArray();
+            Assert.All(retargets, retarget =>
+                Assert.Equal(retarget.Properties["beforeTargetIdentity"], retarget.Properties["afterTargetIdentity"]));
+        }
 
         var bodies = result.Facts.Where(fact => fact.FactType == FactTypes.ManagedIlBodyDeclared).ToArray();
         Assert.Equal(2 * before.Methods.Count, bodies.Length);

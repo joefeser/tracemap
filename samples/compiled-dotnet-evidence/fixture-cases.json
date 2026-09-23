@@ -1572,11 +1572,12 @@
       "language": "csharp",
       "status": "covered",
       "proofLane": "compiled-dotnet-extended-validation.yml:public-mutation-matrix(windows-latest)",
-      "shape": "the public member-shape fixture with generic method specifications, ldtoken type tokens, calli standalone signatures, static field operands, custom-modifier-bearing parameters, property and event accessors, and vararg declarations round trips unchanged through the pinned tools with symbolic operands preserved verbatim in the normalized ILDAsm text",
-      "expectedIdentity": "unchanged il-rewrite edges for every member-shape method with zero gaps",
+      "shape": "the public member-shape fixture with generic method specifications, ldtoken type tokens, calli standalone signatures, static field operands, custom-modifier-bearing parameters, property and event accessors, and vararg declarations round trips through the pinned tools with every symbolic operand preserved verbatim in the canonical ILDAsm body; methods whose raw module-local reference tokens ILAsm renumbered on re-emission classify exactly operand-only-change with every call-retarget identity preserved",
+      "expectedIdentity": "unchanged or operand-only-change il-rewrite edges for every member-shape method with zero gaps and identity-preserving retargets",
       "expectedRuleIds": ["dotnet.compiled.il-rewrite.v1", "dotnet.compiled.il-body.v1"],
       "expectedTier": "Tier2Structural",
       "expectedGaps": [],
+      "limitations": "raw module-local tokens are locations, not stable cross-build identities; renumbering alone is operand-only-change by contract",
       "nonClaims": ["no-general-il-equivalence-claim", "cross-assembly-resolution", "mono-cecil-oracle"]
     },
     {
