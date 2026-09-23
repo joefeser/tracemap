@@ -922,9 +922,27 @@ public static partial class CombinedDependencyPathReporter
                 continue;
             }
 
-            var from = graph.GetOrAddSymbolNode(edge.SourceIndexId, edge.SourceLabel, edge.SourceSymbol, edge.FilePath, edge.StartLine, edge.EndLine, edge.RuleId, edge.EvidenceTier);
-            var to = graph.GetOrAddSymbolNode(edge.SourceIndexId, edge.SourceLabel, edge.TargetSymbol, edge.FilePath, edge.StartLine, edge.EndLine, edge.RuleId, edge.EvidenceTier);
             var normalizedEdgeKind = NormalizeEdgeKind(edge.EdgeKind);
+            // The normalized relationship table may project symbols.display_name
+            // (for example "void Type.Method(int)"), while compiler-resolved call
+            // facts use the exact source symbol ("global::Type.Method(int value)").
+            // Use the relationship fact's own paired identities when available so
+            // candidate dispatch can join without a fuzzy name conversion.
+            var relationshipFact = normalizedEdgeKind is "implements" or "inherits" or "overrides"
+                ? factsById.GetValueOrDefault(edge.EdgeId)
+                : null;
+            var sourceSymbol = relationshipFact is not null
+                && !string.IsNullOrWhiteSpace(relationshipFact.SourceSymbol)
+                && !string.IsNullOrWhiteSpace(relationshipFact.TargetSymbol)
+                    ? relationshipFact.SourceSymbol!
+                    : edge.SourceSymbol;
+            var targetSymbol = relationshipFact is not null
+                && !string.IsNullOrWhiteSpace(relationshipFact.SourceSymbol)
+                && !string.IsNullOrWhiteSpace(relationshipFact.TargetSymbol)
+                    ? relationshipFact.TargetSymbol!
+                    : edge.TargetSymbol;
+            var from = graph.GetOrAddSymbolNode(edge.SourceIndexId, edge.SourceLabel, sourceSymbol, edge.FilePath, edge.StartLine, edge.EndLine, edge.RuleId, edge.EvidenceTier);
+            var to = graph.GetOrAddSymbolNode(edge.SourceIndexId, edge.SourceLabel, targetSymbol, edge.FilePath, edge.StartLine, edge.EndLine, edge.RuleId, edge.EvidenceTier);
             var supportingFactIds = normalizedEdgeKind is "implements" or "inherits" or "overrides"
                 && factsById.ContainsKey(edge.EdgeId)
                     ? new[] { edge.EdgeId }
@@ -1292,8 +1310,8 @@ public static partial class CombinedDependencyPathReporter
                 select relationships.relationship_kind,
                        relationships.relationship_id,
                        relationships.relationship_id,
-                       coalesce(source_symbols.display_name, relationships.source_symbol_id),
-                       coalesce(target_symbols.display_name, relationships.target_symbol_id),
+                       coalesce(nullif(relationship_fact.source_symbol, ''), source_symbols.display_name, relationships.source_symbol_id),
+                       coalesce(nullif(relationship_fact.target_symbol, ''), target_symbols.display_name, relationships.target_symbol_id),
                        source_symbols.assembly_name,
                        source_symbols.assembly_version,
                        relationships.rule_id,
@@ -1302,11 +1320,12 @@ public static partial class CombinedDependencyPathReporter
                        relationships.start_line,
                        relationships.end_line
                 from symbol_relationships relationships
+                left join facts relationship_fact on relationship_fact.scan_id = relationships.scan_id and relationship_fact.fact_id = relationships.relationship_id
                 left join symbols source_symbols on source_symbols.scan_id = relationships.scan_id and source_symbols.symbol_id = relationships.source_symbol_id
                 left join symbols target_symbols on target_symbols.scan_id = relationships.scan_id and target_symbols.symbol_id = relationships.target_symbol_id
                 where $symbols is null
-                   or coalesce(source_symbols.display_name, relationships.source_symbol_id) in (select value from json_each($symbols))
-                   or coalesce(target_symbols.display_name, relationships.target_symbol_id) in (select value from json_each($symbols))
+                   or coalesce(nullif(relationship_fact.source_symbol, ''), source_symbols.display_name, relationships.source_symbol_id) in (select value from json_each($symbols))
+                   or coalesce(nullif(relationship_fact.target_symbol, ''), target_symbols.display_name, relationships.target_symbol_id) in (select value from json_each($symbols))
                 order by relationships.file_path, relationships.start_line, relationships.relationship_id;
                 """, cancellationToken, budget, selectedSymbols);
         }
@@ -4596,6 +4615,7 @@ public static partial class CombinedDependencyPathReporter
         if (terminal is not null && IsRemotingSurface(terminal.SurfaceKind))
         {
             if (path.Edges.Any(edge => edge.EvidenceTier == EvidenceTiers.Tier3SyntaxOrTextual)
+                || path.Edges.Any(edge => edge.EdgeKind is "interface-candidate" or "override-candidate")
                 || path.Edges.Any(edge => edge.EdgeKind == "symbol-reconciliation" || IsLegacyFlowProjectionEdge(edge.EdgeKind))
                 || path.Nodes.Any(node => node.NodeKind == "remoting-object")
                 || terminal.SurfaceKind is "remoting-channel" or "remoting-object" or "remoting-api")
@@ -4610,6 +4630,7 @@ public static partial class CombinedDependencyPathReporter
         var highFanOut = terminal is not null
             && graph.Edges.Count(edge => edge.ToNodeId == terminal.NodeId) >= 5;
         if (path.Edges.Any(edge => edge.EvidenceTier == EvidenceTiers.Tier3SyntaxOrTextual)
+            || path.Edges.Any(edge => edge.EdgeKind is "interface-candidate" or "override-candidate")
             || path.Edges.Any(edge => edge.EdgeKind == "symbol-reconciliation" || IsLegacyFlowProjectionEdge(edge.EdgeKind))
             || path.Edges.Any(edge => edge.EdgeKind == "endpoint-match" && edge.Classification != CombinedEndpointClassifications.MatchedEndpoint)
             || genericTerminal
