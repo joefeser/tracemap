@@ -1704,3 +1704,73 @@ The `FullCorpus` guard now also requires a previously passed bounded receipt
 for the same TraceMap and corpus commits, with generator and bounded-input
 digests; the synthetic suite verifies missing opt-in and missing prior receipt
 both stop before output creation.
+
+## Task 11 Windows blocker triage (2026-09-23)
+
+At the start of this continuation, `codex/task11-windows-validation` was clean
+at `6c5017db63468c78e8e981b8b03a065d567c81c4`. A separate detached,
+clean base worktree was created at
+`25e29a22896184379e1edfb11b46a839d3afcee0`; the original checkout and
+its untracked `.vscode/` remained untouched. No private corpus operation was
+retried, and the pinned private stages remain blocked by the previously
+recorded commit/SSH host-key condition.
+
+The original full-suite invocation did not retain a durable complete console
+log. A replay of `dotnet test src/dotnet/TraceMap.sln --no-build --no-restore
+--logger 'trx;LogFileName=branch-full.trx'` retained exact failure names,
+messages, and stack traces in a **local-only** triage report outside the repo.
+It was interrupted after 62 recorded failing cases across 56 distinct methods
+and a long period without completion; exit code 1, so no full-suite pass total
+is claimed. A second run with test-collection parallelism disabled made no
+case progress in five minutes and was stopped, also exit 1. The temporary
+runner configuration was removed. Neither run is a green full-suite result.
+
+Each of the 56 replay-failing methods was then invoked alone in this branch
+and immediately at the untouched base with `dotnet test
+src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-build --no-restore
+--filter "FullyQualifiedName=<exact method>" --logger
+'console;verbosity=minimal'`. The local-only report retains every exact
+command, exit code, error, and stack trace. **53/56 methods exited 1 on both
+commits with the same top error; 3/56 exited 0 on both.** There were zero
+branch-only failures. The six rows of the evidence-metadata theory were also
+selected individually with `DisplayName` filters: each exited 1 on branch and
+base, one test per invocation. The two unsafe-path theory rows and the
+`combined: True` framework row were separately reproduced on both commits.
+
+| Isolated outcome | Exact representative failures | Classification |
+| --- | --- | --- |
+| 17 methods with `index.sqlite` or other file-in-use errors on both | `WebFormsAgentEvidenceHandoffTests.SetHandoffRejectsIndexWithInvalidEvidenceMetadata`; `WebFormsReportMemoryTests.Large_repetitive_fact_payload_does_not_scale_retained_graph_input` | Pre-existing Windows file-handle behavior |
+| 3 methods with “A required privilege is not held by the client” on both | `AccessDesignEvidenceCompositionTests.Cli_requires_explicit_inputs_and_rejects_database_identity_mismatch_without_output`; both `ReverseImpactArtifactQueryTests` symlink cases | Windows symlink privilege unavailable |
+| 12 methods with `release-review could not read --before/--after input` on both | `SqlValidationSummaryTests.Combined_release_review_preserves_context_matched_source_label`; several `ReleaseReviewTests` | Pre-existing Windows input/read failure |
+| 16 assertion-mismatch methods on both | `LegacyDataEdmxSymbolCompositionTests.F17_scope_decoys_never_become_candidates` (`src\\Model.Designer.cs` versus `src/Model.Designer.cs`); `EvidenceDocsExportTests` cases | Pre-existing Windows behavior |
+| 5 other methods failing on both | Includes `VaultExportTests.Vault_export_hidden_rejects_raw_unsafe_evidence_locations_without_echoing_values` (no expected exception) | Pre-existing Windows behavior |
+| 3 methods passing alone on both after failing in suite | Both `ProjectlessVisualBasicWebFormsDiagnosticsTests` cases and `VisualBasicFoundationTests.Modern_vb_scan_is_deterministic_across_repeated_runs` | Suite interference |
+
+Three additional named failures recoverable from the first interrupted run—
+`ScanEngineTests.Scan_identity_changes_when_committed_source_bytes_change_without_changing_size_or_head`,
+`VisualBasicValidationMatrixTests.Repeated_cli_scans_produce_byte_identical_facts`,
+and `ScanExecutionReceiptTests.Source_only_scan_records_syntax_not_semantic_stage_coverage`—
+each exited 0 alone on branch and base; classify them as suite interference.
+
+`python scripts/test_validate_adapter_artifacts.py` exited 1 on branch **and
+base**, with 7 tests run, 4 passing and 3 errors. Each of
+`test_canonical_extractor_provenance_columns_are_not_null`,
+`test_sqlite_fact_field_mismatch_fails`, and
+`test_sqlite_properties_mismatch_fails` exited 1 when run alone on each commit.
+Each stack ends in `tempfile.TemporaryDirectory.__exit__` /
+`shutil.rmtree`, first raising `PermissionError: [WinError 32]` for open
+`index.sqlite` and then `NotADirectoryError: [WinError 267]` during cleanup.
+Those three unchanged base tests use `with sqlite3.connect(...)`, which
+commits/rolls back but does not close the connection on Windows. The new
+Task 11 runner never executes in those tests. This is pre-existing test
+cleanup, not a branch regression; no broad retry, skip, or unrelated fix was
+added.
+
+Final focused checks on this branch: Task 11 synthetic guard script exit 0;
+`IlDasmTextParserTests` 26 passed/0 failed; solution `dotnet build
+--no-restore -warnaserror` exit 0 with 0 warnings/0 errors; Windows
+`PublicSmoke` exit 0; Git Bash `scripts/check-private-paths.sh` exit 0 with
+“Private path guard passed.” The real public sample scan and standalone
+adapter-artifact validator had already passed in the prior slice. Full .NET
+and Python test suites remain red for the base-equivalent reasons above.
+No PR is opened and no private corpus validation is claimed.
