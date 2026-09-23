@@ -18,8 +18,9 @@ All invocations require a clean TraceMap checkout at the exact 40-character
 commit passed as `-TraceMapCommit` and a fresh `-OutputRoot`. Paths are
 canonicalized and may not overlap either checkout. An existing output tree is
 rejected, including one created by a failed run. The `FullCorpus` lane requires
-`-EnableFullCorpus`, writes `kind: FullCorpus`, and uses its own output tree;
-it cannot reuse a bounded receipt.
+`-EnableFullCorpus` and `-BoundedReceiptPath` pointing to a previously passed
+bounded receipt for the same exact commits. It writes `kind: FullCorpus` and
+uses its own output tree; it cannot reuse or masquerade as a bounded receipt.
 
 The public smoke uses only a checked-in script's tiny public ILAsm source and
 the Windows Framework ILAsm. It does not open the historical checkout:

@@ -22,6 +22,8 @@ try {
     $fullOut = Join-Path $root 'full-without-optin'
     $null = & pwsh -NoProfile -File $runner -Lane FullCorpus -TraceMapRoot $repo -TraceMapCommit $sha -OutputRoot $fullOut 2>&1
     if ($LASTEXITCODE -eq 0 -or (Test-Path -LiteralPath $fullOut)) { throw 'FULL_CORPUS_OPT_IN_GUARD_FAILED' }
+    $null = & pwsh -NoProfile -File $runner -Lane FullCorpus -EnableFullCorpus -TraceMapRoot $repo -TraceMapCommit $sha -OutputRoot $fullOut 2>&1
+    if ($LASTEXITCODE -eq 0 -or (Test-Path -LiteralPath $fullOut)) { throw 'BOUNDED_RECEIPT_GUARD_FAILED' }
     Expect-Block { Assert-Task11Checkout $repo ('0' * 40) 'CORPUS' } 'CORPUS_COMMIT_MISMATCH'
     Assert-Task11Checkout $repo $sha 'CORPUS'
     'dirty' | Set-Content -LiteralPath (Join-Path $repo 'dirty.txt')
@@ -48,7 +50,7 @@ try {
     @{ commitSha = $sha; scannerVersion = 'synthetic'; sourceSnapshotDigest = ('a' * 64); knownGaps = @() } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $scan 'scan-manifest.json')
     @{ commitSha = $sha; factType = 'AnalysisGap'; ruleId = ''; evidenceTier = 'Tier4Unknown'; evidence = @{ extractorId = 'test'; extractorVersion = '1' } } | ConvertTo-Json -Compress | Set-Content -LiteralPath (Join-Path $scan 'facts.ndjson')
     Expect-Block { Assert-Task11Artifacts $scan $sha $generator } 'FACT_PROVENANCE_INVALID'
-    Write-Output 'Task 11 synthetic guards passed: full-corpus opt-in, wrong commit, dirty checkout, missing corpus/tool/artifact, invalid provenance, output reuse/overlap.'
+    Write-Output 'Task 11 synthetic guards passed: full-corpus opt-in/prior receipt, wrong commit, dirty checkout, missing corpus/tool/artifact, invalid provenance, output reuse/overlap.'
 } finally {
     Remove-Item -LiteralPath $root -Recurse -Force
 }
