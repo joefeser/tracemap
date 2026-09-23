@@ -25,6 +25,7 @@ public sealed class MessyWorkspaceRegressionTests
     private const string LoopHandler = "LoopButton_Click";
     private const string EnginesHandler = "EnginesButton_Click";
     private const string SelfHandler = "SelfButton_Click";
+    private const string AmbiguityHandler = "AmbiguityButton_Click";
     private const string VbHandler = "SubmitButton_Click";
 
     [Fact]
@@ -73,7 +74,7 @@ public sealed class MessyWorkspaceRegressionTests
         }
 
         Require("MW-CATALOG", "extraction", implemented >= 6, $"expected at least six implemented cases, found {implemented}");
-        Require("MW-CATALOG", "extraction", deferred >= 4, $"expected at least four deferred cases with blockers, found {deferred}");
+        Require("MW-CATALOG", "extraction", deferred >= 3, $"expected at least three deferred cases with blockers, found {deferred}");
 
         // Catalog evidence annotations are load-bearing: every expected rule id must
         // exist in the rule catalog, tiers must be real evidence tiers, and gap
@@ -468,6 +469,76 @@ public sealed class MessyWorkspaceRegressionTests
     }
 
     [Fact]
+    public async Task Overloads_and_uncertain_interface_receiver_stay_distinct_through_traversal()
+    {
+        using var temp = new TempDirectory();
+        var (alpha, alphaIndex) = ScanRoot(temp, "root-alpha", "alpha-site");
+        var handlerCalls = alpha.Facts.Where(fact =>
+            fact.FactType == FactTypes.CallEdge
+            && fact.RuleId == RuleIds.CSharpSemanticCallGraph
+            && fact.SourceSymbol?.Contains(AmbiguityHandler, StringComparison.Ordinal) == true
+            && fact.TargetSymbol?.Contains("IAmbiguousGateway.Process(", StringComparison.Ordinal) == true).ToArray();
+        Require("MW-OVERLOAD-001", "extraction", handlerCalls.Length == 2,
+            $"the handler must retain two distinct interface overload calls, found {handlerCalls.Length}");
+        Require("MW-OVERLOAD-001", "extraction",
+            handlerCalls.Select(fact => fact.Properties.GetValueOrDefault("targetSymbolId"))
+                .Distinct(StringComparer.Ordinal).Count() == 2,
+            "the two overloads collapsed to one metadata-aware symbol identity");
+
+        var relationships = alpha.Facts.Where(fact =>
+            fact.FactType == FactTypes.SymbolRelationship
+            && fact.Properties.GetValueOrDefault("relationshipKind") == "ImplementsInterfaceMember"
+            && fact.TargetSymbol?.Contains("IAmbiguousGateway.Process(", StringComparison.Ordinal) == true).ToArray();
+        Require("MW-RECEIVER-AMBIGUITY-001", "extraction", relationships.Length == 4,
+            $"two implementations of two overloads must produce four member relationships, found {relationships.Length}");
+        Require("MW-OVERLOAD-001", "reconciliation",
+            relationships.All(fact =>
+                (fact.SourceSymbol?.Contains("(int value)", StringComparison.Ordinal) == true)
+                == (fact.TargetSymbol?.Contains("(int value)", StringComparison.Ordinal) == true)),
+            "an interface relationship crossed int and string signatures");
+
+        var combinedPath = Path.Combine(temp.Path, "combined.sqlite");
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([alphaIndex], combinedPath, ["alpha-site"]));
+        var packet = await WebFormsModernizationPacketReporter.BuildAsync(new(alphaIndex, Path.Combine(temp.Path, "packet")));
+        var packetChains = packet.EventChains.Where(chain => chain.HandlerSymbol?.Contains(AmbiguityHandler, StringComparison.Ordinal) == true).ToArray();
+        var packetBoundaries = TerminalBoundaries(packet, AmbiguityHandler);
+        var inventory = await CombinedDependencyPathReporter.BuildGraphInventoryAsync(combinedPath);
+        var nodes = inventory.Nodes.ToDictionary(node => node.NodeId, node => node);
+        var candidates = inventory.Edges.Where(edge =>
+            edge.EdgeKind == "interface-candidate"
+            && nodes[edge.FromNodeId].DisplayName.Contains("IAmbiguousGateway.Process(", StringComparison.Ordinal)).ToArray();
+        Require("MW-RECEIVER-AMBIGUITY-001", "reconciliation", candidates.Length == 4,
+            $"uncertain receiver must retain four explicit interface candidates, found {candidates.Length}");
+        var handlerCallEdges = inventory.Edges.Where(edge =>
+            edge.EdgeKind == "calls"
+            && nodes[edge.FromNodeId].DisplayName.Contains(AmbiguityHandler, StringComparison.Ordinal)
+            && nodes[edge.ToNodeId].DisplayName.Contains("IAmbiguousGateway.Process(", StringComparison.Ordinal)).ToArray();
+        Require("MW-RECEIVER-AMBIGUITY-001", "reconciliation",
+            handlerCallEdges.Length == 2
+            && handlerCallEdges.All(edge => candidates.Any(candidate => candidate.FromNodeId == edge.ToNodeId)),
+            $"semantic handler call nodes do not meet candidate interface nodes: calls=[{string.Join(',', handlerCallEdges.Select(edge => nodes[edge.ToNodeId].DisplayName))}], candidates=[{string.Join(',', candidates.Select(edge => nodes[edge.FromNodeId].DisplayName))}]");
+        Require("MW-OVERLOAD-001", "reconciliation",
+            candidates.All(edge =>
+                (nodes[edge.FromNodeId].DisplayName.Contains("(int value)", StringComparison.Ordinal)
+                 == nodes[edge.ToNodeId].DisplayName.Contains("(int value)", StringComparison.Ordinal))),
+            "an interface candidate crossed overload signatures");
+        Require("MW-RECEIVER-AMBIGUITY-001", "traversal", packetChains.Length >= 1,
+            "ambiguous-receiver handler chain is missing");
+        var observation = packetChains[0].TraversalObservation;
+        Require("MW-RECEIVER-AMBIGUITY-001", "traversal",
+            packetChains.All(chain => chain.TraversalObservation?.TerminalReachabilityComplete == true)
+            && packetChains.SelectMany(chain => chain.TraversalObservation?.ReachableTerminalIds ?? []).Distinct(StringComparer.Ordinal).Count() == 4
+            && packetChains.Any(chain => chain.TraversalObservation?.TraversedEdgeKinds.Contains("interface-candidate") == true),
+            $"bounded traversal must inventory four candidate terminals; chains=[{string.Join(';', packetChains.Select(chain => $"{chain.ChainId}:complete={chain.TraversalObservation?.TerminalReachabilityComplete},count={chain.TraversalObservation?.DistinctReachableTerminalCount},edges={string.Join(',', chain.TraversalObservation?.TraversedEdgeKinds ?? [])}"))}]");
+        Require("MW-OVERLOAD-001", "traversal", packetBoundaries.Count == 4
+            && packetBoundaries.Select(boundary => boundary.TerminalEvidenceId).Distinct(StringComparer.Ordinal).Count() == 4,
+            $"four overload/receiver terminal identities must survive, found {packetBoundaries.Count}");
+        Require("MW-RECEIVER-AMBIGUITY-001", "traversal",
+            packetBoundaries.All(boundary => boundary.Classification == CombinedDependencyPathClassifications.NeedsReviewStaticPath),
+            $"candidate boundaries must require review; classifications=[{string.Join(';', packetBoundaries.Select(boundary => $"{boundary.Classification}:{string.Join(',', boundary.PathEvidence.Select(evidence => evidence.RuleId))}"))}]");
+    }
+
+    [Fact]
     public async Task Separately_scanned_roots_merge_without_invented_joins()
     {
         using var temp = new TempDirectory();
@@ -588,10 +659,10 @@ public sealed class MessyWorkspaceRegressionTests
                 .ThenBy(tuple => tuple.FactId, StringComparer.Ordinal)
                 .ToArray();
             Require("MW-MERGED-ROOTS-001", "reconciliation",
-                expectedTerminalTuples.Count(tuple => tuple.Label == "alpha-site") == 11
+                expectedTerminalTuples.Count(tuple => tuple.Label == "alpha-site") == 15
                 && expectedTerminalTuples.Count(tuple => tuple.Label == "beta-site") == 1
                 && expectedTerminalTuples.Count(tuple => tuple.Label == "vb-site") == 1,
-                "original scans must supply eleven alpha, one beta, and one VB terminal");
+                "original scans must supply fifteen alpha, one beta, and one VB terminal");
             Require("MW-MERGED-ROOTS-001", "reconciliation",
                 terminalTuples.SequenceEqual(expectedTerminalTuples),
                 "merged terminals must preserve every original (source label, fact id, source symbol, table name) tuple exactly, including multiplicity");
@@ -843,4 +914,3 @@ public sealed class MessyWorkspaceRegressionTests
         throw new DirectoryNotFoundException("Repository root was not found.");
     }
 }
-

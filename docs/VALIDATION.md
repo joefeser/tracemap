@@ -2878,15 +2878,16 @@ reproduce the workspace shapes observed in real Web Forms/.NET scans without
 copying any private source, names, paths, or artifacts. Three roots are
 scanned independently: `root-alpha` (C# Web Forms site with a twelve-call-edge deep
 chain ending in an ADO.NET-style SQL terminal at graph distance 14, a
-three-node cycle plus a self-cycle with its own handler, and ten same-name
-`Process`/`Core` members in one file), `root-beta` (a second C# root reusing those simple
+three-node cycle plus a self-cycle with its own handler, ten same-name
+`Process`/`Core` members in one file, and two overloads across two uncertain
+interface receiver implementations), `root-beta` (a second C# root reusing those simple
 names), and `vb-projectless` (loose VB files with no `.vbproj`/`.sln`).
 
 The stable case catalog is `samples/messy-dotnet-workspace/case-catalog.json`
 (schema `messy-workspace-case-catalog.v1`). Cases are marked `implemented` or
 `deferred`; deferred cases record their exact blocker or next-slice owner
-(overload ambiguity, receiver ambiguity, C#/VB/F# boundaries, generated
-members, and the source→metadata→IL/PDB chain owned by #766). The catalog is
+(C#/VB/F# boundaries, generated members, and the source→metadata→IL/PDB
+chain owned by #766). The catalog is
 an inventory and does not claim deferred cases are proven.
 
 Pinned behaviors, asserted per catalog case id and pipeline stage
@@ -2908,10 +2909,15 @@ Pinned behaviors, asserted per catalog case id and pipeline stage
   terminal fact and class line range with distinct tables and query shape
   hashes; the handler inventories exactly ten distinct terminal witnesses
   with no cross-joined evidence.
+- Interface overloads and uncertain receiver: exact int/string call identities
+  survive relationship projection into the combined graph; two implementations
+  per overload produce four distinct terminal witnesses. The Web Forms packet
+  labels all four candidate boundaries `NeedsReviewStaticPath` and does not
+  claim a selected runtime receiver.
 - Merged roots: combine preserves the union of sources, facts, and symbols
   with per-source namespacing, no symbol deduplication, and no identity that
   blends namespaces; every terminal stays attributed to its own source label
-  (11 alpha, 1 beta, 1 vb); the merged dependency report lists all three
+  (15 alpha, 1 beta, 1 vb); the merged dependency report lists all three
   labeled sources. Call edges are compared to the original scans as exact
   (label, caller, callee) tuples, and terminals as exact (label, original fact
   id, source symbol, table name) tuples, including multiplicity. The Web Forms

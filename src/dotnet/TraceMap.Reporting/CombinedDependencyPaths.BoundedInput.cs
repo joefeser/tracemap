@@ -515,14 +515,15 @@ public static partial class CombinedDependencyPathReporter
             && await TableExistsAsync(connection, "symbols", cancellationToken))
         {
             const string relationships = "from symbol_relationships relationships "
+                + "left join facts relationship_fact on relationship_fact.scan_id = relationships.scan_id and relationship_fact.fact_id = relationships.relationship_id "
                 + "left join symbols source_symbols on source_symbols.scan_id = relationships.scan_id and source_symbols.symbol_id = relationships.source_symbol_id "
                 + "left join symbols target_symbols on target_symbols.scan_id = relationships.scan_id and target_symbols.symbol_id = relationships.target_symbol_id ";
-            traversalQueries.Add("select coalesce(target_symbols.display_name, relationships.target_symbol_id) as target_symbol "
+            traversalQueries.Add("select coalesce(nullif(relationship_fact.target_symbol, ''), target_symbols.display_name, relationships.target_symbol_id) as target_symbol "
                 + relationships
-                + "where coalesce(source_symbols.display_name, relationships.source_symbol_id) in (select value from json_each($symbols))");
-            traversalQueries.Add("select coalesce(source_symbols.display_name, relationships.source_symbol_id) as target_symbol "
+                + "where coalesce(nullif(relationship_fact.source_symbol, ''), source_symbols.display_name, relationships.source_symbol_id) in (select value from json_each($symbols))");
+            traversalQueries.Add("select coalesce(nullif(relationship_fact.source_symbol, ''), source_symbols.display_name, relationships.source_symbol_id) as target_symbol "
                 + relationships
-                + "where coalesce(target_symbols.display_name, relationships.target_symbol_id) in (select value from json_each($symbols))");
+                + "where coalesce(nullif(relationship_fact.target_symbol, ''), target_symbols.display_name, relationships.target_symbol_id) in (select value from json_each($symbols))");
         }
         if (traversalQueries.Count == 0) return symbols;
 
