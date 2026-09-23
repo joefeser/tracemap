@@ -18,6 +18,24 @@ public sealed class ExactSourceScopeTests
     }
 
     [Fact]
+    public void Complete_427_file_profile_is_admitted_and_428_files_fail_closed()
+    {
+        using var temp = new TempDirectory();
+        var paths = Enumerable.Range(0, 427).Select(index => $"Case{index:D3}.cs").ToArray();
+        foreach (var (path, index) in paths.Select((path, index) => (path, index)))
+            File.WriteAllText(Path.Combine(temp.Path, path), $"internal class Case{index:D3} {{ }}\n");
+
+        var scan = ScanEngine.Scan(Options(temp.Path, paths) with { ExactSourceMaxFiles = 427 });
+        Assert.Equal(427, scan.Inventory.Count);
+        Assert.Equal("ExactSourceScopeInventoryMismatch", Assert.Throws<InvalidOperationException>(() =>
+            ScanEngine.Scan(Options(temp.Path, paths[..^1]) with { ExactSourceMaxFiles = 427 })).Message);
+
+        File.WriteAllText(Path.Combine(temp.Path, "Case427.cs"), "internal class Case427 { }\n");
+        Assert.Equal("ExactSourceScopeLimitExceeded", Assert.Throws<InvalidOperationException>(() =>
+            ScanEngine.Scan(Options(temp.Path, [.. paths, "Case427.cs"]) with { ExactSourceMaxFiles = 427 })).Message);
+    }
+
+    [Fact]
     public void Omitted_compilation_input_is_rejected_before_semantic_analysis()
     {
         using var temp = new TempDirectory();

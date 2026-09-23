@@ -2,6 +2,7 @@
 [CmdletBinding()]
 param(
     [ValidateSet('PublicSmoke', 'Bounded', 'FullCorpus')][string]$Lane = 'Bounded',
+    [ValidateSet('HistoricalMaster', 'BuildableFix')][string]$CorpusProfile = 'HistoricalMaster',
     [Parameter(Mandatory)][string]$TraceMapRoot,
     [string]$CorpusRoot,
     [string]$CorpusRemoteSha256,
@@ -24,11 +25,22 @@ param(
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
-$CorpusCommit = 'db8c3359badfec620ccdc6df062b1756ef9607f8'
 $DigestPattern = '^[0-9a-f]{64}$'
 $RequiredCategories = @('branch','switch','exception-region','leave','instrumentation','nested-generic','duplicate-identity')
-$MaxBoundedFiles = 256
+$CorpusProfiles = @{
+    HistoricalMaster = [ordered]@{ commit = 'db8c3359badfec620ccdc6df062b1756ef9607f8'; maxFiles = 256 }
+    BuildableFix = [ordered]@{ commit = '642bdaede0b97a400c24266e30670ed5c1c98689'; maxFiles = 427 }
+}
+$CorpusProfile = switch ($CorpusProfile.ToLowerInvariant()) {
+    'historicalmaster' { 'HistoricalMaster' }
+    'buildablefix' { 'BuildableFix' }
+    default { throw 'CORPUS_PROFILE_INVALID' }
+}
+$CorpusCommit = $CorpusProfiles[$CorpusProfile].commit
+$MaxBoundedFiles = $CorpusProfiles[$CorpusProfile].maxFiles
 $MaxBoundedBytes = 64MB
+$MaxCandidateEntries = 4096
+$RunnerSha256 = (Get-FileHash -LiteralPath $PSCommandPath -Algorithm SHA256).Hash.ToLowerInvariant()
 
 function Assert-Task11([bool]$Condition, [string]$Code) {
     if (-not $Condition) { throw $Code }
@@ -132,7 +144,35 @@ function Assert-Task11BoundedPaths([string]$Root, [string[]]$Paths) {
         $totalBytes += $file.Length
         Assert-Task11 ($totalBytes -le $MaxBoundedBytes) 'BOUNDED_SOURCE_BYTES_LIMIT'
     }
-    return [ordered]@{ fileCount = $Paths.Count; sourceBytes = $totalBytes; maxFiles = $MaxBoundedFiles; maxBytes = $MaxBoundedBytes }
+    return [ordered]@{ fileCount = $Paths.Count; sourceBytes = $totalBytes; maxFiles = $MaxBoundedFiles; maxBytes = $MaxBoundedBytes; maxCandidateEntries = $MaxCandidateEntries }
+}
+function Get-Task11CandidateEntryCount([string]$Root) {
+    # Match FileInventory's non-recursive directory-then-file enumeration. Count
+    # excluded child directories before skipping them, as the scanner does.
+    $options = [IO.EnumerationOptions]::new()
+    $options.RecurseSubdirectories = $false
+    $options.IgnoreInaccessible = $false
+    $options.AttributesToSkip = [IO.FileAttributes]::Hidden -bor [IO.FileAttributes]::System
+    $excluded = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+    foreach ($name in @('.git','.tracemap','.nuget','bin','node_modules','obj')) { [void]$excluded.Add($name) }
+    $pending = [Collections.Generic.Stack[string]]::new()
+    $pending.Push([IO.Path]::GetFullPath($Root))
+    $count = 0
+    while ($pending.Count -gt 0) {
+        $directory = $pending.Pop()
+        foreach ($child in [IO.Directory]::EnumerateDirectories($directory, '*', $options)) {
+            if (++$count -gt $MaxCandidateEntries) { throw 'BOUNDED_CANDIDATE_ENTRY_LIMIT' }
+            $parts = [IO.Path]::GetRelativePath($Root, $child).Split([IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar)
+            if (($parts.Count -gt 1 -and $parts[0].Equals('packages', [StringComparison]::OrdinalIgnoreCase)) -or
+                @($parts | Where-Object { $excluded.Contains($_) }).Count -gt 0) { continue }
+            if ([IO.File]::GetAttributes($child) -band [IO.FileAttributes]::ReparsePoint) { continue }
+            $pending.Push($child)
+        }
+        foreach ($file in [IO.Directory]::EnumerateFiles($directory, '*', $options)) {
+            if (++$count -gt $MaxCandidateEntries) { throw 'BOUNDED_CANDIDATE_ENTRY_LIMIT' }
+        }
+    }
+    return $count
 }
 function Get-Task11RuleIds([string]$Catalog) {
     $ids = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
@@ -228,8 +268,9 @@ function Assert-Task11Artifacts([string]$ScanDir, [string]$ExpectedCommit, [stri
 if ($MyInvocation.InvocationName -eq '.') { return }
 
 $Receipt = [ordered]@{
-    schemaVersion = 1; kind = $Lane; status = 'running'; startedUtc = (Get-Date).ToUniversalTime().ToString('o')
-    traceMapCommit = $TraceMapCommit; corpusCommit = $CorpusCommit
+    schemaVersion = 2; kind = $Lane; status = 'running'; startedUtc = (Get-Date).ToUniversalTime().ToString('o')
+    runnerSha256 = $RunnerSha256; traceMapCommit = $TraceMapCommit; corpusProfile = $CorpusProfile; corpusCommit = $CorpusCommit
+    admissionPolicy = [ordered]@{ maxFiles = $MaxBoundedFiles; maxBytes = $MaxBoundedBytes; maxCandidateEntries = $MaxCandidateEntries }
     host = [ordered]@{ os = [Environment]::OSVersion.VersionString; architecture = $env:PROCESSOR_ARCHITECTURE; psVersion = $PSVersionTable.PSVersion.ToString(); imageOS = $env:ImageOS; imageVersion = $env:ImageVersion }
     tools = @{}; selectedTests = @($RepresentativeCases); boundedPaths = @($BoundedPaths); boundedSelection = $null; stages = [Collections.Generic.List[object]]::new()
     commands = [Collections.Generic.List[object]]::new(); artifacts = @{}; provenance = $null; blocker = $null
@@ -241,8 +282,18 @@ try {
     if ($Lane -eq 'FullCorpus') {
         Assert-Task11 (-not [string]::IsNullOrWhiteSpace($BoundedReceiptPath) -and (Test-Path -LiteralPath $BoundedReceiptPath -PathType Leaf)) 'BOUNDED_RECEIPT_REQUIRED'
         $boundedReceipt = Get-Content -LiteralPath $BoundedReceiptPath -Raw | ConvertFrom-Json
-        Assert-Task11 ($boundedReceipt.kind -ceq 'Bounded' -and $boundedReceipt.status -ceq 'passed' -and
-            $boundedReceipt.traceMapCommit -ceq $TraceMapCommit -and $boundedReceipt.corpusCommit -ceq $CorpusCommit -and
+        Assert-Task11 ($null -ne $boundedReceipt.PSObject.Properties['schemaVersion'] -and
+            [int]$boundedReceipt.schemaVersion -eq 2 -and
+            $boundedReceipt.kind -ceq 'Bounded' -and $boundedReceipt.status -ceq 'passed' -and
+            $null -ne $boundedReceipt.PSObject.Properties['runnerSha256'] -and
+            $boundedReceipt.runnerSha256 -ceq $RunnerSha256 -and
+            $boundedReceipt.traceMapCommit -ceq $TraceMapCommit -and
+            $null -ne $boundedReceipt.PSObject.Properties['corpusProfile'] -and
+            $boundedReceipt.corpusProfile -ceq $CorpusProfile -and $boundedReceipt.corpusCommit -ceq $CorpusCommit -and
+            $null -ne $boundedReceipt.PSObject.Properties['admissionPolicy'] -and
+            [int]$boundedReceipt.admissionPolicy.maxFiles -eq $MaxBoundedFiles -and
+            [long]$boundedReceipt.admissionPolicy.maxBytes -eq $MaxBoundedBytes -and
+            [int]$boundedReceipt.admissionPolicy.maxCandidateEntries -eq $MaxCandidateEntries -and
             [string]$boundedReceipt.provenance.generatorSha256 -cmatch $DigestPattern -and
             $null -ne $boundedReceipt.provenance.PSObject.Properties['generatorPayloadSha256'] -and
             [string]$boundedReceipt.provenance.generatorPayloadSha256 -cmatch $DigestPattern -and
@@ -250,9 +301,18 @@ try {
             $null -ne $boundedReceipt.PSObject.Properties['boundedSelection'] -and
             $null -ne $boundedReceipt.PSObject.Properties['boundedPaths'] -and
             $null -ne $boundedReceipt.boundedSelection -and
+            $null -ne $boundedReceipt.boundedSelection.PSObject.Properties['candidateEntries'] -and
+            $null -ne $boundedReceipt.boundedSelection.PSObject.Properties['candidateEntriesAfterTests'] -and
             [int]$boundedReceipt.boundedSelection.fileCount -gt 0 -and
             [int]$boundedReceipt.boundedSelection.fileCount -le $MaxBoundedFiles -and
-            [long]$boundedReceipt.boundedSelection.sourceBytes -le $MaxBoundedBytes) 'BOUNDED_RECEIPT_INVALID'
+            [long]$boundedReceipt.boundedSelection.sourceBytes -le $MaxBoundedBytes -and
+            [int]$boundedReceipt.boundedSelection.maxFiles -eq $MaxBoundedFiles -and
+            [long]$boundedReceipt.boundedSelection.maxBytes -eq $MaxBoundedBytes -and
+            [int]$boundedReceipt.boundedSelection.candidateEntries -gt 0 -and
+            [int]$boundedReceipt.boundedSelection.candidateEntries -le $MaxCandidateEntries -and
+            [int]$boundedReceipt.boundedSelection.candidateEntriesAfterTests -gt 0 -and
+            [int]$boundedReceipt.boundedSelection.candidateEntriesAfterTests -le $MaxCandidateEntries -and
+            [int]$boundedReceipt.boundedSelection.maxCandidateEntries -eq $MaxCandidateEntries) 'BOUNDED_RECEIPT_INVALID'
     }
     $inputs = @($TraceMapRoot, $CorpusRoot, $BoundedReceiptPath)
     $safeOutput = Assert-Task11FreshOutput $OutputRoot $inputs
@@ -290,6 +350,7 @@ try {
         foreach ($category in $RequiredCategories) { Assert-Task11 ($cases.ContainsKey($category)) "REPRESENTATIVE_CATEGORY_MISSING:$category" }
         if ($Lane -eq 'Bounded') {
             $Receipt.boundedSelection = Assert-Task11BoundedPaths $CorpusRoot $BoundedPaths
+            $Receipt.boundedSelection.candidateEntries = Get-Task11CandidateEntryCount $CorpusRoot
             Assert-Task11BoundedProjectSelection $CorpusRoot $projectFull $BoundedPaths
         }
         Assert-Task11Tool $MsBuildPath 'MSBUILD'
@@ -344,6 +405,9 @@ try {
         }
         $Receipt.stages.Add([ordered]@{ name = 'representative-tests'; status = 'passed' })
         Assert-Task11Checkout $CorpusRoot $CorpusCommit 'CORPUS_AFTER_TESTS'
+        if ($Lane -eq 'Bounded') {
+            $Receipt.boundedSelection.candidateEntriesAfterTests = Get-Task11CandidateEntryCount $CorpusRoot
+        }
         $cliProject = Join-Path $TraceMapRoot 'src/dotnet/TraceMap.Cli/TraceMap.Cli.csproj'
         [void](Invoke-Task11Command $dotnet @('build',$cliProject,'-c','Release','--no-incremental','--nologo') $TraceMapRoot)
         Assert-Task11Checkout $TraceMapRoot $TraceMapCommit 'TRACEMAP_AFTER_BUILD'
