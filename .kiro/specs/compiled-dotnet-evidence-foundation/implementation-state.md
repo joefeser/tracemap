@@ -1800,3 +1800,26 @@ rule-ID matcher only accepted LF. The matcher now accepts either line ending,
 and the regression writes CRLF explicitly on every host. Exact rule-ID checks
 still require a Windows rerun before this follow-up is considered validated
 there.
+
+## PR #785 exact-head review repair (2026-09-23)
+
+The current-head review found that the first bounded receipt could still
+overstate its source and tool scope. The repair keeps the existing Task 11
+lane and fails closed: the bounded selection must equal the scanner's complete
+eligible inventory, scanner candidate enumeration and source file/byte counts
+have hard limits, and any semantic input outside the declared set is rejected.
+The runner rejects ignored source in a supposedly clean checkout, requires the
+exact slice project in the selection, normalizes relative corpus and test
+paths, records safe preflight failure receipts, and checks nonempty required
+artifacts plus SQLite integrity/schema/commit/fact count. Reduced analysis or
+explicit gaps yield a non-passing `partial` receipt. A full-corpus run must
+reproduce the bounded run's exact CLI DLL digest and complete output-payload
+digest before scanning.
+
+Mac validation on this repair: Task 11 synthetic guards passed, the focused
+exact-scope/SQLite validator suite passed 9/9, `dotnet build` passed with zero
+warnings under `-warnaserror`, and the final full .NET suite passed 2,262/2,262.
+The private-path guard, Kiro self-test, and `git diff --check` passed. The
+Windows-only entry point and private corpus have not been rerun for this patch;
+no private validation is claimed. The unrelated base-equivalent Windows
+full-suite failures remain separately recorded above.

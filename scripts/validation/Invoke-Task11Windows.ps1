@@ -52,7 +52,18 @@ function Get-Task11Git([string]$Root, [string[]]$Arguments) {
 function Assert-Task11Checkout([string]$Root, [string]$Expected, [string]$Label) {
     Assert-Task11 (Test-Path -LiteralPath (Join-Path $Root '.git')) "${Label}_UNAVAILABLE"
     Assert-Task11 ((Get-Task11Git $Root @('rev-parse','HEAD')) -ceq $Expected) "${Label}_COMMIT_MISMATCH"
-    Assert-Task11 (-not (Get-Task11Git $Root @('status','--porcelain','--untracked-files=all'))) "${Label}_DIRTY"
+    $status = Get-Task11Git $Root @('status','--porcelain','--untracked-files=all','--ignored')
+    foreach ($line in @($status -split "`r?`n" | Where-Object { $_ })) {
+        if ($line.StartsWith('!! ')) {
+            $relative = $line.Substring(3).Replace('\','/')
+            # Scanner inventory excludes generated bin/obj trees. Other ignored inputs are not admitted.
+            if ($relative -match '(^|/)(bin|obj)/') {
+                $generated = Get-Item -LiteralPath (Join-Path $Root $relative.TrimEnd('/')) -Force
+                if (-not ($generated.Attributes -band [IO.FileAttributes]::ReparsePoint)) { continue }
+            }
+        }
+        throw "${Label}_DIRTY"
+    }
 }
 function Assert-Task11FreshOutput([string]$Path, [string[]]$Inputs) {
     $full = [IO.Path]::GetFullPath($Path).TrimEnd('\','/')
@@ -71,11 +82,35 @@ function Assert-Task11FreshOutput([string]$Path, [string[]]$Inputs) {
     }
     return $full
 }
+function New-Task11FallbackReceiptPath([string[]]$Inputs) {
+    $directory = Join-Path ([IO.Path]::GetTempPath()) ('tracemap-task11-preflight-' + [guid]::NewGuid().ToString('N'))
+    $safe = Assert-Task11FreshOutput $directory $Inputs
+    [void](New-Item -ItemType Directory -Path $safe)
+    return (Join-Path $safe 'private-receipt.json')
+}
 function Assert-Task11Tool([string]$Path, [string]$Label) {
     Assert-Task11 (-not [string]::IsNullOrWhiteSpace($Path) -and (Test-Path -LiteralPath $Path -PathType Leaf)) "${Label}_UNAVAILABLE"
     $item = Get-Item -LiteralPath $Path
     Assert-Task11 (-not [string]::IsNullOrWhiteSpace($item.VersionInfo.FileVersion)) "${Label}_VERSION_UNAVAILABLE"
     $script:Receipt.tools[$Label] = [ordered]@{ path = $item.FullName; fileVersion = $item.VersionInfo.FileVersion; productVersion = $item.VersionInfo.ProductVersion }
+}
+function Resolve-Task11CorpusPath([string]$Root, [string]$Path) {
+    Assert-Task11 (-not [string]::IsNullOrWhiteSpace($Path)) 'CORPUS_PATH_REQUIRED'
+    $rootFull = [IO.Path]::GetFullPath($Root).TrimEnd('\','/')
+    $full = if ([IO.Path]::IsPathRooted($Path)) {
+        [IO.Path]::GetFullPath($Path)
+    } else {
+        [IO.Path]::GetFullPath((Join-Path $rootFull $Path))
+    }
+    Assert-Task11 ($full.StartsWith($rootFull + [IO.Path]::DirectorySeparatorChar,
+        [StringComparison]::OrdinalIgnoreCase)) 'CORPUS_PATH_OUTSIDE_ROOT'
+    return $full
+}
+function Assert-Task11BoundedProjectSelection([string]$Root, [string]$ProjectFull, [string[]]$Paths) {
+    $relativeProject = [IO.Path]::GetRelativePath([IO.Path]::GetFullPath($Root), $ProjectFull).Replace('\','/')
+    $selected = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+    foreach ($path in $Paths) { [void]$selected.Add($path.Replace('\','/')) }
+    Assert-Task11 ($selected.Contains($relativeProject)) 'BOUNDED_PROJECT_NOT_SELECTED'
 }
 function Assert-Task11BoundedPaths([string]$Root, [string[]]$Paths) {
     Assert-Task11 ($Paths.Count -gt 0 -and $Paths.Count -le $MaxBoundedFiles) 'BOUNDED_FILE_COUNT_LIMIT'
@@ -107,16 +142,47 @@ function Get-Task11RuleIds([string]$Catalog) {
     Assert-Task11 ($ids.Count -gt 0) 'RULE_CATALOG_EMPTY'
     return ,$ids
 }
+function Get-Task11GeneratorPayloadSha256([string]$GeneratorPath) {
+    Assert-Task11 (Test-Path -LiteralPath $GeneratorPath -PathType Leaf) 'GENERATOR_MISSING'
+    $directory = [IO.Path]::GetDirectoryName([IO.Path]::GetFullPath($GeneratorPath))
+    $files = @(Get-ChildItem -LiteralPath $directory -File -Recurse -Force |
+        Sort-Object { [IO.Path]::GetRelativePath($directory, $_.FullName).Replace('\','/') })
+    Assert-Task11 ($files.Count -gt 0) 'GENERATOR_PAYLOAD_EMPTY'
+    $entries = foreach ($file in $files) {
+        Assert-Task11 (-not ($file.Attributes -band [IO.FileAttributes]::ReparsePoint)) 'GENERATOR_PAYLOAD_REPARSE_POINT'
+        $relative = [IO.Path]::GetRelativePath($directory, $file.FullName).Replace('\','/')
+        $digest = (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+        "$relative`t$digest"
+    }
+    $payload = [Text.Encoding]::UTF8.GetBytes(($entries -join "`n") + "`n")
+    return [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($payload)).ToLowerInvariant()
+}
+function Assert-Task11GeneratorMatchesReceipt([string]$CurrentPayloadDigest, [string]$CurrentGeneratorDigest, [object]$BoundedReceipt) {
+    Assert-Task11 ($CurrentGeneratorDigest -ceq [string]$BoundedReceipt.provenance.generatorSha256 -and
+        $CurrentPayloadDigest -ceq [string]$BoundedReceipt.provenance.generatorPayloadSha256) 'BOUNDED_GENERATOR_MISMATCH'
+}
 function Assert-Task11Artifacts([string]$ScanDir, [string]$ExpectedCommit, [string]$GeneratorPath) {
     foreach ($relative in @('scan-manifest.json','facts.ndjson','index.sqlite','report.md','logs/analyzer.log')) {
         $path = Join-Path $ScanDir $relative
         Assert-Task11 (Test-Path -LiteralPath $path -PathType Leaf) "ARTIFACT_MISSING:$relative"
         $script:Receipt.artifacts[$relative] = $path
     }
+    foreach ($relative in @('scan-manifest.json','facts.ndjson','index.sqlite','report.md')) {
+        Assert-Task11 ((Get-Item -LiteralPath (Join-Path $ScanDir $relative)).Length -gt 0) "ARTIFACT_EMPTY:$relative"
+    }
+    $indexPath = Join-Path $ScanDir 'index.sqlite'
+    $stream = [IO.File]::OpenRead($indexPath)
+    try {
+        $header = [byte[]]::new(16)
+        Assert-Task11 ($stream.Read($header, 0, $header.Length) -eq 16 -and
+            [Text.Encoding]::ASCII.GetString($header) -ceq "SQLite format 3`0") 'INDEX_SQLITE_HEADER_INVALID'
+    } finally { $stream.Dispose() }
     $manifest = Get-Content -LiteralPath (Join-Path $ScanDir 'scan-manifest.json') -Raw | ConvertFrom-Json
     Assert-Task11 ($manifest.commitSha -ceq $ExpectedCommit) 'PROVENANCE_COMMIT_INVALID'
     Assert-Task11 (-not [string]::IsNullOrWhiteSpace($manifest.scannerVersion)) 'PROVENANCE_SCANNER_VERSION_MISSING'
     Assert-Task11 ([string]$manifest.sourceSnapshotDigest -cmatch $DigestPattern) 'PROVENANCE_BOUNDED_INPUT_INVALID'
+    Assert-Task11 (-not [string]::IsNullOrWhiteSpace([string]$manifest.analysisLevel) -and
+        -not [string]::IsNullOrWhiteSpace([string]$manifest.buildStatus)) 'PROVENANCE_COVERAGE_MISSING'
     $facts = @(Get-Content -LiteralPath (Join-Path $ScanDir 'facts.ndjson') | Where-Object { $_ } | ForEach-Object { $_ | ConvertFrom-Json })
     Assert-Task11 ($facts.Count -gt 0) 'FACTS_EMPTY'
     $extractors = @{}
@@ -138,15 +204,24 @@ function Assert-Task11Artifacts([string]$ScanDir, [string]$ExpectedCommit, [stri
     }
     $script:Receipt.provenance = [ordered]@{
         generatorSha256 = (Get-FileHash -LiteralPath $GeneratorPath -Algorithm SHA256).Hash.ToLowerInvariant()
+        generatorPayloadSha256 = Get-Task11GeneratorPayloadSha256 $GeneratorPath
         boundedInputSha256 = $manifest.sourceSnapshotDigest
         commit = $manifest.commitSha
         scannerVersion = $manifest.scannerVersion
+        analysisLevel = $manifest.analysisLevel
+        buildStatus = $manifest.buildStatus
         extractors = $extractors
         knownGaps = @($manifest.knownGaps)
         analysisGaps = $gaps
         factCount = $facts.Count
         claim = 'pinned-baseline-only; identity edges require rule-specific assertions'
     }
+    if ($manifest.buildStatus -cne 'Succeeded' -or
+        $manifest.analysisLevel -cne 'Level1SemanticAnalysis' -or
+        $gaps.Count -gt 0 -or @($manifest.knownGaps).Count -gt 0) {
+        return 'partial'
+    }
+    return 'passed'
 }
 
 # Dot-source only for public synthetic guard tests; command execution stays in the entry point.
@@ -169,6 +244,8 @@ try {
         Assert-Task11 ($boundedReceipt.kind -ceq 'Bounded' -and $boundedReceipt.status -ceq 'passed' -and
             $boundedReceipt.traceMapCommit -ceq $TraceMapCommit -and $boundedReceipt.corpusCommit -ceq $CorpusCommit -and
             [string]$boundedReceipt.provenance.generatorSha256 -cmatch $DigestPattern -and
+            $null -ne $boundedReceipt.provenance.PSObject.Properties['generatorPayloadSha256'] -and
+            [string]$boundedReceipt.provenance.generatorPayloadSha256 -cmatch $DigestPattern -and
             [string]$boundedReceipt.provenance.boundedInputSha256 -cmatch $DigestPattern -and
             $null -ne $boundedReceipt.PSObject.Properties['boundedSelection'] -and
             $null -ne $boundedReceipt.PSObject.Properties['boundedPaths'] -and
@@ -200,10 +277,9 @@ try {
         $remote = Get-Task11Git $CorpusRoot @('remote','get-url','origin')
         $remoteDigest = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($remote))).ToLowerInvariant()
         Assert-Task11 ($remoteDigest -ceq $CorpusRemoteSha256) 'CORPUS_REMOTE_MISMATCH'
-        Assert-Task11 (-not [string]::IsNullOrWhiteSpace($SliceProject) -and (Test-Path -LiteralPath $SliceProject -PathType Leaf)) 'SLICE_PROJECT_UNAVAILABLE'
-        $corpusFull = [IO.Path]::GetFullPath($CorpusRoot).TrimEnd('\','/')
-        $projectFull = [IO.Path]::GetFullPath($SliceProject)
-        Assert-Task11 ($projectFull.StartsWith($corpusFull + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) 'SLICE_PROJECT_OUTSIDE_CORPUS'
+        Assert-Task11 (-not [string]::IsNullOrWhiteSpace($SliceProject)) 'SLICE_PROJECT_UNAVAILABLE'
+        $projectFull = Resolve-Task11CorpusPath $CorpusRoot $SliceProject
+        Assert-Task11 (Test-Path -LiteralPath $projectFull -PathType Leaf) 'SLICE_PROJECT_UNAVAILABLE'
         Assert-Task11 (-not [string]::IsNullOrWhiteSpace($TestAssembly)) 'TEST_ASSEMBLY_REQUIRED'
         $cases = @{}
         foreach ($case in $RepresentativeCases) {
@@ -214,6 +290,7 @@ try {
         foreach ($category in $RequiredCategories) { Assert-Task11 ($cases.ContainsKey($category)) "REPRESENTATIVE_CATEGORY_MISSING:$category" }
         if ($Lane -eq 'Bounded') {
             $Receipt.boundedSelection = Assert-Task11BoundedPaths $CorpusRoot $BoundedPaths
+            Assert-Task11BoundedProjectSelection $CorpusRoot $projectFull $BoundedPaths
         }
         Assert-Task11Tool $MsBuildPath 'MSBUILD'
         Assert-Task11Tool $TestRunnerPath 'TEST_RUNNER'
@@ -245,16 +322,20 @@ try {
     if ($Lane -ne 'PublicSmoke') {
         $sliceDir = Join-Path $safeOutput 'slice'
         [void](New-Item -ItemType Directory -Path $sliceDir)
-        [void](Invoke-Task11Command $MsBuildPath @($SliceProject,'/t:Build','/p:Configuration=Debug',"/p:BaseOutputPath=$sliceDir\build\") $CorpusRoot)
+        [void](Invoke-Task11Command $MsBuildPath @($projectFull,'/t:Rebuild','/p:Configuration=Debug',"/p:BaseOutputPath=$sliceDir\build\") $CorpusRoot)
         $Receipt.stages.Add([ordered]@{ name = 'smallest-project-build'; status = 'passed' })
-        $assemblyFull = [IO.Path]::GetFullPath($TestAssembly)
         $buildFull = [IO.Path]::GetFullPath((Join-Path $sliceDir 'build')).TrimEnd('\','/')
+        $assemblyFull = if ([IO.Path]::IsPathRooted($TestAssembly)) {
+            [IO.Path]::GetFullPath($TestAssembly)
+        } else {
+            [IO.Path]::GetFullPath((Join-Path $buildFull $TestAssembly))
+        }
         Assert-Task11 ($assemblyFull.StartsWith($buildFull + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) 'TEST_ASSEMBLY_OUTSIDE_SLICE_OUTPUT'
-        Assert-Task11 (Test-Path -LiteralPath $TestAssembly -PathType Leaf) 'TEST_ASSEMBLY_UNAVAILABLE_AFTER_BUILD'
+        Assert-Task11 (Test-Path -LiteralPath $assemblyFull -PathType Leaf) 'TEST_ASSEMBLY_UNAVAILABLE_AFTER_BUILD'
         foreach ($category in $RequiredCategories) {
             $test = $cases[$category]
             $trx = Join-Path $sliceDir (([guid]::NewGuid().ToString('N')) + '.trx')
-            [void](Invoke-Task11Command $TestRunnerPath @($TestAssembly,"/Tests:$test", "/Logger:trx;LogFileName=$trx") $CorpusRoot)
+            [void](Invoke-Task11Command $TestRunnerPath @($assemblyFull,"/Tests:$test", "/Logger:trx;LogFileName=$trx") $CorpusRoot)
             Assert-Task11 (Test-Path -LiteralPath $trx -PathType Leaf) 'TEST_RESULT_MISSING'
             [xml]$result = Get-Content -LiteralPath $trx -Raw
             $passed = @($result.SelectNodes("//*[local-name()='UnitTestResult' and @outcome='Passed']")).Count
@@ -264,26 +345,45 @@ try {
         $Receipt.stages.Add([ordered]@{ name = 'representative-tests'; status = 'passed' })
         Assert-Task11Checkout $CorpusRoot $CorpusCommit 'CORPUS_AFTER_TESTS'
         $cliProject = Join-Path $TraceMapRoot 'src/dotnet/TraceMap.Cli/TraceMap.Cli.csproj'
-        [void](Invoke-Task11Command $dotnet @('build',$cliProject,'-c','Release','--nologo') $TraceMapRoot)
+        [void](Invoke-Task11Command $dotnet @('build',$cliProject,'-c','Release','--no-incremental','--nologo') $TraceMapRoot)
         Assert-Task11Checkout $TraceMapRoot $TraceMapCommit 'TRACEMAP_AFTER_BUILD'
         $generator = Join-Path $TraceMapRoot 'src/dotnet/TraceMap.Cli/bin/Release/net10.0/tracemap.dll'
         Assert-Task11 (Test-Path -LiteralPath $generator -PathType Leaf) 'GENERATOR_MISSING'
+        $generatorPayloadSha256 = Get-Task11GeneratorPayloadSha256 $generator
+        if ($Lane -eq 'FullCorpus') {
+            $generatorSha256 = (Get-FileHash -LiteralPath $generator -Algorithm SHA256).Hash.ToLowerInvariant()
+            Assert-Task11GeneratorMatchesReceipt $generatorPayloadSha256 $generatorSha256 $boundedReceipt
+        }
         $scanDir = Join-Path $safeOutput $(if ($Lane -eq 'FullCorpus') { 'full-corpus-scan' } else { 'bounded-scan' })
         $scanArgs = @($generator,'scan','--repo',$CorpusRoot,'--out',$scanDir)
-        if ($Lane -eq 'Bounded') { foreach ($path in $BoundedPaths) { $scanArgs += @('--include',$path) } }
+        if ($Lane -eq 'Bounded') {
+            $scanArgs += @('--exact-source-scope','--exact-source-max-files',[string]$MaxBoundedFiles,
+                '--exact-source-max-bytes',[string]$MaxBoundedBytes)
+            foreach ($path in $BoundedPaths) { $scanArgs += @('--include',$path) }
+        }
         [void](Invoke-Task11Command $dotnet $scanArgs $TraceMapRoot)
         $Receipt.stages.Add([ordered]@{ name = 'pinned-scan'; status = 'passed' })
-        Assert-Task11Artifacts $scanDir $CorpusCommit $generator
-        $Receipt.stages.Add([ordered]@{ name = 'artifact-provenance'; status = 'passed' })
+        $scanStatus = Assert-Task11Artifacts $scanDir $CorpusCommit $generator
+        [void](Invoke-Task11Command $dotnet @($generator,'validate-index','--index',(Join-Path $scanDir 'index.sqlite'),
+            '--commit',$CorpusCommit,'--facts',[string]$Receipt.provenance.factCount) $TraceMapRoot)
+        $Receipt.stages.Add([ordered]@{ name = 'artifact-provenance'; status = $scanStatus })
     }
-    $Receipt.status = 'passed'
+    $Receipt.status = if ($Lane -eq 'PublicSmoke') { 'passed' } else { $scanStatus }
 } catch {
     $Receipt.status = 'blocked'
     $Receipt.blocker = $_.Exception.Message
     $Receipt.stages.Add([ordered]@{ name = 'halt'; status = 'blocked'; reason = $Receipt.blocker })
 } finally {
     $Receipt.finishedUtc = (Get-Date).ToUniversalTime().ToString('o')
+    if (-not $receiptPath) {
+        try { $receiptPath = New-Task11FallbackReceiptPath @($TraceMapRoot, $CorpusRoot, $BoundedReceiptPath) }
+        catch { $Receipt.stages.Add([ordered]@{ name = 'failure-receipt'; status = 'unavailable'; reason = 'NO_SAFE_FALLBACK_LOCATION' }) }
+    }
     if ($receiptPath) { $Receipt | ConvertTo-Json -Depth 30 | Set-Content -LiteralPath $receiptPath -Encoding utf8 }
 }
-if ($Receipt.status -ne 'passed') { throw $Receipt.blocker }
+if ($Receipt.status -eq 'blocked') { throw "$($Receipt.blocker) receipt=$receiptPath" }
+if ($Receipt.status -eq 'partial') {
+    Write-Output "TASK11_$($Lane.ToUpperInvariant())_PARTIAL receipt=$receiptPath"
+    exit 2
+}
 Write-Output "TASK11_$($Lane.ToUpperInvariant())_PASSED receipt=$receiptPath"
