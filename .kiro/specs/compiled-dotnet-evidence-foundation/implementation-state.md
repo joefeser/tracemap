@@ -1792,3 +1792,11 @@ On macOS, the cross-platform synthetic helper cases and actual rule-catalog
 parse passed; the Windows-only entry-point, full-corpus and output-path guards
 remain for a Windows rerun. No private corpus run or full .NET suite is claimed
 by this follow-up. Task 11 remains open and no PR has been opened.
+
+The Windows rerun at `71675195` proved bounded selection and old-receipt
+rejection, and `PublicSmoke` passed, but the synthetic artifact guard stopped
+at `RULE_CATALOG_EMPTY`: the tiny synthetic catalog used CRLF while the exact
+rule-ID matcher only accepted LF. The matcher now accepts either line ending,
+and the regression writes CRLF explicitly on every host. Exact rule-ID checks
+still require a Windows rerun before this follow-up is considered validated
+there.

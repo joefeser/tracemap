@@ -101,7 +101,7 @@ function Assert-Task11BoundedPaths([string]$Root, [string[]]$Paths) {
 }
 function Get-Task11RuleIds([string]$Catalog) {
     $ids = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
-    foreach ($match in [regex]::Matches($Catalog, '(?m)^  - id: (?<id>[A-Za-z0-9._-]+)[ \t]*(?:#.*)?$')) {
+    foreach ($match in [regex]::Matches($Catalog, '(?m)^  - id: (?<id>[A-Za-z0-9._-]+)[ \t]*(?:#.*)?\r?$')) {
         [void]$ids.Add($match.Groups['id'].Value)
     }
     Assert-Task11 ($ids.Count -gt 0) 'RULE_CATALOG_EMPTY'
