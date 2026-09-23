@@ -26,6 +26,10 @@ public sealed class MessyWorkspaceRegressionTests
     private const string EnginesHandler = "EnginesButton_Click";
     private const string SelfHandler = "SelfButton_Click";
     private const string AmbiguityHandler = "AmbiguityButton_Click";
+    private const string GeneratedHandler = "GeneratedButton_Click";
+    private const string CrossLanguageHandler = "CrossLanguageButton_Click";
+    private const string CrossLanguageSourcePath = "csharp/Pages/CrossLanguage.aspx.cs";
+    private const int CrossLanguageInvocationLine = 7;
     private const string VbHandler = "SubmitButton_Click";
 
     [Fact]
@@ -73,8 +77,10 @@ public sealed class MessyWorkspaceRegressionTests
             Require("MW-CATALOG", "extraction", entry.GetProperty("shape").GetString() is { Length: > 0 }, $"case {id} must describe its shape");
         }
 
-        Require("MW-CATALOG", "extraction", implemented >= 6, $"expected at least six implemented cases, found {implemented}");
-        Require("MW-CATALOG", "extraction", deferred >= 3, $"expected at least three deferred cases with blockers, found {deferred}");
+        Require("MW-CATALOG", "extraction", ids.Count == 12,
+            $"expected the twelve pinned fixture cases, found {ids.Count}");
+        Require("MW-CATALOG", "extraction", implemented == 12 && deferred == 0,
+            $"all twelve pinned fixture cases must remain implemented; found {implemented} implemented and {deferred} deferred");
 
         // Catalog evidence annotations are load-bearing: every expected rule id must
         // exist in the rule catalog, tiers must be real evidence tiers, and gap
@@ -89,36 +95,42 @@ public sealed class MessyWorkspaceRegressionTests
         foreach (var entry in root.GetProperty("cases").EnumerateArray())
         {
             var id = entry.GetProperty("id").GetString()!;
-            if (entry.TryGetProperty("expectedRuleIds", out var ruleIds))
+            var evidenceContracts = entry.TryGetProperty("alternativeEvidence", out var alternatives)
+                ? new[] { entry }.Concat(alternatives.EnumerateArray()).ToArray()
+                : [entry];
+            foreach (var evidenceContract in evidenceContracts)
             {
-                foreach (var rule in ruleIds.EnumerateArray())
+                if (evidenceContract.TryGetProperty("expectedRuleIds", out var ruleIds))
                 {
-                    Require("MW-CATALOG", "extraction", catalogRules.Contains(rule.GetString()!),
-                        $"case {id} expects rule {rule.GetString()} which is not in rules/rule-catalog.yml");
+                    foreach (var rule in ruleIds.EnumerateArray())
+                    {
+                        Require("MW-CATALOG", "extraction", catalogRules.Contains(rule.GetString()!),
+                            $"case {id} expects rule {rule.GetString()} which is not in rules/rule-catalog.yml");
+                    }
                 }
-            }
 
-            if (entry.TryGetProperty("expectedTiers", out var tiers))
-            {
-                foreach (var tier in tiers.EnumerateArray())
+                if (evidenceContract.TryGetProperty("expectedTiers", out var tiers))
                 {
-                    Require("MW-CATALOG", "extraction", validTiers.Contains(tier.GetString()!),
-                        $"case {id} expects tier {tier.GetString()} which is not a valid evidence tier");
+                    foreach (var tier in tiers.EnumerateArray())
+                    {
+                        Require("MW-CATALOG", "extraction", validTiers.Contains(tier.GetString()!),
+                            $"case {id} expects tier {tier.GetString()} which is not a valid evidence tier");
+                    }
                 }
-            }
 
-            if (entry.TryGetProperty("expectedGaps", out var gaps))
-            {
-                foreach (var gap in gaps.EnumerateArray())
+                if (evidenceContract.TryGetProperty("expectedGaps", out var gaps))
                 {
-                    var value = gap.GetString()!;
-                    var separator = value.IndexOf(':', StringComparison.Ordinal);
-                    var kind = separator < 0 ? value : value[..separator];
-                    var reason = separator < 0 ? null : value[(separator + 1)..];
-                    Require("MW-CATALOG", "extraction", kind.Length > 0, $"case {id} has an empty gap kind");
-                    Require("MW-CATALOG", "extraction",
-                        kind != "TruncatedByLimit" || (reason is not null && validTruncationReasons.Contains(reason)),
-                        $"case {id} gap {value} must carry a documented truncation reason");
+                    foreach (var gap in gaps.EnumerateArray())
+                    {
+                        var value = gap.GetString()!;
+                        var separator = value.IndexOf(':', StringComparison.Ordinal);
+                        var kind = separator < 0 ? value : value[..separator];
+                        var reason = separator < 0 ? null : value[(separator + 1)..];
+                        Require("MW-CATALOG", "extraction", kind.Length > 0, $"case {id} has an empty gap kind");
+                        Require("MW-CATALOG", "extraction",
+                            kind != "TruncatedByLimit" || (reason is not null && validTruncationReasons.Contains(reason)),
+                            $"case {id} gap {value} must carry a documented truncation reason");
+                    }
                 }
             }
         }
@@ -539,6 +551,174 @@ public sealed class MessyWorkspaceRegressionTests
     }
 
     [Fact]
+    public async Task Generated_designer_bridge_is_visible_but_does_not_invent_a_source_terminal()
+    {
+        using var temp = new TempDirectory();
+        var (scan, index) = ScanRoot(temp, "root-generated", "generated-site");
+        var bridgeCalls = scan.Facts.Where(fact =>
+            fact.FactType == FactTypes.CallEdge
+            && fact.RuleId == RuleIds.CSharpSemanticCallGraph
+            && fact.EvidenceTier == EvidenceTiers.Tier1Semantic
+            && fact.SourceSymbol?.Contains(GeneratedHandler, StringComparison.Ordinal) == true
+            && fact.TargetSymbol?.Contains("GeneratedBridge.Run", StringComparison.Ordinal) == true).ToArray();
+        Require("MW-GENERATED-MEMBERS-001", "extraction", bridgeCalls.Length == 1,
+            $"expected one semantic call into the generated bridge, found {bridgeCalls.Length}");
+        var generatedBodyEdges = scan.Facts.Where(fact =>
+            fact.FactType == FactTypes.CallEdge
+            && fact.SourceSymbol?.Contains("GeneratedBridge.Run", StringComparison.Ordinal) == true).ToArray();
+        Require("MW-GENERATED-MEMBERS-001", "extraction", generatedBodyEdges.Length == 0,
+            $"auto-generated body was unexpectedly claimed as source call evidence: {generatedBodyEdges.Length}");
+
+        var packet = await WebFormsModernizationPacketReporter.BuildAsync(new(index, Path.Combine(temp.Path, "packet")));
+        var chains = packet.EventChains.Where(chain => chain.HandlerSymbol?.Contains(GeneratedHandler, StringComparison.Ordinal) == true).ToArray();
+        Require("MW-GENERATED-MEMBERS-001", "traversal", chains.Length > 0,
+            "generated-bridge handler chain is missing");
+        Require("MW-GENERATED-MEMBERS-001", "traversal",
+            chains.All(chain => chain.TraversalObservation?.DistinctReachableTerminalCount == 0)
+            && TerminalBoundaries(packet, GeneratedHandler).Count == 0,
+            "source traversal must not skip the excluded generated bridge and claim its terminal");
+        Require("MW-GENERATED-MEMBERS-001", "traversal",
+            packet.Gaps.Any(gap => gap.Classification == "DownstreamWithoutSupportedTerminal"),
+            "generated bridge must leave an explicit static terminal-evidence gap");
+        RequireCatalogEvidence("MW-GENERATED-MEMBERS-001", "traversal",
+            bridgeCalls.Select(fact => fact.RuleId).Concat(chains.SelectMany(chain => chain.RuleIds))
+                .Concat(chains.Where(chain => chain.TraversalObservation is not null)
+                    .Select(chain => chain.TraversalObservation!.RuleId))
+                .Concat(packet.Gaps.Select(gap => gap.RuleId)),
+            bridgeCalls.Select(fact => fact.EvidenceTier).Concat(chains.SelectMany(chain => chain.EvidenceTiers))
+                .Concat(packet.Gaps.Select(gap => gap.EvidenceTier)),
+            packet.Gaps.Select(gap => gap.Classification));
+    }
+
+    [Fact]
+    public void Cross_language_CSharp_VB_FSharp_chain_keeps_the_unsupported_FSharp_source_boundary()
+    {
+        using var temp = new TempDirectory();
+        var (scan, _) = ScanRoot(temp, "root-crosslanguage", "cross-language");
+        var calls = scan.Facts.Where(fact => fact.FactType == FactTypes.CallEdge).ToArray();
+        var csharpToVb = calls.Where(fact =>
+            fact.SourceSymbol?.Contains(CrossLanguageHandler, StringComparison.Ordinal) == true
+            && fact.TargetSymbol?.Contains("VbBridge.Run", StringComparison.Ordinal) == true).ToArray();
+        var csharpSyntaxCall = calls.Where(fact =>
+            fact.RuleId == RuleIds.CSharpSyntaxCallGraph
+            && fact.SourceSymbol?.Contains(CrossLanguageHandler, StringComparison.Ordinal) == true
+            && fact.TargetSymbol == "Run").ToArray();
+        var compilationGaps = scan.Facts.Where(fact => fact.FactType == FactTypes.AnalysisGap
+            && fact.RuleId == RuleIds.CSharpSemanticWorkspace
+            && fact.EvidenceTier == EvidenceTiers.Tier4Unknown
+            && fact.Evidence.FilePath == CrossLanguageSourcePath
+            && fact.Evidence.StartLine == CrossLanguageInvocationLine
+            && fact.Evidence.EndLine == CrossLanguageInvocationLine
+            && fact.Properties.GetValueOrDefault("gapKind") == "CompilationDiagnostic"
+            && fact.Properties.GetValueOrDefault("diagnosticId") == "CS0234").ToArray();
+        // The catalog's alternatives are exclusive: a semantic edge cannot
+        // coexist with fallback call evidence or its compilation gap.
+        var semanticOutcome = csharpToVb.Length == 1
+            && csharpToVb[0].RuleId == RuleIds.CSharpSemanticCallGraph
+            && csharpToVb[0].EvidenceTier == EvidenceTiers.Tier1Semantic
+            && csharpSyntaxCall.Length == 0 && compilationGaps.Length == 0;
+        var syntaxFallbackOutcome = csharpToVb.Length == 0 && csharpSyntaxCall.Length == 1
+            && csharpSyntaxCall[0].EvidenceTier == EvidenceTiers.Tier3SyntaxOrTextual
+            && csharpSyntaxCall[0].Evidence.FilePath == CrossLanguageSourcePath
+            && csharpSyntaxCall[0].Evidence.StartLine == CrossLanguageInvocationLine
+            && compilationGaps.Length > 0;
+        Require("MW-CROSSLANGUAGE-001", "extraction",
+            semanticOutcome || syntaxFallbackOutcome,
+            $"C# to VB call must be exclusively semantic or explicitly downgraded to syntax plus compilation gap; semantic={csharpToVb.Length}, syntax={csharpSyntaxCall.Length}, gaps={compilationGaps.Length}");
+        var vbToFsharp = calls.Where(fact =>
+            fact.SourceSymbol?.Contains("VbBridge.Run", StringComparison.Ordinal) == true
+            && fact.TargetSymbol?.Contains("Functions.Terminal", StringComparison.Ordinal) == true).ToArray();
+        Require("MW-CROSSLANGUAGE-001", "extraction", vbToFsharp.Length == 1
+            && vbToFsharp[0].RuleId == RuleIds.VisualBasicSemanticCallGraph
+            && vbToFsharp[0].EvidenceTier == EvidenceTiers.Tier1Semantic,
+            $"expected one VB to F# semantic call, found {vbToFsharp.Length}");
+        Require("MW-CROSSLANGUAGE-001", "reconciliation",
+            !scan.Facts.Any(fact => fact.SourceSymbol?.Contains("Functions.Terminal", StringComparison.Ordinal) == true
+                && fact.FactType == FactTypes.CallEdge),
+            "an unsupported F# source body must not be invented as a call edge");
+
+        var source = MessyRoot("root-crosslanguage");
+        var compiled = ScanBoundRoot(temp, "root-crosslanguage", "cross-language-bound", [
+            Path.Combine(source, "csharp", "bin", "Debug", "net10.0", "CrossLanguageEntry.dll"),
+            Path.Combine(source, "vb", "bin", "Debug", "net10.0", "CrossLanguage.VisualBasic.dll"),
+            Path.Combine(source, "fsharp", "bin", "Debug", "net10.0", "CrossLanguage.FSharp.dll")
+        ]);
+        var fsharpMethods = compiled.Facts.Where(fact => fact.FactType == FactTypes.ManagedMethodDeclared
+                && fact.TargetSymbol?.Contains("Functions", StringComparison.Ordinal) == true
+                && fact.TargetSymbol.Contains("Terminal", StringComparison.Ordinal)).ToArray();
+        Require("MW-CROSSLANGUAGE-001", "reconciliation", fsharpMethods.Length > 0,
+            "F# compiled method must be inventoried independently of unavailable F# source");
+        var unsupportedLanguageGaps = compiled.Facts.Where(fact =>
+            fact.Properties.GetValueOrDefault("gapKind") == "SourceMetadataReconciliationUnsupportedLanguage").ToArray();
+        Require("MW-CROSSLANGUAGE-001", "reconciliation", unsupportedLanguageGaps.Length > 0,
+            "F# source-to-compiled join must emit an explicit unsupported-language gap");
+        Require("MW-CROSSLANGUAGE-001", "reconciliation",
+            !compiled.Facts.Any(fact => fact.FactType == FactTypes.SourceMetadataIdentityReconciled
+                && fact.TargetSymbol?.Contains("CrossLanguage.FSharp", StringComparison.Ordinal) == true),
+            "an F# source-to-compiled identity must not be guessed from admitted metadata");
+        var caseEvidence = csharpToVb.Concat(csharpSyntaxCall).Concat(vbToFsharp)
+            .Concat(compilationGaps).Concat(fsharpMethods).Concat(unsupportedLanguageGaps).ToArray();
+        RequireCatalogEvidence("MW-CROSSLANGUAGE-001", "reconciliation",
+            caseEvidence.Select(fact => fact.RuleId), caseEvidence.Select(fact => fact.EvidenceTier),
+            caseEvidence.Where(fact => fact.Properties.TryGetValue("gapKind", out _))
+                .Select(fact => fact.Properties["gapKind"]));
+    }
+
+    [Fact]
+    public void Messy_generated_root_joins_source_metadata_IL_and_portable_PDB_only_by_exact_compiled_identity()
+    {
+        using var temp = new TempDirectory();
+        var source = MessyRoot("root-generated");
+        var assembly = Path.Combine(source, "bin", "Debug", "net10.0", "GeneratedSite.dll");
+        var pdb = Path.ChangeExtension(assembly, ".pdb");
+        Require("MW-SOURCE-METADATA-IL-PDB-001", "extraction", File.Exists(assembly) && File.Exists(pdb),
+            "the public generated-root assembly and portable PDB must be built before this test");
+
+        var scan = ScanBoundRoot(temp, "root-generated", "generated-bound", [assembly], [pdb], ilBody: true);
+        Require("MW-GENERATED-MEMBERS-001", "reconciliation",
+            scan.Facts.Any(fact => fact.FactType == FactTypes.ManagedMethodDeclared
+                && fact.TargetSymbol?.Contains("GeneratedBridge", StringComparison.Ordinal) == true
+                && fact.TargetSymbol.Contains("Run", StringComparison.Ordinal))
+            && !scan.Facts.Any(fact => fact.FactType == FactTypes.SourceMetadataIdentityReconciled
+                && fact.TargetSymbol?.Contains("GeneratedBridge", StringComparison.Ordinal) == true
+                && fact.TargetSymbol.Contains("Run", StringComparison.Ordinal)),
+            "the generated bridge must be inventoried in metadata without inventing a source identity join");
+        var sourceEdges = scan.Facts.Where(fact =>
+            fact.FactType == FactTypes.SourceMetadataIdentityReconciled
+            && fact.TargetSymbol?.Contains("GeneratedButton_Click", StringComparison.Ordinal) == true).ToArray();
+        Require("MW-SOURCE-METADATA-IL-PDB-001", "reconciliation", sourceEdges.Length == 1,
+            "handler source symbol must reconcile to one exact compiled method identity");
+        var sourceEdge = sourceEdges[0];
+        var compiledFactId = sourceEdge.Properties.GetValueOrDefault("compiledFactId");
+        Require("MW-SOURCE-METADATA-IL-PDB-001", "reconciliation", !string.IsNullOrWhiteSpace(compiledFactId),
+            "source-to-metadata edge omitted its exact compiled fact ID");
+        var ilBodies = scan.Facts.Where(fact => fact.FactType == FactTypes.ManagedIlBodyDeclared
+            && fact.Properties.GetValueOrDefault("compiledFactId") == compiledFactId).ToArray();
+        var pdbMethods = scan.Facts.Where(fact => fact.FactType == FactTypes.MetadataPdbMethodReconciled
+            && fact.Properties.GetValueOrDefault("compiledFactId") == compiledFactId).ToArray();
+        Require("MW-SOURCE-METADATA-IL-PDB-001", "reconciliation", ilBodies.Length == 1 && pdbMethods.Length == 1,
+            $"the exact compiled handler must own one IL body and one PDB method; il={ilBodies.Length}, pdb={pdbMethods.Length}");
+        var ilBody = ilBodies[0];
+        var pdbMethod = pdbMethods[0];
+        Require("MW-SOURCE-METADATA-IL-PDB-001", "reconciliation",
+            sourceEdge.EvidenceTier == EvidenceTiers.Tier1Semantic
+            && ilBody.EvidenceTier == EvidenceTiers.Tier2Structural
+            && !string.IsNullOrWhiteSpace(sourceEdge.Properties.GetValueOrDefault("provenanceBindingInputSha256"))
+            && !string.IsNullOrWhiteSpace(ilBody.Properties.GetValueOrDefault("ilBoundedInputSha256"))
+            && !string.IsNullOrWhiteSpace(ilBody.Properties.GetValueOrDefault("ilGeneratorSha256"))
+            && !string.IsNullOrWhiteSpace(pdbMethod.Properties.GetValueOrDefault("pdbBoundedInputSha256"))
+            && !string.IsNullOrWhiteSpace(pdbMethod.Properties.GetValueOrDefault("pdbGeneratorSha256")),
+            "joined evidence must retain its tiers, binding input, bounded input, and generator hashes");
+        var sequencePoints = scan.Facts.Where(fact => fact.FactType == FactTypes.PdbSequencePointDeclared
+            && fact.Properties.GetValueOrDefault("metadataPdbReconciliationFactId") == pdbMethod.FactId).ToArray();
+        Require("MW-SOURCE-METADATA-IL-PDB-001", "reconciliation", sequencePoints.Length > 0,
+            "the bound handler PDB method must own a source sequence point");
+        var joinedEvidence = new[] { sourceEdge, ilBody, pdbMethod }.Concat(sequencePoints).ToArray();
+        RequireCatalogEvidence("MW-SOURCE-METADATA-IL-PDB-001", "reconciliation",
+            joinedEvidence.Select(fact => fact.RuleId), joinedEvidence.Select(fact => fact.EvidenceTier), []);
+    }
+
+    [Fact]
     public async Task Separately_scanned_roots_merge_without_invented_joins()
     {
         using var temp = new TempDirectory();
@@ -751,7 +931,7 @@ public sealed class MessyWorkspaceRegressionTests
     public async Task Repeat_scans_pin_byte_identical_facts_per_root()
     {
         using var temp = new TempDirectory();
-        foreach (var root in (string[])["root-alpha", "root-beta", "vb-projectless"])
+        foreach (var root in (string[])["root-alpha", "root-beta", "vb-projectless", "root-generated", "root-crosslanguage"])
         {
             var first = Path.Combine(temp.Path, $"{root}-first");
             var second = Path.Combine(temp.Path, $"{root}-second");
@@ -822,6 +1002,41 @@ public sealed class MessyWorkspaceRegressionTests
         return (scan, indexPath);
     }
 
+    private static ScanResult ScanBoundRoot(
+        TempDirectory temp,
+        string rootName,
+        string label,
+        IReadOnlyList<string> assemblies,
+        IReadOnlyList<string>? pdbs = null,
+        bool ilBody = false)
+    {
+        var source = MessyRoot(rootName);
+        var commit = GitMetadataProvider.Detect(source).CommitSha;
+        var receipt = Path.Combine(temp.Path, $"{label}-binding-receipt.json");
+        var output = Path.Combine(temp.Path, $"{label}-bound-scan");
+        var evaluation = ManagedMetadataExtractor.Evaluate(source, commit,
+            new ScanOptions(source, output, CompiledInputPaths: assemblies));
+        File.WriteAllText(receipt, JsonSerializer.Serialize(new
+        {
+            schemaVersion = "compiled-input-binding-set.v1",
+            bindings = evaluation.Provenance!.Outcomes.Select(outcome => new
+            {
+                schemaVersion = "compiled-input-binding.v1",
+                safeLocator = outcome.SafeLocator,
+                artifactSha256 = outcome.RawFileSha256,
+                assemblyIdentity = outcome.AssemblyIdentity,
+                binarySourceRepository = "public-fixture",
+                binarySourceCommitSha = commit,
+                binaryBuildIdentity = "test-build"
+            }).ToArray()
+        }));
+        return ScanEngine.Scan(new ScanOptions(source, output,
+            CompiledInputPaths: assemblies,
+            CompiledBindingReceiptPaths: [receipt],
+            PdbInputPaths: pdbs,
+            IlBodyEvidence: ilBody));
+    }
+
     private static string MessyRoot(string rootName) =>
         Path.Combine(FindRepoRoot(), "samples", "messy-dotnet-workspace", rootName);
 
@@ -874,17 +1089,29 @@ public sealed class MessyWorkspaceRegressionTests
         using var catalog = JsonDocument.Parse(File.ReadAllText(Path.Combine(FindRepoRoot(), CatalogPath)));
         var entry = catalog.RootElement.GetProperty("cases").EnumerateArray()
             .Single(item => item.GetProperty("id").GetString() == caseId);
-        foreach (var (property, observed) in new[]
+        var observed = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal)
         {
-            ("expectedRuleIds", ruleIds), ("expectedTiers", tiers), ("expectedGaps", gaps),
-        })
+            ["expectedRuleIds"] = ruleIds.ToHashSet(StringComparer.Ordinal),
+            ["expectedTiers"] = tiers.ToHashSet(StringComparer.Ordinal),
+            ["expectedGaps"] = gaps.ToHashSet(StringComparer.Ordinal),
+        };
+        static bool Matches(JsonElement contract, IReadOnlyDictionary<string, HashSet<string>> observed) =>
+            observed.All(pair => contract.GetProperty(pair.Key).EnumerateArray()
+                .All(expected => pair.Value.Contains(expected.GetString()!)));
+
+        foreach (var (property, actual) in observed)
         {
-            var actual = observed.ToHashSet(StringComparer.Ordinal);
             foreach (var expected in entry.GetProperty(property).EnumerateArray().Select(item => item.GetString()!))
             {
                 Require(caseId, stage, actual.Contains(expected),
                     $"catalog {property} value {expected} is missing from the case's produced evidence");
             }
+        }
+
+        if (entry.TryGetProperty("alternativeEvidence", out var alternatives))
+        {
+            Require(caseId, stage, alternatives.EnumerateArray().Any(alternative => Matches(alternative, observed)),
+                "none of the catalog's alternative evidence outcomes was produced");
         }
     }
 

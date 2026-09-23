@@ -25,6 +25,13 @@ Roots:
   `root-alpha` to pressure cross-root joins.
 - `vb-projectless/` — loose VB files with no `.vbproj`/`.sln`, exercising the
   portable Roslyn syntax fallback (Tier3 evidence plus fail-closed gaps).
+- `root-generated/` — buildable Web Forms-shaped C# page whose auto-generated
+  designer bridge is deliberately excluded from source traversal. A bound
+  compiled scan pins the handler's source→metadata→IL/PDB identity chain.
+- `root-crosslanguage/` — buildable C#→VB→F# project graph. The fixture pins
+  the current partial evidence: a C# syntax downgrade with a compilation gap,
+  a VB semantic call to F#, admitted F# metadata, and an explicit unsupported
+  F# source-ownership gap. It does not claim a complete source traversal.
 
 The regression suite that consumes these fixtures lives in
 `src/dotnet/tests/TraceMap.Tests/MessyWorkspaceRegressionTests.cs`; see

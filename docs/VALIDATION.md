@@ -2881,14 +2881,17 @@ chain ending in an ADO.NET-style SQL terminal at graph distance 14, a
 three-node cycle plus a self-cycle with its own handler, ten same-name
 `Process`/`Core` members in one file, and two overloads across two uncertain
 interface receiver implementations), `root-beta` (a second C# root reusing those simple
-names), and `vb-projectless` (loose VB files with no `.vbproj`/`.sln`).
+names), `vb-projectless` (loose VB files with no `.vbproj`/`.sln`),
+`root-generated` (a designer bridge and bound compiled/PDB evidence), and
+`root-crosslanguage` (a buildable C#→VB→F# project graph).
 
 The stable case catalog is `samples/messy-dotnet-workspace/case-catalog.json`
 (schema `messy-workspace-case-catalog.v1`). Cases are marked `implemented` or
-`deferred`; deferred cases record their exact blocker or next-slice owner
-(C#/VB/F# boundaries, generated members, and the source→metadata→IL/PDB
-chain owned by #766). The catalog is
-an inventory and does not claim deferred cases are proven.
+`deferred`; implemented means the fixture and its asserted outcome are pinned,
+not that every attempted join succeeds. The cross-language case explicitly
+records a C# syntax downgrade and unsupported F# source ownership. The
+source→metadata→IL/PDB case proves one exact compiled handler join but does
+not close #766's rewritten-PDB or ILAsm/ILDAsm parity work.
 
 Pinned behaviors, asserted per catalog case id and pipeline stage
 (extraction, combining, reconciliation, traversal) by
@@ -2930,6 +2933,19 @@ Pinned behaviors, asserted per catalog case id and pipeline stage
   Tier4 gaps, a Tier3 `vb.syntax.database-operation.v1` terminal, and a
   handler chain that reaches its `sql-query` boundary. No blocker exists for
   projectless VB in ordinary CI.
+- Generated bridge: the source handler's semantic call into a designer member
+  is retained, but the excluded generated body does not create a false SQL
+  terminal. The packet reports zero reachable source terminals and an explicit
+  downstream gap.
+- C#→VB→F#: all three public projects build; the C# source hop currently falls
+  back to Tier3 syntax with a compilation diagnostic, while the VB→F# call
+  is Tier1 semantic. The F# method is present in admitted compiled metadata,
+  but its source join emits `SourceMetadataReconciliationUnsupportedLanguage`.
+  No complete cross-language source traversal is claimed.
+- Source→metadata→IL/PDB: a bound public build of the generated-root handler
+  has one exact source-to-compiled identity. The same compiled fact owns an
+  operand-aware IL body, a portable-PDB method relationship, and a sequence
+  point. This is not rewritten-PDB offset validity or independent ILAsm parity.
 - Determinism: repeat CLI scans of each root produce byte-identical
   `facts.ndjson`.
 
