@@ -1936,3 +1936,13 @@ The repair validation passed the focused 40-case packet filter, the adjacent
 31-case reporting filter, the zero-warning build, and the full 2,271/2,271
 .NET suite. The four focused PowerShell checks, catalog parse, whitespace
 check, and private-path guard passed. No private corpus was scanned.
+
+The fresh Codex review of repair head `786e5a57` found one remaining bounded
+reader defect: a common callee name still admitted unrelated method
+declarations before type qualification. The follow-up query filters
+declarations by admitted caller/receiver/base types before charging input
+limits. It also reconsiders a method name when a new receiver type arrives in
+a later closure wave; otherwise that narrower query would silently lose
+deeper terminal paths. The public regression inserts 250 unrelated
+same-name declarations and preserves the page-two two-terminal inventory.
+Private pages 2, 3, and 11 remain an owner rerun, not a claimed acceptance.

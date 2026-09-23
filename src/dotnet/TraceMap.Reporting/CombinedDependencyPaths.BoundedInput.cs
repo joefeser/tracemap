@@ -317,7 +317,6 @@ public static partial class CombinedDependencyPathReporter
         // Admit semantic method candidates plus the compact syntax declaration
         // metadata needed to prove a typed field and its bounded base chain.
         // The graph rule still requires unique receiver and target identities.
-        var inspectedBridgeNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var inspectedContextCallIds = new HashSet<string>(StringComparer.Ordinal);
         var inspectedContextTypes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var syntaxClosureWork = 0;
@@ -398,18 +397,17 @@ public static partial class CombinedDependencyPathReporter
                 .Select(row => row.Properties.GetValueOrDefault("calleeName"))
                 .Where(name => !string.IsNullOrWhiteSpace(name))
                 .Select(name => name!)
-                .Where(name => !inspectedBridgeNames.Contains(name))
+                // A name seen in an earlier wave can belong to a newly
+                // admitted receiver type. Deduplicate only this wave.
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .OrderBy(name => name, StringComparer.OrdinalIgnoreCase)
                 .ToArray();
             if (pendingCalls.Length == 0) break;
             await AdmitSyntaxTypeContextAsync(pendingCalls);
             if (bridgeMethodNames.Length == 0) continue;
-            if (bridgeMethodNames.Length > maxFrontier
-                || inspectedBridgeNames.Count > budget.MaxFacts - bridgeMethodNames.Length)
+            if (bridgeMethodNames.Length > maxFrontier)
                 throw new ReportInputLimitException("handler-call-target-frontier");
             foreach (var _ in bridgeMethodNames) CountSyntaxClosureWork();
-            inspectedBridgeNames.UnionWith(bridgeMethodNames);
             await using var command = connection.CreateCommand();
             command.CommandText = CompactFactQuery(hasExtractorVersion, $$"""
                 json_valid(properties_json) and (
@@ -424,9 +422,14 @@ public static partial class CombinedDependencyPathReporter
                             cast(json_extract(properties_json, '$.methodName') as text),
                             cast(json_extract(properties_json, '$.name') as text)) collate nocase
                             in (select value from json_each($method_names)))
-                )
+                ) and coalesce(
+                    cast(json_extract(properties_json, '$.qualifiedContainingType') as text),
+                    cast(json_extract(properties_json, '$.containingType') as text)) collate nocase
+                    in (select value from json_each($context_types))
                 """);
             command.Parameters.AddWithValue("$method_names", JsonSerializer.Serialize(bridgeMethodNames));
+            command.Parameters.AddWithValue("$context_types", JsonSerializer.Serialize(
+                inspectedContextTypes.OrderBy(type => type, StringComparer.OrdinalIgnoreCase)));
             await using var reader = await command.ExecuteReaderAsync(cancellationToken);
             while (await reader.ReadAsync(cancellationToken))
             {
