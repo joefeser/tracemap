@@ -77,9 +77,10 @@ public sealed class MessyWorkspaceRegressionTests
             Require("MW-CATALOG", "extraction", entry.GetProperty("shape").GetString() is { Length: > 0 }, $"case {id} must describe its shape");
         }
 
-        Require("MW-CATALOG", "extraction", implemented >= 11, $"expected at least eleven implemented fixture cases, found {implemented}");
-        Require("MW-CATALOG", "extraction", implemented + deferred == ids.Count,
-            "every catalog case must be classified as implemented or deferred");
+        Require("MW-CATALOG", "extraction", ids.Count == 12,
+            $"expected the twelve pinned fixture cases, found {ids.Count}");
+        Require("MW-CATALOG", "extraction", implemented == 12 && deferred == 0,
+            $"all twelve pinned fixture cases must remain implemented; found {implemented} implemented and {deferred} deferred");
 
         // Catalog evidence annotations are load-bearing: every expected rule id must
         // exist in the rule catalog, tiers must be real evidence tiers, and gap
