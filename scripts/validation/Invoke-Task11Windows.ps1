@@ -148,6 +148,9 @@ try {
         $remoteDigest = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($remote))).ToLowerInvariant()
         Assert-Task11 ($remoteDigest -ceq $CorpusRemoteSha256) 'CORPUS_REMOTE_MISMATCH'
         Assert-Task11 (-not [string]::IsNullOrWhiteSpace($SliceProject) -and (Test-Path -LiteralPath $SliceProject -PathType Leaf)) 'SLICE_PROJECT_UNAVAILABLE'
+        $corpusFull = [IO.Path]::GetFullPath($CorpusRoot).TrimEnd('\','/')
+        $projectFull = [IO.Path]::GetFullPath($SliceProject)
+        Assert-Task11 ($projectFull.StartsWith($corpusFull + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) 'SLICE_PROJECT_OUTSIDE_CORPUS'
         Assert-Task11 (-not [string]::IsNullOrWhiteSpace($TestAssembly)) 'TEST_ASSEMBLY_REQUIRED'
         $cases = @{}
         foreach ($case in $RepresentativeCases) {
@@ -162,7 +165,7 @@ try {
         Assert-Task11Tool $IlDasmPath 'ILDASM'
         Assert-Task11Tool $FrameworkPath 'FRAMEWORK'
         Assert-Task11 (-not [string]::IsNullOrWhiteSpace($VisualStudioPath) -and (Test-Path -LiteralPath $VisualStudioPath -PathType Container)) 'VISUAL_STUDIO_UNAVAILABLE'
-        $Receipt.tools['VISUAL_STUDIO'] = [ordered]@{ path = [IO.Path]::GetFullPath($VisualStudioPath); version = (Get-Item -LiteralPath $VisualStudioPath).Name }
+        Assert-Task11Tool (Join-Path $VisualStudioPath 'Common7/IDE/devenv.exe') 'VISUAL_STUDIO'
         $Receipt.stages.Add([ordered]@{ name = 'private-preflight'; status = 'passed' })
     }
     $smokeDir = Join-Path $safeOutput 'public-ilasm'
