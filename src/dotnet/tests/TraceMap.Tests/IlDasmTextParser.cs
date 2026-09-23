@@ -31,7 +31,9 @@ internal static partial class IlDasmTextParser
         int TryStart,
         int TryEnd,
         int HandlerStart,
-        int HandlerEnd);
+        int HandlerEnd,
+        string? CatchType,
+        int? FilterOffset);
 
     internal sealed record IlDasmMethodText(
         string TypeName,
@@ -58,7 +60,8 @@ internal static partial class IlDasmTextParser
                 $"{instruction.Offset.ToString("x4", CultureInfo.InvariantCulture)}:{instruction.Opcode}:{instruction.Operand}\n"))
             + string.Join(string.Empty, ExceptionRegions.Select(region =>
                 $"eh:{region.Kind}:try{region.TryStart.ToString("x4", CultureInfo.InvariantCulture)}-{region.TryEnd.ToString("x4", CultureInfo.InvariantCulture)}"
-                + $":handler{region.HandlerStart.ToString("x4", CultureInfo.InvariantCulture)}-{region.HandlerEnd.ToString("x4", CultureInfo.InvariantCulture)}\n"));
+                + $":handler{region.HandlerStart.ToString("x4", CultureInfo.InvariantCulture)}-{region.HandlerEnd.ToString("x4", CultureInfo.InvariantCulture)}"
+                + $":catch={region.CatchType ?? ""}:filter={region.FilterOffset?.ToString("x4", CultureInfo.InvariantCulture) ?? ""}\n"));
     }
 
     internal sealed record IlDasmTextFile(
@@ -180,6 +183,10 @@ internal static partial class IlDasmTextParser
             }
             if (trimmed.Length > 0 && trimmed[0] == '{')
             {
+                // ILDasm prints a filter's handler as a bare braced block
+                // immediately after the filter block, not as a keyword.
+                if (builder?.HasPendingFilterHandler == true)
+                    builder.OpenFilterHandlerBlock();
                 braceDepth++;
                 continue;
             }
@@ -240,7 +247,7 @@ internal static partial class IlDasmTextParser
                 // The handler keyword follows its try's closing brace with no
                 // instruction between them, so the pending try block is the
                 // one this handler completes.
-                builder.OpenHandlerBlock(handlerKind);
+                builder.OpenHandlerBlock(handlerKind, trimmed);
                 continue;
             }
             if (LineDirectiveRegex().Match(trimmed) is { Success: true } lineMatch)
@@ -399,6 +406,8 @@ internal static partial class IlDasmTextParser
             public string Kind { get; } = kind;
             public int Start { get; set; } = -1;
             public int End { get; set; } = -1;
+            public string? CatchType { get; set; }
+            public Block? FilterBlock { get; set; }
             // The try block this handler completes, captured when the handler
             // keyword appears directly after the try's closing brace.
             public Block? PairedTry { get; set; }
@@ -410,6 +419,7 @@ internal static partial class IlDasmTextParser
         public int LocalCount { get; set; }
         public int CodeSize { get; set; }
         public bool HasOpenBlocks => OpenBlocks.Count > 0;
+        public bool HasPendingFilterHandler => closedBlocks.LastOrDefault(block => block.End == -1)?.Kind == "filter";
         public IlDasmLineDirective? PendingLine { get; set; }
         public bool SwitchTargetsPending { get; private set; }
         private List<Block> OpenBlocks { get; } = [];
@@ -421,9 +431,16 @@ internal static partial class IlDasmTextParser
             OpenBlocks.Add(new Block(".try"));
         }
 
-        public void OpenHandlerBlock(string kind)
+        public void OpenHandlerBlock(string kind, string declaration)
         {
             var handler = new Block(kind);
+            if (kind == "catch")
+            {
+                var catchType = declaration["catch".Length..].Trim();
+                if (catchType.Length == 0)
+                    throw new InvalidOperationException($"Catch handler in {TypeName}.{MethodName} has no type identity.");
+                handler.CatchType = Regex.Replace(catchType, @"\s+", " ");
+            }
             // The most recently closed block must be the try this handler
             // completes; ildasm never puts an instruction between them.
             var lastClosed = closedBlocks.LastOrDefault(block => block.End == -1);
@@ -431,6 +448,14 @@ internal static partial class IlDasmTextParser
                 throw new InvalidOperationException($"Handler '{kind}' in {TypeName}.{MethodName} follows no open try region.");
             handler.PairedTry = lastClosed;
             OpenBlocks.Add(handler);
+        }
+
+        public void OpenFilterHandlerBlock()
+        {
+            var filter = closedBlocks.LastOrDefault(block => block.End == -1 && block.Kind == "filter");
+            if (filter?.PairedTry is null)
+                throw new InvalidOperationException($"Filter handler in {TypeName}.{MethodName} follows no filter region.");
+            OpenBlocks.Add(new Block("filter-handler") { PairedTry = filter.PairedTry, FilterBlock = filter });
         }
 
         public void CloseBlock()
@@ -466,16 +491,20 @@ internal static partial class IlDasmTextParser
         private void FinalizeCompletedClauses()
         {
             foreach (var handler in closedBlocks
-                         .Where(block => block.Kind != ".try" && block.PairedTry is not null && block.End != -1)
+                         .Where(block => block.Kind is not (".try" or "filter") && block.PairedTry is not null && block.End != -1)
                          .ToArray())
             {
                 regions.Add(new IlDasmExceptionRegion(
-                    handler.Kind,
+                    handler.FilterBlock is null ? handler.Kind : "filter",
                     handler.PairedTry!.Start,
                     handler.PairedTry.End,
                     handler.Start,
-                    handler.End));
+                    handler.End,
+                    handler.CatchType,
+                    handler.FilterBlock?.Start));
                 closedBlocks.Remove(handler.PairedTry);
+                if (handler.FilterBlock is not null)
+                    closedBlocks.Remove(handler.FilterBlock);
                 closedBlocks.Remove(handler);
             }
         }

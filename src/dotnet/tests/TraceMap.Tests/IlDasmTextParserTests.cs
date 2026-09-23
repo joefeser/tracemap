@@ -132,7 +132,62 @@ public sealed class IlDasmTextParserTests
         Assert.Equal(0x08, region.TryEnd);
         Assert.Equal(0x08, region.HandlerStart);
         Assert.Equal(0x16, region.HandlerEnd);
+        Assert.Equal("[System.Runtime]System.Exception", region.CatchType);
+        Assert.Null(region.FilterOffset);
         Assert.Equal([(0x09, "callvirt"), (0x0e, "call")], guarded.CallSites);
+    }
+
+    [Fact]
+    public void Canonical_exception_region_changes_when_catch_identity_changes()
+    {
+        var original = IlDasmTextParser.ParseText(Sample);
+        var changed = IlDasmTextParser.ParseText(Sample.Replace(
+            "catch [System.Runtime]System.Exception",
+            "catch [System.Runtime]System.ArgumentException", StringComparison.Ordinal));
+
+        Assert.NotEqual(original.CanonicalMethodsText(), changed.CanonicalMethodsText());
+        Assert.Equal("[System.Runtime]System.ArgumentException",
+            Assert.Single(changed.Method("TraceMap.CompiledFixtures.CSharp.Il.SampleShapes", "Guarded").ExceptionRegions).CatchType);
+    }
+
+    [Fact]
+    public void Parses_filter_start_and_includes_it_in_canonical_exception_region()
+    {
+        const string text = """
+            .class public X
+            {
+              .method public static void M() cil managed
+              {
+                // Code size 8 (0x8)
+                .maxstack 1
+                .try
+                {
+                  IL_0000: nop
+                  IL_0001: leave.s IL_0007
+                } // end .try
+                filter
+                {
+                  IL_0003: ldc.i4.1
+                  IL_0004: endfilter
+                } // end filter
+                { // handler
+                  IL_0005: pop
+                  IL_0006: leave.s IL_0007
+                } // end handler
+                IL_0007: ret
+              } // end of method X::M
+            } // end of class X
+            """;
+        var original = IlDasmTextParser.ParseText(text);
+        var region = Assert.Single(original.Method("X", "M").ExceptionRegions);
+        Assert.Equal("filter", region.Kind);
+        Assert.Equal(0x03, region.FilterOffset);
+        Assert.Equal(0x05, region.HandlerStart);
+        Assert.Null(region.CatchType);
+
+        var method = original.Method("X", "M");
+        var differentFilterStart = method with { ExceptionRegions = [region with { FilterOffset = 0x04 }] };
+        Assert.NotEqual(method.Canonical(), differentFilterStart.Canonical());
     }
 
     [Fact]
