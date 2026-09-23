@@ -252,6 +252,50 @@
       "expectedTiers": ["Tier1Semantic", "Tier2Structural"],
       "expectedGaps": [],
       "assertions": "a pinned public build and binding receipt yield one exact source-to-metadata handler edge; its compiled fact ID owns an IL body, one metadata-PDB method edge, and a sequence point; this does not claim rewritten PDB offset validity, ILAsm/ILDAsm parity, or runtime behavior"
+    },
+    {
+      "id": "MW-COMPOUND-PAGETWO-001",
+      "status": "implemented",
+      "roots": ["vb-compound-pages"],
+      "shape": "projectless VB Web Forms handler enters a dispatcher that calls five same-name Process methods in one file; two branches continue through unqualified or Me-qualified ContinueRoute calls to distinct SQL terminals",
+      "stages": ["extraction", "reconciliation", "traversal"],
+      "expectedRuleIds": ["vb.syntax.callgraph.v1", "vb.syntax.database-operation.v1", "combined.paths.projectless-vb-receiver-bridge.v1"],
+      "expectedTiers": ["Tier3SyntaxOrTextual"],
+      "expectedGaps": [],
+      "assertions": "five typed receiver calls and exact source-local bridges remain distinct; depth 8 and 10 inventory the same two supported terminal identities without crossing into sibling Process methods"
+    },
+    {
+      "id": "MW-COMPOUND-PAGETHREE-001",
+      "status": "implemented",
+      "roots": ["vb-compound-pages"],
+      "shape": "a separate same-name Web Forms handler traverses Process, Forward, and Finish but has no supported SQL terminal",
+      "stages": ["extraction", "traversal"],
+      "expectedRuleIds": ["vb.syntax.callgraph.v1", "combined.paths.projectless-vb-receiver-bridge.v1"],
+      "expectedTiers": ["Tier3SyntaxOrTextual", "Tier4Unknown"],
+      "expectedGaps": ["DownstreamWithoutSupportedTerminal"],
+      "assertions": "depth 8 and 10 complete retained-graph terminal reachability with zero supported terminals and a selected-chain downstream-without-terminal gap; this never proves runtime absence"
+    },
+    {
+      "id": "MW-COMPOUND-PAGEELEVEN-001",
+      "status": "implemented",
+      "roots": ["vb-compound-pages"],
+      "shape": "a third same-name handler traverses Process, Forward, and Execute to one supported SQL terminal",
+      "stages": ["extraction", "traversal"],
+      "expectedRuleIds": ["vb.syntax.callgraph.v1", "vb.syntax.database-operation.v1", "combined.paths.projectless-vb-receiver-bridge.v1"],
+      "expectedTiers": ["Tier3SyntaxOrTextual"],
+      "expectedGaps": [],
+      "assertions": "depth 8 and 10 retain the same single terminal identity independently from the page-two and page-three routes"
+    },
+    {
+      "id": "MW-COMPOUND-LIMIT-001",
+      "status": "implemented",
+      "roots": ["vb-compound-pages"],
+      "shape": "syntax receiver closure exceeds the deliberately tiny traversal-work budget before graph composition",
+      "stages": ["traversal"],
+      "expectedRuleIds": ["combined.paths.truncation-gap.v1"],
+      "expectedTiers": ["Tier4Unknown"],
+      "expectedGaps": ["GraphInputLimitReached"],
+      "assertions": "the packet reports graph-syntax-closure-work as an input limit and never classifies the page-three analogue as a complete zero-terminal result"
     }
   ]
 }

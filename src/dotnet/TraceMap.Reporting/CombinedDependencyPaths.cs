@@ -1149,7 +1149,8 @@ public static partial class CombinedDependencyPathReporter
         ReportInputBudget? budget = null,
         IReadOnlySet<string>? selectedFactIds = null,
         int maxDepth = 8,
-        int maxFrontier = 10000)
+        int maxFrontier = 10000,
+        int maxTraversalWork = 100_000)
     {
         var (source, manifestJson) = await ReadSingleSourceAsync(connection, indexPath, cancellationToken);
         var warnings = new List<string>();
@@ -1168,7 +1169,7 @@ public static partial class CombinedDependencyPathReporter
         var facts = budget is null
             ? await ReadSingleFactsAsync(connection, source, hasFactExtractorVersion, cancellationToken)
             : await ReadCompactSingleFactsAsync(connection, source, hasFactExtractorVersion, budget, cancellationToken,
-                originalSelectedFactIds, selectedSymbols);
+                originalSelectedFactIds, selectedSymbols, maxFrontier, maxTraversalWork);
         var edges = await ReadSingleEdgesAsync(connection, source, cancellationToken, budget, selectedSymbols);
         var counts = new SortedDictionary<string, long>(StringComparer.Ordinal);
         if (await TableExistsAsync(connection, "parameter_forward_edges", cancellationToken))

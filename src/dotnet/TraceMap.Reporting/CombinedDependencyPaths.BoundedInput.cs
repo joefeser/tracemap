@@ -54,7 +54,8 @@ public static partial class CombinedDependencyPathReporter
                 budget,
                 options.StartingFactIds,
                 options.MaxDepth,
-                options.MaxFrontier);
+                options.MaxFrontier,
+                options.MaxTraversalWork);
             var endpoints = CombinedDependencyReporter.MatchEndpoints(read.Sources, read.Facts);
             var surfaces = CombinedDependencyReporter.BuildSurfaces(read.Facts, read.Sources);
             var graph = BuildGraph(read, endpoints, surfaces, null, includeLegacyRoots: true, budget);
@@ -239,7 +240,9 @@ public static partial class CombinedDependencyPathReporter
         SqliteConnection connection, CombinedReportSource source, bool hasExtractorVersion,
         ReportInputBudget budget, CancellationToken cancellationToken,
         IReadOnlySet<string>? selectedFactIds = null,
-        IReadOnlySet<string>? selectedSymbols = null)
+        IReadOnlySet<string>? selectedSymbols = null,
+        int maxFrontier = 10000,
+        int maxTraversalWork = 100_000)
     {
         var rows = new List<CombinedFactRow>();
         var symbols = new HashSet<string>(StringComparer.Ordinal);
@@ -303,7 +306,9 @@ public static partial class CombinedDependencyPathReporter
             await using var reader = await command.ExecuteReaderAsync(cancellationToken);
             while (await reader.ReadAsync(cancellationToken))
             {
-                budget.Retain(reader.GetInt64(16));
+                if (!retainedIds.Add(reader.GetString(0))) continue;
+                var bytes = reader.GetInt64(16);
+                budget.Retain(bytes);
                 rows.Add(ReadProjectedFact(reader, source));
             }
         }
@@ -312,19 +317,97 @@ public static partial class CombinedDependencyPathReporter
         // Admit semantic method candidates plus the compact syntax declaration
         // metadata needed to prove a typed field and its bounded base chain.
         // The graph rule still requires unique receiver and target identities.
-        var bridgeMethodNames = rows
-            .Where(row => row.FactType == FactTypes.CallEdge
-                && row.RuleId == RuleIds.VisualBasicSyntaxCallGraph
-                && string.Equals(row.Properties.GetValueOrDefault("callKind"), "SyntaxInvocation", StringComparison.Ordinal)
-                && !string.IsNullOrWhiteSpace(row.Properties.GetValueOrDefault("receiverName")))
-            .Select(row => row.Properties.GetValueOrDefault("calleeName"))
-            .Where(name => !string.IsNullOrWhiteSpace(name))
-            .Select(name => name!)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .OrderBy(name => name, StringComparer.OrdinalIgnoreCase)
-            .ToArray();
-        if (bridgeMethodNames.Length > 0)
+        var inspectedContextCallIds = new HashSet<string>(StringComparer.Ordinal);
+        var inspectedContextTypes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var syntaxClosureWork = 0;
+        void CountSyntaxClosureWork()
         {
+            if (++syntaxClosureWork > maxTraversalWork)
+                throw new ReportInputLimitException("graph-syntax-closure-work");
+        }
+        // Type and field metadata is needed for typed receivers and inherited
+        // fields, but unrelated declarations must not consume every hop's work
+        // allowance. Follow only caller/receiver types and their base chain.
+        async Task AdmitSyntaxTypeContextAsync(IReadOnlyList<CombinedFactRow> calls)
+        {
+            var pendingTypes = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
+            void AddType(string? type)
+            {
+                var normalized = NormalizeVisualBasicTypeName(type);
+                if (string.IsNullOrWhiteSpace(normalized)) return;
+                pendingTypes.Add(normalized);
+                pendingTypes.Add(SimpleVisualBasicTypeName(normalized));
+            }
+            foreach (var call in calls)
+            {
+                AddType(VisualBasicQualifiedMemberKey(call.SourceSymbol)?.Type);
+                AddType(call.Properties.GetValueOrDefault("receiverType"));
+                AddType(call.Properties.GetValueOrDefault("calleeContainingType"));
+            }
+            while (true)
+            {
+                var freshTypes = pendingTypes.Where(type => !inspectedContextTypes.Contains(type))
+                    .OrderBy(type => type, StringComparer.OrdinalIgnoreCase).ToArray();
+                if (freshTypes.Length == 0) break;
+                if (freshTypes.Length > maxFrontier
+                    || inspectedContextTypes.Count > budget.MaxFacts - freshTypes.Length)
+                    throw new ReportInputLimitException("handler-call-target-frontier");
+                inspectedContextTypes.UnionWith(freshTypes);
+                foreach (var _ in freshTypes) CountSyntaxClosureWork();
+                await using var contextCommand = connection.CreateCommand();
+                contextCommand.CommandText = CompactFactQuery(hasExtractorVersion, $$"""
+                    rule_id = '{{RuleIds.VisualBasicSyntaxDeclarations}}' and json_valid(properties_json) and (
+                        (fact_type = '{{FactTypes.TypeDeclared}}' and (
+                            cast(json_extract(properties_json, '$.qualifiedName') as text) collate nocase in (select value from json_each($type_names))
+                            or cast(json_extract(properties_json, '$.name') as text) collate nocase in (select value from json_each($type_names))))
+                        or (fact_type = '{{FactTypes.FieldDeclared}}' and (
+                            cast(json_extract(properties_json, '$.qualifiedContainingType') as text) collate nocase in (select value from json_each($type_names))
+                            or cast(json_extract(properties_json, '$.containingType') as text) collate nocase in (select value from json_each($type_names)))))
+                    """);
+                contextCommand.Parameters.AddWithValue("$type_names", JsonSerializer.Serialize(freshTypes));
+                await using var contextReader = await contextCommand.ExecuteReaderAsync(cancellationToken);
+                while (await contextReader.ReadAsync(cancellationToken))
+                {
+                    if (!retainedIds.Add(contextReader.GetString(0))) continue;
+                    CountSyntaxClosureWork();
+                    budget.VisitFact();
+                    var bytes = contextReader.GetInt64(16);
+                    budget.CheckRow(bytes);
+                    var row = ReadProjectedFact(contextReader, source);
+                    budget.Retain(bytes);
+                    rows.Add(row);
+                    if (row.FactType == FactTypes.TypeDeclared)
+                    {
+                        foreach (var baseType in SplitVisualBasicBaseTypes(row.Properties.GetValueOrDefault("baseTypes")))
+                            AddType(baseType);
+                    }
+                }
+            }
+        }
+        while (true)
+        {
+            var pendingCalls = rows
+                .Where(row => row.FactType == FactTypes.CallEdge
+                    && row.RuleId == RuleIds.VisualBasicSyntaxCallGraph
+                    && string.Equals(row.Properties.GetValueOrDefault("callKind"), "SyntaxInvocation", StringComparison.Ordinal)
+                    && !string.IsNullOrWhiteSpace(row.Properties.GetValueOrDefault("calleeName"))
+                    && inspectedContextCallIds.Add(row.OriginalFactId))
+                .ToArray();
+            var bridgeMethodNames = pendingCalls
+                .Select(row => row.Properties.GetValueOrDefault("calleeName"))
+                .Where(name => !string.IsNullOrWhiteSpace(name))
+                .Select(name => name!)
+                // A name seen in an earlier wave can belong to a newly
+                // admitted receiver type. Deduplicate only this wave.
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(name => name, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+            if (pendingCalls.Length == 0) break;
+            await AdmitSyntaxTypeContextAsync(pendingCalls);
+            if (bridgeMethodNames.Length == 0) continue;
+            if (bridgeMethodNames.Length > maxFrontier)
+                throw new ReportInputLimitException("handler-call-target-frontier");
+            foreach (var _ in bridgeMethodNames) CountSyntaxClosureWork();
             await using var command = connection.CreateCommand();
             command.CommandText = CompactFactQuery(hasExtractorVersion, $$"""
                 json_valid(properties_json) and (
@@ -333,28 +416,29 @@ public static partial class CombinedDependencyPathReporter
                         and evidence_tier = '{{EvidenceTiers.Tier1Semantic}}'
                         and cast(json_extract(properties_json, '$.methodName') as text) collate nocase
                             in (select value from json_each($method_names)))
-                    or (rule_id = '{{RuleIds.VisualBasicSyntaxDeclarations}}' and (
-                        fact_type in ('{{FactTypes.TypeDeclared}}','{{FactTypes.FieldDeclared}}')
-                        or (fact_type = '{{FactTypes.MethodDeclared}}'
-                            and coalesce(
-                                cast(json_extract(properties_json, '$.methodName') as text),
-                                cast(json_extract(properties_json, '$.name') as text)) collate nocase
-                                in (select value from json_each($method_names)))))
-                )
+                    or (rule_id = '{{RuleIds.VisualBasicSyntaxDeclarations}}'
+                        and fact_type = '{{FactTypes.MethodDeclared}}'
+                        and coalesce(
+                            cast(json_extract(properties_json, '$.methodName') as text),
+                            cast(json_extract(properties_json, '$.name') as text)) collate nocase
+                            in (select value from json_each($method_names)))
+                ) and coalesce(
+                    cast(json_extract(properties_json, '$.qualifiedContainingType') as text),
+                    cast(json_extract(properties_json, '$.containingType') as text)) collate nocase
+                    in (select value from json_each($context_types))
                 """);
             command.Parameters.AddWithValue("$method_names", JsonSerializer.Serialize(bridgeMethodNames));
+            command.Parameters.AddWithValue("$context_types", JsonSerializer.Serialize(
+                inspectedContextTypes.OrderBy(type => type, StringComparer.OrdinalIgnoreCase)));
             await using var reader = await command.ExecuteReaderAsync(cancellationToken);
             while (await reader.ReadAsync(cancellationToken))
             {
+                if (!retainedIds.Add(reader.GetString(0))) continue;
+                CountSyntaxClosureWork();
                 budget.VisitFact();
                 var bytes = reader.GetInt64(16);
                 budget.CheckRow(bytes);
                 var row = ReadProjectedFact(reader, source);
-                if (!retainedIds.Add(row.OriginalFactId))
-                {
-                    continue;
-                }
-
                 budget.Retain(bytes);
                 rows.Add(row);
             }
@@ -380,18 +464,44 @@ public static partial class CombinedDependencyPathReporter
             if (syntaxMembers.Length > 0)
             {
                 var bodySymbols = new SortedSet<string>(StringComparer.Ordinal);
+                var baseIdentities = rows
+                    .Where(row => row.FactType == FactTypes.MethodDeclared
+                        && (row.RuleId == RuleIds.VisualBasicSyntaxDeclarations
+                            || row.RuleId == RuleIds.VisualBasicSemanticDeclarations)
+                        && bridgeMethodNames.Contains(
+                            CombinedDependencyReporter.FirstValue(row.Properties, "methodName", "name"),
+                            StringComparer.OrdinalIgnoreCase))
+                    .Select(row => row.RuleId == RuleIds.VisualBasicSyntaxDeclarations
+                        ? row.Properties.GetValueOrDefault("memberIdentity")
+                        : row.TargetSymbol)
+                    .Where(identity => !string.IsNullOrWhiteSpace(identity))
+                    .Select(identity => identity!)
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .OrderBy(identity => identity, StringComparer.OrdinalIgnoreCase)
+                    .ToArray();
+                if (baseIdentities.Length > maxFrontier)
+                    throw new ReportInputLimitException("handler-call-target-frontier");
+                var declaredIdentities = baseIdentities
+                    .SelectMany(identity => identity!.StartsWith("Global::", StringComparison.OrdinalIgnoreCase)
+                        ? new[] { identity }
+                        : new[] { identity, "Global::" + identity })
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .OrderBy(identity => identity, StringComparer.OrdinalIgnoreCase)
+                    .ToArray();
                 await using (var bodyCommand = connection.CreateCommand())
                 {
+                    // Declaration identities are full signatures. A substring
+                    // match on a common method name can hide the real body
+                    // behind unrelated symbols before qualification is checked.
                     bodyCommand.CommandText = "select distinct source_symbol from facts "
                         + "where source_symbol is not null and trim(source_symbol) <> '' "
-                        + "and exists (select 1 from json_each($method_names) names "
-                        + "where instr(lower(source_symbol), lower(cast(names.value as text))) > 0) "
-                        + "order by source_symbol collate binary limit $candidate_limit;";
-                    bodyCommand.Parameters.AddWithValue("$method_names", JsonSerializer.Serialize(bridgeMethodNames));
-                    bodyCommand.Parameters.AddWithValue("$candidate_limit", budget.MaxFacts + 1L);
+                        + "and source_symbol collate nocase in (select value from json_each($member_identities)) "
+                        + "order by source_symbol collate binary;";
+                    bodyCommand.Parameters.AddWithValue("$member_identities", JsonSerializer.Serialize(declaredIdentities));
                     await using var bodyReader = await bodyCommand.ExecuteReaderAsync(cancellationToken);
                     while (await bodyReader.ReadAsync(cancellationToken))
                     {
+                        CountSyntaxClosureWork();
                         var symbol = bodyReader.GetString(0);
                         var member = VisualBasicQualifiedMemberKey(symbol);
                         if (member is not null && syntaxMembers.Any(candidate =>
@@ -400,7 +510,7 @@ public static partial class CombinedDependencyPathReporter
                             && VisualBasicTypeMatches(candidate.Type, member.Value.Type)))
                         {
                             bodySymbols.Add(symbol);
-                            if (bodySymbols.Count > budget.MaxFacts)
+                            if (bodySymbols.Count > maxFrontier)
                                 throw new ReportInputLimitException("handler-call-target-frontier");
                         }
                     }
@@ -415,6 +525,7 @@ public static partial class CombinedDependencyPathReporter
                     await using var bodyFactsReader = await bodyFactsCommand.ExecuteReaderAsync(cancellationToken);
                     while (await bodyFactsReader.ReadAsync(cancellationToken))
                     {
+                        CountSyntaxClosureWork();
                         var factType = bodyFactsReader.GetString(4);
                         var symbolOnly = bodyFactsReader.GetBoolean(15);
                         if (symbolOnly && factType != FactTypes.MethodInvoked) continue;

@@ -25,6 +25,12 @@ Roots:
   `root-alpha` to pressure cross-root joins.
 - `vb-projectless/` — loose VB files with no `.vbproj`/`.sln`, exercising the
   portable Roslyn syntax fallback (Tier3 evidence plus fail-closed gaps).
+- `vb-compound-pages/` — three synthetic projectless VB Web Forms pages. Page
+  Two dispatches to five same-name `Process` methods in one file, with two
+  distinct SQL terminals after further call levels, including unqualified and
+  `Me.` calls; Page Three reaches no
+  supported terminal; Page Eleven reaches one. Bounded packet tests pin the
+  exact receiver bridges and depth-independent terminal inventories.
 - `root-generated/` — buildable Web Forms-shaped C# page whose auto-generated
   designer bridge is deliberately excluded from source traversal. A bound
   compiled scan pins the handler's source→metadata→IL/PDB identity chain.
