@@ -1457,22 +1457,22 @@
       "id": "ILRWPDB-ILASM-PARITY-012",
       "language": "csharp",
       "status": "implemented",
-      "shape": "assemble the same before/after mutation matrix with the pinned Microsoft ILAsm and cross-check the disassembled IL offsets and portable PDB sequence points against the admitted TraceMap evidence using the pinned ILDAsm as the independent oracle",
+      "shape": "assemble the same before/after mutation matrix with the pinned Microsoft ILAsm and cross-check the disassembled IL offsets against the admitted TraceMap evidence using the pinned ILDAsm as the independent oracle; the portable PDB sequence-point half of the original prerequisite executes on every run but stays unclaimed while the hosted ILDAsm observes no portable PDB through /linenum",
       "expectedIdentity": "unchanged il-rewrite edges for every round-tripped method with matching ILDAsm handler-clause, instruction, local, and max-stack counts",
-      "expectedRuleIds": ["dotnet.compiled.il-rewrite.v1", "dotnet.compiled.il-rewrite-pdb.v1"],
+      "expectedRuleIds": ["dotnet.compiled.il-rewrite.v1"],
       "expectedTier": "Tier2Structural",
       "expectedGaps": [],
       "satisfiedBy": [
         "ILASM-PARITY-CFLOW-002",
         "ILASM-PARITY-EH-003",
-        "ILASM-PARITY-MUTATE-005",
-        "ILASM-PARITY-PDB-006"
+        "ILASM-PARITY-MUTATE-005"
       ],
-      "limitations": "the IL-offset cross-check is proven on the pinned hosted toolchain; the portable-PDB sequence-point half of the case is executed but stays unclaimed because that ILDAsm observes no .line directives for portable PDBs (see ILASM-PARITY-PDB-006)",
+      "limitations": "the IL-offset cross-check is proven on the pinned hosted toolchain; the portable-PDB sequence-point half stays unclaimed because that ILDAsm emits no .line directives for portable PDBs (see ILASM-PARITY-PDB-006, which records the typed oracle-availability gap and the work-machine receipt), and no test of this gate exercises dotnet.compiled.il-rewrite-pdb.v1",
       "nonClaims": [
         "ilasm-general-equivalence",
         "ildasm-general-equivalence",
-        "mono-cecil-oracle"
+        "mono-cecil-oracle",
+        "portable-pdb-sequence-point-parity"
       ]
     },
     {
