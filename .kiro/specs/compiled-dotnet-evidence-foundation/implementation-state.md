@@ -1700,3 +1700,7 @@ The full-corpus no-opt-in invocation stopped with
 do not turn the blocked private stages or failed full .NET suite green.
 The focused `IlDasmTextParserTests` .NET filter passed 26/26 on this Windows
 host; it does not address Task 10's unavailable portable-PDB line oracle.
+The `FullCorpus` guard now also requires a previously passed bounded receipt
+for the same TraceMap and corpus commits, with generator and bounded-input
+digests; the synthetic suite verifies missing opt-in and missing prior receipt
+both stop before output creation.

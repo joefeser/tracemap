@@ -18,7 +18,8 @@ param(
     [string]$FrameworkPath = "$env:WINDIR\Microsoft.NET\Framework64\v4.0.30319\mscorlib.dll",
     [string]$MsBuildPath,
     [string]$TestRunnerPath,
-    [switch]$EnableFullCorpus
+    [switch]$EnableFullCorpus,
+    [string]$BoundedReceiptPath
 )
 
 Set-StrictMode -Version Latest
@@ -129,7 +130,15 @@ $receiptPath = $null
 try {
     Assert-Task11 ($IsWindows) 'WINDOWS_REQUIRED'
     Assert-Task11 ($Lane -ne 'FullCorpus' -or $EnableFullCorpus) 'FULL_CORPUS_OPT_IN_REQUIRED'
-    $inputs = @($TraceMapRoot, $CorpusRoot)
+    if ($Lane -eq 'FullCorpus') {
+        Assert-Task11 (-not [string]::IsNullOrWhiteSpace($BoundedReceiptPath) -and (Test-Path -LiteralPath $BoundedReceiptPath -PathType Leaf)) 'BOUNDED_RECEIPT_REQUIRED'
+        $boundedReceipt = Get-Content -LiteralPath $BoundedReceiptPath -Raw | ConvertFrom-Json
+        Assert-Task11 ($boundedReceipt.kind -ceq 'Bounded' -and $boundedReceipt.status -ceq 'passed' -and
+            $boundedReceipt.traceMapCommit -ceq $TraceMapCommit -and $boundedReceipt.corpusCommit -ceq $CorpusCommit -and
+            [string]$boundedReceipt.provenance.generatorSha256 -cmatch $DigestPattern -and
+            [string]$boundedReceipt.provenance.boundedInputSha256 -cmatch $DigestPattern) 'BOUNDED_RECEIPT_INVALID'
+    }
+    $inputs = @($TraceMapRoot, $CorpusRoot, $BoundedReceiptPath)
     $safeOutput = Assert-Task11FreshOutput $OutputRoot $inputs
     [void](New-Item -ItemType Directory -Path $safeOutput -Force)
     $receiptPath = Join-Path $safeOutput 'private-receipt.json'
