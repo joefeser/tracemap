@@ -600,17 +600,21 @@ public sealed class MessyWorkspaceRegressionTests
             fact.RuleId == RuleIds.CSharpSyntaxCallGraph
             && fact.SourceSymbol?.Contains(CrossLanguageHandler, StringComparison.Ordinal) == true
             && fact.TargetSymbol == "Run").ToArray();
+        var compilationGaps = scan.Facts.Where(fact => fact.FactType == FactTypes.AnalysisGap
+            && fact.RuleId == RuleIds.CSharpSemanticWorkspace
+            && fact.Properties.GetValueOrDefault("gapKind") == "CompilationDiagnostic").ToArray();
+        // The catalog's alternatives are exclusive: a semantic edge cannot
+        // coexist with fallback call evidence or its compilation gap.
+        var semanticOutcome = csharpToVb.Length == 1
+            && csharpToVb[0].RuleId == RuleIds.CSharpSemanticCallGraph
+            && csharpToVb[0].EvidenceTier == EvidenceTiers.Tier1Semantic
+            && csharpSyntaxCall.Length == 0 && compilationGaps.Length == 0;
+        var syntaxFallbackOutcome = csharpToVb.Length == 0 && csharpSyntaxCall.Length == 1
+            && csharpSyntaxCall[0].EvidenceTier == EvidenceTiers.Tier3SyntaxOrTextual
+            && compilationGaps.Any(fact => fact.EvidenceTier == EvidenceTiers.Tier4Unknown);
         Require("MW-CROSSLANGUAGE-001", "extraction",
-            csharpToVb.Length == 1
-                && csharpToVb[0].RuleId == RuleIds.CSharpSemanticCallGraph
-                && csharpToVb[0].EvidenceTier == EvidenceTiers.Tier1Semantic
-            || csharpToVb.Length == 0 && csharpSyntaxCall.Length == 1
-                && csharpSyntaxCall[0].EvidenceTier == EvidenceTiers.Tier3SyntaxOrTextual
-                && scan.Facts.Any(fact => fact.FactType == FactTypes.AnalysisGap
-                    && fact.RuleId == RuleIds.CSharpSemanticWorkspace
-                    && fact.EvidenceTier == EvidenceTiers.Tier4Unknown
-                    && fact.Properties.GetValueOrDefault("gapKind") == "CompilationDiagnostic"),
-            $"C# to VB call must be semantic or explicitly downgraded to syntax plus compilation gap; semantic={csharpToVb.Length}, syntax={csharpSyntaxCall.Length}");
+            semanticOutcome || syntaxFallbackOutcome,
+            $"C# to VB call must be exclusively semantic or explicitly downgraded to syntax plus compilation gap; semantic={csharpToVb.Length}, syntax={csharpSyntaxCall.Length}, gaps={compilationGaps.Length}");
         var vbToFsharp = calls.Where(fact =>
             fact.SourceSymbol?.Contains("VbBridge.Run", StringComparison.Ordinal) == true
             && fact.TargetSymbol?.Contains("Functions.Terminal", StringComparison.Ordinal) == true).ToArray();
@@ -642,9 +646,6 @@ public sealed class MessyWorkspaceRegressionTests
             !compiled.Facts.Any(fact => fact.FactType == FactTypes.SourceMetadataIdentityReconciled
                 && fact.TargetSymbol?.Contains("CrossLanguage.FSharp", StringComparison.Ordinal) == true),
             "an F# source-to-compiled identity must not be guessed from admitted metadata");
-        var compilationGaps = scan.Facts.Where(fact => fact.FactType == FactTypes.AnalysisGap
-            && fact.RuleId == RuleIds.CSharpSemanticWorkspace
-            && fact.Properties.GetValueOrDefault("gapKind") == "CompilationDiagnostic").ToArray();
         var caseEvidence = csharpToVb.Concat(csharpSyntaxCall).Concat(vbToFsharp)
             .Concat(compilationGaps).Concat(fsharpMethods).Concat(unsupportedLanguageGaps).ToArray();
         RequireCatalogEvidence("MW-CROSSLANGUAGE-001", "reconciliation",
