@@ -48,6 +48,24 @@ credentials. It also requires explicit paths to the installed Visual Studio,
 MSBuild, test runner, ILAsm, ILDAsm, and Framework assemblies and records their
 versions or fails preflight.
 
+`-CorpusProfile` pins the corpus commit and bounded file limit as one contract:
+
+| Profile | Pinned commit | File limit | Purpose |
+| --- | --- | ---: | --- |
+| `HistoricalMaster` (default) | `db8c3359badfec620ccdc6df062b1756ef9607f8` | 256 | #769 historical corpus |
+| `BuildableFix` | `642bdaede0b97a400c24266e30670ed5c1c98689` | 427 | Distinct Windows build/scan baseline |
+
+Both profiles retain the 64 MiB source-byte and 4,096 candidate-entry limits.
+The fix profile requires a complete eligible inventory; selecting only 256
+files is not a passing bounded run. Its receipt records the profile, exact
+commit, effective limits, complete exact-file selection, and exact runner
+SHA-256. A `FullCorpus`
+invocation must use a passed bounded receipt from the same profile and limits;
+old, cross-profile, or different-runner receipts fail closed. The fix profile does not change
+the #769 historical pin or claim the build and tests have passed. Select it
+explicitly with `-CorpusProfile BuildableFix` and keep all private arguments,
+outputs, and receipts local.
+
 Supply the smallest viable historical project as `-SliceProject` (absolute or
 relative to the corpus root) and its resulting test assembly as
 `-TestAssembly` (absolute or relative to the fresh slice build output).
@@ -63,14 +81,16 @@ inventory for the pinned checkout. Unsupported selections and omitted eligible
 files fail closed. Directories and globs (including `*`) are rejected:
 the scanner's literal directory include would otherwise admit a whole subtree
 under a `Bounded` receipt. The runner rejects duplicate, missing, and reparse
-point selections and caps admission at 256 files and 64 MiB of selected source
+point selections and applies the selected profile's file limit and 64 MiB of
+selected source
 bytes before building or scanning. The bounded scan passes each admitted file
 as `--include` and enables the scanner's exact-source-scope check; the
 full-corpus lane omits them only with its explicit opt-in. The scanner checks
 inventory equality and limits before semantic extraction, then rejects any
 newly discovered local semantic input outside that inventory before hashing
-the authoritative source snapshot. Candidate enumeration itself is capped at
-4,096 directory/file entries for the default 256-file bound; exceeding it is
+the authoritative source snapshot. The runner counts candidate directory/file
+entries using the scanner's enumeration exclusions before the private build and
+again before the scan, with a 4,096-entry limit for either profile. Exceeding it is
 an explicit non-passing error, not a complete inventory. These caps bound
 repository source inputs retained by the scanner, not external SDK/package imports, MSBuild's process
 memory, or the representative test run. A project-load gap produces a
@@ -99,7 +119,9 @@ Test the public guards without the historical corpus:
 pwsh -NoProfile -File scripts/validation/Test-Task11Windows.ps1
 ```
 
-The synthetic test covers exact bounded file/count/byte limits, exact rule-ID
+The synthetic test covers the unchanged historical profile, complete 427-file
+fix-profile admission, 428-file rejection, ignored generated input rejection,
+cross-profile receipt rejection, exact bounded file/count/byte limits, exact rule-ID
 registration, wrong commit, dirty or missing checkout, missing tool, missing
 artifact, invalid provenance, and attempted output reuse and overlap. The
 extended public Windows workflow runs this test and `PublicSmoke`
