@@ -1896,5 +1896,6 @@ input rejection, and cross-profile receipt rejection; focused exact-source
 scope tests passed 7/7; locked restore and solution build under `-warnaserror`
 passed with zero warnings/errors; the private-path guard, Kiro self-test, and
 `git diff --check` passed. `PublicSmoke` needs a clean committed TraceMap head
-and is pending that commit. No full .NET suite or private corpus scan is
-claimed by these checks.
+and passed with a private local receipt at code commit `7d4c748d97bafa00ef936f14ca3a0afd130911b9`.
+The PR head will receive a fresh exact-head smoke run. No full .NET suite or
+private corpus scan is claimed by these checks.
