@@ -1549,7 +1549,7 @@
       "language": "csharp",
       "status": "covered",
       "proofLane": "compiled-dotnet-extended-validation.yml:public-mutation-matrix(windows-latest)",
-      "shape": "the public control-flow fixture assembly disassembles with the pinned ILDAsm, reassembles with the pinned ILAsm, and disassembles again to identical normalized IL text while TraceMap joins every method of the bound before/after pair as unchanged with instruction, local, max-stack, and call-offset counts equal to the ILDAsm observation on both sides",
+      "shape": "the public control-flow fixture assembly disassembles with the pinned ILDAsm, reassembles with the pinned ILAsm, and disassembles again to identical canonical method bodies (not whole-file normalized IL text) while TraceMap joins every method of the bound before/after pair as unchanged with instruction, local, max-stack, and call-offset counts equal to the ILDAsm observation on both sides",
       "expectedIdentity": "unchanged il-rewrite edges for every method with tokenRetargeted=false and zero gaps",
       "expectedRuleIds": ["dotnet.compiled.il-rewrite.v1", "dotnet.compiled.il-body.v1", "dotnet.compiled.il-call.v1"],
       "expectedTier": "Tier2Structural",
