@@ -257,7 +257,7 @@
       "id": "MW-COMPOUND-PAGETWO-001",
       "status": "implemented",
       "roots": ["vb-compound-pages"],
-      "shape": "projectless VB Web Forms handler enters a dispatcher that calls five same-name Process methods in one file; two branches continue through Forward and Execute to distinct SQL terminals",
+      "shape": "projectless VB Web Forms handler enters a dispatcher that calls five same-name Process methods in one file; two branches continue through unqualified or Me-qualified ContinueRoute calls to distinct SQL terminals",
       "stages": ["extraction", "reconciliation", "traversal"],
       "expectedRuleIds": ["vb.syntax.callgraph.v1", "vb.syntax.database-operation.v1", "combined.paths.projectless-vb-receiver-bridge.v1"],
       "expectedTiers": ["Tier3SyntaxOrTextual"],

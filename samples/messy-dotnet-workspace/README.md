@@ -27,7 +27,8 @@ Roots:
   portable Roslyn syntax fallback (Tier3 evidence plus fail-closed gaps).
 - `vb-compound-pages/` — three synthetic projectless VB Web Forms pages. Page
   Two dispatches to five same-name `Process` methods in one file, with two
-  distinct SQL terminals after two further call levels; Page Three reaches no
+  distinct SQL terminals after further call levels, including unqualified and
+  `Me.` calls; Page Three reaches no
   supported terminal; Page Eleven reaches one. Bounded packet tests pin the
   exact receiver bridges and depth-independent terminal inventories.
 - `root-generated/` — buildable Web Forms-shaped C# page whose auto-generated

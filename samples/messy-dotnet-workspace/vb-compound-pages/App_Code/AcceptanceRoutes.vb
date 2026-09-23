@@ -66,6 +66,10 @@ End Class
 
 Public Class TwoLane01Middle
     Public Sub Forward()
+        ContinueRoute()
+    End Sub
+
+    Private Sub ContinueRoute()
         Dim tail As New TwoLane01Tail()
         tail.Execute()
     End Sub
@@ -73,6 +77,10 @@ End Class
 
 Public Class TwoLane02Middle
     Public Sub Forward()
+        Me.ContinueRoute()
+    End Sub
+
+    Private Sub ContinueRoute()
         Dim tail As New TwoLane02Tail()
         tail.Execute()
     End Sub

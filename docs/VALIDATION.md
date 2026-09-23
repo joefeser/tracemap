@@ -2899,7 +2899,8 @@ The compound-page regression covers the bounded single-index input reader as
 well as the graph: newly discovered projectless VB syntax calls must admit
 their downstream method bodies to a fixed point within the work/frontier/fact
 limits. Depths 8 and 10, plus a separately combined two-root packet, must
-return the same two/zero/one terminal inventories for the three pages. An
+return the same two/zero/one terminal inventories for the three pages,
+including unqualified and self-qualified VB hops. An
 interrupted input closure must report an explicit
 Tier4 graph-input limit, never a clean no-terminal conclusion. This synthetic
 result does not establish that private pages 2, 3, or 11 are fixed; rerun those
