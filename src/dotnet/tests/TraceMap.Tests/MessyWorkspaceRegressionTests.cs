@@ -28,6 +28,8 @@ public sealed class MessyWorkspaceRegressionTests
     private const string AmbiguityHandler = "AmbiguityButton_Click";
     private const string GeneratedHandler = "GeneratedButton_Click";
     private const string CrossLanguageHandler = "CrossLanguageButton_Click";
+    private const string CrossLanguageSourcePath = "csharp/Pages/CrossLanguage.aspx.cs";
+    private const int CrossLanguageInvocationLine = 7;
     private const string VbHandler = "SubmitButton_Click";
 
     [Fact]
@@ -602,7 +604,12 @@ public sealed class MessyWorkspaceRegressionTests
             && fact.TargetSymbol == "Run").ToArray();
         var compilationGaps = scan.Facts.Where(fact => fact.FactType == FactTypes.AnalysisGap
             && fact.RuleId == RuleIds.CSharpSemanticWorkspace
-            && fact.Properties.GetValueOrDefault("gapKind") == "CompilationDiagnostic").ToArray();
+            && fact.EvidenceTier == EvidenceTiers.Tier4Unknown
+            && fact.Evidence.FilePath == CrossLanguageSourcePath
+            && fact.Evidence.StartLine == CrossLanguageInvocationLine
+            && fact.Evidence.EndLine == CrossLanguageInvocationLine
+            && fact.Properties.GetValueOrDefault("gapKind") == "CompilationDiagnostic"
+            && fact.Properties.GetValueOrDefault("diagnosticId") == "CS0234").ToArray();
         // The catalog's alternatives are exclusive: a semantic edge cannot
         // coexist with fallback call evidence or its compilation gap.
         var semanticOutcome = csharpToVb.Length == 1
@@ -611,7 +618,9 @@ public sealed class MessyWorkspaceRegressionTests
             && csharpSyntaxCall.Length == 0 && compilationGaps.Length == 0;
         var syntaxFallbackOutcome = csharpToVb.Length == 0 && csharpSyntaxCall.Length == 1
             && csharpSyntaxCall[0].EvidenceTier == EvidenceTiers.Tier3SyntaxOrTextual
-            && compilationGaps.Any(fact => fact.EvidenceTier == EvidenceTiers.Tier4Unknown);
+            && csharpSyntaxCall[0].Evidence.FilePath == CrossLanguageSourcePath
+            && csharpSyntaxCall[0].Evidence.StartLine == CrossLanguageInvocationLine
+            && compilationGaps.Length > 0;
         Require("MW-CROSSLANGUAGE-001", "extraction",
             semanticOutcome || syntaxFallbackOutcome,
             $"C# to VB call must be exclusively semantic or explicitly downgraded to syntax plus compilation gap; semantic={csharpToVb.Length}, syntax={csharpSyntaxCall.Length}, gaps={compilationGaps.Length}");
