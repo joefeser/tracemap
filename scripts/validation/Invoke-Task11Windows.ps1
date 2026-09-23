@@ -27,6 +27,8 @@ $ErrorActionPreference = 'Stop'
 $CorpusCommit = 'db8c3359badfec620ccdc6df062b1756ef9607f8'
 $DigestPattern = '^[0-9a-f]{64}$'
 $RequiredCategories = @('branch','switch','exception-region','leave','instrumentation','nested-generic','duplicate-identity')
+$MaxBoundedFiles = 256
+$MaxBoundedBytes = 64MB
 
 function Assert-Task11([bool]$Condition, [string]$Code) {
     if (-not $Condition) { throw $Code }
@@ -75,6 +77,36 @@ function Assert-Task11Tool([string]$Path, [string]$Label) {
     Assert-Task11 (-not [string]::IsNullOrWhiteSpace($item.VersionInfo.FileVersion)) "${Label}_VERSION_UNAVAILABLE"
     $script:Receipt.tools[$Label] = [ordered]@{ path = $item.FullName; fileVersion = $item.VersionInfo.FileVersion; productVersion = $item.VersionInfo.ProductVersion }
 }
+function Assert-Task11BoundedPaths([string]$Root, [string[]]$Paths) {
+    Assert-Task11 ($Paths.Count -gt 0 -and $Paths.Count -le $MaxBoundedFiles) 'BOUNDED_FILE_COUNT_LIMIT'
+    $seen = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+    $rootFull = [IO.Path]::GetFullPath($Root).TrimEnd('\','/')
+    [long]$totalBytes = 0
+    foreach ($path in $Paths) {
+        Assert-Task11 (-not [string]::IsNullOrWhiteSpace($path) -and
+            -not [IO.Path]::IsPathRooted($path) -and $path.IndexOfAny([char[]]'*?[]:') -lt 0) 'BOUNDED_PATH_NOT_EXACT_FILE'
+        $relative = $path.Replace('\','/')
+        Assert-Task11 (-not ($relative.Split('/') | Where-Object { $_ -in @('','.', '..') }) -and
+            $seen.Add($relative)) 'BOUNDED_PATH_INVALID_OR_DUPLICATE'
+        $full = [IO.Path]::GetFullPath((Join-Path $rootFull $relative))
+        Assert-Task11 ($full.StartsWith($rootFull + [IO.Path]::DirectorySeparatorChar,
+            [StringComparison]::OrdinalIgnoreCase) -and (Test-Path -LiteralPath $full -PathType Leaf)) 'BOUNDED_FILE_UNAVAILABLE'
+        $file = Get-Item -LiteralPath $full -Force
+        Assert-Task11 (-not ($file.Attributes -band [IO.FileAttributes]::ReparsePoint)) 'BOUNDED_FILE_REPARSE_POINT'
+        [void](Get-Task11Git $Root @('--literal-pathspecs','ls-files','--error-unmatch','--',$relative))
+        $totalBytes += $file.Length
+        Assert-Task11 ($totalBytes -le $MaxBoundedBytes) 'BOUNDED_SOURCE_BYTES_LIMIT'
+    }
+    return [ordered]@{ fileCount = $Paths.Count; sourceBytes = $totalBytes; maxFiles = $MaxBoundedFiles; maxBytes = $MaxBoundedBytes }
+}
+function Get-Task11RuleIds([string]$Catalog) {
+    $ids = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+    foreach ($match in [regex]::Matches($Catalog, '(?m)^  - id: (?<id>[A-Za-z0-9._-]+)[ \t]*(?:#.*)?$')) {
+        [void]$ids.Add($match.Groups['id'].Value)
+    }
+    Assert-Task11 ($ids.Count -gt 0) 'RULE_CATALOG_EMPTY'
+    return ,$ids
+}
 function Assert-Task11Artifacts([string]$ScanDir, [string]$ExpectedCommit, [string]$GeneratorPath) {
     foreach ($relative in @('scan-manifest.json','facts.ndjson','index.sqlite','report.md','logs/analyzer.log')) {
         $path = Join-Path $ScanDir $relative
@@ -89,6 +121,7 @@ function Assert-Task11Artifacts([string]$ScanDir, [string]$ExpectedCommit, [stri
     Assert-Task11 ($facts.Count -gt 0) 'FACTS_EMPTY'
     $extractors = @{}
     $catalog = Get-Content -LiteralPath (Join-Path $TraceMapRoot 'rules/rule-catalog.yml') -Raw
+    $ruleIds = Get-Task11RuleIds $catalog
     $gaps = @()
     foreach ($fact in $facts) {
         Assert-Task11 ($fact.commitSha -ceq $ExpectedCommit -and
@@ -99,7 +132,7 @@ function Assert-Task11Artifacts([string]$ScanDir, [string]$ExpectedCommit, [stri
             -not [string]::IsNullOrWhiteSpace($fact.evidence.filePath) -and
             [int]$fact.evidence.startLine -ge 0 -and
             [int]$fact.evidence.endLine -ge [int]$fact.evidence.startLine) 'FACT_PROVENANCE_INVALID'
-        Assert-Task11 ($catalog.Contains("- id: $($fact.ruleId)")) 'FACT_RULE_UNREGISTERED'
+        Assert-Task11 ($ruleIds.Contains([string]$fact.ruleId)) 'FACT_RULE_UNREGISTERED'
         $extractors[[string]$fact.evidence.extractorId] = [string]$fact.evidence.extractorVersion
         if ($fact.factType -eq 'AnalysisGap') { $gaps += [ordered]@{ ruleId = $fact.ruleId; factId = $fact.factId } }
     }
@@ -123,7 +156,7 @@ $Receipt = [ordered]@{
     schemaVersion = 1; kind = $Lane; status = 'running'; startedUtc = (Get-Date).ToUniversalTime().ToString('o')
     traceMapCommit = $TraceMapCommit; corpusCommit = $CorpusCommit
     host = [ordered]@{ os = [Environment]::OSVersion.VersionString; architecture = $env:PROCESSOR_ARCHITECTURE; psVersion = $PSVersionTable.PSVersion.ToString(); imageOS = $env:ImageOS; imageVersion = $env:ImageVersion }
-    tools = @{}; selectedTests = @($RepresentativeCases); boundedPaths = @($BoundedPaths); stages = [Collections.Generic.List[object]]::new()
+    tools = @{}; selectedTests = @($RepresentativeCases); boundedPaths = @($BoundedPaths); boundedSelection = $null; stages = [Collections.Generic.List[object]]::new()
     commands = [Collections.Generic.List[object]]::new(); artifacts = @{}; provenance = $null; blocker = $null
 }
 $receiptPath = $null
@@ -136,7 +169,13 @@ try {
         Assert-Task11 ($boundedReceipt.kind -ceq 'Bounded' -and $boundedReceipt.status -ceq 'passed' -and
             $boundedReceipt.traceMapCommit -ceq $TraceMapCommit -and $boundedReceipt.corpusCommit -ceq $CorpusCommit -and
             [string]$boundedReceipt.provenance.generatorSha256 -cmatch $DigestPattern -and
-            [string]$boundedReceipt.provenance.boundedInputSha256 -cmatch $DigestPattern) 'BOUNDED_RECEIPT_INVALID'
+            [string]$boundedReceipt.provenance.boundedInputSha256 -cmatch $DigestPattern -and
+            $null -ne $boundedReceipt.PSObject.Properties['boundedSelection'] -and
+            $null -ne $boundedReceipt.PSObject.Properties['boundedPaths'] -and
+            $null -ne $boundedReceipt.boundedSelection -and
+            [int]$boundedReceipt.boundedSelection.fileCount -gt 0 -and
+            [int]$boundedReceipt.boundedSelection.fileCount -le $MaxBoundedFiles -and
+            [long]$boundedReceipt.boundedSelection.sourceBytes -le $MaxBoundedBytes) 'BOUNDED_RECEIPT_INVALID'
     }
     $inputs = @($TraceMapRoot, $CorpusRoot, $BoundedReceiptPath)
     $safeOutput = Assert-Task11FreshOutput $OutputRoot $inputs
@@ -152,6 +191,11 @@ try {
         Assert-Task11 ($AuthorizedCorpus) 'CORPUS_AUTHORIZATION_REQUIRED'
         Assert-Task11 (-not [string]::IsNullOrWhiteSpace($CorpusRoot)) 'CORPUS_UNAVAILABLE'
         Assert-Task11Checkout $CorpusRoot $CorpusCommit 'CORPUS'
+        if ($Lane -eq 'FullCorpus') {
+            $priorSelection = Assert-Task11BoundedPaths $CorpusRoot @($boundedReceipt.boundedPaths)
+            Assert-Task11 ($priorSelection.fileCount -eq [int]$boundedReceipt.boundedSelection.fileCount -and
+                $priorSelection.sourceBytes -eq [long]$boundedReceipt.boundedSelection.sourceBytes) 'BOUNDED_RECEIPT_SELECTION_MISMATCH'
+        }
         Assert-Task11 ($CorpusRemoteSha256 -cmatch $DigestPattern) 'CORPUS_REMOTE_DIGEST_REQUIRED'
         $remote = Get-Task11Git $CorpusRoot @('remote','get-url','origin')
         $remoteDigest = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($remote))).ToLowerInvariant()
@@ -168,7 +212,9 @@ try {
             $cases[$Matches[1]] = $Matches[2]
         }
         foreach ($category in $RequiredCategories) { Assert-Task11 ($cases.ContainsKey($category)) "REPRESENTATIVE_CATEGORY_MISSING:$category" }
-        Assert-Task11 ($Lane -eq 'FullCorpus' -or ($BoundedPaths.Count -gt 0 -and @($BoundedPaths | Where-Object { [string]::IsNullOrWhiteSpace($_) -or $_.Contains('..') -or [IO.Path]::IsPathRooted($_) }).Count -eq 0)) 'BOUNDED_PATHS_REQUIRED'
+        if ($Lane -eq 'Bounded') {
+            $Receipt.boundedSelection = Assert-Task11BoundedPaths $CorpusRoot $BoundedPaths
+        }
         Assert-Task11Tool $MsBuildPath 'MSBUILD'
         Assert-Task11Tool $TestRunnerPath 'TEST_RUNNER'
         Assert-Task11Tool $IlDasmPath 'ILDASM'

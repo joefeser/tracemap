@@ -1774,3 +1774,21 @@ Final focused checks on this branch: Task 11 synthetic guard script exit 0;
 adapter-artifact validator had already passed in the prior slice. Full .NET
 and Python test suites remain red for the base-equivalent reasons above.
 No PR is opened and no private corpus validation is claimed.
+
+## Task 11 bounded-admission guard follow-up
+
+The first pushed runner allowed a broad `-BoundedPaths` glob such as `*`, which
+could admit the entire corpus under a `Bounded` receipt. The bounded lane now
+requires exact tracked files, rejects directories, globs, duplicate/missing or
+reparse-point paths, and enforces 256 selected files / 64 MiB of selected
+source bytes before any private build or scan. A full-corpus run also rejects
+older bounded receipts without this selection record and rechecks the recorded
+selection against the pinned clean corpus. The receipt retains the admitted
+file and byte counts. The artifact rule-catalog check now compares exact rule
+IDs instead of accepting a prefix substring. Synthetic regressions pin both
+guards and the old-receipt rejection.
+
+On macOS, the cross-platform synthetic helper cases and actual rule-catalog
+parse passed; the Windows-only entry-point, full-corpus and output-path guards
+remain for a Windows rerun. No private corpus run or full .NET suite is claimed
+by this follow-up. Task 11 remains open and no PR has been opened.

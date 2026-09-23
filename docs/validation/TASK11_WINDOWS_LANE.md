@@ -19,7 +19,10 @@ commit passed as `-TraceMapCommit` and a fresh `-OutputRoot`. Paths are
 canonicalized and may not overlap either checkout. An existing output tree is
 rejected, including one created by a failed run. The `FullCorpus` lane requires
 `-EnableFullCorpus` and `-BoundedReceiptPath` pointing to a previously passed
-bounded receipt for the same exact commits. It writes `kind: FullCorpus` and
+bounded receipt for the same exact commits and an exact tracked-file selection
+within the lane's hard limits. The runner rechecks that selection against the
+pinned clean corpus before running the full lane; old wildcard-based bounded
+receipts cannot authorize it. It writes `kind: FullCorpus` and
 uses its own output tree; it cannot reuse or masquerade as a bounded receipt.
 
 The public smoke uses only a checked-in script's tiny public ILAsm source and
@@ -49,9 +52,16 @@ per category using `-RepresentativeCases` entries of the form
 `leave`, `instrumentation`, `nested-generic`, and `duplicate-identity`. These
 names are deliberately supplied from the authorized pinned checkout rather
 than committed into this public repository. A zero-test TRX fails the stage.
-Declare relative `-BoundedPaths` globs for only the sources and project files
-in the selected scan slice. The bounded scan passes these as `--include`; the
-full-corpus lane omits them only with its explicit opt-in.
+Declare relative `-BoundedPaths` as exact tracked source and project **files**
+in the selected scan slice. Directories and globs (including `*`) are rejected:
+the scanner's literal directory include would otherwise admit a whole subtree
+under a `Bounded` receipt. The runner rejects duplicate, missing, and reparse
+point selections and caps admission at 256 files and 64 MiB of selected source
+bytes before building or scanning. The bounded scan passes each admitted file
+as `--include`; the full-corpus lane omits them only with its explicit opt-in.
+These caps bound the selected scan files, not MSBuild's transitive project-load
+work or the runner's process memory. A project-load gap remains a gap, not a
+claim that the whole build graph was exhaustively analyzed.
 
 The order is: preflight; independent public ILAsm smoke; smallest project
 build; each named test; Release TraceMap CLI build; pinned scan; required
@@ -71,9 +81,10 @@ Test the public guards without the historical corpus:
 pwsh -NoProfile -File scripts/validation/Test-Task11Windows.ps1
 ```
 
-The synthetic test covers wrong commit, dirty or missing checkout, missing
-tool, missing artifact, invalid provenance, and attempted output reuse and
-overlap. The extended public Windows workflow runs this test and `PublicSmoke`
+The synthetic test covers exact bounded file/count/byte limits, exact rule-ID
+registration, wrong commit, dirty or missing checkout, missing tool, missing
+artifact, invalid provenance, and attempted output reuse and overlap. The
+extended public Windows workflow runs this test and `PublicSmoke`
 without access to the historical corpus. Default CI remains independent of
 the historical corpus.
 
