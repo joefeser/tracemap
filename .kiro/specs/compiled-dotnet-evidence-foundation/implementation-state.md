@@ -1643,3 +1643,183 @@ final quoted-catch-identity regression and synthetic offset/code-size
 corrections were checked by a focused rebuild after the full suite. Windows
 parity cases return early on macOS and are excluded from any local parity
 claim; the pushed-head Windows extended job is the required proof.
+# Task 11 first bounded Windows validation lane (#768, 2026-09-22)
+
+Branch `codex/task11-windows-validation` was created in a separate clean
+worktree from `origin/dev` at exact base
+`25e29a22896184379e1edfb11b46a839d3afcee0` (PR #783 merge). The origin
+was verified as `joefeser/tracemap`; the original checkout and its untracked
+`.vscode/` were left untouched. Scope is the first reviewable runner, public
+ILAsm smoke, synthetic fail-closed guards, documentation, and C++/CLI
+feasibility inventory for #768. Task 10 and #769 are excluded; the parent
+Task 11 checkbox stays open.
+
+The local historical checkout is clean but its HEAD is not the required
+`db8c3359badfec620ccdc6df062b1756ef9607f8`, and that object is absent.
+A noninteractive fetch using only the configured origin failed with `Host key
+verification failed`; no credential or signing-material search was performed.
+Private project build, representative tests, scan, provenance, and identity
+edge assertions are blocked, not validated. The runner requires the pinned
+commit and authorized remote attestation before any private build or scan.
+
+The Windows host has Visual Studio 2022 Enterprise 17.10.35201.131, .NET SDK
+10.0.303, Framework ILAsm 4.8.9221.0, and SDK ILDAsm 4.8.3928.0. The C++/CLI
+component query and `cl.exe` discovery found no compiler. Public ILAsm can
+represent custom modifiers and unusual pure managed metadata; tracking refs
+and mixed-mode native transitions remain deferred or explicit unsupported
+input. No PDB parity claim is made; Task 10 retains
+`IldasmPortablePdbLineOracleUnavailable` after the prior three-version
+`/linenum` attempt emitted zero `.line` directives.
+
+Validation so far: the synthetic PowerShell guard suite passed wrong commit,
+dirty checkout, missing corpus/tool/artifact, invalid provenance, and output
+reuse/overlap cases. Locked .NET restore succeeded; the solution build passed
+with zero warnings and zero errors. The full .NET suite was attempted on
+Windows and stopped after over eleven minutes and widespread failures in
+unrelated report, Web Forms, artifact, symlink, and Windows file-lock tests;
+it is not green. The Python adapter-artifact test reported three Windows
+temporary SQLite deletion errors. The Bash private-path script returned 0 but
+its WSL Git worktree resolution emitted fatal path errors, so that invocation
+is not treated as a valid privacy pass. `git diff --check` passed. Public
+smoke remains to be run after committing a clean TraceMap head. The full-corpus
+opt-in has not been exercised. Do not open a PR until the required gates pass.
+
+After the clean commit `fe6f54e5`, the Windows `PublicSmoke` runner passed with
+its local private receipt reporting `status=passed`; the synthetic guard suite
+passed again. A real private preflight against the supplied local checkout
+stopped at `CORPUS_COMMIT_MISMATCH` and wrote `status=blocked`, before any build,
+test, or scan. The configured noninteractive fetch had already failed at host
+key verification, so the pinned corpus remains unavailable. A changed-file
+privacy sentinel over the branch diff passed, and `git diff --check` passed.
+The extended Windows public workflow now invokes only the synthetic guards
+and independent public ILAsm smoke; it has no private corpus dependency.
+An additional public modern-sample CLI scan completed with 27 facts and all
+five required artifacts; `validate-adapter-artifacts.py` accepted its output.
+The full-corpus no-opt-in invocation stopped with
+`FULL_CORPUS_OPT_IN_REQUIRED` before creating any output. These public checks
+do not turn the blocked private stages or failed full .NET suite green.
+The focused `IlDasmTextParserTests` .NET filter passed 26/26 on this Windows
+host; it does not address Task 10's unavailable portable-PDB line oracle.
+The `FullCorpus` guard now also requires a previously passed bounded receipt
+for the same TraceMap and corpus commits, with generator and bounded-input
+digests; the synthetic suite verifies missing opt-in and missing prior receipt
+both stop before output creation.
+
+## Task 11 Windows blocker triage (2026-09-23)
+
+At the start of this continuation, `codex/task11-windows-validation` was clean
+at `6c5017db63468c78e8e981b8b03a065d567c81c4`. A separate detached,
+clean base worktree was created at
+`25e29a22896184379e1edfb11b46a839d3afcee0`; the original checkout and
+its untracked `.vscode/` remained untouched. No private corpus operation was
+retried, and the pinned private stages remain blocked by the previously
+recorded commit/SSH host-key condition.
+
+The original full-suite invocation did not retain a durable complete console
+log. A replay of `dotnet test src/dotnet/TraceMap.sln --no-build --no-restore
+--logger 'trx;LogFileName=branch-full.trx'` retained exact failure names,
+messages, and stack traces in a **local-only** triage report outside the repo.
+It was interrupted after 62 recorded failing cases across 56 distinct methods
+and a long period without completion; exit code 1, so no full-suite pass total
+is claimed. A second run with test-collection parallelism disabled made no
+case progress in five minutes and was stopped, also exit 1. The temporary
+runner configuration was removed. Neither run is a green full-suite result.
+
+Each of the 56 replay-failing methods was then invoked alone in this branch
+and immediately at the untouched base with `dotnet test
+src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-build --no-restore
+--filter "FullyQualifiedName=<exact method>" --logger
+'console;verbosity=minimal'`. The local-only report retains every exact
+command, exit code, error, and stack trace. **53/56 methods exited 1 on both
+commits with the same top error; 3/56 exited 0 on both.** There were zero
+branch-only failures. The six rows of the evidence-metadata theory were also
+selected individually with `DisplayName` filters: each exited 1 on branch and
+base, one test per invocation. The two unsafe-path theory rows and the
+`combined: True` framework row were separately reproduced on both commits.
+
+| Isolated outcome | Exact representative failures | Classification |
+| --- | --- | --- |
+| 17 methods with `index.sqlite` or other file-in-use errors on both | `WebFormsAgentEvidenceHandoffTests.SetHandoffRejectsIndexWithInvalidEvidenceMetadata`; `WebFormsReportMemoryTests.Large_repetitive_fact_payload_does_not_scale_retained_graph_input` | Pre-existing Windows file-handle behavior |
+| 3 methods with “A required privilege is not held by the client” on both | `AccessDesignEvidenceCompositionTests.Cli_requires_explicit_inputs_and_rejects_database_identity_mismatch_without_output`; both `ReverseImpactArtifactQueryTests` symlink cases | Windows symlink privilege unavailable |
+| 12 methods with `release-review could not read --before/--after input` on both | `SqlValidationSummaryTests.Combined_release_review_preserves_context_matched_source_label`; several `ReleaseReviewTests` | Pre-existing Windows input/read failure |
+| 16 assertion-mismatch methods on both | `LegacyDataEdmxSymbolCompositionTests.F17_scope_decoys_never_become_candidates` (`src\\Model.Designer.cs` versus `src/Model.Designer.cs`); `EvidenceDocsExportTests` cases | Pre-existing Windows behavior |
+| 5 other methods failing on both | Includes `VaultExportTests.Vault_export_hidden_rejects_raw_unsafe_evidence_locations_without_echoing_values` (no expected exception) | Pre-existing Windows behavior |
+| 3 methods passing alone on both after failing in suite | Both `ProjectlessVisualBasicWebFormsDiagnosticsTests` cases and `VisualBasicFoundationTests.Modern_vb_scan_is_deterministic_across_repeated_runs` | Suite interference |
+
+Three additional named failures recoverable from the first interrupted run—
+`ScanEngineTests.Scan_identity_changes_when_committed_source_bytes_change_without_changing_size_or_head`,
+`VisualBasicValidationMatrixTests.Repeated_cli_scans_produce_byte_identical_facts`,
+and `ScanExecutionReceiptTests.Source_only_scan_records_syntax_not_semantic_stage_coverage`—
+each exited 0 alone on branch and base; classify them as suite interference.
+
+`python scripts/test_validate_adapter_artifacts.py` exited 1 on branch **and
+base**, with 7 tests run, 4 passing and 3 errors. Each of
+`test_canonical_extractor_provenance_columns_are_not_null`,
+`test_sqlite_fact_field_mismatch_fails`, and
+`test_sqlite_properties_mismatch_fails` exited 1 when run alone on each commit.
+Each stack ends in `tempfile.TemporaryDirectory.__exit__` /
+`shutil.rmtree`, first raising `PermissionError: [WinError 32]` for open
+`index.sqlite` and then `NotADirectoryError: [WinError 267]` during cleanup.
+Those three unchanged base tests use `with sqlite3.connect(...)`, which
+commits/rolls back but does not close the connection on Windows. The new
+Task 11 runner never executes in those tests. This is pre-existing test
+cleanup, not a branch regression; no broad retry, skip, or unrelated fix was
+added.
+
+Final focused checks on this branch: Task 11 synthetic guard script exit 0;
+`IlDasmTextParserTests` 26 passed/0 failed; solution `dotnet build
+--no-restore -warnaserror` exit 0 with 0 warnings/0 errors; Windows
+`PublicSmoke` exit 0; Git Bash `scripts/check-private-paths.sh` exit 0 with
+“Private path guard passed.” The real public sample scan and standalone
+adapter-artifact validator had already passed in the prior slice. Full .NET
+and Python test suites remain red for the base-equivalent reasons above.
+No PR is opened and no private corpus validation is claimed.
+
+## Task 11 bounded-admission guard follow-up
+
+The first pushed runner allowed a broad `-BoundedPaths` glob such as `*`, which
+could admit the entire corpus under a `Bounded` receipt. The bounded lane now
+requires exact tracked files, rejects directories, globs, duplicate/missing or
+reparse-point paths, and enforces 256 selected files / 64 MiB of selected
+source bytes before any private build or scan. A full-corpus run also rejects
+older bounded receipts without this selection record and rechecks the recorded
+selection against the pinned clean corpus. The receipt retains the admitted
+file and byte counts. The artifact rule-catalog check now compares exact rule
+IDs instead of accepting a prefix substring. Synthetic regressions pin both
+guards and the old-receipt rejection.
+
+On macOS, the cross-platform synthetic helper cases and actual rule-catalog
+parse passed; the Windows-only entry-point, full-corpus and output-path guards
+remain for a Windows rerun. No private corpus run or full .NET suite is claimed
+by this follow-up. Task 11 remains open and no PR has been opened.
+
+The Windows rerun at `71675195` proved bounded selection and old-receipt
+rejection, and `PublicSmoke` passed, but the synthetic artifact guard stopped
+at `RULE_CATALOG_EMPTY`: the tiny synthetic catalog used CRLF while the exact
+rule-ID matcher only accepted LF. The matcher now accepts either line ending,
+and the regression writes CRLF explicitly on every host. Exact rule-ID checks
+still require a Windows rerun before this follow-up is considered validated
+there.
+
+## PR #785 exact-head review repair (2026-09-23)
+
+The current-head review found that the first bounded receipt could still
+overstate its source and tool scope. The repair keeps the existing Task 11
+lane and fails closed: the bounded selection must equal the scanner's complete
+eligible inventory, scanner candidate enumeration and source file/byte counts
+have hard limits, and any semantic input outside the declared set is rejected.
+The runner rejects ignored source in a supposedly clean checkout, requires the
+exact slice project in the selection, normalizes relative corpus and test
+paths, records safe preflight failure receipts, and checks nonempty required
+artifacts plus SQLite integrity/schema/commit/fact count. Reduced analysis or
+explicit gaps yield a non-passing `partial` receipt. A full-corpus run must
+reproduce the bounded run's exact CLI DLL digest and complete output-payload
+digest before scanning.
+
+Mac validation on this repair: Task 11 synthetic guards passed, the focused
+exact-scope/SQLite validator suite passed 9/9, `dotnet build` passed with zero
+warnings under `-warnaserror`, and the final full .NET suite passed 2,262/2,262.
+The private-path guard, Kiro self-test, and `git diff --check` passed. The
+Windows-only entry point and private corpus have not been rerun for this patch;
+no private validation is claimed. The unrelated base-equivalent Windows
+full-suite failures remain separately recorded above.

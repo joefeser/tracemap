@@ -166,7 +166,10 @@ public sealed record ScanOptions(
     bool IlRewritePdbEvidence = false,
     IReadOnlyList<string>? IlRewriteBeforePdbPaths = null,
     IReadOnlyList<string>? IlRewriteAfterPdbPaths = null,
-    IlRewritePdbLimits? IlRewritePdbLimits = null);
+    IlRewritePdbLimits? IlRewritePdbLimits = null,
+    bool ExactSourceScope = false,
+    int ExactSourceMaxFiles = 256,
+    long ExactSourceMaxBytes = 67_108_864);
 
 public sealed record FileInventoryItem(
     string RelativePath,

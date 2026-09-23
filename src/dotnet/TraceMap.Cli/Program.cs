@@ -36,6 +36,7 @@ public static class TraceMapCommand
             {
                 "scan" => ScanHelp(),
                 "version" => VersionHelp(),
+                "validate-index" => "tracemap validate-index --index <path> --commit <sha> --facts <count>",
                 "local-review" => LocalReviewHelp(),
                 "report" => ReportHelp(),
                 "database-design-review" => DatabaseDesignReviewHelp(),
@@ -67,7 +68,7 @@ public static class TraceMapCommand
                 "explorer" => ExplorerHelp(),
                 _ => RootHelp()
             });
-            return command is "scan" or "version" or "local-review" or "report" or "database-design-review" or "webforms-modernization" or "reduce" or "flow" or "relate" or "export" or "endpoints" or "combine" or "paths" or "route-flow" or "property-flow" or "diff" or "snapshot-diff" or "impact" or "reverse-impact" or "reverse" or "release-review" or "access-review" or "portfolio" or "package-impact" or "package-decision" or "vault" or "docs-export" or "contract-diff" or "baseline" or "evidence-pack" or "explorer" ? 0 : 1;
+            return command is "scan" or "version" or "validate-index" or "local-review" or "report" or "database-design-review" or "webforms-modernization" or "reduce" or "flow" or "relate" or "export" or "endpoints" or "combine" or "paths" or "route-flow" or "property-flow" or "diff" or "snapshot-diff" or "impact" or "reverse-impact" or "reverse" or "release-review" or "access-review" or "portfolio" or "package-impact" or "package-decision" or "vault" or "docs-export" or "contract-diff" or "baseline" or "evidence-pack" or "explorer" ? 0 : 1;
         }
 
         using var commandOperation = TraceMapDiagnostics.StartCommand(command);
@@ -77,6 +78,7 @@ public static class TraceMapCommand
             {
                 "scan" => await RunScanAsync(rest, output, error, cancellationToken),
                 "version" => await RunVersionAsync(rest, output, error),
+                "validate-index" => await RunValidateIndexAsync(rest, output, error),
                 "local-review" => await LocalReviewCommand.RunAsync(rest, output, error, RunScanAsync, cancellationToken),
                 "report" => await RunReportAsync(rest, output, error, cancellationToken),
                 "database-design-review" => await RunDatabaseDesignReviewAsync(rest, output, error, cancellationToken),
@@ -149,6 +151,24 @@ public static class TraceMapCommand
             await output.WriteLineAsync($"Next action: {result.Readiness.NextAction}");
         }
 
+        return 0;
+    }
+
+    private static async Task<int> RunValidateIndexAsync(string[] args, TextWriter output, TextWriter error)
+    {
+        var values = ParseOptions(args);
+        var path = values.GetValueOrDefault("--index");
+        var commit = values.GetValueOrDefault("--commit");
+        var count = values.GetValueOrDefault("--facts");
+        if (string.IsNullOrWhiteSpace(path) || string.IsNullOrWhiteSpace(commit)
+            || !long.TryParse(count, out var expectedFacts) || expectedFacts <= 0)
+        {
+            await error.WriteLineAsync("error: validate-index requires --index, --commit, and positive --facts.");
+            return 1;
+        }
+
+        SqliteIndexValidator.Validate(path, commit, expectedFacts);
+        await output.WriteLineAsync("index-valid");
         return 0;
     }
 
@@ -350,7 +370,10 @@ public static class TraceMapCommand
                 ParsePositiveInt(values, "--il-rewrite-pdb-max-methods", 250_000),
                 ParsePositiveInt(values, "--il-rewrite-pdb-max-sequence-points", 1_000_000),
                 ParsePositiveInt(values, "--il-rewrite-pdb-max-text", 4_096),
-                ParsePositiveLong(values, "--il-rewrite-pdb-max-work", 1_500_000)));
+                ParsePositiveLong(values, "--il-rewrite-pdb-max-work", 1_500_000)),
+            ExactSourceScope: values.HasFlag("--exact-source-scope"),
+            ExactSourceMaxFiles: ParsePositiveInt(values, "--exact-source-max-files", 256),
+            ExactSourceMaxBytes: ParsePositiveLong(values, "--exact-source-max-bytes", 67_108_864));
         var receiptRecorder = new ScanReceiptRecorder(
             scanOptions,
             sqlValidationSummaryPaths.Append(sqlValidationAsOf?.ToString("O") ?? string.Empty));
@@ -549,7 +572,14 @@ public static class TraceMapCommand
         exception is ArgumentException argument
         && argument.Message.StartsWith("--binlog", StringComparison.Ordinal)
             ? argument.Message
-            : ScanReceiptRecorder.ClassifyFailure(exception);
+            : exception is InvalidOperationException scopeError
+                && scopeError.Message is "ExactSourceScopeInvalidOptions"
+                    or "ExactSourceScopeInvalidPath"
+                    or "ExactSourceScopeInventoryMismatch"
+                    or "ExactSourceScopeLimitExceeded"
+                    or "ExactSourceScopeEnumerationLimitExceeded"
+                    ? scopeError.Message
+                    : ScanReceiptRecorder.ClassifyFailure(exception);
 
     private static async Task RunReceiptStageAsync(ScanReceiptOperation operation, Func<Task> action)
     {
@@ -2322,7 +2352,7 @@ public static class TraceMapCommand
                 throw new ArgumentException($"Unexpected argument: {arg}");
             }
 
-            if (arg is "--restore" or "--include-paths" or "--include-reverse" or "--include-impact" or "--allow-identity-mismatch" or "--exit-code" or "--allow-mixed-inputs" or "--release-review" or "--il-body-evidence" or "--il-rewrite-evidence" or "--il-rewrite-pdb-evidence"
+            if (arg is "--restore" or "--include-paths" or "--include-reverse" or "--include-impact" or "--allow-identity-mismatch" or "--exit-code" or "--allow-mixed-inputs" or "--release-review" or "--il-body-evidence" or "--il-rewrite-evidence" or "--il-rewrite-pdb-evidence" or "--exact-source-scope"
                 || additionalFlags.Contains(arg, StringComparer.Ordinal))
             {
                 flags.Add(arg);
@@ -2787,6 +2817,10 @@ public static class TraceMapCommand
               --project <path>         Project to load. Repeat or comma-separate for multiple.
               --include <glob>         Include only matching inventoried paths. Repeatable.
               --exclude <glob>         Exclude matching inventoried paths. Repeatable.
+              --exact-source-scope     Require literal --include paths to equal the complete eligible repository inventory; reject omitted, unsupported, or newly discovered semantic inputs.
+              --exact-source-max-files <count>
+              --exact-source-max-bytes <count>
+                                       Hard file/byte limits for exact source scope (defaults: 256 files, 64 MiB); candidate enumeration has a separate hard limit.
               --target-framework <tfm> MSBuild TargetFramework property for semantic load.
               --restore                Run dotnet restore for selected solution/project targets before semantic load.
               --binlog <path>          Explicit local MSBuild binary log to ingest offline. Repeatable; never discovered.
