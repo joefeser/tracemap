@@ -1110,6 +1110,24 @@ public sealed class MessyWorkspaceRegressionTests
                                      and rule_id = 'vb.syntax.declarations.v1' order by fact_id limit 1);
                 """;
             Assert.Equal(250, await insert.ExecuteNonQueryAsync());
+            await using var insertMethods = connection.CreateCommand();
+            insertMethods.CommandText = """
+                with recursive seq(n) as (select 1 union all select n+1 from seq where n < 250)
+                insert into facts
+                select printf('zz-compound-method-noise-%08d', n), scan_id, repo, commit_sha, project_path,
+                       fact_type, rule_id, evidence_tier, printf('Noise%04d', n),
+                       printf('Noise%04d.Process()', n), contract_element,
+                       'App_Code/Noise.vb', start_line, end_line, snippet_hash,
+                       extractor_id, extractor_version,
+                       json_object('name', 'Process', 'methodName', 'Process',
+                                   'containingType', printf('Noise%04d', n),
+                                   'qualifiedContainingType', printf('Noise%04d', n),
+                                   'memberIdentity', printf('Noise%04d.Process()', n),
+                                   'parameterCount', '0')
+                from seq cross join (select * from facts where fact_type = 'MethodDeclared'
+                                     and rule_id = 'vb.syntax.declarations.v1' order by fact_id limit 1);
+                """;
+            Assert.Equal(250, await insertMethods.ExecuteNonQueryAsync());
         }
         var packet = await WebFormsModernizationPacketReporter.BuildAsync(
             new(index, Path.Combine(temp.Path, "compound-noise-packet"), MaxFrontier: 200, MaxTraversalWork: 1500));
@@ -1118,7 +1136,9 @@ public sealed class MessyWorkspaceRegressionTests
         Require("MW-COMPOUND-PAGETWO-001", "traversal",
             chains.Length > 0 && chains.All(chain => chain.TraversalObservation?.TerminalReachabilityComplete == true
                 && chain.TraversalObservation.DistinctReachableTerminalCount == 2),
-            $"unrelated same-name symbols or declarations blocked the real route: [{string.Join(',', packet.Summary.TruncationReasons)}]");
+            $"unrelated same-name symbols or declarations blocked the real route: "
+                + $"truncation=[{string.Join(',', packet.Summary.TruncationReasons)}], "
+                + $"terminalCounts=[{string.Join(',', chains.Select(chain => chain.TraversalObservation?.DistinctReachableTerminalCount))}]");
     }
 
     [Fact]

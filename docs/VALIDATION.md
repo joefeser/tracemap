@@ -2898,7 +2898,10 @@ not close #766's rewritten-PDB or ILAsm/ILDAsm parity work.
 The compound-page regression covers the bounded single-index input reader as
 well as the graph: newly discovered projectless VB syntax calls must admit
 their downstream method bodies to a fixed point within the work/frontier/fact
-limits. Depths 8 and 10, plus a separately combined two-root packet, must
+limits. Same-name method declarations outside admitted caller/receiver/base
+types must not spend those limits, while a name must be reconsidered when a
+new receiver type appears in a later wave. Depths 8 and 10, plus a separately
+combined two-root packet, must
 return the same two/zero/one terminal inventories for the three pages,
 including unqualified and self-qualified VB hops. An
 interrupted input closure must report an explicit
