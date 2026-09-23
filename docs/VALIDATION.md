@@ -2871,11 +2871,11 @@ equivalence or behavior-preservation conclusion, no runtime loading or
 execution, and no cross-assembly resolution beyond the rows encoded in each
 containing module.
 
-### Messy .NET workspace regression (Task 10 third slice)
+### Messy .NET workspace regression
 
 Public-safe synthetic fixtures under `samples/messy-dotnet-workspace/`
 reproduce the workspace shapes observed in real Web Forms/.NET scans without
-copying any private source, names, paths, or artifacts. Three roots are
+copying any private source, names, paths, or artifacts. Six roots are
 scanned independently: `root-alpha` (C# Web Forms site with a twelve-call-edge deep
 chain ending in an ADO.NET-style SQL terminal at graph distance 14, a
 three-node cycle plus a self-cycle with its own handler, ten same-name
@@ -2883,7 +2883,9 @@ three-node cycle plus a self-cycle with its own handler, ten same-name
 interface receiver implementations), `root-beta` (a second C# root reusing those simple
 names), `vb-projectless` (loose VB files with no `.vbproj`/`.sln`),
 `root-generated` (a designer bridge and bound compiled/PDB evidence), and
-`root-crosslanguage` (a buildable C#→VB→F# project graph).
+`root-crosslanguage` (a buildable C#→VB→F# project graph), and
+`vb-compound-pages` (three projectless VB Web Forms pages with repeated
+`Process` method names, deeper calls, and zero/two/one supported SQL terminals).
 
 The stable case catalog is `samples/messy-dotnet-workspace/case-catalog.json`
 (schema `messy-workspace-case-catalog.v1`). Cases are marked `implemented` or
@@ -2892,6 +2894,20 @@ not that every attempted join succeeds. The cross-language case explicitly
 records a C# syntax downgrade and unsupported F# source ownership. The
 source→metadata→IL/PDB case proves one exact compiled handler join but does
 not close #766's rewritten-PDB or ILAsm/ILDAsm parity work.
+
+The compound-page regression covers the bounded single-index input reader as
+well as the graph: newly discovered projectless VB syntax calls must admit
+their downstream method bodies to a fixed point within the work/frontier/fact
+limits. Same-name method declarations outside admitted caller/receiver/base
+types must not spend those limits, while a name must be reconsidered when a
+new receiver type appears in a later wave. Depths 8 and 10, plus a separately
+combined two-root packet, must
+return the same two/zero/one terminal inventories for the three pages,
+including unqualified and self-qualified VB hops. An
+interrupted input closure must report an explicit
+Tier4 graph-input limit, never a clean no-terminal conclusion. This synthetic
+result does not establish that private pages 2, 3, or 11 are fixed; rerun those
+pages on a fresh merged index to make that claim.
 
 Pinned behaviors, asserted per catalog case id and pipeline stage
 (extraction, combining, reconciliation, traversal) by
