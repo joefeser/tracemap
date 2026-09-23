@@ -2996,6 +2996,7 @@ rules:
       - legacy flow classification
     limitations:
       - Syntax-only, name-only, ambiguous, generated-code-uncertain, high fan-out, or partial-terminal evidence cannot produce StrongStaticPath.
+      - Interface and override candidate hops cap legacy flow and Web Forms boundary classifications at NeedsReviewStaticPath; a complete static terminal inventory does not resolve the runtime receiver.
       - Reduced coverage and missing extractors produce ReducedCoverage or AnalysisGap rather than clean absence.
       - The v1 high fan-out threshold is five or more inbound candidate paths from distinct roots to one terminal identity, or generic ambiguous terminal keys such as status, id, name, value, result, or response. This conservative placeholder requires calibration against redacted legacy validation data, including false-positive and false-negative metrics by terminal kind.
 
