@@ -220,6 +220,13 @@ public sealed class IlAsmIldasmParityGateTests
             // receipt, leave the PDB parity claim unmade, and keep Task 10
             // open on exactly that prerequisite.
             Assert.NotEmpty(parsed.Methods);
+            using var catalog = JsonDocument.Parse(File.ReadAllText(Path.Combine(
+                FindRepoRoot(), "samples", "compiled-dotnet-evidence", "fixture-cases.json")));
+            var pdbCase = catalog.RootElement.GetProperty("ilasmParityCases").EnumerateArray()
+                .Single(item => item.GetProperty("id").GetString() == "ILASM-PARITY-PDB-006");
+            Assert.Equal("deferred", pdbCase.GetProperty("status").GetString());
+            Assert.Contains("IldasmPortablePdbLineOracleUnavailable",
+                pdbCase.GetProperty("expectedGaps").EnumerateArray().Select(item => item.GetString()));
             output.WriteLine("[ILASM-PARITY] ILDasm /linenum produced no .line directives; independent PDB observation unavailable on this toolchain.");
             output.WriteLine("[ILASM-PARITY] " + workMachineCommand);
             return;
@@ -279,7 +286,8 @@ public sealed class IlAsmIldasmParityGateTests
             Assert.Contains(required, ids);
         Assert.All(cases, item =>
         {
-            Assert.Equal("covered", item.GetProperty("status").GetString());
+            Assert.Equal(item.GetProperty("id").GetString() == "ILASM-PARITY-PDB-006" ? "deferred" : "covered",
+                item.GetProperty("status").GetString());
             Assert.Equal("compiled-dotnet-extended-validation.yml:public-mutation-matrix(windows-latest)", item.GetProperty("proofLane").GetString());
             Assert.False(string.IsNullOrWhiteSpace(item.GetProperty("shape").GetString()));
             Assert.Contains(item.GetProperty("expectedTier").GetString(), new[] { EvidenceTiers.Tier2Structural, EvidenceTiers.Tier4Unknown });
@@ -291,6 +299,10 @@ public sealed class IlAsmIldasmParityGateTests
         var tools = cases.Single(item => item.GetProperty("id").GetString() == "ILASM-PARITY-TOOLS-001");
         Assert.Empty(tools.GetProperty("expectedRuleIds").EnumerateArray());
         Assert.Contains("Framework64", tools.GetProperty("prerequisites").GetString(), StringComparison.Ordinal);
+        var pdbCase = cases.Single(item => item.GetProperty("id").GetString() == "ILASM-PARITY-PDB-006");
+        Assert.Equal(EvidenceTiers.Tier4Unknown, pdbCase.GetProperty("expectedTier").GetString());
+        Assert.Contains("IldasmPortablePdbLineOracleUnavailable",
+            pdbCase.GetProperty("expectedGaps").EnumerateArray().Select(item => item.GetString()));
         Assert.All(cases.Where(item => item.GetProperty("id").GetString() != "ILASM-PARITY-TOOLS-001"), item =>
             Assert.NotEmpty(item.GetProperty("expectedRuleIds").EnumerateArray()));
         var parity = document.RootElement.GetProperty("ilRewritePdbCases").EnumerateArray()
@@ -300,7 +312,7 @@ public sealed class IlAsmIldasmParityGateTests
         // Only the proven cases satisfy the prerequisite; the PDB oracle gap
         // keeps ILASM-PARITY-PDB-006 out of the satisfied list, and the gate
         // exercises the il-rewrite rule rather than the rewrite-PDB rule.
-        Assert.Equal(["ILASM-PARITY-CFLOW-002", "ILASM-PARITY-EH-003", "ILASM-PARITY-MUTATE-005"], satisfiedBy);
+        Assert.Equal(new string?[] { "ILASM-PARITY-CFLOW-002", "ILASM-PARITY-EH-003", "ILASM-PARITY-MUTATE-005" }, satisfiedBy);
         Assert.DoesNotContain("dotnet.compiled.il-rewrite-pdb.v1", parity.GetProperty("expectedRuleIds").EnumerateArray().Select(value => value.GetString()));
         Assert.Contains("ILASM-PARITY-PDB-006", parity.GetProperty("limitations").GetString(), StringComparison.Ordinal);
     }

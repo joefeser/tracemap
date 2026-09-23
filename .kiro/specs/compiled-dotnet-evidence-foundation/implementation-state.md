@@ -1563,3 +1563,16 @@ claim), and a permanently red extended lane would block the five proven
 cases and every future src/dotnet PR. Local validation after the
 remediation: 14/14 focused tests, full suite 2,233/2,233, zero-warning
 build. Exact-head CI and the settlement rerun of ACK follow.
+
+PR #783 follow-up on head `7e20b0c9`: the independent ILDAsm canonical
+exception-region observation now commits the catch type identity and, for
+filter clauses, the filter start offset as well as kind and extents. Parser
+regressions pin both identities. The public mutation case's claim is
+corrected to canonical method-body equality, not whole-file normalized
+disassembly. The hosted `/linenum` no-directive outcome is represented in
+the machine-readable fixture catalog as deferred/Tier4Unknown with
+`IldasmPortablePdbLineOracleUnavailable`; the test verifies that record
+before taking its no-oracle branch. This does not close Task 10 or claim
+PDB parity. The broader Windows tool discovery already flows through the
+workflow environment handoff on this head; no second discovery path was
+added to the test.

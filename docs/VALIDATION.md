@@ -3269,10 +3269,11 @@ readers. The six catalog cases live in `fixture-cases.json` schema v9
   table, leave targets, nested exception regions) as `unchanged` with
   `tokenRetargeted=false`, zero gaps, and instruction, local, max-stack,
   and call-offset counts equal to the ILDAsm observation on both sides.
-- `ILASM-PARITY-EH-003` — nested try regions, catch/fault handler kinds,
-  leave targets, and the dense switch keep identical exception-clause
-  extents on instruction boundaries, with ILDAsm clause counts equal to
-  TraceMap exception-region counts on both sides.
+- `ILASM-PARITY-EH-003` — nested try regions, catch/fault handler kinds and
+  catch type identities, leave targets, and the dense switch keep identical
+  canonical exception-clause structure on instruction boundaries, with
+  ILDAsm clause counts equal to TraceMap exception-region counts on both
+  sides. The parser also retains filter start offsets when present.
 - `ILASM-PARITY-MEMBER-004` — the member-shape fixture's generic method
   specifications, `ldtoken` type tokens, `calli` standalone signatures,
   static field operands, custom-modifier parameters, accessors, and vararg
@@ -3286,9 +3287,9 @@ readers. The six catalog cases live in `fixture-cases.json` schema v9
 - `ILASM-PARITY-MUTATE-005` — the branch-retarget, handler-kind, and
   stack-neutral insertion mutations keep their exact TraceMap relationship
   classification when the mutated after side passes through the independent
-  round trip first, with identical canonical disassembly of the raw and
-  round-tripped after sides.
-- `ILASM-PARITY-PDB-006` — the non-hidden sequence points of an embedded
+  round trip first, with identical canonical method bodies, not whole-file
+  normalized disassembly, for the raw and round-tripped after sides.
+- `ILASM-PARITY-PDB-006` — **deferred (Tier4Unknown)**. The non-hidden sequence points of an embedded
   portable PDB fixture, observed independently via ILDAsm's documented
   `/linenum` switch with the extracted PDB adjacent to the carrier copy,
   must equal TraceMap's declared sequence-point tuples (offset, start/end
@@ -3296,7 +3297,8 @@ readers. The six catalog cases live in `fixture-cases.json` schema v9
   on 2026-09-23 the hosted `win25-vs2026` ILDAsm accepted `/linenum`,
   disassembled the carrier, and emitted no `.line` directives for the
   adjacent extracted portable PDB: the typed oracle-availability gap is
-  recorded with the precise work-machine command and expected receipt and
+  recorded as `IldasmPortablePdbLineOracleUnavailable` in the fixture catalog,
+  with the precise work-machine command and expected receipt and
   no PDB parity is claimed. Hidden (`0xfeefee`) points are outside the
   claim either way. Closing this one prerequisite requires a Windows work
   machine whose ILDAsm symbol reader observes portable PDBs (for example a
