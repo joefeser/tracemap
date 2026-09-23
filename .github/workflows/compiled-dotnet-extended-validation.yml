@@ -8,6 +8,9 @@ on:
       - "samples/compiled-dotnet-evidence/**"
       - "rules/rule-catalog.yml"
       - "docs/VALIDATION.md"
+      - "docs/validation/TASK11_WINDOWS_LANE.md"
+      - "scripts/validation/Invoke-Task11Windows.ps1"
+      - "scripts/validation/Test-Task11Windows.ps1"
   workflow_dispatch:
 
 permissions:
@@ -29,6 +32,15 @@ jobs:
           dotnet-version: 10.0.x
       - name: Record SDK identity
         run: dotnet --info
+      - name: Task 11 public ILAsm runner smoke and synthetic guards
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          pwsh -NoProfile -File scripts/validation/Test-Task11Windows.ps1
+          $head = (git rev-parse HEAD).Trim()
+          pwsh -NoProfile -File scripts/validation/Invoke-Task11Windows.ps1 `
+            -Lane PublicSmoke -TraceMapRoot (Get-Location).Path `
+            -TraceMapCommit $head -OutputRoot (Join-Path $env:RUNNER_TEMP 'task11-public-smoke')
       - name: Restore locked dependencies
         run: dotnet restore src/dotnet/TraceMap.sln --locked-mode
       - name: Discover Windows ILAsm and ILDAsm candidates

@@ -57,3 +57,6 @@ slices and require an implementation-state update before work begins.
 - [ ] 11. Later slice: validate legacy .NET Framework/Web Forms build behavior,
   run the isolated Windows `dotnetperf`/C++/CLI lane from #768, and
   mine/minimize the optional stress corpus from #769.
+  - [x] First bounded #768 runner, synthetic fail-closed guards, independent
+    public ILAsm smoke, and C++/CLI feasibility inventory. Private corpus
+    execution and #769 remain open.
