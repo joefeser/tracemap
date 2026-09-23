@@ -1643,3 +1643,43 @@ final quoted-catch-identity regression and synthetic offset/code-size
 corrections were checked by a focused rebuild after the full suite. Windows
 parity cases return early on macOS and are excluded from any local parity
 claim; the pushed-head Windows extended job is the required proof.
+# Task 11 first bounded Windows validation lane (#768, 2026-09-22)
+
+Branch `codex/task11-windows-validation` was created in a separate clean
+worktree from `origin/dev` at exact base
+`25e29a22896184379e1edfb11b46a839d3afcee0` (PR #783 merge). The origin
+was verified as `joefeser/tracemap`; the original checkout and its untracked
+`.vscode/` were left untouched. Scope is the first reviewable runner, public
+ILAsm smoke, synthetic fail-closed guards, documentation, and C++/CLI
+feasibility inventory for #768. Task 10 and #769 are excluded; the parent
+Task 11 checkbox stays open.
+
+The local historical checkout is clean but its HEAD is not the required
+`db8c3359badfec620ccdc6df062b1756ef9607f8`, and that object is absent.
+A noninteractive fetch using only the configured origin failed with `Host key
+verification failed`; no credential or signing-material search was performed.
+Private project build, representative tests, scan, provenance, and identity
+edge assertions are blocked, not validated. The runner requires the pinned
+commit and authorized remote attestation before any private build or scan.
+
+The Windows host has Visual Studio 2022 Enterprise 17.10.35201.131, .NET SDK
+10.0.303, Framework ILAsm 4.8.9221.0, and SDK ILDAsm 4.8.3928.0. The C++/CLI
+component query and `cl.exe` discovery found no compiler. Public ILAsm can
+represent custom modifiers and unusual pure managed metadata; tracking refs
+and mixed-mode native transitions remain deferred or explicit unsupported
+input. No PDB parity claim is made; Task 10 retains
+`IldasmPortablePdbLineOracleUnavailable` after the prior three-version
+`/linenum` attempt emitted zero `.line` directives.
+
+Validation so far: the synthetic PowerShell guard suite passed wrong commit,
+dirty checkout, missing corpus/tool/artifact, invalid provenance, and output
+reuse/overlap cases. Locked .NET restore succeeded; the solution build passed
+with zero warnings and zero errors. The full .NET suite was attempted on
+Windows and stopped after over eleven minutes and widespread failures in
+unrelated report, Web Forms, artifact, symlink, and Windows file-lock tests;
+it is not green. The Python adapter-artifact test reported three Windows
+temporary SQLite deletion errors. The Bash private-path script returned 0 but
+its WSL Git worktree resolution emitted fatal path errors, so that invocation
+is not treated as a valid privacy pass. `git diff --check` passed. Public
+smoke remains to be run after committing a clean TraceMap head. The full-corpus
+opt-in has not been exercised. Do not open a PR until the required gates pass.
