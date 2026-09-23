@@ -307,7 +307,9 @@ public sealed class IlAsmIldasmParityGateTests
             Assert.NotEmpty(item.GetProperty("expectedRuleIds").EnumerateArray()));
         var parity = document.RootElement.GetProperty("ilRewritePdbCases").EnumerateArray()
             .Single(item => item.GetProperty("id").GetString() == "ILRWPDB-ILASM-PARITY-012");
-        Assert.Equal("implemented", parity.GetProperty("status").GetString());
+        Assert.Equal("partial", parity.GetProperty("status").GetString());
+        Assert.Contains("IldasmPortablePdbLineOracleUnavailable",
+            parity.GetProperty("expectedGaps").EnumerateArray().Select(item => item.GetString()));
         var satisfiedBy = parity.GetProperty("satisfiedBy").EnumerateArray().Select(value => value.GetString()).ToArray();
         // Only the proven cases satisfy the prerequisite; the PDB oracle gap
         // keeps ILASM-PARITY-PDB-006 out of the satisfied list, and the gate
