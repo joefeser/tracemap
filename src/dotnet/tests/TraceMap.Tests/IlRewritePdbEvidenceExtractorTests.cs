@@ -658,14 +658,16 @@ public sealed class IlRewritePdbEvidenceExtractorTests
             Assert.True(item.GetProperty("nonClaims").GetArrayLength() > 0);
             Assert.Contains(item.GetProperty("expectedTier").GetString()!, new[] { "Tier2Structural", "Tier4Unknown" });
         });
-        // ILRWPDB-ILASM-PARITY-012 is no longer deferred: its satisfiedBy
-        // list binds it to the implemented parity-gate cases.
+        // The IL-offset half is proven by the satisfiedBy cases, while the
+        // portable-PDB oracle half remains a typed partial gap.
         Assert.Contains(ids, id => id == "ILRWPDB-ILASM-PARITY-012");
         Assert.Contains(ids, id => id == "ILRWPDB-EMBEDDED-PORTABLE-013");
         Assert.Contains(ids, id => id == "ILRWPDB-EMBEDDED-MISSING-014");
         Assert.Contains(ids, id => id == "ILRWPDB-EMBEDDED-MISMATCH-015");
         var ilasm = cases.Single(item => item.GetProperty("id").GetString() == "ILRWPDB-ILASM-PARITY-012");
-        Assert.Equal("implemented", ilasm.GetProperty("status").GetString());
+        Assert.Equal("partial", ilasm.GetProperty("status").GetString());
+        Assert.Contains("IldasmPortablePdbLineOracleUnavailable",
+            ilasm.GetProperty("expectedGaps").EnumerateArray().Select(value => value.GetString()));
         Assert.NotEmpty(ilasm.GetProperty("satisfiedBy").EnumerateArray());
         Assert.Contains("ILASM-PARITY-CFLOW-002", ilasm.GetProperty("satisfiedBy").EnumerateArray().Select(value => value.GetString()));
     }
