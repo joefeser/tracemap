@@ -3197,7 +3197,7 @@ Get-ChildItem "$env:WINDIR\Microsoft.NET\Framework64","$env:WINDIR\Microsoft.NET
 | Windows-native PDB | Existing `CS-ILRWPDB-WINDOWS-009` unsupported gap | Requires an independent Windows PDB reader before admission. |
 | Same opcodes, different operands; token retargets and one-sided members | `CS-ILRW-OPERAND-001`, token/member cases, and SRM raw-IL/runtime integration case | Operand-insensitive hashes are non-unique heuristics; no identity edge from them. |
 | Valid, invalid, and hostile bounded PE/metadata shapes | Existing malformed/limit cases and topology unsupported/ambiguous cases | Reader disagreement withholds the entire disputed relationship. |
-| ILAsm/ILDAsm parity | `ILASM-PARITY-TOOLS-001`–`PDB-006` in the extended Windows lane; `ILRWPDB-ILASM-PARITY-012` is satisfied by them | Parity is proven only for the public fixture matrix on the pinned .NET Framework 4.8 ILAsm + Windows SDK NETFX ILDAsm toolchain, with ILDAsm as the independent oracle; no general equivalence claim. |
+| ILAsm/ILDAsm parity | `ILASM-PARITY-TOOLS-001`, `CFLOW-002`, `EH-003`, `MEMBER-004`, and `MUTATE-005` are proven in the extended Windows lane; `ILASM-PARITY-PDB-006` records the typed PDB-oracle gap | Parity is proven only for the public fixture matrix on the pinned .NET Framework 4.8 ILAsm + Windows SDK NETFX ILDAsm toolchain, with ILDAsm as the independent oracle; sequence-point parity stays unclaimed until a work-machine ILDAsm observes portable PDBs and the recorded receipt matches; no general equivalence claim. |
 
 Each new positive assertion and gap uses the existing rule ID and evidence
 tier, complete assembly/module/member signature where applicable, locations,
@@ -3307,5 +3307,9 @@ privacy-projected bounded-input SHA-256, rule IDs, tiers, locations, and
 limitations of the underlying rules. A repeat scan must be byte-identical.
 The parity claim is bounded to these public fixtures, that pinned 4.8
 toolchain, and those observations; it is not a general IL equivalence,
-execution, or debug-behavior claim, and Task 10's checkbox closes only on
-the passing Windows lane run recorded in the implementation-state note.
+execution, or debug-behavior claim. The green exact-head run is
+https://github.com/joefeser/tracemap/actions/runs/35802803285/job/106996742841
+(Windows, all eight gate tests and seven parser tests passed; Ubuntu and
+macOS lanes green; ordinary lanes including all three package-smoke jobs
+green). Task 10's checkbox stays open on the single PDB-prerequisite gap
+above.

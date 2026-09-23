@@ -1468,6 +1468,7 @@
         "ILASM-PARITY-MUTATE-005",
         "ILASM-PARITY-PDB-006"
       ],
+      "limitations": "the IL-offset cross-check is proven on the pinned hosted toolchain; the portable-PDB sequence-point half of the case is executed but stays unclaimed because that ILDAsm observes no .line directives for portable PDBs (see ILASM-PARITY-PDB-006)",
       "nonClaims": [
         "ilasm-general-equivalence",
         "ildasm-general-equivalence",
