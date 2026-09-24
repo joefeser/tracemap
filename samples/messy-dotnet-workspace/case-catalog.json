@@ -345,12 +345,12 @@
       "id": "MW-DROPDOWN-SINGLE-001",
       "status": "implemented",
       "roots": ["vb-init-single"],
-      "shape": "one projectless Web Forms source index contains a dropdown Init handler and a data-access constructor that populates a list by calling through service, repository, and SQL gateway methods",
+      "shape": "one projectless Web Forms source index contains a dropdown Init handler and a data-access constructor that populates a list by calling through service, repository, and SQL gateway methods; an uncalled same-name method in the constructor's class is an implicit-Me decoy",
       "stages": ["extraction", "traversal"],
       "expectedRuleIds": ["vb.syntax.objectcreation.v1", "combined.paths.projectless-vb-constructor-bridge.v1"],
       "expectedTiers": ["Tier3SyntaxOrTextual", "Tier4Unknown"],
       "expectedGaps": [],
-      "assertions": "bounded single-index graph admission retains the constructor declaration and body facts instead of silently losing the side-effect terminal"
+      "assertions": "bounded single-index graph admission retains the constructor declaration and body facts instead of silently losing the side-effect terminal, while inline-New receiver evidence never bridges to the same-name implicit-Me decoy"
     },
     {
       "id": "MW-COMPOUND-LIMIT-001",

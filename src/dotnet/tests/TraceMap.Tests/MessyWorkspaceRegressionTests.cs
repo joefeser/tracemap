@@ -1194,6 +1194,10 @@ public sealed class MessyWorkspaceRegressionTests
                 && fact.RuleId == RuleIds.VisualBasicSyntaxObjectCreation
                 && fact.Properties.GetValueOrDefault("createdType") == "SyntheticDataAccess"),
             "the inline data-access creation is missing");
+        Require("MW-DROPDOWN-SINGLE-001", "extraction",
+            scan.Facts.Any(fact => fact.FactType == FactTypes.DatabaseOperationCandidate
+                && fact.SourceSymbol?.StartsWith("SyntheticDataAccess.SelectChoices(", StringComparison.Ordinal) == true),
+            "the uncalled same-name SQL decoy is missing");
 
         var handlerFact = scan.Facts.Single(fact => fact.FactType == FactTypes.WebFormsHandlerResolved);
         var unbounded = await CombinedDependencyPathReporter.BuildReportAsync(new(

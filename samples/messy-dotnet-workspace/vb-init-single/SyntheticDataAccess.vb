@@ -14,6 +14,14 @@ Public Class SyntheticDataAccess
             MyList.Add(row.Item("DisplayName").ToString())
         Next
     End Sub
+
+    ' An uncalled same-name member must not become the target of the inline
+    ' New SyntheticService().SelectChoices invocation above.
+    Private Function SelectChoices(region As String, season As String, year As Integer) As DataSet
+        Dim unrelated As New SqlCommand()
+        unrelated.ExecuteReader()
+        Return New DataSet()
+    End Function
 End Class
 
 Public Class SyntheticService

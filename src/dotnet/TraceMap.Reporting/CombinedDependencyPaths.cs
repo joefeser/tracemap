@@ -2962,6 +2962,8 @@ public static partial class CombinedDependencyPathReporter
                 && string.Equals(CombinedDependencyReporter.FirstValue(fact.Properties, "callKind"), "SyntaxInvocation", StringComparison.Ordinal)
                 && (string.IsNullOrWhiteSpace(CombinedDependencyReporter.FirstValue(fact.Properties, "receiverName"))
                     || IsVisualBasicExplicitSelfReceiver(CombinedDependencyReporter.FirstValue(fact.Properties, "receiverName")))
+                && !string.Equals(CombinedDependencyReporter.FirstValue(fact.Properties, "receiverTypeResolution"),
+                    "inline-object-creation-syntax", StringComparison.Ordinal)
                 && !string.IsNullOrWhiteSpace(CombinedDependencyReporter.FirstValue(fact.Properties, "calleeName"))
                 && VisualBasicQualifiedMemberKey(fact.SourceSymbol) is not null)
             .OrderBy(fact => fact.CombinedFactId, StringComparer.Ordinal))
