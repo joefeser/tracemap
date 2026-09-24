@@ -342,6 +342,17 @@
       "assertions": "balanced generic normalization preserves the nested constructor identity, parentheses preserve exact inline-New receiver provenance, unqualified names cannot bridge into an unrelated namespace, and compiler-rejected semantic fallback cannot be rescued by another projectless root"
     },
     {
+      "id": "MW-DROPDOWN-SINGLE-001",
+      "status": "implemented",
+      "roots": ["vb-init-single"],
+      "shape": "one projectless Web Forms source index contains a dropdown Init handler and a data-access constructor that populates a list by calling through service, repository, and SQL gateway methods",
+      "stages": ["extraction", "traversal"],
+      "expectedRuleIds": ["vb.syntax.objectcreation.v1", "combined.paths.projectless-vb-constructor-bridge.v1"],
+      "expectedTiers": ["Tier3SyntaxOrTextual", "Tier4Unknown"],
+      "expectedGaps": [],
+      "assertions": "bounded single-index graph admission retains the constructor declaration and body facts instead of silently losing the side-effect terminal"
+    },
+    {
       "id": "MW-COMPOUND-LIMIT-001",
       "status": "implemented",
       "roots": ["vb-compound-pages"],

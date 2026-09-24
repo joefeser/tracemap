@@ -77,10 +77,10 @@ public sealed class MessyWorkspaceRegressionTests
             Require("MW-CATALOG", "extraction", entry.GetProperty("shape").GetString() is { Length: > 0 }, $"case {id} must describe its shape");
         }
 
-        Require("MW-CATALOG", "extraction", ids.Count == 21,
-            $"expected the twenty-one pinned fixture cases, found {ids.Count}");
-        Require("MW-CATALOG", "extraction", implemented == 21 && deferred == 0,
-            $"all twenty-one pinned fixture cases must remain implemented; found {implemented} implemented and {deferred} deferred");
+        Require("MW-CATALOG", "extraction", ids.Count == 22,
+            $"expected the twenty-two pinned fixture cases, found {ids.Count}");
+        Require("MW-CATALOG", "extraction", implemented == 22 && deferred == 0,
+            $"all twenty-two pinned fixture cases must remain implemented; found {implemented} implemented and {deferred} deferred");
 
         // Catalog evidence annotations are load-bearing: every expected rule id must
         // exist in the rule catalog, tiers must be real evidence tiers, and gap
@@ -1185,6 +1185,48 @@ public sealed class MessyWorkspaceRegressionTests
     }
 
     [Fact]
+    public async Task Dropdown_init_single_index_admits_constructor_body_into_bounded_packet()
+    {
+        using var temp = new TempDirectory();
+        var (scan, index) = ScanRoot(temp, "vb-init-single", "single-index-init");
+        Require("MW-DROPDOWN-SINGLE-001", "extraction",
+            scan.Facts.Any(fact => fact.FactType == FactTypes.ObjectCreated
+                && fact.RuleId == RuleIds.VisualBasicSyntaxObjectCreation
+                && fact.Properties.GetValueOrDefault("createdType") == "SyntheticDataAccess"),
+            "the inline data-access creation is missing");
+
+        var handlerFact = scan.Facts.Single(fact => fact.FactType == FactTypes.WebFormsHandlerResolved);
+        var unbounded = await CombinedDependencyPathReporter.BuildReportAsync(new(
+            index, Path.Combine(temp.Path, "unbounded"), View: LegacyFlowReportConstants.View,
+            IncludeLegacyRoots: true, MaxDepth: 10)
+        {
+            StartingFactIds = new HashSet<string>(StringComparer.Ordinal) { "single:" + handlerFact.FactId },
+            InventoryDistinctTerminals = true
+        });
+        var packet = await WebFormsModernizationPacketReporter.BuildAsync(new(
+            index, Path.Combine(temp.Path, "single-index-packet"), MaxDepth: 10));
+        var emptyIndex = Path.Combine(temp.Path, "empty.sqlite");
+        SqliteIndexWriter.Write(emptyIndex, scan.Manifest with { ScanId = "scan-single-index-empty", RepoName = "single-index-empty" }, []);
+        var combinedIndex = Path.Combine(temp.Path, "single-combined.sqlite");
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([index, emptyIndex], combinedIndex, ["single", "empty"]));
+        var combinedPacket = await WebFormsModernizationPacketReporter.BuildAsync(new(
+            combinedIndex, Path.Combine(temp.Path, "single-combined-packet"), MaxDepth: 10));
+        Require("MW-DROPDOWN-SINGLE-001", "traversal",
+            unbounded.Paths.Count > 0
+                && combinedPacket.EventChains.Any(chain => chain.TraversalObservation?.DistinctReachableTerminalCount == 1),
+            "the reference full and combined readers did not retain the constructor-side-effect path");
+        var chains = packet.EventChains.Where(chain =>
+            chain.HandlerSymbol?.Contains("ChoicesPage.Name_Init", StringComparison.Ordinal) == true).ToArray();
+        Require("MW-DROPDOWN-SINGLE-001", "traversal",
+            chains.Any(chain => chain.TraversalObservation?.TerminalReachabilityComplete == true
+                && chain.TraversalObservation.DistinctReachableTerminalCount == 1),
+            $"the bounded single-index packet failed to inventory the constructor-side-effect terminal; chains=[{string.Join(";", chains.Select(chain => $"{chain.TerminalKind}:{chain.TraversalObservation?.DistinctReachableTerminalCount}:{chain.TraversalObservation?.TerminalReachabilityComplete}"))}]; gaps=[{string.Join(";", packet.Gaps.Select(gap => gap.Classification))}]");
+        Require("MW-DROPDOWN-SINGLE-001", "traversal",
+            TerminalBoundaries(packet, "ChoicesPage.Name_Init").Any(),
+            "the bounded single-index packet has no constructor-side-effect boundary");
+    }
+
+    [Fact]
     public async Task Dropdown_init_duplicate_constructor_type_fails_closed_across_roots()
     {
         using var temp = new TempDirectory();
@@ -1262,7 +1304,7 @@ public sealed class MessyWorkspaceRegressionTests
         var constructorEdges = graph.Edges.Where(edge => edge.EdgeKind == "projectless-vb-constructor-bridge").ToArray();
         Require("MW-CONSTRUCTOR-IDENTITY-001", "reconciliation",
             constructorEdges.Any(edge => nodes[edge.ToNodeId].DisplayName.Contains("Outer.Inner.New", StringComparison.Ordinal)),
-            "the nested generic containing type lost its exact constructor identity");
+            $"the nested generic containing type lost its exact constructor identity; creations=[{string.Join(";", scan.Facts.Where(fact => fact.FactType == FactTypes.ObjectCreated).Select(fact => $"{fact.SourceSymbol}:{fact.Properties.GetValueOrDefault("createdType")}"))}]; declarations=[{string.Join(";", scan.Facts.Where(fact => fact.FactType == FactTypes.MethodDeclared && fact.Properties.GetValueOrDefault("name") == "New").Select(fact => $"{fact.TargetSymbol}:{fact.Properties.GetValueOrDefault("qualifiedContainingType")}"))}]");
         Require("MW-CONSTRUCTOR-IDENTITY-001", "reconciliation",
             constructorEdges.All(edge => !nodes[edge.ToNodeId].DisplayName.Contains("OtherNamespace.Foo.New", StringComparison.Ordinal)),
             "an unqualified creation was attached to an unrelated namespace");
