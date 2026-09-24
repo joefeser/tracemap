@@ -28,6 +28,10 @@ $parseErrors = $null
 if ($parseErrors.Count -ne 0) { throw 'Page graph dump script syntax is invalid.' }
 $shareableSchema = [IO.File]::ReadAllText($shareableSchemaPath) | ConvertFrom-Json -Depth 30
 if ($shareableSchema.properties.schemaVersion.const -ne 'webforms-page-paths-shareable.v1' -or $shareableSchema.properties.privacy.const -ne 'anonymous-structure-only') { throw 'Page shareable schema does not pin its version and privacy profile.' }
+if ($shareableSchema.properties.provenance.properties.traceMapCommitSha.oneOf[1].const -ne 'unavailable' -or
+    @($shareableSchema.properties.provenance.required) -contains 'traceMapCommitSha') {
+    throw 'Page shareable schema must permit unavailable tool provenance without rejecting older v1 exports.'
+}
 
 $temp = Join-Path ([IO.Path]::GetTempPath()) ('tracemap-application-workbench-' + [Guid]::NewGuid().ToString('N'))
 $outputRoot = Join-Path $temp 'output'
@@ -195,6 +199,7 @@ try {
     $receipt = [ordered]@{
         schemaVersion = 'focused-webforms-review-run-receipt.v1'
         run = [ordered]@{ state = 'completed' }
+        traceMap = [ordered]@{ commitSha = ('b' * 40) }
         stages = [ordered]@{ workbench = [ordered]@{ state = 'completed'; artifacts = @($receiptArtifacts) } }
     }
     [IO.File]::WriteAllText((Join-Path $outputRoot 'run-receipt.json'), (($receipt | ConvertTo-Json -Depth 10) + "`n"), [Text.UTF8Encoding]::new($false))
@@ -203,6 +208,7 @@ try {
     $shareableZip = Join-Path $workbench 'page-001.paths.shareable.zip'
     if (!(Test-Path -LiteralPath $shareablePath -PathType Leaf) -or !(Test-Path -LiteralPath $shareableZip -PathType Leaf)) { throw 'Page shareable exporter omitted JSON or ZIP output.' }
     if (@($exportOutput | Where-Object { $_ -eq "zipPath=$shareableZip" }).Count -ne 1) { throw 'Page shareable exporter did not identify its ZIP output.' }
+    if (@($exportOutput | Where-Object { $_ -eq "traceMapCommitSha=$('b' * 40)" }).Count -ne 1) { throw 'Page shareable exporter did not report the receipted TraceMap commit.' }
     $shareableText = [IO.File]::ReadAllText($shareablePath)
     $shareable = $shareableText | ConvertFrom-Json -Depth 30
     $shareableProjectionJson = ConvertTo-Json -InputObject $shareable.projection -Depth 20 -Compress
@@ -216,13 +222,24 @@ try {
     if ($clientHttpChains.Count -ne 2 -or $clientHttpChains[0].endpointAlias -eq 'unavailable' -or $clientHttpChains[0].endpointAlias -ne $clientHttpChains[1].endpointAlias -or $clientHttpChains[0].handlerAlias -ne $clientHttpChains[1].handlerAlias) { throw 'Page shareable artifact did not preserve anonymous shared endpoint/handler equality.' }
     $missingChain = @($shareable.projection.chains | Where-Object { $_.handlerState -eq 'handler-unavailable' })[0]
     if ($null -eq $missingChain -or $missingChain.handlerResolution -ne 'missing-linked-method') { throw 'Page shareable artifact omitted anonymous handler-resolution detail.' }
-    if ($shareable.provenance.generatorSha256 -ne (Get-FileHash -LiteralPath $exportScript -Algorithm SHA256).Hash.ToLowerInvariant() -or $shareable.provenance.sourceWorkbenchGeneratorSha256 -ne $expectedGeneratorSha) { throw 'Page shareable artifact omitted exact generator provenance.' }
+    if ($shareable.provenance.generatorSha256 -ne (Get-FileHash -LiteralPath $exportScript -Algorithm SHA256).Hash.ToLowerInvariant() -or $shareable.provenance.sourceWorkbenchGeneratorSha256 -ne $expectedGeneratorSha -or $shareable.provenance.traceMapCommitSha -ne ('b' * 40)) { throw 'Page shareable artifact omitted exact generator or TraceMap commit provenance.' }
     foreach ($privateValue in @('Pages/First.aspx','Pages/First.aspx.cs','api/SaveAudit.ashx.vb','SaveAudit.ashx','App.First.Go_Click()','SaveAudit.ProcessRequest/1','Telerik.Web.UI.SampleControl','Telerik.Web.UI','Go.Click','surface-one','handler-http','fact-http-call','call-site-one','packet-one','scan-one',('a' * 40))) {
         if ($shareableText.Contains($privateValue, [StringComparison]::OrdinalIgnoreCase)) { throw "Page shareable artifact disclosed private value: $privateValue" }
     }
     $expanded = Join-Path $temp 'expanded-page-shareable'
     Expand-Archive -LiteralPath $shareableZip -DestinationPath $expanded
     if (@(Get-ChildItem -LiteralPath $expanded -File).Count -ne 1 -or !(Test-Path -LiteralPath (Join-Path $expanded 'page-001.paths.shareable.json') -PathType Leaf)) { throw 'Page shareable ZIP did not contain exactly the anonymous JSON artifact.' }
+    $expandedShareable = [IO.File]::ReadAllText((Join-Path $expanded 'page-001.paths.shareable.json')) | ConvertFrom-Json -Depth 30
+    if ($expandedShareable.provenance.traceMapCommitSha -ne ('b' * 40)) { throw 'Page shareable ZIP lost the receipted TraceMap commit.' }
+
+    $receipt.traceMap.commitSha = 'not-a-sha'
+    [IO.File]::WriteAllText((Join-Path $outputRoot 'run-receipt.json'), (($receipt | ConvertTo-Json -Depth 10) + "`n"), [Text.UTF8Encoding]::new($false))
+    $invalidCommitRejected = $false
+    try { & $exportScript -ReviewRoot $outputRoot -PageId 'page-001' | Out-Null }
+    catch { $invalidCommitRejected = $_.Exception.Message.Contains('WEBFORMS_PAGE_SHAREABLE_TRACEMAP_COMMIT_INVALID') }
+    if (!$invalidCommitRejected) { throw 'Page shareable exporter accepted malformed TraceMap commit provenance.' }
+    $receipt.traceMap.commitSha = ('b' * 40)
+    [IO.File]::WriteAllText((Join-Path $outputRoot 'run-receipt.json'), (($receipt | ConvertTo-Json -Depth 10) + "`n"), [Text.UTF8Encoding]::new($false))
 
     $standaloneConfig = Join-Path $temp 'standalone-review.json'
     [IO.File]::WriteAllText($standaloneConfig, (([ordered]@{ outputRoot = $outputRoot } | ConvertTo-Json) + "`n"), [Text.UTF8Encoding]::new($false))
@@ -240,6 +257,8 @@ try {
         throw 'Standalone review receipt did not preserve packet provenance.'
     }
     if (@($standaloneOutput | Where-Object { $_ -eq "zipPath=$standaloneZip" }).Count -ne 1) { throw 'Standalone review export did not identify the ZIP created from its new workbench.' }
+    $standaloneShareable = [IO.File]::ReadAllText((Join-Path $standaloneRoot 'workbench/page-001.paths.shareable.json')) | ConvertFrom-Json -Depth 30
+    if ($standaloneShareable.provenance.traceMapCommitSha -ne 'unavailable') { throw 'Standalone review guessed an unreceipted TraceMap commit.' }
     $latestExportOutput = @(& $latestExportScript -ReviewRoot $outputRoot -PriorPageId 'page-001')
     if (@($latestExportOutput | Where-Object { $_ -eq 'priorPageId=page-001' }).Count -ne 1 -or
         @($latestExportOutput | Where-Object { $_ -eq 'latestPageId=page-001' }).Count -ne 1 -or
