@@ -31,6 +31,11 @@ Roots:
   `Me.` calls; Page Three reaches no
   supported terminal; Page Eleven reaches one. Bounded packet tests pin the
   exact receiver bridges and depth-independent terminal inventories.
+- `vb-split-web/` and `vb-split-backend/` — the same 2/0/1 page shape with
+  page handlers and backend classes in separately scanned roots. The test
+  checks the cross-root bridges and terminal boundaries after index combine;
+  passing this synthetic case does not establish that an unseen receiver
+  pattern in a private merged graph is supported.
 - `root-generated/` — buildable Web Forms-shaped C# page whose auto-generated
   designer bridge is deliberately excluded from source traversal. A bound
   compiled scan pins the handler's source→metadata→IL/PDB identity chain.
