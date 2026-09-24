@@ -3485,3 +3485,24 @@ https://github.com/joefeser/tracemap/actions/runs/35802803285/job/106996742841
 macOS lanes green; ordinary lanes including all three package-smoke jobs
 green). Task 10's checkbox stays open on the single PDB-prerequisite gap
 above.
+
+### Public projectless Web Site publish without PDB
+
+`samples/messy-dotnet-workspace/vb-publish-projectless` is a source-only,
+public-safe Web Site fixture for the dropdown `Init` → constructor-populated
+list → business/data-access wrapper → inherited `Open` → overloaded procedure
+helper → `SqlDataAdapter.Fill` shape. Its source-only regression test requires
+that TraceMap **not** claim a SQL path before an exact source-to-binary entry is
+admitted. The fixture contains no private source, credentials, or runnable
+database dependency; executing its SQL path is outside the test.
+
+On Windows, `pwsh -NoProfile -File scripts/validation/Test-PublicWebFormsPublish.ps1`
+uses the 32-bit .NET Framework `aspnet_compiler.exe` to precompile this public
+fixture into a fresh temporary directory without `-u`. It checks for one
+`Pages/Lookup.aspx` `.compiled` map, its named DLL, and no PDB, and prints
+the compiler SHA-256 plus the bounded public input SHA-256. This validation
+script is **not** a private-site publishing instruction. Until this public
+Windows run succeeds and the emitted `.compiled` and metadata identities are
+inspected, the map is only page-to-assembly evidence: it is not a verified
+source-method, IL-chain, or runtime claim. A 32-bit-only dependency in a
+private site does not become AnyCPU through CodeDOM configuration.

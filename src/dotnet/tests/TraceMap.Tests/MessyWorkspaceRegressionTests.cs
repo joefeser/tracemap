@@ -940,6 +940,22 @@ public sealed class MessyWorkspaceRegressionTests
     }
 
     [Fact]
+    public async Task Public_publish_site_without_compiled_evidence_does_not_claim_the_constructor_SQL_path()
+    {
+        using var temp = new TempDirectory();
+        var (sourceOnly, index) = ScanRoot(temp, "vb-publish-projectless", "publish-source-only");
+        var method = sourceOnly.Facts.Single(fact => fact.FactType == FactTypes.MethodDeclared
+            && fact.RuleId == RuleIds.VisualBasicSyntaxDeclarations
+            && fact.Properties.GetValueOrDefault("name") == "Names_Init");
+        var report = await CombinedDependencyPathReporter.BuildReportAsync(new(
+            index, Path.Combine(temp.Path, "publish-source-only-paths.json"), Format: "json",
+            FromSymbol: method.Properties["memberIdentity"], MaxDepth: 12));
+        Require("MW-SOURCE-METADATA-IL-PDB-001", "source-only-baseline",
+            !report.Paths.Any(path => path.Nodes.Any(node => node.SurfaceKind == "sql-query")),
+            "the public Web Site fixture must not claim a SQL path without an admitted source-to-binary entry");
+    }
+
+    [Fact]
     public async Task Separately_scanned_roots_merge_without_invented_joins()
     {
         using var temp = new TempDirectory();
