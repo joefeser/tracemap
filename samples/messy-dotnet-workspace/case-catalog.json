@@ -301,12 +301,12 @@
       "id": "MW-DROPDOWN-CTOR-001",
       "status": "implemented",
       "roots": ["vb-init-web", "vb-init-backend"],
-      "shape": "a projectless VB Web Forms DropDownList Init Handles handler iterates New SyntheticDataAccess().MyList inside With; its explicit constructor assigns MyList after calling a newly created helper whose method contains a SQL adapter terminal",
+      "shape": "a projectless VB Web Forms DropDownList Init Handles handler iterates New SyntheticDataAccess().MyList inside With; its explicit constructor calls an inline-created service, which forwards through a typed repository field and a typed SQL gateway field to an ADO.NET command terminal",
       "stages": ["extraction", "combining", "reconciliation", "traversal"],
-      "expectedRuleIds": ["vb.syntax.event-wiring.v1", "vb.syntax.objectcreation.v1", "vb.syntax.database-operation.v1", "combined.paths.projectless-vb-constructor-bridge.v1"],
+      "expectedRuleIds": ["vb.syntax.event-wiring.v1", "vb.syntax.objectcreation.v1", "vb.syntax.database-operation.v1", "combined.paths.projectless-vb-constructor-bridge.v1", "combined.paths.projectless-vb-receiver-bridge.v1"],
       "expectedTiers": ["Tier3SyntaxOrTextual"],
       "expectedGaps": [],
-      "assertions": "the control Init binding, inline unassigned New expression, exact creation-to-constructor edge, constructor-to-helper call, and one reachable SQL terminal remain visible after independent scans and combine; property value flow, collection contents, execution, and successful binding are not claimed"
+      "assertions": "the control Init binding, two inline unassigned New expressions, exact creation-to-constructor edge, inline service call, two typed-field call hops, and one reachable SQL terminal remain visible after independent scans and combine; property value flow, collection contents, execution, and successful binding are not claimed"
     },
     {
       "id": "MW-DROPDOWN-CTOR-AMBIGUOUS-001",
@@ -318,6 +318,17 @@
       "expectedTiers": ["Tier4Unknown"],
       "expectedGaps": ["ProjectlessVisualBasicConstructorTargetAmbiguous"],
       "assertions": "the duplicate constructor type identities produce an explicit Tier4 ambiguity gap and cannot create a terminal path from the page"
+    },
+    {
+      "id": "MW-DROPDOWN-INLINE-AMBIGUOUS-001",
+      "status": "implemented",
+      "roots": ["vb-init-web", "vb-init-backend", "vb-init-service-duplicate"],
+      "shape": "two independent backend roots declare the same service type and method reached by an inline New service invocation in a projectless VB constructor",
+      "stages": ["extraction", "combining", "reconciliation", "traversal"],
+      "expectedRuleIds": ["combined.paths.projectless-vb-receiver-bridge.v1"],
+      "expectedTiers": ["Tier4Unknown"],
+      "expectedGaps": ["ProjectlessVisualBasicReceiverTargetAmbiguous"],
+      "assertions": "the inline-created service type stays ambiguous across combined roots, emits a Tier4 receiver gap, and cannot create a terminal path from the page"
     },
     {
       "id": "MW-COMPOUND-LIMIT-001",
