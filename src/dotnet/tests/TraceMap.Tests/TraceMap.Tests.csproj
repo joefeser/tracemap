@@ -48,6 +48,7 @@
     <ProjectReference Include="..\..\..\..\samples\messy-dotnet-workspace\root-alpha\AlphaSite.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="..\..\..\..\samples\messy-dotnet-workspace\root-beta\BetaSite.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="..\..\..\..\samples\messy-dotnet-workspace\root-generated\GeneratedSite.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\..\..\..\samples\messy-dotnet-workspace\vb-pdb-build\CompiledProjectless.VB.vbproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="..\..\..\..\samples\messy-dotnet-workspace\root-crosslanguage\csharp\CrossLanguageEntry.csproj" ReferenceOutputAssembly="false" />
   </ItemGroup>
 

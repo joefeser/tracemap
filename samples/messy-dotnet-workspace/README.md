@@ -61,6 +61,13 @@ Roots:
 - `root-generated/` — buildable Web Forms-shaped C# page whose auto-generated
   designer bridge is deliberately excluded from source traversal. A bound
   compiled scan pins the handler's source→metadata→IL/PDB identity chain.
+- `vb-pdb-projectless/` and `vb-pdb-build/` — a source tree with no project file
+  and a separate deterministic VB build of its page handler. The source-only
+  path stops at an excluded generated bridge; an admitted portable PDB with an
+  exact source-document checksum and one method-row/sequence-point owner can
+  enter IL and reach the existing `root-generated` SQL terminal. Duplicated
+  source methods or a missing checksum join withhold that entry. Native Windows
+  PDBs and private page compilation are not claimed by this fixture.
 - `root-crosslanguage/` — buildable C#→VB→F# project graph. The fixture pins
   the current partial evidence: a C# syntax downgrade with a compilation gap,
   a VB semantic call to F#, admitted F# metadata, and an explicit unsupported

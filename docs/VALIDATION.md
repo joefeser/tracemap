@@ -2788,11 +2788,27 @@ dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj \
 
 This overlay does not change the combined database schema or source-only
 results. It does not admit binaries on its own, claim runtime reachability, or
-solve projectless Web Forms source-to-binary binding. A private page remains
+solve projectless Web Forms source-to-binary binding without an exact admitted
+PDB join. A private page remains
 unproven until its exact built assembly, binding receipt, and source identity
 are admitted and the page-specific path is observed. Single-index Web Forms
 packet compaction does not yet retain the compiled closure; this proof uses a
 combined index, as the application review workflow does.
+
+The additional `vb-pdb-projectless` public fixture covers the formerly missing
+projectless entry when a *portable* PDB is available. Its projectless VB handler
+is compiled by a separate deterministic project, while the source-only combined
+path stops before SQL. The bound scan requires the exact source-document
+checksum, one PDB method row reconciled to one admitted metadata method, and
+visible sequence points contained by one method block. It then traverses a
+cross-assembly IL MemberRef and excluded generated bridge to the SQL terminal.
+Duplicate source declarations or removal of the checksum join withhold the
+entry. Run `dotnet test` with filter
+`FullyQualifiedName~Projectless_VB_handler_enters_bound_IL_only_through_exact_PDB_document_and_method`.
+This is Tier2 static location evidence, not Tier1 semantic binding or runtime
+proof. The work-machine inventory found two classic Windows PDBs and no
+portable PDB, so this path remains unavailable there until a separately
+validated Windows-PDB or other exact source-binding reader exists.
 
 ### IL rewrite evidence (Task 10 second slice)
 
