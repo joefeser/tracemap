@@ -43,6 +43,13 @@ try
         foreach (var line in WebFormsVisualBasicReceiverBridgeAudit.Run(args[1], args[2], args[3], args.Length == 5)) Console.WriteLine(line);
         return 0;
     }
+    if (args.Length == 6 && args[0] == "--vb-constructor-hop-audit")
+    {
+        foreach (var line in WebFormsVisualBasicReceiverBridgeAudit.Run(
+            args[1], args[2], args[3], focusHandlerName: args[4], focusCreatedTypeName: args[5]))
+            if (line.StartsWith("constructorHop", StringComparison.Ordinal)) Console.WriteLine(line);
+        return 0;
+    }
     if (args.Length == 3 && args[0] == "--database-evidence")
     {
         foreach (var line in WebFormsDatabaseEvidenceAudit.Run(args[1], args[2], Console.WriteLine)) Console.WriteLine(line);
@@ -72,7 +79,7 @@ catch (Exception error)
         "AgentHandoffCorpusSchemaMismatch", "AgentHandoffCorpusProvenanceMismatch", "AgentHandoffCorpusIntegrityMismatch",
         "AgentHandoffRecipeSchemaMismatch", "AgentHandoffRecipeCatalogMismatch"];
     safeCodes = [.. safeCodes, "ApplicationWorkbenchPacketUnavailable", "ApplicationWorkbenchPacketSchemaMismatch"];
-    safeCodes = [.. safeCodes, "ReceiverBridgeAuditInputLimit", "ReceiverBridgeAuditSchemaMismatch", "ReceiverBridgeAuditPrivateOptionInvalid"];
+    safeCodes = [.. safeCodes, "ReceiverBridgeAuditInputLimit", "ReceiverBridgeAuditSchemaMismatch", "ReceiverBridgeAuditPrivateOptionInvalid", "ReceiverBridgeAuditFocusInvalid"];
     var code = error is InvalidDataException && safeCodes.Contains(error.Message, StringComparer.Ordinal)
         ? error.Message : "RawAuditInputOrRuntimeFailure";
     Console.Error.WriteLine($"raw-webforms-evidence=failed;code={code}");
