@@ -2875,7 +2875,7 @@ containing module.
 
 Public-safe synthetic fixtures under `samples/messy-dotnet-workspace/`
 reproduce the workspace shapes observed in real Web Forms/.NET scans without
-copying any private source, names, paths, or artifacts. Six roots are
+copying any private source, names, paths, or artifacts. Eight roots are
 scanned independently: `root-alpha` (C# Web Forms site with a twelve-call-edge deep
 chain ending in an ADO.NET-style SQL terminal at graph distance 14, a
 three-node cycle plus a self-cycle with its own handler, ten same-name
@@ -2885,7 +2885,9 @@ names), `vb-projectless` (loose VB files with no `.vbproj`/`.sln`),
 `root-generated` (a designer bridge and bound compiled/PDB evidence), and
 `root-crosslanguage` (a buildable C#→VB→F# project graph), and
 `vb-compound-pages` (three projectless VB Web Forms pages with repeated
-`Process` method names, deeper calls, and zero/two/one supported SQL terminals).
+`Process` method names, deeper calls, and zero/two/one supported SQL terminals),
+and `vb-split-web` plus `vb-split-backend` (the same page/route shape scanned
+as independent web and backend roots before index combine).
 
 The stable case catalog is `samples/messy-dotnet-workspace/case-catalog.json`
 (schema `messy-workspace-case-catalog.v1`). Cases are marked `implemented` or
@@ -2908,6 +2910,12 @@ interrupted input closure must report an explicit
 Tier4 graph-input limit, never a clean no-terminal conclusion. This synthetic
 result does not establish that private pages 2, 3, or 11 are fixed; rerun those
 pages on a fresh merged index to make that claim.
+
+The split-root regression additionally requires one exact page-to-backend
+receiver bridge per page and complete two/zero/one terminal inventories after
+combining the independent projectless VB scans. It currently passes. Thus
+root separation alone does not reproduce the remaining private-page gap; a
+different receiver or call shape must be demonstrated before a resolver change.
 
 Pinned behaviors, asserted per catalog case id and pipeline stage
 (extraction, combining, reconciliation, traversal) by

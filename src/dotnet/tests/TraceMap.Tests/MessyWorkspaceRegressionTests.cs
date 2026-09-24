@@ -77,10 +77,10 @@ public sealed class MessyWorkspaceRegressionTests
             Require("MW-CATALOG", "extraction", entry.GetProperty("shape").GetString() is { Length: > 0 }, $"case {id} must describe its shape");
         }
 
-        Require("MW-CATALOG", "extraction", ids.Count == 16,
-            $"expected the sixteen pinned fixture cases, found {ids.Count}");
-        Require("MW-CATALOG", "extraction", implemented == 16 && deferred == 0,
-            $"all sixteen pinned fixture cases must remain implemented; found {implemented} implemented and {deferred} deferred");
+        Require("MW-CATALOG", "extraction", ids.Count == 17,
+            $"expected the seventeen pinned fixture cases, found {ids.Count}");
+        Require("MW-CATALOG", "extraction", implemented == 17 && deferred == 0,
+            $"all seventeen pinned fixture cases must remain implemented; found {implemented} implemented and {deferred} deferred");
 
         // Catalog evidence annotations are load-bearing: every expected rule id must
         // exist in the rule catalog, tiers must be real evidence tiers, and gap
@@ -1036,6 +1036,63 @@ public sealed class MessyWorkspaceRegressionTests
                     .Concat(observedPacket.Gaps.Select(gap => gap.EvidenceTier)),
                 observedPacket.Gaps.Select(gap => gap.Classification));
         }
+    }
+
+    [Fact]
+    public async Task Split_projectless_vb_pages_reach_backend_terminals_after_independent_scans_and_combine()
+    {
+        using var temp = new TempDirectory();
+        var (webScan, webIndex) = ScanRoot(temp, "vb-split-web", "split-web");
+        var (backendScan, backendIndex) = ScanRoot(temp, "vb-split-backend", "split-backend");
+        Require("MW-SPLIT-VB-001", "extraction",
+            webScan.Manifest.AnalysisLevel == "Level3SyntaxAnalysis"
+            && backendScan.Manifest.AnalysisLevel == "Level3SyntaxAnalysis",
+            "both independent roots must remain projectless syntax scans");
+
+        var combinedIndex = Path.Combine(temp.Path, "split-vb-combined.sqlite");
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions(
+            [webIndex, backendIndex], combinedIndex, ["web", "backend"]));
+        var graph = await CombinedDependencyPathReporter.BuildGraphInventoryAsync(combinedIndex);
+        var nodesById = graph.Nodes.ToDictionary(node => node.NodeId, StringComparer.Ordinal);
+        foreach (var page in new[] { "PageTwo", "PageThree", "PageEleven" })
+        {
+            var crossRootBridges = graph.Edges.Where(edge =>
+                edge.EdgeKind == "projectless-vb-receiver-bridge"
+                && nodesById[edge.FromNodeId].DisplayName.Contains($"{page}.RunButton_Click", StringComparison.Ordinal)
+                && nodesById[edge.ToNodeId].DisplayName.StartsWith("SplitAcceptanceRoutes.Dispatch", StringComparison.Ordinal))
+                .ToArray();
+            Require("MW-SPLIT-VB-001", "reconciliation", crossRootBridges.Length == 1,
+                $"{page}: expected one exact cross-root receiver bridge, found {crossRootBridges.Length}");
+        }
+        var packet = await WebFormsModernizationPacketReporter.BuildAsync(
+            new(combinedIndex, Path.Combine(temp.Path, "split-vb-packet"), MaxDepth: 10));
+        foreach (var (page, expectedTerminals) in new (string Page, int Terminals)[]
+        {
+            ("PageTwo", 2), ("PageThree", 0), ("PageEleven", 1)
+        })
+        {
+            var chains = packet.EventChains.Where(chain =>
+                chain.HandlerSymbol?.Contains($"{page}.RunButton_Click", StringComparison.Ordinal) == true).ToArray();
+            Require("MW-SPLIT-VB-001", "traversal", chains.Length > 0,
+                $"{page}: no page handler chain after combining roots");
+            Require("MW-SPLIT-VB-001", "traversal", chains.All(chain =>
+                chain.TraversalObservation?.TerminalReachabilityComplete == true
+                && chain.TraversalObservation.DistinctReachableTerminalCount == expectedTerminals),
+                $"{page}: expected {expectedTerminals} complete supported terminals, found "
+                    + $"[{string.Join(',', chains.Select(chain => chain.TraversalObservation?.DistinctReachableTerminalCount))}]");
+            Require("MW-SPLIT-VB-001", "traversal",
+                TerminalBoundaries(packet, $"{page}.RunButton_Click").Count == expectedTerminals,
+                $"{page}: supported boundary count differs from terminal inventory");
+        }
+        RequireCatalogEvidence("MW-SPLIT-VB-001", "reconciliation",
+            webScan.Facts.Select(fact => fact.RuleId)
+                .Concat(backendScan.Facts.Select(fact => fact.RuleId))
+                .Concat(packet.EventChains.SelectMany(chain => chain.TraversalObservation?.TraversedRuleIds ?? []))
+                .Concat(packet.Gaps.Select(gap => gap.RuleId)),
+            webScan.Facts.Select(fact => fact.EvidenceTier)
+                .Concat(backendScan.Facts.Select(fact => fact.EvidenceTier))
+                .Concat(packet.Gaps.Select(gap => gap.EvidenceTier)),
+            packet.Gaps.Select(gap => gap.Classification));
     }
 
     [Fact]

@@ -287,6 +287,17 @@
       "assertions": "depth 8 and 10 retain the same single terminal identity independently from the page-two and page-three routes"
     },
     {
+      "id": "MW-SPLIT-VB-001",
+      "status": "implemented",
+      "roots": ["vb-split-web", "vb-split-backend"],
+      "shape": "three projectless VB Web Forms pages and their backend classes are scanned as independent roots, then combined; page two branches through five same-name methods in one backend file to two SQL terminals, page three reaches none, and page eleven reaches one",
+      "stages": ["extraction", "combining", "reconciliation", "traversal"],
+      "expectedRuleIds": ["vb.syntax.callgraph.v1", "vb.syntax.database-operation.v1", "combined.paths.projectless-vb-receiver-bridge.v1"],
+      "expectedTiers": ["Tier3SyntaxOrTextual", "Tier4Unknown"],
+      "expectedGaps": ["DownstreamWithoutSupportedTerminal"],
+      "assertions": "each page has exactly one cross-root receiver bridge; the merged packet retains complete 2/0/1 supported-terminal inventories and matching boundaries; this proves only the synthetic retained graph, not private-corpus behavior or runtime absence"
+    },
+    {
       "id": "MW-COMPOUND-LIMIT-001",
       "status": "implemented",
       "roots": ["vb-compound-pages"],
