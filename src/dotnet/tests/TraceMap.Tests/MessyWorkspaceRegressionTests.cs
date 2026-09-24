@@ -77,10 +77,10 @@ public sealed class MessyWorkspaceRegressionTests
             Require("MW-CATALOG", "extraction", entry.GetProperty("shape").GetString() is { Length: > 0 }, $"case {id} must describe its shape");
         }
 
-        Require("MW-CATALOG", "extraction", ids.Count == 17,
-            $"expected the seventeen pinned fixture cases, found {ids.Count}");
-        Require("MW-CATALOG", "extraction", implemented == 17 && deferred == 0,
-            $"all seventeen pinned fixture cases must remain implemented; found {implemented} implemented and {deferred} deferred");
+        Require("MW-CATALOG", "extraction", ids.Count == 19,
+            $"expected the nineteen pinned fixture cases, found {ids.Count}");
+        Require("MW-CATALOG", "extraction", implemented == 19 && deferred == 0,
+            $"all nineteen pinned fixture cases must remain implemented; found {implemented} implemented and {deferred} deferred");
 
         // Catalog evidence annotations are load-bearing: every expected rule id must
         // exist in the rule catalog, tiers must be real evidence tiers, and gap
@@ -1093,6 +1093,99 @@ public sealed class MessyWorkspaceRegressionTests
                 .Concat(backendScan.Facts.Select(fact => fact.EvidenceTier))
                 .Concat(packet.Gaps.Select(gap => gap.EvidenceTier)),
             packet.Gaps.Select(gap => gap.Classification));
+    }
+
+    [Fact]
+    public async Task Dropdown_init_inline_creation_reaches_constructor_side_effect_and_data_helper()
+    {
+        using var temp = new TempDirectory();
+        var (webScan, webIndex) = ScanRoot(temp, "vb-init-web", "init-web");
+        var (backendScan, backendIndex) = ScanRoot(temp, "vb-init-backend", "init-backend");
+        Require("MW-DROPDOWN-CTOR-001", "extraction",
+            webScan.Manifest.AnalysisLevel == "Level3SyntaxAnalysis"
+            && backendScan.Manifest.AnalysisLevel == "Level3SyntaxAnalysis",
+            "the two roots must be independent projectless VB scans");
+        Require("MW-DROPDOWN-CTOR-001", "extraction",
+            webScan.Facts.Any(fact => fact.FactType == FactTypes.VisualBasicEventBindingDeclared
+                && fact.Properties.GetValueOrDefault("eventName") == "Init"
+                && fact.Properties.GetValueOrDefault("receiverName") == "Name"),
+            "the control Init Handles binding was not extracted");
+        Require("MW-DROPDOWN-CTOR-001", "extraction",
+            webScan.Facts.Any(fact => fact.FactType == FactTypes.ObjectCreated
+                && fact.RuleId == RuleIds.VisualBasicSyntaxObjectCreation
+                && fact.Properties.GetValueOrDefault("createdType") == "SyntheticDataAccess"
+                && fact.Properties.GetValueOrDefault("assignedTo") == ""),
+            "the inline New expression must be retained without a fabricated local assignment");
+        Require("MW-DROPDOWN-CTOR-001", "extraction",
+            backendScan.Facts.Any(fact => fact.FactType == FactTypes.DatabaseOperationCandidate
+                && fact.SourceSymbol == "SyntheticListSource.LoadChoices()"),
+            "the backend terminal is absent before graph composition");
+
+        var combinedIndex = Path.Combine(temp.Path, "init-combined.sqlite");
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions(
+            [webIndex, backendIndex], combinedIndex, ["web", "backend"]));
+        var graph = await CombinedDependencyPathReporter.BuildGraphInventoryAsync(combinedIndex);
+        var nodesById = graph.Nodes.ToDictionary(node => node.NodeId, StringComparer.Ordinal);
+        Require("MW-DROPDOWN-CTOR-001", "reconciliation",
+            graph.Edges.Count(edge => edge.EdgeKind == "projectless-vb-constructor-bridge"
+                && nodesById[edge.FromNodeId].DisplayName == "ChoicesPage.Name_Init(Object,EventArgs)"
+                && nodesById[edge.ToNodeId].DisplayName == "SyntheticDataAccess.New()"
+                && edge.RuleId == "combined.paths.projectless-vb-constructor-bridge.v1"
+                && edge.EvidenceTier == EvidenceTiers.Tier3SyntaxOrTextual) == 1,
+            "the exact inline creation-to-constructor bridge is absent or duplicated");
+        var packet = await WebFormsModernizationPacketReporter.BuildAsync(
+            new(combinedIndex, Path.Combine(temp.Path, "init-packet"), MaxDepth: 10));
+        var chains = packet.EventChains.Where(chain =>
+            chain.HandlerSymbol?.Contains("ChoicesPage.Name_Init", StringComparison.Ordinal) == true).ToArray();
+        Require("MW-DROPDOWN-CTOR-001", "traversal", chains.Length > 0,
+            "the dropdown Init handler is absent from the merged packet");
+        Require("MW-DROPDOWN-CTOR-001", "traversal", chains.All(chain =>
+            chain.TraversalObservation?.TerminalReachabilityComplete == true
+            && chain.TraversalObservation.DistinctReachableTerminalCount == 1),
+            $"constructor-populated MyList must reach one SQL terminal; actual counts "
+                + $"[{string.Join(',', chains.Select(chain => chain.TraversalObservation?.DistinctReachableTerminalCount))}]");
+        Require("MW-DROPDOWN-CTOR-001", "traversal",
+            TerminalBoundaries(packet, "ChoicesPage.Name_Init").Count == 1,
+            "the constructor-to-helper SQL terminal has no boundary");
+        Require("MW-DROPDOWN-CTOR-001", "traversal",
+            chains.All(chain => chain.TraversalObservation!.TraversedRuleIds.Contains("combined.paths.projectless-vb-constructor-bridge.v1")),
+            "the terminal witness did not traverse the constructor bridge");
+        RequireCatalogEvidence("MW-DROPDOWN-CTOR-001", "traversal",
+            webScan.Facts.Select(fact => fact.RuleId)
+                .Concat(backendScan.Facts.Select(fact => fact.RuleId))
+                .Concat(chains.SelectMany(chain => chain.TraversalObservation!.TraversedRuleIds)),
+            webScan.Facts.Select(fact => fact.EvidenceTier)
+                .Concat(backendScan.Facts.Select(fact => fact.EvidenceTier)),
+            packet.Gaps.Select(gap => gap.Classification));
+    }
+
+    [Fact]
+    public async Task Dropdown_init_duplicate_constructor_type_fails_closed_across_roots()
+    {
+        using var temp = new TempDirectory();
+        var (_, webIndex) = ScanRoot(temp, "vb-init-web", "ambiguous-web");
+        var (_, backendIndex) = ScanRoot(temp, "vb-init-backend", "ambiguous-backend");
+        var (_, duplicateIndex) = ScanRoot(temp, "vb-init-duplicate", "ambiguous-duplicate");
+        var combinedIndex = Path.Combine(temp.Path, "ambiguous-init-combined.sqlite");
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions(
+            [webIndex, backendIndex, duplicateIndex], combinedIndex, ["web", "backend", "duplicate"]));
+        var graph = await CombinedDependencyPathReporter.BuildGraphInventoryAsync(combinedIndex);
+        Require("MW-DROPDOWN-CTOR-AMBIGUOUS-001", "reconciliation",
+            graph.Gaps.Any(gap => gap.GapKind == "ProjectlessVisualBasicConstructorTargetAmbiguous"
+                && gap.RuleId == "combined.paths.projectless-vb-constructor-bridge.v1"),
+            "duplicate constructor type identities need an explicit ambiguity gap");
+        var packet = await WebFormsModernizationPacketReporter.BuildAsync(
+            new(combinedIndex, Path.Combine(temp.Path, "ambiguous-init-packet"), MaxDepth: 10));
+        var chains = packet.EventChains.Where(chain =>
+            chain.HandlerSymbol?.Contains("ChoicesPage.Name_Init", StringComparison.Ordinal) == true).ToArray();
+        Require("MW-DROPDOWN-CTOR-AMBIGUOUS-001", "traversal",
+            chains.Length > 0 && chains.All(chain =>
+                chain.TraversalObservation?.DistinctReachableTerminalCount == 0),
+            "an ambiguous constructor identity must not create a SQL terminal path");
+        RequireCatalogEvidence("MW-DROPDOWN-CTOR-AMBIGUOUS-001", "reconciliation",
+            graph.Gaps.Select(gap => gap.RuleId).OfType<string>(),
+            graph.Gaps.Select(gap => gap.EvidenceTier).OfType<string>(),
+            graph.Gaps.Select(gap => gap.GapKind));
     }
 
     [Fact]

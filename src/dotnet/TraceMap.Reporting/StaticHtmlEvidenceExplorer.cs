@@ -338,6 +338,7 @@ public static partial class StaticHtmlEvidenceExplorer
         "fact-attached-to-symbol",
         "surface-evidence",
         "symbol-reconciliation",
+        "projectless-vb-constructor-bridge",
         "interface-candidate",
         "override-candidate",
         "message-publish-consume"
