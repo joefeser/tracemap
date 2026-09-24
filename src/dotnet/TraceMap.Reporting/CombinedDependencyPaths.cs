@@ -1163,6 +1163,11 @@ public static partial class CombinedDependencyPathReporter
             "facts",
             "extractor_version",
             cancellationToken);
+        var hasFactExtractorId = await CombinedDependencyReporter.ColumnExistsAsync(
+            connection,
+            "facts",
+            "extractor_id",
+            cancellationToken);
         var selectedSymbols = budget is not null && selectedFactIds is not null
             ? await ReadSelectedSymbolClosureAsync(connection, selectedFactIds, maxDepth, maxFrontier, budget.MaxFacts, cancellationToken)
             : null;
@@ -1170,8 +1175,8 @@ public static partial class CombinedDependencyPathReporter
             ? id["single:".Length..]
             : id).ToHashSet(StringComparer.Ordinal);
         var facts = budget is null
-            ? await ReadSingleFactsAsync(connection, source, hasFactExtractorVersion, cancellationToken)
-            : await ReadCompactSingleFactsAsync(connection, source, hasFactExtractorVersion, budget, cancellationToken,
+            ? await ReadSingleFactsAsync(connection, source, hasFactExtractorVersion, hasFactExtractorId, cancellationToken)
+            : await ReadCompactSingleFactsAsync(connection, source, hasFactExtractorVersion, hasFactExtractorId, budget, cancellationToken,
                 originalSelectedFactIds, selectedSymbols, maxFrontier, maxTraversalWork);
         var edges = await ReadSingleEdgesAsync(connection, source, cancellationToken, budget, selectedSymbols);
         var counts = new SortedDictionary<string, long>(StringComparer.Ordinal);
@@ -1240,14 +1245,16 @@ public static partial class CombinedDependencyPathReporter
         SqliteConnection connection,
         CombinedReportSource source,
         bool hasExtractorVersion,
+        bool hasExtractorId,
         CancellationToken cancellationToken)
     {
         await using var command = connection.CreateCommand();
         var extractorVersionExpression = hasExtractorVersion ? "extractor_version" : "null";
+        var extractorIdExpression = hasExtractorId ? "extractor_id" : "null";
         command.CommandText = $$"""
             select fact_id, scan_id, repo, commit_sha, fact_type, rule_id, evidence_tier,
                    source_symbol, target_symbol, contract_element, file_path, start_line, end_line, properties_json,
-                   {{extractorVersionExpression}}
+                   {{extractorVersionExpression}}, {{extractorIdExpression}}
             from facts
             order by file_path, start_line, fact_type, fact_id;
             """;
@@ -1274,7 +1281,8 @@ public static partial class CombinedDependencyPathReporter
                 reader.GetInt32(11),
                 reader.GetInt32(12),
                 ParseProperties(reader.GetString(13)),
-                reader.IsDBNull(14) ? null : reader.GetString(14)));
+                reader.IsDBNull(14) ? null : reader.GetString(14),
+                reader.IsDBNull(15) ? null : reader.GetString(15)));
         }
 
         return rows;
@@ -3455,13 +3463,15 @@ public static partial class CombinedDependencyPathReporter
             }
 
             var depth = 1;
-            while (++index < normalized.Length && depth > 0)
+            var cursor = index + 1;
+            while (cursor < normalized.Length && depth > 0)
             {
-                if (normalized[index] == '(') depth++;
-                else if (normalized[index] == ')') depth--;
+                if (normalized[cursor] == '(') depth++;
+                else if (normalized[cursor] == ')') depth--;
+                cursor++;
             }
             if (depth != 0) return string.Empty;
-            index--; // Keep the next nested-type separator after the generic clause.
+            index = cursor - 1; // The for-loop advance lands on the next separator.
         }
         return result.ToString();
     }

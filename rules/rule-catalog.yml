@@ -3458,6 +3458,7 @@ rules:
       - ProjectlessVisualBasicConstructorBodyUnavailable gap
     limitations:
       - Only projectless syntax-extractor object creations can bridge; compiler-rejected semantic constructor fallbacks cannot be rescued by another source root.
+      - A bounded single-index packet admits matching constructor declarations and constructor-owned body facts through the same fact, frontier, and work limits as syntax call closure; interrupted admission is partial evidence, not a clean absent constructor.
       - The created type must match exactly one retained VB syntax constructor declaration by qualified type identity and argument count across the combined sources; unqualified names never infer a namespace, while same-arity overloads and duplicate identities fail closed.
       - An exact arity-bearing constructor body with retained call or creation evidence is required. Missing or unretained bodies remain a Tier4 gap, not a clean absence conclusion.
       - Argument types, implicit constructors, property getter semantics, collection contents, branch feasibility, and runtime object lifetime are not inferred.

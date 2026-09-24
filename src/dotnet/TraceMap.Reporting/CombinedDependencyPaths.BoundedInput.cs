@@ -149,7 +149,7 @@ public static partial class CombinedDependencyPathReporter
     internal static string TextByteCountSql(params string[] columns) =>
         string.Join(" + ", columns.Select(column => $"coalesce(length(cast({column} as blob)), 0)"));
 
-    private static string CompactFactQuery(bool hasExtractorVersion, string predicate = "1 = 1")
+    private static string CompactFactQuery(bool hasExtractorVersion, bool hasExtractorId, string predicate = "1 = 1")
     {
         var types = string.Join(",", SymbolWitnessFactTypes.Select(type => $"'{type}'"));
         // Use SQLite to discard unconsumed large properties before a managed
@@ -188,6 +188,7 @@ public static partial class CombinedDependencyPathReporter
                                'callerName', coalesce(cast(json_extract(properties_json, '$.callerName') as text), ''),
                                'coverageLabel', coalesce(cast(json_extract(properties_json, '$.coverageLabel') as text), ''),
                                'receiverName', coalesce(cast(json_extract(properties_json, '$.receiverName') as text), ''),
+                               'receiverTypeResolution', coalesce(cast(json_extract(properties_json, '$.receiverTypeResolution') as text), ''),
                                'targetSymbolId', coalesce(cast(json_extract(properties_json, '$.targetSymbolId') as text), ''),
                                'targetContainingSymbolId', coalesce(cast(json_extract(properties_json, '$.targetContainingSymbolId') as text), '')),
                                case when json_type(properties_json, '$.receiverType') is not null
@@ -228,17 +229,18 @@ public static partial class CombinedDependencyPathReporter
                                 'baseTypes', coalesce(cast(json_extract(properties_json, '$.baseTypes') as text), ''))
                             when symbol_only then '{}'
                             else properties_json end as properties_json,
-                       {{(hasExtractorVersion ? "extractor_version" : "null")}} as version, symbol_only
+                       {{(hasExtractorVersion ? "extractor_version" : "null")}} as version, symbol_only,
+                       {{(hasExtractorId ? "extractor_id" : "null")}} as extractor_id
                 from projected
             )
-            select *, {{TextByteCountSql("fact_id", "scan_id", "repo", "commit_sha", "fact_type", "rule_id", "evidence_tier", "source_symbol", "target_symbol", "contract_element", "file_path", "properties_json", "version")}}
+            select *, {{TextByteCountSql("fact_id", "scan_id", "repo", "commit_sha", "fact_type", "rule_id", "evidence_tier", "source_symbol", "target_symbol", "contract_element", "file_path", "properties_json", "version", "extractor_id")}}
             from input order by fact_id collate binary;
             """;
     }
 
     private static async Task<IReadOnlyList<CombinedFactRow>> ReadCompactSingleFactsAsync(
         SqliteConnection connection, CombinedReportSource source, bool hasExtractorVersion,
-        ReportInputBudget budget, CancellationToken cancellationToken,
+        bool hasExtractorId, ReportInputBudget budget, CancellationToken cancellationToken,
         IReadOnlySet<string>? selectedFactIds = null,
         IReadOnlySet<string>? selectedSymbols = null,
         int maxFrontier = 10000,
@@ -251,7 +253,7 @@ public static partial class CombinedDependencyPathReporter
         await using (var command = connection.CreateCommand())
         {
             var targeted = selectedFactIds is not null;
-            command.CommandText = CompactFactQuery(hasExtractorVersion, targeted
+            command.CommandText = CompactFactQuery(hasExtractorVersion, hasExtractorId, targeted
                 ? "fact_id in (select value from json_each($fact_ids)) "
                     + "or source_symbol in (select value from json_each($symbols)) "
                     + "or (fact_type = 'MethodDeclared' and target_symbol in (select value from json_each($symbols))) "
@@ -274,7 +276,7 @@ public static partial class CombinedDependencyPathReporter
             while (await reader.ReadAsync(cancellationToken))
             {
                 budget.VisitFact();
-                var bytes = reader.GetInt64(16);
+                var bytes = reader.GetInt64(17);
                 budget.CheckRow(bytes);
                 var sourceSymbol = reader.IsDBNull(7) ? null : reader.GetString(7);
                 var targetSymbol = reader.IsDBNull(8) ? null : reader.GetString(8);
@@ -301,13 +303,13 @@ public static partial class CombinedDependencyPathReporter
             var names = batch.Select((_, index) => "$id" + index).ToArray();
             // The interpolated SQL contains generated parameter names only;
             // every fact ID value is bound below.
-            command.CommandText = CompactFactQuery(hasExtractorVersion, $"fact_id in ({string.Join(',', names)})"); // nosemgrep: csharp.lang.security.sqli.csharp-sqli
+            command.CommandText = CompactFactQuery(hasExtractorVersion, hasExtractorId, $"fact_id in ({string.Join(',', names)})"); // nosemgrep: csharp.lang.security.sqli.csharp-sqli
             for (var index = 0; index < batch.Length; index++) command.Parameters.AddWithValue(names[index], batch[index]);
             await using var reader = await command.ExecuteReaderAsync(cancellationToken);
             while (await reader.ReadAsync(cancellationToken))
             {
                 if (!retainedIds.Add(reader.GetString(0))) continue;
-                var bytes = reader.GetInt64(16);
+                var bytes = reader.GetInt64(17);
                 budget.Retain(bytes);
                 rows.Add(ReadProjectedFact(reader, source));
             }
@@ -318,6 +320,7 @@ public static partial class CombinedDependencyPathReporter
         // metadata needed to prove a typed field and its bounded base chain.
         // The graph rule still requires unique receiver and target identities.
         var inspectedContextCallIds = new HashSet<string>(StringComparer.Ordinal);
+        var inspectedContextCreationIds = new HashSet<string>(StringComparer.Ordinal);
         var inspectedContextTypes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var syntaxClosureWork = 0;
         void CountSyntaxClosureWork()
@@ -328,7 +331,7 @@ public static partial class CombinedDependencyPathReporter
         // Type and field metadata is needed for typed receivers and inherited
         // fields, but unrelated declarations must not consume every hop's work
         // allowance. Follow only caller/receiver types and their base chain.
-        async Task AdmitSyntaxTypeContextAsync(IReadOnlyList<CombinedFactRow> calls)
+        async Task AdmitSyntaxTypeContextAsync(IReadOnlyList<CombinedFactRow> references)
         {
             var pendingTypes = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
             void AddType(string? type)
@@ -338,11 +341,12 @@ public static partial class CombinedDependencyPathReporter
                 pendingTypes.Add(normalized);
                 pendingTypes.Add(SimpleVisualBasicTypeName(normalized));
             }
-            foreach (var call in calls)
+            foreach (var call in references)
             {
                 AddType(VisualBasicQualifiedMemberKey(call.SourceSymbol)?.Type);
                 AddType(call.Properties.GetValueOrDefault("receiverType"));
                 AddType(call.Properties.GetValueOrDefault("calleeContainingType"));
+                AddType(call.Properties.GetValueOrDefault("createdType"));
             }
             while (true)
             {
@@ -355,7 +359,7 @@ public static partial class CombinedDependencyPathReporter
                 inspectedContextTypes.UnionWith(freshTypes);
                 foreach (var _ in freshTypes) CountSyntaxClosureWork();
                 await using var contextCommand = connection.CreateCommand();
-                contextCommand.CommandText = CompactFactQuery(hasExtractorVersion, $$"""
+                contextCommand.CommandText = CompactFactQuery(hasExtractorVersion, hasExtractorId, $$"""
                     rule_id = '{{RuleIds.VisualBasicSyntaxDeclarations}}' and json_valid(properties_json) and (
                         (fact_type = '{{FactTypes.TypeDeclared}}' and (
                             cast(json_extract(properties_json, '$.qualifiedName') as text) collate nocase in (select value from json_each($type_names))
@@ -371,7 +375,7 @@ public static partial class CombinedDependencyPathReporter
                     if (!retainedIds.Add(contextReader.GetString(0))) continue;
                     CountSyntaxClosureWork();
                     budget.VisitFact();
-                    var bytes = contextReader.GetInt64(16);
+                    var bytes = contextReader.GetInt64(17);
                     budget.CheckRow(bytes);
                     var row = ReadProjectedFact(contextReader, source);
                     budget.Retain(bytes);
@@ -393,23 +397,32 @@ public static partial class CombinedDependencyPathReporter
                     && !string.IsNullOrWhiteSpace(row.Properties.GetValueOrDefault("calleeName"))
                     && inspectedContextCallIds.Add(row.OriginalFactId))
                 .ToArray();
+            var pendingCreations = rows
+                .Where(row => row.FactType == FactTypes.ObjectCreated
+                    && row.RuleId == RuleIds.VisualBasicSyntaxObjectCreation
+                    && string.Equals(row.ExtractorId, "VisualBasicSyntaxExtractor", StringComparison.Ordinal)
+                    && !string.Equals(row.Properties.GetValueOrDefault("resolution"), "unresolved-constructor", StringComparison.Ordinal)
+                    && !string.IsNullOrWhiteSpace(row.Properties.GetValueOrDefault("createdType"))
+                    && inspectedContextCreationIds.Add(row.OriginalFactId))
+                .ToArray();
             var bridgeMethodNames = pendingCalls
                 .Select(row => row.Properties.GetValueOrDefault("calleeName"))
                 .Where(name => !string.IsNullOrWhiteSpace(name))
                 .Select(name => name!)
+                .Concat(pendingCreations.Select(_ => "New"))
                 // A name seen in an earlier wave can belong to a newly
                 // admitted receiver type. Deduplicate only this wave.
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .OrderBy(name => name, StringComparer.OrdinalIgnoreCase)
                 .ToArray();
-            if (pendingCalls.Length == 0) break;
-            await AdmitSyntaxTypeContextAsync(pendingCalls);
+            if (pendingCalls.Length == 0 && pendingCreations.Length == 0) break;
+            await AdmitSyntaxTypeContextAsync([.. pendingCalls, .. pendingCreations]);
             if (bridgeMethodNames.Length == 0) continue;
             if (bridgeMethodNames.Length > maxFrontier)
                 throw new ReportInputLimitException("handler-call-target-frontier");
             foreach (var _ in bridgeMethodNames) CountSyntaxClosureWork();
             await using var command = connection.CreateCommand();
-            command.CommandText = CompactFactQuery(hasExtractorVersion, $$"""
+            command.CommandText = CompactFactQuery(hasExtractorVersion, hasExtractorId, $$"""
                 json_valid(properties_json) and (
                     (fact_type = '{{FactTypes.MethodDeclared}}'
                         and rule_id = '{{RuleIds.VisualBasicSemanticDeclarations}}'
@@ -436,7 +449,7 @@ public static partial class CombinedDependencyPathReporter
                 if (!retainedIds.Add(reader.GetString(0))) continue;
                 CountSyntaxClosureWork();
                 budget.VisitFact();
-                var bytes = reader.GetInt64(16);
+                var bytes = reader.GetInt64(17);
                 budget.CheckRow(bytes);
                 var row = ReadProjectedFact(reader, source);
                 budget.Retain(bytes);
@@ -519,7 +532,7 @@ public static partial class CombinedDependencyPathReporter
                 if (bodySymbols.Count > 0)
                 {
                     await using var bodyFactsCommand = connection.CreateCommand();
-                    bodyFactsCommand.CommandText = CompactFactQuery(hasExtractorVersion,
+                    bodyFactsCommand.CommandText = CompactFactQuery(hasExtractorVersion, hasExtractorId,
                         "source_symbol in (select value from json_each($body_symbols))");
                     bodyFactsCommand.Parameters.AddWithValue("$body_symbols", JsonSerializer.Serialize(bodySymbols));
                     await using var bodyFactsReader = await bodyFactsCommand.ExecuteReaderAsync(cancellationToken);
@@ -530,7 +543,7 @@ public static partial class CombinedDependencyPathReporter
                         var symbolOnly = bodyFactsReader.GetBoolean(15);
                         if (symbolOnly && factType != FactTypes.MethodInvoked) continue;
                         budget.VisitFact();
-                        var bytes = bodyFactsReader.GetInt64(16);
+                        var bytes = bodyFactsReader.GetInt64(17);
                         budget.CheckRow(bytes);
                         var row = ReadProjectedFact(bodyFactsReader, source);
                         if (!retainedIds.Add(row.OriginalFactId)) continue;
@@ -857,5 +870,6 @@ public static partial class CombinedDependencyPathReporter
         reader.GetString(4), reader.GetString(5), reader.GetString(6),
         reader.IsDBNull(7) ? null : reader.GetString(7), reader.IsDBNull(8) ? null : reader.GetString(8),
         reader.IsDBNull(9) ? null : reader.GetString(9), reader.GetString(10), reader.GetInt32(11), reader.GetInt32(12),
-        ParseProperties(reader.GetString(13)), reader.IsDBNull(14) ? null : reader.GetString(14));
+        ParseProperties(reader.GetString(13)), reader.IsDBNull(14) ? null : reader.GetString(14),
+        reader.IsDBNull(16) ? null : reader.GetString(16));
 }

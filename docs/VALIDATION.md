@@ -2875,7 +2875,7 @@ containing module.
 
 Public-safe synthetic fixtures under `samples/messy-dotnet-workspace/`
 reproduce the workspace shapes observed in real Web Forms/.NET scans without
-copying any private source, names, paths, or artifacts. Fifteen roots are
+copying any private source, names, paths, or artifacts. Sixteen roots are
 scanned independently: `root-alpha` (C# Web Forms site with a twelve-call-edge deep
 chain ending in an ADO.NET-style SQL terminal at graph distance 14, a
 three-node cycle plus a self-cycle with its own handler, ten same-name
@@ -2893,7 +2893,8 @@ as independent web and backend roots before index combine), and
 duplicate-type negative controls), plus `vb-review-constructor`,
 `vb-review-semantic`, and `vb-review-projectless` (nested generic type identity,
 parenthesized inline creation, namespace rejection, and compiler-rejected
-constructor fallback).
+constructor fallback), plus `vb-init-single` (the dropdown Init handler and
+constructor-side-effect backend in one projectless source index).
 
 The stable case catalog is `samples/messy-dotnet-workspace/case-catalog.json`
 (schema `messy-workspace-case-catalog.v1`). Cases are marked `implemented` or
@@ -2943,6 +2944,9 @@ not become a projectless syntax bridge when another root supplies a constructor.
 Parenthesized direct `New` receivers remain explicit syntax evidence; factories
 and arbitrary member chains remain unproven. The static HTML explorer accepts
 both constructor and receiver bridge hops as ordinary paths-report evidence.
+The single-index dropdown variant verifies that compact packet admission
+retains the matching constructor declaration and body before graph bridging;
+the split-root combined-index result alone cannot establish that behavior.
 
 Pinned behaviors, asserted per catalog case id and pipeline stage
 (extraction, combining, reconciliation, traversal) by
