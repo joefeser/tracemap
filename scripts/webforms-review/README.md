@@ -210,6 +210,23 @@ gap-classification counts so a file-size change can be localized. It emits
 counts only; it does not print private evidence identities or claim runtime
 equivalence.
 
+For a single current-run check of pages 2, 3, and 11, without another scan or
+historical comparison, run:
+
+```powershell
+& $TraceMapRoot\scripts\Show-FocusedWebFormsTerminalInventorySummary.ps1 `
+  -ReviewRoot $MergedReviewRoot
+```
+
+`-PageIds page-002,page-003,page-011` overrides the default page selection.
+The script verifies the completed run receipt and each page handoff hash before
+printing only aggregate terminal-inventory availability, completeness, observed
+distinct terminal IDs, complete terminal-free chains, path-detail truncation,
+and closed safety-limit reasons. It also prints the local TraceMap commit SHA.
+It creates no artifact, does not print private identifiers or paths, and makes
+no runtime-absence claim. A complete inventory is complete only over the
+retained static graph; a partial packet remains partial.
+
 `New-FocusedWebFormsPageGraphDump.ps1` independently closes every resolved
 handler on one receipted page. Its anonymous graph projection separates event
 chain fan-out from distinct handler cases and reports per-case retained
