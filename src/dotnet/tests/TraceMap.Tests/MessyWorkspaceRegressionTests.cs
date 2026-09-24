@@ -77,10 +77,10 @@ public sealed class MessyWorkspaceRegressionTests
             Require("MW-CATALOG", "extraction", entry.GetProperty("shape").GetString() is { Length: > 0 }, $"case {id} must describe its shape");
         }
 
-        Require("MW-CATALOG", "extraction", ids.Count == 16,
-            $"expected the sixteen pinned fixture cases, found {ids.Count}");
-        Require("MW-CATALOG", "extraction", implemented == 16 && deferred == 0,
-            $"all sixteen pinned fixture cases must remain implemented; found {implemented} implemented and {deferred} deferred");
+        Require("MW-CATALOG", "extraction", ids.Count == 22,
+            $"expected the twenty-two pinned fixture cases, found {ids.Count}");
+        Require("MW-CATALOG", "extraction", implemented == 22 && deferred == 0,
+            $"all twenty-two pinned fixture cases must remain implemented; found {implemented} implemented and {deferred} deferred");
 
         // Catalog evidence annotations are load-bearing: every expected rule id must
         // exist in the rule catalog, tiers must be real evidence tiers, and gap
@@ -1036,6 +1036,308 @@ public sealed class MessyWorkspaceRegressionTests
                     .Concat(observedPacket.Gaps.Select(gap => gap.EvidenceTier)),
                 observedPacket.Gaps.Select(gap => gap.Classification));
         }
+    }
+
+    [Fact]
+    public async Task Split_projectless_vb_pages_reach_backend_terminals_after_independent_scans_and_combine()
+    {
+        using var temp = new TempDirectory();
+        var (webScan, webIndex) = ScanRoot(temp, "vb-split-web", "split-web");
+        var (backendScan, backendIndex) = ScanRoot(temp, "vb-split-backend", "split-backend");
+        Require("MW-SPLIT-VB-001", "extraction",
+            webScan.Manifest.AnalysisLevel == "Level3SyntaxAnalysis"
+            && backendScan.Manifest.AnalysisLevel == "Level3SyntaxAnalysis",
+            "both independent roots must remain projectless syntax scans");
+
+        var combinedIndex = Path.Combine(temp.Path, "split-vb-combined.sqlite");
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions(
+            [webIndex, backendIndex], combinedIndex, ["web", "backend"]));
+        var graph = await CombinedDependencyPathReporter.BuildGraphInventoryAsync(combinedIndex);
+        var nodesById = graph.Nodes.ToDictionary(node => node.NodeId, StringComparer.Ordinal);
+        foreach (var page in new[] { "PageTwo", "PageThree", "PageEleven" })
+        {
+            var crossRootBridges = graph.Edges.Where(edge =>
+                edge.EdgeKind == "projectless-vb-receiver-bridge"
+                && nodesById[edge.FromNodeId].DisplayName.Contains($"{page}.RunButton_Click", StringComparison.Ordinal)
+                && nodesById[edge.ToNodeId].DisplayName.StartsWith("SplitAcceptanceRoutes.Dispatch", StringComparison.Ordinal))
+                .ToArray();
+            Require("MW-SPLIT-VB-001", "reconciliation", crossRootBridges.Length == 1,
+                $"{page}: expected one exact cross-root receiver bridge, found {crossRootBridges.Length}");
+        }
+        var packet = await WebFormsModernizationPacketReporter.BuildAsync(
+            new(combinedIndex, Path.Combine(temp.Path, "split-vb-packet"), MaxDepth: 10));
+        foreach (var (page, expectedTerminals) in new (string Page, int Terminals)[]
+        {
+            ("PageTwo", 2), ("PageThree", 0), ("PageEleven", 1)
+        })
+        {
+            var chains = packet.EventChains.Where(chain =>
+                chain.HandlerSymbol?.Contains($"{page}.RunButton_Click", StringComparison.Ordinal) == true).ToArray();
+            Require("MW-SPLIT-VB-001", "traversal", chains.Length > 0,
+                $"{page}: no page handler chain after combining roots");
+            Require("MW-SPLIT-VB-001", "traversal", chains.All(chain =>
+                chain.TraversalObservation?.TerminalReachabilityComplete == true
+                && chain.TraversalObservation.DistinctReachableTerminalCount == expectedTerminals),
+                $"{page}: expected {expectedTerminals} complete supported terminals, found "
+                    + $"[{string.Join(',', chains.Select(chain => chain.TraversalObservation?.DistinctReachableTerminalCount))}]");
+            Require("MW-SPLIT-VB-001", "traversal",
+                TerminalBoundaries(packet, $"{page}.RunButton_Click").Count == expectedTerminals,
+                $"{page}: supported boundary count differs from terminal inventory");
+        }
+        RequireCatalogEvidence("MW-SPLIT-VB-001", "reconciliation",
+            webScan.Facts.Select(fact => fact.RuleId)
+                .Concat(backendScan.Facts.Select(fact => fact.RuleId))
+                .Concat(packet.EventChains.SelectMany(chain => chain.TraversalObservation?.TraversedRuleIds ?? []))
+                .Concat(packet.Gaps.Select(gap => gap.RuleId)),
+            webScan.Facts.Select(fact => fact.EvidenceTier)
+                .Concat(backendScan.Facts.Select(fact => fact.EvidenceTier))
+                .Concat(packet.Gaps.Select(gap => gap.EvidenceTier)),
+            packet.Gaps.Select(gap => gap.Classification));
+    }
+
+    [Fact]
+    public async Task Dropdown_init_inline_creation_reaches_constructor_side_effect_and_data_helper()
+    {
+        using var temp = new TempDirectory();
+        var (webScan, webIndex) = ScanRoot(temp, "vb-init-web", "init-web");
+        var (backendScan, backendIndex) = ScanRoot(temp, "vb-init-backend", "init-backend");
+        Require("MW-DROPDOWN-CTOR-001", "extraction",
+            webScan.Manifest.AnalysisLevel == "Level3SyntaxAnalysis"
+            && backendScan.Manifest.AnalysisLevel == "Level3SyntaxAnalysis",
+            "the two roots must be independent projectless VB scans");
+        Require("MW-DROPDOWN-CTOR-001", "extraction",
+            webScan.Facts.Any(fact => fact.FactType == FactTypes.VisualBasicEventBindingDeclared
+                && fact.Properties.GetValueOrDefault("eventName") == "Init"
+                && fact.Properties.GetValueOrDefault("receiverName") == "Name"),
+            "the control Init Handles binding was not extracted");
+        Require("MW-DROPDOWN-CTOR-001", "extraction",
+            webScan.Facts.Any(fact => fact.FactType == FactTypes.ObjectCreated
+                && fact.RuleId == RuleIds.VisualBasicSyntaxObjectCreation
+                && fact.Properties.GetValueOrDefault("createdType") == "SyntheticDataAccess"
+                && fact.Properties.GetValueOrDefault("assignedTo") == ""),
+            "the inline New expression must be retained without a fabricated local assignment");
+        Require("MW-DROPDOWN-CTOR-001", "extraction",
+            backendScan.Facts.Any(fact => fact.FactType == FactTypes.DatabaseOperationCandidate
+                && fact.SourceSymbol?.StartsWith("SyntheticSqlGateway.ExecuteDataSet(", StringComparison.Ordinal) == true),
+            "the backend terminal is absent before graph composition");
+        Require("MW-DROPDOWN-CTOR-001", "extraction",
+            backendScan.Facts.Any(fact => fact.FactType == FactTypes.ObjectCreated
+                && fact.Properties.GetValueOrDefault("createdType") == "SyntheticService"
+                && fact.Properties.GetValueOrDefault("assignedTo") == ""),
+            "the constructor's inline service creation was not retained");
+        Require("MW-DROPDOWN-CTOR-001", "extraction",
+            backendScan.Facts.Any(fact => fact.FactType == FactTypes.CallEdge
+                && fact.SourceSymbol == "SyntheticDataAccess.New()"
+                && fact.Properties.GetValueOrDefault("calleeName") == "SelectChoices"
+                && fact.Properties.GetValueOrDefault("receiverType") == "SyntheticService"
+                && fact.Properties.GetValueOrDefault("receiverTypeResolution") == "inline-object-creation-syntax"),
+            "the inline service invocation lost its syntax-proven receiver type");
+
+        var combinedIndex = Path.Combine(temp.Path, "init-combined.sqlite");
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions(
+            [webIndex, backendIndex], combinedIndex, ["web", "backend"]));
+        var graph = await CombinedDependencyPathReporter.BuildGraphInventoryAsync(combinedIndex);
+        var nodesById = graph.Nodes.ToDictionary(node => node.NodeId, StringComparer.Ordinal);
+        Require("MW-DROPDOWN-CTOR-001", "reconciliation",
+            graph.Edges.Count(edge => edge.EdgeKind == "projectless-vb-constructor-bridge"
+                && nodesById[edge.FromNodeId].DisplayName == "ChoicesPage.Name_Init(Object,EventArgs)"
+                && nodesById[edge.ToNodeId].DisplayName == "SyntheticDataAccess.New()"
+                && edge.RuleId == "combined.paths.projectless-vb-constructor-bridge.v1"
+                && edge.EvidenceTier == EvidenceTiers.Tier3SyntaxOrTextual) == 1,
+            "the exact inline creation-to-constructor bridge is absent or duplicated");
+        foreach (var (caller, callee) in new[]
+        {
+            ("SyntheticDataAccess.New()", "SyntheticService.SelectChoices(String,String,Integer)"),
+            ("SyntheticService.SelectChoices(String,String,Integer)", "SyntheticRepository.SelectChoices(String,String,Integer)"),
+            ("SyntheticRepository.SelectChoices(String,String,Integer)", "SyntheticSqlGateway.ExecuteDataSet(String,String,String,Integer)")
+        })
+        {
+            Require("MW-DROPDOWN-CTOR-001", "reconciliation",
+                graph.Edges.Any(edge => edge.EdgeKind == "projectless-vb-receiver-bridge"
+                    && nodesById[edge.FromNodeId].DisplayName == caller
+                    && nodesById[edge.ToNodeId].DisplayName == callee),
+                $"the {caller} -> {callee} call hop was not retained");
+        }
+        var packet = await WebFormsModernizationPacketReporter.BuildAsync(
+            new(combinedIndex, Path.Combine(temp.Path, "init-packet"), MaxDepth: 10));
+        var chains = packet.EventChains.Where(chain =>
+            chain.HandlerSymbol?.Contains("ChoicesPage.Name_Init", StringComparison.Ordinal) == true).ToArray();
+        Require("MW-DROPDOWN-CTOR-001", "traversal", chains.Length > 0,
+            "the dropdown Init handler is absent from the merged packet");
+        Require("MW-DROPDOWN-CTOR-001", "traversal", chains.All(chain =>
+            chain.TraversalObservation?.TerminalReachabilityComplete == true
+            && chain.TraversalObservation.DistinctReachableTerminalCount == 1),
+            $"constructor-populated MyList must reach one SQL terminal; actual counts "
+                + $"[{string.Join(',', chains.Select(chain => chain.TraversalObservation?.DistinctReachableTerminalCount))}]");
+        Require("MW-DROPDOWN-CTOR-001", "traversal",
+            TerminalBoundaries(packet, "ChoicesPage.Name_Init").Count == 1,
+            "the constructor-to-helper SQL terminal has no boundary");
+        Require("MW-DROPDOWN-CTOR-001", "traversal",
+            chains.All(chain => chain.TraversalObservation!.TraversedRuleIds.Contains("combined.paths.projectless-vb-constructor-bridge.v1")),
+            "the terminal witness did not traverse the constructor bridge");
+        RequireCatalogEvidence("MW-DROPDOWN-CTOR-001", "traversal",
+            webScan.Facts.Select(fact => fact.RuleId)
+                .Concat(backendScan.Facts.Select(fact => fact.RuleId))
+                .Concat(chains.SelectMany(chain => chain.TraversalObservation!.TraversedRuleIds)),
+            webScan.Facts.Select(fact => fact.EvidenceTier)
+                .Concat(backendScan.Facts.Select(fact => fact.EvidenceTier)),
+            packet.Gaps.Select(gap => gap.Classification));
+    }
+
+    [Fact]
+    public async Task Dropdown_init_single_index_admits_constructor_body_into_bounded_packet()
+    {
+        using var temp = new TempDirectory();
+        var (scan, index) = ScanRoot(temp, "vb-init-single", "single-index-init");
+        Require("MW-DROPDOWN-SINGLE-001", "extraction",
+            scan.Facts.Any(fact => fact.FactType == FactTypes.ObjectCreated
+                && fact.RuleId == RuleIds.VisualBasicSyntaxObjectCreation
+                && fact.Properties.GetValueOrDefault("createdType") == "SyntheticDataAccess"),
+            "the inline data-access creation is missing");
+        Require("MW-DROPDOWN-SINGLE-001", "extraction",
+            scan.Facts.Any(fact => fact.FactType == FactTypes.DatabaseOperationCandidate
+                && fact.SourceSymbol?.StartsWith("SyntheticDataAccess.SelectChoices(", StringComparison.Ordinal) == true),
+            "the uncalled same-name SQL decoy is missing");
+
+        var handlerFact = scan.Facts.Single(fact => fact.FactType == FactTypes.WebFormsHandlerResolved);
+        var unbounded = await CombinedDependencyPathReporter.BuildReportAsync(new(
+            index, Path.Combine(temp.Path, "unbounded"), View: LegacyFlowReportConstants.View,
+            IncludeLegacyRoots: true, MaxDepth: 10)
+        {
+            StartingFactIds = new HashSet<string>(StringComparer.Ordinal) { "single:" + handlerFact.FactId },
+            InventoryDistinctTerminals = true
+        });
+        var packet = await WebFormsModernizationPacketReporter.BuildAsync(new(
+            index, Path.Combine(temp.Path, "single-index-packet"), MaxDepth: 10));
+        var emptyIndex = Path.Combine(temp.Path, "empty.sqlite");
+        SqliteIndexWriter.Write(emptyIndex, scan.Manifest with { ScanId = "scan-single-index-empty", RepoName = "single-index-empty" }, []);
+        var combinedIndex = Path.Combine(temp.Path, "single-combined.sqlite");
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([index, emptyIndex], combinedIndex, ["single", "empty"]));
+        var combinedPacket = await WebFormsModernizationPacketReporter.BuildAsync(new(
+            combinedIndex, Path.Combine(temp.Path, "single-combined-packet"), MaxDepth: 10));
+        Require("MW-DROPDOWN-SINGLE-001", "traversal",
+            unbounded.Paths.Count > 0
+                && combinedPacket.EventChains.Any(chain => chain.TraversalObservation?.DistinctReachableTerminalCount == 1),
+            "the reference full and combined readers did not retain the constructor-side-effect path");
+        var chains = packet.EventChains.Where(chain =>
+            chain.HandlerSymbol?.Contains("ChoicesPage.Name_Init", StringComparison.Ordinal) == true).ToArray();
+        Require("MW-DROPDOWN-SINGLE-001", "traversal",
+            chains.Any(chain => chain.TraversalObservation?.TerminalReachabilityComplete == true
+                && chain.TraversalObservation.DistinctReachableTerminalCount == 1),
+            $"the bounded single-index packet failed to inventory the constructor-side-effect terminal; chains=[{string.Join(";", chains.Select(chain => $"{chain.TerminalKind}:{chain.TraversalObservation?.DistinctReachableTerminalCount}:{chain.TraversalObservation?.TerminalReachabilityComplete}"))}]; gaps=[{string.Join(";", packet.Gaps.Select(gap => gap.Classification))}]");
+        Require("MW-DROPDOWN-SINGLE-001", "traversal",
+            TerminalBoundaries(packet, "ChoicesPage.Name_Init").Any(),
+            "the bounded single-index packet has no constructor-side-effect boundary");
+    }
+
+    [Fact]
+    public async Task Dropdown_init_duplicate_constructor_type_fails_closed_across_roots()
+    {
+        using var temp = new TempDirectory();
+        var (_, webIndex) = ScanRoot(temp, "vb-init-web", "ambiguous-web");
+        var (_, backendIndex) = ScanRoot(temp, "vb-init-backend", "ambiguous-backend");
+        var (_, duplicateIndex) = ScanRoot(temp, "vb-init-duplicate", "ambiguous-duplicate");
+        var combinedIndex = Path.Combine(temp.Path, "ambiguous-init-combined.sqlite");
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions(
+            [webIndex, backendIndex, duplicateIndex], combinedIndex, ["web", "backend", "duplicate"]));
+        var graph = await CombinedDependencyPathReporter.BuildGraphInventoryAsync(combinedIndex);
+        Require("MW-DROPDOWN-CTOR-AMBIGUOUS-001", "reconciliation",
+            graph.Gaps.Any(gap => gap.GapKind == "ProjectlessVisualBasicConstructorTargetAmbiguous"
+                && gap.RuleId == "combined.paths.projectless-vb-constructor-bridge.v1"),
+            "duplicate constructor type identities need an explicit ambiguity gap");
+        var packet = await WebFormsModernizationPacketReporter.BuildAsync(
+            new(combinedIndex, Path.Combine(temp.Path, "ambiguous-init-packet"), MaxDepth: 10));
+        var chains = packet.EventChains.Where(chain =>
+            chain.HandlerSymbol?.Contains("ChoicesPage.Name_Init", StringComparison.Ordinal) == true).ToArray();
+        Require("MW-DROPDOWN-CTOR-AMBIGUOUS-001", "traversal",
+            chains.Length > 0 && chains.All(chain =>
+                chain.TraversalObservation?.DistinctReachableTerminalCount == 0),
+            "an ambiguous constructor identity must not create a SQL terminal path");
+        RequireCatalogEvidence("MW-DROPDOWN-CTOR-AMBIGUOUS-001", "reconciliation",
+            graph.Gaps.Select(gap => gap.RuleId).OfType<string>(),
+            graph.Gaps.Select(gap => gap.EvidenceTier).OfType<string>(),
+            graph.Gaps.Select(gap => gap.GapKind));
+    }
+
+    [Fact]
+    public async Task Dropdown_init_duplicate_inline_service_type_fails_closed_across_roots()
+    {
+        using var temp = new TempDirectory();
+        var (_, webIndex) = ScanRoot(temp, "vb-init-web", "service-ambiguous-web");
+        var (_, backendIndex) = ScanRoot(temp, "vb-init-backend", "service-ambiguous-backend");
+        var (_, duplicateIndex) = ScanRoot(temp, "vb-init-service-duplicate", "service-ambiguous-duplicate");
+        var combinedIndex = Path.Combine(temp.Path, "service-ambiguous-init-combined.sqlite");
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions(
+            [webIndex, backendIndex, duplicateIndex], combinedIndex, ["web", "backend", "duplicate"]));
+        var graph = await CombinedDependencyPathReporter.BuildGraphInventoryAsync(combinedIndex);
+        Require("MW-DROPDOWN-INLINE-AMBIGUOUS-001", "reconciliation",
+            graph.Gaps.Any(gap => gap.GapKind == "ProjectlessVisualBasicReceiverTargetAmbiguous"
+                && gap.RuleId == "combined.paths.projectless-vb-receiver-bridge.v1"),
+            "duplicate inline service types need an explicit receiver ambiguity gap");
+        var packet = await WebFormsModernizationPacketReporter.BuildAsync(
+            new(combinedIndex, Path.Combine(temp.Path, "service-ambiguous-init-packet"), MaxDepth: 10));
+        var chains = packet.EventChains.Where(chain =>
+            chain.HandlerSymbol?.Contains("ChoicesPage.Name_Init", StringComparison.Ordinal) == true).ToArray();
+        Require("MW-DROPDOWN-INLINE-AMBIGUOUS-001", "traversal",
+            chains.Length > 0 && chains.All(chain =>
+                chain.TraversalObservation?.DistinctReachableTerminalCount == 0),
+            "an ambiguous inline service identity must not create a SQL terminal path");
+        RequireCatalogEvidence("MW-DROPDOWN-INLINE-AMBIGUOUS-001", "reconciliation",
+            graph.Gaps.Select(gap => gap.RuleId).OfType<string>(),
+            graph.Gaps.Select(gap => gap.EvidenceTier).OfType<string>(),
+            graph.Gaps.Select(gap => gap.GapKind));
+    }
+
+    [Fact]
+    public async Task Constructor_bridge_preserves_nested_generic_identity_and_rejects_unqualified_namespace_guess()
+    {
+        using var temp = new TempDirectory();
+        var (scan, index) = ScanRoot(temp, "vb-review-constructor", "review-constructor");
+        var (_, companionIndex) = ScanRoot(temp, "vb-init-web", "review-companion");
+        Require("MW-CONSTRUCTOR-IDENTITY-001", "extraction",
+            scan.Facts.Any(fact => fact.FactType == FactTypes.CallEdge
+                && fact.Properties.GetValueOrDefault("calleeName") == "Choose"
+                && fact.Properties.GetValueOrDefault("receiverTypeResolution") == "inline-object-creation-syntax"),
+            "parenthesized inline New receiver lost its syntax provenance");
+
+        var combinedIndex = Path.Combine(temp.Path, "review-constructor-combined.sqlite");
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions(
+            [index, companionIndex], combinedIndex, ["review", "companion"]));
+        var graph = await CombinedDependencyPathReporter.BuildGraphInventoryAsync(combinedIndex);
+        var nodes = graph.Nodes.ToDictionary(node => node.NodeId, StringComparer.Ordinal);
+        var constructorEdges = graph.Edges.Where(edge => edge.EdgeKind == "projectless-vb-constructor-bridge").ToArray();
+        Require("MW-CONSTRUCTOR-IDENTITY-001", "reconciliation",
+            constructorEdges.Any(edge => nodes[edge.ToNodeId].DisplayName.Contains("Outer.Inner.New", StringComparison.Ordinal)),
+            $"the nested generic containing type lost its exact constructor identity; creations=[{string.Join(";", scan.Facts.Where(fact => fact.FactType == FactTypes.ObjectCreated).Select(fact => $"{fact.SourceSymbol}:{fact.Properties.GetValueOrDefault("createdType")}"))}]; declarations=[{string.Join(";", scan.Facts.Where(fact => fact.FactType == FactTypes.MethodDeclared && fact.Properties.GetValueOrDefault("name") == "New").Select(fact => $"{fact.TargetSymbol}:{fact.Properties.GetValueOrDefault("qualifiedContainingType")}"))}]");
+        Require("MW-CONSTRUCTOR-IDENTITY-001", "reconciliation",
+            constructorEdges.All(edge => !nodes[edge.ToNodeId].DisplayName.Contains("OtherNamespace.Foo.New", StringComparison.Ordinal)),
+            "an unqualified creation was attached to an unrelated namespace");
+        Require("MW-CONSTRUCTOR-IDENTITY-001", "reconciliation",
+            graph.Gaps.Any(gap => gap.GapKind == "ProjectlessVisualBasicConstructorTargetUnavailable"),
+            "the unresolved unqualified constructor needs an explicit gap");
+    }
+
+    [Fact]
+    public async Task Constructor_bridge_does_not_rescue_compiler_rejected_creation_from_another_root()
+    {
+        using var temp = new TempDirectory();
+        var (semanticScan, semanticIndex) = ScanRoot(temp, "vb-review-semantic", "invalid-semantic");
+        var (_, projectlessIndex) = ScanRoot(temp, "vb-review-projectless", "same-name-projectless");
+        Require("MW-CONSTRUCTOR-IDENTITY-001", "extraction",
+            semanticScan.Facts.Any(fact => fact.FactType == FactTypes.ObjectCreated
+                && fact.RuleId == RuleIds.VisualBasicSyntaxObjectCreation
+                && fact.Properties.GetValueOrDefault("resolution") == "unresolved-constructor"),
+            "the semantic project did not retain the compiler-rejected constructor fallback");
+
+        var combinedIndex = Path.Combine(temp.Path, "rejected-constructor-combined.sqlite");
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions(
+            [semanticIndex, projectlessIndex], combinedIndex, ["semantic", "projectless"]));
+        var graph = await CombinedDependencyPathReporter.BuildGraphInventoryAsync(combinedIndex);
+        var nodes = graph.Nodes.ToDictionary(node => node.NodeId, StringComparer.Ordinal);
+        Require("MW-CONSTRUCTOR-IDENTITY-001", "reconciliation",
+            !graph.Edges.Any(edge => edge.EdgeKind == "projectless-vb-constructor-bridge"
+                && nodes[edge.FromNodeId].DisplayName.Contains("SemanticCaller.Run", StringComparison.Ordinal)),
+            "a compiler-rejected creation was rescued by a same-name projectless constructor");
     }
 
     [Fact]

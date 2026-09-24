@@ -31,6 +31,20 @@ Roots:
   `Me.` calls; Page Three reaches no
   supported terminal; Page Eleven reaches one. Bounded packet tests pin the
   exact receiver bridges and depth-independent terminal inventories.
+- `vb-split-web/` and `vb-split-backend/` — the same 2/0/1 page shape with
+  page handlers and backend classes in separately scanned roots. The test
+  checks the cross-root bridges and terminal boundaries after index combine;
+  passing this synthetic case does not establish that an unseen receiver
+  pattern in a private merged graph is supported.
+- `vb-init-web/` and `vb-init-backend/` — a control `Init` handler with
+  `With`/`For Each` over an inline `New ...().MyList`. The exact constructor
+  calls an inline-created service, which forwards through a typed repository
+  field and typed SQL-gateway field to a synthetic ADO.NET terminal. The graph
+  asserts a constructor side-effect path, not property contents or control binding.
+- `vb-init-duplicate/` — a second same-name, same-arity constructor in a
+  separately scanned root; the page-to-constructor hop must fail closed.
+- `vb-init-service-duplicate/` — a second same-name service in another root;
+  the inline-created receiver call must also fail closed.
 - `root-generated/` — buildable Web Forms-shaped C# page whose auto-generated
   designer bridge is deliberately excluded from source traversal. A bound
   compiled scan pins the handler's source→metadata→IL/PDB identity chain.
