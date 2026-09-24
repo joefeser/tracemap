@@ -838,6 +838,108 @@ public sealed class MessyWorkspaceRegressionTests
     }
 
     [Fact]
+    public async Task Projectless_VB_handler_enters_bound_IL_only_through_exact_PDB_document_and_method()
+    {
+        using var temp = new TempDirectory();
+        var (sourceOnly, sourceOnlyIndex) = ScanRoot(temp, "vb-pdb-projectless", "projectless-pdb-source-only");
+        var (_, generatedSourceOnlyIndex) = ScanRoot(temp, "root-generated", "projectless-pdb-generated-source-only");
+        var sourceOnlyCombined = Path.Combine(temp.Path, "projectless-pdb-source-only-combined.sqlite");
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions(
+            [sourceOnlyIndex, generatedSourceOnlyIndex], sourceOnlyCombined, ["projectless", "generated"]));
+        var sourceOnlyHandler = sourceOnly.Facts.Single(fact => fact.FactType == FactTypes.MethodDeclared
+            && fact.RuleId == RuleIds.VisualBasicSyntaxDeclarations
+            && fact.Properties.GetValueOrDefault("name") == "Lookup_Init");
+        var sourceOnlyPaths = await CombinedDependencyPathReporter.BuildReportAsync(new(
+            sourceOnlyCombined, Path.Combine(temp.Path, "projectless-pdb-source-only-paths.json"),
+            Format: "json", FromSymbol: sourceOnlyHandler.Properties["memberIdentity"],
+            FromSource: "projectless", MaxDepth: 10));
+        Require("MW-SOURCE-METADATA-IL-PDB-001", "source-only-baseline",
+            !sourceOnlyPaths.Paths.Any(path => path.Nodes.Any(node => node.SurfaceKind == "sql-query")),
+            "a projectless source-only path must not silently cross the excluded generated bridge");
+
+        var vbBuild = MessyRoot("vb-pdb-build");
+        var vbAssembly = Path.Combine(vbBuild, "bin", "Debug", "net10.0", "CompiledProjectless.VB.dll");
+        var vbPdb = Path.ChangeExtension(vbAssembly, ".pdb");
+        var vbScan = ScanBoundRoot(temp, "vb-pdb-projectless", "projectless-pdb-bound",
+            [vbAssembly], [vbPdb], ilBody: true);
+        var vbIndex = Path.Combine(temp.Path, "projectless-pdb-bound.sqlite");
+        SqliteIndexWriter.Write(vbIndex, vbScan.Manifest, vbScan.Facts);
+
+        var generatedRoot = MessyRoot("root-generated");
+        var generatedAssembly = Path.Combine(generatedRoot, "bin", "Debug", "net10.0", "GeneratedSite.dll");
+        var generatedScan = ScanBoundRoot(temp, "root-generated", "projectless-pdb-generated",
+            [generatedAssembly], ilBody: true);
+        var generatedIndex = Path.Combine(temp.Path, "projectless-pdb-generated.sqlite");
+        SqliteIndexWriter.Write(generatedIndex, generatedScan.Manifest, generatedScan.Facts);
+
+        var combined = Path.Combine(temp.Path, "projectless-pdb-combined.sqlite");
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions(
+            [vbIndex, generatedIndex], combined, ["projectless", "generated"]));
+        var graph = await CombinedDependencyPathReporter.BuildGraphInventoryAsync(combined);
+        var nodes = graph.Nodes.ToDictionary(node => node.NodeId, StringComparer.Ordinal);
+        var documentJoins = vbScan.Facts.Count(fact => fact.FactType == FactTypes.PdbSourceDocumentReconciled);
+        var methodJoins = vbScan.Facts.Count(fact => fact.FactType == FactTypes.MetadataPdbMethodReconciled);
+        Require("MW-SOURCE-METADATA-IL-PDB-001", "reconciliation",
+            documentJoins > 0
+            && methodJoins > 0
+            && graph.Edges.Any(edge => edge.EdgeKind == "projectless-source-pdb-identity"
+                && nodes[edge.FromNodeId].DisplayName.Contains("Lookup_Init", StringComparison.Ordinal)
+                && nodes[edge.ToNodeId].DisplayName.Contains("Lookup_Init", StringComparison.Ordinal)),
+            $"projectless handler did not enter its uniquely PDB-bound compiled method; documents={documentJoins}; methods={methodJoins}; vbSyntax={vbScan.Facts.Count(fact => fact.FactType == FactTypes.MethodDeclared && fact.RuleId == RuleIds.VisualBasicSyntaxDeclarations)}");
+
+        var sourceEntry = graph.Edges.Single(edge => edge.EdgeKind == "projectless-source-pdb-identity"
+            && nodes[edge.FromNodeId].DisplayName.Contains("Lookup_Init", StringComparison.Ordinal));
+        var report = await CombinedDependencyPathReporter.BuildReportAsync(new(
+            combined, Path.Combine(temp.Path, "projectless-pdb-paths.json"), Format: "json",
+            FromSymbol: nodes[sourceEntry.FromNodeId].DisplayName, FromSource: "projectless", MaxDepth: 10));
+        Require("MW-SOURCE-METADATA-IL-PDB-001", "traversal",
+            report.Paths.Any(path => path.Edges.Any(edge => edge.EdgeKind == "projectless-source-pdb-identity")
+                && path.Edges.Any(edge => edge.EdgeKind == "compiled-il-call")
+                && path.Nodes.Any(node => node.SurfaceKind == "sql-query")),
+            $"projectless VB PDB and IL walk stopped before the SQL terminal; paths={report.Paths.Count}; endKinds={string.Join(',', report.Paths.Select(path => path.Nodes.Last().SurfaceKind))}");
+
+        var syntaxMethod = vbScan.Facts.Single(fact => fact.FactType == FactTypes.MethodDeclared
+            && fact.RuleId == RuleIds.VisualBasicSyntaxDeclarations
+            && fact.Properties.GetValueOrDefault("name") == "Lookup_Init");
+        var ambiguousIndex = Path.Combine(temp.Path, "projectless-pdb-ambiguous.sqlite");
+        SqliteIndexWriter.Write(ambiguousIndex, vbScan.Manifest, [.. vbScan.Facts,
+            syntaxMethod with { FactId = "fact-synthetic-duplicate-projectless-method" }]);
+        var ambiguousCombined = Path.Combine(temp.Path, "projectless-pdb-ambiguous-combined.sqlite");
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions(
+            [ambiguousIndex, generatedIndex], ambiguousCombined, ["projectless", "generated"]));
+        var ambiguousGraph = await CombinedDependencyPathReporter.BuildGraphInventoryAsync(ambiguousCombined);
+        Require("MW-SOURCE-METADATA-IL-PDB-001", "ambiguity",
+            !ambiguousGraph.Edges.Any(edge => edge.EdgeKind == "projectless-source-pdb-identity")
+            && ambiguousGraph.Gaps.Any(gap => gap.GapKind == "ProjectlessPdbMethodAmbiguous"),
+            "duplicate source declarations sharing one PDB method must withhold the binary path entry");
+
+        var metadataMethod = vbScan.Facts.Single(fact => fact.FactType == FactTypes.ManagedMethodDeclared
+            && fact.Properties.GetValueOrDefault("metadataName") == "Lookup_Init");
+        var duplicateMetadataIndex = Path.Combine(temp.Path, "projectless-pdb-duplicate-metadata.sqlite");
+        SqliteIndexWriter.Write(duplicateMetadataIndex, vbScan.Manifest, [.. vbScan.Facts,
+            metadataMethod with { FactId = "fact-synthetic-duplicate-projectless-metadata" }]);
+        var duplicateMetadataCombined = Path.Combine(temp.Path, "projectless-pdb-duplicate-metadata-combined.sqlite");
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions(
+            [duplicateMetadataIndex, generatedIndex], duplicateMetadataCombined, ["projectless", "generated"]));
+        var duplicateMetadataGraph = await CombinedDependencyPathReporter.BuildGraphInventoryAsync(duplicateMetadataCombined);
+        Require("MW-SOURCE-METADATA-IL-PDB-001", "metadata-ambiguity",
+            !duplicateMetadataGraph.Edges.Any(edge => edge.EdgeKind == "projectless-source-pdb-identity")
+            && duplicateMetadataGraph.Gaps.Any(gap => gap.GapKind == "ProjectlessPdbMetadataAmbiguous"),
+            "duplicate bound metadata identities must withhold the projectless source-to-binary entry");
+
+        var noDocumentIndex = Path.Combine(temp.Path, "projectless-pdb-no-document.sqlite");
+        SqliteIndexWriter.Write(noDocumentIndex, vbScan.Manifest,
+            vbScan.Facts.Where(fact => fact.FactType != FactTypes.PdbSourceDocumentReconciled).ToArray());
+        var noDocumentCombined = Path.Combine(temp.Path, "projectless-pdb-no-document-combined.sqlite");
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions(
+            [noDocumentIndex, generatedIndex], noDocumentCombined, ["projectless", "generated"]));
+        var noDocumentGraph = await CombinedDependencyPathReporter.BuildGraphInventoryAsync(noDocumentCombined);
+        Require("MW-SOURCE-METADATA-IL-PDB-001", "checksum",
+            !noDocumentGraph.Edges.Any(edge => edge.EdgeKind == "projectless-source-pdb-identity"),
+            "without the exact checksum document join, no source-to-binary edge may exist");
+    }
+
+    [Fact]
     public async Task Separately_scanned_roots_merge_without_invented_joins()
     {
         using var temp = new TempDirectory();

@@ -3448,6 +3448,19 @@ rules:
       - MemberRef joins require an admitted bound assembly with the complete encoded assembly-reference identity, non-generic type path, member name, and signature, plus exactly one matching declaration across all combined sources. Unadmitted references, generic type specifications, MethodSpec, calli, constrained type, and unresolved targets are not promoted to graph edges. Missing or ambiguous joins never prove absence or complete reachability.
       - The graph overlay does not rewrite source facts, the combined database schema, or existing source-only path evidence.
 
+  - id: combined.paths.projectless-pdb-identity.v1
+    name: Exact projectless source-to-PDB method path entry
+    description: Adds an in-memory path entry from one projectless VB method declaration to one bound metadata method when a checksum-matched portable PDB document has visible sequence points uniquely owned by that source method block.
+    evidenceTier: Tier2Structural
+    emits:
+      - projectless-source-pdb-identity path edge
+      - ProjectlessPdbMethodAmbiguous gap
+      - ProjectlessPdbMetadataAmbiguous gap
+    limitations:
+      - Requires an explicitly admitted and bound assembly and portable PDB, exact document checksum match to retained source bytes, exact PDB method-row to metadata-method reconciliation, complete visible sequence-point containment in one source method block, matching emitted method name, and one unique source declaration. It never guesses from a pretty name, imports, or an unbound binary.
+      - Source line containment and name establish only a static compiler-location association. They do not prove execution, runtime page compilation, method dispatch, or that the input binary was deployed. Methods without visible PDB points, mismatched documents, ambiguous ownership, native Windows PDBs, and unadmitted inputs receive no path edge.
+      - The rule does not convert projectless syntax evidence into Tier1 Roslyn semantic evidence or change the source scan's coverage label.
+
   - id: combined.paths.projectless-vb-receiver-bridge.v1
     name: Projectless Visual Basic receiver-provenance bridge
     description: Derives an in-memory review-tier path edge from a syntax-only VB invocation to a unique retained VB method declaration when receiver provenance is established by a preceding local creation, an exact inline New expression, a containing-type typed field, or a typed field reached through one unique retained base-type chain, and the retained method identity is compatible.

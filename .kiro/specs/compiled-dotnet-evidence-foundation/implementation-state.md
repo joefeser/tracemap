@@ -1978,3 +1978,30 @@ inventory reports only DLL/PDB counts, portable/Windows/other PDB format
 counts, and DLL/PDB basename-pair count. It prints no private filenames or
 input path, creates no artifact, and makes no source-binding claim. This
 short diagnostic is available before any private binary admission attempt.
+
+The owner ran that inventory on the work machine: 34 DLLs, two PDBs, both
+classic Windows-format and paired by basename, zero portable PDBs. These
+counts do not establish whether the page handler or `App_Code` implementation
+exists in that `bin` folder. The current `PortablePdbExtractor` explicitly
+withholds Windows PDBs (`WindowsPdbIndependentReaderUnavailable`).
+
+The public `vb-pdb-projectless`/`vb-pdb-build` fixture now fails source-only
+before SQL and passes an admitted portable-PDB→metadata→IL→cross-assembly
+generated bridge→SQL path. The in-memory
+`combined.paths.projectless-pdb-identity.v1` entry requires exact source
+document checksum, bound PDB method row, all visible sequence points owned by
+one VB method block, matching metadata name, and one unique retained source
+method; duplicate source declarations and missing checksum facts fail closed.
+This proves the projectless location-join design on portable PDBs, not native
+Windows PDB support or the private page-002 chain. No PR or work-machine scan
+is ready on the basis of this public fixture alone.
+The next public proof needs a native Windows-PDB fixture built from a clean
+projectless Web Forms shape, a bounded independently checked reader, and an
+exact page-method admission test. The 34 DLLs in the observed work `bin` are
+not proof that its dynamically compiled page/App_Code methods are among them.
+Validation for this portable-PDB slice: the new source-only/bound/ambiguity
+regression passed; the messy-workspace suite passed 31/31; the full .NET suite
+passed 2,290/2,290; a zero-warning build with warnings as errors, the
+private-path guard, and `git diff --check` passed. The final source-file index
+optimization was followed by the zero-warning build and four focused bound-IL
+regressions; no private scan was run.

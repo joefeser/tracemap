@@ -5,9 +5,11 @@ namespace TraceMap.Reporting;
 public static partial class CombinedDependencyPathReporter
 {
     private const string CompiledIlBridgeRuleId = "combined.paths.compiled-il-bridge.v1";
+    private const string ProjectlessPdbIdentityRuleId = "combined.paths.projectless-pdb-identity.v1";
 
     private static void AddBoundCompiledIlEdges(EvidenceGraph graph, IReadOnlyList<CombinedFactRow> facts)
     {
+        AddProjectlessPdbIdentityEdges(graph, facts);
         var ilCalls = facts.Where(fact => fact.FactType == FactTypes.ManagedIlCallObserved).ToArray();
         if (ilCalls.Length == 0)
             return;
@@ -112,7 +114,7 @@ public static partial class CombinedDependencyPathReporter
                 ? methodsByIdentity.TryGetValue((call.SourceIndexId, targetIdentity), out var targets)
                 : methodsByMemberReference.TryGetValue(targetIdentity, out targets);
             if (!matched
-                || targets.Length != 1)
+                || targets is not { Length: 1 })
             {
                 if (referenceKind == "methoddef"
                     || admittedReferencePrefixes.Any(prefix => targetIdentity.StartsWith(prefix, StringComparison.Ordinal)))
@@ -139,6 +141,116 @@ public static partial class CombinedDependencyPathReporter
                 virtualCandidate ? EvidenceTiers.Tier3SyntaxOrTextual : EvidenceTiers.Tier2Structural,
                 [call.CombinedFactId, body.CombinedFactId, caller.CombinedFactId, target.CombinedFactId],
                 [], SafePath(call.FilePath), call.StartLine, call.EndLine));
+        }
+    }
+
+    private static void AddProjectlessPdbIdentityEdges(EvidenceGraph graph, IReadOnlyList<CombinedFactRow> facts)
+    {
+        var declarations = facts.Where(fact => fact.FactType == FactTypes.MethodDeclared
+                && fact.RuleId == RuleIds.VisualBasicSyntaxDeclarations
+                && fact.EvidenceTier == EvidenceTiers.Tier3SyntaxOrTextual
+                && !string.IsNullOrWhiteSpace(fact.Properties.GetValueOrDefault("memberIdentity"))
+                && int.TryParse(fact.Properties.GetValueOrDefault("bodyStartLine"), out _)
+                && int.TryParse(fact.Properties.GetValueOrDefault("bodyEndLine"), out _))
+            .ToArray();
+        if (declarations.Length == 0) return;
+        var declarationsByFile = declarations
+            .GroupBy(fact => (fact.SourceIndexId, fact.FilePath))
+            .ToDictionary(group => group.Key, group => group.ToArray());
+
+        var byOriginalId = facts.GroupBy(fact => (fact.SourceIndexId, fact.OriginalFactId))
+            .ToDictionary(group => group.Key, group => group.ToArray());
+        var methodIdentityCounts = facts.Where(fact => fact.FactType == FactTypes.ManagedMethodDeclared
+                && !string.IsNullOrWhiteSpace(fact.TargetSymbol))
+            .GroupBy(fact => (fact.SourceIndexId, fact.TargetSymbol!))
+            .ToDictionary(group => group.Key, group => group.Count());
+        var documentJoins = facts.Where(fact => fact.FactType == FactTypes.PdbSourceDocumentReconciled
+                && fact.Properties.GetValueOrDefault("pdbProvenanceState") == "bound")
+            .GroupBy(fact => (fact.SourceIndexId, fact.Properties.GetValueOrDefault("pdbDocumentFactId")))
+            .ToDictionary(group => group.Key, group => group.ToArray());
+        var pointsByMethodJoin = facts.Where(fact => fact.FactType == FactTypes.PdbSequencePointDeclared)
+            .GroupBy(fact => (fact.SourceIndexId, fact.Properties.GetValueOrDefault("metadataPdbReconciliationFactId")))
+            .ToDictionary(group => group.Key, group => group.ToArray());
+
+        foreach (var join in facts.Where(fact => fact.FactType == FactTypes.MetadataPdbMethodReconciled
+                     && fact.Properties.GetValueOrDefault("pdbProvenanceState") == "bound")
+                 .OrderBy(fact => fact.CombinedFactId, StringComparer.Ordinal))
+        {
+            if (string.IsNullOrWhiteSpace(join.Properties.GetValueOrDefault("pdbBoundedInputSha256"))
+                || string.IsNullOrWhiteSpace(join.Properties.GetValueOrDefault("pdbGeneratorSha256"))
+                || string.IsNullOrWhiteSpace(join.Properties.GetValueOrDefault("provenanceBindingInputSha256"))
+                || !TryUniqueFact(byOriginalId, join.SourceIndexId, join.Properties.GetValueOrDefault("compiledFactId"), out var method)
+                || method.FactType != FactTypes.ManagedMethodDeclared
+                || method.Properties.GetValueOrDefault("provenanceState") != "bound"
+                || method.TargetSymbol != join.Properties.GetValueOrDefault("metadataIdentity")
+                || !TryUniqueFact(byOriginalId, join.SourceIndexId, join.Properties.GetValueOrDefault("pdbMethodFactId"), out var pdbMethod)
+                || pdbMethod.FactType != FactTypes.PdbMethodDeclared
+                || !pointsByMethodJoin.TryGetValue((join.SourceIndexId, join.OriginalFactId), out var allPoints))
+                continue;
+            if (!methodIdentityCounts.TryGetValue((join.SourceIndexId, method.TargetSymbol!), out var identityCount)
+                || identityCount != 1)
+            {
+                AddCompiledIlGap(graph, join, "ProjectlessPdbMetadataAmbiguous",
+                    "bound-metadata-method-identity-not-unique", identityCount, ProjectlessPdbIdentityRuleId);
+                continue;
+            }
+
+            var points = allPoints.Where(point => point.Properties.GetValueOrDefault("hidden") == "false").ToArray();
+            if (points.Length == 0 || points.Any(point => point.Properties.GetValueOrDefault("pdbMethodFactId") != pdbMethod.OriginalFactId))
+                continue;
+            var docIds = points.Select(point => point.Properties.GetValueOrDefault("pdbDocumentFactId"))
+                .Distinct(StringComparer.Ordinal).ToArray();
+            if (docIds.Length != 1 || string.IsNullOrWhiteSpace(docIds[0])
+                || !documentJoins.TryGetValue((join.SourceIndexId, docIds[0]), out var docs)
+                || docs.Length != 1
+                || !TryUniqueFact(byOriginalId, join.SourceIndexId, docIds[0], out var pdbDocument)
+                || pdbDocument.FactType != FactTypes.PdbDocumentDeclared
+                || docs[0].Properties.GetValueOrDefault("pdbInputFactId") != join.Properties.GetValueOrDefault("pdbInputFactId"))
+                continue;
+            var document = docs[0];
+            var sourcePath = document.Properties.GetValueOrDefault("sourcePath");
+            var metadataName = method.Properties.GetValueOrDefault("metadataName");
+            if (string.IsNullOrWhiteSpace(sourcePath) || string.IsNullOrWhiteSpace(metadataName)
+                || points.Any(point => point.FilePath != sourcePath
+                    || !int.TryParse(point.Properties.GetValueOrDefault("startLine"), out _)
+                    || !int.TryParse(point.Properties.GetValueOrDefault("endLine"), out _)))
+                continue;
+
+            var lookupName = metadataName == ".ctor" ? "New" : metadataName;
+            var candidates = declarationsByFile.GetValueOrDefault((join.SourceIndexId, sourcePath), [])
+                .Where(declaration =>
+                    string.Equals(declaration.Properties.GetValueOrDefault("name"), lookupName, StringComparison.OrdinalIgnoreCase)
+                    && int.TryParse(declaration.Properties.GetValueOrDefault("bodyStartLine"), out var start)
+                    && int.TryParse(declaration.Properties.GetValueOrDefault("bodyEndLine"), out var end)
+                    && points.All(point => int.Parse(point.Properties["startLine"]) >= start
+                        && int.Parse(point.Properties["endLine"]) <= end))
+                .ToArray();
+            if (candidates.Length != 1)
+            {
+                if (candidates.Length > 1)
+                    AddCompiledIlGap(graph, join, "ProjectlessPdbMethodAmbiguous",
+                        "exact-document-sequence-points-match-multiple-source-methods", candidates.Length,
+                        ProjectlessPdbIdentityRuleId);
+                continue;
+            }
+            var declaration = candidates[0];
+            var sourceIdentity = declaration.Properties["memberIdentity"];
+            var sourceNode = graph.GetOrAddSymbolNode(declaration.SourceIndexId, declaration.SourceLabel,
+                sourceIdentity, declaration.FilePath, declaration.StartLine, declaration.EndLine,
+                declaration.RuleId, declaration.EvidenceTier);
+            var methodNode = graph.GetOrAddSymbolNode(method.SourceIndexId, method.SourceLabel,
+                method.TargetSymbol!, method.FilePath, method.StartLine, method.EndLine,
+                method.RuleId, method.EvidenceTier);
+            graph.AddEdge(new GraphEdge(
+                $"projectless-source-pdb-identity:{join.CombinedFactId}:{declaration.CombinedFactId}",
+                "projectless-source-pdb-identity", sourceNode.NodeId, methodNode.NodeId,
+                "EvidenceEdge", ProjectlessPdbIdentityRuleId, EvidenceTiers.Tier2Structural,
+                points.Select(point => point.CombinedFactId)
+                    .Append(document.CombinedFactId).Append(join.CombinedFactId)
+                    .Append(pdbDocument.CombinedFactId).Append(pdbMethod.CombinedFactId)
+                    .Append(declaration.CombinedFactId).Append(method.CombinedFactId)
+                    .Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray(),
+                [], SafePath(declaration.FilePath), declaration.StartLine, declaration.EndLine));
         }
     }
 
@@ -220,14 +332,14 @@ public static partial class CombinedDependencyPathReporter
     }
 
     private static void AddCompiledIlGap(EvidenceGraph graph, CombinedFactRow fact,
-        string gapKind, string reason, int? candidateCount)
+        string gapKind, string reason, int? candidateCount, string ruleId = CompiledIlBridgeRuleId)
     {
         graph.Gaps.Add(new CombinedPathGap(
             $"gap:compiled-il:{fact.CombinedFactId}:{gapKind}", gapKind,
             CombinedDependencyPathClassifications.UnknownAnalysisGap,
             "Bound compiled evidence could not be joined to one path-graph target; no edge was inferred.",
             fact.SourceIndexId, fact.SourceLabel, null, fact.CombinedFactId,
-            CompiledIlBridgeRuleId, EvidenceTiers.Tier4Unknown,
+            ruleId, EvidenceTiers.Tier4Unknown,
             SafePath(fact.FilePath), fact.StartLine, reason,
             fact.CommitSha, fact.ExtractorVersion, "bound-compiled-il",
             fact.EndLine, candidateCount, SupportingFactIds: [fact.CombinedFactId]));

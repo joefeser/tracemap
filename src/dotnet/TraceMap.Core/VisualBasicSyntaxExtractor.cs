@@ -311,6 +311,8 @@ public static class VisualBasicSyntaxExtractor
                 .OfType<TypeBlockSyntax>()
                 .FirstOrDefault()?.BlockStatement.Identifier.ValueText ?? string.Empty;
             var qualifiedContainingType = GetSyntacticContainingType(statement);
+            var methodBody = statement.Parent is MethodBlockBaseSyntax block ? (SyntaxNode)block : statement;
+            var methodBodyLines = statement.SyntaxTree.GetLineSpan(methodBody.Span);
             var parameterTypes = MethodParameterTypes(statement).ToArray();
             var parameterCount = statement switch
             {
@@ -334,6 +336,8 @@ public static class VisualBasicSyntaxExtractor
                         ["qualifiedMemberName"] = $"{qualifiedContainingType}.{methodName}",
                         ["qualifiedContainingType"] = qualifiedContainingType,
                         ["name"] = methodName,
+                        ["bodyStartLine"] = (methodBodyLines.StartLinePosition.Line + 1).ToString(),
+                        ["bodyEndLine"] = (methodBodyLines.EndLinePosition.Line + 1).ToString(),
                         ["parameterCount"] = parameterCount.ToString(),
                         ["parameterTypes"] = string.Join(";", parameterTypes)
                     },
