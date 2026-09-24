@@ -114,6 +114,45 @@ public sealed class CombinedDependencyPathTests
     }
 
     [Fact]
+    public async Task Terminal_inventory_preserves_bounded_alternate_routes_to_one_terminal()
+    {
+        using var temp = new TempDirectory();
+        var manifest = Manifest("server", "shared-terminal-routes");
+        var index = Path.Combine(temp.Path, "index.sqlite");
+        var combined = Path.Combine(temp.Path, "combined.sqlite");
+        SqliteIndexWriter.Write(index, manifest, [
+            CallFact(manifest, "Page.Init()", "Service.First()", "Page.cs", 1),
+            CallFact(manifest, "Page.Init()", "Service.Second()", "Page.cs", 2),
+            CallFact(manifest, "Service.First()", "Store.Read()", "Service.cs", 3),
+            CallFact(manifest, "Service.Second()", "Store.Read()", "Service.cs", 4),
+            QueryPatternFact(manifest, "Store.Read()", "Store.cs", 5)
+        ]);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([index], combined, ["server"]));
+
+        var options = new CombinedDependencyPathOptions(
+            combined,
+            Path.Combine(temp.Path, "out"),
+            FromSymbol: "Page.Init()",
+            ToSurface: "sql-query",
+            View: LegacyFlowReportConstants.View,
+            MaxDepth: 8,
+            MaxPaths: 10,
+            MaxFrontier: 100)
+        {
+            InventoryDistinctTerminals = true
+        };
+        var result = await CombinedDependencyPathReporter.WriteAsync(options);
+
+        Assert.Equal(2, result.Report.Paths.Count);
+        Assert.Single(result.Report.Paths.Select(path => path.Nodes[^1].NodeId).Distinct(StringComparer.Ordinal));
+        Assert.Contains(result.Report.Paths, path => path.Nodes.Any(node => node.SymbolId == "Service.First()"));
+        Assert.Contains(result.Report.Paths, path => path.Nodes.Any(node => node.SymbolId == "Service.Second()"));
+        Assert.DoesNotContain(result.Report.Gaps, gap => gap.GapKind == "TruncatedByLimit");
+        var again = await CombinedDependencyPathReporter.WriteAsync(options with { OutputPath = Path.Combine(temp.Path, "again") });
+        Assert.Equal(JsonSerializer.Serialize(result.Report), JsonSerializer.Serialize(again.Report));
+    }
+
+    [Fact]
     public async Task Paths_writes_endpoint_to_sql_markdown_and_json_without_mutating_combined_index()
     {
         using var temp = new TempDirectory();

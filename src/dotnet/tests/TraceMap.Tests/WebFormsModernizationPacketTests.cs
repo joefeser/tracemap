@@ -1938,6 +1938,68 @@ public sealed class WebFormsModernizationPacketTests
     }
 
     [Fact]
+    public async Task Packet_keeps_two_bounded_routes_to_one_terminal_without_inflating_terminal_inventory()
+    {
+        using var temp = new TempDirectory();
+        var manifest = Manifest("Succeeded") with { AnalysisLevel = "Level1SemanticAnalysis" };
+        const string surface = "webforms-surface:shared-terminal";
+        const string handlerId = "symbol-id:shared-terminal-handler";
+        const string handlerSymbol = "Sample.SharedTerminal.Run_Click(object, System.EventArgs)";
+        var page = Fact(manifest, FactTypes.WebFormsPageDeclared, RuleIds.LegacyWebFormsInventory, "Pages/Shared.aspx", 1,
+            source: surface, target: "Sample.SharedTerminal", contract: "Shared.aspx",
+            ("surfaceIdentity", surface), ("directiveKind", "Page"), ("coverageLabel", "bounded-static-webforms-inventory"));
+        var binding = Fact(manifest, FactTypes.WebFormsEventBindingDeclared, RuleIds.LegacyWebFormsEventBinding, "Pages/Shared.aspx", 10,
+            source: "control:run", target: handlerId, contract: "Run_Click",
+            ("surfaceIdentity", surface), ("eventSourceIdentity", "control:run"), ("eventName", "OnClick"),
+            ("controlId", "run"), ("handlerName", "Run_Click"), ("markupFile", "Pages/Shared.aspx"),
+            ("coverageLabel", "bounded-static-webforms-event"));
+        var handler = Fact(manifest, FactTypes.WebFormsHandlerResolved, RuleIds.LegacyWebFormsHandlerResolution, "Pages/Shared.aspx.cs", 20,
+            source: "control:run", target: handlerId, contract: "Run_Click",
+            ("surfaceIdentity", surface), ("bindingFactId", binding.FactId), ("handlerSymbolId", handlerId),
+            ("handlerSymbol", handlerSymbol), ("handlerName", "Run_Click"), ("controlId", "run"),
+            ("eventName", "OnClick"), ("markupFile", "Pages/Shared.aspx"),
+            ("coverageLabel", "bounded-static-webforms-handler"));
+        CodeFact Call(string source, string target, int line) =>
+            Fact(manifest, FactTypes.CallEdge, RuleIds.CSharpSemanticCallGraph, "Services/Routes.cs", line,
+                source: source, target: target, contract: "route", ("coverageLabel", "bounded-static-call"))
+            with { EvidenceTier = EvidenceTiers.Tier1Semantic };
+        var terminal = Fact(manifest, FactTypes.QueryPatternDetected, RuleIds.CSharpSyntaxQueryPattern, "Services/Store.cs", 50,
+            source: "Sample.Store.Read()", target: "shared-query", contract: "SELECT",
+            ("operationName", "SELECT"), ("tableName", "shared"), ("columnNames", "id"),
+            ("sqlSourceKind", "literal-string"), ("queryShapeHash", "shared-terminal"),
+            ("coverageLabel", "bounded-static-query"));
+        var index = Path.Combine(temp.Path, "index.sqlite");
+        SqliteIndexWriter.Write(index, manifest, [
+            page, binding, handler,
+            Call(handlerSymbol, "Sample.Service.First()", 30),
+            Call(handlerSymbol, "Sample.Service.Second()", 31),
+            Call("Sample.Service.First()", "Sample.Store.Read()", 32),
+            Call("Sample.Service.Second()", "Sample.Store.Read()", 33),
+            terminal
+        ]);
+
+        var packet = await WebFormsModernizationPacketReporter.BuildAsync(new(index, Path.Combine(temp.Path, "packet"), MaxPaths: 10));
+        var chains = packet.EventChains.Where(chain => chain.HandlerFactId == handler.FactId).ToArray();
+        Assert.Equal(2, chains.Length);
+        Assert.All(chains, chain =>
+        {
+            Assert.True(chain.TraversalObservation?.TerminalReachabilityComplete);
+            Assert.Equal(1, chain.TraversalObservation?.DistinctReachableTerminalCount);
+            Assert.Equal("sql-query", chain.TerminalKind);
+        });
+        Assert.Single(packet.DownstreamBoundaries.Select(boundary => boundary.TerminalEvidenceId).Distinct(StringComparer.Ordinal));
+        Assert.Equal(2, chains.Select(chain => string.Join(",", chain.PathEvidence.Select(evidence => evidence.EvidenceId))).Distinct(StringComparer.Ordinal).Count());
+
+        var bounded = await WebFormsModernizationPacketReporter.BuildAsync(new(
+            index, Path.Combine(temp.Path, "bounded"), MaxPaths: 1));
+        var boundedChain = Assert.Single(bounded.EventChains, chain => chain.HandlerFactId == handler.FactId);
+        Assert.True(boundedChain.TraversalObservation?.TerminalReachabilityComplete);
+        Assert.Equal(1, boundedChain.TraversalObservation?.DistinctReachableTerminalCount);
+        Assert.True(boundedChain.TraversalObservation?.PathEnumerationTruncated);
+        Assert.Contains("path", boundedChain.TraversalObservation?.PathEnumerationTruncationReasons ?? []);
+    }
+
+    [Fact]
     public async Task Existing_static_terminal_path_is_composed_without_runtime_claims()
     {
         using var temp = new TempDirectory();

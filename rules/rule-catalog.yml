@@ -2976,7 +2976,8 @@ rules:
       - Composed paths are static evidence, not runtime execution proof, reachability proof, production traffic, service deployment, branch feasibility, user behavior, or permission proof.
       - Call edges may miss reflection, dynamic dispatch, delegates, runtime DI, partial methods, generated code, serializer behavior, event bubbling, collection contents, and branch-dependent behavior.
       - WCF operation nodes are terminals in v1; traversal does not continue through service-side implementation or downstream service-side evidence.
-      - Traversal is bounded by depth, path, and frontier limits; truncated output is partial.
+      - Terminal inventory retains one shortest deterministic witness per distinct supported terminal; separately bounded path-detail enumeration can retain additional routes to the same terminal without increasing the distinct-terminal count.
+      - Traversal is bounded by depth, path, frontier, and work limits; a complete terminal inventory does not imply complete route detail, and truncated path output is partial.
 
   - id: legacy.flow.parameter-forward-unavailable.v1
     name: Legacy flow parameter-forwarding availability gap
