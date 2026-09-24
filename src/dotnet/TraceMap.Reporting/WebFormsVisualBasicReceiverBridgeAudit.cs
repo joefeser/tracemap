@@ -444,8 +444,71 @@ public static class WebFormsVisualBasicReceiverBridgeAudit
             foreach (var group in receiverGaps.GroupBy(gap => SafeReason(gap.Reason), StringComparer.Ordinal)
                 .OrderBy(group => group.Key, StringComparer.Ordinal))
                 output.Add($"{prefix}.constructorReceiverGapReason.{group.Key}={group.Count()}");
+            if (bridges.Length == 1)
+                AddFocusedConstructorAdjacency(output, graph, bridges[0].ToNodeId, prefix);
         }
         if (selectedCreations.Length > 20) output.Add("constructorHopCreationsTruncated=True");
+    }
+
+    private static void AddFocusedConstructorAdjacency(List<string> output,
+        CombinedPathGraphInventory graph, string startNodeId, string prefix)
+    {
+        const int maxDepth = 12;
+        const int maxNodes = 1_000;
+        const int maxEdgesPerDepth = 10_000;
+        static string SafeCategory(string? value) => value is { Length: > 0 and <= 128 }
+            && value.All(character => char.IsAsciiLetterOrDigit(character) || character is '-' or '.')
+                ? value : "unavailable";
+        var nodesById = graph.Nodes.ToDictionary(node => node.NodeId, StringComparer.Ordinal);
+        var edgesBySource = graph.Edges.GroupBy(edge => edge.FromNodeId, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.Ordinal);
+        var gapsByNode = graph.Gaps.Where(gap => gap.NodeId is not null)
+            .GroupBy(gap => gap.NodeId!, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.Ordinal);
+        var visited = new HashSet<string>(StringComparer.Ordinal) { startNodeId };
+        var frontier = new List<string> { startNodeId };
+        for (var depth = 0; depth <= maxDepth && frontier.Count > 0; depth++)
+        {
+            var depthPrefix = $"{prefix}.adjacencyDepth-{depth:D2}";
+            output.Add($"{depthPrefix}.nodes={frontier.Count}");
+            foreach (var group in frontier.SelectMany(nodeId => nodesById.TryGetValue(nodeId, out var node)
+                    && node.SurfaceKind is not null ? new[] { SafeCategory(node.SurfaceKind) } : [])
+                .GroupBy(value => value, StringComparer.Ordinal).OrderBy(group => group.Key, StringComparer.Ordinal))
+                output.Add($"{depthPrefix}.surfaceKind.{group.Key}={group.Count()}");
+            foreach (var group in frontier.SelectMany(nodeId => gapsByNode.GetValueOrDefault(nodeId, []))
+                .Select(gap => SafeCategory(gap.Reason))
+                .GroupBy(value => value, StringComparer.Ordinal).OrderBy(group => group.Key, StringComparer.Ordinal))
+                output.Add($"{depthPrefix}.gapReason.{group.Key}={group.Count()}");
+            var outgoing = frontier.SelectMany(nodeId => edgesBySource.GetValueOrDefault(nodeId, []))
+                .OrderBy(edge => edge.EdgeId, StringComparer.Ordinal).Take(maxEdgesPerDepth + 1).ToArray();
+            if (outgoing.Length > maxEdgesPerDepth)
+            {
+                output.Add($"{prefix}.adjacencyLimit=edges");
+                return;
+            }
+            output.Add($"{depthPrefix}.outgoingEdges={outgoing.Length}");
+            foreach (var group in outgoing.Select(edge => SafeCategory(edge.EdgeKind))
+                .GroupBy(value => value, StringComparer.Ordinal).OrderBy(group => group.Key, StringComparer.Ordinal))
+                output.Add($"{depthPrefix}.edgeKind.{group.Key}={group.Count()}");
+            if (depth == maxDepth)
+            {
+                if (outgoing.Length > 0) output.Add($"{prefix}.adjacencyLimit=depth");
+                break;
+            }
+            var next = new List<string>();
+            foreach (var edge in outgoing)
+            {
+                if (!visited.Add(edge.ToNodeId)) continue;
+                if (visited.Count > maxNodes)
+                {
+                    output.Add($"{prefix}.adjacencyLimit=nodes");
+                    return;
+                }
+                next.Add(edge.ToNodeId);
+            }
+            frontier = next;
+        }
+        output.Add($"{prefix}.adjacencyLimit=none");
     }
 
     private static string ReadReceiverProvenanceFacts(
