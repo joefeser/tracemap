@@ -77,10 +77,10 @@ public sealed class MessyWorkspaceRegressionTests
             Require("MW-CATALOG", "extraction", entry.GetProperty("shape").GetString() is { Length: > 0 }, $"case {id} must describe its shape");
         }
 
-        Require("MW-CATALOG", "extraction", ids.Count == 25,
-            $"expected the twenty-five pinned fixture cases, found {ids.Count}");
-        Require("MW-CATALOG", "extraction", implemented == 25 && deferred == 0,
-            $"all twenty-five pinned fixture cases must remain implemented; found {implemented} implemented and {deferred} deferred");
+        Require("MW-CATALOG", "extraction", ids.Count == 26,
+            $"expected the twenty-six pinned fixture cases, found {ids.Count}");
+        Require("MW-CATALOG", "extraction", implemented == 26 && deferred == 0,
+            $"all twenty-six pinned fixture cases must remain implemented; found {implemented} implemented and {deferred} deferred");
 
         // Catalog evidence annotations are load-bearing: every expected rule id must
         // exist in the rule catalog, tiers must be real evidence tiers, and gap
@@ -1240,6 +1240,46 @@ public sealed class MessyWorkspaceRegressionTests
                 && audit.Contains("constructorHopCreation-01.adjacencyLimit=none")
                 && audit.All(line => !line.Contains("Synthetic.Data", StringComparison.Ordinal)),
             "the focused diagnostic must identify the constructor hop without printing source identities: " + string.Join(";", audit.Where(line => line.StartsWith("constructorHop", StringComparison.Ordinal))));
+    }
+
+    [Fact]
+    public async Task Dropdown_init_crosses_overloaded_byref_arraylist_sql_gateway()
+    {
+        using var temp = new TempDirectory();
+        var (webScan, webIndex) = ScanRoot(temp, "vb-overload-web", "overload-web");
+        var (backendScan, backendIndex) = ScanRoot(temp, "vb-overload-framework", "overload-framework");
+        Require("MW-DROPDOWN-OVERLOAD-001", "extraction",
+            webScan.Facts.Any(fact => fact.FactType == FactTypes.CallEdge
+                && fact.SourceSymbol == "Synthetic.Data.ChoiceRepository.SelectNames()"
+                && fact.Properties.GetValueOrDefault("calleeName") == "ExecuteProcedureDataSet")
+            && backendScan.Facts.Any(fact => fact.FactType == FactTypes.DatabaseOperationCandidate
+                && fact.SourceSymbol?.Contains("ProcedureGateway.ExecuteProcedureDataSet(", StringComparison.Ordinal) == true),
+            "the synthetic overloaded gateway call or Fill terminal was not extracted");
+        var combinedIndex = Path.Combine(temp.Path, "overload-combined.sqlite");
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions(
+            [webIndex, backendIndex], combinedIndex, ["web", "framework"]));
+        var graph = await CombinedDependencyPathReporter.BuildGraphInventoryAsync(combinedIndex);
+        var nodesById = graph.Nodes.ToDictionary(node => node.NodeId, StringComparer.Ordinal);
+        var gatewayOverloadTargets = graph.Edges
+            .Where(edge => edge.EdgeKind == "projectless-vb-receiver-bridge")
+            .Select(edge => nodesById[edge.ToNodeId].DisplayName)
+            .Where(name => name.Contains("ProcedureGateway.ExecuteProcedureDataSet(", StringComparison.Ordinal))
+            .Distinct(StringComparer.Ordinal).ToArray();
+        Require("MW-DROPDOWN-OVERLOAD-001", "reconciliation",
+            graph.Edges.Count(edge => edge.EdgeKind == "projectless-vb-receiver-bridge") >= 4
+                && gatewayOverloadTargets.Length == 2,
+            "the service, repository, gateway, and two distinct overload receiver hops were not all retained; targets="
+                + string.Join('|', gatewayOverloadTargets));
+        var packet = await WebFormsModernizationPacketReporter.BuildAsync(
+            new(combinedIndex, Path.Combine(temp.Path, "overload-packet"), MaxDepth: 10));
+        var chains = packet.EventChains.Where(chain =>
+            chain.HandlerSymbol?.Contains("NamesPage.Names_Init", StringComparison.Ordinal) == true).ToArray();
+        Require("MW-DROPDOWN-OVERLOAD-001", "traversal",
+            chains.Length > 0 && chains.All(chain =>
+                chain.TraversalObservation?.TerminalReachabilityComplete == true
+                && chain.TraversalObservation.DistinctReachableTerminalCount == 1),
+            "the overloaded ArrayList/ByRef gateway did not yield one complete SQL terminal; observed "
+                + string.Join(',', chains.Select(chain => $"{chain.TraversalObservation?.DistinctReachableTerminalCount}:{chain.TraversalObservation?.TerminalReachabilityComplete}")));
     }
 
     [Fact]
