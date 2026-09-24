@@ -320,6 +320,28 @@
       "assertions": "the duplicate constructor type identities produce an explicit Tier4 ambiguity gap and cannot create a terminal path from the page"
     },
     {
+      "id": "MW-DROPDOWN-QUALIFIED-001",
+      "status": "implemented",
+      "roots": ["vb-qualified-init-web", "vb-qualified-init-backend"],
+      "shape": "a projectless VB dropdown Init handler creates an unqualified data-access type imported from one explicit namespace; its constructor calls two same-name helper methods before SQL, while an unrelated same-simple-name constructor in a second namespace has its own SQL decoy",
+      "stages": ["extraction", "combining", "reconciliation", "traversal"],
+      "expectedRuleIds": ["vb.syntax.objectcreation.v1", "combined.paths.projectless-vb-constructor-bridge.v1", "combined.paths.projectless-vb-receiver-bridge.v1", "vb.syntax.database-operation.v1"],
+      "expectedTiers": ["Tier3SyntaxOrTextual"],
+      "expectedGaps": [],
+      "assertions": "only the explicitly imported qualified constructor is bridged, the helper chain reaches one supported SQL terminal with complete retained-graph reachability, and source-local symbol reconciliation cannot merge the unrelated same-name constructor into a false second terminal"
+    },
+    {
+      "id": "MW-DROPDOWN-QUALIFIED-AMBIGUOUS-001",
+      "status": "implemented",
+      "roots": ["vb-qualified-ambiguous-web", "vb-qualified-init-backend"],
+      "shape": "an unqualified projectless VB constructor creation has explicit Imports for two namespaces with same-name same-arity constructor declarations",
+      "stages": ["extraction", "combining", "reconciliation", "traversal"],
+      "expectedRuleIds": ["combined.paths.projectless-vb-constructor-bridge.v1"],
+      "expectedTiers": ["Tier4Unknown"],
+      "expectedGaps": ["ProjectlessVisualBasicConstructorTargetAmbiguous"],
+      "assertions": "competing imported constructor identities fail closed with an explicit ambiguity gap and zero invented SQL terminals"
+    },
+    {
       "id": "MW-DROPDOWN-INLINE-AMBIGUOUS-001",
       "status": "implemented",
       "roots": ["vb-init-web", "vb-init-backend", "vb-init-service-duplicate"],
@@ -334,12 +356,12 @@
       "id": "MW-CONSTRUCTOR-IDENTITY-001",
       "status": "implemented",
       "roots": ["vb-review-constructor", "vb-review-semantic", "vb-review-projectless"],
-      "shape": "projectless VB constructs a nested type after a generic outer type and calls through a parenthesized inline New receiver; an unqualified same-simple-name type in another namespace and a compiler-rejected semantic-project constructor remain unrelated",
+      "shape": "projectless VB constructs a nested type after a generic outer type and calls through a parenthesized inline New receiver; a creation in its lexical namespace resolves only that namespace's same-simple-name constructor, a root-level creation cannot guess a namespace, and a compiler-rejected semantic-project constructor remains unrelated",
       "stages": ["extraction", "combining", "reconciliation"],
       "expectedRuleIds": ["vb.syntax.objectcreation.v1", "vb.syntax.callgraph.v1", "combined.paths.projectless-vb-constructor-bridge.v1"],
       "expectedTiers": ["Tier3SyntaxOrTextual", "Tier4Unknown"],
       "expectedGaps": ["ProjectlessVisualBasicConstructorTargetUnavailable"],
-      "assertions": "balanced generic normalization preserves the nested constructor identity, parentheses preserve exact inline-New receiver provenance, unqualified names cannot bridge into an unrelated namespace, and compiler-rejected semantic fallback cannot be rescued by another projectless root"
+      "assertions": "balanced generic normalization preserves the nested constructor identity, parentheses preserve exact inline-New receiver provenance, lexical namespace evidence selects only its own constructor, root-level unqualified names cannot bridge into an unrelated namespace, and compiler-rejected semantic fallback cannot be rescued by another projectless root"
     },
     {
       "id": "MW-DROPDOWN-SINGLE-001",

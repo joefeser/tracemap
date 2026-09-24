@@ -2890,7 +2890,10 @@ names), `vb-projectless` (loose VB files with no `.vbproj`/`.sln`),
 as independent web and backend roots before index combine), and
 `vb-init-web`, `vb-init-backend`, `vb-init-duplicate`, plus
 `vb-init-service-duplicate` (an inline constructor side-effect path and two
-duplicate-type negative controls), plus `vb-review-constructor`,
+duplicate-type negative controls), plus `vb-qualified-init-web`,
+`vb-qualified-init-backend`, and `vb-qualified-ambiguous-web` (explicit-import
+constructor resolution, a same-simple-name SQL decoy, and fail-closed
+competing imports), plus `vb-review-constructor`,
 `vb-review-semantic`, and `vb-review-projectless` (nested generic type identity,
 parenthesized inline creation, namespace rejection, and compiler-rejected
 constructor fallback), plus `vb-init-single` (the dropdown Init handler and

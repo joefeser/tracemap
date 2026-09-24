@@ -77,10 +77,10 @@ public sealed class MessyWorkspaceRegressionTests
             Require("MW-CATALOG", "extraction", entry.GetProperty("shape").GetString() is { Length: > 0 }, $"case {id} must describe its shape");
         }
 
-        Require("MW-CATALOG", "extraction", ids.Count == 22,
-            $"expected the twenty-two pinned fixture cases, found {ids.Count}");
-        Require("MW-CATALOG", "extraction", implemented == 22 && deferred == 0,
-            $"all twenty-two pinned fixture cases must remain implemented; found {implemented} implemented and {deferred} deferred");
+        Require("MW-CATALOG", "extraction", ids.Count == 24,
+            $"expected the twenty-four pinned fixture cases, found {ids.Count}");
+        Require("MW-CATALOG", "extraction", implemented == 24 && deferred == 0,
+            $"all twenty-four pinned fixture cases must remain implemented; found {implemented} implemented and {deferred} deferred");
 
         // Catalog evidence annotations are load-bearing: every expected rule id must
         // exist in the rule catalog, tiers must be real evidence tiers, and gap
@@ -1185,6 +1185,75 @@ public sealed class MessyWorkspaceRegressionTests
     }
 
     [Fact]
+    public async Task Dropdown_init_imported_namespace_selects_only_exact_constructor_and_reaches_sql()
+    {
+        using var temp = new TempDirectory();
+        var (webScan, webIndex) = ScanRoot(temp, "vb-qualified-init-web", "qualified-init-web");
+        var (_, backendIndex) = ScanRoot(temp, "vb-qualified-init-backend", "qualified-init-backend");
+        Require("MW-DROPDOWN-QUALIFIED-001", "extraction",
+            webScan.Manifest.AnalysisLevel == "Level3SyntaxAnalysis"
+                && webScan.Facts.Any(fact => fact.FactType == FactTypes.ObjectCreated
+                    && fact.Properties.GetValueOrDefault("createdType") == "ChoiceNames"),
+            "the projectless Init handler did not retain its unqualified New expression");
+
+        var combinedIndex = Path.Combine(temp.Path, "qualified-init-combined.sqlite");
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions(
+            [webIndex, backendIndex], combinedIndex, ["web", "backend"]));
+        var graph = await CombinedDependencyPathReporter.BuildGraphInventoryAsync(combinedIndex);
+        var nodes = graph.Nodes.ToDictionary(node => node.NodeId, StringComparer.Ordinal);
+        Require("MW-DROPDOWN-QUALIFIED-001", "reconciliation",
+            graph.Edges.Count(edge => edge.EdgeKind == "projectless-vb-constructor-bridge"
+                && nodes[edge.FromNodeId].DisplayName == "NamesPage.Names_Init(Object,EventArgs)"
+                && nodes[edge.ToNodeId].DisplayName == "Synthetic.Data.ChoiceNames.New()") == 1,
+            "an explicit Imports should select the exact qualified constructor once");
+        Require("MW-DROPDOWN-QUALIFIED-001", "reconciliation",
+            graph.Edges.All(edge => edge.EdgeKind != "projectless-vb-constructor-bridge"
+                || nodes[edge.ToNodeId].DisplayName != "Unrelated.Data.ChoiceNames.New()"),
+            "the same-name constructor in an unrelated namespace must remain disconnected");
+
+        var packet = await WebFormsModernizationPacketReporter.BuildAsync(
+            new(combinedIndex, Path.Combine(temp.Path, "qualified-init-packet"), MaxDepth: 10));
+        var chains = packet.EventChains.Where(chain =>
+            chain.HandlerSymbol?.Contains("NamesPage.Names_Init", StringComparison.Ordinal) == true).ToArray();
+        Require("MW-DROPDOWN-QUALIFIED-001", "traversal",
+            chains.Length > 0 && chains.All(chain =>
+                chain.TraversalObservation?.TerminalReachabilityComplete == true
+                && chain.TraversalObservation.DistinctReachableTerminalCount == 1),
+            $"expected one complete terminal via the imported constructor; observed "
+                + $"[{string.Join(',', chains.Select(chain => $"{chain.TraversalObservation?.DistinctReachableTerminalCount}:{chain.TraversalObservation?.TerminalReachabilityComplete}"))}]");
+        Require("MW-DROPDOWN-QUALIFIED-001", "traversal",
+            TerminalBoundaries(packet, "NamesPage.Names_Init").Count == 1,
+            "the constructor side effect did not produce one supported boundary");
+    }
+
+    [Fact]
+    public async Task Dropdown_init_two_imported_constructor_namespaces_fail_closed()
+    {
+        using var temp = new TempDirectory();
+        var (_, webIndex) = ScanRoot(temp, "vb-qualified-ambiguous-web", "ambiguous-import-web");
+        var (_, backendIndex) = ScanRoot(temp, "vb-qualified-init-backend", "ambiguous-import-backend");
+        var combinedIndex = Path.Combine(temp.Path, "ambiguous-import-combined.sqlite");
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions(
+            [webIndex, backendIndex], combinedIndex, ["web", "backend"]));
+        var graph = await CombinedDependencyPathReporter.BuildGraphInventoryAsync(combinedIndex);
+        var nodes = graph.Nodes.ToDictionary(node => node.NodeId, StringComparer.Ordinal);
+        Require("MW-DROPDOWN-QUALIFIED-AMBIGUOUS-001", "reconciliation",
+            graph.Gaps.Any(gap => gap.GapKind == "ProjectlessVisualBasicConstructorTargetAmbiguous")
+                && graph.Edges.All(edge => edge.EdgeKind != "projectless-vb-constructor-bridge"
+                    || nodes[edge.FromNodeId].DisplayName != "NamesPage.Names_Init(Object,EventArgs)"),
+            "two explicitly imported same-name constructors must remain ambiguous");
+        var packet = await WebFormsModernizationPacketReporter.BuildAsync(
+            new(combinedIndex, Path.Combine(temp.Path, "ambiguous-import-packet"), MaxDepth: 10));
+        var chains = packet.EventChains.Where(chain =>
+            chain.HandlerSymbol?.Contains("NamesPage.Names_Init", StringComparison.Ordinal) == true).ToArray();
+        Require("MW-DROPDOWN-QUALIFIED-AMBIGUOUS-001", "traversal",
+            chains.Length > 0 && chains.All(chain =>
+                chain.TraversalObservation?.TerminalReachabilityComplete == true
+                && chain.TraversalObservation.DistinctReachableTerminalCount == 0),
+            "ambiguous imported constructors must not invent either SQL terminal");
+    }
+
+    [Fact]
     public async Task Dropdown_init_single_index_admits_constructor_body_into_bounded_packet()
     {
         using var temp = new TempDirectory();
@@ -1313,8 +1382,12 @@ public sealed class MessyWorkspaceRegressionTests
             constructorEdges.All(edge => !nodes[edge.ToNodeId].DisplayName.Contains("OtherNamespace.Foo.New", StringComparison.Ordinal)),
             "an unqualified creation was attached to an unrelated namespace");
         Require("MW-CONSTRUCTOR-IDENTITY-001", "reconciliation",
+            constructorEdges.Any(edge => nodes[edge.FromNodeId].DisplayName == "CallerNamespace.ReviewCaller.Run()"
+                && nodes[edge.ToNodeId].DisplayName == "CallerNamespace.Foo.New()"),
+            $"the local lexical namespace must resolve its own same-name constructor; edges=[{string.Join(';', constructorEdges.Select(edge => $"{nodes[edge.FromNodeId].DisplayName}->{nodes[edge.ToNodeId].DisplayName}"))}]");
+        Require("MW-CONSTRUCTOR-IDENTITY-001", "reconciliation",
             graph.Gaps.Any(gap => gap.GapKind == "ProjectlessVisualBasicConstructorTargetUnavailable"),
-            "the unresolved unqualified constructor needs an explicit gap");
+            "the root-level unqualified constructor needs an explicit gap");
     }
 
     [Fact]

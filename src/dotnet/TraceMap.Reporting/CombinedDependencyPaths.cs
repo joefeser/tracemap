@@ -3086,6 +3086,26 @@ public static partial class CombinedDependencyPathReporter
             var matching = candidates
                 .Where(declaration => string.Equals(VisualBasicContainingType(declaration), createdType, StringComparison.OrdinalIgnoreCase))
                 .ToArray();
+            if (matching.Length == 0 && !createdType.Contains('.') && !createdType.Contains('+'))
+            {
+                // A bare New Type() cannot select an arbitrary namespace by
+                // simple name. Only the creation site's lexical namespace or
+                // an explicit, non-aliased Imports clause may qualify it.
+                var lexicalNamespace = NormalizeVisualBasicTypeName(
+                    CombinedDependencyReporter.FirstValue(creation.Properties, "lexicalNamespace"));
+                var importedNamespaces = (CombinedDependencyReporter.FirstValue(creation.Properties, "importedNamespaces") ?? string.Empty)
+                    .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                    .Select(NormalizeVisualBasicTypeName);
+                var qualifiedNames = importedNamespaces
+                    .Append(lexicalNamespace)
+                    .Where(name => name.Length > 0)
+                    .Select(name => $"{name}.{createdType}")
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToHashSet(StringComparer.OrdinalIgnoreCase);
+                matching = candidates
+                    .Where(declaration => qualifiedNames.Contains(VisualBasicContainingType(declaration)))
+                    .ToArray();
+            }
             if (matching.Length == 0)
             {
                 if (candidates.Length > 0)
@@ -3098,7 +3118,7 @@ public static partial class CombinedDependencyPathReporter
                 continue; // External or implicit constructor; no source-body claim.
             }
 
-            var identity = ResolveUniqueVisualBasicReceiverTypeIdentity(matching, createdType);
+            var identity = ResolveUniqueVisualBasicReceiverTypeIdentity(matching, VisualBasicContainingType(matching[0]));
             if (identity is null || matching.Length != 1)
             {
                 AddProjectlessVisualBasicConstructorBridgeGap(graph, creation, sourceNode,
@@ -3959,11 +3979,12 @@ public static partial class CombinedDependencyPathReporter
             return null;
         }
 
-        var type = parts.Length >= 2 ? CleanSymbolPart(parts[^2]) : null;
-        if (string.Equals(type, "global::", StringComparison.Ordinal))
-        {
-            type = null;
-        }
+        // The penultimate segment alone conflates NamespaceA.Type.New with
+        // NamespaceB.Type.New. Preserve the entire declaring-type path so
+        // same-name classes cannot become a traversal shortcut.
+        var type = parts.Length >= 2
+            ? string.Join('.', parts[..^1].Select(CleanSymbolPart))
+            : null;
 
         return new SymbolAlias(
             MemberKey: member.ToLowerInvariant(),

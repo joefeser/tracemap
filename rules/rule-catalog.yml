@@ -3427,6 +3427,7 @@ rules:
       - Reconciliation is source-local and must not join symbols across combined indexes or languages.
       - Short-name reconciliation is review evidence only and cannot produce a strong static path.
       - Ambiguous same-name candidates must remain gaps or review evidence rather than arbitrary strong links.
+      - Reconciliation retains the full namespace and nested declaring-type path; equal final type segments in different namespaces do not authorize an edge.
       - Reconciliation does not prove runtime dispatch, dependency injection binding, reflection targets, branch feasibility, serializer behavior, or SQL execution.
 
   - id: combined.paths.projectless-vb-receiver-bridge.v1
@@ -3460,7 +3461,7 @@ rules:
     limitations:
       - Only projectless syntax-extractor object creations can bridge; compiler-rejected semantic constructor fallbacks cannot be rescued by another source root.
       - A bounded single-index packet admits matching constructor declarations and constructor-owned body facts through the same fact, frontier, and work limits as syntax call closure; interrupted admission is partial evidence, not a clean absent constructor.
-      - The created type must match exactly one retained VB syntax constructor declaration by qualified type identity and argument count across the combined sources; unqualified names never infer a namespace, while same-arity overloads and duplicate identities fail closed.
+      - The created type must match exactly one retained VB syntax constructor declaration by qualified type identity and argument count across the combined sources. An unqualified type may be qualified only by its retained lexical namespace or a non-aliased explicit Imports namespace; absent or competing identities fail closed rather than guessing a namespace.
       - An exact arity-bearing constructor body with retained call or creation evidence is required. Missing or unretained bodies remain a Tier4 gap, not a clean absence conclusion.
       - Argument types, implicit constructors, property getter semantics, collection contents, branch feasibility, and runtime object lifetime are not inferred.
       - The edge proves only a possible static constructor side-effect path in the retained graph; it does not prove that a property is populated, a database call executes, or a Web Forms control binds successfully.
@@ -4384,6 +4385,7 @@ rules:
       - ObjectCreated
     limitations:
       - Created types are raw `New ...` syntax text and are never compiler-resolved targets; the type may not resolve or exist.
+      - Full-file projectless syntax facts retain the creation site's lexical namespace and non-aliased explicit Imports namespaces as text-only context; aliases, root namespaces, compiler binding, and assembly identity are not inferred.
       - Creation candidates prove syntax presence only; constructor identity, executed constructor, and runtime allocation are not claimed.
       - In an otherwise semantically analyzed file, this rule is used only when the created type is known but its constructor is unresolved, and a `CallSiteSemanticResolutionUnavailable` Tier4 gap accompanies it.
 
