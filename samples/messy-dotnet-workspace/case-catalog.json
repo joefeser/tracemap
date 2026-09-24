@@ -287,6 +287,72 @@
       "assertions": "depth 8 and 10 retain the same single terminal identity independently from the page-two and page-three routes"
     },
     {
+      "id": "MW-SPLIT-VB-001",
+      "status": "implemented",
+      "roots": ["vb-split-web", "vb-split-backend"],
+      "shape": "three projectless VB Web Forms pages and their backend classes are scanned as independent roots, then combined; page two branches through five same-name methods in one backend file to two SQL terminals, page three reaches none, and page eleven reaches one",
+      "stages": ["extraction", "combining", "reconciliation", "traversal"],
+      "expectedRuleIds": ["vb.syntax.callgraph.v1", "vb.syntax.database-operation.v1", "combined.paths.projectless-vb-receiver-bridge.v1"],
+      "expectedTiers": ["Tier3SyntaxOrTextual", "Tier4Unknown"],
+      "expectedGaps": ["DownstreamWithoutSupportedTerminal"],
+      "assertions": "each page has exactly one cross-root receiver bridge; the merged packet retains complete 2/0/1 supported-terminal inventories and matching boundaries; this proves only the synthetic retained graph, not private-corpus behavior or runtime absence"
+    },
+    {
+      "id": "MW-DROPDOWN-CTOR-001",
+      "status": "implemented",
+      "roots": ["vb-init-web", "vb-init-backend"],
+      "shape": "a projectless VB Web Forms DropDownList Init Handles handler iterates New SyntheticDataAccess().MyList inside With; its explicit constructor calls an inline-created service, which forwards through a typed repository field and a typed SQL gateway field to an ADO.NET command terminal",
+      "stages": ["extraction", "combining", "reconciliation", "traversal"],
+      "expectedRuleIds": ["vb.syntax.event-wiring.v1", "vb.syntax.objectcreation.v1", "vb.syntax.database-operation.v1", "combined.paths.projectless-vb-constructor-bridge.v1", "combined.paths.projectless-vb-receiver-bridge.v1"],
+      "expectedTiers": ["Tier3SyntaxOrTextual"],
+      "expectedGaps": [],
+      "assertions": "the control Init binding, two inline unassigned New expressions, exact creation-to-constructor edge, inline service call, two typed-field call hops, and one reachable SQL terminal remain visible after independent scans and combine; property value flow, collection contents, execution, and successful binding are not claimed"
+    },
+    {
+      "id": "MW-DROPDOWN-CTOR-AMBIGUOUS-001",
+      "status": "implemented",
+      "roots": ["vb-init-web", "vb-init-backend", "vb-init-duplicate"],
+      "shape": "two independent backend roots contain the same unqualified VB type name and same-arity explicit constructor, while the page uses an inline New expression",
+      "stages": ["extraction", "combining", "reconciliation", "traversal"],
+      "expectedRuleIds": ["combined.paths.projectless-vb-constructor-bridge.v1"],
+      "expectedTiers": ["Tier4Unknown"],
+      "expectedGaps": ["ProjectlessVisualBasicConstructorTargetAmbiguous"],
+      "assertions": "the duplicate constructor type identities produce an explicit Tier4 ambiguity gap and cannot create a terminal path from the page"
+    },
+    {
+      "id": "MW-DROPDOWN-INLINE-AMBIGUOUS-001",
+      "status": "implemented",
+      "roots": ["vb-init-web", "vb-init-backend", "vb-init-service-duplicate"],
+      "shape": "two independent backend roots declare the same service type and method reached by an inline New service invocation in a projectless VB constructor",
+      "stages": ["extraction", "combining", "reconciliation", "traversal"],
+      "expectedRuleIds": ["combined.paths.projectless-vb-receiver-bridge.v1"],
+      "expectedTiers": ["Tier4Unknown"],
+      "expectedGaps": ["ProjectlessVisualBasicReceiverTargetAmbiguous"],
+      "assertions": "the inline-created service type stays ambiguous across combined roots, emits a Tier4 receiver gap, and cannot create a terminal path from the page"
+    },
+    {
+      "id": "MW-CONSTRUCTOR-IDENTITY-001",
+      "status": "implemented",
+      "roots": ["vb-review-constructor", "vb-review-semantic", "vb-review-projectless"],
+      "shape": "projectless VB constructs a nested type after a generic outer type and calls through a parenthesized inline New receiver; an unqualified same-simple-name type in another namespace and a compiler-rejected semantic-project constructor remain unrelated",
+      "stages": ["extraction", "combining", "reconciliation"],
+      "expectedRuleIds": ["vb.syntax.objectcreation.v1", "vb.syntax.callgraph.v1", "combined.paths.projectless-vb-constructor-bridge.v1"],
+      "expectedTiers": ["Tier3SyntaxOrTextual", "Tier4Unknown"],
+      "expectedGaps": ["ProjectlessVisualBasicConstructorTargetUnavailable"],
+      "assertions": "balanced generic normalization preserves the nested constructor identity, parentheses preserve exact inline-New receiver provenance, unqualified names cannot bridge into an unrelated namespace, and compiler-rejected semantic fallback cannot be rescued by another projectless root"
+    },
+    {
+      "id": "MW-DROPDOWN-SINGLE-001",
+      "status": "implemented",
+      "roots": ["vb-init-single"],
+      "shape": "one projectless Web Forms source index contains a dropdown Init handler and a data-access constructor that populates a list by calling through service, repository, and SQL gateway methods; an uncalled same-name method in the constructor's class is an implicit-Me decoy",
+      "stages": ["extraction", "traversal"],
+      "expectedRuleIds": ["vb.syntax.objectcreation.v1", "combined.paths.projectless-vb-constructor-bridge.v1"],
+      "expectedTiers": ["Tier3SyntaxOrTextual", "Tier4Unknown"],
+      "expectedGaps": [],
+      "assertions": "bounded single-index graph admission retains the constructor declaration and body facts instead of silently losing the side-effect terminal, while inline-New receiver evidence never bridges to the same-name implicit-Me decoy"
+    },
+    {
       "id": "MW-COMPOUND-LIMIT-001",
       "status": "implemented",
       "roots": ["vb-compound-pages"],

@@ -2875,7 +2875,7 @@ containing module.
 
 Public-safe synthetic fixtures under `samples/messy-dotnet-workspace/`
 reproduce the workspace shapes observed in real Web Forms/.NET scans without
-copying any private source, names, paths, or artifacts. Six roots are
+copying any private source, names, paths, or artifacts. Sixteen roots are
 scanned independently: `root-alpha` (C# Web Forms site with a twelve-call-edge deep
 chain ending in an ADO.NET-style SQL terminal at graph distance 14, a
 three-node cycle plus a self-cycle with its own handler, ten same-name
@@ -2885,7 +2885,16 @@ names), `vb-projectless` (loose VB files with no `.vbproj`/`.sln`),
 `root-generated` (a designer bridge and bound compiled/PDB evidence), and
 `root-crosslanguage` (a buildable C#→VB→F# project graph), and
 `vb-compound-pages` (three projectless VB Web Forms pages with repeated
-`Process` method names, deeper calls, and zero/two/one supported SQL terminals).
+`Process` method names, deeper calls, and zero/two/one supported SQL terminals),
+`vb-split-web` plus `vb-split-backend` (the same page/route shape scanned
+as independent web and backend roots before index combine), and
+`vb-init-web`, `vb-init-backend`, `vb-init-duplicate`, plus
+`vb-init-service-duplicate` (an inline constructor side-effect path and two
+duplicate-type negative controls), plus `vb-review-constructor`,
+`vb-review-semantic`, and `vb-review-projectless` (nested generic type identity,
+parenthesized inline creation, namespace rejection, and compiler-rejected
+constructor fallback), plus `vb-init-single` (the dropdown Init handler and
+constructor-side-effect backend in one projectless source index).
 
 The stable case catalog is `samples/messy-dotnet-workspace/case-catalog.json`
 (schema `messy-workspace-case-catalog.v1`). Cases are marked `implemented` or
@@ -2908,6 +2917,39 @@ interrupted input closure must report an explicit
 Tier4 graph-input limit, never a clean no-terminal conclusion. This synthetic
 result does not establish that private pages 2, 3, or 11 are fixed; rerun those
 pages on a fresh merged index to make that claim.
+
+The split-root regression additionally requires one exact page-to-backend
+receiver bridge per page and complete two/zero/one terminal inventories after
+combining the independent projectless VB scans. It currently passes. Thus
+root separation alone does not reproduce the remaining private-page gap; a
+different receiver or call shape must be demonstrated before a resolver change.
+
+The dropdown Init case demonstrates one such missing shape: an inline
+`New SyntheticDataAccess().MyList` object creation in a `For Each` was
+retained, and the constructor independently reached a SQL operation, but
+there was no edge between them. The explicit, unique type-and-arity
+constructor bridge now retains that static side-effect path. The constructor
+then calls a service through another inline `New`, and the service forwards
+through two typed fields to the ADO.NET operation. The syntax extractor retains
+the exact inline-created receiver type for that second hop; duplicate
+constructor or service types in another root produce Tier4 ambiguity gaps.
+The same-index fixture also declares an uncalled same-name method on the
+containing data-access class with its own SQL operation. The inline receiver
+must not acquire an implicit `Me` bridge to that decoy terminal.
+This does not prove property value flow, collection contents, runtime SQL
+execution, or that any private page improved.
+
+The constructor-review case requires exact qualified type identity and preserves
+nested types after balanced generic clauses. An unqualified same-simple-name
+declaration in another namespace yields a Tier4 gap rather than a guessed
+bridge. A compiler-rejected constructor fallback from a semantic project does
+not become a projectless syntax bridge when another root supplies a constructor.
+Parenthesized direct `New` receivers remain explicit syntax evidence; factories
+and arbitrary member chains remain unproven. The static HTML explorer accepts
+both constructor and receiver bridge hops as ordinary paths-report evidence.
+The single-index dropdown variant verifies that compact packet admission
+retains the matching constructor declaration and body before graph bridging;
+the split-root combined-index result alone cannot establish that behavior.
 
 Pinned behaviors, asserted per catalog case id and pipeline stage
 (extraction, combining, reconciliation, traversal) by
