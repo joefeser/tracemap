@@ -161,7 +161,7 @@ public sealed class WebFormsReportMemoryTests(ITestOutputHelper output)
 
     [Theory]
     [InlineData(5, 100_000)]
-    [InlineData(100, 2_000)]
+    [InlineData(100, 3_000)]
     public async Task Snapshot_and_graph_receive_independent_bounded_budgets(int facts, int bytes)
     {
         using var temp = new TempDirectory();
