@@ -40,13 +40,16 @@ if ($page.schemaVersion -ne 'webforms-application-page-handoff.v1' -or
     $page.claimLevel -ne 'local-only' -or $page.pageId -ne $PageId) {
     throw 'WEBFORMS_CONSTRUCTOR_HOP_PAGE_INVALID'
 }
-$surfaceIds = @($page.eventChains | ForEach-Object { [string]$_.surfaceId } |
-    Where-Object { $_ } | Sort-Object -Unique)
-if ($surfaceIds.Count -ne 1) { throw 'WEBFORMS_CONSTRUCTOR_HOP_SURFACE_UNAVAILABLE' }
+$surfaceId = [string]$page.subject.surfaceId
+if ([string]::IsNullOrWhiteSpace($surfaceId)) { throw 'WEBFORMS_CONSTRUCTOR_HOP_SURFACE_UNAVAILABLE' }
 $applicationPath = Join-Path $root 'workbench/application-handoff.json'
 $application = Read-BoundedJson $applicationPath 128MB 'WEBFORMS_CONSTRUCTOR_HOP_APPLICATION_UNAVAILABLE'
 if ($application.schemaVersion -ne 'webforms-application-handoff.v1') {
     throw 'WEBFORMS_CONSTRUCTOR_HOP_APPLICATION_INVALID'
+}
+$applicationPages = @($application.pages | Where-Object { [string]$_.pageId -eq $PageId })
+if ($applicationPages.Count -ne 1 -or [string]$applicationPages[0].surfaceId -ne $surfaceId) {
+    throw 'WEBFORMS_CONSTRUCTOR_HOP_SURFACE_MISMATCH'
 }
 $packetPath = Join-Path $root 'workbench/webforms-modernization.snapshot.json'
 $packet = Read-BoundedJson $packetPath 512MB 'WEBFORMS_CONSTRUCTOR_HOP_PACKET_UNAVAILABLE'
@@ -71,5 +74,5 @@ Write-Output "traceMapCommitSha=$($commit[0])"
 Write-Output "pageId=$PageId"
 Write-Output "pageHandoffSha256=$pageHash"
 Write-Output "packetSha256=$packetHash"
-dotnet $dll --vb-constructor-hop-audit $index $packetPath $surfaceIds[0] $HandlerName $CreatedTypeName
+dotnet $dll --vb-constructor-hop-audit $index $packetPath $surfaceId $HandlerName $CreatedTypeName
 if ($LASTEXITCODE -ne 0) { throw 'WEBFORMS_CONSTRUCTOR_HOP_AUDIT_FAILED' }
