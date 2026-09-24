@@ -2933,6 +2933,9 @@ then calls a service through another inline `New`, and the service forwards
 through two typed fields to the ADO.NET operation. The syntax extractor retains
 the exact inline-created receiver type for that second hop; duplicate
 constructor or service types in another root produce Tier4 ambiguity gaps.
+The same-index fixture also declares an uncalled same-name method on the
+containing data-access class with its own SQL operation. The inline receiver
+must not acquire an implicit `Me` bridge to that decoy terminal.
 This does not prove property value flow, collection contents, runtime SQL
 execution, or that any private page improved.
 
