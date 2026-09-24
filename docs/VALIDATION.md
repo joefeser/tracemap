@@ -2875,7 +2875,7 @@ containing module.
 
 Public-safe synthetic fixtures under `samples/messy-dotnet-workspace/`
 reproduce the workspace shapes observed in real Web Forms/.NET scans without
-copying any private source, names, paths, or artifacts. Sixteen roots are
+copying any private source, names, paths, or artifacts. Seventeen roots are
 scanned independently: `root-alpha` (C# Web Forms site with a twelve-call-edge deep
 chain ending in an ADO.NET-style SQL terminal at graph distance 14, a
 three-node cycle plus a self-cycle with its own handler, ten same-name
@@ -2894,7 +2894,9 @@ duplicate-type negative controls), plus `vb-review-constructor`,
 `vb-review-semantic`, and `vb-review-projectless` (nested generic type identity,
 parenthesized inline creation, namespace rejection, and compiler-rejected
 constructor fallback), plus `vb-init-single` (the dropdown Init handler and
-constructor-side-effect backend in one projectless source index).
+constructor-side-effect backend in one projectless source index), and
+`root-route-reconvergence` (two same-named methods in separate classes in
+one file, two call levels, one shared SQL terminal).
 
 The stable case catalog is `samples/messy-dotnet-workspace/case-catalog.json`
 (schema `messy-workspace-case-catalog.v1`). Cases are marked `implemented` or
@@ -2947,6 +2949,14 @@ both constructor and receiver bridge hops as ordinary paths-report evidence.
 The single-index dropdown variant verifies that compact packet admission
 retains the matching constructor declaration and body before graph bridging;
 the split-root combined-index result alone cannot establish that behavior.
+
+The shared-terminal route case pins the distinction between terminal identity
+and bounded path detail. A handler with two routes to one terminal yields two
+event-chain rows when both fit the configured work/path/depth limits, but one
+distinct supported-terminal identity. With a one-path budget, the terminal
+inventory remains complete while path-detail truncation is explicit. This
+recovers the alternate route rows hidden by the shortest-witness-only packet
+change; it does not prove private page counts or runtime execution.
 
 Pinned behaviors, asserted per catalog case id and pipeline stage
 (extraction, combining, reconciliation, traversal) by

@@ -4037,6 +4037,13 @@ public static partial class CombinedDependencyPathReporter
         var paths = new List<CombinedPath>();
         var gaps = new List<CombinedPathGap>();
         var reachedNodeIds = starts.Select(node => node.NodeId).ToHashSet(StringComparer.Ordinal);
+        // Terminal inventory answers which supported terminals are reachable;
+        // ordinary enumeration still retains bounded, distinct route detail.
+        // A shortest witness may also be found by enumeration, so identify it
+        // by its exact root and edge sequence before adding another path row.
+        var retainedPathRoutes = new HashSet<string>(StringComparer.Ordinal);
+        static string PathRouteKey(PathState state) =>
+            state.RootNodeId + "\0" + string.Join("\0", state.EdgeIds);
         var truncated = false;
         var sequence = 0;
         var work = 0;
@@ -4061,6 +4068,7 @@ public static partial class CombinedDependencyPathReporter
             foreach (var witness in inventory.Witnesses)
             {
                 sequence++;
+                retainedPathRoutes.Add(PathRouteKey(witness));
                 var path = ToPath($"path:{sequence:0000}", graph, witness);
                 paths.Add(path with
                 {
@@ -4167,11 +4175,23 @@ public static partial class CombinedDependencyPathReporter
             var currentNodeId = state.NodeIds[^1];
             if (terminalNodeIds.Contains(currentNodeId) && state.EdgeIds.Count > 0)
             {
-                if (!inventoryDistinctTerminals)
+                if (!inventoryDistinctTerminals || retainedPathRoutes.Add(PathRouteKey(state)))
                 {
                     traversal[state.RootNodeId].TerminalPathCount++;
                     sequence++;
-                    paths.Add(ToPath($"path:{sequence:0000}", graph, state));
+                    var path = ToPath($"path:{sequence:0000}", graph, state);
+                    paths.Add(inventoryDistinctTerminals
+                        ? path with
+                        {
+                            Notes =
+                            [
+                                .. path.Notes,
+                                new CombinedPathNote(
+                                    "BoundedPathDetail",
+                                    "This alternate route was retained by bounded path enumeration. Terminal reachability completeness is reported separately; static path detail does not prove runtime execution.")
+                            ]
+                        }
+                        : path);
                 }
                 YieldLegacyRoot(state.RootNodeId);
                 continue;

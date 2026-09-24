@@ -77,10 +77,10 @@ public sealed class MessyWorkspaceRegressionTests
             Require("MW-CATALOG", "extraction", entry.GetProperty("shape").GetString() is { Length: > 0 }, $"case {id} must describe its shape");
         }
 
-        Require("MW-CATALOG", "extraction", ids.Count == 22,
-            $"expected the twenty-two pinned fixture cases, found {ids.Count}");
-        Require("MW-CATALOG", "extraction", implemented == 22 && deferred == 0,
-            $"all twenty-two pinned fixture cases must remain implemented; found {implemented} implemented and {deferred} deferred");
+        Require("MW-CATALOG", "extraction", ids.Count == 23,
+            $"expected the twenty-three pinned fixture cases, found {ids.Count}");
+        Require("MW-CATALOG", "extraction", implemented == 23 && deferred == 0,
+            $"all twenty-three pinned fixture cases must remain implemented; found {implemented} implemented and {deferred} deferred");
 
         // Catalog evidence annotations are load-bearing: every expected rule id must
         // exist in the rule catalog, tiers must be real evidence tiers, and gap
@@ -1006,8 +1006,8 @@ public sealed class MessyWorkspaceRegressionTests
                 var terminalIds = chains[0].TraversalObservation!.ReachableTerminalIds.ToHashSet(StringComparer.Ordinal);
                 terminalSets.Add(terminalIds);
                 var boundaries = TerminalBoundaries(packet, $"{page}.RunButton_Click");
-                Require(caseId, "traversal", boundaries.Count == expectedTerminals,
-                    $"depth {depth}: expected {expectedTerminals} supported boundaries, found {boundaries.Count}");
+                Require(caseId, "traversal", boundaries.Count >= expectedTerminals,
+                    $"depth {depth}: fewer supported boundary rows than the {expectedTerminals} distinct terminals; found {boundaries.Count}");
                 Require(caseId, "traversal",
                     boundaries.Select(boundary => boundary.TerminalEvidenceId).Distinct(StringComparer.Ordinal).Count() == expectedTerminals,
                     $"depth {depth}: terminal evidence identities collapsed or crossed page routes");
@@ -1169,9 +1169,11 @@ public sealed class MessyWorkspaceRegressionTests
             && chain.TraversalObservation.DistinctReachableTerminalCount == 1),
             $"constructor-populated MyList must reach one SQL terminal; actual counts "
                 + $"[{string.Join(',', chains.Select(chain => chain.TraversalObservation?.DistinctReachableTerminalCount))}]");
+        var boundaries = TerminalBoundaries(packet, "ChoicesPage.Name_Init");
         Require("MW-DROPDOWN-CTOR-001", "traversal",
-            TerminalBoundaries(packet, "ChoicesPage.Name_Init").Count == 1,
-            "the constructor-to-helper SQL terminal has no boundary");
+            boundaries.Count >= 1
+                && boundaries.Select(boundary => boundary.TerminalEvidenceId).Distinct(StringComparer.Ordinal).Count() == 1,
+            "the constructor-to-helper route must retain one distinct SQL terminal boundary");
         Require("MW-DROPDOWN-CTOR-001", "traversal",
             chains.All(chain => chain.TraversalObservation!.TraversedRuleIds.Contains("combined.paths.projectless-vb-constructor-bridge.v1")),
             "the terminal witness did not traverse the constructor bridge");
@@ -1311,6 +1313,32 @@ public sealed class MessyWorkspaceRegressionTests
         Require("MW-CONSTRUCTOR-IDENTITY-001", "reconciliation",
             graph.Gaps.Any(gap => gap.GapKind == "ProjectlessVisualBasicConstructorTargetUnavailable"),
             "the unresolved unqualified constructor needs an explicit gap");
+    }
+
+    [Fact]
+    public async Task Reconvergent_routes_retain_two_page_chains_to_one_terminal()
+    {
+        using var temp = new TempDirectory();
+        var (scan, index) = ScanRoot(temp, "root-route-reconvergence", "shared-route-page");
+        Require("MW-SHARED-TERMINAL-ROUTES-001", "extraction",
+            scan.Manifest.BuildStatus == "Succeeded", "the public reconvergent route fixture did not build");
+        Require("MW-SHARED-TERMINAL-ROUTES-001", "extraction",
+            scan.Facts.Count(fact => fact.FactType == FactTypes.CallEdge
+                && fact.SourceSymbol?.Contains("SharedPage.Run_Click", StringComparison.Ordinal) == true) == 2,
+            "the page handler did not retain both first-level calls");
+
+        var packet = await WebFormsModernizationPacketReporter.BuildAsync(new(index, Path.Combine(temp.Path, "packet")));
+        var chains = packet.EventChains.Where(chain => chain.HandlerSymbol?.Contains("SharedPage.Run_Click", StringComparison.Ordinal) == true).ToArray();
+        Require("MW-SHARED-TERMINAL-ROUTES-001", "traversal", chains.Length == 2,
+            $"two routes to one retained terminal should yield two page chains, found {chains.Length}; queries=[{string.Join(";", scan.Facts.Where(fact => fact.FactType == FactTypes.QueryPatternDetected).Select(fact => fact.SourceSymbol))}]; calls=[{string.Join(";", scan.Facts.Where(fact => fact.FactType == FactTypes.CallEdge).Select(fact => $"{fact.SourceSymbol}->{fact.TargetSymbol}"))}]; all chains=[{string.Join(";", packet.EventChains.Select(chain => $"{chain.HandlerSymbol}:{chain.TerminalKind}:{chain.LegacyPathId}"))}]");
+        Require("MW-SHARED-TERMINAL-ROUTES-001", "traversal",
+            chains.All(chain => chain.TraversalObservation?.TerminalReachabilityComplete == true
+                && chain.TraversalObservation.DistinctReachableTerminalCount == 1),
+            "both route rows must share one complete terminal inventory");
+        Require("MW-SHARED-TERMINAL-ROUTES-001", "traversal",
+            packet.DownstreamBoundaries.Where(boundary => chains.Any(chain => chain.ChainId == boundary.ChainId))
+                .Select(boundary => boundary.TerminalEvidenceId).Distinct(StringComparer.Ordinal).Count() == 1,
+            "the shared terminal must not be misreported as two distinct terminals");
     }
 
     [Fact]
