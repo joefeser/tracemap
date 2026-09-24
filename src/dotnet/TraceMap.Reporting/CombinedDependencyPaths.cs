@@ -3057,6 +3057,8 @@ public static partial class CombinedDependencyPathReporter
             .Where(fact => fact.FactType == FactTypes.ObjectCreated
                 && fact.RuleId == RuleIds.VisualBasicSyntaxObjectCreation
                 && fact.EvidenceTier == EvidenceTiers.Tier3SyntaxOrTextual
+                && string.Equals(fact.ExtractorId, "VisualBasicSyntaxExtractor", StringComparison.Ordinal)
+                && !string.Equals(CombinedDependencyReporter.FirstValue(fact.Properties, "resolution"), "unresolved-constructor", StringComparison.Ordinal)
                 && !string.IsNullOrWhiteSpace(fact.SourceSymbol))
             .OrderBy(fact => fact.CombinedFactId, StringComparer.Ordinal))
         {
@@ -3069,11 +3071,22 @@ public static partial class CombinedDependencyPathReporter
                 continue;
             }
 
-            var matching = constructorsByTypeAndArity
-                .GetValueOrDefault($"{SimpleVisualBasicTypeName(createdType)}\0{arity}", [])
-                .Where(declaration => VisualBasicTypeMatches(VisualBasicContainingType(declaration), createdType))
+            var candidates = constructorsByTypeAndArity
+                .GetValueOrDefault($"{SimpleVisualBasicTypeName(createdType)}\0{arity}", []);
+            var matching = candidates
+                .Where(declaration => string.Equals(VisualBasicContainingType(declaration), createdType, StringComparison.OrdinalIgnoreCase))
                 .ToArray();
-            if (matching.Length == 0) continue; // External or implicit constructor; no source-body claim.
+            if (matching.Length == 0)
+            {
+                if (candidates.Length > 0)
+                {
+                    AddProjectlessVisualBasicConstructorBridgeGap(graph, creation, sourceNode,
+                        "ProjectlessVisualBasicConstructorTargetUnavailable", "constructor-qualified-type-unavailable",
+                        "A constructor shares the created type's simple name and arity, but no exact qualified type identity was retained; TraceMap did not infer a namespace.",
+                        candidates);
+                }
+                continue; // External or implicit constructor; no source-body claim.
+            }
 
             var identity = ResolveUniqueVisualBasicReceiverTypeIdentity(matching, createdType);
             if (identity is null || matching.Length != 1)
@@ -3419,22 +3432,7 @@ public static partial class CombinedDependencyPathReporter
             return string.Empty;
         }
 
-        var normalized = value.Trim();
-        if (normalized.StartsWith("Global::", StringComparison.OrdinalIgnoreCase))
-        {
-            normalized = normalized[8..];
-        }
-        else if (normalized.StartsWith("Global.", StringComparison.OrdinalIgnoreCase))
-        {
-            normalized = normalized[7..];
-        }
-
-        var generic = normalized.IndexOf("(Of ", StringComparison.OrdinalIgnoreCase);
-        if (generic >= 0)
-        {
-            normalized = normalized[..generic];
-        }
-
+        var normalized = NormalizeVisualBasicTypeName(value);
         var separator = Math.Max(normalized.LastIndexOf('.'), normalized.LastIndexOf('+'));
         return separator >= 0 ? normalized[(separator + 1)..] : normalized;
     }
@@ -3445,8 +3443,27 @@ public static partial class CombinedDependencyPathReporter
         var normalized = value.Trim();
         if (normalized.StartsWith("Global::", StringComparison.OrdinalIgnoreCase)) normalized = normalized[8..];
         else if (normalized.StartsWith("Global.", StringComparison.OrdinalIgnoreCase)) normalized = normalized[7..];
-        var generic = normalized.IndexOf("(Of ", StringComparison.OrdinalIgnoreCase);
-        return generic >= 0 ? normalized[..generic] : normalized;
+        var result = new StringBuilder(normalized.Length);
+        for (var index = 0; index < normalized.Length; index++)
+        {
+            if (normalized[index] != '(' || index + 3 >= normalized.Length
+                || !normalized.AsSpan(index + 1).StartsWith("Of", StringComparison.OrdinalIgnoreCase)
+                || !char.IsWhiteSpace(normalized[index + 3]))
+            {
+                result.Append(normalized[index]);
+                continue;
+            }
+
+            var depth = 1;
+            while (++index < normalized.Length && depth > 0)
+            {
+                if (normalized[index] == '(') depth++;
+                else if (normalized[index] == ')') depth--;
+            }
+            if (depth != 0) return string.Empty;
+            index--; // Keep the next nested-type separator after the generic clause.
+        }
+        return result.ToString();
     }
 
     private static string VisualBasicContainingType(CombinedFactRow fact) =>

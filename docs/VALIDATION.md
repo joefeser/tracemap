@@ -2875,7 +2875,7 @@ containing module.
 
 Public-safe synthetic fixtures under `samples/messy-dotnet-workspace/`
 reproduce the workspace shapes observed in real Web Forms/.NET scans without
-copying any private source, names, paths, or artifacts. Twelve roots are
+copying any private source, names, paths, or artifacts. Fifteen roots are
 scanned independently: `root-alpha` (C# Web Forms site with a twelve-call-edge deep
 chain ending in an ADO.NET-style SQL terminal at graph distance 14, a
 three-node cycle plus a self-cycle with its own handler, ten same-name
@@ -2890,7 +2890,10 @@ names), `vb-projectless` (loose VB files with no `.vbproj`/`.sln`),
 as independent web and backend roots before index combine), and
 `vb-init-web`, `vb-init-backend`, `vb-init-duplicate`, plus
 `vb-init-service-duplicate` (an inline constructor side-effect path and two
-duplicate-type negative controls).
+duplicate-type negative controls), plus `vb-review-constructor`,
+`vb-review-semantic`, and `vb-review-projectless` (nested generic type identity,
+parenthesized inline creation, namespace rejection, and compiler-rejected
+constructor fallback).
 
 The stable case catalog is `samples/messy-dotnet-workspace/case-catalog.json`
 (schema `messy-workspace-case-catalog.v1`). Cases are marked `implemented` or
@@ -2931,6 +2934,15 @@ the exact inline-created receiver type for that second hop; duplicate
 constructor or service types in another root produce Tier4 ambiguity gaps.
 This does not prove property value flow, collection contents, runtime SQL
 execution, or that any private page improved.
+
+The constructor-review case requires exact qualified type identity and preserves
+nested types after balanced generic clauses. An unqualified same-simple-name
+declaration in another namespace yields a Tier4 gap rather than a guessed
+bridge. A compiler-rejected constructor fallback from a semantic project does
+not become a projectless syntax bridge when another root supplies a constructor.
+Parenthesized direct `New` receivers remain explicit syntax evidence; factories
+and arbitrary member chains remain unproven. The static HTML explorer accepts
+both constructor and receiver bridge hops as ordinary paths-report evidence.
 
 Pinned behaviors, asserted per catalog case id and pipeline stage
 (extraction, combining, reconciliation, traversal) by

@@ -331,6 +331,17 @@
       "assertions": "the inline-created service type stays ambiguous across combined roots, emits a Tier4 receiver gap, and cannot create a terminal path from the page"
     },
     {
+      "id": "MW-CONSTRUCTOR-IDENTITY-001",
+      "status": "implemented",
+      "roots": ["vb-review-constructor", "vb-review-semantic", "vb-review-projectless"],
+      "shape": "projectless VB constructs a nested type after a generic outer type and calls through a parenthesized inline New receiver; an unqualified same-simple-name type in another namespace and a compiler-rejected semantic-project constructor remain unrelated",
+      "stages": ["extraction", "combining", "reconciliation"],
+      "expectedRuleIds": ["vb.syntax.objectcreation.v1", "vb.syntax.callgraph.v1", "combined.paths.projectless-vb-constructor-bridge.v1"],
+      "expectedTiers": ["Tier3SyntaxOrTextual", "Tier4Unknown"],
+      "expectedGaps": ["ProjectlessVisualBasicConstructorTargetUnavailable"],
+      "assertions": "balanced generic normalization preserves the nested constructor identity, parentheses preserve exact inline-New receiver provenance, unqualified names cannot bridge into an unrelated namespace, and compiler-rejected semantic fallback cannot be rescued by another projectless root"
+    },
+    {
       "id": "MW-COMPOUND-LIMIT-001",
       "status": "implemented",
       "roots": ["vb-compound-pages"],
