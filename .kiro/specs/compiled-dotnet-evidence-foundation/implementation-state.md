@@ -1972,3 +1972,9 @@ Local validation: the focused public regressions passed, the complete .NET
 test project passed 2,289/2,289 with no failures, `git diff --check` passed,
 and the private-path guard passed. These results do not replace a page-002
 binary admission and traversal receipt from the work machine.
+
+A follow-up read-only `Show-FocusedWebFormsCompiledInputs.ps1` top-level `bin`
+inventory reports only DLL/PDB counts, portable/Windows/other PDB format
+counts, and DLL/PDB basename-pair count. It prints no private filenames or
+input path, creates no artifact, and makes no source-binding claim. This
+short diagnostic is available before any private binary admission attempt.
