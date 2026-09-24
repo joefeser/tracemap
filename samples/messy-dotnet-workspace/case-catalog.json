@@ -345,12 +345,12 @@
       "id": "MW-DROPDOWN-OVERLOAD-001",
       "status": "implemented",
       "roots": ["vb-overload-web", "vb-overload-framework"],
-      "shape": "a projectless VB dropdown Init handler reads a constructor-populated list; App_Code uses initialized and inherited fields, then calls a SQL gateway in a separate scan root through an ArrayList/ByRef overload that forwards into an array overload containing an ADO.NET Fill operation",
+      "shape": "a projectless VB dropdown Init handler reads a constructor-populated list; App_Code DataAccess inherits a field-level SQL gateway and Open method that assigns it, then calls that gateway in a separate scan root through an ArrayList/ByRef overload that forwards into an array overload containing an ADO.NET Fill operation",
       "stages": ["extraction", "combining", "reconciliation", "traversal"],
       "expectedRuleIds": ["vb.syntax.event-wiring.v1", "vb.syntax.objectcreation.v1", "vb.syntax.database-operation.v1", "combined.paths.projectless-vb-constructor-bridge.v1", "combined.paths.projectless-vb-receiver-bridge.v1"],
       "expectedTiers": ["Tier3SyntaxOrTextual"],
       "expectedGaps": [],
-      "assertions": "the distinct two- and three-argument gateway overloads are both retained as receiver destinations and the merged packet reports one complete supported SQL terminal; this synthetic result does not prove private-corpus behavior or runtime execution"
+      "assertions": "the inherited Open-initialized field receiver and distinct two- and three-argument gateway overloads are retained, and the merged packet reports one complete supported SQL terminal; this synthetic result does not prove private-corpus behavior or runtime execution"
     },
     {
       "id": "MW-DROPDOWN-INLINE-AMBIGUOUS-001",

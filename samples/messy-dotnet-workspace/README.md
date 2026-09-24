@@ -53,8 +53,8 @@ Roots:
 - `vb-qualified-ambiguous-web/` — competing explicit imports for those
   same-name constructors; no constructor or SQL terminal may be chosen.
 - `vb-overload-web/` and `vb-overload-framework/` — a synthetic projectless
-  constructor path through initialized fields, an inherited gateway field,
-  and two `ByRef` SQL-gateway overloads (`ArrayList` then typed arrays) in a
+  constructor path through a field initialized by an inherited `Open` method and two
+  `ByRef` SQL-gateway overloads (`ArrayList` then typed arrays) in a
   separately scanned root to an ADO.NET `Fill` terminal.
   Passing this case does not explain the private receiver declaration or prove
   a terminal in a private page.

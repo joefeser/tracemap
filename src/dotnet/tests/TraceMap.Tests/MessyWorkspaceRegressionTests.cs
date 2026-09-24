@@ -1243,7 +1243,7 @@ public sealed class MessyWorkspaceRegressionTests
     }
 
     [Fact]
-    public async Task Dropdown_init_crosses_overloaded_byref_arraylist_sql_gateway()
+    public async Task Dropdown_init_crosses_inherited_open_field_and_overloaded_sql_gateway()
     {
         using var temp = new TempDirectory();
         var (webScan, webIndex) = ScanRoot(temp, "vb-overload-web", "overload-web");
@@ -1251,10 +1251,13 @@ public sealed class MessyWorkspaceRegressionTests
         Require("MW-DROPDOWN-OVERLOAD-001", "extraction",
             webScan.Facts.Any(fact => fact.FactType == FactTypes.CallEdge
                 && fact.SourceSymbol == "Synthetic.Data.ChoiceRepository.SelectNames()"
+                && fact.Properties.GetValueOrDefault("calleeName") == "Open")
+            && webScan.Facts.Any(fact => fact.FactType == FactTypes.CallEdge
+                && fact.SourceSymbol == "Synthetic.Data.ChoiceRepository.SelectNames()"
                 && fact.Properties.GetValueOrDefault("calleeName") == "ExecuteProcedureDataSet")
             && backendScan.Facts.Any(fact => fact.FactType == FactTypes.DatabaseOperationCandidate
                 && fact.SourceSymbol?.Contains("ProcedureGateway.ExecuteProcedureDataSet(", StringComparison.Ordinal) == true),
-            "the synthetic overloaded gateway call or Fill terminal was not extracted");
+            "the inherited Open call, overloaded gateway call, or Fill terminal was not extracted");
         var combinedIndex = Path.Combine(temp.Path, "overload-combined.sqlite");
         await CombinedIndexBuilder.CombineAsync(new CombineOptions(
             [webIndex, backendIndex], combinedIndex, ["web", "framework"]));
