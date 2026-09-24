@@ -77,10 +77,10 @@ public sealed class MessyWorkspaceRegressionTests
             Require("MW-CATALOG", "extraction", entry.GetProperty("shape").GetString() is { Length: > 0 }, $"case {id} must describe its shape");
         }
 
-        Require("MW-CATALOG", "extraction", ids.Count == 20,
-            $"expected the twenty pinned fixture cases, found {ids.Count}");
-        Require("MW-CATALOG", "extraction", implemented == 20 && deferred == 0,
-            $"all twenty pinned fixture cases must remain implemented; found {implemented} implemented and {deferred} deferred");
+        Require("MW-CATALOG", "extraction", ids.Count == 21,
+            $"expected the twenty-one pinned fixture cases, found {ids.Count}");
+        Require("MW-CATALOG", "extraction", implemented == 21 && deferred == 0,
+            $"all twenty-one pinned fixture cases must remain implemented; found {implemented} implemented and {deferred} deferred");
 
         // Catalog evidence annotations are load-bearing: every expected rule id must
         // exist in the rule catalog, tiers must be real evidence tiers, and gap
@@ -1240,6 +1240,58 @@ public sealed class MessyWorkspaceRegressionTests
             graph.Gaps.Select(gap => gap.RuleId).OfType<string>(),
             graph.Gaps.Select(gap => gap.EvidenceTier).OfType<string>(),
             graph.Gaps.Select(gap => gap.GapKind));
+    }
+
+    [Fact]
+    public async Task Constructor_bridge_preserves_nested_generic_identity_and_rejects_unqualified_namespace_guess()
+    {
+        using var temp = new TempDirectory();
+        var (scan, index) = ScanRoot(temp, "vb-review-constructor", "review-constructor");
+        var (_, companionIndex) = ScanRoot(temp, "vb-init-web", "review-companion");
+        Require("MW-CONSTRUCTOR-IDENTITY-001", "extraction",
+            scan.Facts.Any(fact => fact.FactType == FactTypes.CallEdge
+                && fact.Properties.GetValueOrDefault("calleeName") == "Choose"
+                && fact.Properties.GetValueOrDefault("receiverTypeResolution") == "inline-object-creation-syntax"),
+            "parenthesized inline New receiver lost its syntax provenance");
+
+        var combinedIndex = Path.Combine(temp.Path, "review-constructor-combined.sqlite");
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions(
+            [index, companionIndex], combinedIndex, ["review", "companion"]));
+        var graph = await CombinedDependencyPathReporter.BuildGraphInventoryAsync(combinedIndex);
+        var nodes = graph.Nodes.ToDictionary(node => node.NodeId, StringComparer.Ordinal);
+        var constructorEdges = graph.Edges.Where(edge => edge.EdgeKind == "projectless-vb-constructor-bridge").ToArray();
+        Require("MW-CONSTRUCTOR-IDENTITY-001", "reconciliation",
+            constructorEdges.Any(edge => nodes[edge.ToNodeId].DisplayName.Contains("Outer.Inner.New", StringComparison.Ordinal)),
+            "the nested generic containing type lost its exact constructor identity");
+        Require("MW-CONSTRUCTOR-IDENTITY-001", "reconciliation",
+            constructorEdges.All(edge => !nodes[edge.ToNodeId].DisplayName.Contains("OtherNamespace.Foo.New", StringComparison.Ordinal)),
+            "an unqualified creation was attached to an unrelated namespace");
+        Require("MW-CONSTRUCTOR-IDENTITY-001", "reconciliation",
+            graph.Gaps.Any(gap => gap.GapKind == "ProjectlessVisualBasicConstructorTargetUnavailable"),
+            "the unresolved unqualified constructor needs an explicit gap");
+    }
+
+    [Fact]
+    public async Task Constructor_bridge_does_not_rescue_compiler_rejected_creation_from_another_root()
+    {
+        using var temp = new TempDirectory();
+        var (semanticScan, semanticIndex) = ScanRoot(temp, "vb-review-semantic", "invalid-semantic");
+        var (_, projectlessIndex) = ScanRoot(temp, "vb-review-projectless", "same-name-projectless");
+        Require("MW-CONSTRUCTOR-IDENTITY-001", "extraction",
+            semanticScan.Facts.Any(fact => fact.FactType == FactTypes.ObjectCreated
+                && fact.RuleId == RuleIds.VisualBasicSyntaxObjectCreation
+                && fact.Properties.GetValueOrDefault("resolution") == "unresolved-constructor"),
+            "the semantic project did not retain the compiler-rejected constructor fallback");
+
+        var combinedIndex = Path.Combine(temp.Path, "rejected-constructor-combined.sqlite");
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions(
+            [semanticIndex, projectlessIndex], combinedIndex, ["semantic", "projectless"]));
+        var graph = await CombinedDependencyPathReporter.BuildGraphInventoryAsync(combinedIndex);
+        var nodes = graph.Nodes.ToDictionary(node => node.NodeId, StringComparer.Ordinal);
+        Require("MW-CONSTRUCTOR-IDENTITY-001", "reconciliation",
+            !graph.Edges.Any(edge => edge.EdgeKind == "projectless-vb-constructor-bridge"
+                && nodes[edge.FromNodeId].DisplayName.Contains("SemanticCaller.Run", StringComparison.Ordinal)),
+            "a compiler-rejected creation was rescued by a same-name projectless constructor");
     }
 
     [Fact]

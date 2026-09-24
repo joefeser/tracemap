@@ -1035,6 +1035,15 @@ public static class VisualBasicSyntaxExtractor
             : $"initializer:{string.Join('.', containingTypes)}";
     }
 
+    private static ExpressionSyntax UnwrapParenthesizedExpression(ExpressionSyntax expression)
+    {
+        while (expression is ParenthesizedExpressionSyntax parenthesized)
+        {
+            expression = parenthesized.Expression;
+        }
+        return expression;
+    }
+
     private static bool AddInvocationCallFacts(
         ScanManifest manifest,
         List<CodeFact> facts,
@@ -1062,8 +1071,8 @@ public static class VisualBasicSyntaxExtractor
             properties["receiverType"] = receiverType;
             properties["receiverTypeResolution"] = "explicit-caller-syntax";
         }
-        else if (invocation.Expression is MemberAccessExpressionSyntax
-                 { Expression: ObjectCreationExpressionSyntax inlineCreation })
+        else if (invocation.Expression is MemberAccessExpressionSyntax memberAccess
+                 && UnwrapParenthesizedExpression(memberAccess.Expression) is ObjectCreationExpressionSyntax inlineCreation)
         {
             // The receiver is the exact New expression, not an inferred local
             // or the return type of an arbitrary factory/property call.

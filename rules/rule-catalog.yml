@@ -3454,9 +3454,11 @@ rules:
     emits:
       - projectless-vb-constructor-bridge path edge
       - ProjectlessVisualBasicConstructorTargetAmbiguous gap
+      - ProjectlessVisualBasicConstructorTargetUnavailable gap
       - ProjectlessVisualBasicConstructorBodyUnavailable gap
     limitations:
-      - The created type must match exactly one retained VB syntax constructor declaration by type identity and argument count across the combined sources; same-arity overloads, duplicate type identities, or multiple source roots with the same type fail closed.
+      - Only projectless syntax-extractor object creations can bridge; compiler-rejected semantic constructor fallbacks cannot be rescued by another source root.
+      - The created type must match exactly one retained VB syntax constructor declaration by qualified type identity and argument count across the combined sources; unqualified names never infer a namespace, while same-arity overloads and duplicate identities fail closed.
       - An exact arity-bearing constructor body with retained call or creation evidence is required. Missing or unretained bodies remain a Tier4 gap, not a clean absence conclusion.
       - Argument types, implicit constructors, property getter semantics, collection contents, branch feasibility, and runtime object lifetime are not inferred.
       - The edge proves only a possible static constructor side-effect path in the retained graph; it does not prove that a property is populated, a database call executes, or a Web Forms control binds successfully.
