@@ -2875,7 +2875,7 @@ containing module.
 
 Public-safe synthetic fixtures under `samples/messy-dotnet-workspace/`
 reproduce the workspace shapes observed in real Web Forms/.NET scans without
-copying any private source, names, paths, or artifacts. Eleven roots are
+copying any private source, names, paths, or artifacts. Twelve roots are
 scanned independently: `root-alpha` (C# Web Forms site with a twelve-call-edge deep
 chain ending in an ADO.NET-style SQL terminal at graph distance 14, a
 three-node cycle plus a self-cycle with its own handler, ten same-name
@@ -2888,8 +2888,9 @@ names), `vb-projectless` (loose VB files with no `.vbproj`/`.sln`),
 `Process` method names, deeper calls, and zero/two/one supported SQL terminals),
 `vb-split-web` plus `vb-split-backend` (the same page/route shape scanned
 as independent web and backend roots before index combine), and
-`vb-init-web`, `vb-init-backend`, plus `vb-init-duplicate` (an inline
-constructor side-effect path and a duplicate-type negative control).
+`vb-init-web`, `vb-init-backend`, `vb-init-duplicate`, plus
+`vb-init-service-duplicate` (an inline constructor side-effect path and two
+duplicate-type negative controls).
 
 The stable case catalog is `samples/messy-dotnet-workspace/case-catalog.json`
 (schema `messy-workspace-case-catalog.v1`). Cases are marked `implemented` or
@@ -2923,8 +2924,11 @@ The dropdown Init case demonstrates one such missing shape: an inline
 `New SyntheticDataAccess().MyList` object creation in a `For Each` was
 retained, and the constructor independently reached a SQL operation, but
 there was no edge between them. The explicit, unique type-and-arity
-constructor bridge now retains that static side-effect path; a second
-same-name constructor in another root produces a Tier4 ambiguity gap instead.
+constructor bridge now retains that static side-effect path. The constructor
+then calls a service through another inline `New`, and the service forwards
+through two typed fields to the ADO.NET operation. The syntax extractor retains
+the exact inline-created receiver type for that second hop; duplicate
+constructor or service types in another root produce Tier4 ambiguity gaps.
 This does not prove property value flow, collection contents, runtime SQL
 execution, or that any private page improved.
 

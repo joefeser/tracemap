@@ -3431,7 +3431,7 @@ rules:
 
   - id: combined.paths.projectless-vb-receiver-bridge.v1
     name: Projectless Visual Basic receiver-provenance bridge
-    description: Derives an in-memory review-tier path edge from a handler-owned syntax-only VB invocation to a unique retained VB method declaration when receiver provenance is established by a preceding local creation, a containing-type typed field, or a typed field reached through one unique retained base-type chain, and the retained method identity is compatible.
+    description: Derives an in-memory review-tier path edge from a syntax-only VB invocation to a unique retained VB method declaration when receiver provenance is established by a preceding local creation, an exact inline New expression, a containing-type typed field, or a typed field reached through one unique retained base-type chain, and the retained method identity is compatible.
     evidenceTier: Tier2Structural
     emits:
       - projectless-vb-receiver-bridge path edge
@@ -3441,6 +3441,7 @@ rules:
     limitations:
       - The receiver creation and invocation must be source-index-local; the unique semantic declaration may come from that source or another explicitly combined TraceMap index.
       - Local creation takes precedence. Field provenance requires one typed declaration on the containing type or one typed field reached through a unique retained syntax-only base-type chain; ambiguous field or inheritance evidence fails closed.
+      - An inline New expression qualifies only when it is the invocation's direct receiver in retained syntax; property returns, factories, and arbitrary nested expression types are not inferred.
       - The bridge does not perform compiler binding for the projectless caller and does not infer properties, factories, dependency-injection, late-bound, reflection, or reassigned receiver targets.
       - Type matching uses a case-insensitive canonical declaring-type identity, method name, arity, and any available ordered argument/parameter types; zero or multiple compatible declarations remain explicit gaps.
       - Bounded single-index packet input follows newly discovered syntax calls through method bodies only while fact, text, frontier, and traversal-work limits permit. Interrupted closure is an explicit Tier4 graph-input limit, not a complete zero-terminal inventory.
@@ -4368,6 +4369,7 @@ rules:
       - Callees are invocation or creation text, never compiler-resolved targets; edges prove only that call-like syntax exists at a location.
       - The caller is the lexically containing member derived from syntax; no runtime reachability, dispatch, or execution is claimed.
       - Object-creation edges use `SyntaxObjectCreation` call kinds and are bounded by the same deterministic per-file budget as other fallback facts.
+      - A direct inline `New Type().Method()` invocation retains the textual created receiver type with `inline-object-creation-syntax` provenance; this is not compiler type binding or proof that construction succeeds.
       - In an otherwise semantically analyzed file, this rule is used only for an individual unresolved invocation or known-type constructor and is accompanied by a `CallSiteSemanticResolutionUnavailable` Tier4 gap.
 
   - id: vb.syntax.objectcreation.v1

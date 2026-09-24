@@ -1062,6 +1062,14 @@ public static class VisualBasicSyntaxExtractor
             properties["receiverType"] = receiverType;
             properties["receiverTypeResolution"] = "explicit-caller-syntax";
         }
+        else if (invocation.Expression is MemberAccessExpressionSyntax
+                 { Expression: ObjectCreationExpressionSyntax inlineCreation })
+        {
+            // The receiver is the exact New expression, not an inferred local
+            // or the return type of an arbitrary factory/property call.
+            properties["receiverType"] = inlineCreation.Type.ToString().Trim();
+            properties["receiverTypeResolution"] = "inline-object-creation-syntax";
+        }
         if (argumentTypes is not null)
         {
             properties["argumentTypes"] = string.Join(";", argumentTypes);

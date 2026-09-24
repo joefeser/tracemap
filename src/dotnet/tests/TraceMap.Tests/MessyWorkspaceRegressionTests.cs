@@ -77,10 +77,10 @@ public sealed class MessyWorkspaceRegressionTests
             Require("MW-CATALOG", "extraction", entry.GetProperty("shape").GetString() is { Length: > 0 }, $"case {id} must describe its shape");
         }
 
-        Require("MW-CATALOG", "extraction", ids.Count == 19,
-            $"expected the nineteen pinned fixture cases, found {ids.Count}");
-        Require("MW-CATALOG", "extraction", implemented == 19 && deferred == 0,
-            $"all nineteen pinned fixture cases must remain implemented; found {implemented} implemented and {deferred} deferred");
+        Require("MW-CATALOG", "extraction", ids.Count == 20,
+            $"expected the twenty pinned fixture cases, found {ids.Count}");
+        Require("MW-CATALOG", "extraction", implemented == 20 && deferred == 0,
+            $"all twenty pinned fixture cases must remain implemented; found {implemented} implemented and {deferred} deferred");
 
         // Catalog evidence annotations are load-bearing: every expected rule id must
         // exist in the rule catalog, tiers must be real evidence tiers, and gap
@@ -1118,8 +1118,20 @@ public sealed class MessyWorkspaceRegressionTests
             "the inline New expression must be retained without a fabricated local assignment");
         Require("MW-DROPDOWN-CTOR-001", "extraction",
             backendScan.Facts.Any(fact => fact.FactType == FactTypes.DatabaseOperationCandidate
-                && fact.SourceSymbol == "SyntheticListSource.LoadChoices()"),
+                && fact.SourceSymbol?.StartsWith("SyntheticSqlGateway.ExecuteDataSet(", StringComparison.Ordinal) == true),
             "the backend terminal is absent before graph composition");
+        Require("MW-DROPDOWN-CTOR-001", "extraction",
+            backendScan.Facts.Any(fact => fact.FactType == FactTypes.ObjectCreated
+                && fact.Properties.GetValueOrDefault("createdType") == "SyntheticService"
+                && fact.Properties.GetValueOrDefault("assignedTo") == ""),
+            "the constructor's inline service creation was not retained");
+        Require("MW-DROPDOWN-CTOR-001", "extraction",
+            backendScan.Facts.Any(fact => fact.FactType == FactTypes.CallEdge
+                && fact.SourceSymbol == "SyntheticDataAccess.New()"
+                && fact.Properties.GetValueOrDefault("calleeName") == "SelectChoices"
+                && fact.Properties.GetValueOrDefault("receiverType") == "SyntheticService"
+                && fact.Properties.GetValueOrDefault("receiverTypeResolution") == "inline-object-creation-syntax"),
+            "the inline service invocation lost its syntax-proven receiver type");
 
         var combinedIndex = Path.Combine(temp.Path, "init-combined.sqlite");
         await CombinedIndexBuilder.CombineAsync(new CombineOptions(
@@ -1133,6 +1145,19 @@ public sealed class MessyWorkspaceRegressionTests
                 && edge.RuleId == "combined.paths.projectless-vb-constructor-bridge.v1"
                 && edge.EvidenceTier == EvidenceTiers.Tier3SyntaxOrTextual) == 1,
             "the exact inline creation-to-constructor bridge is absent or duplicated");
+        foreach (var (caller, callee) in new[]
+        {
+            ("SyntheticDataAccess.New()", "SyntheticService.SelectChoices(String,String,Integer)"),
+            ("SyntheticService.SelectChoices(String,String,Integer)", "SyntheticRepository.SelectChoices(String,String,Integer)"),
+            ("SyntheticRepository.SelectChoices(String,String,Integer)", "SyntheticSqlGateway.ExecuteDataSet(String,String,String,Integer)")
+        })
+        {
+            Require("MW-DROPDOWN-CTOR-001", "reconciliation",
+                graph.Edges.Any(edge => edge.EdgeKind == "projectless-vb-receiver-bridge"
+                    && nodesById[edge.FromNodeId].DisplayName == caller
+                    && nodesById[edge.ToNodeId].DisplayName == callee),
+                $"the {caller} -> {callee} call hop was not retained");
+        }
         var packet = await WebFormsModernizationPacketReporter.BuildAsync(
             new(combinedIndex, Path.Combine(temp.Path, "init-packet"), MaxDepth: 10));
         var chains = packet.EventChains.Where(chain =>
@@ -1183,6 +1208,35 @@ public sealed class MessyWorkspaceRegressionTests
                 chain.TraversalObservation?.DistinctReachableTerminalCount == 0),
             "an ambiguous constructor identity must not create a SQL terminal path");
         RequireCatalogEvidence("MW-DROPDOWN-CTOR-AMBIGUOUS-001", "reconciliation",
+            graph.Gaps.Select(gap => gap.RuleId).OfType<string>(),
+            graph.Gaps.Select(gap => gap.EvidenceTier).OfType<string>(),
+            graph.Gaps.Select(gap => gap.GapKind));
+    }
+
+    [Fact]
+    public async Task Dropdown_init_duplicate_inline_service_type_fails_closed_across_roots()
+    {
+        using var temp = new TempDirectory();
+        var (_, webIndex) = ScanRoot(temp, "vb-init-web", "service-ambiguous-web");
+        var (_, backendIndex) = ScanRoot(temp, "vb-init-backend", "service-ambiguous-backend");
+        var (_, duplicateIndex) = ScanRoot(temp, "vb-init-service-duplicate", "service-ambiguous-duplicate");
+        var combinedIndex = Path.Combine(temp.Path, "service-ambiguous-init-combined.sqlite");
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions(
+            [webIndex, backendIndex, duplicateIndex], combinedIndex, ["web", "backend", "duplicate"]));
+        var graph = await CombinedDependencyPathReporter.BuildGraphInventoryAsync(combinedIndex);
+        Require("MW-DROPDOWN-INLINE-AMBIGUOUS-001", "reconciliation",
+            graph.Gaps.Any(gap => gap.GapKind == "ProjectlessVisualBasicReceiverTargetAmbiguous"
+                && gap.RuleId == "combined.paths.projectless-vb-receiver-bridge.v1"),
+            "duplicate inline service types need an explicit receiver ambiguity gap");
+        var packet = await WebFormsModernizationPacketReporter.BuildAsync(
+            new(combinedIndex, Path.Combine(temp.Path, "service-ambiguous-init-packet"), MaxDepth: 10));
+        var chains = packet.EventChains.Where(chain =>
+            chain.HandlerSymbol?.Contains("ChoicesPage.Name_Init", StringComparison.Ordinal) == true).ToArray();
+        Require("MW-DROPDOWN-INLINE-AMBIGUOUS-001", "traversal",
+            chains.Length > 0 && chains.All(chain =>
+                chain.TraversalObservation?.DistinctReachableTerminalCount == 0),
+            "an ambiguous inline service identity must not create a SQL terminal path");
+        RequireCatalogEvidence("MW-DROPDOWN-INLINE-AMBIGUOUS-001", "reconciliation",
             graph.Gaps.Select(gap => gap.RuleId).OfType<string>(),
             graph.Gaps.Select(gap => gap.EvidenceTier).OfType<string>(),
             graph.Gaps.Select(gap => gap.GapKind));
