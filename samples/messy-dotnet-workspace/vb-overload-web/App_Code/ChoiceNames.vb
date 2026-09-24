@@ -30,13 +30,18 @@ Namespace Synthetic.Data
         Inherits RepositoryBase
 
         Public Function SelectNames() As DataSet
+            Open()
             Dim parameters As New ArrayList()
             parameters.Add(New ParameterDescriptor("synthetic-id", 1))
-            Return Gateway.ExecuteProcedureDataSet("synthetic.lookup", parameters)
+            Return SQLDA.ExecuteProcedureDataSet("synthetic.lookup", parameters)
         End Function
     End Class
 
     Public Class RepositoryBase
-        Protected ReadOnly Gateway As New ProcedureGateway()
+        Protected SQLDA As ProcedureGateway
+
+        Protected Sub Open()
+            SQLDA = New ProcedureGateway()
+        End Sub
     End Class
 End Namespace
