@@ -273,6 +273,7 @@ public static partial class CombinedDependencyPathReporter
     private const string TruncationGapRuleId = "combined.paths.truncation-gap.v1";
     private const string SymbolReconciliationRuleId = "combined.paths.symbol-reconciliation.v1";
     private const string ProjectlessVisualBasicReceiverBridgeRuleId = "combined.paths.projectless-vb-receiver-bridge.v1";
+    private const string ProjectlessVisualBasicConstructorBridgeRuleId = "combined.paths.projectless-vb-constructor-bridge.v1";
 
     private static readonly HashSet<string> EdgeKindTerms = new(StringComparer.Ordinal)
     {
@@ -287,6 +288,7 @@ public static partial class CombinedDependencyPathReporter
         "surface-evidence",
         "symbol-reconciliation",
         "projectless-vb-receiver-bridge",
+        "projectless-vb-constructor-bridge",
         "interface-candidate",
         "override-candidate",
         "message-publish-consume"
@@ -1115,6 +1117,7 @@ public static partial class CombinedDependencyPathReporter
         AddSymbolReconciliationEdges(graph);
         AddProjectlessVisualBasicReceiverBridgeEdges(graph, read.Facts);
         AddProjectlessVisualBasicImplicitReceiverBridgeEdges(graph, read.Facts);
+        AddProjectlessVisualBasicConstructorBridgeEdges(graph, read.Facts);
         AddDispatchCandidateEdges(graph, read.Facts, read.Sources, read.HasFactExtractorVersion);
         graph.Sort();
         return graph;
@@ -3021,6 +3024,128 @@ public static partial class CombinedDependencyPathReporter
         }
     }
 
+    private static void AddProjectlessVisualBasicConstructorBridgeEdges(
+        EvidenceGraph graph,
+        IReadOnlyList<CombinedFactRow> facts)
+    {
+        var constructors = facts
+            .Where(fact => fact.FactType == FactTypes.MethodDeclared
+                && fact.RuleId == RuleIds.VisualBasicSyntaxDeclarations
+                && fact.EvidenceTier == EvidenceTiers.Tier3SyntaxOrTextual
+                && string.Equals(CombinedDependencyReporter.FirstValue(fact.Properties, "methodName", "name"), "New", StringComparison.OrdinalIgnoreCase)
+                && !string.IsNullOrWhiteSpace(CombinedDependencyReporter.FirstValue(fact.Properties, "memberIdentity")))
+            .OrderBy(fact => fact.CombinedFactId, StringComparer.Ordinal)
+            .ToArray();
+        if (constructors.Length == 0) return;
+        var constructorsByTypeAndArity = constructors
+            .Where(fact => int.TryParse(CombinedDependencyReporter.FirstValue(fact.Properties, "parameterCount"), out _))
+            .GroupBy(fact => $"{SimpleVisualBasicTypeName(VisualBasicContainingType(fact))}\0"
+                + CombinedDependencyReporter.FirstValue(fact.Properties, "parameterCount"), StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.OrdinalIgnoreCase);
+
+        var bodyFacts = facts
+            .Where(fact => IsVisualBasicReceiverBodyFact(fact)
+                && !string.IsNullOrWhiteSpace(fact.SourceSymbol))
+            .GroupBy(fact => $"{fact.SourceIndexId}\0{fact.SourceSymbol}", StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key,
+                group => group.OrderBy(fact => fact.CombinedFactId, StringComparer.Ordinal).ToArray(),
+                StringComparer.OrdinalIgnoreCase);
+
+        foreach (var creation in facts
+            .Where(fact => fact.FactType == FactTypes.ObjectCreated
+                && fact.RuleId == RuleIds.VisualBasicSyntaxObjectCreation
+                && fact.EvidenceTier == EvidenceTiers.Tier3SyntaxOrTextual
+                && !string.IsNullOrWhiteSpace(fact.SourceSymbol))
+            .OrderBy(fact => fact.CombinedFactId, StringComparer.Ordinal))
+        {
+            var createdType = NormalizeVisualBasicTypeName(
+                CombinedDependencyReporter.FirstValue(creation.Properties, "createdType"));
+            if (createdType.Length == 0
+                || !int.TryParse(CombinedDependencyReporter.FirstValue(creation.Properties, "argumentCount"), out var arity)
+                || !graph.Nodes.TryGetValue(SymbolNodeId(creation.SourceIndexId, creation.SourceSymbol!), out var sourceNode))
+            {
+                continue;
+            }
+
+            var matching = constructorsByTypeAndArity
+                .GetValueOrDefault($"{SimpleVisualBasicTypeName(createdType)}\0{arity}", [])
+                .Where(declaration => VisualBasicTypeMatches(VisualBasicContainingType(declaration), createdType))
+                .ToArray();
+            if (matching.Length == 0) continue; // External or implicit constructor; no source-body claim.
+
+            var identity = ResolveUniqueVisualBasicReceiverTypeIdentity(matching, createdType);
+            if (identity is null || matching.Length != 1)
+            {
+                AddProjectlessVisualBasicConstructorBridgeGap(graph, creation, sourceNode,
+                    "ProjectlessVisualBasicConstructorTargetAmbiguous", "constructor-target-ambiguous",
+                    "The created VB type and constructor arity match multiple retained constructor declarations or type identities; no constructor was selected.",
+                    matching);
+                continue;
+            }
+
+            var target = matching[0];
+            var memberIdentity = CombinedDependencyReporter.FirstValue(target.Properties, "memberIdentity")!;
+            var exactBody = bodyFacts.GetValueOrDefault($"{target.SourceIndexId}\0{memberIdentity}", []);
+            if (exactBody.Length == 0
+                || !graph.Nodes.TryGetValue(SymbolNodeId(target.SourceIndexId, memberIdentity), out var targetNode))
+            {
+                AddProjectlessVisualBasicConstructorBridgeGap(graph, creation, sourceNode,
+                    "ProjectlessVisualBasicConstructorBodyUnavailable", "constructor-body-unavailable",
+                    "One constructor declaration matched the created type and arity, but no exact retained constructor body evidence was available for a path edge.",
+                    matching);
+                continue;
+            }
+
+            graph.AddEdge(new GraphEdge(
+                $"projectless-vb-constructor-bridge:{creation.CombinedFactId}:{target.CombinedFactId}",
+                "projectless-vb-constructor-bridge",
+                sourceNode.NodeId,
+                targetNode.NodeId,
+                "EvidenceEdge",
+                ProjectlessVisualBasicConstructorBridgeRuleId,
+                EvidenceTiers.Tier3SyntaxOrTextual,
+                exactBody.Select(fact => fact.CombinedFactId)
+                    .Append(creation.CombinedFactId)
+                    .Append(target.CombinedFactId)
+                    .Distinct(StringComparer.Ordinal)
+                    .OrderBy(value => value, StringComparer.Ordinal)
+                    .ToArray(),
+                [],
+                SafePath(creation.FilePath),
+                creation.StartLine,
+                creation.EndLine));
+        }
+    }
+
+    private static void AddProjectlessVisualBasicConstructorBridgeGap(
+        EvidenceGraph graph, CombinedFactRow creation, GraphNode sourceNode,
+        string gapKind, string reason, string message, IReadOnlyList<CombinedFactRow> candidates)
+    {
+        graph.Gaps.Add(new CombinedPathGap(
+            $"gap:projectless-vb-constructor-bridge:{creation.CombinedFactId}:{reason}",
+            gapKind,
+            CombinedDependencyPathClassifications.AnalysisGap,
+            message,
+            creation.SourceIndexId,
+            creation.SourceLabel,
+            sourceNode.NodeId,
+            creation.CombinedFactId,
+            ProjectlessVisualBasicConstructorBridgeRuleId,
+            EvidenceTiers.Tier4Unknown,
+            SafePath(creation.FilePath),
+            creation.StartLine,
+            reason,
+            creation.CommitSha,
+            creation.ExtractorVersion,
+            "projectless-vb-constructor",
+            creation.EndLine,
+            CandidateCount: candidates.Count,
+            SupportingFactIds: candidates.Select(candidate => candidate.CombinedFactId)
+                .Append(creation.CombinedFactId)
+                .OrderBy(value => value, StringComparer.Ordinal)
+                .ToArray()));
+    }
+
     private static bool IsVisualBasicExplicitSelfReceiver(string? receiverName) =>
         string.Equals(receiverName?.Trim(), "Me", StringComparison.OrdinalIgnoreCase)
         || string.Equals(receiverName?.Trim(), "MyClass", StringComparison.OrdinalIgnoreCase);
@@ -4785,6 +4910,11 @@ public static partial class CombinedDependencyPathReporter
             notes.Add(new CombinedPathNote("ProjectlessVisualBasicReceiverBridge", "This review-tier hop joins a syntax-only VB invocation using one uniquely retained receiver provenance plus method identity. Provenance may be a local object creation, one explicit caller parameter/local/field type, an exact namespace-qualified retained type, a containing-type field initializer, one typed field reached through a unique retained syntax-only base-type chain, or the exact containing type for an unqualified implicit-Me or explicit Me/MyClass call; local creation takes precedence. It may continue from a reached syntax method through another independently supported receiver call. It prefers one semantic type/name/arity declaration; under reduced semantic coverage it requires one syntax type/name declaration and an exact arity-bearing member-body symbol. Only after receiver identity is unique may exact ordered text-only argument/parameter types eliminate different-signature overloads. Partial argument types may narrow candidates only when every unresolved position has the same retained parameter type across all candidates. Named, wholly unknown, conflicting, or signature-incomplete evidence does not authorize that filter. Ambiguous receiver, inheritance, field, signature, or target evidence fails closed. The resulting target hop is not compiler-resolved call evidence or proof of runtime execution."));
         }
 
+        if (edges.Any(edge => edge.EdgeKind == "projectless-vb-constructor-bridge"))
+        {
+            notes.Add(new CombinedPathNote("ProjectlessVisualBasicConstructorBridge", "This syntax-only review hop connects one VB object creation to a unique explicit constructor with retained body evidence by type identity and arity. It permits static analysis of constructor side effects, including an inline New expression, but does not prove property values, runtime execution, or successful binding. Ambiguous or unavailable constructor bodies fail closed."));
+        }
+
         if (edges.Any(edge => edge.EdgeKind is "remoting-evidence" or "remoting-channel-link"))
         {
             notes.Add(new CombinedPathNote("StaticRemotingEvidence", "Static Remoting evidence marks a boundary candidate only; it does not prove runtime channel setup, object activation, process boundary, deployment, reachability, lifetime, or production use."));
@@ -6087,6 +6217,7 @@ public static partial class CombinedDependencyPathReporter
             "endpoint-match" => 0,
             "calls" => 1,
             "creates" => 2,
+            "projectless-vb-constructor-bridge" => 2,
             "parameter-forward" => 3,
             "argument-passed" => 4,
             "surface-evidence" => 5,

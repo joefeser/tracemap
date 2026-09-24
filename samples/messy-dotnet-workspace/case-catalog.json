@@ -298,6 +298,28 @@
       "assertions": "each page has exactly one cross-root receiver bridge; the merged packet retains complete 2/0/1 supported-terminal inventories and matching boundaries; this proves only the synthetic retained graph, not private-corpus behavior or runtime absence"
     },
     {
+      "id": "MW-DROPDOWN-CTOR-001",
+      "status": "implemented",
+      "roots": ["vb-init-web", "vb-init-backend"],
+      "shape": "a projectless VB Web Forms DropDownList Init Handles handler iterates New SyntheticDataAccess().MyList inside With; its explicit constructor assigns MyList after calling a newly created helper whose method contains a SQL adapter terminal",
+      "stages": ["extraction", "combining", "reconciliation", "traversal"],
+      "expectedRuleIds": ["vb.syntax.event-wiring.v1", "vb.syntax.objectcreation.v1", "vb.syntax.database-operation.v1", "combined.paths.projectless-vb-constructor-bridge.v1"],
+      "expectedTiers": ["Tier3SyntaxOrTextual"],
+      "expectedGaps": [],
+      "assertions": "the control Init binding, inline unassigned New expression, exact creation-to-constructor edge, constructor-to-helper call, and one reachable SQL terminal remain visible after independent scans and combine; property value flow, collection contents, execution, and successful binding are not claimed"
+    },
+    {
+      "id": "MW-DROPDOWN-CTOR-AMBIGUOUS-001",
+      "status": "implemented",
+      "roots": ["vb-init-web", "vb-init-backend", "vb-init-duplicate"],
+      "shape": "two independent backend roots contain the same unqualified VB type name and same-arity explicit constructor, while the page uses an inline New expression",
+      "stages": ["extraction", "combining", "reconciliation", "traversal"],
+      "expectedRuleIds": ["combined.paths.projectless-vb-constructor-bridge.v1"],
+      "expectedTiers": ["Tier4Unknown"],
+      "expectedGaps": ["ProjectlessVisualBasicConstructorTargetAmbiguous"],
+      "assertions": "the duplicate constructor type identities produce an explicit Tier4 ambiguity gap and cannot create a terminal path from the page"
+    },
+    {
       "id": "MW-COMPOUND-LIMIT-001",
       "status": "implemented",
       "roots": ["vb-compound-pages"],
