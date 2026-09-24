@@ -1220,6 +1220,16 @@ public static class VisualBasicSyntaxExtractor
     {
         var typeName = creation.Type.ToString();
         var containingMember = GetContainingMemberName(creation);
+        var compilationUnit = creation.Ancestors().OfType<CompilationUnitSyntax>().FirstOrDefault();
+        var importedNamespaces = compilationUnit?.Imports
+            .SelectMany(statement => statement.ImportsClauses)
+            .OfType<SimpleImportsClauseSyntax>()
+            .Where(clause => clause.Alias is null)
+            .Select(clause => clause.Name.ToString().Trim())
+            .Where(name => name.Length > 0)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(name => name, StringComparer.Ordinal)
+            .ToArray() ?? [];
         if (!TryAddSyntaxFact(
                     manifest,
                     facts,
@@ -1234,7 +1244,9 @@ public static class VisualBasicSyntaxExtractor
                         ["assignedTo"] = GetAssignedVariableName(creation) ?? string.Empty,
                         ["callerName"] = containingMember ?? string.Empty,
                         ["createdType"] = typeName,
-                        ["creationKind"] = "SyntaxObjectCreation"
+                        ["creationKind"] = "SyntaxObjectCreation",
+                        ["importedNamespaces"] = string.Join(';', importedNamespaces),
+                        ["lexicalNamespace"] = GetSyntacticNamespace(creation)
                     },
                     budget,
                     sourceSymbol: containingMember))

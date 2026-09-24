@@ -45,6 +45,13 @@ Roots:
   separately scanned root; the page-to-constructor hop must fail closed.
 - `vb-init-service-duplicate/` — a second same-name service in another root;
   the inline-created receiver call must also fail closed.
+- `vb-qualified-init-web/` and `vb-qualified-init-backend/` — a projectless
+  dropdown constructor side-effect path whose unqualified created type is
+  grounded by one explicit namespace import. A same-name constructor in an
+  unrelated namespace has its own SQL decoy and must not be reached by symbol
+  reconciliation.
+- `vb-qualified-ambiguous-web/` — competing explicit imports for those
+  same-name constructors; no constructor or SQL terminal may be chosen.
 - `root-generated/` — buildable Web Forms-shaped C# page whose auto-generated
   designer bridge is deliberately excluded from source traversal. A bound
   compiled scan pins the handler's source→metadata→IL/PDB identity chain.
