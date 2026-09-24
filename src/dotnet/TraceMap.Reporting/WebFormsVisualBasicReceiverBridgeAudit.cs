@@ -10,7 +10,8 @@ public static class WebFormsVisualBasicReceiverBridgeAudit
         string? SourceSymbol, string FilePath, int Line, string RuleId, string Tier,
         IReadOnlyDictionary<string, string> Properties);
 
-    public static IReadOnlyList<string> Run(string indexPath, string packetPath, string surfaceId, bool includePrivateIdentities = false)
+    public static IReadOnlyList<string> Run(string indexPath, string packetPath, string surfaceId,
+        bool includePrivateIdentities = false, string? focusHandlerName = null, string? focusCreatedTypeName = null)
     {
         if (new FileInfo(packetPath).Length is <= 0 or > 512 * 1024 * 1024)
             throw new InvalidDataException("ReceiverBridgeAuditInputLimit");
@@ -259,6 +260,9 @@ public static class WebFormsVisualBasicReceiverBridgeAudit
             .GroupBy(gap => gap.Reason ?? "unavailable", StringComparer.Ordinal)
             .OrderBy(group => group.Key, StringComparer.Ordinal)
             .Select(group => $"receiverBridgeRelevantGraphGapReason.{group.Key}={group.Count()}"));
+        if (focusHandlerName is not null)
+            AddFocusedConstructorAudit(output, db, transaction, graphInventory, selectedHandlerSymbols,
+                focusHandlerName, focusCreatedTypeName);
         if (includePrivateIdentities)
         {
             output.Add("receiverBridgePrivate=enabled");
@@ -338,6 +342,110 @@ public static class WebFormsVisualBasicReceiverBridgeAudit
             output.Add($"receiverBridgePrivate.callStatuses={callStatusIndex}");
         }
         return output;
+    }
+
+    private static void AddFocusedConstructorAudit(List<string> output, SqliteConnection db,
+        SqliteTransaction transaction, CombinedPathGraphInventory graph,
+        IReadOnlyList<string> selectedHandlerSymbols, string handlerName, string? createdTypeName)
+    {
+        static bool SafeName(string value) => value.Length is > 0 and <= 128
+            && value.All(character => char.IsAsciiLetterOrDigit(character) || character is '_' or '.');
+        static string SafeReason(string? reason) => reason is { Length: > 0 and <= 128 }
+            && reason.All(character => char.IsAsciiLetterOrDigit(character) || character is '-' or '.')
+                ? reason : "unavailable";
+        if (!SafeName(handlerName) || createdTypeName is not null && !SafeName(createdTypeName))
+            throw new InvalidDataException("ReceiverBridgeAuditFocusInvalid");
+        var handlers = selectedHandlerSymbols
+            .Where(symbol => symbol.Contains(handlerName, StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+        output.Add("constructorHopAudit=valid");
+        output.Add($"constructorHopHandlerMatches={handlers.Length}");
+        using (var command = db.CreateCommand())
+        {
+            command.Transaction = transaction;
+            command.CommandText = "select count(*) from combined_facts where rule_id=$rule;";
+            command.Parameters.AddWithValue("$rule", RuleIds.DotNetIlCall);
+            output.Add($"constructorHopCompiledIlCallFactsInIndex={Convert.ToInt64(command.ExecuteScalar(), System.Globalization.CultureInfo.InvariantCulture)}");
+        }
+        if (handlers.Length != 1) return;
+
+        var creations = new List<Fact>();
+        using (var command = db.CreateCommand())
+        {
+            command.Transaction = transaction;
+            command.CommandText = "select source_index_id, source_index_id, project_path, combined_fact_id, "
+                + "source_symbol, file_path, start_line, rule_id, evidence_tier, properties_json "
+                + "from combined_facts where fact_type='ObjectCreated' and rule_id=$rule "
+                + "and source_symbol=$handler collate nocase order by combined_fact_id limit 10001;";
+            command.Parameters.AddWithValue("$rule", RuleIds.VisualBasicSyntaxObjectCreation);
+            command.Parameters.AddWithValue("$handler", handlers[0]);
+            using var reader = command.ExecuteReader();
+            while (reader.Read()) creations.Add(ReadFact(reader));
+        }
+        if (creations.Count > 10_000) throw new InvalidDataException("ReceiverBridgeAuditInputLimit");
+        var selectedCreations = creations.Where(creation => createdTypeName is null
+                || string.Equals(SimpleType(Value(creation, "createdType")), createdTypeName,
+                    StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+        output.Add($"constructorHopCreationFacts={selectedCreations.Length}");
+        var declarations = new List<Fact>();
+        if (selectedCreations.Length > 0)
+        {
+            using var command = db.CreateCommand();
+            command.Transaction = transaction;
+            command.CommandText = "select source_index_id, source_index_id, project_path, combined_fact_id, "
+                + "source_symbol, file_path, start_line, rule_id, evidence_tier, properties_json "
+                + "from combined_facts where fact_type='MethodDeclared' and rule_id=$rule "
+                + "and json_valid(properties_json) and "
+                + "coalesce(cast(json_extract(properties_json,'$.methodName') as text), "
+                + "cast(json_extract(properties_json,'$.name') as text), '')='New' "
+                + "order by combined_fact_id limit 10001;";
+            command.Parameters.AddWithValue("$rule", RuleIds.VisualBasicSyntaxDeclarations);
+            using var reader = command.ExecuteReader();
+            while (reader.Read()) declarations.Add(ReadFact(reader));
+            if (declarations.Count > 10_000) throw new InvalidDataException("ReceiverBridgeAuditInputLimit");
+        }
+        foreach (var (creation, index) in selectedCreations.Take(20).Select((item, index) => (item, index + 1)))
+        {
+            var bridges = graph.Edges.Where(edge => edge.EdgeKind == "projectless-vb-constructor-bridge"
+                    && edge.SupportingFactIds.Contains(creation.Id, StringComparer.Ordinal)).ToArray();
+            var gaps = graph.Gaps.Where(gap => gap.RuleId == "combined.paths.projectless-vb-constructor-bridge.v1"
+                    && gap.CombinedFactId == creation.Id).ToArray();
+            var imported = (Value(creation, "importedNamespaces") ?? string.Empty)
+                .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            var type = Value(creation, "createdType") ?? string.Empty;
+            var arity = Value(creation, "argumentCount");
+            static string DeclaringType(Fact declaration) =>
+                Value(declaration, "qualifiedContainingType") ?? Value(declaration, "containingType") ?? string.Empty;
+            var simpleCandidates = declarations.Where(declaration =>
+                string.Equals(SimpleType(DeclaringType(declaration)), SimpleType(type), StringComparison.OrdinalIgnoreCase)
+                && string.Equals(Value(declaration, "parameterCount"), arity, StringComparison.Ordinal)).ToArray();
+            var qualifiedNames = imported.Append(Value(creation, "lexicalNamespace") ?? string.Empty)
+                .Where(name => !string.IsNullOrWhiteSpace(name))
+                .Select(name => $"{name}.{type}")
+                .Append(type).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var qualifiedCandidates = simpleCandidates.Count(declaration => qualifiedNames.Contains(DeclaringType(declaration)));
+            var prefix = $"constructorHopCreation-{index:D2}";
+            output.Add($"{prefix}.qualifiedCreatedType={Value(creation, "createdType")?.Contains('.') == true}");
+            output.Add($"{prefix}.importedNamespaceCount={imported.Length}");
+            output.Add($"{prefix}.lexicalNamespaceAvailable={!string.IsNullOrWhiteSpace(Value(creation, "lexicalNamespace"))}");
+            output.Add($"{prefix}.simpleConstructorCandidates={simpleCandidates.Length}");
+            output.Add($"{prefix}.qualifiedConstructorCandidates={qualifiedCandidates}");
+            output.Add($"{prefix}.bridgeEdges={bridges.Length}");
+            output.Add($"{prefix}.bridgeGapCount={gaps.Length}");
+            foreach (var group in gaps.GroupBy(gap => SafeReason(gap.Reason), StringComparer.Ordinal)
+                .OrderBy(group => group.Key, StringComparer.Ordinal))
+                output.Add($"{prefix}.bridgeGapReason.{group.Key}={group.Count()}");
+            var receiverEdges = graph.Edges.Count(edge => edge.EdgeKind == "projectless-vb-receiver-bridge"
+                && bridges.Any(bridge => bridge.ToNodeId == edge.FromNodeId));
+            output.Add($"{prefix}.constructorReceiverEdges={receiverEdges}");
+            var receiverGaps = graph.Gaps.Where(gap => gap.RuleId == "combined.paths.projectless-vb-receiver-bridge.v1"
+                && bridges.Any(bridge => bridge.ToNodeId == gap.NodeId)).ToArray();
+            foreach (var group in receiverGaps.GroupBy(gap => SafeReason(gap.Reason), StringComparer.Ordinal)
+                .OrderBy(group => group.Key, StringComparer.Ordinal))
+                output.Add($"{prefix}.constructorReceiverGapReason.{group.Key}={group.Count()}");
+        }
+        if (selectedCreations.Length > 20) output.Add("constructorHopCreationsTruncated=True");
     }
 
     private static string ReadReceiverProvenanceFacts(

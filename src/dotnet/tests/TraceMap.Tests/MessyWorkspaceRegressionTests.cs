@@ -1213,8 +1213,9 @@ public sealed class MessyWorkspaceRegressionTests
                 || nodes[edge.ToNodeId].DisplayName != "Unrelated.Data.ChoiceNames.New()"),
             "the same-name constructor in an unrelated namespace must remain disconnected");
 
-        var packet = await WebFormsModernizationPacketReporter.BuildAsync(
+        var written = await WebFormsModernizationPacketReporter.WriteAsync(
             new(combinedIndex, Path.Combine(temp.Path, "qualified-init-packet"), MaxDepth: 10));
+        var packet = written.Packet;
         var chains = packet.EventChains.Where(chain =>
             chain.HandlerSymbol?.Contains("NamesPage.Names_Init", StringComparison.Ordinal) == true).ToArray();
         Require("MW-DROPDOWN-QUALIFIED-001", "traversal",
@@ -1226,6 +1227,16 @@ public sealed class MessyWorkspaceRegressionTests
         Require("MW-DROPDOWN-QUALIFIED-001", "traversal",
             TerminalBoundaries(packet, "NamesPage.Names_Init").Count == 1,
             "the constructor side effect did not produce one supported boundary");
+        var audit = WebFormsVisualBasicReceiverBridgeAudit.Run(combinedIndex, written.JsonPath,
+            chains[0].SurfaceId, focusHandlerName: "Names_Init", focusCreatedTypeName: "ChoiceNames");
+        Require("MW-DROPDOWN-QUALIFIED-001", "diagnostic",
+            audit.Contains("constructorHopHandlerMatches=1")
+                && audit.Contains("constructorHopCreationFacts=1")
+                && audit.Contains("constructorHopCreation-01.qualifiedConstructorCandidates=1")
+                && audit.Contains("constructorHopCreation-01.bridgeEdges=1")
+                && audit.Contains("constructorHopCreation-01.constructorReceiverEdges=1")
+                && audit.All(line => !line.Contains("Synthetic.Data", StringComparison.Ordinal)),
+            "the focused diagnostic must identify the constructor hop without printing source identities: " + string.Join(";", audit.Where(line => line.StartsWith("constructorHop", StringComparison.Ordinal))));
     }
 
     [Fact]
@@ -1244,8 +1255,9 @@ public sealed class MessyWorkspaceRegressionTests
                 && graph.Edges.All(edge => edge.EdgeKind != "projectless-vb-constructor-bridge"
                     || nodes[edge.FromNodeId].DisplayName != "NamesPage.Names_Init(Object,EventArgs)"),
             "two explicitly imported same-name constructors must remain ambiguous");
-        var packet = await WebFormsModernizationPacketReporter.BuildAsync(
+        var written = await WebFormsModernizationPacketReporter.WriteAsync(
             new(combinedIndex, Path.Combine(temp.Path, "ambiguous-import-packet"), MaxDepth: 10));
+        var packet = written.Packet;
         var chains = packet.EventChains.Where(chain =>
             chain.HandlerSymbol?.Contains("NamesPage.Names_Init", StringComparison.Ordinal) == true).ToArray();
         Require("MW-DROPDOWN-QUALIFIED-AMBIGUOUS-001", "traversal",
@@ -1253,6 +1265,13 @@ public sealed class MessyWorkspaceRegressionTests
                 chain.TraversalObservation?.TerminalReachabilityComplete == true
                 && chain.TraversalObservation.DistinctReachableTerminalCount == 0),
             "ambiguous imported constructors must not invent either SQL terminal");
+        var audit = WebFormsVisualBasicReceiverBridgeAudit.Run(combinedIndex, written.JsonPath,
+            chains[0].SurfaceId, focusHandlerName: "Names_Init", focusCreatedTypeName: "ChoiceNames");
+        Require("MW-DROPDOWN-QUALIFIED-AMBIGUOUS-001", "diagnostic",
+            audit.Contains("constructorHopCreationFacts=1")
+                && audit.Contains("constructorHopCreation-01.bridgeEdges=0")
+                && audit.Contains("constructorHopCreation-01.bridgeGapReason.constructor-target-ambiguous=1"),
+            "the focused diagnostic must report a fail-closed constructor ambiguity");
     }
 
     [Fact]
