@@ -287,6 +287,9 @@ public static partial class CombinedDependencyPathReporter
         "fact-attached-to-symbol",
         "surface-evidence",
         "symbol-reconciliation",
+        "compiled-source-identity",
+        "compiled-il-call",
+        "compiled-il-callvirt-candidate",
         "projectless-vb-receiver-bridge",
         "projectless-vb-constructor-bridge",
         "interface-candidate",
@@ -1115,6 +1118,7 @@ public static partial class CombinedDependencyPathReporter
         }
 
         AddSymbolReconciliationEdges(graph);
+        AddBoundCompiledIlEdges(graph, read.Facts);
         AddProjectlessVisualBasicReceiverBridgeEdges(graph, read.Facts);
         AddProjectlessVisualBasicImplicitReceiverBridgeEdges(graph, read.Facts);
         AddProjectlessVisualBasicConstructorBridgeEdges(graph, read.Facts);
@@ -4960,6 +4964,11 @@ public static partial class CombinedDependencyPathReporter
         if (edges.Any(edge => edge.EdgeKind is "calls" or "creates" or "inherits" or "implements" or "overrides"))
         {
             notes.Add(new CombinedPathNote("StaticCodeEvidence", "Code relationship hops do not prove dynamic dispatch, runtime DI, reflection, branch feasibility, collection contents, or serializer behavior."));
+        }
+
+        if (edges.Any(edge => edge.EdgeKind is "compiled-source-identity" or "compiled-il-call" or "compiled-il-callvirt-candidate"))
+        {
+            notes.Add(new CombinedPathNote("BoundCompiledIlEvidence", "Exact bound source identity and same-assembly IL call operands are static evidence only. They do not prove execution, branch feasibility, virtual dispatch, or external assembly resolution."));
         }
 
         if (edges.Any(edge => edge.EdgeKind is "interface-candidate" or "override-candidate"))

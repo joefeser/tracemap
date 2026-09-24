@@ -3431,6 +3431,23 @@ rules:
       - Reconciliation retains the full namespace and nested declaring-type path; equal final type segments in different namespaces do not authorize an edge.
       - Reconciliation does not prove runtime dispatch, dependency injection binding, reflection targets, branch feasibility, serializer behavior, or SQL execution.
 
+  - id: combined.paths.compiled-il-bridge.v1
+    name: Bound compiled IL path bridge
+    description: Adds in-memory path edges between an exact source-to-metadata reconciliation and its admitted method, and between admitted IL method bodies and uniquely matched MethodDef or assembly-scoped MemberRef call targets.
+    evidenceTier: Tier1Semantic, Tier2Structural, or Tier3SyntaxOrTextual
+    emits:
+      - compiled-source-identity path edge
+      - compiled-il-call path edge
+      - compiled-il-callvirt-candidate path edge
+      - CompiledIlSourceDisplayUnavailable gap
+      - CompiledIlTargetUnavailable gap
+      - CompiledIlTargetAmbiguous gap
+    limitations:
+      - Requires a validated bound source-to-metadata reconciliation for source entry, an exact source symbol ID on one uniquely displayed Tier1 call source, admitted dual-reader IL body/call facts, exact fact-ID joins, and one unique MethodDef or assembly-scoped MemberRef target; no binary discovery or guessed source-to-binary identity occurs in this graph layer. A source method without a retained Tier1 call source cannot enter through this first slice.
+      - A call/newobj edge records a static encoded target, not execution or branch feasibility. A callvirt operand produces only a Tier3 review candidate because actual virtual dispatch may select an override; it does not prove runtime target, reflection, dependency-injection binding, or a database operation.
+      - MemberRef joins require an admitted bound assembly with the complete encoded assembly-reference identity, non-generic type path, member name, and signature, plus exactly one matching declaration across all combined sources. Unadmitted references, generic type specifications, MethodSpec, calli, constrained type, and unresolved targets are not promoted to graph edges. Missing or ambiguous joins never prove absence or complete reachability.
+      - The graph overlay does not rewrite source facts, the combined database schema, or existing source-only path evidence.
+
   - id: combined.paths.projectless-vb-receiver-bridge.v1
     name: Projectless Visual Basic receiver-provenance bridge
     description: Derives an in-memory review-tier path edge from a syntax-only VB invocation to a unique retained VB method declaration when receiver provenance is established by a preceding local creation, an exact inline New expression, a containing-type typed field, or a typed field reached through one unique retained base-type chain, and the retained method identity is compatible.
