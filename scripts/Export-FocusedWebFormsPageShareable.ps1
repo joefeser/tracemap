@@ -101,6 +101,14 @@ $receipt = Read-Json $receiptPath 16MB 'WEBFORMS_PAGE_SHAREABLE_RECEIPT_UNAVAILA
 if ($receipt.schemaVersion -ne 'focused-webforms-review-run-receipt.v1' -or $receipt.run.state -ne 'completed' -or $receipt.stages.workbench.state -ne 'completed') {
     throw 'WEBFORMS_PAGE_SHAREABLE_RUN_INCOMPLETE'
 }
+$traceMapCommit = [string](Property-Value (Property-Value $receipt 'traceMap') 'commitSha')
+if ($traceMapCommit) {
+    if ($traceMapCommit -cnotmatch '^[0-9a-fA-F]{40}$') { throw 'WEBFORMS_PAGE_SHAREABLE_TRACEMAP_COMMIT_INVALID' }
+    $traceMapCommit = $traceMapCommit.ToLowerInvariant()
+} else {
+    # A standalone review receipt does not identify the TraceMap scan commit.
+    $traceMapCommit = 'unavailable'
+}
 function Get-ReceiptedArtifact([string]$RelativePath) {
     $artifact = @($receipt.stages.workbench.artifacts | Where-Object {
         ([string]$_.path).Replace('\', '/').Equals($RelativePath, [StringComparison]::OrdinalIgnoreCase)
@@ -271,6 +279,7 @@ $artifact = [ordered]@{
         inputSha256 = Text-Sha256 $projectionJson
         inputCanonicalization = 'powershell-json-compact-depth-20-utf8-v1'
         sourceWorkbenchGeneratorSha256 = [string]$page.provenance.generatorSha256
+        traceMapCommitSha = $traceMapCommit
     }
     projection = $projection
 }
@@ -288,3 +297,4 @@ Write-Output "chains=$($chainRows.Count)"
 Write-Output "callSites=$($siteRows.Count)"
 Write-Output "generatorSha256=$generatorSha"
 Write-Output "inputSha256=$($artifact.provenance.inputSha256)"
+Write-Output "traceMapCommitSha=$traceMapCommit"

@@ -375,6 +375,17 @@
       "assertions": "bounded single-index graph admission retains the constructor declaration and body facts instead of silently losing the side-effect terminal, while inline-New receiver evidence never bridges to the same-name implicit-Me decoy"
     },
     {
+      "id": "MW-SHARED-TERMINAL-ROUTES-001",
+      "status": "implemented",
+      "roots": ["root-route-reconvergence"],
+      "shape": "a Web Forms handler calls two same-named Run methods in separate classes within one source file; both continue two levels and converge on one SQL terminal",
+      "stages": ["extraction", "traversal"],
+      "expectedRuleIds": ["legacy.webforms.event-binding.v1", "csharp.semantic.callgraph.v1", "legacy.flow.static-traversal.v1"],
+      "expectedTiers": ["Tier1Semantic", "Tier2Structural"],
+      "expectedGaps": [],
+      "assertions": "the packet retains two bounded event-chain routes while the complete supported-terminal inventory counts their shared terminal once"
+    },
+    {
       "id": "MW-COMPOUND-LIMIT-001",
       "status": "implemented",
       "roots": ["vb-compound-pages"],
