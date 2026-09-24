@@ -1946,3 +1946,29 @@ a later closure wave; otherwise that narrower query would silently lose
 deeper terminal paths. The public regression inserts 250 unrelated
 same-name declarations and preserves the page-two two-terminal inventory.
 Private pages 2, 3, and 11 remain an owner rerun, not a claimed acceptance.
+
+## 2026-09-24 bound IL page-path experiment
+
+Branch `codex/webforms-qualified-constructor-proof` retains a public-safe
+projectless VB fixture for the dropdown constructor → BusinessLogic field →
+DataAccess base-class `Open` → inherited SQL-helper field → overloaded gateway
+shape. That source-only fixture reaches its synthetic SQL terminal, so it does
+not reproduce the private page-002 gap and authorizes no resolver claim.
+
+The separate `combined.paths.compiled-il-bridge.v1` experiment projects only
+bound, exact source-to-metadata joins and uniquely matched direct IL MethodDef
+or complete assembly-scoped MemberRef targets into the in-memory combined
+path graph. `callvirt` remains a review-tier dispatch candidate. A public
+generated Web Forms-shaped bridge is terminal-free without compiled inputs
+and reaches supported SQL evidence with bound IL; a C#→VB fixture pins a
+cross-assembly MemberRef and inherited `Open`-initialized field. Duplicated
+method identities withhold edges and emit gaps. No private assembly, PDB, or
+page rerun has been inspected for this experiment. Projectless source-to-binary
+binding, unadmitted external assemblies, and single-index compact packet
+closure remain unresolved. No PR or work-machine command is ready solely from
+this public proof.
+
+Local validation: the focused public regressions passed, the complete .NET
+test project passed 2,289/2,289 with no failures, `git diff --check` passed,
+and the private-path guard passed. These results do not replace a page-002
+binary admission and traversal receipt from the work machine.

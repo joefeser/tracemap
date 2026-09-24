@@ -719,6 +719,125 @@ public sealed class MessyWorkspaceRegressionTests
     }
 
     [Fact]
+    public async Task Bound_IL_walk_crosses_excluded_generated_bridge_to_supported_terminal()
+    {
+        using var temp = new TempDirectory();
+        var source = MessyRoot("root-generated");
+        var assembly = Path.Combine(source, "bin", "Debug", "net10.0", "GeneratedSite.dll");
+        var scan = ScanBoundRoot(temp, "root-generated", "generated-il-path", [assembly], ilBody: true);
+        var index = Path.Combine(temp.Path, "generated-il-path.sqlite");
+        SqliteIndexWriter.Write(index, scan.Manifest, scan.Facts);
+        var (_, unrelatedIndex) = ScanRoot(temp, "vb-overload-framework", "generated-il-unrelated");
+        var combinedIndex = Path.Combine(temp.Path, "generated-il-combined.sqlite");
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions(
+            [index, unrelatedIndex], combinedIndex, ["generated", "unrelated"]));
+
+        var graph = await CombinedDependencyPathReporter.BuildGraphInventoryAsync(combinedIndex);
+        var ilEdges = graph.Edges.Where(edge => edge.EdgeKind == "compiled-il-call").ToArray();
+        Require("MW-SOURCE-METADATA-IL-PDB-001", "reconciliation",
+            graph.Edges.Any(edge => edge.EdgeKind == "compiled-source-identity") && ilEdges.Length >= 2,
+            $"bound source identity and two same-assembly IL hops were not retained; il={ilEdges.Length}");
+
+        var packet = await WebFormsModernizationPacketReporter.BuildAsync(
+            new(combinedIndex, Path.Combine(temp.Path, "generated-il-packet"), MaxDepth: 10));
+        var chains = packet.EventChains.Where(chain =>
+            chain.HandlerSymbol?.Contains(GeneratedHandler, StringComparison.Ordinal) == true).ToArray();
+        var boundaries = TerminalBoundaries(packet, GeneratedHandler);
+        Require("MW-SOURCE-METADATA-IL-PDB-001", "traversal",
+            chains.Length > 0 && chains.All(chain =>
+                chain.TraversalObservation?.DistinctReachableTerminalCount > 0
+                && chain.TraversalObservation.TerminalReachabilityComplete == true
+                && chain.TraversalObservation.TraversedEdgeKinds.Contains("compiled-il-call"))
+            && boundaries.Any(boundary => boundary.BoundaryKind == "sql-query"
+                && boundary.PathEvidence.Any(evidence => evidence.RuleId == "combined.paths.compiled-il-bridge.v1")),
+            "bound IL walk did not cross the excluded generated bridge to a supported SQL terminal; boundaries="
+                + string.Join(',', boundaries.Select(boundary => boundary.BoundaryKind)));
+    }
+
+    [Fact]
+    public async Task Bound_IL_walk_with_duplicate_method_identity_fails_closed()
+    {
+        using var temp = new TempDirectory();
+        var source = MessyRoot("root-generated");
+        var assembly = Path.Combine(source, "bin", "Debug", "net10.0", "GeneratedSite.dll");
+        var scan = ScanBoundRoot(temp, "root-generated", "generated-il-ambiguous", [assembly], ilBody: true);
+        var bridge = scan.Facts.Single(fact => fact.FactType == FactTypes.ManagedMethodDeclared
+            && fact.TargetSymbol?.Contains("GeneratedBridge", StringComparison.Ordinal) == true
+            && fact.TargetSymbol.Contains("|method:3:Run|", StringComparison.Ordinal));
+        var duplicate = bridge with { FactId = "fact-synthetic-duplicate-generated-bridge" };
+        var index = Path.Combine(temp.Path, "generated-il-ambiguous.sqlite");
+        SqliteIndexWriter.Write(index, scan.Manifest, [.. scan.Facts, duplicate]);
+        var (_, unrelatedIndex) = ScanRoot(temp, "vb-overload-framework", "generated-il-ambiguous-unrelated");
+        var combinedIndex = Path.Combine(temp.Path, "generated-il-ambiguous-combined.sqlite");
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions(
+            [index, unrelatedIndex], combinedIndex, ["generated", "unrelated"]));
+
+        var graph = await CombinedDependencyPathReporter.BuildGraphInventoryAsync(combinedIndex);
+        var nodes = graph.Nodes.ToDictionary(node => node.NodeId, StringComparer.Ordinal);
+        Require("MW-SOURCE-METADATA-IL-PDB-001", "reconciliation",
+            graph.Gaps.Any(gap => gap.GapKind == "CompiledIlTargetAmbiguous")
+            && !graph.Edges.Any(edge => edge.EdgeKind == "compiled-il-call"
+                && nodes[edge.ToNodeId].DisplayName.Contains("GeneratedBridge", StringComparison.Ordinal)),
+            "a duplicate exact metadata target must withhold its IL call edge and emit an explicit ambiguity gap");
+    }
+
+    [Fact]
+    public async Task Bound_IL_walk_joins_explicit_cross_assembly_member_reference()
+    {
+        using var temp = new TempDirectory();
+        var source = MessyRoot("root-crosslanguage");
+        var scan = ScanBoundRoot(temp, "root-crosslanguage", "cross-language-il", [
+            Path.Combine(source, "csharp", "bin", "Debug", "net10.0", "CrossLanguageEntry.dll"),
+            Path.Combine(source, "vb", "bin", "Debug", "net10.0", "CrossLanguage.VisualBasic.dll"),
+            Path.Combine(source, "fsharp", "bin", "Debug", "net10.0", "CrossLanguage.FSharp.dll")
+        ], ilBody: true);
+        var index = Path.Combine(temp.Path, "cross-language-il.sqlite");
+        SqliteIndexWriter.Write(index, scan.Manifest, scan.Facts);
+        var (_, unrelatedIndex) = ScanRoot(temp, "vb-overload-framework", "cross-language-il-unrelated");
+        var combinedIndex = Path.Combine(temp.Path, "cross-language-il-combined.sqlite");
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions(
+            [index, unrelatedIndex], combinedIndex, ["cross", "unrelated"]));
+        var graph = await CombinedDependencyPathReporter.BuildGraphInventoryAsync(combinedIndex);
+        var nodes = graph.Nodes.ToDictionary(node => node.NodeId, StringComparer.Ordinal);
+        var memberReference = scan.Facts.Single(fact => fact.FactType == FactTypes.ManagedIlCallObserved
+            && fact.Properties.GetValueOrDefault("referenceKind") == "memberref"
+            && fact.Properties.GetValueOrDefault("targetIdentity")?.Contains("VbBridge", StringComparison.Ordinal) == true);
+        var declaration = scan.Facts.Single(fact => fact.FactType == FactTypes.ManagedMethodDeclared
+            && fact.TargetSymbol?.Contains("VbBridge", StringComparison.Ordinal) == true
+            && fact.TargetSymbol.Contains("|method:3:Run|", StringComparison.Ordinal));
+        Require("MW-CROSSLANGUAGE-001", "reconciliation",
+            graph.Edges.Any(edge => edge.EdgeKind == "compiled-il-call"
+                && nodes[edge.FromNodeId].DisplayName.Contains("CrossLanguageButton_Click", StringComparison.Ordinal)
+                && nodes[edge.ToNodeId].DisplayName == declaration.TargetSymbol),
+            "cross-assembly MemberRef did not join to one admitted declaration; memberref="
+                + memberReference.Properties.GetValueOrDefault("targetIdentity")
+                + "; declaration=" + declaration.TargetSymbol);
+        Require("MW-CROSSLANGUAGE-001", "reconciliation",
+            graph.Edges.Any(edge => edge.EdgeKind == "compiled-il-callvirt-candidate"
+                && edge.EvidenceTier == EvidenceTiers.Tier3SyntaxOrTextual
+                && nodes[edge.FromNodeId].DisplayName.Contains("DataAccess", StringComparison.Ordinal)
+                && nodes[edge.FromNodeId].DisplayName.Contains("SelectNames", StringComparison.Ordinal)
+                && nodes[edge.ToNodeId].DisplayName.Contains("ProcedureGateway", StringComparison.Ordinal)
+                && nodes[edge.ToNodeId].DisplayName.Contains("ExecuteProcedure", StringComparison.Ordinal)),
+            "the inherited Open-initialized field callvirt must remain a review-tier compiled candidate");
+
+        var ambiguousIndex = Path.Combine(temp.Path, "cross-language-il-ambiguous.sqlite");
+        SqliteIndexWriter.Write(ambiguousIndex, scan.Manifest, [.. scan.Facts,
+            declaration with { FactId = "fact-synthetic-duplicate-cross-assembly-method" }]);
+        var ambiguousCombined = Path.Combine(temp.Path, "cross-language-il-ambiguous-combined.sqlite");
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions(
+            [ambiguousIndex, unrelatedIndex], ambiguousCombined, ["cross", "unrelated"]));
+        var ambiguousGraph = await CombinedDependencyPathReporter.BuildGraphInventoryAsync(ambiguousCombined);
+        var ambiguousNodes = ambiguousGraph.Nodes.ToDictionary(node => node.NodeId, StringComparer.Ordinal);
+        Require("MW-CROSSLANGUAGE-001", "reconciliation",
+            ambiguousGraph.Gaps.Any(gap => gap.GapKind == "CompiledIlTargetAmbiguous")
+            && !ambiguousGraph.Edges.Any(edge => edge.EdgeKind == "compiled-il-call"
+                && ambiguousNodes[edge.FromNodeId].DisplayName.Contains("CrossLanguageButton_Click", StringComparison.Ordinal)
+                && ambiguousNodes[edge.ToNodeId].DisplayName == declaration.TargetSymbol),
+            "duplicate admitted cross-assembly member identity must fail closed");
+    }
+
+    [Fact]
     public async Task Separately_scanned_roots_merge_without_invented_joins()
     {
         using var temp = new TempDirectory();

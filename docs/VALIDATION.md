@@ -2760,6 +2760,40 @@ analysis, no runtime loading or execution, and no cross-assembly resolution
 beyond the reference rows encoded in the containing module. The next slice
 below begins the bounded rewrite work; everything else stays deferred.
 
+### Bound compiled IL page-path overlay (public proof slice)
+
+`combined.paths.compiled-il-bridge.v1` adds in-memory path edges when an
+explicitly admitted IL lane is present in a combined index. A Tier1 source
+declaration enters the binary graph only through a `bound`, exact
+`SourceMetadataIdentityReconciled` fact and one matching retained Tier1 call
+source-symbol ID. IL body and call facts must join to their admitted compiled
+method by exact fact IDs and matching verified artifact SHA-256. `call` and
+`newobj` MethodDef targets join only to one method in the same source index;
+assembly-scoped MemberRef targets join only to one bound method across the
+combined index using the complete assembly-reference identity, non-generic
+type path, member name, and signature. `callvirt` is a Tier3 review candidate,
+not a proven dispatch destination. Missing or ambiguous admitted targets are
+gaps; unadmitted external assemblies are not inferred as absent.
+
+The public `root-generated` test proves that a bound IL walk can cross an
+excluded generated bridge to supported SQL evidence while the corresponding
+source-only scan remains terminal-free. The `root-crosslanguage` test proves a
+C#→VB MemberRef join and an inherited `Open`-initialized field receiver, and
+duplicate exact identities fail closed. Run them with:
+
+```bash
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj \
+  --filter 'FullyQualifiedName~Bound_IL_walk|FullyQualifiedName~Generated_designer_bridge_is_visible_but_does_not_invent_a_source_terminal'
+```
+
+This overlay does not change the combined database schema or source-only
+results. It does not admit binaries on its own, claim runtime reachability, or
+solve projectless Web Forms source-to-binary binding. A private page remains
+unproven until its exact built assembly, binding receipt, and source identity
+are admitted and the page-specific path is observed. Single-index Web Forms
+packet compaction does not yet retain the compiled closure; this proof uses a
+combined index, as the application review workflow does.
+
 ### IL rewrite evidence (Task 10 second slice)
 
 The second Task 10 slice activates `dotnet.compiled.il-rewrite.v1` and
