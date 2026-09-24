@@ -1235,6 +1235,9 @@ public sealed class MessyWorkspaceRegressionTests
                 && audit.Contains("constructorHopCreation-01.qualifiedConstructorCandidates=1")
                 && audit.Contains("constructorHopCreation-01.bridgeEdges=1")
                 && audit.Contains("constructorHopCreation-01.constructorReceiverEdges=1")
+                && audit.Contains("constructorHopCreation-01.adjacencyDepth-00.nodes=1")
+                && audit.Any(line => line.Contains(".surfaceKind.sql-query=", StringComparison.Ordinal))
+                && audit.Contains("constructorHopCreation-01.adjacencyLimit=none")
                 && audit.All(line => !line.Contains("Synthetic.Data", StringComparison.Ordinal)),
             "the focused diagnostic must identify the constructor hop without printing source identities: " + string.Join(";", audit.Where(line => line.StartsWith("constructorHop", StringComparison.Ordinal))));
     }
