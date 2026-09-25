@@ -3559,3 +3559,55 @@ repeat modern facts, and the pinned `community-visual-basic` smoke at
 `Level1SemanticAnalysisReduced` / `FailedOrPartial`). The Windows-only
 relative-root publish regression remains to be checked on the pushed repair
 head; a macOS pass does not substitute for it.
+
+### Existing published Web Site, local-only admission probe
+
+`scripts/Invoke-ExistingWebFormsPublishProof.ps1` is a separate diagnostic for
+an already-published Web Site. It does not run `aspnet_compiler`, change the
+source or publish folders, or infer that the published bytes came from the
+current source. Run the public synthetic guard first:
+
+```powershell
+pwsh -NoProfile -File scripts/tests/Test-ExistingWebFormsPublishProof.ps1
+```
+
+On Windows the guard also publishes the public two-DLL/no-PDB fixture and
+requires a reported `Names_Init` to `sql-query` path. That Windows case must
+pass before using this diagnostic on a private site. For a local-only site
+probe, run from a clean TraceMap checkout:
+
+```powershell
+pwsh -NoProfile -File scripts/Invoke-ExistingWebFormsPublishProof.ps1 -HandlerName BidGroupNamesDDL_Init
+```
+
+The script prompts for the source Web Site folder, the existing published
+output folder (containing `bin/` and `.compiled` maps), and the page path
+relative to the source site (for example `UBid/BidGroup.aspx`). It requires
+one exact page map, a matching mapped DLL, a clean source-site Git scope,
+and bounded committed page/code-behind, relevant `Web.config`, plus
+`App_Code` sources. The scan is explicitly limited to those receipted source
+files; it is not a complete-site source scan. It selects the mapped
+page DLL and `App_Code` DLLs by default; `-AdditionalAssemblyName` may name
+other **exact** DLL filenames only when the operator can attest they were
+built from the same source commit. It copies only selected DLLs and the map
+to a fresh local temporary output, not the source site. It enforces the
+receipt's 256-source, 64-published-file, 32-page, and per-file limits before
+scanning. `-PrepareOnly` stops after the local receipt and copies.
+
+A first, unbound scan records the scanner's exact safe locators and metadata
+identities. Before a second scan may bind those selected DLLs, the operator
+must explicitly attest that they were built from the exact clean source
+commit; declining stops without a bound path claim. The script retains the
+binding receipt, both scans, logs, combined index, and optional handler path
+report only in its local output folder. Its console output contains counts,
+coverage states, and a local folder path, not source snippets. Do not share
+the local receipts, logs, scan, or path report. The existing publish's actual
+compiler and full build-input set remain unknown: the compiler hash in this
+operator-declared receipt is an explicitly labeled unknown sentinel, **not**
+a compiler attribution. A missing `.compiled` page map, a source-commit
+attestation that cannot be made, an omitted internal DLL, or a scanner limit
+is a gap to investigate, not permission to guess a source-to-binary join.
+
+This diagnostic is a separate proof attempt; it does not rewrite the normal
+Web Forms workbench or establish runtime execution, source-line identity,
+complete application reachability, or private-page success.
