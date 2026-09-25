@@ -1,5 +1,7 @@
+using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text.Json;
+using System.Xml.Linq;
 using Microsoft.Data.Sqlite;
 using TraceMap.Cli;
 using TraceMap.Combine;
@@ -77,10 +79,10 @@ public sealed class MessyWorkspaceRegressionTests
             Require("MW-CATALOG", "extraction", entry.GetProperty("shape").GetString() is { Length: > 0 }, $"case {id} must describe its shape");
         }
 
-        Require("MW-CATALOG", "extraction", ids.Count == 26,
-            $"expected the twenty-six pinned fixture cases, found {ids.Count}");
-        Require("MW-CATALOG", "extraction", implemented == 26 && deferred == 0,
-            $"all twenty-six pinned fixture cases must remain implemented; found {implemented} implemented and {deferred} deferred");
+        Require("MW-CATALOG", "extraction", ids.Count == 27,
+            $"expected twenty-seven pinned fixture cases, found {ids.Count}");
+        Require("MW-CATALOG", "extraction", implemented == 26 && deferred == 1,
+            $"expected twenty-six implemented and one explicitly deferred case; found {implemented} implemented and {deferred} deferred");
 
         // Catalog evidence annotations are load-bearing: every expected rule id must
         // exist in the rule catalog, tiers must be real evidence tiers, and gap
@@ -953,6 +955,81 @@ public sealed class MessyWorkspaceRegressionTests
         Require("MW-SOURCE-METADATA-IL-PDB-001", "source-only-baseline",
             !report.Paths.Any(path => path.Nodes.Any(node => node.SurfaceKind == "sql-query")),
             "the public Web Site fixture must not claim a SQL path without an admitted source-to-binary entry");
+    }
+
+    [Fact]
+    public async Task Windows_public_Web_Site_publish_exposes_no_PDB_page_map_and_static_IL_chain()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        using var temp = new TempDirectory();
+        var source = MessyRoot("vb-publish-projectless");
+        var compiler = Path.Combine(Environment.GetEnvironmentVariable("WINDIR") ?? string.Empty,
+            "Microsoft.NET", "Framework", "v4.0.30319", "aspnet_compiler.exe");
+        Require("MW-PUBLISH-NOPDB-001", "extraction", File.Exists(compiler),
+            "the 32-bit .NET Framework ASP.NET compiler is required for the public Windows fixture");
+        var published = Path.Combine(temp.Path, "public-site-publish");
+        var start = new ProcessStartInfo(compiler)
+        {
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true
+        };
+        foreach (var argument in new[] { "-p", source, "-v", "/", published })
+            start.ArgumentList.Add(argument);
+        using var process = Process.Start(start)!;
+        if (!process.WaitForExit(120_000))
+        {
+            process.Kill(entireProcessTree: true);
+            throw new Xunit.Sdk.XunitException("messy-workspace case MW-PUBLISH-NOPDB-001 failed at stage extraction: public ASP.NET precompilation exceeded two minutes");
+        }
+        var output = process.StandardOutput.ReadToEnd();
+        var error = process.StandardError.ReadToEnd();
+        Require("MW-PUBLISH-NOPDB-001", "extraction", process.ExitCode == 0,
+            $"public ASP.NET precompilation failed; exit={process.ExitCode}; stdout={output}; stderr={error}");
+
+        var dlls = Directory.GetFiles(Path.Combine(published, "bin"), "*.dll", SearchOption.TopDirectoryOnly)
+            .OrderBy(path => path, StringComparer.Ordinal).ToArray();
+        var maps = Directory.GetFiles(published, "*.compiled", SearchOption.AllDirectories);
+        var pdbs = Directory.GetFiles(published, "*.pdb", SearchOption.AllDirectories);
+        Require("MW-PUBLISH-NOPDB-001", "extraction", dlls.Length == 2 && maps.Length == 2 && pdbs.Length == 0,
+            $"the public publish shape changed; dll={dlls.Length}, maps={maps.Length}, pdb={pdbs.Length}");
+        var pageMaps = maps.Select(path => XDocument.Load(path).Root)
+            .Where(root => root?.Attribute("virtualPath")?.Value == "/Pages/Lookup.aspx")
+            .ToArray();
+        Require("MW-PUBLISH-NOPDB-001", "extraction", pageMaps.Length == 1,
+            "the public page must have exactly one generated publish map");
+        var mappedAssembly = pageMaps[0]!.Attribute("assembly")?.Value;
+        var mappedType = pageMaps[0]!.Attribute("type")?.Value;
+        Require("MW-PUBLISH-NOPDB-001", "extraction", !string.IsNullOrWhiteSpace(mappedAssembly)
+            && !string.IsNullOrWhiteSpace(mappedType)
+            && dlls.Count(path => Path.GetFileNameWithoutExtension(path) == mappedAssembly) == 1,
+            "the public page map must identify one emitted DLL and generated type");
+
+        var scan = ScanBoundRoot(temp, "vb-publish-projectless", "publish-no-pdb",
+            dlls, ilBody: true);
+        var calls = scan.Facts.Where(fact => fact.FactType == FactTypes.ManagedIlCallObserved).ToArray();
+        var methods = scan.Facts.Where(fact => fact.FactType == FactTypes.ManagedMethodDeclared).ToArray();
+        Require("MW-PUBLISH-NOPDB-001", "reconciliation",
+            methods.Any(fact => fact.Properties.GetValueOrDefault("metadataName") == "Names_Init")
+            && calls.Any(fact => fact.Properties.GetValueOrDefault("targetIdentity")?.Contains("GroupOptions", StringComparison.Ordinal) == true)
+            && calls.Any(fact => fact.Properties.GetValueOrDefault("targetIdentity")?.Contains("ExecProc_DataSet", StringComparison.Ordinal) == true)
+            && calls.Any(fact => fact.Properties.GetValueOrDefault("targetIdentity")?.Contains("DbDataAdapter", StringComparison.Ordinal) == true
+                && fact.Properties.GetValueOrDefault("targetIdentity")?.Contains("Fill", StringComparison.Ordinal) == true),
+            "both admitted publish DLLs must expose the handler, constructor, overloaded helper, and public DbDataAdapter.Fill target");
+        Require("MW-PUBLISH-NOPDB-001", "reconciliation",
+            !scan.Facts.Any(fact => fact.FactType == FactTypes.PdbSequencePointDeclared)
+            && !scan.Facts.Any(fact => fact.FactType == FactTypes.SourceMetadataIdentityReconciled),
+            "the no-PDB public publish must not silently acquire source-line or semantic method identity evidence");
+
+        var index = Path.Combine(temp.Path, "publish-no-pdb.sqlite");
+        SqliteIndexWriter.Write(index, scan.Manifest, scan.Facts);
+        var graph = await CombinedDependencyPathReporter.BuildGraphInventoryAsync(index);
+        var nodes = graph.Nodes.ToDictionary(node => node.NodeId, StringComparer.Ordinal);
+        Require("MW-PUBLISH-NOPDB-001", "reconciliation",
+            graph.Edges.Any(edge => edge.EdgeKind == "compiled-il-call"
+                && nodes[edge.FromNodeId].DisplayName.Contains("Names_Init", StringComparison.Ordinal)
+                && nodes[edge.ToNodeId].DisplayName.Contains("GroupOptions", StringComparison.Ordinal)),
+            "the published page assembly must cross to the admitted App_Code constructor by exact MemberRef");
     }
 
     [Fact]

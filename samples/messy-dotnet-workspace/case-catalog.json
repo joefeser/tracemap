@@ -406,6 +406,18 @@
       "expectedTiers": ["Tier4Unknown"],
       "expectedGaps": ["GraphInputLimitReached"],
       "assertions": "the packet reports graph-syntax-closure-work as an input limit and never classifies the page-three analogue as a complete zero-terminal result"
+    },
+    {
+      "id": "MW-PUBLISH-NOPDB-001",
+      "status": "deferred",
+      "roots": ["vb-publish-projectless"],
+      "shape": "an actual public VB Web Site publish emits page and App_Code assemblies plus a page mapping but no PDB; a dropdown Init handler crosses the constructor, inherited Open, two procedure helper overloads, and the public DbDataAdapter.Fill(DataSet) call target",
+      "stages": ["extraction", "reconciliation", "traversal"],
+      "expectedRuleIds": ["dotnet.compiled.member.v1", "dotnet.compiled.il-call.v1", "combined.paths.compiled-il-bridge.v1"],
+      "expectedTiers": ["Tier2Structural", "Tier4Unknown"],
+      "expectedGaps": ["ProjectlessPublishSourceMethodIdentityUnavailable"],
+      "blocker": "the public Windows publish observation has not yet been pinned by a passing TraceMap scan regression, and no bounded publish receipt joins its generated page and App_Code DLLs to a unique projectless source method",
+      "assertions": "Windows-generated .compiled maps and exact admitted DLLs must first reproduce the static IL chain; no source-method or runtime claim is made without a bounded publish binding and a unique structural join"
     }
   ]
 }
