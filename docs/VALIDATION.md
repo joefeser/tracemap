@@ -3589,7 +3589,14 @@ and bounded committed page/code-behind, relevant `Web.config`, plus
 files; it is not a complete-site source scan. It selects the mapped
 page DLL and `App_Code` DLLs by default; `-AdditionalAssemblyName` may name
 other **exact** DLL filenames only when the operator can attest they were
-built from the same source commit. It copies only selected DLLs and the map
+built from the same source commit. Every other `bin/*.dll` must be explicitly
+declared outside this focused proof (one `OUTOFSCOPE` response); otherwise
+the probe stops with `unclassified-assemblies`. The local receipt records
+each available DLL hash and its selected/out-of-scope disposition. An
+out-of-scope DLL is never a complete-publish or cross-assembly claim.
+The source subset follows `CodeBehind`/`CodeFile` in the page directive,
+then conventional VB/C# fallback, and includes every ancestor `Web.config`.
+It copies only selected DLLs and the map
 to a fresh local temporary output, not the source site. It enforces the
 receipt's 256-source, 64-published-file, 32-page, and per-file limits before
 scanning. `-PrepareOnly` stops after the local receipt and copies.
@@ -3600,7 +3607,9 @@ must explicitly attest that they were built from the exact clean source
 commit; declining stops without a bound path claim. The script retains the
 binding receipt, both scans, logs, combined index, and optional handler path
 report only in its local output folder. Its console output contains counts,
-coverage states, and a local folder path, not source snippets. Do not share
+coverage states, a hashed source-repository identity, exact source commit,
+and a local folder path, not source snippets. The binding receipt carries
+the script generator hash and a bounded-input digest. Do not share
 the local receipts, logs, scan, or path report. The existing publish's actual
 compiler and full build-input set remain unknown: the compiler hash in this
 operator-declared receipt is an explicitly labeled unknown sentinel, **not**

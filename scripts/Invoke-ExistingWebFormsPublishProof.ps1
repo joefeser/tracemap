@@ -5,6 +5,8 @@ param(
     [string]$PagePath,
     [string]$HandlerName,
     [string[]]$AdditionalAssemblyName = @(),
+    [switch]$OperatorAttestsRemainingOutOfScope,
+    [switch]$FailOnUnclassifiedAssemblies,
     [string]$OutputRoot,
     [string]$TraceMapRoot = (Split-Path $PSScriptRoot -Parent),
     [switch]$OperatorAttestsExactSourceCommit,
@@ -62,6 +64,55 @@ function Read-Map([string]$Path) {
     $reader = [Xml.XmlReader]::Create($Path, $settings)
     try { return [Xml.Linq.XDocument]::Load($reader).Root }
     finally { $reader.Dispose() }
+}
+
+function Get-LinkedCodePaths([string]$MarkupPath, [string]$PageRelativePath) {
+    $markup = [IO.File]::ReadAllText($MarkupPath)
+    $directive = [regex]::Match($markup, '<%@\s*Page\b(?<attrs>.*?)%>',
+        [Text.RegularExpressions.RegexOptions]::IgnoreCase -bor [Text.RegularExpressions.RegexOptions]::Singleline)
+    $pageDirectory = [IO.Path]::GetDirectoryName($PageRelativePath).Replace('\', '/')
+    if ($directive.Success) {
+        $attributes = @{}
+        foreach ($match in [regex]::Matches($directive.Groups['attrs'].Value,
+            '(?<name>[A-Za-z_:][\w:.-]*)\s*=\s*(?:"(?<dq>[^"]*)"|''(?<sq>[^'']*)'')',
+            [Text.RegularExpressions.RegexOptions]::Singleline)) {
+            $attributes[$match.Groups['name'].Value] = if ($match.Groups['dq'].Success) {
+                $match.Groups['dq'].Value
+            } else { $match.Groups['sq'].Value }
+        }
+        foreach ($name in @('CodeBehind', 'CodeFile')) {
+            if ($attributes.ContainsKey($name)) {
+                $declared = [string]$attributes[$name]
+                $relative = $declared.Replace('\', '/').TrimStart('~', '/')
+                if ($declared -match '://|:|\.\.|\$|%' -or $declared.StartsWith('/') -or
+                    [string]::IsNullOrWhiteSpace($relative)) {
+                    throw 'WEBFORMS_EXISTING_PUBLISH_LINKED_CODE_UNSAFE'
+                }
+                $linked = if ($pageDirectory) { "$pageDirectory/$relative" } else { $relative }
+                return ,@($linked)
+            }
+        }
+    }
+    return ,@("$PageRelativePath.vb", "$PageRelativePath.cs")
+}
+
+function Resolve-PhysicalDirectoryPath([string]$Path) {
+    $full = [IO.Path]::GetFullPath($Path)
+    $current = [IO.Path]::GetPathRoot($full)
+    $remaining = $full.Substring($current.Length).Split([IO.Path]::DirectorySeparatorChar,
+        [StringSplitOptions]::RemoveEmptyEntries)
+    foreach ($segment in $remaining) {
+        $current = [IO.Path]::Combine($current, $segment)
+        if ([IO.Directory]::Exists($current)) {
+            $item = [IO.DirectoryInfo]::new($current)
+            if ($item.Attributes.HasFlag([IO.FileAttributes]::ReparsePoint)) {
+                $target = $item.ResolveLinkTarget($true)
+                if ($null -eq $target) { throw 'WEBFORMS_EXISTING_PUBLISH_OUTPUT_REPARSE_UNRESOLVED' }
+                $current = Resolve-PhysicalDirectoryPath $target.FullName
+            }
+        }
+    }
+    return [IO.Path]::GetFullPath($current)
 }
 
 $SourceSiteRoot = [IO.Path]::GetFullPath((Read-Required $SourceSiteRoot 'Source Web Site folder')).TrimEnd('\', '/')
@@ -130,16 +181,49 @@ foreach ($name in $AdditionalAssemblyName) {
 }
 $dlls = @($availableDlls | Where-Object { $requestedNames.Contains($_.Name) } | Sort-Object Name)
 if ($dlls.Count -lt 1 -or $dlls.Count -gt 63) { throw 'WEBFORMS_EXISTING_PUBLISH_ASSEMBLY_LIMIT' }
+$excludedDlls = @($availableDlls | Where-Object { !$requestedNames.Contains($_.Name) })
+if ($excludedDlls.Count -gt 0 -and !$OperatorAttestsRemainingOutOfScope) {
+    Write-Output "selectedDlls=$($dlls.Count)"
+    Write-Output "unclassifiedDlls=$($excludedDlls.Count)"
+    Write-Output ('unclassifiedDllNames=' + (($excludedDlls | ForEach-Object Name) -join ','))
+    $answer = if ($FailOnUnclassifiedAssemblies) { '' } else {
+        Read-Host 'Are all unselected DLLs outside this focused proof? Type OUTOFSCOPE to record exclusions'
+    }
+    if ($answer -cne 'OUTOFSCOPE') {
+        Write-Output 'existingPublishScan=gap;reason=unclassified-assemblies'
+        return
+    }
+}
+$assemblyInventory = @($availableDlls | ForEach-Object {
+    [ordered]@{
+        path = 'bin/' + $_.Name
+        sha256 = Get-Sha256 $_.FullName 67108864
+        disposition = if ($requestedNames.Contains($_.Name)) { 'selected' } else { 'operator-declared-out-of-scope' }
+    }
+})
+$inventoryLines = @($assemblyInventory | ForEach-Object { "$($_.path):$($_.sha256):$($_.disposition)" })
+$assemblyInventorySha256 = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData(
+    [Text.Encoding]::UTF8.GetBytes(($inventoryLines -join "`n") + "`n"))).ToLowerInvariant()
 
 # The bounded source set supports candidate joins; it is explicitly not a
 # complete inventory of inputs to the historical publish operation.
 $sourceFiles = [Collections.Generic.List[string]]::new()
 $sourceFiles.Add($pageFile)
-$codeBehind = "$PagePath.vb"
-if (Test-Path -LiteralPath (Join-Path $SourceSiteRoot $codeBehind) -PathType Leaf) {
-    $sourceFiles.Add((Assert-Child $SourceSiteRoot $codeBehind 'SOURCE'))
+foreach ($linkedCode in @(Get-LinkedCodePaths $pageFile $PagePath)) {
+    $linkedAbsolute = Join-Path $SourceSiteRoot $linkedCode
+    if (Test-Path -LiteralPath $linkedAbsolute -PathType Leaf) {
+        $sourceFiles.Add((Assert-Child $SourceSiteRoot $linkedCode 'SOURCE'))
+    } elseif ($linkedCode -notin @("$PagePath.vb", "$PagePath.cs")) {
+        throw 'WEBFORMS_EXISTING_PUBLISH_LINKED_CODE_UNAVAILABLE'
+    }
 }
-foreach ($configPath in @('Web.config', ((Split-Path -Parent $PagePath).Replace('\', '/') + '/Web.config'))) {
+$configPaths = [Collections.Generic.List[string]]::new()
+$configPaths.Add('Web.config')
+$segments = $PagePath.Split('/')
+for ($i = 1; $i -lt $segments.Length; $i++) {
+    $configPaths.Add((($segments[0..($i - 1)] -join '/') + '/Web.config'))
+}
+foreach ($configPath in $configPaths) {
     if (Test-Path -LiteralPath (Join-Path $SourceSiteRoot $configPath) -PathType Leaf) {
         $sourceFiles.Add((Assert-Child $SourceSiteRoot $configPath 'SOURCE'))
     }
@@ -172,10 +256,12 @@ $output = if ($OutputRoot) { [IO.Path]::GetFullPath($OutputRoot) } else {
     Join-Path ([IO.Path]::GetTempPath()) ('tracemap-existing-publish-' + [guid]::NewGuid().ToString('N'))
 }
 if (Test-Path -LiteralPath $output) { throw 'WEBFORMS_EXISTING_PUBLISH_OUTPUT_NOT_FRESH' }
+$physicalOutput = Resolve-PhysicalDirectoryPath $output
 $comparison = if ($IsWindows) { [StringComparison]::OrdinalIgnoreCase } else { [StringComparison]::Ordinal }
 foreach ($root in @($SourceSiteRoot, $PublishedRoot, $TraceMapRoot)) {
-    if ($output.Equals($root, $comparison) -or
-        $output.StartsWith($root + [IO.Path]::DirectorySeparatorChar, $comparison)) {
+    $physicalRoot = Resolve-PhysicalDirectoryPath $root
+    if ($physicalOutput.Equals($physicalRoot, $comparison) -or
+        $physicalOutput.StartsWith($physicalRoot + [IO.Path]::DirectorySeparatorChar, $comparison)) {
         throw 'WEBFORMS_EXISTING_PUBLISH_OUTPUT_INSIDE_INPUT'
     }
 }
@@ -205,6 +291,10 @@ if ((Get-Sha256 $mapDestination 1048576) -cne $mapHash) {
 $publishedRows.Add([ordered]@{ path = $mapRelative; sha256 = $mapHash; kind = 'compiled-map' })
 
 $receiptGeneratorSha256 = Get-Sha256 $PSCommandPath 1048576
+$sourceRepositorySha256 = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData(
+    [Text.Encoding]::UTF8.GetBytes($sourceRepository))).ToLowerInvariant()
+$receiptInputSha256 = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData(
+    [Text.Encoding]::UTF8.GetBytes("source:$sourceRepositorySha256`ncommit:$sourceCommit`nsource:$boundedInputSha256`nassemblies:$assemblyInventorySha256`nmap:$mapHash`n"))).ToLowerInvariant()
 # Existing output cannot identify its true compiler. This is an explicit
 # unknown marker, not an attribution to the public test compiler.
 $compilerSha256 = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData(
@@ -217,6 +307,9 @@ $receipt = [ordered]@{
     compilerProvenance = 'unavailable-existing-output'
     sourceCommitSha = $sourceCommit
     boundedInputSha256 = $boundedInputSha256
+    receiptInputSha256 = $receiptInputSha256
+    assemblyInventorySha256 = $assemblyInventorySha256
+    assemblyInventory = $assemblyInventory
     sourceFiles = $sourceRows
     publishedFiles = @($publishedRows)
     pages = @([ordered]@{
@@ -229,9 +322,13 @@ $receipt = [ordered]@{
 $receiptPath = Join-Path $output 'publish-receipt.local.json'
 [IO.File]::WriteAllText($receiptPath, (($receipt | ConvertTo-Json -Depth 10) + "`n"), [Text.UTF8Encoding]::new($false))
 Write-Output 'existingPublishPreparation=valid'
+Write-Output "sourceRepositorySha256=$sourceRepositorySha256"
+Write-Output "sourceCommitSha=$sourceCommit"
 Write-Output "sourceFiles=$($sourceRows.Count)"
 Write-Output "availableDlls=$($availableDlls.Count)"
 Write-Output "selectedDlls=$($dlls.Count)"
+Write-Output "excludedDlls=$($excludedDlls.Count)"
+Write-Output 'scope=selected-published-assemblies-only;no-complete-publish-claim'
 Write-Output 'matchedPageMaps=1'
 Write-Output "boundedInputSha256=$boundedInputSha256"
 Write-Output 'compilerProvenance=unavailable-existing-output'
@@ -300,8 +397,22 @@ $bindings = @($probeOutcomes | ForEach-Object {
     }
 })
 $bindingPath = Join-Path $output 'compiled-binding.local.json'
+$bindingInputLines = @($bindings | Sort-Object safeLocator | ForEach-Object {
+    "$($_.safeLocator):$($_.artifactSha256):$($_.assemblyIdentity):$($_.binarySourceCommitSha)"
+})
+$bindingInputLines += "source:$boundedInputSha256"
+$bindingInputLines += "source-repository:$sourceRepositorySha256"
+$bindingInputLines += "assembly-inventory:$assemblyInventorySha256"
+$bindingInputLines += "page-map:$mapHash"
+$bindingInputSha256 = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData(
+    [Text.Encoding]::UTF8.GetBytes(($bindingInputLines -join "`n") + "`n"))).ToLowerInvariant()
 [IO.File]::WriteAllText($bindingPath,
-    (([ordered]@{ schemaVersion = 'compiled-input-binding-set.v1'; bindings = $bindings } |
+    (([ordered]@{
+        schemaVersion = 'compiled-input-binding-set.v1'
+        generatorSha256 = $receiptGeneratorSha256
+        boundedInputSha256 = $bindingInputSha256
+        bindings = $bindings
+    } |
         ConvertTo-Json -Depth 10) + "`n"), [Text.UTF8Encoding]::new($false))
 
 $scanPath = Join-Path $output 'scan'
