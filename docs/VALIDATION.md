@@ -3505,7 +3505,12 @@ On Windows, `pwsh -NoProfile -File scripts/validation/Test-PublicWebFormsPublish
 uses the 32-bit .NET Framework `aspnet_compiler.exe` to precompile this public
 fixture into a fresh temporary directory without `-u`. It checks for one
 `Pages/Lookup.aspx` `.compiled` map, its named DLL, and no PDB, and prints
-the compiler SHA-256 plus the bounded public input SHA-256. This validation
+the compiler SHA-256 plus the bounded public input SHA-256. It also writes a
+`webforms-publish-binding.v1` receipt **inside that temporary output** with
+the exact script/compiler hashes, source commit, all six source-file hashes,
+all emitted DLL/map hashes, and the page mapping. The receipt is local-only;
+it is not yet consumed by `tracemap scan` and does not authorize a
+source-to-binary method edge. This validation
 script is **not** a private-site publishing instruction. Even after the public
 Windows run succeeded and the emitted `.compiled` and metadata identities were
 inspected, the map is only page-to-assembly evidence: it is not a verified
