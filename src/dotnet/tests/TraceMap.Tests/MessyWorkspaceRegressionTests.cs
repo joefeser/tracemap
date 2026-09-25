@@ -81,8 +81,8 @@ public sealed class MessyWorkspaceRegressionTests
 
         Require("MW-CATALOG", "extraction", ids.Count == 27,
             $"expected twenty-seven pinned fixture cases, found {ids.Count}");
-        Require("MW-CATALOG", "extraction", implemented == 26 && deferred == 1,
-            $"expected twenty-six implemented and one explicitly deferred case; found {implemented} implemented and {deferred} deferred");
+        Require("MW-CATALOG", "extraction", implemented == 27 && deferred == 0,
+            $"expected twenty-seven implemented cases and no deferred case; found {implemented} implemented and {deferred} deferred");
 
         // Catalog evidence annotations are load-bearing: every expected rule id must
         // exist in the rule catalog, tiers must be real evidence tiers, and gap
@@ -977,12 +977,13 @@ public sealed class MessyWorkspaceRegressionTests
         var published = Path.Combine(temp.Path, "public-site-publish");
         var start = new ProcessStartInfo("pwsh")
         {
+            WorkingDirectory = Path.GetDirectoryName(repoRoot)!,
             UseShellExecute = false,
             RedirectStandardOutput = true,
             RedirectStandardError = true
         };
         foreach (var argument in new[] { "-NoProfile", "-File", publishScript,
-                     "-TraceMapRoot", repoRoot, "-OutputRoot", published })
+                     "-TraceMapRoot", Path.GetFileName(repoRoot), "-OutputRoot", published })
             start.ArgumentList.Add(argument);
         using var process = Process.Start(start)!;
         if (!process.WaitForExit(120_000))
@@ -1150,6 +1151,17 @@ public sealed class MessyWorkspaceRegressionTests
                 && nodes[edge.FromNodeId].DisplayName.Contains("Lookup_Init", StringComparison.Ordinal)
                 && nodes[edge.ToNodeId].DisplayName.Contains("Lookup_Init", StringComparison.Ordinal)),
             "the verified page map must permit only a review-tier qualified handler candidate");
+        var omittedCodeIndex = Path.Combine(temp.Path, "publish-receipt-omitted-code.sqlite");
+        SqliteIndexWriter.Write(omittedCodeIndex, scan.Manifest, scan.Facts.Where(fact =>
+            fact.FactType != FactTypes.WebFormsPublishSourceBound
+            || fact.Evidence.FilePath != "Pages/Lookup.aspx.vb").ToArray());
+        var omittedCodeCombined = Path.Combine(temp.Path, "publish-receipt-omitted-code-combined.sqlite");
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([omittedCodeIndex], omittedCodeCombined, ["public-publish"]));
+        var omittedCodeGraph = await CombinedDependencyPathReporter.BuildGraphInventoryAsync(omittedCodeCombined);
+        Require("MW-PUBLISH-NOPDB-001", "omitted-code-behind",
+            !omittedCodeGraph.Edges.Any(edge => edge.EdgeKind == "projectless-publish-method-candidate")
+            && omittedCodeGraph.Gaps.Any(gap => gap.GapKind == "ProjectlessPublishSourceAmbiguous"),
+            "an unreceipted linked code-behind must not join to an older published method");
         var lookupMethod = scan.Facts.Single(fact => fact.FactType == FactTypes.ManagedMethodDeclared
             && fact.Properties.GetValueOrDefault("metadataName") == "Lookup_Init");
         var duplicateIndex = Path.Combine(temp.Path, "publish-receipt-duplicate.sqlite");
@@ -1174,15 +1186,21 @@ public sealed class MessyWorkspaceRegressionTests
     }
 
     [Theory]
-    [InlineData("String", "type(namespace:6:System|names:6:String)", true)]
-    [InlineData("SqlParameter()", "scope(assembly:name:21:System.Data.SqlClient)type(namespace:21:System.Data.SqlClient|names:12:SqlParameter)[]", true)]
-    [InlineData("System.Data.SqlClient.SqlParameter()", "scope(assembly:name:21:System.Data.SqlClient)type(namespace:21:System.Data.SqlClient|names:12:SqlParameter)[]", true)]
-    [InlineData("System.Data.SqlClient.SqlParameter()", "scope(assembly:name:21:System.Data.SqlClient)type(namespace:15:Other.Data.Sql|names:12:SqlParameter)[]", false)]
-    [InlineData("SqlParameter()", "scope(assembly:name:21:System.Data.SqlClient)type(namespace:21:System.Data.SqlClient|names:12:SqlParameter)", false)]
+    [InlineData("String", "type(namespace:6:System|names:6:String)", "", true)]
+    [InlineData("string", "type(namespace:6:System|names:6:String)", "", true)]
+    [InlineData("STRING", "type(namespace:6:System|names:6:String)", "", true)]
+    [InlineData("SqlParameter()", "scope(assembly:name:21:System.Data.SqlClient)type(namespace:21:System.Data.SqlClient|names:12:SqlParameter)[]", "System.Data.SqlClient", true)]
+    [InlineData("sqlparameter()", "scope(assembly:name:21:System.Data.SqlClient)type(namespace:21:System.Data.SqlClient|names:12:SqlParameter)[]", "System.Data.SqlClient", true)]
+    [InlineData("SqlParameter()", "scope(assembly:name:21:System.Data.SqlClient)type(namespace:21:System.Data.SqlClient|names:12:SqlParameter)[]", "Other.Data", false)]
+    [InlineData("System.Data.SqlClient.SqlParameter()", "scope(assembly:name:21:System.Data.SqlClient)type(namespace:21:System.Data.SqlClient|names:12:SqlParameter)[]", "", true)]
+    [InlineData("system.data.sqlclient.sqlparameter()", "scope(assembly:name:21:System.Data.SqlClient)type(namespace:21:System.Data.SqlClient|names:12:SqlParameter)[]", "", true)]
+    [InlineData("System.Data.SqlClient.SqlParameter()", "scope(assembly:name:21:System.Data.SqlClient)type(namespace:15:Other.Data.Sql|names:12:SqlParameter)[]", "", false)]
+    [InlineData("SqlParameter()", "scope(assembly:name:21:System.Data.SqlClient)type(namespace:21:System.Data.SqlClient|names:12:SqlParameter)", "System.Data.SqlClient", false)]
     public void Publish_member_parameter_matching_rejects_wrong_shape_or_qualified_type(
-        string syntaxType, string metadataType, bool expected)
+        string syntaxType, string metadataType, string importedNamespaces, bool expected)
     {
-        Assert.Equal(expected, CombinedDependencyPathReporter.PublishParameterMatches(syntaxType, metadataType));
+        Assert.Equal(expected, CombinedDependencyPathReporter.PublishParameterMatches(
+            syntaxType, metadataType, importedNamespaces: importedNamespaces));
     }
 
     [Fact]
@@ -1707,6 +1725,22 @@ public sealed class MessyWorkspaceRegressionTests
                 && audit.Contains("constructorHopCreation-01.adjacencyLimit=none")
                 && audit.All(line => !line.Contains("Synthetic.Data", StringComparison.Ordinal)),
             "the focused diagnostic must identify the constructor hop without printing source identities: " + string.Join(";", audit.Where(line => line.StartsWith("constructorHop", StringComparison.Ordinal))));
+    }
+
+    [Fact]
+    public async Task Dropdown_init_direct_type_import_selects_exact_constructor()
+    {
+        using var temp = new TempDirectory();
+        var (_, webIndex) = ScanRoot(temp, "vb-type-import-web", "type-import-web");
+        var (_, backendIndex) = ScanRoot(temp, "vb-qualified-init-backend", "type-import-backend");
+        var combinedIndex = Path.Combine(temp.Path, "type-import-combined.sqlite");
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions(
+            [webIndex, backendIndex], combinedIndex, ["web", "backend"]));
+        var graph = await CombinedDependencyPathReporter.BuildGraphInventoryAsync(combinedIndex);
+        var nodes = graph.Nodes.ToDictionary(node => node.NodeId, StringComparer.Ordinal);
+        Assert.Single(graph.Edges, edge => edge.EdgeKind == "projectless-vb-constructor-bridge"
+            && nodes[edge.FromNodeId].DisplayName == "NamesPage.Names_Init(Object,EventArgs)"
+            && nodes[edge.ToNodeId].DisplayName == "Synthetic.Data.ChoiceNames.New()");
     }
 
     [Fact]
