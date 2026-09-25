@@ -1,5 +1,6 @@
 param(
-    [string]$TraceMapRoot = (Split-Path (Split-Path $PSScriptRoot -Parent) -Parent)
+    [string]$TraceMapRoot = (Split-Path (Split-Path $PSScriptRoot -Parent) -Parent),
+    [string]$OutputRoot
 )
 
 $ErrorActionPreference = 'Stop'
@@ -14,7 +15,14 @@ if (-not (Test-Path -LiteralPath $site -PathType Container)) {
 
 # This is deliberately a fresh public-only publish, with no -u (updatable)
 # switch. A normal Web Site build does not persist the page assembly.
-$output = Join-Path ([System.IO.Path]::GetTempPath()) ('tracemap-public-webforms-publish-' + [guid]::NewGuid().ToString('N'))
+$output = if ([string]::IsNullOrWhiteSpace($OutputRoot)) {
+    Join-Path ([System.IO.Path]::GetTempPath()) ('tracemap-public-webforms-publish-' + [guid]::NewGuid().ToString('N'))
+} else {
+    [System.IO.Path]::GetFullPath($OutputRoot)
+}
+if (Test-Path -LiteralPath $output) {
+    throw 'PUBLIC_WEBFORMS_OUTPUT_NOT_FRESH'
+}
 $inputs = @(Get-ChildItem -LiteralPath $site -Recurse -File |
     Where-Object { $_.Extension -in @('.vb', '.aspx', '.config') } |
     Sort-Object FullName)
@@ -31,6 +39,11 @@ try {
     $hasher.Dispose()
 }
 $generatorSha256 = (Get-FileHash -LiteralPath $compiler -Algorithm SHA256).Hash.ToLowerInvariant()
+$receiptGeneratorSha256 = (Get-FileHash -LiteralPath $PSCommandPath -Algorithm SHA256).Hash.ToLowerInvariant()
+$sourceCommitSha = (& git -C $TraceMapRoot rev-parse HEAD).Trim().ToLowerInvariant()
+if ($LASTEXITCODE -ne 0 -or $sourceCommitSha -notmatch '^[0-9a-f]{40}$') {
+    throw 'PUBLIC_WEBFORMS_SOURCE_COMMIT_UNAVAILABLE'
+}
 
 & $compiler -p $site -v / $output
 if ($LASTEXITCODE -ne 0) {
@@ -61,6 +74,39 @@ if ($pdbs.Count -ne 0) {
     throw "PUBLIC_WEBFORMS_EXPECTED_NO_PDB:count=$($pdbs.Count)"
 }
 
+# Local-only build provenance. Paths are relative to the explicit source and
+# publish roots; source hashes must not be copied into a shareable artifact.
+$published = @($dlls + $maps | Sort-Object FullName | ForEach-Object {
+    [ordered]@{
+        path = $_.FullName.Substring($output.Length).TrimStart('\', '/').Replace('\', '/')
+        sha256 = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+        kind = if ($_.Extension -eq '.dll') { 'assembly' } else { 'compiled-map' }
+    }
+})
+$receipt = [ordered]@{
+    schemaVersion = 'webforms-publish-binding.v1'
+    visibility = 'local-only'
+    receiptGeneratorSha256 = $receiptGeneratorSha256
+    compilerSha256 = $generatorSha256
+    sourceCommitSha = $sourceCommitSha
+    boundedInputSha256 = $inputSha256
+    sourceFiles = @($inputs | ForEach-Object {
+        [ordered]@{
+            path = $_.FullName.Substring($site.Length).TrimStart('\', '/').Replace('\', '/')
+            sha256 = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+        }
+    })
+    publishedFiles = $published
+    pages = @([ordered]@{
+        virtualPath = [string]$pageMap.preserve.virtualPath
+        assembly = $assemblyName
+        generatedType = [string]$pageMap.preserve.type
+        mapPath = $pageMaps[0].FullName.Substring($output.Length).TrimStart('\', '/').Replace('\', '/')
+    })
+}
+$receiptPath = Join-Path $output 'publish-receipt.local.json'
+[System.IO.File]::WriteAllText($receiptPath, ($receipt | ConvertTo-Json -Depth 8) + "`n", [System.Text.UTF8Encoding]::new($false))
+
 Write-Output 'publicWebFormsPublishStatus=valid'
 Write-Output "generatorSha256=$generatorSha256"
 Write-Output "boundedInputSha256=$inputSha256"
@@ -70,5 +116,8 @@ Write-Output "pdbCount=$($pdbs.Count)"
 Write-Output "compiledMapCount=$($maps.Count)"
 Write-Output "pageMapCount=$($pageMaps.Count)"
 Write-Output "mappedAssemblyPresent=$([bool](Test-Path -LiteralPath (Join-Path $output "bin/$assemblyName.dll")))"
+Write-Output "receiptGeneratorSha256=$receiptGeneratorSha256"
+Write-Output "sourceCommitSha=$sourceCommitSha"
+Write-Output 'receiptVisibility=local-only'
 Write-Output 'claim=page-to-assembly-only;no-source-method-or-runtime-claim'
 Write-Output "outputRoot=$output"

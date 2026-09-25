@@ -962,19 +962,21 @@ public sealed class MessyWorkspaceRegressionTests
     {
         if (!OperatingSystem.IsWindows()) return;
         using var temp = new TempDirectory();
-        var source = MessyRoot("vb-publish-projectless");
+        var repoRoot = FindRepoRoot();
+        var publishScript = Path.Combine(repoRoot, "scripts", "validation", "Test-PublicWebFormsPublish.ps1");
         var compiler = Path.Combine(Environment.GetEnvironmentVariable("WINDIR") ?? string.Empty,
             "Microsoft.NET", "Framework", "v4.0.30319", "aspnet_compiler.exe");
         Require("MW-PUBLISH-NOPDB-001", "extraction", File.Exists(compiler),
             "the 32-bit .NET Framework ASP.NET compiler is required for the public Windows fixture");
         var published = Path.Combine(temp.Path, "public-site-publish");
-        var start = new ProcessStartInfo(compiler)
+        var start = new ProcessStartInfo("pwsh")
         {
             UseShellExecute = false,
             RedirectStandardOutput = true,
             RedirectStandardError = true
         };
-        foreach (var argument in new[] { "-p", source, "-v", "/", published })
+        foreach (var argument in new[] { "-NoProfile", "-File", publishScript,
+                     "-TraceMapRoot", repoRoot, "-OutputRoot", published })
             start.ArgumentList.Add(argument);
         using var process = Process.Start(start)!;
         if (!process.WaitForExit(120_000))
@@ -986,6 +988,25 @@ public sealed class MessyWorkspaceRegressionTests
         var error = process.StandardError.ReadToEnd();
         Require("MW-PUBLISH-NOPDB-001", "extraction", process.ExitCode == 0,
             $"public ASP.NET precompilation failed; exit={process.ExitCode}; stdout={output}; stderr={error}");
+        Require("MW-PUBLISH-NOPDB-001", "extraction", output.Contains("publicWebFormsPublishStatus=valid", StringComparison.Ordinal),
+            "the public publish guard did not report a valid result");
+
+        var receiptPath = Path.Combine(published, "publish-receipt.local.json");
+        Require("MW-PUBLISH-NOPDB-001", "extraction", File.Exists(receiptPath),
+            "the public publish guard must retain its local-only provenance receipt");
+        using var receipt = JsonDocument.Parse(File.ReadAllBytes(receiptPath));
+        var receiptRoot = receipt.RootElement;
+        Require("MW-PUBLISH-NOPDB-001", "extraction",
+            receiptRoot.GetProperty("schemaVersion").GetString() == "webforms-publish-binding.v1"
+            && receiptRoot.GetProperty("visibility").GetString() == "local-only"
+            && receiptRoot.GetProperty("receiptGeneratorSha256").GetString() ==
+                Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(publishScript))).ToLowerInvariant()
+            && receiptRoot.GetProperty("compilerSha256").GetString() ==
+                Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(compiler))).ToLowerInvariant()
+            && receiptRoot.GetProperty("sourceFiles").GetArrayLength() == 6
+            && receiptRoot.GetProperty("publishedFiles").GetArrayLength() == 4
+            && receiptRoot.GetProperty("pages").GetArrayLength() == 1,
+            "the local-only publish receipt must bind the exact script/compiler and all bounded public inputs/outputs");
 
         var dlls = Directory.GetFiles(Path.Combine(published, "bin"), "*.dll", SearchOption.TopDirectoryOnly)
             .OrderBy(path => path, StringComparer.Ordinal).ToArray();
