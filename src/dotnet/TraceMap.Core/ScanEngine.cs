@@ -232,6 +232,7 @@ public static class ScanEngine
         var ilEvaluation = IlBodyEvidenceExtractor.Evaluate(options, compiledEvaluation, cancellationToken);
         var ilRewriteEvaluation = IlRewriteEvidenceExtractor.Evaluate(options, cancellationToken);
         var ilRewritePdbEvaluation = IlRewritePdbEvidenceExtractor.Evaluate(options, ilRewriteEvaluation, cancellationToken);
+        var webFormsPublishEvaluation = WebFormsPublishMapExtractor.Evaluate(repoPath, git.CommitSha, options, cancellationToken);
         var projects = inventory
             .Where(item => item.Kind is "Project" or "SqlProject" or "VisualBasicProject")
             .Select(item => item.RelativePath)
@@ -282,6 +283,7 @@ public static class ScanEngine
             .Concat(ilEvaluation.KnownGaps)
             .Concat(ilRewriteEvaluation.KnownGaps)
             .Concat(ilRewritePdbEvaluation.KnownGaps)
+            .Concat(webFormsPublishEvaluation.Provenance?.GapKinds.Select(gap => $"Web Forms publish map coverage reduced: `{gap}`.") ?? [])
             .OrderBy(gap => gap, StringComparer.Ordinal)
             .Distinct(StringComparer.Ordinal)
             .ToArray();
@@ -296,7 +298,8 @@ public static class ScanEngine
                 pdbEvaluation.Provenance?.BoundedInputSha256,
                 ilEvaluation.Provenance?.BoundedInputSha256,
                 ilRewriteEvaluation.Provenance?.BoundedInputSha256,
-                ilRewritePdbEvaluation.Provenance?.BoundedInputSha256),
+                ilRewritePdbEvaluation.Provenance?.BoundedInputSha256,
+                webFormsPublishEvaluation.Provenance?.BoundedInputSha256),
             git.RepoName,
             git.RemoteUrl,
             git.Branch,
@@ -319,7 +322,8 @@ public static class ScanEngine
             PdbEvidenceSummary: null,
             IlBodyProvenance: ilEvaluation.Provenance,
             IlRewriteProvenance: ilRewriteEvaluation.Provenance,
-            IlRewritePdbProvenance: ilRewritePdbEvaluation.Provenance);
+            IlRewritePdbProvenance: ilRewritePdbEvaluation.Provenance,
+            WebFormsPublishProvenance: webFormsPublishEvaluation.Provenance);
 
         var binlogFacts = MsBuildBinlogExtractor.Extract(repoPath, provisionalManifest, options.BinlogPaths);
         var binlogGaps = binlogFacts
@@ -371,6 +375,7 @@ public static class ScanEngine
                     ilEvaluation,
                     ilRewriteEvaluation,
                     ilRewritePdbEvaluation,
+                    webFormsPublishEvaluation,
                     progress,
                     cancellationToken);
                 cancellationToken.ThrowIfCancellationRequested();
@@ -503,7 +508,8 @@ public static class ScanEngine
         string? pdbBoundedInputSha256,
         string? ilBoundedInputSha256,
         string? ilRewriteBoundedInputSha256,
-        string? ilRewritePdbBoundedInputSha256 = null)
+        string? ilRewritePdbBoundedInputSha256 = null,
+        string? webFormsPublishBoundedInputSha256 = null)
     {
         var signature = string.Join('\n', inventory.Select(item => $"{item.RelativePath}|{item.Kind}|{item.SizeBytes}"));
         var binlogSignature = MsBuildBinlogExtractor.CreateInputSignature(options.BinlogPaths, repoPath: options.RepoPath);
@@ -519,7 +525,8 @@ public static class ScanEngine
             $"pdb={pdbBoundedInputSha256 ?? string.Empty}",
             $"il={ilBoundedInputSha256 ?? string.Empty}",
             $"ilrewrite={ilRewriteBoundedInputSha256 ?? string.Empty}",
-            $"ilrewritepdb={ilRewritePdbBoundedInputSha256 ?? string.Empty}");
+            $"ilrewritepdb={ilRewritePdbBoundedInputSha256 ?? string.Empty}",
+            $"webformspublish={webFormsPublishBoundedInputSha256 ?? string.Empty}");
         var repoIdentity = string.IsNullOrWhiteSpace(git.RemoteUrl) ? git.RepoName : git.RemoteUrl;
         return "scan-" + FactFactory.Hash($"{repoIdentity}|{git.CommitSha}|{sourceSnapshotDigest}|{signature}|{optionSignature}|{binlogSignature}", 20);
     }
@@ -722,6 +729,7 @@ public static class ScanEngine
         IlBodyEvaluation ilEvaluation,
         IlRewriteEvaluation ilRewriteEvaluation,
         IlRewritePdbEvaluation ilRewritePdbEvaluation,
+        WebFormsPublishEvaluation webFormsPublishEvaluation,
         ScanProgressReporter? progress = null,
         CancellationToken cancellationToken = default)
     {
@@ -764,7 +772,8 @@ public static class ScanEngine
                 || gap.StartsWith("PDB coverage reduced:", StringComparison.Ordinal)
                 || gap.StartsWith("IL body evidence coverage reduced:", StringComparison.Ordinal)
                 || gap.StartsWith("IL rewrite evidence coverage reduced:", StringComparison.Ordinal)
-                || gap.StartsWith("IL rewrite PDB evidence coverage reduced:", StringComparison.Ordinal))
+                || gap.StartsWith("IL rewrite PDB evidence coverage reduced:", StringComparison.Ordinal)
+                || gap.StartsWith("Web Forms publish map coverage reduced:", StringComparison.Ordinal))
                 continue;
             facts.Add(FactFactory.Create(
                 manifest,
@@ -785,6 +794,7 @@ public static class ScanEngine
         var ilRewriteFacts = IlRewriteEvidenceExtractor.MaterializeFacts(manifest, ilRewriteEvaluation, cancellationToken);
         facts.AddRange(ilRewriteFacts);
         facts.AddRange(IlRewritePdbEvidenceExtractor.MaterializeFacts(manifest, ilRewritePdbEvaluation, ilRewriteFacts, cancellationToken));
+        facts.AddRange(WebFormsPublishMapExtractor.MaterializeFacts(manifest, webFormsPublishEvaluation));
 
         foreach (var item in inventory)
         {

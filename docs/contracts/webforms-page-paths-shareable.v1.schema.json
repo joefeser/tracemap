@@ -20,7 +20,8 @@
         "inputKind": { "const": "anonymous-page-path-projection" },
         "inputSha256": { "$ref": "#/$defs/sha256" },
         "inputCanonicalization": { "const": "powershell-json-compact-depth-20-utf8-v1" },
-        "sourceWorkbenchGeneratorSha256": { "$ref": "#/$defs/sha256" }
+        "sourceWorkbenchGeneratorSha256": { "$ref": "#/$defs/sha256" },
+        "traceMapCommitSha": { "oneOf": [{ "type": "string", "pattern": "^[0-9a-f]{40}$" }, { "const": "unavailable" }] }
       }
     },
     "projection": {

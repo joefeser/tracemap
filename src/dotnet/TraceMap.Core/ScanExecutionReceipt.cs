@@ -129,6 +129,7 @@ public sealed class ScanReceiptRecorder
             Normalize(options.CompiledInputPaths),
             Normalize(options.CompiledDependencyPaths),
             Normalize(options.CompiledBindingReceiptPaths),
+            options.WebFormsPublishReceiptPath?.Trim() ?? string.Empty,
             options.CompiledInputLimits?.ToString() ?? string.Empty,
             Normalize(options.PdbInputPaths),
             options.PdbInputLimits?.ToString() ?? string.Empty,

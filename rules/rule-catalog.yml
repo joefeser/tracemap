@@ -2502,6 +2502,20 @@ rules:
       - Anonymous output does not prove runtime execution, reachability, ordering, successful binding, behavior, correctness, or absence of unsupported calls.
       - Rare graph shapes and counts may still reveal architectural characteristics and require owner review before sharing.
 
+  - id: legacy.webforms.publish-map.v1
+    name: Explicit Web Forms publish-map binding
+    description: Re-verifies a bounded local-only publish receipt against exact current source bytes, emitted DLL/map bytes, the source commit, and each declared .compiled page mapping before emitting page-to-assembly evidence.
+    evidenceTier: Tier2Structural or Tier4Unknown
+    emits:
+      - WebFormsPublishPageMapped
+      - WebFormsPublishSourceBound
+      - WebFormsPublishAssemblyBound
+      - AnalysisGap
+    limitations:
+      - The receipt is operator-declared. Matching hashes and a .compiled map establish static page-to-assembly correspondence for the declared build inputs; they do not independently prove the compiler ran, source-method identity, PDB lines, deployment, page activation, or runtime execution.
+      - Input count, file size, path, duplicate, content, commit, XML, and mapping failures withhold the entire receipt behind Tier4 gaps. No ambient publish output is discovered, and a gap never means the page or assembly is absent.
+      - Raw local receipt and source/artifact hashes remain local-only. Shareable projections must not expose private paths, symbols, or commitments to raw private source artifacts.
+
   - id: legacy.webforms.inventory.v1
     name: Legacy WebForms file and page inventory
     description: Inventories WebForms markup, code-behind, designer files, directives, static server controls, checked-in configuration registrations, and safe page linkage metadata.
@@ -2976,7 +2990,8 @@ rules:
       - Composed paths are static evidence, not runtime execution proof, reachability proof, production traffic, service deployment, branch feasibility, user behavior, or permission proof.
       - Call edges may miss reflection, dynamic dispatch, delegates, runtime DI, partial methods, generated code, serializer behavior, event bubbling, collection contents, and branch-dependent behavior.
       - WCF operation nodes are terminals in v1; traversal does not continue through service-side implementation or downstream service-side evidence.
-      - Traversal is bounded by depth, path, and frontier limits; truncated output is partial.
+      - Terminal inventory retains one shortest deterministic witness per distinct supported terminal; separately bounded path-detail enumeration can retain additional routes to the same terminal without increasing the distinct-terminal count.
+      - Traversal is bounded by depth, path, frontier, and work limits; a complete terminal inventory does not imply complete route detail, and truncated path output is partial.
 
   - id: legacy.flow.parameter-forward-unavailable.v1
     name: Legacy flow parameter-forwarding availability gap
@@ -3427,7 +3442,59 @@ rules:
       - Reconciliation is source-local and must not join symbols across combined indexes or languages.
       - Short-name reconciliation is review evidence only and cannot produce a strong static path.
       - Ambiguous same-name candidates must remain gaps or review evidence rather than arbitrary strong links.
+      - Reconciliation retains the full namespace and nested declaring-type path; equal final type segments in different namespaces do not authorize an edge.
       - Reconciliation does not prove runtime dispatch, dependency injection binding, reflection targets, branch feasibility, serializer behavior, or SQL execution.
+
+  - id: combined.paths.compiled-il-bridge.v1
+    name: Bound compiled IL path bridge
+    description: Adds in-memory path edges between an exact source-to-metadata reconciliation and its admitted method, and between admitted IL method bodies and uniquely matched MethodDef or assembly-scoped MemberRef call targets.
+    evidenceTier: Tier1Semantic, Tier2Structural, or Tier3SyntaxOrTextual
+    emits:
+      - compiled-source-identity path edge
+      - compiled-il-call path edge
+      - compiled-il-callvirt-candidate path edge
+      - CompiledIlSourceDisplayUnavailable gap
+      - CompiledIlTargetUnavailable gap
+      - CompiledIlTargetAmbiguous gap
+    limitations:
+      - Requires a validated bound source-to-metadata reconciliation for source entry, an exact source symbol ID on one uniquely displayed Tier1 call source, admitted dual-reader IL body/call facts, exact fact-ID joins, and one unique MethodDef or assembly-scoped MemberRef target; no binary discovery or guessed source-to-binary identity occurs in this graph layer. A source method without a retained Tier1 call source cannot enter through this first slice.
+      - A call/newobj edge records a static encoded target, not execution or branch feasibility. A callvirt operand produces only a Tier3 review candidate because actual virtual dispatch may select an override; it does not prove runtime target, reflection, dependency-injection binding, or a database operation.
+      - MemberRef joins require an admitted bound assembly with the complete encoded assembly-reference identity, non-generic type path, member name, and signature, plus exactly one matching declaration across all combined sources. Unadmitted references, generic type specifications, MethodSpec, calli, constrained type, and unresolved targets are not promoted to graph edges. Missing or ambiguous joins never prove absence or complete reachability.
+      - The graph overlay does not rewrite source facts, the combined database schema, or existing source-only path evidence.
+
+  - id: combined.paths.projectless-pdb-identity.v1
+    name: Exact projectless source-to-PDB method path entry
+    description: Adds an in-memory path entry from one projectless VB method declaration to one bound metadata method when a checksum-matched portable PDB document has visible sequence points uniquely owned by that source method block.
+    evidenceTier: Tier2Structural
+    emits:
+      - projectless-source-pdb-identity path edge
+      - ProjectlessPdbMethodAmbiguous gap
+      - ProjectlessPdbMetadataAmbiguous gap
+    limitations:
+      - Requires an explicitly admitted and bound assembly and portable PDB, exact document checksum match to retained source bytes, exact PDB method-row to metadata-method reconciliation, complete visible sequence-point containment in one source method block, matching emitted method name, and one unique source declaration. It never guesses from a pretty name, imports, or an unbound binary.
+      - Source line containment and name establish only a static compiler-location association. They do not prove execution, runtime page compilation, method dispatch, or that the input binary was deployed. Methods without visible PDB points, mismatched documents, ambiguous ownership, native Windows PDBs, and unadmitted inputs receive no path edge.
+      - The rule does not convert projectless syntax evidence into Tier1 Roslyn semantic evidence or change the source scan's coverage label.
+
+  - id: combined.paths.projectless-publish-candidate.v1
+    name: Projectless Web Forms publish method candidate
+    description: Adds a review-only path entry from one qualified projectless VB handler to one admitted published metadata method when a verified publish receipt maps the page to the exact assembly bytes.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - projectless-publish-method-candidate path edge
+      - projectless-publish-member-candidate path edge
+      - ProjectlessPublishPageUnavailable gap
+      - ProjectlessPublishGeneratedTypeUnavailable gap
+      - ProjectlessPublishSourceAmbiguous gap
+      - ProjectlessPublishMetadataAmbiguous gap
+      - ProjectlessPublishMemberAmbiguous gap
+      - ProjectlessPublishAssemblyAmbiguous gap
+      - ProjectlessPublishMemberWorkLimit gap
+    limitations:
+      - Requires an explicitly declared and scanner-rechecked local-only publish receipt, one exact page-to-assembly map, a linked code-behind file bound by the same receipt digest, the mapped generated type in the admitted assembly, one linked source handler declaration with the full qualified containing type, and one bound metadata method in the exact mapped assembly bytes with the full encoded type path and method name. Ambiguous or missing candidates fail closed.
+      - Without PDB sequence points or a compiler source-method map, this is a Tier3 candidate, not exact source-to-metadata method identity. It does not prove source-line identity, execution, runtime page activation, branch feasibility, or SQL effects.
+      - The graph overlay does not promote source syntax to Roslyn semantic evidence or rewrite source facts.
+      - Other source methods named by the verified receipt may join a uniquely admitted method with the complete qualified type path and compatible parameter shapes. VB page, handler, containing-type, method, and parameter spelling is matched case-insensitively; intrinsic aliases, including unsigned integers and SByte, use their defined System type, while unqualified non-intrinsic names must match a retained lexical namespace or explicit non-aliased Imports scope. Unscoped names, case-equivalent ambiguous overloads, and ambiguous assembly identities fail closed. Both directions are candidate edges so a compiled IL walk can re-enter retained source evidence, not an exact method-location claim.
+      - The member-candidate pass preflights its bounded source/member comparison work before emitting any of its edges; work-limit exhaustion withholds the pass and emits a Tier4 gap.
 
   - id: combined.paths.projectless-vb-receiver-bridge.v1
     name: Projectless Visual Basic receiver-provenance bridge
@@ -3460,7 +3527,7 @@ rules:
     limitations:
       - Only projectless syntax-extractor object creations can bridge; compiler-rejected semantic constructor fallbacks cannot be rescued by another source root.
       - A bounded single-index packet admits matching constructor declarations and constructor-owned body facts through the same fact, frontier, and work limits as syntax call closure; interrupted admission is partial evidence, not a clean absent constructor.
-      - The created type must match exactly one retained VB syntax constructor declaration by qualified type identity and argument count across the combined sources; unqualified names never infer a namespace, while same-arity overloads and duplicate identities fail closed.
+      - The created type must match exactly one retained VB syntax constructor declaration by qualified type identity and argument count across the combined sources. An unqualified type may be qualified only by its retained lexical namespace or a non-aliased explicit Imports namespace; absent or competing identities fail closed rather than guessing a namespace.
       - An exact arity-bearing constructor body with retained call or creation evidence is required. Missing or unretained bodies remain a Tier4 gap, not a clean absence conclusion.
       - Argument types, implicit constructors, property getter semantics, collection contents, branch feasibility, and runtime object lifetime are not inferred.
       - The edge proves only a possible static constructor side-effect path in the retained graph; it does not prove that a property is populated, a database call executes, or a Web Forms control binds successfully.
@@ -4384,6 +4451,7 @@ rules:
       - ObjectCreated
     limitations:
       - Created types are raw `New ...` syntax text and are never compiler-resolved targets; the type may not resolve or exist.
+      - Full-file projectless syntax facts retain the creation site's lexical namespace and non-aliased explicit Imports namespaces as text-only context; aliases, root namespaces, compiler binding, and assembly identity are not inferred.
       - Creation candidates prove syntax presence only; constructor identity, executed constructor, and runtime allocation are not claimed.
       - In an otherwise semantically analyzed file, this rule is used only when the created type is known but its constructor is unresolved, and a `CallSiteSemanticResolutionUnavailable` Tier4 gap accompanies it.
 

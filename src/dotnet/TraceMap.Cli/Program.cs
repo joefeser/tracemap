@@ -371,6 +371,7 @@ public static class TraceMapCommand
                 ParsePositiveInt(values, "--il-rewrite-pdb-max-sequence-points", 1_000_000),
                 ParsePositiveInt(values, "--il-rewrite-pdb-max-text", 4_096),
                 ParsePositiveLong(values, "--il-rewrite-pdb-max-work", 1_500_000)),
+            WebFormsPublishReceiptPath: values.GetValueOrDefault("--webforms-publish-receipt"),
             ExactSourceScope: values.HasFlag("--exact-source-scope"),
             ExactSourceMaxFiles: ParsePositiveInt(values, "--exact-source-max-files", 256),
             ExactSourceMaxBytes: ParsePositiveLong(values, "--exact-source-max-bytes", 67_108_864));
@@ -2831,6 +2832,8 @@ public static class TraceMapCommand
                                        Explicit dependency candidate admitted under the same bounded policy. Repeatable.
               --compiled-binding-receipt <path>
                                        Optional compiled-input-binding-set.v1 receipt. Repeatable.
+              --webforms-publish-receipt <path>
+                                       Explicit local-only webforms-publish-binding.v1 receipt. Never discovered.
               --pdb-input <path>       Explicit portable PDB, assembly with embedded portable PDB, or Windows PDB input. Repeatable; never discovered.
               --compiled-max-artifacts <count>
               --compiled-max-file-bytes <count>
