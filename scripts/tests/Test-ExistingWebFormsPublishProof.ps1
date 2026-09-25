@@ -39,8 +39,16 @@ try {
     if ($receipt.schemaVersion -ne 'webforms-publish-binding.v1' -or
         $receipt.compilerProvenance -ne 'unavailable-existing-output' -or
         @($receipt.pages).Count -ne 1 -or @($receipt.publishedFiles).Count -ne 2 -or
-        @($receipt.sourceFiles).Count -ne 2) {
+        @($receipt.sourceFiles).Count -ne 2 -or
+        @($receipt.assemblyInventory).Count -ne 1 -or
+        $receipt.assemblyInventory[0].disposition -ne 'selected') {
         throw 'EXISTING_PUBLISH_TEST_RECEIPT_INVALID'
+    }
+    $binding = [IO.File]::ReadAllText((Join-Path $output 'compiled-binding.local.json')) | ConvertFrom-Json -Depth 20
+    if ($binding.generatorSha256 -cnotmatch '^[0-9a-f]{64}$' -or
+        $binding.boundedInputSha256 -cnotmatch '^[0-9a-f]{64}$' -or
+        $binding.generatorSha256 -cne (Get-FileHash -LiteralPath $script -Algorithm SHA256).Hash.ToLowerInvariant()) {
+        throw 'EXISTING_PUBLISH_TEST_BINDING_PROVENANCE_INVALID'
     }
     $manifest = [IO.File]::ReadAllText((Join-Path $output 'scan/scan-manifest.json')) | ConvertFrom-Json -Depth 20
     if ($manifest.webFormsPublishProvenance.status -ne 'bound' -or
@@ -49,6 +57,63 @@ try {
     }
     if (!(Test-Path -LiteralPath (Join-Path $output 'handler-paths.json') -PathType Leaf)) {
         throw 'EXISTING_PUBLISH_TEST_PATH_REPORT_UNAVAILABLE'
+    }
+    $nestedSource = Join-Path $temp 'nested-source'
+    [void][IO.Directory]::CreateDirectory((Join-Path $nestedSource 'Pages/Deep'))
+    [IO.File]::WriteAllText((Join-Path $nestedSource 'Pages/Deep/Lookup.aspx'),
+        '<%@ Page Language="C#" CodeBehind="CustomHandler.cs" Inherits="PublicProof.LookupPage" %>',
+        [Text.UTF8Encoding]::new($false))
+    [IO.File]::WriteAllText((Join-Path $nestedSource 'Pages/Deep/CustomHandler.cs'),
+        'namespace PublicProof { public class LookupPage {} }', [Text.UTF8Encoding]::new($false))
+    foreach ($config in @('Web.config', 'Pages/Web.config', 'Pages/Deep/Web.config')) {
+        [IO.File]::WriteAllText((Join-Path $nestedSource $config), '<configuration />',
+            [Text.UTF8Encoding]::new($false))
+    }
+    & git -C $nestedSource init -q
+    & git -C $nestedSource remote add origin 'https://example.invalid/public-synthetic.git'
+    & git -C $nestedSource add .
+    & git -C $nestedSource -c user.name=PublicTest -c user.email=public@example.invalid commit -qm synthetic
+    if ($LASTEXITCODE -ne 0) { throw 'EXISTING_PUBLISH_TEST_SYNTHETIC_GIT_FAILED' }
+    $nestedPublish = Join-Path $temp 'nested-publish'
+    [void][IO.Directory]::CreateDirectory((Join-Path $nestedPublish 'bin'))
+    [void][IO.Directory]::CreateDirectory((Join-Path $nestedPublish 'Pages/Deep'))
+    [IO.File]::Copy($assembly, (Join-Path $nestedPublish 'bin/CompiledProjectless.VB.dll'))
+    [IO.File]::Copy($assembly, (Join-Path $nestedPublish 'bin/Unselected.dll'))
+    [IO.File]::WriteAllText((Join-Path $nestedPublish 'Pages/Deep/Lookup.aspx.compiled'),
+        '<preserve virtualPath="/Pages/Deep/Lookup.aspx" assembly="CompiledProjectless.VB" type="PublicProof.LookupPage" />',
+        [Text.UTF8Encoding]::new($false))
+    $nestedOutput = Join-Path $temp 'nested-proof'
+    $unclassified = @(& $script -SourceSiteRoot $nestedSource -PublishedRoot $nestedPublish `
+        -PagePath 'Pages/Deep/Lookup.aspx' -OutputRoot $nestedOutput -TraceMapRoot $TraceMapRoot `
+        -FailOnUnclassifiedAssemblies -PrepareOnly)
+    if ($unclassified -notcontains 'existingPublishScan=gap;reason=unclassified-assemblies' -or
+        (Test-Path -LiteralPath $nestedOutput)) {
+        throw 'EXISTING_PUBLISH_TEST_UNCLASSIFIED_DLL_NOT_WITHHELD'
+    }
+    $nestedLines = @(& $script -SourceSiteRoot $nestedSource -PublishedRoot $nestedPublish `
+        -PagePath 'Pages/Deep/Lookup.aspx' -OutputRoot $nestedOutput -TraceMapRoot $TraceMapRoot `
+        -OperatorAttestsRemainingOutOfScope -PrepareOnly)
+    $nestedReceipt = [IO.File]::ReadAllText((Join-Path $nestedOutput 'publish-receipt.local.json')) | ConvertFrom-Json -Depth 20
+    if ($nestedLines -notcontains 'excludedDlls=1' -or
+        @($nestedReceipt.sourceFiles).Count -ne 5 -or
+        @($nestedReceipt.sourceFiles | Where-Object { $_.path -eq 'Pages/Deep/CustomHandler.cs' }).Count -ne 1 -or
+        @($nestedReceipt.sourceFiles | Where-Object { $_.path -eq 'Pages/Web.config' }).Count -ne 1 -or
+        @($nestedReceipt.assemblyInventory | Where-Object { $_.disposition -eq 'operator-declared-out-of-scope' }).Count -ne 1) {
+        throw 'EXISTING_PUBLISH_TEST_NESTED_SOURCE_OR_INVENTORY_INVALID'
+    }
+    if (!$IsWindows) {
+        $alias = Join-Path $temp 'source-alias'
+        [void][IO.Directory]::CreateSymbolicLink($alias, $nestedSource)
+        $captured = $null
+        $aliasLines = @()
+        try {
+            $aliasLines = @(& $script -SourceSiteRoot $nestedSource -PublishedRoot $nestedPublish `
+                -PagePath 'Pages/Deep/Lookup.aspx' -OutputRoot (Join-Path $alias 'proof') `
+                -TraceMapRoot $TraceMapRoot -OperatorAttestsRemainingOutOfScope -PrepareOnly)
+        } catch { $captured = $_.Exception.Message }
+        if ($captured -ne 'WEBFORMS_EXISTING_PUBLISH_OUTPUT_INSIDE_INPUT') {
+            throw "EXISTING_PUBLISH_TEST_OUTPUT_ALIAS_NOT_REJECTED:${captured}:$($aliasLines -join ',')"
+        }
     }
     if ($IsWindows) {
         $publicSite = Join-Path $TraceMapRoot 'samples/messy-dotnet-workspace/vb-publish-projectless'
