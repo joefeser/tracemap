@@ -2022,8 +2022,8 @@ handler to a uniquely bound method in the exact mapped assembly; missing or
 ambiguous joins emit gaps. No PDB line, execution, or private-site claim is
 made. Local validation passed: 34/34 messy-workspace tests, 2,293/2,293
 full .NET tests, zero-warning build, private-path guard, and whitespace check.
-The expanded Windows end-to-end test at this exact SHA is still required
-before a PR or full-path support claim.
+The expanded Windows end-to-end test was still required at that SHA before a
+PR or public full-path support claim.
 
 That `4cebcb65` home-Windows test passed 1/1: the receipt was bound, the
 page-map fact was present, and the Tier3 `Names_Init` candidate reached its
@@ -2033,6 +2033,15 @@ fully qualified containing types, compatible parameter shapes, exact emitted
 assembly hashes, and a bounded uniqueness check. A public source-only test
 shows that the deep `ExecProc_DataSet(String,SqlParameter())` method already
 reaches SQL evidence, but `DataAccess.SelectGroups` does not reach it without
-the compiled path. The expanded Windows test must now prove the report can
-cross from the page handler through admitted IL and re-enter that deep source
-method. Until it passes, there is no complete reported-chain claim or PR.
+the compiled path. At exact public commit
+`fa696ce8fd7fd8549aa7483a007a3c7250d8f315`, the home-Windows focused
+test passed (exit 0, 1/1). Its traversal assertion found a report path from
+`Names_Init` through a Tier3 review-only publish-method candidate, at least
+four admitted IL-call edges, a publish-member candidate, and retained
+`sql-query` evidence. The isolated Windows checkout remained tracked-clean;
+no private files were accessed. Local macOS validation at that code head
+passed the 39/39 focused messy-workspace suite, zero-warning build, and
+2,298/2,298 full .NET suite on rerun. This establishes a public static
+reported-chain proof, not private page-002 behavior, exact source-line/PDB
+identity, or runtime execution. The branch is ready for PR review, subject
+to exact-head gates; neither Task 10 nor Task 11 is completed by this slice.

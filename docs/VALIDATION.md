@@ -3522,7 +3522,7 @@ walk to re-enter retained source evidence; it is not a PDB or exact
 source-method identity claim. The validation
 script is **not** a private-site publishing instruction. Even after the public
 Windows run succeeded and the emitted `.compiled` and metadata identities were
-inspected, the map is only page-to-assembly evidence: it is not a verified
+inspected, the map alone is only page-to-assembly evidence: it is not a verified
 source-method, IL-chain, or runtime claim. A 32-bit-only dependency in a
 private site does not become AnyCPU through CodeDOM configuration.
 
@@ -3538,7 +3538,10 @@ runtime execution, or private-site behavior. The follow-up public test at
 `eafc6af1` passed 1/1 and proved an exact admitted IL MemberRef edge from
 `Names_Init` to the `App_Code` constructor. The scanner-side receipt and Tier3
 handler candidate subsequently passed the focused Windows test at `4cebcb65`
-(1/1). That test did not prove a complete reported path to SQL. The expanded
-public Windows regression now requires a report from `Names_Init` through at
-least four compiled calls and a review-tier source re-entry to retained SQL
-evidence; it must pass before any full-path support claim.
+(1/1). That test did not prove a complete reported path to SQL. At exact
+public commit `fa696ce8fd7fd8549aa7483a007a3c7250d8f315`, the expanded
+home-Windows regression passed (exit 0, 1/1): its traversal assertion found
+a report path from `Names_Init` with a Tier3 review-only publish-method
+candidate, at least four admitted IL-call edges, a publish-member candidate,
+and retained `sql-query` evidence. This proves the public static report path,
+not source-line identity, execution, or the private page-002 chain.
