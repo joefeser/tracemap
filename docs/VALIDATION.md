@@ -3508,9 +3508,14 @@ fixture into a fresh temporary directory without `-u`. It checks for one
 the compiler SHA-256 plus the bounded public input SHA-256. It also writes a
 `webforms-publish-binding.v1` receipt **inside that temporary output** with
 the exact script/compiler hashes, source commit, all six source-file hashes,
-all emitted DLL/map hashes, and the page mapping. The receipt is local-only;
-it is not yet consumed by `tracemap scan` and does not authorize a
-source-to-binary method edge. This validation
+all emitted DLL/map hashes, and the page mapping. The receipt is local-only.
+`tracemap scan --webforms-publish-receipt <path>` rechecks the declared
+source and publish bytes, the source commit, and the `.compiled` map before
+emitting `WebFormsPublishPageMapped`; missing or mismatched evidence becomes
+a Tier4 gap. In the combined graph, one uniquely qualified projectless VB
+handler and one bound metadata method in those exact assembly bytes may form
+a Tier3 `projectless-publish-method-candidate` path entry. This is not a PDB
+or exact source-method identity claim. The validation
 script is **not** a private-site publishing instruction. Even after the public
 Windows run succeeded and the emitted `.compiled` and metadata identities were
 inspected, the map is only page-to-assembly evidence: it is not a verified
@@ -3525,5 +3530,9 @@ Read-only published-IL inspection observed the static chain from
 inherited `SqlBaseDA.Open`, and both `ExecProc_DataSet` overloads to the
 public `DbDataAdapter.Fill(DataSet)` target. This does **not** establish a
 TraceMap source-method edge, line identity, cross-assembly App_Code binding,
-runtime execution, or private-site behavior. The test must pin those joins
-before a full-path support claim.
+runtime execution, or private-site behavior. The follow-up public test at
+`eafc6af1` passed 1/1 and proved an exact admitted IL MemberRef edge from
+`Names_Init` to the `App_Code` constructor. The scanner-side publish receipt
+and Tier3 method-candidate join still require a fresh Windows end-to-end pass;
+neither the earlier IL result nor a passing source-only scan establishes the
+full source-to-compiled path.
