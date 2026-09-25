@@ -1023,7 +1023,9 @@ public sealed class MessyWorkspaceRegressionTests
 
         var index = Path.Combine(temp.Path, "publish-no-pdb.sqlite");
         SqliteIndexWriter.Write(index, scan.Manifest, scan.Facts);
-        var graph = await CombinedDependencyPathReporter.BuildGraphInventoryAsync(index);
+        var combined = Path.Combine(temp.Path, "publish-no-pdb-combined.sqlite");
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([index], combined, ["public-publish"]));
+        var graph = await CombinedDependencyPathReporter.BuildGraphInventoryAsync(combined);
         var nodes = graph.Nodes.ToDictionary(node => node.NodeId, StringComparer.Ordinal);
         Require("MW-PUBLISH-NOPDB-001", "reconciliation",
             graph.Edges.Any(edge => edge.EdgeKind == "compiled-il-call"
