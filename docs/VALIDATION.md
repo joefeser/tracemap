@@ -3511,11 +3511,15 @@ the exact script/compiler hashes, source commit, all six source-file hashes,
 all emitted DLL/map hashes, and the page mapping. The receipt is local-only.
 `tracemap scan --webforms-publish-receipt <path>` rechecks the declared
 source and publish bytes, the source commit, and the `.compiled` map before
-emitting `WebFormsPublishPageMapped`; missing or mismatched evidence becomes
-a Tier4 gap. In the combined graph, one uniquely qualified projectless VB
-handler and one bound metadata method in those exact assembly bytes may form
-a Tier3 `projectless-publish-method-candidate` path entry. This is not a PDB
-or exact source-method identity claim. The validation
+emitting local-only page/source/assembly facts; missing or mismatched evidence
+becomes a Tier4 gap. In the combined graph, one uniquely qualified
+projectless VB handler and one bound metadata method in those exact assembly
+bytes may form a Tier3 `projectless-publish-method-candidate` entry. Other
+receipt-listed source methods may form bidirectional Tier3 member candidates
+when the fully qualified containing type, method, and bounded parameter
+shapes select exactly one bound published method. This permits a static IL
+walk to re-enter retained source evidence; it is not a PDB or exact
+source-method identity claim. The validation
 script is **not** a private-site publishing instruction. Even after the public
 Windows run succeeded and the emitted `.compiled` and metadata identities were
 inspected, the map is only page-to-assembly evidence: it is not a verified
@@ -3532,7 +3536,9 @@ public `DbDataAdapter.Fill(DataSet)` target. This does **not** establish a
 TraceMap source-method edge, line identity, cross-assembly App_Code binding,
 runtime execution, or private-site behavior. The follow-up public test at
 `eafc6af1` passed 1/1 and proved an exact admitted IL MemberRef edge from
-`Names_Init` to the `App_Code` constructor. The scanner-side publish receipt
-and Tier3 method-candidate join still require a fresh Windows end-to-end pass;
-neither the earlier IL result nor a passing source-only scan establishes the
-full source-to-compiled path.
+`Names_Init` to the `App_Code` constructor. The scanner-side receipt and Tier3
+handler candidate subsequently passed the focused Windows test at `4cebcb65`
+(1/1). That test did not prove a complete reported path to SQL. The expanded
+public Windows regression now requires a report from `Names_Init` through at
+least four compiled calls and a review-tier source re-entry to retained SQL
+evidence; it must pass before any full-path support claim.

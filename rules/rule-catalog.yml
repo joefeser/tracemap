@@ -2508,6 +2508,8 @@ rules:
     evidenceTier: Tier2Structural or Tier4Unknown
     emits:
       - WebFormsPublishPageMapped
+      - WebFormsPublishSourceBound
+      - WebFormsPublishAssemblyBound
       - AnalysisGap
     limitations:
       - The receipt is operator-declared. Matching hashes and a .compiled map establish static page-to-assembly correspondence for the declared build inputs; they do not independently prove the compiler ran, source-method identity, PDB lines, deployment, page activation, or runtime execution.
@@ -3479,14 +3481,20 @@ rules:
     evidenceTier: Tier3SyntaxOrTextual
     emits:
       - projectless-publish-method-candidate path edge
+      - projectless-publish-member-candidate path edge
       - ProjectlessPublishPageUnavailable gap
       - ProjectlessPublishGeneratedTypeUnavailable gap
       - ProjectlessPublishSourceAmbiguous gap
       - ProjectlessPublishMetadataAmbiguous gap
+      - ProjectlessPublishMemberAmbiguous gap
+      - ProjectlessPublishAssemblyAmbiguous gap
+      - ProjectlessPublishMemberWorkLimit gap
     limitations:
       - Requires an explicitly declared and scanner-rechecked local-only publish receipt, one exact page-to-assembly map, the mapped generated type in the admitted assembly, one linked source handler declaration with the full qualified containing type, and one bound metadata method in the exact mapped assembly bytes with the full encoded type path and method name. Ambiguous or missing candidates fail closed.
       - Without PDB sequence points or a compiler source-method map, this is a Tier3 candidate, not exact source-to-metadata method identity. It does not prove source-line identity, execution, runtime page activation, branch feasibility, or SQL effects.
       - The graph overlay does not promote source syntax to Roslyn semantic evidence or rewrite source facts.
+      - Other source methods named by the verified receipt may join a uniquely admitted method with the complete qualified type path and compatible parameter shapes. Intrinsic VB aliases use their defined System type; unqualified non-intrinsic parameter names remain Tier3 review candidates and ambiguous overloads or assembly identities fail closed. Both directions are candidate edges so a compiled IL walk can re-enter retained source evidence, not an exact method-location claim.
+      - The member-candidate pass preflights its bounded source/member comparison work before emitting any of its edges; work-limit exhaustion withholds the pass and emits a Tier4 gap.
 
   - id: combined.paths.projectless-vb-receiver-bridge.v1
     name: Projectless Visual Basic receiver-provenance bridge

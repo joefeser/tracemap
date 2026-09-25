@@ -2024,3 +2024,15 @@ made. Local validation passed: 34/34 messy-workspace tests, 2,293/2,293
 full .NET tests, zero-warning build, private-path guard, and whitespace check.
 The expanded Windows end-to-end test at this exact SHA is still required
 before a PR or full-path support claim.
+
+That `4cebcb65` home-Windows test passed 1/1: the receipt was bound, the
+page-map fact was present, and the Tier3 `Names_Init` candidate reached its
+published method while the exact IL MemberRef reached `GroupOptions`.
+The next public slice extends this to receipt-listed `App_Code` methods using
+fully qualified containing types, compatible parameter shapes, exact emitted
+assembly hashes, and a bounded uniqueness check. A public source-only test
+shows that the deep `ExecProc_DataSet(String,SqlParameter())` method already
+reaches SQL evidence, but `DataAccess.SelectGroups` does not reach it without
+the compiled path. The expanded Windows test must now prove the report can
+cross from the page handler through admitted IL and re-enter that deep source
+method. Until it passes, there is no complete reported-chain claim or PR.
