@@ -1151,6 +1151,62 @@ public sealed class MessyWorkspaceRegressionTests
                 && nodes[edge.FromNodeId].DisplayName.Contains("Lookup_Init", StringComparison.Ordinal)
                 && nodes[edge.ToNodeId].DisplayName.Contains("Lookup_Init", StringComparison.Ordinal)),
             "the verified page map must permit only a review-tier qualified handler candidate");
+        static CodeFact ChangeProperties(CodeFact fact, params (string Key, string Value)[] changes)
+        {
+            var properties = fact.Properties.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
+            foreach (var (key, value) in changes) properties[key] = value;
+            return fact with { Properties = properties };
+        }
+        var caseFacts = scan.Facts.Select(fact => fact.FactType switch
+        {
+            FactTypes.WebFormsPublishPageMapped => ChangeProperties(fact, ("generatedType", "publicproof.lookuppage")),
+            FactTypes.WebFormsPageDeclared => ChangeProperties(fact, ("pageTypeName", "publicproof.lookuppage")),
+            FactTypes.WebFormsHandlerResolved => ChangeProperties(fact,
+                ("pageTypeName", "publicproof.lookuppage"), ("handlerName", "LOOKUP_INIT")),
+            _ => fact
+        }).ToList();
+        var linkedSource = caseFacts.Single(fact => fact.FactType == FactTypes.WebFormsPublishSourceBound
+            && fact.Evidence.FilePath == "Pages/Lookup.aspx.vb");
+        const string syntheticPath = "App_Code/SyntheticCase.vb";
+        caseFacts.Add(ChangeProperties(linkedSource with
+        {
+            FactId = "fact-synthetic-publish-case-source",
+            Evidence = linkedSource.Evidence with { FilePath = syntheticPath }
+        }, ("sourcePath", syntheticPath)));
+        var linkedDeclaration = caseFacts.Single(fact => fact.FactType == FactTypes.MethodDeclared
+            && fact.Properties.GetValueOrDefault("name") == "Lookup_Init");
+        caseFacts.Add(ChangeProperties(linkedDeclaration with
+        {
+            FactId = "fact-synthetic-publish-case-member",
+            Evidence = linkedDeclaration.Evidence with { FilePath = syntheticPath }
+        }, ("memberIdentity", "synthetic-case-member"), ("name", "lookup_init"),
+            ("qualifiedContainingType", "publicproof.lookuppage")));
+        var caseIndex = Path.Combine(temp.Path, "publish-receipt-case.sqlite");
+        SqliteIndexWriter.Write(caseIndex, scan.Manifest, caseFacts);
+        var caseCombined = Path.Combine(temp.Path, "publish-receipt-case-combined.sqlite");
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([caseIndex], caseCombined, ["public-publish"]));
+        var caseGraph = await CombinedDependencyPathReporter.BuildGraphInventoryAsync(caseCombined);
+        var caseNodes = caseGraph.Nodes.ToDictionary(node => node.NodeId, StringComparer.Ordinal);
+        Require("MW-PUBLISH-NOPDB-001", "vb-casing",
+            caseGraph.Edges.Any(edge => edge.EdgeKind == "projectless-publish-method-candidate")
+            && caseGraph.Edges.Any(edge => edge.EdgeKind == "projectless-publish-member-candidate"
+                && caseNodes[edge.FromNodeId].DisplayName == "synthetic-case-member"),
+            "VB casing differences across page, handler, declaration, metadata, and App_Code member must retain review-tier candidates");
+        var caseMethod = caseFacts.Single(fact => fact.FactType == FactTypes.ManagedMethodDeclared
+            && fact.Properties.GetValueOrDefault("metadataName") == "Lookup_Init");
+        var caseDuplicateIndex = Path.Combine(temp.Path, "publish-receipt-case-duplicate.sqlite");
+        SqliteIndexWriter.Write(caseDuplicateIndex, scan.Manifest,
+            [.. caseFacts, ChangeProperties(caseMethod with { FactId = "fact-synthetic-publish-case-duplicate" },
+                ("metadataName", "LOOKUP_INIT"))]);
+        var caseDuplicateCombined = Path.Combine(temp.Path, "publish-receipt-case-duplicate-combined.sqlite");
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([caseDuplicateIndex], caseDuplicateCombined, ["public-publish"]));
+        var caseAmbiguous = await CombinedDependencyPathReporter.BuildGraphInventoryAsync(caseDuplicateCombined);
+        Require("MW-PUBLISH-NOPDB-001", "vb-casing-ambiguity",
+            !caseAmbiguous.Edges.Any(edge => edge.EdgeKind == "projectless-publish-method-candidate")
+            && !caseAmbiguous.Edges.Any(edge => edge.EdgeKind == "projectless-publish-member-candidate")
+            && caseAmbiguous.Gaps.Any(gap => gap.GapKind == "ProjectlessPublishMetadataAmbiguous")
+            && caseAmbiguous.Gaps.Any(gap => gap.GapKind == "ProjectlessPublishMemberAmbiguous"),
+            "case-equivalent published members must be withheld as ambiguous, not silently selected");
         var omittedCodeIndex = Path.Combine(temp.Path, "publish-receipt-omitted-code.sqlite");
         SqliteIndexWriter.Write(omittedCodeIndex, scan.Manifest, scan.Facts.Where(fact =>
             fact.FactType != FactTypes.WebFormsPublishSourceBound
@@ -1189,6 +1245,12 @@ public sealed class MessyWorkspaceRegressionTests
     [InlineData("String", "type(namespace:6:System|names:6:String)", "", true)]
     [InlineData("string", "type(namespace:6:System|names:6:String)", "", true)]
     [InlineData("STRING", "type(namespace:6:System|names:6:String)", "", true)]
+    [InlineData("UInteger", "type(namespace:6:System|names:6:UInt32)", "", true)]
+    [InlineData("ulong", "type(namespace:6:System|names:6:UInt64)", "", true)]
+    [InlineData("UShort", "type(namespace:6:System|names:6:UInt16)", "", true)]
+    [InlineData("sbyte", "type(namespace:6:System|names:5:SByte)", "", true)]
+    [InlineData("UInteger()", "type(namespace:6:System|names:6:UInt32)[]", "", true)]
+    [InlineData("UInteger", "type(namespace:6:System|names:5:Int32)", "", false)]
     [InlineData("SqlParameter()", "scope(assembly:name:21:System.Data.SqlClient)type(namespace:21:System.Data.SqlClient|names:12:SqlParameter)[]", "System.Data.SqlClient", true)]
     [InlineData("sqlparameter()", "scope(assembly:name:21:System.Data.SqlClient)type(namespace:21:System.Data.SqlClient|names:12:SqlParameter)[]", "System.Data.SqlClient", true)]
     [InlineData("SqlParameter()", "scope(assembly:name:21:System.Data.SqlClient)type(namespace:21:System.Data.SqlClient|names:12:SqlParameter)[]", "Other.Data", false)]
