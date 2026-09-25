@@ -2005,3 +2005,22 @@ passed 2,290/2,290; a zero-warning build with warnings as errors, the
 private-path guard, and `git diff --check` passed. The final source-file index
 optimization was followed by the zero-warning build and four focused bound-IL
 regressions; no private scan was run.
+
+The subsequent public no-PDB Web Site publish work is on
+`codex/webforms-qualified-constructor-proof`. At `eafc6af1`, the home Windows
+fixture passed 1/1 and proved an admitted cross-assembly IL MemberRef from
+the published `Names_Init` method to the `App_Code` constructor, with two
+DLLs, two `.compiled` maps, and no PDB. This is binary-to-binary static
+evidence, not source-method binding.
+
+At `4cebcb65`, the scanner gained explicit `--webforms-publish-receipt`
+consumption. It independently rechecks the operator-declared local-only
+receipt, current source and emitted bytes, source commit, and `.compiled`
+page map before emitting page-to-assembly evidence. The combined graph may
+then add only a Tier3 candidate from a uniquely qualified projectless VB
+handler to a uniquely bound method in the exact mapped assembly; missing or
+ambiguous joins emit gaps. No PDB line, execution, or private-site claim is
+made. Local validation passed: 34/34 messy-workspace tests, 2,293/2,293
+full .NET tests, zero-warning build, private-path guard, and whitespace check.
+The expanded Windows end-to-end test at this exact SHA is still required
+before a PR or full-path support claim.
