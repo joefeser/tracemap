@@ -18,9 +18,11 @@ public sealed record WebFormsPublishProvenance(
 
 internal sealed record WebFormsPublishPage(string SourcePath, string AssemblyName,
     string AssemblySha256, string GeneratedType, string MapSha256);
+internal sealed record WebFormsPublishAssembly(string Path, string Sha256);
 
 internal sealed record WebFormsPublishEvaluation(WebFormsPublishProvenance? Provenance,
-    IReadOnlyList<WebFormsPublishPage> Pages);
+    IReadOnlyList<WebFormsPublishPage> Pages, IReadOnlyList<string> SourcePaths,
+    IReadOnlyList<WebFormsPublishAssembly> Assemblies);
 
 internal static class WebFormsPublishMapExtractor
 {
@@ -35,7 +37,7 @@ internal static class WebFormsPublishMapExtractor
         ScanOptions options, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(options.WebFormsPublishReceiptPath))
-            return new WebFormsPublishEvaluation(null, []);
+            return new WebFormsPublishEvaluation(null, [], [], []);
 
         var generatorPath = typeof(WebFormsPublishMapExtractor).Assembly.Location;
         if (string.IsNullOrWhiteSpace(generatorPath) || !File.Exists(generatorPath))
@@ -47,6 +49,8 @@ internal static class WebFormsPublishMapExtractor
         var publishRoot = Path.GetDirectoryName(receiptPath)!;
         var gaps = new List<string>();
         var pages = new List<WebFormsPublishPage>();
+        var sourcePaths = new List<string>();
+        var assemblies = new List<WebFormsPublishAssembly>();
         var sourceCount = 0;
         var publishedCount = 0;
         var pageCount = 0;
@@ -86,6 +90,7 @@ internal static class WebFormsPublishMapExtractor
                 if (Sha256(ReadBounded(path, MaxArtifactBytes)) != item.Sha256)
                     throw new PublishException("WebFormsPublishSourceMismatch");
                 inputLines.Add($"{item.Path}:{item.Sha256}");
+                sourcePaths.Add(item.Path!);
             }
             var sourceDigest = Sha256(Encoding.UTF8.GetBytes(string.Join("\n", inputLines) + "\n"));
             if (sourceDigest != receipt.BoundedInputSha256)
@@ -102,6 +107,7 @@ internal static class WebFormsPublishMapExtractor
                 if (Sha256(ReadBounded(path, limit)) != item.Sha256)
                     throw new PublishException("WebFormsPublishArtifactMismatch");
                 published.Add(item.Path!, item);
+                if (item.Kind == "assembly") assemblies.Add(new WebFormsPublishAssembly(item.Path!, item.Sha256!));
             }
             foreach (var item in receipt.Pages)
             {
@@ -137,6 +143,8 @@ internal static class WebFormsPublishMapExtractor
             boundedInputSha256 = SafeReceiptDigest(receiptPath);
             gaps.Add(exception.GapKind);
             pages.Clear();
+            sourcePaths.Clear();
+            assemblies.Clear();
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException
             or JsonException or XmlException or ArgumentException or OverflowException)
@@ -144,11 +152,13 @@ internal static class WebFormsPublishMapExtractor
             boundedInputSha256 = SafeReceiptDigest(receiptPath);
             gaps.Add("WebFormsPublishReceiptUnreadable");
             pages.Clear();
+            sourcePaths.Clear();
+            assemblies.Clear();
         }
         var provenance = new WebFormsPublishProvenance("webforms-publish-provenance.v1",
             generatorSha256, boundedInputSha256, gaps.Count == 0 ? "bound" : "gap",
             gaps, sourceCount, publishedCount, pageCount);
-        return new WebFormsPublishEvaluation(provenance, pages);
+        return new WebFormsPublishEvaluation(provenance, pages, sourcePaths, assemblies);
     }
 
     public static IReadOnlyList<CodeFact> MaterializeFacts(ScanManifest manifest,
@@ -156,6 +166,30 @@ internal static class WebFormsPublishMapExtractor
     {
         if (evaluation.Provenance is not { } provenance) return [];
         var facts = new List<CodeFact>();
+        foreach (var sourcePath in evaluation.SourcePaths)
+            facts.Add(FactFactory.Create(manifest, FactTypes.WebFormsPublishSourceBound,
+                RuleIds.LegacyWebFormsPublishMap, EvidenceTiers.Tier2Structural,
+                new EvidenceSpan(sourcePath, 1, 1, null, nameof(WebFormsPublishMapExtractor),
+                    ScannerVersions.WebFormsPublishMapExtractor),
+                properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["boundedInputSha256"] = provenance.BoundedInputSha256,
+                    ["generatorSha256"] = provenance.GeneratorSha256,
+                    ["sourcePath"] = sourcePath,
+                    ["limitation"] = "Verified receipt membership, not source-to-binary method identity."
+                }));
+        foreach (var assembly in evaluation.Assemblies)
+            facts.Add(FactFactory.Create(manifest, FactTypes.WebFormsPublishAssemblyBound,
+                RuleIds.LegacyWebFormsPublishMap, EvidenceTiers.Tier2Structural,
+                new EvidenceSpan(assembly.Path, 1, 1, null, nameof(WebFormsPublishMapExtractor),
+                    ScannerVersions.WebFormsPublishMapExtractor),
+                properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["boundedInputSha256"] = provenance.BoundedInputSha256,
+                    ["generatorSha256"] = provenance.GeneratorSha256,
+                    ["assemblyRawSha256"] = assembly.Sha256,
+                    ["limitation"] = "Verified published assembly bytes, not source-to-binary method identity."
+                }));
         foreach (var page in evaluation.Pages)
             facts.Add(FactFactory.Create(manifest, FactTypes.WebFormsPublishPageMapped,
                 RuleIds.LegacyWebFormsPublishMap, EvidenceTiers.Tier2Structural,

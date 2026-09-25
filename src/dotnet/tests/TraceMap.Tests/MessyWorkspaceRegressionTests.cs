@@ -955,6 +955,12 @@ public sealed class MessyWorkspaceRegressionTests
         Require("MW-SOURCE-METADATA-IL-PDB-001", "source-only-baseline",
             !report.Paths.Any(path => path.Nodes.Any(node => node.SurfaceKind == "sql-query")),
             "the public Web Site fixture must not claim a SQL path without an admitted source-to-binary entry");
+        var downstream = await CombinedDependencyPathReporter.BuildReportAsync(new(
+            index, Path.Combine(temp.Path, "publish-source-downstream-paths.json"), Format: "json",
+            FromSymbol: "PublicSqlDataAccess.ExecProc_DataSet(String,SqlParameter())", MaxDepth: 12));
+        Require("MW-SOURCE-METADATA-IL-PDB-001", "source-only-baseline",
+            downstream.Paths.Any(path => path.Nodes.Any(node => node.SurfaceKind == "sql-query")),
+            "the public fixture must retain downstream SQL evidence before testing a publish bridge");
     }
 
     [Fact]
@@ -1063,10 +1069,22 @@ public sealed class MessyWorkspaceRegressionTests
                 && nodes[edge.FromNodeId].DisplayName.Contains("Names_Init", StringComparison.Ordinal)
                 && nodes[edge.ToNodeId].DisplayName.Contains("Names_Init", StringComparison.Ordinal)),
             "the fully qualified no-PDB source handler must enter the exact published assembly as a review-only candidate");
+        var entry = graph.Edges.Single(edge => edge.EdgeKind == "projectless-publish-method-candidate"
+            && nodes[edge.FromNodeId].DisplayName.Contains("Names_Init", StringComparison.Ordinal));
+        var pathReport = await CombinedDependencyPathReporter.BuildReportAsync(new(
+            combined, Path.Combine(temp.Path, "publish-no-pdb-paths.json"), Format: "json",
+            FromSymbol: nodes[entry.FromNodeId].DisplayName, FromSource: "public-publish", MaxDepth: 20,
+            MaxPaths: 256));
+        Require("MW-PUBLISH-NOPDB-001", "traversal",
+            pathReport.Paths.Any(path => path.Edges.Any(edge => edge.EdgeKind == "projectless-publish-method-candidate")
+                && path.Edges.Count(edge => edge.EdgeKind is "compiled-il-call" or "compiled-il-callvirt-candidate") >= 4
+                && path.Edges.Any(edge => edge.EdgeKind == "projectless-publish-member-candidate")
+                && path.Nodes.Any(node => node.SurfaceKind == "sql-query")),
+            $"the public no-PDB report did not retain a review-tier handler-through-IL path to source SQL evidence; paths={pathReport.Paths.Count}; gaps={string.Join(',', pathReport.Gaps.Select(gap => gap.GapKind).Distinct(StringComparer.Ordinal))}");
     }
 
     [Fact]
-    public void Explicit_publish_receipt_is_rechecked_and_map_tampering_fails_closed()
+    public async Task Explicit_publish_receipt_is_rechecked_and_map_tampering_fails_closed()
     {
         using var temp = new TempDirectory();
         var source = MessyRoot("vb-pdb-projectless");
@@ -1117,8 +1135,33 @@ public sealed class MessyWorkspaceRegressionTests
             webFormsPublishReceipt: receiptPath);
         Require("MW-PUBLISH-NOPDB-001", "extraction",
             scan.Manifest.WebFormsPublishProvenance is { Status: "bound", SourceFileCount: 2, PublishedFileCount: 2, PageCount: 1 }
-            && scan.Facts.Count(fact => fact.FactType == FactTypes.WebFormsPublishPageMapped) == 1,
+            && scan.Facts.Count(fact => fact.FactType == FactTypes.WebFormsPublishPageMapped) == 1
+            && scan.Facts.Count(fact => fact.FactType == FactTypes.WebFormsPublishSourceBound) == 2
+            && scan.Facts.Count(fact => fact.FactType == FactTypes.WebFormsPublishAssemblyBound) == 1,
             "the explicit bounded receipt must emit one page-to-assembly fact");
+        var index = Path.Combine(temp.Path, "publish-receipt-bound.sqlite");
+        SqliteIndexWriter.Write(index, scan.Manifest, scan.Facts);
+        var combined = Path.Combine(temp.Path, "publish-receipt-bound-combined.sqlite");
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([index], combined, ["public-publish"]));
+        var graph = await CombinedDependencyPathReporter.BuildGraphInventoryAsync(combined);
+        var nodes = graph.Nodes.ToDictionary(node => node.NodeId, StringComparer.Ordinal);
+        Require("MW-PUBLISH-NOPDB-001", "reconciliation",
+            graph.Edges.Any(edge => edge.EdgeKind == "projectless-publish-method-candidate"
+                && nodes[edge.FromNodeId].DisplayName.Contains("Lookup_Init", StringComparison.Ordinal)
+                && nodes[edge.ToNodeId].DisplayName.Contains("Lookup_Init", StringComparison.Ordinal)),
+            "the verified page map must permit only a review-tier qualified handler candidate");
+        var lookupMethod = scan.Facts.Single(fact => fact.FactType == FactTypes.ManagedMethodDeclared
+            && fact.Properties.GetValueOrDefault("metadataName") == "Lookup_Init");
+        var duplicateIndex = Path.Combine(temp.Path, "publish-receipt-duplicate.sqlite");
+        SqliteIndexWriter.Write(duplicateIndex, scan.Manifest,
+            [.. scan.Facts, lookupMethod with { FactId = "fact-public-publish-duplicate-method" }]);
+        var duplicateCombined = Path.Combine(temp.Path, "publish-receipt-duplicate-combined.sqlite");
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([duplicateIndex], duplicateCombined, ["public-publish"]));
+        var ambiguous = await CombinedDependencyPathReporter.BuildGraphInventoryAsync(duplicateCombined);
+        Require("MW-PUBLISH-NOPDB-001", "ambiguity",
+            !ambiguous.Edges.Any(edge => edge.EdgeKind == "projectless-publish-method-candidate")
+            && ambiguous.Gaps.Any(gap => gap.GapKind == "ProjectlessPublishMetadataAmbiguous"),
+            "duplicate published method candidates must not produce a guessed source join");
 
         File.AppendAllText(map, " ");
         var changed = WebFormsPublishMapExtractor.Evaluate(source, commit,
@@ -1128,6 +1171,18 @@ public sealed class MessyWorkspaceRegressionTests
             changed.Pages.Count == 0
             && changed.Provenance?.GapKinds.SequenceEqual(["WebFormsPublishArtifactMismatch"]) == true,
             "a changed .compiled map must withhold every page mapping behind a categorical gap");
+    }
+
+    [Theory]
+    [InlineData("String", "type(namespace:6:System|names:6:String)", true)]
+    [InlineData("SqlParameter()", "scope(assembly:name:21:System.Data.SqlClient)type(namespace:21:System.Data.SqlClient|names:12:SqlParameter)[]", true)]
+    [InlineData("System.Data.SqlClient.SqlParameter()", "scope(assembly:name:21:System.Data.SqlClient)type(namespace:21:System.Data.SqlClient|names:12:SqlParameter)[]", true)]
+    [InlineData("System.Data.SqlClient.SqlParameter()", "scope(assembly:name:21:System.Data.SqlClient)type(namespace:15:Other.Data.Sql|names:12:SqlParameter)[]", false)]
+    [InlineData("SqlParameter()", "scope(assembly:name:21:System.Data.SqlClient)type(namespace:21:System.Data.SqlClient|names:12:SqlParameter)", false)]
+    public void Publish_member_parameter_matching_rejects_wrong_shape_or_qualified_type(
+        string syntaxType, string metadataType, bool expected)
+    {
+        Assert.Equal(expected, CombinedDependencyPathReporter.PublishParameterMatches(syntaxType, metadataType));
     }
 
     [Fact]

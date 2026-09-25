@@ -12,6 +12,7 @@ public static partial class CombinedDependencyPathReporter
     {
         AddProjectlessPdbIdentityEdges(graph, facts);
         AddProjectlessPublishCandidateEdges(graph, facts);
+        AddProjectlessPublishMemberCandidates(graph, facts);
         var ilCalls = facts.Where(fact => fact.FactType == FactTypes.ManagedIlCallObserved).ToArray();
         if (ilCalls.Length == 0)
             return;
@@ -246,6 +247,225 @@ public static partial class CombinedDependencyPathReporter
     private static bool MatchesTypePath(string? identity, string typeName) =>
         TrySimpleTypePath(typeName, out var typePath)
         && identity?.Contains("|type:" + typePath + "|arity:0", StringComparison.Ordinal) == true;
+
+    private static void AddProjectlessPublishMemberCandidates(EvidenceGraph graph, IReadOnlyList<CombinedFactRow> facts)
+    {
+        var pageSourceKeys = facts.Where(fact => fact.FactType == FactTypes.WebFormsPublishPageMapped)
+            .Select(fact => (fact.SourceIndexId, fact.FilePath)).ToHashSet();
+        foreach (var mapped in facts.Where(fact => fact.FactType == FactTypes.WebFormsPublishPageMapped))
+        {
+            foreach (var page in facts.Where(fact => fact.SourceIndexId == mapped.SourceIndexId
+                         && fact.FactType == FactTypes.WebFormsPageDeclared
+                         && fact.FilePath == mapped.FilePath))
+            {
+                var linkedCode = page.Properties.GetValueOrDefault("linkedCodePath");
+                if (!string.IsNullOrWhiteSpace(linkedCode)) pageSourceKeys.Add((mapped.SourceIndexId, linkedCode));
+            }
+        }
+        var assemblies = facts.Where(fact => fact.FactType == FactTypes.WebFormsPublishAssemblyBound
+                && fact.RuleId == RuleIds.LegacyWebFormsPublishMap
+                && fact.EvidenceTier == EvidenceTiers.Tier2Structural)
+            .ToArray();
+        var sourceInputs = facts.Where(fact => fact.FactType == FactTypes.WebFormsPublishSourceBound
+                     && fact.RuleId == RuleIds.LegacyWebFormsPublishMap
+                     && fact.EvidenceTier == EvidenceTiers.Tier2Structural
+                     && !pageSourceKeys.Contains((fact.SourceIndexId, fact.FilePath)))
+                 .OrderBy(fact => fact.CombinedFactId, StringComparer.Ordinal).ToArray();
+        var declarationsByFile = facts.Where(fact => fact.FactType == FactTypes.MethodDeclared
+                && fact.RuleId == RuleIds.VisualBasicSyntaxDeclarations)
+            .GroupBy(fact => (fact.SourceIndexId, fact.FilePath))
+            .ToDictionary(group => group.Key, group => group.ToArray());
+        var methodsByName = facts.Where(fact => fact.FactType == FactTypes.ManagedMethodDeclared
+                && fact.Properties.GetValueOrDefault("provenanceState") == "bound")
+            .GroupBy(fact => (fact.SourceIndexId, fact.Properties.GetValueOrDefault("metadataName")))
+            .ToDictionary(group => group.Key, group => group.ToArray());
+        long candidateWork = 0;
+        foreach (var source in sourceInputs)
+        {
+            if (!declarationsByFile.TryGetValue((source.SourceIndexId, source.FilePath), out var declarations)) continue;
+            foreach (var declaration in declarations)
+            {
+                var key = (source.SourceIndexId, declaration.Properties.GetValueOrDefault("name"));
+                candidateWork += methodsByName.GetValueOrDefault(key)?.Length ?? 0;
+                if (candidateWork <= 100_000) continue;
+                AddCompiledIlGap(graph, source, "ProjectlessPublishMemberWorkLimit",
+                    "bounded-publish-member-join-work-exceeded", null, ProjectlessPublishCandidateRuleId);
+                return;
+            }
+        }
+        foreach (var source in sourceInputs)
+        {
+            var boundedInput = source.Properties.GetValueOrDefault("boundedInputSha256");
+            if (string.IsNullOrWhiteSpace(boundedInput) || source.Properties.GetValueOrDefault("sourcePath") != source.FilePath)
+                continue;
+            var boundAssemblies = assemblies.Where(assembly => assembly.SourceIndexId == source.SourceIndexId
+                    && assembly.Properties.GetValueOrDefault("boundedInputSha256") == boundedInput)
+                .ToArray();
+            var hashes = boundAssemblies.Select(assembly => assembly.Properties.GetValueOrDefault("assemblyRawSha256"))
+                .Where(hash => !string.IsNullOrWhiteSpace(hash)).ToHashSet(StringComparer.Ordinal);
+            if (hashes.Count == 0) continue;
+
+            if (!declarationsByFile.TryGetValue((source.SourceIndexId, source.FilePath), out var sourceDeclarations))
+                continue;
+            foreach (var declaration in sourceDeclarations.OrderBy(fact => fact.CombinedFactId, StringComparer.Ordinal))
+            {
+                var typeName = declaration.Properties.GetValueOrDefault("qualifiedContainingType");
+                var name = declaration.Properties.GetValueOrDefault("name");
+                var memberIdentity = declaration.Properties.GetValueOrDefault("memberIdentity");
+                if (!TrySimpleTypePath(typeName, out var typePath) || string.IsNullOrWhiteSpace(name)
+                    || name == "New" || string.IsNullOrWhiteSpace(memberIdentity))
+                    continue;
+                var candidates = (methodsByName.GetValueOrDefault((source.SourceIndexId, name)) ?? [])
+                    .Where(fact => hashes.Contains(fact.Properties.GetValueOrDefault("rawFileSha256"))
+                        && fact.TargetSymbol?.Contains("|type:" + typePath + "|arity:0|method:", StringComparison.Ordinal) == true
+                        && PublishCandidateSignatureMatches(declaration, fact))
+                    .ToArray();
+                if (candidates.Length != 1)
+                {
+                    AddCompiledIlGap(graph, declaration, "ProjectlessPublishMemberAmbiguous",
+                        "one-qualified-published-member-with-compatible-parameter-shapes-required",
+                        candidates.Length, ProjectlessPublishCandidateRuleId);
+                    continue;
+                }
+                var compiled = candidates[0];
+                var matchingAssembly = boundAssemblies.Where(assembly =>
+                    assembly.Properties.GetValueOrDefault("assemblyRawSha256") == compiled.Properties.GetValueOrDefault("rawFileSha256"))
+                    .ToArray();
+                if (matchingAssembly.Length != 1)
+                {
+                    AddCompiledIlGap(graph, declaration, "ProjectlessPublishAssemblyAmbiguous",
+                        "one-declared-published-assembly-required", matchingAssembly.Length, ProjectlessPublishCandidateRuleId);
+                    continue;
+                }
+                var sourceNode = graph.GetOrAddSymbolNode(declaration.SourceIndexId, declaration.SourceLabel,
+                    memberIdentity, declaration.FilePath, declaration.StartLine, declaration.EndLine,
+                    declaration.RuleId, declaration.EvidenceTier);
+                var compiledNode = graph.GetOrAddSymbolNode(compiled.SourceIndexId, compiled.SourceLabel,
+                    compiled.TargetSymbol!, compiled.FilePath, compiled.StartLine, compiled.EndLine,
+                    compiled.RuleId, compiled.EvidenceTier);
+                foreach (var (from, to, direction) in new[]
+                         {
+                             (sourceNode, compiledNode, "source-to-compiled"),
+                             (compiledNode, sourceNode, "compiled-to-source")
+                         })
+                    graph.AddEdge(new GraphEdge(
+                        $"projectless-publish-member:{declaration.CombinedFactId}:{compiled.CombinedFactId}:{direction}",
+                        "projectless-publish-member-candidate", from.NodeId, to.NodeId,
+                        "EvidenceEdge", ProjectlessPublishCandidateRuleId, EvidenceTiers.Tier3SyntaxOrTextual,
+                        [source.CombinedFactId, matchingAssembly[0].CombinedFactId,
+                            declaration.CombinedFactId, compiled.CombinedFactId],
+                        [], SafePath(declaration.FilePath), declaration.StartLine, declaration.EndLine));
+            }
+        }
+    }
+
+    private static bool PublishCandidateSignatureMatches(CombinedFactRow source, CombinedFactRow compiled)
+    {
+        var rawSyntaxTypes = source.Properties.GetValueOrDefault("parameterTypes");
+        var syntaxTypes = string.IsNullOrEmpty(rawSyntaxTypes) ? [] : rawSyntaxTypes.Split(';');
+        if (!int.TryParse(source.Properties.GetValueOrDefault("parameterCount"), out var sourceCount)
+            || sourceCount != syntaxTypes.Length
+            || !TrySignatureParameters(compiled.Properties.GetValueOrDefault("signature"), out var metadataTypes)
+            || sourceCount != metadataTypes.Length)
+            return false;
+        return syntaxTypes.Zip(metadataTypes).All(pair => PublishParameterMatches(pair.First, pair.Second));
+    }
+
+    private static bool TrySignatureParameters(string? signature, out string[] parameters)
+    {
+        parameters = [];
+        if (string.IsNullOrWhiteSpace(signature) || signature.Length > 16_384) return false;
+        var open = signature.IndexOf("|(", StringComparison.Ordinal);
+        if (open < 0) return false;
+        var start = open + 2;
+        var depth = 1;
+        var parts = new List<string>();
+        for (var index = start; index < signature.Length; index++)
+        {
+            if (signature[index] == '(') depth++;
+            else if (signature[index] == ')' && --depth == 0)
+            {
+                if (!signature.AsSpan(index).StartsWith(")->", StringComparison.Ordinal)) return false;
+                if (index > start) parts.Add(signature[start..index]);
+                parameters = parts.ToArray();
+                return true;
+            }
+            else if (signature[index] == ',' && depth == 1)
+            {
+                if (index == start) return false;
+                parts.Add(signature[start..index]);
+                start = index + 1;
+            }
+            if (depth < 1) return false;
+        }
+        return false;
+    }
+
+    internal static bool PublishParameterMatches(string syntaxType, string metadataType)
+    {
+        var syntax = syntaxType.Trim();
+        var array = syntax.EndsWith("()", StringComparison.Ordinal);
+        if (array) syntax = syntax[..^2];
+        if (syntax.Length == 0 || syntax == "unavailable") return false;
+        var expected = syntax switch
+        {
+            "String" => "System.String",
+            "Object" => "System.Object",
+            "Integer" => "System.Int32",
+            "Boolean" => "System.Boolean",
+            "Long" => "System.Int64",
+            "Short" => "System.Int16",
+            "Byte" => "System.Byte",
+            "Decimal" => "System.Decimal",
+            "Double" => "System.Double",
+            "Single" => "System.Single",
+            "Char" => "System.Char",
+            "Date" => "System.DateTime",
+            _ => syntax.StartsWith("Global.", StringComparison.OrdinalIgnoreCase) ? syntax[7..] : syntax
+        };
+        var value = metadataType.Trim();
+        if (array)
+        {
+            if (!value.EndsWith("[]", StringComparison.Ordinal)) return false;
+            value = value[..^2];
+        }
+        else if (value.EndsWith("[]", StringComparison.Ordinal)) return false;
+        if (!value.StartsWith("type(", StringComparison.Ordinal)
+            && !value.StartsWith("scope(", StringComparison.Ordinal)) return false;
+        var marker = value.LastIndexOf("type(namespace:", StringComparison.Ordinal);
+        if (marker < 0 || !value.EndsWith(')') || !TryMetadataTypeName(value[(marker + 5)..^1], out var fullName))
+            return false;
+        return expected.Contains('.', StringComparison.Ordinal)
+            ? string.Equals(expected, fullName, StringComparison.Ordinal)
+            : string.Equals(expected, fullName[(fullName.LastIndexOf('.') + 1)..], StringComparison.Ordinal);
+    }
+
+    private static bool TryMetadataTypeName(string path, out string fullName)
+    {
+        fullName = string.Empty;
+        var position = 0;
+        if (!ConsumeLiteral(path, ref position, "namespace:")
+            || !ReadComponent(path, ref position, out var ns)
+            || !ConsumeLiteral(path, ref position, "|names:")
+            || !ReadComponent(path, ref position, out var name)
+            || position != path.Length || name.Length == 0)
+            return false;
+        fullName = ns.Length == 0 ? name : ns + "." + name;
+        return true;
+    }
+
+    private static bool ReadComponent(string value, ref int position, out string component)
+    {
+        component = string.Empty;
+        var start = position;
+        while (position < value.Length && char.IsAsciiDigit(value[position])) position++;
+        if (position == start || position >= value.Length || value[position] != ':'
+            || !int.TryParse(value.AsSpan(start, position - start), out var length)
+            || length < 0 || length > value.Length - position - 1) return false;
+        component = value.Substring(position + 1, length);
+        position += length + 1;
+        return true;
+    }
 
     private static bool TrySimpleTypePath(string? qualifiedName, out string typePath)
     {

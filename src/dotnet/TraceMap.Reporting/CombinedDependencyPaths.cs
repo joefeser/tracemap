@@ -290,6 +290,7 @@ public static partial class CombinedDependencyPathReporter
         "compiled-source-identity",
         "projectless-source-pdb-identity",
         "projectless-publish-method-candidate",
+        "projectless-publish-member-candidate",
         "compiled-il-call",
         "compiled-il-callvirt-candidate",
         "projectless-vb-receiver-bridge",
@@ -4973,9 +4974,9 @@ public static partial class CombinedDependencyPathReporter
             notes.Add(new CombinedPathNote("BoundCompiledIlEvidence", "Exact bound source identity or uniquely owned checksum-matched PDB sequence points and admitted IL call operands are static evidence only. They do not prove execution, branch feasibility, virtual dispatch, or external assembly resolution."));
         }
 
-        if (edges.Any(edge => edge.EdgeKind == "projectless-publish-method-candidate"))
+        if (edges.Any(edge => edge.EdgeKind is "projectless-publish-method-candidate" or "projectless-publish-member-candidate"))
         {
-            notes.Add(new CombinedPathNote("ProjectlessPublishMethodCandidate", "A verified no-PDB page-to-assembly map plus unique fully qualified source and metadata declarations gives a review-only candidate, not exact source-method identity, execution, or runtime page activation."));
+            notes.Add(new CombinedPathNote("ProjectlessPublishMethodCandidate", "Verified no-PDB publish inputs plus unique qualified source and bound metadata declarations give review-only candidates, not exact source-method identity, execution, or runtime page activation."));
         }
 
         if (edges.Any(edge => edge.EdgeKind is "interface-candidate" or "override-candidate"))
