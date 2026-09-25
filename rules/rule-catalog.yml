@@ -2502,6 +2502,18 @@ rules:
       - Anonymous output does not prove runtime execution, reachability, ordering, successful binding, behavior, correctness, or absence of unsupported calls.
       - Rare graph shapes and counts may still reveal architectural characteristics and require owner review before sharing.
 
+  - id: legacy.webforms.publish-map.v1
+    name: Explicit Web Forms publish-map binding
+    description: Re-verifies a bounded local-only publish receipt against exact current source bytes, emitted DLL/map bytes, the source commit, and each declared .compiled page mapping before emitting page-to-assembly evidence.
+    evidenceTier: Tier2Structural or Tier4Unknown
+    emits:
+      - WebFormsPublishPageMapped
+      - AnalysisGap
+    limitations:
+      - The receipt is operator-declared. Matching hashes and a .compiled map establish static page-to-assembly correspondence for the declared build inputs; they do not independently prove the compiler ran, source-method identity, PDB lines, deployment, page activation, or runtime execution.
+      - Input count, file size, path, duplicate, content, commit, XML, and mapping failures withhold the entire receipt behind Tier4 gaps. No ambient publish output is discovered, and a gap never means the page or assembly is absent.
+      - Raw local receipt and source/artifact hashes remain local-only. Shareable projections must not expose private paths, symbols, or commitments to raw private source artifacts.
+
   - id: legacy.webforms.inventory.v1
     name: Legacy WebForms file and page inventory
     description: Inventories WebForms markup, code-behind, designer files, directives, static server controls, checked-in configuration registrations, and safe page linkage metadata.
@@ -3460,6 +3472,21 @@ rules:
       - Requires an explicitly admitted and bound assembly and portable PDB, exact document checksum match to retained source bytes, exact PDB method-row to metadata-method reconciliation, complete visible sequence-point containment in one source method block, matching emitted method name, and one unique source declaration. It never guesses from a pretty name, imports, or an unbound binary.
       - Source line containment and name establish only a static compiler-location association. They do not prove execution, runtime page compilation, method dispatch, or that the input binary was deployed. Methods without visible PDB points, mismatched documents, ambiguous ownership, native Windows PDBs, and unadmitted inputs receive no path edge.
       - The rule does not convert projectless syntax evidence into Tier1 Roslyn semantic evidence or change the source scan's coverage label.
+
+  - id: combined.paths.projectless-publish-candidate.v1
+    name: Projectless Web Forms publish method candidate
+    description: Adds a review-only path entry from one qualified projectless VB handler to one admitted published metadata method when a verified publish receipt maps the page to the exact assembly bytes.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - projectless-publish-method-candidate path edge
+      - ProjectlessPublishPageUnavailable gap
+      - ProjectlessPublishGeneratedTypeUnavailable gap
+      - ProjectlessPublishSourceAmbiguous gap
+      - ProjectlessPublishMetadataAmbiguous gap
+    limitations:
+      - Requires an explicitly declared and scanner-rechecked local-only publish receipt, one exact page-to-assembly map, the mapped generated type in the admitted assembly, one linked source handler declaration with the full qualified containing type, and one bound metadata method in the exact mapped assembly bytes with the full encoded type path and method name. Ambiguous or missing candidates fail closed.
+      - Without PDB sequence points or a compiler source-method map, this is a Tier3 candidate, not exact source-to-metadata method identity. It does not prove source-line identity, execution, runtime page activation, branch feasibility, or SQL effects.
+      - The graph overlay does not promote source syntax to Roslyn semantic evidence or rewrite source facts.
 
   - id: combined.paths.projectless-vb-receiver-bridge.v1
     name: Projectless Visual Basic receiver-provenance bridge

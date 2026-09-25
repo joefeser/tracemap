@@ -1027,7 +1027,7 @@ public sealed class MessyWorkspaceRegressionTests
             "the public page map must identify one emitted DLL and generated type");
 
         var scan = ScanBoundRoot(temp, "vb-publish-projectless", "publish-no-pdb",
-            dlls, ilBody: true);
+            dlls, ilBody: true, webFormsPublishReceipt: receiptPath);
         var calls = scan.Facts.Where(fact => fact.FactType == FactTypes.ManagedIlCallObserved).ToArray();
         var methods = scan.Facts.Where(fact => fact.FactType == FactTypes.ManagedMethodDeclared).ToArray();
         Require("MW-PUBLISH-NOPDB-001", "reconciliation",
@@ -1041,6 +1041,10 @@ public sealed class MessyWorkspaceRegressionTests
             !scan.Facts.Any(fact => fact.FactType == FactTypes.PdbSequencePointDeclared)
             && !scan.Facts.Any(fact => fact.FactType == FactTypes.SourceMetadataIdentityReconciled),
             "the no-PDB public publish must not silently acquire source-line or semantic method identity evidence");
+        Require("MW-PUBLISH-NOPDB-001", "reconciliation",
+            scan.Manifest.WebFormsPublishProvenance?.Status == "bound"
+            && scan.Facts.Count(fact => fact.FactType == FactTypes.WebFormsPublishPageMapped) == 1,
+            "the scanner must independently recheck the explicit page-to-assembly publish receipt");
 
         var index = Path.Combine(temp.Path, "publish-no-pdb.sqlite");
         SqliteIndexWriter.Write(index, scan.Manifest, scan.Facts);
@@ -1053,6 +1057,77 @@ public sealed class MessyWorkspaceRegressionTests
                 && nodes[edge.FromNodeId].DisplayName.Contains("Names_Init", StringComparison.Ordinal)
                 && nodes[edge.ToNodeId].DisplayName.Contains("GroupOptions", StringComparison.Ordinal)),
             "the published page assembly must cross to the admitted App_Code constructor by exact MemberRef");
+        Require("MW-PUBLISH-NOPDB-001", "reconciliation",
+            graph.Edges.Any(edge => edge.EdgeKind == "projectless-publish-method-candidate"
+                && edge.EvidenceTier == EvidenceTiers.Tier3SyntaxOrTextual
+                && nodes[edge.FromNodeId].DisplayName.Contains("Names_Init", StringComparison.Ordinal)
+                && nodes[edge.ToNodeId].DisplayName.Contains("Names_Init", StringComparison.Ordinal)),
+            "the fully qualified no-PDB source handler must enter the exact published assembly as a review-only candidate");
+    }
+
+    [Fact]
+    public void Explicit_publish_receipt_is_rechecked_and_map_tampering_fails_closed()
+    {
+        using var temp = new TempDirectory();
+        var source = MessyRoot("vb-pdb-projectless");
+        var commit = GitMetadataProvider.Detect(source).CommitSha;
+        var compiled = Path.Combine(MessyRoot("vb-pdb-build"), "bin", "Debug", "net10.0", "CompiledProjectless.VB.dll");
+        Require("MW-PUBLISH-NOPDB-001", "extraction", File.Exists(compiled),
+            "the public VB fixture assembly must be built for the publish-receipt test");
+        var publish = Path.Combine(temp.Path, "declared-publish");
+        Directory.CreateDirectory(Path.Combine(publish, "bin"));
+        Directory.CreateDirectory(Path.Combine(publish, "Pages"));
+        var publishedAssembly = Path.Combine(publish, "bin", "CompiledProjectless.VB.dll");
+        File.Copy(compiled, publishedAssembly);
+        var map = Path.Combine(publish, "Pages", "Lookup.aspx.compiled");
+        File.WriteAllText(map,
+            "<preserve virtualPath=\"/Pages/Lookup.aspx\" assembly=\"CompiledProjectless.VB\" type=\"PublicProof.LookupPage\" />");
+        static string Hash(byte[] bytes) => Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
+        static string FileHash(string path) => Hash(File.ReadAllBytes(path));
+        var sourceFiles = new[] { "Pages/Lookup.aspx", "Pages/Lookup.aspx.vb" }
+            .Select(path => new { path, sha256 = FileHash(Path.Combine(source, path.Replace('/', Path.DirectorySeparatorChar))) })
+            .OrderBy(item => item.path, StringComparer.Ordinal).ToArray();
+        var sourceDigest = Hash(System.Text.Encoding.UTF8.GetBytes(
+            string.Join("\n", sourceFiles.Select(item => $"{item.path}:{item.sha256}")) + "\n"));
+        var receiptPath = Path.Combine(publish, "publish-receipt.local.json");
+        File.WriteAllText(receiptPath, JsonSerializer.Serialize(new
+        {
+            schemaVersion = "webforms-publish-binding.v1",
+            visibility = "local-only",
+            receiptGeneratorSha256 = Hash(System.Text.Encoding.UTF8.GetBytes("public-test-receipt-generator")),
+            compilerSha256 = Hash(System.Text.Encoding.UTF8.GetBytes("public-test-compiler")),
+            sourceCommitSha = commit,
+            boundedInputSha256 = sourceDigest,
+            sourceFiles,
+            publishedFiles = new[]
+            {
+                new { path = "bin/CompiledProjectless.VB.dll", sha256 = FileHash(publishedAssembly), kind = "assembly" },
+                new { path = "Pages/Lookup.aspx.compiled", sha256 = FileHash(map), kind = "compiled-map" }
+            },
+            pages = new[] { new
+            {
+                virtualPath = "/Pages/Lookup.aspx",
+                assembly = "CompiledProjectless.VB",
+                generatedType = "PublicProof.LookupPage",
+                mapPath = "Pages/Lookup.aspx.compiled"
+            } }
+        }));
+
+        var scan = ScanBoundRoot(temp, "vb-pdb-projectless", "publish-receipt-bound", [publishedAssembly],
+            webFormsPublishReceipt: receiptPath);
+        Require("MW-PUBLISH-NOPDB-001", "extraction",
+            scan.Manifest.WebFormsPublishProvenance is { Status: "bound", SourceFileCount: 2, PublishedFileCount: 2, PageCount: 1 }
+            && scan.Facts.Count(fact => fact.FactType == FactTypes.WebFormsPublishPageMapped) == 1,
+            "the explicit bounded receipt must emit one page-to-assembly fact");
+
+        File.AppendAllText(map, " ");
+        var changed = WebFormsPublishMapExtractor.Evaluate(source, commit,
+            new ScanOptions(source, Path.Combine(temp.Path, "tampered-output"),
+                WebFormsPublishReceiptPath: receiptPath), CancellationToken.None);
+        Require("MW-PUBLISH-NOPDB-001", "extraction",
+            changed.Pages.Count == 0
+            && changed.Provenance?.GapKinds.SequenceEqual(["WebFormsPublishArtifactMismatch"]) == true,
+            "a changed .compiled map must withhold every page mapping behind a categorical gap");
     }
 
     [Fact]
@@ -2027,7 +2102,8 @@ public sealed class MessyWorkspaceRegressionTests
         string label,
         IReadOnlyList<string> assemblies,
         IReadOnlyList<string>? pdbs = null,
-        bool ilBody = false)
+        bool ilBody = false,
+        string? webFormsPublishReceipt = null)
     {
         var source = MessyRoot(rootName);
         var commit = GitMetadataProvider.Detect(source).CommitSha;
@@ -2053,7 +2129,8 @@ public sealed class MessyWorkspaceRegressionTests
             CompiledInputPaths: assemblies,
             CompiledBindingReceiptPaths: [receipt],
             PdbInputPaths: pdbs,
-            IlBodyEvidence: ilBody));
+            IlBodyEvidence: ilBody,
+            WebFormsPublishReceiptPath: webFormsPublishReceipt));
     }
 
     private static string MessyRoot(string rootName) =>
