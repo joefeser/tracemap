@@ -186,6 +186,15 @@ public static class VisualBasicSyntaxExtractor
         CompilationUnitSyntax root,
         FactBudget budget)
     {
+        var importedNamespaces = root.Imports
+            .SelectMany(statement => statement.ImportsClauses)
+            .OfType<SimpleImportsClauseSyntax>()
+            .Where(clause => clause.Alias is null)
+            .Select(clause => clause.Name.ToString().Trim())
+            .Where(name => name.Length > 0)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(name => name, StringComparer.Ordinal)
+            .ToArray();
         foreach (var statement in root.DescendantNodes().OfType<TypeStatementSyntax>())
         {
             var declared = statement switch
@@ -335,6 +344,8 @@ public static class VisualBasicSyntaxExtractor
                         ["memberIdentity"] = $"{qualifiedContainingType}.{methodName}({string.Join(",", parameterTypes)})",
                         ["qualifiedMemberName"] = $"{qualifiedContainingType}.{methodName}",
                         ["qualifiedContainingType"] = qualifiedContainingType,
+                        ["lexicalNamespace"] = GetSyntacticNamespace(statement),
+                        ["importedNamespaces"] = string.Join(';', importedNamespaces),
                         ["name"] = methodName,
                         ["bodyStartLine"] = (methodBodyLines.StartLinePosition.Line + 1).ToString(),
                         ["bodyEndLine"] = (methodBodyLines.EndLinePosition.Line + 1).ToString(),

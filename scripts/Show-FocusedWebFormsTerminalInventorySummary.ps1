@@ -32,9 +32,8 @@ if ($receipt.schemaVersion -ne 'focused-webforms-review-run-receipt.v1' -or
     throw 'WEBFORMS_TERMINAL_SUMMARY_RUN_INCOMPLETE'
 }
 
-$repoRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
-$traceMapCommit = @(& git -C $repoRoot rev-parse HEAD 2>$null)
-if ($LASTEXITCODE -ne 0 -or $traceMapCommit.Count -ne 1 -or $traceMapCommit[0] -notmatch '^[0-9a-f]{40}$') {
+$traceMapCommit = [string](Property-Value (Property-Value $receipt 'traceMap') 'commitSha')
+if ($traceMapCommit -notmatch '^[0-9a-f]{40}$') {
     throw 'WEBFORMS_TERMINAL_SUMMARY_TRACEMAP_COMMIT_UNAVAILABLE'
 }
 
@@ -108,6 +107,6 @@ foreach ($pageId in $PageIds) {
 }
 
 Write-Output 'webFormsTerminalInventorySummary=valid'
-Write-Output "traceMapCommitSha=$($traceMapCommit[0])"
+Write-Output "traceMapCommitSha=$traceMapCommit"
 Write-Output 'scope=receipted-retained-graph-only;runtime-absence-not-proven'
 foreach ($line in $lines) { Write-Output $line }

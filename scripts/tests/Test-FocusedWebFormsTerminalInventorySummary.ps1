@@ -42,6 +42,7 @@ try {
     )
     $receipt = [ordered]@{
         schemaVersion = 'focused-webforms-review-run-receipt.v1'
+        traceMap = @{ commitSha = ('a' * 40) }
         run = @{ state = 'completed' }
         stages = @{ workbench = @{ state = 'completed'; artifacts = $artifacts } }
     }
@@ -54,9 +55,7 @@ try {
     Assert-Output $output 'pageId=page-002;analysisStatus=partial;packetTruncated=true;chains=2;available=2;complete=2;incomplete=0;unavailable=0;distinctTerminalIdsObserved=1;reportedTerminalCountSum=2;noSupportedTerminalComplete=0;pathDetailTruncated=1;limits=none'
     Assert-Output $output 'pageId=page-003;analysisStatus=partial;packetTruncated=true;chains=1;available=1;complete=1;incomplete=0;unavailable=0;distinctTerminalIdsObserved=0;reportedTerminalCountSum=0;noSupportedTerminalComplete=1;pathDetailTruncated=1;limits=none'
     Assert-Output $output 'pageId=page-011;analysisStatus=partial;packetTruncated=true;chains=2;available=1;complete=0;incomplete=1;unavailable=1;distinctTerminalIdsObserved=1;reportedTerminalCountSum=1;noSupportedTerminalComplete=0;pathDetailTruncated=0;limits=work'
-    if (@($output | Where-Object { $_ -match '^traceMapCommitSha=[0-9a-f]{40}$' }).Count -ne 1) {
-        throw 'Terminal summary omitted the TraceMap commit.'
-    }
+    Assert-Output $output "traceMapCommitSha=$('a' * 40)"
 
     $selected = @(& $subject -ReviewRoot $root -PageIds page-011,page-002)
     if (@($selected | Where-Object { $_ -match '^pageId=' }).Count -ne 2 -or
@@ -68,6 +67,15 @@ try {
     try { & $subject -ReviewRoot $root -PageIds page-002,page-002 | Out-Null }
     catch { $caught = $_.Exception.Message -match 'WEBFORMS_TERMINAL_SUMMARY_DUPLICATE_PAGE' }
     if (!$caught) { throw 'Duplicate page selection was accepted.' }
+
+    $receipt.traceMap.commitSha = 'unavailable'
+    [IO.File]::WriteAllText($receiptPath, (($receipt | ConvertTo-Json -Depth 20) + "`n"), [Text.UTF8Encoding]::new($false))
+    $caught = $false
+    try { & $subject -ReviewRoot $root | Out-Null }
+    catch { $caught = $_.Exception.Message -match 'WEBFORMS_TERMINAL_SUMMARY_TRACEMAP_COMMIT_UNAVAILABLE' }
+    if (!$caught) { throw 'Missing receipted TraceMap commit was guessed.' }
+    $receipt.traceMap.commitSha = ('a' * 40)
+    [IO.File]::WriteAllText($receiptPath, (($receipt | ConvertTo-Json -Depth 20) + "`n"), [Text.UTF8Encoding]::new($false))
 
     [IO.File]::AppendAllText((Join-Path $workbench 'page-003.handoff.json'), ' ')
     $caught = $false

@@ -3540,3 +3540,17 @@ home-Windows regression passed (exit 0, 1/1): its traversal assertion found
 a report path from `Names_Init` with a Tier3 review-only publish-method
 candidate, at least four admitted IL-call edges, a publish-member candidate,
 and retained `sql-query` evidence. This proves only the public static report path; source-line identity, runtime execution, and application-specific acceptance remain unverified.
+
+PR #793 review repair tightens the same public boundary: the linked code-behind
+must be bound by the page map's receipt digest, non-intrinsic VB parameter
+types must match retained lexical or imported scope, and VB type spelling is
+case-insensitive. A direct type import has its own constructor regression;
+relative publish roots and receipted tool-revision attribution are pinned by
+focused tests. The macOS review-repair validation ran the documented VB.NET
+matrix: 88 adapter/fixture tests, 43 data/external/Web Forms tests, modern,
+legacy, and Web Forms CLI scans with artifact validation, byte-identical
+repeat modern facts, and the pinned `community-visual-basic` smoke at
+`20d2a51dfc9f342848ad134952ceaa8d79302559` (110,726 facts,
+`Level1SemanticAnalysisReduced` / `FailedOrPartial`). The Windows-only
+relative-root publish regression remains to be checked on the pushed repair
+head; a macOS pass does not substitute for it.

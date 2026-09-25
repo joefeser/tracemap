@@ -2045,3 +2045,21 @@ passed the 39/39 focused messy-workspace suite, zero-warning build, and
 reported-chain proof, not private page-002 behavior, exact source-line/PDB
 identity, or runtime execution. The branch is ready for PR review, subject
 to exact-head gates; neither Task 10 nor Task 11 is completed by this slice.
+
+PR #793 opened at `05b09ede` against `dev`. The first ACK result returned
+`PATCH_AUTHORIZED` with nine unresolved threads, one actionable top-level
+finding, and five pending checks. The consolidated review repair in progress
+requires the mapped handler's linked code-behind to be bound by the same
+publish receipt; narrows bare VB parameter names to retained lexical/import
+scope, case-folds VB spelling, handles direct type imports, uses canonical
+paths for the public publish receipt, attributes terminal summaries to the
+receipted TraceMap commit, and promotes the now-proven publish catalog case
+instead of expecting a gap that cannot be emitted. Focused macOS validation
+passed 45/45 messy-workspace tests, 88/88 VB adapter/fixture tests, 43/43
+data/external/Web Forms tests, the public terminal-summary PowerShell guard,
+three VB CLI scans and artifact checks, byte-identical repeat modern facts,
+and the pinned `community-visual-basic` smoke at `20d2a51` (110,726 facts,
+reduced/partial). The full .NET suite then passed 2,304/2,304 on macOS.
+The pushed-head Windows publish test remains required before claiming the
+repair complete. No merge authority
+is inferred from the local results.

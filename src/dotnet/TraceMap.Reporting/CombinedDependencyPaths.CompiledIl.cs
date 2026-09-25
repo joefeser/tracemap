@@ -200,6 +200,21 @@ public static partial class CombinedDependencyPathReporter
                 if (string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(linkedCode)
                     || string.IsNullOrWhiteSpace(sourceSymbol) || linkedCode != handler.FilePath)
                     continue;
+                var linkedBindings = facts.Where(fact => fact.SourceIndexId == map.SourceIndexId
+                        && fact.FactType == FactTypes.WebFormsPublishSourceBound
+                        && fact.RuleId == RuleIds.LegacyWebFormsPublishMap
+                        && fact.EvidenceTier == EvidenceTiers.Tier2Structural
+                        && fact.FilePath == linkedCode
+                        && fact.Properties.GetValueOrDefault("sourcePath") == linkedCode
+                        && fact.Properties.GetValueOrDefault("boundedInputSha256") == map.Properties.GetValueOrDefault("boundedInputSha256")
+                        && fact.Properties.GetValueOrDefault("generatorSha256") == map.Properties.GetValueOrDefault("generatorSha256"))
+                    .ToArray();
+                if (linkedBindings.Length != 1)
+                {
+                    AddCompiledIlGap(graph, handler, "ProjectlessPublishSourceAmbiguous",
+                        "one-receipt-bound-linked-code-file-required", linkedBindings.Length, ProjectlessPublishCandidateRuleId);
+                    continue;
+                }
                 var declarations = facts.Where(fact => fact.SourceIndexId == map.SourceIndexId
                         && fact.FactType == FactTypes.MethodDeclared
                         && fact.RuleId == RuleIds.VisualBasicSyntaxDeclarations
@@ -237,7 +252,7 @@ public static partial class CombinedDependencyPathReporter
                     $"projectless-publish-candidate:{handler.CombinedFactId}:{compiled.CombinedFactId}",
                     "projectless-publish-method-candidate", sourceNode.NodeId, compiledNode.NodeId,
                     "EvidenceEdge", ProjectlessPublishCandidateRuleId, EvidenceTiers.Tier3SyntaxOrTextual,
-                    [map.CombinedFactId, pages[0].CombinedFactId, generatedTypes[0].CombinedFactId,
+                    [map.CombinedFactId, linkedBindings[0].CombinedFactId, pages[0].CombinedFactId, generatedTypes[0].CombinedFactId,
                         handler.CombinedFactId, declarations[0].CombinedFactId, compiled.CombinedFactId],
                     [], SafePath(handler.FilePath), handler.StartLine, handler.EndLine));
             }
@@ -368,7 +383,10 @@ public static partial class CombinedDependencyPathReporter
             || !TrySignatureParameters(compiled.Properties.GetValueOrDefault("signature"), out var metadataTypes)
             || sourceCount != metadataTypes.Length)
             return false;
-        return syntaxTypes.Zip(metadataTypes).All(pair => PublishParameterMatches(pair.First, pair.Second));
+        var lexicalNamespace = source.Properties.GetValueOrDefault("lexicalNamespace") ?? string.Empty;
+        var importedNamespaces = source.Properties.GetValueOrDefault("importedNamespaces") ?? string.Empty;
+        return syntaxTypes.Zip(metadataTypes).All(pair =>
+            PublishParameterMatches(pair.First, pair.Second, lexicalNamespace, importedNamespaces));
     }
 
     private static bool TrySignatureParameters(string? signature, out string[] parameters)
@@ -401,26 +419,27 @@ public static partial class CombinedDependencyPathReporter
         return false;
     }
 
-    internal static bool PublishParameterMatches(string syntaxType, string metadataType)
+    internal static bool PublishParameterMatches(string syntaxType, string metadataType,
+        string lexicalNamespace = "", string importedNamespaces = "")
     {
         var syntax = syntaxType.Trim();
         var array = syntax.EndsWith("()", StringComparison.Ordinal);
         if (array) syntax = syntax[..^2];
-        if (syntax.Length == 0 || syntax == "unavailable") return false;
-        var expected = syntax switch
+        if (syntax.Length == 0 || syntax.Equals("unavailable", StringComparison.OrdinalIgnoreCase)) return false;
+        var expected = syntax.ToUpperInvariant() switch
         {
-            "String" => "System.String",
-            "Object" => "System.Object",
-            "Integer" => "System.Int32",
-            "Boolean" => "System.Boolean",
-            "Long" => "System.Int64",
-            "Short" => "System.Int16",
-            "Byte" => "System.Byte",
-            "Decimal" => "System.Decimal",
-            "Double" => "System.Double",
-            "Single" => "System.Single",
-            "Char" => "System.Char",
-            "Date" => "System.DateTime",
+            "STRING" => "System.String",
+            "OBJECT" => "System.Object",
+            "INTEGER" => "System.Int32",
+            "BOOLEAN" => "System.Boolean",
+            "LONG" => "System.Int64",
+            "SHORT" => "System.Int16",
+            "BYTE" => "System.Byte",
+            "DECIMAL" => "System.Decimal",
+            "DOUBLE" => "System.Double",
+            "SINGLE" => "System.Single",
+            "CHAR" => "System.Char",
+            "DATE" => "System.DateTime",
             _ => syntax.StartsWith("Global.", StringComparison.OrdinalIgnoreCase) ? syntax[7..] : syntax
         };
         var value = metadataType.Trim();
@@ -435,9 +454,29 @@ public static partial class CombinedDependencyPathReporter
         var marker = value.LastIndexOf("type(namespace:", StringComparison.Ordinal);
         if (marker < 0 || !value.EndsWith(')') || !TryMetadataTypeName(value[(marker + 5)..^1], out var fullName))
             return false;
-        return expected.Contains('.', StringComparison.Ordinal)
-            ? string.Equals(expected, fullName, StringComparison.Ordinal)
-            : string.Equals(expected, fullName[(fullName.LastIndexOf('.') + 1)..], StringComparison.Ordinal);
+        if (expected.Contains('.', StringComparison.Ordinal))
+            return string.Equals(expected, fullName, StringComparison.OrdinalIgnoreCase);
+
+        // A bare user-defined type name is not enough to bind an arbitrary
+        // metadata namespace. It must be reachable through lexical scope or
+        // an explicit, non-aliased Imports clause retained with the source.
+        var qualifiedScopes = importedNamespaces
+            .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Append(lexicalNamespace.Trim())
+            .Where(scope => scope.Length > 0)
+            .SelectMany(scope =>
+            {
+                var namespaceCandidate = scope + "." + expected;
+                return scope.EndsWith("." + expected, StringComparison.OrdinalIgnoreCase)
+                    ? new[] { scope, namespaceCandidate }
+                    : new[] { namespaceCandidate };
+            })
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        if (qualifiedScopes.Length == 0)
+            return string.Equals(expected, fullName, StringComparison.OrdinalIgnoreCase);
+        return qualifiedScopes.Count(candidate =>
+            string.Equals(candidate, fullName, StringComparison.OrdinalIgnoreCase)) == 1;
     }
 
     private static bool TryMetadataTypeName(string path, out string fullName)

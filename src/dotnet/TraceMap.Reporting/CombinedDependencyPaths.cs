@@ -3106,7 +3106,17 @@ public static partial class CombinedDependencyPathReporter
                 var qualifiedNames = importedNamespaces
                     .Append(lexicalNamespace)
                     .Where(name => name.Length > 0)
-                    .Select(name => $"{name}.{createdType}")
+                    .SelectMany(name =>
+                    {
+                        // Imports may name either a namespace or the type itself.
+                        // Keep both possibilities and let the exact declaration
+                        // identity plus the uniqueness gate decide.
+                        var namespaceCandidate = $"{name}.{createdType}";
+                        return string.Equals(SimpleVisualBasicTypeName(name), createdType,
+                            StringComparison.OrdinalIgnoreCase)
+                            ? new[] { name, namespaceCandidate }
+                            : new[] { namespaceCandidate };
+                    })
                     .Distinct(StringComparer.OrdinalIgnoreCase)
                     .ToHashSet(StringComparer.OrdinalIgnoreCase);
                 matching = candidates

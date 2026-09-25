@@ -4,7 +4,8 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$site = Join-Path $TraceMapRoot 'samples/messy-dotnet-workspace/vb-publish-projectless'
+$TraceMapRoot = [System.IO.Path]::GetFullPath($TraceMapRoot)
+$site = [System.IO.Path]::GetFullPath((Join-Path $TraceMapRoot 'samples/messy-dotnet-workspace/vb-publish-projectless'))
 $compiler = Join-Path $env:WINDIR 'Microsoft.NET/Framework/v4.0.30319/aspnet_compiler.exe'
 if (-not (Test-Path -LiteralPath $compiler -PathType Leaf)) {
     throw 'ASP.NET_FRAMEWORK_COMPILER_UNAVAILABLE'
@@ -27,7 +28,7 @@ $inputs = @(Get-ChildItem -LiteralPath $site -Recurse -File |
     Where-Object { $_.Extension -in @('.vb', '.aspx', '.config') } |
     Sort-Object FullName)
 $digestLines = @($inputs | ForEach-Object {
-    $relative = $_.FullName.Substring($site.Length).TrimStart('\', '/').Replace('\', '/')
+    $relative = [System.IO.Path]::GetRelativePath($site, $_.FullName).Replace('\', '/')
     $hash = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
     "$relative`:$hash"
 })
@@ -78,7 +79,7 @@ if ($pdbs.Count -ne 0) {
 # publish roots; source hashes must not be copied into a shareable artifact.
 $published = @($dlls + $maps | Sort-Object FullName | ForEach-Object {
     [ordered]@{
-        path = $_.FullName.Substring($output.Length).TrimStart('\', '/').Replace('\', '/')
+        path = [System.IO.Path]::GetRelativePath($output, $_.FullName).Replace('\', '/')
         sha256 = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
         kind = if ($_.Extension -eq '.dll') { 'assembly' } else { 'compiled-map' }
     }
@@ -92,7 +93,7 @@ $receipt = [ordered]@{
     boundedInputSha256 = $inputSha256
     sourceFiles = @($inputs | ForEach-Object {
         [ordered]@{
-            path = $_.FullName.Substring($site.Length).TrimStart('\', '/').Replace('\', '/')
+            path = [System.IO.Path]::GetRelativePath($site, $_.FullName).Replace('\', '/')
             sha256 = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
         }
     })
@@ -101,7 +102,7 @@ $receipt = [ordered]@{
         virtualPath = [string]$pageMap.preserve.virtualPath
         assembly = $assemblyName
         generatedType = [string]$pageMap.preserve.type
-        mapPath = $pageMaps[0].FullName.Substring($output.Length).TrimStart('\', '/').Replace('\', '/')
+        mapPath = [System.IO.Path]::GetRelativePath($output, $pageMaps[0].FullName).Replace('\', '/')
     })
 }
 $receiptPath = Join-Path $output 'publish-receipt.local.json'
