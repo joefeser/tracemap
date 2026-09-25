@@ -2760,6 +2760,56 @@ analysis, no runtime loading or execution, and no cross-assembly resolution
 beyond the reference rows encoded in the containing module. The next slice
 below begins the bounded rewrite work; everything else stays deferred.
 
+### Bound compiled IL page-path overlay (public proof slice)
+
+`combined.paths.compiled-il-bridge.v1` adds in-memory path edges when an
+explicitly admitted IL lane is present in a combined index. A Tier1 source
+declaration enters the binary graph only through a `bound`, exact
+`SourceMetadataIdentityReconciled` fact and one matching retained Tier1 call
+source-symbol ID. IL body and call facts must join to their admitted compiled
+method by exact fact IDs and matching verified artifact SHA-256. `call` and
+`newobj` MethodDef targets join only to one method in the same source index;
+assembly-scoped MemberRef targets join only to one bound method across the
+combined index using the complete assembly-reference identity, non-generic
+type path, member name, and signature. `callvirt` is a Tier3 review candidate,
+not a proven dispatch destination. Missing or ambiguous admitted targets are
+gaps; unadmitted external assemblies are not inferred as absent.
+
+The public `root-generated` test proves that a bound IL walk can cross an
+excluded generated bridge to supported SQL evidence while the corresponding
+source-only scan remains terminal-free. The `root-crosslanguage` test proves a
+C#→VB MemberRef join and an inherited `Open`-initialized field receiver, and
+duplicate exact identities fail closed. Run them with:
+
+```bash
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj \
+  --filter 'FullyQualifiedName~Bound_IL_walk|FullyQualifiedName~Generated_designer_bridge_is_visible_but_does_not_invent_a_source_terminal'
+```
+
+This overlay does not change the combined database schema or source-only
+results. It does not admit binaries on its own, claim runtime reachability, or
+solve projectless Web Forms source-to-binary binding without an exact admitted
+PDB join. A private page remains
+unproven until its exact built assembly, binding receipt, and source identity
+are admitted and the page-specific path is observed. Single-index Web Forms
+packet compaction does not yet retain the compiled closure; this proof uses a
+combined index, as the application review workflow does.
+
+The additional `vb-pdb-projectless` public fixture covers the formerly missing
+projectless entry when a *portable* PDB is available. Its projectless VB handler
+is compiled by a separate deterministic project, while the source-only combined
+path stops before SQL. The bound scan requires the exact source-document
+checksum, one PDB method row reconciled to one admitted metadata method, and
+visible sequence points contained by one method block. It then traverses a
+cross-assembly IL MemberRef and excluded generated bridge to the SQL terminal.
+Duplicate source declarations or removal of the checksum join withhold the
+entry. Run `dotnet test` with filter
+`FullyQualifiedName~Projectless_VB_handler_enters_bound_IL_only_through_exact_PDB_document_and_method`.
+This is Tier2 static location evidence, not Tier1 semantic binding or runtime
+proof. The work-machine inventory found two classic Windows PDBs and no
+portable PDB, so this path remains unavailable there until a separately
+validated Windows-PDB or other exact source-binding reader exists.
+
 ### IL rewrite evidence (Task 10 second slice)
 
 The second Task 10 slice activates `dotnet.compiled.il-rewrite.v1` and
@@ -2875,7 +2925,7 @@ containing module.
 
 Public-safe synthetic fixtures under `samples/messy-dotnet-workspace/`
 reproduce the workspace shapes observed in real Web Forms/.NET scans without
-copying any private source, names, paths, or artifacts. Sixteen roots are
+copying any private source, names, paths, or artifacts. Seventeen roots are
 scanned independently: `root-alpha` (C# Web Forms site with a twelve-call-edge deep
 chain ending in an ADO.NET-style SQL terminal at graph distance 14, a
 three-node cycle plus a self-cycle with its own handler, ten same-name
@@ -2890,11 +2940,16 @@ names), `vb-projectless` (loose VB files with no `.vbproj`/`.sln`),
 as independent web and backend roots before index combine), and
 `vb-init-web`, `vb-init-backend`, `vb-init-duplicate`, plus
 `vb-init-service-duplicate` (an inline constructor side-effect path and two
-duplicate-type negative controls), plus `vb-review-constructor`,
+duplicate-type negative controls), plus `vb-qualified-init-web`,
+`vb-qualified-init-backend`, and `vb-qualified-ambiguous-web` (explicit-import
+constructor resolution, a same-simple-name SQL decoy, and fail-closed
+competing imports), plus `vb-review-constructor`,
 `vb-review-semantic`, and `vb-review-projectless` (nested generic type identity,
 parenthesized inline creation, namespace rejection, and compiler-rejected
 constructor fallback), plus `vb-init-single` (the dropdown Init handler and
-constructor-side-effect backend in one projectless source index).
+constructor-side-effect backend in one projectless source index), and
+`root-route-reconvergence` (two same-named methods in separate classes in
+one file, two call levels, one shared SQL terminal).
 
 The stable case catalog is `samples/messy-dotnet-workspace/case-catalog.json`
 (schema `messy-workspace-case-catalog.v1`). Cases are marked `implemented` or
@@ -2950,6 +3005,14 @@ both constructor and receiver bridge hops as ordinary paths-report evidence.
 The single-index dropdown variant verifies that compact packet admission
 retains the matching constructor declaration and body before graph bridging;
 the split-root combined-index result alone cannot establish that behavior.
+
+The shared-terminal route case pins the distinction between terminal identity
+and bounded path detail. A handler with two routes to one terminal yields two
+event-chain rows when both fit the configured work/path/depth limits, but one
+distinct supported-terminal identity. With a one-path budget, the terminal
+inventory remains complete while path-detail truncation is explicit. This
+recovers the alternate route rows hidden by the shortest-witness-only packet
+change; it does not prove private page counts or runtime execution.
 
 Pinned behaviors, asserted per catalog case id and pipeline stage
 (extraction, combining, reconciliation, traversal) by
@@ -3422,3 +3485,77 @@ https://github.com/joefeser/tracemap/actions/runs/35802803285/job/106996742841
 macOS lanes green; ordinary lanes including all three package-smoke jobs
 green). Task 10's checkbox stays open on the single PDB-prerequisite gap
 above.
+
+### Public projectless Web Site publish without PDB
+
+`samples/messy-dotnet-workspace/vb-publish-projectless` is a source-only,
+public-safe Web Site fixture for the dropdown `Init` → constructor-populated
+list → business/data-access wrapper → inherited `Open` → overloaded procedure
+helper → data-adapter `Fill` shape. The fixture constructs a `SqlDataAdapter`,
+but the published one-argument IL call targets the **public override**
+`System.Data.Common.DbDataAdapter.Fill(DataSet)`. Protected `Fill` overloads
+have different signatures and are not the observed call target (see the
+[.NET Framework API signature](https://learn.microsoft.com/en-us/dotnet/api/system.data.common.dbdataadapter.fill?view=netframework-4.8.1)). Its
+source-only regression test requires that TraceMap **not** claim a SQL path
+before an exact source-to-binary entry is admitted. The fixture contains no
+private source, credentials, or runnable
+database dependency; executing its SQL path is outside the test.
+
+On Windows, `pwsh -NoProfile -File scripts/validation/Test-PublicWebFormsPublish.ps1`
+uses the 32-bit .NET Framework `aspnet_compiler.exe` to precompile this public
+fixture into a fresh temporary directory without `-u`. It checks for one
+`Pages/Lookup.aspx` `.compiled` map, its named DLL, and no PDB, and prints
+the compiler SHA-256 plus the bounded public input SHA-256. It also writes a
+`webforms-publish-binding.v1` receipt **inside that temporary output** with
+the exact script/compiler hashes, source commit, all six source-file hashes,
+all emitted DLL/map hashes, and the page mapping. The receipt is local-only.
+`tracemap scan --webforms-publish-receipt <path>` rechecks the declared
+source and publish bytes, the source commit, and the `.compiled` map before
+emitting local-only page/source/assembly facts; missing or mismatched evidence
+becomes a Tier4 gap. In the combined graph, one uniquely qualified
+projectless VB handler and one bound metadata method in those exact assembly
+bytes may form a Tier3 `projectless-publish-method-candidate` entry. Other
+receipt-listed source methods may form bidirectional Tier3 member candidates
+when the fully qualified containing type, method, and bounded parameter
+shapes select exactly one bound published method. This permits a static IL
+walk to re-enter retained source evidence; it is not a PDB or exact
+source-method identity claim. The validation
+script is **not** a private-site publishing instruction. Even after the public
+Windows run succeeded and the emitted `.compiled` and metadata identities were
+inspected, the map alone is only page-to-assembly evidence: it is not a verified
+source-method, IL-chain, or runtime claim. A 32-bit-only dependency in a
+private site does not become AnyCPU through CodeDOM configuration.
+
+The public-only home-Windows check at `822d3b55dc287b1820e8d42ad4c534cf8304242a`
+passed: six public inputs produced two DLLs, two `.compiled` maps, no PDBs,
+and one `Pages/Lookup.aspx` map to `App_Web_r50enpyu` / `ASP.pages_lookup_aspx`.
+Read-only published-IL inspection observed the static chain from
+`LookupPage.Names_Init` through the constructor, business/data-access methods,
+inherited `SqlBaseDA.Open`, and both `ExecProc_DataSet` overloads to the
+public `DbDataAdapter.Fill(DataSet)` target. This does **not** establish a
+TraceMap source-method edge, line identity, cross-assembly App_Code binding,
+runtime execution, or private-site behavior. The follow-up public test at
+`eafc6af1` passed 1/1 and proved an exact admitted IL MemberRef edge from
+`Names_Init` to the `App_Code` constructor. The scanner-side receipt and Tier3
+handler candidate subsequently passed the focused Windows test at `4cebcb65`
+(1/1). That test did not prove a complete reported path to SQL. At exact
+public commit `fa696ce8fd7fd8549aa7483a007a3c7250d8f315`, the expanded
+home-Windows regression passed (exit 0, 1/1): its traversal assertion found
+a report path from `Names_Init` with a Tier3 review-only publish-method
+candidate, at least four admitted IL-call edges, a publish-member candidate,
+and retained `sql-query` evidence. This proves the public static report path,
+not source-line identity, execution, or the private page-002 chain.
+
+PR #793 review repair tightens the same public boundary: the linked code-behind
+must be bound by the page map's receipt digest, non-intrinsic VB parameter
+types must match retained lexical or imported scope, and VB type spelling is
+case-insensitive. A direct type import has its own constructor regression;
+relative publish roots and receipted tool-revision attribution are pinned by
+focused tests. The macOS review-repair validation ran the documented VB.NET
+matrix: 88 adapter/fixture tests, 43 data/external/Web Forms tests, modern,
+legacy, and Web Forms CLI scans with artifact validation, byte-identical
+repeat modern facts, and the pinned `community-visual-basic` smoke at
+`20d2a51dfc9f342848ad134952ceaa8d79302559` (110,726 facts,
+`Level1SemanticAnalysisReduced` / `FailedOrPartial`). The Windows-only
+relative-root publish regression remains to be checked on the pushed repair
+head; a macOS pass does not substitute for it.

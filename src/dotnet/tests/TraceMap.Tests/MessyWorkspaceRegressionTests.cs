@@ -1,5 +1,7 @@
+using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text.Json;
+using System.Xml.Linq;
 using Microsoft.Data.Sqlite;
 using TraceMap.Cli;
 using TraceMap.Combine;
@@ -77,10 +79,10 @@ public sealed class MessyWorkspaceRegressionTests
             Require("MW-CATALOG", "extraction", entry.GetProperty("shape").GetString() is { Length: > 0 }, $"case {id} must describe its shape");
         }
 
-        Require("MW-CATALOG", "extraction", ids.Count == 22,
-            $"expected the twenty-two pinned fixture cases, found {ids.Count}");
-        Require("MW-CATALOG", "extraction", implemented == 22 && deferred == 0,
-            $"all twenty-two pinned fixture cases must remain implemented; found {implemented} implemented and {deferred} deferred");
+        Require("MW-CATALOG", "extraction", ids.Count == 27,
+            $"expected twenty-seven pinned fixture cases, found {ids.Count}");
+        Require("MW-CATALOG", "extraction", implemented == 27 && deferred == 0,
+            $"expected twenty-seven implemented cases and no deferred case; found {implemented} implemented and {deferred} deferred");
 
         // Catalog evidence annotations are load-bearing: every expected rule id must
         // exist in the rule catalog, tiers must be real evidence tiers, and gap
@@ -719,6 +721,551 @@ public sealed class MessyWorkspaceRegressionTests
     }
 
     [Fact]
+    public async Task Bound_IL_walk_crosses_excluded_generated_bridge_to_supported_terminal()
+    {
+        using var temp = new TempDirectory();
+        var source = MessyRoot("root-generated");
+        var assembly = Path.Combine(source, "bin", "Debug", "net10.0", "GeneratedSite.dll");
+        var scan = ScanBoundRoot(temp, "root-generated", "generated-il-path", [assembly], ilBody: true);
+        var index = Path.Combine(temp.Path, "generated-il-path.sqlite");
+        SqliteIndexWriter.Write(index, scan.Manifest, scan.Facts);
+        var (_, unrelatedIndex) = ScanRoot(temp, "vb-overload-framework", "generated-il-unrelated");
+        var combinedIndex = Path.Combine(temp.Path, "generated-il-combined.sqlite");
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions(
+            [index, unrelatedIndex], combinedIndex, ["generated", "unrelated"]));
+
+        var graph = await CombinedDependencyPathReporter.BuildGraphInventoryAsync(combinedIndex);
+        var ilEdges = graph.Edges.Where(edge => edge.EdgeKind == "compiled-il-call").ToArray();
+        Require("MW-SOURCE-METADATA-IL-PDB-001", "reconciliation",
+            graph.Edges.Any(edge => edge.EdgeKind == "compiled-source-identity") && ilEdges.Length >= 2,
+            $"bound source identity and two same-assembly IL hops were not retained; il={ilEdges.Length}");
+
+        var packet = await WebFormsModernizationPacketReporter.BuildAsync(
+            new(combinedIndex, Path.Combine(temp.Path, "generated-il-packet"), MaxDepth: 10));
+        var chains = packet.EventChains.Where(chain =>
+            chain.HandlerSymbol?.Contains(GeneratedHandler, StringComparison.Ordinal) == true).ToArray();
+        var boundaries = TerminalBoundaries(packet, GeneratedHandler);
+        Require("MW-SOURCE-METADATA-IL-PDB-001", "traversal",
+            chains.Length > 0 && chains.All(chain =>
+                chain.TraversalObservation?.DistinctReachableTerminalCount > 0
+                && chain.TraversalObservation.TerminalReachabilityComplete == true
+                && chain.TraversalObservation.TraversedEdgeKinds.Contains("compiled-il-call"))
+            && boundaries.Any(boundary => boundary.BoundaryKind == "sql-query"
+                && boundary.PathEvidence.Any(evidence => evidence.RuleId == "combined.paths.compiled-il-bridge.v1")),
+            "bound IL walk did not cross the excluded generated bridge to a supported SQL terminal; boundaries="
+                + string.Join(',', boundaries.Select(boundary => boundary.BoundaryKind)));
+    }
+
+    [Fact]
+    public async Task Bound_IL_walk_with_duplicate_method_identity_fails_closed()
+    {
+        using var temp = new TempDirectory();
+        var source = MessyRoot("root-generated");
+        var assembly = Path.Combine(source, "bin", "Debug", "net10.0", "GeneratedSite.dll");
+        var scan = ScanBoundRoot(temp, "root-generated", "generated-il-ambiguous", [assembly], ilBody: true);
+        var bridge = scan.Facts.Single(fact => fact.FactType == FactTypes.ManagedMethodDeclared
+            && fact.TargetSymbol?.Contains("GeneratedBridge", StringComparison.Ordinal) == true
+            && fact.TargetSymbol.Contains("|method:3:Run|", StringComparison.Ordinal));
+        var duplicate = bridge with { FactId = "fact-synthetic-duplicate-generated-bridge" };
+        var index = Path.Combine(temp.Path, "generated-il-ambiguous.sqlite");
+        SqliteIndexWriter.Write(index, scan.Manifest, [.. scan.Facts, duplicate]);
+        var (_, unrelatedIndex) = ScanRoot(temp, "vb-overload-framework", "generated-il-ambiguous-unrelated");
+        var combinedIndex = Path.Combine(temp.Path, "generated-il-ambiguous-combined.sqlite");
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions(
+            [index, unrelatedIndex], combinedIndex, ["generated", "unrelated"]));
+
+        var graph = await CombinedDependencyPathReporter.BuildGraphInventoryAsync(combinedIndex);
+        var nodes = graph.Nodes.ToDictionary(node => node.NodeId, StringComparer.Ordinal);
+        Require("MW-SOURCE-METADATA-IL-PDB-001", "reconciliation",
+            graph.Gaps.Any(gap => gap.GapKind == "CompiledIlTargetAmbiguous")
+            && !graph.Edges.Any(edge => edge.EdgeKind == "compiled-il-call"
+                && nodes[edge.ToNodeId].DisplayName.Contains("GeneratedBridge", StringComparison.Ordinal)),
+            "a duplicate exact metadata target must withhold its IL call edge and emit an explicit ambiguity gap");
+    }
+
+    [Fact]
+    public async Task Bound_IL_walk_joins_explicit_cross_assembly_member_reference()
+    {
+        using var temp = new TempDirectory();
+        var source = MessyRoot("root-crosslanguage");
+        var scan = ScanBoundRoot(temp, "root-crosslanguage", "cross-language-il", [
+            Path.Combine(source, "csharp", "bin", "Debug", "net10.0", "CrossLanguageEntry.dll"),
+            Path.Combine(source, "vb", "bin", "Debug", "net10.0", "CrossLanguage.VisualBasic.dll"),
+            Path.Combine(source, "fsharp", "bin", "Debug", "net10.0", "CrossLanguage.FSharp.dll")
+        ], ilBody: true);
+        var index = Path.Combine(temp.Path, "cross-language-il.sqlite");
+        SqliteIndexWriter.Write(index, scan.Manifest, scan.Facts);
+        var (_, unrelatedIndex) = ScanRoot(temp, "vb-overload-framework", "cross-language-il-unrelated");
+        var combinedIndex = Path.Combine(temp.Path, "cross-language-il-combined.sqlite");
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions(
+            [index, unrelatedIndex], combinedIndex, ["cross", "unrelated"]));
+        var graph = await CombinedDependencyPathReporter.BuildGraphInventoryAsync(combinedIndex);
+        var nodes = graph.Nodes.ToDictionary(node => node.NodeId, StringComparer.Ordinal);
+        var memberReference = scan.Facts.Single(fact => fact.FactType == FactTypes.ManagedIlCallObserved
+            && fact.Properties.GetValueOrDefault("referenceKind") == "memberref"
+            && fact.Properties.GetValueOrDefault("targetIdentity")?.Contains("VbBridge", StringComparison.Ordinal) == true);
+        var declaration = scan.Facts.Single(fact => fact.FactType == FactTypes.ManagedMethodDeclared
+            && fact.TargetSymbol?.Contains("VbBridge", StringComparison.Ordinal) == true
+            && fact.TargetSymbol.Contains("|method:3:Run|", StringComparison.Ordinal));
+        Require("MW-CROSSLANGUAGE-001", "reconciliation",
+            graph.Edges.Any(edge => edge.EdgeKind == "compiled-il-call"
+                && nodes[edge.FromNodeId].DisplayName.Contains("CrossLanguageButton_Click", StringComparison.Ordinal)
+                && nodes[edge.ToNodeId].DisplayName == declaration.TargetSymbol),
+            "cross-assembly MemberRef did not join to one admitted declaration; memberref="
+                + memberReference.Properties.GetValueOrDefault("targetIdentity")
+                + "; declaration=" + declaration.TargetSymbol);
+        Require("MW-CROSSLANGUAGE-001", "reconciliation",
+            graph.Edges.Any(edge => edge.EdgeKind == "compiled-il-callvirt-candidate"
+                && edge.EvidenceTier == EvidenceTiers.Tier3SyntaxOrTextual
+                && nodes[edge.FromNodeId].DisplayName.Contains("DataAccess", StringComparison.Ordinal)
+                && nodes[edge.FromNodeId].DisplayName.Contains("SelectNames", StringComparison.Ordinal)
+                && nodes[edge.ToNodeId].DisplayName.Contains("ProcedureGateway", StringComparison.Ordinal)
+                && nodes[edge.ToNodeId].DisplayName.Contains("ExecuteProcedure", StringComparison.Ordinal)),
+            "the inherited Open-initialized field callvirt must remain a review-tier compiled candidate");
+
+        var ambiguousIndex = Path.Combine(temp.Path, "cross-language-il-ambiguous.sqlite");
+        SqliteIndexWriter.Write(ambiguousIndex, scan.Manifest, [.. scan.Facts,
+            declaration with { FactId = "fact-synthetic-duplicate-cross-assembly-method" }]);
+        var ambiguousCombined = Path.Combine(temp.Path, "cross-language-il-ambiguous-combined.sqlite");
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions(
+            [ambiguousIndex, unrelatedIndex], ambiguousCombined, ["cross", "unrelated"]));
+        var ambiguousGraph = await CombinedDependencyPathReporter.BuildGraphInventoryAsync(ambiguousCombined);
+        var ambiguousNodes = ambiguousGraph.Nodes.ToDictionary(node => node.NodeId, StringComparer.Ordinal);
+        Require("MW-CROSSLANGUAGE-001", "reconciliation",
+            ambiguousGraph.Gaps.Any(gap => gap.GapKind == "CompiledIlTargetAmbiguous")
+            && !ambiguousGraph.Edges.Any(edge => edge.EdgeKind == "compiled-il-call"
+                && ambiguousNodes[edge.FromNodeId].DisplayName.Contains("CrossLanguageButton_Click", StringComparison.Ordinal)
+                && ambiguousNodes[edge.ToNodeId].DisplayName == declaration.TargetSymbol),
+            "duplicate admitted cross-assembly member identity must fail closed");
+    }
+
+    [Fact]
+    public async Task Projectless_VB_handler_enters_bound_IL_only_through_exact_PDB_document_and_method()
+    {
+        using var temp = new TempDirectory();
+        var (sourceOnly, sourceOnlyIndex) = ScanRoot(temp, "vb-pdb-projectless", "projectless-pdb-source-only");
+        var (_, generatedSourceOnlyIndex) = ScanRoot(temp, "root-generated", "projectless-pdb-generated-source-only");
+        var sourceOnlyCombined = Path.Combine(temp.Path, "projectless-pdb-source-only-combined.sqlite");
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions(
+            [sourceOnlyIndex, generatedSourceOnlyIndex], sourceOnlyCombined, ["projectless", "generated"]));
+        var sourceOnlyHandler = sourceOnly.Facts.Single(fact => fact.FactType == FactTypes.MethodDeclared
+            && fact.RuleId == RuleIds.VisualBasicSyntaxDeclarations
+            && fact.Properties.GetValueOrDefault("name") == "Lookup_Init");
+        var sourceOnlyPaths = await CombinedDependencyPathReporter.BuildReportAsync(new(
+            sourceOnlyCombined, Path.Combine(temp.Path, "projectless-pdb-source-only-paths.json"),
+            Format: "json", FromSymbol: sourceOnlyHandler.Properties["memberIdentity"],
+            FromSource: "projectless", MaxDepth: 10));
+        Require("MW-SOURCE-METADATA-IL-PDB-001", "source-only-baseline",
+            !sourceOnlyPaths.Paths.Any(path => path.Nodes.Any(node => node.SurfaceKind == "sql-query")),
+            "a projectless source-only path must not silently cross the excluded generated bridge");
+
+        var vbBuild = MessyRoot("vb-pdb-build");
+        var vbAssembly = Path.Combine(vbBuild, "bin", "Debug", "net10.0", "CompiledProjectless.VB.dll");
+        var vbPdb = Path.ChangeExtension(vbAssembly, ".pdb");
+        var vbScan = ScanBoundRoot(temp, "vb-pdb-projectless", "projectless-pdb-bound",
+            [vbAssembly], [vbPdb], ilBody: true);
+        var vbIndex = Path.Combine(temp.Path, "projectless-pdb-bound.sqlite");
+        SqliteIndexWriter.Write(vbIndex, vbScan.Manifest, vbScan.Facts);
+
+        var generatedRoot = MessyRoot("root-generated");
+        var generatedAssembly = Path.Combine(generatedRoot, "bin", "Debug", "net10.0", "GeneratedSite.dll");
+        var generatedScan = ScanBoundRoot(temp, "root-generated", "projectless-pdb-generated",
+            [generatedAssembly], ilBody: true);
+        var generatedIndex = Path.Combine(temp.Path, "projectless-pdb-generated.sqlite");
+        SqliteIndexWriter.Write(generatedIndex, generatedScan.Manifest, generatedScan.Facts);
+
+        var combined = Path.Combine(temp.Path, "projectless-pdb-combined.sqlite");
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions(
+            [vbIndex, generatedIndex], combined, ["projectless", "generated"]));
+        var graph = await CombinedDependencyPathReporter.BuildGraphInventoryAsync(combined);
+        var nodes = graph.Nodes.ToDictionary(node => node.NodeId, StringComparer.Ordinal);
+        var documentJoins = vbScan.Facts.Count(fact => fact.FactType == FactTypes.PdbSourceDocumentReconciled);
+        var methodJoins = vbScan.Facts.Count(fact => fact.FactType == FactTypes.MetadataPdbMethodReconciled);
+        Require("MW-SOURCE-METADATA-IL-PDB-001", "reconciliation",
+            documentJoins > 0
+            && methodJoins > 0
+            && graph.Edges.Any(edge => edge.EdgeKind == "projectless-source-pdb-identity"
+                && nodes[edge.FromNodeId].DisplayName.Contains("Lookup_Init", StringComparison.Ordinal)
+                && nodes[edge.ToNodeId].DisplayName.Contains("Lookup_Init", StringComparison.Ordinal)),
+            $"projectless handler did not enter its uniquely PDB-bound compiled method; documents={documentJoins}; methods={methodJoins}; vbSyntax={vbScan.Facts.Count(fact => fact.FactType == FactTypes.MethodDeclared && fact.RuleId == RuleIds.VisualBasicSyntaxDeclarations)}");
+
+        var sourceEntry = graph.Edges.Single(edge => edge.EdgeKind == "projectless-source-pdb-identity"
+            && nodes[edge.FromNodeId].DisplayName.Contains("Lookup_Init", StringComparison.Ordinal));
+        var report = await CombinedDependencyPathReporter.BuildReportAsync(new(
+            combined, Path.Combine(temp.Path, "projectless-pdb-paths.json"), Format: "json",
+            FromSymbol: nodes[sourceEntry.FromNodeId].DisplayName, FromSource: "projectless", MaxDepth: 10));
+        Require("MW-SOURCE-METADATA-IL-PDB-001", "traversal",
+            report.Paths.Any(path => path.Edges.Any(edge => edge.EdgeKind == "projectless-source-pdb-identity")
+                && path.Edges.Any(edge => edge.EdgeKind == "compiled-il-call")
+                && path.Nodes.Any(node => node.SurfaceKind == "sql-query")),
+            $"projectless VB PDB and IL walk stopped before the SQL terminal; paths={report.Paths.Count}; endKinds={string.Join(',', report.Paths.Select(path => path.Nodes.Last().SurfaceKind))}");
+
+        var syntaxMethod = vbScan.Facts.Single(fact => fact.FactType == FactTypes.MethodDeclared
+            && fact.RuleId == RuleIds.VisualBasicSyntaxDeclarations
+            && fact.Properties.GetValueOrDefault("name") == "Lookup_Init");
+        var ambiguousIndex = Path.Combine(temp.Path, "projectless-pdb-ambiguous.sqlite");
+        SqliteIndexWriter.Write(ambiguousIndex, vbScan.Manifest, [.. vbScan.Facts,
+            syntaxMethod with { FactId = "fact-synthetic-duplicate-projectless-method" }]);
+        var ambiguousCombined = Path.Combine(temp.Path, "projectless-pdb-ambiguous-combined.sqlite");
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions(
+            [ambiguousIndex, generatedIndex], ambiguousCombined, ["projectless", "generated"]));
+        var ambiguousGraph = await CombinedDependencyPathReporter.BuildGraphInventoryAsync(ambiguousCombined);
+        Require("MW-SOURCE-METADATA-IL-PDB-001", "ambiguity",
+            !ambiguousGraph.Edges.Any(edge => edge.EdgeKind == "projectless-source-pdb-identity")
+            && ambiguousGraph.Gaps.Any(gap => gap.GapKind == "ProjectlessPdbMethodAmbiguous"),
+            "duplicate source declarations sharing one PDB method must withhold the binary path entry");
+
+        var metadataMethod = vbScan.Facts.Single(fact => fact.FactType == FactTypes.ManagedMethodDeclared
+            && fact.Properties.GetValueOrDefault("metadataName") == "Lookup_Init");
+        var duplicateMetadataIndex = Path.Combine(temp.Path, "projectless-pdb-duplicate-metadata.sqlite");
+        SqliteIndexWriter.Write(duplicateMetadataIndex, vbScan.Manifest, [.. vbScan.Facts,
+            metadataMethod with { FactId = "fact-synthetic-duplicate-projectless-metadata" }]);
+        var duplicateMetadataCombined = Path.Combine(temp.Path, "projectless-pdb-duplicate-metadata-combined.sqlite");
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions(
+            [duplicateMetadataIndex, generatedIndex], duplicateMetadataCombined, ["projectless", "generated"]));
+        var duplicateMetadataGraph = await CombinedDependencyPathReporter.BuildGraphInventoryAsync(duplicateMetadataCombined);
+        Require("MW-SOURCE-METADATA-IL-PDB-001", "metadata-ambiguity",
+            !duplicateMetadataGraph.Edges.Any(edge => edge.EdgeKind == "projectless-source-pdb-identity")
+            && duplicateMetadataGraph.Gaps.Any(gap => gap.GapKind == "ProjectlessPdbMetadataAmbiguous"),
+            "duplicate bound metadata identities must withhold the projectless source-to-binary entry");
+
+        var noDocumentIndex = Path.Combine(temp.Path, "projectless-pdb-no-document.sqlite");
+        SqliteIndexWriter.Write(noDocumentIndex, vbScan.Manifest,
+            vbScan.Facts.Where(fact => fact.FactType != FactTypes.PdbSourceDocumentReconciled).ToArray());
+        var noDocumentCombined = Path.Combine(temp.Path, "projectless-pdb-no-document-combined.sqlite");
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions(
+            [noDocumentIndex, generatedIndex], noDocumentCombined, ["projectless", "generated"]));
+        var noDocumentGraph = await CombinedDependencyPathReporter.BuildGraphInventoryAsync(noDocumentCombined);
+        Require("MW-SOURCE-METADATA-IL-PDB-001", "checksum",
+            !noDocumentGraph.Edges.Any(edge => edge.EdgeKind == "projectless-source-pdb-identity"),
+            "without the exact checksum document join, no source-to-binary edge may exist");
+    }
+
+    [Fact]
+    public async Task Public_publish_site_without_compiled_evidence_does_not_claim_the_constructor_SQL_path()
+    {
+        using var temp = new TempDirectory();
+        var (sourceOnly, index) = ScanRoot(temp, "vb-publish-projectless", "publish-source-only");
+        var method = sourceOnly.Facts.Single(fact => fact.FactType == FactTypes.MethodDeclared
+            && fact.RuleId == RuleIds.VisualBasicSyntaxDeclarations
+            && fact.Properties.GetValueOrDefault("name") == "Names_Init");
+        var report = await CombinedDependencyPathReporter.BuildReportAsync(new(
+            index, Path.Combine(temp.Path, "publish-source-only-paths.json"), Format: "json",
+            FromSymbol: method.Properties["memberIdentity"], MaxDepth: 12));
+        Require("MW-SOURCE-METADATA-IL-PDB-001", "source-only-baseline",
+            !report.Paths.Any(path => path.Nodes.Any(node => node.SurfaceKind == "sql-query")),
+            "the public Web Site fixture must not claim a SQL path without an admitted source-to-binary entry");
+        var downstream = await CombinedDependencyPathReporter.BuildReportAsync(new(
+            index, Path.Combine(temp.Path, "publish-source-downstream-paths.json"), Format: "json",
+            FromSymbol: "PublicSqlDataAccess.ExecProc_DataSet(String,SqlParameter())", MaxDepth: 12));
+        Require("MW-SOURCE-METADATA-IL-PDB-001", "source-only-baseline",
+            downstream.Paths.Any(path => path.Nodes.Any(node => node.SurfaceKind == "sql-query")),
+            "the public fixture must retain downstream SQL evidence before testing a publish bridge");
+    }
+
+    [Fact]
+    public async Task Windows_public_Web_Site_publish_exposes_no_PDB_page_map_and_static_IL_chain()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        using var temp = new TempDirectory();
+        var repoRoot = FindRepoRoot();
+        var publishScript = Path.Combine(repoRoot, "scripts", "validation", "Test-PublicWebFormsPublish.ps1");
+        var compiler = Path.Combine(Environment.GetEnvironmentVariable("WINDIR") ?? string.Empty,
+            "Microsoft.NET", "Framework", "v4.0.30319", "aspnet_compiler.exe");
+        Require("MW-PUBLISH-NOPDB-001", "extraction", File.Exists(compiler),
+            "the 32-bit .NET Framework ASP.NET compiler is required for the public Windows fixture");
+        var published = Path.Combine(temp.Path, "public-site-publish");
+        var start = new ProcessStartInfo("pwsh")
+        {
+            WorkingDirectory = Path.GetDirectoryName(repoRoot)!,
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true
+        };
+        foreach (var argument in new[] { "-NoProfile", "-File", publishScript,
+                     "-TraceMapRoot", Path.GetFileName(repoRoot), "-OutputRoot", published })
+            start.ArgumentList.Add(argument);
+        using var process = Process.Start(start)!;
+        if (!process.WaitForExit(120_000))
+        {
+            process.Kill(entireProcessTree: true);
+            throw new Xunit.Sdk.XunitException("messy-workspace case MW-PUBLISH-NOPDB-001 failed at stage extraction: public ASP.NET precompilation exceeded two minutes");
+        }
+        var output = process.StandardOutput.ReadToEnd();
+        var error = process.StandardError.ReadToEnd();
+        Require("MW-PUBLISH-NOPDB-001", "extraction", process.ExitCode == 0,
+            $"public ASP.NET precompilation failed; exit={process.ExitCode}; stdout={output}; stderr={error}");
+        Require("MW-PUBLISH-NOPDB-001", "extraction", output.Contains("publicWebFormsPublishStatus=valid", StringComparison.Ordinal),
+            "the public publish guard did not report a valid result");
+
+        var receiptPath = Path.Combine(published, "publish-receipt.local.json");
+        Require("MW-PUBLISH-NOPDB-001", "extraction", File.Exists(receiptPath),
+            "the public publish guard must retain its local-only provenance receipt");
+        using var receipt = JsonDocument.Parse(File.ReadAllBytes(receiptPath));
+        var receiptRoot = receipt.RootElement;
+        Require("MW-PUBLISH-NOPDB-001", "extraction",
+            receiptRoot.GetProperty("schemaVersion").GetString() == "webforms-publish-binding.v1"
+            && receiptRoot.GetProperty("visibility").GetString() == "local-only"
+            && receiptRoot.GetProperty("receiptGeneratorSha256").GetString() ==
+                Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(publishScript))).ToLowerInvariant()
+            && receiptRoot.GetProperty("compilerSha256").GetString() ==
+                Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(compiler))).ToLowerInvariant()
+            && receiptRoot.GetProperty("sourceFiles").GetArrayLength() == 6
+            && receiptRoot.GetProperty("publishedFiles").GetArrayLength() == 4
+            && receiptRoot.GetProperty("pages").GetArrayLength() == 1,
+            "the local-only publish receipt must bind the exact script/compiler and all bounded public inputs/outputs");
+
+        var dlls = Directory.GetFiles(Path.Combine(published, "bin"), "*.dll", SearchOption.TopDirectoryOnly)
+            .OrderBy(path => path, StringComparer.Ordinal).ToArray();
+        var maps = Directory.GetFiles(published, "*.compiled", SearchOption.AllDirectories);
+        var pdbs = Directory.GetFiles(published, "*.pdb", SearchOption.AllDirectories);
+        Require("MW-PUBLISH-NOPDB-001", "extraction", dlls.Length == 2 && maps.Length == 2 && pdbs.Length == 0,
+            $"the public publish shape changed; dll={dlls.Length}, maps={maps.Length}, pdb={pdbs.Length}");
+        var pageMaps = maps.Select(path => XDocument.Load(path).Root)
+            .Where(root => root?.Attribute("virtualPath")?.Value == "/Pages/Lookup.aspx")
+            .ToArray();
+        Require("MW-PUBLISH-NOPDB-001", "extraction", pageMaps.Length == 1,
+            "the public page must have exactly one generated publish map");
+        var mappedAssembly = pageMaps[0]!.Attribute("assembly")?.Value;
+        var mappedType = pageMaps[0]!.Attribute("type")?.Value;
+        Require("MW-PUBLISH-NOPDB-001", "extraction", !string.IsNullOrWhiteSpace(mappedAssembly)
+            && !string.IsNullOrWhiteSpace(mappedType)
+            && dlls.Count(path => Path.GetFileNameWithoutExtension(path) == mappedAssembly) == 1,
+            "the public page map must identify one emitted DLL and generated type");
+
+        var scan = ScanBoundRoot(temp, "vb-publish-projectless", "publish-no-pdb",
+            dlls, ilBody: true, webFormsPublishReceipt: receiptPath);
+        var calls = scan.Facts.Where(fact => fact.FactType == FactTypes.ManagedIlCallObserved).ToArray();
+        var methods = scan.Facts.Where(fact => fact.FactType == FactTypes.ManagedMethodDeclared).ToArray();
+        Require("MW-PUBLISH-NOPDB-001", "reconciliation",
+            methods.Any(fact => fact.Properties.GetValueOrDefault("metadataName") == "Names_Init")
+            && calls.Any(fact => fact.Properties.GetValueOrDefault("targetIdentity")?.Contains("GroupOptions", StringComparison.Ordinal) == true)
+            && calls.Any(fact => fact.Properties.GetValueOrDefault("targetIdentity")?.Contains("ExecProc_DataSet", StringComparison.Ordinal) == true)
+            && calls.Any(fact => fact.Properties.GetValueOrDefault("targetIdentity")?.Contains("DbDataAdapter", StringComparison.Ordinal) == true
+                && fact.Properties.GetValueOrDefault("targetIdentity")?.Contains("Fill", StringComparison.Ordinal) == true),
+            "both admitted publish DLLs must expose the handler, constructor, overloaded helper, and public DbDataAdapter.Fill target");
+        Require("MW-PUBLISH-NOPDB-001", "reconciliation",
+            !scan.Facts.Any(fact => fact.FactType == FactTypes.PdbSequencePointDeclared)
+            && !scan.Facts.Any(fact => fact.FactType == FactTypes.SourceMetadataIdentityReconciled),
+            "the no-PDB public publish must not silently acquire source-line or semantic method identity evidence");
+        Require("MW-PUBLISH-NOPDB-001", "reconciliation",
+            scan.Manifest.WebFormsPublishProvenance?.Status == "bound"
+            && scan.Facts.Count(fact => fact.FactType == FactTypes.WebFormsPublishPageMapped) == 1,
+            "the scanner must independently recheck the explicit page-to-assembly publish receipt");
+
+        var index = Path.Combine(temp.Path, "publish-no-pdb.sqlite");
+        SqliteIndexWriter.Write(index, scan.Manifest, scan.Facts);
+        var combined = Path.Combine(temp.Path, "publish-no-pdb-combined.sqlite");
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([index], combined, ["public-publish"]));
+        var graph = await CombinedDependencyPathReporter.BuildGraphInventoryAsync(combined);
+        var nodes = graph.Nodes.ToDictionary(node => node.NodeId, StringComparer.Ordinal);
+        Require("MW-PUBLISH-NOPDB-001", "reconciliation",
+            graph.Edges.Any(edge => edge.EdgeKind == "compiled-il-call"
+                && nodes[edge.FromNodeId].DisplayName.Contains("Names_Init", StringComparison.Ordinal)
+                && nodes[edge.ToNodeId].DisplayName.Contains("GroupOptions", StringComparison.Ordinal)),
+            "the published page assembly must cross to the admitted App_Code constructor by exact MemberRef");
+        Require("MW-PUBLISH-NOPDB-001", "reconciliation",
+            graph.Edges.Any(edge => edge.EdgeKind == "projectless-publish-method-candidate"
+                && edge.EvidenceTier == EvidenceTiers.Tier3SyntaxOrTextual
+                && nodes[edge.FromNodeId].DisplayName.Contains("Names_Init", StringComparison.Ordinal)
+                && nodes[edge.ToNodeId].DisplayName.Contains("Names_Init", StringComparison.Ordinal)),
+            "the fully qualified no-PDB source handler must enter the exact published assembly as a review-only candidate");
+        var entry = graph.Edges.Single(edge => edge.EdgeKind == "projectless-publish-method-candidate"
+            && nodes[edge.FromNodeId].DisplayName.Contains("Names_Init", StringComparison.Ordinal));
+        var pathReport = await CombinedDependencyPathReporter.BuildReportAsync(new(
+            combined, Path.Combine(temp.Path, "publish-no-pdb-paths.json"), Format: "json",
+            FromSymbol: nodes[entry.FromNodeId].DisplayName, FromSource: "public-publish", MaxDepth: 20,
+            MaxPaths: 256));
+        Require("MW-PUBLISH-NOPDB-001", "traversal",
+            pathReport.Paths.Any(path => path.Edges.Any(edge => edge.EdgeKind == "projectless-publish-method-candidate")
+                && path.Edges.Count(edge => edge.EdgeKind is "compiled-il-call" or "compiled-il-callvirt-candidate") >= 4
+                && path.Edges.Any(edge => edge.EdgeKind == "projectless-publish-member-candidate")
+                && path.Nodes.Any(node => node.SurfaceKind == "sql-query")),
+            $"the public no-PDB report did not retain a review-tier handler-through-IL path to source SQL evidence; paths={pathReport.Paths.Count}; gaps={string.Join(',', pathReport.Gaps.Select(gap => gap.GapKind).Distinct(StringComparer.Ordinal))}");
+    }
+
+    [Fact]
+    public async Task Explicit_publish_receipt_is_rechecked_and_map_tampering_fails_closed()
+    {
+        using var temp = new TempDirectory();
+        var source = MessyRoot("vb-pdb-projectless");
+        var commit = GitMetadataProvider.Detect(source).CommitSha;
+        var compiled = Path.Combine(MessyRoot("vb-pdb-build"), "bin", "Debug", "net10.0", "CompiledProjectless.VB.dll");
+        Require("MW-PUBLISH-NOPDB-001", "extraction", File.Exists(compiled),
+            "the public VB fixture assembly must be built for the publish-receipt test");
+        var publish = Path.Combine(temp.Path, "declared-publish");
+        Directory.CreateDirectory(Path.Combine(publish, "bin"));
+        Directory.CreateDirectory(Path.Combine(publish, "Pages"));
+        var publishedAssembly = Path.Combine(publish, "bin", "CompiledProjectless.VB.dll");
+        File.Copy(compiled, publishedAssembly);
+        var map = Path.Combine(publish, "Pages", "Lookup.aspx.compiled");
+        File.WriteAllText(map,
+            "<preserve virtualPath=\"/Pages/Lookup.aspx\" assembly=\"CompiledProjectless.VB\" type=\"PublicProof.LookupPage\" />");
+        static string Hash(byte[] bytes) => Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
+        static string FileHash(string path) => Hash(File.ReadAllBytes(path));
+        var sourceFiles = new[] { "Pages/Lookup.aspx", "Pages/Lookup.aspx.vb" }
+            .Select(path => new { path, sha256 = FileHash(Path.Combine(source, path.Replace('/', Path.DirectorySeparatorChar))) })
+            .OrderBy(item => item.path, StringComparer.Ordinal).ToArray();
+        var sourceDigest = Hash(System.Text.Encoding.UTF8.GetBytes(
+            string.Join("\n", sourceFiles.Select(item => $"{item.path}:{item.sha256}")) + "\n"));
+        var receiptPath = Path.Combine(publish, "publish-receipt.local.json");
+        File.WriteAllText(receiptPath, JsonSerializer.Serialize(new
+        {
+            schemaVersion = "webforms-publish-binding.v1",
+            visibility = "local-only",
+            receiptGeneratorSha256 = Hash(System.Text.Encoding.UTF8.GetBytes("public-test-receipt-generator")),
+            compilerSha256 = Hash(System.Text.Encoding.UTF8.GetBytes("public-test-compiler")),
+            sourceCommitSha = commit,
+            boundedInputSha256 = sourceDigest,
+            sourceFiles,
+            publishedFiles = new[]
+            {
+                new { path = "bin/CompiledProjectless.VB.dll", sha256 = FileHash(publishedAssembly), kind = "assembly" },
+                new { path = "Pages/Lookup.aspx.compiled", sha256 = FileHash(map), kind = "compiled-map" }
+            },
+            pages = new[] { new
+            {
+                virtualPath = "/Pages/Lookup.aspx",
+                assembly = "CompiledProjectless.VB",
+                generatedType = "PublicProof.LookupPage",
+                mapPath = "Pages/Lookup.aspx.compiled"
+            } }
+        }));
+
+        var scan = ScanBoundRoot(temp, "vb-pdb-projectless", "publish-receipt-bound", [publishedAssembly],
+            webFormsPublishReceipt: receiptPath);
+        Require("MW-PUBLISH-NOPDB-001", "extraction",
+            scan.Manifest.WebFormsPublishProvenance is { Status: "bound", SourceFileCount: 2, PublishedFileCount: 2, PageCount: 1 }
+            && scan.Facts.Count(fact => fact.FactType == FactTypes.WebFormsPublishPageMapped) == 1
+            && scan.Facts.Count(fact => fact.FactType == FactTypes.WebFormsPublishSourceBound) == 2
+            && scan.Facts.Count(fact => fact.FactType == FactTypes.WebFormsPublishAssemblyBound) == 1,
+            "the explicit bounded receipt must emit one page-to-assembly fact");
+        var index = Path.Combine(temp.Path, "publish-receipt-bound.sqlite");
+        SqliteIndexWriter.Write(index, scan.Manifest, scan.Facts);
+        var combined = Path.Combine(temp.Path, "publish-receipt-bound-combined.sqlite");
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([index], combined, ["public-publish"]));
+        var graph = await CombinedDependencyPathReporter.BuildGraphInventoryAsync(combined);
+        var nodes = graph.Nodes.ToDictionary(node => node.NodeId, StringComparer.Ordinal);
+        Require("MW-PUBLISH-NOPDB-001", "reconciliation",
+            graph.Edges.Any(edge => edge.EdgeKind == "projectless-publish-method-candidate"
+                && nodes[edge.FromNodeId].DisplayName.Contains("Lookup_Init", StringComparison.Ordinal)
+                && nodes[edge.ToNodeId].DisplayName.Contains("Lookup_Init", StringComparison.Ordinal)),
+            "the verified page map must permit only a review-tier qualified handler candidate");
+        static CodeFact ChangeProperties(CodeFact fact, params (string Key, string Value)[] changes)
+        {
+            var properties = fact.Properties.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
+            foreach (var (key, value) in changes) properties[key] = value;
+            return fact with { Properties = properties };
+        }
+        var caseFacts = scan.Facts.Select(fact => fact.FactType switch
+        {
+            FactTypes.WebFormsPublishPageMapped => ChangeProperties(fact, ("generatedType", "publicproof.lookuppage")),
+            FactTypes.WebFormsPageDeclared => ChangeProperties(fact, ("pageTypeName", "publicproof.lookuppage")),
+            FactTypes.WebFormsHandlerResolved => ChangeProperties(fact,
+                ("pageTypeName", "publicproof.lookuppage"), ("handlerName", "LOOKUP_INIT")),
+            _ => fact
+        }).ToList();
+        var linkedSource = caseFacts.Single(fact => fact.FactType == FactTypes.WebFormsPublishSourceBound
+            && fact.Evidence.FilePath == "Pages/Lookup.aspx.vb");
+        const string syntheticPath = "App_Code/SyntheticCase.vb";
+        caseFacts.Add(ChangeProperties(linkedSource with
+        {
+            FactId = "fact-synthetic-publish-case-source",
+            Evidence = linkedSource.Evidence with { FilePath = syntheticPath }
+        }, ("sourcePath", syntheticPath)));
+        var linkedDeclaration = caseFacts.Single(fact => fact.FactType == FactTypes.MethodDeclared
+            && fact.Properties.GetValueOrDefault("name") == "Lookup_Init");
+        caseFacts.Add(ChangeProperties(linkedDeclaration with
+        {
+            FactId = "fact-synthetic-publish-case-member",
+            Evidence = linkedDeclaration.Evidence with { FilePath = syntheticPath }
+        }, ("memberIdentity", "synthetic-case-member"), ("name", "lookup_init"),
+            ("qualifiedContainingType", "publicproof.lookuppage")));
+        var caseIndex = Path.Combine(temp.Path, "publish-receipt-case.sqlite");
+        SqliteIndexWriter.Write(caseIndex, scan.Manifest, caseFacts);
+        var caseCombined = Path.Combine(temp.Path, "publish-receipt-case-combined.sqlite");
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([caseIndex], caseCombined, ["public-publish"]));
+        var caseGraph = await CombinedDependencyPathReporter.BuildGraphInventoryAsync(caseCombined);
+        var caseNodes = caseGraph.Nodes.ToDictionary(node => node.NodeId, StringComparer.Ordinal);
+        Require("MW-PUBLISH-NOPDB-001", "vb-casing",
+            caseGraph.Edges.Any(edge => edge.EdgeKind == "projectless-publish-method-candidate")
+            && caseGraph.Edges.Any(edge => edge.EdgeKind == "projectless-publish-member-candidate"
+                && caseNodes[edge.FromNodeId].DisplayName == "synthetic-case-member"),
+            "VB casing differences across page, handler, declaration, metadata, and App_Code member must retain review-tier candidates");
+        var caseMethod = caseFacts.Single(fact => fact.FactType == FactTypes.ManagedMethodDeclared
+            && fact.Properties.GetValueOrDefault("metadataName") == "Lookup_Init");
+        var caseDuplicateIndex = Path.Combine(temp.Path, "publish-receipt-case-duplicate.sqlite");
+        SqliteIndexWriter.Write(caseDuplicateIndex, scan.Manifest,
+            [.. caseFacts, ChangeProperties(caseMethod with { FactId = "fact-synthetic-publish-case-duplicate" },
+                ("metadataName", "LOOKUP_INIT"))]);
+        var caseDuplicateCombined = Path.Combine(temp.Path, "publish-receipt-case-duplicate-combined.sqlite");
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([caseDuplicateIndex], caseDuplicateCombined, ["public-publish"]));
+        var caseAmbiguous = await CombinedDependencyPathReporter.BuildGraphInventoryAsync(caseDuplicateCombined);
+        Require("MW-PUBLISH-NOPDB-001", "vb-casing-ambiguity",
+            !caseAmbiguous.Edges.Any(edge => edge.EdgeKind == "projectless-publish-method-candidate")
+            && !caseAmbiguous.Edges.Any(edge => edge.EdgeKind == "projectless-publish-member-candidate")
+            && caseAmbiguous.Gaps.Any(gap => gap.GapKind == "ProjectlessPublishMetadataAmbiguous")
+            && caseAmbiguous.Gaps.Any(gap => gap.GapKind == "ProjectlessPublishMemberAmbiguous"),
+            "case-equivalent published members must be withheld as ambiguous, not silently selected");
+        var omittedCodeIndex = Path.Combine(temp.Path, "publish-receipt-omitted-code.sqlite");
+        SqliteIndexWriter.Write(omittedCodeIndex, scan.Manifest, scan.Facts.Where(fact =>
+            fact.FactType != FactTypes.WebFormsPublishSourceBound
+            || fact.Evidence.FilePath != "Pages/Lookup.aspx.vb").ToArray());
+        var omittedCodeCombined = Path.Combine(temp.Path, "publish-receipt-omitted-code-combined.sqlite");
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([omittedCodeIndex], omittedCodeCombined, ["public-publish"]));
+        var omittedCodeGraph = await CombinedDependencyPathReporter.BuildGraphInventoryAsync(omittedCodeCombined);
+        Require("MW-PUBLISH-NOPDB-001", "omitted-code-behind",
+            !omittedCodeGraph.Edges.Any(edge => edge.EdgeKind == "projectless-publish-method-candidate")
+            && omittedCodeGraph.Gaps.Any(gap => gap.GapKind == "ProjectlessPublishSourceAmbiguous"),
+            "an unreceipted linked code-behind must not join to an older published method");
+        var lookupMethod = scan.Facts.Single(fact => fact.FactType == FactTypes.ManagedMethodDeclared
+            && fact.Properties.GetValueOrDefault("metadataName") == "Lookup_Init");
+        var duplicateIndex = Path.Combine(temp.Path, "publish-receipt-duplicate.sqlite");
+        SqliteIndexWriter.Write(duplicateIndex, scan.Manifest,
+            [.. scan.Facts, lookupMethod with { FactId = "fact-public-publish-duplicate-method" }]);
+        var duplicateCombined = Path.Combine(temp.Path, "publish-receipt-duplicate-combined.sqlite");
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([duplicateIndex], duplicateCombined, ["public-publish"]));
+        var ambiguous = await CombinedDependencyPathReporter.BuildGraphInventoryAsync(duplicateCombined);
+        Require("MW-PUBLISH-NOPDB-001", "ambiguity",
+            !ambiguous.Edges.Any(edge => edge.EdgeKind == "projectless-publish-method-candidate")
+            && ambiguous.Gaps.Any(gap => gap.GapKind == "ProjectlessPublishMetadataAmbiguous"),
+            "duplicate published method candidates must not produce a guessed source join");
+
+        File.AppendAllText(map, " ");
+        var changed = WebFormsPublishMapExtractor.Evaluate(source, commit,
+            new ScanOptions(source, Path.Combine(temp.Path, "tampered-output"),
+                WebFormsPublishReceiptPath: receiptPath), CancellationToken.None);
+        Require("MW-PUBLISH-NOPDB-001", "extraction",
+            changed.Pages.Count == 0
+            && changed.Provenance?.GapKinds.SequenceEqual(["WebFormsPublishArtifactMismatch"]) == true,
+            "a changed .compiled map must withhold every page mapping behind a categorical gap");
+    }
+
+    [Theory]
+    [InlineData("String", "type(namespace:6:System|names:6:String)", "", true)]
+    [InlineData("string", "type(namespace:6:System|names:6:String)", "", true)]
+    [InlineData("STRING", "type(namespace:6:System|names:6:String)", "", true)]
+    [InlineData("UInteger", "type(namespace:6:System|names:6:UInt32)", "", true)]
+    [InlineData("ulong", "type(namespace:6:System|names:6:UInt64)", "", true)]
+    [InlineData("UShort", "type(namespace:6:System|names:6:UInt16)", "", true)]
+    [InlineData("sbyte", "type(namespace:6:System|names:5:SByte)", "", true)]
+    [InlineData("UInteger()", "type(namespace:6:System|names:6:UInt32)[]", "", true)]
+    [InlineData("UInteger", "type(namespace:6:System|names:5:Int32)", "", false)]
+    [InlineData("SqlParameter()", "scope(assembly:name:21:System.Data.SqlClient)type(namespace:21:System.Data.SqlClient|names:12:SqlParameter)[]", "System.Data.SqlClient", true)]
+    [InlineData("sqlparameter()", "scope(assembly:name:21:System.Data.SqlClient)type(namespace:21:System.Data.SqlClient|names:12:SqlParameter)[]", "System.Data.SqlClient", true)]
+    [InlineData("SqlParameter()", "scope(assembly:name:21:System.Data.SqlClient)type(namespace:21:System.Data.SqlClient|names:12:SqlParameter)[]", "Other.Data", false)]
+    [InlineData("System.Data.SqlClient.SqlParameter()", "scope(assembly:name:21:System.Data.SqlClient)type(namespace:21:System.Data.SqlClient|names:12:SqlParameter)[]", "", true)]
+    [InlineData("system.data.sqlclient.sqlparameter()", "scope(assembly:name:21:System.Data.SqlClient)type(namespace:21:System.Data.SqlClient|names:12:SqlParameter)[]", "", true)]
+    [InlineData("System.Data.SqlClient.SqlParameter()", "scope(assembly:name:21:System.Data.SqlClient)type(namespace:15:Other.Data.Sql|names:12:SqlParameter)[]", "", false)]
+    [InlineData("SqlParameter()", "scope(assembly:name:21:System.Data.SqlClient)type(namespace:21:System.Data.SqlClient|names:12:SqlParameter)", "System.Data.SqlClient", false)]
+    public void Publish_member_parameter_matching_rejects_wrong_shape_or_qualified_type(
+        string syntaxType, string metadataType, string importedNamespaces, bool expected)
+    {
+        Assert.Equal(expected, CombinedDependencyPathReporter.PublishParameterMatches(
+            syntaxType, metadataType, importedNamespaces: importedNamespaces));
+    }
+
+    [Fact]
     public async Task Separately_scanned_roots_merge_without_invented_joins()
     {
         using var temp = new TempDirectory();
@@ -1006,8 +1553,8 @@ public sealed class MessyWorkspaceRegressionTests
                 var terminalIds = chains[0].TraversalObservation!.ReachableTerminalIds.ToHashSet(StringComparer.Ordinal);
                 terminalSets.Add(terminalIds);
                 var boundaries = TerminalBoundaries(packet, $"{page}.RunButton_Click");
-                Require(caseId, "traversal", boundaries.Count == expectedTerminals,
-                    $"depth {depth}: expected {expectedTerminals} supported boundaries, found {boundaries.Count}");
+                Require(caseId, "traversal", boundaries.Count >= expectedTerminals,
+                    $"depth {depth}: fewer supported boundary rows than the {expectedTerminals} distinct terminals; found {boundaries.Count}");
                 Require(caseId, "traversal",
                     boundaries.Select(boundary => boundary.TerminalEvidenceId).Distinct(StringComparer.Ordinal).Count() == expectedTerminals,
                     $"depth {depth}: terminal evidence identities collapsed or crossed page routes");
@@ -1169,9 +1716,11 @@ public sealed class MessyWorkspaceRegressionTests
             && chain.TraversalObservation.DistinctReachableTerminalCount == 1),
             $"constructor-populated MyList must reach one SQL terminal; actual counts "
                 + $"[{string.Join(',', chains.Select(chain => chain.TraversalObservation?.DistinctReachableTerminalCount))}]");
+        var boundaries = TerminalBoundaries(packet, "ChoicesPage.Name_Init");
         Require("MW-DROPDOWN-CTOR-001", "traversal",
-            TerminalBoundaries(packet, "ChoicesPage.Name_Init").Count == 1,
-            "the constructor-to-helper SQL terminal has no boundary");
+            boundaries.Count >= 1
+                && boundaries.Select(boundary => boundary.TerminalEvidenceId).Distinct(StringComparer.Ordinal).Count() == 1,
+            "the constructor-to-helper route must retain one distinct SQL terminal boundary");
         Require("MW-DROPDOWN-CTOR-001", "traversal",
             chains.All(chain => chain.TraversalObservation!.TraversedRuleIds.Contains("combined.paths.projectless-vb-constructor-bridge.v1")),
             "the terminal witness did not traverse the constructor bridge");
@@ -1182,6 +1731,156 @@ public sealed class MessyWorkspaceRegressionTests
             webScan.Facts.Select(fact => fact.EvidenceTier)
                 .Concat(backendScan.Facts.Select(fact => fact.EvidenceTier)),
             packet.Gaps.Select(gap => gap.Classification));
+    }
+
+    [Fact]
+    public async Task Dropdown_init_imported_namespace_selects_only_exact_constructor_and_reaches_sql()
+    {
+        using var temp = new TempDirectory();
+        var (webScan, webIndex) = ScanRoot(temp, "vb-qualified-init-web", "qualified-init-web");
+        var (_, backendIndex) = ScanRoot(temp, "vb-qualified-init-backend", "qualified-init-backend");
+        Require("MW-DROPDOWN-QUALIFIED-001", "extraction",
+            webScan.Manifest.AnalysisLevel == "Level3SyntaxAnalysis"
+                && webScan.Facts.Any(fact => fact.FactType == FactTypes.ObjectCreated
+                    && fact.Properties.GetValueOrDefault("createdType") == "ChoiceNames"),
+            "the projectless Init handler did not retain its unqualified New expression");
+
+        var combinedIndex = Path.Combine(temp.Path, "qualified-init-combined.sqlite");
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions(
+            [webIndex, backendIndex], combinedIndex, ["web", "backend"]));
+        var graph = await CombinedDependencyPathReporter.BuildGraphInventoryAsync(combinedIndex);
+        var nodes = graph.Nodes.ToDictionary(node => node.NodeId, StringComparer.Ordinal);
+        Require("MW-DROPDOWN-QUALIFIED-001", "reconciliation",
+            graph.Edges.Count(edge => edge.EdgeKind == "projectless-vb-constructor-bridge"
+                && nodes[edge.FromNodeId].DisplayName == "NamesPage.Names_Init(Object,EventArgs)"
+                && nodes[edge.ToNodeId].DisplayName == "Synthetic.Data.ChoiceNames.New()") == 1,
+            "an explicit Imports should select the exact qualified constructor once");
+        Require("MW-DROPDOWN-QUALIFIED-001", "reconciliation",
+            graph.Edges.All(edge => edge.EdgeKind != "projectless-vb-constructor-bridge"
+                || nodes[edge.ToNodeId].DisplayName != "Unrelated.Data.ChoiceNames.New()"),
+            "the same-name constructor in an unrelated namespace must remain disconnected");
+
+        var written = await WebFormsModernizationPacketReporter.WriteAsync(
+            new(combinedIndex, Path.Combine(temp.Path, "qualified-init-packet"), MaxDepth: 10));
+        var packet = written.Packet;
+        var chains = packet.EventChains.Where(chain =>
+            chain.HandlerSymbol?.Contains("NamesPage.Names_Init", StringComparison.Ordinal) == true).ToArray();
+        Require("MW-DROPDOWN-QUALIFIED-001", "traversal",
+            chains.Length > 0 && chains.All(chain =>
+                chain.TraversalObservation?.TerminalReachabilityComplete == true
+                && chain.TraversalObservation.DistinctReachableTerminalCount == 1),
+            $"expected one complete terminal via the imported constructor; observed "
+                + $"[{string.Join(',', chains.Select(chain => $"{chain.TraversalObservation?.DistinctReachableTerminalCount}:{chain.TraversalObservation?.TerminalReachabilityComplete}"))}]");
+        Require("MW-DROPDOWN-QUALIFIED-001", "traversal",
+            TerminalBoundaries(packet, "NamesPage.Names_Init").Count == 1,
+            "the constructor side effect did not produce one supported boundary");
+        var audit = WebFormsVisualBasicReceiverBridgeAudit.Run(combinedIndex, written.JsonPath,
+            chains[0].SurfaceId, focusHandlerName: "Names_Init", focusCreatedTypeName: "ChoiceNames");
+        Require("MW-DROPDOWN-QUALIFIED-001", "diagnostic",
+            audit.Contains("constructorHopHandlerMatches=1")
+                && audit.Contains("constructorHopCreationFacts=1")
+                && audit.Contains("constructorHopCreation-01.qualifiedConstructorCandidates=1")
+                && audit.Contains("constructorHopCreation-01.bridgeEdges=1")
+                && audit.Contains("constructorHopCreation-01.constructorReceiverEdges=1")
+                && audit.Contains("constructorHopCreation-01.adjacencyDepth-00.nodes=1")
+                && audit.Any(line => line.Contains(".surfaceKind.sql-query=", StringComparison.Ordinal))
+                && audit.Contains("constructorHopCreation-01.adjacencyLimit=none")
+                && audit.All(line => !line.Contains("Synthetic.Data", StringComparison.Ordinal)),
+            "the focused diagnostic must identify the constructor hop without printing source identities: " + string.Join(";", audit.Where(line => line.StartsWith("constructorHop", StringComparison.Ordinal))));
+    }
+
+    [Fact]
+    public async Task Dropdown_init_direct_type_import_selects_exact_constructor()
+    {
+        using var temp = new TempDirectory();
+        var (_, webIndex) = ScanRoot(temp, "vb-type-import-web", "type-import-web");
+        var (_, backendIndex) = ScanRoot(temp, "vb-qualified-init-backend", "type-import-backend");
+        var combinedIndex = Path.Combine(temp.Path, "type-import-combined.sqlite");
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions(
+            [webIndex, backendIndex], combinedIndex, ["web", "backend"]));
+        var graph = await CombinedDependencyPathReporter.BuildGraphInventoryAsync(combinedIndex);
+        var nodes = graph.Nodes.ToDictionary(node => node.NodeId, StringComparer.Ordinal);
+        Assert.Single(graph.Edges, edge => edge.EdgeKind == "projectless-vb-constructor-bridge"
+            && nodes[edge.FromNodeId].DisplayName == "NamesPage.Names_Init(Object,EventArgs)"
+            && nodes[edge.ToNodeId].DisplayName == "Synthetic.Data.ChoiceNames.New()");
+    }
+
+    [Fact]
+    public async Task Dropdown_init_crosses_inherited_open_field_and_overloaded_sql_gateway()
+    {
+        using var temp = new TempDirectory();
+        var (webScan, webIndex) = ScanRoot(temp, "vb-overload-web", "overload-web");
+        var (backendScan, backendIndex) = ScanRoot(temp, "vb-overload-framework", "overload-framework");
+        Require("MW-DROPDOWN-OVERLOAD-001", "extraction",
+            webScan.Facts.Any(fact => fact.FactType == FactTypes.CallEdge
+                && fact.SourceSymbol == "Synthetic.Data.ChoiceRepository.SelectNames()"
+                && fact.Properties.GetValueOrDefault("calleeName") == "Open")
+            && webScan.Facts.Any(fact => fact.FactType == FactTypes.CallEdge
+                && fact.SourceSymbol == "Synthetic.Data.ChoiceRepository.SelectNames()"
+                && fact.Properties.GetValueOrDefault("calleeName") == "ExecuteProcedureDataSet")
+            && backendScan.Facts.Any(fact => fact.FactType == FactTypes.DatabaseOperationCandidate
+                && fact.SourceSymbol?.Contains("ProcedureGateway.ExecuteProcedureDataSet(", StringComparison.Ordinal) == true),
+            "the inherited Open call, overloaded gateway call, or Fill terminal was not extracted");
+        var combinedIndex = Path.Combine(temp.Path, "overload-combined.sqlite");
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions(
+            [webIndex, backendIndex], combinedIndex, ["web", "framework"]));
+        var graph = await CombinedDependencyPathReporter.BuildGraphInventoryAsync(combinedIndex);
+        var nodesById = graph.Nodes.ToDictionary(node => node.NodeId, StringComparer.Ordinal);
+        var gatewayOverloadTargets = graph.Edges
+            .Where(edge => edge.EdgeKind == "projectless-vb-receiver-bridge")
+            .Select(edge => nodesById[edge.ToNodeId].DisplayName)
+            .Where(name => name.Contains("ProcedureGateway.ExecuteProcedureDataSet(", StringComparison.Ordinal))
+            .Distinct(StringComparer.Ordinal).ToArray();
+        Require("MW-DROPDOWN-OVERLOAD-001", "reconciliation",
+            graph.Edges.Count(edge => edge.EdgeKind == "projectless-vb-receiver-bridge") >= 4
+                && gatewayOverloadTargets.Length == 2,
+            "the service, repository, gateway, and two distinct overload receiver hops were not all retained; targets="
+                + string.Join('|', gatewayOverloadTargets));
+        var packet = await WebFormsModernizationPacketReporter.BuildAsync(
+            new(combinedIndex, Path.Combine(temp.Path, "overload-packet"), MaxDepth: 10));
+        var chains = packet.EventChains.Where(chain =>
+            chain.HandlerSymbol?.Contains("NamesPage.Names_Init", StringComparison.Ordinal) == true).ToArray();
+        Require("MW-DROPDOWN-OVERLOAD-001", "traversal",
+            chains.Length > 0 && chains.All(chain =>
+                chain.TraversalObservation?.TerminalReachabilityComplete == true
+                && chain.TraversalObservation.DistinctReachableTerminalCount == 1),
+            "the overloaded ArrayList/ByRef gateway did not yield one complete SQL terminal; observed "
+                + string.Join(',', chains.Select(chain => $"{chain.TraversalObservation?.DistinctReachableTerminalCount}:{chain.TraversalObservation?.TerminalReachabilityComplete}")));
+    }
+
+    [Fact]
+    public async Task Dropdown_init_two_imported_constructor_namespaces_fail_closed()
+    {
+        using var temp = new TempDirectory();
+        var (_, webIndex) = ScanRoot(temp, "vb-qualified-ambiguous-web", "ambiguous-import-web");
+        var (_, backendIndex) = ScanRoot(temp, "vb-qualified-init-backend", "ambiguous-import-backend");
+        var combinedIndex = Path.Combine(temp.Path, "ambiguous-import-combined.sqlite");
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions(
+            [webIndex, backendIndex], combinedIndex, ["web", "backend"]));
+        var graph = await CombinedDependencyPathReporter.BuildGraphInventoryAsync(combinedIndex);
+        var nodes = graph.Nodes.ToDictionary(node => node.NodeId, StringComparer.Ordinal);
+        Require("MW-DROPDOWN-QUALIFIED-AMBIGUOUS-001", "reconciliation",
+            graph.Gaps.Any(gap => gap.GapKind == "ProjectlessVisualBasicConstructorTargetAmbiguous")
+                && graph.Edges.All(edge => edge.EdgeKind != "projectless-vb-constructor-bridge"
+                    || nodes[edge.FromNodeId].DisplayName != "NamesPage.Names_Init(Object,EventArgs)"),
+            "two explicitly imported same-name constructors must remain ambiguous");
+        var written = await WebFormsModernizationPacketReporter.WriteAsync(
+            new(combinedIndex, Path.Combine(temp.Path, "ambiguous-import-packet"), MaxDepth: 10));
+        var packet = written.Packet;
+        var chains = packet.EventChains.Where(chain =>
+            chain.HandlerSymbol?.Contains("NamesPage.Names_Init", StringComparison.Ordinal) == true).ToArray();
+        Require("MW-DROPDOWN-QUALIFIED-AMBIGUOUS-001", "traversal",
+            chains.Length > 0 && chains.All(chain =>
+                chain.TraversalObservation?.TerminalReachabilityComplete == true
+                && chain.TraversalObservation.DistinctReachableTerminalCount == 0),
+            "ambiguous imported constructors must not invent either SQL terminal");
+        var audit = WebFormsVisualBasicReceiverBridgeAudit.Run(combinedIndex, written.JsonPath,
+            chains[0].SurfaceId, focusHandlerName: "Names_Init", focusCreatedTypeName: "ChoiceNames");
+        Require("MW-DROPDOWN-QUALIFIED-AMBIGUOUS-001", "diagnostic",
+            audit.Contains("constructorHopCreationFacts=1")
+                && audit.Contains("constructorHopCreation-01.bridgeEdges=0")
+                && audit.Contains("constructorHopCreation-01.bridgeGapReason.constructor-target-ambiguous=1"),
+            "the focused diagnostic must report a fail-closed constructor ambiguity");
     }
 
     [Fact]
@@ -1313,8 +2012,38 @@ public sealed class MessyWorkspaceRegressionTests
             constructorEdges.All(edge => !nodes[edge.ToNodeId].DisplayName.Contains("OtherNamespace.Foo.New", StringComparison.Ordinal)),
             "an unqualified creation was attached to an unrelated namespace");
         Require("MW-CONSTRUCTOR-IDENTITY-001", "reconciliation",
+            constructorEdges.Any(edge => nodes[edge.FromNodeId].DisplayName == "CallerNamespace.ReviewCaller.Run()"
+                && nodes[edge.ToNodeId].DisplayName == "CallerNamespace.Foo.New()"),
+            $"the local lexical namespace must resolve its own same-name constructor; edges=[{string.Join(';', constructorEdges.Select(edge => $"{nodes[edge.FromNodeId].DisplayName}->{nodes[edge.ToNodeId].DisplayName}"))}]");
+        Require("MW-CONSTRUCTOR-IDENTITY-001", "reconciliation",
             graph.Gaps.Any(gap => gap.GapKind == "ProjectlessVisualBasicConstructorTargetUnavailable"),
-            "the unresolved unqualified constructor needs an explicit gap");
+            "the root-level unqualified constructor needs an explicit gap");
+    }
+
+    [Fact]
+    public async Task Reconvergent_routes_retain_two_page_chains_to_one_terminal()
+    {
+        using var temp = new TempDirectory();
+        var (scan, index) = ScanRoot(temp, "root-route-reconvergence", "shared-route-page");
+        Require("MW-SHARED-TERMINAL-ROUTES-001", "extraction",
+            scan.Manifest.BuildStatus == "Succeeded", "the public reconvergent route fixture did not build");
+        Require("MW-SHARED-TERMINAL-ROUTES-001", "extraction",
+            scan.Facts.Count(fact => fact.FactType == FactTypes.CallEdge
+                && fact.SourceSymbol?.Contains("SharedPage.Run_Click", StringComparison.Ordinal) == true) == 2,
+            "the page handler did not retain both first-level calls");
+
+        var packet = await WebFormsModernizationPacketReporter.BuildAsync(new(index, Path.Combine(temp.Path, "packet")));
+        var chains = packet.EventChains.Where(chain => chain.HandlerSymbol?.Contains("SharedPage.Run_Click", StringComparison.Ordinal) == true).ToArray();
+        Require("MW-SHARED-TERMINAL-ROUTES-001", "traversal", chains.Length == 2,
+            $"two routes to one retained terminal should yield two page chains, found {chains.Length}; queries=[{string.Join(";", scan.Facts.Where(fact => fact.FactType == FactTypes.QueryPatternDetected).Select(fact => fact.SourceSymbol))}]; calls=[{string.Join(";", scan.Facts.Where(fact => fact.FactType == FactTypes.CallEdge).Select(fact => $"{fact.SourceSymbol}->{fact.TargetSymbol}"))}]; all chains=[{string.Join(";", packet.EventChains.Select(chain => $"{chain.HandlerSymbol}:{chain.TerminalKind}:{chain.LegacyPathId}"))}]");
+        Require("MW-SHARED-TERMINAL-ROUTES-001", "traversal",
+            chains.All(chain => chain.TraversalObservation?.TerminalReachabilityComplete == true
+                && chain.TraversalObservation.DistinctReachableTerminalCount == 1),
+            "both route rows must share one complete terminal inventory");
+        Require("MW-SHARED-TERMINAL-ROUTES-001", "traversal",
+            packet.DownstreamBoundaries.Where(boundary => chains.Any(chain => chain.ChainId == boundary.ChainId))
+                .Select(boundary => boundary.TerminalEvidenceId).Distinct(StringComparer.Ordinal).Count() == 1,
+            "the shared terminal must not be misreported as two distinct terminals");
     }
 
     [Fact]
@@ -1524,7 +2253,8 @@ public sealed class MessyWorkspaceRegressionTests
         string label,
         IReadOnlyList<string> assemblies,
         IReadOnlyList<string>? pdbs = null,
-        bool ilBody = false)
+        bool ilBody = false,
+        string? webFormsPublishReceipt = null)
     {
         var source = MessyRoot(rootName);
         var commit = GitMetadataProvider.Detect(source).CommitSha;
@@ -1550,7 +2280,8 @@ public sealed class MessyWorkspaceRegressionTests
             CompiledInputPaths: assemblies,
             CompiledBindingReceiptPaths: [receipt],
             PdbInputPaths: pdbs,
-            IlBodyEvidence: ilBody));
+            IlBodyEvidence: ilBody,
+            WebFormsPublishReceiptPath: webFormsPublishReceipt));
     }
 
     private static string MessyRoot(string rootName) =>

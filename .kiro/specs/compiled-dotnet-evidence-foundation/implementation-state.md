@@ -1946,3 +1946,120 @@ a later closure wave; otherwise that narrower query would silently lose
 deeper terminal paths. The public regression inserts 250 unrelated
 same-name declarations and preserves the page-two two-terminal inventory.
 Private pages 2, 3, and 11 remain an owner rerun, not a claimed acceptance.
+
+## 2026-09-24 bound IL page-path experiment
+
+Branch `codex/webforms-qualified-constructor-proof` retains a public-safe
+projectless VB fixture for the dropdown constructor → BusinessLogic field →
+DataAccess base-class `Open` → inherited SQL-helper field → overloaded gateway
+shape. That source-only fixture reaches its synthetic SQL terminal, so it does
+not reproduce the private page-002 gap and authorizes no resolver claim.
+
+The separate `combined.paths.compiled-il-bridge.v1` experiment projects only
+bound, exact source-to-metadata joins and uniquely matched direct IL MethodDef
+or complete assembly-scoped MemberRef targets into the in-memory combined
+path graph. `callvirt` remains a review-tier dispatch candidate. A public
+generated Web Forms-shaped bridge is terminal-free without compiled inputs
+and reaches supported SQL evidence with bound IL; a C#→VB fixture pins a
+cross-assembly MemberRef and inherited `Open`-initialized field. Duplicated
+method identities withhold edges and emit gaps. No private assembly, PDB, or
+page rerun has been inspected for this experiment. Projectless source-to-binary
+binding, unadmitted external assemblies, and single-index compact packet
+closure remain unresolved. No PR or work-machine command is ready solely from
+this public proof.
+
+Local validation: the focused public regressions passed, the complete .NET
+test project passed 2,289/2,289 with no failures, `git diff --check` passed,
+and the private-path guard passed. These results do not replace a page-002
+binary admission and traversal receipt from the work machine.
+
+A follow-up read-only `Show-FocusedWebFormsCompiledInputs.ps1` top-level `bin`
+inventory reports only DLL/PDB counts, portable/Windows/other PDB format
+counts, and DLL/PDB basename-pair count. It prints no private filenames or
+input path, creates no artifact, and makes no source-binding claim. This
+short diagnostic is available before any private binary admission attempt.
+
+The owner ran that inventory on the work machine: 34 DLLs, two PDBs, both
+classic Windows-format and paired by basename, zero portable PDBs. These
+counts do not establish whether the page handler or `App_Code` implementation
+exists in that `bin` folder. The current `PortablePdbExtractor` explicitly
+withholds Windows PDBs (`WindowsPdbIndependentReaderUnavailable`).
+
+The public `vb-pdb-projectless`/`vb-pdb-build` fixture now fails source-only
+before SQL and passes an admitted portable-PDB→metadata→IL→cross-assembly
+generated bridge→SQL path. The in-memory
+`combined.paths.projectless-pdb-identity.v1` entry requires exact source
+document checksum, bound PDB method row, all visible sequence points owned by
+one VB method block, matching metadata name, and one unique retained source
+method; duplicate source declarations and missing checksum facts fail closed.
+This proves the projectless location-join design on portable PDBs, not native
+Windows PDB support or the private page-002 chain. No PR or work-machine scan
+is ready on the basis of this public fixture alone.
+The next public proof needs a native Windows-PDB fixture built from a clean
+projectless Web Forms shape, a bounded independently checked reader, and an
+exact page-method admission test. The 34 DLLs in the observed work `bin` are
+not proof that its dynamically compiled page/App_Code methods are among them.
+Validation for this portable-PDB slice: the new source-only/bound/ambiguity
+regression passed; the messy-workspace suite passed 31/31; the full .NET suite
+passed 2,290/2,290; a zero-warning build with warnings as errors, the
+private-path guard, and `git diff --check` passed. The final source-file index
+optimization was followed by the zero-warning build and four focused bound-IL
+regressions; no private scan was run.
+
+The subsequent public no-PDB Web Site publish work is on
+`codex/webforms-qualified-constructor-proof`. At `eafc6af1`, the home Windows
+fixture passed 1/1 and proved an admitted cross-assembly IL MemberRef from
+the published `Names_Init` method to the `App_Code` constructor, with two
+DLLs, two `.compiled` maps, and no PDB. This is binary-to-binary static
+evidence, not source-method binding.
+
+At `4cebcb65`, the scanner gained explicit `--webforms-publish-receipt`
+consumption. It independently rechecks the operator-declared local-only
+receipt, current source and emitted bytes, source commit, and `.compiled`
+page map before emitting page-to-assembly evidence. The combined graph may
+then add only a Tier3 candidate from a uniquely qualified projectless VB
+handler to a uniquely bound method in the exact mapped assembly; missing or
+ambiguous joins emit gaps. No PDB line, execution, or private-site claim is
+made. Local validation passed: 34/34 messy-workspace tests, 2,293/2,293
+full .NET tests, zero-warning build, private-path guard, and whitespace check.
+The expanded Windows end-to-end test was still required at that SHA before a
+PR or public full-path support claim.
+
+That `4cebcb65` home-Windows test passed 1/1: the receipt was bound, the
+page-map fact was present, and the Tier3 `Names_Init` candidate reached its
+published method while the exact IL MemberRef reached `GroupOptions`.
+The next public slice extends this to receipt-listed `App_Code` methods using
+fully qualified containing types, compatible parameter shapes, exact emitted
+assembly hashes, and a bounded uniqueness check. A public source-only test
+shows that the deep `ExecProc_DataSet(String,SqlParameter())` method already
+reaches SQL evidence, but `DataAccess.SelectGroups` does not reach it without
+the compiled path. At exact public commit
+`fa696ce8fd7fd8549aa7483a007a3c7250d8f315`, the home-Windows focused
+test passed (exit 0, 1/1). Its traversal assertion found a report path from
+`Names_Init` through a Tier3 review-only publish-method candidate, at least
+four admitted IL-call edges, a publish-member candidate, and retained
+`sql-query` evidence. The isolated Windows checkout remained tracked-clean;
+no private files were accessed. Local macOS validation at that code head
+passed the 39/39 focused messy-workspace suite, zero-warning build, and
+2,298/2,298 full .NET suite on rerun. This establishes a public static
+reported-chain proof, not private page-002 behavior, exact source-line/PDB
+identity, or runtime execution. The branch is ready for PR review, subject
+to exact-head gates; neither Task 10 nor Task 11 is completed by this slice.
+
+PR #793 opened at `05b09ede` against `dev`. The first ACK result returned
+`PATCH_AUTHORIZED` with nine unresolved threads, one actionable top-level
+finding, and five pending checks. The consolidated review repair in progress
+requires the mapped handler's linked code-behind to be bound by the same
+publish receipt; narrows bare VB parameter names to retained lexical/import
+scope, case-folds VB spelling, handles direct type imports, uses canonical
+paths for the public publish receipt, attributes terminal summaries to the
+receipted TraceMap commit, and promotes the now-proven publish catalog case
+instead of expecting a gap that cannot be emitted. Focused macOS validation
+passed 45/45 messy-workspace tests, 88/88 VB adapter/fixture tests, 43/43
+data/external/Web Forms tests, the public terminal-summary PowerShell guard,
+three VB CLI scans and artifact checks, byte-identical repeat modern facts,
+and the pinned `community-visual-basic` smoke at `20d2a51` (110,726 facts,
+reduced/partial). The full .NET suite then passed 2,304/2,304 on macOS.
+The pushed-head Windows publish test remains required before claiming the
+repair complete. No merge authority
+is inferred from the local results.

@@ -320,6 +320,39 @@
       "assertions": "the duplicate constructor type identities produce an explicit Tier4 ambiguity gap and cannot create a terminal path from the page"
     },
     {
+      "id": "MW-DROPDOWN-QUALIFIED-001",
+      "status": "implemented",
+      "roots": ["vb-qualified-init-web", "vb-qualified-init-backend"],
+      "shape": "a projectless VB dropdown Init handler creates an unqualified data-access type imported from one explicit namespace; its constructor calls two same-name helper methods before SQL, while an unrelated same-simple-name constructor in a second namespace has its own SQL decoy",
+      "stages": ["extraction", "combining", "reconciliation", "traversal"],
+      "expectedRuleIds": ["vb.syntax.objectcreation.v1", "combined.paths.projectless-vb-constructor-bridge.v1", "combined.paths.projectless-vb-receiver-bridge.v1", "vb.syntax.database-operation.v1"],
+      "expectedTiers": ["Tier3SyntaxOrTextual"],
+      "expectedGaps": [],
+      "assertions": "only the explicitly imported qualified constructor is bridged, the helper chain reaches one supported SQL terminal with complete retained-graph reachability, and source-local symbol reconciliation cannot merge the unrelated same-name constructor into a false second terminal"
+    },
+    {
+      "id": "MW-DROPDOWN-QUALIFIED-AMBIGUOUS-001",
+      "status": "implemented",
+      "roots": ["vb-qualified-ambiguous-web", "vb-qualified-init-backend"],
+      "shape": "an unqualified projectless VB constructor creation has explicit Imports for two namespaces with same-name same-arity constructor declarations",
+      "stages": ["extraction", "combining", "reconciliation", "traversal"],
+      "expectedRuleIds": ["combined.paths.projectless-vb-constructor-bridge.v1"],
+      "expectedTiers": ["Tier4Unknown"],
+      "expectedGaps": ["ProjectlessVisualBasicConstructorTargetAmbiguous"],
+      "assertions": "competing imported constructor identities fail closed with an explicit ambiguity gap and zero invented SQL terminals"
+    },
+    {
+      "id": "MW-DROPDOWN-OVERLOAD-001",
+      "status": "implemented",
+      "roots": ["vb-overload-web", "vb-overload-framework"],
+      "shape": "a projectless VB dropdown Init handler reads a constructor-populated list; App_Code DataAccess inherits a field-level SQL gateway and Open method that assigns it, then calls that gateway in a separate scan root through an ArrayList/ByRef overload that forwards into an array overload containing an ADO.NET Fill operation",
+      "stages": ["extraction", "combining", "reconciliation", "traversal"],
+      "expectedRuleIds": ["vb.syntax.event-wiring.v1", "vb.syntax.objectcreation.v1", "vb.syntax.database-operation.v1", "combined.paths.projectless-vb-constructor-bridge.v1", "combined.paths.projectless-vb-receiver-bridge.v1"],
+      "expectedTiers": ["Tier3SyntaxOrTextual"],
+      "expectedGaps": [],
+      "assertions": "the inherited Open-initialized field receiver and distinct two- and three-argument gateway overloads are retained, and the merged packet reports one complete supported SQL terminal; this synthetic result does not prove private-corpus behavior or runtime execution"
+    },
+    {
       "id": "MW-DROPDOWN-INLINE-AMBIGUOUS-001",
       "status": "implemented",
       "roots": ["vb-init-web", "vb-init-backend", "vb-init-service-duplicate"],
@@ -334,12 +367,12 @@
       "id": "MW-CONSTRUCTOR-IDENTITY-001",
       "status": "implemented",
       "roots": ["vb-review-constructor", "vb-review-semantic", "vb-review-projectless"],
-      "shape": "projectless VB constructs a nested type after a generic outer type and calls through a parenthesized inline New receiver; an unqualified same-simple-name type in another namespace and a compiler-rejected semantic-project constructor remain unrelated",
+      "shape": "projectless VB constructs a nested type after a generic outer type and calls through a parenthesized inline New receiver; a creation in its lexical namespace resolves only that namespace's same-simple-name constructor, a root-level creation cannot guess a namespace, and a compiler-rejected semantic-project constructor remains unrelated",
       "stages": ["extraction", "combining", "reconciliation"],
       "expectedRuleIds": ["vb.syntax.objectcreation.v1", "vb.syntax.callgraph.v1", "combined.paths.projectless-vb-constructor-bridge.v1"],
       "expectedTiers": ["Tier3SyntaxOrTextual", "Tier4Unknown"],
       "expectedGaps": ["ProjectlessVisualBasicConstructorTargetUnavailable"],
-      "assertions": "balanced generic normalization preserves the nested constructor identity, parentheses preserve exact inline-New receiver provenance, unqualified names cannot bridge into an unrelated namespace, and compiler-rejected semantic fallback cannot be rescued by another projectless root"
+      "assertions": "balanced generic normalization preserves the nested constructor identity, parentheses preserve exact inline-New receiver provenance, lexical namespace evidence selects only its own constructor, root-level unqualified names cannot bridge into an unrelated namespace, and compiler-rejected semantic fallback cannot be rescued by another projectless root"
     },
     {
       "id": "MW-DROPDOWN-SINGLE-001",
@@ -353,6 +386,17 @@
       "assertions": "bounded single-index graph admission retains the constructor declaration and body facts instead of silently losing the side-effect terminal, while inline-New receiver evidence never bridges to the same-name implicit-Me decoy"
     },
     {
+      "id": "MW-SHARED-TERMINAL-ROUTES-001",
+      "status": "implemented",
+      "roots": ["root-route-reconvergence"],
+      "shape": "a Web Forms handler calls two same-named Run methods in separate classes within one source file; both continue two levels and converge on one SQL terminal",
+      "stages": ["extraction", "traversal"],
+      "expectedRuleIds": ["legacy.webforms.event-binding.v1", "csharp.semantic.callgraph.v1", "legacy.flow.static-traversal.v1"],
+      "expectedTiers": ["Tier1Semantic", "Tier2Structural"],
+      "expectedGaps": [],
+      "assertions": "the packet retains two bounded event-chain routes while the complete supported-terminal inventory counts their shared terminal once"
+    },
+    {
       "id": "MW-COMPOUND-LIMIT-001",
       "status": "implemented",
       "roots": ["vb-compound-pages"],
@@ -362,6 +406,18 @@
       "expectedTiers": ["Tier4Unknown"],
       "expectedGaps": ["GraphInputLimitReached"],
       "assertions": "the packet reports graph-syntax-closure-work as an input limit and never classifies the page-three analogue as a complete zero-terminal result"
+    },
+    {
+      "id": "MW-PUBLISH-NOPDB-001",
+      "status": "implemented",
+      "roots": ["vb-publish-projectless"],
+      "shape": "an actual public VB Web Site publish emits page and App_Code assemblies plus a page mapping but no PDB; a dropdown Init handler crosses the constructor, inherited Open, two procedure helper overloads, and the public DbDataAdapter.Fill(DataSet) call target",
+      "stages": ["extraction", "reconciliation", "traversal"],
+      "expectedRuleIds": ["dotnet.compiled.member.v1", "dotnet.compiled.il-call.v1", "combined.paths.compiled-il-bridge.v1"],
+      "expectedTiers": ["Tier2Structural", "Tier3SyntaxOrTextual"],
+      "expectedGaps": [],
+      "blocker": null,
+      "assertions": "a Windows publish regression must use a bounded receipt and exact admitted DLLs to report the static chain through at least four IL calls to retained SQL evidence, with source-method joins labeled Tier3 review-only; no exact source-line or runtime claim is made"
     }
   ]
 }
