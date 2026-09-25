@@ -191,7 +191,8 @@ public static partial class CombinedDependencyPathReporter
             foreach (var handler in facts.Where(fact => fact.SourceIndexId == map.SourceIndexId
                          && fact.FactType == FactTypes.WebFormsHandlerResolved
                          && fact.Properties.GetValueOrDefault("markupFile") == sourcePath
-                         && fact.Properties.GetValueOrDefault("pageTypeName") == pages[0].Properties.GetValueOrDefault("pageTypeName"))
+                         && string.Equals(fact.Properties.GetValueOrDefault("pageTypeName"),
+                             pages[0].Properties.GetValueOrDefault("pageTypeName"), StringComparison.OrdinalIgnoreCase))
                      .OrderBy(fact => fact.CombinedFactId, StringComparer.Ordinal))
             {
                 var name = handler.Properties.GetValueOrDefault("handlerName");
@@ -219,8 +220,9 @@ public static partial class CombinedDependencyPathReporter
                         && fact.FactType == FactTypes.MethodDeclared
                         && fact.RuleId == RuleIds.VisualBasicSyntaxDeclarations
                         && fact.FilePath == linkedCode
-                        && fact.Properties.GetValueOrDefault("qualifiedContainingType") == pages[0].Properties.GetValueOrDefault("pageTypeName")
-                        && fact.Properties.GetValueOrDefault("name") == name
+                        && string.Equals(fact.Properties.GetValueOrDefault("qualifiedContainingType"),
+                            pages[0].Properties.GetValueOrDefault("pageTypeName"), StringComparison.OrdinalIgnoreCase)
+                        && string.Equals(fact.Properties.GetValueOrDefault("name"), name, StringComparison.OrdinalIgnoreCase)
                         && fact.StartLine == handler.StartLine)
                     .ToArray();
                 if (declarations.Length != 1)
@@ -233,8 +235,8 @@ public static partial class CombinedDependencyPathReporter
                         && fact.FactType == FactTypes.ManagedMethodDeclared
                         && fact.Properties.GetValueOrDefault("provenanceState") == "bound"
                         && fact.Properties.GetValueOrDefault("rawFileSha256") == rawSha
-                        && fact.Properties.GetValueOrDefault("metadataName") == name
-                        && fact.TargetSymbol?.Contains("|type:" + sourceType + "|arity:0|method:", StringComparison.Ordinal) == true)
+                        && string.Equals(fact.Properties.GetValueOrDefault("metadataName"), name, StringComparison.OrdinalIgnoreCase)
+                        && fact.TargetSymbol?.Contains("|type:" + sourceType + "|arity:0|method:", StringComparison.OrdinalIgnoreCase) == true)
                     .ToArray();
                 if (methods.Length != 1)
                 {
@@ -261,7 +263,7 @@ public static partial class CombinedDependencyPathReporter
 
     private static bool MatchesTypePath(string? identity, string typeName) =>
         TrySimpleTypePath(typeName, out var typePath)
-        && identity?.Contains("|type:" + typePath + "|arity:0", StringComparison.Ordinal) == true;
+        && identity?.Contains("|type:" + typePath + "|arity:0", StringComparison.OrdinalIgnoreCase) == true;
 
     private static void AddProjectlessPublishMemberCandidates(EvidenceGraph graph, IReadOnlyList<CombinedFactRow> facts)
     {
@@ -292,7 +294,8 @@ public static partial class CombinedDependencyPathReporter
             .ToDictionary(group => group.Key, group => group.ToArray());
         var methodsByName = facts.Where(fact => fact.FactType == FactTypes.ManagedMethodDeclared
                 && fact.Properties.GetValueOrDefault("provenanceState") == "bound")
-            .GroupBy(fact => (fact.SourceIndexId, fact.Properties.GetValueOrDefault("metadataName")))
+            .GroupBy(fact => (fact.SourceIndexId,
+                Name: fact.Properties.GetValueOrDefault("metadataName")?.ToUpperInvariant()))
             .ToDictionary(group => group.Key, group => group.ToArray());
         long candidateWork = 0;
         foreach (var source in sourceInputs)
@@ -300,7 +303,7 @@ public static partial class CombinedDependencyPathReporter
             if (!declarationsByFile.TryGetValue((source.SourceIndexId, source.FilePath), out var declarations)) continue;
             foreach (var declaration in declarations)
             {
-                var key = (source.SourceIndexId, declaration.Properties.GetValueOrDefault("name"));
+                var key = (source.SourceIndexId, declaration.Properties.GetValueOrDefault("name")?.ToUpperInvariant());
                 candidateWork += methodsByName.GetValueOrDefault(key)?.Length ?? 0;
                 if (candidateWork <= 100_000) continue;
                 AddCompiledIlGap(graph, source, "ProjectlessPublishMemberWorkLimit",
@@ -328,11 +331,11 @@ public static partial class CombinedDependencyPathReporter
                 var name = declaration.Properties.GetValueOrDefault("name");
                 var memberIdentity = declaration.Properties.GetValueOrDefault("memberIdentity");
                 if (!TrySimpleTypePath(typeName, out var typePath) || string.IsNullOrWhiteSpace(name)
-                    || name == "New" || string.IsNullOrWhiteSpace(memberIdentity))
+                    || name.Equals("New", StringComparison.OrdinalIgnoreCase) || string.IsNullOrWhiteSpace(memberIdentity))
                     continue;
-                var candidates = (methodsByName.GetValueOrDefault((source.SourceIndexId, name)) ?? [])
+                var candidates = (methodsByName.GetValueOrDefault((source.SourceIndexId, name.ToUpperInvariant())) ?? [])
                     .Where(fact => hashes.Contains(fact.Properties.GetValueOrDefault("rawFileSha256"))
-                        && fact.TargetSymbol?.Contains("|type:" + typePath + "|arity:0|method:", StringComparison.Ordinal) == true
+                        && fact.TargetSymbol?.Contains("|type:" + typePath + "|arity:0|method:", StringComparison.OrdinalIgnoreCase) == true
                         && PublishCandidateSignatureMatches(declaration, fact))
                     .ToArray();
                 if (candidates.Length != 1)
@@ -435,6 +438,10 @@ public static partial class CombinedDependencyPathReporter
             "LONG" => "System.Int64",
             "SHORT" => "System.Int16",
             "BYTE" => "System.Byte",
+            "UINTEGER" => "System.UInt32",
+            "ULONG" => "System.UInt64",
+            "USHORT" => "System.UInt16",
+            "SBYTE" => "System.SByte",
             "DECIMAL" => "System.Decimal",
             "DOUBLE" => "System.Double",
             "SINGLE" => "System.Single",
