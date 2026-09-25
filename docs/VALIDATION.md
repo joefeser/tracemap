@@ -3491,9 +3491,14 @@ above.
 `samples/messy-dotnet-workspace/vb-publish-projectless` is a source-only,
 public-safe Web Site fixture for the dropdown `Init` → constructor-populated
 list → business/data-access wrapper → inherited `Open` → overloaded procedure
-helper → `SqlDataAdapter.Fill` shape. Its source-only regression test requires
-that TraceMap **not** claim a SQL path before an exact source-to-binary entry is
-admitted. The fixture contains no private source, credentials, or runnable
+helper → data-adapter `Fill` shape. The fixture constructs a `SqlDataAdapter`,
+but the published one-argument IL call targets the **public override**
+`System.Data.Common.DbDataAdapter.Fill(DataSet)`. Protected `Fill` overloads
+have different signatures and are not the observed call target (see the
+[.NET Framework API signature](https://learn.microsoft.com/en-us/dotnet/api/system.data.common.dbdataadapter.fill?view=netframework-4.8.1)). Its
+source-only regression test requires that TraceMap **not** claim a SQL path
+before an exact source-to-binary entry is admitted. The fixture contains no
+private source, credentials, or runnable
 database dependency; executing its SQL path is outside the test.
 
 On Windows, `pwsh -NoProfile -File scripts/validation/Test-PublicWebFormsPublish.ps1`
@@ -3501,8 +3506,19 @@ uses the 32-bit .NET Framework `aspnet_compiler.exe` to precompile this public
 fixture into a fresh temporary directory without `-u`. It checks for one
 `Pages/Lookup.aspx` `.compiled` map, its named DLL, and no PDB, and prints
 the compiler SHA-256 plus the bounded public input SHA-256. This validation
-script is **not** a private-site publishing instruction. Until this public
-Windows run succeeds and the emitted `.compiled` and metadata identities are
+script is **not** a private-site publishing instruction. Even after the public
+Windows run succeeded and the emitted `.compiled` and metadata identities were
 inspected, the map is only page-to-assembly evidence: it is not a verified
 source-method, IL-chain, or runtime claim. A 32-bit-only dependency in a
 private site does not become AnyCPU through CodeDOM configuration.
+
+The public-only home-Windows check at `822d3b55dc287b1820e8d42ad4c534cf8304242a`
+passed: six public inputs produced two DLLs, two `.compiled` maps, no PDBs,
+and one `Pages/Lookup.aspx` map to `App_Web_r50enpyu` / `ASP.pages_lookup_aspx`.
+Read-only published-IL inspection observed the static chain from
+`LookupPage.Names_Init` through the constructor, business/data-access methods,
+inherited `SqlBaseDA.Open`, and both `ExecProc_DataSet` overloads to the
+public `DbDataAdapter.Fill(DataSet)` target. This does **not** establish a
+TraceMap source-method edge, line identity, cross-assembly App_Code binding,
+runtime execution, or private-site behavior. The test must pin those joins
+before a full-path support claim.

@@ -74,8 +74,10 @@ Roots:
   `Fill`. Its source-only regression must stop short of SQL. The separate
   Windows publish check uses the 32-bit Framework compiler without `-u` and
   verifies only that a `.compiled` map names an existing page assembly with
-  no PDB. It does not yet establish a source-method identity join or a
-  complete compiled path.
+  no PDB. The public published IL constructs a `SqlDataAdapter` and calls the
+  public inherited `DbDataAdapter.Fill(DataSet)` override; that one-argument
+  target is not a protected overload. The fixture does not yet establish a
+  TraceMap source-method identity join or a complete compiled path.
 - `root-crosslanguage/` — buildable C#→VB→F# project graph. The fixture pins
   the current partial evidence: a C# syntax downgrade with a compilation gap,
   a VB semantic call to F#, admitted F# metadata, and an explicit unsupported
