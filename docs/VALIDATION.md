@@ -3526,6 +3526,22 @@ inspected, the map alone is only page-to-assembly evidence: it is not a verified
 source-method, IL-chain, or runtime claim. A 32-bit-only dependency in a
 private site does not become AnyCPU through CodeDOM configuration.
 
+`Test-PublicWebFormsPublish.ps1 -Updatable` publishes the public
+`vb-publish-mapless` fixture with `-u -v /UBid`: four DLLs (`App_Code`,
+`App_global.asax`, `App_WebReferences`, and `App_Web_*`), exactly three
+`.compiled` maps (`/UBid/App_Code/`, `/UBid/global.asax`, and
+`/UBid/App_WebReferences/`), no page map, and no PDB. The `App_Web_*` metadata still
+declares the code-behind handler and its IL calls. An updatable publish does
+not establish page activation or a generated `ASP.*` page type. Its local
+receipt declares `mapless-source-type-candidate`, hashes every emitted DLL
+and map, and supplies the exact source commit. The scanner requires the
+declared page, source file, map inventory, and an `App_Web_*` assembly. The
+combined graph requires exactly one bound code-behind type and method among
+the selected assemblies; zero or multiple matches produce a gap. The
+source-handler to compiled-method edge is Tier3 and review-only. Without a
+PDB, no source line is assigned to the compiled method. IL call edges and
+source SQL evidence describe a static path, not execution.
+
 The public-only home-Windows check at `822d3b55dc287b1820e8d42ad4c534cf8304242a`
 passed: six public inputs produced two DLLs, two `.compiled` maps, no PDBs,
 and one `Pages/Lookup.aspx` map to `App_Web_r50enpyu` / `ASP.pages_lookup_aspx`.
@@ -3571,8 +3587,9 @@ current source. Run the public synthetic guard first:
 pwsh -NoProfile -File scripts/tests/Test-ExistingWebFormsPublishProof.ps1
 ```
 
-On Windows the guard also publishes the public two-DLL/no-PDB fixture and
-requires a reported `Names_Init` to `sql-query` path. That Windows case must
+On Windows the guard publishes both mapped two-DLL and updatable four-DLL public no-PDB
+fixtures and requires a `Names_Init` to `sql-query` path with a Tier3 source
+candidate in the mapless case. That Windows case must
 pass before using this diagnostic on a private site. For a local-only site
 probe, run from a clean TraceMap checkout:
 
@@ -3583,15 +3600,17 @@ pwsh -NoProfile -File scripts/Invoke-ExistingWebFormsPublishProof.ps1 -HandlerNa
 The script prompts for the source Web Site folder, the existing published
 output folder (containing `bin/` and `.compiled` maps), and the page path
 relative to the source site (for example `BidGroup.aspx` when the site folder
-is `UBid`). It requires one unambiguous page map, a matching mapped DLL, a clean source-site Git scope,
+is `UBid`). It requires zero or one unambiguous page map and a clean source-site Git scope,
 and bounded committed page/code-behind, relevant `Web.config`, plus
 `App_Code` sources. The scan is explicitly limited to those receipted source
 files; it is not a complete-site source scan. It matches the page map by
 exact virtual path, or by one unique application-root-prefixed
 suffix when the `.compiled` virtual path differs from the source-relative
-page path. The receipt records both paths and retains the map bytes unchanged;
-zero or multiple candidates stop with map-count diagnostics. It selects the mapped
-page DLL and `App_Code` DLLs by default; `-AdditionalAssemblyName` may name
+page path. A mapped page selects its named DLL. With no matching page map,
+the mapless path selects every `App_Web_*` DLL and `App_Code` DLL, hashes and
+copies every `.compiled` map, and records an explicit Tier3 source-type
+candidate. No `App_Web_*` DLL or multiple matching maps stop the probe.
+`-AdditionalAssemblyName` may name
 other **exact** DLL filenames only when the operator can attest they were
 built from the same source commit. Every other `bin/*.dll` must be explicitly
 declared outside this focused proof (one `OUTOFSCOPE` response); otherwise
@@ -3600,7 +3619,7 @@ each available DLL hash and its selected/out-of-scope disposition. An
 out-of-scope DLL is never a complete-publish or cross-assembly claim.
 The source subset follows `CodeBehind`/`CodeFile` in the page directive,
 then conventional VB/C# fallback, and includes every ancestor `Web.config`.
-It copies only selected DLLs and the map
+It copies only selected DLLs and the relevant mapped map or all mapless maps
 to a fresh local temporary output, not the source site. It enforces the
 receipt's 256-source, 64-published-file, 32-page, and per-file limits before
 scanning. `-PrepareOnly` stops after the local receipt and copies.

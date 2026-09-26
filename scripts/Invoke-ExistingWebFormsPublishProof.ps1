@@ -93,11 +93,11 @@ function Get-LinkedCodePaths([string]$MarkupPath, [string]$PageRelativePath) {
                     throw 'WEBFORMS_EXISTING_PUBLISH_LINKED_CODE_UNSAFE'
                 }
                 $linked = if ($pageDirectory) { "$pageDirectory/$relative" } else { $relative }
-                return ,@($linked)
+                return @($linked)
             }
         }
     }
-    return ,@("$PageRelativePath.vb", "$PageRelativePath.cs")
+    return @("$PageRelativePath.vb", "$PageRelativePath.cs")
 }
 
 function Resolve-PhysicalDirectoryPath([string]$Path) {
@@ -162,34 +162,43 @@ $prefixedMaps = @($mapRows | Where-Object {
 $pageMaps = @()
 if ($exactMaps.Count -gt 0) { $pageMaps = @($exactMaps) }
 else { $pageMaps = @($prefixedMaps) }
-if ($pageMaps.Count -ne 1) {
+if ($pageMaps.Count -gt 1) {
     Write-Output "existingPublishPageMapCount=$($pageMaps.Count)"
     Write-Output "existingPublishAvailableMaps=$($maps.Count)"
     Write-Output "existingPublishPrefixedCandidates=$($prefixedMaps.Count)"
     throw 'WEBFORMS_EXISTING_PUBLISH_PAGE_MAP_NOT_UNIQUE'
 }
-$map = Read-Map $pageMaps[0].File.FullName
-$virtualPath = [string]$pageMaps[0].VirtualPath
-$assemblyName = if ($null -eq $map.Attribute('assembly')) { '' } else { $map.Attribute('assembly').Value }
-$generatedType = if ($null -eq $map.Attribute('type')) { '' } else { $map.Attribute('type').Value }
-if ($assemblyName -cnotmatch '^[A-Za-z0-9_.-]{1,200}$' -or
-    [string]::IsNullOrWhiteSpace($generatedType)) {
-    throw 'WEBFORMS_EXISTING_PUBLISH_MAP_INVALID'
+$mapless = $pageMaps.Count -eq 0
+$virtualPath = if ($mapless) { $suffix } else { [string]$pageMaps[0].VirtualPath }
+$assemblyName = ''
+$generatedType = ''
+if (!$mapless) {
+    $map = Read-Map $pageMaps[0].File.FullName
+    $assemblyName = if ($null -eq $map.Attribute('assembly')) { '' } else { $map.Attribute('assembly').Value }
+    $generatedType = if ($null -eq $map.Attribute('type')) { '' } else { $map.Attribute('type').Value }
+    if ($assemblyName -cnotmatch '^[A-Za-z0-9_.-]{1,200}$' -or
+        [string]::IsNullOrWhiteSpace($generatedType)) {
+        throw 'WEBFORMS_EXISTING_PUBLISH_MAP_INVALID'
+    }
 }
-$mappedAssembly = Assert-Child $PublishedRoot "bin/$assemblyName.dll" 'ASSEMBLY'
+$mappedAssembly = if ($mapless) { '' } else { Assert-Child $PublishedRoot "bin/$assemblyName.dll" 'ASSEMBLY' }
 $bin = Assert-Child $PublishedRoot 'bin' 'BIN'
 $availableDlls = @(Get-ChildItem -LiteralPath $bin -File -Filter '*.dll' | Sort-Object Name)
 if ($availableDlls.Count -lt 1 -or $availableDlls.Count -gt 4096) {
     Write-Output "existingPublishDllCount=$($availableDlls.Count)"
     throw 'WEBFORMS_EXISTING_PUBLISH_ASSEMBLY_LIMIT'
 }
-if (@($availableDlls | Where-Object { $_.FullName -eq $mappedAssembly }).Count -ne 1) {
+if (!$mapless -and @($availableDlls | Where-Object { $_.FullName -eq $mappedAssembly }).Count -ne 1) {
     throw 'WEBFORMS_EXISTING_PUBLISH_MAPPED_ASSEMBLY_UNAVAILABLE'
 }
 $requestedNames = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
-[void]$requestedNames.Add([IO.Path]::GetFileName($mappedAssembly))
+if (!$mapless) { [void]$requestedNames.Add([IO.Path]::GetFileName($mappedAssembly)) }
 foreach ($file in $availableDlls) {
     if ($file.BaseName -match '^App_Code(?:[._]|$)') { [void]$requestedNames.Add($file.Name) }
+    if ($mapless -and $file.BaseName -match '^App_Web_') { [void]$requestedNames.Add($file.Name) }
+}
+if ($mapless -and @($availableDlls | Where-Object { $_.BaseName -match '^App_Web_' }).Count -eq 0) {
+    throw 'WEBFORMS_EXISTING_PUBLISH_MAPLESS_WEB_ASSEMBLY_UNAVAILABLE'
 }
 foreach ($name in $AdditionalAssemblyName) {
     if ($name -cnotmatch '^[A-Za-z0-9_.-]{1,204}\.dll$' -or
@@ -298,22 +307,43 @@ foreach ($file in $dlls) {
     }
     $publishedRows.Add([ordered]@{ path = $relative; sha256 = $sourceHash; kind = 'assembly' })
 }
-$mapRelative = [IO.Path]::GetRelativePath($PublishedRoot, $pageMaps[0].File.FullName).Replace('\', '/')
-$mapSource = Assert-Child $PublishedRoot $mapRelative 'MAP'
-$mapDestination = Join-Path $output $mapRelative
-[void][IO.Directory]::CreateDirectory((Split-Path -Parent $mapDestination))
-[IO.File]::Copy($mapSource, $mapDestination)
-$mapHash = Get-Sha256 $mapSource 1048576
-if ((Get-Sha256 $mapDestination 1048576) -cne $mapHash) {
-    throw 'WEBFORMS_EXISTING_PUBLISH_COPY_MISMATCH'
+$mapHash = 'mapless-source-type-candidate'
+if (!$mapless) {
+    $mapRelative = [IO.Path]::GetRelativePath($PublishedRoot, $pageMaps[0].File.FullName).Replace('\', '/')
+    $mapSource = Assert-Child $PublishedRoot $mapRelative 'MAP'
+    $mapDestination = Join-Path $output $mapRelative
+    [void][IO.Directory]::CreateDirectory((Split-Path -Parent $mapDestination))
+    [IO.File]::Copy($mapSource, $mapDestination)
+    $mapHash = Get-Sha256 $mapSource 1048576
+    if ((Get-Sha256 $mapDestination 1048576) -cne $mapHash) {
+        throw 'WEBFORMS_EXISTING_PUBLISH_COPY_MISMATCH'
+    }
+    $publishedRows.Add([ordered]@{ path = $mapRelative; sha256 = $mapHash; kind = 'compiled-map' })
+} else {
+    foreach ($file in $maps) {
+        $relative = [IO.Path]::GetRelativePath($PublishedRoot, $file.FullName).Replace('\', '/')
+        $source = Assert-Child $PublishedRoot $relative 'MAP'
+        $destination = Join-Path $output $relative
+        [void][IO.Directory]::CreateDirectory((Split-Path -Parent $destination))
+        [IO.File]::Copy($source, $destination)
+        $hash = Get-Sha256 $source 1048576
+        if ((Get-Sha256 $destination 1048576) -cne $hash) {
+            throw 'WEBFORMS_EXISTING_PUBLISH_COPY_MISMATCH'
+        }
+        $publishedRows.Add([ordered]@{ path = $relative; sha256 = $hash; kind = 'compiled-map' })
+    }
 }
-$publishedRows.Add([ordered]@{ path = $mapRelative; sha256 = $mapHash; kind = 'compiled-map' })
+$mapInventoryLines = [string[]]@($publishedRows | Where-Object { $_.kind -eq 'compiled-map' } |
+    ForEach-Object { "$($_.path):$($_.sha256)" })
+[Array]::Sort($mapInventoryLines, [StringComparer]::Ordinal)
+$mapInventorySha256 = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData(
+    [Text.Encoding]::UTF8.GetBytes(($mapInventoryLines -join "`n") + "`n"))).ToLowerInvariant()
 
 $receiptGeneratorSha256 = Get-Sha256 $PSCommandPath 1048576
 $sourceRepositorySha256 = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData(
     [Text.Encoding]::UTF8.GetBytes($sourceRepository))).ToLowerInvariant()
 $receiptInputSha256 = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData(
-    [Text.Encoding]::UTF8.GetBytes("source:$sourceRepositorySha256`ncommit:$sourceCommit`nsource:$boundedInputSha256`nassemblies:$assemblyInventorySha256`nmap:$mapHash`n"))).ToLowerInvariant()
+    [Text.Encoding]::UTF8.GetBytes("source:$sourceRepositorySha256`ncommit:$sourceCommit`nsource:$boundedInputSha256`nassemblies:$assemblyInventorySha256`nmaps:$mapInventorySha256`n"))).ToLowerInvariant()
 # Existing output cannot identify its true compiler. This is an explicit
 # unknown marker, not an attribution to the public test compiler.
 $compilerSha256 = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData(
@@ -329,14 +359,17 @@ $receipt = [ordered]@{
     receiptInputSha256 = $receiptInputSha256
     assemblyInventorySha256 = $assemblyInventorySha256
     assemblyInventory = $assemblyInventory
+    publishedMapCount = $maps.Count
+    mapInventorySha256 = $mapInventorySha256
     sourceFiles = $sourceRows
     publishedFiles = @($publishedRows)
     pages = @([ordered]@{
         virtualPath = $virtualPath
         sourcePath = $PagePath
-        assembly = $assemblyName
-        generatedType = $generatedType
-        mapPath = $mapRelative
+        assembly = if ($mapless) { $null } else { $assemblyName }
+        generatedType = if ($mapless) { $null } else { $generatedType }
+        mapPath = if ($mapless) { $null } else { $mapRelative }
+        bindingKind = if ($mapless) { 'mapless-source-type-candidate' } else { $null }
     })
 }
 $receiptPath = Join-Path $output 'publish-receipt.local.json'
@@ -349,8 +382,8 @@ Write-Output "availableDlls=$($availableDlls.Count)"
 Write-Output "selectedDlls=$($dlls.Count)"
 Write-Output "excludedDlls=$($excludedDlls.Count)"
 Write-Output 'scope=selected-published-assemblies-only;no-complete-publish-claim'
-Write-Output 'matchedPageMaps=1'
-Write-Output "pageMapMatch=$($(if ($exactMaps.Count -gt 0) { 'exact' } else { 'unique-prefixed' }))"
+Write-Output "matchedPageMaps=$($pageMaps.Count)"
+Write-Output "pageMapMatch=$($(if ($mapless) { 'mapless' } elseif ($exactMaps.Count -gt 0) { 'exact' } else { 'unique-prefixed' }))"
 Write-Output "boundedInputSha256=$boundedInputSha256"
 Write-Output 'compilerProvenance=unavailable-existing-output'
 Write-Output 'claim=operator-declared-publish-bytes;review-only-candidates;no-build-or-runtime-proof'
@@ -424,7 +457,7 @@ $bindingInputLines = @($bindings | Sort-Object safeLocator | ForEach-Object {
 $bindingInputLines += "source:$boundedInputSha256"
 $bindingInputLines += "source-repository:$sourceRepositorySha256"
 $bindingInputLines += "assembly-inventory:$assemblyInventorySha256"
-$bindingInputLines += "page-map:$mapHash"
+$bindingInputLines += "map-inventory:$mapInventorySha256"
 $bindingInputSha256 = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData(
     [Text.Encoding]::UTF8.GetBytes(($bindingInputLines -join "`n") + "`n"))).ToLowerInvariant()
 [IO.File]::WriteAllText($bindingPath,
@@ -468,5 +501,10 @@ if ($HandlerName) {
     if ($LASTEXITCODE -ne 0) { throw 'WEBFORMS_EXISTING_PUBLISH_PATHS_FAILED' }
     $report = [IO.File]::ReadAllText($paths) | ConvertFrom-Json -Depth 50
     Write-Output "sqlQueryPaths=$(@($report.paths).Count)"
+    $sourceJoinPaths = @($report.paths | Where-Object {
+        @($_.edges.edgeKind) -contains 'projectless-publish-method-candidate'
+    }).Count
+    Write-Output "sourceJoinPaths=$sourceJoinPaths"
+    Write-Output "existingPublishPaths=$($(if ($sourceJoinPaths -gt 0) { 'review-candidate' } else { 'gap' }))"
     Write-Output "pathGaps=$(@($report.gaps).Count)"
 }

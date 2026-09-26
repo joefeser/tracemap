@@ -1086,6 +1086,89 @@ public sealed class MessyWorkspaceRegressionTests
     }
 
     [Fact]
+    public async Task Windows_mapless_publish_joins_one_code_behind_handler_and_fails_closed()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        using var temp = new TempDirectory();
+        var root = FindRepoRoot();
+        var published = Path.Combine(temp.Path, "updatable-publish");
+        var script = Path.Combine(root, "scripts", "validation", "Test-PublicWebFormsPublish.ps1");
+        var start = new ProcessStartInfo("pwsh")
+        {
+            UseShellExecute = false, RedirectStandardOutput = true, RedirectStandardError = true
+        };
+        foreach (var argument in new[] { "-NoProfile", "-File", script, "-TraceMapRoot", root,
+                     "-OutputRoot", published, "-Updatable" }) start.ArgumentList.Add(argument);
+        using var process = Process.Start(start)!;
+        Require("MW-PUBLISH-MAPLESS-001", "publish", process.WaitForExit(120_000),
+            "the public updatable publish exceeded two minutes");
+        Require("MW-PUBLISH-MAPLESS-001", "publish", process.ExitCode == 0,
+            $"the public updatable publish failed: {process.StandardError.ReadToEnd()}");
+        var dlls = Directory.GetFiles(Path.Combine(published, "bin"), "*.dll");
+        var maps = Directory.GetFiles(published, "*.compiled", SearchOption.AllDirectories);
+        Require("MW-PUBLISH-MAPLESS-001", "publish", dlls.Length == 4 && maps.Length == 3
+            && dlls.Any(path => Path.GetFileName(path).StartsWith("App_Web_", StringComparison.Ordinal))
+            && maps.Select(path => XDocument.Load(path).Root?.Attribute("virtualPath")?.Value)
+                .OrderBy(value => value, StringComparer.Ordinal)
+                .SequenceEqual(new[] { "/UBid/App_Code/", "/UBid/App_WebReferences/", "/UBid/global.asax" })
+            && !File.Exists(Path.Combine(published, "Pages", "Lookup.aspx.compiled"))
+            && Directory.GetFiles(published, "*.pdb", SearchOption.AllDirectories).Length == 0,
+            "the updatable fixture must have App_Web IL and no page map or PDB");
+        var receipt = Path.Combine(published, "publish-receipt.local.json");
+        var scan = ScanBoundRoot(temp, "vb-publish-mapless", "mapless-publish", dlls,
+            ilBody: true, webFormsPublishReceipt: receipt);
+        Require("MW-PUBLISH-MAPLESS-001", "scan", scan.Manifest.WebFormsPublishProvenance?.Status == "bound"
+            && scan.Facts.Count(fact => fact.FactType == FactTypes.WebFormsPublishPageCandidate) == 1
+            && !scan.Facts.Any(fact => fact.FactType is FactTypes.WebFormsPublishPageMapped
+                or FactTypes.PdbSequencePointDeclared),
+            $"mapless provenance must remain a Tier3 candidate without a fabricated map or source line; status={scan.Manifest.WebFormsPublishProvenance?.Status}; gaps={string.Join(',', scan.Manifest.WebFormsPublishProvenance?.GapKinds ?? [])}; candidates={scan.Facts.Count(fact => fact.FactType == FactTypes.WebFormsPublishPageCandidate)}");
+        var index = Path.Combine(temp.Path, "mapless.sqlite");
+        SqliteIndexWriter.Write(index, scan.Manifest, scan.Facts);
+        var combined = Path.Combine(temp.Path, "mapless-combined.sqlite");
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([index], combined, ["public-publish"]));
+        var graph = await CombinedDependencyPathReporter.BuildGraphInventoryAsync(combined);
+        var nodes = graph.Nodes.ToDictionary(node => node.NodeId, StringComparer.Ordinal);
+        var join = graph.Edges.Single(edge => edge.EdgeKind == "projectless-publish-method-candidate"
+            && nodes[edge.FromNodeId].DisplayName.Contains("Names_Init", StringComparison.Ordinal));
+        Require("MW-PUBLISH-MAPLESS-001", "join", join.EvidenceTier == EvidenceTiers.Tier3SyntaxOrTextual,
+            "the mapless source-to-compiled join must be review-only");
+        var report = await CombinedDependencyPathReporter.BuildReportAsync(new(combined,
+            Path.Combine(temp.Path, "mapless-paths.json"), Format: "json",
+            FromSymbol: nodes[join.FromNodeId].DisplayName, FromSource: "public-publish",
+            ToSurface: "sql-query", MaxDepth: 20, MaxPaths: 256));
+        Require("MW-PUBLISH-MAPLESS-001", "path", report.Paths.Any(path =>
+            path.Edges.Any(edge => edge.EdgeKind == "projectless-publish-method-candidate")
+            && path.Edges.Any(edge => edge.EdgeKind == "compiled-il-call")
+            && path.Edges.Any(edge => edge.EdgeKind == "projectless-publish-member-candidate")
+            && path.Nodes.Any(node => node.DisplayName.Contains("GroupOptions", StringComparison.Ordinal))
+            && path.Nodes.Any(node => node.DisplayName.Contains("DataAccess", StringComparison.Ordinal))
+            && path.Nodes.Any(node => node.SurfaceKind == "sql-query")),
+            "the source handler must reach constructor, data access, and SQL through review-tier and IL edges");
+        var method = scan.Facts.Single(fact => fact.FactType == FactTypes.ManagedMethodDeclared
+            && fact.Properties.GetValueOrDefault("metadataName") == "Names_Init");
+        var duplicateIndex = Path.Combine(temp.Path, "mapless-duplicate.sqlite");
+        SqliteIndexWriter.Write(duplicateIndex, scan.Manifest,
+            [.. scan.Facts, method with { FactId = "fact-mapless-duplicate-handler" }]);
+        var duplicateCombined = Path.Combine(temp.Path, "mapless-duplicate-combined.sqlite");
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([duplicateIndex], duplicateCombined, ["public-publish"]));
+        var ambiguous = await CombinedDependencyPathReporter.BuildGraphInventoryAsync(duplicateCombined);
+        Require("MW-PUBLISH-MAPLESS-001", "ambiguous", !ambiguous.Edges.Any(edge =>
+                edge.EdgeKind == "projectless-publish-method-candidate")
+            && ambiguous.Gaps.Any(gap => gap.GapKind == "ProjectlessPublishMetadataAmbiguous"),
+            "duplicate handler metadata must withhold the source join with an explicit gap");
+        var missingIndex = Path.Combine(temp.Path, "mapless-missing.sqlite");
+        SqliteIndexWriter.Write(missingIndex, scan.Manifest, scan.Facts.Where(fact =>
+            fact.FactId != method.FactId).ToArray());
+        var missingCombined = Path.Combine(temp.Path, "mapless-missing-combined.sqlite");
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([missingIndex], missingCombined, ["public-publish"]));
+        var missing = await CombinedDependencyPathReporter.BuildGraphInventoryAsync(missingCombined);
+        Require("MW-PUBLISH-MAPLESS-001", "missing", !missing.Edges.Any(edge =>
+                edge.EdgeKind == "projectless-publish-method-candidate")
+            && missing.Gaps.Any(gap => gap.GapKind == "ProjectlessPublishMetadataAmbiguous"),
+            "missing handler metadata must withhold the source join with an explicit gap");
+    }
+
+    [Fact]
     public async Task Explicit_publish_receipt_is_rechecked_and_map_tampering_fails_closed()
     {
         using var temp = new TempDirectory();

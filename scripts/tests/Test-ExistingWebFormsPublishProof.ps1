@@ -168,6 +168,31 @@ try {
             @($publicProof | Where-Object { $_ -match '^sqlQueryPaths=[1-9][0-9]*$' }).Count -ne 1) {
             throw "EXISTING_PUBLISH_TEST_WINDOWS_CHAIN_FAILED:$($publicProof -join ',')"
         }
+        $maplessPublish = Join-Path $temp 'public-mapless-publish'
+        & (Join-Path $TraceMapRoot 'scripts/validation/Test-PublicWebFormsPublish.ps1') `
+            -TraceMapRoot $TraceMapRoot -OutputRoot $maplessPublish -Updatable | Out-Null
+        $maplessProofRoot = Join-Path $temp 'public-mapless-proof'
+        $maplessSite = Join-Path $temp 'mapless-source'
+        Copy-Item -LiteralPath (Join-Path $TraceMapRoot 'samples/messy-dotnet-workspace/vb-publish-mapless') `
+            -Destination $maplessSite -Recurse
+        & git -C $maplessSite init -q
+        & git -C $maplessSite remote add origin 'https://example.invalid/public-mapless.git'
+        & git -C $maplessSite add .
+        & git -C $maplessSite -c user.name=PublicTest -c user.email=public@example.invalid commit -qm synthetic
+        if ($LASTEXITCODE -ne 0) { throw 'EXISTING_PUBLISH_TEST_MAPLESS_SOURCE_GIT_FAILED' }
+        $maplessProof = @(& $script -SourceSiteRoot $maplessSite -PublishedRoot $maplessPublish `
+            -PagePath 'Pages/Lookup.aspx' -HandlerName 'Names_Init' `
+            -AdditionalAssemblyName @('App_global.asax.dll', 'App_WebReferences.dll') `
+            -OutputRoot $maplessProofRoot -TraceMapRoot $TraceMapRoot -OperatorAttestsExactSourceCommit)
+        $maplessPaths = [IO.File]::ReadAllText((Join-Path $maplessProofRoot 'handler-paths.json')) | ConvertFrom-Json -Depth 50
+        if ($maplessProof -notcontains 'pageMapMatch=mapless' -or
+            $maplessProof -notcontains 'matchedPageMaps=0' -or
+            $maplessProof -notcontains 'existingPublishScan=bound' -or
+            @($maplessPaths.paths | Where-Object {
+                @($_.edges.edgeKind) -contains 'projectless-publish-method-candidate'
+            }).Count -lt 1) {
+            throw 'EXISTING_PUBLISH_TEST_MAPLESS_CHAIN_FAILED'
+        }
     }
     $captured = $null
     try {
@@ -185,7 +210,7 @@ try {
         & $script -SourceSiteRoot $source -PublishedRoot $publish -PagePath 'Pages/Lookup.aspx' `
             -OutputRoot (Join-Path $temp 'mismatch') -PrepareOnly *> $null
     } catch { $captured = $_.Exception.Message }
-    if ($captured -ne 'WEBFORMS_EXISTING_PUBLISH_PAGE_MAP_NOT_UNIQUE') {
+    if ($captured -ne 'WEBFORMS_EXISTING_PUBLISH_MAPLESS_WEB_ASSEMBLY_UNAVAILABLE') {
         throw "EXISTING_PUBLISH_TEST_MAP_MISMATCH_NOT_REJECTED:$captured"
     }
     Write-Output 'existingPublishPublicTests=passed'
