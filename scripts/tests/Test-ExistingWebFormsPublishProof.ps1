@@ -260,6 +260,28 @@ try {
             $caseAliasLines -notcontains 'existingPublishPreparation=valid') {
             throw 'EXISTING_PUBLISH_TEST_TRACKED_CASE_ALIAS_NOT_ADMITTED'
         }
+        & git -C $maplessSite update-index --assume-unchanged 'app_code/BusinessLogic.vb'
+        [IO.File]::AppendAllText((Join-Path $maplessSite 'App_Code/BusinessLogic.vb'),
+            "`n' Public test mismatch`n", [Text.UTF8Encoding]::new($false))
+        if (@(& git -C $maplessSite status --porcelain).Count -ne 0) {
+            throw 'EXISTING_PUBLISH_TEST_ASSUMED_UNCHANGED_NOT_CLEAN'
+        }
+        $mismatchLines = @()
+        $captured = $null
+        try {
+            & $script -SourceSiteRoot $maplessSite -PublishedRoot $maplessPublish `
+                -PagePath 'Pages/Lookup.aspx' -HandlerName 'Names_Init' `
+                -IncludeAllPublishedAssembliesAsContext -FailOnUnclassifiedAssemblies `
+                -OutputRoot (Join-Path $temp 'case-alias-mismatch-proof') -TraceMapRoot $TraceMapRoot `
+                -PrepareOnly | ForEach-Object { $mismatchLines += $_ }
+        } catch { $captured = $_.Exception.Message }
+        if ($captured -ne 'WEBFORMS_EXISTING_PUBLISH_SOURCE_MISMATCH' -or
+            $mismatchLines -notcontains 'sourceTrackingCaseAliases=1' -or
+            $mismatchLines -notcontains 'sourceMismatchCount=1' -or
+            $mismatchLines -notcontains 'sourceMismatchAppCodeCount=1' -or
+            $mismatchLines -notcontains 'sourceMismatchHashErrorCount=0') {
+            throw 'EXISTING_PUBLISH_TEST_CHANGED_CASE_ALIAS_NOT_REJECTED'
+        }
     }
     $captured = $null
     try {

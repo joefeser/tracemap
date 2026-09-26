@@ -300,7 +300,12 @@ foreach ($path in $relativeSourcePaths) {
             else { 'linkedCode' }
         $missingByKind[$kind]++
     } elseif ($canonical -cne $path) {
-        $caseAliases.Add([pscustomobject]@{ Actual = $path; Canonical = $canonical })
+        $kind = if ($path.Equals($PagePath, [StringComparison]::OrdinalIgnoreCase)) { 'page' }
+            elseif ($path.StartsWith('App_Code/', [StringComparison]::OrdinalIgnoreCase)) { 'appCode' }
+            elseif ($path.Equals('Web.config', [StringComparison]::OrdinalIgnoreCase) -or
+                $path.EndsWith('/Web.config', [StringComparison]::OrdinalIgnoreCase)) { 'config' }
+            else { 'linkedCode' }
+        $caseAliases.Add([pscustomobject]@{ Actual = $path; Canonical = $canonical; Kind = $kind })
     }
 }
 $missingCount = @($missingByKind.Values | Measure-Object -Sum)[0].Sum
@@ -315,14 +320,30 @@ if ($missingCount -gt 0) {
 if ($caseAliases.Count -gt 0) {
     $gitPrefix = ([string](& git -C $SourceSiteRoot rev-parse --show-prefix)).Trim()
     if ($LASTEXITCODE -ne 0) { throw 'WEBFORMS_EXISTING_PUBLISH_COMMIT_UNAVAILABLE' }
+    $mismatchByKind = @{ page = 0; linkedCode = 0; config = 0; appCode = 0 }
+    $hashErrorCount = 0
     foreach ($alias in $caseAliases) {
         $expected = ([string](& git -C $SourceSiteRoot rev-parse "HEAD:$gitPrefix$($alias.Canonical)")).Trim()
-        $actual = ([string](& git -C $SourceSiteRoot hash-object "--path=$($alias.Canonical)" `
+        $expectedValid = $LASTEXITCODE -eq 0 -and $expected -cmatch '^[0-9a-f]{40}$'
+        $actual = ([string](& git -C $SourceSiteRoot hash-object "--path=$gitPrefix$($alias.Canonical)" `
             (Assert-Child $SourceSiteRoot $alias.Actual 'SOURCE'))).Trim()
-        if ($LASTEXITCODE -ne 0 -or $expected -cnotmatch '^[0-9a-f]{40}$' -or
-            $actual -cne $expected) { throw 'WEBFORMS_EXISTING_PUBLISH_SOURCE_MISMATCH' }
+        $actualValid = $LASTEXITCODE -eq 0 -and $actual -cmatch '^[0-9a-f]{40}$'
+        if (!$expectedValid -or !$actualValid) { $hashErrorCount++ }
+        if (!$expectedValid -or !$actualValid -or $actual -cne $expected) {
+            $mismatchByKind[$alias.Kind]++
+        }
     }
     Write-Output "sourceTrackingCaseAliases=$($caseAliases.Count)"
+    $mismatchCount = @($mismatchByKind.Values | Measure-Object -Sum)[0].Sum
+    if ($mismatchCount -gt 0) {
+        Write-Output "sourceMismatchCount=$mismatchCount"
+        Write-Output "sourceMismatchPageCount=$($mismatchByKind.page)"
+        Write-Output "sourceMismatchLinkedCodeCount=$($mismatchByKind.linkedCode)"
+        Write-Output "sourceMismatchConfigCount=$($mismatchByKind.config)"
+        Write-Output "sourceMismatchAppCodeCount=$($mismatchByKind.appCode)"
+        Write-Output "sourceMismatchHashErrorCount=$hashErrorCount"
+        throw 'WEBFORMS_EXISTING_PUBLISH_SOURCE_MISMATCH'
+    }
 }
 $sourceRows = @($relativeSourcePaths | ForEach-Object {
     [ordered]@{ path = $_; sha256 = Get-Sha256 (Assert-Child $SourceSiteRoot $_ 'SOURCE') 67108864 }
