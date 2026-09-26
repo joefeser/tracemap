@@ -279,9 +279,52 @@ $relativeSourcePaths = @($sourceFiles | ForEach-Object {
 })
 $relativeSourcePaths = [string[]]@($relativeSourcePaths | Select-Object -Unique)
 [Array]::Sort($relativeSourcePaths, [StringComparer]::Ordinal)
+# Git's pathspec lookup can reject a tracked path when its index casing differs
+# from the Windows working tree. Read HEAD paths, then verify case aliases by blob.
+$trackedRaw = [string](& git -C $SourceSiteRoot ls-tree -r -z --name-only HEAD -- .)
+if ($LASTEXITCODE -ne 0) { throw 'WEBFORMS_EXISTING_PUBLISH_COMMIT_UNAVAILABLE' }
+$trackedComparer = if ($IsWindows) { [StringComparer]::OrdinalIgnoreCase } else { [StringComparer]::Ordinal }
+$tracked = [Collections.Generic.Dictionary[string,string]]::new($trackedComparer)
+foreach ($path in $trackedRaw.Split([char]0, [StringSplitOptions]::RemoveEmptyEntries)) {
+    if (!$tracked.TryAdd($path, $path)) { throw 'WEBFORMS_EXISTING_PUBLISH_SOURCE_TRACKING_AMBIGUOUS' }
+}
+$missingByKind = @{ page = 0; linkedCode = 0; config = 0; appCode = 0 }
+$caseAliases = [Collections.Generic.List[object]]::new()
+foreach ($path in $relativeSourcePaths) {
+    $canonical = ''
+    if (!$tracked.TryGetValue($path, [ref]$canonical)) {
+        $kind = if ($path.Equals($PagePath, [StringComparison]::OrdinalIgnoreCase)) { 'page' }
+            elseif ($path.StartsWith('App_Code/', [StringComparison]::OrdinalIgnoreCase)) { 'appCode' }
+            elseif ($path.Equals('Web.config', [StringComparison]::OrdinalIgnoreCase) -or
+                $path.EndsWith('/Web.config', [StringComparison]::OrdinalIgnoreCase)) { 'config' }
+            else { 'linkedCode' }
+        $missingByKind[$kind]++
+    } elseif ($canonical -cne $path) {
+        $caseAliases.Add([pscustomobject]@{ Actual = $path; Canonical = $canonical })
+    }
+}
+$missingCount = @($missingByKind.Values | Measure-Object -Sum)[0].Sum
+if ($missingCount -gt 0) {
+    Write-Output "sourceNotCommittedCount=$missingCount"
+    Write-Output "sourceNotCommittedPageCount=$($missingByKind.page)"
+    Write-Output "sourceNotCommittedLinkedCodeCount=$($missingByKind.linkedCode)"
+    Write-Output "sourceNotCommittedConfigCount=$($missingByKind.config)"
+    Write-Output "sourceNotCommittedAppCodeCount=$($missingByKind.appCode)"
+    throw 'WEBFORMS_EXISTING_PUBLISH_SOURCE_NOT_COMMITTED'
+}
+if ($caseAliases.Count -gt 0) {
+    $gitPrefix = ([string](& git -C $SourceSiteRoot rev-parse --show-prefix)).Trim()
+    if ($LASTEXITCODE -ne 0) { throw 'WEBFORMS_EXISTING_PUBLISH_COMMIT_UNAVAILABLE' }
+    foreach ($alias in $caseAliases) {
+        $expected = ([string](& git -C $SourceSiteRoot rev-parse "HEAD:$gitPrefix$($alias.Canonical)")).Trim()
+        $actual = ([string](& git -C $SourceSiteRoot hash-object "--path=$($alias.Canonical)" `
+            (Assert-Child $SourceSiteRoot $alias.Actual 'SOURCE'))).Trim()
+        if ($LASTEXITCODE -ne 0 -or $expected -cnotmatch '^[0-9a-f]{40}$' -or
+            $actual -cne $expected) { throw 'WEBFORMS_EXISTING_PUBLISH_SOURCE_MISMATCH' }
+    }
+    Write-Output "sourceTrackingCaseAliases=$($caseAliases.Count)"
+}
 $sourceRows = @($relativeSourcePaths | ForEach-Object {
-    & git -C $SourceSiteRoot ls-files --error-unmatch -- $_ *> $null
-    if ($LASTEXITCODE -ne 0) { throw 'WEBFORMS_EXISTING_PUBLISH_SOURCE_NOT_COMMITTED' }
     [ordered]@{ path = $_; sha256 = Get-Sha256 (Assert-Child $SourceSiteRoot $_ 'SOURCE') 67108864 }
 })
 if ($sourceRows.Count -gt 256) { throw 'WEBFORMS_EXISTING_PUBLISH_SOURCE_LIMIT' }

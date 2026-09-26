@@ -218,6 +218,48 @@ try {
             }).Count -lt 1) {
             throw 'EXISTING_PUBLISH_TEST_MAPLESS_CONTEXT_PROVENANCE_FAILED'
         }
+        [IO.File]::WriteAllText((Join-Path $maplessSite '.gitignore'),
+            "App_Code/IgnoredPublic.vb`n", [Text.UTF8Encoding]::new($false))
+        & git -C $maplessSite add .gitignore
+        & git -C $maplessSite -c user.name=PublicTest -c user.email=public@example.invalid commit -qm ignore-public-file
+        if ($LASTEXITCODE -ne 0) { throw 'EXISTING_PUBLISH_TEST_IGNORE_GIT_FAILED' }
+        $ignoredSource = Join-Path $maplessSite 'App_Code/IgnoredPublic.vb'
+        [IO.File]::WriteAllText($ignoredSource, 'Public Class IgnoredPublic : End Class',
+            [Text.UTF8Encoding]::new($false))
+        $missingLines = @()
+        $captured = $null
+        try {
+            & $script -SourceSiteRoot $maplessSite -PublishedRoot $maplessPublish `
+                -PagePath 'Pages/Lookup.aspx' -HandlerName 'Names_Init' `
+                -IncludeAllPublishedAssembliesAsContext -FailOnUnclassifiedAssemblies `
+                -OutputRoot (Join-Path $temp 'ignored-source-proof') -TraceMapRoot $TraceMapRoot -PrepareOnly |
+                ForEach-Object { $missingLines += $_ }
+        } catch { $captured = $_.Exception.Message }
+        if ($captured -ne 'WEBFORMS_EXISTING_PUBLISH_SOURCE_NOT_COMMITTED' -or
+            $missingLines -notcontains 'sourceNotCommittedCount=1' -or
+            $missingLines -notcontains 'sourceNotCommittedAppCodeCount=1') {
+            throw 'EXISTING_PUBLISH_TEST_IGNORED_SOURCE_NOT_REJECTED'
+        }
+        Remove-Item -LiteralPath $ignoredSource
+        & git -C $maplessSite config core.ignorecase true
+        $blob = ([string](& git -C $maplessSite rev-parse 'HEAD:App_Code/BusinessLogic.vb')).Trim()
+        if ($LASTEXITCODE -ne 0 -or $blob -cnotmatch '^[0-9a-f]{40}$') {
+            throw 'EXISTING_PUBLISH_TEST_CASE_ALIAS_BLOB_UNAVAILABLE'
+        }
+        & git -C $maplessSite update-index --force-remove 'App_Code/BusinessLogic.vb'
+        & git -C $maplessSite update-index --add --cacheinfo "100644,$blob,app_code/BusinessLogic.vb"
+        & git -C $maplessSite -c user.name=PublicTest -c user.email=public@example.invalid commit -qm case-alias
+        if ($LASTEXITCODE -ne 0 -or @(& git -C $maplessSite status --porcelain).Count -ne 0) {
+            throw 'EXISTING_PUBLISH_TEST_CASE_ALIAS_GIT_FAILED'
+        }
+        $caseAliasLines = @(& $script -SourceSiteRoot $maplessSite -PublishedRoot $maplessPublish `
+            -PagePath 'Pages/Lookup.aspx' -HandlerName 'Names_Init' `
+            -IncludeAllPublishedAssembliesAsContext -FailOnUnclassifiedAssemblies `
+            -OutputRoot (Join-Path $temp 'case-alias-proof') -TraceMapRoot $TraceMapRoot -PrepareOnly)
+        if ($caseAliasLines -notcontains 'sourceTrackingCaseAliases=1' -or
+            $caseAliasLines -notcontains 'existingPublishPreparation=valid') {
+            throw 'EXISTING_PUBLISH_TEST_TRACKED_CASE_ALIAS_NOT_ADMITTED'
+        }
     }
     $captured = $null
     try {
