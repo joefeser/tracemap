@@ -325,11 +325,20 @@ if ($caseAliases.Count -gt 0) {
     foreach ($alias in $caseAliases) {
         $expected = ([string](& git -C $SourceSiteRoot rev-parse "HEAD:$gitPrefix$($alias.Canonical)")).Trim()
         $expectedValid = $LASTEXITCODE -eq 0 -and $expected -cmatch '^[0-9a-f]{40}$'
-        $actual = ([string](& git -C $SourceSiteRoot hash-object "--path=$gitPrefix$($alias.Canonical)" `
-            (Assert-Child $SourceSiteRoot $alias.Actual 'SOURCE'))).Trim()
-        $actualValid = $LASTEXITCODE -eq 0 -and $actual -cmatch '^[0-9a-f]{40}$'
-        if (!$expectedValid -or !$actualValid) { $hashErrorCount++ }
-        if (!$expectedValid -or !$actualValid -or $actual -cne $expected) {
+        $physical = Assert-Child $SourceSiteRoot $alias.Actual 'SOURCE'
+        $raw = ([string](& git -C $SourceSiteRoot hash-object --no-filters $physical)).Trim()
+        $rawValid = $LASTEXITCODE -eq 0 -and $raw -cmatch '^[0-9a-f]{40}$'
+        $filtered = ''
+        $filteredValid = $false
+        if ($rawValid -and $raw -cne $expected) {
+            $filtered = ([string](& git -C $SourceSiteRoot hash-object `
+                "--path=$gitPrefix$($alias.Canonical)" $physical)).Trim()
+            $filteredValid = $LASTEXITCODE -eq 0 -and $filtered -cmatch '^[0-9a-f]{40}$'
+        }
+        if (!$expectedValid -or !$rawValid -or ($raw -cne $expected -and !$filteredValid)) {
+            $hashErrorCount++
+        }
+        if (!$expectedValid -or ($raw -cne $expected -and $filtered -cne $expected)) {
             $mismatchByKind[$alias.Kind]++
         }
     }

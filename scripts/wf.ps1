@@ -34,12 +34,17 @@ if (!(Test-Path -LiteralPath $proof -PathType Leaf) -or
     !(Test-Path -LiteralPath (Join-Path $SourceSiteRoot 'Web.config') -PathType Leaf)) {
     throw 'WEBFORMS_SNAPSHOT_INPUT_UNAVAILABLE'
 }
-$proofCommitBlob = ([string](& git -C $TraceMapRoot rev-parse `
-    'HEAD:scripts/Invoke-ExistingWebFormsPublishProof.ps1')).Trim()
-$proofWorkingBlob = ([string](& git -C $TraceMapRoot hash-object `
+# Pin the public proof implementation so a local deletion of its provenance
+# check cannot be used through this wrapper. Accept exact bytes or Git's
+# checkout-filtered representation of that one public script.
+$expectedProofBlob = '5ea6d39ffd018879a8d3dec63692e8fdca41ee97'
+$proofRawBlob = ([string](& git -C $TraceMapRoot hash-object --no-filters $proof)).Trim()
+$rawValid = $LASTEXITCODE -eq 0 -and $proofRawBlob -cmatch '^[0-9a-f]{40}$'
+$proofFilteredBlob = ([string](& git -C $TraceMapRoot hash-object `
     '--path=scripts/Invoke-ExistingWebFormsPublishProof.ps1' $proof)).Trim()
-if ($LASTEXITCODE -ne 0 -or $proofCommitBlob -cnotmatch '^[0-9a-f]{40}$' -or
-    $proofWorkingBlob -cne $proofCommitBlob) {
+$filteredValid = $LASTEXITCODE -eq 0 -and $proofFilteredBlob -cmatch '^[0-9a-f]{40}$'
+if (!$rawValid -or !$filteredValid -or
+    ($proofRawBlob -cne $expectedProofBlob -and $proofFilteredBlob -cne $expectedProofBlob)) {
     throw 'WEBFORMS_SNAPSHOT_PROOF_MODIFIED'
 }
 
@@ -79,10 +84,19 @@ foreach ($path in $paths) {
     $inputLines.Add("$($path):$((Get-FileHash -LiteralPath $physical -Algorithm SHA256).Hash.ToLowerInvariant())")
     $expected = ([string](& git -C $SourceSiteRoot rev-parse "HEAD:$sourcePrefix$path")).Trim()
     $expectedValid = $LASTEXITCODE -eq 0 -and $expected -cmatch '^[0-9a-f]{40}$'
-    $actual = ([string](& git -C $SourceSiteRoot hash-object "--path=$sourcePrefix$path" $physical)).Trim()
-    $actualValid = $LASTEXITCODE -eq 0 -and $actual -cmatch '^[0-9a-f]{40}$'
-    if (!$expectedValid -or !$actualValid) { $hashErrors++; continue }
-    if ($expected -cne $actual) {
+    $raw = ([string](& git -C $SourceSiteRoot hash-object --no-filters $physical)).Trim()
+    $rawValid = $LASTEXITCODE -eq 0 -and $raw -cmatch '^[0-9a-f]{40}$'
+    $filtered = ''
+    $filteredValid = $false
+    if ($rawValid -and $raw -cne $expected) {
+        $filtered = ([string](& git -C $SourceSiteRoot hash-object "--path=$sourcePrefix$path" $physical)).Trim()
+        $filteredValid = $LASTEXITCODE -eq 0 -and $filtered -cmatch '^[0-9a-f]{40}$'
+    }
+    if (!$expectedValid -or !$rawValid -or ($raw -cne $expected -and !$filteredValid)) {
+        $hashErrors++
+        continue
+    }
+    if ($expected -cne $raw -and $expected -cne $filtered) {
         if ($path.Equals($configPath, [StringComparison]::Ordinal)) { $changedConfig++ }
         else { $changedOther++ }
     }
