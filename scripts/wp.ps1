@@ -33,12 +33,29 @@ $missingHash = @($outcomes | Where-Object { [string]::IsNullOrWhiteSpace([string
 $missingIdentity = @($outcomes | Where-Object { [string]::IsNullOrWhiteSpace([string]$_.assemblyIdentity) }).Count
 $ready = $outcomes.Count -eq $inventory.Count -and $omitted -eq 0 -and
     $nonadmitted -eq 0 -and $missingLocator -eq 0 -and $missingHash -eq 0 -and $missingIdentity -eq 0
+$failedSelected = 0
+$failedContext = 0
+$failedUnknown = 0
+foreach ($item in @($outcomes | Where-Object { $_.outcome -cne 'admitted' })) {
+    $matches = @($inventory | Where-Object {
+        ![string]::IsNullOrWhiteSpace([string]$item.rawFileSha256) -and
+        [string]$_.sha256 -ceq [string]$item.rawFileSha256
+    })
+    if ($matches.Count -ne 1) { $failedUnknown++; continue }
+    if ($matches[0].disposition -ceq 'selected') { $failedSelected++ }
+    elseif ($matches[0].disposition -ceq 'artifact-context-no-source-commit') { $failedContext++ }
+    else { $failedUnknown++ }
+}
 
 Write-Output "probeSelected=$($inventory.Count)"
 Write-Output "probeOutcomes=$($outcomes.Count)"
 Write-Output "probeOmitted=$omitted"
 Write-Output "probeAdmitted=$admitted"
 Write-Output "probeNonadmitted=$nonadmitted"
+Write-Output "probeNonadmittedSelected=$failedSelected"
+Write-Output "probeNonadmittedContext=$failedContext"
+Write-Output "probeNonadmittedUnknown=$failedUnknown"
+Write-Output "probeTextLimit=$($manifest.compiledInputProvenance.effectiveLimits.maxTextLength)"
 Write-Output "probeMissingLocator=$missingLocator"
 Write-Output "probeMissingHash=$missingHash"
 Write-Output "probeMissingIdentity=$missingIdentity"
