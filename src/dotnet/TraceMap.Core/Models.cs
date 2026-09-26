@@ -329,6 +329,7 @@ public static class FactTypes
     public const string RemotingConfigProviderDeclared = nameof(RemotingConfigProviderDeclared);
     public const string WebFormsPageDeclared = nameof(WebFormsPageDeclared);
     public const string WebFormsPublishPageMapped = nameof(WebFormsPublishPageMapped);
+    public const string WebFormsPublishPageCandidate = nameof(WebFormsPublishPageCandidate);
     public const string WebFormsPublishSourceBound = nameof(WebFormsPublishSourceBound);
     public const string WebFormsPublishAssemblyBound = nameof(WebFormsPublishAssemblyBound);
     public const string WebFormsControlDeclared = nameof(WebFormsControlDeclared);

@@ -149,17 +149,21 @@ public static partial class CombinedDependencyPathReporter
 
     private static void AddProjectlessPublishCandidateEdges(EvidenceGraph graph, IReadOnlyList<CombinedFactRow> facts)
     {
-        var maps = facts.Where(fact => fact.FactType == FactTypes.WebFormsPublishPageMapped
+        var maps = facts.Where(fact => (fact.FactType == FactTypes.WebFormsPublishPageMapped
                 && fact.RuleId == RuleIds.LegacyWebFormsPublishMap
                 && fact.EvidenceTier == EvidenceTiers.Tier2Structural)
+                || (fact.FactType == FactTypes.WebFormsPublishPageCandidate
+                && fact.RuleId == RuleIds.LegacyWebFormsPublishMap
+                && fact.EvidenceTier == EvidenceTiers.Tier3SyntaxOrTextual))
             .OrderBy(fact => fact.CombinedFactId, StringComparer.Ordinal).ToArray();
         foreach (var map in maps)
         {
+            var mapless = map.FactType == FactTypes.WebFormsPublishPageCandidate;
             var sourcePath = map.Properties.GetValueOrDefault("sourcePath");
             var rawSha = map.Properties.GetValueOrDefault("assemblyRawSha256");
             var generatedType = map.Properties.GetValueOrDefault("generatedType");
             if (string.IsNullOrWhiteSpace(sourcePath) || sourcePath != map.FilePath
-                || string.IsNullOrWhiteSpace(rawSha) || string.IsNullOrWhiteSpace(generatedType)
+                || (!mapless && (string.IsNullOrWhiteSpace(rawSha) || string.IsNullOrWhiteSpace(generatedType)))
                 || string.IsNullOrWhiteSpace(map.Properties.GetValueOrDefault("boundedInputSha256"))
                 || string.IsNullOrWhiteSpace(map.Properties.GetValueOrDefault("generatorSha256")))
                 continue;
@@ -175,27 +179,50 @@ public static partial class CombinedDependencyPathReporter
                 continue;
             }
 
+            var boundHashes = facts.Where(fact => fact.SourceIndexId == map.SourceIndexId
+                    && fact.FactType == FactTypes.WebFormsPublishAssemblyBound
+                    && fact.RuleId == RuleIds.LegacyWebFormsPublishMap
+                    && fact.Properties.GetValueOrDefault("boundedInputSha256") == map.Properties.GetValueOrDefault("boundedInputSha256")
+                    && fact.Properties.GetValueOrDefault("generatorSha256") == map.Properties.GetValueOrDefault("generatorSha256"))
+                .Select(fact => fact.Properties.GetValueOrDefault("assemblyRawSha256"))
+                .Where(hash => !string.IsNullOrWhiteSpace(hash)).ToHashSet(StringComparer.Ordinal);
             var generatedTypes = facts.Where(fact => fact.SourceIndexId == map.SourceIndexId
                     && fact.FactType == FactTypes.ManagedTypeDeclared
                     && fact.Properties.GetValueOrDefault("provenanceState") == "bound"
-                    && fact.Properties.GetValueOrDefault("rawFileSha256") == rawSha
-                    && MatchesTypePath(fact.TargetSymbol, generatedType))
+                    && (mapless ? boundHashes.Contains(fact.Properties.GetValueOrDefault("rawFileSha256"))
+                        : fact.Properties.GetValueOrDefault("rawFileSha256") == rawSha)
+                    && MatchesTypePath(fact.TargetSymbol, mapless
+                        ? pages[0].Properties.GetValueOrDefault("pageTypeName")! : generatedType!))
                 .ToArray();
             if (generatedTypes.Length != 1)
             {
                 AddCompiledIlGap(graph, map, "ProjectlessPublishGeneratedTypeUnavailable",
-                    "mapped-generated-type-not-unique-in-bound-assembly", generatedTypes.Length, ProjectlessPublishCandidateRuleId);
+                    mapless ? "mapless-source-type-not-unique-in-bound-assemblies" : "mapped-generated-type-not-unique-in-bound-assembly",
+                    generatedTypes.Length, ProjectlessPublishCandidateRuleId);
                 continue;
             }
+            if (mapless) rawSha = generatedTypes[0].Properties.GetValueOrDefault("rawFileSha256");
 
-            foreach (var handler in facts.Where(fact => fact.SourceIndexId == map.SourceIndexId
+            var handlers = facts.Where(fact => fact.SourceIndexId == map.SourceIndexId
                          && fact.FactType == FactTypes.WebFormsHandlerResolved
                          && fact.Properties.GetValueOrDefault("markupFile") == sourcePath
                          && string.Equals(fact.Properties.GetValueOrDefault("pageTypeName"),
                              pages[0].Properties.GetValueOrDefault("pageTypeName"), StringComparison.OrdinalIgnoreCase))
-                     .OrderBy(fact => fact.CombinedFactId, StringComparer.Ordinal))
+                     .OrderBy(fact => fact.CombinedFactId, StringComparer.Ordinal).ToArray();
+            if (mapless && handlers.Length == 0)
+                AddCompiledIlGap(graph, map, "ProjectlessPublishHandlerUnavailable",
+                    "mapless-page-has-no-unique-source-handler", 0, ProjectlessPublishCandidateRuleId);
+            foreach (var handler in handlers)
             {
                 var name = handler.Properties.GetValueOrDefault("handlerName");
+                if (mapless && handlers.Count(candidate => string.Equals(
+                        candidate.Properties.GetValueOrDefault("handlerName"), name,
+                        StringComparison.OrdinalIgnoreCase)) != 1)
+                {
+                    AddCompiledIlGap(graph, handler, "ProjectlessPublishSourceAmbiguous",
+                        "mapless-source-handler-name-not-unique", null, ProjectlessPublishCandidateRuleId);
+                    continue;
+                }
                 var linkedCode = handler.Properties.GetValueOrDefault("linkedCodePath");
                 var sourceSymbol = handler.Properties.GetValueOrDefault("handlerSymbol");
                 if (string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(linkedCode)
@@ -267,9 +294,9 @@ public static partial class CombinedDependencyPathReporter
 
     private static void AddProjectlessPublishMemberCandidates(EvidenceGraph graph, IReadOnlyList<CombinedFactRow> facts)
     {
-        var pageSourceKeys = facts.Where(fact => fact.FactType == FactTypes.WebFormsPublishPageMapped)
+        var pageSourceKeys = facts.Where(fact => fact.FactType is FactTypes.WebFormsPublishPageMapped or FactTypes.WebFormsPublishPageCandidate)
             .Select(fact => (fact.SourceIndexId, fact.FilePath)).ToHashSet();
-        foreach (var mapped in facts.Where(fact => fact.FactType == FactTypes.WebFormsPublishPageMapped))
+        foreach (var mapped in facts.Where(fact => fact.FactType is FactTypes.WebFormsPublishPageMapped or FactTypes.WebFormsPublishPageCandidate))
         {
             foreach (var page in facts.Where(fact => fact.SourceIndexId == mapped.SourceIndexId
                          && fact.FactType == FactTypes.WebFormsPageDeclared
