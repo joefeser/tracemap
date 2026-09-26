@@ -3630,6 +3630,14 @@ needed. This mode does not attribute UnitedFramework or third-party binaries
 to the Web Site commit, nor does it prove a complete cross-repository path.
 The source subset follows `CodeBehind`/`CodeFile` in the page directive,
 then conventional VB/C# fallback, and includes every ancestor `Web.config`.
+Source tracking is checked against the exact `HEAD` tree under the Web Site
+folder. On Windows, a unique case-only path difference is accepted only when
+the working file's Git blob hash matches the committed blob; the safe
+`sourceTrackingCaseAliases` count reports these matches. Missing source fails
+closed with `WEBFORMS_EXISTING_PUBLISH_SOURCE_NOT_COMMITTED` and aggregate
+`sourceNotCommitted*Count` lines by page, linked code, config, and `App_Code`.
+Those counts contain no source paths. An ignored `App_Code` source remains a
+missing committed input even if the Git working tree reports clean.
 It copies only selected DLLs and the relevant mapped map or all mapless maps
 to a fresh local temporary output, not the source site. It enforces the
 receipt's 256-source, 64-published-file, 32-page, and per-file limits before
