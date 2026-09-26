@@ -51,7 +51,10 @@ try {
         throw 'EXISTING_PUBLISH_TEST_BINDING_PROVENANCE_INVALID'
     }
     $manifest = [IO.File]::ReadAllText((Join-Path $output 'scan/scan-manifest.json')) | ConvertFrom-Json -Depth 20
+    $probeManifest = [IO.File]::ReadAllText((Join-Path $output 'probe/scan-manifest.json')) | ConvertFrom-Json -Depth 20
     if ($manifest.webFormsPublishProvenance.status -ne 'bound' -or
+        $probeManifest.compiledInputProvenance.effectiveLimits.maxTextLength -ne 8192 -or
+        $manifest.compiledInputProvenance.effectiveLimits.maxTextLength -ne 8192 -or
         $manifest.webFormsPublishProvenance.pageCount -ne 1) {
         throw 'EXISTING_PUBLISH_TEST_MANIFEST_INVALID'
     }

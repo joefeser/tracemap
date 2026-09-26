@@ -3628,6 +3628,11 @@ that needs a context DLL cannot become a bound IL edge through this run.
 Use the separately provenance-bound repository run when such an edge is
 needed. This mode does not attribute UnitedFramework or third-party binaries
 to the Web Site commit, nor does it prove a complete cross-repository path.
+Both the initial admission probe and the bound scan use an explicit 8,192-character
+compiled metadata text limit. This is a bounded override of the general 4,096-character
+default, and the effective limit is recorded in each scan manifest. An assembly
+that still exceeds it remains a gap; the script does not drop context DLLs to
+make the probe pass.
 The source subset follows `CodeBehind`/`CodeFile` in the page directive,
 then conventional VB/C# fallback, and includes every ancestor `Web.config`.
 Source tracking is checked against the exact `HEAD` tree under the Web Site
