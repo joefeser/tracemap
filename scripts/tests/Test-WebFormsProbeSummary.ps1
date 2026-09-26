@@ -1,0 +1,41 @@
+[CmdletBinding()]
+param([string]$TraceMapRoot = (Split-Path (Split-Path $PSScriptRoot -Parent) -Parent))
+
+Set-StrictMode -Version Latest
+$ErrorActionPreference = 'Stop'
+$root = Join-Path ([IO.Path]::GetTempPath()) ('tracemap-probe-summary-test-' + [guid]::NewGuid().ToString('N'))
+try {
+    [void][IO.Directory]::CreateDirectory((Join-Path $root 'probe'))
+    $manifest = @{
+        compiledInputProvenance = @{
+            omittedInputCount = 0
+            outcomes = @(
+                @{ outcome = 'admitted'; safeLocator = 'private-one'; rawFileSha256 = 'hash'; assemblyIdentity = 'private-identity'; gapKinds = @('UnboundSource') },
+                @{ outcome = 'unreadable'; safeLocator = 'private-two'; rawFileSha256 = 'hash'; assemblyIdentity = ''; gapKinds = @('SystemReflectionMetadataReaderFailure') }
+            )
+        }
+    }
+    $receipt = @{ assemblyInventory = @(
+        @{ path = 'private-one'; disposition = 'selected' },
+        @{ path = 'private-two'; disposition = 'artifact-context-no-source-commit' }) }
+    [IO.File]::WriteAllText((Join-Path $root 'probe/scan-manifest.json'), ($manifest | ConvertTo-Json -Depth 10))
+    [IO.File]::WriteAllText((Join-Path $root 'publish-receipt.local.json'), ($receipt | ConvertTo-Json -Depth 10))
+    $lines = @(& (Join-Path $TraceMapRoot 'scripts/wp.ps1') -OutputRoot $root)
+    foreach ($expected in @('probeSelected=2', 'probeOutcomes=2', 'probeAdmitted=1',
+            'probeNonadmitted=1', 'probeMissingIdentity=1', 'probeReady=False',
+            'probeOutcome.unreadable=1', 'probeGap.SystemReflectionMetadataReaderFailure=1')) {
+        if ($lines -cnotcontains $expected) { throw 'WEBFORMS_PROBE_SUMMARY_TEST_FAILED' }
+    }
+    if (($lines -join "`n") -match 'private-') { throw 'WEBFORMS_PROBE_SUMMARY_PRIVACY_FAILED' }
+    $manifest.compiledInputProvenance.outcomes[1].outcome = 'admitted'
+    $manifest.compiledInputProvenance.outcomes[1].assemblyIdentity = 'private-identity-two'
+    [IO.File]::WriteAllText((Join-Path $root 'probe/scan-manifest.json'), ($manifest | ConvertTo-Json -Depth 10))
+    $readyLines = @(& (Join-Path $TraceMapRoot 'scripts/wp.ps1') -OutputRoot $root)
+    if ($readyLines -cnotcontains 'probeReady=True' -or $readyLines -cnotcontains 'probeAdmitted=2') {
+        throw 'WEBFORMS_PROBE_SUMMARY_READY_TEST_FAILED'
+    }
+    Write-Output 'webFormsProbeSummaryTest=pass'
+}
+finally {
+    if (Test-Path -LiteralPath $root) { Remove-Item -LiteralPath $root -Recurse -Force }
+}
