@@ -19,6 +19,7 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 if ($PSVersionTable.PSVersion.Major -lt 7) { throw 'WEBFORMS_EXISTING_PUBLISH_POWERSHELL_7_REQUIRED' }
+$compiledMaxText = 8192
 
 function Read-Required([string]$Value, [string]$Prompt) {
     if (![string]::IsNullOrWhiteSpace($Value)) { return $Value.Trim() }
@@ -478,7 +479,8 @@ function Invoke-CompiledScan([string]$ScanPath, [string]$LogPath, [string]$Bindi
     $arguments = [Collections.Generic.List[string]]::new()
     foreach ($argument in @('run', '--project', (Join-Path $TraceMapRoot 'src/dotnet/TraceMap.Cli'),
             '--', 'scan', '--repo', $SourceSiteRoot, '--out', $ScanPath,
-            '--webforms-publish-receipt', $receiptPath, '--compiled-max-artifacts', '64')) {
+            '--webforms-publish-receipt', $receiptPath, '--compiled-max-artifacts', '64',
+            '--compiled-max-text', [string]$compiledMaxText)) {
         $arguments.Add($argument)
     }
     if ($BindingPath) { $arguments.Add('--compiled-binding-receipt'); $arguments.Add($BindingPath) }
