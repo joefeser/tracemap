@@ -58,6 +58,10 @@ function Get-Sha256([string]$Path, [long]$MaximumBytes) {
 }
 
 function Read-Map([string]$Path) {
+    if (([IO.FileInfo]::new($Path)).Attributes.HasFlag([IO.FileAttributes]::ReparsePoint)) {
+        throw 'WEBFORMS_EXISTING_PUBLISH_REPARSE_POINT'
+    }
+    [void](Get-Sha256 $Path 1048576)
     $settings = [Xml.XmlReaderSettings]::new()
     $settings.DtdProcessing = [Xml.DtdProcessing]::Prohibit
     $settings.XmlResolver = $null
@@ -136,21 +140,36 @@ if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($sourceRepository)) {
 $dirty = @(& git -C $SourceSiteRoot status --porcelain --untracked-files=all -- .)
 if ($LASTEXITCODE -ne 0 -or $dirty.Count -ne 0) { throw 'WEBFORMS_EXISTING_PUBLISH_SOURCE_DIRTY' }
 
-# One exact page map is required. The source site, published output, and
-# compiler used to produce it are operator declarations, not build proof.
+# One exact or uniquely prefixed page map is required. The source site,
+# published output, and compiler used to produce it are operator declarations,
+# not build proof. A virtual-root prefix is not a source-tree directory.
 $maps = @(Get-ChildItem -LiteralPath $PublishedRoot -Recurse -File -Filter '*.compiled')
 if ($maps.Count -gt 4096) { throw 'WEBFORMS_EXISTING_PUBLISH_MAP_LIMIT' }
-$pageMaps = @($maps | Where-Object {
+$mapRows = @($maps | ForEach-Object {
     $root = Read-Map $_.FullName
-    $root.Name.LocalName -eq 'preserve' -and
-        $null -ne $root.Attribute('virtualPath') -and
-        $root.Attribute('virtualPath').Value -ceq ('/' + $PagePath)
+    if ($root.Name.LocalName -eq 'preserve' -and $null -ne $root.Attribute('virtualPath')) {
+        [pscustomobject]@{ File = $_; VirtualPath = [string]$root.Attribute('virtualPath').Value }
+    }
 })
+$suffix = '/' + $PagePath
+$exactMaps = @($mapRows | Where-Object { $_.VirtualPath -ceq $suffix })
+$prefixedMaps = @($mapRows | Where-Object {
+    $_.VirtualPath.Length -gt $suffix.Length -and
+    $_.VirtualPath.EndsWith($suffix, [StringComparison]::OrdinalIgnoreCase) -and
+    $_.VirtualPath.StartsWith('/') -and
+    $_.VirtualPath -notmatch '[/\\](?:\.|\.\.)[/\\]|//|\\|[?#]'
+})
+$pageMaps = @()
+if ($exactMaps.Count -gt 0) { $pageMaps = @($exactMaps) }
+else { $pageMaps = @($prefixedMaps) }
 if ($pageMaps.Count -ne 1) {
     Write-Output "existingPublishPageMapCount=$($pageMaps.Count)"
+    Write-Output "existingPublishAvailableMaps=$($maps.Count)"
+    Write-Output "existingPublishPrefixedCandidates=$($prefixedMaps.Count)"
     throw 'WEBFORMS_EXISTING_PUBLISH_PAGE_MAP_NOT_UNIQUE'
 }
-$map = Read-Map $pageMaps[0].FullName
+$map = Read-Map $pageMaps[0].File.FullName
+$virtualPath = [string]$pageMaps[0].VirtualPath
 $assemblyName = if ($null -eq $map.Attribute('assembly')) { '' } else { $map.Attribute('assembly').Value }
 $generatedType = if ($null -eq $map.Attribute('type')) { '' } else { $map.Attribute('type').Value }
 if ($assemblyName -cnotmatch '^[A-Za-z0-9_.-]{1,200}$' -or
@@ -279,7 +298,7 @@ foreach ($file in $dlls) {
     }
     $publishedRows.Add([ordered]@{ path = $relative; sha256 = $sourceHash; kind = 'assembly' })
 }
-$mapRelative = [IO.Path]::GetRelativePath($PublishedRoot, $pageMaps[0].FullName).Replace('\', '/')
+$mapRelative = [IO.Path]::GetRelativePath($PublishedRoot, $pageMaps[0].File.FullName).Replace('\', '/')
 $mapSource = Assert-Child $PublishedRoot $mapRelative 'MAP'
 $mapDestination = Join-Path $output $mapRelative
 [void][IO.Directory]::CreateDirectory((Split-Path -Parent $mapDestination))
@@ -313,7 +332,8 @@ $receipt = [ordered]@{
     sourceFiles = $sourceRows
     publishedFiles = @($publishedRows)
     pages = @([ordered]@{
-        virtualPath = '/' + $PagePath
+        virtualPath = $virtualPath
+        sourcePath = $PagePath
         assembly = $assemblyName
         generatedType = $generatedType
         mapPath = $mapRelative
@@ -330,6 +350,7 @@ Write-Output "selectedDlls=$($dlls.Count)"
 Write-Output "excludedDlls=$($excludedDlls.Count)"
 Write-Output 'scope=selected-published-assemblies-only;no-complete-publish-claim'
 Write-Output 'matchedPageMaps=1'
+Write-Output "pageMapMatch=$($(if ($exactMaps.Count -gt 0) { 'exact' } else { 'unique-prefixed' }))"
 Write-Output "boundedInputSha256=$boundedInputSha256"
 Write-Output 'compilerProvenance=unavailable-existing-output'
 Write-Output 'claim=operator-declared-publish-bytes;review-only-candidates;no-build-or-runtime-proof'

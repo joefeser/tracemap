@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Xml.Linq;
 using Microsoft.Data.Sqlite;
 using TraceMap.Cli;
@@ -1140,6 +1141,33 @@ public sealed class MessyWorkspaceRegressionTests
             && scan.Facts.Count(fact => fact.FactType == FactTypes.WebFormsPublishSourceBound) == 2
             && scan.Facts.Count(fact => fact.FactType == FactTypes.WebFormsPublishAssemblyBound) == 1,
             "the explicit bounded receipt must emit one page-to-assembly fact");
+        var originalReceipt = File.ReadAllText(receiptPath);
+        var originalMap = File.ReadAllText(map);
+        File.WriteAllText(map,
+            "<preserve virtualPath=\"/VirtualSite/Pages/Lookup.aspx\" assembly=\"CompiledProjectless.VB\" type=\"PublicProof.LookupPage\" />");
+        var prefixedReceipt = JsonNode.Parse(originalReceipt)!.AsObject();
+        prefixedReceipt["publishedFiles"]![1]!["sha256"] = FileHash(map);
+        prefixedReceipt["pages"]![0]!["virtualPath"] = "/VirtualSite/Pages/Lookup.aspx";
+        prefixedReceipt["pages"]![0]!["sourcePath"] = "Pages/Lookup.aspx";
+        File.WriteAllText(receiptPath, prefixedReceipt.ToJsonString());
+        var prefixed = WebFormsPublishMapExtractor.Evaluate(source, commit,
+            new ScanOptions(source, Path.Combine(temp.Path, "prefixed-output"),
+                WebFormsPublishReceiptPath: receiptPath), CancellationToken.None);
+        Require("MW-PUBLISH-NOPDB-001", "extraction",
+            prefixed.Provenance?.Status == "bound"
+            && prefixed.Pages.Single().SourcePath == "Pages/Lookup.aspx",
+            "a separately declared source-relative path must bind one unchanged prefixed virtual page map");
+        prefixedReceipt["pages"]![0]!["sourcePath"] = "Pages/Other.aspx";
+        File.WriteAllText(receiptPath, prefixedReceipt.ToJsonString());
+        var invalidPrefix = WebFormsPublishMapExtractor.Evaluate(source, commit,
+            new ScanOptions(source, Path.Combine(temp.Path, "invalid-prefix-output"),
+                WebFormsPublishReceiptPath: receiptPath), CancellationToken.None);
+        Require("MW-PUBLISH-NOPDB-001", "extraction",
+            invalidPrefix.Pages.Count == 0
+            && invalidPrefix.Provenance?.GapKinds.SequenceEqual(["WebFormsPublishReceiptInvalid"]) == true,
+            "an unrelated declared source path must not join to a prefixed virtual page");
+        File.WriteAllText(map, originalMap);
+        File.WriteAllText(receiptPath, originalReceipt);
         var index = Path.Combine(temp.Path, "publish-receipt-bound.sqlite");
         SqliteIndexWriter.Write(index, scan.Manifest, scan.Facts);
         var combined = Path.Combine(temp.Path, "publish-receipt-bound-combined.sqlite");

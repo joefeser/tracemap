@@ -3582,11 +3582,15 @@ pwsh -NoProfile -File scripts/Invoke-ExistingWebFormsPublishProof.ps1 -HandlerNa
 
 The script prompts for the source Web Site folder, the existing published
 output folder (containing `bin/` and `.compiled` maps), and the page path
-relative to the source site (for example `UBid/BidGroup.aspx`). It requires
-one exact page map, a matching mapped DLL, a clean source-site Git scope,
+relative to the source site (for example `BidGroup.aspx` when the site folder
+is `UBid`). It requires one unambiguous page map, a matching mapped DLL, a clean source-site Git scope,
 and bounded committed page/code-behind, relevant `Web.config`, plus
 `App_Code` sources. The scan is explicitly limited to those receipted source
-files; it is not a complete-site source scan. It selects the mapped
+files; it is not a complete-site source scan. It matches the page map by
+exact virtual path, or by one unique application-root-prefixed
+suffix when the `.compiled` virtual path differs from the source-relative
+page path. The receipt records both paths and retains the map bytes unchanged;
+zero or multiple candidates stop with map-count diagnostics. It selects the mapped
 page DLL and `App_Code` DLLs by default; `-AdditionalAssemblyName` may name
 other **exact** DLL filenames only when the operator can attest they were
 built from the same source commit. Every other `bin/*.dll` must be explicitly

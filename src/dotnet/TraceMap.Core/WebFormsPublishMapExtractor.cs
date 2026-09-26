@@ -115,7 +115,10 @@ internal static class WebFormsPublishMapExtractor
                 if (string.IsNullOrWhiteSpace(item.Assembly) || string.IsNullOrWhiteSpace(item.GeneratedType)
                     || item.VirtualPath is null || !item.VirtualPath.StartsWith("/", StringComparison.Ordinal))
                     throw new PublishException("WebFormsPublishReceiptInvalid");
-                var sourcePath = item.VirtualPath.TrimStart('/');
+                var sourcePath = item.SourcePath ?? item.VirtualPath.TrimStart('/');
+                if (item.SourcePath is not null
+                    && !item.VirtualPath.EndsWith("/" + sourcePath, StringComparison.OrdinalIgnoreCase))
+                    throw new PublishException("WebFormsPublishReceiptInvalid");
                 _ = ResolveChild(repoPath, sourcePath);
                 if (!receipt.SourceFiles.Any(source => source.Path == sourcePath))
                     throw new PublishException("WebFormsPublishSourceUnavailable");
@@ -277,6 +280,6 @@ internal static class WebFormsPublishMapExtractor
     private sealed record SourceFile(string? Path, string? Sha256);
     private sealed record PublishedFile(string? Path, string? Sha256, string? Kind);
     private sealed record Page(string? VirtualPath, string? Assembly, string? GeneratedType,
-        string? MapPath);
+        string? MapPath, string? SourcePath = null);
     private sealed class PublishException(string gapKind) : Exception { public string GapKind { get; } = gapKind; }
 }
