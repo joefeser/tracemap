@@ -5,6 +5,7 @@ param(
     [string]$PagePath,
     [string]$HandlerName,
     [string[]]$AdditionalAssemblyName = @(),
+    [switch]$IncludeAllPublishedAssembliesAsContext,
     [switch]$OperatorAttestsRemainingOutOfScope,
     [switch]$FailOnUnclassifiedAssemblies,
     [string]$OutputRoot,
@@ -140,7 +141,7 @@ if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($sourceRepository)) {
 $dirty = @(& git -C $SourceSiteRoot status --porcelain --untracked-files=all -- .)
 if ($LASTEXITCODE -ne 0 -or $dirty.Count -ne 0) { throw 'WEBFORMS_EXISTING_PUBLISH_SOURCE_DIRTY' }
 
-# One exact or uniquely prefixed page map is required. The source site,
+# Zero or one exact or uniquely prefixed page map is accepted. The source site,
 # published output, and compiler used to produce it are operator declarations,
 # not build proof. A virtual-root prefix is not a source-tree directory.
 $maps = @(Get-ChildItem -LiteralPath $PublishedRoot -Recurse -File -Filter '*.compiled')
@@ -207,9 +208,15 @@ foreach ($name in $AdditionalAssemblyName) {
     }
     [void]$requestedNames.Add($name)
 }
-$dlls = @($availableDlls | Where-Object { $requestedNames.Contains($_.Name) } | Sort-Object Name)
+$dlls = @($availableDlls | Where-Object {
+    $IncludeAllPublishedAssembliesAsContext -or $requestedNames.Contains($_.Name)
+} | Sort-Object Name)
 if ($dlls.Count -lt 1 -or $dlls.Count -gt 63) { throw 'WEBFORMS_EXISTING_PUBLISH_ASSEMBLY_LIMIT' }
-$excludedDlls = @($availableDlls | Where-Object { !$requestedNames.Contains($_.Name) })
+$sourceBoundDlls = @($dlls | Where-Object { $requestedNames.Contains($_.Name) })
+$contextDlls = @($dlls | Where-Object { !$requestedNames.Contains($_.Name) })
+$excludedDlls = @($availableDlls | Where-Object {
+    !$IncludeAllPublishedAssembliesAsContext -and !$requestedNames.Contains($_.Name)
+})
 if ($excludedDlls.Count -gt 0 -and !$OperatorAttestsRemainingOutOfScope) {
     Write-Output "selectedDlls=$($dlls.Count)"
     Write-Output "unclassifiedDlls=$($excludedDlls.Count)"
@@ -226,7 +233,9 @@ $assemblyInventory = @($availableDlls | ForEach-Object {
     [ordered]@{
         path = 'bin/' + $_.Name
         sha256 = Get-Sha256 $_.FullName 67108864
-        disposition = if ($requestedNames.Contains($_.Name)) { 'selected' } else { 'operator-declared-out-of-scope' }
+        disposition = if ($requestedNames.Contains($_.Name)) { 'selected' }
+            elseif ($IncludeAllPublishedAssembliesAsContext) { 'artifact-context-no-source-commit' }
+            else { 'operator-declared-out-of-scope' }
     }
 })
 $inventoryLines = @($assemblyInventory | ForEach-Object { "$($_.path):$($_.sha256):$($_.disposition)" })
@@ -380,8 +389,10 @@ Write-Output "sourceCommitSha=$sourceCommit"
 Write-Output "sourceFiles=$($sourceRows.Count)"
 Write-Output "availableDlls=$($availableDlls.Count)"
 Write-Output "selectedDlls=$($dlls.Count)"
+Write-Output "sourceCommitDlls=$($sourceBoundDlls.Count)"
+Write-Output "artifactContextDlls=$($contextDlls.Count)"
 Write-Output "excludedDlls=$($excludedDlls.Count)"
-Write-Output 'scope=selected-published-assemblies-only;no-complete-publish-claim'
+Write-Output "scope=$($(if ($IncludeAllPublishedAssembliesAsContext) { 'all-published-assemblies-artifact-context' } else { 'selected-published-assemblies-only' }));no-complete-publish-claim"
 Write-Output "matchedPageMaps=$($pageMaps.Count)"
 Write-Output "pageMapMatch=$($(if ($mapless) { 'mapless' } elseif ($exactMaps.Count -gt 0) { 'exact' } else { 'unique-prefixed' }))"
 Write-Output "boundedInputSha256=$boundedInputSha256"
@@ -433,13 +444,15 @@ if ($probe.webFormsPublishProvenance.status -ne 'bound') {
 }
 
 if (!$OperatorAttestsExactSourceCommit) {
-    $answer = Read-Host 'Do you attest the selected published DLLs were built from this exact clean source commit? Type YES to continue'
+    $answer = Read-Host 'Do you attest the source-commit DLLs (excluding artifact context) were built from this exact clean source commit? Type YES to continue'
     if ($answer -cne 'YES') {
         Write-Output 'existingPublishScan=stopped;reason=exact-source-commit-not-attested'
         return
     }
 }
-$bindings = @($probeOutcomes | ForEach-Object {
+$bindings = @($probeOutcomes | Where-Object {
+    $requestedNames.Contains([IO.Path]::GetFileName([string]$_.safeLocator))
+} | ForEach-Object {
     [ordered]@{
         schemaVersion = 'compiled-input-binding.v1'
         safeLocator = [string]$_.safeLocator
@@ -473,14 +486,23 @@ $scanPath = Join-Path $output 'scan'
 $manifest = Invoke-CompiledScan $scanPath (Join-Path $output 'scan.local.log') $bindingPath $true
 $status = [string]$manifest.webFormsPublishProvenance.status
 $boundCount = @($manifest.compiledInputProvenance.outcomes | Where-Object { $_.provenanceState -eq 'bound' }).Count
-$ilGaps = @($manifest.ilBodyProvenance.outcomes | Where-Object { @($_.gapKinds).Count -gt 0 }).Count
-Write-Output "existingPublishScan=$status"
+$contextUnboundCount = @($manifest.compiledInputProvenance.outcomes | Where-Object {
+    $_.provenanceState -eq 'unbound' -and
+    !$requestedNames.Contains([IO.Path]::GetFileName([string]$_.safeLocator))
+}).Count
+$ilGaps = @($manifest.ilBodyProvenance.outcomes | Where-Object {
+    @($_.gapKinds).Count -gt 0 -and
+    $requestedNames.Contains([IO.Path]::GetFileName([string]$_.safeLocator))
+}).Count
+Write-Output "existingPublishScan=$($(if ($status -eq 'bound' -and $contextDlls.Count -gt 0) { 'bound-with-unbound-context' } else { $status }))"
 Write-Output "compiledBoundInputs=$boundCount"
+Write-Output "compiledContextUnboundInputs=$contextUnboundCount"
 Write-Output "compiledCoverage=$($manifest.compiledInputProvenance.coverageState)"
 Write-Output "ilCoverage=$($manifest.ilBodyProvenance.coverageState)"
 Write-Output "ilInputsWithGaps=$ilGaps"
 Write-Output "publishGapKinds=$(@($manifest.webFormsPublishProvenance.gapKinds).Count)"
-if ($status -ne 'bound' -or $boundCount -ne $dlls.Count -or $ilGaps -ne 0) {
+if ($status -ne 'bound' -or $boundCount -ne $sourceBoundDlls.Count -or
+    $contextUnboundCount -ne $contextDlls.Count -or $ilGaps -ne 0) {
     Write-Output 'existingPublishPaths=withheld;reason=incomplete-compiled-evidence'
     return
 }

@@ -3617,6 +3617,17 @@ declared outside this focused proof (one `OUTOFSCOPE` response); otherwise
 the probe stops with `unclassified-assemblies`. The local receipt records
 each available DLL hash and its selected/out-of-scope disposition. An
 out-of-scope DLL is never a complete-publish or cross-assembly claim.
+When the deployment also contains binaries from another repository or build,
+`-IncludeAllPublishedAssembliesAsContext` instead hashes and scans every
+`bin/*.dll` without excluding any. Only the mapped or mapless Web Site DLLs
+and any explicitly named `-AdditionalAssemblyName` DLLs receive the Web Site
+commit binding. The others are labeled `artifact-context-no-source-commit`
+in the local inventory and remain unbound metadata context. A duplicate
+code-behind type in that context blocks the Tier3 page candidate; a call
+that needs a context DLL cannot become a bound IL edge through this run.
+Use the separately provenance-bound repository run when such an edge is
+needed. This mode does not attribute UnitedFramework or third-party binaries
+to the Web Site commit, nor does it prove a complete cross-repository path.
 The source subset follows `CodeBehind`/`CodeFile` in the page directive,
 then conventional VB/C# fallback, and includes every ancestor `Web.config`.
 It copies only selected DLLs and the relevant mapped map or all mapless maps
@@ -3625,8 +3636,8 @@ receipt's 256-source, 64-published-file, 32-page, and per-file limits before
 scanning. `-PrepareOnly` stops after the local receipt and copies.
 
 A first, unbound scan records the scanner's exact safe locators and metadata
-identities. Before a second scan may bind those selected DLLs, the operator
-must explicitly attest that they were built from the exact clean source
+identities. Before a second scan may bind the Web Site DLLs, the operator
+must explicitly attest that those DLLs were built from the exact clean source
 commit; declining stops without a bound path claim. The script retains the
 binding receipt, both scans, logs, combined index, and optional handler path
 report only in its local output folder. Its console output contains counts,
@@ -3636,9 +3647,10 @@ the script generator hash and a bounded-input digest. Do not share
 the local receipts, logs, scan, or path report. The existing publish's actual
 compiler and full build-input set remain unknown: the compiler hash in this
 operator-declared receipt is an explicitly labeled unknown sentinel, **not**
-a compiler attribution. A missing `.compiled` page map, a source-commit
-attestation that cannot be made, an omitted internal DLL, or a scanner limit
-is a gap to investigate, not permission to guess a source-to-binary join.
+a compiler attribution. A mapless page without a unique bound code-behind
+type, a source-commit attestation that cannot be made, an omitted internal
+DLL, or a scanner limit is a gap to investigate, not permission to guess a
+source-to-binary join.
 
 This diagnostic is a separate proof attempt; it does not rewrite the normal
 Web Forms workbench or establish runtime execution, source-line identity,
