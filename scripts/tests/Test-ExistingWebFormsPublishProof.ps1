@@ -58,6 +58,46 @@ try {
     if (!(Test-Path -LiteralPath (Join-Path $output 'handler-paths.json') -PathType Leaf)) {
         throw 'EXISTING_PUBLISH_TEST_PATH_REPORT_UNAVAILABLE'
     }
+    [IO.File]::WriteAllText($map,
+        '<preserve virtualPath="/VirtualSite/Pages/Lookup.aspx" assembly="CompiledProjectless.VB" type="PublicProof.LookupPage" />',
+        [Text.UTF8Encoding]::new($false))
+    $prefixedOutput = Join-Path $temp 'prefixed-proof'
+    $prefixedLines = @(& $script -SourceSiteRoot $source -PublishedRoot $publish -PagePath 'Pages/Lookup.aspx' `
+        -OutputRoot $prefixedOutput -TraceMapRoot $TraceMapRoot -OperatorAttestsExactSourceCommit)
+    $prefixedReceipt = [IO.File]::ReadAllText((Join-Path $prefixedOutput 'publish-receipt.local.json')) | ConvertFrom-Json -Depth 20
+    $prefixedManifest = [IO.File]::ReadAllText((Join-Path $prefixedOutput 'scan/scan-manifest.json')) | ConvertFrom-Json -Depth 20
+    if ($prefixedLines -notcontains 'pageMapMatch=unique-prefixed' -or
+        $prefixedLines -notcontains 'existingPublishScan=bound' -or
+        $prefixedReceipt.pages[0].virtualPath -ne '/VirtualSite/Pages/Lookup.aspx' -or
+        $prefixedReceipt.pages[0].sourcePath -ne 'Pages/Lookup.aspx' -or
+        $prefixedManifest.webFormsPublishProvenance.status -ne 'bound') {
+        throw 'EXISTING_PUBLISH_TEST_PREFIXED_PAGE_MAP_NOT_BOUND'
+    }
+    [IO.File]::WriteAllText((Join-Path $publish 'Pages/Other.compiled'),
+        '<preserve virtualPath="/AnotherSite/Pages/Lookup.aspx" assembly="CompiledProjectless.VB" type="PublicProof.LookupPage" />',
+        [Text.UTF8Encoding]::new($false))
+    $captured = $null
+    try {
+        & $script -SourceSiteRoot $source -PublishedRoot $publish -PagePath 'Pages/Lookup.aspx' `
+            -OutputRoot (Join-Path $temp 'ambiguous') -PrepareOnly *> $null
+    } catch { $captured = $_.Exception.Message }
+    if ($captured -ne 'WEBFORMS_EXISTING_PUBLISH_PAGE_MAP_NOT_UNIQUE') {
+        throw 'EXISTING_PUBLISH_TEST_PREFIXED_AMBIGUITY_NOT_REJECTED'
+    }
+    Remove-Item -LiteralPath (Join-Path $publish 'Pages/Other.compiled')
+    if (!$IsWindows) {
+        $aliasMap = Join-Path $publish 'Pages/Alias.compiled'
+        [void][IO.File]::CreateSymbolicLink($aliasMap, $map)
+        $captured = $null
+        try {
+            & $script -SourceSiteRoot $source -PublishedRoot $publish -PagePath 'Pages/Lookup.aspx' `
+                -OutputRoot (Join-Path $temp 'alias-map') -PrepareOnly *> $null
+        } catch { $captured = $_.Exception.Message }
+        if ($captured -ne 'WEBFORMS_EXISTING_PUBLISH_REPARSE_POINT') {
+            throw 'EXISTING_PUBLISH_TEST_MAP_ALIAS_NOT_REJECTED'
+        }
+        Remove-Item -LiteralPath $aliasMap
+    }
     $nestedSource = Join-Path $temp 'nested-source'
     [void][IO.Directory]::CreateDirectory((Join-Path $nestedSource 'Pages/Deep'))
     [IO.File]::WriteAllText((Join-Path $nestedSource 'Pages/Deep/Lookup.aspx'),
@@ -146,7 +186,7 @@ try {
             -OutputRoot (Join-Path $temp 'mismatch') -PrepareOnly *> $null
     } catch { $captured = $_.Exception.Message }
     if ($captured -ne 'WEBFORMS_EXISTING_PUBLISH_PAGE_MAP_NOT_UNIQUE') {
-        throw 'EXISTING_PUBLISH_TEST_MAP_MISMATCH_NOT_REJECTED'
+        throw "EXISTING_PUBLISH_TEST_MAP_MISMATCH_NOT_REJECTED:$captured"
     }
     Write-Output 'existingPublishPublicTests=passed'
 } finally {
