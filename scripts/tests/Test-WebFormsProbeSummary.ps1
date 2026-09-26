@@ -9,6 +9,7 @@ try {
     $manifest = @{
         compiledInputProvenance = @{
             omittedInputCount = 0
+            effectiveLimits = @{ maxTextLength = 4096 }
             outcomes = @(
                 @{ outcome = 'admitted'; safeLocator = 'private-one'; rawFileSha256 = 'hash'; assemblyIdentity = 'private-identity'; gapKinds = @('UnboundSource') },
                 @{ outcome = 'unreadable'; safeLocator = 'private-two'; rawFileSha256 = 'hash'; assemblyIdentity = ''; gapKinds = @('SystemReflectionMetadataReaderFailure') }
@@ -16,13 +17,14 @@ try {
         }
     }
     $receipt = @{ assemblyInventory = @(
-        @{ path = 'private-one'; disposition = 'selected' },
-        @{ path = 'private-two'; disposition = 'artifact-context-no-source-commit' }) }
+        @{ path = 'private-one'; sha256 = 'other-hash'; disposition = 'selected' },
+        @{ path = 'private-two'; sha256 = 'hash'; disposition = 'artifact-context-no-source-commit' }) }
     [IO.File]::WriteAllText((Join-Path $root 'probe/scan-manifest.json'), ($manifest | ConvertTo-Json -Depth 10))
     [IO.File]::WriteAllText((Join-Path $root 'publish-receipt.local.json'), ($receipt | ConvertTo-Json -Depth 10))
     $lines = @(& (Join-Path $TraceMapRoot 'scripts/wp.ps1') -OutputRoot $root)
     foreach ($expected in @('probeSelected=2', 'probeOutcomes=2', 'probeAdmitted=1',
             'probeNonadmitted=1', 'probeMissingIdentity=1', 'probeReady=False',
+            'probeNonadmittedSelected=0', 'probeNonadmittedContext=1', 'probeTextLimit=4096',
             'probeOutcome.unreadable=1', 'probeGap.SystemReflectionMetadataReaderFailure=1')) {
         if ($lines -cnotcontains $expected) { throw 'WEBFORMS_PROBE_SUMMARY_TEST_FAILED' }
     }
