@@ -3638,6 +3638,10 @@ closed with `WEBFORMS_EXISTING_PUBLISH_SOURCE_NOT_COMMITTED` and aggregate
 `sourceNotCommitted*Count` lines by page, linked code, config, and `App_Code`.
 Those counts contain no source paths. An ignored `App_Code` source remains a
 missing committed input even if the Git working tree reports clean.
+If an alias resolves to different committed and working blob identities, the
+probe fails with `WEBFORMS_EXISTING_PUBLISH_SOURCE_MISMATCH` and aggregate
+`sourceMismatch*Count` lines for the same categories. These counts also omit
+paths and hashes; a clean Git status alone does not override this gate.
 It copies only selected DLLs and the relevant mapped map or all mapless maps
 to a fresh local temporary output, not the source site. It enforces the
 receipt's 256-source, 64-published-file, 32-page, and per-file limits before
