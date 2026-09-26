@@ -3632,8 +3632,10 @@ The source subset follows `CodeBehind`/`CodeFile` in the page directive,
 then conventional VB/C# fallback, and includes every ancestor `Web.config`.
 Source tracking is checked against the exact `HEAD` tree under the Web Site
 folder. On Windows, a unique case-only path difference is accepted only when
-the working file's Git blob hash matches the committed blob; the safe
-`sourceTrackingCaseAliases` count reports these matches. Missing source fails
+the working file's raw or Git-filtered blob hash matches the committed blob.
+The raw comparison also accepts an exact committed byte match when the
+machine's current line-ending filter differs from the one used for the commit.
+The safe `sourceTrackingCaseAliases` count reports these matches. Missing source fails
 closed with `WEBFORMS_EXISTING_PUBLISH_SOURCE_NOT_COMMITTED` and aggregate
 `sourceNotCommitted*Count` lines by page, linked code, config, and `App_Code`.
 Those counts contain no source paths. An ignored `App_Code` source remains a
@@ -3644,7 +3646,7 @@ probe fails with `WEBFORMS_EXISTING_PUBLISH_SOURCE_MISMATCH` and aggregate
 paths and hashes; a clean Git status alone does not override this gate.
 For a Web Site whose only tracked content difference is its root `Web.config`,
 `scripts/wf.ps1` provides a local-only snapshot path. It checks every tracked
-Web Site file against `HEAD` with Git's clean filters, requires the existing
+Web Site file against `HEAD` using raw and Git-filtered blob identities, requires the existing
 bounded proof to identify only that config mismatch, creates a detached local
 commit containing the current config in a fresh temporary worktree, and runs
 the proof against that exact snapshot. It does not modify the original source

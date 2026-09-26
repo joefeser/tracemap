@@ -265,6 +265,33 @@ try {
         if (@(& git -C $maplessSite status --porcelain).Count -ne 0) {
             throw 'EXISTING_PUBLISH_TEST_SNAPSHOT_SOURCE_NOT_RESTORED'
         }
+        & git -C $maplessSite config core.autocrlf false
+        $configText = [IO.File]::ReadAllText((Join-Path $maplessSite 'Web.config'))
+        [IO.File]::WriteAllText((Join-Path $maplessSite 'Web.config'),
+            $configText.Replace("`r`n", "`n").Replace("`n", "`r`n"),
+            [Text.UTF8Encoding]::new($false))
+        & git -C $maplessSite add -u -- .
+        & git -C $maplessSite -c user.name=PublicTest -c user.email=public@example.invalid `
+            commit -qm raw-crlf-config
+        if ($LASTEXITCODE -ne 0) { throw 'EXISTING_PUBLISH_TEST_RAW_CONFIG_GIT_FAILED' }
+        & git -C $maplessSite config core.autocrlf true
+        $rawExpected = ([string](& git -C $maplessSite rev-parse HEAD:web.config)).Trim()
+        $rawActual = ([string](& git -C $maplessSite hash-object --no-filters `
+            (Join-Path $maplessSite 'Web.config'))).Trim()
+        $filteredActual = ([string](& git -C $maplessSite hash-object --path=web.config `
+            (Join-Path $maplessSite 'Web.config'))).Trim()
+        if ($rawActual -cne $rawExpected -or $filteredActual -ceq $rawExpected) {
+            throw 'EXISTING_PUBLISH_TEST_RAW_CONFIG_FILTER_SETUP_FAILED'
+        }
+        $rawProof = @(& $script -SourceSiteRoot $maplessSite -PublishedRoot $maplessPublish `
+            -PagePath 'Pages/Lookup.aspx' -HandlerName 'Names_Init' `
+            -IncludeAllPublishedAssembliesAsContext -FailOnUnclassifiedAssemblies `
+            -OutputRoot (Join-Path $temp 'raw-crlf-proof') -TraceMapRoot $TraceMapRoot -PrepareOnly)
+        if ($rawProof -notcontains 'sourceTrackingCaseAliases=1' -or
+            $rawProof -notcontains 'existingPublishPreparation=valid') {
+            throw 'EXISTING_PUBLISH_TEST_EXACT_RAW_CONFIG_NOT_ADMITTED'
+        }
+        & git -C $maplessSite config core.autocrlf false
         [IO.File]::WriteAllText((Join-Path $maplessSite '.gitignore'),
             "App_Code/IgnoredPublic.vb`n", [Text.UTF8Encoding]::new($false))
         & git -C $maplessSite add .gitignore
