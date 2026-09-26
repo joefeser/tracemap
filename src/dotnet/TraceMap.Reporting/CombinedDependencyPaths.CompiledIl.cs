@@ -188,16 +188,17 @@ public static partial class CombinedDependencyPathReporter
                 .Where(hash => !string.IsNullOrWhiteSpace(hash)).ToHashSet(StringComparer.Ordinal);
             var generatedTypes = facts.Where(fact => fact.SourceIndexId == map.SourceIndexId
                     && fact.FactType == FactTypes.ManagedTypeDeclared
-                    && fact.Properties.GetValueOrDefault("provenanceState") == "bound"
+                    && (mapless || fact.Properties.GetValueOrDefault("provenanceState") == "bound")
                     && (mapless ? boundHashes.Contains(fact.Properties.GetValueOrDefault("rawFileSha256"))
                         : fact.Properties.GetValueOrDefault("rawFileSha256") == rawSha)
                     && MatchesTypePath(fact.TargetSymbol, mapless
                         ? pages[0].Properties.GetValueOrDefault("pageTypeName")! : generatedType!))
                 .ToArray();
-            if (generatedTypes.Length != 1)
+            if (generatedTypes.Length != 1
+                || (mapless && generatedTypes[0].Properties.GetValueOrDefault("provenanceState") != "bound"))
             {
                 AddCompiledIlGap(graph, map, "ProjectlessPublishGeneratedTypeUnavailable",
-                    mapless ? "mapless-source-type-not-unique-in-bound-assemblies" : "mapped-generated-type-not-unique-in-bound-assembly",
+                    mapless ? "mapless-source-type-not-unique-and-bound-in-deployed-assemblies" : "mapped-generated-type-not-unique-in-bound-assembly",
                     generatedTypes.Length, ProjectlessPublishCandidateRuleId);
                 continue;
             }

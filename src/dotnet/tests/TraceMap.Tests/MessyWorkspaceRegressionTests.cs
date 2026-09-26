@@ -1156,6 +1156,26 @@ public sealed class MessyWorkspaceRegressionTests
                 edge.EdgeKind == "projectless-publish-method-candidate")
             && ambiguous.Gaps.Any(gap => gap.GapKind == "ProjectlessPublishMetadataAmbiguous"),
             "duplicate handler metadata must withhold the source join with an explicit gap");
+        var type = scan.Facts.Single(fact => fact.FactType == FactTypes.ManagedTypeDeclared
+            && fact.Properties.GetValueOrDefault("metadataName") == "LookupPage");
+        var contextHash = scan.Facts.Single(fact => fact.FactType == FactTypes.WebFormsPublishAssemblyBound
+            && fact.Evidence.FilePath.EndsWith("App_global.asax.dll", StringComparison.OrdinalIgnoreCase))
+            .Properties["assemblyRawSha256"];
+        var contextProperties = type.Properties.ToDictionary(pair => pair.Key, pair => pair.Value,
+            StringComparer.Ordinal);
+        contextProperties["rawFileSha256"] = contextHash;
+        contextProperties["provenanceState"] = "unbound";
+        var contextIndex = Path.Combine(temp.Path, "mapless-context-duplicate.sqlite");
+        SqliteIndexWriter.Write(contextIndex, scan.Manifest,
+            [.. scan.Facts, type with { FactId = "fact-mapless-unbound-type", Properties = contextProperties }]);
+        var contextCombined = Path.Combine(temp.Path, "mapless-context-duplicate-combined.sqlite");
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([contextIndex], contextCombined,
+            ["public-publish"]));
+        var contextAmbiguous = await CombinedDependencyPathReporter.BuildGraphInventoryAsync(contextCombined);
+        Require("MW-PUBLISH-MAPLESS-001", "unbound-type-ambiguity",
+            !contextAmbiguous.Edges.Any(edge => edge.EdgeKind == "projectless-publish-method-candidate")
+            && contextAmbiguous.Gaps.Any(gap => gap.GapKind == "ProjectlessPublishGeneratedTypeUnavailable"),
+            "a duplicate code-behind type in artifact-only context must block the source join");
         var missingIndex = Path.Combine(temp.Path, "mapless-missing.sqlite");
         SqliteIndexWriter.Write(missingIndex, scan.Manifest, scan.Facts.Where(fact =>
             fact.FactId != method.FactId).ToArray());

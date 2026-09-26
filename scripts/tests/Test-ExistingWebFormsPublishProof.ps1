@@ -193,6 +193,31 @@ try {
             }).Count -lt 1) {
             throw 'EXISTING_PUBLISH_TEST_MAPLESS_CHAIN_FAILED'
         }
+        $contextProofRoot = Join-Path $temp 'public-mapless-context-proof'
+        $contextProof = @(& $script -SourceSiteRoot $maplessSite -PublishedRoot $maplessPublish `
+            -PagePath 'Pages/Lookup.aspx' -HandlerName 'Names_Init' `
+            -IncludeAllPublishedAssembliesAsContext -FailOnUnclassifiedAssemblies `
+            -OutputRoot $contextProofRoot -TraceMapRoot $TraceMapRoot -OperatorAttestsExactSourceCommit)
+        $contextReceipt = [IO.File]::ReadAllText((Join-Path $contextProofRoot 'publish-receipt.local.json')) |
+            ConvertFrom-Json -Depth 20
+        $contextPaths = [IO.File]::ReadAllText((Join-Path $contextProofRoot 'handler-paths.json')) |
+            ConvertFrom-Json -Depth 50
+        if ($contextProof -notcontains 'selectedDlls=4' -or
+            $contextProof -notcontains 'sourceCommitDlls=2' -or
+            $contextProof -notcontains 'artifactContextDlls=2' -or
+            $contextProof -notcontains 'excludedDlls=0' -or
+            $contextProof -notcontains 'compiledBoundInputs=2' -or
+            $contextProof -notcontains 'compiledContextUnboundInputs=2' -or
+            $contextProof -notcontains 'existingPublishScan=bound-with-unbound-context' -or
+            $contextProof -notcontains 'existingPublishPaths=review-candidate' -or
+            @($contextReceipt.assemblyInventory | Where-Object {
+                $_.disposition -eq 'artifact-context-no-source-commit'
+            }).Count -ne 2 -or
+            @($contextPaths.paths | Where-Object {
+                @($_.edges.edgeKind) -contains 'projectless-publish-method-candidate'
+            }).Count -lt 1) {
+            throw 'EXISTING_PUBLISH_TEST_MAPLESS_CONTEXT_PROVENANCE_FAILED'
+        }
     }
     $captured = $null
     try {
