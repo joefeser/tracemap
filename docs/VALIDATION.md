@@ -3642,6 +3642,20 @@ If an alias resolves to different committed and working blob identities, the
 probe fails with `WEBFORMS_EXISTING_PUBLISH_SOURCE_MISMATCH` and aggregate
 `sourceMismatch*Count` lines for the same categories. These counts also omit
 paths and hashes; a clean Git status alone does not override this gate.
+For a Web Site whose only tracked content difference is its root `Web.config`,
+`scripts/wf.ps1` provides a local-only snapshot path. It checks every tracked
+Web Site file against `HEAD` with Git's clean filters, requires the existing
+bounded proof to identify only that config mismatch, creates a detached local
+commit containing the current config in a fresh temporary worktree, and runs
+the proof against that exact snapshot. It does not modify the original source
+checkout, branch, or index, and it does not push the private commit. The new
+commit and worktree remain local so the receipt can still resolve its source
+SHA. Run `pwsh -NoProfile -File scripts/wf.ps1` and answer its four input
+prompts; `-PrepareOnly` stops before the scans and source attestation. Only
+attest the snapshot as the publish input if those bytes were actually used to
+produce the deployed binaries. A later config edit does not establish that
+claim. Other source differences stop this helper; it never silently rewrites
+the source-commit claim or treats an unbound probe as a bound result.
 It copies only selected DLLs and the relevant mapped map or all mapless maps
 to a fresh local temporary output, not the source site. It enforces the
 receipt's 256-source, 64-published-file, 32-page, and per-file limits before

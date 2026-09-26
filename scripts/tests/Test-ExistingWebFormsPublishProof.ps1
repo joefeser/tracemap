@@ -218,6 +218,53 @@ try {
             }).Count -lt 1) {
             throw 'EXISTING_PUBLISH_TEST_MAPLESS_CONTEXT_PROVENANCE_FAILED'
         }
+        $snapshotScript = Join-Path $TraceMapRoot 'scripts/wf.ps1'
+        & git -C $maplessSite config core.ignorecase true
+        $configBlob = ([string](& git -C $maplessSite rev-parse 'HEAD:Web.config')).Trim()
+        & git -C $maplessSite update-index --force-remove Web.config
+        & git -C $maplessSite update-index --add --cacheinfo "100644,$configBlob,web.config"
+        & git -C $maplessSite -c user.name=PublicTest -c user.email=public@example.invalid `
+            commit -qm config-case-alias
+        if ($LASTEXITCODE -ne 0 -or @(& git -C $maplessSite status --porcelain).Count -ne 0) {
+            throw 'EXISTING_PUBLISH_TEST_CONFIG_CASE_ALIAS_GIT_FAILED'
+        }
+        $originalConfig = [IO.File]::ReadAllBytes((Join-Path $maplessSite 'Web.config'))
+        $originalHead = ([string](& git -C $maplessSite rev-parse HEAD)).Trim()
+        & git -C $maplessSite update-index --assume-unchanged web.config
+        [IO.File]::AppendAllText((Join-Path $maplessSite 'Web.config'),
+            "`n<!-- Public CodeDOM configuration change -->`n", [Text.UTF8Encoding]::new($false))
+        $snapshotRoot = Join-Path $temp 'local-source-snapshot'
+        $snapshotLines = @(& $snapshotScript -SourceSiteRoot $maplessSite -PublishedRoot $maplessPublish `
+            -PagePath 'Pages/Lookup.aspx' -HandlerName 'Names_Init' -SnapshotRoot $snapshotRoot `
+            -OutputRoot (Join-Path $temp 'local-snapshot-proof') -TraceMapRoot $TraceMapRoot -PrepareOnly)
+        $snapshotCommit = ([string](& git -C $snapshotRoot rev-parse HEAD)).Trim()
+        $snapshotChanged = @(& git -C $snapshotRoot diff-tree --no-commit-id --name-only -r HEAD)
+        $snapshotReceipt = [IO.File]::ReadAllText(($snapshotRoot + '.receipt.local.json')) |
+            ConvertFrom-Json -Depth 10
+        if ($snapshotLines -notcontains 'sourceSnapshotConfigDifferences=1' -or
+            $snapshotLines -notcontains 'sourceSnapshotOtherDifferences=0' -or
+            $snapshotLines -notcontains 'sourceSnapshotHashErrors=0' -or
+            $snapshotLines -notcontains 'sourceSnapshotKind=local-config-commit' -or
+            $snapshotLines -notcontains 'existingPublishPreparation=valid' -or
+            $snapshotCommit -eq $originalHead -or
+            ([string](& git -C $snapshotRoot rev-parse HEAD^)).Trim() -ne $originalHead -or
+            $snapshotChanged.Count -ne 1 -or $snapshotChanged[0] -cne 'web.config' -or
+            $snapshotReceipt.schemaVersion -ne 'webforms-local-config-snapshot.v1' -or
+            $snapshotReceipt.generatorSha256 -cne
+                (Get-FileHash -LiteralPath $snapshotScript -Algorithm SHA256).Hash.ToLowerInvariant() -or
+            $snapshotReceipt.boundedInputSha256 -cnotmatch '^[0-9a-f]{64}$' -or
+            !$snapshotReceipt.configOnlyTrackedDifference -or
+            $snapshotReceipt.snapshotCommitSha -cne $snapshotCommit -or
+            ([string](& git -C $maplessSite rev-parse HEAD)).Trim() -ne $originalHead) {
+            throw 'EXISTING_PUBLISH_TEST_LOCAL_CONFIG_SNAPSHOT_INVALID'
+        }
+        & git -C $maplessSite worktree remove -- $snapshotRoot
+        if ($LASTEXITCODE -ne 0) { throw 'EXISTING_PUBLISH_TEST_SNAPSHOT_WORKTREE_REMOVE_FAILED' }
+        [IO.File]::WriteAllBytes((Join-Path $maplessSite 'Web.config'), $originalConfig)
+        & git -C $maplessSite update-index --no-assume-unchanged web.config
+        if (@(& git -C $maplessSite status --porcelain).Count -ne 0) {
+            throw 'EXISTING_PUBLISH_TEST_SNAPSHOT_SOURCE_NOT_RESTORED'
+        }
         [IO.File]::WriteAllText((Join-Path $maplessSite '.gitignore'),
             "App_Code/IgnoredPublic.vb`n", [Text.UTF8Encoding]::new($false))
         & git -C $maplessSite add .gitignore
@@ -256,7 +303,7 @@ try {
             -PagePath 'Pages/Lookup.aspx' -HandlerName 'Names_Init' `
             -IncludeAllPublishedAssembliesAsContext -FailOnUnclassifiedAssemblies `
             -OutputRoot (Join-Path $temp 'case-alias-proof') -TraceMapRoot $TraceMapRoot -PrepareOnly)
-        if ($caseAliasLines -notcontains 'sourceTrackingCaseAliases=1' -or
+        if ($caseAliasLines -notcontains 'sourceTrackingCaseAliases=2' -or
             $caseAliasLines -notcontains 'existingPublishPreparation=valid') {
             throw 'EXISTING_PUBLISH_TEST_TRACKED_CASE_ALIAS_NOT_ADMITTED'
         }
@@ -276,11 +323,26 @@ try {
                 -PrepareOnly | ForEach-Object { $mismatchLines += $_ }
         } catch { $captured = $_.Exception.Message }
         if ($captured -ne 'WEBFORMS_EXISTING_PUBLISH_SOURCE_MISMATCH' -or
-            $mismatchLines -notcontains 'sourceTrackingCaseAliases=1' -or
+            $mismatchLines -notcontains 'sourceTrackingCaseAliases=2' -or
             $mismatchLines -notcontains 'sourceMismatchCount=1' -or
             $mismatchLines -notcontains 'sourceMismatchAppCodeCount=1' -or
             $mismatchLines -notcontains 'sourceMismatchHashErrorCount=0') {
             throw 'EXISTING_PUBLISH_TEST_CHANGED_CASE_ALIAS_NOT_REJECTED'
+        }
+        $snapshotGapLines = @()
+        $captured = $null
+        try {
+            & $snapshotScript -SourceSiteRoot $maplessSite -PublishedRoot $maplessPublish `
+                -PagePath 'Pages/Lookup.aspx' -HandlerName 'Names_Init' `
+                -SnapshotRoot (Join-Path $temp 'other-source-snapshot') `
+                -TraceMapRoot $TraceMapRoot -PrepareOnly |
+                ForEach-Object { $snapshotGapLines += $_ }
+        } catch { $captured = $_.Exception.Message }
+        if ($captured -ne 'WEBFORMS_SNAPSHOT_SOURCE_NOT_CONFIG_ONLY' -or
+            $snapshotGapLines -notcontains 'sourceSnapshotConfigDifferences=0' -or
+            $snapshotGapLines -notcontains 'sourceSnapshotOtherDifferences=1' -or
+            (Test-Path -LiteralPath (Join-Path $temp 'other-source-snapshot'))) {
+            throw 'EXISTING_PUBLISH_TEST_OTHER_SOURCE_SNAPSHOT_NOT_REJECTED'
         }
     }
     $captured = $null
