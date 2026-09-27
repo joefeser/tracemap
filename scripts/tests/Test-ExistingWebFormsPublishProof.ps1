@@ -9,6 +9,12 @@ $TraceMapRoot = [IO.Path]::GetFullPath($TraceMapRoot)
 $source = Join-Path $TraceMapRoot 'samples/messy-dotnet-workspace/vb-pdb-projectless'
 $project = Join-Path $TraceMapRoot 'samples/messy-dotnet-workspace/vb-pdb-build/CompiledProjectless.VB.vbproj'
 $script = Join-Path $TraceMapRoot 'scripts/Invoke-ExistingWebFormsPublishProof.ps1'
+$snapshotWrapper = [IO.File]::ReadAllText((Join-Path $TraceMapRoot 'scripts/wf.ps1'))
+$pin = [regex]::Match($snapshotWrapper, "(?m)^\`$expectedProofBlob = '([0-9a-f]{40})'\s*$")
+$proofBlob = ([string](& git -C $TraceMapRoot hash-object --path=scripts/Invoke-ExistingWebFormsPublishProof.ps1 $script)).Trim()
+if (!$pin.Success -or $LASTEXITCODE -ne 0 -or $pin.Groups[1].Value -cne $proofBlob) {
+    throw 'EXISTING_PUBLISH_TEST_SNAPSHOT_PROOF_PIN_STALE'
+}
 & dotnet build $project --nologo -v quiet | Out-Null
 if ($LASTEXITCODE -ne 0) { throw 'EXISTING_PUBLISH_TEST_BUILD_FAILED' }
 $assembly = Join-Path $TraceMapRoot 'samples/messy-dotnet-workspace/vb-pdb-build/bin/Debug/net10.0/CompiledProjectless.VB.dll'
