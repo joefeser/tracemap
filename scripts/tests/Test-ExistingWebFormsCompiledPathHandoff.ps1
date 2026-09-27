@@ -40,7 +40,8 @@ try {
     }
     [IO.File]::WriteAllText((Join-Path $root 'scan/scan-manifest.json'), (($manifest | ConvertTo-Json -Depth 15) + "`n"))
     [IO.File]::WriteAllText((Join-Path $root 'publish-receipt.local.json'), (($receipt | ConvertTo-Json -Depth 5) + "`n"))
-    [IO.File]::WriteAllText((Join-Path $root 'handler-paths.json'), (($report | ConvertTo-Json -Depth 20) + "`n"))
+    $originalSqlReport = (($report | ConvertTo-Json -Depth 20) + "`n")
+    [IO.File]::WriteAllText((Join-Path $root 'handler-paths.json'), $originalSqlReport)
     [IO.File]::WriteAllText((Join-Path $root 'combined.sqlite'), 'public-test-index')
     $replayFailure = $null
     try { & (Join-Path $TraceMapRoot 'scripts/Replay-ExistingWebFormsCompiledPathReviews.ps1') `
@@ -83,10 +84,11 @@ try {
     $captured = $null
     try { & $generator -ProofRoot $root -OutputDirectory (Join-Path $root 'empty-index') *> $null }
     catch { $captured = $_.Exception.Message }
-    if ($captured -ne 'WEBFORMS_COMPILED_HANDOFF_INPUT_LIMIT;slot=combinedIndex;bytes=0;max=2147483648') {
+    if ($captured -ne 'WEBFORMS_COMPILED_HANDOFF_INPUT_LIMIT;slot=combinedIndex;bytes=0;max=4294967296') {
         throw "WEBFORMS_COMPILED_HANDOFF_LIMIT_DIAGNOSTIC_INVALID:$captured"
     }
     [IO.File]::WriteAllText((Join-Path $root 'combined.sqlite'), 'public-test-index')
+    [IO.File]::WriteAllText((Join-Path $root 'handler-paths.json'), $originalSqlReport)
     $report.paths[0].edges[0].toNodeId = 'compiled'
     $report.paths[0].nodes[-1].surfaceKind = 'database-api'
     $report.paths[0].edges[-1].edgeKind = 'compiled-database-api-candidate'
@@ -132,6 +134,36 @@ try {
             (Get-FileHash -LiteralPath (Join-Path $root "combined-ilwork-$highWork.sqlite") -Algorithm SHA256).Hash.ToLowerInvariant() -or
         $highHandoff.paths.Count -ne 1) {
         throw 'WEBFORMS_COMPILED_HANDOFF_HIGH_WORK_PROVENANCE_INVALID'
+    }
+    $highFactsPath = Join-Path $highScan 'facts.ndjson'
+    [IO.File]::WriteAllText($highFactsPath, "{`"factType`":`"PublicSynthetic`"}`n")
+    $savedFolder = Join-Path $root 'path-recheck-public'
+    [void][IO.Directory]::CreateDirectory($savedFolder)
+    $emptySql = $originalSqlReport | ConvertFrom-Json -Depth 30
+    $emptySql.paths = @()
+    $emptySql.summary.pathCount = 0
+    [IO.File]::WriteAllText((Join-Path $root 'handler-paths.json'),
+        (($emptySql | ConvertTo-Json -Depth 30) + "`n"))
+    $report.query.surfaceName = 'DbDataAdapter.Fill'
+    $report.summary.selectorCandidateCount = 1
+    [IO.File]::WriteAllText((Join-Path $savedFolder 'handler-paths.local.json'),
+        (($report | ConvertTo-Json -Depth 20) + "`n"))
+    $inputInventory = (Get-FileHash -LiteralPath (Join-Path $root "combined-ilwork-$highWork.sqlite") -Algorithm SHA256).Hash.ToLowerInvariant() + "`n" +
+        (Get-FileHash -LiteralPath (Join-Path $root 'handler-paths.json') -Algorithm SHA256).Hash.ToLowerInvariant() + "`n" +
+        (Get-FileHash -LiteralPath $highFactsPath -Algorithm SHA256).Hash.ToLowerInvariant()
+    $inputSha = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData(
+        [Text.Encoding]::UTF8.GetBytes($inputInventory))).ToLowerInvariant()
+    [IO.File]::WriteAllText((Join-Path $savedFolder 'path-recheck.receipt.local.json'),
+        (([ordered]@{ schemaVersion = 'webforms-path-recheck.v1'; generatorSha256 = 'e' * 64
+            boundedInputSha256 = $inputSha; scanFolder = "scan-ilwork-$highWork"
+            combinedIndex = "combined-ilwork-$highWork.sqlite" } | ConvertTo-Json) + "`n"))
+    $savedLines = @(& (Join-Path $TraceMapRoot 'scripts/Replay-ExistingWebFormsCompiledPathReviews.ps1') `
+        -ProofRoot $root)
+    if ($savedLines -cnotcontains 'compiledReplaySavedApi=True' -or
+        $savedLines -cnotcontains 'compiledApiPaths=1' -or
+        $savedLines -cnotcontains 'compiledPathReviewPaths=1' -or
+        !(Test-Path -LiteralPath (Join-Path $savedFolder 'compiled-api-review/handler.local.html') -PathType Leaf)) {
+        throw "WEBFORMS_COMPILED_REPLAY_SAVED_API_NOT_PROJECTED:$($savedLines -join ';')"
     }
     $badReceipt = Join-Path $root 'handler-high-work-bad.receipt.json'
     [IO.File]::WriteAllText($badReceipt, (([ordered]@{

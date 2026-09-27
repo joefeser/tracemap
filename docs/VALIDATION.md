@@ -3624,8 +3624,8 @@ ordered path is a later graph projection from `combined.sqlite`, not an
 additional extracted fact. The handoff JSON hashes its generator and the
 bounded path report, manifest, receipt, and combined index. It is local-only
 and may contain private identities; do not share it as an anonymous artifact.
-The local renderer accepts a path report up to 256 MiB and at most 250,000
-explicit graph gaps. It shows 256 detailed gaps and 128 kind/rule count groups
+The local renderer accepts a path report up to 256 MiB, a combined index up
+to 4 GiB, and at most 250,000 explicit graph gaps. It shows 256 detailed gaps and 128 kind/rule count groups
 at most, with omitted counts; the full bounded input remains committed by its
 SHA-256. An input-limit failure reports only the input slot, measured bytes,
 and limit so a saved proof can be diagnosed without another scan.
@@ -3634,7 +3634,11 @@ If the SQL-query path count is zero, the local replay runs a unique-handler
 `combined-ilwork-30000000.sqlite`, narrowing the terminal to
 `DbDataAdapter.Fill`. With no explicit proof root it selects the latest complete
 high-work proof, not merely the latest lower-work proof; if none is saved, it
-stops before a graph query. It prints truncation and traversal counts and projects
+stops before a graph query. The initial publish proof explicitly allows its
+base index before a high-work replay exists. A matching saved, receipted high-work API path report
+is reused after its bounded input hash is checked, avoiding a repeated graph
+query. Otherwise the graph query runs against the saved high-work index. It
+prints truncation and traversal counts and projects
 the separate receipted report into a fresh `path-recheck-*/compiled-api-review/`
 directory. The handoff binds the
 exact scan and index hashes. This is a static database API candidate, not
