@@ -1323,6 +1323,21 @@ public sealed class MessyWorkspaceRegressionTests
             && caseGraph.Edges.Any(edge => edge.EdgeKind == "projectless-publish-member-candidate"
                 && caseNodes[edge.FromNodeId].DisplayName == "synthetic-case-member"),
             "VB casing differences across page, handler, declaration, metadata, and App_Code member must retain review-tier candidates");
+        var absentNameIndex = Path.Combine(temp.Path, "publish-receipt-absent-name.sqlite");
+        SqliteIndexWriter.Write(absentNameIndex, scan.Manifest, caseFacts.Select(fact =>
+            fact.FactId == "fact-synthetic-publish-case-member"
+                ? ChangeProperties(fact, ("name", "AbsentPublicMember")) : fact).ToArray());
+        var absentNameCombined = Path.Combine(temp.Path, "publish-receipt-absent-name-combined.sqlite");
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([absentNameIndex],
+            absentNameCombined, ["public-publish"]));
+        var absentNameGraph = await CombinedDependencyPathReporter.BuildGraphInventoryAsync(absentNameCombined);
+        Require("MW-PUBLISH-NOPDB-001", "missing-published-member",
+            absentNameGraph.Gaps.Any(gap => gap.GapKind == "ProjectlessPublishMemberAmbiguous"
+                && gap.FilePath == syntheticPath && gap.Reason == "bound-method-name-unavailable"
+                && gap.CandidateCount == 0)
+            && !absentNameGraph.Edges.Any(edge => edge.EdgeKind == "projectless-publish-member-candidate"
+                && edge.FilePath == syntheticPath),
+            "a missing bound method name must retain a categorical gap without a source-to-compiled edge");
         var caseMethod = caseFacts.Single(fact => fact.FactType == FactTypes.ManagedMethodDeclared
             && fact.Properties.GetValueOrDefault("metadataName") == "Lookup_Init");
         var caseDuplicateIndex = Path.Combine(temp.Path, "publish-receipt-case-duplicate.sqlite");

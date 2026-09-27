@@ -361,15 +361,18 @@ public static partial class CombinedDependencyPathReporter
                 if (!TrySimpleTypePath(typeName, out var typePath) || string.IsNullOrWhiteSpace(name)
                     || name.Equals("New", StringComparison.OrdinalIgnoreCase) || string.IsNullOrWhiteSpace(memberIdentity))
                     continue;
-                var candidates = (methodsByName.GetValueOrDefault((source.SourceIndexId, name.ToUpperInvariant())) ?? [])
-                    .Where(fact => hashes.Contains(fact.Properties.GetValueOrDefault("rawFileSha256"))
-                        && fact.TargetSymbol?.Contains("|type:" + typePath + "|arity:0|method:", StringComparison.OrdinalIgnoreCase) == true
-                        && PublishCandidateSignatureMatches(declaration, fact))
-                    .ToArray();
+                var named = methodsByName.GetValueOrDefault((source.SourceIndexId, name.ToUpperInvariant())) ?? [];
+                var inBoundAssembly = named.Where(fact =>
+                    hashes.Contains(fact.Properties.GetValueOrDefault("rawFileSha256"))).ToArray();
+                var inQualifiedType = inBoundAssembly.Where(fact =>
+                    fact.TargetSymbol?.Contains("|type:" + typePath + "|arity:0|method:", StringComparison.OrdinalIgnoreCase) == true).ToArray();
+                var candidates = inQualifiedType.Where(fact =>
+                    PublishCandidateSignatureMatches(declaration, fact)).ToArray();
                 if (candidates.Length != 1)
                 {
                     AddCompiledIlGap(graph, declaration, "ProjectlessPublishMemberAmbiguous",
-                        "one-qualified-published-member-with-compatible-parameter-shapes-required",
+                        PublishMemberGapReason(named.Length, inBoundAssembly.Length,
+                            inQualifiedType.Length, candidates.Length),
                         candidates.Length, ProjectlessPublishCandidateRuleId);
                     continue;
                 }
@@ -403,6 +406,16 @@ public static partial class CombinedDependencyPathReporter
                         [], SafePath(declaration.FilePath), declaration.StartLine, declaration.EndLine));
             }
         }
+    }
+
+    internal static string PublishMemberGapReason(int named, int inBoundAssembly,
+        int inQualifiedType, int compatibleSignature)
+    {
+        if (named == 0) return "bound-method-name-unavailable";
+        if (inBoundAssembly == 0) return "method-absent-from-receipt-bound-assemblies";
+        if (inQualifiedType == 0) return "qualified-containing-type-unmatched";
+        if (compatibleSignature == 0) return "parameter-shape-unmatched";
+        return "multiple-qualified-compatible-members";
     }
 
     private static bool PublishCandidateSignatureMatches(CombinedFactRow source, CombinedFactRow compiled)
