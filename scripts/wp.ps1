@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param([string]$OutputRoot)
+param([string]$OutputRoot, [switch]$RecheckPathReasons)
 
 # Summarize an existing local Web Forms compiled probe. Never starts a scan.
 Set-StrictMode -Version Latest
@@ -121,4 +121,61 @@ if (Test-Path -LiteralPath $pathReportPath -PathType Leaf) {
     }
     Write-Output "pathPublishMemberMissing=$missingMembers"
     Write-Output "pathPublishMemberMultiple=$multipleMembers"
+}
+
+if ($RecheckPathReasons) {
+    $combinedPath = Join-Path $OutputRoot 'combined.sqlite'
+    if (!(Test-Path -LiteralPath $pathReportPath -PathType Leaf) -or
+        !(Test-Path -LiteralPath $combinedPath -PathType Leaf)) {
+        throw 'WEBFORMS_PROBE_PATH_RECHECK_INPUT_UNAVAILABLE'
+    }
+    $previous = [IO.File]::ReadAllText($pathReportPath) | ConvertFrom-Json -Depth 50
+    if ([string]::IsNullOrWhiteSpace([string]$previous.query.fromSymbol) -or
+        $previous.query.toSurface -cne 'sql-query' -or
+        [int]$previous.query.maxDepth -ne 20 -or [int]$previous.query.maxPaths -ne 256) {
+        throw 'WEBFORMS_PROBE_PATH_RECHECK_QUERY_UNEXPECTED'
+    }
+    $scratch = Join-Path $OutputRoot ('path-recheck-' + [guid]::NewGuid().ToString('N'))
+    [void][IO.Directory]::CreateDirectory($scratch)
+    $recheckPath = Join-Path $scratch 'handler-paths.local.json'
+    $project = Join-Path $PSScriptRoot '../src/dotnet/TraceMap.Cli/TraceMap.Cli.csproj'
+    & dotnet run --project $project -- paths --index $combinedPath --out $recheckPath `
+        --format json --from-symbol ([string]$previous.query.fromSymbol) `
+        --to-surface sql-query --max-depth 20 --max-paths 256 *> (Join-Path $scratch 'paths.local.log')
+    if ($LASTEXITCODE -ne 0 -or !(Test-Path -LiteralPath $recheckPath -PathType Leaf)) {
+        throw 'WEBFORMS_PROBE_PATH_RECHECK_FAILED'
+    }
+    $generatorDirectory = Join-Path $PSScriptRoot '../src/dotnet/TraceMap.Cli/bin/Debug/net10.0'
+    $assemblies = @(Get-ChildItem -LiteralPath $generatorDirectory -File -Filter 'TraceMap.*.dll' |
+        Sort-Object Name)
+    if ($assemblies.Count -lt 3) {
+        throw 'WEBFORMS_PROBE_PATH_RECHECK_GENERATOR_UNAVAILABLE'
+    }
+    $generatorFiles = @($PSCommandPath) + @($assemblies.FullName)
+    $generatorInventory = @($generatorFiles | ForEach-Object {
+        (Split-Path $_ -Leaf) + ':' + (Get-FileHash -LiteralPath $_ -Algorithm SHA256).Hash.ToLowerInvariant()
+    }) -join "`n"
+    $generatorSha = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData(
+        [Text.Encoding]::UTF8.GetBytes($generatorInventory))).ToLowerInvariant()
+    $inputInventory = (Get-FileHash -LiteralPath $combinedPath -Algorithm SHA256).Hash.ToLowerInvariant() + "`n" +
+        (Get-FileHash -LiteralPath $pathReportPath -Algorithm SHA256).Hash.ToLowerInvariant()
+    $inputSha = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData(
+        [Text.Encoding]::UTF8.GetBytes($inputInventory))).ToLowerInvariant()
+    $receipt = [ordered]@{ schemaVersion = 'webforms-path-recheck.v1'; visibility = 'local-only'
+        generatorSha256 = $generatorSha; boundedInputSha256 = $inputSha }
+    [IO.File]::WriteAllText((Join-Path $scratch 'path-recheck.receipt.local.json'),
+        (($receipt | ConvertTo-Json -Depth 5) + "`n"), [Text.UTF8Encoding]::new($false))
+    $recheck = [IO.File]::ReadAllText($recheckPath) | ConvertFrom-Json -Depth 50
+    $memberGaps = @($recheck.gaps | Where-Object { $_.gapKind -ceq 'ProjectlessPublishMemberAmbiguous' })
+    Write-Output "pathRecheckPaths=$($recheck.summary.pathCount)"
+    Write-Output "pathRecheckPublishMemberGaps=$($memberGaps.Count)"
+    foreach ($reason in @('bound-method-name-unavailable',
+            'method-absent-from-receipt-bound-assemblies', 'qualified-containing-type-unmatched',
+            'parameter-shape-unmatched', 'multiple-qualified-compatible-members')) {
+        Write-Output "pathRecheckReason.$reason=$(@($memberGaps | Where-Object { $_.reason -ceq $reason }).Count)"
+    }
+    Write-Output "pathRecheckReason.other=$(@($memberGaps | Where-Object {
+        $_.reason -cnotin @('bound-method-name-unavailable',
+            'method-absent-from-receipt-bound-assemblies', 'qualified-containing-type-unmatched',
+            'parameter-shape-unmatched', 'multiple-qualified-compatible-members') }).Count)"
 }

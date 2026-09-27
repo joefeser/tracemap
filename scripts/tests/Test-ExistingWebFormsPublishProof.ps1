@@ -62,6 +62,13 @@ try {
     if (!(Test-Path -LiteralPath (Join-Path $output 'handler-paths.json') -PathType Leaf)) {
         throw 'EXISTING_PUBLISH_TEST_PATH_REPORT_UNAVAILABLE'
     }
+    $recheckLines = @(& (Join-Path $TraceMapRoot 'scripts/wp.ps1') `
+        -OutputRoot $output -RecheckPathReasons)
+    if (@($recheckLines | Where-Object { $_ -cmatch '^pathRecheckPaths=\d+$' }).Count -ne 1 -or
+        @($recheckLines | Where-Object { $_ -cmatch '^pathRecheckPublishMemberGaps=\d+$' }).Count -ne 1 -or
+        $recheckLines -cnotcontains 'pathRecheckReason.other=0') {
+        throw 'EXISTING_PUBLISH_TEST_PATH_RECHECK_INVALID'
+    }
     function global:Read-Host { param([string]$Prompt) 'yes' }
     try {
         $lowercaseLines = @(& $script -SourceSiteRoot $source -PublishedRoot $publish `
