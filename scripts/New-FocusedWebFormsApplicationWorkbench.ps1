@@ -257,15 +257,17 @@ if ($CompiledPathHandoffPath) {
     $compiledPathHandoff = [IO.File]::ReadAllText($compiledInput.FullName) | ConvertFrom-Json -Depth 50
     $compiledPaths = @(Values $compiledPathHandoff.paths)
     $compiledCommit = [string]$compiledPathHandoff.provenance.sourceCommitSha
-    if ($compiledPathHandoff.schemaVersion -cne 'webforms-compiled-path-handoff.v1' -or
-        $compiledPathHandoff.ruleId -cne 'diagnostic.webforms.compiled-path-handoff.v1' -or
-        $compiledPathHandoff.claimLevel -cne 'review-only-static-evidence' -or
-        $compiledCommit -cnotmatch '^[0-9a-f]{40}$' -or
-        @($sources | Where-Object { [string]$_.commitSha -ceq $compiledCommit }).Count -ne 1 -or
-        [string]$compiledPathHandoff.provenance.generatorSha256 -cnotmatch '^[0-9a-f]{64}$' -or
-        [string]$compiledPathHandoff.provenance.boundedInputSha256 -cnotmatch '^[0-9a-f]{64}$' -or
-        $compiledPaths.Count -gt 256 -or
-        @($compiledPaths | Where-Object {
+    $compiledRejections = [Collections.Generic.List[string]]::new()
+    if ($compiledPathHandoff.schemaVersion -cne 'webforms-compiled-path-handoff.v1') { $compiledRejections.Add('schema') }
+    if ($compiledPathHandoff.ruleId -cne 'diagnostic.webforms.compiled-path-handoff.v1') { $compiledRejections.Add('rule-id') }
+    if ($compiledPathHandoff.claimLevel -cne 'review-only-static-evidence') { $compiledRejections.Add('claim-level') }
+    if ($compiledCommit -cnotmatch '^[0-9a-f]{40}$') { $compiledRejections.Add('source-commit-format') }
+    $compiledSourceMatches = @($sources | Where-Object { [string]$_.commitSha -ceq $compiledCommit }).Count
+    if ($compiledSourceMatches -ne 1) { $compiledRejections.Add('packet-source-commit') }
+    if ([string]$compiledPathHandoff.provenance.generatorSha256 -cnotmatch '^[0-9a-f]{64}$') { $compiledRejections.Add('generator-hash') }
+    if ([string]$compiledPathHandoff.provenance.boundedInputSha256 -cnotmatch '^[0-9a-f]{64}$') { $compiledRejections.Add('bounded-input-hash') }
+    if ($compiledPaths.Count -gt 256) { $compiledRejections.Add('path-limit') }
+    if (@($compiledPaths | Where-Object {
             $_.claim -cne 'review-only-static-path' -or @($_.hops).Count -lt 1 -or
             @($_.hops).Count -gt 20 -or @($_.hops | Where-Object {
                 [string]::IsNullOrWhiteSpace([string]$_.ruleId) -or
@@ -273,8 +275,13 @@ if ($CompiledPathHandoffPath) {
                 [string]::IsNullOrWhiteSpace([string]$_.from.name) -or
                 [string]::IsNullOrWhiteSpace([string]$_.to.name)
             }).Count -gt 0
-        }).Count -gt 0) {
-        throw 'ApplicationWorkbenchCompiledPathProvenanceMismatch'
+        }).Count -gt 0) { $compiledRejections.Add('path-evidence') }
+    if ($compiledRejections.Count -gt 0) {
+        # Categorical output only: no private source identities or packet paths.
+        Write-Output "compiledPathAttachmentReasons=$($compiledRejections -join ',')"
+        Write-Output "compiledPathAttachmentSourceMatches=$compiledSourceMatches"
+        Write-Output "compiledPathAttachmentPacketSources=$($sources.Count)"
+        throw "ApplicationWorkbenchCompiledPathProvenanceMismatch;reasons=$($compiledRejections -join ',');sourceMatches=$compiledSourceMatches"
     }
     $compiledPathHandoffSha256 = (Get-FileHash -LiteralPath $compiledInput.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
 }

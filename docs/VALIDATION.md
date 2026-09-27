@@ -3665,6 +3665,13 @@ forwards its selected handoff into the standalone workbench. Run
 `-OutputRoot`, and `-ConfigPath` override discovery. It uses the normal local
 page-list configuration by default and does not rebuild, publish, scan, or
 combine. Its public wrapper guard is `scripts/tests/Test-WebFormsView.ps1`.
+When a compiled handoff is supplied without `-PacketPath`, packet discovery
+chooses the newest saved packet with exactly one matching source commit,
+not merely the newest packet. Discovery is bounded to 64 packets, 128 MiB
+per packet and 512 MiB total read; no compatible packet stops with
+`WEBFORMS_STANDALONE_REVIEW_COMPATIBLE_PACKET_UNAVAILABLE`. Explicitly supplied
+packets still undergo the same attachment guard. A rejected pairing reports
+categorical reasons and source-match counts, never private source names.
 The cross-platform projection guard is
 `pwsh -NoProfile -File scripts/tests/Test-ExistingWebFormsCompiledPathHandoff.ps1`.
 The Windows case must
