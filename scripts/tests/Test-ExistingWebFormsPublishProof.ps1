@@ -47,7 +47,9 @@ try {
     $binding = [IO.File]::ReadAllText((Join-Path $output 'compiled-binding.local.json')) | ConvertFrom-Json -Depth 20
     if ($binding.generatorSha256 -cnotmatch '^[0-9a-f]{64}$' -or
         $binding.boundedInputSha256 -cnotmatch '^[0-9a-f]{64}$' -or
-        $binding.generatorSha256 -cne (Get-FileHash -LiteralPath $script -Algorithm SHA256).Hash.ToLowerInvariant()) {
+        $binding.generatorSha256 -cne (Get-FileHash -LiteralPath $script -Algorithm SHA256).Hash.ToLowerInvariant() -or
+        @($binding.bindings).Count -ne 1 -or
+        $binding.bindings[0].artifactSha256 -cne $receipt.assemblyInventory[0].sha256) {
         throw 'EXISTING_PUBLISH_TEST_BINDING_PROVENANCE_INVALID'
     }
     $manifest = [IO.File]::ReadAllText((Join-Path $output 'scan/scan-manifest.json')) | ConvertFrom-Json -Depth 20
@@ -273,6 +275,12 @@ try {
             -OutputRoot $contextProofRoot -TraceMapRoot $TraceMapRoot -OperatorAttestsExactSourceCommit)
         $contextReceipt = [IO.File]::ReadAllText((Join-Path $contextProofRoot 'publish-receipt.local.json')) |
             ConvertFrom-Json -Depth 20
+        $contextBinding = [IO.File]::ReadAllText((Join-Path $contextProofRoot 'compiled-binding.local.json')) |
+            ConvertFrom-Json -Depth 20
+        $selectedContextHashes = @($contextReceipt.assemblyInventory | Where-Object {
+            $_.disposition -eq 'selected'
+        } | ForEach-Object { $_.sha256 } | Sort-Object)
+        $boundContextHashes = @($contextBinding.bindings | ForEach-Object { $_.artifactSha256 } | Sort-Object)
         $contextPaths = [IO.File]::ReadAllText((Join-Path $contextProofRoot 'handler-paths.json')) |
             ConvertFrom-Json -Depth 50
         if ($contextProof -notcontains 'selectedDlls=4' -or
@@ -283,6 +291,8 @@ try {
             $contextProof -notcontains 'compiledContextUnboundInputs=2' -or
             $contextProof -notcontains 'existingPublishScan=bound-with-unbound-context' -or
             $contextProof -notcontains 'existingPublishPaths=review-candidate' -or
+            @($contextBinding.bindings).Count -ne 2 -or
+            ($boundContextHashes -join ',') -cne ($selectedContextHashes -join ',') -or
             @($contextReceipt.assemblyInventory | Where-Object {
                 $_.disposition -eq 'artifact-context-no-source-commit'
             }).Count -ne 2 -or
