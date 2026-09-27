@@ -79,6 +79,9 @@ try {
         @($apiLines | Where-Object { $_ -cmatch '^compiledApiPaths=\d+$' }).Count -ne 1 -or
         $apiLines -cnotcontains 'compiledApiSelectorCandidates=1' -or
         $apiLines -cnotcontains 'compiledApiStatus=unique-handler' -or
+        @($apiLines | Where-Object { $_ -cmatch '^compiledApiReachedNodes=\d+$' }).Count -ne 1 -or
+        @($apiLines | Where-Object { $_ -cmatch '^compiledApiTraversed\.projectless-publish-method-candidate=(True|False)$' }).Count -ne 1 -or
+        @($apiLines | Where-Object { $_ -cmatch '^compiledApiDiagnosticShapesTruncated=(True|False)$' }).Count -ne 1 -or
         @($apiLines | Where-Object { $_ -cmatch '^compiledApiTruncated=(True|False)$' }).Count -ne 1 -or
         @($apiLines | Where-Object { $_ -cmatch '^compiledApiTruncation\.work=\d+$' }).Count -ne 1 -or
         @($apiLines | Where-Object { $_ -cmatch '^compiledApiNoTerminal=\d+$' }).Count -ne 1) {

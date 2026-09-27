@@ -57,7 +57,18 @@ public sealed record CombinedDependencyPathReport(
     IReadOnlyList<CombinedPath> Paths,
     IReadOnlyList<CombinedPathGap> Gaps,
     CombinedPathInventory Inventory,
-    IReadOnlyList<string> Limitations);
+    IReadOnlyList<string> Limitations)
+{
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public CombinedPathRootTraversal? RootTraversal { get; init; }
+}
+
+public sealed record CombinedPathRootTraversal(
+    int ReachedNodeCount,
+    int TraversedEdgeCount,
+    IReadOnlyList<string> TraversedEdgeKinds,
+    IReadOnlyList<string> LeafNodeKinds,
+    bool DiagnosticShapesTruncated);
 
 public sealed record CombinedPathQuery(
     string? FromEndpoint,
@@ -665,6 +676,9 @@ public static partial class CombinedDependencyPathReporter
             .ThenBy(edge => edge.EdgeId, StringComparer.Ordinal)
             .ToArray();
 
+        var rootTraversal = options.ExactFromSymbol && startNodes.Count == 1 && search is not null
+            ? search.TraversalByRootNodeId.GetValueOrDefault(startNodes[0].NodeId)
+            : null;
         var report = new CombinedDependencyPathReport(
             Version,
             legacyMode ? LegacyFlowReportConstants.SchemaVersion : null,
@@ -708,7 +722,15 @@ public static partial class CombinedDependencyPathReporter
                 CountBy(sortedGaps, gap => gap.GapKind),
                 participatingNodes,
                 participatingEdges),
-            ReportLimitations(legacyMode, participatingNodes, sortedGaps));
+            ReportLimitations(legacyMode, participatingNodes, sortedGaps))
+        {
+            RootTraversal = rootTraversal is null ? null : new CombinedPathRootTraversal(
+                rootTraversal.ReachedNodeCount,
+                rootTraversal.TraversedEdgeCount,
+                rootTraversal.TraversedEdgeKinds,
+                rootTraversal.LeafNodeKinds,
+                rootTraversal.DiagnosticShapesTruncated)
+        };
         var observations = startNodes
             .Where(node => node.CombinedFactId is not null)
             .GroupBy(node => node.CombinedFactId!, StringComparer.Ordinal)

@@ -1544,6 +1544,8 @@ public sealed class MessyWorkspaceRegressionTests
             ToSurface: "database-api", MaxDepth: 20, MaxPaths: 256) { ExactFromSymbol = true });
         Require("MW-PUBLISH-CROSSDLL-001", "compiled-api",
             apiReport.Query.ExactFromSymbol && apiReport.Summary.SelectorCandidateCount == 1
+            && apiReport.RootTraversal?.TraversedEdgeKinds.Contains("projectless-publish-method-candidate") == true
+            && apiReport.RootTraversal.TraversedEdgeKinds.Contains("compiled-il-call")
             && apiReport.Paths.Any(path => path.Edges.Any(edge => edge.EdgeKind == "projectless-publish-method-candidate")
                 && path.Edges.Any(edge => edge.EdgeKind is "compiled-il-call" or "compiled-il-callvirt-candidate"
                     && edge.EvidenceTier == EvidenceTiers.Tier3SyntaxOrTextual)
