@@ -151,7 +151,9 @@ if ($RecheckPathReasons -or $RecheckCompiledApi) {
         $callCounts = [ordered]@{ memberRefs = 0; supportedFill = 0
             systemDataExecute = 0; systemDataOtherFill = 0
             sqliteExecuteOrFill = 0; microsoftSqlExecuteOrFill = 0
-            otherFill = 0; otherExecute = 0 }
+            otherFill = 0; otherExecute = 0
+            otherFillDbDataAdapter = 0; otherFillSqlDataAdapter = 0; otherFillOtherOwner = 0
+            otherFillSystemDataCommonScope = 0; otherFillSystemDataSqlClientScope = 0; otherFillOtherScope = 0 }
         foreach ($line in [IO.File]::ReadLines($factsPath)) {
             if ($line.Contains('"factType":"ManagedIlCallObserved"', [StringComparison]::Ordinal)) {
                 $call = $line | ConvertFrom-Json -Depth 30
@@ -170,7 +172,20 @@ if ($RecheckPathReasons -or $RecheckCompiledApi) {
                             $callCounts.sqliteExecuteOrFill++
                         } elseif ($target -cmatch 'scope\(assembly:name:[0-9]+:Microsoft\.Data\.SqlClient\|') {
                             $callCounts.microsoftSqlExecuteOrFill++
-                        } elseif ($method -ceq 'Fill') { $callCounts.otherFill++ }
+                        } elseif ($method -ceq 'Fill') {
+                            $callCounts.otherFill++
+                            if ($target.Contains('type(namespace:18:System.Data.Common|names:13:DbDataAdapter)', [StringComparison]::Ordinal)) {
+                                $callCounts.otherFillDbDataAdapter++
+                            } elseif ($target.Contains('type(namespace:21:System.Data.SqlClient|names:14:SqlDataAdapter)', [StringComparison]::Ordinal) -or
+                                $target.Contains('type(namespace:24:Microsoft.Data.SqlClient|names:14:SqlDataAdapter)', [StringComparison]::Ordinal)) {
+                                $callCounts.otherFillSqlDataAdapter++
+                            } else { $callCounts.otherFillOtherOwner++ }
+                            if ($target.Contains('scope(assembly:name:18:System.Data.Common|', [StringComparison]::Ordinal)) {
+                                $callCounts.otherFillSystemDataCommonScope++
+                            } elseif ($target.Contains('scope(assembly:name:21:System.Data.SqlClient|', [StringComparison]::Ordinal)) {
+                                $callCounts.otherFillSystemDataSqlClientScope++
+                            } else { $callCounts.otherFillOtherScope++ }
+                        }
                         else { $callCounts.otherExecute++ }
                     }
                 }
@@ -186,7 +201,9 @@ if ($RecheckPathReasons -or $RecheckCompiledApi) {
         }
         Write-Output "compiledCallMemberRefs=$($callCounts.memberRefs)"
         foreach ($kind in @('supportedFill', 'systemDataExecute', 'systemDataOtherFill',
-                'sqliteExecuteOrFill', 'microsoftSqlExecuteOrFill', 'otherFill', 'otherExecute')) {
+                'sqliteExecuteOrFill', 'microsoftSqlExecuteOrFill', 'otherFill', 'otherExecute',
+                'otherFillDbDataAdapter', 'otherFillSqlDataAdapter', 'otherFillOtherOwner',
+                'otherFillSystemDataCommonScope', 'otherFillSystemDataSqlClientScope', 'otherFillOtherScope')) {
             Write-Output "compiledCall.$kind=$($callCounts[$kind])"
         }
         Write-Output "compiledApiHandlerMatches=$($handlerSymbols.Count)"
@@ -253,6 +270,8 @@ if ($RecheckPathReasons -or $RecheckCompiledApi) {
             Write-Output "compiledApiTerminalCallers=$($recheck.rootTraversal.terminalCallerCount)"
             Write-Output "compiledApiReachableTerminalCallers=$($recheck.rootTraversal.reachableTerminalCallerCount)"
             Write-Output "compiledApiReachableUnresolvedIlCalls=$($recheck.rootTraversal.reachableUnresolvedIlCallCount)"
+            Write-Output "compiledApiReachableFillMemberRefs=$($recheck.rootTraversal.reachableFillMemberRefCount)"
+            Write-Output "compiledApiReachableUnrecognizedFillMemberRefs=$($recheck.rootTraversal.reachableUnrecognizedFillMemberRefCount)"
             foreach ($reason in @('same-assembly-methoddef-target-not-unique',
                     'admitted-memberref-target-not-unique',
                     'target-assembly-present-without-bound-provenance', 'other')) {

@@ -3701,6 +3701,11 @@ not establish a handler path or SQL execution. Only the local receipt hashes
 the private facts input; shareable output contains category counts alone.
 `otherFill` and `otherExecute` separate calls outside the named framework
 families without exposing their assembly or type identities.
+The other `Fill` count is split again by fixed adapter owner and assembly
+categories. The exact-handler traversal also reports how many `Fill`
+MemberRefs have reachable caller methods and how many of those calls are not
+recognized database APIs. These counts still do not establish dispatch or
+execution.
 The command does not rebuild, republish, rescan, or assert SQL source ownership.
 For a unique exact handler, it also prints bounded root-traversal counts and
 fixed edge-kind presence plus categorical graph gaps. These identify where

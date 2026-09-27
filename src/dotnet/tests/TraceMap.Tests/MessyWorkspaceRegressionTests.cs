@@ -1548,6 +1548,8 @@ public sealed class MessyWorkspaceRegressionTests
             && apiReport.RootTraversal.TraversedEdgeKinds.Contains("compiled-il-call")
             && apiReport.RootTraversal.TerminalCallerCount == 1
             && apiReport.RootTraversal.ReachableTerminalCallerCount == 1
+            && apiReport.RootTraversal.ReachableFillMemberRefCount == 1
+            && apiReport.RootTraversal.ReachableUnrecognizedFillMemberRefCount == 0
             && apiReport.Paths.Any(path => path.Edges.Any(edge => edge.EdgeKind == "projectless-publish-method-candidate")
                 && path.Edges.Any(edge => edge.EdgeKind is "compiled-il-call" or "compiled-il-callvirt-candidate"
                     && edge.EvidenceTier == EvidenceTiers.Tier3SyntaxOrTextual)

@@ -73,6 +73,8 @@ public sealed record CombinedPathRootTraversal(
     public int TerminalCallerCount { get; init; }
     public int ReachableTerminalCallerCount { get; init; }
     public int ReachableUnresolvedIlCallCount { get; init; }
+    public int ReachableFillMemberRefCount { get; init; }
+    public int ReachableUnrecognizedFillMemberRefCount { get; init; }
     public IReadOnlyDictionary<string, int> ReachableUnresolvedIlCallsByReason { get; init; }
         = new Dictionary<string, int>(StringComparer.Ordinal);
 }
@@ -745,6 +747,8 @@ public static partial class CombinedDependencyPathReporter
                 TerminalCallerCount = compiledRootDiagnostics?.TerminalCallerCount ?? 0,
                 ReachableTerminalCallerCount = compiledRootDiagnostics?.ReachableTerminalCallerCount ?? 0,
                 ReachableUnresolvedIlCallCount = compiledRootDiagnostics?.ReachableUnresolvedIlCallCount ?? 0,
+                ReachableFillMemberRefCount = compiledRootDiagnostics?.ReachableFillMemberRefCount ?? 0,
+                ReachableUnrecognizedFillMemberRefCount = compiledRootDiagnostics?.ReachableUnrecognizedFillMemberRefCount ?? 0,
                 ReachableUnresolvedIlCallsByReason = compiledRootDiagnostics?.ReachableUnresolvedIlCallsByReason
                     ?? new Dictionary<string, int>(StringComparer.Ordinal)
             }
