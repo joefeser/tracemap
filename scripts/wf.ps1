@@ -34,6 +34,12 @@ if (!(Test-Path -LiteralPath $proof -PathType Leaf) -or
     !(Test-Path -LiteralPath (Join-Path $SourceSiteRoot 'Web.config') -PathType Leaf)) {
     throw 'WEBFORMS_SNAPSHOT_INPUT_UNAVAILABLE'
 }
+if (!(Test-Path -LiteralPath (Join-Path $PublishedRoot 'bin') -PathType Container)) {
+    if ((Split-Path -Leaf $PublishedRoot).Equals('bin', [StringComparison]::OrdinalIgnoreCase)) {
+        throw 'WEBFORMS_SNAPSHOT_PUBLISHED_ROOT_IS_BIN'
+    }
+    throw 'WEBFORMS_SNAPSHOT_PUBLISHED_BIN_UNAVAILABLE'
+}
 # Pin the public proof implementation so a local deletion of its provenance
 # check cannot be used through this wrapper. Accept exact bytes or Git's
 # checkout-filtered representation of that one public script.

@@ -29,6 +29,18 @@ try {
     [IO.File]::WriteAllText($map,
         '<preserve virtualPath="/Pages/Lookup.aspx" assembly="CompiledProjectless.VB" type="PublicProof.LookupPage" />',
         [Text.UTF8Encoding]::new($false))
+    $wrongRootFailure = $null
+    try {
+        & (Join-Path $TraceMapRoot 'scripts/wf.ps1') `
+            -SourceSiteRoot (Join-Path $TraceMapRoot 'samples/messy-dotnet-workspace/vb-publish-mapless') `
+            -PublishedRoot (Join-Path $publish 'bin') -PagePath 'Pages/Lookup.aspx' `
+            -HandlerName 'Names_Init' -OutputRoot (Join-Path $temp 'wrong-root') *> $null
+    }
+    catch { $wrongRootFailure = $_.Exception.Message }
+    if ($wrongRootFailure -cne 'WEBFORMS_SNAPSHOT_PUBLISHED_ROOT_IS_BIN' -or
+        (Test-Path -LiteralPath (Join-Path $temp 'wrong-root'))) {
+        throw "EXISTING_PUBLISH_TEST_WRONG_BIN_ROOT_NOT_REJECTED:$wrongRootFailure"
+    }
 
     $output = Join-Path $temp 'proof'
     $lines = @(& $script -SourceSiteRoot $source -PublishedRoot $publish -PagePath 'Pages/Lookup.aspx' `
