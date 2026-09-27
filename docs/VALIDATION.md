@@ -3659,6 +3659,12 @@ path/gap counts, truncation, and `pageVerdictJoined=false`. The source commit
 must match exactly one packet source. This is a separate local-only,
 review-only projection, not a page-chain verdict, SQL-query join, or runtime
 execution claim. Do not put these private files in a shareable artifact.
+The short entry point `scripts/wview.ps1` runs the saved-proof replay and
+forwards its selected handoff into the standalone workbench. Run
+`pwsh -NoProfile -File scripts/wview.ps1`; optional `-ProofRoot`, `-PacketPath`,
+`-OutputRoot`, and `-ConfigPath` override discovery. It uses the normal local
+page-list configuration by default and does not rebuild, publish, scan, or
+combine. Its public wrapper guard is `scripts/tests/Test-WebFormsView.ps1`.
 The cross-platform projection guard is
 `pwsh -NoProfile -File scripts/tests/Test-ExistingWebFormsCompiledPathHandoff.ps1`.
 The Windows case must
