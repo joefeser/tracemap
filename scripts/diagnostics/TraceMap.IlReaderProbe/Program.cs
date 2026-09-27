@@ -32,7 +32,9 @@ if (args.Length == 1 && args[0] == "--self-test")
         ? "ilReaderProbeSelfTest=pass" : "ilReaderProbeSelfTest=fail");
     return passed ? 0 : 1;
 }
-if (args.Length != 2 || !int.TryParse(args[1], out var maxText) || maxText < 71 || maxText > 65_536)
+if ((args.Length != 2 && args.Length != 3) ||
+    !int.TryParse(args[1], out var maxText) || maxText < 71 || maxText > 65_536 ||
+    (args.Length == 3 && (!long.TryParse(args[2], out var requestedWork) || requestedWork < 1 || requestedWork > 100_000_000)))
 {
     Console.WriteLine("ilReaderProbeStatus=invalid-arguments");
     return 2;
@@ -46,7 +48,8 @@ try
         return 2;
     }
     var bytes = File.ReadAllBytes(file.FullName);
-    var limits = new IlBodyLimits(MaxTextLength: maxText);
+    var maxWork = args.Length == 3 ? long.Parse(args[2], System.Globalization.CultureInfo.InvariantCulture) : 2_000_000;
+    var limits = new IlBodyLimits(MaxTextLength: maxText, MaxTotalWorkUnits: maxWork);
     var budget = new IlBodyEvidenceExtractor.IlWorkBudget(limits.MaxTotalWorkUnits);
     var srm = IlBodyEvidenceExtractor.ReadSystemReflectionMetadataBodies(bytes, limits, budget, CancellationToken.None, true);
     var cecil = IlBodyEvidenceExtractor.ReadCecilBodies(bytes, limits, budget, CancellationToken.None, true);

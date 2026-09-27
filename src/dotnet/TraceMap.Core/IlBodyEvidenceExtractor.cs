@@ -27,7 +27,7 @@ namespace TraceMap.Core;
 internal static class IlBodyEvidenceExtractor
 {
     internal const string SchemaVersion = "il-body-provenance.v1";
-    internal const string PolicyVersion = "explicit-il-body-evidence.v1";
+    internal const string PolicyVersion = "explicit-il-body-evidence.v2";
     internal const string IlLocationKind = "managed-il-v1";
     internal const string BodyLimitation = "IL body evidence proves only that the admitted assembly contains this exact bounded operand-aware instruction stream at this module-local method row; it does not prove execution, dispatch, reachability, behavior, source ownership, semantic equivalence, or rewrite preservation.";
     internal const string CallLimitation = "A call site records the static member reference or calli standalone signature encoded in this module's IL; a calli signature does not identify a target member. No call site proves execution, virtual dispatch resolution, target presence, cross-assembly resolution, call-graph reachability, or rewrite equivalence.";
@@ -99,7 +99,22 @@ internal static class IlBodyEvidenceExtractor
                 var disagreements = CompareBodies(cecil, srm);
                 if (disagreements.Count > 0)
                 {
-                    evaluated.Add(InputGap(artifact, "IlReaderDisagreement"));
+                    // Agreement is method-local once the assembly/module identity
+                    // agrees. Preserve only bodies checked by both independent
+                    // readers; the input and scan remain explicitly partial.
+                    var agreedBodies = AgreedBodies(cecil, disagreements);
+                    evaluated.Add(new EvaluatedIlInput(new IlInputOutcome(
+                        artifact.SafeLocator,
+                        artifact.Role,
+                        "partial",
+                        artifact.ProvenanceState,
+                        artifact.RawFileSha256,
+                        PrivacyProjectedDigest(artifact),
+                        artifact.AssemblyIdentity,
+                        cecil.ModuleName,
+                        cecil.ModuleMvid,
+                        artifact.ProvenanceBindingInputSha256,
+                        ["IlReaderDisagreement"]), agreedBodies));
                     continue;
                 }
                 evaluated.Add(new EvaluatedIlInput(new IlInputOutcome(
@@ -218,7 +233,7 @@ internal static class IlBodyEvidenceExtractor
             var common = CommonProperties(provenance, outcome);
             foreach (var gapKind in outcome.GapKinds.OrderBy(value => value, StringComparer.Ordinal))
                 facts.Add(GapFact(manifest, outcome.SafeLocator, gapKind, common));
-            if (outcome.Outcome != "admitted")
+            if (outcome.Outcome is not ("admitted" or "partial"))
                 continue;
 
             foreach (var body in input.Bodies.OrderBy(item => item.MetadataToken, StringComparer.Ordinal))
@@ -316,6 +331,14 @@ internal static class IlBodyEvidenceExtractor
             disagreements.Add(token);
         }
         return disagreements;
+    }
+
+    internal static IReadOnlyList<IlBodyObservation> AgreedBodies(IlReaderResult cecil, IReadOnlyList<string> disagreements)
+    {
+        if (disagreements.Contains("assembly", StringComparer.Ordinal))
+            return [];
+        var disputed = disagreements.ToHashSet(StringComparer.Ordinal);
+        return cecil.Bodies.Where(body => !disputed.Contains(body.MetadataToken)).ToArray();
     }
 
     // Internal so the rewrite lane can rebuild the same dual-reader contract
@@ -1338,6 +1361,7 @@ internal static class IlBodyEvidenceExtractor
             ["ilBoundedInputSha256"] = provenance.BoundedInputSha256,
             ["ilGeneratorSha256"] = provenance.GeneratorSha256,
             ["ilCoverage"] = provenance.CoverageState,
+            ["ilInputOutcome"] = outcome.Outcome,
             ["artifactVisibility"] = provenance.ArtifactVisibility
         };
         if (outcome.AssemblyIdentity is not null)

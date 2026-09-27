@@ -2693,8 +2693,11 @@ metadata token resolution) each rebuild the complete canonical encoding for
 every admitted input, and the two results must agree on the assembly and
 module identity, the method identity, every body digest, every call-site
 offset, opcode, reference kind, reference token, and target identity, the
-locals, the exception regions, and max stack. Any disagreement withholds that
-input's positive IL facts behind `IlReaderDisagreement`. Fields that cannot
+locals, the exception regions, and max stack. A method disagreement withholds
+that method's positive IL facts, retains only fully agreed methods from the
+same module, and marks the input and scan partial with `IlReaderDisagreement`.
+An assembly or module identity disagreement withholds the entire input.
+Fields that cannot
 yet be independently verified are not promoted to positive evidence:
 non-call token operands such as field and signature tokens are committed by
 raw module-local token only, and string literals are committed by digest only
@@ -3678,6 +3681,10 @@ categorical probe of the source-bound input. The effective IL limit is recorded
 in the scan manifest; exceeding it still withholds that input's IL evidence.
 `scripts/wp.ps1` summarizes the latest local saved probe, bound IL outcomes,
 and path gap kinds without rerunning a scan or printing source paths or names.
+`scripts/wid.ps1 -TypeName <type> -MethodName <method>` identifies the one
+copied assembly containing that compiled method and runs a bounded dual-reader
+probe on it. Its output consists only of disagreement categories and counts;
+it uses the saved publish bytes and does not rescan the Web Site.
 `scripts/wm.ps1 -TypeName <type> -MethodName <method>` correlates a compiled
 method family with its saved IL bodies and per-assembly IL admission outcome.
 It prints counts and categorical gaps only. When the relevant assembly has
