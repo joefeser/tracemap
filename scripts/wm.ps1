@@ -59,13 +59,30 @@ $matchedBodies = @($bodies | Where-Object {
 $bodyIds = @($matchedBodies | ForEach-Object { [string]$_.factId })
 $callCount = 0
 $fillCalls = 0
+$fillCategories = [ordered]@{ frameworkDbAdapter = 0; frameworkSqlAdapter = 0; otherOwner = 0
+    systemDataScope = 0; systemDataCommonScope = 0; systemDataSqlClientScope = 0; otherScope = 0 }
 if ($bodyIds.Count -gt 0) {
     foreach ($line in [IO.File]::ReadLines($factsPath)) {
         if (!$line.Contains('"factType":"ManagedIlCallObserved"', [StringComparison]::Ordinal)) { continue }
         $fact = $line | ConvertFrom-Json -Depth 30
         if ([string]$fact.properties.ilBodyFactId -notin $bodyIds) { continue }
         $callCount++
-        if ([string]$fact.properties.targetIdentity -match '\|method:4:Fill\|') { $fillCalls++ }
+        $target = [string]$fact.properties.targetIdentity
+        if ($target.Contains('|member:4:Fill|', [StringComparison]::Ordinal)) {
+            $fillCalls++
+            if ($target.Contains('type(namespace:18:System.Data.Common|names:13:DbDataAdapter)', [StringComparison]::Ordinal)) {
+                $fillCategories.frameworkDbAdapter++
+            } elseif ($target.Contains('type(namespace:21:System.Data.SqlClient|names:14:SqlDataAdapter)', [StringComparison]::Ordinal)) {
+                $fillCategories.frameworkSqlAdapter++
+            } else { $fillCategories.otherOwner++ }
+            if ($target.Contains('scope(assembly:name:11:System.Data|', [StringComparison]::Ordinal)) {
+                $fillCategories.systemDataScope++
+            } elseif ($target.Contains('scope(assembly:name:18:System.Data.Common|', [StringComparison]::Ordinal)) {
+                $fillCategories.systemDataCommonScope++
+            } elseif ($target.Contains('scope(assembly:name:21:System.Data.SqlClient|', [StringComparison]::Ordinal)) {
+                $fillCategories.systemDataSqlClientScope++
+            } else { $fillCategories.otherScope++ }
+        }
     }
 }
 $manifest = [IO.File]::ReadAllText($manifestPath) | ConvertFrom-Json -Depth 30
@@ -79,6 +96,7 @@ Write-Output "methodBodyCount=$($matchedBodies.Count)"
 Write-Output "methodLinkedBodyCount=$($linkedBodies.Count)"
 Write-Output "methodCallCount=$callCount"
 Write-Output "methodFillCallCount=$fillCalls"
+foreach ($kind in $fillCategories.Keys) { Write-Output "methodFillCall.$kind=$($fillCategories[$kind])" }
 Write-Output "methodIlOutcomeCount=$($ilOutcomes.Count)"
 foreach ($group in @($ilOutcomes | Group-Object -Property outcome | Sort-Object Name)) {
     $label = if ([string]$group.Name -cmatch '^[a-z][a-z0-9-]{0,63}$') { $group.Name } else { 'other' }
