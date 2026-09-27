@@ -16,11 +16,18 @@ if (args.Length == 1 && args[0] == "--self-test")
         ["0:0:ldtoken:tok:type:0x02000001:scope(Right)type(Named)"] };
     var token = Classify(new IlBodyEvidenceExtractor.IlReaderResult("assembly", "module", "mvid", [tokenBody]),
         new IlBodyEvidenceExtractor.IlReaderResult("assembly", "module", "mvid", [tokenOther]));
+    var rawToken = Classify(new IlBodyEvidenceExtractor.IlReaderResult("assembly", "module", "mvid", [tokenBody]),
+        new IlBodyEvidenceExtractor.IlReaderResult("assembly", "module", "mvid",
+            [tokenBody with { InstructionsSha256 = "raw-token", DiagnosticInstructions =
+                ["0:0:ldtoken:tok:type:0x1b000001:scope(Left)type(Named)"] }]));
     var passed = result.DisputedBodies == 1 && result.Calls == 1 && result.MissingBodies == 0
         && operand.OperandOnly == 1 && operand.FirstDifference == "operand" && operand.FirstOperandKind == "integer"
         && token.FirstOpcode == "ldtoken" && token.FirstOperandKind == "token"
         && token.FirstTokenKind == "type" && token.FirstTokenDifference == "identity"
-        && token.FirstIdentityPart == "type-scope";
+        && token.FirstIdentityPart == "type-scope"
+        && rawToken.FirstTokenDifference == "raw-token"
+        && rawToken.FirstCecilTokenTable == "type-def" && rawToken.FirstRawTokenTable == "type-spec"
+        && rawToken.FirstTokenIdentityAgreement == "yes";
     Console.WriteLine(passed
         ? "ilReaderProbeSelfTest=pass" : "ilReaderProbeSelfTest=fail");
     return passed ? 0 : 1;
@@ -56,6 +63,9 @@ try
     Console.WriteLine($"ilReaderProbeFirstOperandKind={shape.FirstOperandKind}");
     Console.WriteLine($"ilReaderProbeFirstTokenKind={shape.FirstTokenKind}");
     Console.WriteLine($"ilReaderProbeFirstTokenDifference={shape.FirstTokenDifference}");
+    Console.WriteLine($"ilReaderProbeFirstCecilTokenTable={shape.FirstCecilTokenTable}");
+    Console.WriteLine($"ilReaderProbeFirstRawTokenTable={shape.FirstRawTokenTable}");
+    Console.WriteLine($"ilReaderProbeFirstTokenIdentityAgreement={shape.FirstTokenIdentityAgreement}");
     Console.WriteLine($"ilReaderProbeFirstIdentityPart={shape.FirstIdentityPart}");
     Console.WriteLine($"ilReaderProbeCalls={shape.Calls}");
     Console.WriteLine($"ilReaderProbeLocals={shape.Locals}");
@@ -167,6 +177,9 @@ static void ClassifyToken(string first, string second, Shape shape)
     var b = second.Split(':', 4);
     if (a.Length != 4 || b.Length != 4) return;
     shape.FirstTokenKind = a[1] is "field" or "type" or "method" ? a[1] : "other";
+    shape.FirstCecilTokenTable = TokenTable(a[2]);
+    shape.FirstRawTokenTable = TokenTable(b[2]);
+    shape.FirstTokenIdentityAgreement = a[3] == b[3] ? "yes" : "no";
     if (a[1] != b[1]) shape.FirstTokenDifference = "kind";
     else if (a[2] != b[2]) shape.FirstTokenDifference = "raw-token";
     else if (a[3] != b[3])
@@ -174,6 +187,20 @@ static void ClassifyToken(string first, string second, Shape shape)
         shape.FirstTokenDifference = "identity";
         shape.FirstIdentityPart = ClassifyIdentityPart(a[3], b[3]);
     }
+}
+
+static string TokenTable(string token)
+{
+    if (token.Length != 10 || !token.StartsWith("0x", StringComparison.Ordinal) ||
+        !uint.TryParse(token.AsSpan(2), System.Globalization.NumberStyles.HexNumber,
+            System.Globalization.CultureInfo.InvariantCulture, out var value))
+        return "invalid";
+    return (value >> 24) switch
+    {
+        0x01 => "type-ref", 0x02 => "type-def", 0x1b => "type-spec",
+        0x04 => "field-def", 0x06 => "method-def", 0x0a => "member-ref",
+        0x2b => "method-spec", 0 => "zero-or-unresolved", _ => "other"
+    };
 }
 
 static string ClassifyIdentityPart(string first, string second)
@@ -219,6 +246,9 @@ file sealed class Shape
     public string FirstOperandKind = "none";
     public string FirstTokenKind = "none";
     public string FirstTokenDifference = "none";
+    public string FirstCecilTokenTable = "none";
+    public string FirstRawTokenTable = "none";
+    public string FirstTokenIdentityAgreement = "none";
     public string FirstIdentityPart = "none";
     public int Calls;
     public int Locals;
