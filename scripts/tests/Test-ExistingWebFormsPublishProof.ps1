@@ -260,6 +260,32 @@ try {
             -AdditionalAssemblyName @('App_global.asax.dll', 'App_WebReferences.dll') `
             -OutputRoot $maplessProofRoot -TraceMapRoot $TraceMapRoot -OperatorAttestsExactSourceCommit)
         $maplessPaths = [IO.File]::ReadAllText((Join-Path $maplessProofRoot 'handler-paths.json')) | ConvertFrom-Json -Depth 50
+        $maplessHandoffPath = Join-Path $maplessProofRoot 'compiled-path-review/handler.handoff.local.json'
+        $maplessHtmlPath = Join-Path $maplessProofRoot 'compiled-path-review/handler.local.html'
+        if (!(Test-Path -LiteralPath $maplessHandoffPath -PathType Leaf) -or
+            !(Test-Path -LiteralPath $maplessHtmlPath -PathType Leaf)) {
+            throw 'EXISTING_PUBLISH_TEST_MAPLESS_HANDOFF_MISSING'
+        }
+        $maplessHandoff = [IO.File]::ReadAllText($maplessHandoffPath) | ConvertFrom-Json -Depth 40
+        $maplessHtml = [IO.File]::ReadAllText($maplessHtmlPath)
+        $maplessScanReport = [IO.File]::ReadAllText((Join-Path $maplessProofRoot 'scan/report.md'))
+        $maplessFacts = [IO.File]::ReadAllText((Join-Path $maplessProofRoot 'scan/facts.ndjson'))
+        if ($maplessHandoff.schemaVersion -ne 'webforms-compiled-path-handoff.v1' -or
+            $maplessHandoff.claimLevel -ne 'review-only-static-evidence' -or
+            $maplessHandoff.provenance.sourceCommitSha -ne (& git -C $maplessSite rev-parse HEAD).Trim() -or
+            $maplessHandoff.provenance.generatorSha256 -ne (Get-FileHash -LiteralPath (Join-Path $TraceMapRoot 'scripts/New-ExistingWebFormsCompiledPathHandoff.ps1') -Algorithm SHA256).Hash.ToLowerInvariant() -or
+            @($maplessHandoff.paths | Where-Object {
+                $_.claim -eq 'review-only-static-path' -and
+                @($_.hops.edgeKind) -contains 'projectless-publish-method-candidate' -and
+                @($_.hops.edgeKind) -contains 'compiled-il-call'
+            }).Count -lt 1 -or
+            @($maplessHandoff.assemblies | Where-Object { $_.rawFileSha256 -cmatch '^[0-9a-f]{64}$' }).Count -lt 1 -or
+            !$maplessScanReport.Contains('## Web Forms Published-Site Evidence', [StringComparison]::Ordinal) -or
+            !$maplessFacts.Contains('"factType":"WebFormsPublishPageCandidate"', [StringComparison]::Ordinal) -or
+            !$maplessHtml.Contains('review-only-static-path', [StringComparison]::Ordinal) -or
+            !$maplessHtml.Contains('compiled-il-call', [StringComparison]::Ordinal)) {
+            throw 'EXISTING_PUBLISH_TEST_MAPLESS_HANDOFF_INVALID'
+        }
         if ($maplessProof -notcontains 'pageMapMatch=mapless' -or
             $maplessProof -notcontains 'matchedPageMaps=0' -or
             $maplessProof -notcontains 'existingPublishScan=bound' -or

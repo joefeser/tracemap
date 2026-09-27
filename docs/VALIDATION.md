@@ -3614,7 +3614,19 @@ pwsh -NoProfile -File scripts/tests/Test-ExistingWebFormsPublishProof.ps1
 
 On Windows the guard publishes both mapped two-DLL and updatable four-DLL public no-PDB
 fixtures and requires a `Names_Init` to `sql-query` path with a Tier3 source
-candidate in the mapless case. That Windows case must
+candidate in the mapless case. It also checks that the derived ordered hops,
+rule IDs, evidence tiers, source commit, admitted DLL hashes, and review-only
+status appear in the local `compiled-path-review/handler.local.html` and
+`handler.handoff.local.json` outputs. The scan-time `report.md` inventories the
+published-site binding facts, their bounded-input provenance, and gaps; the
+same retained observations live in `facts.ndjson` and `index.sqlite`. The
+ordered path is a later graph projection from `combined.sqlite`, not an
+additional extracted fact. The handoff JSON hashes its generator and the
+bounded path report, manifest, receipt, and combined index. It is local-only
+and may contain private identities; do not share it as an anonymous artifact.
+The cross-platform projection guard is
+`pwsh -NoProfile -File scripts/tests/Test-ExistingWebFormsCompiledPathHandoff.ps1`.
+The Windows case must
 pass before using this diagnostic on a private site. For a local-only site
 probe, run from a clean TraceMap checkout:
 
