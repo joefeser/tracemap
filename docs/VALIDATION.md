@@ -3672,6 +3672,17 @@ per packet and 512 MiB total read; no compatible packet stops with
 `WEBFORMS_STANDALONE_REVIEW_COMPATIBLE_PACKET_UNAVAILABLE`. Explicitly supplied
 packets still undergo the same attachment guard. A rejected pairing reports
 categorical reasons and source-match counts, never private source names.
+If no matching normal packet exists, `scripts/wview.ps1 -FromSavedProof`
+explicitly composes a **focused** packet from the exact saved combined index
+and creates its workbench under the proof root. It does not replace full-site
+reports, collect sources, scan, publish, or combine. The index hash must match
+the handoff before and after generation. A fresh local receipt records the
+wrapper SHA-256, CLI assembly SHA-256, bounded index/handoff input digest, and
+packet/Markdown artifact hashes. Default packet bounds remain in force and
+may yield reduced coverage. The public wrapper guard is
+`scripts/tests/Test-SavedWebFormsProofPacket.ps1`; this mock guard verifies
+orchestration and hash rejection, while the .NET modernization packet tests
+verify the actual reporter.
 The cross-platform projection guard is
 `pwsh -NoProfile -File scripts/tests/Test-ExistingWebFormsCompiledPathHandoff.ps1`.
 The Windows case must

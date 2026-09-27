@@ -8,6 +8,7 @@ try {
     [IO.File]::WriteAllText((Join-Path $temp 'Replay-ExistingWebFormsCompiledPathReviews.ps1'), @'
 param([string]$ProofRoot)
 if ($ProofRoot -eq 'missing') { Write-Output 'compiledReplaySqlProjection=existing'; return }
+Write-Output 'compiledReplayProofRoot=public-proof'
 Write-Output 'compiledPathReviewHandoff=public-api.json'
 Write-Output 'compiledPathReviewHandoff=public-empty-sql.json'
 '@)
@@ -22,6 +23,13 @@ Write-Output 'publicView=passed'
     try { & (Join-Path $temp 'wview.ps1') -ProofRoot missing | Out-Null }
     catch { $rejected = $_.Exception.Message -eq 'WEBFORMS_VIEW_HANDOFF_UNAVAILABLE' }
     if (!$rejected) { throw 'View continued without a selected handoff' }
+    [IO.File]::WriteAllText((Join-Path $temp 'New-SavedWebFormsProofPacket.ps1'), @'
+param([string]$ProofRoot, [string]$CompiledPathHandoffPath)
+if ($ProofRoot -ne 'public-proof' -or $CompiledPathHandoffPath -ne 'public-api.json') { throw 'Wrong saved proof input' }
+Write-Output 'savedProofPacket=public-packet.json'
+'@)
+    $savedResult = @(& (Join-Path $temp 'wview.ps1') -FromSavedProof -OutputRoot public-output -ConfigPath public-config.json)
+    if (@($savedResult | Where-Object { $_ -eq 'publicView=passed' }).Count -ne 1) { throw 'View did not use the saved proof packet' }
     Write-Output 'webFormsViewPublicTests=passed'
 }
 finally { Remove-Item -LiteralPath $temp -Recurse -Force }
