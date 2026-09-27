@@ -15,7 +15,7 @@ Namespace PublicProof.Framework
             Return ExecProc_DataSet(commandText, New SqlParameter("@employeeId", employeeId))
         End Function
 
-        Public Function ExecProc_DataSet(commandText As String, parameters As ArrayList) As DataSet
+        Public Function ExecProc_DataSet(commandText As String, ByRef parameters As ArrayList) As DataSet
             Dim typedParameters(parameters.Count - 1) As SqlParameter
             parameters.CopyTo(typedParameters)
             Return ExecProc_DataSet(commandText, typedParameters)
