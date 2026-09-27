@@ -140,8 +140,33 @@ if ($RecheckPathReasons -or $RecheckCompiledApi) {
     $recheckPath = Join-Path $scratch 'handler-paths.local.json'
     $project = Join-Path $PSScriptRoot '../src/dotnet/TraceMap.Cli/TraceMap.Cli.csproj'
     $terminalSurface = if ($RecheckCompiledApi) { 'database-api' } else { 'sql-query' }
+    $fromSymbol = [string]$previous.query.fromSymbol
+    if ($RecheckCompiledApi) {
+        $factsPath = Join-Path $OutputRoot 'scan/facts.ndjson'
+        if (!(Test-Path -LiteralPath $factsPath -PathType Leaf) -or @($receipt.pages).Count -ne 1) {
+            throw 'WEBFORMS_PROBE_HANDLER_FACTS_UNAVAILABLE'
+        }
+        $pageSource = [string]$receipt.pages[0].sourcePath
+        $handlerSymbols = [Collections.Generic.List[string]]::new()
+        foreach ($line in [IO.File]::ReadLines($factsPath)) {
+            if (!$line.Contains('"factType":"WebFormsHandlerResolved"', [StringComparison]::Ordinal)) { continue }
+            $fact = $line | ConvertFrom-Json -Depth 30
+            if ([string]$fact.properties.handlerName -ieq $fromSymbol -and
+                [string]$fact.properties.markupFile -ieq $pageSource -and
+                ![string]::IsNullOrWhiteSpace([string]$fact.properties.handlerSymbol)) {
+                $handlerSymbols.Add([string]$fact.properties.handlerSymbol)
+                if ($handlerSymbols.Count -gt 16) { break }
+            }
+        }
+        Write-Output "compiledApiHandlerMatches=$($handlerSymbols.Count)"
+        if ($handlerSymbols.Count -ne 1) {
+            Write-Output 'compiledApiStatus=handler-not-unique'
+            return
+        }
+        $fromSymbol = $handlerSymbols[0]
+    }
     & dotnet run --project $project -- paths --index $combinedPath --out $recheckPath `
-        --format json --from-symbol ([string]$previous.query.fromSymbol) `
+        --format json --from-symbol $fromSymbol `
         --to-surface $terminalSurface --max-depth 20 --max-paths 256 *> (Join-Path $scratch 'paths.local.log')
     if ($LASTEXITCODE -ne 0 -or !(Test-Path -LiteralPath $recheckPath -PathType Leaf)) {
         throw 'WEBFORMS_PROBE_PATH_RECHECK_FAILED'
@@ -168,13 +193,23 @@ if ($RecheckPathReasons -or $RecheckCompiledApi) {
         (($receipt | ConvertTo-Json -Depth 5) + "`n"), [Text.UTF8Encoding]::new($false))
     $recheck = [IO.File]::ReadAllText($recheckPath) | ConvertFrom-Json -Depth 50
     if ($RecheckCompiledApi) {
+        $selectorCount = [int]$recheck.summary.selectorCandidateCount
         $apiPaths = @($recheck.paths | Where-Object {
             @($_.nodes).Count -gt 0 -and $_.nodes[-1].surfaceKind -ceq 'database-api' -and
             @($_.edges | Where-Object { $_.edgeKind -ceq 'compiled-database-api-candidate' }).Count -gt 0
         })
-        Write-Output "compiledApiPaths=$($apiPaths.Count)"
-        Write-Output "compiledApiSelectorCandidates=$($recheck.summary.selectorCandidateCount)"
+        Write-Output "compiledApiPaths=$($(if ($selectorCount -eq 1) { $apiPaths.Count } else { 'withheld' }))"
+        Write-Output "compiledApiSelectorCandidates=$selectorCount"
+        Write-Output "compiledApiStatus=$($(if ($selectorCount -eq 1) { 'unique-handler' } else { 'selector-not-unique' }))"
         Write-Output "compiledApiTruncated=$($recheck.summary.truncated)"
+        foreach ($reason in @('selector-candidates', 'depth', 'frontier', 'work', 'path', 'cycle')) {
+            Write-Output "compiledApiTruncation.$reason=$(@($recheck.gaps | Where-Object {
+                $_.gapKind -ceq 'TruncatedByLimit' -and $_.reason -ceq $reason
+            }).Count)"
+        }
+        Write-Output "compiledApiNoTerminal=$(@($recheck.gaps | Where-Object {
+            $_.gapKind -ceq 'SelectorNoMatch' -and $_.reason -ceq 'selector'
+        }).Count)"
         return
     }
     $memberGaps = @($recheck.gaps | Where-Object { $_.gapKind -ceq 'ProjectlessPublishMemberAmbiguous' })
