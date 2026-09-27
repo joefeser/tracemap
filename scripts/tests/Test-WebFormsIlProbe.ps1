@@ -43,6 +43,14 @@ try {
         ($diagnostic -join "`n") -match 'PublicOne|PublicTwo|[a-f0-9]{64}') {
         throw 'WEBFORMS_IL_DIAG_TEST_RESULT_INVALID'
     }
+    $methodFact.properties.metadataToken = '0x0600ffff'
+    [IO.File]::WriteAllText((Join-Path $root 'scan-ilwork-20000000/facts.ndjson'), ($methodFact | ConvertTo-Json -Depth 10 -Compress))
+    $go = @(& (Join-Path $TraceMapRoot 'scripts/wgo.ps1') -OutputRoot $root `
+        -SourceSiteRoot $TraceMapRoot -TypeName Provider -MethodName Run)
+    if ($go -cnotcontains 'replaySkipped=selected-method-disagreement' -or
+        (Test-Path -LiteralPath (Join-Path $root 'scan-ilwork-30000000'))) {
+        throw 'WEBFORMS_GO_TEST_UNEXPECTED_REPLAY'
+    }
     $lines = @(& (Join-Path $TraceMapRoot 'scripts/wil.ps1') -OutputRoot $root -TraceMapRoot $TraceMapRoot)
     if ($lines -cnotcontains 'disputed.ilReaderProbeStatus=agreed' -or
         $lines -cnotcontains 'disputed.ilReaderProbeFirstDifference=none' -or

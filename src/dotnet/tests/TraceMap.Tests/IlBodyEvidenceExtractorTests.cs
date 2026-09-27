@@ -16,6 +16,15 @@ namespace TraceMap.Tests;
 public sealed class IlBodyEvidenceExtractorTests
 {
     [Fact]
+    public void Cecil_opcode_name_uses_raw_name_only_for_matching_numeric_opcode()
+    {
+        var instruction = Mono.Cecil.Cil.Instruction.Create(Mono.Cecil.Cil.OpCodes.Nop);
+        Assert.Equal("nop", IlBodyEvidenceExtractor.CanonicalCecilOpcodeName(instruction, [0x00]));
+        Assert.Equal(instruction.OpCode.Name,
+            IlBodyEvidenceExtractor.CanonicalCecilOpcodeName(instruction, [0x01]));
+    }
+
+    [Fact]
     public void InlineTok_type_spec_retains_encoded_row_when_cecil_projects_another_token()
     {
         var fixture = Fixture("csharp", "CompiledEvidence.CSharp");

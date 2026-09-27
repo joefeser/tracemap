@@ -2697,6 +2697,10 @@ locals, the exception regions, and max stack. A method disagreement withholds
 that method's positive IL facts, retains only fully agreed methods from the
 same module, and marks the input and scan partial with `IlReaderDisagreement`.
 An assembly or module identity disagreement withholds the entire input.
+The Cecil lane uses the raw reader's canonical opcode display name only when
+the numeric opcode bytes at that offset equal Cecil's decoded opcode value;
+different numeric opcodes remain a method disagreement. Both lanes still
+decode operands independently and compare full instruction and call digests.
 Fields that cannot
 yet be independently verified are not promoted to positive evidence:
 non-call token operands such as field and signature tokens are committed by
@@ -3688,6 +3692,11 @@ it also counts how many selected overloads have bodies that agree in both
 readers and reports each overload's agreement plus generic collection,
 array-parameter, and by-reference signature flags. It uses the saved publish
 bytes and does not rescan the Web Site.
+`scripts/wgo.ps1 -SourceSiteRoot <site-root> -TypeName <type>
+-MethodName <method>` runs that quick probe first. It starts a separate
+30,000,000-unit replay only when every selected overload agrees; otherwise it
+prints `replaySkipped=selected-method-disagreement` and leaves the saved scan
+unchanged.
 `scripts/wm.ps1 -TypeName <type> -MethodName <method>` correlates a compiled
 method family with its saved IL bodies and per-assembly IL admission outcome.
 It prints counts and categorical gaps only. When the relevant assembly has
