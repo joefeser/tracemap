@@ -41,7 +41,19 @@ foreach ($line in [IO.File]::ReadLines($factsPath)) {
 $hashes = @($methods | ForEach-Object { [string]$_.properties.rawFileSha256 } |
     Where-Object { $_ } | Sort-Object -Unique)
 $methodIds = @($methods | ForEach-Object { [string]$_.factId })
-$matchedBodies = @($bodies | Where-Object { $_.properties.compiledFactId -in $methodIds })
+$methodKeys = @($methods | ForEach-Object {
+    [string]$_.properties.rawFileSha256 + '|' + [string]$_.properties.metadataToken
+})
+$linkedBodies = @($bodies | Where-Object {
+    $link = $_.properties.PSObject.Properties['compiledFactId']
+    $null -ne $link -and [string]$link.Value -in $methodIds
+})
+$matchedBodies = @($bodies | Where-Object {
+    $hash = $_.properties.PSObject.Properties['rawFileSha256']
+    $token = $_.properties.PSObject.Properties['metadataToken']
+    ($null -ne $hash -and $null -ne $token -and
+        ([string]$hash.Value + '|' + [string]$token.Value) -in $methodKeys)
+})
 $bodyIds = @($matchedBodies | ForEach-Object { [string]$_.factId })
 $callCount = 0
 $fillCalls = 0
@@ -56,11 +68,13 @@ if ($bodyIds.Count -gt 0) {
 }
 $manifest = [IO.File]::ReadAllText($manifestPath) | ConvertFrom-Json -Depth 30
 $ilOutcomes = @($manifest.ilBodyProvenance.outcomes | Where-Object {
-    [string]$_.rawFileSha256 -in $hashes
+    $hashProperty = $_.PSObject.Properties['rawFileSha256']
+    $null -ne $hashProperty -and [string]$hashProperty.Value -in $hashes
 })
 Write-Output "methodAssemblyCount=$($hashes.Count)"
 Write-Output "methodCount=$($methods.Count)"
 Write-Output "methodBodyCount=$($matchedBodies.Count)"
+Write-Output "methodLinkedBodyCount=$($linkedBodies.Count)"
 Write-Output "methodCallCount=$callCount"
 Write-Output "methodFillCallCount=$fillCalls"
 Write-Output "methodIlOutcomeCount=$($ilOutcomes.Count)"
