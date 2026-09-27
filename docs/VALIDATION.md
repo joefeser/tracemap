@@ -3644,6 +3644,9 @@ declared outside this focused proof (one `OUTOFSCOPE` response); otherwise
 the probe stops with `unclassified-assemblies`. The local receipt records
 each available DLL hash and its selected/out-of-scope disposition. An
 out-of-scope DLL is never a complete-publish or cross-assembly claim.
+The probe joins copied DLLs to compiled outcomes by unique SHA-256, because
+external safe locators include a hash prefix. A duplicate scanned DLL hash or
+an unmatched outcome stops the proof before source-commit binding.
 When the deployment also contains binaries from another repository or build,
 `-IncludeAllPublishedAssembliesAsContext` instead hashes and scans every
 `bin/*.dll` without excluding any. Only the mapped or mapless Web Site DLLs

@@ -521,6 +521,30 @@ if ($probe.webFormsPublishProvenance.status -ne 'bound') {
     return
 }
 
+# External compiled inputs receive a hash-prefixed safe locator. Join the
+# probe to the copied inventory by bytes, and refuse duplicate hashes because
+# they cannot identify which inventory disposition an outcome belongs to.
+$scannedInventory = @($assemblyInventory | Where-Object {
+    $_.disposition -eq 'selected' -or $_.disposition -eq 'artifact-context-no-source-commit'
+})
+$scannedHashes = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+$selectedHashes = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+$uniqueInventory = $true
+foreach ($item in $scannedInventory) {
+    if (!$scannedHashes.Add([string]$item.sha256)) { $uniqueInventory = $false }
+    if ($item.disposition -eq 'selected') { [void]$selectedHashes.Add([string]$item.sha256) }
+}
+$probeHashes = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+$uniqueProbe = $true
+foreach ($item in $probeOutcomes) {
+    if (!$probeHashes.Add([string]$item.rawFileSha256)) { $uniqueProbe = $false }
+}
+if (!$uniqueInventory -or !$uniqueProbe -or $scannedHashes.Count -ne $probeHashes.Count -or
+    @($probeOutcomes | Where-Object { !$scannedHashes.Contains([string]$_.rawFileSha256) }).Count -ne 0) {
+    Write-Output 'existingPublishScan=gap;reason=compiled-inventory-join'
+    return
+}
+
 if (!$OperatorAttestsExactSourceCommit) {
     $answer = Read-Host 'Do you attest the source-commit DLLs (excluding artifact context) were built from this exact clean source commit? Type YES to continue'
     if ($answer.Trim() -ine 'YES') {
@@ -529,7 +553,7 @@ if (!$OperatorAttestsExactSourceCommit) {
     }
 }
 $bindings = @($probeOutcomes | Where-Object {
-    $requestedNames.Contains([IO.Path]::GetFileName([string]$_.safeLocator))
+    $selectedHashes.Contains([string]$_.rawFileSha256)
 } | ForEach-Object {
     [ordered]@{
         schemaVersion = 'compiled-input-binding.v1'
@@ -566,11 +590,12 @@ $status = [string]$manifest.webFormsPublishProvenance.status
 $boundCount = @($manifest.compiledInputProvenance.outcomes | Where-Object { $_.provenanceState -eq 'bound' }).Count
 $contextUnboundCount = @($manifest.compiledInputProvenance.outcomes | Where-Object {
     $_.provenanceState -eq 'unbound' -and
-    !$requestedNames.Contains([IO.Path]::GetFileName([string]$_.safeLocator))
+    $scannedHashes.Contains([string]$_.rawFileSha256) -and
+    !$selectedHashes.Contains([string]$_.rawFileSha256)
 }).Count
 $ilGaps = @($manifest.ilBodyProvenance.outcomes | Where-Object {
     @($_.gapKinds).Count -gt 0 -and
-    $requestedNames.Contains([IO.Path]::GetFileName([string]$_.safeLocator))
+    $selectedHashes.Contains([string]$_.rawFileSha256)
 }).Count
 Write-Output "existingPublishScan=$($(if ($status -eq 'bound' -and $contextDlls.Count -gt 0) { 'bound-with-unbound-context' } else { $status }))"
 Write-Output "compiledBoundInputs=$boundCount"
