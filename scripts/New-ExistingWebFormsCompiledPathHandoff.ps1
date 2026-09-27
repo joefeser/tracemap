@@ -27,6 +27,23 @@ function Hash-Input([string]$Path, [long]$Limit, [string]$Slot) {
 }
 function Html([object]$Value) { return [Net.WebUtility]::HtmlEncode([string]$Value) }
 function Values([object]$Value) { if ($null -eq $Value) { return @() }; return @($Value) }
+function Display-Label([string]$Identity) {
+    # A display-only projection. Never use this label for matching or evidence identity.
+    $member = [regex]::Match($Identity, '\|(?:method|constructor):[0-9]+:([^|]+)')
+    if ($member.Success) {
+        $prefix = $Identity.Substring(0, $member.Index)
+        $types = [regex]::Matches($prefix, '\|names:[0-9]+:([^|]+)')
+        $namespaces = [regex]::Matches($prefix, 'namespace:[0-9]+:([^|]*)')
+        $typeName = if ($types.Count -gt 0) { $types[-1].Groups[1].Value } else { 'unknown type' }
+        $namespace = if ($namespaces.Count -gt 0) { $namespaces[-1].Groups[1].Value } else { '' }
+        $memberName = $member.Groups[1].Value
+        if ($memberName -eq '.ctor') { $memberName = 'New' }
+        $qualifiedType = if ($namespace) { "$namespace.$typeName" } else { $typeName }
+        return "$qualifiedType.$memberName()"
+    }
+    if ($Identity.Length -gt 160) { return $Identity.Substring(0, 157) + '…' }
+    return $Identity
+}
 
 $ProofRoot = [IO.Path]::GetFullPath($ProofRoot).TrimEnd('\', '/')
 $pathsPath = if ($PathReportPath) { [IO.Path]::GetFullPath($PathReportPath) } else { Join-Path $ProofRoot 'handler-paths.json' }
@@ -93,8 +110,8 @@ foreach ($path in @(Values $paths.paths)) {
         }
         $hops.Add([ordered]@{
             ordinal = $i + 1
-            from = [ordered]@{ name = [string]$nodes[$i].displayName; scanId = [string]$nodes[$i].scanId; commitSha = [string]$nodes[$i].commitSha }
-            to = [ordered]@{ name = [string]$nodes[$i + 1].displayName; scanId = [string]$nodes[$i + 1].scanId; commitSha = [string]$nodes[$i + 1].commitSha }
+            from = [ordered]@{ name = [string]$nodes[$i].displayName; displayLabel = Display-Label ([string]$nodes[$i].displayName); scanId = [string]$nodes[$i].scanId; commitSha = [string]$nodes[$i].commitSha }
+            to = [ordered]@{ name = [string]$nodes[$i + 1].displayName; displayLabel = Display-Label ([string]$nodes[$i + 1].displayName); scanId = [string]$nodes[$i + 1].scanId; commitSha = [string]$nodes[$i + 1].commitSha }
             edgeKind = [string]$edge.edgeKind
             ruleId = [string]$edge.ruleId
             evidenceTier = [string]$edge.evidenceTier
@@ -173,15 +190,20 @@ if (!$OutputDirectory.StartsWith($proofPrefix, $(if ($IsWindows) { [StringCompar
 $jsonPath = Join-Path $OutputDirectory 'handler.handoff.local.json'
 $htmlPath = Join-Path $OutputDirectory 'handler.local.html'
 [IO.File]::WriteAllText($jsonPath, (($handoff | ConvertTo-Json -Depth 30) + "`n"), [Text.UTF8Encoding]::new($false))
+$pathNumber = 0
 $sections = foreach ($path in $retained) {
+    $pathNumber++
     $hopRows = foreach ($hop in $path.hops) {
-        '<tr><td>{0}</td><td><code>{1}</code></td><td><code>{2}</code></td><td><code>{3}</code><br><small>{4}; {5}</small></td><td><code>{6}</code><br><small>{7}:{8}-{9}</small></td></tr>' -f `
-            $hop.ordinal, (Html $hop.from.name), (Html $hop.edgeKind), (Html $hop.to.name),
-            (Html $hop.ruleId), (Html $hop.evidenceTier), (Html (($hop.supportingFactIds) -join ', ')),
-            (Html $hop.filePath), (Html $hop.startLine), (Html $hop.endLine)
+        '<tr><th scope="row">{0}</th><td><strong>{1}</strong><span class="arrow">→</span><strong>{2}</strong><details class="identity"><summary>Exact identities</summary><p>From: <code>{3}</code></p><p>To: <code>{4}</code></p></details></td><td><code>{5}</code><br><small>{6}; {7}</small></td><td><small>{8}:{9}-{10}</small><details class="identity"><summary>Supporting facts</summary><code>{11}</code></details></td></tr>' -f `
+            $hop.ordinal, (Html $hop.from.displayLabel), (Html $hop.to.displayLabel),
+            (Html $hop.from.name), (Html $hop.to.name), (Html $hop.edgeKind),
+            (Html $hop.ruleId), (Html $hop.evidenceTier), (Html $hop.filePath),
+            (Html $hop.startLine), (Html $hop.endLine), (Html (($hop.supportingFactIds) -join ', '))
     }
-    '<section><h2>{0}</h2><p>Classification: <code>{1}</code>; claim: <strong>{2}</strong>; terminal: <code>{3}</code></p><table><thead><tr><th>#</th><th>From</th><th>Edge</th><th>To / rule / tier</th><th>Supporting facts / location</th></tr></thead><tbody>{4}</tbody></table></section>' -f `
-        (Html $path.pathId), (Html $path.classification), (Html $path.claim), (Html $path.terminalKind), ($hopRows -join '')
+    '<section><h2>Path {0:D2}: {1} → {2}</h2><p><small>Path ID <code>{3}</code></small><br>Classification: <code>{4}</code>; claim: <strong>{5}</strong>; terminal: <code>{6}</code></p><div class="table-wrap"><table><thead><tr><th>#</th><th>Method transition</th><th>Edge / rule / tier</th><th>Location / evidence</th></tr></thead><tbody>{7}</tbody></table></div></section>' -f `
+        $pathNumber, (Html $path.hops[0].from.displayLabel), (Html $path.hops[-1].to.displayLabel),
+        (Html $path.pathId), (Html $path.classification), (Html $path.claim),
+        (Html $path.terminalKind), ($hopRows -join '')
 }
 $assemblyRows = foreach ($assembly in $handoff.assemblies) {
     '<li><code>{0}</code> — SHA-256 <code>{1}</code>; provenance <code>{2}</code></li>' -f `
@@ -193,7 +215,7 @@ $gapRows = foreach ($gap in $handoff.coverage.gaps) {
         (Html $gap.message), (Html $gap.commitSha)
 }
 $html = @"
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Web Forms compiled path review</title><style>body{font:16px system-ui,sans-serif;max-width:1500px;margin:2rem auto;padding:0 1rem;color:#172033}table{border-collapse:collapse;width:100%;margin:1rem 0}th,td{border:1px solid #ccd5e0;padding:.5rem;text-align:left;vertical-align:top;overflow-wrap:anywhere}th{background:#eaf1ff}code{overflow-wrap:anywhere}section{margin:2rem 0}p.warning{background:#fff1df;border-left:4px solid #a85a00;padding:1rem}</style></head><body><h1>Web Forms compiled path review</h1><p class="warning">LOCAL ONLY. These are bounded static, review-only candidates—not runtime execution, page activation, source-line identity, or proof that SQL ran.</p><p>Terminal <code>$(Html $ToSurface)</code>; source commit <code>$(Html $manifest.commitSha)</code>; scan <code>$(Html $manifest.scanId)</code>; paths $($retained.Count); gaps $($allGaps.Count); coverage <code>$(Html $paths.reportCoverage)</code>; truncated <code>$(Html $paths.summary.truncated)</code>. <a href="handler.handoff.local.json">Machine-readable handoff</a>.</p><h2>Admitted DLL provenance</h2><ul>$($assemblyRows -join '')</ul>$($sections -join '')<h2>Explicit graph gaps</h2><p>Showing $($retainedGaps.Count) of $($allGaps.Count) gap details; $($handoff.coverage.omittedGapDetailCount) omitted from this display. Exact counts by kind and rule remain in the JSON; the complete bounded report is committed by its input SHA-256.</p><ul>$($gapRows -join '')</ul><p>Generator SHA-256 <code>$generatorHash</code>; bounded input SHA-256 <code>$inputDigest</code>.</p></body></html>
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Web Forms compiled path review</title><style>body{font:16px system-ui,sans-serif;max-width:1450px;margin:2rem auto;padding:0 1rem;color:#172033}section{margin:2rem 0;padding:1rem;border:1px solid #ccd5e0;border-radius:8px}.table-wrap{overflow-x:auto}table{border-collapse:collapse;width:100%;table-layout:fixed;margin:1rem 0}th,td{border:1px solid #ccd5e0;padding:.65rem;text-align:left;vertical-align:top;overflow-wrap:anywhere}th{background:#eaf1ff}th:first-child{width:3rem}th:nth-child(2){width:44%}th:nth-child(3){width:23%}code{overflow-wrap:anywhere}td strong{display:block}.arrow{display:block;color:#526078}.identity{font-size:.85rem;margin-top:.4rem}.identity p{margin:.35rem 0}.identity code{word-break:break-all}p.warning{background:#fff1df;border-left:4px solid #a85a00;padding:1rem}small{color:#526078}</style></head><body><h1>Web Forms compiled path review</h1><p class="warning">LOCAL ONLY. These are bounded static, review-only candidates—not runtime execution, page activation, source-line identity, or proof that SQL ran.</p><p>Terminal <code>$(Html $ToSurface)</code>; source commit <code>$(Html $manifest.commitSha)</code>; scan <code>$(Html $manifest.scanId)</code>; paths $($retained.Count); gaps $($allGaps.Count); coverage <code>$(Html $paths.reportCoverage)</code>; truncated <code>$(Html $paths.summary.truncated)</code>. <a href="handler.handoff.local.json">Machine-readable handoff</a>.</p><p>Compact method labels are for reading only. Expand “Exact identities” for the preserved compiler/IL identity; rule IDs and evidence tiers remain on each hop.</p>$($sections -join '')<details><summary>Admitted DLL provenance ($($handoff.assemblies.Count))</summary><ul>$($assemblyRows -join '')</ul></details><details><summary>Explicit graph gaps ($($allGaps.Count))</summary><p>Showing $($retainedGaps.Count) of $($allGaps.Count) gap details; $($handoff.coverage.omittedGapDetailCount) omitted from this display. Exact counts by kind and rule remain in the JSON; the complete bounded report is committed by its input SHA-256.</p><ul>$($gapRows -join '')</ul></details><p>Generator SHA-256 <code>$generatorHash</code>; bounded input SHA-256 <code>$inputDigest</code>.</p></body></html>
 "@
 [IO.File]::WriteAllText($htmlPath, $html, [Text.UTF8Encoding]::new($false))
 Write-Output "compiledPathReviewStatus=valid"

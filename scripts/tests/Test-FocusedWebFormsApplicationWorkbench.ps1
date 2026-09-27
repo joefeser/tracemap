@@ -243,7 +243,18 @@ try {
 
     $standaloneConfig = Join-Path $temp 'standalone-review.json'
     [IO.File]::WriteAllText($standaloneConfig, (([ordered]@{ outputRoot = $outputRoot } | ConvertTo-Json) + "`n"), [Text.UTF8Encoding]::new($false))
-    $standaloneOutput = @(& $standaloneScript -PacketPath $packetPath -ConfigPath $standaloneConfig -PageId 'page-001')
+    $compiledPathInput = Join-Path $temp 'compiled-path-handoff.local.json'
+    $compiledFixture = [ordered]@{
+        schemaVersion = 'webforms-compiled-path-handoff.v1'; ruleId = 'diagnostic.webforms.compiled-path-handoff.v1'; claimLevel = 'review-only-static-evidence'
+        provenance = [ordered]@{ sourceCommitSha = ('a' * 40); scanId = 'scan-one'; generatorSha256 = ('c' * 64); boundedInputSha256 = ('d' * 64) }
+        coverage = [ordered]@{ truncated = $true; gapCount = 3 }
+        paths = @([ordered]@{ pathId = 'public-path-001'; classification = 'NeedsReview'; claim = 'review-only-static-path'; terminalKind = 'database-api'; hops = @([ordered]@{
+            ordinal = 1; from = [ordered]@{ name = 'namespace:6:Public|names:6:Lookup|method:10:Names_Init'; displayLabel = 'spoofed label' }; to = [ordered]@{ name = 'namespace:6:Public|names:13:DbDataAdapter|method:4:Fill'; displayLabel = 'spoofed label' }
+            edgeKind = 'compiled-il-call'; ruleId = 'dotnet.compiled.il-call.v1'; evidenceTier = 'Tier3SyntaxOrTextual'; filePath = 'public/Lookup.aspx'; startLine = 1; endLine = 1
+        }) })
+    }
+    [IO.File]::WriteAllText($compiledPathInput, (($compiledFixture | ConvertTo-Json -Depth 20) + "`n"), [Text.UTF8Encoding]::new($false))
+    $standaloneOutput = @(& $standaloneScript -PacketPath $packetPath -ConfigPath $standaloneConfig -CompiledPathHandoffPath $compiledPathInput -PageId 'page-001')
     $standaloneRootLine = @($standaloneOutput | Where-Object { $_ -like 'standaloneReviewRoot=*' })
     if ($standaloneRootLine.Count -ne 1) { throw 'Standalone review did not report exactly one review root.' }
     $standaloneRoot = $standaloneRootLine[0].Substring('standaloneReviewRoot='.Length)
@@ -256,6 +267,26 @@ try {
         $standaloneReceipt.provenance.inputSha256 -ne (Get-FileHash -LiteralPath $packetPath -Algorithm SHA256).Hash.ToLowerInvariant()) {
         throw 'Standalone review receipt did not preserve packet provenance.'
     }
+    $compiledDigest = (Get-FileHash -LiteralPath $compiledPathInput -Algorithm SHA256).Hash.ToLowerInvariant()
+    $supplemental = ([IO.File]::ReadAllText((Join-Path $standaloneRoot 'workbench/application-handoff.json')) | ConvertFrom-Json -Depth 30).supplementalCompiledPaths
+    $compiledHtml = [IO.File]::ReadAllText((Join-Path $standaloneRoot 'workbench/compiled-paths.local.html'))
+    $standaloneIndex = [IO.File]::ReadAllText((Join-Path $standaloneRoot 'workbench/index.html'))
+    if ($supplemental.status -ne 'separate-review-only-static-evidence' -or $supplemental.pageVerdictJoined -ne $false -or
+        $supplemental.pathCount -ne 1 -or $supplemental.inputSha256 -ne $compiledDigest -or
+        $standaloneReceipt.provenance.supplementalCompiledPathSha256 -ne $compiledDigest -or
+        @($standaloneReceipt.stages.workbench.artifacts | Where-Object { $_.path -eq 'workbench/compiled-paths.local.html' }).Count -ne 1 -or
+        !$compiledHtml.Contains('Public.Lookup.Names_Init()', [StringComparison]::Ordinal) -or
+        !$compiledHtml.Contains('namespace:6:Public|names:6:Lookup|method:10:Names_Init', [StringComparison]::Ordinal) -or
+        $compiledHtml.Contains('spoofed label', [StringComparison]::Ordinal) -or
+        !$standaloneIndex.Contains('compiled-paths.local.html', [StringComparison]::Ordinal)) {
+        throw 'Standalone review did not preserve separate readable compiled-path evidence and provenance.'
+    }
+    $compiledFixture.provenance.sourceCommitSha = ('e' * 40)
+    [IO.File]::WriteAllText($compiledPathInput, (($compiledFixture | ConvertTo-Json -Depth 20) + "`n"), [Text.UTF8Encoding]::new($false))
+    $mismatchRejected = $false
+    try { & $standaloneScript -PacketPath $packetPath -ConfigPath $standaloneConfig -CompiledPathHandoffPath $compiledPathInput | Out-Null }
+    catch { $mismatchRejected = $_.Exception.Message.Contains('ApplicationWorkbenchCompiledPathProvenanceMismatch') }
+    if (!$mismatchRejected) { throw 'Standalone review accepted a compiled path handoff from another commit.' }
     if (@($standaloneOutput | Where-Object { $_ -eq "zipPath=$standaloneZip" }).Count -ne 1) { throw 'Standalone review export did not identify the ZIP created from its new workbench.' }
     $standaloneShareable = [IO.File]::ReadAllText((Join-Path $standaloneRoot 'workbench/page-001.paths.shareable.json')) | ConvertFrom-Json -Depth 30
     if ($standaloneShareable.provenance.traceMapCommitSha -ne 'unavailable') { throw 'Standalone review guessed an unreceipted TraceMap commit.' }

@@ -3640,12 +3640,25 @@ is reused after its bounded input hash is checked, avoiding a repeated graph
 query. Otherwise the graph query runs against the saved high-work index. It
 prints truncation and traversal counts and projects
 the separate receipted report into a fresh `path-recheck-*/compiled-api-review/`
-directory. The handoff binds the
+directory (or a new `compiled-api-review-readable-*` sibling when the first
+projection already exists). The method table uses compact display labels;
+the exact length-prefixed identities remain in the collapsed row detail and
+unchanged in the local JSON. The handoff binds the
 exact scan and index hashes. This is a static database API candidate, not
 a SQL-query join or execution claim. To replay these projections without
 building, publishing, scanning, or combining again, run
 `pwsh -NoProfile -File scripts/Replay-ExistingWebFormsCompiledPathReviews.ps1`;
 it selects the most recent saved complete proof in the local temporary folder.
+To add a saved local compiled-path handoff to a **new** normal private
+application workbench without rescanning, run
+`pwsh -NoProfile -File scripts/New-FocusedWebFormsStandaloneReview.ps1 -PacketPath <webforms-modernization.json> -CompiledPathHandoffPath <handler.handoff.local.json>`.
+The standalone review creates a fresh receipted output; it never rewrites an
+old workbench. Its index links to `compiled-paths.local.html` and the exact
+copied JSON, and `application-handoff.json` records the handoff's raw SHA-256,
+path/gap counts, truncation, and `pageVerdictJoined=false`. The source commit
+must match exactly one packet source. This is a separate local-only,
+review-only projection, not a page-chain verdict, SQL-query join, or runtime
+execution claim. Do not put these private files in a shareable artifact.
 The cross-platform projection guard is
 `pwsh -NoProfile -File scripts/tests/Test-ExistingWebFormsCompiledPathHandoff.ps1`.
 The Windows case must

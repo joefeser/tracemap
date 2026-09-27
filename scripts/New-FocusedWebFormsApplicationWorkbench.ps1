@@ -4,6 +4,7 @@ param(
     [string]$OutputRoot = '',
     [string]$OutputDirectory = '',
     [string]$EvidenceDocsRoot = '',
+    [string]$CompiledPathHandoffPath = '',
     [string]$ReviewPath = '',
     [string]$SourceRoot = '',
     [switch]$IncludeRawSource,
@@ -16,6 +17,19 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 function ConvertTo-HtmlText([object]$Value) { [Net.WebUtility]::HtmlEncode([string]$Value) }
+function Get-CompiledDisplayLabel([string]$Identity) {
+    $member = [regex]::Match($Identity, '\|(?:method|constructor):[0-9]+:([^|]+)')
+    if (!$member.Success) { return $Identity }
+    $prefix = $Identity.Substring(0, $member.Index)
+    $types = [regex]::Matches($prefix, '\|names:[0-9]+:([^|]+)')
+    $namespaces = [regex]::Matches($prefix, 'namespace:[0-9]+:([^|]*)')
+    $typeName = if ($types.Count -gt 0) { $types[-1].Groups[1].Value } else { 'unknown type' }
+    $namespace = if ($namespaces.Count -gt 0) { $namespaces[-1].Groups[1].Value } else { '' }
+    $memberName = $member.Groups[1].Value
+    if ($memberName -eq '.ctor') { $memberName = 'New' }
+    $qualifiedType = if ($namespace) { "$namespace.$typeName" } else { $typeName }
+    return "$qualifiedType.$memberName()"
+}
 function Values([object]$Value) { if ($null -eq $Value) { @() } else { @($Value) } }
 function New-StableAlias([string]$Prefix, [int]$Number) { '{0}-{1:d3}' -f $Prefix, $Number }
 function Same([object]$Left, [object]$Right) { [string]::Equals([string]$Left, [string]$Right, [StringComparison]::Ordinal) }
@@ -234,6 +248,36 @@ foreach ($source in $sources) {
 }
 $surfaces = @(Values $packet.surfaces)
 if ($surfaces.Count -lt 1 -or $surfaces.Count -gt 1000) { throw 'ApplicationWorkbenchSurfaceLimit' }
+$compiledPathHandoff = $null
+$compiledPathHandoffSha256 = $null
+if ($CompiledPathHandoffPath) {
+    if (!(Test-Path -LiteralPath $CompiledPathHandoffPath -PathType Leaf)) { throw 'ApplicationWorkbenchCompiledPathUnavailable' }
+    $compiledInput = Get-Item -LiteralPath $CompiledPathHandoffPath
+    if ($compiledInput.Length -le 0 -or $compiledInput.Length -gt 16MB) { throw 'ApplicationWorkbenchCompiledPathLimit' }
+    $compiledPathHandoff = [IO.File]::ReadAllText($compiledInput.FullName) | ConvertFrom-Json -Depth 50
+    $compiledPaths = @(Values $compiledPathHandoff.paths)
+    $compiledCommit = [string]$compiledPathHandoff.provenance.sourceCommitSha
+    if ($compiledPathHandoff.schemaVersion -cne 'webforms-compiled-path-handoff.v1' -or
+        $compiledPathHandoff.ruleId -cne 'diagnostic.webforms.compiled-path-handoff.v1' -or
+        $compiledPathHandoff.claimLevel -cne 'review-only-static-evidence' -or
+        $compiledCommit -cnotmatch '^[0-9a-f]{40}$' -or
+        @($sources | Where-Object { [string]$_.commitSha -ceq $compiledCommit }).Count -ne 1 -or
+        [string]$compiledPathHandoff.provenance.generatorSha256 -cnotmatch '^[0-9a-f]{64}$' -or
+        [string]$compiledPathHandoff.provenance.boundedInputSha256 -cnotmatch '^[0-9a-f]{64}$' -or
+        $compiledPaths.Count -gt 256 -or
+        @($compiledPaths | Where-Object {
+            $_.claim -cne 'review-only-static-path' -or @($_.hops).Count -lt 1 -or
+            @($_.hops).Count -gt 20 -or @($_.hops | Where-Object {
+                [string]::IsNullOrWhiteSpace([string]$_.ruleId) -or
+                $_.evidenceTier -cnotin @('Tier1Semantic','Tier2Structural','Tier3SyntaxOrTextual','Tier4Unknown') -or
+                [string]::IsNullOrWhiteSpace([string]$_.from.name) -or
+                [string]::IsNullOrWhiteSpace([string]$_.to.name)
+            }).Count -gt 0
+        }).Count -gt 0) {
+        throw 'ApplicationWorkbenchCompiledPathProvenanceMismatch'
+    }
+    $compiledPathHandoffSha256 = (Get-FileHash -LiteralPath $compiledInput.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+}
 if ($IncludeRawSource -and (!$SourceRoot -or !(Test-Path -LiteralPath $SourceRoot -PathType Container))) { throw 'ApplicationWorkbenchSourceRootUnavailable' }
 $reviewBySurface = [Collections.Generic.Dictionary[string,object]]::new([StringComparer]::Ordinal)
 $reviewSha256 = $null
@@ -315,6 +359,28 @@ $staging = Join-Path $parent ('.' + (Split-Path -Leaf $OutputDirectory) + '.stag
 
 try {
     [IO.File]::Copy($packetFile.FullName, (Join-Path $staging 'webforms-modernization.snapshot.json'), $false)
+    if ($compiledPathHandoff) {
+        [IO.File]::Copy($compiledInput.FullName, (Join-Path $staging 'compiled-paths.local.json'), $false)
+        $compiledSections = foreach ($compiledPath in $compiledPaths) {
+            $compiledRows = foreach ($hop in @($compiledPath.hops)) {
+                $fromLabel = Get-CompiledDisplayLabel ([string]$hop.from.name)
+                $toLabel = Get-CompiledDisplayLabel ([string]$hop.to.name)
+                '<tr><td>{0}</td><td><strong>{1}</strong> → <strong>{2}</strong><details><summary>Exact identities</summary><code>{3}</code><br><code>{4}</code></details></td><td><code>{5}</code><br>{6}; {7}</td><td>{8}:{9}-{10}</td></tr>' -f `
+                    (ConvertTo-HtmlText $hop.ordinal), (ConvertTo-HtmlText $fromLabel), (ConvertTo-HtmlText $toLabel),
+                    (ConvertTo-HtmlText $hop.from.name), (ConvertTo-HtmlText $hop.to.name),
+                    (ConvertTo-HtmlText $hop.edgeKind), (ConvertTo-HtmlText $hop.ruleId),
+                    (ConvertTo-HtmlText $hop.evidenceTier), (ConvertTo-HtmlText $hop.filePath),
+                    (ConvertTo-HtmlText $hop.startLine), (ConvertTo-HtmlText $hop.endLine)
+            }
+            '<section><h2>Path {0}</h2><p><code>{1}</code>; {2}; terminal <code>{3}</code></p><div class="table-wrap"><table><thead><tr><th>#</th><th>Method transition</th><th>Edge / rule / tier</th><th>Location</th></tr></thead><tbody>{4}</tbody></table></div></section>' -f `
+                (ConvertTo-HtmlText $compiledPath.pathId), (ConvertTo-HtmlText $compiledPath.classification),
+                (ConvertTo-HtmlText $compiledPath.claim), (ConvertTo-HtmlText $compiledPath.terminalKind), ($compiledRows -join '')
+        }
+        $compiledHtml = @"
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Supplemental compiled path review</title><style>:root{font-family:system-ui,sans-serif;color:#172033;background:#f5f7fb}main{max-width:1400px;margin:auto;padding:24px}section{background:white;padding:16px;margin:18px 0;border:1px solid #dbe2ee;border-radius:8px}.warning{padding:12px;background:#fff0d8;border-left:5px solid #a05a00}.table-wrap{overflow-x:auto}table{width:100%;border-collapse:collapse}th,td{padding:9px;border:1px solid #dbe2ee;text-align:left;vertical-align:top}th{background:#eaf1ff}code{overflow-wrap:anywhere}details{margin-top:7px}a{color:#1558b0}</style></head><body><main><h1>Supplemental compiled path review</h1><p class="warning">LOCAL ONLY · review-only static candidates. Separate from the packet page-chain verdict. These paths do not prove source-line identity, event firing, runtime dispatch, or SQL execution. Coverage truncated: $(ConvertTo-HtmlText $compiledPathHandoff.coverage.truncated); retained gaps: $(ConvertTo-HtmlText $compiledPathHandoff.coverage.gapCount).</p><p>Source commit <code>$(ConvertTo-HtmlText $compiledCommit)</code>; scan <code>$(ConvertTo-HtmlText $compiledPathHandoff.provenance.scanId)</code>; handoff SHA-256 <code>$(ConvertTo-HtmlText $compiledPathHandoffSha256)</code>; generator SHA-256 <code>$(ConvertTo-HtmlText $generatorSha256)</code>. <a href="compiled-paths.local.json">Exact handoff JSON</a> · <a href="index.html">Application workbench</a>.</p>$($compiledSections -join '')</main></body></html>
+"@
+        [IO.File]::WriteAllText((Join-Path $staging 'compiled-paths.local.html'), $compiledHtml, [Text.UTF8Encoding]::new($false))
+    }
     $ordered = @($surfaces | Sort-Object @{ Expression = { [string]$_.evidence.filePath } }, @{ Expression = { [string]$_.surfaceId } })
     $pageRows = [Collections.Generic.List[object]]::new()
     $applicationPages = [Collections.Generic.List[object]]::new()
@@ -834,6 +900,7 @@ try {
         nextEvidenceSummary = @($applicationNextEvidenceSummary)
         controlRegistrationGaps = @($controlRegistrationGaps)
         outlierReview = [ordered]@{ ruleId = 'diagnostic.webforms.application-outlier-ranking.v1'; privateHtml = 'application-outliers.html'; html = 'application-outliers.shareable.html'; json = 'application-outliers.shareable.json' }
+        supplementalCompiledPaths = if ($compiledPathHandoff) { [ordered]@{ status = 'separate-review-only-static-evidence'; ruleId = [string]$compiledPathHandoff.ruleId; claimLevel = [string]$compiledPathHandoff.claimLevel; sourceCommitSha = $compiledCommit; pathCount = $compiledPaths.Count; truncated = [bool]$compiledPathHandoff.coverage.truncated; gapCount = [int]$compiledPathHandoff.coverage.gapCount; inputSha256 = $compiledPathHandoffSha256; inputCanonicalization = 'raw-file-bytes'; html = 'compiled-paths.local.html'; json = 'compiled-paths.local.json'; pageVerdictJoined = $false } } else { [ordered]@{ status = 'not-supplied' } }
         applicationGaps = @($applicationGaps | ForEach-Object { [ordered]@{ gapId = [string]$_.gapId; classification = [string]$_.classification; scopeKind = [string]$_.scopeKind; scopeId = $_.scopeId; ruleId = [string]$_.ruleId; evidenceTier = [string]$_.evidenceTier; coverageLabel = [string]$_.coverageLabel; commitSha = [string]$_.commitSha; filePath = $_.filePath; startLine = $_.startLine; endLine = $_.endLine; extractorId = $_.extractorId; extractorVersion = $_.extractorVersion; safeMetadata = if ($null -eq $_.safeMetadata) { [ordered]@{} } else { $_.safeMetadata }; truncationReason = $_.truncationReason; supportingFactIds = @(Values $_.supportingFactIds); limitations = @(Values $_.limitations) } })
         unassociatedIdentityState = @($unassociatedIdentity | ForEach-Object { [ordered]@{ id = [string]$_.identityStateId; kind = [string]$_.identityKind; classification = [string]$_.classification; safeMetadata = $_.safeMetadata; evidenceFactId = [string]$_.evidence.factId; evidence = Project-Evidence $_.evidence; supportingFactIds = @(Values $_.supportingFactIds) } })
         projectDataMovement = @($applicationBatch | ForEach-Object { [ordered]@{ id = [string]$_.batchDataMovementId; projectId = [string]$_.projectId; surfaceKind = [string]$_.surfaceKind; mechanism = [string]$_.mechanism; operationKind = [string]$_.operationKind; ownerStatus = [string]$_.ownerStatus; projectResolution = [string]$_.projectResolution; safeMetadata = $_.safeMetadata; evidenceFactId = [string]$_.evidence.factId; evidence = Project-Evidence $_.evidence; supportingFactIds = @(Values $_.supportingFactIds) } })
@@ -870,8 +937,9 @@ try {
         $diagnostics = '<details class="row-details"><summary>Show</summary><dl><dt>Retained route</dt><dd><code>{1}</code></dd><dt>Kind</dt><dd>{2}</dd><dt>Calls</dt><dd>{7} projections; {8} unique facts; {9} normalized sites; {19} reuse</dd><dt>Call evidence ceiling</dt><dd>{10} chain(s); {20} explicitly omitted</dd><dt>Handler unavailable</dt><dd>{11} — event source retained; usable handler fact unavailable</dd><dt>Downstream / no terminal</dt><dd>{12}</dd><dt>No downstream</dt><dd>{13}</dd><dt>Terminal inventory incomplete</dt><dd>{21}</dd><dt>Terminal inventory unavailable</dt><dd>{23}</dd><dt>Path detail truncated</dt><dd>{22}</dd><dt>Other incomplete</dt><dd>{15}</dd><dt>Boundaries</dt><dd>{6}</dd><dt>Recorded gap facts</dt><dd>{16}</dd><dt>Review</dt><dd>{17}; {18}</dd><dt>Evidence handoff</dt><dd><a href="{0}.handoff.json">Open JSON</a></dd></dl></details>' -f $row.PageId, (ConvertTo-HtmlText $row.Path), (ConvertTo-HtmlText $row.SurfaceKind), $row.Chains, $row.ClientBehaviors, $row.ServerBehaviors, $row.Boundaries, $row.CallProjections, $row.UniqueCallFacts, $row.UniqueCallSites, $row.CallEvidenceCeilingChains, $row.HandlerUnavailable, $row.NoTerminal, $row.NoDownstream, $row.Truncated, $row.OtherIncomplete, $row.Gaps, (ConvertTo-HtmlText $row.Verdict), (ConvertTo-HtmlText $row.Disposition), $projectionReuse, $row.CallEvidenceOmitted, $row.TerminalInventoryIncomplete, $row.PathDetailTruncated, $row.TerminalInventoryUnavailable
         '<tr class="page-summary"><td><a class="page-link" target="_blank" rel="noopener" href="{0}.html">{0}</a></td><td>{1}</td><td>{2}</td><td><div class="flags">{3}</div></td><td>{4}</td><td>{5}</td></tr><tr class="page-context"><th scope="row">Route and controls</th><td colspan="5"><span class="route"><strong>Route:</strong> <code>{6}</code></span><span class="controls"><strong>Controls:</strong> {7}</span></td></tr>' -f $row.PageId, $activity, $calls, ($flags -join ''), $reviewState, $diagnostics, (ConvertTo-HtmlText $row.Path), (ConvertTo-HtmlText $row.ControlDisplay)
     }
+    $compiledLink = if ($compiledPathHandoff) { '<p class="private"><strong>Supplemental compiled path review:</strong> {0} review-only static paths; truncated {1}. This is separate from the page-chain verdict. <a href="compiled-paths.local.html">Open readable paths</a> · <a href="compiled-paths.local.json">Exact JSON</a>.</p>' -f $compiledPaths.Count, (ConvertTo-HtmlText $compiledPathHandoff.coverage.truncated) } else { '' }
     $index = @"
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Web Forms application workbench</title><style>:root{font-family:system-ui,sans-serif;color:#172033;background:#f5f7fb}main{max-width:1400px;margin:auto;padding:24px}.private{padding:12px;border-left:5px solid #c62828;background:#fff1f0}.table-wrap{overflow-x:auto;border:1px solid #dbe2ee;border-radius:8px;background:white}table{width:100%;border-collapse:collapse;background:white}th,td{padding:10px;border-bottom:1px solid #dbe2ee;text-align:left;vertical-align:top}th{position:sticky;top:0;z-index:1;background:#eaf1ff;white-space:nowrap}tbody tr.page-summary:hover,tbody tr.page-context:hover{background:#f7faff}code{background:#edf1f7;padding:.1rem .3rem;border-radius:4px;overflow-wrap:anywhere}a{color:#1558b0}.page-link{font-weight:700;white-space:nowrap}.metric,.submetric,.route,.controls{display:block}.metric{white-space:nowrap}.submetric{margin-top:3px;color:#526078;font-size:.88rem}.page-context th{position:static;background:#f7f9fc;color:#526078;font-size:.82rem}.page-context td{background:#fbfcfe;font-size:.88rem;overflow-wrap:anywhere}.page-context .controls{margin-top:5px}.flags{display:flex;flex-wrap:wrap;gap:5px;min-width:150px}.flag{display:inline-block;border-radius:999px;padding:2px 7px;font-size:.78rem;white-space:nowrap}.flag.warning{background:#fff0d8;color:#7a4100}.flag.evidence{background:#e8f4ff;color:#174e7a}.flag.quiet{background:#edf1f7;color:#526078}.row-details{margin:0;padding:0;border:0;background:transparent;min-width:70px}.row-details summary{cursor:pointer;color:#1558b0}.row-details dl{display:grid;grid-template-columns:max-content minmax(180px,1fr);gap:5px 10px;min-width:420px;margin:10px 0 2px}.row-details dt{font-weight:700}.row-details dd{margin:0}body>main>details{background:white;border:1px solid #dbe2ee;border-radius:8px;padding:14px;margin:14px 0}@media(max-width:800px){main{padding:12px}.table-wrap{border-radius:0}th,td{padding:8px}.row-details dl{grid-template-columns:1fr;min-width:260px}.row-details dd{margin-bottom:6px}}</style></head><body><main><h1>Private Web Forms application workbench</h1><p class="private">PRIVATE: $(ConvertTo-HtmlText $applicationPages.Count) selected surfaces from one retained packet. No source scan was run.</p><p>Packet <code>$(ConvertTo-HtmlText $packet.packetId)</code>. Analysis <code>$(ConvertTo-HtmlText $applicationStatus)</code>; coverage <code>$(ConvertTo-HtmlText $packet.coverage)</code>; truncated <code>$(ConvertTo-HtmlText $packet.summary.truncated)</code>. <a href="application-handoff.json">Application handoff JSON</a> · <a href="webforms-modernization.snapshot.json">Packet snapshot</a> · <a href="application-outliers.html">Private outlier review</a> · <a href="application-outliers.shareable.html">Alias-only outlier review</a> · <a href="application-outliers.shareable.json">Outlier JSON</a>.</p><p><strong>Call accounting:</strong> P = chain-associated projections; F = unique retained facts; S = normalized source sites. <strong>Handler unavailable</strong> means the event source was retained but no usable handler fact/span was available to continue that chain. It is not proof that the application has no handler. Expand Diagnostics for the complete retained breakdown.</p><div class="table-wrap"><table><thead><tr><th>Page</th><th>Activity</th><th>Calls P/F/S</th><th>Retained flags</th><th>Review</th><th>Diagnostics</th></tr></thead><tbody>$($tableRows -join '')</tbody></table></div><details><summary><strong>Application or unassociated gaps ($($applicationGaps.Count))</strong></summary><ul>$($applicationGapRows -join '')</ul></details><details><summary><strong>Unassociated identity/state ($($unassociatedIdentity.Count))</strong></summary><ul>$($unassociatedIdentityRows -join '')</ul></details><details><summary><strong>Project-scoped batch/data movement ($($applicationBatch.Count))</strong></summary><ul>$($applicationBatchRows -join '')</ul></details><details><summary><strong>Unassociated batch/data movement ($($unassociatedBatch.Count))</strong></summary><ul>$($unassociatedBatchRows -join '')</ul></details><details><summary><strong>Unassociated structural candidates ($($unassociatedCandidates.Count))</strong></summary><ul>$($unassociatedCandidateRows -join '')</ul></details><p>Static evidence does not prove runtime execution, business intent, or migration correctness. Human review remains a separate overlay.</p></main></body></html>
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Web Forms application workbench</title><style>:root{font-family:system-ui,sans-serif;color:#172033;background:#f5f7fb}main{max-width:1400px;margin:auto;padding:24px}.private{padding:12px;border-left:5px solid #c62828;background:#fff1f0}.table-wrap{overflow-x:auto;border:1px solid #dbe2ee;border-radius:8px;background:white}table{width:100%;border-collapse:collapse;background:white}th,td{padding:10px;border-bottom:1px solid #dbe2ee;text-align:left;vertical-align:top}th{position:sticky;top:0;z-index:1;background:#eaf1ff;white-space:nowrap}tbody tr.page-summary:hover,tbody tr.page-context:hover{background:#f7faff}code{background:#edf1f7;padding:.1rem .3rem;border-radius:4px;overflow-wrap:anywhere}a{color:#1558b0}.page-link{font-weight:700;white-space:nowrap}.metric,.submetric,.route,.controls{display:block}.metric{white-space:nowrap}.submetric{margin-top:3px;color:#526078;font-size:.88rem}.page-context th{position:static;background:#f7f9fc;color:#526078;font-size:.82rem}.page-context td{background:#fbfcfe;font-size:.88rem;overflow-wrap:anywhere}.page-context .controls{margin-top:5px}.flags{display:flex;flex-wrap:wrap;gap:5px;min-width:150px}.flag{display:inline-block;border-radius:999px;padding:2px 7px;font-size:.78rem;white-space:nowrap}.flag.warning{background:#fff0d8;color:#7a4100}.flag.evidence{background:#e8f4ff;color:#174e7a}.flag.quiet{background:#edf1f7;color:#526078}.row-details{margin:0;padding:0;border:0;background:transparent;min-width:70px}.row-details summary{cursor:pointer;color:#1558b0}.row-details dl{display:grid;grid-template-columns:max-content minmax(180px,1fr);gap:5px 10px;min-width:420px;margin:10px 0 2px}.row-details dt{font-weight:700}.row-details dd{margin:0}body>main>details{background:white;border:1px solid #dbe2ee;border-radius:8px;padding:14px;margin:14px 0}@media(max-width:800px){main{padding:12px}.table-wrap{border-radius:0}th,td{padding:8px}.row-details dl{grid-template-columns:1fr;min-width:260px}.row-details dd{margin-bottom:6px}}</style></head><body><main><h1>Private Web Forms application workbench</h1><p class="private">PRIVATE: $(ConvertTo-HtmlText $applicationPages.Count) selected surfaces from one retained packet. No source scan was run.</p><p>Packet <code>$(ConvertTo-HtmlText $packet.packetId)</code>. Analysis <code>$(ConvertTo-HtmlText $applicationStatus)</code>; coverage <code>$(ConvertTo-HtmlText $packet.coverage)</code>; truncated <code>$(ConvertTo-HtmlText $packet.summary.truncated)</code>. <a href="application-handoff.json">Application handoff JSON</a> · <a href="webforms-modernization.snapshot.json">Packet snapshot</a> · <a href="application-outliers.html">Private outlier review</a> · <a href="application-outliers.shareable.html">Alias-only outlier review</a> · <a href="application-outliers.shareable.json">Outlier JSON</a>.</p>$compiledLink<p><strong>Call accounting:</strong> P = chain-associated projections; F = unique retained facts; S = normalized source sites. <strong>Handler unavailable</strong> means the event source was retained but no usable handler fact/span was available to continue that chain. It is not proof that the application has no handler. Expand Diagnostics for the complete retained breakdown.</p><div class="table-wrap"><table><thead><tr><th>Page</th><th>Activity</th><th>Calls P/F/S</th><th>Retained flags</th><th>Review</th><th>Diagnostics</th></tr></thead><tbody>$($tableRows -join '')</tbody></table></div><details><summary><strong>Application or unassociated gaps ($($applicationGaps.Count))</strong></summary><ul>$($applicationGapRows -join '')</ul></details><details><summary><strong>Unassociated identity/state ($($unassociatedIdentity.Count))</strong></summary><ul>$($unassociatedIdentityRows -join '')</ul></details><details><summary><strong>Project-scoped batch/data movement ($($applicationBatch.Count))</strong></summary><ul>$($applicationBatchRows -join '')</ul></details><details><summary><strong>Unassociated batch/data movement ($($unassociatedBatch.Count))</strong></summary><ul>$($unassociatedBatchRows -join '')</ul></details><details><summary><strong>Unassociated structural candidates ($($unassociatedCandidates.Count))</strong></summary><ul>$($unassociatedCandidateRows -join '')</ul></details><p>Static evidence does not prove runtime execution, business intent, or migration correctness. Human review remains a separate overlay.</p></main></body></html>
 "@
     [IO.File]::WriteAllText((Join-Path $staging 'index.html'), $index, [Text.UTF8Encoding]::new($false))
     [IO.Directory]::Move($staging, $OutputDirectory)
