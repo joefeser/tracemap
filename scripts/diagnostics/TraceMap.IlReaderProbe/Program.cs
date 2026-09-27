@@ -65,6 +65,8 @@ try
     Console.WriteLine($"ilReaderProbeOpcodeStreams={shape.OpcodeStreams}");
     Console.WriteLine($"ilReaderProbeOperandOnly={shape.OperandOnly}");
     Console.WriteLine($"ilReaderProbeFirstDifference={shape.FirstDifference}");
+    Console.WriteLine($"ilReaderProbeFirstCecilOpcode={shape.FirstCecilOpcode}");
+    Console.WriteLine($"ilReaderProbeFirstRawOpcode={shape.FirstRawOpcode}");
     Console.WriteLine($"ilReaderProbeFirstOpcode={shape.FirstOpcode}");
     Console.WriteLine($"ilReaderProbeFirstOperandKind={shape.FirstOperandKind}");
     Console.WriteLine($"ilReaderProbeFirstTokenKind={shape.FirstTokenKind}");
@@ -85,11 +87,14 @@ try
         var cecilTokens = cecil.Bodies.Select(body => body.MetadataToken).ToHashSet(StringComparer.OrdinalIgnoreCase);
         var rawTokens = srm.Bodies.Select(body => body.MetadataToken).ToHashSet(StringComparer.OrdinalIgnoreCase);
         var assemblyDisputed = disputed.Contains("assembly");
-        var agreedCount = selected.Count(token => !assemblyDisputed && !disputed.Contains(token) &&
-            cecilTokens.Contains(token) && rawTokens.Contains(token));
+        var statuses = selected.Select(token => !assemblyDisputed && !disputed.Contains(token) &&
+            cecilTokens.Contains(token) && rawTokens.Contains(token)).ToArray();
+        var agreedCount = statuses.Count(value => value);
         Console.WriteLine($"ilReaderProbeSelectedMethods={selected.Length}");
         Console.WriteLine($"ilReaderProbeSelectedAgreed={agreedCount}");
         Console.WriteLine($"ilReaderProbeSelectedDisputed={selected.Length - agreedCount}");
+        for (var index = 0; index < statuses.Length; index++)
+            Console.WriteLine($"ilReaderProbeSelected{index}Status={(statuses[index] ? "agreed" : "disputed")}");
     }
     return 0;
 }
@@ -170,7 +175,12 @@ static void ClassifyFirstInstructionDifference(IlBodyObservation a, IlBodyObserv
             return;
         }
         if (first[1] != second[1]) shape.FirstDifference = "offset";
-        else if (first[2] != second[2]) shape.FirstDifference = "opcode";
+        else if (first[2] != second[2])
+        {
+            shape.FirstDifference = "opcode";
+            shape.FirstCecilOpcode = SafeOpcode(first[2]);
+            shape.FirstRawOpcode = SafeOpcode(second[2]);
+        }
         else
         {
             shape.FirstDifference = "operand";
@@ -189,6 +199,9 @@ static void ClassifyFirstInstructionDifference(IlBodyObservation a, IlBodyObserv
     }
     shape.FirstDifference = "unavailable";
 }
+
+static string SafeOpcode(string value) => value.Length is > 0 and <= 40 &&
+    value.All(ch => char.IsAsciiLetterOrDigit(ch) || ch is '.' or '_') ? value : "other";
 
 static void ClassifyToken(string first, string second, Shape shape)
 {
@@ -261,6 +274,8 @@ file sealed class Shape
     public int OpcodeStreams;
     public int OperandOnly;
     public string FirstDifference = "none";
+    public string FirstCecilOpcode = "none";
+    public string FirstRawOpcode = "none";
     public string FirstOpcode = "none";
     public string FirstOperandKind = "none";
     public string FirstTokenKind = "none";

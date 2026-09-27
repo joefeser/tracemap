@@ -30,12 +30,16 @@ try {
     [IO.File]::WriteAllText((Join-Path $root 'scan/scan-manifest.json'), ($manifest | ConvertTo-Json -Depth 10))
     [IO.File]::WriteAllText((Join-Path $root 'publish-receipt.local.json'), ($receipt | ConvertTo-Json -Depth 10))
     [void][IO.Directory]::CreateDirectory((Join-Path $root 'scan-ilwork-20000000'))
-    $methodFact = @{ factType='ManagedMethodDeclared'; targetSymbol='assembly:name:4:Test|type:namespace:4:Demo|names:8:Provider|arity:0|method:3:Run|signature:x'; properties=@{ rawFileSha256=$oneHash; metadataToken='0x06000001' } }
+    $methodFact = @{ factType='ManagedMethodDeclared'; targetSymbol='assembly:name:4:Test|type:namespace:4:Demo|names:8:Provider|arity:0|method:3:Run|signature:x'; properties=@{ rawFileSha256=$oneHash; metadataToken='0x06000001'; signature='(System.Collections.ArrayList&,CustomType[])->System.Data.DataSet' } }
     [IO.File]::WriteAllText((Join-Path $root 'scan-ilwork-20000000/facts.ndjson'), ($methodFact | ConvertTo-Json -Depth 10 -Compress))
     $diagnostic = @(& (Join-Path $TraceMapRoot 'scripts/wid.ps1') -OutputRoot $root -TypeName Provider -MethodName Run)
     if ($diagnostic -cnotcontains 'ilReaderProbeStatus=agreed' -or
         $diagnostic -cnotcontains 'ilReaderProbeSelectedMethods=1' -or
         $diagnostic -cnotcontains 'ilReaderProbeSelectedAgreed=1' -or
+        $diagnostic -cnotcontains 'ilReaderProbeSelected0Status=agreed' -or
+        $diagnostic -cnotcontains 'methodOverload0HasArrayList=True' -or
+        $diagnostic -cnotcontains 'methodOverload0HasArrayParameter=True' -or
+        $diagnostic -cnotcontains 'methodOverload0HasByRef=True' -or
         ($diagnostic -join "`n") -match 'PublicOne|PublicTwo|[a-f0-9]{64}') {
         throw 'WEBFORMS_IL_DIAG_TEST_RESULT_INVALID'
     }
