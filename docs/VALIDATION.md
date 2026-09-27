@@ -3624,6 +3624,11 @@ ordered path is a later graph projection from `combined.sqlite`, not an
 additional extracted fact. The handoff JSON hashes its generator and the
 bounded path report, manifest, receipt, and combined index. It is local-only
 and may contain private identities; do not share it as an anonymous artifact.
+The local renderer accepts a path report up to 256 MiB and at most 250,000
+explicit graph gaps. It shows 256 detailed gaps and 128 kind/rule count groups
+at most, with omitted counts; the full bounded input remains committed by its
+SHA-256. An input-limit failure reports only the input slot, measured bytes,
+and limit so a saved proof can be diagnosed without another scan.
 The cross-platform projection guard is
 `pwsh -NoProfile -File scripts/tests/Test-ExistingWebFormsCompiledPathHandoff.ps1`.
 The Windows case must
