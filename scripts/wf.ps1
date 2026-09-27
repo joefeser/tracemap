@@ -37,7 +37,7 @@ if (!(Test-Path -LiteralPath $proof -PathType Leaf) -or
 # Pin the public proof implementation so a local deletion of its provenance
 # check cannot be used through this wrapper. Accept exact bytes or Git's
 # checkout-filtered representation of that one public script.
-$expectedProofBlob = 'b01682d19d9697b25b57c7fccea5af369f5f1440'
+$expectedProofBlob = '358a407ad3d829cc63362ac595e1d0b29133209b'
 $proofRawBlob = ([string](& git -C $TraceMapRoot hash-object --no-filters $proof)).Trim()
 $rawValid = $LASTEXITCODE -eq 0 -and $proofRawBlob -cmatch '^[0-9a-f]{40}$'
 $proofFilteredBlob = ([string](& git -C $TraceMapRoot hash-object `
