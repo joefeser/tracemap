@@ -70,6 +70,13 @@ try {
         $recheckLines -cnotcontains 'pathRecheckReason.other=0') {
         throw 'EXISTING_PUBLISH_TEST_PATH_RECHECK_INVALID'
     }
+    $apiLines = @(& (Join-Path $TraceMapRoot 'scripts/wp.ps1') `
+        -OutputRoot $output -RecheckCompiledApi)
+    if (@($apiLines | Where-Object { $_ -cmatch '^compiledApiPaths=\d+$' }).Count -ne 1 -or
+        @($apiLines | Where-Object { $_ -cmatch '^compiledApiSelectorCandidates=\d+$' }).Count -ne 1 -or
+        @($apiLines | Where-Object { $_ -cmatch '^compiledApiTruncated=(True|False)$' }).Count -ne 1) {
+        throw 'EXISTING_PUBLISH_TEST_COMPILED_API_RECHECK_INVALID'
+    }
     function global:Read-Host { param([string]$Prompt) 'yes' }
     try {
         $lowercaseLines = @(& $script -SourceSiteRoot $source -PublishedRoot $publish `

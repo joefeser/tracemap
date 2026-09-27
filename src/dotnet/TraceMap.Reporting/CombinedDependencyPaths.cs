@@ -5168,7 +5168,7 @@ public static partial class CombinedDependencyPathReporter
 
     private static bool IsDefaultTerminalSurface(GraphNode node, IReadOnlySet<string> startFactIds)
     {
-        if (node.SurfaceKind == "http-route")
+        if (node.SurfaceKind is "http-route" or "database-api")
         {
             return false;
         }
