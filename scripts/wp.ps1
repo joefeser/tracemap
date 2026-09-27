@@ -109,4 +109,16 @@ if (Test-Path -LiteralPath $pathReportPath -PathType Leaf) {
         } else { 'other' }
         Write-Output "pathGap.$label=$($group.Count)"
     }
+    $truncations = @($pathGaps | Where-Object { $_.gapKind -ceq 'TruncatedByLimit' })
+    foreach ($reason in @('selector-candidates', 'depth', 'frontier', 'work', 'path', 'cycle')) {
+        Write-Output "pathTruncation.$reason=$(@($truncations | Where-Object { $_.reason -ceq $reason }).Count)"
+    }
+    $memberGaps = @($pathGaps | Where-Object { $_.gapKind -ceq 'ProjectlessPublishMemberAmbiguous' })
+    $missingMembers = @($memberGaps | Where-Object { [int]$_.candidateCount -eq 0 }).Count
+    $multipleMembers = @($memberGaps | Where-Object { [int]$_.candidateCount -gt 1 }).Count
+    if ($missingMembers + $multipleMembers -ne $memberGaps.Count) {
+        throw 'WEBFORMS_PROBE_MEMBER_CANDIDATE_SUMMARY_MISMATCH'
+    }
+    Write-Output "pathPublishMemberMissing=$missingMembers"
+    Write-Output "pathPublishMemberMultiple=$multipleMembers"
 }
