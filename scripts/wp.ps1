@@ -249,6 +249,16 @@ if ($RecheckPathReasons -or $RecheckCompiledApi) {
             if ($null -eq $recheck.rootTraversal) { throw 'WEBFORMS_PROBE_ROOT_TRAVERSAL_UNAVAILABLE' }
             Write-Output "compiledApiReachedNodes=$($recheck.rootTraversal.reachedNodeCount)"
             Write-Output "compiledApiTraversedEdges=$($recheck.rootTraversal.traversedEdgeCount)"
+            Write-Output "compiledApiTerminalCallers=$($recheck.rootTraversal.terminalCallerCount)"
+            Write-Output "compiledApiReachableTerminalCallers=$($recheck.rootTraversal.reachableTerminalCallerCount)"
+            Write-Output "compiledApiReachableUnresolvedIlCalls=$($recheck.rootTraversal.reachableUnresolvedIlCallCount)"
+            foreach ($reason in @('same-assembly-methoddef-target-not-unique',
+                    'admitted-memberref-target-not-unique',
+                    'target-assembly-present-without-bound-provenance', 'other')) {
+                $entry = $recheck.rootTraversal.reachableUnresolvedIlCallsByReason.PSObject.Properties[$reason]
+                $count = if ($null -eq $entry) { 0 } else { [int]$entry.Value }
+                Write-Output "compiledApiReachableIlGap.$reason=$count"
+            }
             Write-Output "compiledApiDiagnosticShapesTruncated=$($recheck.rootTraversal.diagnosticShapesTruncated)"
             foreach ($kind in @('projectless-publish-method-candidate',
                     'projectless-publish-member-candidate', 'projectless-vb-constructor-bridge',

@@ -8,6 +8,50 @@ public static partial class CombinedDependencyPathReporter
     private const string ProjectlessPdbIdentityRuleId = "combined.paths.projectless-pdb-identity.v1";
     private const string ProjectlessPublishCandidateRuleId = "combined.paths.projectless-publish-candidate.v1";
 
+    private sealed record CompiledIlRootDiagnostics(int TerminalCallerCount, int ReachableTerminalCallerCount,
+        int ReachableUnresolvedIlCallCount, IReadOnlyDictionary<string, int> ReachableUnresolvedIlCallsByReason);
+
+    private static CompiledIlRootDiagnostics
+        SummarizeCompiledIlRootDiagnostics(CombinedReadResult read, EvidenceGraph graph,
+            IReadOnlySet<string> reachedNodeIds, string rootNodeId)
+    {
+        var reached = reachedNodeIds.Append(rootNodeId).ToHashSet(StringComparer.Ordinal);
+        var terminalCallers = graph.Edges
+            .Where(edge => edge.EdgeKind == "compiled-database-api-candidate")
+            .Select(edge => edge.FromNodeId).Distinct(StringComparer.Ordinal).ToArray();
+        var factsByCombinedId = read.Facts.GroupBy(fact => fact.CombinedFactId, StringComparer.Ordinal)
+            .Where(group => group.Count() == 1)
+            .ToDictionary(group => group.Key, group => group.Single(), StringComparer.Ordinal);
+        var factsByOriginalId = read.Facts
+            .GroupBy(fact => (fact.SourceIndexId, fact.OriginalFactId))
+            .ToDictionary(group => group.Key, group => group.ToArray());
+        var reasons = new Dictionary<string, int>(StringComparer.Ordinal);
+        var unresolved = 0;
+        foreach (var gap in graph.Gaps.Where(gap => gap.GapKind is "CompiledIlTargetUnavailable" or "CompiledIlTargetAmbiguous"))
+        {
+            if (gap.CombinedFactId is null
+                || !factsByCombinedId.TryGetValue(gap.CombinedFactId, out var call)
+                || call.FactType != FactTypes.ManagedIlCallObserved
+                || !TryUniqueFact(factsByOriginalId, call.SourceIndexId,
+                    call.Properties.GetValueOrDefault("ilBodyFactId"), out var body)
+                || body.FactType != FactTypes.ManagedIlBodyDeclared
+                || !TryUniqueFact(factsByOriginalId, call.SourceIndexId,
+                    body.Properties.GetValueOrDefault("compiledFactId"), out var caller)
+                || caller.FactType != FactTypes.ManagedMethodDeclared
+                || string.IsNullOrWhiteSpace(caller.TargetSymbol)
+                || !reached.Contains(SymbolNodeId(caller.SourceIndexId, caller.TargetSymbol)))
+                continue;
+            unresolved++;
+            var reason = gap.Reason is "same-assembly-methoddef-target-not-unique"
+                or "admitted-memberref-target-not-unique"
+                or "target-assembly-present-without-bound-provenance"
+                ? gap.Reason : "other";
+            reasons[reason] = reasons.GetValueOrDefault(reason) + 1;
+        }
+        return new CompiledIlRootDiagnostics(
+            terminalCallers.Length, terminalCallers.Count(reached.Contains), unresolved, reasons);
+    }
+
     private static void AddBoundCompiledIlEdges(EvidenceGraph graph, IReadOnlyList<CombinedFactRow> facts)
     {
         AddProjectlessPdbIdentityEdges(graph, facts);

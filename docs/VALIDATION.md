@@ -3704,6 +3704,9 @@ For a unique exact handler, it also prints bounded root-traversal counts and
 fixed edge-kind presence plus categorical graph gaps. These identify where
 the saved graph traversal stopped; graph-wide gaps can belong to unrelated
 methods, and a cycle notice does not by itself establish an omitted terminal.
+Terminal-caller reachability and unresolved IL target counts are restricted
+to the exact handler's traversed component; no private symbol or assembly
+identity is printed.
 For a saved bound scan with one source-bound `IlReaderDisagreement` and one
 source-bound `IlTextLimitExceeded`, `scripts/wil.ps1` locally replays only those
 two copied DLLs through the same independent IL readers. It validates their

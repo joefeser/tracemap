@@ -1546,13 +1546,17 @@ public sealed class MessyWorkspaceRegressionTests
             apiReport.Query.ExactFromSymbol && apiReport.Summary.SelectorCandidateCount == 1
             && apiReport.RootTraversal?.TraversedEdgeKinds.Contains("projectless-publish-method-candidate") == true
             && apiReport.RootTraversal.TraversedEdgeKinds.Contains("compiled-il-call")
+            && apiReport.RootTraversal.TerminalCallerCount == 1
+            && apiReport.RootTraversal.ReachableTerminalCallerCount == 1
             && apiReport.Paths.Any(path => path.Edges.Any(edge => edge.EdgeKind == "projectless-publish-method-candidate")
                 && path.Edges.Any(edge => edge.EdgeKind is "compiled-il-call" or "compiled-il-callvirt-candidate"
                     && edge.EvidenceTier == EvidenceTiers.Tier3SyntaxOrTextual)
                 && path.Edges.Any(edge => edge.EdgeKind == "compiled-database-api-candidate")
                 && path.Nodes.Last().SurfaceKind == "database-api"),
             $"the exact compiled chain must reach a review-only database API; paths={apiReport.Paths.Count}; "
-            + $"apiNodes={contextGraph.Nodes.Count(node => node.SurfaceKind == "database-api")}");
+            + $"apiNodes={contextGraph.Nodes.Count(node => node.SurfaceKind == "database-api")}; "
+            + $"terminalCallers={apiReport.RootTraversal?.TerminalCallerCount}; "
+            + $"reachableTerminalCallers={apiReport.RootTraversal?.ReachableTerminalCallerCount}");
         Require("MW-PUBLISH-CROSSDLL-001", "command-execute-api",
             apiReport.Paths.Any(path => path.Nodes.Last().SurfaceName == "SqlCommand.ExecuteNonQuery"
                 && path.Edges.Any(edge => edge.EdgeKind == "compiled-database-api-candidate"))
