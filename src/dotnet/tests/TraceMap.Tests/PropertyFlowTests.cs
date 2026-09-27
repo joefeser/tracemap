@@ -992,6 +992,7 @@ public sealed class PropertyFlowTests
             ["asmx-metadata"] = "legacy-communication terminal context",
             ["asmx-operation"] = "legacy-communication terminal context",
             ["asmx-service"] = "legacy-communication terminal context",
+            ["database-api"] = "data-surface terminal context",
             ["dependency-surface"] = "dependency-surface terminal context",
             ["http-client"] = null,
             ["http-route"] = null,

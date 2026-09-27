@@ -142,6 +142,18 @@ try {
         throw 'EXISTING_PUBLISH_TEST_PREFIXED_AMBIGUITY_NOT_REJECTED'
     }
     Remove-Item -LiteralPath (Join-Path $publish 'Pages/Other.compiled')
+    [IO.File]::WriteAllText((Join-Path $publish 'Pages/Other.compiled'),
+        '<preserve virtualPath="/Pages/Lookup.aspx" assembly="CompiledProjectless.VB" type="PublicProof.LookupPage" />',
+        [Text.UTF8Encoding]::new($false))
+    $captured = $null
+    try {
+        & $script -SourceSiteRoot $source -PublishedRoot $publish -PagePath 'Pages/Lookup.aspx' `
+            -OutputRoot (Join-Path $temp 'exact-and-prefixed') -PrepareOnly *> $null
+    } catch { $captured = $_.Exception.Message }
+    if ($captured -ne 'WEBFORMS_EXISTING_PUBLISH_PAGE_MAP_NOT_UNIQUE') {
+        throw 'EXISTING_PUBLISH_TEST_EXACT_AND_PREFIXED_AMBIGUITY_NOT_REJECTED'
+    }
+    Remove-Item -LiteralPath (Join-Path $publish 'Pages/Other.compiled')
     if (!$IsWindows) {
         $aliasMap = Join-Path $publish 'Pages/Alias.compiled'
         [void][IO.File]::CreateSymbolicLink($aliasMap, $map)

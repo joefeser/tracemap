@@ -3631,7 +3631,9 @@ and bounded committed page/code-behind, relevant `Web.config`, plus
 files; it is not a complete-site source scan. It matches the page map by
 exact virtual path, or by one unique application-root-prefixed
 suffix when the `.compiled` virtual path differs from the source-relative
-page path. A mapped page selects its named DLL. With no matching page map,
+page path. Uniqueness includes exact and prefixed candidates together; an
+exact match alongside a prefixed match is ambiguous and stops the probe.
+A mapped page selects its named DLL. With no matching page map,
 the mapless path selects every `App_Web_*` DLL and `App_Code` DLL, hashes and
 copies every `.compiled` map, and records an explicit Tier3 source-type
 candidate. No `App_Web_*` DLL or multiple matching maps stop the probe.
