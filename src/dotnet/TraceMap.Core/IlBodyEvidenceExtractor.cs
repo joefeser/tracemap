@@ -27,7 +27,7 @@ namespace TraceMap.Core;
 internal static class IlBodyEvidenceExtractor
 {
     internal const string SchemaVersion = "il-body-provenance.v1";
-    internal const string PolicyVersion = "explicit-il-body-evidence.v2";
+    internal const string PolicyVersion = "explicit-il-body-evidence.v3";
     internal const string IlLocationKind = "managed-il-v1";
     internal const string BodyLimitation = "IL body evidence proves only that the admitted assembly contains this exact bounded operand-aware instruction stream at this module-local method row; it does not prove execution, dispatch, reachability, behavior, source ownership, semantic equivalence, or rewrite preservation.";
     internal const string CallLimitation = "A call site records the static member reference or calli standalone signature encoded in this module's IL; a calli signature does not identify a target member. No call site proves execution, virtual dispatch resolution, target presence, cross-assembly resolution, call-graph reachability, or rewrite equivalence.";
@@ -418,9 +418,10 @@ internal static class IlBodyEvidenceExtractor
                 throw new IlEvidenceException("IlInstructionLimitExceeded");
             if (!budget.TryConsume(1))
                 throw new IlEvidenceException("IlTotalWorkLimitExceeded");
-            var operand = CecilOperand(instruction, rawIl, calls, budget, assemblyIdentity, limits);
-            instructions.Add($"{instructions.Count.ToString(CultureInfo.InvariantCulture)}:{instruction.Offset.ToString("x", CultureInfo.InvariantCulture)}:{instruction.OpCode.Name}:{operand}");
-            opcodes.Add(instruction.OpCode.Name.ToString());
+            var opcodeName = CanonicalCecilOpcodeName(instruction, rawIl);
+            var operand = CecilOperand(instruction, opcodeName, rawIl, calls, budget, assemblyIdentity, limits);
+            instructions.Add($"{instructions.Count.ToString(CultureInfo.InvariantCulture)}:{instruction.Offset.ToString("x", CultureInfo.InvariantCulture)}:{opcodeName}:{operand}");
+            opcodes.Add(opcodeName);
         }
         var locals = body.Variables
             .Select(variable => (variable.Index, Type: CecilLocalType(variable.VariableType)))
@@ -462,7 +463,31 @@ internal static class IlBodyEvidenceExtractor
             retainDiagnosticInstructions ? instructions : null);
     }
 
-    private static string CecilOperand(Instruction instruction, byte[] rawIl, List<IlCallObservation> calls, IlWorkBudget budget, string selfAssemblyIdentity, IlBodyLimits limits)
+    // Cecil and Reflection.Emit may use different display names for an opcode.
+    // Use the raw-reader name only after confirming Cecil decoded the same
+    // numeric opcode bytes at the same offset. A real opcode disagreement is
+    // left intact for the dual-reader comparison to withhold that method.
+    internal static string CanonicalCecilOpcodeName(Instruction instruction, byte[] rawIl)
+    {
+        var offset = instruction.Offset;
+        if (offset < 0 || offset >= rawIl.Length)
+            return instruction.OpCode.Name;
+        var first = rawIl[offset];
+        if (first == 0xfe)
+        {
+            if (offset + 1 >= rawIl.Length ||
+                unchecked((ushort)instruction.OpCode.Value) != (ushort)(0xfe00 | rawIl[offset + 1]))
+                return instruction.OpCode.Name;
+            return MultiByteOpcodes().TryGetValue(rawIl[offset + 1], out var opcode)
+                ? opcode.Name! : instruction.OpCode.Name;
+        }
+        if (unchecked((ushort)instruction.OpCode.Value) != first)
+            return instruction.OpCode.Name;
+        return SingleByteOpcodes().TryGetValue(first, out var single)
+            ? single.Name! : instruction.OpCode.Name;
+    }
+
+    private static string CecilOperand(Instruction instruction, string opcodeName, byte[] rawIl, List<IlCallObservation> calls, IlWorkBudget budget, string selfAssemblyIdentity, IlBodyLimits limits)
     {
         switch (instruction.OpCode.OperandType)
         {
@@ -504,20 +529,20 @@ internal static class IlBodyEvidenceExtractor
                 if (!budget.TryConsume(1))
                     throw new IlEvidenceException("IlTotalWorkLimitExceeded");
                 var target = CecilMethodTarget((MethodReference)instruction.Operand!, selfAssemblyIdentity, limits);
-                if (IsCallObservationOpcode(instruction.OpCode.Name))
-                    calls.Add(new IlCallObservation(instruction.Offset, instruction.OpCode.Name, target.Kind, target.Token, target.Identity));
+                if (IsCallObservationOpcode(opcodeName))
+                    calls.Add(new IlCallObservation(instruction.Offset, opcodeName, target.Kind, target.Token, target.Identity));
                 return $"m:{target.Kind}:{target.Token}:{target.Identity}";
             case OperandType.InlineType:
                 var typeIdentity = CecilTypeOperandIdentity((Mono.Cecil.TypeReference)instruction.Operand!);
                 if (typeIdentity.Length > limits.MaxTextLength)
                     throw new IlEvidenceException("IlTextLimitExceeded");
-                if (instruction.OpCode.Name == "constrained.")
+                if (opcodeName == "constrained.")
                 {
                     if (!budget.TryConsume(1))
                         throw new IlEvidenceException("IlTotalWorkLimitExceeded");
                     calls.Add(new IlCallObservation(
                         instruction.Offset,
-                        instruction.OpCode.Name,
+                        opcodeName,
                         "constrainedtype",
                         "-",
                         typeIdentity));
@@ -550,7 +575,7 @@ internal static class IlBodyEvidenceExtractor
                     callSite.Parameters.Select(parameter => ManagedMetadataExtractor.FormatType(parameter.ParameterType)));
                 if (cecilSignature.Length > limits.MaxTextLength)
                     throw new IlEvidenceException("IlTextLimitExceeded");
-                if (instruction.OpCode.Name == "calli")
+                if (opcodeName == "calli")
                     calls.Add(new IlCallObservation(instruction.Offset, "calli", "standalonesig",
                         RawCecilToken(callSite), cecilSignature));
                 return $"sig:{RawCecilToken(callSite)}:{cecilSignature}";
