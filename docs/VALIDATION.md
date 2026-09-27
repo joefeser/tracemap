@@ -3678,6 +3678,16 @@ categorical probe of the source-bound input. The effective IL limit is recorded
 in the scan manifest; exceeding it still withholds that input's IL evidence.
 `scripts/wp.ps1` summarizes the latest local saved probe, bound IL outcomes,
 and path gap kinds without rerunning a scan or printing source paths or names.
+`scripts/wm.ps1 -TypeName <type> -MethodName <method>` correlates a compiled
+method family with its saved IL bodies and per-assembly IL admission outcome.
+It prints counts and categorical gaps only. When the relevant assembly has
+`IlTotalWorkLimitExceeded`, `scripts/wr.ps1 -SourceSiteRoot <site-root>
+-TypeName <type> -MethodName <method>` reuses the saved receipt, binding, and
+copied publish bytes for one new scan with an explicit 20,000,000-unit IL
+budget. It writes a separate scan and exact-handler `database-api` path
+report under the same local output root. It verifies the source commit and
+copied assembly hashes before scanning; the original scan is retained. A
+larger budget changes coverage, not the evidence tier or proof of execution.
 `scripts/wp.ps1 -RecheckPathReasons` reruns only the saved path query against
 the local combined index and prints categorical published-member mismatch
 counts plus `pathRecheckArtifactIlCalls`. The latter counts exact IL references

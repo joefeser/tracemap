@@ -2,23 +2,25 @@
 param(
     [string]$OutputRoot,
     [Parameter(Mandatory)][string]$TypeName,
-    [Parameter(Mandatory)][string]$MethodName
+    [Parameter(Mandatory)][string]$MethodName,
+    [string]$ScanFolder = 'scan'
 )
 
 # Inspect one compiled method family in an existing Web Forms scan. Print counts only.
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 if ($PSVersionTable.PSVersion.Major -lt 7) { throw 'WEBFORMS_PROBE_POWERSHELL_7_REQUIRED' }
+if ($ScanFolder -cnotmatch '^scan(?:-ilwork-[0-9]+)?$') { throw 'WEBFORMS_PROBE_SCAN_FOLDER_INVALID' }
 if (!$OutputRoot) {
     $latest = Get-ChildItem -LiteralPath ([IO.Path]::GetTempPath()) -Directory |
         Where-Object { $_.Name -cmatch '^tracemap-existing-publish-[0-9a-f]{32}$' -and
-            (Test-Path -LiteralPath (Join-Path $_.FullName 'scan/facts.ndjson') -PathType Leaf) } |
+            (Test-Path -LiteralPath (Join-Path $_.FullName "$ScanFolder/facts.ndjson") -PathType Leaf) } |
         Sort-Object LastWriteTimeUtc -Descending | Select-Object -First 1
     if (!$latest) { throw 'WEBFORMS_PROBE_SCAN_UNAVAILABLE' }
     $OutputRoot = $latest.FullName
 }
-$factsPath = Join-Path $OutputRoot 'scan/facts.ndjson'
-$manifestPath = Join-Path $OutputRoot 'scan/scan-manifest.json'
+$factsPath = Join-Path $OutputRoot "$ScanFolder/facts.ndjson"
+$manifestPath = Join-Path $OutputRoot "$ScanFolder/scan-manifest.json"
 if (!(Test-Path -LiteralPath $factsPath -PathType Leaf) -or
     !(Test-Path -LiteralPath $manifestPath -PathType Leaf)) {
     throw 'WEBFORMS_PROBE_SCAN_UNAVAILABLE'

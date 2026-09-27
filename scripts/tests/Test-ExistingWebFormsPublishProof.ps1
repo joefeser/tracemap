@@ -62,6 +62,15 @@ try {
     if (!(Test-Path -LiteralPath (Join-Path $output 'handler-paths.json') -PathType Leaf)) {
         throw 'EXISTING_PUBLISH_TEST_PATH_REPORT_UNAVAILABLE'
     }
+    $replayLines = @(& (Join-Path $TraceMapRoot 'scripts/wr.ps1') `
+        -SourceSiteRoot $source -OutputRoot $output -TypeName LookupPage -MethodName Lookup_Init)
+    $replayManifest = [IO.File]::ReadAllText((Join-Path $output 'scan-ilwork-20000000/scan-manifest.json')) |
+        ConvertFrom-Json -Depth 30
+    if ($replayLines -notcontains 'replayPublishStatus=bound' -or
+        $replayManifest.ilBodyProvenance.effectiveLimits.maxTotalWorkUnits -ne 20000000 -or
+        !(Test-Path -LiteralPath (Join-Path $output 'handler-database-api-ilwork-20000000.json') -PathType Leaf)) {
+        throw 'EXISTING_PUBLISH_TEST_REPLAY_FAILED'
+    }
     $recheckLines = @(& (Join-Path $TraceMapRoot 'scripts/wp.ps1') `
         -OutputRoot $output -RecheckPathReasons)
     if (@($recheckLines | Where-Object { $_ -cmatch '^pathRecheckPaths=\d+$' }).Count -ne 1 -or
