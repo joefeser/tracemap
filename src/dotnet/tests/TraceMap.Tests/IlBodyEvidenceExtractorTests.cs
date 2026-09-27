@@ -659,6 +659,41 @@ public sealed class IlBodyEvidenceExtractorTests
         Assert.NotEmpty(IlBodyEvidenceExtractor.CompareBodies(cecil, missingBody));
         var changedAssembly = new IlBodyEvidenceExtractor.IlReaderResult("other", "module", "mvid", [body]);
         Assert.Contains("assembly", IlBodyEvidenceExtractor.CompareBodies(cecil, changedAssembly));
+
+        var agreed = body with { MetadataToken = "0x06000003" };
+        var twoBodies = new IlBodyEvidenceExtractor.IlReaderResult("assembly", "module", "mvid", [body, agreed]);
+        var oneDisputed = new IlBodyEvidenceExtractor.IlReaderResult("assembly", "module", "mvid", [changedCall, agreed]);
+        var disagreements = IlBodyEvidenceExtractor.CompareBodies(twoBodies, oneDisputed);
+        Assert.Equal(new[] { "0x06000001" }, disagreements);
+        Assert.Equal(new[] { "0x06000003" }, IlBodyEvidenceExtractor.AgreedBodies(twoBodies, disagreements)
+            .Select(item => item.MetadataToken));
+        Assert.Empty(IlBodyEvidenceExtractor.AgreedBodies(twoBodies, ["assembly"]));
+    }
+
+    [Fact]
+    public void Partial_input_emits_only_supplied_agreed_body_and_rule_backed_gap()
+    {
+        var fixture = Fixture("csharp", "CompiledEvidence.CSharp");
+        var result = Scan(new ScanOptions(fixture.Source, TempOutput(),
+            CompiledInputPaths: [fixture.Assembly], IlBodyEvidence: true));
+        var provenance = Assert.IsType<IlBodyProvenance>(result.Manifest.IlBodyProvenance);
+        var outcome = Assert.Single(provenance.Outcomes) with
+        {
+            Outcome = "partial",
+            GapKinds = ["IlReaderDisagreement"]
+        };
+        var reader = IlBodyEvidenceExtractor.ReadCecilBodies(File.ReadAllBytes(fixture.Assembly),
+            new IlBodyLimits(), new IlBodyEvidenceExtractor.IlWorkBudget(2_000_000), CancellationToken.None);
+        var agreed = Assert.Single(reader.Bodies.Take(1));
+        var evaluation = new IlBodyEvaluation(provenance with { CoverageState = "il-partial", Outcomes = [outcome] },
+            [new EvaluatedIlInput(outcome, [agreed])], [], []);
+
+        var facts = IlBodyEvidenceExtractor.MaterializeFacts(result.Manifest, evaluation, result.Facts);
+        Assert.Contains(facts, fact => fact.RuleId == RuleIds.DotNetIlGap
+            && fact.Properties.GetValueOrDefault("gapKind") == "IlReaderDisagreement");
+        var body = Assert.Single(facts, fact => fact.FactType == FactTypes.ManagedIlBodyDeclared);
+        Assert.Equal("partial", body.Properties.GetValueOrDefault("ilInputOutcome"));
+        Assert.Equal(agreed.MetadataToken, body.Properties.GetValueOrDefault("metadataToken"));
     }
 
     [Fact]
