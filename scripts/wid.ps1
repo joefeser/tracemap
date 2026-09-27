@@ -30,13 +30,20 @@ $typeMarker = '|names:' + $TypeName.Length + ':' + $TypeName + '|arity:'
 $methodMarker = '|method:' + $MethodName.Length + ':' + $MethodName + '|'
 $hashes = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
 $tokens = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+$signatures = [Collections.Generic.Dictionary[string,string]]::new([StringComparer]::OrdinalIgnoreCase)
 foreach ($line in [IO.File]::ReadLines($factsPath)) {
     if (!$line.Contains('"factType":"ManagedMethodDeclared"', [StringComparison]::Ordinal)) { continue }
     $fact = $line | ConvertFrom-Json -Depth 30
     if (!([string]$fact.targetSymbol).Contains($typeMarker, [StringComparison]::Ordinal) -or
         !([string]$fact.targetSymbol).Contains($methodMarker, [StringComparison]::Ordinal)) { continue }
     [void]$hashes.Add([string]$fact.properties.rawFileSha256)
-    [void]$tokens.Add([string]$fact.properties.metadataToken)
+    $token = [string]$fact.properties.metadataToken
+    [void]$tokens.Add($token)
+    $signature = [string]$fact.properties.signature
+    if ($signatures.ContainsKey($token) -and $signatures[$token] -cne $signature) {
+        throw 'WEBFORMS_IL_DIAG_METHOD_SIGNATURE_DISAGREEMENT'
+    }
+    $signatures[$token] = $signature
 }
 if ($hashes.Count -ne 1 -or $tokens.Count -lt 1 -or $tokens.Count -gt 64) {
     throw 'WEBFORMS_IL_DIAG_METHOD_ASSEMBLY_NOT_UNIQUE'
@@ -53,13 +60,20 @@ if (!(Test-Path -LiteralPath $path -PathType Leaf) -or
     throw 'WEBFORMS_IL_DIAG_ASSEMBLY_CHANGED'
 }
 $project = Join-Path $PSScriptRoot 'diagnostics/TraceMap.IlReaderProbe/TraceMap.IlReaderProbe.csproj'
-$tokenList = (@($tokens) | Sort-Object) -join ','
+$sortedTokens = @($tokens | Sort-Object)
+$tokenList = $sortedTokens -join ','
 $raw = @(& dotnet run --project $project -- $path 16384 $IlMaxWork $tokenList 2>&1)
 if ($LASTEXITCODE -ne 0) { throw 'WEBFORMS_IL_DIAG_RUN_FAILED' }
 $lines = @($raw | ForEach-Object { [string]$_ } | Where-Object {
-    $_ -cmatch '^ilReaderProbe[A-Za-z]+=(?:[A-Za-z0-9-]+|[0-9]+)$'
+    $_ -cmatch '^ilReaderProbe[A-Za-z0-9]+=(?:[A-Za-z0-9-]+|[0-9]+)$'
 })
 if (@($lines | Where-Object { $_ -cmatch '^ilReaderProbeStatus=' }).Count -ne 1) {
     throw 'WEBFORMS_IL_DIAG_RESULT_UNAVAILABLE'
 }
 foreach ($line in $lines) { Write-Output $line }
+for ($index = 0; $index -lt $sortedTokens.Count; $index++) {
+    $signature = $signatures[$sortedTokens[$index]]
+    Write-Output "methodOverload${index}HasArrayList=$($signature.Contains('ArrayList', [StringComparison]::Ordinal))"
+    Write-Output "methodOverload${index}HasArrayParameter=$($signature.Contains('[]', [StringComparison]::Ordinal))"
+    Write-Output "methodOverload${index}HasByRef=$($signature.Contains('&', [StringComparison]::Ordinal))"
+}
