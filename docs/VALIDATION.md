@@ -3683,7 +3683,10 @@ source-to-SQL path count. The refreshed report and its hashes stay beside the
 local receipt.
 `scripts/wp.ps1 -RecheckCompiledApi` first requires one handler fact matching
 the receipted page and handler name, then reruns one bounded `database-api`
-path query from its full source symbol against the saved combined index. It
+path query from its full source symbol against the saved combined index, with
+exact symbol matching. The ordinary `--from-symbol` path selector retains its
+substring behavior; `--exact-from-symbol` requires an identical symbol ID or
+display and records that choice in the query. It
 prints only candidate counts and categorical truncation reasons. Multiple or
 missing handler facts stop the query; multiple graph start nodes withhold the
 path count. `Truncated=True` alone does not identify
