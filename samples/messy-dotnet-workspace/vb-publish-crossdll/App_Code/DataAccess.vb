@@ -1,5 +1,6 @@
 Imports System.Data
 Imports System.Data.SqlClient
+Imports System.Collections
 Imports PublicProof.Framework
 
 Public MustInherit Class SqlBaseDA
@@ -16,6 +17,7 @@ Public Class DataAccess
 
     Public Function SelectGroups(employeeId As String) As DataSet
         Open()
-        Return SqlDA.ExecProc_DataSet("PublicFixture.GetGroupNames", employeeId)
+        Dim parameters As New ArrayList From {New SqlParameter("@employeeId", employeeId)}
+        Return SqlDA.ExecProc_DataSet("PublicFixture.GetGroupNames", parameters)
     End Function
 End Class

@@ -76,6 +76,8 @@ try {
         @($apiLines | Where-Object { $_ -cmatch '^compiledCallMemberRefs=\d+$' }).Count -ne 1 -or
         @($apiLines | Where-Object { $_ -cmatch '^compiledCall\.supportedFill=\d+$' }).Count -ne 1 -or
         @($apiLines | Where-Object { $_ -cmatch '^compiledCall\.systemDataExecute=\d+$' }).Count -ne 1 -or
+        @($apiLines | Where-Object { $_ -cmatch '^compiledCall\.otherFill=\d+$' }).Count -ne 1 -or
+        @($apiLines | Where-Object { $_ -cmatch '^compiledCall\.otherExecute=\d+$' }).Count -ne 1 -or
         @($apiLines | Where-Object { $_ -cmatch '^compiledApiPaths=\d+$' }).Count -ne 1 -or
         $apiLines -cnotcontains 'compiledApiSelectorCandidates=1' -or
         $apiLines -cnotcontains 'compiledApiStatus=unique-handler' -or

@@ -3699,6 +3699,8 @@ The recheck also counts saved `ManagedIlCallObserved` MemberRefs by fixed
 calls from other published assemblies; they diagnose terminal coverage and do
 not establish a handler path or SQL execution. Only the local receipt hashes
 the private facts input; shareable output contains category counts alone.
+`otherFill` and `otherExecute` separate calls outside the named framework
+families without exposing their assembly or type identities.
 The command does not rebuild, republish, rescan, or assert SQL source ownership.
 For a unique exact handler, it also prints bounded root-traversal counts and
 fixed edge-kind presence plus categorical graph gaps. These identify where
