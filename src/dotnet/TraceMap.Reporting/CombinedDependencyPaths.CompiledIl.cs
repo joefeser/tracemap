@@ -120,6 +120,8 @@ public static partial class CombinedDependencyPathReporter
                 continue;
 
             var targetIdentity = call.Properties.GetValueOrDefault("targetIdentity") ?? string.Empty;
+            if (referenceKind == "memberref" && IsFrameworkDataAdapterFill(targetIdentity))
+                AddCompiledDatabaseApiCandidate(graph, call, body, caller);
             var matched = referenceKind == "methoddef"
                 ? methodsByIdentity.TryGetValue((call.SourceIndexId, targetIdentity), out var targets)
                 : methodsByMemberReference.TryGetValue(targetIdentity, out targets);
@@ -163,6 +165,55 @@ public static partial class CombinedDependencyPathReporter
                 AddCompiledIlGap(graph, call, "CompiledIlArtifactContext",
                     "exact-il-target-present-without-source-commit-binding", 1);
         }
+    }
+
+    private static bool IsFrameworkDataAdapterFill(string targetIdentity) =>
+        targetIdentity.Contains("scope(assembly:name:11:System.Data|", StringComparison.Ordinal)
+        && targetIdentity.Contains("type(namespace:18:System.Data.Common|names:13:DbDataAdapter)", StringComparison.Ordinal)
+        && targetIdentity.Contains("|member:4:Fill|", StringComparison.Ordinal);
+
+    private static void AddCompiledDatabaseApiCandidate(EvidenceGraph graph, CombinedFactRow call,
+        CombinedFactRow body, CombinedFactRow caller)
+    {
+        var from = graph.GetOrAddSymbolNode(caller.SourceIndexId, caller.SourceLabel, caller.TargetSymbol!,
+            caller.FilePath, caller.StartLine, caller.EndLine, caller.RuleId, caller.EvidenceTier);
+        var terminal = new GraphNode(
+            NodeId: $"surface:compiled-database-api:{call.CombinedFactId}",
+            NodeKind: "DatabaseApiCandidate",
+            DisplayName: "compiled:DbDataAdapter.Fill",
+            SourceIndexId: call.SourceIndexId,
+            SourceLabel: call.SourceLabel,
+            ScanId: call.ScanId,
+            CommitSha: caller.Properties.GetValueOrDefault("provenanceState") == "bound" ? call.CommitSha : null,
+            SymbolId: null,
+            CombinedFactId: call.CombinedFactId,
+            RuleId: CompiledIlBridgeRuleId,
+            EvidenceTier: EvidenceTiers.Tier3SyntaxOrTextual,
+            FilePath: SafePath(call.FilePath),
+            StartLine: call.StartLine,
+            EndLine: call.EndLine,
+            SurfaceKind: "database-api",
+            SurfaceName: "DbDataAdapter.Fill",
+            HttpMethod: null,
+            NormalizedPathKey: null,
+            OperationName: "Fill",
+            TableName: null,
+            ColumnNames: null,
+            SourceKind: "compiled-il-framework-api",
+            ShapeHash: null,
+            TextHash: null,
+            TextLength: null,
+            PackageName: null,
+            ConfigKey: null,
+            SurfaceSubtype: "compiled-data-adapter-fill-candidate",
+            Limitations: ["Static IL call to a framework data adapter API; no SQL text, database provider dispatch, source line, or runtime execution is established."]);
+        graph.AddNode(terminal);
+        graph.AddEdge(new GraphEdge(
+            $"compiled-database-api:{call.CombinedFactId}", "compiled-database-api-candidate",
+            from.NodeId, terminal.NodeId, "EvidenceEdge", CompiledIlBridgeRuleId,
+            EvidenceTiers.Tier3SyntaxOrTextual,
+            [call.CombinedFactId, body.CombinedFactId, caller.CombinedFactId], [],
+            SafePath(call.FilePath), call.StartLine, call.EndLine));
     }
 
     private static void AddProjectlessPublishCandidateEdges(EvidenceGraph graph, IReadOnlyList<CombinedFactRow> facts)

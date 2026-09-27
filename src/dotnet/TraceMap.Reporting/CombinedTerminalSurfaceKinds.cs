@@ -5,6 +5,7 @@ internal static class CombinedTerminalSurfaceKinds
     public static readonly string[] All =
     [
         "sql-query",
+        "database-api",
         "sql-persistence",
         "http-route",
         "http-client",

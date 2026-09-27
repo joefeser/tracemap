@@ -2781,6 +2781,11 @@ source commit or connect it to source SQL evidence. `callvirt` is also a Tier3
 review candidate, not a proven dispatch destination. Missing or ambiguous
 admitted targets are gaps; unadmitted external assemblies are not inferred as
 absent.
+An admitted IL call to the exact framework `System.Data.Common.DbDataAdapter.Fill`
+MemberRef can terminate a `--to-surface database-api` path as a Tier3
+`compiled-database-api-candidate`. This identifies a static data-adapter API
+call only. It supplies no SQL text, database provider dispatch, source line,
+or runtime proof, and it never substitutes for a `sql-query` terminal.
 
 The public `root-generated` test proves that a bound IL walk can cross an
 excluded generated bridge to supported SQL evidence while the corresponding
@@ -3657,6 +3662,9 @@ source ownership or complete a source SQL path. A same-named provider,
 an independently rebuilt DLL with different bytes, or an unbound context DLL
 cannot complete this chain. The synthetic fixture does not attest any private
 publish or independently built historical artifact.
+The same public mapless fixture proves that an exact IL path through the
+unbound provider can instead reach the separate `database-api` candidate
+terminal while the `sql-query` path count remains zero.
 Both the initial admission probe and the bound scan use an explicit 8,192-character
 compiled metadata text limit. This is a bounded override of the general 4,096-character
 default, and the effective limit is recorded in each scan manifest. An assembly
@@ -3673,6 +3681,10 @@ counts plus `pathRecheckArtifactIlCalls`. The latter counts exact IL references
 that enter unbound artifact context as review-only candidates; it is not a
 source-to-SQL path count. The refreshed report and its hashes stay beside the
 local receipt.
+`scripts/wp.ps1 -RecheckCompiledApi` reruns one bounded `database-api` path
+query against the saved combined index and prints only the candidate path
+count, handler selector count, and truncation flag. It does not rebuild,
+republish, rescan, or assert SQL source ownership.
 For a saved bound scan with one source-bound `IlReaderDisagreement` and one
 source-bound `IlTextLimitExceeded`, `scripts/wil.ps1` locally replays only those
 two copied DLLs through the same independent IL readers. It validates their

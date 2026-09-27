@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param([string]$OutputRoot, [switch]$RecheckPathReasons)
+param([string]$OutputRoot, [switch]$RecheckPathReasons, [switch]$RecheckCompiledApi)
 
 # Summarize an existing local Web Forms compiled probe. Never starts a scan.
 Set-StrictMode -Version Latest
@@ -123,7 +123,7 @@ if (Test-Path -LiteralPath $pathReportPath -PathType Leaf) {
     Write-Output "pathPublishMemberMultiple=$multipleMembers"
 }
 
-if ($RecheckPathReasons) {
+if ($RecheckPathReasons -or $RecheckCompiledApi) {
     $combinedPath = Join-Path $OutputRoot 'combined.sqlite'
     if (!(Test-Path -LiteralPath $pathReportPath -PathType Leaf) -or
         !(Test-Path -LiteralPath $combinedPath -PathType Leaf)) {
@@ -139,9 +139,10 @@ if ($RecheckPathReasons) {
     [void][IO.Directory]::CreateDirectory($scratch)
     $recheckPath = Join-Path $scratch 'handler-paths.local.json'
     $project = Join-Path $PSScriptRoot '../src/dotnet/TraceMap.Cli/TraceMap.Cli.csproj'
+    $terminalSurface = if ($RecheckCompiledApi) { 'database-api' } else { 'sql-query' }
     & dotnet run --project $project -- paths --index $combinedPath --out $recheckPath `
         --format json --from-symbol ([string]$previous.query.fromSymbol) `
-        --to-surface sql-query --max-depth 20 --max-paths 256 *> (Join-Path $scratch 'paths.local.log')
+        --to-surface $terminalSurface --max-depth 20 --max-paths 256 *> (Join-Path $scratch 'paths.local.log')
     if ($LASTEXITCODE -ne 0 -or !(Test-Path -LiteralPath $recheckPath -PathType Leaf)) {
         throw 'WEBFORMS_PROBE_PATH_RECHECK_FAILED'
     }
@@ -166,6 +167,16 @@ if ($RecheckPathReasons) {
     [IO.File]::WriteAllText((Join-Path $scratch 'path-recheck.receipt.local.json'),
         (($receipt | ConvertTo-Json -Depth 5) + "`n"), [Text.UTF8Encoding]::new($false))
     $recheck = [IO.File]::ReadAllText($recheckPath) | ConvertFrom-Json -Depth 50
+    if ($RecheckCompiledApi) {
+        $apiPaths = @($recheck.paths | Where-Object {
+            @($_.nodes).Count -gt 0 -and $_.nodes[-1].surfaceKind -ceq 'database-api' -and
+            @($_.edges | Where-Object { $_.edgeKind -ceq 'compiled-database-api-candidate' }).Count -gt 0
+        })
+        Write-Output "compiledApiPaths=$($apiPaths.Count)"
+        Write-Output "compiledApiSelectorCandidates=$($recheck.summary.selectorCandidateCount)"
+        Write-Output "compiledApiTruncated=$($recheck.summary.truncated)"
+        return
+    }
     $memberGaps = @($recheck.gaps | Where-Object { $_.gapKind -ceq 'ProjectlessPublishMemberAmbiguous' })
     $artifactIlGaps = @($recheck.gaps | Where-Object { $_.gapKind -ceq 'CompiledIlArtifactContext' })
     Write-Output "pathRecheckPaths=$($recheck.summary.pathCount)"

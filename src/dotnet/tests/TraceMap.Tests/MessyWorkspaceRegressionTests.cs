@@ -1538,6 +1538,18 @@ public sealed class MessyWorkspaceRegressionTests
             && contextGraph.Gaps.Any(gap => gap.GapKind == "CompiledIlArtifactContext"
                 && gap.Reason == "exact-il-target-present-without-source-commit-binding"),
             "an exact IL call into an unbound DLL must be review-only with a categorical context gap");
+        var apiReport = await CombinedDependencyPathReporter.BuildReportAsync(new(contextCombined,
+            Path.Combine(temp.Path, "cross-dll-context-api-paths.json"), Format: "json",
+            FromSymbol: nodes[handlerJoin.FromNodeId].DisplayName, FromSource: "public-web",
+            ToSurface: "database-api", MaxDepth: 20, MaxPaths: 256));
+        Require("MW-PUBLISH-CROSSDLL-001", "compiled-api",
+            apiReport.Paths.Any(path => path.Edges.Any(edge => edge.EdgeKind == "projectless-publish-method-candidate")
+                && path.Edges.Any(edge => edge.EdgeKind is "compiled-il-call" or "compiled-il-callvirt-candidate"
+                    && edge.EvidenceTier == EvidenceTiers.Tier3SyntaxOrTextual)
+                && path.Edges.Any(edge => edge.EdgeKind == "compiled-database-api-candidate")
+                && path.Nodes.Last().SurfaceKind == "database-api"),
+            $"the exact compiled chain must reach a review-only database API; paths={apiReport.Paths.Count}; "
+            + $"apiNodes={contextGraph.Nodes.Count(node => node.SurfaceKind == "database-api")}");
         var contextReport = await CombinedDependencyPathReporter.BuildReportAsync(new(contextCombined,
             Path.Combine(temp.Path, "cross-dll-context-paths.json"), Format: "json",
             FromSymbol: nodes[handlerJoin.FromNodeId].DisplayName, FromSource: "public-web",
