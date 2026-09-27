@@ -66,6 +66,7 @@ try {
         -OutputRoot $output -RecheckPathReasons)
     if (@($recheckLines | Where-Object { $_ -cmatch '^pathRecheckPaths=\d+$' }).Count -ne 1 -or
         @($recheckLines | Where-Object { $_ -cmatch '^pathRecheckPublishMemberGaps=\d+$' }).Count -ne 1 -or
+        @($recheckLines | Where-Object { $_ -cmatch '^pathRecheckArtifactIlCalls=\d+$' }).Count -ne 1 -or
         $recheckLines -cnotcontains 'pathRecheckReason.other=0') {
         throw 'EXISTING_PUBLISH_TEST_PATH_RECHECK_INVALID'
     }
