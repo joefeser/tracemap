@@ -162,9 +162,7 @@ $prefixedMaps = @($mapRows | Where-Object {
     $_.VirtualPath.StartsWith('/') -and
     $_.VirtualPath -notmatch '[/\\](?:\.|\.\.)[/\\]|//|\\|[?#]'
 })
-$pageMaps = @()
-if ($exactMaps.Count -gt 0) { $pageMaps = @($exactMaps) }
-else { $pageMaps = @($prefixedMaps) }
+$pageMaps = @($exactMaps) + @($prefixedMaps)
 if ($pageMaps.Count -gt 1) {
     Write-Output "existingPublishPageMapCount=$($pageMaps.Count)"
     Write-Output "existingPublishAvailableMaps=$($maps.Count)"
