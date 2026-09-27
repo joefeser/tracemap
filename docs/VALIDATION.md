@@ -3681,10 +3681,14 @@ counts plus `pathRecheckArtifactIlCalls`. The latter counts exact IL references
 that enter unbound artifact context as review-only candidates; it is not a
 source-to-SQL path count. The refreshed report and its hashes stay beside the
 local receipt.
-`scripts/wp.ps1 -RecheckCompiledApi` reruns one bounded `database-api` path
-query against the saved combined index and prints only the candidate path
-count, handler selector count, and truncation flag. It does not rebuild,
-republish, rescan, or assert SQL source ownership.
+`scripts/wp.ps1 -RecheckCompiledApi` first requires one handler fact matching
+the receipted page and handler name, then reruns one bounded `database-api`
+path query from its full source symbol against the saved combined index. It
+prints only candidate counts and categorical truncation reasons. Multiple or
+missing handler facts stop the query; multiple graph start nodes withhold the
+path count. `Truncated=True` alone does not identify
+which bound was hit; inspect the reason counts before interpreting zero paths.
+The command does not rebuild, republish, rescan, or assert SQL source ownership.
 For a saved bound scan with one source-bound `IlReaderDisagreement` and one
 source-bound `IlTextLimitExceeded`, `scripts/wil.ps1` locally replays only those
 two copied DLLs through the same independent IL readers. It validates their
