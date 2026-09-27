@@ -431,6 +431,14 @@ public sealed class ManagedMetadataExtractorTests
         AssertGap(textLimited, "ManagedInputTextLimitExceeded");
         Assert.DoesNotContain(textLimited.Provenance!.Outcomes.SelectMany(outcome => outcome.DependencyResolutionOutcomes),
             outcome => outcome.Length > textLimited.Provenance.EffectiveLimits.MaxTextLength);
+
+        var textAdmitted = ManagedMetadataExtractor.Evaluate(repo, commit, new ScanOptions(
+            repo,
+            "unused",
+            CompiledInputPaths: [oversizedReferenceAssembly],
+            CompiledInputLimits: new CompiledInputLimits(MaxTextLength: 8_192)));
+        Assert.Single(textAdmitted.Provenance!.Outcomes);
+        Assert.Equal("admitted", textAdmitted.Provenance.Outcomes[0].Outcome);
     }
 
     [Fact]

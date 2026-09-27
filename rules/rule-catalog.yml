@@ -2513,6 +2513,7 @@ rules:
       - AnalysisGap
     limitations:
       - The receipt is operator-declared. Matching hashes and a .compiled map establish static page-to-assembly correspondence for the declared build inputs; they do not independently prove the compiler ran, source-method identity, PDB lines, deployment, page activation, or runtime execution.
+      - A virtual application-root prefix may differ from the source-relative page path only when the local preparer finds one unique suffix match and records the distinct sourcePath explicitly. The exact .compiled bytes remain unchanged; multiple candidates or a mismatched declared source path are gaps, not guessed joins.
       - Input count, file size, path, duplicate, content, commit, XML, and mapping failures withhold the entire receipt behind Tier4 gaps. No ambient publish output is discovered, and a gap never means the page or assembly is absent.
       - Raw local receipt and source/artifact hashes remain local-only. Shareable projections must not expose private paths, symbols, or commitments to raw private source artifacts.
 

@@ -16,6 +16,31 @@ namespace TraceMap.Tests;
 public sealed class IlBodyEvidenceExtractorTests
 {
     [Fact]
+    public void Cecil_opcode_name_uses_raw_name_only_for_matching_numeric_opcode()
+    {
+        var instruction = Mono.Cecil.Cil.Instruction.Create(Mono.Cecil.Cil.OpCodes.Nop);
+        Assert.Equal("nop", IlBodyEvidenceExtractor.CanonicalCecilOpcodeName(instruction, [0x00]));
+        Assert.Equal(instruction.OpCode.Name,
+            IlBodyEvidenceExtractor.CanonicalCecilOpcodeName(instruction, [0x01]));
+    }
+
+    [Fact]
+    public void InlineTok_type_spec_retains_encoded_row_when_cecil_projects_another_token()
+    {
+        var fixture = Fixture("csharp", "CompiledEvidence.CSharp");
+        using var module = CecilModuleDefinition.ReadModule(fixture.Assembly);
+        var projected = module.TypeSystem.Int32;
+        var encodedTypeSpec = new byte[] { 0xd0, 0x01, 0x00, 0x00, 0x1b };
+        Assert.Equal("0x1b000001", IlBodyEvidenceExtractor.CecilInlineTypeToken(projected, encodedTypeSpec, 1));
+
+        var encodedTypeRef = new byte[] { 0xd0, 0x01, 0x00, 0x00, 0x01 };
+        Assert.Equal(ManagedMetadataExtractor.Token(projected.MetadataToken.ToUInt32()),
+            IlBodyEvidenceExtractor.CecilInlineTypeToken(projected, encodedTypeRef, 1));
+        Assert.Throws<IlBodyEvidenceExtractor.IlEvidenceException>(() =>
+            IlBodyEvidenceExtractor.CecilInlineTypeToken(projected, encodedTypeSpec, 2));
+    }
+
+    [Fact]
     public void Admitted_fixture_emits_operand_aware_bodies_calls_and_provenance()
     {
         var fixture = Fixture("csharp", "CompiledEvidence.CSharp");
@@ -643,6 +668,41 @@ public sealed class IlBodyEvidenceExtractorTests
         Assert.NotEmpty(IlBodyEvidenceExtractor.CompareBodies(cecil, missingBody));
         var changedAssembly = new IlBodyEvidenceExtractor.IlReaderResult("other", "module", "mvid", [body]);
         Assert.Contains("assembly", IlBodyEvidenceExtractor.CompareBodies(cecil, changedAssembly));
+
+        var agreed = body with { MetadataToken = "0x06000003" };
+        var twoBodies = new IlBodyEvidenceExtractor.IlReaderResult("assembly", "module", "mvid", [body, agreed]);
+        var oneDisputed = new IlBodyEvidenceExtractor.IlReaderResult("assembly", "module", "mvid", [changedCall, agreed]);
+        var disagreements = IlBodyEvidenceExtractor.CompareBodies(twoBodies, oneDisputed);
+        Assert.Equal(new[] { "0x06000001" }, disagreements);
+        Assert.Equal(new[] { "0x06000003" }, IlBodyEvidenceExtractor.AgreedBodies(twoBodies, disagreements)
+            .Select(item => item.MetadataToken));
+        Assert.Empty(IlBodyEvidenceExtractor.AgreedBodies(twoBodies, ["assembly"]));
+    }
+
+    [Fact]
+    public void Partial_input_emits_only_supplied_agreed_body_and_rule_backed_gap()
+    {
+        var fixture = Fixture("csharp", "CompiledEvidence.CSharp");
+        var result = Scan(new ScanOptions(fixture.Source, TempOutput(),
+            CompiledInputPaths: [fixture.Assembly], IlBodyEvidence: true));
+        var provenance = Assert.IsType<IlBodyProvenance>(result.Manifest.IlBodyProvenance);
+        var outcome = Assert.Single(provenance.Outcomes) with
+        {
+            Outcome = "partial",
+            GapKinds = ["IlReaderDisagreement"]
+        };
+        var reader = IlBodyEvidenceExtractor.ReadCecilBodies(File.ReadAllBytes(fixture.Assembly),
+            new IlBodyLimits(), new IlBodyEvidenceExtractor.IlWorkBudget(2_000_000), CancellationToken.None);
+        var agreed = Assert.Single(reader.Bodies.Take(1));
+        var evaluation = new IlBodyEvaluation(provenance with { CoverageState = "il-partial", Outcomes = [outcome] },
+            [new EvaluatedIlInput(outcome, [agreed])], [], []);
+
+        var facts = IlBodyEvidenceExtractor.MaterializeFacts(result.Manifest, evaluation, result.Facts);
+        Assert.Contains(facts, fact => fact.RuleId == RuleIds.DotNetIlGap
+            && fact.Properties.GetValueOrDefault("gapKind") == "IlReaderDisagreement");
+        var body = Assert.Single(facts, fact => fact.FactType == FactTypes.ManagedIlBodyDeclared);
+        Assert.Equal("partial", body.Properties.GetValueOrDefault("ilInputOutcome"));
+        Assert.Equal(agreed.MetadataToken, body.Properties.GetValueOrDefault("metadataToken"));
     }
 
     [Fact]

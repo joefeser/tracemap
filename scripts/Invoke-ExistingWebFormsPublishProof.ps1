@@ -5,6 +5,7 @@ param(
     [string]$PagePath,
     [string]$HandlerName,
     [string[]]$AdditionalAssemblyName = @(),
+    [switch]$IncludeAllPublishedAssembliesAsContext,
     [switch]$OperatorAttestsRemainingOutOfScope,
     [switch]$FailOnUnclassifiedAssemblies,
     [string]$OutputRoot,
@@ -18,6 +19,8 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 if ($PSVersionTable.PSVersion.Major -lt 7) { throw 'WEBFORMS_EXISTING_PUBLISH_POWERSHELL_7_REQUIRED' }
+$compiledMaxText = 8192
+$ilMaxText = 16384
 
 function Read-Required([string]$Value, [string]$Prompt) {
     if (![string]::IsNullOrWhiteSpace($Value)) { return $Value.Trim() }
@@ -58,6 +61,10 @@ function Get-Sha256([string]$Path, [long]$MaximumBytes) {
 }
 
 function Read-Map([string]$Path) {
+    if (([IO.FileInfo]::new($Path)).Attributes.HasFlag([IO.FileAttributes]::ReparsePoint)) {
+        throw 'WEBFORMS_EXISTING_PUBLISH_REPARSE_POINT'
+    }
+    [void](Get-Sha256 $Path 1048576)
     $settings = [Xml.XmlReaderSettings]::new()
     $settings.DtdProcessing = [Xml.DtdProcessing]::Prohibit
     $settings.XmlResolver = $null
@@ -89,11 +96,11 @@ function Get-LinkedCodePaths([string]$MarkupPath, [string]$PageRelativePath) {
                     throw 'WEBFORMS_EXISTING_PUBLISH_LINKED_CODE_UNSAFE'
                 }
                 $linked = if ($pageDirectory) { "$pageDirectory/$relative" } else { $relative }
-                return ,@($linked)
+                return @($linked)
             }
         }
     }
-    return ,@("$PageRelativePath.vb", "$PageRelativePath.cs")
+    return @("$PageRelativePath.vb", "$PageRelativePath.cs")
 }
 
 function Resolve-PhysicalDirectoryPath([string]$Path) {
@@ -136,41 +143,63 @@ if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($sourceRepository)) {
 $dirty = @(& git -C $SourceSiteRoot status --porcelain --untracked-files=all -- .)
 if ($LASTEXITCODE -ne 0 -or $dirty.Count -ne 0) { throw 'WEBFORMS_EXISTING_PUBLISH_SOURCE_DIRTY' }
 
-# One exact page map is required. The source site, published output, and
-# compiler used to produce it are operator declarations, not build proof.
+# Zero or one exact or uniquely prefixed page map is accepted. The source site,
+# published output, and compiler used to produce it are operator declarations,
+# not build proof. A virtual-root prefix is not a source-tree directory.
 $maps = @(Get-ChildItem -LiteralPath $PublishedRoot -Recurse -File -Filter '*.compiled')
 if ($maps.Count -gt 4096) { throw 'WEBFORMS_EXISTING_PUBLISH_MAP_LIMIT' }
-$pageMaps = @($maps | Where-Object {
+$mapRows = @($maps | ForEach-Object {
     $root = Read-Map $_.FullName
-    $root.Name.LocalName -eq 'preserve' -and
-        $null -ne $root.Attribute('virtualPath') -and
-        $root.Attribute('virtualPath').Value -ceq ('/' + $PagePath)
+    if ($root.Name.LocalName -eq 'preserve' -and $null -ne $root.Attribute('virtualPath')) {
+        [pscustomobject]@{ File = $_; VirtualPath = [string]$root.Attribute('virtualPath').Value }
+    }
 })
-if ($pageMaps.Count -ne 1) {
+$suffix = '/' + $PagePath
+$exactMaps = @($mapRows | Where-Object { $_.VirtualPath -ceq $suffix })
+$prefixedMaps = @($mapRows | Where-Object {
+    $_.VirtualPath.Length -gt $suffix.Length -and
+    $_.VirtualPath.EndsWith($suffix, [StringComparison]::OrdinalIgnoreCase) -and
+    $_.VirtualPath.StartsWith('/') -and
+    $_.VirtualPath -notmatch '[/\\](?:\.|\.\.)[/\\]|//|\\|[?#]'
+})
+$pageMaps = @($exactMaps) + @($prefixedMaps)
+if ($pageMaps.Count -gt 1) {
     Write-Output "existingPublishPageMapCount=$($pageMaps.Count)"
+    Write-Output "existingPublishAvailableMaps=$($maps.Count)"
+    Write-Output "existingPublishPrefixedCandidates=$($prefixedMaps.Count)"
     throw 'WEBFORMS_EXISTING_PUBLISH_PAGE_MAP_NOT_UNIQUE'
 }
-$map = Read-Map $pageMaps[0].FullName
-$assemblyName = if ($null -eq $map.Attribute('assembly')) { '' } else { $map.Attribute('assembly').Value }
-$generatedType = if ($null -eq $map.Attribute('type')) { '' } else { $map.Attribute('type').Value }
-if ($assemblyName -cnotmatch '^[A-Za-z0-9_.-]{1,200}$' -or
-    [string]::IsNullOrWhiteSpace($generatedType)) {
-    throw 'WEBFORMS_EXISTING_PUBLISH_MAP_INVALID'
+$mapless = $pageMaps.Count -eq 0
+$virtualPath = if ($mapless) { $suffix } else { [string]$pageMaps[0].VirtualPath }
+$assemblyName = ''
+$generatedType = ''
+if (!$mapless) {
+    $map = Read-Map $pageMaps[0].File.FullName
+    $assemblyName = if ($null -eq $map.Attribute('assembly')) { '' } else { $map.Attribute('assembly').Value }
+    $generatedType = if ($null -eq $map.Attribute('type')) { '' } else { $map.Attribute('type').Value }
+    if ($assemblyName -cnotmatch '^[A-Za-z0-9_.-]{1,200}$' -or
+        [string]::IsNullOrWhiteSpace($generatedType)) {
+        throw 'WEBFORMS_EXISTING_PUBLISH_MAP_INVALID'
+    }
 }
-$mappedAssembly = Assert-Child $PublishedRoot "bin/$assemblyName.dll" 'ASSEMBLY'
+$mappedAssembly = if ($mapless) { '' } else { Assert-Child $PublishedRoot "bin/$assemblyName.dll" 'ASSEMBLY' }
 $bin = Assert-Child $PublishedRoot 'bin' 'BIN'
 $availableDlls = @(Get-ChildItem -LiteralPath $bin -File -Filter '*.dll' | Sort-Object Name)
 if ($availableDlls.Count -lt 1 -or $availableDlls.Count -gt 4096) {
     Write-Output "existingPublishDllCount=$($availableDlls.Count)"
     throw 'WEBFORMS_EXISTING_PUBLISH_ASSEMBLY_LIMIT'
 }
-if (@($availableDlls | Where-Object { $_.FullName -eq $mappedAssembly }).Count -ne 1) {
+if (!$mapless -and @($availableDlls | Where-Object { $_.FullName -eq $mappedAssembly }).Count -ne 1) {
     throw 'WEBFORMS_EXISTING_PUBLISH_MAPPED_ASSEMBLY_UNAVAILABLE'
 }
 $requestedNames = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
-[void]$requestedNames.Add([IO.Path]::GetFileName($mappedAssembly))
+if (!$mapless) { [void]$requestedNames.Add([IO.Path]::GetFileName($mappedAssembly)) }
 foreach ($file in $availableDlls) {
     if ($file.BaseName -match '^App_Code(?:[._]|$)') { [void]$requestedNames.Add($file.Name) }
+    if ($mapless -and $file.BaseName -match '^App_Web_') { [void]$requestedNames.Add($file.Name) }
+}
+if ($mapless -and @($availableDlls | Where-Object { $_.BaseName -match '^App_Web_' }).Count -eq 0) {
+    throw 'WEBFORMS_EXISTING_PUBLISH_MAPLESS_WEB_ASSEMBLY_UNAVAILABLE'
 }
 foreach ($name in $AdditionalAssemblyName) {
     if ($name -cnotmatch '^[A-Za-z0-9_.-]{1,204}\.dll$' -or
@@ -179,9 +208,15 @@ foreach ($name in $AdditionalAssemblyName) {
     }
     [void]$requestedNames.Add($name)
 }
-$dlls = @($availableDlls | Where-Object { $requestedNames.Contains($_.Name) } | Sort-Object Name)
+$dlls = @($availableDlls | Where-Object {
+    $IncludeAllPublishedAssembliesAsContext -or $requestedNames.Contains($_.Name)
+} | Sort-Object Name)
 if ($dlls.Count -lt 1 -or $dlls.Count -gt 63) { throw 'WEBFORMS_EXISTING_PUBLISH_ASSEMBLY_LIMIT' }
-$excludedDlls = @($availableDlls | Where-Object { !$requestedNames.Contains($_.Name) })
+$sourceBoundDlls = @($dlls | Where-Object { $requestedNames.Contains($_.Name) })
+$contextDlls = @($dlls | Where-Object { !$requestedNames.Contains($_.Name) })
+$excludedDlls = @($availableDlls | Where-Object {
+    !$IncludeAllPublishedAssembliesAsContext -and !$requestedNames.Contains($_.Name)
+})
 if ($excludedDlls.Count -gt 0 -and !$OperatorAttestsRemainingOutOfScope) {
     Write-Output "selectedDlls=$($dlls.Count)"
     Write-Output "unclassifiedDlls=$($excludedDlls.Count)"
@@ -198,7 +233,9 @@ $assemblyInventory = @($availableDlls | ForEach-Object {
     [ordered]@{
         path = 'bin/' + $_.Name
         sha256 = Get-Sha256 $_.FullName 67108864
-        disposition = if ($requestedNames.Contains($_.Name)) { 'selected' } else { 'operator-declared-out-of-scope' }
+        disposition = if ($requestedNames.Contains($_.Name)) { 'selected' }
+            elseif ($IncludeAllPublishedAssembliesAsContext) { 'artifact-context-no-source-commit' }
+            else { 'operator-declared-out-of-scope' }
     }
 })
 $inventoryLines = @($assemblyInventory | ForEach-Object { "$($_.path):$($_.sha256):$($_.disposition)" })
@@ -242,9 +279,82 @@ $relativeSourcePaths = @($sourceFiles | ForEach-Object {
 })
 $relativeSourcePaths = [string[]]@($relativeSourcePaths | Select-Object -Unique)
 [Array]::Sort($relativeSourcePaths, [StringComparer]::Ordinal)
+# Git's pathspec lookup can reject a tracked path when its index casing differs
+# from the Windows working tree. Read HEAD paths, then verify case aliases by blob.
+$trackedRaw = [string](& git -C $SourceSiteRoot ls-tree -r -z --name-only HEAD -- .)
+if ($LASTEXITCODE -ne 0) { throw 'WEBFORMS_EXISTING_PUBLISH_COMMIT_UNAVAILABLE' }
+$trackedComparer = if ($IsWindows) { [StringComparer]::OrdinalIgnoreCase } else { [StringComparer]::Ordinal }
+$tracked = [Collections.Generic.Dictionary[string,string]]::new($trackedComparer)
+foreach ($path in $trackedRaw.Split([char]0, [StringSplitOptions]::RemoveEmptyEntries)) {
+    if (!$tracked.TryAdd($path, $path)) { throw 'WEBFORMS_EXISTING_PUBLISH_SOURCE_TRACKING_AMBIGUOUS' }
+}
+$missingByKind = @{ page = 0; linkedCode = 0; config = 0; appCode = 0 }
+$caseAliases = [Collections.Generic.List[object]]::new()
+foreach ($path in $relativeSourcePaths) {
+    $canonical = ''
+    if (!$tracked.TryGetValue($path, [ref]$canonical)) {
+        $kind = if ($path.Equals($PagePath, [StringComparison]::OrdinalIgnoreCase)) { 'page' }
+            elseif ($path.StartsWith('App_Code/', [StringComparison]::OrdinalIgnoreCase)) { 'appCode' }
+            elseif ($path.Equals('Web.config', [StringComparison]::OrdinalIgnoreCase) -or
+                $path.EndsWith('/Web.config', [StringComparison]::OrdinalIgnoreCase)) { 'config' }
+            else { 'linkedCode' }
+        $missingByKind[$kind]++
+    } elseif ($canonical -cne $path) {
+        $kind = if ($path.Equals($PagePath, [StringComparison]::OrdinalIgnoreCase)) { 'page' }
+            elseif ($path.StartsWith('App_Code/', [StringComparison]::OrdinalIgnoreCase)) { 'appCode' }
+            elseif ($path.Equals('Web.config', [StringComparison]::OrdinalIgnoreCase) -or
+                $path.EndsWith('/Web.config', [StringComparison]::OrdinalIgnoreCase)) { 'config' }
+            else { 'linkedCode' }
+        $caseAliases.Add([pscustomobject]@{ Actual = $path; Canonical = $canonical; Kind = $kind })
+    }
+}
+$missingCount = @($missingByKind.Values | Measure-Object -Sum)[0].Sum
+if ($missingCount -gt 0) {
+    Write-Output "sourceNotCommittedCount=$missingCount"
+    Write-Output "sourceNotCommittedPageCount=$($missingByKind.page)"
+    Write-Output "sourceNotCommittedLinkedCodeCount=$($missingByKind.linkedCode)"
+    Write-Output "sourceNotCommittedConfigCount=$($missingByKind.config)"
+    Write-Output "sourceNotCommittedAppCodeCount=$($missingByKind.appCode)"
+    throw 'WEBFORMS_EXISTING_PUBLISH_SOURCE_NOT_COMMITTED'
+}
+if ($caseAliases.Count -gt 0) {
+    $gitPrefix = ([string](& git -C $SourceSiteRoot rev-parse --show-prefix)).Trim()
+    if ($LASTEXITCODE -ne 0) { throw 'WEBFORMS_EXISTING_PUBLISH_COMMIT_UNAVAILABLE' }
+    $mismatchByKind = @{ page = 0; linkedCode = 0; config = 0; appCode = 0 }
+    $hashErrorCount = 0
+    foreach ($alias in $caseAliases) {
+        $expected = ([string](& git -C $SourceSiteRoot rev-parse "HEAD:$gitPrefix$($alias.Canonical)")).Trim()
+        $expectedValid = $LASTEXITCODE -eq 0 -and $expected -cmatch '^[0-9a-f]{40}$'
+        $physical = Assert-Child $SourceSiteRoot $alias.Actual 'SOURCE'
+        $raw = ([string](& git -C $SourceSiteRoot hash-object --no-filters $physical)).Trim()
+        $rawValid = $LASTEXITCODE -eq 0 -and $raw -cmatch '^[0-9a-f]{40}$'
+        $filtered = ''
+        $filteredValid = $false
+        if ($rawValid -and $raw -cne $expected) {
+            $filtered = ([string](& git -C $SourceSiteRoot hash-object `
+                "--path=$gitPrefix$($alias.Canonical)" $physical)).Trim()
+            $filteredValid = $LASTEXITCODE -eq 0 -and $filtered -cmatch '^[0-9a-f]{40}$'
+        }
+        if (!$expectedValid -or !$rawValid -or ($raw -cne $expected -and !$filteredValid)) {
+            $hashErrorCount++
+        }
+        if (!$expectedValid -or ($raw -cne $expected -and $filtered -cne $expected)) {
+            $mismatchByKind[$alias.Kind]++
+        }
+    }
+    Write-Output "sourceTrackingCaseAliases=$($caseAliases.Count)"
+    $mismatchCount = @($mismatchByKind.Values | Measure-Object -Sum)[0].Sum
+    if ($mismatchCount -gt 0) {
+        Write-Output "sourceMismatchCount=$mismatchCount"
+        Write-Output "sourceMismatchPageCount=$($mismatchByKind.page)"
+        Write-Output "sourceMismatchLinkedCodeCount=$($mismatchByKind.linkedCode)"
+        Write-Output "sourceMismatchConfigCount=$($mismatchByKind.config)"
+        Write-Output "sourceMismatchAppCodeCount=$($mismatchByKind.appCode)"
+        Write-Output "sourceMismatchHashErrorCount=$hashErrorCount"
+        throw 'WEBFORMS_EXISTING_PUBLISH_SOURCE_MISMATCH'
+    }
+}
 $sourceRows = @($relativeSourcePaths | ForEach-Object {
-    & git -C $SourceSiteRoot ls-files --error-unmatch -- $_ *> $null
-    if ($LASTEXITCODE -ne 0) { throw 'WEBFORMS_EXISTING_PUBLISH_SOURCE_NOT_COMMITTED' }
     [ordered]@{ path = $_; sha256 = Get-Sha256 (Assert-Child $SourceSiteRoot $_ 'SOURCE') 67108864 }
 })
 if ($sourceRows.Count -gt 256) { throw 'WEBFORMS_EXISTING_PUBLISH_SOURCE_LIMIT' }
@@ -279,22 +389,43 @@ foreach ($file in $dlls) {
     }
     $publishedRows.Add([ordered]@{ path = $relative; sha256 = $sourceHash; kind = 'assembly' })
 }
-$mapRelative = [IO.Path]::GetRelativePath($PublishedRoot, $pageMaps[0].FullName).Replace('\', '/')
-$mapSource = Assert-Child $PublishedRoot $mapRelative 'MAP'
-$mapDestination = Join-Path $output $mapRelative
-[void][IO.Directory]::CreateDirectory((Split-Path -Parent $mapDestination))
-[IO.File]::Copy($mapSource, $mapDestination)
-$mapHash = Get-Sha256 $mapSource 1048576
-if ((Get-Sha256 $mapDestination 1048576) -cne $mapHash) {
-    throw 'WEBFORMS_EXISTING_PUBLISH_COPY_MISMATCH'
+$mapHash = 'mapless-source-type-candidate'
+if (!$mapless) {
+    $mapRelative = [IO.Path]::GetRelativePath($PublishedRoot, $pageMaps[0].File.FullName).Replace('\', '/')
+    $mapSource = Assert-Child $PublishedRoot $mapRelative 'MAP'
+    $mapDestination = Join-Path $output $mapRelative
+    [void][IO.Directory]::CreateDirectory((Split-Path -Parent $mapDestination))
+    [IO.File]::Copy($mapSource, $mapDestination)
+    $mapHash = Get-Sha256 $mapSource 1048576
+    if ((Get-Sha256 $mapDestination 1048576) -cne $mapHash) {
+        throw 'WEBFORMS_EXISTING_PUBLISH_COPY_MISMATCH'
+    }
+    $publishedRows.Add([ordered]@{ path = $mapRelative; sha256 = $mapHash; kind = 'compiled-map' })
+} else {
+    foreach ($file in $maps) {
+        $relative = [IO.Path]::GetRelativePath($PublishedRoot, $file.FullName).Replace('\', '/')
+        $source = Assert-Child $PublishedRoot $relative 'MAP'
+        $destination = Join-Path $output $relative
+        [void][IO.Directory]::CreateDirectory((Split-Path -Parent $destination))
+        [IO.File]::Copy($source, $destination)
+        $hash = Get-Sha256 $source 1048576
+        if ((Get-Sha256 $destination 1048576) -cne $hash) {
+            throw 'WEBFORMS_EXISTING_PUBLISH_COPY_MISMATCH'
+        }
+        $publishedRows.Add([ordered]@{ path = $relative; sha256 = $hash; kind = 'compiled-map' })
+    }
 }
-$publishedRows.Add([ordered]@{ path = $mapRelative; sha256 = $mapHash; kind = 'compiled-map' })
+$mapInventoryLines = [string[]]@($publishedRows | Where-Object { $_.kind -eq 'compiled-map' } |
+    ForEach-Object { "$($_.path):$($_.sha256)" })
+[Array]::Sort($mapInventoryLines, [StringComparer]::Ordinal)
+$mapInventorySha256 = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData(
+    [Text.Encoding]::UTF8.GetBytes(($mapInventoryLines -join "`n") + "`n"))).ToLowerInvariant()
 
 $receiptGeneratorSha256 = Get-Sha256 $PSCommandPath 1048576
 $sourceRepositorySha256 = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData(
     [Text.Encoding]::UTF8.GetBytes($sourceRepository))).ToLowerInvariant()
 $receiptInputSha256 = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData(
-    [Text.Encoding]::UTF8.GetBytes("source:$sourceRepositorySha256`ncommit:$sourceCommit`nsource:$boundedInputSha256`nassemblies:$assemblyInventorySha256`nmap:$mapHash`n"))).ToLowerInvariant()
+    [Text.Encoding]::UTF8.GetBytes("source:$sourceRepositorySha256`ncommit:$sourceCommit`nsource:$boundedInputSha256`nassemblies:$assemblyInventorySha256`nmaps:$mapInventorySha256`n"))).ToLowerInvariant()
 # Existing output cannot identify its true compiler. This is an explicit
 # unknown marker, not an attribution to the public test compiler.
 $compilerSha256 = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData(
@@ -310,13 +441,17 @@ $receipt = [ordered]@{
     receiptInputSha256 = $receiptInputSha256
     assemblyInventorySha256 = $assemblyInventorySha256
     assemblyInventory = $assemblyInventory
+    publishedMapCount = $maps.Count
+    mapInventorySha256 = $mapInventorySha256
     sourceFiles = $sourceRows
     publishedFiles = @($publishedRows)
     pages = @([ordered]@{
-        virtualPath = '/' + $PagePath
-        assembly = $assemblyName
-        generatedType = $generatedType
-        mapPath = $mapRelative
+        virtualPath = $virtualPath
+        sourcePath = $PagePath
+        assembly = if ($mapless) { $null } else { $assemblyName }
+        generatedType = if ($mapless) { $null } else { $generatedType }
+        mapPath = if ($mapless) { $null } else { $mapRelative }
+        bindingKind = if ($mapless) { 'mapless-source-type-candidate' } else { $null }
     })
 }
 $receiptPath = Join-Path $output 'publish-receipt.local.json'
@@ -327,9 +462,12 @@ Write-Output "sourceCommitSha=$sourceCommit"
 Write-Output "sourceFiles=$($sourceRows.Count)"
 Write-Output "availableDlls=$($availableDlls.Count)"
 Write-Output "selectedDlls=$($dlls.Count)"
+Write-Output "sourceCommitDlls=$($sourceBoundDlls.Count)"
+Write-Output "artifactContextDlls=$($contextDlls.Count)"
 Write-Output "excludedDlls=$($excludedDlls.Count)"
-Write-Output 'scope=selected-published-assemblies-only;no-complete-publish-claim'
-Write-Output 'matchedPageMaps=1'
+Write-Output "scope=$($(if ($IncludeAllPublishedAssembliesAsContext) { 'all-published-assemblies-artifact-context' } else { 'selected-published-assemblies-only' }));no-complete-publish-claim"
+Write-Output "matchedPageMaps=$($pageMaps.Count)"
+Write-Output "pageMapMatch=$($(if ($mapless) { 'mapless' } elseif ($exactMaps.Count -gt 0) { 'exact' } else { 'unique-prefixed' }))"
 Write-Output "boundedInputSha256=$boundedInputSha256"
 Write-Output 'compilerProvenance=unavailable-existing-output'
 Write-Output 'claim=operator-declared-publish-bytes;review-only-candidates;no-build-or-runtime-proof'
@@ -340,11 +478,16 @@ function Invoke-CompiledScan([string]$ScanPath, [string]$LogPath, [string]$Bindi
     $arguments = [Collections.Generic.List[string]]::new()
     foreach ($argument in @('run', '--project', (Join-Path $TraceMapRoot 'src/dotnet/TraceMap.Cli'),
             '--', 'scan', '--repo', $SourceSiteRoot, '--out', $ScanPath,
-            '--webforms-publish-receipt', $receiptPath, '--compiled-max-artifacts', '64')) {
+            '--webforms-publish-receipt', $receiptPath, '--compiled-max-artifacts', '64',
+            '--compiled-max-text', [string]$compiledMaxText)) {
         $arguments.Add($argument)
     }
     if ($BindingPath) { $arguments.Add('--compiled-binding-receipt'); $arguments.Add($BindingPath) }
-    if ($IncludeIl) { $arguments.Add('--il-body-evidence') }
+    if ($IncludeIl) {
+        $arguments.Add('--il-body-evidence')
+        $arguments.Add('--il-max-text')
+        $arguments.Add([string]$ilMaxText)
+    }
     foreach ($file in $dlls) {
         $arguments.Add('--compiled-input')
         $arguments.Add((Join-Path $output ('bin/' + $file.Name)))
@@ -378,14 +521,40 @@ if ($probe.webFormsPublishProvenance.status -ne 'bound') {
     return
 }
 
+# External compiled inputs receive a hash-prefixed safe locator. Join the
+# probe to the copied inventory by bytes, and refuse duplicate hashes because
+# they cannot identify which inventory disposition an outcome belongs to.
+$scannedInventory = @($assemblyInventory | Where-Object {
+    $_.disposition -eq 'selected' -or $_.disposition -eq 'artifact-context-no-source-commit'
+})
+$scannedHashes = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+$selectedHashes = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+$uniqueInventory = $true
+foreach ($item in $scannedInventory) {
+    if (!$scannedHashes.Add([string]$item.sha256)) { $uniqueInventory = $false }
+    if ($item.disposition -eq 'selected') { [void]$selectedHashes.Add([string]$item.sha256) }
+}
+$probeHashes = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+$uniqueProbe = $true
+foreach ($item in $probeOutcomes) {
+    if (!$probeHashes.Add([string]$item.rawFileSha256)) { $uniqueProbe = $false }
+}
+if (!$uniqueInventory -or !$uniqueProbe -or $scannedHashes.Count -ne $probeHashes.Count -or
+    @($probeOutcomes | Where-Object { !$scannedHashes.Contains([string]$_.rawFileSha256) }).Count -ne 0) {
+    Write-Output 'existingPublishScan=gap;reason=compiled-inventory-join'
+    return
+}
+
 if (!$OperatorAttestsExactSourceCommit) {
-    $answer = Read-Host 'Do you attest the selected published DLLs were built from this exact clean source commit? Type YES to continue'
-    if ($answer -cne 'YES') {
+    $answer = Read-Host 'Do you attest the source-commit DLLs (excluding artifact context) were built from this exact clean source commit? Type YES to continue'
+    if ($answer.Trim() -ine 'YES') {
         Write-Output 'existingPublishScan=stopped;reason=exact-source-commit-not-attested'
         return
     }
 }
-$bindings = @($probeOutcomes | ForEach-Object {
+$bindings = @($probeOutcomes | Where-Object {
+    $selectedHashes.Contains([string]$_.rawFileSha256)
+} | ForEach-Object {
     [ordered]@{
         schemaVersion = 'compiled-input-binding.v1'
         safeLocator = [string]$_.safeLocator
@@ -403,7 +572,7 @@ $bindingInputLines = @($bindings | Sort-Object safeLocator | ForEach-Object {
 $bindingInputLines += "source:$boundedInputSha256"
 $bindingInputLines += "source-repository:$sourceRepositorySha256"
 $bindingInputLines += "assembly-inventory:$assemblyInventorySha256"
-$bindingInputLines += "page-map:$mapHash"
+$bindingInputLines += "map-inventory:$mapInventorySha256"
 $bindingInputSha256 = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData(
     [Text.Encoding]::UTF8.GetBytes(($bindingInputLines -join "`n") + "`n"))).ToLowerInvariant()
 [IO.File]::WriteAllText($bindingPath,
@@ -419,14 +588,24 @@ $scanPath = Join-Path $output 'scan'
 $manifest = Invoke-CompiledScan $scanPath (Join-Path $output 'scan.local.log') $bindingPath $true
 $status = [string]$manifest.webFormsPublishProvenance.status
 $boundCount = @($manifest.compiledInputProvenance.outcomes | Where-Object { $_.provenanceState -eq 'bound' }).Count
-$ilGaps = @($manifest.ilBodyProvenance.outcomes | Where-Object { @($_.gapKinds).Count -gt 0 }).Count
-Write-Output "existingPublishScan=$status"
+$contextUnboundCount = @($manifest.compiledInputProvenance.outcomes | Where-Object {
+    $_.provenanceState -eq 'unbound' -and
+    $scannedHashes.Contains([string]$_.rawFileSha256) -and
+    !$selectedHashes.Contains([string]$_.rawFileSha256)
+}).Count
+$ilGaps = @($manifest.ilBodyProvenance.outcomes | Where-Object {
+    @($_.gapKinds).Count -gt 0 -and
+    $selectedHashes.Contains([string]$_.rawFileSha256)
+}).Count
+Write-Output "existingPublishScan=$($(if ($status -eq 'bound' -and $contextDlls.Count -gt 0) { 'bound-with-unbound-context' } else { $status }))"
 Write-Output "compiledBoundInputs=$boundCount"
+Write-Output "compiledContextUnboundInputs=$contextUnboundCount"
 Write-Output "compiledCoverage=$($manifest.compiledInputProvenance.coverageState)"
 Write-Output "ilCoverage=$($manifest.ilBodyProvenance.coverageState)"
 Write-Output "ilInputsWithGaps=$ilGaps"
 Write-Output "publishGapKinds=$(@($manifest.webFormsPublishProvenance.gapKinds).Count)"
-if ($status -ne 'bound' -or $boundCount -ne $dlls.Count -or $ilGaps -ne 0) {
+if ($status -ne 'bound' -or $boundCount -ne $sourceBoundDlls.Count -or
+    $contextUnboundCount -ne $contextDlls.Count -or $ilGaps -ne 0) {
     Write-Output 'existingPublishPaths=withheld;reason=incomplete-compiled-evidence'
     return
 }
@@ -447,5 +626,10 @@ if ($HandlerName) {
     if ($LASTEXITCODE -ne 0) { throw 'WEBFORMS_EXISTING_PUBLISH_PATHS_FAILED' }
     $report = [IO.File]::ReadAllText($paths) | ConvertFrom-Json -Depth 50
     Write-Output "sqlQueryPaths=$(@($report.paths).Count)"
+    $sourceJoinPaths = @($report.paths | Where-Object {
+        @($_.edges.edgeKind) -contains 'projectless-publish-method-candidate'
+    }).Count
+    Write-Output "sourceJoinPaths=$sourceJoinPaths"
+    Write-Output "existingPublishPaths=$($(if ($sourceJoinPaths -gt 0) { 'review-candidate' } else { 'gap' }))"
     Write-Output "pathGaps=$(@($report.gaps).Count)"
 }

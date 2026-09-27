@@ -8,6 +8,74 @@ public static partial class CombinedDependencyPathReporter
     private const string ProjectlessPdbIdentityRuleId = "combined.paths.projectless-pdb-identity.v1";
     private const string ProjectlessPublishCandidateRuleId = "combined.paths.projectless-publish-candidate.v1";
 
+    private sealed record CompiledIlRootDiagnostics(int TerminalCallerCount, int ReachableTerminalCallerCount,
+        int ReachableUnresolvedIlCallCount, IReadOnlyDictionary<string, int> ReachableUnresolvedIlCallsByReason,
+        int ReachableFillMemberRefCount, int ReachableUnrecognizedFillMemberRefCount);
+
+    private static CompiledIlRootDiagnostics
+        SummarizeCompiledIlRootDiagnostics(CombinedReadResult read, EvidenceGraph graph,
+            IReadOnlySet<string> reachedNodeIds, string rootNodeId)
+    {
+        var reached = reachedNodeIds.Append(rootNodeId).ToHashSet(StringComparer.Ordinal);
+        var terminalCallers = graph.Edges
+            .Where(edge => edge.EdgeKind == "compiled-database-api-candidate")
+            .Select(edge => edge.FromNodeId).Distinct(StringComparer.Ordinal).ToArray();
+        var factsByCombinedId = read.Facts.GroupBy(fact => fact.CombinedFactId, StringComparer.Ordinal)
+            .Where(group => group.Count() == 1)
+            .ToDictionary(group => group.Key, group => group.Single(), StringComparer.Ordinal);
+        var factsByOriginalId = read.Facts
+            .GroupBy(fact => (fact.SourceIndexId, fact.OriginalFactId))
+            .ToDictionary(group => group.Key, group => group.ToArray());
+        var reasons = new Dictionary<string, int>(StringComparer.Ordinal);
+        var unresolved = 0;
+        var reachableFill = 0;
+        var reachableUnrecognizedFill = 0;
+        foreach (var call in read.Facts.Where(fact => fact.FactType == FactTypes.ManagedIlCallObserved
+                     && fact.Properties.GetValueOrDefault("referenceKind") == "memberref"
+                     && (fact.Properties.GetValueOrDefault("targetIdentity") ?? string.Empty)
+                         .Contains("|member:4:Fill|", StringComparison.Ordinal)))
+        {
+            if (!TryUniqueFact(factsByOriginalId, call.SourceIndexId,
+                    call.Properties.GetValueOrDefault("ilBodyFactId"), out var body)
+                || body.FactType != FactTypes.ManagedIlBodyDeclared
+                || !TryUniqueFact(factsByOriginalId, call.SourceIndexId,
+                    body.Properties.GetValueOrDefault("compiledFactId"), out var caller)
+                || caller.FactType != FactTypes.ManagedMethodDeclared
+                || string.IsNullOrWhiteSpace(caller.TargetSymbol)
+                || call.Properties.GetValueOrDefault("rawFileSha256") != body.Properties.GetValueOrDefault("rawFileSha256")
+                || body.Properties.GetValueOrDefault("rawFileSha256") != caller.Properties.GetValueOrDefault("rawFileSha256")
+                || !reached.Contains(SymbolNodeId(caller.SourceIndexId, caller.TargetSymbol)))
+                continue;
+            reachableFill++;
+            if (!TryFrameworkDatabaseApi(call.Properties.GetValueOrDefault("targetIdentity")!, out _))
+                reachableUnrecognizedFill++;
+        }
+        foreach (var gap in graph.Gaps.Where(gap => gap.GapKind is "CompiledIlTargetUnavailable" or "CompiledIlTargetAmbiguous"))
+        {
+            if (gap.CombinedFactId is null
+                || !factsByCombinedId.TryGetValue(gap.CombinedFactId, out var call)
+                || call.FactType != FactTypes.ManagedIlCallObserved
+                || !TryUniqueFact(factsByOriginalId, call.SourceIndexId,
+                    call.Properties.GetValueOrDefault("ilBodyFactId"), out var body)
+                || body.FactType != FactTypes.ManagedIlBodyDeclared
+                || !TryUniqueFact(factsByOriginalId, call.SourceIndexId,
+                    body.Properties.GetValueOrDefault("compiledFactId"), out var caller)
+                || caller.FactType != FactTypes.ManagedMethodDeclared
+                || string.IsNullOrWhiteSpace(caller.TargetSymbol)
+                || !reached.Contains(SymbolNodeId(caller.SourceIndexId, caller.TargetSymbol)))
+                continue;
+            unresolved++;
+            var reason = gap.Reason is "same-assembly-methoddef-target-not-unique"
+                or "admitted-memberref-target-not-unique"
+                or "target-assembly-present-without-bound-provenance"
+                ? gap.Reason : "other";
+            reasons[reason] = reasons.GetValueOrDefault(reason) + 1;
+        }
+        return new CompiledIlRootDiagnostics(
+            terminalCallers.Length, terminalCallers.Count(reached.Contains), unresolved, reasons,
+            reachableFill, reachableUnrecognizedFill);
+    }
+
     private static void AddBoundCompiledIlEdges(EvidenceGraph graph, IReadOnlyList<CombinedFactRow> facts)
     {
         AddProjectlessPdbIdentityEdges(graph, facts);
@@ -27,13 +95,20 @@ public static partial class CombinedDependencyPathReporter
             .GroupBy(fact => (fact.SourceIndexId, fact.TargetSymbol!))
             .ToDictionary(group => group.Key, group => group.ToArray());
         var methodsByMemberReference = methods
-            .Where(fact => fact.Properties.GetValueOrDefault("provenanceState") == "bound")
+            .Where(fact => fact.Properties.GetValueOrDefault("provenanceState") is "bound" or "unbound")
             .Select(fact => (Fact: fact, Reference: ExpectedMemberReference(fact)))
             .Where(item => item.Reference is not null)
             .GroupBy(item => item.Reference!, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.Select(item => item.Fact).ToArray(), StringComparer.Ordinal);
         var admittedReferencePrefixes = methods
             .Where(fact => fact.Properties.GetValueOrDefault("provenanceState") == "bound")
+            .Select(fact => fact.Properties.GetValueOrDefault("assemblyReferenceIdentity"))
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Select(value => "memberref|type:scope(" + value + ")type(")
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        var unboundReferencePrefixes = methods
+            .Where(fact => fact.Properties.GetValueOrDefault("provenanceState") != "bound")
             .Select(fact => fact.Properties.GetValueOrDefault("assemblyReferenceIdentity"))
             .Where(value => !string.IsNullOrWhiteSpace(value))
             .Select(value => "memberref|type:scope(" + value + ")type(")
@@ -104,7 +179,7 @@ public static partial class CombinedDependencyPathReporter
                 || !TryUniqueFact(factsByOriginalId, call.SourceIndexId,
                     body.Properties.GetValueOrDefault("compiledFactId"), out var caller)
                 || caller.FactType != FactTypes.ManagedMethodDeclared
-                || caller.Properties.GetValueOrDefault("provenanceState") != "bound"
+                || caller.Properties.GetValueOrDefault("provenanceState") is not ("bound" or "unbound")
                 || string.IsNullOrWhiteSpace(body.Properties.GetValueOrDefault("ilBoundedInputSha256"))
                 || string.IsNullOrWhiteSpace(body.Properties.GetValueOrDefault("ilGeneratorSha256"))
                 || string.IsNullOrWhiteSpace(body.Properties.GetValueOrDefault("rawFileSha256"))
@@ -113,6 +188,8 @@ public static partial class CombinedDependencyPathReporter
                 continue;
 
             var targetIdentity = call.Properties.GetValueOrDefault("targetIdentity") ?? string.Empty;
+            if (referenceKind == "memberref" && TryFrameworkDatabaseApi(targetIdentity, out var api))
+                AddCompiledDatabaseApiCandidate(graph, call, body, caller, api);
             var matched = referenceKind == "methoddef"
                 ? methodsByIdentity.TryGetValue((call.SourceIndexId, targetIdentity), out var targets)
                 : methodsByMemberReference.TryGetValue(targetIdentity, out targets);
@@ -127,39 +204,138 @@ public static partial class CombinedDependencyPathReporter
                         referenceKind == "methoddef" ? "same-assembly-methoddef-target-not-unique" : "admitted-memberref-target-not-unique",
                         targets?.Length);
                 }
+                else if (unboundReferencePrefixes.Any(prefix => targetIdentity.StartsWith(prefix, StringComparison.Ordinal)))
+                {
+                    AddCompiledIlGap(graph, call, "CompiledIlTargetUnavailable",
+                        "target-assembly-present-without-bound-provenance", null);
+                }
                 continue;
             }
 
             var target = targets[0];
-            if (target.Properties.GetValueOrDefault("provenanceState") != "bound")
+            var targetProvenance = target.Properties.GetValueOrDefault("provenanceState");
+            if (targetProvenance is not ("bound" or "unbound"))
                 continue;
             var from = graph.GetOrAddSymbolNode(caller.SourceIndexId, caller.SourceLabel, caller.TargetSymbol!,
                 caller.FilePath, caller.StartLine, caller.EndLine, caller.RuleId, caller.EvidenceTier);
             var to = graph.GetOrAddSymbolNode(target.SourceIndexId, target.SourceLabel, target.TargetSymbol!,
                 target.FilePath, target.StartLine, target.EndLine, target.RuleId, target.EvidenceTier);
             var virtualCandidate = opcode == "callvirt";
+            var artifactContext = caller.Properties.GetValueOrDefault("provenanceState") != "bound"
+                || targetProvenance != "bound";
             graph.AddEdge(new GraphEdge(
                 $"compiled-il-call:{call.CombinedFactId}", virtualCandidate ? "compiled-il-callvirt-candidate" : "compiled-il-call",
                 from.NodeId, to.NodeId, "EvidenceEdge", CompiledIlBridgeRuleId,
-                virtualCandidate ? EvidenceTiers.Tier3SyntaxOrTextual : EvidenceTiers.Tier2Structural,
+                artifactContext || virtualCandidate ? EvidenceTiers.Tier3SyntaxOrTextual : EvidenceTiers.Tier2Structural,
                 [call.CombinedFactId, body.CombinedFactId, caller.CombinedFactId, target.CombinedFactId],
                 [], SafePath(call.FilePath), call.StartLine, call.EndLine));
+            if (artifactContext)
+                AddCompiledIlGap(graph, call, "CompiledIlArtifactContext",
+                    "exact-il-target-present-without-source-commit-binding", 1);
         }
+    }
+
+    private static bool TryFrameworkDatabaseApi(string targetIdentity, out string api)
+    {
+        api = string.Empty;
+        if (!targetIdentity.StartsWith("memberref|type:scope(assembly:name:11:System.Data|", StringComparison.Ordinal))
+            return false;
+        var memberStart = targetIdentity.IndexOf("|member:", StringComparison.Ordinal);
+        if (memberStart < 0)
+            return false;
+        var declaringType = targetIdentity[..memberStart];
+        if (HasType("System.Data.Common", "DbDataAdapter") && HasMember("Fill"))
+        {
+            api = "DbDataAdapter.Fill";
+            return true;
+        }
+        var commandType = new[]
+        {
+            (Namespace: "System.Data.Common", Name: "DbCommand"),
+            (Namespace: "System.Data", Name: "IDbCommand"),
+            (Namespace: "System.Data.SqlClient", Name: "SqlCommand"),
+            (Namespace: "System.Data.Odbc", Name: "OdbcCommand"),
+            (Namespace: "System.Data.OleDb", Name: "OleDbCommand")
+        }.FirstOrDefault(type => HasType(type.Namespace, type.Name));
+        if (commandType.Name is null)
+            return false;
+        foreach (var method in new[] { "ExecuteReader", "ExecuteNonQuery", "ExecuteScalar" })
+        {
+            if (!HasMember(method))
+                continue;
+            api = $"{commandType.Name}.{method}";
+            return true;
+        }
+        return false;
+
+        bool HasType(string ns, string name) => declaringType.EndsWith(
+            $"type(namespace:{ns.Length}:{ns}|names:{name.Length}:{name})", StringComparison.Ordinal);
+        bool HasMember(string name) => targetIdentity.AsSpan(memberStart).StartsWith(
+            $"|member:{name.Length}:{name}|", StringComparison.Ordinal);
+    }
+
+    private static void AddCompiledDatabaseApiCandidate(EvidenceGraph graph, CombinedFactRow call,
+        CombinedFactRow body, CombinedFactRow caller, string api)
+    {
+        var from = graph.GetOrAddSymbolNode(caller.SourceIndexId, caller.SourceLabel, caller.TargetSymbol!,
+            caller.FilePath, caller.StartLine, caller.EndLine, caller.RuleId, caller.EvidenceTier);
+        var terminal = new GraphNode(
+            NodeId: $"surface:compiled-database-api:{call.CombinedFactId}",
+            NodeKind: "DatabaseApiCandidate",
+            DisplayName: $"compiled:{api}",
+            SourceIndexId: call.SourceIndexId,
+            SourceLabel: call.SourceLabel,
+            ScanId: call.ScanId,
+            CommitSha: caller.Properties.GetValueOrDefault("provenanceState") == "bound" ? call.CommitSha : null,
+            SymbolId: null,
+            CombinedFactId: call.CombinedFactId,
+            RuleId: CompiledIlBridgeRuleId,
+            EvidenceTier: EvidenceTiers.Tier3SyntaxOrTextual,
+            FilePath: SafePath(call.FilePath),
+            StartLine: call.StartLine,
+            EndLine: call.EndLine,
+            SurfaceKind: "database-api",
+            SurfaceName: api,
+            HttpMethod: null,
+            NormalizedPathKey: null,
+            OperationName: api[(api.LastIndexOf('.') + 1)..],
+            TableName: null,
+            ColumnNames: null,
+            SourceKind: "compiled-il-framework-api",
+            ShapeHash: null,
+            TextHash: null,
+            TextLength: null,
+            PackageName: null,
+            ConfigKey: null,
+            SurfaceSubtype: api == "DbDataAdapter.Fill"
+                ? "compiled-data-adapter-fill-candidate" : "compiled-command-execute-candidate",
+            Limitations: ["Static IL call to a framework database API; no SQL text, database provider dispatch, source line, or runtime execution is established."]);
+        graph.AddNode(terminal);
+        graph.AddEdge(new GraphEdge(
+            $"compiled-database-api:{call.CombinedFactId}", "compiled-database-api-candidate",
+            from.NodeId, terminal.NodeId, "EvidenceEdge", CompiledIlBridgeRuleId,
+            EvidenceTiers.Tier3SyntaxOrTextual,
+            [call.CombinedFactId, body.CombinedFactId, caller.CombinedFactId], [],
+            SafePath(call.FilePath), call.StartLine, call.EndLine));
     }
 
     private static void AddProjectlessPublishCandidateEdges(EvidenceGraph graph, IReadOnlyList<CombinedFactRow> facts)
     {
-        var maps = facts.Where(fact => fact.FactType == FactTypes.WebFormsPublishPageMapped
+        var maps = facts.Where(fact => (fact.FactType == FactTypes.WebFormsPublishPageMapped
                 && fact.RuleId == RuleIds.LegacyWebFormsPublishMap
                 && fact.EvidenceTier == EvidenceTiers.Tier2Structural)
+                || (fact.FactType == FactTypes.WebFormsPublishPageCandidate
+                && fact.RuleId == RuleIds.LegacyWebFormsPublishMap
+                && fact.EvidenceTier == EvidenceTiers.Tier3SyntaxOrTextual))
             .OrderBy(fact => fact.CombinedFactId, StringComparer.Ordinal).ToArray();
         foreach (var map in maps)
         {
+            var mapless = map.FactType == FactTypes.WebFormsPublishPageCandidate;
             var sourcePath = map.Properties.GetValueOrDefault("sourcePath");
             var rawSha = map.Properties.GetValueOrDefault("assemblyRawSha256");
             var generatedType = map.Properties.GetValueOrDefault("generatedType");
             if (string.IsNullOrWhiteSpace(sourcePath) || sourcePath != map.FilePath
-                || string.IsNullOrWhiteSpace(rawSha) || string.IsNullOrWhiteSpace(generatedType)
+                || (!mapless && (string.IsNullOrWhiteSpace(rawSha) || string.IsNullOrWhiteSpace(generatedType)))
                 || string.IsNullOrWhiteSpace(map.Properties.GetValueOrDefault("boundedInputSha256"))
                 || string.IsNullOrWhiteSpace(map.Properties.GetValueOrDefault("generatorSha256")))
                 continue;
@@ -175,27 +351,51 @@ public static partial class CombinedDependencyPathReporter
                 continue;
             }
 
+            var boundHashes = facts.Where(fact => fact.SourceIndexId == map.SourceIndexId
+                    && fact.FactType == FactTypes.WebFormsPublishAssemblyBound
+                    && fact.RuleId == RuleIds.LegacyWebFormsPublishMap
+                    && fact.Properties.GetValueOrDefault("boundedInputSha256") == map.Properties.GetValueOrDefault("boundedInputSha256")
+                    && fact.Properties.GetValueOrDefault("generatorSha256") == map.Properties.GetValueOrDefault("generatorSha256"))
+                .Select(fact => fact.Properties.GetValueOrDefault("assemblyRawSha256"))
+                .Where(hash => !string.IsNullOrWhiteSpace(hash)).ToHashSet(StringComparer.Ordinal);
             var generatedTypes = facts.Where(fact => fact.SourceIndexId == map.SourceIndexId
                     && fact.FactType == FactTypes.ManagedTypeDeclared
-                    && fact.Properties.GetValueOrDefault("provenanceState") == "bound"
-                    && fact.Properties.GetValueOrDefault("rawFileSha256") == rawSha
-                    && MatchesTypePath(fact.TargetSymbol, generatedType))
+                    && (mapless || fact.Properties.GetValueOrDefault("provenanceState") == "bound")
+                    && (mapless ? boundHashes.Contains(fact.Properties.GetValueOrDefault("rawFileSha256"))
+                        : fact.Properties.GetValueOrDefault("rawFileSha256") == rawSha)
+                    && MatchesTypePath(fact.TargetSymbol, mapless
+                        ? pages[0].Properties.GetValueOrDefault("pageTypeName")! : generatedType!))
                 .ToArray();
-            if (generatedTypes.Length != 1)
+            if (generatedTypes.Length != 1
+                || (mapless && generatedTypes[0].Properties.GetValueOrDefault("provenanceState") != "bound"))
             {
                 AddCompiledIlGap(graph, map, "ProjectlessPublishGeneratedTypeUnavailable",
-                    "mapped-generated-type-not-unique-in-bound-assembly", generatedTypes.Length, ProjectlessPublishCandidateRuleId);
+                    mapless ? "mapless-source-type-not-unique-and-bound-in-deployed-assemblies" : "mapped-generated-type-not-unique-in-bound-assembly",
+                    generatedTypes.Length, ProjectlessPublishCandidateRuleId);
                 continue;
             }
+            if (mapless) rawSha = generatedTypes[0].Properties.GetValueOrDefault("rawFileSha256");
 
-            foreach (var handler in facts.Where(fact => fact.SourceIndexId == map.SourceIndexId
+            var handlers = facts.Where(fact => fact.SourceIndexId == map.SourceIndexId
                          && fact.FactType == FactTypes.WebFormsHandlerResolved
                          && fact.Properties.GetValueOrDefault("markupFile") == sourcePath
                          && string.Equals(fact.Properties.GetValueOrDefault("pageTypeName"),
                              pages[0].Properties.GetValueOrDefault("pageTypeName"), StringComparison.OrdinalIgnoreCase))
-                     .OrderBy(fact => fact.CombinedFactId, StringComparer.Ordinal))
+                     .OrderBy(fact => fact.CombinedFactId, StringComparer.Ordinal).ToArray();
+            if (mapless && handlers.Length == 0)
+                AddCompiledIlGap(graph, map, "ProjectlessPublishHandlerUnavailable",
+                    "mapless-page-has-no-unique-source-handler", 0, ProjectlessPublishCandidateRuleId);
+            foreach (var handler in handlers)
             {
                 var name = handler.Properties.GetValueOrDefault("handlerName");
+                if (mapless && handlers.Count(candidate => string.Equals(
+                        candidate.Properties.GetValueOrDefault("handlerName"), name,
+                        StringComparison.OrdinalIgnoreCase)) != 1)
+                {
+                    AddCompiledIlGap(graph, handler, "ProjectlessPublishSourceAmbiguous",
+                        "mapless-source-handler-name-not-unique", null, ProjectlessPublishCandidateRuleId);
+                    continue;
+                }
                 var linkedCode = handler.Properties.GetValueOrDefault("linkedCodePath");
                 var sourceSymbol = handler.Properties.GetValueOrDefault("handlerSymbol");
                 if (string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(linkedCode)
@@ -267,9 +467,9 @@ public static partial class CombinedDependencyPathReporter
 
     private static void AddProjectlessPublishMemberCandidates(EvidenceGraph graph, IReadOnlyList<CombinedFactRow> facts)
     {
-        var pageSourceKeys = facts.Where(fact => fact.FactType == FactTypes.WebFormsPublishPageMapped)
+        var pageSourceKeys = facts.Where(fact => fact.FactType is FactTypes.WebFormsPublishPageMapped or FactTypes.WebFormsPublishPageCandidate)
             .Select(fact => (fact.SourceIndexId, fact.FilePath)).ToHashSet();
-        foreach (var mapped in facts.Where(fact => fact.FactType == FactTypes.WebFormsPublishPageMapped))
+        foreach (var mapped in facts.Where(fact => fact.FactType is FactTypes.WebFormsPublishPageMapped or FactTypes.WebFormsPublishPageCandidate))
         {
             foreach (var page in facts.Where(fact => fact.SourceIndexId == mapped.SourceIndexId
                          && fact.FactType == FactTypes.WebFormsPageDeclared
@@ -333,15 +533,18 @@ public static partial class CombinedDependencyPathReporter
                 if (!TrySimpleTypePath(typeName, out var typePath) || string.IsNullOrWhiteSpace(name)
                     || name.Equals("New", StringComparison.OrdinalIgnoreCase) || string.IsNullOrWhiteSpace(memberIdentity))
                     continue;
-                var candidates = (methodsByName.GetValueOrDefault((source.SourceIndexId, name.ToUpperInvariant())) ?? [])
-                    .Where(fact => hashes.Contains(fact.Properties.GetValueOrDefault("rawFileSha256"))
-                        && fact.TargetSymbol?.Contains("|type:" + typePath + "|arity:0|method:", StringComparison.OrdinalIgnoreCase) == true
-                        && PublishCandidateSignatureMatches(declaration, fact))
-                    .ToArray();
+                var named = methodsByName.GetValueOrDefault((source.SourceIndexId, name.ToUpperInvariant())) ?? [];
+                var inBoundAssembly = named.Where(fact =>
+                    hashes.Contains(fact.Properties.GetValueOrDefault("rawFileSha256"))).ToArray();
+                var inQualifiedType = inBoundAssembly.Where(fact =>
+                    fact.TargetSymbol?.Contains("|type:" + typePath + "|arity:0|method:", StringComparison.OrdinalIgnoreCase) == true).ToArray();
+                var candidates = inQualifiedType.Where(fact =>
+                    PublishCandidateSignatureMatches(declaration, fact)).ToArray();
                 if (candidates.Length != 1)
                 {
                     AddCompiledIlGap(graph, declaration, "ProjectlessPublishMemberAmbiguous",
-                        "one-qualified-published-member-with-compatible-parameter-shapes-required",
+                        PublishMemberGapReason(named.Length, inBoundAssembly.Length,
+                            inQualifiedType.Length, candidates.Length),
                         candidates.Length, ProjectlessPublishCandidateRuleId);
                     continue;
                 }
@@ -375,6 +578,16 @@ public static partial class CombinedDependencyPathReporter
                         [], SafePath(declaration.FilePath), declaration.StartLine, declaration.EndLine));
             }
         }
+    }
+
+    internal static string PublishMemberGapReason(int named, int inBoundAssembly,
+        int inQualifiedType, int compatibleSignature)
+    {
+        if (named == 0) return "bound-method-name-unavailable";
+        if (inBoundAssembly == 0) return "method-absent-from-receipt-bound-assemblies";
+        if (inQualifiedType == 0) return "qualified-containing-type-unmatched";
+        if (compatibleSignature == 0) return "parameter-shape-unmatched";
+        return "multiple-qualified-compatible-members";
     }
 
     private static bool PublishCandidateSignatureMatches(CombinedFactRow source, CombinedFactRow compiled)
@@ -532,8 +745,10 @@ public static partial class CombinedDependencyPathReporter
     private static void AddProjectlessPdbIdentityEdges(EvidenceGraph graph, IReadOnlyList<CombinedFactRow> facts)
     {
         var declarations = facts.Where(fact => fact.FactType == FactTypes.MethodDeclared
-                && fact.RuleId == RuleIds.VisualBasicSyntaxDeclarations
-                && fact.EvidenceTier == EvidenceTiers.Tier3SyntaxOrTextual
+                && ((fact.RuleId == RuleIds.VisualBasicSyntaxDeclarations
+                     && fact.EvidenceTier == EvidenceTiers.Tier3SyntaxOrTextual)
+                    || (fact.RuleId == RuleIds.VisualBasicSemanticDeclarations
+                        && fact.EvidenceTier == EvidenceTiers.Tier1Semantic))
                 && !string.IsNullOrWhiteSpace(fact.Properties.GetValueOrDefault("memberIdentity"))
                 && int.TryParse(fact.Properties.GetValueOrDefault("bodyStartLine"), out _)
                 && int.TryParse(fact.Properties.GetValueOrDefault("bodyEndLine"), out _))
@@ -626,16 +841,21 @@ public static partial class CombinedDependencyPathReporter
             var methodNode = graph.GetOrAddSymbolNode(method.SourceIndexId, method.SourceLabel,
                 method.TargetSymbol!, method.FilePath, method.StartLine, method.EndLine,
                 method.RuleId, method.EvidenceTier);
+            var evidenceIds = points.Select(point => point.CombinedFactId)
+                .Append(document.CombinedFactId).Append(join.CombinedFactId)
+                .Append(pdbDocument.CombinedFactId).Append(pdbMethod.CombinedFactId)
+                .Append(declaration.CombinedFactId).Append(method.CombinedFactId)
+                .Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray();
             graph.AddEdge(new GraphEdge(
                 $"projectless-source-pdb-identity:{join.CombinedFactId}:{declaration.CombinedFactId}",
                 "projectless-source-pdb-identity", sourceNode.NodeId, methodNode.NodeId,
                 "EvidenceEdge", ProjectlessPdbIdentityRuleId, EvidenceTiers.Tier2Structural,
-                points.Select(point => point.CombinedFactId)
-                    .Append(document.CombinedFactId).Append(join.CombinedFactId)
-                    .Append(pdbDocument.CombinedFactId).Append(pdbMethod.CombinedFactId)
-                    .Append(declaration.CombinedFactId).Append(method.CombinedFactId)
-                    .Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray(),
-                [], SafePath(declaration.FilePath), declaration.StartLine, declaration.EndLine));
+                evidenceIds, [], SafePath(declaration.FilePath), declaration.StartLine, declaration.EndLine));
+            graph.AddEdge(new GraphEdge(
+                $"projectless-pdb-compiled-to-source:{join.CombinedFactId}:{declaration.CombinedFactId}",
+                "projectless-pdb-compiled-to-source", methodNode.NodeId, sourceNode.NodeId,
+                "EvidenceEdge", ProjectlessPdbIdentityRuleId, EvidenceTiers.Tier2Structural,
+                evidenceIds, [], SafePath(declaration.FilePath), declaration.StartLine, declaration.EndLine));
         }
     }
 

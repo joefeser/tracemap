@@ -27,7 +27,7 @@ namespace TraceMap.Core;
 internal static class IlBodyEvidenceExtractor
 {
     internal const string SchemaVersion = "il-body-provenance.v1";
-    internal const string PolicyVersion = "explicit-il-body-evidence.v1";
+    internal const string PolicyVersion = "explicit-il-body-evidence.v3";
     internal const string IlLocationKind = "managed-il-v1";
     internal const string BodyLimitation = "IL body evidence proves only that the admitted assembly contains this exact bounded operand-aware instruction stream at this module-local method row; it does not prove execution, dispatch, reachability, behavior, source ownership, semantic equivalence, or rewrite preservation.";
     internal const string CallLimitation = "A call site records the static member reference or calli standalone signature encoded in this module's IL; a calli signature does not identify a target member. No call site proves execution, virtual dispatch resolution, target presence, cross-assembly resolution, call-graph reachability, or rewrite equivalence.";
@@ -99,7 +99,22 @@ internal static class IlBodyEvidenceExtractor
                 var disagreements = CompareBodies(cecil, srm);
                 if (disagreements.Count > 0)
                 {
-                    evaluated.Add(InputGap(artifact, "IlReaderDisagreement"));
+                    // Agreement is method-local once the assembly/module identity
+                    // agrees. Preserve only bodies checked by both independent
+                    // readers; the input and scan remain explicitly partial.
+                    var agreedBodies = AgreedBodies(cecil, disagreements);
+                    evaluated.Add(new EvaluatedIlInput(new IlInputOutcome(
+                        artifact.SafeLocator,
+                        artifact.Role,
+                        "partial",
+                        artifact.ProvenanceState,
+                        artifact.RawFileSha256,
+                        PrivacyProjectedDigest(artifact),
+                        artifact.AssemblyIdentity,
+                        cecil.ModuleName,
+                        cecil.ModuleMvid,
+                        artifact.ProvenanceBindingInputSha256,
+                        ["IlReaderDisagreement"]), agreedBodies));
                     continue;
                 }
                 evaluated.Add(new EvaluatedIlInput(new IlInputOutcome(
@@ -218,7 +233,7 @@ internal static class IlBodyEvidenceExtractor
             var common = CommonProperties(provenance, outcome);
             foreach (var gapKind in outcome.GapKinds.OrderBy(value => value, StringComparer.Ordinal))
                 facts.Add(GapFact(manifest, outcome.SafeLocator, gapKind, common));
-            if (outcome.Outcome != "admitted")
+            if (outcome.Outcome is not ("admitted" or "partial"))
                 continue;
 
             foreach (var body in input.Bodies.OrderBy(item => item.MetadataToken, StringComparer.Ordinal))
@@ -318,13 +333,22 @@ internal static class IlBodyEvidenceExtractor
         return disagreements;
     }
 
+    internal static IReadOnlyList<IlBodyObservation> AgreedBodies(IlReaderResult cecil, IReadOnlyList<string> disagreements)
+    {
+        if (disagreements.Contains("assembly", StringComparer.Ordinal))
+            return [];
+        var disputed = disagreements.ToHashSet(StringComparer.Ordinal);
+        return cecil.Bodies.Where(body => !disputed.Contains(body.MetadataToken)).ToArray();
+    }
+
     // Internal so the rewrite lane can rebuild the same dual-reader contract
     // over its own paired inputs instead of duplicating IL decoding.
     internal static IlReaderResult ReadCecilBodies(
         byte[] bytes,
         IlBodyLimits limits,
         IlWorkBudget budget,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool retainDiagnosticInstructions = false)
     {
         using var stream = new MemoryStream(bytes, writable: false);
         using var resolver = new ManagedMetadataExtractor.RejectingAssemblyResolver();
@@ -337,6 +361,9 @@ internal static class IlBodyEvidenceExtractor
         });
         if (module.Assembly is null)
             throw new IlEvidenceException("ManagedNetmoduleInputUnsupported");
+        using var rawStream = new MemoryStream(bytes, writable: false);
+        using var rawPe = new PEReader(rawStream, PEStreamOptions.LeaveOpen);
+        var rawReader = rawPe.GetMetadataReader();
         var assemblyIdentity = CecilSelfAssemblyIdentity(module);
         var bodies = new List<IlBodyObservation>();
         var bodyCount = 0;
@@ -352,7 +379,11 @@ internal static class IlBodyEvidenceExtractor
                     throw new IlEvidenceException("IlBodyCountLimitExceeded");
                 if (!budget.TryConsume(1))
                     throw new IlEvidenceException("IlTotalWorkLimitExceeded");
-                bodies.Add(ReadCecilBody(method, assemblyIdentity, limits, budget));
+                var rawMethod = rawReader.GetMethodDefinition(
+                    MetadataTokens.MethodDefinitionHandle(checked((int)method.MetadataToken.RID)));
+                var rawIl = rawPe.GetMethodBody(rawMethod.RelativeVirtualAddress).GetILBytes()
+                    ?? throw new IlEvidenceException("MalformedIlBody");
+                bodies.Add(ReadCecilBody(method, rawIl, assemblyIdentity, limits, budget, retainDiagnosticInstructions));
             }
         }
         return new IlReaderResult(assemblyIdentity, module.Name, module.Mvid.ToString("D", CultureInfo.InvariantCulture), bodies);
@@ -360,9 +391,11 @@ internal static class IlBodyEvidenceExtractor
 
     private static IlBodyObservation ReadCecilBody(
         CecilMethodDefinition method,
+        byte[] rawIl,
         string assemblyIdentity,
         IlBodyLimits limits,
-        IlWorkBudget budget)
+        IlWorkBudget budget,
+        bool retainDiagnosticInstructions)
     {
         var body = method.Body;
         var memberKind = method.IsConstructor ? "constructor" : "method";
@@ -385,9 +418,10 @@ internal static class IlBodyEvidenceExtractor
                 throw new IlEvidenceException("IlInstructionLimitExceeded");
             if (!budget.TryConsume(1))
                 throw new IlEvidenceException("IlTotalWorkLimitExceeded");
-            var operand = CecilOperand(instruction, calls, budget, assemblyIdentity, limits);
-            instructions.Add($"{instructions.Count.ToString(CultureInfo.InvariantCulture)}:{instruction.Offset.ToString("x", CultureInfo.InvariantCulture)}:{instruction.OpCode.Name}:{operand}");
-            opcodes.Add(instruction.OpCode.Name.ToString());
+            var opcodeName = CanonicalCecilOpcodeName(instruction, rawIl);
+            var operand = CecilOperand(instruction, opcodeName, rawIl, calls, budget, assemblyIdentity, limits);
+            instructions.Add($"{instructions.Count.ToString(CultureInfo.InvariantCulture)}:{instruction.Offset.ToString("x", CultureInfo.InvariantCulture)}:{opcodeName}:{operand}");
+            opcodes.Add(opcodeName);
         }
         var locals = body.Variables
             .Select(variable => (variable.Index, Type: CecilLocalType(variable.VariableType)))
@@ -425,10 +459,35 @@ internal static class IlBodyEvidenceExtractor
             body.InitLocals,
             bodyIdentity,
             bodySha256,
-            calls);
+            calls,
+            retainDiagnosticInstructions ? instructions : null);
     }
 
-    private static string CecilOperand(Instruction instruction, List<IlCallObservation> calls, IlWorkBudget budget, string selfAssemblyIdentity, IlBodyLimits limits)
+    // Cecil and Reflection.Emit may use different display names for an opcode.
+    // Use the raw-reader name only after confirming Cecil decoded the same
+    // numeric opcode bytes at the same offset. A real opcode disagreement is
+    // left intact for the dual-reader comparison to withhold that method.
+    internal static string CanonicalCecilOpcodeName(Instruction instruction, byte[] rawIl)
+    {
+        var offset = instruction.Offset;
+        if (offset < 0 || offset >= rawIl.Length)
+            return instruction.OpCode.Name;
+        var first = rawIl[offset];
+        if (first == 0xfe)
+        {
+            if (offset + 1 >= rawIl.Length ||
+                unchecked((ushort)instruction.OpCode.Value) != (ushort)(0xfe00 | rawIl[offset + 1]))
+                return instruction.OpCode.Name;
+            return MultiByteOpcodes().TryGetValue(rawIl[offset + 1], out var opcode)
+                ? opcode.Name! : instruction.OpCode.Name;
+        }
+        if (unchecked((ushort)instruction.OpCode.Value) != first)
+            return instruction.OpCode.Name;
+        return SingleByteOpcodes().TryGetValue(first, out var single)
+            ? single.Name! : instruction.OpCode.Name;
+    }
+
+    private static string CecilOperand(Instruction instruction, string opcodeName, byte[] rawIl, List<IlCallObservation> calls, IlWorkBudget budget, string selfAssemblyIdentity, IlBodyLimits limits)
     {
         switch (instruction.OpCode.OperandType)
         {
@@ -470,20 +529,20 @@ internal static class IlBodyEvidenceExtractor
                 if (!budget.TryConsume(1))
                     throw new IlEvidenceException("IlTotalWorkLimitExceeded");
                 var target = CecilMethodTarget((MethodReference)instruction.Operand!, selfAssemblyIdentity, limits);
-                if (IsCallObservationOpcode(instruction.OpCode.Name))
-                    calls.Add(new IlCallObservation(instruction.Offset, instruction.OpCode.Name, target.Kind, target.Token, target.Identity));
+                if (IsCallObservationOpcode(opcodeName))
+                    calls.Add(new IlCallObservation(instruction.Offset, opcodeName, target.Kind, target.Token, target.Identity));
                 return $"m:{target.Kind}:{target.Token}:{target.Identity}";
             case OperandType.InlineType:
                 var typeIdentity = CecilTypeOperandIdentity((Mono.Cecil.TypeReference)instruction.Operand!);
                 if (typeIdentity.Length > limits.MaxTextLength)
                     throw new IlEvidenceException("IlTextLimitExceeded");
-                if (instruction.OpCode.Name == "constrained.")
+                if (opcodeName == "constrained.")
                 {
                     if (!budget.TryConsume(1))
                         throw new IlEvidenceException("IlTotalWorkLimitExceeded");
                     calls.Add(new IlCallObservation(
                         instruction.Offset,
-                        instruction.OpCode.Name,
+                        opcodeName,
                         "constrainedtype",
                         "-",
                         typeIdentity));
@@ -496,7 +555,9 @@ internal static class IlBodyEvidenceExtractor
             case OperandType.InlineTok:
                 return instruction.Operand switch
                 {
-                    Mono.Cecil.TypeReference type => BoundedOperand("type", RawCecilToken(type), CecilTypeOperandIdentity(type), limits),
+                    Mono.Cecil.TypeReference type => BoundedOperand("type",
+                        CecilInlineTypeToken(type, rawIl, instruction.Offset + instruction.OpCode.Size),
+                        CecilTypeOperandIdentity(type), limits),
                     FieldReference tokenField => BoundedOperand("field", RawCecilToken(tokenField), CecilFieldIdentity(tokenField), limits),
                     MethodReference tokenMethod => BoundedOperand("method", RawCecilToken(tokenMethod), CecilMethodTarget(tokenMethod, selfAssemblyIdentity, limits).Identity, limits),
                     _ => throw new IlEvidenceException("IlOperandEncodingUnsupported")
@@ -514,7 +575,7 @@ internal static class IlBodyEvidenceExtractor
                     callSite.Parameters.Select(parameter => ManagedMetadataExtractor.FormatType(parameter.ParameterType)));
                 if (cecilSignature.Length > limits.MaxTextLength)
                     throw new IlEvidenceException("IlTextLimitExceeded");
-                if (instruction.OpCode.Name == "calli")
+                if (opcodeName == "calli")
                     calls.Add(new IlCallObservation(instruction.Offset, "calli", "standalonesig",
                         RawCecilToken(callSite), cecilSignature));
                 return $"sig:{RawCecilToken(callSite)}:{cecilSignature}";
@@ -618,6 +679,18 @@ internal static class IlBodyEvidenceExtractor
         _ => throw new IlEvidenceException("IlOperandEncodingUnsupported")
     };
 
+    // Cecil may project an InlineTok TypeSpec onto a decoded type whose
+    // MetadataToken names another table. Keep the token encoded in the IL;
+    // SRM independently validates that row and the two decoded identities
+    // must still agree before evidence is admitted.
+    internal static string CecilInlineTypeToken(Mono.Cecil.TypeReference type, ReadOnlySpan<byte> il, int operandOffset)
+    {
+        if (operandOffset < 0 || operandOffset > il.Length - sizeof(int))
+            throw new IlEvidenceException("MalformedIlBody");
+        var raw = BinaryPrimitives.ReadUInt32LittleEndian(il.Slice(operandOffset, sizeof(int)));
+        return raw >> 24 == 0x1b ? ManagedMetadataExtractor.Token(raw) : RawCecilToken(type);
+    }
+
     private static string CecilFieldIdentity(FieldReference field) =>
         $"{(field is Mono.Cecil.FieldDefinition ? "fielddef" : "memberref")}|type:{CecilTypeOperandIdentity(field.DeclaringType)}|member:{ManagedMetadataExtractor.EncodeIdentityComponent(field.Name)}|{ManagedMetadataExtractor.FormatType(field.FieldType)}";
 
@@ -675,7 +748,8 @@ internal static class IlBodyEvidenceExtractor
         byte[] bytes,
         IlBodyLimits limits,
         IlWorkBudget budget,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool retainDiagnosticInstructions = false)
     {
         using var stream = new MemoryStream(bytes, writable: false);
         using var pe = new PEReader(stream, PEStreamOptions.LeaveOpen);
@@ -707,7 +781,8 @@ internal static class IlBodyEvidenceExtractor
                 throw new IlEvidenceException("IlBodyCountLimitExceeded");
             if (!budget.TryConsume(1))
                 throw new IlEvidenceException("IlTotalWorkLimitExceeded");
-            bodies.Add(ReadSrmBody(pe, reader, provider, handle, method, assemblyIdentity, limits, budget));
+            bodies.Add(ReadSrmBody(pe, reader, provider, handle, method, assemblyIdentity, limits, budget,
+                retainDiagnosticInstructions));
         }
         return new IlReaderResult(assemblyIdentity, moduleName, reader.GetGuid(moduleDefinition.Mvid).ToString("D", CultureInfo.InvariantCulture), bodies);
     }
@@ -720,7 +795,8 @@ internal static class IlBodyEvidenceExtractor
         SrmMethodDefinition method,
         string assemblyIdentity,
         IlBodyLimits limits,
-        IlWorkBudget budget)
+        IlWorkBudget budget,
+        bool retainDiagnosticInstructions)
     {
         var body = pe.GetMethodBody(method.RelativeVirtualAddress);
         var il = body.GetILBytes() ?? throw new IlEvidenceException("MalformedIlBody");
@@ -824,7 +900,8 @@ internal static class IlBodyEvidenceExtractor
             body.LocalVariablesInitialized,
             bodyIdentity,
             bodySha256,
-            calls);
+            calls,
+            retainDiagnosticInstructions ? instructions : null);
     }
 
     private static (string Kind, string Token, string Identity) SrmBoundedTarget(string kind, string token, string identity, IlBodyLimits limits)
@@ -1309,6 +1386,7 @@ internal static class IlBodyEvidenceExtractor
             ["ilBoundedInputSha256"] = provenance.BoundedInputSha256,
             ["ilGeneratorSha256"] = provenance.GeneratorSha256,
             ["ilCoverage"] = provenance.CoverageState,
+            ["ilInputOutcome"] = outcome.Outcome,
             ["artifactVisibility"] = provenance.ArtifactVisibility
         };
         if (outcome.AssemblyIdentity is not null)
