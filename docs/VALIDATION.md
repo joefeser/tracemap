@@ -3522,7 +3522,10 @@ receipt-listed source methods may form bidirectional Tier3 member candidates
 when the fully qualified containing type, method, and bounded parameter
 shapes select exactly one bound published method. This permits a static IL
 walk to re-enter retained source evidence; it is not a PDB or exact
-source-method identity claim. The validation
+source-method identity claim. A missing member candidate stays a gap with a
+categorical reason identifying whether name, receipt-bound assembly,
+qualified type, or parameter shape failed; multiple candidates remain
+ambiguous. The validation
 script is **not** a private-site publishing instruction. Even after the public
 Windows run succeeded and the emitted `.compiled` and metadata identities were
 inspected, the map alone is only page-to-assembly evidence: it is not a verified
