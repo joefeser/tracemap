@@ -3669,7 +3669,10 @@ in the scan manifest; exceeding it still withholds that input's IL evidence.
 and path gap kinds without rerunning a scan or printing source paths or names.
 `scripts/wp.ps1 -RecheckPathReasons` reruns only the saved path query against
 the local combined index and prints categorical published-member mismatch
-counts; the refreshed report and its hashes stay beside the local receipt.
+counts plus `pathRecheckArtifactIlCalls`. The latter counts exact IL references
+that enter unbound artifact context as review-only candidates; it is not a
+source-to-SQL path count. The refreshed report and its hashes stay beside the
+local receipt.
 For a saved bound scan with one source-bound `IlReaderDisagreement` and one
 source-bound `IlTextLimitExceeded`, `scripts/wil.ps1` locally replays only those
 two copied DLLs through the same independent IL readers. It validates their

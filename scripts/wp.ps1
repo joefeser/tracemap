@@ -167,8 +167,10 @@ if ($RecheckPathReasons) {
         (($receipt | ConvertTo-Json -Depth 5) + "`n"), [Text.UTF8Encoding]::new($false))
     $recheck = [IO.File]::ReadAllText($recheckPath) | ConvertFrom-Json -Depth 50
     $memberGaps = @($recheck.gaps | Where-Object { $_.gapKind -ceq 'ProjectlessPublishMemberAmbiguous' })
+    $artifactIlGaps = @($recheck.gaps | Where-Object { $_.gapKind -ceq 'CompiledIlArtifactContext' })
     Write-Output "pathRecheckPaths=$($recheck.summary.pathCount)"
     Write-Output "pathRecheckPublishMemberGaps=$($memberGaps.Count)"
+    Write-Output "pathRecheckArtifactIlCalls=$($artifactIlGaps.Count)"
     foreach ($reason in @('bound-method-name-unavailable',
             'method-absent-from-receipt-bound-assemblies', 'qualified-containing-type-unmatched',
             'parameter-shape-unmatched', 'multiple-qualified-compatible-members')) {
