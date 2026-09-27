@@ -2492,6 +2492,7 @@ rules:
       - A mapless source-to-binary join, source member join, virtual call candidate, or database API candidate remains review-only even when an ordered static path reaches SQL evidence.
       - Source and DLL hashes identify declared local inputs, not a verified historical build, deployment, event firing, dispatch, branch feasibility, or SQL execution.
       - HTML and JSON contain private source identities and local provenance and must not be shared as anonymous artifacts.
+      - The local projection accepts at most 256 MiB of path JSON and 250000 gap rows; it retains at most 256 detailed gaps and 128 exact kind/rule count groups, records omissions, and hashes the complete bounded path input.
   - id: diagnostic.webforms.raw-exact-call-evidence.v1
     name: Private Web Forms raw exact-call evidence audit
     description: Audits a bounded set of selected handlers against retained exact semantic call evidence for local diagnostic review.

@@ -25,13 +25,18 @@ try {
         [ordered]@{ edgeKind = 'projectless-publish-method-candidate'; fromNodeId = 'source'; toNodeId = 'compiled'; ruleId = 'combined.paths.projectless-publish-candidate.v1'; evidenceTier = 'Tier3SyntaxOrTextual'; filePath = 'Pages/Lookup.aspx.vb'; startLine = 4; endLine = 4; supportingFactIds = @('fact-source','fact-method') },
         [ordered]@{ edgeKind = 'compiled-il-call'; fromNodeId = 'compiled'; toNodeId = 'query'; ruleId = 'dotnet.compiled.il-call.v1'; evidenceTier = 'Tier2Structural'; filePath = 'compiled:public'; startLine = 1; endLine = 1; supportingFactIds = @('fact-il') }
     )
+    $gaps = @(1..300 | ForEach-Object { [ordered]@{
+        gapId = "gap-$_"; gapKind = 'PublicGap'; ruleId = 'public.gap.v1'
+        evidenceTier = 'Tier4Unknown'; message = 'Public synthetic gap'
+        reason = 'MissingPublicInput'; commitSha = $commit
+    } })
     $report = [ordered]@{
         version = '1.0'; reportCoverage = 'ReducedCoverage'; coverageWarnings = @('public test warning')
         sources = @([ordered]@{ scanId = 'scan-public'; commitSha = $commit })
         query = [ordered]@{ fromSymbol = 'Names_Init'; toSurface = 'sql-query'; maxDepth = 20; maxPaths = 256 }
-        summary = [ordered]@{ pathCount = 1; gapCount = 0; truncated = $false }
+        summary = [ordered]@{ pathCount = 1; gapCount = 300; truncated = $false }
         paths = @([ordered]@{ pathId = 'path-public'; classification = 'NeedsReviewStaticPath'; nodes = $nodes; edges = $edges; supportingFactIds = @('fact-source','fact-method','fact-il'); notes = @() })
-        gaps = @()
+        gaps = $gaps
     }
     [IO.File]::WriteAllText((Join-Path $root 'scan/scan-manifest.json'), (($manifest | ConvertTo-Json -Depth 15) + "`n"))
     [IO.File]::WriteAllText((Join-Path $root 'publish-receipt.local.json'), (($receipt | ConvertTo-Json -Depth 5) + "`n"))
@@ -47,10 +52,15 @@ try {
         $json.provenance.boundedInputSha256 -cnotmatch '^[0-9a-f]{64}$' -or
         $json.paths[0].hops.Count -ne 2 -or
         $json.paths[0].claim -ne 'review-only-static-path' -or
+        $json.coverage.gapCount -ne 300 -or
+        @($json.coverage.gaps).Count -ne 256 -or
+        $json.coverage.omittedGapDetailCount -ne 44 -or
+        $json.coverage.gapCounts[0].count -ne 300 -or
         $json.paths[0].hops[0].ruleId -ne 'combined.paths.projectless-publish-candidate.v1' -or
         $json.assemblies[0].rawFileSha256 -ne ('b' * 64) -or
         !$html.Contains('&lt;Names_Init&gt;', [StringComparison]::Ordinal) -or
         $html.Contains('<Names_Init>', [StringComparison]::Ordinal) -or
+        !$html.Contains('Showing 256 of 300 gap details', [StringComparison]::Ordinal) -or
         !$html.Contains('not runtime execution', [StringComparison]::OrdinalIgnoreCase)) {
         throw 'WEBFORMS_COMPILED_HANDOFF_PUBLIC_PROJECTION_INVALID'
     }
@@ -61,6 +71,13 @@ try {
     catch { $captured = $_.Exception.Message }
     if ($captured -ne 'WEBFORMS_COMPILED_HANDOFF_PATH_INVALID') {
         throw "WEBFORMS_COMPILED_HANDOFF_INVALID_PATH_ACCEPTED:$captured"
+    }
+    [IO.File]::WriteAllText((Join-Path $root 'combined.sqlite'), '')
+    $captured = $null
+    try { & $generator -ProofRoot $root -OutputDirectory (Join-Path $root 'empty-index') *> $null }
+    catch { $captured = $_.Exception.Message }
+    if ($captured -ne 'WEBFORMS_COMPILED_HANDOFF_INPUT_LIMIT;slot=combinedIndex;bytes=0;max=2147483648') {
+        throw "WEBFORMS_COMPILED_HANDOFF_LIMIT_DIAGNOSTIC_INVALID:$captured"
     }
     Write-Output 'webFormsCompiledHandoffPublicTests=passed'
 }
