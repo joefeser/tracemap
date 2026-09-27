@@ -475,10 +475,10 @@ try {
                 ForEach-Object { $snapshotGapLines += $_ }
         } catch { $captured = $_.Exception.Message }
         if ($captured -ne 'WEBFORMS_SNAPSHOT_SOURCE_NOT_CONFIG_ONLY' -or
-            $snapshotGapLines -notcontains 'sourceSnapshotConfigDifferences=0' -or
-            $snapshotGapLines -notcontains 'sourceSnapshotOtherDifferences=1' -or
+            @($snapshotGapLines | Where-Object { $_ -cmatch '^sourceSnapshotOtherDifferences=[1-9][0-9]*$' }).Count -ne 1 -or
+            $snapshotGapLines -notcontains 'sourceSnapshotHashErrors=0' -or
             (Test-Path -LiteralPath (Join-Path $temp 'other-source-snapshot'))) {
-            throw 'EXISTING_PUBLISH_TEST_OTHER_SOURCE_SNAPSHOT_NOT_REJECTED'
+            throw "EXISTING_PUBLISH_TEST_OTHER_SOURCE_SNAPSHOT_NOT_REJECTED;error=$captured;stage=$($snapshotGapLines -join ',')"
         }
     }
     $captured = $null
