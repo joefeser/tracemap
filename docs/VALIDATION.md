@@ -2772,11 +2772,15 @@ declaration enters the binary graph only through a `bound`, exact
 source-symbol ID. IL body and call facts must join to their admitted compiled
 method by exact fact IDs and matching verified artifact SHA-256. `call` and
 `newobj` MethodDef targets join only to one method in the same source index;
-assembly-scoped MemberRef targets join only to one bound method across the
-combined index using the complete assembly-reference identity, non-generic
-type path, member name, and signature. `callvirt` is a Tier3 review candidate,
-not a proven dispatch destination. Missing or ambiguous admitted targets are
-gaps; unadmitted external assemblies are not inferred as absent.
+assembly-scoped MemberRef targets join only to one exact admitted method across
+the combined index using the complete assembly-reference identity, non-generic
+type path, member name, and signature. If either method is unbound artifact
+context, the exact IL edge is Tier3 review-only and emits a
+`CompiledIlArtifactContext` gap. It does not attribute the context DLL to the
+source commit or connect it to source SQL evidence. `callvirt` is also a Tier3
+review candidate, not a proven dispatch destination. Missing or ambiguous
+admitted targets are gaps; unadmitted external assemblies are not inferred as
+absent.
 
 The public `root-generated` test proves that a bound IL walk can cross an
 excluded generated bridge to supported SQL evidence while the corresponding
@@ -3642,12 +3646,14 @@ MemberRef target. The cross-platform `root-crosslanguage` regression separately
 binds and combines two compiled indexes to exercise the same MemberRef rule
 without requiring ASP.NET precompilation. A second source index for the
 framework must bind that exact DLL and reconcile its portable-PDB document
-and method before the compiled call can return to the source SQL terminal. The page entry remains Tier3
+and method before the compiled call can return to the source SQL terminal.
+The page entry remains Tier3
 review-only, the bound IL call is static evidence, and the PDB bridge is Tier2
 structural evidence, never runtime execution. The regression requires zero
 SQL paths when the framework PDB is unavailable or its DLL is only unbound
-artifact context; the latter also emits `CompiledIlTargetUnavailable` with
-`target-assembly-present-without-bound-provenance`. A same-named provider,
+artifact context. Exact IL references into that context remain Tier3 review
+candidates with a `CompiledIlArtifactContext` gap; they cannot establish
+source ownership or complete a source SQL path. A same-named provider,
 an independently rebuilt DLL with different bytes, or an unbound context DLL
 cannot complete this chain. The synthetic fixture does not attest any private
 publish or independently built historical artifact.

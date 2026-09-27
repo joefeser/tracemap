@@ -1527,14 +1527,17 @@ public sealed class MessyWorkspaceRegressionTests
             ["public-web", "public-framework-context"]));
         var contextGraph = await CombinedDependencyPathReporter.BuildGraphInventoryAsync(contextCombined);
         var contextNodes = contextGraph.Nodes.ToDictionary(node => node.NodeId, StringComparer.Ordinal);
-        Require("MW-PUBLISH-CROSSDLL-001", "unbound-context",
-            !contextGraph.Edges.Any(edge => edge.EdgeKind is "compiled-il-call" or "compiled-il-callvirt-candidate"
+        var contextEdges = contextGraph.Edges.Where(edge => edge.EdgeKind is "compiled-il-call" or "compiled-il-callvirt-candidate"
                 && contextNodes[edge.FromNodeId].SourceLabel == "public-web"
                 && contextNodes[edge.ToNodeId].SourceLabel == "public-framework-context"
                 && contextNodes[edge.ToNodeId].DisplayName.Contains("ExecProc_DataSet", StringComparison.Ordinal))
-            && contextGraph.Gaps.Any(gap => gap.GapKind == "CompiledIlTargetUnavailable"
-                && gap.Reason == "target-assembly-present-without-bound-provenance"),
-            "an unbound published DLL must leave the cross-assembly IL call as a categorical gap");
+            .ToArray();
+        Require("MW-PUBLISH-CROSSDLL-001", "unbound-context",
+            contextEdges.Length == 1
+            && contextEdges[0].EvidenceTier == EvidenceTiers.Tier3SyntaxOrTextual
+            && contextGraph.Gaps.Any(gap => gap.GapKind == "CompiledIlArtifactContext"
+                && gap.Reason == "exact-il-target-present-without-source-commit-binding"),
+            "an exact IL call into an unbound DLL must be review-only with a categorical context gap");
         var contextReport = await CombinedDependencyPathReporter.BuildReportAsync(new(contextCombined,
             Path.Combine(temp.Path, "cross-dll-context-paths.json"), Format: "json",
             FromSymbol: nodes[handlerJoin.FromNodeId].DisplayName, FromSource: "public-web",

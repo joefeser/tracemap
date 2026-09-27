@@ -27,7 +27,7 @@ public static partial class CombinedDependencyPathReporter
             .GroupBy(fact => (fact.SourceIndexId, fact.TargetSymbol!))
             .ToDictionary(group => group.Key, group => group.ToArray());
         var methodsByMemberReference = methods
-            .Where(fact => fact.Properties.GetValueOrDefault("provenanceState") == "bound")
+            .Where(fact => fact.Properties.GetValueOrDefault("provenanceState") is "bound" or "unbound")
             .Select(fact => (Fact: fact, Reference: ExpectedMemberReference(fact)))
             .Where(item => item.Reference is not null)
             .GroupBy(item => item.Reference!, StringComparer.Ordinal)
@@ -111,7 +111,7 @@ public static partial class CombinedDependencyPathReporter
                 || !TryUniqueFact(factsByOriginalId, call.SourceIndexId,
                     body.Properties.GetValueOrDefault("compiledFactId"), out var caller)
                 || caller.FactType != FactTypes.ManagedMethodDeclared
-                || caller.Properties.GetValueOrDefault("provenanceState") != "bound"
+                || caller.Properties.GetValueOrDefault("provenanceState") is not ("bound" or "unbound")
                 || string.IsNullOrWhiteSpace(body.Properties.GetValueOrDefault("ilBoundedInputSha256"))
                 || string.IsNullOrWhiteSpace(body.Properties.GetValueOrDefault("ilGeneratorSha256"))
                 || string.IsNullOrWhiteSpace(body.Properties.GetValueOrDefault("rawFileSha256"))
@@ -143,19 +143,25 @@ public static partial class CombinedDependencyPathReporter
             }
 
             var target = targets[0];
-            if (target.Properties.GetValueOrDefault("provenanceState") != "bound")
+            var targetProvenance = target.Properties.GetValueOrDefault("provenanceState");
+            if (targetProvenance is not ("bound" or "unbound"))
                 continue;
             var from = graph.GetOrAddSymbolNode(caller.SourceIndexId, caller.SourceLabel, caller.TargetSymbol!,
                 caller.FilePath, caller.StartLine, caller.EndLine, caller.RuleId, caller.EvidenceTier);
             var to = graph.GetOrAddSymbolNode(target.SourceIndexId, target.SourceLabel, target.TargetSymbol!,
                 target.FilePath, target.StartLine, target.EndLine, target.RuleId, target.EvidenceTier);
             var virtualCandidate = opcode == "callvirt";
+            var artifactContext = caller.Properties.GetValueOrDefault("provenanceState") != "bound"
+                || targetProvenance != "bound";
             graph.AddEdge(new GraphEdge(
                 $"compiled-il-call:{call.CombinedFactId}", virtualCandidate ? "compiled-il-callvirt-candidate" : "compiled-il-call",
                 from.NodeId, to.NodeId, "EvidenceEdge", CompiledIlBridgeRuleId,
-                virtualCandidate ? EvidenceTiers.Tier3SyntaxOrTextual : EvidenceTiers.Tier2Structural,
+                artifactContext || virtualCandidate ? EvidenceTiers.Tier3SyntaxOrTextual : EvidenceTiers.Tier2Structural,
                 [call.CombinedFactId, body.CombinedFactId, caller.CombinedFactId, target.CombinedFactId],
                 [], SafePath(call.FilePath), call.StartLine, call.EndLine));
+            if (artifactContext)
+                AddCompiledIlGap(graph, call, "CompiledIlArtifactContext",
+                    "exact-il-target-present-without-source-commit-binding", 1);
         }
     }
 
