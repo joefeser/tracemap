@@ -3683,6 +3683,12 @@ may yield reduced coverage. The public wrapper guard is
 `scripts/tests/Test-SavedWebFormsProofPacket.ps1`; this mock guard verifies
 orchestration and hash rejection, while the .NET modernization packet tests
 verify the actual reporter.
+The packet reporter accepts a combined index with one or more recorded
+sources, including a focused publish proof combined from one scan. It still
+rejects zero sources, invalid commit identity, missing/ambiguous primary Web
+Forms sources, and source/fact mismatches. A combined schema does not imply
+multi-repository coverage. The public .NET single-source regression verifies
+source identity, deterministic packet bytes, and read-only index handling.
 The cross-platform projection guard is
 `pwsh -NoProfile -File scripts/tests/Test-ExistingWebFormsCompiledPathHandoff.ps1`.
 The Windows case must
