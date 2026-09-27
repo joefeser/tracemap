@@ -4,7 +4,8 @@ param(
     [string]$OutputDirectory,
     [string]$PathReportPath,
     [string]$PathReportReceiptPath,
-    [ValidateSet('sql-query', 'database-api')][string]$ToSurface = 'sql-query'
+    [ValidateSet('sql-query', 'database-api')][string]$ToSurface = 'sql-query',
+    [long]$IlMaxWork = 0
 )
 
 # Private projection of an already-generated, bounded compiled path report.
@@ -12,6 +13,9 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 if ($PSVersionTable.PSVersion.Major -lt 7) { throw 'WEBFORMS_COMPILED_HANDOFF_POWERSHELL_7_REQUIRED' }
+if ($IlMaxWork -ne 0 -and ($IlMaxWork -lt 2000001 -or $IlMaxWork -gt 100000000)) {
+    throw 'WEBFORMS_COMPILED_HANDOFF_IL_WORK_LIMIT_INVALID'
+}
 
 function Hash-Input([string]$Path, [long]$Limit, [string]$Slot) {
     if (!(Test-Path -LiteralPath $Path -PathType Leaf)) { throw "WEBFORMS_COMPILED_HANDOFF_INPUT_UNAVAILABLE;slot=$Slot" }
@@ -30,9 +34,11 @@ $comparison = if ($IsWindows) { [StringComparison]::OrdinalIgnoreCase } else { [
 if (!$pathsPath.StartsWith($ProofRoot + [IO.Path]::DirectorySeparatorChar, $comparison)) {
     throw 'WEBFORMS_COMPILED_HANDOFF_PATH_REPORT_OUTSIDE_PROOF'
 }
-$manifestPath = Join-Path $ProofRoot 'scan/scan-manifest.json'
+$scanFolder = if ($IlMaxWork -eq 0) { 'scan' } else { 'scan-ilwork-' + $IlMaxWork }
+$combinedName = if ($IlMaxWork -eq 0) { 'combined.sqlite' } else { 'combined-ilwork-' + $IlMaxWork + '.sqlite' }
+$manifestPath = Join-Path $ProofRoot (Join-Path $scanFolder 'scan-manifest.json')
 $receiptPath = Join-Path $ProofRoot 'publish-receipt.local.json'
-$indexPath = Join-Path $ProofRoot 'combined.sqlite'
+$indexPath = Join-Path $ProofRoot $combinedName
 $inputHashes = [ordered]@{
     paths = Hash-Input $pathsPath 268435456 'paths'
     manifest = Hash-Input $manifestPath 4194304 'manifest'
@@ -49,7 +55,9 @@ if ($ToSurface -eq 'database-api') {
     $pathReportReceipt = [IO.File]::ReadAllText($PathReportReceiptPath) | ConvertFrom-Json -Depth 10
     if ($pathReportReceipt.schemaVersion -cne 'webforms-path-recheck.v1' -or
         [string]$pathReportReceipt.generatorSha256 -cnotmatch '^[0-9a-f]{64}$' -or
-        [string]$pathReportReceipt.boundedInputSha256 -cnotmatch '^[0-9a-f]{64}$') {
+        [string]$pathReportReceipt.boundedInputSha256 -cnotmatch '^[0-9a-f]{64}$' -or
+        ($IlMaxWork -ne 0 -and ($pathReportReceipt.scanFolder -cne $scanFolder -or
+            $pathReportReceipt.combinedIndex -cne $combinedName))) {
         throw 'WEBFORMS_COMPILED_HANDOFF_API_RECEIPT_INVALID'
     }
 }
@@ -127,7 +135,7 @@ $handoff = [ordered]@{
     ruleId = 'diagnostic.webforms.compiled-path-handoff.v1'
     visibility = 'local-only'
     claimLevel = 'review-only-static-evidence'
-    provenance = [ordered]@{ generatorSha256 = $generatorHash; boundedInputSha256 = $inputDigest; inputSha256 = $inputHashes; sourceCommitSha = [string]$manifest.commitSha; scanId = [string]$manifest.scanId; pathReportGeneration = if ($ToSurface -eq 'database-api') { [ordered]@{ generatorSha256 = [string]$pathReportReceipt.generatorSha256; boundedInputSha256 = [string]$pathReportReceipt.boundedInputSha256 } } else { $null } }
+    provenance = [ordered]@{ generatorSha256 = $generatorHash; boundedInputSha256 = $inputDigest; inputSha256 = $inputHashes; sourceCommitSha = [string]$manifest.commitSha; scanId = [string]$manifest.scanId; scanFolder = $scanFolder; combinedIndex = $combinedName; pathReportGeneration = if ($ToSurface -eq 'database-api') { [ordered]@{ generatorSha256 = [string]$pathReportReceipt.generatorSha256; boundedInputSha256 = [string]$pathReportReceipt.boundedInputSha256 } } else { $null } }
     query = [ordered]@{ fromSymbol = [string]$paths.query.fromSymbol; toSurface = $ToSurface; maxDepth = [int]$paths.query.maxDepth; maxPaths = [int]$paths.query.maxPaths }
     coverage = [ordered]@{
         reportCoverage = [string]$paths.reportCoverage
@@ -150,7 +158,9 @@ $handoff = [ordered]@{
     )
 }
 $OutputDirectory = if ($OutputDirectory) { [IO.Path]::GetFullPath($OutputDirectory) } else {
-    Join-Path $ProofRoot $(if ($ToSurface -eq 'database-api') { 'compiled-api-review' } else { 'compiled-path-review' })
+    Join-Path $ProofRoot $(if ($ToSurface -eq 'database-api') {
+        if ($IlMaxWork -ne 0) { "compiled-api-review-ilwork-$IlMaxWork" } else { 'compiled-api-review' }
+    } else { 'compiled-path-review' })
 }
 if (Test-Path -LiteralPath $OutputDirectory) { throw 'WEBFORMS_COMPILED_HANDOFF_OUTPUT_NOT_FRESH' }
 $outputParent = Split-Path -Parent $OutputDirectory

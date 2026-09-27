@@ -1,10 +1,17 @@
 [CmdletBinding()]
-param([string]$OutputRoot, [switch]$RecheckPathReasons, [switch]$RecheckCompiledApi)
+param([string]$OutputRoot, [switch]$RecheckPathReasons, [switch]$RecheckCompiledApi,
+    [long]$IlMaxWork = 0, [switch]$FillOnly)
 
 # Summarize an existing local Web Forms compiled probe. Never starts a scan.
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 if ($PSVersionTable.PSVersion.Major -lt 7) { throw 'WEBFORMS_PROBE_POWERSHELL_7_REQUIRED' }
+if ($IlMaxWork -ne 0 -and ($IlMaxWork -lt 2000001 -or $IlMaxWork -gt 100000000)) {
+    throw 'WEBFORMS_PROBE_IL_WORK_LIMIT_INVALID'
+}
+if (($IlMaxWork -ne 0 -or $FillOnly) -and !$RecheckCompiledApi) {
+    throw 'WEBFORMS_PROBE_COMPILED_API_REQUIRED'
+}
 
 if (!$OutputRoot) {
     $latest = Get-ChildItem -LiteralPath ([IO.Path]::GetTempPath()) -Directory |
@@ -124,7 +131,9 @@ if (Test-Path -LiteralPath $pathReportPath -PathType Leaf) {
 }
 
 if ($RecheckPathReasons -or $RecheckCompiledApi) {
-    $combinedPath = Join-Path $OutputRoot 'combined.sqlite'
+    $scanFolder = if ($IlMaxWork -eq 0) { 'scan' } else { 'scan-ilwork-' + $IlMaxWork }
+    $combinedName = if ($IlMaxWork -eq 0) { 'combined.sqlite' } else { 'combined-ilwork-' + $IlMaxWork + '.sqlite' }
+    $combinedPath = Join-Path $OutputRoot $combinedName
     if (!(Test-Path -LiteralPath $pathReportPath -PathType Leaf) -or
         !(Test-Path -LiteralPath $combinedPath -PathType Leaf)) {
         throw 'WEBFORMS_PROBE_PATH_RECHECK_INPUT_UNAVAILABLE'
@@ -142,7 +151,7 @@ if ($RecheckPathReasons -or $RecheckCompiledApi) {
     $terminalSurface = if ($RecheckCompiledApi) { 'database-api' } else { 'sql-query' }
     $fromSymbol = [string]$previous.query.fromSymbol
     if ($RecheckCompiledApi) {
-        $factsPath = Join-Path $OutputRoot 'scan/facts.ndjson'
+        $factsPath = Join-Path $OutputRoot (Join-Path $scanFolder 'facts.ndjson')
         if (!(Test-Path -LiteralPath $factsPath -PathType Leaf) -or @($receipt.pages).Count -ne 1) {
             throw 'WEBFORMS_PROBE_HANDLER_FACTS_UNAVAILABLE'
         }
@@ -217,6 +226,7 @@ if ($RecheckPathReasons -or $RecheckCompiledApi) {
         '--out', $recheckPath, '--format', 'json', '--from-symbol', $fromSymbol,
         '--to-surface', $terminalSurface, '--max-depth', '20', '--max-paths', '256')
     if ($RecheckCompiledApi) { $pathArgs += '--exact-from-symbol' }
+    if ($FillOnly) { $pathArgs += @('--surface-name', 'DbDataAdapter.Fill') }
     & dotnet @pathArgs *> (Join-Path $scratch 'paths.local.log')
     if ($LASTEXITCODE -ne 0 -or !(Test-Path -LiteralPath $recheckPath -PathType Leaf)) {
         throw 'WEBFORMS_PROBE_PATH_RECHECK_FAILED'
@@ -241,7 +251,8 @@ if ($RecheckPathReasons -or $RecheckCompiledApi) {
     $inputSha = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData(
         [Text.Encoding]::UTF8.GetBytes($inputInventory))).ToLowerInvariant()
     $receipt = [ordered]@{ schemaVersion = 'webforms-path-recheck.v1'; visibility = 'local-only'
-        generatorSha256 = $generatorSha; boundedInputSha256 = $inputSha }
+        generatorSha256 = $generatorSha; boundedInputSha256 = $inputSha
+        scanFolder = $scanFolder; combinedIndex = $combinedName }
     [IO.File]::WriteAllText((Join-Path $scratch 'path-recheck.receipt.local.json'),
         (($receipt | ConvertTo-Json -Depth 5) + "`n"), [Text.UTF8Encoding]::new($false))
     $recheck = [IO.File]::ReadAllText($recheckPath) | ConvertFrom-Json -Depth 50
