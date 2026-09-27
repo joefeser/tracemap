@@ -69,3 +69,23 @@ $kinds = @($outcomes | ForEach-Object { @($_.gapKinds) } |
 foreach ($group in @($kinds | Group-Object | Sort-Object Name)) {
     Write-Output "probeGap.$($group.Name)=$($group.Count)"
 }
+
+$scanManifestPath = Join-Path $OutputRoot 'scan/scan-manifest.json'
+if (Test-Path -LiteralPath $scanManifestPath -PathType Leaf) {
+    $scan = [IO.File]::ReadAllText($scanManifestPath) | ConvertFrom-Json -Depth 30
+    $boundIl = @($scan.ilBodyProvenance.outcomes | Where-Object { $_.provenanceState -ceq 'bound' })
+    $boundIlWithGaps = @($boundIl | Where-Object { @($_.gapKinds).Count -gt 0 })
+    Write-Output "scanIlCoverage=$($scan.ilBodyProvenance.coverageState)"
+    Write-Output "scanBoundIlInputs=$($boundIl.Count)"
+    Write-Output "scanBoundIlInputsWithGaps=$($boundIlWithGaps.Count)"
+    Write-Output "scanIlTextLimit=$($scan.ilBodyProvenance.effectiveLimits.maxTextLength)"
+    foreach ($group in @($boundIl | Group-Object -Property outcome | Sort-Object Name)) {
+        $label = if ([string]$group.Name -cmatch '^[a-z][a-z0-9-]{0,63}$') { $group.Name } else { 'other' }
+        Write-Output "scanBoundIlOutcome.$label=$($group.Count)"
+    }
+    $boundGapKinds = @($boundIlWithGaps | ForEach-Object { @($_.gapKinds) } |
+        Where-Object { $_ -is [string] -and $_ -cmatch '^[A-Za-z][A-Za-z0-9]{0,79}$' })
+    foreach ($group in @($boundGapKinds | Group-Object | Sort-Object Name)) {
+        Write-Output "scanBoundIlGap.$($group.Name)=$($group.Count)"
+    }
+}
