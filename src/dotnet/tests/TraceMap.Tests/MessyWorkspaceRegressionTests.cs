@@ -1566,6 +1566,26 @@ public sealed class MessyWorkspaceRegressionTests
                 .Select(node => node.SurfaceName).ToHashSet(StringComparer.Ordinal)
                 .SetEquals(["DbDataAdapter.Fill", "SqlCommand.ExecuteNonQuery"]),
             "only the two exact framework API MemberRefs may become review-only terminals");
+        var fillReport = await CombinedDependencyPathReporter.BuildReportAsync(new(contextCombined,
+            Path.Combine(temp.Path, "cross-dll-context-fill-paths.json"), Format: "json",
+            FromSymbol: nodes[handlerJoin.FromNodeId].DisplayName, FromSource: "public-web",
+            ToSurface: "database-api", SurfaceName: "DbDataAdapter.Fill", MaxDepth: 20, MaxPaths: 256)
+            { ExactFromSymbol = true });
+        var fillPaths = fillReport.Paths.Where(path => path.Nodes.Last().SurfaceName == "DbDataAdapter.Fill")
+            .ToArray();
+        Require("MW-PUBLISH-CROSSDLL-001", "selected-provider-fill",
+            fillReport.Summary.SelectorCandidateCount == 1
+            && fillPaths.Length > 0
+            && fillPaths.All(path => (path.Classification is CombinedDependencyPathClassifications.NeedsReviewPath
+                or CombinedDependencyPathClassifications.NeedsReviewStaticPath)
+                && path.Edges.Any(edge => edge.EdgeKind == "compiled-database-api-candidate")
+                && path.Nodes.Where(node => node.DisplayName.Contains("PublicSqlDataAccess", StringComparison.Ordinal)
+                    && node.DisplayName.Contains("ExecProc_DataSet", StringComparison.Ordinal))
+                    .Select(node => node.NodeId).Distinct(StringComparer.Ordinal).Count() == 2
+                && !path.Nodes.Any(node => new[] { "PublicOdbcDataAccess", "PublicSqliteDataAccess",
+                    "PublicLegacyDataAccess", "PublicCloudDataAccess" }
+                    .Any(decoy => node.DisplayName.Contains(decoy, StringComparison.Ordinal)))),
+            "the exact Fill path must pass through both SQL provider overloads without same-named provider decoys");
         var contextReport = await CombinedDependencyPathReporter.BuildReportAsync(new(contextCombined,
             Path.Combine(temp.Path, "cross-dll-context-paths.json"), Format: "json",
             FromSymbol: nodes[handlerJoin.FromNodeId].DisplayName, FromSource: "public-web",
