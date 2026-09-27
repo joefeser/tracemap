@@ -1,5 +1,6 @@
 Imports System.Data
 Imports System.Data.SqlClient
+Imports System.Collections
 
 ' Public synthetic assembly compiled independently of the Web Site publish.
 Namespace PublicProof.Framework
@@ -12,6 +13,12 @@ Namespace PublicProof.Framework
 
         Public Function ExecProc_DataSet(commandText As String, employeeId As String) As DataSet
             Return ExecProc_DataSet(commandText, New SqlParameter("@employeeId", employeeId))
+        End Function
+
+        Public Function ExecProc_DataSet(commandText As String, parameters As ArrayList) As DataSet
+            Dim typedParameters(parameters.Count - 1) As SqlParameter
+            parameters.CopyTo(typedParameters)
+            Return ExecProc_DataSet(commandText, typedParameters)
         End Function
 
         Public Function ExecProc_DataSet(commandText As String, ParamArray parameters As SqlParameter()) As DataSet

@@ -151,7 +151,7 @@ if ($RecheckPathReasons -or $RecheckCompiledApi) {
         $callCounts = [ordered]@{ memberRefs = 0; supportedFill = 0
             systemDataExecute = 0; systemDataOtherFill = 0
             sqliteExecuteOrFill = 0; microsoftSqlExecuteOrFill = 0
-            otherExecuteOrFill = 0 }
+            otherFill = 0; otherExecute = 0 }
         foreach ($line in [IO.File]::ReadLines($factsPath)) {
             if ($line.Contains('"factType":"ManagedIlCallObserved"', [StringComparison]::Ordinal)) {
                 $call = $line | ConvertFrom-Json -Depth 30
@@ -170,7 +170,8 @@ if ($RecheckPathReasons -or $RecheckCompiledApi) {
                             $callCounts.sqliteExecuteOrFill++
                         } elseif ($target -cmatch 'scope\(assembly:name:[0-9]+:Microsoft\.Data\.SqlClient\|') {
                             $callCounts.microsoftSqlExecuteOrFill++
-                        } else { $callCounts.otherExecuteOrFill++ }
+                        } elseif ($method -ceq 'Fill') { $callCounts.otherFill++ }
+                        else { $callCounts.otherExecute++ }
                     }
                 }
                 continue
@@ -185,7 +186,7 @@ if ($RecheckPathReasons -or $RecheckCompiledApi) {
         }
         Write-Output "compiledCallMemberRefs=$($callCounts.memberRefs)"
         foreach ($kind in @('supportedFill', 'systemDataExecute', 'systemDataOtherFill',
-                'sqliteExecuteOrFill', 'microsoftSqlExecuteOrFill', 'otherExecuteOrFill')) {
+                'sqliteExecuteOrFill', 'microsoftSqlExecuteOrFill', 'otherFill', 'otherExecute')) {
             Write-Output "compiledCall.$kind=$($callCounts[$kind])"
         }
         Write-Output "compiledApiHandlerMatches=$($handlerSymbols.Count)"

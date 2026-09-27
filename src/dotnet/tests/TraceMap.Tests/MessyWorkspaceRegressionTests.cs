@@ -1455,8 +1455,8 @@ public sealed class MessyWorkspaceRegressionTests
             [framework], [frameworkPdb], ilBody: true);
         var sameNamed = frameworkScan.Facts.Where(fact => fact.FactType == FactTypes.ManagedMethodDeclared
             && fact.Properties.GetValueOrDefault("metadataName") == "ExecProc_DataSet").ToArray();
-        Require("MW-PUBLISH-CROSSDLL-001", "metadata", sameNamed.Length == 6,
-            "the external public DLL must contain the called overloads and four same-named provider decoys");
+        Require("MW-PUBLISH-CROSSDLL-001", "metadata", sameNamed.Length == 7,
+            "the external public DLL must contain the collection-forwarding overloads and four same-named provider decoys");
         var webIndex = Path.Combine(temp.Path, "cross-dll-web.sqlite");
         var frameworkIndex = Path.Combine(temp.Path, "cross-dll-framework.sqlite");
         SqliteIndexWriter.Write(webIndex, webScan.Manifest, webScan.Facts);
