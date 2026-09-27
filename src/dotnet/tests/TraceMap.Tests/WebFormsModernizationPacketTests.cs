@@ -12,6 +12,47 @@ namespace TraceMap.Tests;
 public sealed class WebFormsModernizationPacketTests
 {
     [Fact]
+    public async Task Packet_accepts_single_source_combined_index_and_preserves_exact_source_identity()
+    {
+        using var temp = new TempDirectory();
+        var manifest = Manifest("Succeeded");
+        var index = Path.Combine(temp.Path, "scan.sqlite");
+        SqliteIndexWriter.Write(index, manifest, [Page("surface:public", "Public/Lookup.aspx", manifest)]);
+        var combined = Path.Combine(temp.Path, "combined.sqlite");
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([index], combined, ["existing-publish"]));
+        var before = Hash(combined);
+        var result = await WebFormsModernizationPacketReporter.WriteAsync(new(combined, Path.Combine(temp.Path, "packet")));
+        var source = Assert.Single(result.Packet.Sources);
+        Assert.Equal(manifest.ScanId, source.ScanId);
+        Assert.Equal(manifest.CommitSha.ToLowerInvariant(), source.CommitSha);
+        Assert.Equal("Public/Lookup.aspx", Assert.Single(result.Packet.Surfaces).Evidence.FilePath);
+        var second = await WebFormsModernizationPacketReporter.WriteAsync(new(combined, Path.Combine(temp.Path, "packet-second")));
+        Assert.Equal(await File.ReadAllTextAsync(result.JsonPath), await File.ReadAllTextAsync(second.JsonPath));
+        Assert.Equal(before, Hash(combined));
+    }
+
+    [Fact]
+    public async Task Packet_rejects_combined_index_without_any_source_identity()
+    {
+        using var temp = new TempDirectory();
+        var manifest = Manifest("Succeeded");
+        var index = Path.Combine(temp.Path, "scan.sqlite");
+        SqliteIndexWriter.Write(index, manifest, [Page("surface:public", "Public/Lookup.aspx", manifest)]);
+        var combined = Path.Combine(temp.Path, "combined.sqlite");
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([index], combined, ["existing-publish"]));
+        await using (var connection = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = combined, Pooling = false }.ToString()))
+        {
+            await connection.OpenAsync();
+            await using var command = connection.CreateCommand();
+            command.CommandText = "delete from index_sources;";
+            await command.ExecuteNonQueryAsync();
+        }
+        var error = await Assert.ThrowsAsync<InvalidDataException>(() => WebFormsModernizationPacketReporter.WriteAsync(new(combined, Path.Combine(temp.Path, "packet"))));
+        Assert.Equal("WebFormsModernizationCombinedSourcesUnavailable", error.Message);
+        Assert.False(Directory.Exists(Path.Combine(temp.Path, "packet")));
+    }
+
+    [Fact]
     public async Task Packet_composes_client_http_handler_through_local_helper_to_external_wcf_boundary()
     {
         using var temp = new TempDirectory();

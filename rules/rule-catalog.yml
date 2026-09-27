@@ -2766,6 +2766,7 @@ rules:
       - webforms-modernization-packet.v1
       - AnalysisGap
     limitations:
+      - A combined index may contain one or more provenance-recorded sources; a single-source combine is not multi-repository coverage. Zero source rows and missing or ambiguous primary Web Forms source identity remain errors.
       - Packet rows preserve upstream evidence and deterministic structural connectivity; they do not add extractor conclusions or prove runtime reachability, event firing, postback behavior, validation, authorization, persistence, production usage, or complete workflow coverage.
       - Handler-call rows are limited to call-edge fact IDs already cited by a retained event-flow fact. They preserve only safe callee identity, call kind, provenance, and limitations; they do not retain arguments or prove receiver type, overload resolution, branch execution, or runtime dispatch.
       - Downstream-boundary rows inventory only supported terminal evidence already composed by the bounded legacy-flow path reader; they do not prove successful service, message, configuration, database, or other external interaction.

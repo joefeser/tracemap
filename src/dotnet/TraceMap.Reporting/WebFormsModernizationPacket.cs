@@ -1677,7 +1677,9 @@ public static class WebFormsModernizationPacketReporter
                 sourceRows.Add((reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.GetString(3), commit, reader.GetString(5), reader.GetString(6)));
             }
         }
-        if (sourceRows.Count < 2)
+        // combine accepts a single scan too (including focused publish proofs).
+        // The combined schema is not evidence that two repositories were loaded.
+        if (sourceRows.Count == 0)
         {
             throw new InvalidDataException("WebFormsModernizationCombinedSourcesUnavailable");
         }
