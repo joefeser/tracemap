@@ -55,17 +55,22 @@ try {
     if (($scanLines -join "`n") -match 'private-') { throw 'WEBFORMS_PROBE_SUMMARY_SCAN_PRIVACY_FAILED' }
     $pathReport = @{
         summary = @{ selectorCandidateCount = 1; graphNodeCount = 7; graphEdgeCount = 5
-            pathCount = 0; gapCount = 2; truncated = $false }
+            pathCount = 0; gapCount = 5; truncated = $true }
         gaps = @(
             @{ gapKind = 'SelectorNoMatch'; message = 'private-source-one' },
-            @{ gapKind = 'UnlinkedSurface'; message = 'private-source-two' })
+            @{ gapKind = 'UnlinkedSurface'; message = 'private-source-two' },
+            @{ gapKind = 'TruncatedByLimit'; reason = 'depth'; message = 'private-source-three' },
+            @{ gapKind = 'ProjectlessPublishMemberAmbiguous'; candidateCount = 0; message = 'private-source-four' },
+            @{ gapKind = 'ProjectlessPublishMemberAmbiguous'; candidateCount = 2; message = 'private-source-five' })
     }
     [IO.File]::WriteAllText((Join-Path $root 'handler-paths.json'),
         ($pathReport | ConvertTo-Json -Depth 10))
     $pathLines = @(& (Join-Path $TraceMapRoot 'scripts/wp.ps1') -OutputRoot $root)
     foreach ($expected in @('pathSelectorCandidates=1', 'pathGraphNodes=7',
-            'pathGraphEdges=5', 'pathCount=0', 'pathGapCount=2', 'pathTruncated=False',
-            'pathGap.SelectorNoMatch=1', 'pathGap.UnlinkedSurface=1')) {
+            'pathGraphEdges=5', 'pathCount=0', 'pathGapCount=5', 'pathTruncated=True',
+            'pathGap.SelectorNoMatch=1', 'pathGap.UnlinkedSurface=1',
+            'pathGap.ProjectlessPublishMemberAmbiguous=2', 'pathTruncation.depth=1',
+            'pathPublishMemberMissing=1', 'pathPublishMemberMultiple=1')) {
         if ($pathLines -cnotcontains $expected) { throw 'WEBFORMS_PROBE_SUMMARY_PATH_TEST_FAILED' }
     }
     if (($pathLines -join "`n") -match 'private-') { throw 'WEBFORMS_PROBE_SUMMARY_PATH_PRIVACY_FAILED' }
