@@ -1551,6 +1551,13 @@ public sealed class MessyWorkspaceRegressionTests
                 && path.Nodes.Last().SurfaceKind == "database-api"),
             $"the exact compiled chain must reach a review-only database API; paths={apiReport.Paths.Count}; "
             + $"apiNodes={contextGraph.Nodes.Count(node => node.SurfaceKind == "database-api")}");
+        Require("MW-PUBLISH-CROSSDLL-001", "command-execute-api",
+            apiReport.Paths.Any(path => path.Nodes.Last().SurfaceName == "SqlCommand.ExecuteNonQuery"
+                && path.Edges.Any(edge => edge.EdgeKind == "compiled-database-api-candidate"))
+            && contextGraph.Nodes.Where(node => node.SurfaceKind == "database-api")
+                .Select(node => node.SurfaceName).ToHashSet(StringComparer.Ordinal)
+                .SetEquals(["DbDataAdapter.Fill", "SqlCommand.ExecuteNonQuery"]),
+            "only the two exact framework API MemberRefs may become review-only terminals");
         var contextReport = await CombinedDependencyPathReporter.BuildReportAsync(new(contextCombined,
             Path.Combine(temp.Path, "cross-dll-context-paths.json"), Format: "json",
             FromSymbol: nodes[handlerJoin.FromNodeId].DisplayName, FromSource: "public-web",

@@ -19,9 +19,13 @@ Namespace PublicProof.Framework
             Using command As New SqlCommand(commandText, connection)
                 command.CommandType = CommandType.StoredProcedure
                 command.Parameters.AddRange(parameters)
-                Using adapter As New SqlDataAdapter(command)
-                    adapter.Fill(result)
-                End Using
+                If commandText.EndsWith(".NonQuery", StringComparison.Ordinal) Then
+                    command.ExecuteNonQuery()
+                Else
+                    Using adapter As New SqlDataAdapter(command)
+                        adapter.Fill(result)
+                    End Using
+                End If
             End Using
             Return result
         End Function

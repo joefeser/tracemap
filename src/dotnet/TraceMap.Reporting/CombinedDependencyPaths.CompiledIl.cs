@@ -120,8 +120,8 @@ public static partial class CombinedDependencyPathReporter
                 continue;
 
             var targetIdentity = call.Properties.GetValueOrDefault("targetIdentity") ?? string.Empty;
-            if (referenceKind == "memberref" && IsFrameworkDataAdapterFill(targetIdentity))
-                AddCompiledDatabaseApiCandidate(graph, call, body, caller);
+            if (referenceKind == "memberref" && TryFrameworkDatabaseApi(targetIdentity, out var api))
+                AddCompiledDatabaseApiCandidate(graph, call, body, caller, api);
             var matched = referenceKind == "methoddef"
                 ? methodsByIdentity.TryGetValue((call.SourceIndexId, targetIdentity), out var targets)
                 : methodsByMemberReference.TryGetValue(targetIdentity, out targets);
@@ -167,20 +167,54 @@ public static partial class CombinedDependencyPathReporter
         }
     }
 
-    private static bool IsFrameworkDataAdapterFill(string targetIdentity) =>
-        targetIdentity.Contains("scope(assembly:name:11:System.Data|", StringComparison.Ordinal)
-        && targetIdentity.Contains("type(namespace:18:System.Data.Common|names:13:DbDataAdapter)", StringComparison.Ordinal)
-        && targetIdentity.Contains("|member:4:Fill|", StringComparison.Ordinal);
+    private static bool TryFrameworkDatabaseApi(string targetIdentity, out string api)
+    {
+        api = string.Empty;
+        if (!targetIdentity.StartsWith("memberref|type:scope(assembly:name:11:System.Data|", StringComparison.Ordinal))
+            return false;
+        var memberStart = targetIdentity.IndexOf("|member:", StringComparison.Ordinal);
+        if (memberStart < 0)
+            return false;
+        var declaringType = targetIdentity[..memberStart];
+        if (HasType("System.Data.Common", "DbDataAdapter") && HasMember("Fill"))
+        {
+            api = "DbDataAdapter.Fill";
+            return true;
+        }
+        var commandType = new[]
+        {
+            (Namespace: "System.Data.Common", Name: "DbCommand"),
+            (Namespace: "System.Data", Name: "IDbCommand"),
+            (Namespace: "System.Data.SqlClient", Name: "SqlCommand"),
+            (Namespace: "System.Data.Odbc", Name: "OdbcCommand"),
+            (Namespace: "System.Data.OleDb", Name: "OleDbCommand")
+        }.FirstOrDefault(type => HasType(type.Namespace, type.Name));
+        if (commandType.Name is null)
+            return false;
+        foreach (var method in new[] { "ExecuteReader", "ExecuteNonQuery", "ExecuteScalar" })
+        {
+            if (!HasMember(method))
+                continue;
+            api = $"{commandType.Name}.{method}";
+            return true;
+        }
+        return false;
+
+        bool HasType(string ns, string name) => declaringType.EndsWith(
+            $"type(namespace:{ns.Length}:{ns}|names:{name.Length}:{name})", StringComparison.Ordinal);
+        bool HasMember(string name) => targetIdentity.AsSpan(memberStart).StartsWith(
+            $"|member:{name.Length}:{name}|", StringComparison.Ordinal);
+    }
 
     private static void AddCompiledDatabaseApiCandidate(EvidenceGraph graph, CombinedFactRow call,
-        CombinedFactRow body, CombinedFactRow caller)
+        CombinedFactRow body, CombinedFactRow caller, string api)
     {
         var from = graph.GetOrAddSymbolNode(caller.SourceIndexId, caller.SourceLabel, caller.TargetSymbol!,
             caller.FilePath, caller.StartLine, caller.EndLine, caller.RuleId, caller.EvidenceTier);
         var terminal = new GraphNode(
             NodeId: $"surface:compiled-database-api:{call.CombinedFactId}",
             NodeKind: "DatabaseApiCandidate",
-            DisplayName: "compiled:DbDataAdapter.Fill",
+            DisplayName: $"compiled:{api}",
             SourceIndexId: call.SourceIndexId,
             SourceLabel: call.SourceLabel,
             ScanId: call.ScanId,
@@ -193,10 +227,10 @@ public static partial class CombinedDependencyPathReporter
             StartLine: call.StartLine,
             EndLine: call.EndLine,
             SurfaceKind: "database-api",
-            SurfaceName: "DbDataAdapter.Fill",
+            SurfaceName: api,
             HttpMethod: null,
             NormalizedPathKey: null,
-            OperationName: "Fill",
+            OperationName: api[(api.LastIndexOf('.') + 1)..],
             TableName: null,
             ColumnNames: null,
             SourceKind: "compiled-il-framework-api",
@@ -205,8 +239,9 @@ public static partial class CombinedDependencyPathReporter
             TextLength: null,
             PackageName: null,
             ConfigKey: null,
-            SurfaceSubtype: "compiled-data-adapter-fill-candidate",
-            Limitations: ["Static IL call to a framework data adapter API; no SQL text, database provider dispatch, source line, or runtime execution is established."]);
+            SurfaceSubtype: api == "DbDataAdapter.Fill"
+                ? "compiled-data-adapter-fill-candidate" : "compiled-command-execute-candidate",
+            Limitations: ["Static IL call to a framework database API; no SQL text, database provider dispatch, source line, or runtime execution is established."]);
         graph.AddNode(terminal);
         graph.AddEdge(new GraphEdge(
             $"compiled-database-api:{call.CombinedFactId}", "compiled-database-api-candidate",
