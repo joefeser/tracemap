@@ -2782,10 +2782,13 @@ review candidate, not a proven dispatch destination. Missing or ambiguous
 admitted targets are gaps; unadmitted external assemblies are not inferred as
 absent.
 An admitted IL call to the exact framework `System.Data.Common.DbDataAdapter.Fill`
-MemberRef can terminate a `--to-surface database-api` path as a Tier3
-`compiled-database-api-candidate`. This identifies a static data-adapter API
-call only. It supplies no SQL text, database provider dispatch, source line,
-or runtime proof, and it never substitutes for a `sql-query` terminal.
+MemberRef or to `ExecuteReader`, `ExecuteNonQuery`, or `ExecuteScalar` on a
+`System.Data` command type (`DbCommand`, `IDbCommand`, `SqlCommand`,
+`OdbcCommand`, or `OleDbCommand`) can terminate a `--to-surface database-api`
+path as a Tier3 `compiled-database-api-candidate`. The assembly, type, and
+member must all match. This identifies a static database API call only. It
+supplies no SQL text, database provider dispatch, source line, or runtime
+proof, and it never substitutes for a `sql-query` terminal.
 
 The public `root-generated` test proves that a bound IL walk can cross an
 excluded generated bridge to supported SQL evidence while the corresponding
