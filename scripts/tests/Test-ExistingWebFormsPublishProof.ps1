@@ -73,6 +73,9 @@ try {
     $apiLines = @(& (Join-Path $TraceMapRoot 'scripts/wp.ps1') `
         -OutputRoot $output -RecheckCompiledApi)
     if ($apiLines -cnotcontains 'compiledApiHandlerMatches=1' -or
+        @($apiLines | Where-Object { $_ -cmatch '^compiledCallMemberRefs=\d+$' }).Count -ne 1 -or
+        @($apiLines | Where-Object { $_ -cmatch '^compiledCall\.supportedFill=\d+$' }).Count -ne 1 -or
+        @($apiLines | Where-Object { $_ -cmatch '^compiledCall\.systemDataExecute=\d+$' }).Count -ne 1 -or
         @($apiLines | Where-Object { $_ -cmatch '^compiledApiPaths=\d+$' }).Count -ne 1 -or
         $apiLines -cnotcontains 'compiledApiSelectorCandidates=1' -or
         $apiLines -cnotcontains 'compiledApiStatus=unique-handler' -or

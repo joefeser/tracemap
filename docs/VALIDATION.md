@@ -3691,6 +3691,11 @@ prints only candidate counts and categorical truncation reasons. Multiple or
 missing handler facts stop the query; multiple graph start nodes withhold the
 path count. `Truncated=True` alone does not identify
 which bound was hit; inspect the reason counts before interpreting zero paths.
+The recheck also counts saved `ManagedIlCallObserved` MemberRefs by fixed
+`Fill`/`Execute*` API families. These global counts may include unreachable
+calls from other published assemblies; they diagnose terminal coverage and do
+not establish a handler path or SQL execution. Only the local receipt hashes
+the private facts input; shareable output contains category counts alone.
 The command does not rebuild, republish, rescan, or assert SQL source ownership.
 For a saved bound scan with one source-bound `IlReaderDisagreement` and one
 source-bound `IlTextLimitExceeded`, `scripts/wil.ps1` locally replays only those

@@ -148,15 +148,45 @@ if ($RecheckPathReasons -or $RecheckCompiledApi) {
         }
         $pageSource = [string]$receipt.pages[0].sourcePath
         $handlerSymbols = [Collections.Generic.List[string]]::new()
+        $callCounts = [ordered]@{ memberRefs = 0; supportedFill = 0
+            systemDataExecute = 0; systemDataOtherFill = 0
+            sqliteExecuteOrFill = 0; microsoftSqlExecuteOrFill = 0
+            otherExecuteOrFill = 0 }
         foreach ($line in [IO.File]::ReadLines($factsPath)) {
+            if ($line.Contains('"factType":"ManagedIlCallObserved"', [StringComparison]::Ordinal)) {
+                $call = $line | ConvertFrom-Json -Depth 30
+                if ([string]$call.properties.referenceKind -ceq 'memberref') {
+                    $callCounts.memberRefs++
+                    $target = [string]$call.properties.targetIdentity
+                    if ($target -cmatch '\|member:[0-9]+:(Fill|ExecuteReader|ExecuteNonQuery|ExecuteScalar)\|') {
+                        $method = $Matches[1]
+                        if ($target.Contains('scope(assembly:name:11:System.Data|', [StringComparison]::Ordinal)) {
+                            if ($method -ceq 'Fill' -and
+                                $target.Contains('type(namespace:18:System.Data.Common|names:13:DbDataAdapter)', [StringComparison]::Ordinal)) {
+                                $callCounts.supportedFill++
+                            } elseif ($method -ceq 'Fill') { $callCounts.systemDataOtherFill++ }
+                            else { $callCounts.systemDataExecute++ }
+                        } elseif ($target -cmatch 'scope\(assembly:name:[0-9]+:System\.Data\.SQLite\|') {
+                            $callCounts.sqliteExecuteOrFill++
+                        } elseif ($target -cmatch 'scope\(assembly:name:[0-9]+:Microsoft\.Data\.SqlClient\|') {
+                            $callCounts.microsoftSqlExecuteOrFill++
+                        } else { $callCounts.otherExecuteOrFill++ }
+                    }
+                }
+                continue
+            }
             if (!$line.Contains('"factType":"WebFormsHandlerResolved"', [StringComparison]::Ordinal)) { continue }
             $fact = $line | ConvertFrom-Json -Depth 30
             if ([string]$fact.properties.handlerName -ieq $fromSymbol -and
                 [string]$fact.properties.markupFile -ieq $pageSource -and
                 ![string]::IsNullOrWhiteSpace([string]$fact.properties.handlerSymbol)) {
-                $handlerSymbols.Add([string]$fact.properties.handlerSymbol)
-                if ($handlerSymbols.Count -gt 16) { break }
+                if ($handlerSymbols.Count -lt 17) { $handlerSymbols.Add([string]$fact.properties.handlerSymbol) }
             }
+        }
+        Write-Output "compiledCallMemberRefs=$($callCounts.memberRefs)"
+        foreach ($kind in @('supportedFill', 'systemDataExecute', 'systemDataOtherFill',
+                'sqliteExecuteOrFill', 'microsoftSqlExecuteOrFill', 'otherExecuteOrFill')) {
+            Write-Output "compiledCall.$kind=$($callCounts[$kind])"
         }
         Write-Output "compiledApiHandlerMatches=$($handlerSymbols.Count)"
         if ($handlerSymbols.Count -ne 1) {
@@ -187,6 +217,9 @@ if ($RecheckPathReasons -or $RecheckCompiledApi) {
         [Text.Encoding]::UTF8.GetBytes($generatorInventory))).ToLowerInvariant()
     $inputInventory = (Get-FileHash -LiteralPath $combinedPath -Algorithm SHA256).Hash.ToLowerInvariant() + "`n" +
         (Get-FileHash -LiteralPath $pathReportPath -Algorithm SHA256).Hash.ToLowerInvariant()
+    if ($RecheckCompiledApi) {
+        $inputInventory += "`n" + (Get-FileHash -LiteralPath $factsPath -Algorithm SHA256).Hash.ToLowerInvariant()
+    }
     $inputSha = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData(
         [Text.Encoding]::UTF8.GetBytes($inputInventory))).ToLowerInvariant()
     $receipt = [ordered]@{ schemaVersion = 'webforms-path-recheck.v1'; visibility = 'local-only'
