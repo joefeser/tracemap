@@ -824,6 +824,30 @@ public sealed class MessyWorkspaceRegressionTests
                 && nodes[edge.ToNodeId].DisplayName.Contains("ExecuteProcedure", StringComparison.Ordinal)),
             "the inherited Open-initialized field callvirt must remain a review-tier compiled candidate");
 
+        // This portion also runs on macOS: two independent bound scans must
+        // retain the same exact cross-assembly MemberRef after index combine.
+        var entryScan = ScanBoundRoot(temp, "root-crosslanguage/csharp", "separate-entry",
+            [Path.Combine(source, "csharp", "bin", "Debug", "net10.0", "CrossLanguageEntry.dll")],
+            ilBody: true);
+        var bridgeScan = ScanBoundRoot(temp, "root-crosslanguage/vb", "separate-bridge",
+            [Path.Combine(source, "vb", "bin", "Debug", "net10.0", "CrossLanguage.VisualBasic.dll")],
+            ilBody: true);
+        var entryIndex = Path.Combine(temp.Path, "separate-entry.sqlite");
+        var bridgeIndex = Path.Combine(temp.Path, "separate-bridge.sqlite");
+        SqliteIndexWriter.Write(entryIndex, entryScan.Manifest, entryScan.Facts);
+        SqliteIndexWriter.Write(bridgeIndex, bridgeScan.Manifest, bridgeScan.Facts);
+        var separateCombined = Path.Combine(temp.Path, "separate-cross-assembly.sqlite");
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([entryIndex, bridgeIndex],
+            separateCombined, ["entry", "bridge"]));
+        var separateGraph = await CombinedDependencyPathReporter.BuildGraphInventoryAsync(separateCombined);
+        var separateNodes = separateGraph.Nodes.ToDictionary(node => node.NodeId, StringComparer.Ordinal);
+        Require("MW-CROSSLANGUAGE-001", "separate-bound-scans",
+            separateGraph.Edges.Count(edge => edge.EdgeKind == "compiled-il-call"
+                && separateNodes[edge.FromNodeId].SourceLabel == "entry"
+                && separateNodes[edge.ToNodeId].SourceLabel == "bridge"
+                && separateNodes[edge.ToNodeId].DisplayName.Contains("VbBridge", StringComparison.Ordinal)) == 1,
+            "separately bound indexes must retain one exact cross-assembly IL call");
+
         var ambiguousIndex = Path.Combine(temp.Path, "cross-language-il-ambiguous.sqlite");
         SqliteIndexWriter.Write(ambiguousIndex, scan.Manifest, [.. scan.Facts,
             declaration with { FactId = "fact-synthetic-duplicate-cross-assembly-method" }]);
@@ -1385,6 +1409,138 @@ public sealed class MessyWorkspaceRegressionTests
             changed.Pages.Count == 0
             && changed.Provenance?.GapKinds.SequenceEqual(["WebFormsPublishArtifactMismatch"]) == true,
             "a changed .compiled map must withhold every page mapping behind a categorical gap");
+    }
+
+    [Fact]
+    public async Task Windows_mapless_publish_crosses_separately_bound_provider_with_same_named_decoys()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        using var temp = new TempDirectory();
+        var root = FindRepoRoot();
+        var published = Path.Combine(temp.Path, "cross-dll-publish");
+        var script = Path.Combine(root, "scripts", "validation", "Test-PublicWebFormsPublish.ps1");
+        var start = new ProcessStartInfo("pwsh")
+        {
+            UseShellExecute = false, RedirectStandardOutput = true, RedirectStandardError = true
+        };
+        foreach (var argument in new[] { "-NoProfile", "-File", script, "-TraceMapRoot", root,
+                     "-OutputRoot", published, "-Updatable", "-CrossAssembly" }) start.ArgumentList.Add(argument);
+        using var process = Process.Start(start)!;
+        Require("MW-PUBLISH-CROSSDLL-001", "publish", process.WaitForExit(120_000),
+            "the public cross-DLL publish exceeded two minutes");
+        Require("MW-PUBLISH-CROSSDLL-001", "publish", process.ExitCode == 0,
+            $"the public cross-DLL publish failed: {process.StandardError.ReadToEnd()}");
+        var receipt = Path.Combine(published, "publish-receipt.local.json");
+        using var receiptJson = JsonDocument.Parse(File.ReadAllBytes(receipt));
+        Require("MW-PUBLISH-CROSSDLL-001", "provenance",
+            receiptJson.RootElement.GetProperty("frameworkCompilerSha256").GetString()?.Length == 64
+            && receiptJson.RootElement.GetProperty("frameworkBoundedInputSha256").GetString()?.Length == 64,
+            "the separately generated public DLL needs its exact compiler and bounded input hashes");
+        var dlls = Directory.GetFiles(Path.Combine(published, "bin"), "*.dll");
+        var framework = dlls.Single(path => Path.GetFileName(path) == "PublicProof.Framework.dll");
+        var webDlls = dlls.Where(path => path != framework).ToArray();
+        Require("MW-PUBLISH-CROSSDLL-001", "publish",
+            webDlls.Length == 4 && Directory.GetFiles(published, "*.compiled", SearchOption.AllDirectories).Length == 3
+            && Directory.GetFiles(published, "*.pdb", SearchOption.AllDirectories).Length == 0,
+            "the public publish must retain the mapless no-PDB shape with one external DLL");
+
+        var webScan = ScanBoundRoot(temp, "vb-publish-crossdll", "cross-dll-web", webDlls,
+            ilBody: true, webFormsPublishReceipt: receipt);
+        var frameworkPdb = published + ".framework.pdb";
+        Require("MW-PUBLISH-CROSSDLL-001", "provenance", File.Exists(frameworkPdb)
+            && Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(frameworkPdb))).ToLowerInvariant()
+                == receiptJson.RootElement.GetProperty("frameworkPdbSha256").GetString(),
+            "the public external DLL must have one separately hashed build PDB outside the publish folder");
+        var frameworkScan = ScanBoundRoot(temp, "vb-publish-crossdll-framework", "cross-dll-framework",
+            [framework], [frameworkPdb], ilBody: true);
+        var sameNamed = frameworkScan.Facts.Where(fact => fact.FactType == FactTypes.ManagedMethodDeclared
+            && fact.Properties.GetValueOrDefault("metadataName") == "ExecProc_DataSet").ToArray();
+        Require("MW-PUBLISH-CROSSDLL-001", "metadata", sameNamed.Length == 6,
+            "the external public DLL must contain the called overloads and four same-named provider decoys");
+        var webIndex = Path.Combine(temp.Path, "cross-dll-web.sqlite");
+        var frameworkIndex = Path.Combine(temp.Path, "cross-dll-framework.sqlite");
+        SqliteIndexWriter.Write(webIndex, webScan.Manifest, webScan.Facts);
+        SqliteIndexWriter.Write(frameworkIndex, frameworkScan.Manifest, frameworkScan.Facts);
+        var combined = Path.Combine(temp.Path, "cross-dll-combined.sqlite");
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([webIndex, frameworkIndex], combined,
+            ["public-web", "public-framework"]));
+        var graph = await CombinedDependencyPathReporter.BuildGraphInventoryAsync(combined);
+        var nodes = graph.Nodes.ToDictionary(node => node.NodeId, StringComparer.Ordinal);
+        var externalEdges = graph.Edges.Where(edge => edge.EdgeKind is "compiled-il-call" or "compiled-il-callvirt-candidate"
+            && nodes[edge.FromNodeId].SourceLabel == "public-web"
+            && nodes[edge.ToNodeId].SourceLabel == "public-framework"
+            && nodes[edge.ToNodeId].DisplayName.Contains("ExecProc_DataSet", StringComparison.Ordinal)).ToArray();
+        Require("MW-PUBLISH-CROSSDLL-001", "cross-assembly",
+            externalEdges.Length == 1
+            && nodes[externalEdges[0].ToNodeId].DisplayName.Contains("PublicSqlDataAccess", StringComparison.Ordinal)
+            && !externalEdges.Any(edge => nodes[edge.ToNodeId].DisplayName.Contains("PublicOdbcDataAccess", StringComparison.Ordinal)
+                || nodes[edge.ToNodeId].DisplayName.Contains("PublicSqliteDataAccess", StringComparison.Ordinal)
+                || nodes[edge.ToNodeId].DisplayName.Contains("PublicLegacyDataAccess", StringComparison.Ordinal)
+                || nodes[edge.ToNodeId].DisplayName.Contains("PublicCloudDataAccess", StringComparison.Ordinal)),
+            $"the Web Site must cross by exact MemberRef to one bound SQL provider; edges={externalEdges.Length}");
+
+        var handlerJoins = graph.Edges.Where(edge => edge.EdgeKind == "projectless-publish-method-candidate"
+            && nodes[edge.FromNodeId].DisplayName.Contains("Names_Init", StringComparison.Ordinal)).ToArray();
+        Require("MW-PUBLISH-CROSSDLL-001", "handler-join", handlerJoins.Length == 1,
+            $"the public mapless handler did not make one review candidate; joins={handlerJoins.Length}; "
+            + $"publishStatus={webScan.Manifest.WebFormsPublishProvenance?.Status}; "
+            + $"publishGaps={string.Join(',', webScan.Manifest.WebFormsPublishProvenance?.GapKinds ?? [])}; "
+            + $"graphGaps={string.Join(',', graph.Gaps.Select(gap => gap.GapKind).Distinct(StringComparer.Ordinal))}");
+        var handlerJoin = handlerJoins[0];
+        var report = await CombinedDependencyPathReporter.BuildReportAsync(new(combined,
+            Path.Combine(temp.Path, "cross-dll-paths.json"), Format: "json",
+            FromSymbol: nodes[handlerJoin.FromNodeId].DisplayName, FromSource: "public-web",
+            ToSurface: "sql-query", MaxDepth: 20, MaxPaths: 256));
+        Require("MW-PUBLISH-CROSSDLL-001", "traversal", report.Paths.Any(path =>
+                path.Edges.Any(edge => edge.EdgeKind == "projectless-publish-method-candidate")
+                && path.Edges.Any(edge => edge.EdgeKind is "compiled-il-call" or "compiled-il-callvirt-candidate"
+                    && edge.ToNodeId == externalEdges[0].ToNodeId)
+                && path.Edges.Any(edge => edge.EdgeKind == "projectless-pdb-compiled-to-source")
+                && path.Nodes.Any(node => node.SurfaceKind == "sql-query")),
+            $"the separately bound provider did not reach public SQL evidence; paths={report.Paths.Count}; "
+            + $"pdbEdges={graph.Edges.Count(edge => edge.EdgeKind == "projectless-pdb-compiled-to-source")}");
+
+        var noPdbScan = ScanBoundRoot(temp, "vb-publish-crossdll-framework", "cross-dll-no-pdb",
+            [framework], ilBody: true);
+        var noPdbIndex = Path.Combine(temp.Path, "cross-dll-no-pdb.sqlite");
+        SqliteIndexWriter.Write(noPdbIndex, noPdbScan.Manifest, noPdbScan.Facts);
+        var noPdbCombined = Path.Combine(temp.Path, "cross-dll-no-pdb-combined.sqlite");
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([webIndex, noPdbIndex], noPdbCombined,
+            ["public-web", "public-framework-no-pdb"]));
+        var noPdbReport = await CombinedDependencyPathReporter.BuildReportAsync(new(noPdbCombined,
+            Path.Combine(temp.Path, "cross-dll-no-pdb-paths.json"), Format: "json",
+            FromSymbol: nodes[handlerJoin.FromNodeId].DisplayName, FromSource: "public-web",
+            ToSurface: "sql-query", MaxDepth: 20, MaxPaths: 256));
+        Require("MW-PUBLISH-CROSSDLL-001", "no-pdb",
+            noPdbReport.Paths.Count == 0
+            && !noPdbScan.Facts.Any(fact => fact.FactType == FactTypes.PdbSourceDocumentReconciled),
+            "a separately bound DLL without PDB evidence must not acquire a source SQL path");
+
+        var frameworkSource = MessyRoot("vb-publish-crossdll-framework");
+        var contextScan = ScanEngine.Scan(new ScanOptions(frameworkSource,
+            Path.Combine(temp.Path, "cross-dll-context-scan"), CompiledInputPaths: [framework],
+            IlBodyEvidence: true));
+        var contextIndex = Path.Combine(temp.Path, "cross-dll-context.sqlite");
+        SqliteIndexWriter.Write(contextIndex, contextScan.Manifest, contextScan.Facts);
+        var contextCombined = Path.Combine(temp.Path, "cross-dll-context-combined.sqlite");
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([webIndex, contextIndex], contextCombined,
+            ["public-web", "public-framework-context"]));
+        var contextGraph = await CombinedDependencyPathReporter.BuildGraphInventoryAsync(contextCombined);
+        var contextNodes = contextGraph.Nodes.ToDictionary(node => node.NodeId, StringComparer.Ordinal);
+        Require("MW-PUBLISH-CROSSDLL-001", "unbound-context",
+            !contextGraph.Edges.Any(edge => edge.EdgeKind is "compiled-il-call" or "compiled-il-callvirt-candidate"
+                && contextNodes[edge.FromNodeId].SourceLabel == "public-web"
+                && contextNodes[edge.ToNodeId].SourceLabel == "public-framework-context"
+                && contextNodes[edge.ToNodeId].DisplayName.Contains("ExecProc_DataSet", StringComparison.Ordinal))
+            && contextGraph.Gaps.Any(gap => gap.GapKind == "CompiledIlTargetUnavailable"
+                && gap.Reason == "target-assembly-present-without-bound-provenance"),
+            "an unbound published DLL must leave the cross-assembly IL call as a categorical gap");
+        var contextReport = await CombinedDependencyPathReporter.BuildReportAsync(new(contextCombined,
+            Path.Combine(temp.Path, "cross-dll-context-paths.json"), Format: "json",
+            FromSymbol: nodes[handlerJoin.FromNodeId].DisplayName, FromSource: "public-web",
+            ToSurface: "sql-query", MaxDepth: 20, MaxPaths: 256));
+        Require("MW-PUBLISH-CROSSDLL-001", "unbound-path", contextReport.Paths.Count == 0,
+            "artifact-only context must not complete the handler-to-SQL path");
     }
 
     [Theory]

@@ -39,6 +39,13 @@ public static partial class CombinedDependencyPathReporter
             .Select(value => "memberref|type:scope(" + value + ")type(")
             .Distinct(StringComparer.Ordinal)
             .ToArray();
+        var unboundReferencePrefixes = methods
+            .Where(fact => fact.Properties.GetValueOrDefault("provenanceState") != "bound")
+            .Select(fact => fact.Properties.GetValueOrDefault("assemblyReferenceIdentity"))
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Select(value => "memberref|type:scope(" + value + ")type(")
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
         var bodiesByOriginalId = facts
             .Where(fact => fact.FactType == FactTypes.ManagedIlBodyDeclared)
             .GroupBy(fact => (fact.SourceIndexId, fact.OriginalFactId))
@@ -126,6 +133,11 @@ public static partial class CombinedDependencyPathReporter
                         targets is { Length: > 1 } ? "CompiledIlTargetAmbiguous" : "CompiledIlTargetUnavailable",
                         referenceKind == "methoddef" ? "same-assembly-methoddef-target-not-unique" : "admitted-memberref-target-not-unique",
                         targets?.Length);
+                }
+                else if (unboundReferencePrefixes.Any(prefix => targetIdentity.StartsWith(prefix, StringComparison.Ordinal)))
+                {
+                    AddCompiledIlGap(graph, call, "CompiledIlTargetUnavailable",
+                        "target-assembly-present-without-bound-provenance", null);
                 }
                 continue;
             }
@@ -573,8 +585,10 @@ public static partial class CombinedDependencyPathReporter
     private static void AddProjectlessPdbIdentityEdges(EvidenceGraph graph, IReadOnlyList<CombinedFactRow> facts)
     {
         var declarations = facts.Where(fact => fact.FactType == FactTypes.MethodDeclared
-                && fact.RuleId == RuleIds.VisualBasicSyntaxDeclarations
-                && fact.EvidenceTier == EvidenceTiers.Tier3SyntaxOrTextual
+                && ((fact.RuleId == RuleIds.VisualBasicSyntaxDeclarations
+                     && fact.EvidenceTier == EvidenceTiers.Tier3SyntaxOrTextual)
+                    || (fact.RuleId == RuleIds.VisualBasicSemanticDeclarations
+                        && fact.EvidenceTier == EvidenceTiers.Tier1Semantic))
                 && !string.IsNullOrWhiteSpace(fact.Properties.GetValueOrDefault("memberIdentity"))
                 && int.TryParse(fact.Properties.GetValueOrDefault("bodyStartLine"), out _)
                 && int.TryParse(fact.Properties.GetValueOrDefault("bodyEndLine"), out _))
@@ -667,16 +681,21 @@ public static partial class CombinedDependencyPathReporter
             var methodNode = graph.GetOrAddSymbolNode(method.SourceIndexId, method.SourceLabel,
                 method.TargetSymbol!, method.FilePath, method.StartLine, method.EndLine,
                 method.RuleId, method.EvidenceTier);
+            var evidenceIds = points.Select(point => point.CombinedFactId)
+                .Append(document.CombinedFactId).Append(join.CombinedFactId)
+                .Append(pdbDocument.CombinedFactId).Append(pdbMethod.CombinedFactId)
+                .Append(declaration.CombinedFactId).Append(method.CombinedFactId)
+                .Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray();
             graph.AddEdge(new GraphEdge(
                 $"projectless-source-pdb-identity:{join.CombinedFactId}:{declaration.CombinedFactId}",
                 "projectless-source-pdb-identity", sourceNode.NodeId, methodNode.NodeId,
                 "EvidenceEdge", ProjectlessPdbIdentityRuleId, EvidenceTiers.Tier2Structural,
-                points.Select(point => point.CombinedFactId)
-                    .Append(document.CombinedFactId).Append(join.CombinedFactId)
-                    .Append(pdbDocument.CombinedFactId).Append(pdbMethod.CombinedFactId)
-                    .Append(declaration.CombinedFactId).Append(method.CombinedFactId)
-                    .Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray(),
-                [], SafePath(declaration.FilePath), declaration.StartLine, declaration.EndLine));
+                evidenceIds, [], SafePath(declaration.FilePath), declaration.StartLine, declaration.EndLine));
+            graph.AddEdge(new GraphEdge(
+                $"projectless-pdb-compiled-to-source:{join.CombinedFactId}:{declaration.CombinedFactId}",
+                "projectless-pdb-compiled-to-source", methodNode.NodeId, sourceNode.NodeId,
+                "EvidenceEdge", ProjectlessPdbIdentityRuleId, EvidenceTiers.Tier2Structural,
+                evidenceIds, [], SafePath(declaration.FilePath), declaration.StartLine, declaration.EndLine));
         }
     }
 

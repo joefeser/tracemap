@@ -3634,6 +3634,23 @@ that needs a context DLL cannot become a bound IL edge through this run.
 Use the separately provenance-bound repository run when such an edge is
 needed. This mode does not attribute UnitedFramework or third-party binaries
 to the Web Site commit, nor does it prove a complete cross-repository path.
+The public `vb-publish-crossdll` Windows regression publishes a mapless Web
+Site with five DLLs and three `.compiled` maps, while keeping the independently
+built framework PDB outside the published folder. Five framework provider
+classes expose the same method name; the graph admits only the exact bound
+MemberRef target. The cross-platform `root-crosslanguage` regression separately
+binds and combines two compiled indexes to exercise the same MemberRef rule
+without requiring ASP.NET precompilation. A second source index for the
+framework must bind that exact DLL and reconcile its portable-PDB document
+and method before the compiled call can return to the source SQL terminal. The page entry remains Tier3
+review-only, the bound IL call is static evidence, and the PDB bridge is Tier2
+structural evidence, never runtime execution. The regression requires zero
+SQL paths when the framework PDB is unavailable or its DLL is only unbound
+artifact context; the latter also emits `CompiledIlTargetUnavailable` with
+`target-assembly-present-without-bound-provenance`. A same-named provider,
+an independently rebuilt DLL with different bytes, or an unbound context DLL
+cannot complete this chain. The synthetic fixture does not attest any private
+publish or independently built historical artifact.
 Both the initial admission probe and the bound scan use an explicit 8,192-character
 compiled metadata text limit. This is a bounded override of the general 4,096-character
 default, and the effective limit is recorded in each scan manifest. An assembly
