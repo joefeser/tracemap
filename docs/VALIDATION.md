@@ -3699,13 +3699,21 @@ prints `replaySkipped=selected-method-disagreement` and leaves the saved scan
 unchanged.
 `scripts/wm.ps1 -TypeName <type> -MethodName <method>` correlates a compiled
 method family with its saved IL bodies and per-assembly IL admission outcome.
-It prints counts and categorical gaps only. When the relevant assembly has
+It counts exact IL `member:Fill` references by framework owner and assembly
+scope, and prints counts and categorical gaps only. When the relevant assembly has
 `IlTotalWorkLimitExceeded`, `scripts/wr.ps1 -SourceSiteRoot <site-root>
 -TypeName <type> -MethodName <method>` reuses the saved receipt, binding, and
 copied publish bytes for one new scan with an explicit 20,000,000-unit IL
 budget. It writes a separate scan and exact-handler `database-api` path
 report under the same local output root. It verifies the source commit and
-copied assembly hashes before scanning; the original scan is retained. A
+copied assembly hashes before scanning; the original scan is retained. The
+replay path query uses the unique resolved handler symbol from the receipted
+page; the short handler name alone is not an exact graph selector. For an
+existing replay, `scripts/wpath.ps1` reruns only that corrected path query
+against the saved combined index and writes a separate exact-handler report.
+`scripts/wpost.ps1 -TypeName <type> -MethodName <method>` reads a saved replay
+without scanning or querying and reports the selected method family's Fill
+calls and root reachability counts. A
 larger budget changes coverage, not the evidence tier or proof of execution.
 `scripts/wp.ps1 -RecheckPathReasons` reruns only the saved path query against
 the local combined index and prints categorical published-member mismatch
