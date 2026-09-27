@@ -31,10 +31,34 @@ $OutputRoot = [IO.Path]::GetFullPath($OutputRoot)
 if (!(Test-Path -LiteralPath $OutputRoot -PathType Container)) { throw 'WEBFORMS_STANDALONE_REVIEW_OUTPUT_ROOT_UNAVAILABLE' }
 
 if (!$PacketPath) {
-    $latest = Get-ChildItem -LiteralPath $OutputRoot -File -Recurse -Filter 'webforms-modernization.json' |
+    $candidates = @(Get-ChildItem -LiteralPath $OutputRoot -File -Recurse -Filter 'webforms-modernization.json' |
         Where-Object { $_.FullName -match '[\\/]webforms-page-list-[^\\/]+[\\/]webforms-modernization\.json$' } |
-        Sort-Object LastWriteTimeUtc, FullName -Descending |
-        Select-Object -First 1
+        Sort-Object LastWriteTimeUtc, FullName -Descending)
+    $latest = $candidates | Select-Object -First 1
+    if ($CompiledPathHandoffPath) {
+        if (!(Test-Path -LiteralPath $CompiledPathHandoffPath -PathType Leaf)) { throw 'WEBFORMS_STANDALONE_REVIEW_COMPILED_HANDOFF_UNAVAILABLE' }
+        $handoffFile = Get-Item -LiteralPath $CompiledPathHandoffPath
+        if ($handoffFile.Length -le 0 -or $handoffFile.Length -gt 16MB) { throw 'WEBFORMS_STANDALONE_REVIEW_COMPILED_HANDOFF_LIMIT' }
+        $handoff = [IO.File]::ReadAllText($handoffFile.FullName) | ConvertFrom-Json -Depth 50
+        $sourceCommit = [string]$handoff.provenance.sourceCommitSha
+        if ($sourceCommit -cnotmatch '^[0-9a-f]{40}$') { throw 'WEBFORMS_STANDALONE_REVIEW_COMPILED_COMMIT_INVALID' }
+        if ($candidates.Count -gt 64) { throw 'WEBFORMS_STANDALONE_REVIEW_PACKET_DISCOVERY_LIMIT' }
+        $latest = $null
+        $discoveryBytes = 0L
+        foreach ($candidate in $candidates) {
+            $discoveryBytes += $candidate.Length
+            if ($candidate.Length -le 0 -or $candidate.Length -gt 128MB -or $discoveryBytes -gt 512MB) { throw 'WEBFORMS_STANDALONE_REVIEW_PACKET_DISCOVERY_LIMIT' }
+            $candidatePacket = [IO.File]::ReadAllText($candidate.FullName) | ConvertFrom-Json -Depth 100
+            if ($candidatePacket.schemaVersion -cne 'webforms-modernization-packet.v1') { continue }
+            if (@($candidatePacket.sources | Where-Object { [string]$_.commitSha -ceq $sourceCommit }).Count -eq 1) {
+                $latest = $candidate
+                break
+            }
+        }
+        Write-Output "compiledPathAttachmentSavedPacketCandidates=$($candidates.Count)"
+        Write-Output "compiledPathAttachmentCompatiblePacket=$($null -ne $latest)"
+        if ($null -eq $latest) { throw 'WEBFORMS_STANDALONE_REVIEW_COMPATIBLE_PACKET_UNAVAILABLE' }
+    }
     if ($null -eq $latest) { throw 'WEBFORMS_STANDALONE_REVIEW_PACKET_UNAVAILABLE' }
     $PacketPath = $latest.FullName
 }

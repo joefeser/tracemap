@@ -254,7 +254,17 @@ try {
         }) })
     }
     [IO.File]::WriteAllText($compiledPathInput, (($compiledFixture | ConvertTo-Json -Depth 20) + "`n"), [Text.UTF8Encoding]::new($false))
-    $standaloneOutput = @(& $standaloneScript -PacketPath $packetPath -ConfigPath $standaloneConfig -CompiledPathHandoffPath $compiledPathInput -PageId 'page-001')
+    $compatiblePacketFolder = Join-Path $outputRoot 'webforms-page-list-compatible'
+    $unrelatedPacketFolder = Join-Path $outputRoot 'webforms-page-list-unrelated'
+    [void][IO.Directory]::CreateDirectory($compatiblePacketFolder)
+    [void][IO.Directory]::CreateDirectory($unrelatedPacketFolder)
+    $compatiblePacketPath = Join-Path $compatiblePacketFolder 'webforms-modernization.json'
+    [IO.File]::Copy($packetPath, $compatiblePacketPath)
+    $unrelatedPacketPath = Join-Path $unrelatedPacketFolder 'webforms-modernization.json'
+    [IO.File]::WriteAllText($unrelatedPacketPath, ((@{ schemaVersion = 'webforms-modernization-packet.v1'; sources = @(@{ commitSha = ('f' * 40) }) } | ConvertTo-Json -Depth 5) + "`n"))
+    [IO.File]::SetLastWriteTimeUtc($unrelatedPacketPath, [DateTime]::UtcNow.AddMinutes(1))
+    $standaloneOutput = @(& $standaloneScript -ConfigPath $standaloneConfig -CompiledPathHandoffPath $compiledPathInput -PageId 'page-001')
+    if (@($standaloneOutput | Where-Object { $_ -eq "standaloneReviewPacket=$compatiblePacketPath" }).Count -ne 1) { throw 'Standalone review selected the newest unrelated packet instead of the source-commit-compatible packet.' }
     $standaloneRootLine = @($standaloneOutput | Where-Object { $_ -like 'standaloneReviewRoot=*' })
     if ($standaloneRootLine.Count -ne 1) { throw 'Standalone review did not report exactly one review root.' }
     $standaloneRoot = $standaloneRootLine[0].Substring('standaloneReviewRoot='.Length)
@@ -285,8 +295,12 @@ try {
     [IO.File]::WriteAllText($compiledPathInput, (($compiledFixture | ConvertTo-Json -Depth 20) + "`n"), [Text.UTF8Encoding]::new($false))
     $mismatchRejected = $false
     try { & $standaloneScript -PacketPath $packetPath -ConfigPath $standaloneConfig -CompiledPathHandoffPath $compiledPathInput | Out-Null }
-    catch { $mismatchRejected = $_.Exception.Message.Contains('ApplicationWorkbenchCompiledPathProvenanceMismatch') }
+    catch { $mismatchRejected = $_.Exception.Message.Contains('ApplicationWorkbenchCompiledPathProvenanceMismatch;reasons=packet-source-commit;sourceMatches=0') }
     if (!$mismatchRejected) { throw 'Standalone review accepted a compiled path handoff from another commit.' }
+    $missingCompatibleRejected = $false
+    try { & $standaloneScript -ConfigPath $standaloneConfig -CompiledPathHandoffPath $compiledPathInput | Out-Null }
+    catch { $missingCompatibleRejected = $_.Exception.Message -eq 'WEBFORMS_STANDALONE_REVIEW_COMPATIBLE_PACKET_UNAVAILABLE' }
+    if (!$missingCompatibleRejected) { throw 'Standalone discovery attached a compiled handoff with no compatible saved packet.' }
     if (@($standaloneOutput | Where-Object { $_ -eq "zipPath=$standaloneZip" }).Count -ne 1) { throw 'Standalone review export did not identify the ZIP created from its new workbench.' }
     $standaloneShareable = [IO.File]::ReadAllText((Join-Path $standaloneRoot 'workbench/page-001.paths.shareable.json')) | ConvertFrom-Json -Depth 30
     if ($standaloneShareable.provenance.traceMapCommitSha -ne 'unavailable') { throw 'Standalone review guessed an unreceipted TraceMap commit.' }
