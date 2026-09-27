@@ -128,6 +128,25 @@ try {
         @($apiLines | Where-Object { $_ -cmatch '^compiledApiNoTerminal=\d+$' }).Count -ne 1) {
         throw 'EXISTING_PUBLISH_TEST_COMPILED_API_RECHECK_INVALID'
     }
+    $apiReportLines = @($apiLines | Where-Object { $_ -cmatch '^compiledApiPathReport=' })
+    $apiReceiptLines = @($apiLines | Where-Object { $_ -cmatch '^compiledApiPathReceipt=' })
+    if ($apiReportLines.Count -ne 1 -or $apiReceiptLines.Count -ne 1) {
+        throw 'EXISTING_PUBLISH_TEST_COMPILED_API_RECEIPT_UNAVAILABLE'
+    }
+    $apiReviewRoot = Join-Path $output 'compiled-api-test'
+    & (Join-Path $TraceMapRoot 'scripts/New-ExistingWebFormsCompiledPathHandoff.ps1') `
+        -ProofRoot $output `
+        -PathReportPath ([string]$apiReportLines[0].Substring('compiledApiPathReport='.Length)) `
+        -PathReportReceiptPath ([string]$apiReceiptLines[0].Substring('compiledApiPathReceipt='.Length)) `
+        -ToSurface database-api -OutputDirectory $apiReviewRoot *> $null
+    $apiHandoff = [IO.File]::ReadAllText((Join-Path $apiReviewRoot 'handler.handoff.local.json')) |
+        ConvertFrom-Json -Depth 40
+    if ($apiHandoff.query.toSurface -cne 'database-api' -or
+        $apiHandoff.claimLevel -cne 'review-only-static-evidence' -or
+        $apiHandoff.provenance.pathReportGeneration.generatorSha256 -cnotmatch '^[0-9a-f]{64}$' -or
+        !(Test-Path -LiteralPath (Join-Path $apiReviewRoot 'handler.local.html') -PathType Leaf)) {
+        throw 'EXISTING_PUBLISH_TEST_COMPILED_API_HANDOFF_INVALID'
+    }
     function global:Read-Host { param([string]$Prompt) 'yes' }
     try {
         $lowercaseLines = @(& $script -SourceSiteRoot $source -PublishedRoot $publish `

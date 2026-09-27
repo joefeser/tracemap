@@ -246,6 +246,8 @@ if ($RecheckPathReasons -or $RecheckCompiledApi) {
         (($receipt | ConvertTo-Json -Depth 5) + "`n"), [Text.UTF8Encoding]::new($false))
     $recheck = [IO.File]::ReadAllText($recheckPath) | ConvertFrom-Json -Depth 50
     if ($RecheckCompiledApi) {
+        Write-Output "compiledApiPathReport=$recheckPath"
+        Write-Output "compiledApiPathReceipt=$(Join-Path $scratch 'path-recheck.receipt.local.json')"
         $selectorCount = [int]$recheck.summary.selectorCandidateCount
         $apiPaths = @($recheck.paths | Where-Object {
             @($_.nodes).Count -gt 0 -and $_.nodes[-1].surfaceKind -ceq 'database-api' -and

@@ -632,5 +632,5 @@ if ($HandlerName) {
     Write-Output "sourceJoinPaths=$sourceJoinPaths"
     Write-Output "existingPublishPaths=$($(if ($sourceJoinPaths -gt 0) { 'review-candidate' } else { 'gap' }))"
     Write-Output "pathGaps=$(@($report.gaps).Count)"
-    & (Join-Path $PSScriptRoot 'New-ExistingWebFormsCompiledPathHandoff.ps1') -ProofRoot $output
+    & (Join-Path $PSScriptRoot 'Replay-ExistingWebFormsCompiledPathReviews.ps1') -ProofRoot $output
 }
