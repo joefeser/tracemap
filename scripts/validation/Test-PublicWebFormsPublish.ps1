@@ -31,6 +31,7 @@ if (Test-Path -LiteralPath $output) {
 }
 $publishSite = $site
 $externalInput = $null
+$frameworkPdb = $null
 $frameworkCompilerSha256 = $null
 $frameworkBoundedInputSha256 = $null
 if ($CrossAssembly) {
@@ -66,6 +67,12 @@ if ($CrossAssembly) {
         throw 'PUBLIC_WEBFORMS_FRAMEWORK_BUILD_FAILED'
     }
     Copy-Item -LiteralPath $builtDll -Destination $externalInput
+    $builtPdb = Join-Path $baseOutput 'Debug/net48/PublicProof.Framework.pdb'
+    if (!(Test-Path -LiteralPath $builtPdb -PathType Leaf)) {
+        throw 'PUBLIC_WEBFORMS_FRAMEWORK_PDB_UNAVAILABLE'
+    }
+    $frameworkPdb = $output + '.framework.pdb'
+    Copy-Item -LiteralPath $builtPdb -Destination $frameworkPdb
 }
 $inputs = @(Get-ChildItem -LiteralPath $site -Recurse -File |
     Where-Object { $_.Extension -in @('.vb', '.aspx', '.config', '.asax', '.wsdl', '.discomap') } |
@@ -75,16 +82,19 @@ $digestLines = @($inputs | ForEach-Object {
     $hash = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
     "$relative`:$hash"
 })
-if ($CrossAssembly) {
-    $digestLines += 'external:bin/PublicProof.Framework.dll:' +
-        (Get-FileHash -LiteralPath $externalInput -Algorithm SHA256).Hash.ToLowerInvariant()
-}
 $digestBytes = [System.Text.Encoding]::UTF8.GetBytes(($digestLines -join "`n") + "`n")
 $hasher = [System.Security.Cryptography.SHA256]::Create()
 try {
     $inputSha256 = ([BitConverter]::ToString($hasher.ComputeHash($digestBytes))).Replace('-', '').ToLowerInvariant()
 } finally {
     $hasher.Dispose()
+}
+$publishInputSha256 = $null
+if ($CrossAssembly) {
+    $publishInputLines = @($digestLines) + @('external:bin/PublicProof.Framework.dll:' +
+        (Get-FileHash -LiteralPath $externalInput -Algorithm SHA256).Hash.ToLowerInvariant())
+    $publishInputSha256 = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData(
+        [Text.Encoding]::UTF8.GetBytes(($publishInputLines -join "`n") + "`n"))).ToLowerInvariant()
 }
 $generatorSha256 = (Get-FileHash -LiteralPath $compiler -Algorithm SHA256).Hash.ToLowerInvariant()
 $receiptGeneratorSha256 = (Get-FileHash -LiteralPath $PSCommandPath -Algorithm SHA256).Hash.ToLowerInvariant()
@@ -151,8 +161,12 @@ $receipt = [ordered]@{
     compilerSha256 = $generatorSha256
     frameworkCompilerSha256 = $frameworkCompilerSha256
     frameworkBoundedInputSha256 = $frameworkBoundedInputSha256
+    frameworkPdbSha256 = if ($CrossAssembly) {
+        (Get-FileHash -LiteralPath $frameworkPdb -Algorithm SHA256).Hash.ToLowerInvariant()
+    } else { $null }
     sourceCommitSha = $sourceCommitSha
     boundedInputSha256 = $inputSha256
+    publishInputSha256 = $publishInputSha256
     sourceFiles = @($inputs | ForEach-Object {
         [ordered]@{
             path = [System.IO.Path]::GetRelativePath($site, $_.FullName).Replace('\', '/')

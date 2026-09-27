@@ -796,12 +796,18 @@ public static class VisualBasicSemanticExtractor
                 continue;
             }
 
+            var methodBody = statement.Parent is MethodBlockBaseSyntax block ? (SyntaxNode)block : statement;
+            var methodBodyLines = statement.SyntaxTree.GetLineSpan(methodBody.Span);
             var properties = AddAssemblyProperties(
                 AddSymbolProperties(
                     new SortedDictionary<string, string>(StringComparer.Ordinal)
                     {
                         ["containingType"] = method.ContainingType?.ToDisplayString(SymbolFormat) ?? string.Empty,
                         ["methodName"] = method.Name,
+                        ["name"] = method.MethodKind == MethodKind.Constructor ? "New" : method.Name,
+                        ["memberIdentity"] = method.ToDisplayString(SymbolFormat),
+                        ["bodyStartLine"] = (methodBodyLines.StartLinePosition.Line + 1).ToString(),
+                        ["bodyEndLine"] = (methodBodyLines.EndLinePosition.Line + 1).ToString(),
                         ["methodKind"] = method.MethodKind.ToString(),
                         ["isShared"] = method.IsShared().ToString(),
                         ["parameterCount"] = method.Parameters.Length.ToString(),
