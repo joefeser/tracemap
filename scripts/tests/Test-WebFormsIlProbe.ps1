@@ -32,6 +32,7 @@ try {
     $lines = @(& (Join-Path $TraceMapRoot 'scripts/wil.ps1') -OutputRoot $root -TraceMapRoot $TraceMapRoot)
     if ($lines -cnotcontains 'disputed.ilReaderProbeStatus=agreed' -or
         $lines -cnotcontains 'disputed.ilReaderProbeFirstDifference=none' -or
+        $lines -cnotcontains 'disputed.ilReaderProbeFirstTokenDifference=none' -or
         $lines -cnotcontains 'ilProbeResult=disputed-input-not-reproduced') {
         throw 'WEBFORMS_IL_PROBE_TEST_RESULT_INVALID'
     }
