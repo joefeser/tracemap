@@ -18,7 +18,7 @@ try {
     $receipt = [ordered]@{ sourceCommitSha = $commit }
     $nodes = @(
         [ordered]@{ nodeId = 'source'; displayName = '<Names_Init>'; scanId = 'scan-public'; commitSha = $commit; surfaceKind = $null },
-        [ordered]@{ nodeId = 'compiled'; displayName = 'LookupPage.Names_Init'; scanId = 'scan-public'; commitSha = $commit; surfaceKind = $null },
+        [ordered]@{ nodeId = 'compiled'; displayName = 'assembly:name:11:PublicProof|type(namespace:11:PublicProof|names:10:LookupPage|arity:0)|method:10:Names_Init|arity:0'; scanId = 'scan-public'; commitSha = $commit; surfaceKind = $null },
         [ordered]@{ nodeId = 'query'; displayName = 'sql-query'; scanId = 'scan-public'; commitSha = $commit; surfaceKind = 'sql-query' }
     )
     $edges = @(
@@ -60,6 +60,8 @@ try {
         $json.provenance.boundedInputSha256 -cnotmatch '^[0-9a-f]{64}$' -or
         $json.paths[0].hops.Count -ne 2 -or
         $json.paths[0].claim -ne 'review-only-static-path' -or
+        $json.paths[0].hops[0].to.displayLabel -cne 'PublicProof.LookupPage.Names_Init()' -or
+        $json.paths[0].hops[0].to.name -cne $nodes[1].displayName -or
         $json.coverage.gapCount -ne 300 -or
         @($json.coverage.gaps).Count -ne 256 -or
         $json.coverage.omittedGapDetailCount -ne 44 -or
@@ -67,6 +69,8 @@ try {
         $json.paths[0].hops[0].ruleId -ne 'combined.paths.projectless-publish-candidate.v1' -or
         $json.assemblies[0].rawFileSha256 -ne ('b' * 64) -or
         !$html.Contains('&lt;Names_Init&gt;', [StringComparison]::Ordinal) -or
+        !$html.Contains('PublicProof.LookupPage.Names_Init()', [StringComparison]::Ordinal) -or
+        !$html.Contains('Exact identities', [StringComparison]::Ordinal) -or
         $html.Contains('<Names_Init>', [StringComparison]::Ordinal) -or
         !$html.Contains('Showing 256 of 300 gap details', [StringComparison]::Ordinal) -or
         !$html.Contains('not runtime execution', [StringComparison]::OrdinalIgnoreCase)) {

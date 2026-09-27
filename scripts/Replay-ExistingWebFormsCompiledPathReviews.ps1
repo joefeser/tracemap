@@ -105,6 +105,9 @@ if (@($sql.paths).Count -eq 0) {
         $apiReceipt = [string]$apiReceiptLine[0].Substring('compiledApiPathReceipt='.Length)
     }
     $reviewDirectory = Join-Path (Split-Path -Parent $apiPath) 'compiled-api-review'
+    if (Test-Path -LiteralPath $reviewDirectory) {
+        $reviewDirectory = Join-Path (Split-Path -Parent $apiPath) ('compiled-api-review-readable-' + [Guid]::NewGuid().ToString('N').Substring(0, 8))
+    }
     & (Join-Path $PSScriptRoot 'New-ExistingWebFormsCompiledPathHandoff.ps1') `
         -ProofRoot $ProofRoot -PathReportPath $apiPath -PathReportReceiptPath $apiReceipt `
         -ToSurface database-api -IlMaxWork $(if ($useHighWork) { $ilMaxWork } else { 0 }) `

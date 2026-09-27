@@ -3,6 +3,7 @@ param(
     [string]$PacketPath = '',
     [string]$OutputRoot = '',
     [string]$ConfigPath = '',
+    [string]$CompiledPathHandoffPath = '',
     [ValidatePattern('^$|^page-[0-9]{3,4}$')]
     [string]$PageId = ''
 )
@@ -49,7 +50,8 @@ try {
     & (Join-Path $PSScriptRoot 'New-FocusedWebFormsApplicationWorkbench.ps1') `
         -PacketPath $PacketPath `
         -OutputRoot $reviewRoot `
-        -OutputDirectory $workbench
+        -OutputDirectory $workbench `
+        -CompiledPathHandoffPath $CompiledPathHandoffPath
 
     $artifactNames = @(
         'index.html'
@@ -58,6 +60,7 @@ try {
         'application-outliers.shareable.json'
         Get-ChildItem -LiteralPath $workbench -File -Filter '*.handoff.json' | ForEach-Object { $_.Name }
     )
+    if ($CompiledPathHandoffPath) { $artifactNames += @('compiled-paths.local.html', 'compiled-paths.local.json') }
     $artifacts = @($artifactNames | ForEach-Object {
         $path = Join-Path $workbench $_
         if (!(Test-Path -LiteralPath $path -PathType Leaf)) { throw 'WEBFORMS_STANDALONE_REVIEW_WORKBENCH_INCOMPLETE' }
@@ -81,6 +84,8 @@ try {
             inputKind = 'webforms-modernization-packet.v1'
             inputSha256 = (Get-FileHash -LiteralPath $packetFile.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
             inputCanonicalization = 'raw-file-bytes'
+            supplementalCompiledPathKind = if ($CompiledPathHandoffPath) { 'webforms-compiled-path-handoff.v1' } else { 'not-supplied' }
+            supplementalCompiledPathSha256 = if ($CompiledPathHandoffPath) { (Get-FileHash -LiteralPath $CompiledPathHandoffPath -Algorithm SHA256).Hash.ToLowerInvariant() } else { $null }
         }
         run = [ordered]@{
             state = 'completed'
