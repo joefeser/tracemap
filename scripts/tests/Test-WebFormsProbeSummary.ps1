@@ -36,6 +36,23 @@ try {
     if ($readyLines -cnotcontains 'probeReady=True' -or $readyLines -cnotcontains 'probeAdmitted=2') {
         throw 'WEBFORMS_PROBE_SUMMARY_READY_TEST_FAILED'
     }
+    [void][IO.Directory]::CreateDirectory((Join-Path $root 'scan'))
+    $scan = @{ ilBodyProvenance = @{
+        coverageState = 'il-partial'
+        effectiveLimits = @{ maxTextLength = 4096 }
+        outcomes = @(
+            @{ provenanceState = 'bound'; outcome = 'gap'; gapKinds = @('IlTextLimitExceeded'); safeLocator = 'private-one' },
+            @{ provenanceState = 'bound'; outcome = 'gap'; gapKinds = @('IlReaderDisagreement'); safeLocator = 'private-two' },
+            @{ provenanceState = 'unbound'; outcome = 'admitted'; gapKinds = @(); safeLocator = 'private-three' })
+    } }
+    [IO.File]::WriteAllText((Join-Path $root 'scan/scan-manifest.json'), ($scan | ConvertTo-Json -Depth 10))
+    $scanLines = @(& (Join-Path $TraceMapRoot 'scripts/wp.ps1') -OutputRoot $root)
+    foreach ($expected in @('scanIlCoverage=il-partial', 'scanBoundIlInputs=2',
+            'scanBoundIlInputsWithGaps=2', 'scanIlTextLimit=4096',
+            'scanBoundIlGap.IlTextLimitExceeded=1', 'scanBoundIlGap.IlReaderDisagreement=1')) {
+        if ($scanLines -cnotcontains $expected) { throw 'WEBFORMS_PROBE_SUMMARY_SCAN_TEST_FAILED' }
+    }
+    if (($scanLines -join "`n") -match 'private-') { throw 'WEBFORMS_PROBE_SUMMARY_SCAN_PRIVACY_FAILED' }
     Write-Output 'webFormsProbeSummaryTest=pass'
 }
 finally {
