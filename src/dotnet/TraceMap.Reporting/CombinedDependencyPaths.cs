@@ -68,7 +68,14 @@ public sealed record CombinedPathRootTraversal(
     int TraversedEdgeCount,
     IReadOnlyList<string> TraversedEdgeKinds,
     IReadOnlyList<string> LeafNodeKinds,
-    bool DiagnosticShapesTruncated);
+    bool DiagnosticShapesTruncated)
+{
+    public int TerminalCallerCount { get; init; }
+    public int ReachableTerminalCallerCount { get; init; }
+    public int ReachableUnresolvedIlCallCount { get; init; }
+    public IReadOnlyDictionary<string, int> ReachableUnresolvedIlCallsByReason { get; init; }
+        = new Dictionary<string, int>(StringComparer.Ordinal);
+}
 
 public sealed record CombinedPathQuery(
     string? FromEndpoint,
@@ -679,6 +686,10 @@ public static partial class CombinedDependencyPathReporter
         var rootTraversal = options.ExactFromSymbol && startNodes.Count == 1 && search is not null
             ? search.TraversalByRootNodeId.GetValueOrDefault(startNodes[0].NodeId)
             : null;
+        var compiledRootDiagnostics = rootTraversal is not null
+            && options.ToSurface == "database-api"
+            ? SummarizeCompiledIlRootDiagnostics(read, graph, search!.ReachedNodeIds, startNodes[0].NodeId)
+            : null;
         var report = new CombinedDependencyPathReport(
             Version,
             legacyMode ? LegacyFlowReportConstants.SchemaVersion : null,
@@ -730,6 +741,13 @@ public static partial class CombinedDependencyPathReporter
                 rootTraversal.TraversedEdgeKinds,
                 rootTraversal.LeafNodeKinds,
                 rootTraversal.DiagnosticShapesTruncated)
+            {
+                TerminalCallerCount = compiledRootDiagnostics?.TerminalCallerCount ?? 0,
+                ReachableTerminalCallerCount = compiledRootDiagnostics?.ReachableTerminalCallerCount ?? 0,
+                ReachableUnresolvedIlCallCount = compiledRootDiagnostics?.ReachableUnresolvedIlCallCount ?? 0,
+                ReachableUnresolvedIlCallsByReason = compiledRootDiagnostics?.ReachableUnresolvedIlCallsByReason
+                    ?? new Dictionary<string, int>(StringComparer.Ordinal)
+            }
         };
         var observations = startNodes
             .Where(node => node.CombinedFactId is not null)
