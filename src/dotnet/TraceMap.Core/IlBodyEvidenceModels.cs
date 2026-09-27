@@ -60,7 +60,8 @@ internal sealed record IlBodyObservation(
     bool InitLocals,
     string BodyIdentity,
     string BodySha256,
-    IReadOnlyList<IlCallObservation> Calls);
+    IReadOnlyList<IlCallObservation> Calls,
+    IReadOnlyList<string>? DiagnosticInstructions = null);
 
 internal sealed record EvaluatedIlInput(
     IlInputOutcome Outcome,

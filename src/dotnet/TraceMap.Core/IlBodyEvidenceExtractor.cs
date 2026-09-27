@@ -324,7 +324,8 @@ internal static class IlBodyEvidenceExtractor
         byte[] bytes,
         IlBodyLimits limits,
         IlWorkBudget budget,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool retainDiagnosticInstructions = false)
     {
         using var stream = new MemoryStream(bytes, writable: false);
         using var resolver = new ManagedMetadataExtractor.RejectingAssemblyResolver();
@@ -352,7 +353,7 @@ internal static class IlBodyEvidenceExtractor
                     throw new IlEvidenceException("IlBodyCountLimitExceeded");
                 if (!budget.TryConsume(1))
                     throw new IlEvidenceException("IlTotalWorkLimitExceeded");
-                bodies.Add(ReadCecilBody(method, assemblyIdentity, limits, budget));
+                bodies.Add(ReadCecilBody(method, assemblyIdentity, limits, budget, retainDiagnosticInstructions));
             }
         }
         return new IlReaderResult(assemblyIdentity, module.Name, module.Mvid.ToString("D", CultureInfo.InvariantCulture), bodies);
@@ -362,7 +363,8 @@ internal static class IlBodyEvidenceExtractor
         CecilMethodDefinition method,
         string assemblyIdentity,
         IlBodyLimits limits,
-        IlWorkBudget budget)
+        IlWorkBudget budget,
+        bool retainDiagnosticInstructions)
     {
         var body = method.Body;
         var memberKind = method.IsConstructor ? "constructor" : "method";
@@ -425,7 +427,8 @@ internal static class IlBodyEvidenceExtractor
             body.InitLocals,
             bodyIdentity,
             bodySha256,
-            calls);
+            calls,
+            retainDiagnosticInstructions ? instructions : null);
     }
 
     private static string CecilOperand(Instruction instruction, List<IlCallObservation> calls, IlWorkBudget budget, string selfAssemblyIdentity, IlBodyLimits limits)
@@ -675,7 +678,8 @@ internal static class IlBodyEvidenceExtractor
         byte[] bytes,
         IlBodyLimits limits,
         IlWorkBudget budget,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool retainDiagnosticInstructions = false)
     {
         using var stream = new MemoryStream(bytes, writable: false);
         using var pe = new PEReader(stream, PEStreamOptions.LeaveOpen);
@@ -707,7 +711,8 @@ internal static class IlBodyEvidenceExtractor
                 throw new IlEvidenceException("IlBodyCountLimitExceeded");
             if (!budget.TryConsume(1))
                 throw new IlEvidenceException("IlTotalWorkLimitExceeded");
-            bodies.Add(ReadSrmBody(pe, reader, provider, handle, method, assemblyIdentity, limits, budget));
+            bodies.Add(ReadSrmBody(pe, reader, provider, handle, method, assemblyIdentity, limits, budget,
+                retainDiagnosticInstructions));
         }
         return new IlReaderResult(assemblyIdentity, moduleName, reader.GetGuid(moduleDefinition.Mvid).ToString("D", CultureInfo.InvariantCulture), bodies);
     }
@@ -720,7 +725,8 @@ internal static class IlBodyEvidenceExtractor
         SrmMethodDefinition method,
         string assemblyIdentity,
         IlBodyLimits limits,
-        IlWorkBudget budget)
+        IlWorkBudget budget,
+        bool retainDiagnosticInstructions)
     {
         var body = pe.GetMethodBody(method.RelativeVirtualAddress);
         var il = body.GetILBytes() ?? throw new IlEvidenceException("MalformedIlBody");
@@ -824,7 +830,8 @@ internal static class IlBodyEvidenceExtractor
             body.LocalVariablesInitialized,
             bodyIdentity,
             bodySha256,
-            calls);
+            calls,
+            retainDiagnosticInstructions ? instructions : null);
     }
 
     private static (string Kind, string Token, string Identity) SrmBoundedTarget(string kind, string token, string identity, IlBodyLimits limits)

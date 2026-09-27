@@ -3636,7 +3636,8 @@ make the probe pass.
 For a saved bound scan with one source-bound `IlReaderDisagreement` and one
 source-bound `IlTextLimitExceeded`, `scripts/wil.ps1` locally replays only those
 two copied DLLs through the same independent IL readers. It validates their
-receipt hashes and prints categorical disagreement counts and the first
+receipt hashes and prints categorical disagreement counts, the first differing
+instruction's opcode/operand category, and the first
 non-text-limit ceiling up to 65,536. Local receipts record the diagnostic
 generator and bounded input SHA-256 values; no identities, tokens, source,
 paths, or private hashes are printed. This diagnostic does not change the
