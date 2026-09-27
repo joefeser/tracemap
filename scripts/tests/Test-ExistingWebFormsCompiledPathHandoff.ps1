@@ -42,6 +42,13 @@ try {
     [IO.File]::WriteAllText((Join-Path $root 'publish-receipt.local.json'), (($receipt | ConvertTo-Json -Depth 5) + "`n"))
     [IO.File]::WriteAllText((Join-Path $root 'handler-paths.json'), (($report | ConvertTo-Json -Depth 20) + "`n"))
     [IO.File]::WriteAllText((Join-Path $root 'combined.sqlite'), 'public-test-index')
+    $replayFailure = $null
+    try { & (Join-Path $TraceMapRoot 'scripts/Replay-ExistingWebFormsCompiledPathReviews.ps1') `
+        -ProofRoot $root *> $null }
+    catch { $replayFailure = $_.Exception.Message }
+    if ($replayFailure -cne 'WEBFORMS_COMPILED_REPLAY_HIGH_WORK_PROOF_UNAVAILABLE') {
+        throw "WEBFORMS_COMPILED_REPLAY_LOWER_WORK_ACCEPTED:$replayFailure"
+    }
     $lines = @(& $generator -ProofRoot $root)
     $json = [IO.File]::ReadAllText((Join-Path $root 'compiled-path-review/handler.handoff.local.json')) | ConvertFrom-Json -Depth 40
     $html = [IO.File]::ReadAllText((Join-Path $root 'compiled-path-review/handler.local.html'))
