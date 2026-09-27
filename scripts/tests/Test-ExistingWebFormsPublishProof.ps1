@@ -375,6 +375,21 @@ try {
             throw 'EXISTING_PUBLISH_TEST_EXACT_RAW_CONFIG_NOT_ADMITTED'
         }
         & git -C $maplessSite config core.autocrlf false
+        # The prior fixture deliberately changed the checkout filter. Refresh
+        # this case-aliased index entry using its exact committed bytes before
+        # the next clean-tree assertion; Windows Git may otherwise retain a
+        # stale filtered stat entry from core.autocrlf=true.
+        $configHeadBlob = ([string](& git -C $maplessSite rev-parse HEAD:web.config)).Trim()
+        $configDiskBlob = ([string](& git -C $maplessSite hash-object --no-filters `
+            (Join-Path $maplessSite 'Web.config'))).Trim()
+        if ($configDiskBlob -cne $configHeadBlob) {
+            throw 'EXISTING_PUBLISH_TEST_RAW_CONFIG_RESTORE_FAILED'
+        }
+        & git -C $maplessSite add -- web.config
+        if ($LASTEXITCODE -ne 0 -or
+            ([string](& git -C $maplessSite rev-parse ':web.config')).Trim() -cne $configHeadBlob) {
+            throw 'EXISTING_PUBLISH_TEST_RAW_CONFIG_INDEX_REFRESH_FAILED'
+        }
         [IO.File]::WriteAllText((Join-Path $maplessSite '.gitignore'),
             "App_Code/IgnoredPublic.vb`n", [Text.UTF8Encoding]::new($false))
         & git -C $maplessSite add .gitignore
@@ -406,8 +421,10 @@ try {
         & git -C $maplessSite update-index --force-remove 'App_Code/BusinessLogic.vb'
         & git -C $maplessSite update-index --add --cacheinfo "100644,$blob,app_code/BusinessLogic.vb"
         & git -C $maplessSite -c user.name=PublicTest -c user.email=public@example.invalid commit -qm case-alias
-        if ($LASTEXITCODE -ne 0 -or @(& git -C $maplessSite status --porcelain).Count -ne 0) {
-            throw 'EXISTING_PUBLISH_TEST_CASE_ALIAS_GIT_FAILED'
+        $caseAliasCommitExit = $LASTEXITCODE
+        $caseAliasStatus = @(& git -C $maplessSite status --porcelain)
+        if ($caseAliasCommitExit -ne 0 -or $caseAliasStatus.Count -ne 0) {
+            throw "EXISTING_PUBLISH_TEST_CASE_ALIAS_GIT_FAILED;commitExit=$caseAliasCommitExit;status=$($caseAliasStatus -join ',')"
         }
         $caseAliasLines = @(& $script -SourceSiteRoot $maplessSite -PublishedRoot $maplessPublish `
             -PagePath 'Pages/Lookup.aspx' -HandlerName 'Names_Init' `
