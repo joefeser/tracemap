@@ -3633,6 +3633,14 @@ compiled metadata text limit. This is a bounded override of the general 4,096-ch
 default, and the effective limit is recorded in each scan manifest. An assembly
 that still exceeds it remains a gap; the script does not drop context DLLs to
 make the probe pass.
+For a saved bound scan with one source-bound `IlReaderDisagreement` and one
+source-bound `IlTextLimitExceeded`, `scripts/wil.ps1` locally replays only those
+two copied DLLs through the same independent IL readers. It validates their
+receipt hashes and prints categorical disagreement counts and the first
+non-text-limit ceiling up to 65,536. Local receipts record the diagnostic
+generator and bounded input SHA-256 values; no identities, tokens, source,
+paths, or private hashes are printed. This diagnostic does not change the
+scanner's fail-closed IL result or establish a source-to-SQL path.
 The source subset follows `CodeBehind`/`CodeFile` in the page directive,
 then conventional VB/C# fallback, and includes every ancestor `Web.config`.
 Source tracking is checked against the exact `HEAD` tree under the Web Site
