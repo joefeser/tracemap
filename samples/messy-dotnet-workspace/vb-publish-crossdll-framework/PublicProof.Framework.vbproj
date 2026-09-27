@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net48</TargetFramework>
+    <RootNamespace></RootNamespace>
+    <AssemblyName>PublicProof.Framework</AssemblyName>
+    <DebugType>portable</DebugType>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <GenerateTargetFrameworkAttribute>false</GenerateTargetFrameworkAttribute>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="System.Data" />
+  </ItemGroup>
+</Project>
