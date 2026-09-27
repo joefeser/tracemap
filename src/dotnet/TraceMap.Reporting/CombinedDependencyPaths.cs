@@ -30,6 +30,7 @@ public sealed record CombinedDependencyPathOptions(
     // the historical selector ceiling and selection behavior.
     internal int StartingNodeLimit { get; init; } = 250;
     internal IReadOnlySet<string>? StartingFactIds { get; init; }
+    public bool ExactFromSymbol { get; init; }
     // Deterministic work bound, including nonterminal/cyclic exploration.
     public int MaxTraversalWork { get; init; } = 100_000;
     // Web Forms packet composition inventories one shortest witness per
@@ -78,7 +79,8 @@ public sealed record CombinedPathQuery(
     string AlgorithmVersion,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     string? MessageDirection,
-    int MaxTraversalWork = 100_000);
+    int MaxTraversalWork = 100_000,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool ExactFromSymbol = false);
 
 public sealed record CombinedPathSummary(
     int SourceCount,
@@ -685,7 +687,8 @@ public static partial class CombinedDependencyPathReporter
                 Algorithm,
                 AlgorithmVersion,
                 CombinedReportHelpers.NormalizeMessageDirection(options.MessageDirection, "paths"),
-                options.MaxTraversalWork),
+                options.MaxTraversalWork,
+                options.ExactFromSymbol),
             read.Sources.Select(source => legacyMode ? SanitizeSource(source) : source).OrderBy(source => source.Label, StringComparer.Ordinal).ThenBy(source => source.SourceIndexId, StringComparer.Ordinal).ToArray(),
             new CombinedPathSummary(
                 read.Sources.Count,
@@ -5086,7 +5089,7 @@ public static partial class CombinedDependencyPathReporter
             var selector = options.FromSymbol.Trim();
             candidates = graph.Nodes.Values.Where(node =>
                 node.NodeKind is "Symbol" or "Method" or "Type" or "webforms-event" or "webforms-lifecycle" or "EndpointRoute" or "wcf-operation"
-                && NodeMatchesSymbol(node, selector));
+                && NodeMatchesSymbol(node, selector, options.ExactFromSymbol));
         }
         else if (!string.IsNullOrWhiteSpace(sourceFilter))
         {
@@ -5138,11 +5141,11 @@ public static partial class CombinedDependencyPathReporter
                 .Any(node => NodeMatchesSymbol(node, selector));
     }
 
-    private static bool NodeMatchesSymbol(GraphNode node, string selector)
+    private static bool NodeMatchesSymbol(GraphNode node, string selector, bool exact = false)
     {
         return string.Equals(node.SymbolId, selector, StringComparison.Ordinal)
             || string.Equals(node.DisplayName, selector, StringComparison.Ordinal)
-            || node.DisplayName.Contains(selector, StringComparison.OrdinalIgnoreCase);
+            || (!exact && node.DisplayName.Contains(selector, StringComparison.OrdinalIgnoreCase));
     }
 
     private static IReadOnlySet<string> ResolveTerminalNodes(CombinedDependencyPathOptions options, EvidenceGraph graph, IReadOnlyList<GraphNode> startNodes)

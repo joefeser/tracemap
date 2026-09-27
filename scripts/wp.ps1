@@ -165,9 +165,11 @@ if ($RecheckPathReasons -or $RecheckCompiledApi) {
         }
         $fromSymbol = $handlerSymbols[0]
     }
-    & dotnet run --project $project -- paths --index $combinedPath --out $recheckPath `
-        --format json --from-symbol $fromSymbol `
-        --to-surface $terminalSurface --max-depth 20 --max-paths 256 *> (Join-Path $scratch 'paths.local.log')
+    $pathArgs = @('run', '--project', $project, '--', 'paths', '--index', $combinedPath,
+        '--out', $recheckPath, '--format', 'json', '--from-symbol', $fromSymbol,
+        '--to-surface', $terminalSurface, '--max-depth', '20', '--max-paths', '256')
+    if ($RecheckCompiledApi) { $pathArgs += '--exact-from-symbol' }
+    & dotnet @pathArgs *> (Join-Path $scratch 'paths.local.log')
     if ($LASTEXITCODE -ne 0 -or !(Test-Path -LiteralPath $recheckPath -PathType Leaf)) {
         throw 'WEBFORMS_PROBE_PATH_RECHECK_FAILED'
     }

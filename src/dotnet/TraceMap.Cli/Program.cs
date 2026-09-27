@@ -757,7 +757,12 @@ public static class TraceMapCommand
 
     private static async Task<int> RunPathsAsync(string[] args, TextWriter output, TextWriter error, CancellationToken cancellationToken)
     {
-        var values = ParseOptions(args, "--include-legacy-roots");
+        var values = ParseOptions(args, "--include-legacy-roots", "--exact-from-symbol");
+        if (values.HasFlag("--exact-from-symbol") && !values.TryGetValue("--from-symbol", out _))
+        {
+            await error.WriteLineAsync("error: paths --exact-from-symbol requires --from-symbol.");
+            return 1;
+        }
         if (!values.TryGetValue("--index", out var indexPath) || string.IsNullOrWhiteSpace(indexPath))
         {
             await error.WriteLineAsync("error: paths requires --index <combined.sqlite>.");
@@ -806,7 +811,8 @@ public static class TraceMapCommand
                 MaxDepth: ParsePositiveInt(values, "--max-depth", 8),
                 MaxPaths: ParsePositiveInt(values, "--max-paths", 100),
                 MaxFrontier: ParsePositiveInt(values, "--max-frontier", 10000),
-                MessageDirection: values.GetValueOrDefault("--message-direction")),
+                MessageDirection: values.GetValueOrDefault("--message-direction"))
+            { ExactFromSymbol = values.HasFlag("--exact-from-symbol") },
             cancellationToken);
 
         await output.WriteLineAsync($"TraceMap paths completed: {result.MarkdownPath ?? result.JsonPath}");
@@ -2372,7 +2378,7 @@ public static class TraceMapCommand
             }
 
             var rawValue = args[++index];
-            if (arg == "--surface-list") list.Add(rawValue);
+            if (arg is "--surface-list" or "--from-symbol") list.Add(rawValue);
             else list.AddRange(rawValue.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
         }
 
@@ -2998,9 +3004,10 @@ public static class TraceMapCommand
             Selectors:
               --from-endpoint "<M> <P>"  Start from an HTTP endpoint method/path key.
               --from-symbol <symbol>     Start from matching source-local symbol candidates.
+              --exact-from-symbol       Require exact symbol identity for --from-symbol.
               --from-webforms-event <id>  Start from a WebForms event/root fact or selector.
               --from-source <label>      Constrain start evidence to a source label.
-              --to-surface <kind>        sql-query, sql-persistence, http-route, http-client,
+              --to-surface <kind>        database-api, sql-query, sql-persistence, http-route, http-client,
                                           package-config, wcf-operation, asmx-service,
                                           asmx-operation, asmx-client, asmx-config,
                                           asmx-metadata, legacy-data, dependency-surface,
