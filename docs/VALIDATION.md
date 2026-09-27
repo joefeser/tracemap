@@ -3684,7 +3684,8 @@ and path gap kinds without rerunning a scan or printing source paths or names.
 `scripts/wid.ps1 -TypeName <type> -MethodName <method>` identifies the one
 copied assembly containing that compiled method and runs a bounded dual-reader
 probe on it. Its output consists only of disagreement categories and counts;
-it uses the saved publish bytes and does not rescan the Web Site.
+it also counts how many selected overloads have bodies that agree in both
+readers. It uses the saved publish bytes and does not rescan the Web Site.
 `scripts/wm.ps1 -TypeName <type> -MethodName <method>` correlates a compiled
 method family with its saved IL bodies and per-assembly IL admission outcome.
 It prints counts and categorical gaps only. When the relevant assembly has

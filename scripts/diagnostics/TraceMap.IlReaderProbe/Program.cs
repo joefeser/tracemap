@@ -32,9 +32,12 @@ if (args.Length == 1 && args[0] == "--self-test")
         ? "ilReaderProbeSelfTest=pass" : "ilReaderProbeSelfTest=fail");
     return passed ? 0 : 1;
 }
-if ((args.Length != 2 && args.Length != 3) ||
+if (args.Length is < 2 or > 4 ||
     !int.TryParse(args[1], out var maxText) || maxText < 71 || maxText > 65_536 ||
-    (args.Length == 3 && (!long.TryParse(args[2], out var requestedWork) || requestedWork < 1 || requestedWork > 100_000_000)))
+    (args.Length >= 3 && (!long.TryParse(args[2], out var requestedWork) || requestedWork < 1 || requestedWork > 100_000_000)) ||
+    (args.Length == 4 && (args[3].Length > 704 ||
+        args[3].Split(',').Length > 64 ||
+        args[3].Split(',').Any(token => !System.Text.RegularExpressions.Regex.IsMatch(token, "^0x[0-9a-fA-F]{8}$")))))
 {
     Console.WriteLine("ilReaderProbeStatus=invalid-arguments");
     return 2;
@@ -48,7 +51,7 @@ try
         return 2;
     }
     var bytes = File.ReadAllBytes(file.FullName);
-    var maxWork = args.Length == 3 ? long.Parse(args[2], System.Globalization.CultureInfo.InvariantCulture) : 2_000_000;
+    var maxWork = args.Length >= 3 ? long.Parse(args[2], System.Globalization.CultureInfo.InvariantCulture) : 2_000_000;
     var limits = new IlBodyLimits(MaxTextLength: maxText, MaxTotalWorkUnits: maxWork);
     var budget = new IlBodyEvidenceExtractor.IlWorkBudget(limits.MaxTotalWorkUnits);
     var srm = IlBodyEvidenceExtractor.ReadSystemReflectionMetadataBodies(bytes, limits, budget, CancellationToken.None, true);
@@ -75,6 +78,19 @@ try
     Console.WriteLine($"ilReaderProbeRegions={shape.Regions}");
     Console.WriteLine($"ilReaderProbeStackOrInit={shape.StackOrInit}");
     Console.WriteLine($"ilReaderProbeIdentityOnly={shape.IdentityOnly}");
+    if (args.Length == 4)
+    {
+        var selected = args[3].Split(',').Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+        var disputed = IlBodyEvidenceExtractor.CompareBodies(cecil, srm).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var cecilTokens = cecil.Bodies.Select(body => body.MetadataToken).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var rawTokens = srm.Bodies.Select(body => body.MetadataToken).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var assemblyDisputed = disputed.Contains("assembly");
+        var agreedCount = selected.Count(token => !assemblyDisputed && !disputed.Contains(token) &&
+            cecilTokens.Contains(token) && rawTokens.Contains(token));
+        Console.WriteLine($"ilReaderProbeSelectedMethods={selected.Length}");
+        Console.WriteLine($"ilReaderProbeSelectedAgreed={agreedCount}");
+        Console.WriteLine($"ilReaderProbeSelectedDisputed={selected.Length - agreedCount}");
+    }
     return 0;
 }
 catch (IlBodyEvidenceExtractor.IlEvidenceException error)
