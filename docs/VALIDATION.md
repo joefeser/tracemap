@@ -3711,6 +3711,10 @@ replay path query uses the unique resolved handler symbol from the receipted
 page; the short handler name alone is not an exact graph selector. For an
 existing replay, `scripts/wpath.ps1` reruns only that corrected path query
 against the saved combined index and writes a separate exact-handler report.
+`scripts/wpath.ps1 -FillOnly -TypeName <provider> -MethodName <method>`
+queries only the exact `DbDataAdapter.Fill` terminal and prints categorical
+path, classification, and selected provider counts; its local report retains
+the full evidence chain for review.
 `scripts/wpost.ps1 -TypeName <type> -MethodName <method>` reads a saved replay
 without scanning or querying and reports the selected method family's Fill
 calls and root reachability counts. A
