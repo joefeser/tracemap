@@ -60,7 +60,11 @@ try {
         throw 'EXISTING_PUBLISH_TEST_MANIFEST_INVALID'
     }
     if (!(Test-Path -LiteralPath (Join-Path $output 'handler-paths.json') -PathType Leaf)) {
-        throw 'EXISTING_PUBLISH_TEST_PATH_REPORT_UNAVAILABLE'
+        $stage = @($lines | Where-Object { $_ -cmatch '^(existingPublishScan|existingPublishPaths|ilCoverage|ilInputsWithGaps|compiledBoundInputs|compiledContextUnboundInputs|publishGapKinds)=' })
+        $ilGapKinds = @($manifest.ilBodyProvenance.outcomes | ForEach-Object { @($_.gapKinds) } |
+            Where-Object { $_ -is [string] -and $_ -cmatch '^[A-Za-z][A-Za-z0-9]{0,79}$' } |
+            Sort-Object -Unique)
+        throw "EXISTING_PUBLISH_TEST_PATH_REPORT_UNAVAILABLE;stage=$($stage -join ';');ilGapKinds=$($ilGapKinds -join ',')"
     }
     $replayLines = @(& (Join-Path $TraceMapRoot 'scripts/wr.ps1') `
         -SourceSiteRoot $source -OutputRoot $output -TypeName LookupPage -MethodName Lookup_Init)
