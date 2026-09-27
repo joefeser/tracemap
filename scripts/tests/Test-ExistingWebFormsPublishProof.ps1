@@ -422,6 +422,15 @@ try {
         & git -C $maplessSite update-index --add --cacheinfo "100644,$blob,app_code/BusinessLogic.vb"
         & git -C $maplessSite -c user.name=PublicTest -c user.email=public@example.invalid commit -qm case-alias
         $caseAliasCommitExit = $LASTEXITCODE
+        if ($caseAliasCommitExit -eq 0) {
+            # Git for Windows can leave the original working file with a
+            # different line-ending filter after this index-only case rename.
+            # Restore the committed bytes before testing clean-tree admission.
+            & git -C $maplessSite checkout-index --force -- app_code/BusinessLogic.vb
+            if ($LASTEXITCODE -ne 0) {
+                throw 'EXISTING_PUBLISH_TEST_CASE_ALIAS_CHECKOUT_FAILED'
+            }
+        }
         $caseAliasStatus = @(& git -C $maplessSite status --porcelain)
         if ($caseAliasCommitExit -ne 0 -or $caseAliasStatus.Count -ne 0) {
             throw "EXISTING_PUBLISH_TEST_CASE_ALIAS_GIT_FAILED;commitExit=$caseAliasCommitExit;status=$($caseAliasStatus -join ',')"
