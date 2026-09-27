@@ -3644,6 +3644,9 @@ categorical probe of the source-bound input. The effective IL limit is recorded
 in the scan manifest; exceeding it still withholds that input's IL evidence.
 `scripts/wp.ps1` summarizes the latest local saved probe, bound IL outcomes,
 and path gap kinds without rerunning a scan or printing source paths or names.
+`scripts/wp.ps1 -RecheckPathReasons` reruns only the saved path query against
+the local combined index and prints categorical published-member mismatch
+counts; the refreshed report and its hashes stay beside the local receipt.
 For a saved bound scan with one source-bound `IlReaderDisagreement` and one
 source-bound `IlTextLimitExceeded`, `scripts/wil.ps1` locally replays only those
 two copied DLLs through the same independent IL readers. It validates their
