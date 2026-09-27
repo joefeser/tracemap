@@ -2494,6 +2494,17 @@ rules:
       - HTML and JSON contain private source identities and local provenance and must not be shared as anonymous artifacts.
       - The local projection accepts at most 256 MiB of path JSON and 250000 gap rows; it retains at most 256 detailed gaps and 128 exact kind/rule count groups, records omissions, and hashes the complete bounded path input.
       - A zero SQL-query path may have a separate exact-handler database-api candidate path; these are different terminal claims and remain in separate local HTML and JSON outputs.
+  - id: diagnostic.webforms.saved-proof-packet.v1
+    name: Focused saved Web Forms proof packet receipt
+    description: Records exact generator, CLI, index, handoff, and artifact hashes for a new bounded modernization packet composed from an existing focused publish-proof index.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - webforms-saved-proof-packet-receipt.v1 local receipt
+    limitations:
+      - This is a local reporting projection, not a scan, build provenance proof for the published DLLs, or replacement for full-site reports.
+      - The saved combined index must match the compiled handoff hash before and after reporting; the source commit must match exactly one packet source.
+      - Default packet input and traversal bounds may reduce coverage; packet truncation and gaps remain authoritative.
+      - It does not prove source-line identity, runtime execution, branch feasibility, event firing, or SQL execution, and is not a shareable artifact.
   - id: diagnostic.webforms.raw-exact-call-evidence.v1
     name: Private Web Forms raw exact-call evidence audit
     description: Audits a bounded set of selected handlers against retained exact semantic call evidence for local diagnostic review.
