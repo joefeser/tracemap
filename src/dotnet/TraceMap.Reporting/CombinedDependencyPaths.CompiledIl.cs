@@ -9,7 +9,8 @@ public static partial class CombinedDependencyPathReporter
     private const string ProjectlessPublishCandidateRuleId = "combined.paths.projectless-publish-candidate.v1";
 
     private sealed record CompiledIlRootDiagnostics(int TerminalCallerCount, int ReachableTerminalCallerCount,
-        int ReachableUnresolvedIlCallCount, IReadOnlyDictionary<string, int> ReachableUnresolvedIlCallsByReason);
+        int ReachableUnresolvedIlCallCount, IReadOnlyDictionary<string, int> ReachableUnresolvedIlCallsByReason,
+        int ReachableFillMemberRefCount, int ReachableUnrecognizedFillMemberRefCount);
 
     private static CompiledIlRootDiagnostics
         SummarizeCompiledIlRootDiagnostics(CombinedReadResult read, EvidenceGraph graph,
@@ -27,6 +28,28 @@ public static partial class CombinedDependencyPathReporter
             .ToDictionary(group => group.Key, group => group.ToArray());
         var reasons = new Dictionary<string, int>(StringComparer.Ordinal);
         var unresolved = 0;
+        var reachableFill = 0;
+        var reachableUnrecognizedFill = 0;
+        foreach (var call in read.Facts.Where(fact => fact.FactType == FactTypes.ManagedIlCallObserved
+                     && fact.Properties.GetValueOrDefault("referenceKind") == "memberref"
+                     && (fact.Properties.GetValueOrDefault("targetIdentity") ?? string.Empty)
+                         .Contains("|member:4:Fill|", StringComparison.Ordinal)))
+        {
+            if (!TryUniqueFact(factsByOriginalId, call.SourceIndexId,
+                    call.Properties.GetValueOrDefault("ilBodyFactId"), out var body)
+                || body.FactType != FactTypes.ManagedIlBodyDeclared
+                || !TryUniqueFact(factsByOriginalId, call.SourceIndexId,
+                    body.Properties.GetValueOrDefault("compiledFactId"), out var caller)
+                || caller.FactType != FactTypes.ManagedMethodDeclared
+                || string.IsNullOrWhiteSpace(caller.TargetSymbol)
+                || call.Properties.GetValueOrDefault("rawFileSha256") != body.Properties.GetValueOrDefault("rawFileSha256")
+                || body.Properties.GetValueOrDefault("rawFileSha256") != caller.Properties.GetValueOrDefault("rawFileSha256")
+                || !reached.Contains(SymbolNodeId(caller.SourceIndexId, caller.TargetSymbol)))
+                continue;
+            reachableFill++;
+            if (!TryFrameworkDatabaseApi(call.Properties.GetValueOrDefault("targetIdentity")!, out _))
+                reachableUnrecognizedFill++;
+        }
         foreach (var gap in graph.Gaps.Where(gap => gap.GapKind is "CompiledIlTargetUnavailable" or "CompiledIlTargetAmbiguous"))
         {
             if (gap.CombinedFactId is null
@@ -49,7 +72,8 @@ public static partial class CombinedDependencyPathReporter
             reasons[reason] = reasons.GetValueOrDefault(reason) + 1;
         }
         return new CompiledIlRootDiagnostics(
-            terminalCallers.Length, terminalCallers.Count(reached.Contains), unresolved, reasons);
+            terminalCallers.Length, terminalCallers.Count(reached.Contains), unresolved, reasons,
+            reachableFill, reachableUnrecognizedFill);
     }
 
     private static void AddBoundCompiledIlEdges(EvidenceGraph graph, IReadOnlyList<CombinedFactRow> facts)

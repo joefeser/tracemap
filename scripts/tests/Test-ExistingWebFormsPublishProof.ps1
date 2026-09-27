@@ -78,12 +78,16 @@ try {
         @($apiLines | Where-Object { $_ -cmatch '^compiledCall\.systemDataExecute=\d+$' }).Count -ne 1 -or
         @($apiLines | Where-Object { $_ -cmatch '^compiledCall\.otherFill=\d+$' }).Count -ne 1 -or
         @($apiLines | Where-Object { $_ -cmatch '^compiledCall\.otherExecute=\d+$' }).Count -ne 1 -or
+        @($apiLines | Where-Object { $_ -cmatch '^compiledCall\.otherFillSqlDataAdapter=\d+$' }).Count -ne 1 -or
+        @($apiLines | Where-Object { $_ -cmatch '^compiledCall\.otherFillOtherOwner=\d+$' }).Count -ne 1 -or
         @($apiLines | Where-Object { $_ -cmatch '^compiledApiPaths=\d+$' }).Count -ne 1 -or
         $apiLines -cnotcontains 'compiledApiSelectorCandidates=1' -or
         $apiLines -cnotcontains 'compiledApiStatus=unique-handler' -or
         @($apiLines | Where-Object { $_ -cmatch '^compiledApiReachedNodes=\d+$' }).Count -ne 1 -or
         @($apiLines | Where-Object { $_ -cmatch '^compiledApiTerminalCallers=\d+$' }).Count -ne 1 -or
         @($apiLines | Where-Object { $_ -cmatch '^compiledApiReachableUnresolvedIlCalls=\d+$' }).Count -ne 1 -or
+        @($apiLines | Where-Object { $_ -cmatch '^compiledApiReachableFillMemberRefs=\d+$' }).Count -ne 1 -or
+        @($apiLines | Where-Object { $_ -cmatch '^compiledApiReachableUnrecognizedFillMemberRefs=\d+$' }).Count -ne 1 -or
         @($apiLines | Where-Object { $_ -cmatch '^compiledApiTraversed\.projectless-publish-method-candidate=(True|False)$' }).Count -ne 1 -or
         @($apiLines | Where-Object { $_ -cmatch '^compiledApiDiagnosticShapesTruncated=(True|False)$' }).Count -ne 1 -or
         @($apiLines | Where-Object { $_ -cmatch '^compiledApiTruncated=(True|False)$' }).Count -ne 1 -or
