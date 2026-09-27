@@ -520,7 +520,7 @@ if ($probe.webFormsPublishProvenance.status -ne 'bound') {
 
 if (!$OperatorAttestsExactSourceCommit) {
     $answer = Read-Host 'Do you attest the source-commit DLLs (excluding artifact context) were built from this exact clean source commit? Type YES to continue'
-    if ($answer -cne 'YES') {
+    if ($answer.Trim() -ine 'YES') {
         Write-Output 'existingPublishScan=stopped;reason=exact-source-commit-not-attested'
         return
     }

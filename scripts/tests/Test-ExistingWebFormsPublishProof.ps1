@@ -61,6 +61,17 @@ try {
     if (!(Test-Path -LiteralPath (Join-Path $output 'handler-paths.json') -PathType Leaf)) {
         throw 'EXISTING_PUBLISH_TEST_PATH_REPORT_UNAVAILABLE'
     }
+    function global:Read-Host { param([string]$Prompt) 'yes' }
+    try {
+        $lowercaseLines = @(& $script -SourceSiteRoot $source -PublishedRoot $publish `
+            -PagePath 'Pages/Lookup.aspx' -HandlerName 'Lookup_Init' `
+            -OutputRoot (Join-Path $temp 'lowercase-attestation-proof') -TraceMapRoot $TraceMapRoot)
+    } finally {
+        Remove-Item Function:global:Read-Host -ErrorAction SilentlyContinue
+    }
+    if ($lowercaseLines -notcontains 'existingPublishScan=bound') {
+        throw 'EXISTING_PUBLISH_TEST_LOWERCASE_ATTESTATION_REJECTED'
+    }
     [IO.File]::WriteAllText($map,
         '<preserve virtualPath="/VirtualSite/Pages/Lookup.aspx" assembly="CompiledProjectless.VB" type="PublicProof.LookupPage" />',
         [Text.UTF8Encoding]::new($false))
