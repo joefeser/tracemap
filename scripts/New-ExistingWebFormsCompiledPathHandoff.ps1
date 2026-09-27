@@ -43,7 +43,7 @@ $inputHashes = [ordered]@{
     paths = Hash-Input $pathsPath 268435456 'paths'
     manifest = Hash-Input $manifestPath 4194304 'manifest'
     publishReceipt = Hash-Input $receiptPath 4194304 'publishReceipt'
-    combinedIndex = Hash-Input $indexPath 2147483648 'combinedIndex'
+    combinedIndex = Hash-Input $indexPath 4294967296 'combinedIndex'
 }
 if ($ToSurface -eq 'database-api') {
     if (!$PathReportReceiptPath) { throw 'WEBFORMS_COMPILED_HANDOFF_API_RECEIPT_REQUIRED' }
