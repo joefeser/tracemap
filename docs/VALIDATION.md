@@ -3700,6 +3700,10 @@ calls from other published assemblies; they diagnose terminal coverage and do
 not establish a handler path or SQL execution. Only the local receipt hashes
 the private facts input; shareable output contains category counts alone.
 The command does not rebuild, republish, rescan, or assert SQL source ownership.
+For a unique exact handler, it also prints bounded root-traversal counts and
+fixed edge-kind presence plus categorical graph gaps. These identify where
+the saved graph traversal stopped; graph-wide gaps can belong to unrelated
+methods, and a cycle notice does not by itself establish an omitted terminal.
 For a saved bound scan with one source-bound `IlReaderDisagreement` and one
 source-bound `IlTextLimitExceeded`, `scripts/wil.ps1` locally replays only those
 two copied DLLs through the same independent IL readers. It validates their

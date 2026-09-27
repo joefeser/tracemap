@@ -245,6 +245,23 @@ if ($RecheckPathReasons -or $RecheckCompiledApi) {
         Write-Output "compiledApiNoTerminal=$(@($recheck.gaps | Where-Object {
             $_.gapKind -ceq 'SelectorNoMatch' -and $_.reason -ceq 'selector'
         }).Count)"
+        if ($selectorCount -eq 1) {
+            if ($null -eq $recheck.rootTraversal) { throw 'WEBFORMS_PROBE_ROOT_TRAVERSAL_UNAVAILABLE' }
+            Write-Output "compiledApiReachedNodes=$($recheck.rootTraversal.reachedNodeCount)"
+            Write-Output "compiledApiTraversedEdges=$($recheck.rootTraversal.traversedEdgeCount)"
+            Write-Output "compiledApiDiagnosticShapesTruncated=$($recheck.rootTraversal.diagnosticShapesTruncated)"
+            foreach ($kind in @('projectless-publish-method-candidate',
+                    'projectless-publish-member-candidate', 'projectless-vb-constructor-bridge',
+                    'projectless-vb-receiver-bridge', 'compiled-il-call',
+                    'compiled-il-callvirt-candidate', 'compiled-database-api-candidate')) {
+                Write-Output "compiledApiTraversed.$kind=$(@($recheck.rootTraversal.traversedEdgeKinds) -ccontains $kind)"
+            }
+            foreach ($kind in @('ProjectlessPublishGeneratedTypeUnavailable',
+                    'ProjectlessPublishSourceAmbiguous', 'ProjectlessPublishMetadataAmbiguous',
+                    'CompiledIlTargetUnavailable', 'CompiledIlTargetAmbiguous')) {
+                Write-Output "compiledApiGap.$kind=$(@($recheck.gaps | Where-Object { $_.gapKind -ceq $kind }).Count)"
+            }
+        }
         return
     }
     $memberGaps = @($recheck.gaps | Where-Object { $_.gapKind -ceq 'ProjectlessPublishMemberAmbiguous' })
