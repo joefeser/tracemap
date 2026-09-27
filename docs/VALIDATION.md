@@ -3639,6 +3639,8 @@ make the probe pass.
 The bound scan also uses a 16,384-character IL text limit, based on the
 categorical probe of the source-bound input. The effective IL limit is recorded
 in the scan manifest; exceeding it still withholds that input's IL evidence.
+`scripts/wp.ps1` summarizes the latest local saved probe, bound IL outcomes,
+and path gap kinds without rerunning a scan or printing source paths or names.
 For a saved bound scan with one source-bound `IlReaderDisagreement` and one
 source-bound `IlTextLimitExceeded`, `scripts/wil.ps1` locally replays only those
 two copied DLLs through the same independent IL readers. It validates their

@@ -89,3 +89,24 @@ if (Test-Path -LiteralPath $scanManifestPath -PathType Leaf) {
         Write-Output "scanBoundIlGap.$($group.Name)=$($group.Count)"
     }
 }
+
+$pathReportPath = Join-Path $OutputRoot 'handler-paths.json'
+if (Test-Path -LiteralPath $pathReportPath -PathType Leaf) {
+    $report = [IO.File]::ReadAllText($pathReportPath) | ConvertFrom-Json -Depth 50
+    $pathGaps = @($report.gaps)
+    if ($pathGaps.Count -ne [int]$report.summary.gapCount) {
+        throw 'WEBFORMS_PROBE_PATH_SUMMARY_MISMATCH'
+    }
+    Write-Output "pathSelectorCandidates=$($report.summary.selectorCandidateCount)"
+    Write-Output "pathGraphNodes=$($report.summary.graphNodeCount)"
+    Write-Output "pathGraphEdges=$($report.summary.graphEdgeCount)"
+    Write-Output "pathCount=$($report.summary.pathCount)"
+    Write-Output "pathGapCount=$($pathGaps.Count)"
+    Write-Output "pathTruncated=$($report.summary.truncated)"
+    foreach ($group in @($pathGaps | Group-Object -Property gapKind | Sort-Object Name)) {
+        $label = if ([string]$group.Name -cmatch '^[A-Za-z][A-Za-z0-9]{0,79}$') {
+            $group.Name
+        } else { 'other' }
+        Write-Output "pathGap.$label=$($group.Count)"
+    }
+}
