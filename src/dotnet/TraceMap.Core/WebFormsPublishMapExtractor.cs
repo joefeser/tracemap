@@ -18,11 +18,13 @@ public sealed record WebFormsPublishProvenance(
 
 internal sealed record WebFormsPublishPage(string SourcePath, string AssemblyName,
     string AssemblySha256, string GeneratedType, string MapSha256);
+internal sealed record WebFormsPublishPageCandidate(string SourcePath);
 internal sealed record WebFormsPublishAssembly(string Path, string Sha256);
 
 internal sealed record WebFormsPublishEvaluation(WebFormsPublishProvenance? Provenance,
     IReadOnlyList<WebFormsPublishPage> Pages, IReadOnlyList<string> SourcePaths,
-    IReadOnlyList<WebFormsPublishAssembly> Assemblies);
+    IReadOnlyList<WebFormsPublishAssembly> Assemblies,
+    IReadOnlyList<WebFormsPublishPageCandidate>? Candidates = null);
 
 internal static class WebFormsPublishMapExtractor
 {
@@ -49,6 +51,7 @@ internal static class WebFormsPublishMapExtractor
         var publishRoot = Path.GetDirectoryName(receiptPath)!;
         var gaps = new List<string>();
         var pages = new List<WebFormsPublishPage>();
+        var candidates = new List<WebFormsPublishPageCandidate>();
         var sourcePaths = new List<string>();
         var assemblies = new List<WebFormsPublishAssembly>();
         var sourceCount = 0;
@@ -73,7 +76,7 @@ internal static class WebFormsPublishMapExtractor
             sourceCount = receipt.SourceFiles.Count;
             publishedCount = receipt.PublishedFiles.Count;
             pageCount = receipt.Pages.Count;
-            if (sourceCount is < 1 or > MaxSourceFiles || publishedCount is < 2 or > MaxPublishedFiles
+            if (sourceCount is < 1 or > MaxSourceFiles || publishedCount is < 1 or > MaxPublishedFiles
                 || pageCount is < 1 or > MaxPages)
                 throw new PublishException("WebFormsPublishInputLimitExceeded");
             if (HasDuplicatePaths(receipt.SourceFiles.Select(item => item.Path))
@@ -112,10 +115,49 @@ internal static class WebFormsPublishMapExtractor
             foreach (var item in receipt.Pages)
             {
                 cancellationToken.ThrowIfCancellationRequested();
+                if (item.BindingKind == "mapless-source-type-candidate")
+                {
+                    if (item.SourcePath is null || item.VirtualPath is null
+                        || !item.VirtualPath.StartsWith("/", StringComparison.Ordinal)
+                        || !item.VirtualPath.EndsWith("/" + item.SourcePath, StringComparison.OrdinalIgnoreCase)
+                        || item.Assembly is not null || item.GeneratedType is not null || item.MapPath is not null)
+                        throw new PublishException("WebFormsPublishReceiptInvalid");
+                    _ = ResolveChild(repoPath, item.SourcePath);
+                    if (!receipt.SourceFiles.Any(source => source.Path == item.SourcePath))
+                        throw new PublishException("WebFormsPublishSourceUnavailable");
+                    if (!assemblies.Any(assembly => Path.GetFileName(assembly.Path).StartsWith("App_Web_", StringComparison.OrdinalIgnoreCase)))
+                        throw new PublishException("WebFormsPublishAssemblyUnavailable");
+                    var mapRows = receipt.PublishedFiles.Where(file => file.Kind == "compiled-map")
+                        .OrderBy(file => file.Path, StringComparer.Ordinal).ToArray();
+                    if (receipt.PublishedMapCount != mapRows.Length || !IsSha256(receipt.MapInventorySha256))
+                        throw new PublishException("WebFormsPublishReceiptInvalid");
+                    var mapLines = mapRows.Select(file => $"{file.Path}:{file.Sha256}");
+                    if (Sha256(Encoding.UTF8.GetBytes(string.Join("\n", mapLines) + "\n")) != receipt.MapInventorySha256)
+                        throw new PublishException("WebFormsPublishReceiptInvalid");
+                    foreach (var mapRow in mapRows)
+                    {
+                        using var mapStream = File.OpenRead(ResolveChild(publishRoot, mapRow.Path));
+                        using var mapReader = XmlReader.Create(mapStream,
+                            new XmlReaderSettings { DtdProcessing = DtdProcessing.Prohibit, XmlResolver = null });
+                        var virtualPath = XDocument.Load(mapReader).Root?.Attribute("virtualPath")?.Value;
+                        if (virtualPath is null)
+                            throw new PublishException("WebFormsPublishMapMismatch");
+                        if (virtualPath.Equals(item.VirtualPath, StringComparison.OrdinalIgnoreCase)
+                            || virtualPath.EndsWith("/" + item.SourcePath, StringComparison.OrdinalIgnoreCase))
+                            throw new PublishException("WebFormsPublishMapMismatch");
+                    }
+                    candidates.Add(new WebFormsPublishPageCandidate(item.SourcePath));
+                    continue;
+                }
+                if (item.BindingKind is not null)
+                    throw new PublishException("WebFormsPublishReceiptInvalid");
                 if (string.IsNullOrWhiteSpace(item.Assembly) || string.IsNullOrWhiteSpace(item.GeneratedType)
                     || item.VirtualPath is null || !item.VirtualPath.StartsWith("/", StringComparison.Ordinal))
                     throw new PublishException("WebFormsPublishReceiptInvalid");
-                var sourcePath = item.VirtualPath.TrimStart('/');
+                var sourcePath = item.SourcePath ?? item.VirtualPath.TrimStart('/');
+                if (item.SourcePath is not null
+                    && !item.VirtualPath.EndsWith("/" + sourcePath, StringComparison.OrdinalIgnoreCase))
+                    throw new PublishException("WebFormsPublishReceiptInvalid");
                 _ = ResolveChild(repoPath, sourcePath);
                 if (!receipt.SourceFiles.Any(source => source.Path == sourcePath))
                     throw new PublishException("WebFormsPublishSourceUnavailable");
@@ -143,6 +185,7 @@ internal static class WebFormsPublishMapExtractor
             boundedInputSha256 = SafeReceiptDigest(receiptPath);
             gaps.Add(exception.GapKind);
             pages.Clear();
+            candidates.Clear();
             sourcePaths.Clear();
             assemblies.Clear();
         }
@@ -152,13 +195,14 @@ internal static class WebFormsPublishMapExtractor
             boundedInputSha256 = SafeReceiptDigest(receiptPath);
             gaps.Add("WebFormsPublishReceiptUnreadable");
             pages.Clear();
+            candidates.Clear();
             sourcePaths.Clear();
             assemblies.Clear();
         }
         var provenance = new WebFormsPublishProvenance("webforms-publish-provenance.v1",
             generatorSha256, boundedInputSha256, gaps.Count == 0 ? "bound" : "gap",
             gaps, sourceCount, publishedCount, pageCount);
-        return new WebFormsPublishEvaluation(provenance, pages, sourcePaths, assemblies);
+        return new WebFormsPublishEvaluation(provenance, pages, sourcePaths, assemblies, candidates);
     }
 
     public static IReadOnlyList<CodeFact> MaterializeFacts(ScanManifest manifest,
@@ -206,6 +250,18 @@ internal static class WebFormsPublishMapExtractor
                     ["mapSha256"] = page.MapSha256,
                     ["sourcePath"] = page.SourcePath,
                     ["limitation"] = "Verified operator-declared publish inputs bind a page to an emitted assembly, not a source method, PDB line, runtime page activation, or execution."
+                }));
+        foreach (var candidate in evaluation.Candidates ?? [])
+            facts.Add(FactFactory.Create(manifest, FactTypes.WebFormsPublishPageCandidate,
+                RuleIds.LegacyWebFormsPublishMap, EvidenceTiers.Tier3SyntaxOrTextual,
+                new EvidenceSpan(candidate.SourcePath, 1, 1, null, nameof(WebFormsPublishMapExtractor),
+                    ScannerVersions.WebFormsPublishMapExtractor),
+                properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["sourcePath"] = candidate.SourcePath,
+                    ["boundedInputSha256"] = provenance.BoundedInputSha256,
+                    ["generatorSha256"] = provenance.GeneratorSha256,
+                    ["limitation"] = "Operator-declared mapless page and hashed assemblies permit only a unique source-type-to-metadata review candidate; no page map, PDB line, build, activation, or runtime execution is proven."
                 }));
         foreach (var gap in provenance.GapKinds)
             facts.Add(FactFactory.Create(manifest, FactTypes.AnalysisGap,
@@ -273,10 +329,11 @@ internal static class WebFormsPublishMapExtractor
     private sealed record PublishReceipt(string? SchemaVersion, string? Visibility,
         string? ReceiptGeneratorSha256, string? CompilerSha256, string? SourceCommitSha,
         string? BoundedInputSha256, IReadOnlyList<SourceFile>? SourceFiles,
-        IReadOnlyList<PublishedFile>? PublishedFiles, IReadOnlyList<Page>? Pages);
+        IReadOnlyList<PublishedFile>? PublishedFiles, IReadOnlyList<Page>? Pages,
+        int? PublishedMapCount = null, string? MapInventorySha256 = null);
     private sealed record SourceFile(string? Path, string? Sha256);
     private sealed record PublishedFile(string? Path, string? Sha256, string? Kind);
     private sealed record Page(string? VirtualPath, string? Assembly, string? GeneratedType,
-        string? MapPath);
+        string? MapPath, string? SourcePath = null, string? BindingKind = null);
     private sealed class PublishException(string gapKind) : Exception { public string GapKind { get; } = gapKind; }
 }

@@ -329,6 +329,7 @@ public static class FactTypes
     public const string RemotingConfigProviderDeclared = nameof(RemotingConfigProviderDeclared);
     public const string WebFormsPageDeclared = nameof(WebFormsPageDeclared);
     public const string WebFormsPublishPageMapped = nameof(WebFormsPublishPageMapped);
+    public const string WebFormsPublishPageCandidate = nameof(WebFormsPublishPageCandidate);
     public const string WebFormsPublishSourceBound = nameof(WebFormsPublishSourceBound);
     public const string WebFormsPublishAssemblyBound = nameof(WebFormsPublishAssemblyBound);
     public const string WebFormsControlDeclared = nameof(WebFormsControlDeclared);
@@ -680,8 +681,8 @@ public static class ScannerVersions
     public const string ManagedMetadataExtractor = "managed-metadata/0.1.0+cecil-0.11.6";
     public const string SourceMetadataReconciliationExtractor = "source-metadata-reconciliation/0.1.0";
     public const string PortablePdbExtractor = "portable-pdb/0.1.0+srm-10.0.0+cecil-0.11.6";
-    public const string IlBodyEvidenceExtractor = "il-body-evidence/0.1.0+srm-10.0.0+cecil-0.11.6";
-    public const string IlRewriteEvidenceExtractor = "il-rewrite-evidence/0.1.0+srm-10.0.0+cecil-0.11.6";
+    public const string IlBodyEvidenceExtractor = "il-body-evidence/0.1.3+srm-10.0.0+cecil-0.11.6";
+    public const string IlRewriteEvidenceExtractor = "il-rewrite-evidence/0.1.1+srm-10.0.0+cecil-0.11.6";
     public const string IlRewritePdbEvidenceExtractor = "il-rewrite-pdb-evidence/0.1.0+srm-10.0.0+cecil-0.11.6";
     public const string ConfigExtractor = "config/0.1.0";
     public const string SqlTextExtractor = "sql-text/0.1.0";

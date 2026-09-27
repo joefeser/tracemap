@@ -11,6 +11,19 @@ namespace TraceMap.Tests;
 
 public sealed class CombinedDependencyPathTests
 {
+    [Theory]
+    [InlineData(0, 0, 0, 0, "bound-method-name-unavailable")]
+    [InlineData(1, 0, 0, 0, "method-absent-from-receipt-bound-assemblies")]
+    [InlineData(1, 1, 0, 0, "qualified-containing-type-unmatched")]
+    [InlineData(1, 1, 1, 0, "parameter-shape-unmatched")]
+    [InlineData(2, 2, 2, 2, "multiple-qualified-compatible-members")]
+    public void Publish_member_gap_reason_identifies_the_failed_matching_stage(
+        int named, int inBoundAssembly, int inQualifiedType, int compatibleSignature, string expected)
+    {
+        Assert.Equal(expected, CombinedDependencyPathReporter.PublishMemberGapReason(
+            named, inBoundAssembly, inQualifiedType, compatibleSignature));
+    }
+
     [Fact]
     public async Task Paths_rejects_nonpositive_traversal_work_even_without_matching_roots()
     {

@@ -2693,13 +2693,23 @@ metadata token resolution) each rebuild the complete canonical encoding for
 every admitted input, and the two results must agree on the assembly and
 module identity, the method identity, every body digest, every call-site
 offset, opcode, reference kind, reference token, and target identity, the
-locals, the exception regions, and max stack. Any disagreement withholds that
-input's positive IL facts behind `IlReaderDisagreement`. Fields that cannot
+locals, the exception regions, and max stack. A method disagreement withholds
+that method's positive IL facts, retains only fully agreed methods from the
+same module, and marks the input and scan partial with `IlReaderDisagreement`.
+An assembly or module identity disagreement withholds the entire input.
+The Cecil lane uses the raw reader's canonical opcode display name only when
+the numeric opcode bytes at that offset equal Cecil's decoded opcode value;
+different numeric opcodes remain a method disagreement. Both lanes still
+decode operands independently and compare full instruction and call digests.
+Fields that cannot
 yet be independently verified are not promoted to positive evidence:
 non-call token operands such as field and signature tokens are committed by
 raw module-local token only, and string literals are committed by digest only
 and never retained verbatim because literal text is unbounded and may contain
-secrets. The `constrained.` prefix target is cross-checked as a
+secrets. For an `InlineTok` TypeSpec, the Cecil path retains the token encoded
+in the IL because Cecil can project the decoded type onto another metadata
+table; the raw reader still validates that TypeSpec row and both decoded type
+identities must agree. The `constrained.` prefix target is cross-checked as a
 `constrainedtype` call observation, but its module-local token stays
 explicitly unclaimed because Mono.Cecil cannot reproduce the raw TypeSpec
 token after resolving the operand. `--il-max-text` bounds user strings,
@@ -2769,11 +2779,23 @@ declaration enters the binary graph only through a `bound`, exact
 source-symbol ID. IL body and call facts must join to their admitted compiled
 method by exact fact IDs and matching verified artifact SHA-256. `call` and
 `newobj` MethodDef targets join only to one method in the same source index;
-assembly-scoped MemberRef targets join only to one bound method across the
-combined index using the complete assembly-reference identity, non-generic
-type path, member name, and signature. `callvirt` is a Tier3 review candidate,
-not a proven dispatch destination. Missing or ambiguous admitted targets are
-gaps; unadmitted external assemblies are not inferred as absent.
+assembly-scoped MemberRef targets join only to one exact admitted method across
+the combined index using the complete assembly-reference identity, non-generic
+type path, member name, and signature. If either method is unbound artifact
+context, the exact IL edge is Tier3 review-only and emits a
+`CompiledIlArtifactContext` gap. It does not attribute the context DLL to the
+source commit or connect it to source SQL evidence. `callvirt` is also a Tier3
+review candidate, not a proven dispatch destination. Missing or ambiguous
+admitted targets are gaps; unadmitted external assemblies are not inferred as
+absent.
+An admitted IL call to the exact framework `System.Data.Common.DbDataAdapter.Fill`
+MemberRef or to `ExecuteReader`, `ExecuteNonQuery`, or `ExecuteScalar` on a
+`System.Data` command type (`DbCommand`, `IDbCommand`, `SqlCommand`,
+`OdbcCommand`, or `OleDbCommand`) can terminate a `--to-surface database-api`
+path as a Tier3 `compiled-database-api-candidate`. The assembly, type, and
+member must all match. This identifies a static database API call only. It
+supplies no SQL text, database provider dispatch, source line, or runtime
+proof, and it never substitutes for a `sql-query` terminal.
 
 The public `root-generated` test proves that a bound IL walk can cross an
 excluded generated bridge to supported SQL evidence while the corresponding
@@ -3519,12 +3541,31 @@ receipt-listed source methods may form bidirectional Tier3 member candidates
 when the fully qualified containing type, method, and bounded parameter
 shapes select exactly one bound published method. This permits a static IL
 walk to re-enter retained source evidence; it is not a PDB or exact
-source-method identity claim. The validation
+source-method identity claim. A missing member candidate stays a gap with a
+categorical reason identifying whether name, receipt-bound assembly,
+qualified type, or parameter shape failed; multiple candidates remain
+ambiguous. The validation
 script is **not** a private-site publishing instruction. Even after the public
 Windows run succeeded and the emitted `.compiled` and metadata identities were
 inspected, the map alone is only page-to-assembly evidence: it is not a verified
 source-method, IL-chain, or runtime claim. A 32-bit-only dependency in a
 private site does not become AnyCPU through CodeDOM configuration.
+
+`Test-PublicWebFormsPublish.ps1 -Updatable` publishes the public
+`vb-publish-mapless` fixture with `-u -v /UBid`: four DLLs (`App_Code`,
+`App_global.asax`, `App_WebReferences`, and `App_Web_*`), exactly three
+`.compiled` maps (`/UBid/App_Code/`, `/UBid/global.asax`, and
+`/UBid/App_WebReferences/`), no page map, and no PDB. The `App_Web_*` metadata still
+declares the code-behind handler and its IL calls. An updatable publish does
+not establish page activation or a generated `ASP.*` page type. Its local
+receipt declares `mapless-source-type-candidate`, hashes every emitted DLL
+and map, and supplies the exact source commit. The scanner requires the
+declared page, source file, map inventory, and an `App_Web_*` assembly. The
+combined graph requires exactly one bound code-behind type and method among
+the selected assemblies; zero or multiple matches produce a gap. The
+source-handler to compiled-method edge is Tier3 and review-only. Without a
+PDB, no source line is assigned to the compiled method. IL call edges and
+source SQL evidence describe a static path, not execution.
 
 The public-only home-Windows check at `822d3b55dc287b1820e8d42ad4c534cf8304242a`
 passed: six public inputs produced two DLLs, two `.compiled` maps, no PDBs,
@@ -3571,8 +3612,9 @@ current source. Run the public synthetic guard first:
 pwsh -NoProfile -File scripts/tests/Test-ExistingWebFormsPublishProof.ps1
 ```
 
-On Windows the guard also publishes the public two-DLL/no-PDB fixture and
-requires a reported `Names_Init` to `sql-query` path. That Windows case must
+On Windows the guard publishes both mapped two-DLL and updatable four-DLL public no-PDB
+fixtures and requires a `Names_Init` to `sql-query` path with a Tier3 source
+candidate in the mapless case. That Windows case must
 pass before using this diagnostic on a private site. For a local-only site
 probe, run from a clean TraceMap checkout:
 
@@ -3582,28 +3624,190 @@ pwsh -NoProfile -File scripts/Invoke-ExistingWebFormsPublishProof.ps1 -HandlerNa
 
 The script prompts for the source Web Site folder, the existing published
 output folder (containing `bin/` and `.compiled` maps), and the page path
-relative to the source site (for example `UBid/BidGroup.aspx`). It requires
-one exact page map, a matching mapped DLL, a clean source-site Git scope,
+relative to the source site (for example `BidGroup.aspx` when the site folder
+is `UBid`). It requires zero or one unambiguous page map and a clean source-site Git scope,
 and bounded committed page/code-behind, relevant `Web.config`, plus
 `App_Code` sources. The scan is explicitly limited to those receipted source
-files; it is not a complete-site source scan. It selects the mapped
-page DLL and `App_Code` DLLs by default; `-AdditionalAssemblyName` may name
+files; it is not a complete-site source scan. It matches the page map by
+exact virtual path, or by one unique application-root-prefixed
+suffix when the `.compiled` virtual path differs from the source-relative
+page path. Uniqueness includes exact and prefixed candidates together; an
+exact match alongside a prefixed match is ambiguous and stops the probe.
+A mapped page selects its named DLL. With no matching page map,
+the mapless path selects every `App_Web_*` DLL and `App_Code` DLL, hashes and
+copies every `.compiled` map, and records an explicit Tier3 source-type
+candidate. No `App_Web_*` DLL or multiple matching maps stop the probe.
+`-AdditionalAssemblyName` may name
 other **exact** DLL filenames only when the operator can attest they were
 built from the same source commit. Every other `bin/*.dll` must be explicitly
 declared outside this focused proof (one `OUTOFSCOPE` response); otherwise
 the probe stops with `unclassified-assemblies`. The local receipt records
 each available DLL hash and its selected/out-of-scope disposition. An
 out-of-scope DLL is never a complete-publish or cross-assembly claim.
+The probe joins copied DLLs to compiled outcomes by unique SHA-256, because
+external safe locators include a hash prefix. A duplicate scanned DLL hash or
+an unmatched outcome stops the proof before source-commit binding.
+When the deployment also contains binaries from another repository or build,
+`-IncludeAllPublishedAssembliesAsContext` instead hashes and scans every
+`bin/*.dll` without excluding any. Only the mapped or mapless Web Site DLLs
+and any explicitly named `-AdditionalAssemblyName` DLLs receive the Web Site
+commit binding. The others are labeled `artifact-context-no-source-commit`
+in the local inventory and remain unbound metadata context. A duplicate
+code-behind type in that context blocks the Tier3 page candidate; a call
+that needs a context DLL cannot become a bound IL edge through this run.
+Use the separately provenance-bound repository run when such an edge is
+needed. This mode does not attribute UnitedFramework or third-party binaries
+to the Web Site commit, nor does it prove a complete cross-repository path.
+The public `vb-publish-crossdll` Windows regression publishes a mapless Web
+Site with five DLLs and three `.compiled` maps, while keeping the independently
+built framework PDB outside the published folder. Five framework provider
+classes expose the same method name; the graph admits only the exact bound
+MemberRef target. The cross-platform `root-crosslanguage` regression separately
+binds and combines two compiled indexes to exercise the same MemberRef rule
+without requiring ASP.NET precompilation. A second source index for the
+framework must bind that exact DLL and reconcile its portable-PDB document
+and method before the compiled call can return to the source SQL terminal.
+The page entry remains Tier3
+review-only, the bound IL call is static evidence, and the PDB bridge is Tier2
+structural evidence, never runtime execution. The regression requires zero
+SQL paths when the framework PDB is unavailable or its DLL is only unbound
+artifact context. Exact IL references into that context remain Tier3 review
+candidates with a `CompiledIlArtifactContext` gap; they cannot establish
+source ownership or complete a source SQL path. A same-named provider,
+an independently rebuilt DLL with different bytes, or an unbound context DLL
+cannot complete this chain. The synthetic fixture does not attest any private
+publish or independently built historical artifact.
+The same public mapless fixture proves that an exact IL path through the
+unbound provider can instead reach the separate `database-api` candidate
+terminal while the `sql-query` path count remains zero.
+Both the initial admission probe and the bound scan use an explicit 8,192-character
+compiled metadata text limit. This is a bounded override of the general 4,096-character
+default, and the effective limit is recorded in each scan manifest. An assembly
+that still exceeds it remains a gap; the script does not drop context DLLs to
+make the probe pass.
+The bound scan also uses a 16,384-character IL text limit, based on the
+categorical probe of the source-bound input. The effective IL limit is recorded
+in the scan manifest; exceeding it still withholds that input's IL evidence.
+`scripts/wp.ps1` summarizes the latest local saved probe, bound IL outcomes,
+and path gap kinds without rerunning a scan or printing source paths or names.
+`scripts/wid.ps1 -TypeName <type> -MethodName <method>` identifies the one
+copied assembly containing that compiled method and runs a bounded dual-reader
+probe on it. Its output consists only of disagreement categories and counts;
+it also counts how many selected overloads have bodies that agree in both
+readers and reports each overload's agreement plus generic collection,
+array-parameter, and by-reference signature flags. It uses the saved publish
+bytes and does not rescan the Web Site.
+`scripts/wgo.ps1 -SourceSiteRoot <site-root> -TypeName <type>
+-MethodName <method>` runs that quick probe first. It starts a separate
+30,000,000-unit replay only when every selected overload agrees; otherwise it
+prints `replaySkipped=selected-method-disagreement` and leaves the saved scan
+unchanged.
+`scripts/wm.ps1 -TypeName <type> -MethodName <method>` correlates a compiled
+method family with its saved IL bodies and per-assembly IL admission outcome.
+It counts exact IL `member:Fill` references by framework owner and assembly
+scope, and prints counts and categorical gaps only. When the relevant assembly has
+`IlTotalWorkLimitExceeded`, `scripts/wr.ps1 -SourceSiteRoot <site-root>
+-TypeName <type> -MethodName <method>` reuses the saved receipt, binding, and
+copied publish bytes for one new scan with an explicit 20,000,000-unit IL
+budget. It writes a separate scan and exact-handler `database-api` path
+report under the same local output root. It verifies the source commit and
+copied assembly hashes before scanning; the original scan is retained. The
+replay path query uses the unique resolved handler symbol from the receipted
+page; the short handler name alone is not an exact graph selector. For an
+existing replay, `scripts/wpath.ps1` reruns only that corrected path query
+against the saved combined index and writes a separate exact-handler report.
+`scripts/wpath.ps1 -FillOnly -TypeName <provider> -MethodName <method>`
+queries only the exact `DbDataAdapter.Fill` terminal and prints categorical
+path, classification, and selected provider counts; its local report retains
+the full evidence chain for review.
+`scripts/wpost.ps1 -TypeName <type> -MethodName <method>` reads a saved replay
+without scanning or querying and reports the selected method family's Fill
+calls and root reachability counts. A
+larger budget changes coverage, not the evidence tier or proof of execution.
+`scripts/wp.ps1 -RecheckPathReasons` reruns only the saved path query against
+the local combined index and prints categorical published-member mismatch
+counts plus `pathRecheckArtifactIlCalls`. The latter counts exact IL references
+that enter unbound artifact context as review-only candidates; it is not a
+source-to-SQL path count. The refreshed report and its hashes stay beside the
+local receipt.
+`scripts/wp.ps1 -RecheckCompiledApi` first requires one handler fact matching
+the receipted page and handler name, then reruns one bounded `database-api`
+path query from its full source symbol against the saved combined index, with
+exact symbol matching. The ordinary `--from-symbol` path selector retains its
+substring behavior; `--exact-from-symbol` requires an identical symbol ID or
+display and records that choice in the query. It
+prints only candidate counts and categorical truncation reasons. Multiple or
+missing handler facts stop the query; multiple graph start nodes withhold the
+path count. `Truncated=True` alone does not identify
+which bound was hit; inspect the reason counts before interpreting zero paths.
+The recheck also counts saved `ManagedIlCallObserved` MemberRefs by fixed
+`Fill`/`Execute*` API families. These global counts may include unreachable
+calls from other published assemblies; they diagnose terminal coverage and do
+not establish a handler path or SQL execution. Only the local receipt hashes
+the private facts input; shareable output contains category counts alone.
+`otherFill` and `otherExecute` separate calls outside the named framework
+families without exposing their assembly or type identities.
+The other `Fill` count is split again by fixed adapter owner and assembly
+categories. The exact-handler traversal also reports how many `Fill`
+MemberRefs have reachable caller methods and how many of those calls are not
+recognized database APIs. These counts still do not establish dispatch or
+execution.
+The command does not rebuild, republish, rescan, or assert SQL source ownership.
+For a unique exact handler, it also prints bounded root-traversal counts and
+fixed edge-kind presence plus categorical graph gaps. These identify where
+the saved graph traversal stopped; graph-wide gaps can belong to unrelated
+methods, and a cycle notice does not by itself establish an omitted terminal.
+Terminal-caller reachability and unresolved IL target counts are restricted
+to the exact handler's traversed component; no private symbol or assembly
+identity is printed.
+For a saved bound scan with one source-bound `IlReaderDisagreement` and one
+source-bound `IlTextLimitExceeded`, `scripts/wil.ps1` locally replays only those
+two copied DLLs through the same independent IL readers. It validates their
+receipt hashes and prints categorical disagreement counts, the first differing
+instruction's opcode/operand category, token kind and identity-part category,
+and the first
+non-text-limit ceiling up to 65,536. Local receipts record the diagnostic
+generator and bounded input SHA-256 values; no identities, tokens, source,
+paths, or private hashes are printed. This diagnostic does not change the
+scanner's fail-closed IL result or establish a source-to-SQL path.
 The source subset follows `CodeBehind`/`CodeFile` in the page directive,
 then conventional VB/C# fallback, and includes every ancestor `Web.config`.
-It copies only selected DLLs and the map
+Source tracking is checked against the exact `HEAD` tree under the Web Site
+folder. On Windows, a unique case-only path difference is accepted only when
+the working file's raw or Git-filtered blob hash matches the committed blob.
+The raw comparison also accepts an exact committed byte match when the
+machine's current line-ending filter differs from the one used for the commit.
+The safe `sourceTrackingCaseAliases` count reports these matches. Missing source fails
+closed with `WEBFORMS_EXISTING_PUBLISH_SOURCE_NOT_COMMITTED` and aggregate
+`sourceNotCommitted*Count` lines by page, linked code, config, and `App_Code`.
+Those counts contain no source paths. An ignored `App_Code` source remains a
+missing committed input even if the Git working tree reports clean.
+If an alias resolves to different committed and working blob identities, the
+probe fails with `WEBFORMS_EXISTING_PUBLISH_SOURCE_MISMATCH` and aggregate
+`sourceMismatch*Count` lines for the same categories. These counts also omit
+paths and hashes; a clean Git status alone does not override this gate.
+For a Web Site whose only tracked content difference is its root `Web.config`,
+`scripts/wf.ps1` provides a local-only snapshot path. It checks every tracked
+Web Site file against `HEAD` using raw and Git-filtered blob identities, requires the existing
+bounded proof to identify only that config mismatch, creates a detached local
+commit containing the current config in a fresh temporary worktree, and runs
+the proof against that exact snapshot. It does not modify the original source
+checkout, branch, or index, and it does not push the private commit. The new
+commit and worktree remain local so the receipt can still resolve its source
+SHA. Run `pwsh -NoProfile -File scripts/wf.ps1` and answer its four input
+prompts; `-PrepareOnly` stops before the scans and source attestation. Only
+attest the snapshot as the publish input if those bytes were actually used to
+produce the deployed binaries. A later config edit does not establish that
+claim. Other source differences stop this helper; it never silently rewrites
+the source-commit claim or treats an unbound probe as a bound result.
+It copies only selected DLLs and the relevant mapped map or all mapless maps
 to a fresh local temporary output, not the source site. It enforces the
 receipt's 256-source, 64-published-file, 32-page, and per-file limits before
 scanning. `-PrepareOnly` stops after the local receipt and copies.
 
 A first, unbound scan records the scanner's exact safe locators and metadata
-identities. Before a second scan may bind those selected DLLs, the operator
-must explicitly attest that they were built from the exact clean source
+identities. Before a second scan may bind the Web Site DLLs, the operator
+must explicitly attest that those DLLs were built from the exact clean source
 commit; declining stops without a bound path claim. The script retains the
 binding receipt, both scans, logs, combined index, and optional handler path
 report only in its local output folder. Its console output contains counts,
@@ -3613,9 +3817,10 @@ the script generator hash and a bounded-input digest. Do not share
 the local receipts, logs, scan, or path report. The existing publish's actual
 compiler and full build-input set remain unknown: the compiler hash in this
 operator-declared receipt is an explicitly labeled unknown sentinel, **not**
-a compiler attribution. A missing `.compiled` page map, a source-commit
-attestation that cannot be made, an omitted internal DLL, or a scanner limit
-is a gap to investigate, not permission to guess a source-to-binary join.
+a compiler attribution. A mapless page without a unique bound code-behind
+type, a source-commit attestation that cannot be made, an omitted internal
+DLL, or a scanner limit is a gap to investigate, not permission to guess a
+source-to-binary join.
 
 This diagnostic is a separate proof attempt; it does not rewrite the normal
 Web Forms workbench or establish runtime execution, source-line identity,

@@ -30,6 +30,7 @@ public sealed record CombinedDependencyPathOptions(
     // the historical selector ceiling and selection behavior.
     internal int StartingNodeLimit { get; init; } = 250;
     internal IReadOnlySet<string>? StartingFactIds { get; init; }
+    public bool ExactFromSymbol { get; init; }
     // Deterministic work bound, including nonterminal/cyclic exploration.
     public int MaxTraversalWork { get; init; } = 100_000;
     // Web Forms packet composition inventories one shortest witness per
@@ -56,7 +57,27 @@ public sealed record CombinedDependencyPathReport(
     IReadOnlyList<CombinedPath> Paths,
     IReadOnlyList<CombinedPathGap> Gaps,
     CombinedPathInventory Inventory,
-    IReadOnlyList<string> Limitations);
+    IReadOnlyList<string> Limitations)
+{
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public CombinedPathRootTraversal? RootTraversal { get; init; }
+}
+
+public sealed record CombinedPathRootTraversal(
+    int ReachedNodeCount,
+    int TraversedEdgeCount,
+    IReadOnlyList<string> TraversedEdgeKinds,
+    IReadOnlyList<string> LeafNodeKinds,
+    bool DiagnosticShapesTruncated)
+{
+    public int TerminalCallerCount { get; init; }
+    public int ReachableTerminalCallerCount { get; init; }
+    public int ReachableUnresolvedIlCallCount { get; init; }
+    public int ReachableFillMemberRefCount { get; init; }
+    public int ReachableUnrecognizedFillMemberRefCount { get; init; }
+    public IReadOnlyDictionary<string, int> ReachableUnresolvedIlCallsByReason { get; init; }
+        = new Dictionary<string, int>(StringComparer.Ordinal);
+}
 
 public sealed record CombinedPathQuery(
     string? FromEndpoint,
@@ -78,7 +99,8 @@ public sealed record CombinedPathQuery(
     string AlgorithmVersion,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     string? MessageDirection,
-    int MaxTraversalWork = 100_000);
+    int MaxTraversalWork = 100_000,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool ExactFromSymbol = false);
 
 public sealed record CombinedPathSummary(
     int SourceCount,
@@ -663,6 +685,13 @@ public static partial class CombinedDependencyPathReporter
             .ThenBy(edge => edge.EdgeId, StringComparer.Ordinal)
             .ToArray();
 
+        var rootTraversal = options.ExactFromSymbol && startNodes.Count == 1 && search is not null
+            ? search.TraversalByRootNodeId.GetValueOrDefault(startNodes[0].NodeId)
+            : null;
+        var compiledRootDiagnostics = rootTraversal is not null
+            && options.ToSurface == "database-api"
+            ? SummarizeCompiledIlRootDiagnostics(read, graph, search!.ReachedNodeIds, startNodes[0].NodeId)
+            : null;
         var report = new CombinedDependencyPathReport(
             Version,
             legacyMode ? LegacyFlowReportConstants.SchemaVersion : null,
@@ -685,7 +714,8 @@ public static partial class CombinedDependencyPathReporter
                 Algorithm,
                 AlgorithmVersion,
                 CombinedReportHelpers.NormalizeMessageDirection(options.MessageDirection, "paths"),
-                options.MaxTraversalWork),
+                options.MaxTraversalWork,
+                options.ExactFromSymbol),
             read.Sources.Select(source => legacyMode ? SanitizeSource(source) : source).OrderBy(source => source.Label, StringComparer.Ordinal).ThenBy(source => source.SourceIndexId, StringComparer.Ordinal).ToArray(),
             new CombinedPathSummary(
                 read.Sources.Count,
@@ -705,7 +735,24 @@ public static partial class CombinedDependencyPathReporter
                 CountBy(sortedGaps, gap => gap.GapKind),
                 participatingNodes,
                 participatingEdges),
-            ReportLimitations(legacyMode, participatingNodes, sortedGaps));
+            ReportLimitations(legacyMode, participatingNodes, sortedGaps))
+        {
+            RootTraversal = rootTraversal is null ? null : new CombinedPathRootTraversal(
+                rootTraversal.ReachedNodeCount,
+                rootTraversal.TraversedEdgeCount,
+                rootTraversal.TraversedEdgeKinds,
+                rootTraversal.LeafNodeKinds,
+                rootTraversal.DiagnosticShapesTruncated)
+            {
+                TerminalCallerCount = compiledRootDiagnostics?.TerminalCallerCount ?? 0,
+                ReachableTerminalCallerCount = compiledRootDiagnostics?.ReachableTerminalCallerCount ?? 0,
+                ReachableUnresolvedIlCallCount = compiledRootDiagnostics?.ReachableUnresolvedIlCallCount ?? 0,
+                ReachableFillMemberRefCount = compiledRootDiagnostics?.ReachableFillMemberRefCount ?? 0,
+                ReachableUnrecognizedFillMemberRefCount = compiledRootDiagnostics?.ReachableUnrecognizedFillMemberRefCount ?? 0,
+                ReachableUnresolvedIlCallsByReason = compiledRootDiagnostics?.ReachableUnresolvedIlCallsByReason
+                    ?? new Dictionary<string, int>(StringComparer.Ordinal)
+            }
+        };
         var observations = startNodes
             .Where(node => node.CombinedFactId is not null)
             .GroupBy(node => node.CombinedFactId!, StringComparer.Ordinal)
@@ -5086,7 +5133,7 @@ public static partial class CombinedDependencyPathReporter
             var selector = options.FromSymbol.Trim();
             candidates = graph.Nodes.Values.Where(node =>
                 node.NodeKind is "Symbol" or "Method" or "Type" or "webforms-event" or "webforms-lifecycle" or "EndpointRoute" or "wcf-operation"
-                && NodeMatchesSymbol(node, selector));
+                && NodeMatchesSymbol(node, selector, options.ExactFromSymbol));
         }
         else if (!string.IsNullOrWhiteSpace(sourceFilter))
         {
@@ -5138,11 +5185,11 @@ public static partial class CombinedDependencyPathReporter
                 .Any(node => NodeMatchesSymbol(node, selector));
     }
 
-    private static bool NodeMatchesSymbol(GraphNode node, string selector)
+    private static bool NodeMatchesSymbol(GraphNode node, string selector, bool exact = false)
     {
         return string.Equals(node.SymbolId, selector, StringComparison.Ordinal)
             || string.Equals(node.DisplayName, selector, StringComparison.Ordinal)
-            || node.DisplayName.Contains(selector, StringComparison.OrdinalIgnoreCase);
+            || (!exact && node.DisplayName.Contains(selector, StringComparison.OrdinalIgnoreCase));
     }
 
     private static IReadOnlySet<string> ResolveTerminalNodes(CombinedDependencyPathOptions options, EvidenceGraph graph, IReadOnlyList<GraphNode> startNodes)
@@ -5168,7 +5215,7 @@ public static partial class CombinedDependencyPathReporter
 
     private static bool IsDefaultTerminalSurface(GraphNode node, IReadOnlySet<string> startFactIds)
     {
-        if (node.SurfaceKind == "http-route")
+        if (node.SurfaceKind is "http-route" or "database-api")
         {
             return false;
         }
