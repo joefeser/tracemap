@@ -79,6 +79,29 @@ try {
     if ($captured -ne 'WEBFORMS_COMPILED_HANDOFF_INPUT_LIMIT;slot=combinedIndex;bytes=0;max=2147483648') {
         throw "WEBFORMS_COMPILED_HANDOFF_LIMIT_DIAGNOSTIC_INVALID:$captured"
     }
+    [IO.File]::WriteAllText((Join-Path $root 'combined.sqlite'), 'public-test-index')
+    $report.paths[0].edges[0].toNodeId = 'compiled'
+    $report.paths[0].nodes[-1].surfaceKind = 'database-api'
+    $report.paths[0].edges[-1].edgeKind = 'compiled-database-api-candidate'
+    $report.query.toSurface = 'database-api'
+    $apiPath = Join-Path $root 'handler-api-paths.json'
+    $apiReceiptPath = Join-Path $root 'handler-api-paths.receipt.json'
+    [IO.File]::WriteAllText($apiPath, (($report | ConvertTo-Json -Depth 20) + "`n"))
+    [IO.File]::WriteAllText($apiReceiptPath, (([ordered]@{
+        schemaVersion = 'webforms-path-recheck.v1'
+        generatorSha256 = 'c' * 64
+        boundedInputSha256 = 'd' * 64
+    } | ConvertTo-Json) + "`n"))
+    & $generator -ProofRoot $root -PathReportPath $apiPath `
+        -PathReportReceiptPath $apiReceiptPath -ToSurface database-api *> $null
+    $apiHandoff = [IO.File]::ReadAllText((Join-Path $root 'compiled-api-review/handler.handoff.local.json')) |
+        ConvertFrom-Json -Depth 40
+    if ($apiHandoff.query.toSurface -ne 'database-api' -or
+        $apiHandoff.provenance.pathReportGeneration.generatorSha256 -ne ('c' * 64) -or
+        $apiHandoff.paths[0].claim -ne 'review-only-static-path' -or
+        @($apiHandoff.paths[0].hops.edgeKind) -cnotcontains 'compiled-database-api-candidate') {
+        throw 'WEBFORMS_COMPILED_HANDOFF_PUBLIC_API_PROJECTION_INVALID'
+    }
     Write-Output 'webFormsCompiledHandoffPublicTests=passed'
 }
 finally {

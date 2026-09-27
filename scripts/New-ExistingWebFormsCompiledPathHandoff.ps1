@@ -1,7 +1,10 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory)][string]$ProofRoot,
-    [string]$OutputDirectory
+    [string]$OutputDirectory,
+    [string]$PathReportPath,
+    [string]$PathReportReceiptPath,
+    [ValidateSet('sql-query', 'database-api')][string]$ToSurface = 'sql-query'
 )
 
 # Private projection of an already-generated, bounded compiled path report.
@@ -22,7 +25,11 @@ function Html([object]$Value) { return [Net.WebUtility]::HtmlEncode([string]$Val
 function Values([object]$Value) { if ($null -eq $Value) { return @() }; return @($Value) }
 
 $ProofRoot = [IO.Path]::GetFullPath($ProofRoot).TrimEnd('\', '/')
-$pathsPath = Join-Path $ProofRoot 'handler-paths.json'
+$pathsPath = if ($PathReportPath) { [IO.Path]::GetFullPath($PathReportPath) } else { Join-Path $ProofRoot 'handler-paths.json' }
+$comparison = if ($IsWindows) { [StringComparison]::OrdinalIgnoreCase } else { [StringComparison]::Ordinal }
+if (!$pathsPath.StartsWith($ProofRoot + [IO.Path]::DirectorySeparatorChar, $comparison)) {
+    throw 'WEBFORMS_COMPILED_HANDOFF_PATH_REPORT_OUTSIDE_PROOF'
+}
 $manifestPath = Join-Path $ProofRoot 'scan/scan-manifest.json'
 $receiptPath = Join-Path $ProofRoot 'publish-receipt.local.json'
 $indexPath = Join-Path $ProofRoot 'combined.sqlite'
@@ -32,10 +39,24 @@ $inputHashes = [ordered]@{
     publishReceipt = Hash-Input $receiptPath 4194304 'publishReceipt'
     combinedIndex = Hash-Input $indexPath 2147483648 'combinedIndex'
 }
+if ($ToSurface -eq 'database-api') {
+    if (!$PathReportReceiptPath) { throw 'WEBFORMS_COMPILED_HANDOFF_API_RECEIPT_REQUIRED' }
+    $PathReportReceiptPath = [IO.Path]::GetFullPath($PathReportReceiptPath)
+    if (!$PathReportReceiptPath.StartsWith($ProofRoot + [IO.Path]::DirectorySeparatorChar, $comparison)) {
+        throw 'WEBFORMS_COMPILED_HANDOFF_API_RECEIPT_OUTSIDE_PROOF'
+    }
+    $inputHashes.pathReportReceipt = Hash-Input $PathReportReceiptPath 1048576 'pathReportReceipt'
+    $pathReportReceipt = [IO.File]::ReadAllText($PathReportReceiptPath) | ConvertFrom-Json -Depth 10
+    if ($pathReportReceipt.schemaVersion -cne 'webforms-path-recheck.v1' -or
+        [string]$pathReportReceipt.generatorSha256 -cnotmatch '^[0-9a-f]{64}$' -or
+        [string]$pathReportReceipt.boundedInputSha256 -cnotmatch '^[0-9a-f]{64}$') {
+        throw 'WEBFORMS_COMPILED_HANDOFF_API_RECEIPT_INVALID'
+    }
+}
 $paths = [IO.File]::ReadAllText($pathsPath) | ConvertFrom-Json -Depth 60
 $manifest = [IO.File]::ReadAllText($manifestPath) | ConvertFrom-Json -Depth 40
 $receipt = [IO.File]::ReadAllText($receiptPath) | ConvertFrom-Json -Depth 30
-if ([string]$paths.version -ne '1.0' -or [string]$paths.query.toSurface -ne 'sql-query' -or
+if ([string]$paths.version -ne '1.0' -or [string]$paths.query.toSurface -ne $ToSurface -or
     [string]$manifest.commitSha -cnotmatch '^[0-9a-f]{40}$' -or
     [string]$receipt.sourceCommitSha -cne [string]$manifest.commitSha -or
     [int]$paths.query.maxDepth -gt 20 -or [int]$paths.query.maxPaths -gt 256 -or
@@ -106,8 +127,8 @@ $handoff = [ordered]@{
     ruleId = 'diagnostic.webforms.compiled-path-handoff.v1'
     visibility = 'local-only'
     claimLevel = 'review-only-static-evidence'
-    provenance = [ordered]@{ generatorSha256 = $generatorHash; boundedInputSha256 = $inputDigest; inputSha256 = $inputHashes; sourceCommitSha = [string]$manifest.commitSha; scanId = [string]$manifest.scanId }
-    query = [ordered]@{ fromSymbol = [string]$paths.query.fromSymbol; toSurface = 'sql-query'; maxDepth = [int]$paths.query.maxDepth; maxPaths = [int]$paths.query.maxPaths }
+    provenance = [ordered]@{ generatorSha256 = $generatorHash; boundedInputSha256 = $inputDigest; inputSha256 = $inputHashes; sourceCommitSha = [string]$manifest.commitSha; scanId = [string]$manifest.scanId; pathReportGeneration = if ($ToSurface -eq 'database-api') { [ordered]@{ generatorSha256 = [string]$pathReportReceipt.generatorSha256; boundedInputSha256 = [string]$pathReportReceipt.boundedInputSha256 } } else { $null } }
+    query = [ordered]@{ fromSymbol = [string]$paths.query.fromSymbol; toSurface = $ToSurface; maxDepth = [int]$paths.query.maxDepth; maxPaths = [int]$paths.query.maxPaths }
     coverage = [ordered]@{
         reportCoverage = [string]$paths.reportCoverage
         warnings = @(Values $paths.coverageWarnings)
@@ -128,7 +149,9 @@ $handoff = [ordered]@{
         'Static calls, SQL text evidence, and a database API candidate do not prove event firing, dispatch, database execution, or branch feasibility.'
     )
 }
-$OutputDirectory = if ($OutputDirectory) { [IO.Path]::GetFullPath($OutputDirectory) } else { Join-Path $ProofRoot 'compiled-path-review' }
+$OutputDirectory = if ($OutputDirectory) { [IO.Path]::GetFullPath($OutputDirectory) } else {
+    Join-Path $ProofRoot $(if ($ToSurface -eq 'database-api') { 'compiled-api-review' } else { 'compiled-path-review' })
+}
 if (Test-Path -LiteralPath $OutputDirectory) { throw 'WEBFORMS_COMPILED_HANDOFF_OUTPUT_NOT_FRESH' }
 $outputParent = Split-Path -Parent $OutputDirectory
 if (!(Test-Path -LiteralPath $outputParent -PathType Container)) { throw 'WEBFORMS_COMPILED_HANDOFF_OUTPUT_PARENT_UNAVAILABLE' }
@@ -160,7 +183,7 @@ $gapRows = foreach ($gap in $handoff.coverage.gaps) {
         (Html $gap.message), (Html $gap.commitSha)
 }
 $html = @"
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Web Forms compiled path review</title><style>body{font:16px system-ui,sans-serif;max-width:1500px;margin:2rem auto;padding:0 1rem;color:#172033}table{border-collapse:collapse;width:100%;margin:1rem 0}th,td{border:1px solid #ccd5e0;padding:.5rem;text-align:left;vertical-align:top;overflow-wrap:anywhere}th{background:#eaf1ff}code{overflow-wrap:anywhere}section{margin:2rem 0}p.warning{background:#fff1df;border-left:4px solid #a85a00;padding:1rem}</style></head><body><h1>Web Forms compiled path review</h1><p class="warning">LOCAL ONLY. These are bounded static, review-only candidates—not runtime execution, page activation, source-line identity, or proof that SQL ran.</p><p>Source commit <code>$(Html $manifest.commitSha)</code>; scan <code>$(Html $manifest.scanId)</code>; paths $($retained.Count); gaps $($allGaps.Count); coverage <code>$(Html $paths.reportCoverage)</code>; truncated <code>$(Html $paths.summary.truncated)</code>. <a href="handler.handoff.local.json">Machine-readable handoff</a>.</p><h2>Admitted DLL provenance</h2><ul>$($assemblyRows -join '')</ul>$($sections -join '')<h2>Explicit graph gaps</h2><p>Showing $($retainedGaps.Count) of $($allGaps.Count) gap details; $($handoff.coverage.omittedGapDetailCount) omitted from this display. Exact counts by kind and rule remain in the JSON; the complete bounded report is committed by its input SHA-256.</p><ul>$($gapRows -join '')</ul><p>Generator SHA-256 <code>$generatorHash</code>; bounded input SHA-256 <code>$inputDigest</code>.</p></body></html>
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Web Forms compiled path review</title><style>body{font:16px system-ui,sans-serif;max-width:1500px;margin:2rem auto;padding:0 1rem;color:#172033}table{border-collapse:collapse;width:100%;margin:1rem 0}th,td{border:1px solid #ccd5e0;padding:.5rem;text-align:left;vertical-align:top;overflow-wrap:anywhere}th{background:#eaf1ff}code{overflow-wrap:anywhere}section{margin:2rem 0}p.warning{background:#fff1df;border-left:4px solid #a85a00;padding:1rem}</style></head><body><h1>Web Forms compiled path review</h1><p class="warning">LOCAL ONLY. These are bounded static, review-only candidates—not runtime execution, page activation, source-line identity, or proof that SQL ran.</p><p>Terminal <code>$(Html $ToSurface)</code>; source commit <code>$(Html $manifest.commitSha)</code>; scan <code>$(Html $manifest.scanId)</code>; paths $($retained.Count); gaps $($allGaps.Count); coverage <code>$(Html $paths.reportCoverage)</code>; truncated <code>$(Html $paths.summary.truncated)</code>. <a href="handler.handoff.local.json">Machine-readable handoff</a>.</p><h2>Admitted DLL provenance</h2><ul>$($assemblyRows -join '')</ul>$($sections -join '')<h2>Explicit graph gaps</h2><p>Showing $($retainedGaps.Count) of $($allGaps.Count) gap details; $($handoff.coverage.omittedGapDetailCount) omitted from this display. Exact counts by kind and rule remain in the JSON; the complete bounded report is committed by its input SHA-256.</p><ul>$($gapRows -join '')</ul><p>Generator SHA-256 <code>$generatorHash</code>; bounded input SHA-256 <code>$inputDigest</code>.</p></body></html>
 "@
 [IO.File]::WriteAllText($htmlPath, $html, [Text.UTF8Encoding]::new($false))
 Write-Output "compiledPathReviewStatus=valid"

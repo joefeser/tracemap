@@ -2493,6 +2493,7 @@ rules:
       - Source and DLL hashes identify declared local inputs, not a verified historical build, deployment, event firing, dispatch, branch feasibility, or SQL execution.
       - HTML and JSON contain private source identities and local provenance and must not be shared as anonymous artifacts.
       - The local projection accepts at most 256 MiB of path JSON and 250000 gap rows; it retains at most 256 detailed gaps and 128 exact kind/rule count groups, records omissions, and hashes the complete bounded path input.
+      - A zero SQL-query path may have a separate exact-handler database-api candidate path; these are different terminal claims and remain in separate local HTML and JSON outputs.
   - id: diagnostic.webforms.raw-exact-call-evidence.v1
     name: Private Web Forms raw exact-call evidence audit
     description: Audits a bounded set of selected handlers against retained exact semantic call evidence for local diagnostic review.
