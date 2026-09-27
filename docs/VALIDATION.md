@@ -2699,7 +2699,10 @@ yet be independently verified are not promoted to positive evidence:
 non-call token operands such as field and signature tokens are committed by
 raw module-local token only, and string literals are committed by digest only
 and never retained verbatim because literal text is unbounded and may contain
-secrets. The `constrained.` prefix target is cross-checked as a
+secrets. For an `InlineTok` TypeSpec, the Cecil path retains the token encoded
+in the IL because Cecil can project the decoded type onto another metadata
+table; the raw reader still validates that TypeSpec row and both decoded type
+identities must agree. The `constrained.` prefix target is cross-checked as a
 `constrainedtype` call observation, but its module-local token stays
 explicitly unclaimed because Mono.Cecil cannot reproduce the raw TypeSpec
 token after resolving the operand. `--il-max-text` bounds user strings,
@@ -3633,6 +3636,9 @@ compiled metadata text limit. This is a bounded override of the general 4,096-ch
 default, and the effective limit is recorded in each scan manifest. An assembly
 that still exceeds it remains a gap; the script does not drop context DLLs to
 make the probe pass.
+The bound scan also uses a 16,384-character IL text limit, based on the
+categorical probe of the source-bound input. The effective IL limit is recorded
+in the scan manifest; exceeding it still withholds that input's IL evidence.
 For a saved bound scan with one source-bound `IlReaderDisagreement` and one
 source-bound `IlTextLimitExceeded`, `scripts/wil.ps1` locally replays only those
 two copied DLLs through the same independent IL readers. It validates their

@@ -16,6 +16,22 @@ namespace TraceMap.Tests;
 public sealed class IlBodyEvidenceExtractorTests
 {
     [Fact]
+    public void InlineTok_type_spec_retains_encoded_row_when_cecil_projects_another_token()
+    {
+        var fixture = Fixture("csharp", "CompiledEvidence.CSharp");
+        using var module = CecilModuleDefinition.ReadModule(fixture.Assembly);
+        var projected = module.TypeSystem.Int32;
+        var encodedTypeSpec = new byte[] { 0xd0, 0x01, 0x00, 0x00, 0x1b };
+        Assert.Equal("0x1b000001", IlBodyEvidenceExtractor.CecilInlineTypeToken(projected, encodedTypeSpec, 1));
+
+        var encodedTypeRef = new byte[] { 0xd0, 0x01, 0x00, 0x00, 0x01 };
+        Assert.Equal(ManagedMetadataExtractor.Token(projected.MetadataToken.ToUInt32()),
+            IlBodyEvidenceExtractor.CecilInlineTypeToken(projected, encodedTypeRef, 1));
+        Assert.Throws<IlBodyEvidenceExtractor.IlEvidenceException>(() =>
+            IlBodyEvidenceExtractor.CecilInlineTypeToken(projected, encodedTypeSpec, 2));
+    }
+
+    [Fact]
     public void Admitted_fixture_emits_operand_aware_bodies_calls_and_provenance()
     {
         var fixture = Fixture("csharp", "CompiledEvidence.CSharp");
