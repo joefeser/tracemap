@@ -1,12 +1,14 @@
 param(
     [string]$TraceMapRoot = (Split-Path (Split-Path $PSScriptRoot -Parent) -Parent),
     [string]$OutputRoot,
-    [switch]$Updatable
+    [switch]$Updatable,
+    [switch]$CrossAssembly
 )
 
 $ErrorActionPreference = 'Stop'
 $TraceMapRoot = [System.IO.Path]::GetFullPath($TraceMapRoot)
-$fixture = if ($Updatable) { 'vb-publish-mapless' } else { 'vb-publish-projectless' }
+$fixture = if ($CrossAssembly) { 'vb-publish-crossdll' }
+    elseif ($Updatable) { 'vb-publish-mapless' } else { 'vb-publish-projectless' }
 $site = [System.IO.Path]::GetFullPath((Join-Path $TraceMapRoot "samples/messy-dotnet-workspace/$fixture"))
 $compiler = Join-Path $env:WINDIR 'Microsoft.NET/Framework/v4.0.30319/aspnet_compiler.exe'
 if (-not (Test-Path -LiteralPath $compiler -PathType Leaf)) {
@@ -15,6 +17,7 @@ if (-not (Test-Path -LiteralPath $compiler -PathType Leaf)) {
 if (-not (Test-Path -LiteralPath $site -PathType Container)) {
     throw 'PUBLIC_WEBFORMS_FIXTURE_UNAVAILABLE'
 }
+if ($CrossAssembly -and !$Updatable) { throw 'PUBLIC_WEBFORMS_CROSS_ASSEMBLY_REQUIRES_UPDATABLE' }
 
 # A fresh public-only publish. -Updatable reproduces a page without a
 # .compiled map while retaining the code-behind in App_Web_*.dll.
@@ -26,6 +29,44 @@ $output = if ([string]::IsNullOrWhiteSpace($OutputRoot)) {
 if (Test-Path -LiteralPath $output) {
     throw 'PUBLIC_WEBFORMS_OUTPUT_NOT_FRESH'
 }
+$publishSite = $site
+$externalInput = $null
+$frameworkCompilerSha256 = $null
+$frameworkBoundedInputSha256 = $null
+if ($CrossAssembly) {
+    $frameworkRoot = Join-Path $TraceMapRoot 'samples/messy-dotnet-workspace/vb-publish-crossdll-framework'
+    $frameworkSource = Join-Path $frameworkRoot 'PublicSqlDataAccess.vb'
+    $frameworkProject = Join-Path $frameworkRoot 'PublicProof.Framework.vbproj'
+    $sdkVersion = (& dotnet --version).Trim()
+    $sdkCompiler = Join-Path (Split-Path (Get-Command dotnet).Source -Parent) "sdk/$sdkVersion/Roslyn/bincore/vbc.dll"
+    if (!(Test-Path -LiteralPath $frameworkSource -PathType Leaf) -or
+        !(Test-Path -LiteralPath $frameworkProject -PathType Leaf) -or
+        !(Test-Path -LiteralPath $sdkCompiler -PathType Leaf)) {
+        throw 'PUBLIC_WEBFORMS_FRAMEWORK_COMPILER_INPUT_UNAVAILABLE'
+    }
+    $frameworkCompilerSha256 = (Get-FileHash -LiteralPath $sdkCompiler -Algorithm SHA256).Hash.ToLowerInvariant()
+    $frameworkLines = @(@($frameworkSource, $frameworkProject) | ForEach-Object {
+        (Split-Path $_ -Leaf) + ':' + (Get-FileHash -LiteralPath $_ -Algorithm SHA256).Hash.ToLowerInvariant()
+    })
+    $frameworkBoundedInputSha256 = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData(
+        [Text.Encoding]::UTF8.GetBytes(($frameworkLines -join "`n") + "`n"))).ToLowerInvariant()
+    $publishSite = Join-Path ([IO.Path]::GetTempPath()) ('tracemap-public-crossdll-site-' + [guid]::NewGuid().ToString('N'))
+    [void][IO.Directory]::CreateDirectory($publishSite)
+    Copy-Item -Path (Join-Path $site '*') -Destination $publishSite -Recurse
+    $bin = Join-Path $publishSite 'bin'
+    [void][IO.Directory]::CreateDirectory($bin)
+    $externalInput = Join-Path $bin 'PublicProof.Framework.dll'
+    $buildRoot = Join-Path ([IO.Path]::GetTempPath()) ('tracemap-public-crossdll-build-' + [guid]::NewGuid().ToString('N'))
+    $baseOutput = (Join-Path $buildRoot 'bin') + [IO.Path]::DirectorySeparatorChar
+    $baseIntermediate = (Join-Path $buildRoot 'obj') + [IO.Path]::DirectorySeparatorChar
+    & dotnet build $frameworkProject -p:Configuration=Debug "-p:BaseOutputPath=$baseOutput" `
+        "-p:BaseIntermediateOutputPath=$baseIntermediate" -v:q --ignore-failed-sources
+    $builtDll = Join-Path $baseOutput 'Debug/net48/PublicProof.Framework.dll'
+    if ($LASTEXITCODE -ne 0 -or !(Test-Path -LiteralPath $builtDll -PathType Leaf)) {
+        throw 'PUBLIC_WEBFORMS_FRAMEWORK_BUILD_FAILED'
+    }
+    Copy-Item -LiteralPath $builtDll -Destination $externalInput
+}
 $inputs = @(Get-ChildItem -LiteralPath $site -Recurse -File |
     Where-Object { $_.Extension -in @('.vb', '.aspx', '.config', '.asax', '.wsdl', '.discomap') } |
     Sort-Object FullName)
@@ -34,6 +75,10 @@ $digestLines = @($inputs | ForEach-Object {
     $hash = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
     "$relative`:$hash"
 })
+if ($CrossAssembly) {
+    $digestLines += 'external:bin/PublicProof.Framework.dll:' +
+        (Get-FileHash -LiteralPath $externalInput -Algorithm SHA256).Hash.ToLowerInvariant()
+}
 $digestBytes = [System.Text.Encoding]::UTF8.GetBytes(($digestLines -join "`n") + "`n")
 $hasher = [System.Security.Cryptography.SHA256]::Create()
 try {
@@ -48,7 +93,7 @@ if ($LASTEXITCODE -ne 0 -or $sourceCommitSha -notmatch '^[0-9a-f]{40}$') {
     throw 'PUBLIC_WEBFORMS_SOURCE_COMMIT_UNAVAILABLE'
 }
 
-$compilerArguments = @('-p', $site, '-v', $(if ($Updatable) { '/UBid' } else { '/' }))
+$compilerArguments = @('-p', $publishSite, '-v', $(if ($Updatable) { '/UBid' } else { '/' }))
 if ($Updatable) { $compilerArguments += '-u' }
 $compilerArguments += $output
 & $compiler @compilerArguments
@@ -104,6 +149,8 @@ $receipt = [ordered]@{
     visibility = 'local-only'
     receiptGeneratorSha256 = $receiptGeneratorSha256
     compilerSha256 = $generatorSha256
+    frameworkCompilerSha256 = $frameworkCompilerSha256
+    frameworkBoundedInputSha256 = $frameworkBoundedInputSha256
     sourceCommitSha = $sourceCommitSha
     boundedInputSha256 = $inputSha256
     sourceFiles = @($inputs | ForEach-Object {
