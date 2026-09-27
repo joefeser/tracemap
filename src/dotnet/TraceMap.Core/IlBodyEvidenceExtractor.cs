@@ -338,6 +338,9 @@ internal static class IlBodyEvidenceExtractor
         });
         if (module.Assembly is null)
             throw new IlEvidenceException("ManagedNetmoduleInputUnsupported");
+        using var rawStream = new MemoryStream(bytes, writable: false);
+        using var rawPe = new PEReader(rawStream, PEStreamOptions.LeaveOpen);
+        var rawReader = rawPe.GetMetadataReader();
         var assemblyIdentity = CecilSelfAssemblyIdentity(module);
         var bodies = new List<IlBodyObservation>();
         var bodyCount = 0;
@@ -353,7 +356,11 @@ internal static class IlBodyEvidenceExtractor
                     throw new IlEvidenceException("IlBodyCountLimitExceeded");
                 if (!budget.TryConsume(1))
                     throw new IlEvidenceException("IlTotalWorkLimitExceeded");
-                bodies.Add(ReadCecilBody(method, assemblyIdentity, limits, budget, retainDiagnosticInstructions));
+                var rawMethod = rawReader.GetMethodDefinition(
+                    MetadataTokens.MethodDefinitionHandle(checked((int)method.MetadataToken.RID)));
+                var rawIl = rawPe.GetMethodBody(rawMethod.RelativeVirtualAddress).GetILBytes()
+                    ?? throw new IlEvidenceException("MalformedIlBody");
+                bodies.Add(ReadCecilBody(method, rawIl, assemblyIdentity, limits, budget, retainDiagnosticInstructions));
             }
         }
         return new IlReaderResult(assemblyIdentity, module.Name, module.Mvid.ToString("D", CultureInfo.InvariantCulture), bodies);
@@ -361,6 +368,7 @@ internal static class IlBodyEvidenceExtractor
 
     private static IlBodyObservation ReadCecilBody(
         CecilMethodDefinition method,
+        byte[] rawIl,
         string assemblyIdentity,
         IlBodyLimits limits,
         IlWorkBudget budget,
@@ -387,7 +395,7 @@ internal static class IlBodyEvidenceExtractor
                 throw new IlEvidenceException("IlInstructionLimitExceeded");
             if (!budget.TryConsume(1))
                 throw new IlEvidenceException("IlTotalWorkLimitExceeded");
-            var operand = CecilOperand(instruction, calls, budget, assemblyIdentity, limits);
+            var operand = CecilOperand(instruction, rawIl, calls, budget, assemblyIdentity, limits);
             instructions.Add($"{instructions.Count.ToString(CultureInfo.InvariantCulture)}:{instruction.Offset.ToString("x", CultureInfo.InvariantCulture)}:{instruction.OpCode.Name}:{operand}");
             opcodes.Add(instruction.OpCode.Name.ToString());
         }
@@ -431,7 +439,7 @@ internal static class IlBodyEvidenceExtractor
             retainDiagnosticInstructions ? instructions : null);
     }
 
-    private static string CecilOperand(Instruction instruction, List<IlCallObservation> calls, IlWorkBudget budget, string selfAssemblyIdentity, IlBodyLimits limits)
+    private static string CecilOperand(Instruction instruction, byte[] rawIl, List<IlCallObservation> calls, IlWorkBudget budget, string selfAssemblyIdentity, IlBodyLimits limits)
     {
         switch (instruction.OpCode.OperandType)
         {
@@ -499,7 +507,9 @@ internal static class IlBodyEvidenceExtractor
             case OperandType.InlineTok:
                 return instruction.Operand switch
                 {
-                    Mono.Cecil.TypeReference type => BoundedOperand("type", RawCecilToken(type), CecilTypeOperandIdentity(type), limits),
+                    Mono.Cecil.TypeReference type => BoundedOperand("type",
+                        CecilInlineTypeToken(type, rawIl, instruction.Offset + instruction.OpCode.Size),
+                        CecilTypeOperandIdentity(type), limits),
                     FieldReference tokenField => BoundedOperand("field", RawCecilToken(tokenField), CecilFieldIdentity(tokenField), limits),
                     MethodReference tokenMethod => BoundedOperand("method", RawCecilToken(tokenMethod), CecilMethodTarget(tokenMethod, selfAssemblyIdentity, limits).Identity, limits),
                     _ => throw new IlEvidenceException("IlOperandEncodingUnsupported")
@@ -620,6 +630,18 @@ internal static class IlBodyEvidenceExtractor
         IMetadataTokenProvider provider => ManagedMetadataExtractor.Token(provider.MetadataToken.ToUInt32()),
         _ => throw new IlEvidenceException("IlOperandEncodingUnsupported")
     };
+
+    // Cecil may project an InlineTok TypeSpec onto a decoded type whose
+    // MetadataToken names another table. Keep the token encoded in the IL;
+    // SRM independently validates that row and the two decoded identities
+    // must still agree before evidence is admitted.
+    internal static string CecilInlineTypeToken(Mono.Cecil.TypeReference type, ReadOnlySpan<byte> il, int operandOffset)
+    {
+        if (operandOffset < 0 || operandOffset > il.Length - sizeof(int))
+            throw new IlEvidenceException("MalformedIlBody");
+        var raw = BinaryPrimitives.ReadUInt32LittleEndian(il.Slice(operandOffset, sizeof(int)));
+        return raw >> 24 == 0x1b ? ManagedMetadataExtractor.Token(raw) : RawCecilToken(type);
+    }
 
     private static string CecilFieldIdentity(FieldReference field) =>
         $"{(field is Mono.Cecil.FieldDefinition ? "fielddef" : "memberref")}|type:{CecilTypeOperandIdentity(field.DeclaringType)}|member:{ManagedMetadataExtractor.EncodeIdentityComponent(field.Name)}|{ManagedMetadataExtractor.FormatType(field.FieldType)}";

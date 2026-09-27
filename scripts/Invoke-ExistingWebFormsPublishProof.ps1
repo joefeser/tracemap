@@ -20,6 +20,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 if ($PSVersionTable.PSVersion.Major -lt 7) { throw 'WEBFORMS_EXISTING_PUBLISH_POWERSHELL_7_REQUIRED' }
 $compiledMaxText = 8192
+$ilMaxText = 16384
 
 function Read-Required([string]$Value, [string]$Prompt) {
     if (![string]::IsNullOrWhiteSpace($Value)) { return $Value.Trim() }
@@ -484,7 +485,11 @@ function Invoke-CompiledScan([string]$ScanPath, [string]$LogPath, [string]$Bindi
         $arguments.Add($argument)
     }
     if ($BindingPath) { $arguments.Add('--compiled-binding-receipt'); $arguments.Add($BindingPath) }
-    if ($IncludeIl) { $arguments.Add('--il-body-evidence') }
+    if ($IncludeIl) {
+        $arguments.Add('--il-body-evidence')
+        $arguments.Add('--il-max-text')
+        $arguments.Add([string]$ilMaxText)
+    }
     foreach ($file in $dlls) {
         $arguments.Add('--compiled-input')
         $arguments.Add((Join-Path $output ('bin/' + $file.Name)))

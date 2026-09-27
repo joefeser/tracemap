@@ -55,6 +55,7 @@ try {
     if ($manifest.webFormsPublishProvenance.status -ne 'bound' -or
         $probeManifest.compiledInputProvenance.effectiveLimits.maxTextLength -ne 8192 -or
         $manifest.compiledInputProvenance.effectiveLimits.maxTextLength -ne 8192 -or
+        $manifest.ilBodyProvenance.effectiveLimits.maxTextLength -ne 16384 -or
         $manifest.webFormsPublishProvenance.pageCount -ne 1) {
         throw 'EXISTING_PUBLISH_TEST_MANIFEST_INVALID'
     }
