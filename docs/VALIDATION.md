@@ -3629,10 +3629,14 @@ explicit graph gaps. It shows 256 detailed gaps and 128 kind/rule count groups
 at most, with omitted counts; the full bounded input remains committed by its
 SHA-256. An input-limit failure reports only the input slot, measured bytes,
 and limit so a saved proof can be diagnosed without another scan.
-If the SQL-query path count is zero, the local replay also runs the existing
-unique-handler `database-api` graph recheck from the saved combined index and
-projects its separate receipted report to `compiled-api-review/handler.local.html`
-and `handler.handoff.local.json`. This is a static database API candidate, not
+If the SQL-query path count is zero, the local replay runs a unique-handler
+`database-api` graph recheck. When the saved `scan-ilwork-30000000` facts and
+`combined-ilwork-30000000.sqlite` are present, it selects those higher-work
+inputs and narrows the terminal to `DbDataAdapter.Fill`; otherwise it uses the
+original combined index. It prints truncation and traversal counts and projects
+the separate receipted report to `compiled-api-review-ilwork-30000000/`
+(or `compiled-api-review/` for the original index). The handoff binds the
+exact scan and index hashes. This is a static database API candidate, not
 a SQL-query join or execution claim. To replay these projections without
 building, publishing, scanning, or combining again, run
 `pwsh -NoProfile -File scripts/Replay-ExistingWebFormsCompiledPathReviews.ps1`;

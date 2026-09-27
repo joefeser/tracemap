@@ -95,6 +95,26 @@ try {
         !(Test-Path -LiteralPath (Join-Path $output 'handler-database-api-ilwork-20000000.json') -PathType Leaf)) {
         throw 'EXISTING_PUBLISH_TEST_REPLAY_FAILED'
     }
+    $highApiLines = @(& (Join-Path $TraceMapRoot 'scripts/wp.ps1') `
+        -OutputRoot $output -RecheckCompiledApi -IlMaxWork 20000000 -FillOnly)
+    $highPathLine = @($highApiLines | Where-Object { $_ -cmatch '^compiledApiPathReport=' })
+    $highReceiptLine = @($highApiLines | Where-Object { $_ -cmatch '^compiledApiPathReceipt=' })
+    if ($highApiLines -cnotcontains 'compiledApiStatus=unique-handler' -or
+        $highPathLine.Count -ne 1 -or $highReceiptLine.Count -ne 1) {
+        throw 'EXISTING_PUBLISH_TEST_HIGH_WORK_QUERY_FAILED'
+    }
+    $highReviewRoot = Join-Path $output 'compiled-api-high-work-test'
+    & (Join-Path $TraceMapRoot 'scripts/New-ExistingWebFormsCompiledPathHandoff.ps1') `
+        -ProofRoot $output -PathReportPath ([string]$highPathLine[0].Substring('compiledApiPathReport='.Length)) `
+        -PathReportReceiptPath ([string]$highReceiptLine[0].Substring('compiledApiPathReceipt='.Length)) `
+        -ToSurface database-api -IlMaxWork 20000000 -OutputDirectory $highReviewRoot *> $null
+    $highHandoff = [IO.File]::ReadAllText((Join-Path $highReviewRoot 'handler.handoff.local.json')) |
+        ConvertFrom-Json -Depth 40
+    if ($highHandoff.provenance.scanFolder -cne 'scan-ilwork-20000000' -or
+        $highHandoff.provenance.combinedIndex -cne 'combined-ilwork-20000000.sqlite' -or
+        $highHandoff.provenance.pathReportGeneration.generatorSha256 -cnotmatch '^[0-9a-f]{64}$') {
+        throw 'EXISTING_PUBLISH_TEST_HIGH_WORK_HANDOFF_INVALID'
+    }
     $recheckLines = @(& (Join-Path $TraceMapRoot 'scripts/wp.ps1') `
         -OutputRoot $output -RecheckPathReasons)
     if (@($recheckLines | Where-Object { $_ -cmatch '^pathRecheckPaths=\d+$' }).Count -ne 1 -or

@@ -31,11 +31,24 @@ if ($sql.query.toSurface -cne 'sql-query' -or
 }
 Write-Output "compiledReplaySqlPaths=$(@($sql.paths).Count)"
 if (@($sql.paths).Count -eq 0) {
-    $apiLines = @(& (Join-Path $PSScriptRoot 'wp.ps1') -OutputRoot $ProofRoot -RecheckCompiledApi)
+    $ilMaxWork = 30000000
+    $highWorkIndex = Join-Path $ProofRoot "combined-ilwork-$ilMaxWork.sqlite"
+    $highWorkFacts = Join-Path $ProofRoot "scan-ilwork-$ilMaxWork/facts.ndjson"
+    $highWorkManifest = Join-Path $ProofRoot "scan-ilwork-$ilMaxWork/scan-manifest.json"
+    $useHighWork = (Test-Path -LiteralPath $highWorkIndex -PathType Leaf) -and
+        (Test-Path -LiteralPath $highWorkFacts -PathType Leaf) -and
+        (Test-Path -LiteralPath $highWorkManifest -PathType Leaf)
+    Write-Output "compiledReplayHighWorkAvailable=$useHighWork"
+    $apiArgs = @{ OutputRoot = $ProofRoot; RecheckCompiledApi = $true }
+    if ($useHighWork) { $apiArgs.IlMaxWork = $ilMaxWork; $apiArgs.FillOnly = $true }
+    $apiLines = @(& (Join-Path $PSScriptRoot 'wp.ps1') @apiArgs)
     $apiStatus = @($apiLines | Where-Object { $_ -cmatch '^compiledApiStatus=' })
     $apiReportLine = @($apiLines | Where-Object { $_ -cmatch '^compiledApiPathReport=' })
     $apiReceiptLine = @($apiLines | Where-Object { $_ -cmatch '^compiledApiPathReceipt=' })
-    foreach ($line in @($apiLines | Where-Object { $_ -cmatch '^(compiledApiPaths|compiledApiStatus|compiledApiSelectorCandidates|compiledApiTruncated)=' })) {
+    foreach ($line in @($apiLines | Where-Object {
+        $_ -cmatch '^compiledApi(?:Paths|Status|SelectorCandidates|Truncated|ReachedNodes|TraversedEdges|TerminalCallers|ReachableTerminalCallers|ReachableFillMemberRefs|ReachableUnresolvedIlCalls)=' -or
+        $_ -cmatch '^compiledApi(?:Truncation|Traversed|ReachableIlGap)\.[A-Za-z0-9-]+='
+    })) {
         Write-Output $line
     }
     if ($apiStatus.Count -ne 1) { throw 'WEBFORMS_COMPILED_REPLAY_API_STATUS_UNAVAILABLE' }
@@ -47,7 +60,12 @@ if (@($sql.paths).Count -eq 0) {
         $apiReceipt = [string]$apiReceiptLine[0].Substring('compiledApiPathReceipt='.Length)
         & (Join-Path $PSScriptRoot 'New-ExistingWebFormsCompiledPathHandoff.ps1') `
             -ProofRoot $ProofRoot -PathReportPath $apiPath -PathReportReceiptPath $apiReceipt `
-            -ToSurface database-api
+            -ToSurface database-api -IlMaxWork $(if ($useHighWork) { $ilMaxWork } else { 0 })
     }
 }
-& (Join-Path $PSScriptRoot 'New-ExistingWebFormsCompiledPathHandoff.ps1') -ProofRoot $ProofRoot
+$sqlProjection = Join-Path $ProofRoot 'compiled-path-review'
+if (Test-Path -LiteralPath $sqlProjection) {
+    Write-Output 'compiledReplaySqlProjection=existing'
+} else {
+    & (Join-Path $PSScriptRoot 'New-ExistingWebFormsCompiledPathHandoff.ps1') -ProofRoot $ProofRoot
+}

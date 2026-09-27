@@ -102,6 +102,46 @@ try {
         @($apiHandoff.paths[0].hops.edgeKind) -cnotcontains 'compiled-database-api-candidate') {
         throw 'WEBFORMS_COMPILED_HANDOFF_PUBLIC_API_PROJECTION_INVALID'
     }
+    $highWork = 30000000
+    $highScan = Join-Path $root "scan-ilwork-$highWork"
+    [void][IO.Directory]::CreateDirectory($highScan)
+    [IO.File]::WriteAllText((Join-Path $highScan 'scan-manifest.json'), (($manifest | ConvertTo-Json -Depth 15) + "`n"))
+    [IO.File]::WriteAllText((Join-Path $root "combined-ilwork-$highWork.sqlite"), 'public-test-high-work-index')
+    $highReceiptPath = Join-Path $root 'handler-high-work.receipt.json'
+    [IO.File]::WriteAllText($highReceiptPath, (([ordered]@{
+        schemaVersion = 'webforms-path-recheck.v1'
+        generatorSha256 = 'e' * 64
+        boundedInputSha256 = 'f' * 64
+        scanFolder = "scan-ilwork-$highWork"
+        combinedIndex = "combined-ilwork-$highWork.sqlite"
+    } | ConvertTo-Json) + "`n"))
+    & $generator -ProofRoot $root -PathReportPath $apiPath `
+        -PathReportReceiptPath $highReceiptPath -ToSurface database-api -IlMaxWork $highWork *> $null
+    $highHandoff = [IO.File]::ReadAllText((Join-Path $root "compiled-api-review-ilwork-$highWork/handler.handoff.local.json")) |
+        ConvertFrom-Json -Depth 40
+    if ($highHandoff.provenance.scanFolder -cne "scan-ilwork-$highWork" -or
+        $highHandoff.provenance.combinedIndex -cne "combined-ilwork-$highWork.sqlite" -or
+        $highHandoff.provenance.inputSha256.combinedIndex -cne
+            (Get-FileHash -LiteralPath (Join-Path $root "combined-ilwork-$highWork.sqlite") -Algorithm SHA256).Hash.ToLowerInvariant() -or
+        $highHandoff.paths.Count -ne 1) {
+        throw 'WEBFORMS_COMPILED_HANDOFF_HIGH_WORK_PROVENANCE_INVALID'
+    }
+    $badReceipt = Join-Path $root 'handler-high-work-bad.receipt.json'
+    [IO.File]::WriteAllText($badReceipt, (([ordered]@{
+        schemaVersion = 'webforms-path-recheck.v1'
+        generatorSha256 = 'e' * 64
+        boundedInputSha256 = 'f' * 64
+        scanFolder = 'scan'
+        combinedIndex = 'combined.sqlite'
+    } | ConvertTo-Json) + "`n"))
+    $captured = $null
+    try { & $generator -ProofRoot $root -PathReportPath $apiPath `
+        -PathReportReceiptPath $badReceipt -ToSurface database-api -IlMaxWork $highWork `
+        -OutputDirectory (Join-Path $root 'bad-high-work') *> $null }
+    catch { $captured = $_.Exception.Message }
+    if ($captured -cne 'WEBFORMS_COMPILED_HANDOFF_API_RECEIPT_INVALID') {
+        throw "WEBFORMS_COMPILED_HANDOFF_MIXED_INDEX_ACCEPTED:$captured"
+    }
     Write-Output 'webFormsCompiledHandoffPublicTests=passed'
 }
 finally {
