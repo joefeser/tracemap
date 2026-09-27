@@ -109,12 +109,4 @@ if ($manifest.webFormsPublishProvenance.status -cne 'bound') { return }
 & dotnet run --project $project -- combine --index (Join-Path $scanPath 'index.sqlite') `
     --out $combinedPath --label existing-publish *> (Join-Path $OutputRoot ('combine-ilwork-' + $IlMaxWork + '.local.log'))
 if ($LASTEXITCODE -ne 0) { throw 'WEBFORMS_REPLAY_COMBINE_FAILED' }
-& dotnet run --project $project -- paths --index $combinedPath --out $reportPath `
-    --format json --from-symbol ([string]$paths.query.fromSymbol) --exact-from-symbol `
-    --to-surface database-api --max-depth 20 --max-paths 256 `
-    *> (Join-Path $OutputRoot ('paths-ilwork-' + $IlMaxWork + '.local.log'))
-if ($LASTEXITCODE -ne 0) { throw 'WEBFORMS_REPLAY_PATHS_FAILED' }
-$report = [IO.File]::ReadAllText($reportPath) | ConvertFrom-Json -Depth 50
-Write-Output "replayDatabaseApiPaths=$(@($report.paths).Count)"
-Write-Output "replayPathGaps=$(@($report.gaps).Count)"
-Write-Output "replayPathTruncated=$($report.summary.truncated)"
+& (Join-Path $PSScriptRoot 'wpath.ps1') -OutputRoot $OutputRoot -IlMaxWork $IlMaxWork
