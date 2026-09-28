@@ -31,3 +31,20 @@ is explicitly recomputed before its view; merged reporting uses `-RecheckApi`.
 Public orchestration guard: `pwsh -NoProfile -File scripts/tests/Test-WCompare.ps1`.
 It uses synthetic inputs and mock version checkouts. It does not establish private
 Windows acceptance, actual graph-traversal parity, or CI determinism.
+
+## Local duplicate diagnostic
+
+Run `scripts/wgroups.ps1` to select a completed comparison and inspect its after
+handoff without typing the file path. `-HandoffPath` is an optional explicit
+override. No files are written, evidence deleted, scans run, or uploads made.
+The console prints only counts and path IDs, not method names or source paths.
+
+Rule `diagnostic.webforms.path-grouping.v1` groups by exact ordered method
+identities, scan/commit identity, classification, claim and terminal kind. A
+second grouping uses display labels to expose visually identical chains whose
+overloads or source identities differ. Evidence-variant counts retain differences
+in rules, tiers, locations and supporting facts. Distinct bridge routes remain
+distinct; repeated chains are not automatically erroneous facts or runtime paths.
+Limits: 64 MiB local input, 256 retained paths and 20 hops per path. This is a
+console diagnostic, not a new machine-readable evidence artifact. Public guard:
+`pwsh -NoProfile -File scripts/tests/Test-WGroups.ps1`.
