@@ -40,6 +40,9 @@
       tests; keep current-source snapshot and operator execution pending.
 - [ ] Implement .NET orchestration for source-plus-compiled runs and immutable
   attachment to a retained source scan; keep compatibility wrappers.
+  - [x] Add checkpointed native fresh execution using the existing scanner and
+    immutable preflight, fresh owned retry attempts and hash-verified resume.
+    Keep attachment/publish-map production and unified reports pending.
 - [ ] Integrate compiled evidence into normal packet/docs/handoff navigation
   across selected/all-page modes without upgrading review-only page verdicts.
   - [ ] Group exact method chains in the HTML while retaining every evidence

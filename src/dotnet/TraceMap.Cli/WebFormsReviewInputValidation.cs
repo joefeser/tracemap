@@ -88,7 +88,7 @@ internal static class WebFormsReviewInputValidation
         }
     }
 
-    private static async Task<(ScanManifest Manifest, long Facts)> ValidateParentAsync(
+    internal static async Task<(ScanManifest Manifest, long Facts)> ValidateParentAsync(
         WebFormsReviewPreflightManifest preflight, GitMetadata git, CancellationToken token)
     {
         var config = preflight.Configuration;

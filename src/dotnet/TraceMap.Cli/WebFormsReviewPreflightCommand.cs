@@ -71,11 +71,15 @@ public static class WebFormsReviewPreflightCommand
 
     public const string Help = """
         tracemap webforms-review preflight --config <private-json> --out <new-durable-run-root>
+        tracemap webforms-review run --run <durable-run-root>
+        tracemap webforms-review resume --run <durable-run-root>
 
         Validates the fresh/attach run contract and inventories explicit compiled inputs.
         Writes local-only run-manifest.json and README.md. No scan/build/publish/binding,
         report rendering, source mutation, cleanup or implicit TEMP discovery occurs.
-        This is preflight only, not the completed .NET review workflow.
+        This output is preflight only, not a completed review workflow.
+        Run/resume execute fresh source-plus-compiled scans with pinned checkpoints.
+        Attachment and unified reports are not implemented yet; retain the proven wrappers.
         """;
 
     public static async Task<int> RunAsync(string[] args, TextWriter output, TextWriter error,
@@ -104,7 +108,7 @@ public static class WebFormsReviewPreflightCommand
             await File.WriteAllTextAsync(Path.Combine(staging, "README.md"),
                 $"# Private Web Forms review run\n\nState: preflight only. Rule: `{RuleId}`.\n\n" +
                 "The manifest is this run's explicit inventory, not proof that scanning, binding or reporting occurred.\n" +
-                "No resume or execution command is implemented in this slice. Keep referenced inputs unchanged.\n" +
+                "Use webforms-review run/resume --run <this-root> for a fresh scan. Attachment/reports remain pending.\n" +
                 "Source, publish and parent scans remain external and immutable; this run is not relocatable yet.\n" +
                 "Do not upload this private manifest or delete referenced inputs.\n", cancellationToken);
             Directory.Move(staging, outputRoot); // Never replaces an existing run.

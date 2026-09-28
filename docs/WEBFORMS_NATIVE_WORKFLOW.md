@@ -1,10 +1,10 @@
 # Native compiled Web Forms workflow
 
-Status: first slice — preflight and private run contract only.
+Status: native preflight, input validation and checkpointed fresh scanning.
+Immutable attachment and unified review reports are still pending.
 
-The proven PowerShell proof/report workflow remains supported. This command does
-not replace it or execute source scans, compiled binding, graph traversal,
-reports, publishing, resume or cleanup:
+The proven PowerShell proof/report workflow remains supported. Preflight alone
+does not execute scans or replace that workflow:
 
 ```text
 tracemap webforms-review preflight --config <private-json> --out <new-durable-run-root>
@@ -16,6 +16,72 @@ parent scan roots (and must not contain those roots). It contains only
 manifest owns this run ID, explicit input hashes, effective budgets, gaps and
 pending phase states. Its successful creation is **not a successful scan**.
 Retain the external dependencies; relocation and cleanup are not supported yet.
+
+## Native fresh scan and resume
+
+After preflight, a `fresh` configuration can execute the normal scanner once,
+including explicitly declared managed metadata, receipts, portable PDB and IL
+evidence. It does not rebuild or publish the site or create operator attestations:
+
+```text
+tracemap webforms-review run --run <durable-run-root>
+tracemap webforms-review resume --run <durable-run-root>
+```
+
+The run owns these paths:
+
+```text
+run-manifest.json                 immutable preflight/input contract
+checkpoints/0001.json              scan-started checkpoint
+checkpoints/0002.json              completed/failed/cancelled checkpoint
+attempts/<owned-id>/scan/          normal five scan artifacts plus scan receipt
+.native-run.lock                   exclusive process lock, not a discovery hint
+```
+
+Checkpoints are append-only, contiguous and hash chained. Every checkpoint pins
+the exact CLI generator, preflight bytes and bounded execution input; its separate
+canonical payload hash covers status, gaps and derived claims. Completed scans
+pin every output file, retain the scanner's actual source snapshot, and pass the
+same manifest/index/NDJSON validation used for retained parents. There is no
+successful checkpoint for missing, changed, oversized or inconsistent output.
+Checkpoint SHA values are local integrity checks, not authenticated signatures.
+Execution also pins distribution DLL/native/dependency/runtime-config bytes and
+the .NET runtime version. Changes reject resume, even if the CLI DLL is unchanged.
+This bounded distribution inventory admits 512 code/config files (256 MiB each,
+2 GiB total) and at most 4,096 filesystem entries, with no symlink traversal.
+External SDK/toolchain bytes are not pinned; that remains an explicit gap, not a
+claim of reproducible or authentic compilation. Runs must stay outside the tool
+distribution directory.
+
+`run` refuses an already-started run; use `resume`. Failed/cancelled/interrupted
+attempts remain on disk and a retry uses a new owned ID. A completed resume checks
+input/tool/output hashes and does **not** rerun source scanning. It reports
+`retainedSnapshot=true;sourceRescanned=false`: current unpinned source-file edits
+do not turn a retained snapshot into current-source validation. A changed config,
+selected page, declared DLL/receipt/PDB/map or tool rejects reuse; make a new
+preflight run for new inputs. A changed Git identity also rejects execution.
+
+Source folders restrict direct file inventory. Projectless mode excludes project and
+solution files; explicit solution/project modes pass their selected paths to the
+existing scanner and explicitly admit those selection files even outside the
+source folders. Literal source folders containing `*` are refused rather than
+interpreted as expanded globs. Selected/all-page mode remains the future report-selection
+contract, not a claim that all-page compiled path integration is complete.
+Explicit project/solution scans retain the existing compiler-membership behavior;
+their additional semantic inputs participate in the scanner's source snapshot.
+These modes have argument-admission coverage here, not full compiled-site parity.
+
+This milestone ends at `scan-completed-reports-pending`. The scan's normal
+`report.md` is available, but no unified workbench, grouped compiled-path handoff,
+publish-map execution or graph-query phase is produced here. Raw page maps are
+pinned, not promoted to a publish receipt. `attach` is explicitly refused before
+execution; it must not be approximated by a fresh scan of the parent's source.
+
+Execution uses configured metadata/IL budgets and normal portable-PDB defaults
+with configured artifact count/file size. Output admission is bounded separately
+to 256 filesystem entries, configured per-artifact/total hash bytes, and 256
+checkpoints. Source scanning and graph scale acceptance remain unproven; streaming
+artifact hashes do not make the scanner's fact collection memory-bounded.
 
 ## Private configuration
 
@@ -60,15 +126,16 @@ file is relative to its configured root. No assembly discovery or upload occurs.
 }
 ```
 
-- `fresh` inventories inputs for a future source-plus-compiled run.
+- `fresh` inventories inputs for the native source-plus-compiled scan.
 - `attach` requires `parentScanRoot`. Its five required scan artifacts are hashed
   using streaming reads. Source commit and parent manifest commit must match;
-  parent repository/index identity and source snapshot validation remain deferred.
+  the execution gate can validate parent repository/index identity, but attachment
+  production and source-to-compiled cross-index joins remain pending.
   A derived run never appends files to or modifies the parent scan.
 - `projectMode` is exactly `projectless`, `solution` with one solution path, or
   `projects` with a nonempty native JSON path array. Selected files must exist.
 - `sourceFolders` is a bounded array of source-relative directories; `.` explicitly
-  selects the source root. These declarations are preserved for future execution.
+  selects the source root. These declarations restrict native fresh scan admission.
 - `pageMode` is `selected` with nonempty `.aspx` paths, or `all` with an empty page
   list. This preflight does not claim that all-page extraction/reporting works.
 - Assemblies, receipts, PDBs and maps are explicit lists under the published root.
@@ -93,8 +160,9 @@ Config/receipt JSON is capped at 1 MiB, selected files and parent manifest at
 4 MiB. All hashing is streaming; the managed metadata header uses a bounded PE
 reader. These facts are not an eight-times corpus performance acceptance claim.
 
-IL and graph work limits are recorded for future execution, **not consumed or
-enforced by a nonexistent scan/report phase**. No budget is automatically raised.
+Preflight records IL and graph work limits without consuming them. Native fresh
+execution enforces metadata/IL budgets; graph traversal is not yet executed.
+No budget is automatically raised.
 The input canonicalization is UTF-8 camel-case indented JSON of config SHA-256
 and ordered input records (role then physical path). The manifest records its
 exact CLI-assembly generator hash and actual bounded input hash. Run ID is not
@@ -108,8 +176,8 @@ new run is published, and an existing output is never overwritten.
 
 ## Internal execution validation gate
 
-The next native execution layer has a tested internal input gate. It is not a
-new operator command and is not called by inventory-only `preflight` yet.
+Native execution calls the tested input gate before scanning. Inventory-only
+`preflight` does not call it and remains a separate planning boundary.
 
 Managed inspection reuses the exact scanner readers, receipt classification,
 dependency resolution and global gap policy through `ManagedMetadataExtractor.InspectInputs`.
@@ -132,8 +200,9 @@ parent snapshot is **not** a validation of current source bytes; fresh scans mus
 establish their own actual source snapshot. Public gate tests cover receipt
 identity/locator/ambiguity/staleness, parent tampering and count/row limits, escaped
 filesystem names, cancellation and byte-for-byte parent immutability. They do not
-establish private Windows or representative scale acceptance. Orchestration,
-resume, fresh/attach execution and reporting integration remain outstanding.
+establish private Windows or representative scale acceptance. Fresh execution
+and resume are now implemented; attachment and reporting integration remain
+outstanding.
 
 ## Next slices and acceptance
 
@@ -146,7 +215,8 @@ resume, fresh/attach execution and reporting integration remain outstanding.
 Do not retire compatibility wrappers or the original working proof until public
 parity tests and an authorized private Windows run validate the new flow.
 
-Public tests: `WebFormsReviewPreflightTests`. The first slice validates real managed
+Public tests: `WebFormsReviewPreflightTests`, `WebFormsReviewInputValidationTests`
+and `WebFormsReviewExecutionTests`. The first slice validates real managed
 headers, typed input failures, explicit gaps, parent immutability, deterministic
 input hashing, cancellation, output separation, bounded JSON configuration,
 and a native CLI invocation against a disposable public Git repository.

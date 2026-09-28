@@ -27,6 +27,40 @@
 - Goal is active, not achieved. Preflight tests establish only the first slice;
   subsequent implementation and final private validation remain outstanding.
 
+## Native fresh execution and resume (2026-09-28)
+
+- Added `webforms-review run/resume --run <explicit-root>` for fresh configs.
+  Execution rebuilds/rechecks the preflight contract and exact tool bytes, uses
+  the authoritative input gate, and invokes the existing scanner once with
+  configured source scope and explicit metadata/receipt/PDB/IL inputs.
+- Immutable preflight bytes are retained. Owned attempts and append-only numbered
+  checkpoints replace timestamp/TEMP discovery. Every checkpoint has exact CLI
+  and preflight hashes, a bounded input hash, a complete payload integrity hash,
+  and the prior checkpoint byte hash. An exclusive file lock prevents two scans.
+- Completed output is admitted only after required artifacts, streaming hashes,
+  actual source snapshot and manifest/SQLite/NDJSON parity pass. Resume checks
+  retained artifact hashes without rescanning source or changing the snapshot.
+  Failed/cancelled/interrupted attempts remain separate from a fresh retry.
+- Native execution still ends at `scan-completed-reports-pending`. Attachment
+  is refused explicitly rather than silently rescanning the retained parent's
+  source. Unified workbench, publish-map receipt production, cross-scan compiled
+  provenance joins, grouped indexed handoff, Claude updates and scale gates
+  remain outstanding. No proof cleanup or wrapper retirement occurred.
+- Final focused validation passed 130/130 across native execution (23 tests),
+  preflight/input validation, Core metadata policy, existing CLI and local-review
+  regressions. Rebuilds emitted no compiler/analyzer warnings; private-path and
+  diff guards passed. Full regression for this execution milestone is pending.
+  Distribution dependency/runtime-version pinning includes a bounded digest test;
+  external SDK bytes and clean-source authenticity remain explicit gaps. No
+  private Windows run or full workflow parity is claimed.
+- Next implementation constraint: existing projectless publish graph joins
+  require source/page/handler/declaration and compiled facts in one source index.
+  A future attachment must introduce an explicitly validated parent-context join
+  while retaining original source/index/fact identities. Combining indexes alone
+  cannot establish it; do not relabel/reemit parent facts to force a join. Fresh
+  publish receipt support must also preserve explicit operator attestation rather
+  than treating a DLL hash or Git HEAD as source/build ownership proof.
+
 ## Native input validation gate (2026-09-28)
 
 - Added `ManagedMetadataExtractor.InspectInputs`, a narrow Core facade over the
