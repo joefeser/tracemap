@@ -554,7 +554,7 @@ public static class CombinedDependencyReporter
         return Convert.ToInt64(await command.ExecuteScalarAsync(cancellationToken));
     }
 
-    private static async Task<IReadOnlyList<CombinedSourceReadRow>> ReadSourcesAsync(SqliteConnection connection, CancellationToken cancellationToken)
+    internal static async Task<IReadOnlyList<CombinedSourceReadRow>> ReadSourcesAsync(SqliteConnection connection, CancellationToken cancellationToken)
     {
         await using var command = connection.CreateCommand();
         command.CommandText = """

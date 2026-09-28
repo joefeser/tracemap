@@ -3689,6 +3689,14 @@ rejects zero sources, invalid commit identity, missing/ambiguous primary Web
 Forms sources, and source/fact mismatches. A combined schema does not imply
 multi-repository coverage. The public .NET single-source regression verifies
 source identity, deterministic packet bytes, and read-only index handling.
+Combined graph admission limits now follow the single-index partial-output
+contract: preserve bounded inventory and source provenance, emit a Tier4
+input-limit gap, and mark coverage reduced and truncated. Never classify
+paths or downstream boundaries from an incomplete graph. The public
+`WebFormsReportMemoryTests` exercise combined fact, edge, and text limits,
+deterministic output, and unchanged index bytes. This does not raise budgets
+or establish private-site success; separately attached saved compiled paths
+remain review-only and do not change the packet's page verdicts.
 The cross-platform projection guard is
 `pwsh -NoProfile -File scripts/tests/Test-ExistingWebFormsCompiledPathHandoff.ps1`.
 The Windows case must
