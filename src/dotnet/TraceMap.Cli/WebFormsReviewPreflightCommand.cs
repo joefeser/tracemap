@@ -41,7 +41,8 @@ public sealed record WebFormsReviewConfig(
     string[] PdbInputs,
     string[] PageMaps,
     string? ParentScanRoot,
-    WebFormsReviewBudgets Budgets);
+    WebFormsReviewBudgets Budgets,
+    string? PublishReceiptRelativePath = null);
 
 public sealed record WebFormsReviewInput(string Role, string Path, long Bytes, string Sha256, string? MetadataName = null);
 public sealed record WebFormsReviewPhase(string Phase, string State, string NextAction);
@@ -199,6 +200,60 @@ public static class WebFormsReviewPreflightCommand
         }
         foreach (var pdb in config.PdbInputs.Order(StringComparer.Ordinal)) await Add("pdb", Child(config.PublishedRoot, pdb), config.Budgets.MaxAssemblyBytes);
         foreach (var map in config.PageMaps.Order(StringComparer.Ordinal)) await Add("page-map", Child(config.PublishedRoot, map), 1_048_576);
+        if (config.PublishReceiptRelativePath is not null)
+        {
+            var receiptPath = Child(config.PublishedRoot, config.PublishReceiptRelativePath);
+            var receiptInput = await Add("publish-receipt", receiptPath, 1_048_576);
+            var bytes = await ReadSmallAsync(receiptPath, 1_048_576, cancellationToken);
+            if (Digest(bytes) != receiptInput.Sha256) throw Fail("INPUT_CHANGED");
+            RejectDuplicateProperties(bytes);
+            using var receipt = JsonDocument.Parse(bytes, new JsonDocumentOptions { MaxDepth = 16 });
+            var root = receipt.RootElement;
+            if (root.GetProperty("schemaVersion").GetString() != "webforms-publish-binding.v1" ||
+                root.GetProperty("visibility").GetString() != "local-only" ||
+                root.GetProperty("sourceCommitSha").GetString() != config.SourceCommitSha) throw Fail("PUBLISH_RECEIPT_INVALID");
+            var sources = Array("sourceFiles", 256);
+            var published = Array("publishedFiles", 64);
+            var pages = Array("pages", 32);
+            var sourceNames = new HashSet<string>(PathComparer);
+            foreach (var source in sources.EnumerateArray())
+            {
+                var name = source.GetProperty("path").GetString() ?? throw Fail("PUBLISH_RECEIPT_INVALID");
+                var sha = source.GetProperty("sha256").GetString();
+                if (!sourceNames.Add(name) || !IsHex(sha, 64)) throw Fail("PUBLISH_RECEIPT_INVALID");
+                var path = Child(config.SourceRoot, name);
+                var existing = inputs.SingleOrDefault(input => PathComparer.Equals(input.Path, path));
+                var item = existing ?? await Add("publish-source", path, 67_108_864);
+                if (item.Sha256 != sha) throw Fail("PUBLISH_SOURCE_MISMATCH");
+            }
+            var publishedNames = new HashSet<string>(PathComparer);
+            foreach (var item in published.EnumerateArray())
+            {
+                var name = item.GetProperty("path").GetString() ?? throw Fail("PUBLISH_RECEIPT_INVALID");
+                var kind = item.GetProperty("kind").GetString();
+                if (!publishedNames.Add(name) || kind is not ("assembly" or "compiled-map")) throw Fail("PUBLISH_RECEIPT_INVALID");
+                var path = Child(config.PublishedRoot, name);
+                var declared = inputs.SingleOrDefault(input => PathComparer.Equals(input.Path, path) &&
+                    (kind == "assembly" ? input.Role is "primary-assembly" or "dependency-assembly" : input.Role == "page-map"));
+                if (declared is null || declared.Sha256 != item.GetProperty("sha256").GetString()) throw Fail("PUBLISH_ARTIFACT_NOT_DECLARED_OR_MISMATCH");
+            }
+            var pageNames = new HashSet<string>(PathComparer);
+            foreach (var page in pages.EnumerateArray())
+            {
+                var sourcePath = page.TryGetProperty("sourcePath", out var source) && source.ValueKind == JsonValueKind.String
+                    ? source.GetString() : page.GetProperty("virtualPath").GetString()?.TrimStart('/');
+                if (sourcePath is null || !pageNames.Add(sourcePath) || !sourceNames.Contains(sourcePath)) throw Fail("PUBLISH_PAGE_INVALID");
+            }
+            if (config.PageMode == "selected" && config.PageRelativePaths.Any(page => !pageNames.Contains(page))) throw Fail("PUBLISH_SELECTED_PAGE_UNAVAILABLE");
+            gaps.Add("PublishReceiptSemanticValidationDeferred");
+
+            JsonElement Array(string name, int max)
+            {
+                var value = root.GetProperty(name);
+                if (value.ValueKind != JsonValueKind.Array || value.GetArrayLength() is < 1 || value.GetArrayLength() > max) throw Fail("PUBLISH_RECEIPT_LIMIT_OR_SHAPE_INVALID");
+                return value;
+            }
+        }
         gaps.Add("PdbIdentityValidationDeferred");
         gaps.Add("PageMapValidationDeferred");
         if (config.PdbInputs.Length == 0) gaps.Add("PdbInputsNotDeclared");

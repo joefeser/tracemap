@@ -2517,7 +2517,7 @@ rules:
     emits:
       - webforms-compiled-review-checkpoint.v1 local-only execution checkpoint
     limitations:
-      - Successful execution ends at scan-completed-reports-pending, not a complete compiled-site review workflow; attachment, publish-map receipt execution, graph queries and unified reports are not implemented by this phase.
+      - Successful execution ends at scan-completed-reports-pending, not a complete compiled-site review workflow; attachment, operator publish-receipt creation, graph queries and unified reports are not implemented by this phase.
       - The CLI does not build or publish the site, load assemblies at runtime, infer bindings or attest source ownership; existing receipt policy and reduced metadata/IL/PDB coverage remain authoritative.
       - Resume verifies retained inputs and outputs without a new source scan; a retained snapshot does not validate current unpinned source bytes, clean Git state, runtime behavior or SQL execution.
       - Checkpoint generator and input/payload hashes are local integrity commitments, not authenticated signatures; local-only artifacts contain private input fingerprints and must not be shared.
@@ -2568,6 +2568,7 @@ rules:
       - WebFormsPublishAssemblyBound
       - AnalysisGap
     limitations:
+      - Published files default to the receipt directory. An explicit caller-supplied absolute root may locate the same declared bytes elsewhere; its path hash participates in the bounded input digest and never proves source ownership, authentic compilation or a complete publish inventory.
       - The receipt is operator-declared. Matching hashes and a .compiled map establish static page-to-assembly correspondence for the declared build inputs; they do not independently prove the compiler ran, source-method identity, PDB lines, deployment, page activation, or runtime execution.
       - A virtual application-root prefix may differ from the source-relative page path only when the local preparer finds one unique suffix match and records the distinct sourcePath explicitly. The exact .compiled bytes remain unchanged; multiple candidates or a mismatched declared source path are gaps, not guessed joins.
       - Input count, file size, path, duplicate, content, commit, XML, and mapping failures withhold the entire receipt behind Tier4 gaps. No ambient publish output is discovered, and a gap never means the page or assembly is absent.

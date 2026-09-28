@@ -1,0 +1,118 @@
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
+using TraceMap.Cli;
+using TraceMap.Core;
+
+namespace TraceMap.Tests;
+
+public sealed class WebFormsPublishedRootTests
+{
+    [Fact]
+    public async Task CLI_requires_a_receipt_with_an_explicit_root()
+    {
+        using var output = new StringWriter(); using var error = new StringWriter();
+        Assert.Equal(1, await TraceMapCommand.RunAsync(["scan", "--repo", "public-source", "--out", "public-output",
+            "--webforms-published-root", "public-publish"], output, error));
+        Assert.Contains("requires --webforms-publish-receipt", error.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Execution_receipt_scope_distinguishes_the_explicit_published_root()
+    {
+        var options = new ScanOptions("public-source", "public-output", WebFormsPublishReceiptPath: "public-receipt");
+        string Scope(ScanOptions value)
+        {
+            var recorder = new ScanReceiptRecorder(value);
+            recorder.Bind(new GitMetadata("public", null, "dev", new string('a', 40), []));
+            return recorder.CreateReceipt().AuthorizedScopeFingerprint;
+        }
+        Assert.NotEqual(Scope(options), Scope(options with { WebFormsPublishedRootPath = "public-publish-a" }));
+        Assert.NotEqual(Scope(options with { WebFormsPublishedRootPath = "public-publish-a" }),
+            Scope(options with { WebFormsPublishedRootPath = "public-publish-b" }));
+        Assert.Equal(Scope(options), Scope(options with { WebFormsPublishedRootPath = null }));
+    }
+    [Fact]
+    public void Explicit_root_reads_original_published_files_without_colocating_or_copying_them()
+    {
+        using var fixture = new Fixture();
+        var before = fixture.Hashes();
+        var result = fixture.Evaluate(fixture.Published);
+        Assert.Equal("bound", result.Provenance!.Status);
+        Assert.Single(result.Pages);
+        Assert.Equal(HashText(Path.GetFullPath(fixture.Published)), result.Provenance.PublishedRootPathHash);
+        Assert.NotEqual(Hash(fixture.Receipt), result.Provenance.BoundedInputSha256);
+        Assert.Equal(before.OrderBy(pair => pair.Key), fixture.Hashes().OrderBy(pair => pair.Key));
+        Assert.False(Directory.Exists(Path.Combine(fixture.Receipts, "bin")));
+    }
+
+    [Fact]
+    public void Default_receipt_colocation_and_digest_remain_unchanged()
+    {
+        using var fixture = new Fixture();
+        var colocated = Path.Combine(fixture.Published, "publish.json");
+        File.Copy(fixture.Receipt, colocated);
+        var result = WebFormsPublishMapExtractor.Evaluate(fixture.Source, new string('a', 40),
+            new(fixture.Source, "unused", WebFormsPublishReceiptPath: colocated), CancellationToken.None);
+        Assert.Equal("bound", result.Provenance!.Status);
+        Assert.Null(result.Provenance.PublishedRootPathHash);
+        Assert.Equal(Hash(colocated), result.Provenance.BoundedInputSha256);
+    }
+
+    [Theory]
+    [InlineData("relative", "WebFormsPublishRootInvalid")]
+    [InlineData("missing", "WebFormsPublishRootInvalid")]
+    [InlineData("changed", "WebFormsPublishArtifactMismatch")]
+    public void Invalid_or_changed_published_inputs_withhold_all_binding_facts(string mutation, string expected)
+    {
+        using var fixture = new Fixture();
+        if (mutation == "changed") File.AppendAllText(Path.Combine(fixture.Published, "bin", "App_Web_Public.dll"), "changed");
+        var root = mutation switch { "relative" => "relative", "missing" => Path.Combine(fixture.Root, "missing"), _ => fixture.Published };
+        var result = fixture.Evaluate(root);
+        Assert.Equal("gap", result.Provenance!.Status);
+        Assert.Contains(expected, result.Provenance.GapKinds);
+        Assert.Empty(result.Pages);
+        Assert.Empty(result.SourcePaths);
+        Assert.Empty(result.Assemblies);
+    }
+
+    private static string Hash(string path) { using var stream = File.OpenRead(path); return Convert.ToHexString(SHA256.HashData(stream)).ToLowerInvariant(); }
+    private static string HashText(string value) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value))).ToLowerInvariant();
+    private sealed class Fixture : IDisposable
+    {
+        public string Root { get; } = WebFormsReviewPreflightCommand.PhysicalPath(Path.Combine(Path.GetTempPath(), "tracemap published-root " + Guid.NewGuid().ToString("N")));
+        public string Source => Path.Combine(Root, "source");
+        public string Published => Path.Combine(Root, "published");
+        public string Receipts => Path.Combine(Root, "receipts");
+        public string Receipt => Path.Combine(Receipts, "publish.json");
+        public Fixture()
+        {
+            Directory.CreateDirectory(Path.Combine(Source, "Pages"));
+            Directory.CreateDirectory(Path.Combine(Published, "bin"));
+            Directory.CreateDirectory(Path.Combine(Published, "Pages"));
+            Directory.CreateDirectory(Receipts);
+            File.WriteAllText(Path.Combine(Source, "Pages", "Lookup.aspx"), "<%@ Page Language=\"VB\" Inherits=\"Lookup\" %>");
+            File.WriteAllText(Path.Combine(Published, "bin", "App_Web_Public.dll"), "public byte-membership fixture, not PE/build evidence");
+            File.WriteAllText(Path.Combine(Published, "Pages", "Lookup.aspx.compiled"), "<preserve virtualPath=\"/Pages/Lookup.aspx\" assembly=\"App_Web_Public\" type=\"ASP.lookup_aspx\" />");
+            var sourceHash = Hash(Path.Combine(Source, "Pages", "Lookup.aspx"));
+            File.WriteAllText(Receipt, JsonSerializer.Serialize(new
+            {
+                schemaVersion = "webforms-publish-binding.v1", visibility = "local-only", sourceCommitSha = new string('a', 40),
+                receiptGeneratorSha256 = Hash(typeof(WebFormsPublishedRootTests).Assembly.Location),
+                compilerSha256 = HashText("unknown-compiler-public-test-not-build-proof"),
+                boundedInputSha256 = HashText("Pages/Lookup.aspx:" + sourceHash + "\n"),
+                sourceFiles = new[] { new { path = "Pages/Lookup.aspx", sha256 = sourceHash } },
+                publishedFiles = new[]
+                {
+                    new { path = "bin/App_Web_Public.dll", sha256 = Hash(Path.Combine(Published, "bin", "App_Web_Public.dll")), kind = "assembly" },
+                    new { path = "Pages/Lookup.aspx.compiled", sha256 = Hash(Path.Combine(Published, "Pages", "Lookup.aspx.compiled")), kind = "compiled-map" }
+                },
+                pages = new[] { new { virtualPath = "/Pages/Lookup.aspx", sourcePath = "Pages/Lookup.aspx", assembly = "App_Web_Public", generatedType = "ASP.lookup_aspx", mapPath = "Pages/Lookup.aspx.compiled" } }
+            }));
+        }
+        public WebFormsPublishEvaluation Evaluate(string root) => WebFormsPublishMapExtractor.Evaluate(Source, new string('a', 40),
+            new(Source, "unused", WebFormsPublishReceiptPath: Receipt, WebFormsPublishedRootPath: root), CancellationToken.None);
+        public Dictionary<string, string> Hashes() => Directory.GetFiles(Root, "*", SearchOption.AllDirectories).ToDictionary(path => path, Hash);
+        public void Dispose() => Directory.Delete(Root, recursive: true);
+    }
+}

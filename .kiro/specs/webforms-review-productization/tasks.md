@@ -38,6 +38,9 @@
     - [x] Add the shared Core inspection facade and an internal immutable parent
       manifest/index/facts validation gate with bounded input and cancellation
       tests; keep current-source snapshot and operator execution pending.
+    - [x] Consume an explicitly retained publish receipt from the native config,
+      pin its source/DLL/map membership and support a separate published root
+      without copying original binaries. Keep operator receipt creation pending.
 - [ ] Implement .NET orchestration for source-plus-compiled runs and immutable
   attachment to a retained source scan; keep compatibility wrappers.
   - [x] Add checkpointed native fresh execution using the existing scanner and

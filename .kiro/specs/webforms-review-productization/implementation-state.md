@@ -27,6 +27,27 @@
 - Goal is active, not achieved. Preflight tests establish only the first slice;
   subsequent implementation and final private validation remain outstanding.
 
+## Explicit published root and retained publish receipts (2026-09-28)
+
+- Continued on the same `codex/webforms-native-preflight` branch in the managed
+  `webforms-native-publish` checkout after the old checkout's full regression
+  completed. The old checkout is detached at its validated `33cd362a` head;
+  no proof dependencies or other user lanes were removed or reused.
+- Normal scan options now permit a separately explicit published-file root for
+  an existing receipt. Default receipt-directory behavior and digest remain
+  unchanged. Explicit root identity joins receipt bytes in the bounded publish
+  digest; the source/published roots stay read-only.
+- Native config accepts an optional receipt path. Preflight pins its source
+  membership bytes and validates commit/page coverage plus exact DLL/map
+  declarations and hashes. Scanning uses the existing Core map/receipt policy;
+  malformed semantic content retains gaps rather than fabricated joins.
+- Broader focused validation passed 217/217 across native preflight/input/execution,
+  published-root, Core metadata, CLI, local-review, scan execution receipt and
+  messy-workspace regressions. There were no
+  compiler/analyzer warnings. This is retained-receipt consumption, not native
+  receipt preparation, operator attestation, immutable attachment or complete
+  compiled-site/report parity. Those remain active goal requirements.
+
 ## Native fresh execution and resume (2026-09-28)
 
 - Added `webforms-review run/resume --run <explicit-root>` for fresh configs.
@@ -49,7 +70,8 @@
 - Final focused validation passed 130/130 across native execution (23 tests),
   preflight/input validation, Core metadata policy, existing CLI and local-review
   regressions. Rebuilds emitted no compiler/analyzer warnings; private-path and
-  diff guards passed. Full regression for this execution milestone is pending.
+  diff guards passed. Full regression at `33cd362a` passed 2,404/2,404, zero
+  failed/skipped (6 minutes 17 seconds); that milestone is pushed.
   Distribution dependency/runtime-version pinning includes a bounded digest test;
   external SDK bytes and clean-source authenticity remain explicit gaps. No
   private Windows run or full workflow parity is claimed.

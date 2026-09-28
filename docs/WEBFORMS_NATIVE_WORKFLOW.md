@@ -72,10 +72,28 @@ their additional semantic inputs participate in the scanner's source snapshot.
 These modes have argument-admission coverage here, not full compiled-site parity.
 
 This milestone ends at `scan-completed-reports-pending`. The scan's normal
-`report.md` is available, but no unified workbench, grouped compiled-path handoff,
-publish-map execution or graph-query phase is produced here. Raw page maps are
-pinned, not promoted to a publish receipt. `attach` is explicitly refused before
+`report.md` is available, but no unified workbench, grouped compiled-path handoff
+or graph-query phase is produced here. Raw page maps are not promoted to a
+publish receipt automatically. `attach` is explicitly refused before
 execution; it must not be approximated by a fresh scan of the parent's source.
+
+An optional `publishReceiptRelativePath` names an existing local-only
+`webforms-publish-binding.v1` receipt under the explicit published root. Receipts
+can live in a subdirectory: native execution passes the published root separately
+instead of copying the DLLs/maps beside the receipt. Preflight pins receipt source
+file hashes and requires every receipt DLL/map to be a declared assembly/map with
+the same hash. Duplicate/unsafe paths, changed bytes, wrong commits or missing
+selected pages reject the preflight. The existing Core policy then independently
+validates source membership and page-map content during the scan; bad map content
+remains reduced coverage, not a source/compiled join. Mapless receipts retain their
+existing declared-map-inventory limitations. None of this creates an operator
+attestation, validates a historical compiler or proves the DLLs came from this
+source. Native operator-declared receipt preparation remains outstanding.
+
+Normal `scan` also supports `--webforms-published-root <absolute-path>` together
+with `--webforms-publish-receipt`. If absent, the established receipt-directory
+root and receipt-byte digest behavior are unchanged. An explicit root participates
+in the publish bounded-input digest through its path hash and is never written.
 
 Execution uses configured metadata/IL budgets and normal portable-PDB defaults
 with configured artifact count/file size. Output admission is bounded separately
@@ -108,6 +126,7 @@ file is relative to its configured root. No assembly discovery or upload occurs.
   "pdbInputs": [],
   "pageMaps": [],
   "parentScanRoot": null,
+  "publishReceiptRelativePath": null,
   "budgets": {
     "maxInputFiles": 128,
     "maxAssemblyBytes": 67108864,
@@ -148,7 +167,8 @@ file is relative to its configured root. No assembly discovery or upload occurs.
   identity, safe-locator, repository, build and commit-relation validation remains
   pending under the existing scanner policy. A candidate never establishes source
   ownership or source-line identity.
-- PDB/map bytes are hashed, not semantically validated. Missing optional inputs
+- Preflight hashes PDB/map bytes without semantic validation. A declared publish
+  receipt is checked semantically only in the actual scan. Missing optional inputs
   and deferred validations are visible gaps, not inferred clean coverage.
 
 ## Limits and provenance
