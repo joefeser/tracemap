@@ -1,4 +1,5 @@
 using System.Runtime.CompilerServices;
+using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Data.Sqlite;
@@ -60,21 +61,98 @@ internal static class WebFormsReviewInputValidation
         long parentFacts = 0;
         if (config.ParentScanRoot is not null)
         {
-            try { (parent, parentFacts) = await ValidateParentAsync(preflight, git, cancellationToken); }
+            try
+            {
+                (parent, parentFacts) = await ValidateParentAsync(preflight, git, cancellationToken);
+                ValidateRetainedSourceSnapshot(preflight, parent, cancellationToken);
+            }
             catch (SqliteException exception) when (exception.SqliteErrorCode == 9 && cancellationToken.IsCancellationRequested)
             { throw new OperationCanceledException(cancellationToken); }
-            gaps.Add("RetainedSourceSnapshotNotCurrentSourceValidation");
+            gaps.Add("RetainedSnapshotScopeNotFullCurrentInventory");
         }
         await RecheckAsync(preflight, cancellationToken);
+        if (parent is not null) ValidateRetainedSourceSnapshot(preflight, parent, cancellationToken);
         var gitAfter = GitMetadataProvider.Detect(config.SourceRoot);
         if (gitAfter.CommitSha != git.CommitSha || gitAfter.RemoteUrl != git.RemoteUrl ||
             gitAfter.GitRootPath != git.GitRootPath || gitAfter.ScanRootRelativePath != git.ScanRootRelativePath)
             throw Fail("SOURCE_IDENTITY_CHANGED");
         return new(preflight, compiled, parent, parentFacts,
-            parent is null ? "current-source-snapshot-pending" : "retained-parent-identity-validated",
+            parent is null ? "current-source-snapshot-pending" : "retained-parent-source-snapshot-verified",
             gaps.ToArray());
 
         string[] Paths(string role) => preflight.Inputs.Where(input => input.Role == role).Select(input => input.Path).ToArray();
+    }
+
+    // Call only after the complete parent index/NDJSON validation. A retained
+    // FileInventoried roster may omit additional semantic metadata inputs; only
+    // exact equality with the original snapshot digest admits this reconstruction.
+    // Missing roster members are never guessed from current filesystem discovery.
+    internal static SourceSnapshotInspection ValidateRetainedSourceSnapshot(
+        WebFormsReviewPreflightManifest preflight, ScanManifest parent, CancellationToken token)
+    {
+        var input = preflight.Inputs.Single(item => item.Role == "parent-index.sqlite");
+        RejectSidecars(input.Path);
+        using var connection = new SqliteConnection(new SqliteConnectionStringBuilder
+        {
+            DataSource = new Uri(input.Path).AbsoluteUri + "?immutable=1",
+            Mode = SqliteOpenMode.ReadOnly, Pooling = false
+        }.ToString());
+        connection.Open();
+        using var interrupt = InterruptOnCancellation(connection, token);
+        connection.CreateCollation("tracemap_ordinal", StringComparer.Ordinal.Compare);
+        using (var setup = connection.CreateCommand())
+        {
+            setup.CommandText = "pragma temp_store=FILE; pragma cache_size=-2048; pragma temp.cache_size=-2048";
+            setup.ExecuteNonQuery();
+        }
+        try
+        {
+            var availableBytes = preflight.Configuration.Budgets.MaxTotalHashBytes - preflight.Inputs.Sum(item => item.Bytes);
+            if (availableBytes < 1) throw Fail("PARENT_SOURCE_HASH_BYTES_LIMIT");
+            var observed = SourceSnapshotInspector.InspectOrderedInventory(preflight.Configuration.SourceRoot,
+                Inventory(), preflight.Configuration.Budgets.MaxParentFacts, availableBytes, token);
+            if (observed.Digest != parent.SourceSnapshotDigest) throw Fail("PARENT_SOURCE_SNAPSHOT_MISMATCH_OR_INCOMPLETE_INVENTORY");
+            RejectSidecars(input.Path);
+            return observed;
+        }
+        catch (SqliteException exception) when (exception.SqliteErrorCode == 9 && token.IsCancellationRequested)
+        { throw new OperationCanceledException(token); }
+        catch (SourceSnapshotException) { throw Fail("PARENT_SOURCE_SNAPSHOT_CHANGED"); }
+        catch (SourceInventoryException) { throw Fail("PARENT_SOURCE_INPUT_UNAVAILABLE"); }
+        catch (InvalidOperationException exception) when (exception.Message.StartsWith("SourceSnapshot", StringComparison.Ordinal))
+        {
+            throw Fail(exception.Message switch
+            {
+                "SourceSnapshotInputLimit" => "PARENT_SOURCE_INPUT_LIMIT",
+                "SourceSnapshotLinkedInput" => "PARENT_SOURCE_LINKED_INPUT",
+                _ => "PARENT_SOURCE_INVENTORY_INVALID"
+            });
+        }
+
+        IEnumerable<FileInventoryItem> Inventory()
+        {
+            using var command = connection.CreateCommand();
+            command.CommandText = """
+                select file_path, properties_json, rule_id, extractor_id from facts
+                where fact_type=$type order by file_path collate tracemap_ordinal
+                """;
+            command.Parameters.AddWithValue("$type", FactTypes.FileInventoried);
+            using var reader = command.ExecuteReader();
+            while (reader.Read())
+            {
+                token.ThrowIfCancellationRequested();
+                if (reader.GetString(2) != RuleIds.FileInventory || reader.GetString(3) != "FileInventoryExtractor")
+                    throw Fail("PARENT_SOURCE_INVENTORY_INVALID");
+                var raw = Encoding.UTF8.GetBytes(reader.GetString(1));
+                WebFormsReviewPreflightCommand.RejectDuplicateProperties(raw);
+                using var properties = JsonDocument.Parse(raw);
+                if (!properties.RootElement.TryGetProperty("kind", out var kind) || kind.ValueKind != JsonValueKind.String
+                    || !properties.RootElement.TryGetProperty("sizeBytes", out var size) || size.ValueKind != JsonValueKind.String
+                    || !long.TryParse(size.GetString(), NumberStyles.None, CultureInfo.InvariantCulture, out var bytes))
+                    throw Fail("PARENT_SOURCE_INVENTORY_INVALID");
+                yield return new(reader.GetString(0), kind.GetString()!, bytes);
+            }
+        }
     }
 
     internal static async Task RecheckAsync(WebFormsReviewPreflightManifest preflight, CancellationToken token)
