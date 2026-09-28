@@ -15,6 +15,119 @@ public sealed class WebFormsAllocationCollection { }
 [Collection("WebForms isolated allocation")]
 public sealed class WebFormsReportMemoryTests(ITestOutputHelper output)
 {
+    [Theory]
+    [InlineData(32)]
+    [InlineData(256)]
+    public async Task Indexed_combined_graph_retains_global_parity_without_loading_all_outgoing_edges(int pages)
+    {
+        using var temp = new TempDirectory();
+        var facts = Enumerable.Range(0, pages).SelectMany(index => Fixture(
+            $"{index:D4}", $"Synthetic.{(index % 2 == 0 ? "\U00010000" : "\uE000")}.Page{index:D4}.Load()",
+            $"Pages/Page{index:D4}.aspx"));
+        var combined = Path.Combine(temp.Path, "combined.sqlite");
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([Write(temp.Path, facts)], combined, ["public-page"]));
+        var hash = Hash(combined);
+        var options = PathOptions(combined) with { StartingNodeLimit = 1_000 };
+        var expected = await CombinedDependencyPathReporter.BuildReportAsync(options);
+        var actual = await CombinedDependencyPathReporter.BuildBoundedCombinedIndexReportWithTraversalAsync(options, Budget());
+        Assert.Equal(JsonSerializer.Serialize(expected), JsonSerializer.Serialize(actual.Report));
+        var usage = Assert.IsType<CombinedDependencyPathReporter.IndexedGraphUsage>(actual.GraphStorage);
+        Assert.Equal("sqlite-temporary", usage.Engine);
+        Assert.Equal(hash.ToLowerInvariant(), usage.InputSha256);
+        Assert.Equal(Hash(typeof(CombinedDependencyPathReporter).Assembly.Location).ToLowerInvariant(), usage.GeneratorSha256);
+        Assert.Equal(expected.Summary.GraphNodeCount, usage.StoredNodes);
+        Assert.Equal(expected.Summary.GraphEdgeCount, usage.StoredEdges);
+        Assert.InRange(usage.LogicalStorageBytes, 4_096, 512L * 1024 * 1024);
+        Assert.InRange(usage.MaximumOutgoingRowsLoaded, 1, 20);
+        Assert.True(usage.MaximumOutgoingRowsLoaded < usage.StoredEdges);
+        Assert.Equal(hash, Hash(combined));
+        output.WriteLine($"pages={pages};nodes={usage.StoredNodes};edges={usage.StoredEdges};logicalStorageBytes={usage.LogicalStorageBytes};maxOutgoingRows={usage.MaximumOutgoingRowsLoaded}");
+    }
+
+    [Fact]
+    public async Task Indexed_graph_storage_refusal_discards_every_partial_path_and_preserves_input()
+    {
+        using var temp = new TempDirectory();
+        var combined = Path.Combine(temp.Path, "combined.sqlite");
+        var facts = Enumerable.Range(0, 32).SelectMany(index => Fixture($"{index:D4}", filePath: $"Pages/Page{index:D4}.aspx"));
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([Write(temp.Path, facts)], combined, ["page"]));
+        var hash = Hash(combined);
+        var budget = new ReportInputBudget(1_000, 1_000, 1_000_000) { MaxGraphStorageBytes = 64 * 1024 };
+        var result = await CombinedDependencyPathReporter.BuildBoundedCombinedIndexReportWithTraversalAsync(PathOptions(combined), budget);
+        Assert.Empty(result.Report.Paths);
+        Assert.Contains(result.Report.Gaps, gap => gap.GapKind == "GraphInputLimitReached" && gap.Reason == "graph-storage-bytes");
+        Assert.True(result.Report.Summary.Truncated);
+        Assert.Single(result.Report.Sources);
+        Assert.Null(result.GraphStorage);
+        Assert.Equal(hash, Hash(combined));
+    }
+
+    [Fact]
+    public async Task Indexed_outgoing_order_uses_dotnet_ordinal_unicode_order_and_preserves_all_branches()
+    {
+        using var temp = new TempDirectory();
+        var facts = Fixture();
+        foreach (var name in new[] { "\uE000", "\U00010000" })
+        {
+            var target = $"Synthetic.{name}.Store.Save()";
+            facts.Add(Fact(FactTypes.CallEdge, "csharp.semantic.call.v1", "Sample.Page.Load()", target, 40));
+            facts.Add(Fact(FactTypes.QueryPatternDetected, RuleIds.CSharpSyntaxQueryPattern, target, $"query:{name}", 41,
+                ("operationName", "SELECT"), ("tableName", $"synthetic_{name}"), ("sqlSourceKind", "literal-string")));
+        }
+        var combined = Path.Combine(temp.Path, "combined.sqlite");
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([Write(temp.Path, facts)], combined, ["page"]));
+        var hash = Hash(combined);
+        var files = Directory.GetFiles(temp.Path).Order(StringComparer.Ordinal).ToArray();
+        var expected = await CombinedDependencyPathReporter.BuildReportAsync(PathOptions(combined));
+        var actual = await CombinedDependencyPathReporter.BuildBoundedCombinedIndexReportWithTraversalAsync(PathOptions(combined), Budget());
+        Assert.Equal(JsonSerializer.Serialize(expected), JsonSerializer.Serialize(actual.Report));
+        Assert.Contains(actual.Report.Paths, path => path.Nodes.Any(node => node.DisplayName.Contains("\U00010000", StringComparison.Ordinal)));
+        Assert.Contains(actual.Report.Paths, path => path.Nodes.Any(node => node.DisplayName.Contains("\uE000", StringComparison.Ordinal)));
+        Assert.Equal(3, actual.GraphStorage!.MaximumOutgoingRowsLoaded);
+        Assert.Equal(files, Directory.GetFiles(temp.Path).Order(StringComparer.Ordinal).ToArray());
+        Assert.Equal(hash, Hash(combined));
+    }
+
+    [Fact]
+    public async Task Cancelled_indexed_graph_does_not_modify_or_publish_input_artifacts()
+    {
+        using var temp = new TempDirectory();
+        var combined = Path.Combine(temp.Path, "combined.sqlite");
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([Write(temp.Path, Fixture())], combined, ["page"]));
+        var hash = Hash(combined);
+        var files = Directory.GetFiles(temp.Path).Order(StringComparer.Ordinal).ToArray();
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => CombinedDependencyPathReporter.BuildBoundedCombinedIndexReportWithTraversalAsync(
+            PathOptions(combined), Budget(), cancellation.Token));
+        Assert.Equal(files, Directory.GetFiles(temp.Path).Order(StringComparer.Ordinal).ToArray());
+        Assert.Equal(hash, Hash(combined));
+    }
+
+    [Fact]
+    public async Task Indexed_graph_rejects_orphaned_source_facts_instead_of_silently_pruning_competitors()
+    {
+        using var temp = new TempDirectory();
+        var combined = Path.Combine(temp.Path, "combined.sqlite");
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([Write(temp.Path, Fixture())], combined, ["page"]));
+        await using (var writer = new SqliteConnection($"Data Source={combined};Pooling=False"))
+        {
+            await writer.OpenAsync();
+            await using var command = writer.CreateCommand();
+            command.CommandText = """
+                update combined_facts set source_index_id='missing-source',
+                    combined_fact_id='missing-source:' || original_fact_id
+                where combined_fact_id=(select min(combined_fact_id) from combined_facts);
+                """;
+            await command.ExecuteNonQueryAsync();
+        }
+        var hash = Hash(combined);
+        var exception = await Assert.ThrowsAsync<InvalidDataException>(() =>
+            CombinedDependencyPathReporter.BuildBoundedCombinedIndexReportWithTraversalAsync(PathOptions(combined), Budget()));
+        Assert.Equal("COMBINED_FACT_SOURCE_UNAVAILABLE", exception.Message);
+        Assert.Equal(hash, Hash(combined));
+    }
+
     [Fact]
     public async Task Combined_compact_properties_preserve_every_fact_and_global_cross_source_competitor()
     {

@@ -115,6 +115,10 @@
     every row and all global competitors; preserve compiled bridge identity/body
     context and admit edge text before allocation. Keep indexed graph traversal
     and representative peak-memory validation pending.
+  - [x] Construct bounded combined nodes/edges directly in a private indexed
+    scratch graph; preserve complete global alias groups, exact ordinal outgoing
+    order and lossless historical report parity. Keep global fact/semantic-index
+    allocation and representative source/compiled peak-memory acceptance pending.
 - [ ] Benchmark eight-times source-size synthetic corpus and representative
   compiled graph distributions; record disk/time/peak-memory/coverage metrics.
 - [ ] Add dependency-aware retention, durable run location, relocation validation,

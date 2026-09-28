@@ -277,7 +277,8 @@ input, 512 MiB aggregate rendered output, 500,000 records and 2,000,000 referenc
 The internal combined SQLite uses retained-artifact/hash bounds, not the rendered
 output cap. Receipt partitioning is implemented for declared inventory; complete
 compiled-site coverage and representative eight-times graph memory remain separate
-gates. The graph still materializes after admission.
+gates. Bounded combined reports use the indexed scratch graph described below;
+admitted fact rows and global semantic ambiguity indexes still use managed memory.
 
 The bounded combined reader now projects the same audited graph-consumed
 properties used by the single-index reader in SQLite, before allocating .NET
@@ -291,7 +292,25 @@ identity fields from SQLite's different JSON lookup semantics.
 Original fact JSON remains unchanged in the retained index; the projection is
 an internal read optimization, not a replacement handoff or evidence deletion.
 Fact/edge text is admitted before allocation. Raw combined admission ceilings
-are not raised, and this is not yet root-specific indexed graph processing.
+are not raised.
+
+Bounded combined graph nodes, edges and outgoing adjacency now reside in a
+private temporary SQLite database, with an 8 MiB page cache and a 512 MiB logical
+database ceiling. This is not an emitted run artifact or a reusable checkpoint:
+SQLite owns the temporary file and disposes it with the connection. The header
+pins the exact Reporting DLL SHA-256 and full input-index SHA-256; input bytes are
+streamed again before a report can be returned. No input index is written.
+Source/overload/dispatch competitors are not pruned. Symbol reconciliation uses
+an indexed alias roster and loads one global alias group at a time; traversal
+loads one node's outgoing edges, using .NET ordinal ordering even for Unicode.
+Storage refusal discards the graph and returns the existing reduced-coverage
+`GraphInputLimitReached` gap with reason `graph-storage-bytes`, not partial paths.
+
+The storage ceiling excludes SQLite sorter scratch files and is not an OS
+working-set guarantee. Fact rows, compiled binding/dispatch metadata, alias-group
+fan-out and selected traversal/output records still have managed allocations.
+The 32/256-page public parity fixture proves an eight-times page-count ratio,
+not representative source or compiled-graph disk/time/peak-memory acceptance.
 
 ### Bounded retained evidence retrieval
 

@@ -3978,6 +3978,8 @@ only audited graph-consumed properties before managed allocation. Tests compare
 complete serialized path reports with the full reader, retain supporting IDs and
 cross-source competitors, check missing legacy extractor columns, reject
 noncanonical identities, and withhold paths on oversized dependency-edge text.
+Facts whose source-index metadata is absent are rejected, never silently skipped
+by the per-source projection; global competitors cannot disappear that way.
 Duplicate JSON keys, numeric/nested values and non-object property JSON retain
 the combined full parser's exact last-value or empty malformed-properties behavior
 (the single-index parser retains its existing malformed-properties hash behavior).
@@ -3986,5 +3988,25 @@ member identity, body-span and namespace/import context that a source-only
 projection must not omit. The allocation comparison is warmed and isolated from
 parallel test collections; it measures managed allocation, not peak working set.
 Every original fact stays in the read-only combined index. Raw fact/edge/text
-admission and full graph materialization remain: this is not an eight-times scale
-or lazy graph acceptance result.
+admission and global fact/semantic-index allocations remain: the allocation
+comparison alone is not an eight-times scale or peak-working-set acceptance result.
+
+### Indexed bounded combined graph
+
+The same focused command exercises the private temporary SQLite graph backend.
+Nodes and edges are inserted directly into it during graph construction; there is
+no full in-memory graph followed by a spill. Global aliases retain their complete
+source namespace, with one reconciliation group loaded at a time. Outgoing
+adjacency is fetched by exact node ID. SQLite ordering uses an explicit .NET
+ordinal collation, preserving supplementary/BMP Unicode and null-path ordering.
+The backend remains private and ephemeral, pins actual generator/input hashes,
+rechecks input bytes before returning a report, and never writes the input index.
+
+Public 32/256-page cases compare complete serialized reports with the historical
+reader and observe all graph node/edge counts, logical database bytes and maximum
+outgoing rows loaded. Tests also pin branch ordering, unchanged input/directory
+contents, cancellation, and fail-closed refusal at a small storage quota. The
+default logical database ceiling is 512 MiB; the page cache is 8 MiB. Sorter
+temporary files are outside that logical ceiling, and facts/global semantic
+indexes remain managed. These checks do not replace representative 8x source and
+compiled-distribution elapsed-time, total-disk and peak-memory measurements.
