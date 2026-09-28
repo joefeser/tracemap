@@ -2551,7 +2551,8 @@ rules:
       - External and embedded manifest identity, parent content hashes, retained snapshot and repository identity are checked; full fact/NDJSON consistency and current retained-source admission belong to the native parent gate.
       - Inputs are streamed within explicit hash budgets, sidecars and symbolic paths are rejected, and immutable SQLite URI reads do not rewrite the source indexes. This does not establish bounded graph/scanner memory or representative scale acceptance.
       - Generator and bounded-input hashes are local integrity commitments, not authenticated signatures. Paths and fingerprints remain private and review-only; no runtime, build authenticity, source-line or all-site claim is made.
-      - The link API does not itself create source-to-compiled graph edges or a unified workbench; reporting integration and public chain parity remain separate required gates.
+      - Reporting validates stored link and embedded-manifest bytes before using its parent source namespace for existing VB PDB/publish candidate rules. Earlier draft rows without embedded-manifest hashes require explicit recombination; no label/commit inference or silent upgrade occurs.
+      - Cross-index edges retain a link digest and local path JSON retains the link records. Native report orchestration, new semantic source reconciliation, complete compiled-site parity and the unified workbench remain separate required gates.
   - id: workflow.source-snapshot-retention.v1
     name: Complete private source snapshot roster retention
     description: Explicitly retains the scanner's authoritative ordered snapshot inventory, including extra semantic metadata, in a streamed local NDJSON roster and a generator/input/scan/roster hash-bound manifest for later immutable source-byte validation.
@@ -3596,6 +3597,7 @@ rules:
       - Requires an explicitly admitted and bound assembly and portable PDB, exact document checksum match to retained source bytes, exact PDB method-row to metadata-method reconciliation, complete visible sequence-point containment in one source method block, matching emitted method name, and one unique source declaration. It never guesses from a pretty name, imports, or an unbound binary.
       - Source line containment and name establish only a static compiler-location association. They do not prove execution, runtime page compilation, method dispatch, or that the input binary was deployed. Methods without visible PDB points, mismatched documents, ambiguous ownership, native Windows PDBs, and unadmitted inputs receive no path edge.
       - The rule does not convert projectless syntax evidence into Tier1 Roslyn semantic evidence or change the source scan's coverage label.
+      - A compiled-only attachment may use declarations in a different index only through an explicitly admitted and report-validated compiled-attachment-index-link.v1 relationship. Supporting facts retain their original namespaces and the edge records the link digest; matching labels or commits alone are insufficient.
 
   - id: combined.paths.projectless-publish-candidate.v1
     name: Projectless Web Forms publish method candidate
@@ -3617,6 +3619,7 @@ rules:
       - The graph overlay does not promote source syntax to Roslyn semantic evidence or rewrite source facts.
       - Other source methods named by the verified receipt may join a uniquely admitted method with the complete qualified type path and compatible parameter shapes. VB page, handler, containing-type, method, and parameter spelling is matched case-insensitively; intrinsic aliases, including unsigned integers and SByte, use their defined System type, while unqualified non-intrinsic names must match a retained lexical namespace or explicit non-aliased Imports scope. Unscoped names, case-equivalent ambiguous overloads, and ambiguous assembly identities fail closed. Both directions are candidate edges so a compiled IL walk can re-enter retained source evidence, not an exact method-location claim.
       - The member-candidate pass preflights its bounded source/member comparison work before emitting any of its edges; work-limit exhaustion withholds the pass and emits a Tier4 gap.
+      - A compiled-only attachment may use retained pages, handlers and method declarations from its explicitly validated parent index. Publish/metadata/IL facts remain in the attachment namespace, supporting fact IDs are unchanged, and cross-index edges record the admitted link digest. This does not create Tier1 source identity or upgrade page verdicts.
 
   - id: combined.paths.projectless-vb-receiver-bridge.v1
     name: Projectless Visual Basic receiver-provenance bridge

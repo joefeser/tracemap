@@ -5,6 +5,7 @@ using TraceMap.Cli;
 using TraceMap.Combine;
 using TraceMap.Core;
 using TraceMap.Storage;
+using TraceMap.Reporting;
 
 namespace TraceMap.Tests;
 
@@ -27,6 +28,8 @@ public sealed class CompiledAttachmentCombineTests
         command.CommandText = "select payload_json from compiled_attachment_links;";
         var link = JsonSerializer.Deserialize<CompiledAttachmentIndexLink>((string)(await command.ExecuteScalarAsync())!)!;
         CompiledAttachmentIndexLink.Validate(link);
+        var read = await CombinedDependencyReporter.ReadAsync(connection, CancellationToken.None);
+        Assert.Equal(link, Assert.Single(read.CompiledAttachmentLinks));
         Assert.Equal(Hash(fixture.ParentIndex), link.ParentIndexSha256);
         Assert.Equal(Hash(fixture.ChildIndex), link.AttachmentIndexSha256);
         Assert.Equal(Hash(fixture.ParentManifest), link.ParentManifestSha256);
@@ -118,6 +121,53 @@ public sealed class CompiledAttachmentCombineTests
         var failure = await Assert.ThrowsAsync<InvalidDataException>(() => CombinedIndexBuilder.CombineAsync(options));
         Assert.Equal("COMPILED_ATTACHMENT_COMBINE_INPUT_LIMIT", failure.Message);
         Assert.False(File.Exists(options.OutputPath));
+    }
+
+    [Theory]
+    [InlineData("payload")]
+    [InlineData("parent-index-hash")]
+    [InlineData("source-label")]
+    [InlineData("source-commit")]
+    [InlineData("embedded-manifest")]
+    [InlineData("column")]
+    [InlineData("oversized")]
+    [InlineData("legacy-link")]
+    public async Task Reporting_rejects_changed_links_or_source_identity_without_guessing(string mutation)
+    {
+        using var fixture = await Fixture.CreateAsync();
+        await CombinedIndexBuilder.CombineAsync(fixture.Options);
+        await using var connection = new SqliteConnection($"Data Source={fixture.Options.OutputPath}");
+        await connection.OpenAsync(); await using var command = connection.CreateCommand();
+        command.CommandText = "select payload_json from compiled_attachment_links;";
+        var json = (string)(await command.ExecuteScalarAsync())!;
+        var link = JsonSerializer.Deserialize<CompiledAttachmentIndexLink>(json)!;
+        command.CommandText = mutation switch
+        {
+            "source-label" => "update index_sources set label = 'changed' where label = 'retained';",
+            "source-commit" => "update index_sources set commit_sha = 'changed' where label = 'retained';",
+            "embedded-manifest" => "update index_sources set manifest_json = manifest_json || ' ' where label = 'retained';",
+            "column" => "update compiled_attachment_links set parent_source_index_id = 'changed';",
+            _ => "update compiled_attachment_links set payload_json = $json;"
+        };
+        if (mutation == "parent-index-hash")
+        {
+            link = link with { ParentIndexSha256 = new string('b', 64) };
+            link = link with { BoundedInputSha256 = CompiledAttachmentIndexLink.InputDigest(link) };
+            json = JsonSerializer.Serialize(link);
+        }
+        else if (mutation == "payload") json = json.Replace(link.BoundedInputSha256, new string('c', 64), StringComparison.Ordinal);
+        else if (mutation == "oversized") json = new string('x', 32769);
+        else if (mutation == "legacy-link")
+        {
+            var legacy = System.Text.Json.Nodes.JsonNode.Parse(json)!.AsObject();
+            legacy.Remove(nameof(CompiledAttachmentIndexLink.ParentEmbeddedManifestSha256));
+            legacy.Remove(nameof(CompiledAttachmentIndexLink.AttachmentEmbeddedManifestSha256));
+            json = legacy.ToJsonString();
+        }
+        if (command.CommandText.Contains("$json", StringComparison.Ordinal)) command.Parameters.AddWithValue("$json", json);
+        await command.ExecuteNonQueryAsync();
+        var failure = await Assert.ThrowsAsync<InvalidDataException>(() => CombinedDependencyReporter.ReadAsync(connection, CancellationToken.None));
+        if (mutation == "legacy-link") Assert.Equal("COMPILED_ATTACHMENT_REPORT_LINK_RECOMBINE_REQUIRED", failure.Message);
     }
 
     private static string Hash(string path) { using var stream = File.OpenRead(path); return Convert.ToHexString(SHA256.HashData(stream)).ToLowerInvariant(); }

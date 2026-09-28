@@ -61,6 +61,8 @@ public sealed record CombinedDependencyPathReport(
 {
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public CombinedPathRootTraversal? RootTraversal { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<CompiledAttachmentIndexLink>? CompiledAttachmentLinks { get; init; }
 }
 
 public sealed record CombinedPathRootTraversal(
@@ -189,7 +191,11 @@ public sealed record CombinedPathEdge(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     string? CandidateBridgeKind = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    IReadOnlyList<string>? SupportingRelationshipIds = null);
+    IReadOnlyList<string>? SupportingRelationshipIds = null)
+{
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? CompiledAttachmentLinkSha256 { get; init; }
+}
 
 public sealed record CombinedPathNote(string Code, string Message);
 
@@ -735,8 +741,11 @@ public static partial class CombinedDependencyPathReporter
                 CountBy(sortedGaps, gap => gap.GapKind),
                 participatingNodes,
                 participatingEdges),
-            ReportLimitations(legacyMode, participatingNodes, sortedGaps))
+            ReportLimitations(legacyMode, participatingNodes, sortedGaps)
+                .Concat(read.CompiledAttachmentLinks.Count == 0 ? [] : new[]
+                { "Compiled attachment joins use an explicitly validated local parent/index link and preserve original fact namespaces. They remain static review evidence, not runtime execution, source-line identity, build authenticity or full-site coverage." }).ToArray())
         {
+            CompiledAttachmentLinks = read.CompiledAttachmentLinks.Count == 0 ? null : read.CompiledAttachmentLinks,
             RootTraversal = rootTraversal is null ? null : new CombinedPathRootTraversal(
                 rootTraversal.ReachedNodeCount,
                 rootTraversal.TraversedEdgeCount,
@@ -1168,7 +1177,7 @@ public static partial class CombinedDependencyPathReporter
         }
 
         AddSymbolReconciliationEdges(graph);
-        AddBoundCompiledIlEdges(graph, read.Facts);
+        AddBoundCompiledIlEdges(graph, read.Facts, read.CompiledAttachmentLinks);
         AddProjectlessVisualBasicReceiverBridgeEdges(graph, read.Facts);
         AddProjectlessVisualBasicImplicitReceiverBridgeEdges(graph, read.Facts);
         AddProjectlessVisualBasicConstructorBridgeEdges(graph, read.Facts);
@@ -6924,6 +6933,7 @@ public static partial class CombinedDependencyPathReporter
         string? CandidateBridgeKind = null,
         IReadOnlyList<string>? SupportingRelationshipIds = null)
     {
+        public string? CompiledAttachmentLinkSha256 { get; init; }
         public CombinedPathEdge ToReportEdge()
         {
             return new CombinedPathEdge(
@@ -6943,7 +6953,8 @@ public static partial class CombinedDependencyPathReporter
                 SupportingRegistrationFactIds?.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
                 CandidateState: CandidateState,
                 CandidateBridgeKind: CandidateBridgeKind,
-                SupportingRelationshipIds: SupportingRelationshipIds?.OrderBy(value => value, StringComparer.Ordinal).ToArray());
+                SupportingRelationshipIds: SupportingRelationshipIds?.OrderBy(value => value, StringComparer.Ordinal).ToArray())
+            { CompiledAttachmentLinkSha256 = CompiledAttachmentLinkSha256 };
         }
     }
 }

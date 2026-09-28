@@ -9,7 +9,8 @@ internal sealed class CompiledAttachmentCombineContracts
 {
     private sealed record Pinned(string Path, long Bytes, string Sha256);
     private sealed record Contract(Pinned ParentIndex, Pinned ParentManifest, Pinned AttachmentIndex,
-        Pinned AttachmentManifest, ScanManifest Parent, ScanManifest Attachment);
+        Pinned AttachmentManifest, ScanManifest Parent, ScanManifest Attachment,
+        string ParentEmbeddedSha256, string AttachmentEmbeddedSha256);
     private readonly List<Contract> contracts = [];
     private readonly Dictionary<string, Pinned> pins = new(StringComparer.OrdinalIgnoreCase);
     private string generator = "";
@@ -35,7 +36,8 @@ internal sealed class CompiledAttachmentCombineContracts
             var pm = await Pin(item.ParentManifestPath, 4_194_304);
             var ci = await Pin(childIndex, options.MaxAttachmentIndexBytes);
             var cm = await Pin(item.AttachmentManifestPath, 4_194_304);
-            var parent = await ReadManifest(pm, pi, token); var child = await ReadManifest(cm, ci, token);
+            var (parent, parentEmbedded) = await ReadManifest(pm, pi, token);
+            var (child, childEmbedded) = await ReadManifest(cm, ci, token);
             CompiledAttachmentProducer.ValidateContext(child);
             var context = child.CompiledAttachment!;
             if (parent.CompiledAttachment is not null || context.ParentScanId != parent.ScanId
@@ -45,7 +47,7 @@ internal sealed class CompiledAttachmentCombineContracts
                 || child.RemoteUrl != parent.RemoteUrl || child.GitRootHash != parent.GitRootHash
                 || child.ScanRootPathHash != parent.ScanRootPathHash || child.ScanRootRelativePath != parent.ScanRootRelativePath)
                 throw Fail("PARENT_CONTEXT_MISMATCH");
-            result.contracts.Add(new(pi, pm, ci, cm, parent, child));
+            result.contracts.Add(new(pi, pm, ci, cm, parent, child, parentEmbedded, childEmbedded));
         }
         await result.RecheckAsync(token);
         return result;
@@ -91,7 +93,9 @@ internal sealed class CompiledAttachmentCombineContracts
                 EvidenceTiers.Tier2Structural, "local-only-review-only", generator, "", parent.SourceIndexId, child.SourceIndexId,
                 parent.ScanId, child.ScanId, contract.ParentManifest.Sha256, contract.ParentIndex.Sha256,
                 contract.AttachmentManifest.Sha256, contract.AttachmentIndex.Sha256, context.ParentSourceSnapshotDigest,
-                context.BoundedInputSha256);
+                context.BoundedInputSha256)
+            { ParentEmbeddedManifestSha256 = contract.ParentEmbeddedSha256,
+                AttachmentEmbeddedManifestSha256 = contract.AttachmentEmbeddedSha256 };
             link = link with { BoundedInputSha256 = CompiledAttachmentIndexLink.InputDigest(link) };
             CompiledAttachmentIndexLink.Validate(link);
             command.CommandText = "insert into compiled_attachment_links values ($child, $parent, $json);";
@@ -104,7 +108,7 @@ internal sealed class CompiledAttachmentCombineContracts
         await transaction.CommitAsync(token);
     }
 
-    private static async Task<ScanManifest> ReadManifest(Pinned manifest, Pinned index, CancellationToken token)
+    private static async Task<(ScanManifest Manifest, string EmbeddedSha256)> ReadManifest(Pinned manifest, Pinned index, CancellationToken token)
     {
         var bytes = new byte[checked((int)manifest.Bytes)];
         await using (var stream = File.OpenRead(manifest.Path))
@@ -126,11 +130,12 @@ internal sealed class CompiledAttachmentCombineContracts
         command.CommandText = "select case when length(cast(manifest_json as blob)) <= 4194304 then manifest_json else null end from scan_manifest;";
         await using var reader = await command.ExecuteReaderAsync(token);
         if (!await reader.ReadAsync(token) || reader.IsDBNull(0)) throw Fail("INDEX_MANIFEST_UNAVAILABLE");
-        using var embedded = JsonDocument.Parse(reader.GetString(0), new JsonDocumentOptions { MaxDepth = 32 });
+        var embeddedJson = reader.GetString(0);
+        using var embedded = JsonDocument.Parse(embeddedJson, new JsonDocumentOptions { MaxDepth = 32 });
         RejectDuplicates(embedded.RootElement);
         if (!JsonElement.DeepEquals(document.RootElement, embedded.RootElement) || await reader.ReadAsync(token))
             throw Fail("INDEX_MANIFEST_MISMATCH");
-        return value;
+        return (value, Convert.ToHexString(SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(embeddedJson))).ToLowerInvariant());
     }
 
     internal static string ImmutableUri(string path) => new Uri(Path.GetFullPath(path)).AbsoluteUri + "?mode=ro&immutable=1";

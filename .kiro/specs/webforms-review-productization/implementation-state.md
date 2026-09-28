@@ -54,6 +54,42 @@
   and public method-chain parity are next. This is not final workflow acceptance;
   the 2,528-test full result above belongs to `fd13069c`, before this contract.
 
+## Reporting consumption of explicit attachment links (2026-09-28)
+
+- Reporting now validates stored link payload, exact embedded manifest hashes,
+  attachment context and source-row identity before selecting a retained parent
+  namespace. Changed links, manifests, source metadata or oversized payloads
+  refuse reporting; earlier draft links lacking embedded-manifest hashes require
+  explicit recombination instead of a silent upgrade.
+- Existing VB PDB and publish graph bridges can use parent declarations/pages/
+  handlers while metadata/IL facts stay in the attachment index. Original rule,
+  tier, checksum, signature and ambiguity requirements remain unchanged. Parent
+  facts are never copied or relabeled. Each cross-index bridge carries its link
+  digest; local path JSON retains complete link context and a review-only
+  limitation. Reports with no link retain the previous optional-field shape.
+- Public tests compare complete terminal method-chain display, edge kind, rule,
+  tier, span and classification keys against single-index baselines for PDB and
+  publish fixtures. They check both original supporting namespaces, absence of
+  guessed joins without a link, withheld duplicate declarations, bidirectional
+  receipt member candidates and post-combine tamper rejection.
+- Broader focused regression passed 231/231, zero failed/skipped (1 minute
+  28 seconds), across native execution, producer/combine, messy workspace and
+  dependency path/report suites. No compiler/analyzer warnings were emitted.
+  Final targeted validation, including the subsequent explicit draft-link
+  recombination-required case, passed 27/27, zero failed/skipped (6 seconds),
+  with no compiler/analyzer warnings. `git diff --check` passed.
+- Synthetic fixture binding/compiler declarations are test evidence only, not
+  build-authenticity or private Windows acceptance. New semantic source
+  reconciliation was not added. Complete native report phase execution,
+  workbench/grouped lossless JSON, all-pages partitioning, compiled-site parity,
+  bounded scale, retention and final authorized Windows validation remain open.
+- Next implementation should extend native checkpoints beyond scan completion
+  with separately owned, retryable report attempts; consume the explicit link
+  API for attachment and ordinary same-index evidence for fresh runs. Grouping
+  must index all exact evidence variants instead of deleting them. Report input,
+  output and generator bytes must be pinned before workbench admission; current
+  `CrossIndexParentJoinsPending` remains until that orchestration actually runs.
+
 ## Active native workflow goal (2026-09-28)
 
 - Owner requested the complete workflow as an active tracked goal after the

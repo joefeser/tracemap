@@ -15,6 +15,8 @@ public sealed record CompiledAttachmentIndexLink(
 {
     public const string Schema = "compiled-attachment-index-link.v1";
     public const string Rule = "workflow.compiled-attachment-index-link.v1";
+    public string ParentEmbeddedManifestSha256 { get; init; } = "";
+    public string AttachmentEmbeddedManifestSha256 { get; init; } = "";
 
     public static string InputDigest(CompiledAttachmentIndexLink link) =>
         Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(link with { BoundedInputSha256 = "" })))
@@ -27,7 +29,8 @@ public sealed record CompiledAttachmentIndexLink(
             || !Hex(link.ParentSourceIndexId, 24) || !Hex(link.AttachmentSourceIndexId, 24)
             || string.IsNullOrWhiteSpace(link.ParentScanId) || string.IsNullOrWhiteSpace(link.AttachmentScanId)
             || new[] { link.GeneratorSha256, link.BoundedInputSha256, link.ParentManifestSha256, link.ParentIndexSha256,
-                link.AttachmentManifestSha256, link.AttachmentIndexSha256, link.SourceSnapshotDigest, link.AttachmentContextSha256 }
+                link.AttachmentManifestSha256, link.AttachmentIndexSha256, link.SourceSnapshotDigest, link.AttachmentContextSha256,
+                link.ParentEmbeddedManifestSha256, link.AttachmentEmbeddedManifestSha256 }
                 .Any(value => !Hex(value, 64)) || link.BoundedInputSha256 != InputDigest(link))
             throw new InvalidDataException("COMPILED_ATTACHMENT_INDEX_LINK_INVALID");
     }

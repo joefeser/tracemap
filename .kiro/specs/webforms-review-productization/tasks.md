@@ -73,6 +73,11 @@
     external and embedded manifests, actual index hashes and snapshot/repository
     identity. Record a generator/input-bound additive link without relabeling
     facts; keep reporting consumption and method-chain parity pending.
+  - [x] Consume validated attachment links in the existing VB PDB/publish graph
+    bridges, preserve supporting fact namespaces and per-edge context, and pin
+    public baseline method-chain/rule/tier/span/classification parity plus
+    ambiguity and tamper rejection. Keep native report phase and full compiled-site
+    acceptance pending.
 - [ ] Integrate compiled evidence into normal packet/docs/handoff navigation
   across selected/all-page modes without upgrading review-only page verdicts.
   - [ ] Group exact method chains in the HTML while retaining every evidence

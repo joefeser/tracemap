@@ -1,7 +1,8 @@
 # Native compiled Web Forms workflow
 
 Status: native preflight, input validation, checkpointed fresh scanning and
-immutable compiled-only attachment. Cross-index joins and unified review reports
+immutable compiled-only attachment. Explicit cross-index VB PDB/publish reporting
+joins are implemented; native report orchestration and unified review reports
 are still pending.
 
 The Core compiled-only producer now has a distinct local attachment context
@@ -14,8 +15,10 @@ authenticated signatures. Source analysis/build status stays not run and the
 derived scan remains reduced and review-only. Native `attach` now validates the
 original parent manifest/index/facts and retained source bytes, then writes a
 separate compiled-only scan in a new owned attempt. Context validation checks
-local integrity, not authenticity. Validated cross-index report joins are not
-implemented yet; the proven report wrappers remain required.
+local integrity, not authenticity. Validated cross-index report joins are now
+consumed by the reporting graph through the explicit combine contract described
+below. Native report orchestration is not implemented yet; the proven report
+wrappers remain required.
 
 ## Native operator-declared receipt preparation
 
@@ -364,8 +367,9 @@ Public gate tests cover receipt
 identity/locator/ambiguity/staleness, parent tampering and count/row limits, escaped
 filesystem names, cancellation and byte-for-byte parent immutability. They do not
 establish private Windows or representative scale acceptance. Fresh execution
-and immutable attachment/resume are implemented; cross-index joins and reporting
-integration remain outstanding.
+and immutable attachment/resume are implemented. Reporting can consume explicit
+attachment links for retained VB PDB/publish candidates; native report execution,
+complete compiled-site parity and unified workbench integration remain outstanding.
 
 ## Next slices and acceptance
 
@@ -374,8 +378,8 @@ integration remain outstanding.
 The .NET `CombineOptions.CompiledAttachments` API accepts explicit parent and
 attachment index/manifest paths. It never discovers manifests next to an index
 or grants join authority from matching labels or commits. Ordinary combine
-behavior does not create attachment links. This is currently an API foundation,
-not a new operator command or an implemented cross-index report join.
+behavior does not create attachment links. This is a .NET API contract consumed
+by reporting, not a new operator command or completed native report phase.
 
 Each declared pair must be present among the combine inputs. Admission streams
 and pins actual index/manifest bytes, rejects SQLite sidecars and symbolic input
@@ -389,13 +393,28 @@ Only a new output is admitted for attachment combination. Inputs are attached
 through immutable read-only SQLite URIs and rehashed before link publication.
 The additive `compiled_attachment_links` table records exact Combine generator
 and bounded-input hashes, parent/child source IDs, scan IDs, content hashes,
-snapshot and attachment-context hash. Original source namespaces and fact IDs
+snapshot, external/embedded manifest hashes and attachment-context hash. Original source namespaces and fact IDs
 remain intact. Its digest is local integrity evidence, not an authenticated
 signature or runtime proof. The normal native parent gate remains responsible
 for complete fact/index/NDJSON and current retained-source admission.
 
-Reporting consumption, per-edge context provenance and public method-chain parity
-are the next steps; keep `CrossIndexParentJoinsPending` until those pass.
+Reporting validates the complete link, recorded embedded manifest bytes and
+source metadata before using it. PDB and publish candidate bridges look up source
+declarations only in the explicitly linked parent; metadata/IL facts stay in the
+attachment index. Unique ownership, checksum, binding and signature policies are
+unchanged. Cross-index candidate edges record `compiledAttachmentLinkSha256`;
+local path JSON includes the exact `compiledAttachmentLinks` records. Ordinary
+reports without links retain their previous JSON shape. Earlier draft link rows
+without embedded-manifest hashes stop with `RECOMBINE_REQUIRED`, never an inferred
+upgrade. Native execution still retains `CrossIndexParentJoinsPending` until its
+report phase actually consumes and pins this contract.
+
+Public synthetic tests establish PDB/publish VB method-chain, rule/tier/span and
+classification parity with the single-index baseline, bidirectional member
+candidates, original supporting fact namespaces, withheld ambiguous joins and
+rejection of changed links/embedded manifests/source identity. These tests do not
+establish native end-to-end workbench acceptance, Windows compiled-site parity,
+all-pages coverage, new semantic source reconciliation or representative scale.
 
 1. Authoritative source/parent/binding validation and resumable .NET phase execution.
 2. Integration of grouped method chains into normal workbench navigation and an
