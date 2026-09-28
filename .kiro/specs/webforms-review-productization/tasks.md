@@ -23,7 +23,28 @@
 - [ ] Consolidate the 450-line focused review reference after compatibility
   wrappers and recovery paths are pinned by tests.
 
-## Private — after public/work stabilization
+## Compiled Web Site productization — planned follow-up
+
+- [x] Project a saved selected-handler compiled proof into readable HTML and
+  exact handoff JSON, separately attached to the application workbench.
+- [x] Preserve partial modernization packets when combined graph admission
+  reaches its budget; never classify incomplete graph paths.
+- [ ] Add published-site input/binding preflight to the normal run configuration.
+- [ ] Implement .NET orchestration for source-plus-compiled runs and immutable
+  attachment to a retained source scan; keep compatibility wrappers.
+- [ ] Integrate compiled evidence into normal packet/docs/handoff navigation
+  across selected/all-page modes without upgrading review-only page verdicts.
+- [ ] Expose per-phase budget usage, missing-input guidance, and resumable gaps.
+- [ ] Avoid full combined-graph materialization while retaining global ambiguity
+  and cross-assembly evidence; validate deterministic parity.
+- [ ] Benchmark eight-times source-size synthetic corpus and representative
+  compiled graph distributions; record disk/time/peak-memory/coverage metrics.
+- [ ] Add dependency-aware retention, durable run location, relocation validation,
+  and dry-run-first cleanup; do not delete the working proof before verification.
+- [ ] Validate the new workflow on an authorized real repository before replacing
+  the current proof wrappers; parallelization follows correctness and scale work.
+
+## Private decision workflow
 
 - [ ] Specify an alias-only `wits-ticket-plan.v1` dry-run schema.
 - [ ] Define grouping, fan-out caps, approval gates, and idempotency receipts.

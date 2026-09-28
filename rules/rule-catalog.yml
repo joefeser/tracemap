@@ -2469,6 +2469,7 @@ rules:
     limitations:
       - This is navigation metadata over retained packet evidence; it does not add scanner facts, infer business intent, generate a BRD, or prove runtime behavior or migration correctness.
       - The optional evidence-docs corpus is referenced read-only and is not copied, modified, truncated, or deleted.
+      - Supplemental compiled paths require exactly one packet source matching both the retained repository ID and commit; same-commit fork evidence cannot be attached by commit alone.
 
   - id: diagnostic.webforms.application-page-handoff.v1
     name: Web Forms application page handoff
@@ -2479,6 +2480,34 @@ rules:
     limitations:
       - Surface association is limited to identities retained in the source modernization packet; project-level data-movement rows are stored once in the application handoff because project association does not prove association to each page.
       - Retained call paths and boundaries are static evidence and do not prove runtime order, branch feasibility, successful binding, or complete transitive closure.
+
+  - id: diagnostic.webforms.compiled-path-handoff.v1
+    name: Private compiled Web Forms path handoff
+    description: Projects one bounded existing-publish path report, its scan manifest, and its publish receipt into ordered local-only HTML and JSON for human review.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - webforms-compiled-path-handoff.v1 private handoff
+      - private compiled-handler HTML review
+    limitations:
+      - This projection does not add scanner facts or turn derived graph edges into extracted facts; facts.ndjson and index.sqlite remain authoritative for retained observations.
+      - A mapless source-to-binary join, source member join, virtual call candidate, or database API candidate remains review-only even when an ordered static path reaches SQL evidence.
+      - Source and DLL hashes identify declared local inputs, not a verified historical build, deployment, event firing, dispatch, branch feasibility, or SQL execution.
+      - HTML and JSON contain private source identities and local provenance and must not be shared as anonymous artifacts.
+      - The local projection accepts at most 256 MiB of path JSON and 250000 gap rows; it retains at most 256 detailed gaps and 128 exact kind/rule count groups, records omissions, and hashes the complete bounded path input.
+      - A zero SQL-query path may have a separate exact-handler database-api candidate path; these are different terminal claims and remain in separate local HTML and JSON outputs.
+      - Saved API report reuse requires both exact input and report-byte hashes; older receipts require an explicit bounded graph recheck, not a new source scan.
+      - Gap details retain available source, span, extractor and evidence identifiers; missing rules or invalid tiers reject the projection.
+  - id: diagnostic.webforms.saved-proof-packet.v1
+    name: Focused saved Web Forms proof packet receipt
+    description: Records exact generator, CLI, index, handoff, and artifact hashes for a new bounded modernization packet composed from an existing focused publish-proof index.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - webforms-saved-proof-packet-receipt.v1 local receipt
+    limitations:
+      - This is a local reporting projection, not a scan, build provenance proof for the published DLLs, or replacement for full-site reports.
+      - The saved combined index must match the compiled handoff hash before and after reporting; repository ID and source commit must match exactly one packet source, and JSON and Markdown artifacts are hashed independently.
+      - Default packet input and traversal bounds may reduce coverage; packet truncation and gaps remain authoritative.
+      - It does not prove source-line identity, runtime execution, branch feasibility, event firing, or SQL execution, and is not a shareable artifact.
   - id: diagnostic.webforms.raw-exact-call-evidence.v1
     name: Private Web Forms raw exact-call evidence audit
     description: Audits a bounded set of selected handlers against retained exact semantic call evidence for local diagnostic review.
@@ -2740,6 +2769,8 @@ rules:
       - webforms-modernization-packet.v1
       - AnalysisGap
     limitations:
+      - A combined index may contain one or more provenance-recorded sources; a single-source combine is not multi-repository coverage. Zero source rows and missing or ambiguous primary Web Forms source identity remain errors.
+      - Combined graph fact, edge, node, or text admission limits retain bounded inventory and source provenance but emit a Tier4 input-limit gap with reduced coverage and truncation; no paths or downstream boundaries are classified from the incomplete graph.
       - Packet rows preserve upstream evidence and deterministic structural connectivity; they do not add extractor conclusions or prove runtime reachability, event firing, postback behavior, validation, authorization, persistence, production usage, or complete workflow coverage.
       - Handler-call rows are limited to call-edge fact IDs already cited by a retained event-flow fact. They preserve only safe callee identity, call kind, provenance, and limitations; they do not retain arguments or prove receiver type, overload resolution, branch execution, or runtime dispatch.
       - Downstream-boundary rows inventory only supported terminal evidence already composed by the bounded legacy-flow path reader; they do not prove successful service, message, configuration, database, or other external interaction.

@@ -72,6 +72,7 @@ public static class MarkdownReportWriter
         AddBuildEnvironmentDiagnostics(lines, result);
         AddAnalyzerCapabilityDiagnostics(lines, result);
         AddCompiledMetadataEvidence(lines, result);
+        AddWebFormsPublishEvidence(lines, result);
 
         lines.Add("");
         lines.Add("## Facts By Type");
@@ -434,6 +435,22 @@ public static class MarkdownReportWriter
 
         lines.Add("");
         return string.Join(Environment.NewLine, lines);
+    }
+
+    private static void AddWebFormsPublishEvidence(List<string> lines, ScanResult result)
+    {
+        if (result.Manifest.WebFormsPublishProvenance is not { } publish)
+            return;
+        var publishFacts = result.Facts.Where(fact => fact.RuleId == RuleIds.LegacyWebFormsPublishMap).ToArray();
+        lines.Add("");
+        lines.Add("## Web Forms Published-Site Evidence");
+        lines.Add("");
+        lines.Add($"- Status: `{publish.Status}`; source files: `{publish.SourceFileCount}`; published files: `{publish.PublishedFileCount}`; pages: `{publish.PageCount}`.");
+        lines.Add($"- Generator SHA-256: `{publish.GeneratorSha256}`; bounded input SHA-256: `{publish.BoundedInputSha256}`.");
+        lines.Add($"- Page maps: `{publishFacts.Count(fact => fact.FactType == FactTypes.WebFormsPublishPageMapped)}`; mapless page candidates: `{publishFacts.Count(fact => fact.FactType == FactTypes.WebFormsPublishPageCandidate)}`; bound assemblies: `{publishFacts.Count(fact => fact.FactType == FactTypes.WebFormsPublishAssemblyBound)}`.");
+        lines.Add($"- Gaps: `{(publish.GapKinds.Count == 0 ? "none" : string.Join(",", publish.GapKinds))}`.");
+        lines.Add("- Published-site binding facts are retained in `facts.ndjson` and `index.sqlite`. Ordered source-to-compiled paths are derived after scan from a combined index; they are not extracted facts and are not included in this scan-time report.");
+        lines.Add("- Mapless source-to-method joins remain Tier3 review-only candidates. Static IL and SQL evidence do not prove page activation, runtime calls, or database execution.");
     }
 
     private static void AddCompiledMetadataEvidence(List<string> lines, ScanResult result)

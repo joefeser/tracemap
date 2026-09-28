@@ -34,10 +34,16 @@ if (!(Test-Path -LiteralPath $proof -PathType Leaf) -or
     !(Test-Path -LiteralPath (Join-Path $SourceSiteRoot 'Web.config') -PathType Leaf)) {
     throw 'WEBFORMS_SNAPSHOT_INPUT_UNAVAILABLE'
 }
+if (!(Test-Path -LiteralPath (Join-Path $PublishedRoot 'bin') -PathType Container)) {
+    if ((Split-Path -Leaf $PublishedRoot).Equals('bin', [StringComparison]::OrdinalIgnoreCase)) {
+        throw 'WEBFORMS_SNAPSHOT_PUBLISHED_ROOT_IS_BIN'
+    }
+    throw 'WEBFORMS_SNAPSHOT_PUBLISHED_BIN_UNAVAILABLE'
+}
 # Pin the public proof implementation so a local deletion of its provenance
 # check cannot be used through this wrapper. Accept exact bytes or Git's
 # checkout-filtered representation of that one public script.
-$expectedProofBlob = '3e9e36237e09a090e3b01076ac6c6e43b19f9402'
+$expectedProofBlob = 'b90c9d81f295fdc06bac4189f7211d4d1c22bc73'
 $proofRawBlob = ([string](& git -C $TraceMapRoot hash-object --no-filters $proof)).Trim()
 $rawValid = $LASTEXITCODE -eq 0 -and $proofRawBlob -cmatch '^[0-9a-f]{40}$'
 $proofFilteredBlob = ([string](& git -C $TraceMapRoot hash-object `
