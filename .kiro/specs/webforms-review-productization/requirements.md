@@ -63,3 +63,29 @@ review/ticket workflow design follows after those surfaces are stable.
 Every newly derived machine-readable artifact records the exact generator
 SHA-256 and a bounded SHA-256 of its actual input. Shareable artifacts hash only
 their privacy-projected input.
+
+### Requirement 7: Compiled Web Site workflow and scale (planned)
+
+1. Make optional published-site inputs part of the normal configured run. Keep
+   source roots, published roots, scan artifacts, and report outputs distinct;
+   never append generated files to the source checkout or commit private DLLs.
+2. Perform source/DLL identity and binding preflight before expensive scanning.
+   Missing compiler provenance, PDBs, maps, or attestation remains an explicit
+   gap or review-only candidate, not an inferred source/binary identity.
+3. Support adding compiled evidence to a retained source scan by creating a
+   new immutable derived run with parent hashes, not modifying the old scan.
+4. Move orchestration/report integration into .NET; preserve the proven
+   PowerShell commands as compatibility wrappers until parity is validated.
+5. Produce one navigable workbench and one documented handoff entry point,
+   with compiled paths available through both. Separate review-only compiled
+   paths from page-chain verdicts and private from shareable outputs.
+6. Report file-admission, retained-input, IL extraction, graph traversal, and
+   output limits separately, with observed usage, configured maxima, phase,
+   and actionable resume guidance. Do not infer missing causes for old runs.
+7. Validate representative large synthetic corpora, including an eight-times
+   source-size scale case, before claiming larger-repository support. Measure
+   elapsed time, disk bytes, peak memory, and retained/truncated evidence;
+   source size alone is not a graph-work predictor. Never raise limits silently.
+8. Keep durable run manifests and relative internal artifact links. Cleanup
+   must be dry-run-first and preserve every dependency of retained handoffs;
+   moving a run requires explicit locator handling and hash verification.

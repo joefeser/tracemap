@@ -10,6 +10,36 @@ not merge wholesale)
 
 Public claim level: hidden
 
+## Selected compiled-proof export closeout (2026-09-27)
+
+- Branch: `codex/webforms-proof-exports`; base: `dev`.
+- Tested code checkpoint: `013317c6ba927566edb8b9d2e6dea882e5692559`.
+- Full .NET suite: 2,326 passed, zero failed/skipped. Focused packet/memory
+  regressions: 54 passed; strengthened combined-limit publication cases: 3
+  passed. Saved-packet, short-view, and application-workbench guards passed.
+- Operator-provided Windows readback at that checkpoint showed a successful
+  saved-proof replay with 41 review-only database-api paths and one selected
+  surface. Screenshots showed the workbench's supplemental link and readable
+  method transitions with per-hop rule/tier/location and expandable identities.
+  This is operator readback, not a coordinator rerun or all-pages validation.
+- The source packet remains reduced/truncated. Saved compiled paths are a
+  separate supplemental artifact, not an upgrade of the page-chain verdict,
+  source-line identity, runtime dispatch, or SQL execution evidence.
+- No private source, DLLs, indexes, paths, or screenshots are checked in.
+- Normal `scan` already supports compiled inputs and binding receipts, but the
+  focused pipeline does not yet offer the complete compiled-site configuration
+  and .NET orchestration contract. The new requirements/tasks describe planned
+  work, not implemented commands or a completed larger-corpus capability.
+- The old 2 GiB combined-index proof-admission ceiling was not a universal scan
+  limit. This proof helper now streams hashes with a 4 GiB index ceiling; the
+  focused pipeline's receipt hashing has a separate 16 GiB artifact ceiling.
+  Packet input admission, IL work, traversal, and output caps are independent.
+  None of these ceilings establishes acceptable memory/time for an eight-times
+  repository. Larger-corpus benchmarks and bounded graph redesign remain open.
+- Retain the working proof and its dependencies until durable archival and
+  reopen/hash verification. Cleanup of unrelated temporary attempts is separate
+  from source/scan/report authority; no automated deletion has been implemented.
+
 ## Completed foundation
 
 - Full application workbench with compact application index and per-page
