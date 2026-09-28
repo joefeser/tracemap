@@ -148,11 +148,58 @@
   equality without parent mutation. The ordering-only second recheck passed
   43/43 before this final broader run. Builds emitted no compiler/analyzer
   warnings. Full regression at the new committed head remains a separate gate.
+- Full regression at committed `758b61ea` subsequently passed 2,472/2,472,
+  zero failed/skipped (7 minutes 10 seconds), before the retention slice below.
 - This advances authoritative attachment input validation, not attachment
-  production. Complete snapshot-membership retention for future source scans,
+  production. At that milestone complete snapshot-membership retention for future source scans,
   compiled-only derived scan production, explicit cross-index parent context,
   unified/indexed reports and all other goal acceptance remain outstanding.
   No private proof dependency, Windows data, PR or merge was touched.
+
+## Complete source snapshot roster retention (2026-09-28)
+
+- Implementation continues on `codex/webforms-native-preflight` in the managed
+  `webforms-native-attachment` checkout. It was created at `758b61ea` while that
+  head's suite ran unchanged; after the suite passed, the prior publish checkout
+  was detached at its verified head and the existing branch transferred here.
+  Old ignored binaries/proof dependencies remain in place; no lane was purged.
+- The scanner returns its complete authoritative snapshot inventory through an
+  additive JSON-ignored execution-only ScanResult property, preserving the
+  original constructor/deconstruction and default artifact schemas. Opt-in
+  `scan --retain-source-snapshot` streams that roster into local NDJSON and a
+  small exact CLI/Core generator, original manifest, source/roster and bounded
+  input hash manifest. The NDJSON roster also has its own exact generator and
+  bounded framed-source-input header, validated before yielding membership.
+  No source snippets, binary copies or derived parent facts
+  are added. Native fresh execution requests and pins both artifacts.
+- Parent preflight pins the optional complete pair; a partial pair fails. Source
+  validation prefers the retained complete membership, checks original scan and
+  artifact identities/count/bytes, and applies current admission budgets. An
+  actual project-scoped parent with uninventoried root semantic metadata validates
+  without modifying its facts/index. Legacy exact-inventory fallback remains;
+  incomplete older snapshots still refuse guessed membership.
+- Configured file/source/roster limit values are validated before scanning;
+  actual member/byte admission occurs during retention, after scanning. Roster
+  writing/reading is streamed, with a 32,768-character member line bound covering
+  escaped relative paths. These caps are not a global memory or eight-times scale
+  claim. Fresh completed checkpoints verify roster/source identity; completed
+  fresh resume retains its prior contract and does not rehash current unpinned
+  source or rerun analysis. Tool/input/artifact tampering still rejects resume.
+- Initial focused validation passed 84/84 (49 seconds), including real scoped
+  retention, native fresh/resume, ordinary-scan fact/identity parity, parent
+  immutability, generator/input/hash tamper, typed limits and bounded reader cases.
+  CLI build passed with zero compiler/analyzer warnings. Final broader validation
+  passed 227/227, zero failed/skipped (1 minute 8 seconds), after typed retention
+  diagnostics, escaped-line bounds, incomplete/directory pair refusal and the
+  roster's independent generator/input header were added. The denominator includes
+  snapshot/retention, native preflight/input/execution/preparation, scanner, CLI,
+  output transaction and execution-receipt regressions. Diff and private-path
+  guards passed. Full regression at this new committed head is a separate gate;
+  the prior 2,472-test result does not carry forward to these changes.
+- Compiled-only attachment production, explicit cross-index parent joins,
+  unified grouped/indexed reports, Claude guidance, all-pages receipt partitioning,
+  public compiled-site parity, scale/retention/relocation and final authorized
+  private Windows validation remain outstanding. No PR or merge occurred.
 
 ## Native fresh execution and resume (2026-09-28)
 

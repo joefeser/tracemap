@@ -279,6 +279,16 @@ public static class WebFormsReviewPreflightCommand
         {
             foreach (var name in new[] { "scan-manifest.json", "facts.ndjson", "index.sqlite", "report.md", "logs/analyzer.log" })
                 await Add("parent-" + name, Child(config.ParentScanRoot, name), name == "scan-manifest.json" ? 4_194_304 : config.Budgets.MaxRetainedArtifactBytes);
+            var snapshotManifest = Child(config.ParentScanRoot, SourceSnapshotRetention.ManifestName);
+            var snapshotRoster = Child(config.ParentScanRoot, SourceSnapshotRetention.RosterName);
+            if (Path.Exists(snapshotManifest) != Path.Exists(snapshotRoster)
+                || Path.Exists(snapshotManifest) && (!File.Exists(snapshotManifest) || !File.Exists(snapshotRoster)))
+                throw Fail("PARENT_SOURCE_SNAPSHOT_PAIR_INCOMPLETE");
+            if (File.Exists(snapshotManifest))
+            {
+                await Add("parent-" + SourceSnapshotRetention.ManifestName, snapshotManifest, 1_048_576);
+                await Add("parent-" + SourceSnapshotRetention.RosterName, snapshotRoster, config.Budgets.MaxRetainedArtifactBytes);
+            }
             var bytes = await ReadSmallAsync(Child(config.ParentScanRoot, "scan-manifest.json"), 4_194_304, cancellationToken);
             if (Digest(bytes) != inputs.Single(input => input.Role == "parent-scan-manifest.json").Sha256) throw Fail("INPUT_CHANGED");
             using var parent = JsonDocument.Parse(bytes);

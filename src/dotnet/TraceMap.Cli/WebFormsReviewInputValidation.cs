@@ -64,14 +64,14 @@ internal static class WebFormsReviewInputValidation
             try
             {
                 (parent, parentFacts) = await ValidateParentAsync(preflight, git, cancellationToken);
-                ValidateRetainedSourceSnapshot(preflight, parent, cancellationToken);
+                await ValidateCompleteOrLegacySnapshotAsync(preflight, parent, cancellationToken);
             }
             catch (SqliteException exception) when (exception.SqliteErrorCode == 9 && cancellationToken.IsCancellationRequested)
             { throw new OperationCanceledException(cancellationToken); }
             gaps.Add("RetainedSnapshotScopeNotFullCurrentInventory");
         }
         await RecheckAsync(preflight, cancellationToken);
-        if (parent is not null) ValidateRetainedSourceSnapshot(preflight, parent, cancellationToken);
+        if (parent is not null) await ValidateCompleteOrLegacySnapshotAsync(preflight, parent, cancellationToken);
         var gitAfter = GitMetadataProvider.Detect(config.SourceRoot);
         if (gitAfter.CommitSha != git.CommitSha || gitAfter.RemoteUrl != git.RemoteUrl ||
             gitAfter.GitRootPath != git.GitRootPath || gitAfter.ScanRootRelativePath != git.ScanRootRelativePath)
@@ -81,6 +81,33 @@ internal static class WebFormsReviewInputValidation
             gaps.ToArray());
 
         string[] Paths(string role) => preflight.Inputs.Where(input => input.Role == role).Select(input => input.Path).ToArray();
+    }
+
+    internal static async Task<SourceSnapshotInspection> ValidateCompleteOrLegacySnapshotAsync(
+        WebFormsReviewPreflightManifest preflight, ScanManifest parent, CancellationToken token)
+    {
+        var manifestInput = preflight.Inputs.SingleOrDefault(item => item.Role == "parent-" + SourceSnapshotRetention.ManifestName);
+        var rosterInput = preflight.Inputs.SingleOrDefault(item => item.Role == "parent-" + SourceSnapshotRetention.RosterName);
+        if (manifestInput is null && rosterInput is null) return ValidateRetainedSourceSnapshot(preflight, parent, token);
+        if (manifestInput is null || rosterInput is null) throw Fail("PARENT_SOURCE_SNAPSHOT_PAIR_INCOMPLETE");
+        var retained = await SourceSnapshotRetention.ReadManifestAsync(manifestInput, rosterInput,
+            preflight.Inputs.Single(item => item.Role == "parent-scan-manifest.json"), parent, token);
+        var availableBytes = preflight.Configuration.Budgets.MaxTotalHashBytes - preflight.Inputs.Sum(item => item.Bytes);
+        if (availableBytes < 1) throw Fail("PARENT_SOURCE_HASH_BYTES_LIMIT");
+        try
+        {
+            var observed = SourceSnapshotInspector.InspectOrderedInventory(preflight.Configuration.SourceRoot,
+                SourceSnapshotRetention.ReadRoster(rosterInput, token, retained),
+                Math.Min(preflight.Configuration.Budgets.MaxParentFacts, retained.MaxFiles),
+                Math.Min(availableBytes, retained.MaxSourceBytes), token);
+            if (observed.Digest != parent.SourceSnapshotDigest || observed.FileCount != retained.FileCount
+                || observed.Bytes != retained.SourceBytes) throw Fail("PARENT_SOURCE_SNAPSHOT_MISMATCH");
+            return observed;
+        }
+        catch (SourceSnapshotException) { throw Fail("PARENT_SOURCE_SNAPSHOT_CHANGED"); }
+        catch (SourceInventoryException) { throw Fail("PARENT_SOURCE_INPUT_UNAVAILABLE"); }
+        catch (InvalidOperationException exception) when (exception.Message.StartsWith("SourceSnapshot", StringComparison.Ordinal))
+        { throw SnapshotFailure(exception); }
     }
 
     // Call only after the complete parent index/NDJSON validation. A retained
@@ -120,14 +147,7 @@ internal static class WebFormsReviewInputValidation
         catch (SourceSnapshotException) { throw Fail("PARENT_SOURCE_SNAPSHOT_CHANGED"); }
         catch (SourceInventoryException) { throw Fail("PARENT_SOURCE_INPUT_UNAVAILABLE"); }
         catch (InvalidOperationException exception) when (exception.Message.StartsWith("SourceSnapshot", StringComparison.Ordinal))
-        {
-            throw Fail(exception.Message switch
-            {
-                "SourceSnapshotInputLimit" => "PARENT_SOURCE_INPUT_LIMIT",
-                "SourceSnapshotLinkedInput" => "PARENT_SOURCE_LINKED_INPUT",
-                _ => "PARENT_SOURCE_INVENTORY_INVALID"
-            });
-        }
+        { throw SnapshotFailure(exception); }
 
         IEnumerable<FileInventoryItem> Inventory()
         {
@@ -154,6 +174,13 @@ internal static class WebFormsReviewInputValidation
             }
         }
     }
+
+    private static InvalidOperationException SnapshotFailure(InvalidOperationException exception) => Fail(exception.Message switch
+    {
+        "SourceSnapshotInputLimit" => "PARENT_SOURCE_INPUT_LIMIT",
+        "SourceSnapshotLinkedInput" => "PARENT_SOURCE_LINKED_INPUT",
+        _ => "PARENT_SOURCE_INVENTORY_INVALID"
+    });
 
     internal static async Task RecheckAsync(WebFormsReviewPreflightManifest preflight, CancellationToken token)
     {

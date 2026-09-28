@@ -101,7 +101,7 @@ The run owns these paths:
 run-manifest.json                 immutable preflight/input contract
 checkpoints/0001.json              scan-started checkpoint
 checkpoints/0002.json              completed/failed/cancelled checkpoint
-attempts/<owned-id>/scan/          normal five scan artifacts plus scan receipt
+attempts/<owned-id>/scan/          five scan artifacts, receipt, complete snapshot roster/manifest
 .native-run.lock                   exclusive process lock, not a discovery hint
 ```
 
@@ -112,6 +112,26 @@ pin every output file, retain the scanner's actual source snapshot, and pass the
 same manifest/index/NDJSON validation used for retained parents. There is no
 successful checkpoint for missing, changed, oversized or inconsistent output.
 Checkpoint SHA values are local integrity checks, not authenticated signatures.
+
+Native fresh runs explicitly retain `source-snapshot.local.ndjson` and
+`source-snapshot-manifest.local.json`. The roster is the scanner's authoritative
+snapshot membership, including semantic metadata absent from `FileInventoried`
+facts. It contains relative paths, kinds and sizes, never source snippets. The
+roster's first line records its own exact CLI generator and the SHA-256 of the
+scanner's bounded framed source input. Its small companion manifest pins the
+exact CLI/Core generators, original scan-manifest bytes,
+snapshot digest, roster hash/count/bytes and declared limits with a bounded-input
+SHA-256. The roster is streamed on writing and reading; it is not a giant JSON
+array. Both artifacts are private local evidence, not shareable or signed proof.
+
+Normal `scan` output is unchanged unless `--retain-source-snapshot` is requested.
+Its explicit retention caps default to 1,000,000 files, 64 GiB raw source bytes
+and 64 MiB roster bytes. Native execution supplies its configured parent-fact,
+hash-byte and retained-artifact bounds instead. Retention does not bound overall
+Roslyn/scanner memory or prove eight-times scale acceptance. Configured limit values
+are validated before scanning; actual roster/source usage is admitted during
+retention, after scanning. Admission failures retain no completed native checkpoint.
+Rosters admit lines up to 32,768 characters, including escaped relative names.
 Execution also pins distribution DLL/native/dependency/runtime-config bytes and
 the .NET runtime version. Changes reject resume, even if the CLI DLL is unchanged.
 This bounded distribution inventory admits 512 code/config files (256 MiB each,
@@ -298,8 +318,13 @@ the immutable index and recomputes current bytes with the scanner's exact snapsh
 framing, twice around validation. The original digest must match exactly. The
 ordered stream is bounded by `maxParentFacts` and the remaining `maxTotalHashBytes`
 per hash pass; it rejects unsafe, duplicate, linked, missing or changed members.
-It does not discover extra files or rerun semantic extraction. A retained roster
-that omitted semantic metadata inputs fails with
+It does not discover extra files or rerun semantic extraction. When the complete
+retention pair is present, preflight pins both files, and validation checks their
+scan identity, original manifest hash, roster hash, input digest and actual
+membership count/bytes before accepting snapshot equality. A missing member of
+the pair is an error, never an implicit downgrade to the older inventory path.
+An older parent without the pair still uses only retained `FileInventoried` rows.
+If those rows omitted semantic metadata inputs, it fails with
 `PARENT_SOURCE_SNAPSHOT_MISMATCH_OR_INCOMPLETE_INVENTORY`; those members are not
 guessed. An exact match establishes only the retained snapshot's declared scope,
 not full current-repository coverage, clean Git state, historical build identity

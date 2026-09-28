@@ -315,6 +315,55 @@ public sealed class WebFormsReviewInputValidationTests
         Assert.Equal(before.OrderBy(pair => pair.Key), fixture.ParentHashes().OrderBy(pair => pair.Key));
     }
 
+    [Fact]
+    public async Task Complete_retained_roster_admits_scoped_parent_without_inventing_missing_inventory_facts()
+    {
+        using var fixture = new Fixture();
+        Directory.CreateDirectory(Path.Combine(fixture.Source, "pages"));
+        File.WriteAllText(Path.Combine(fixture.Source, "pages", "Scoped.vb"), "Public Class Scoped\nEnd Class\n");
+        File.WriteAllText(Path.Combine(fixture.Source, "pages", "Scoped.vbproj"),
+            "<Project Sdk=\"Microsoft.NET.Sdk\"><PropertyGroup><TargetFramework>net10.0</TargetFramework></PropertyGroup></Project>");
+        File.WriteAllText(Path.Combine(fixture.Source, "Directory.Build.props"), "<Project />");
+        fixture.Git("add", ".");
+        fixture.Git("commit", "-qm", "public complete roster");
+        fixture.Config = fixture.Config with { SourceCommitSha = GitMetadataProvider.Detect(fixture.Source).CommitSha };
+        await fixture.CreateParent("--project", "pages/Scoped.vbproj", "--retain-source-snapshot");
+        var before = fixture.ParentHashes();
+        var plan = await fixture.Plan();
+        Assert.Contains(plan.Inputs, item => item.Role == "parent-" + SourceSnapshotRetention.ManifestName);
+        Assert.Contains(plan.Inputs, item => item.Role == "parent-" + SourceSnapshotRetention.RosterName);
+        var validated = await WebFormsReviewInputValidation.ValidateAsync(plan);
+        Assert.Equal("retained-parent-source-snapshot-verified", validated.SourceState);
+        var roster = SourceSnapshotRetention.ReadRoster(plan.Inputs.Single(item =>
+            item.Role == "parent-" + SourceSnapshotRetention.RosterName), default).ToArray();
+        Assert.Contains(roster, item => item.RelativePath == "Directory.Build.props");
+        using (var connection = fixture.OpenIndex())
+        using (var command = connection.CreateCommand())
+        {
+            command.CommandText = "select count(*) from facts where fact_type=$type and file_path='Directory.Build.props'";
+            command.Parameters.AddWithValue("$type", FactTypes.FileInventoried);
+            Assert.Equal(0L, command.ExecuteScalar());
+        }
+        Assert.Equal(before.OrderBy(pair => pair.Key), fixture.ParentHashes().OrderBy(pair => pair.Key));
+    }
+
+    [Theory]
+    [InlineData("manifest")]
+    [InlineData("roster")]
+    [InlineData("directory")]
+    public async Task Partial_or_directory_snapshot_pairs_never_downgrade_to_legacy_inventory(string kind)
+    {
+        using var fixture = new Fixture();
+        await fixture.CreateParent("--retain-source-snapshot");
+        var path = Path.Combine(fixture.Parent, kind == "manifest" ? SourceSnapshotRetention.ManifestName : SourceSnapshotRetention.RosterName);
+        File.Delete(path);
+        if (kind == "directory") Directory.CreateDirectory(path);
+        var before = fixture.ParentHashes();
+        var error = await Assert.ThrowsAsync<WebFormsReviewPreflightCommand.PreflightException>(() => fixture.Plan());
+        Assert.Equal("WEBFORMS_PREFLIGHT_PARENT_SOURCE_SNAPSHOT_PAIR_INCOMPLETE", error.Message);
+        Assert.Equal(before.OrderBy(pair => pair.Key), fixture.ParentHashes().OrderBy(pair => pair.Key));
+    }
+
     private sealed class Fixture : IDisposable
     {
         public string Root { get; } = WebFormsReviewPreflightCommand.PhysicalPath(Path.Combine(Path.GetTempPath(), "tracemap input gate #&%-" + Guid.NewGuid().ToString("N")));

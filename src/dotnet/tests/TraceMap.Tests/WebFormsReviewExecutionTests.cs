@@ -39,6 +39,8 @@ public sealed class WebFormsReviewExecutionTests
         var manifest = JsonSerializer.Deserialize<ScanManifest>(File.ReadAllText(Path.Combine(scan, "scan-manifest.json")), JsonOptions)!;
         Assert.NotNull(manifest.CompiledInputProvenance);
         Assert.NotNull(manifest.IlBodyProvenance);
+        Assert.Contains(checkpoint.Artifacts, item => item.RelativePath.EndsWith("/" + SourceSnapshotRetention.ManifestName, StringComparison.Ordinal));
+        Assert.Contains(checkpoint.Artifacts, item => item.RelativePath.EndsWith("/" + SourceSnapshotRetention.RosterName, StringComparison.Ordinal));
         Assert.Empty(manifest.Projects);
         var facts = File.ReadLines(Path.Combine(scan, "facts.ndjson")).Select(line => JsonSerializer.Deserialize<CodeFact>(line, JsonOptions)!).ToArray();
         Assert.DoesNotContain(facts, fact => fact.Evidence.FilePath.StartsWith("Unselected/", StringComparison.Ordinal));
