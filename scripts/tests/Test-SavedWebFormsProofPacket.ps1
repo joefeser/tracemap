@@ -13,16 +13,17 @@ $index = Join-Path $proof 'combined-ilwork-30000000.sqlite'
 [IO.File]::WriteAllText($index, 'public-mocked-index')
 $indexSha = (Get-FileHash $index -Algorithm SHA256).Hash.ToLowerInvariant()
 $handoff = Join-Path $proof 'public-handoff.json'
-$input = @{ schemaVersion = 'webforms-compiled-path-handoff.v1'; ruleId = 'diagnostic.webforms.compiled-path-handoff.v1'; claimLevel = 'review-only-static-evidence'; provenance = @{ combinedIndex = 'combined-ilwork-30000000.sqlite'; sourceCommitSha = ('a' * 40); inputSha256 = @{ combinedIndex = $indexSha } } }
+$input = @{ schemaVersion = 'webforms-compiled-path-handoff.v1'; ruleId = 'diagnostic.webforms.compiled-path-handoff.v1'; claimLevel = 'review-only-static-evidence'; provenance = @{ combinedIndex = 'combined-ilwork-30000000.sqlite'; sourceCommitSha = ('a' * 40); sourceRepositorySha256 = ('b' * 64); packetRepositoryId = ('repository-' + ('c' * 24)); inputSha256 = @{ combinedIndex = $indexSha } } }
 [IO.File]::WriteAllText($handoff, ($input | ConvertTo-Json -Depth 10))
 $global:savedPacketTestInvocations = 0
+$global:savedPacketTestRepository = 'repository-' + ('c' * 24)
 function dotnet {
     $global:savedPacketTestInvocations++
     if ($args -contains 'webforms-modernization') {
         $outPosition = [Array]::IndexOf($args, '--out')
         $output = [string]$args[$outPosition + 1]
         [void][IO.Directory]::CreateDirectory($output)
-        [IO.File]::WriteAllText((Join-Path $output 'webforms-modernization.json'), ((@{ schemaVersion = 'webforms-modernization-packet.v1'; coverage = 'reduced'; surfaces = @(@{ surfaceId = 'public-page' }); summary = @{ truncated = $true }; sources = @(@{ commitSha = ('a' * 40) }) } | ConvertTo-Json -Depth 10)))
+        [IO.File]::WriteAllText((Join-Path $output 'webforms-modernization.json'), ((@{ schemaVersion = 'webforms-modernization-packet.v1'; coverage = 'reduced'; surfaces = @(@{ surfaceId = 'public-page' }); summary = @{ truncated = $true }; sources = @(@{ commitSha = ('a' * 40); repositoryId = $global:savedPacketTestRepository }) } | ConvertTo-Json -Depth 10)))
         [IO.File]::WriteAllText((Join-Path $output 'webforms-modernization.md'), 'public-mocked-report')
     } elseif ($args[0] -ne 'build') { throw 'Wrapper attempted a scan, publish, or combine' }
     $global:LASTEXITCODE = 0
@@ -38,11 +39,19 @@ try {
         $receipt.provenance.cliSha256 -ne (Get-FileHash $cli -Algorithm SHA256).Hash.ToLowerInvariant() -or
         $receipt.provenance.generatorSha256 -ne (Get-FileHash (Join-Path $scripts 'New-SavedWebFormsProofPacket.ps1') -Algorithm SHA256).Hash.ToLowerInvariant() -or
         @($receipt.artifacts).Count -ne 2) { throw 'Saved packet receipt lost exact generator or input provenance' }
+    foreach ($artifact in $receipt.artifacts) {
+        if ($artifact.sha256 -cne (Get-FileHash (Join-Path (Split-Path $receiptPath -Parent) $artifact.path)).Hash.ToLowerInvariant()) { throw 'Saved packet artifact hash invalid' }
+    }
+    $global:savedPacketTestRepository = 'repository-' + ('d' * 24)
+    $rejected = $false
+    try { & (Join-Path $scripts 'New-SavedWebFormsProofPacket.ps1') -ProofRoot $proof -CompiledPathHandoffPath $handoff | Out-Null }
+    catch { $rejected = $_.Exception.Message -eq 'WEBFORMS_SAVED_PACKET_SOURCE_MISMATCH' }
+    if (!$rejected) { throw 'Same commit in different repository was admitted' }
     [IO.File]::WriteAllText($index, 'changed-index')
     $rejected = $false
     try { & (Join-Path $scripts 'New-SavedWebFormsProofPacket.ps1') -ProofRoot $proof -CompiledPathHandoffPath $handoff | Out-Null }
     catch { $rejected = $_.Exception.Message -eq 'WEBFORMS_SAVED_PACKET_INDEX_HASH_MISMATCH' }
-    if (!$rejected -or $global:savedPacketTestInvocations -ne 2) { throw 'Changed saved index was admitted' }
+    if (!$rejected -or $global:savedPacketTestInvocations -ne 4) { throw 'Changed saved index was admitted' }
     Write-Output 'savedWebFormsProofPacketPublicTests=passed'
 }
-finally { Remove-Item Function:\dotnet -ErrorAction SilentlyContinue; Remove-Variable savedPacketTestInvocations -Scope Global -ErrorAction SilentlyContinue; Remove-Item -LiteralPath $temp -Recurse -Force }
+finally { Remove-Item Function:\dotnet -ErrorAction SilentlyContinue; Remove-Variable savedPacketTestInvocations,savedPacketTestRepository -Scope Global -ErrorAction SilentlyContinue; Remove-Item -LiteralPath $temp -Recurse -Force }

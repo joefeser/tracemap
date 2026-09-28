@@ -4,7 +4,8 @@ param(
     [string]$PacketPath = '',
     [string]$OutputRoot = '',
     [string]$ConfigPath = '',
-    [switch]$FromSavedProof
+    [switch]$FromSavedProof,
+    [switch]$RecheckApi
 )
 
 # Short entry point: saved proof -> readable paths -> fresh private workbench.
@@ -17,6 +18,7 @@ $handoffs = [Collections.Generic.List[string]]::new()
 $selectedProofRoot = ''
 $replayArgs = @{}
 if ($ProofRoot) { $replayArgs.ProofRoot = $ProofRoot }
+if ($RecheckApi) { $replayArgs.RecheckApi = $true }
 & (Join-Path $PSScriptRoot 'Replay-ExistingWebFormsCompiledPathReviews.ps1') @replayArgs |
     ForEach-Object {
         $line = [string]$_

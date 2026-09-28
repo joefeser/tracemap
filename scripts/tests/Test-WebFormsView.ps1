@@ -6,7 +6,8 @@ $temp = Join-Path ([IO.Path]::GetTempPath()) ('tracemap-view-test-' + [Guid]::Ne
 try {
     [IO.File]::Copy($script, (Join-Path $temp 'wview.ps1'))
     [IO.File]::WriteAllText((Join-Path $temp 'Replay-ExistingWebFormsCompiledPathReviews.ps1'), @'
-param([string]$ProofRoot)
+param([string]$ProofRoot, [switch]$RecheckApi)
+if ($RecheckApi) { Write-Output 'publicRecheckApi=forwarded' }
 if ($ProofRoot -eq 'missing') { Write-Output 'compiledReplaySqlProjection=existing'; return }
 Write-Output 'compiledReplayProofRoot=public-proof'
 Write-Output 'compiledPathReviewHandoff=public-api.json'
@@ -28,8 +29,9 @@ param([string]$ProofRoot, [string]$CompiledPathHandoffPath)
 if ($ProofRoot -ne 'public-proof' -or $CompiledPathHandoffPath -ne 'public-api.json') { throw 'Wrong saved proof input' }
 Write-Output 'savedProofPacket=public-packet.json'
 '@)
-    $savedResult = @(& (Join-Path $temp 'wview.ps1') -FromSavedProof -OutputRoot public-output -ConfigPath public-config.json)
-    if (@($savedResult | Where-Object { $_ -eq 'publicView=passed' }).Count -ne 1) { throw 'View did not use the saved proof packet' }
+    $savedResult = @(& (Join-Path $temp 'wview.ps1') -FromSavedProof -RecheckApi -OutputRoot public-output -ConfigPath public-config.json)
+    if (@($savedResult | Where-Object { $_ -eq 'publicView=passed' }).Count -ne 1 -or
+        $savedResult -cnotcontains 'publicRecheckApi=forwarded') { throw 'View did not use the saved proof packet or forward explicit recheck' }
     Write-Output 'webFormsViewPublicTests=passed'
 }
 finally { Remove-Item -LiteralPath $temp -Recurse -Force }

@@ -46,6 +46,26 @@ Public claim level: hidden
 
 ## Completed foundation
 
+### PR #796 consolidated review repair
+
+- SQL replay now always emits a fresh handoff on repeat runs. A missing or
+  ambiguous optional API handler retains the gap proof instead of failing it.
+- API receipt reuse binds exact report bytes and recomputes the saved input
+  digest. Old receipts stop with an explicit recheck-required category;
+  `wview.ps1 -FromSavedProof -RecheckApi` regenerates the graph report without
+  scanning, publishing, or collecting again.
+- Handoffs validate scan-source repository metadata and retain repository
+  identity hashes. Saved packets require repository ID plus commit agreement.
+- Gap rules/tiers are validated; available source IDs, spans, extractor scope,
+  support IDs, and candidate accounting survive projection. JSON and Markdown
+  packet artifacts each have an actual SHA-256 receipt entry.
+- Public publish end-to-end guard passed with a stable checkout, including a
+  missing-handler gap proof. Public handoff, saved-packet, short-view,
+  workbench, and packet-log guards passed. Earlier full .NET checkpoint remains
+  2,326/2,326; this repair changes PowerShell projection/orchestration only.
+- Larger-corpus performance and native .NET orchestration remain planned, not
+  acceptance claims for this proof closeout.
+
 - Full application workbench with compact application index and per-page
   evidence handoffs.
 - Explicit `P / F / S` call accounting, normalized source sites, evidence

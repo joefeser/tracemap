@@ -13,6 +13,8 @@ if ($handoff.schemaVersion -cne 'webforms-compiled-path-handoff.v1' -or
     $handoff.ruleId -cne 'diagnostic.webforms.compiled-path-handoff.v1' -or
     $handoff.claimLevel -cne 'review-only-static-evidence' -or
     [string]$handoff.provenance.sourceCommitSha -cnotmatch '^[0-9a-f]{40}$' -or
+    [string]$handoff.provenance.sourceRepositorySha256 -cnotmatch '^[0-9a-f]{64}$' -or
+    [string]$handoff.provenance.packetRepositoryId -cnotmatch '^repository-[0-9a-f]{24}$' -or
     $indexName -cnotmatch '^combined(?:-ilwork-[0-9]+)?\.sqlite$' -or
     [string]$handoff.provenance.inputSha256.combinedIndex -cnotmatch '^[0-9a-f]{64}$') { throw 'WEBFORMS_SAVED_PACKET_HANDOFF_INVALID' }
 $indexPath = Join-Path $ProofRoot $indexName
@@ -40,14 +42,17 @@ $packetFile = Get-Item -LiteralPath $packetPath
 if ($packetFile.Length -le 0 -or $packetFile.Length -gt 128MB) { throw 'WEBFORMS_SAVED_PACKET_OUTPUT_LIMIT' }
 $packet = [IO.File]::ReadAllText($packetPath) | ConvertFrom-Json -Depth 100
 if ($packet.schemaVersion -cne 'webforms-modernization-packet.v1' -or
-    @($packet.sources | Where-Object { [string]$_.commitSha -ceq [string]$handoff.provenance.sourceCommitSha }).Count -ne 1) { throw 'WEBFORMS_SAVED_PACKET_SOURCE_MISMATCH' }
+    @($packet.sources | Where-Object { [string]$_.commitSha -ceq [string]$handoff.provenance.sourceCommitSha -and
+        [string]$_.repositoryId -ceq [string]$handoff.provenance.packetRepositoryId }).Count -ne 1) { throw 'WEBFORMS_SAVED_PACKET_SOURCE_MISMATCH' }
 $boundedInputSha = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes("index:$indexSha`nhandoff:$handoffSha`n"))).ToLowerInvariant()
 $receipt = [ordered]@{
     schemaVersion = 'webforms-saved-proof-packet-receipt.v1'; ruleId = 'diagnostic.webforms.saved-proof-packet.v1'; claimLevel = 'local-only-focused-static-projection'
     provenance = [ordered]@{ generatorSha256 = (Get-FileHash -LiteralPath $PSCommandPath -Algorithm SHA256).Hash.ToLowerInvariant(); cliSha256 = $cliSha; boundedInputSha256 = $boundedInputSha; inputSha256 = [ordered]@{ combinedIndex = $indexSha; compiledHandoff = $handoffSha }; canonicalization = 'index-and-handoff-sha256-labeled-lf-v1'; sourceCommitSha = [string]$handoff.provenance.sourceCommitSha }
-    artifacts = @('webforms-modernization.json', 'webforms-modernization.md' | ForEach-Object { [ordered]@{ path = "packet/$_"; sha256 = (Get-FileHash -LiteralPath (Join-Path $packetDirectory $_) -Algorithm SHA256).Hash.ToLowerInvariant() } })
+    artifacts = @(@('webforms-modernization.json', 'webforms-modernization.md') | ForEach-Object { [ordered]@{ path = "packet/$_"; sha256 = (Get-FileHash -LiteralPath (Join-Path $packetDirectory $_) -Algorithm SHA256).Hash.ToLowerInvariant() } })
     limitations = @('Only the saved focused publish-proof corpus is represented, not the full-site or multi-repository scan.', 'Default packet bounds may reduce coverage; no scan, combine, publish, runtime, or SQL execution claim is made.')
 }
+$receipt.provenance.sourceRepositorySha256 = [string]$handoff.provenance.sourceRepositorySha256
+$receipt.provenance.packetRepositoryId = [string]$handoff.provenance.packetRepositoryId
 [IO.File]::WriteAllText((Join-Path $runRoot 'packet.receipt.local.json'), (($receipt | ConvertTo-Json -Depth 20) + "`n"), [Text.UTF8Encoding]::new($false))
 Write-Output 'savedProofPacketScope=focused-saved-corpus-not-full-site'
 Write-Output "savedProofPacketCoverage=$($packet.coverage)"
