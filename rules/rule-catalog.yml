@@ -2541,6 +2541,22 @@ rules:
       - Existing public packet semantics are preserved; parity with every legacy PowerShell presentation feature and a real private Windows compiled site remains a separate gate.
       - Configurable graph admission, root, traversal, projection and aggregate rendered-output bounds fail closed. The combined graph still materializes after bounded admission; representative eight-times time, disk and peak-memory acceptance is unverified.
       - All-page mode remains limited by admitted page packet and receipt membership; complete receipt partitioning and all-pages compiled coverage are explicitly pending. No dependency cleanup, relocation or external publication occurs.
+  - id: workflow.webforms.bounded-evidence-query.v1
+    name: Private indexed native Web Forms evidence retrieval
+    description: Losslessly indexes both retained handoff JSON documents as ordered tokens and retrieves exact bounded JSON Pointer slices from a completed hash-pinned run without loading whole documents, scanning source or invoking an AI model.
+    evidenceTier: Tier2Structural
+    emits:
+      - webforms-review-evidence-index.v1 local-only SQLite metadata
+      - webforms-review-evidence-slice.v1 local-only stdout JSON
+    limitations:
+      - Actual CLI generator, exact handoff input hashes, node count and parser/storage bounds bind the index metadata; the completed checkpoint pins the actual database bytes. These are local integrity commitments, not signed provenance or build authenticity.
+      - Token indexing preserves original array/object order and complete scalar values, not source snippets. It admits at most 2000000 nodes, 64 JSON levels, 4096-character property names and a 1 MiB pending token buffer under aggregate report-input and retained-index byte caps. Failed indexing leaves an unadmitted report attempt.
+      - Queries consume only a completed owned journal and its checkpointed index. They reject changed bytes, sidecars, invalid pointers and unbounded selectors; no arbitrary SQL, source path, repair, report regeneration or fallback discovery is accepted.
+      - The query does not revalidate external source, published DLLs, parent scans or every other report output. Success proves retained index integrity only, not current-source validity, runtime SQL, full-site coverage or source-line identity.
+      - Response bounds are 128 KiB, 2048 nodes, depth 0-8 and 1-50 children per container. Omitted children and retrieval truncation are explicit and independent of packet/graph coverage. Oversized scalar values or recursive slices fail closed without partial stdout; refine the exact pointer rather than truncating evidence text.
+      - Exact current query generator, index/run/checkpoint/context hashes and selected response digest participate in each slice bounded-input commitment. All paths, symbols, values and input fingerprints remain private; no shareable projection is supplied.
+      - Whole-index hash verification streams complete retained index bytes before and after each query. Bounded memory is not constant-time retrieval, representative eight-times acceptance or a performance benchmark.
+      - The updated Claude guidance uses read-only deterministic retrieval only. Existing PowerShell launch and session wrappers remain legacy-only; native agent launching, permissions and real work-machine acceptance are separate gates.
   - id: workflow.compiled-source-attachment.v1
     name: Compiled-only attachment context and limitations
     description: Records exact Core generator, bounded input, parent manifest/index hashes and verified retained source snapshot for a new compiled-only scan using existing metadata, IL, portable PDB and publish receipt policies.

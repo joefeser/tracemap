@@ -318,6 +318,46 @@ public sealed class WebFormsReviewExecutionTests
         Assert.NotEmpty(handoff.Packet.EventChains);
         Assert.True(handoff.RequestedCompiledRoots > 0);
         Assert.Equal(handoff.PacketSha256, WebFormsReviewReportExecution.CanonicalHash(handoff.Packet, 268_435_456, CancellationToken.None));
+        Assert.Equal("review-evidence.sqlite", handoff.EvidenceIndexRelativePath);
+        Assert.Contains(checkpoint.Artifacts, artifact => artifact.RelativePath.EndsWith("/review-evidence.sqlite", StringComparison.Ordinal));
+        fixture.Output.GetStringBuilder().Clear();
+        Assert.Equal(0, await TraceMapCommand.RunAsync(["webforms-review", "query", "--run", fixture.Run,
+            "--pointer", "/packet/eventChains/0", "--depth", "2", "--limit", "50"], fixture.Output, fixture.Error));
+        var slice = JsonSerializer.Deserialize<WebFormsEvidenceResponse>(fixture.Output.ToString(), JsonOptions)!;
+        Assert.Equal("webforms-review-evidence-slice.v1", slice.SchemaVersion);
+        Assert.Equal("Lookup.Names_Init(Object,System.EventArgs)", slice.Result.Children.Single(item => item.Pointer.EndsWith("/handlerSymbol", StringComparison.Ordinal)).Value!.Value.GetString());
+        Assert.Equal(Hash(typeof(WebFormsReviewExecutionCommand).Assembly.Location), slice.GeneratorSha256);
+        Assert.Equal(Hash(Path.Combine(report, "review-evidence.sqlite")), slice.IndexSha256);
+        Assert.Equal(4, fixture.LastCheckpoint().Sequence);
+    }
+
+    [Theory]
+    [InlineData("changed-index")]
+    [InlineData("sidecar")]
+    [InlineData("external-inputs-unavailable")]
+    public async Task Query_only_consumes_the_checkpointed_index_and_never_repairs_it(string scenario)
+    {
+        using var fixture = new Fixture();
+        await fixture.Preflight();
+        Assert.Equal(0, await fixture.Execute("run", Scan));
+        Assert.Equal(0, await fixture.ExecuteReports("resume", WebFormsReviewReportExecution.WriteAsync));
+        var checkpoint = fixture.LastCheckpoint();
+        var index = Path.Combine(fixture.Run, checkpoint.Reports!.ReportAttempt, "review-evidence.sqlite");
+        var hash = Hash(index);
+        if (scenario == "changed-index") File.AppendAllText(index, "changed retained bytes");
+        if (scenario == "sidecar") File.WriteAllText(index + "-wal", "unadmitted sidecar");
+        if (scenario == "external-inputs-unavailable")
+        {
+            Directory.Move(fixture.Source, Path.Combine(fixture.Root, "unavailable-source"));
+            Directory.Move(fixture.Published, Path.Combine(fixture.Root, "unavailable-published"));
+        }
+        fixture.Output.GetStringBuilder().Clear(); fixture.Error.GetStringBuilder().Clear();
+        var exit = await TraceMapCommand.RunAsync(["webforms-review", "query", "--run", fixture.Run, "--pointer", "/coverage", "--depth", "0"], fixture.Output, fixture.Error);
+        Assert.Equal(scenario == "external-inputs-unavailable" ? 0 : 1, exit);
+        Assert.Equal(checkpoint.Sequence, fixture.LastCheckpoint().Sequence);
+        if (scenario != "changed-index") Assert.Equal(hash, Hash(index));
+        if (exit != 0) Assert.Empty(fixture.Output.ToString());
+        else Assert.Contains("External source, DLLs and other artifacts were not revalidated", fixture.Output.ToString(), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -443,6 +483,8 @@ public sealed class WebFormsReviewExecutionTests
         Assert.Equal("reports-failed", fixture.LastCheckpoint().State);
         Assert.Equal(scan.Artifacts, fixture.LastCheckpoint().Artifacts);
         Assert.True(File.Exists(Path.Combine(fixture.Run, fixture.LastCheckpoint().Reports!.ReportAttempt, "combined.sqlite")));
+        Assert.Contains("WEBFORMS_NATIVE_REPORT_OUTPUT_LIMIT", fixture.LastCheckpoint().Gaps);
+        Assert.Contains("WEBFORMS_NATIVE_REPORT_OUTPUT_LIMIT", fixture.Error.ToString(), StringComparison.Ordinal);
     }
 
     [Fact]

@@ -136,6 +136,7 @@ reports/<owned-id>/index.html      single private entry page
 reports/<owned-id>/handoff.local.json  full retained page packet, input/manifest provenance and compiled link
 reports/<owned-id>/compiled/       grouped method-chain HTML and lossless indexed JSON
 reports/<owned-id>/combined.sqlite internal exact combined evidence, not another source scan
+reports/<owned-id>/review-evidence.sqlite lossless indexed JSON tokens for bounded read-only retrieval
 .native-run.lock                   exclusive process lock, not a discovery hint
 ```
 
@@ -223,6 +224,49 @@ input, 512 MiB aggregate rendered output, 500,000 records and 2,000,000 referenc
 The internal combined SQLite uses retained-artifact/hash bounds, not the rendered
 output cap. All-page receipt partitioning and representative eight-times graph
 memory remain separate gates. The graph still materializes after admission.
+
+### Bounded retained evidence retrieval
+
+New native reports additionally index both complete handoff documents as a
+lossless JSON-token tree in `review-evidence.sqlite`. Metadata binds the exact
+CLI generator, run ID, input handoff hashes, node count and parser/storage bounds.
+The completed checkpoint pins the actual database bytes. This index is private,
+not another source scan, classification engine or privacy projection.
+
+```text
+tracemap webforms-review query --run <durable-run-root>
+tracemap webforms-review query --run <durable-run-root> --document application --pointer /packet/surfaces --offset 0 --limit 5 --depth 2
+tracemap webforms-review query --run <durable-run-root> --document compiled --pointer /chains/0 --depth 2 --limit 10
+```
+
+The closed query grammar accepts only `application` or `compiled`, an exact JSON
+Pointer, nonnegative offset, limit 1–50 and depth 0–8. It never accepts SQL, globs,
+short-name matches or a source path. JSON Pointer escapes `~` as `~0` and `/` as
+`~1`. Object order and array ordinals remain original; child pointers select exact
+records. Containers report total/returned/omitted children. Depth-limited or
+paginated omission is not empty evidence, nor packet or graph truncation.
+
+Each JSON response carries the actual query generator, preflight/checkpoint/index
+hashes, original index generator/input hashes and its own bounded-input digest.
+Output is buffered and capped at 128 KiB and 2,048 nodes; oversized responses emit
+no partial stdout. Refine a refused query by choosing a child pointer or reducing
+depth/limit. Query preserves complete leaf values, never truncates their text.
+Index construction streams both JSON inputs, allows at most 2,000,000 nodes,
+64 JSON levels, 4,096-character property names and a 1 MiB pending token buffer.
+Input aggregate bytes use the report output budget; SQLite bytes use the retained
+artifact budget. Failed indexing retains an unadmitted report attempt and never
+publishes report completion.
+
+Query verifies the completed journal and index before and after retrieval, rejects
+SQLite sidecars and uses immutable read-only access under the existing run lock.
+It does not require current source/publish/parent availability and does not read
+those external inputs or full JSON handoffs. It therefore proves retained index
+integrity, not fresh source/build/runtime validity or every other report file's
+current bytes. Whole-index hash verification still streams the complete index;
+this is a bounded-memory read, not a constant-time retrieval or scale benchmark.
+Older native reports without this index are refused, never automatically repaired.
+See the [agent handoff](WEBFORMS_AGENT_HANDOFF.md) and updated prompt for the
+bounded review sequence. Existing PowerShell launch wrappers remain legacy-only.
 
 An optional `publishReceiptRelativePath` names an existing local-only
 `webforms-publish-binding.v1` receipt under `receiptRoot`, if declared, or the

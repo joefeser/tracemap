@@ -1,5 +1,45 @@
 # Web Forms Review Productization Implementation State
 
+## Bounded native evidence retrieval and Claude guidance (2026-09-28)
+
+- Continued on `codex/webforms-native-preflight` in the managed attachment
+  checkout at `fb373ac5`. Native report completion now also pins a private
+  `review-evidence.sqlite`, built by streaming both exact handoff JSON documents
+  into a lossless ordered token tree. Metadata pins actual CLI generator,
+  input hashes, run ID, counts and parser/storage bounds. Original JSON and
+  PowerShell proof remain unchanged; no source or DLL bytes are copied.
+- `webforms-review query --run` consumes only a completed owned journal/index.
+  It never reads source/published/parent inputs or whole handoff documents,
+  never repairs missing older indexes, and emits one bounded private JSON slice
+  with generator/run/checkpoint/index/input commitments. JSON Pointer, pagination
+  and depth are closed selectors. Omitted child counts and cursors are explicit;
+  retrieval omissions cannot upgrade/downgrade retained page verdicts or coverage.
+- Responses cap at 128 KiB/2,048 nodes; retained scalar/pointer bytes are checked
+  before response deserialization, and oversize results emit no partial stdout.
+  Indexing caps at 2,000,000 values, 64 levels, 4,096-character property names and
+  a 1 MiB pending token buffer; SQLite and aggregate JSON input retain existing
+  configured byte caps. Failed report/index bounds retain safe categorical codes
+  in the journal, never raw exception text.
+- The checked-in Claude prompt and agent handoff now distinguish native query
+  review from the legacy PowerShell artifact/grant/session contract. Native
+  launching is not implemented by query; no model/API call or source grant was
+  added. All query output remains private, not shareable.
+- Initial execution/query checks passed 66/66; expanded grouped/execution/query
+  checks passed 90/90 with zero failures/skips. Broader review, attachment,
+  snapshot, grouping and messy-workspace regression passed 322/322 (2 minutes
+  18 seconds). After the final locator-first scalar loading and stdout byte-cap
+  refinements, execution/query checks passed 67/67 (1 minute 43 seconds), with
+  zero failures/skips and no introduced compiler/analyzer warnings.
+- Public-fixture Playwright desktop/mobile screenshots were inspected. The
+  bounded query guidance is visible, viewport/document both measure 390 pixels
+  on mobile, and the browser reported no console errors or warnings. Browser
+  and localhost server were closed. Representative scale and the real Windows
+  compiled-site/work-machine gate remain unverified.
+- Whole-index hash verification is streamed before and after each query; this
+  is not constant-time retrieval. All-page receipt partitioning, global graph
+  memory redesign, retention/relocation and private acceptance remain active goal
+  work. No wrapper retirement, proof cleanup, PR creation or merge occurred.
+
 ## Native report execution and entry workbench (2026-09-28)
 
 - Continued on `codex/webforms-native-preflight` in the managed

@@ -92,8 +92,11 @@
       compiled handoff. Verify failure/cancellation/resume and output tampering.
       Keep all-page receipt partitioning, retrieval, legacy presentation parity,
       scale and the real private Windows acceptance gate pending.
-  - [ ] Update the work-machine Claude guidance to start from the run manifest
+  - [x] Update the work-machine Claude guidance to start from the run manifest
     and retrieve bounded evidence groups instead of loading whole large files.
+    The native read-only query consumes a checkpointed lossless token index;
+    legacy launch/session wrappers remain unchanged. Real work-machine acceptance
+    remains part of the final private validation gate.
 - [ ] Expose per-phase budget usage, missing-input guidance, and resumable gaps.
 - [ ] Avoid full combined-graph materialization while retaining global ambiguity
   and cross-assembly evidence; validate deterministic parity.

@@ -90,6 +90,7 @@ public static class WebFormsReviewPreflightCommand
         tracemap webforms-review preflight --config <private-json> --out <new-durable-run-root>
         tracemap webforms-review run --run <durable-run-root>
         tracemap webforms-review resume --run <durable-run-root>
+        tracemap webforms-review query --run <durable-run-root> [--document application|compiled] [--pointer <JSON-pointer>] [--offset <n>] [--limit <1-50>] [--depth <0-8>]
         tracemap webforms-review prepare --config <private-json> --out <new-evidence-root> --attest-exact-source-commit <commit>
 
         Validates the fresh/attach run contract and inventories explicit compiled inputs.
@@ -98,6 +99,8 @@ public static class WebFormsReviewPreflightCommand
         This output is preflight only, not a completed review workflow.
         Run/resume execute fresh scans or immutable compiled attachments and private
         workbench/grouped handoff reports with pinned, resumable checkpoints.
+        Query reads only a completed run's checkpointed evidence index, returning
+        at most 128 KiB and 2048 nodes; it never scans, repairs or reads source.
         Prepare writes separate operator-declared receipts only with an exact-commit
         attestation and explicit publishSourceRelativePaths; it never copies binaries.
         All-pages receipt partitioning, scale and private Windows parity remain pending;
