@@ -109,7 +109,7 @@ internal static class WebFormsReviewReportExecution
         if (roots.Length == 0) gaps.Add("RetainedHandlerSymbolsUnavailable");
         if (packet.Gaps.Count > 0) gaps.Add("PagePacketCoverageGaps");
         if (paths.Gaps.Count > 0) gaps.Add("CompiledPathCoverageGaps");
-        if (config.PageMode == "all") gaps.Add("AllPagesCompiledReceiptPartitioningPending");
+        if (config.PageMode == "all") gaps.Add("AllPagesPublicationCompletenessNotEstablished");
         var manifests = new List<ScanManifest> { await ManifestAsync(parentPath, cancellationToken) };
         if (attach) manifests.Add(await ManifestAsync(scanPath, cancellationToken));
         var generator = await WebFormsReviewPreflightCommand.HashAsync("generator", typeof(WebFormsReviewReportExecution).Assembly.Location,

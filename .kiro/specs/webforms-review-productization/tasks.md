@@ -47,11 +47,17 @@
     - [x] Add native explicit operator-declared preparation of primary binding
       and source/publish-map receipts in a new evidence root, validate them through
       Core policy, and generate a pinned follow-on config without copying binaries.
-      Keep all-pages receipt partitioning and compiled-site parity pending.
+      Receipt partitioning is covered by the subsequent integration task;
+      compiled-site parity remains pending.
     - [x] Add an all-or-none Core publish receipt-set reader that retains legacy
       per-partition bounds, exact partition/generator/input commitments and global
-      source/assembly/page/map ambiguity checks. Keep native partition preparation,
-      preflight pinning and all-page coverage acceptance pending.
+      source/assembly/page/map ambiguity checks. Native preparation/preflight is
+      covered below; all-page compiled-site coverage acceptance remains pending.
+    - [x] Prepare deterministic receipt partitions natively, pin every partition
+      in preflight/resume, and validate exact global membership through Core.
+      Test selected/all-page fresh and immutable attachment workflows with 67
+      declared pages and 368 source files. Keep compiled-site parity and
+      representative scale acceptance pending.
 - [ ] Implement .NET orchestration for source-plus-compiled runs and immutable
   attachment to a retained source scan; keep compatibility wrappers.
   - [x] Add checkpointed native fresh execution using the existing scanner and
@@ -94,8 +100,9 @@
       attempts anchored to the scan checkpoint; retain full packet semantics,
       exact full-identity roots, input/DLL/manifest provenance and lossless
       compiled handoff. Verify failure/cancellation/resume and output tampering.
-      Keep all-page receipt partitioning, retrieval, legacy presentation parity,
-      scale and the real private Windows acceptance gate pending.
+      Receipt partitioning and retrieval are covered by subsequent tasks;
+      legacy presentation parity, scale and real private Windows acceptance
+      remain pending.
   - [x] Update the work-machine Claude guidance to start from the run manifest
     and retrieve bounded evidence groups instead of loading whole large files.
     The native read-only query consumes a checkpointed lossless token index;

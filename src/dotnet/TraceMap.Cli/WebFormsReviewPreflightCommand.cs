@@ -25,6 +25,8 @@ public sealed record WebFormsReviewBudgets(
 {
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public WebFormsReviewReportBudgets? Reports { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? MaxPublishInputFiles { get; init; }
 }
 
 public sealed record WebFormsReviewReportBudgets(
@@ -71,7 +73,7 @@ public sealed record WebFormsReviewPreflightManifest(
     IReadOnlyList<string> Gaps, IReadOnlyList<string> Limitations);
 
 /// <summary>Local-only planning boundary; never runs scans, builds, binds DLLs or rewrites retained inputs.</summary>
-public static class WebFormsReviewPreflightCommand
+public static partial class WebFormsReviewPreflightCommand
 {
     public const string ConfigSchema = "webforms-compiled-review-config.v1";
     public const string ManifestSchema = "webforms-compiled-review-run.v1";
@@ -103,7 +105,8 @@ public static class WebFormsReviewPreflightCommand
         at most 128 KiB and 2048 nodes; it never scans, repairs or reads source.
         Prepare writes separate operator-declared receipts only with an exact-commit
         attestation and explicit publishSourceRelativePaths; it never copies binaries.
-        All-pages receipt partitioning, scale and private Windows parity remain pending;
+        Prepare partitions larger declared inventories without raising per-receipt limits.
+        Scale, full-site coverage and private Windows parity remain pending;
         retain the proven wrappers and original evidence until those gates pass.
         """;
 
@@ -168,6 +171,8 @@ public static class WebFormsReviewPreflightCommand
         foreach (var folder in config.SourceFolders)
             if (!Directory.Exists(folder == "." ? config.SourceRoot : Child(config.SourceRoot, folder))) throw Fail("SOURCE_FOLDER_UNAVAILABLE");
         var inputs = new List<WebFormsReviewInput> { configInput };
+        var hashedBytes = configInput.Bytes;
+        var publishInputCount = 0;
         var paths = new HashSet<string>(PathComparer) { configPath };
         var gaps = new SortedSet<string>(StringComparer.Ordinal)
         {
@@ -178,10 +183,17 @@ public static class WebFormsReviewPreflightCommand
         {
             path = PhysicalPath(path);
             if (!paths.Add(path)) throw Fail("DUPLICATE_INPUT");
-            if (inputs.Count >= config.Budgets.MaxInputFiles) throw Fail("INPUT_COUNT_LIMIT");
+            if (config.Budgets.MaxPublishInputFiles is { } publishLimit)
+            {
+                if (IsPublishInventoryRole(role) ? publishInputCount >= publishLimit
+                    : inputs.Count - publishInputCount >= config.Budgets.MaxInputFiles) throw Fail("INPUT_COUNT_LIMIT");
+            }
+            else if (inputs.Count >= config.Budgets.MaxInputFiles) throw Fail("INPUT_COUNT_LIMIT");
             var item = await HashAsync(role, path, limit, cancellationToken);
-            if (inputs.Sum(input => input.Bytes) > config.Budgets.MaxTotalHashBytes - item.Bytes) throw Fail("HASH_BYTES_LIMIT");
+            if (hashedBytes > config.Budgets.MaxTotalHashBytes - item.Bytes) throw Fail("HASH_BYTES_LIMIT");
             inputs.Add(item);
+            hashedBytes += item.Bytes;
+            if (IsPublishInventoryRole(role)) publishInputCount++;
             return item;
         }
         if (configInput.Bytes > config.Budgets.MaxTotalHashBytes) throw Fail("HASH_BYTES_LIMIT");
@@ -234,57 +246,8 @@ public static class WebFormsReviewPreflightCommand
         foreach (var map in config.PageMaps.Order(StringComparer.Ordinal)) await Add("page-map", Child(config.PublishedRoot, map), 1_048_576);
         if (config.PublishReceiptRelativePath is not null)
         {
-            var receiptPath = Child(receiptRoot, config.PublishReceiptRelativePath);
-            var receiptInput = await Add("publish-receipt", receiptPath, 1_048_576);
-            var bytes = await ReadSmallAsync(receiptPath, 1_048_576, cancellationToken);
-            if (Digest(bytes) != receiptInput.Sha256) throw Fail("INPUT_CHANGED");
-            RejectDuplicateProperties(bytes);
-            using var receipt = JsonDocument.Parse(bytes, new JsonDocumentOptions { MaxDepth = 16 });
-            var root = receipt.RootElement;
-            if (root.GetProperty("schemaVersion").GetString() != "webforms-publish-binding.v1" ||
-                root.GetProperty("visibility").GetString() != "local-only" ||
-                root.GetProperty("sourceCommitSha").GetString() != config.SourceCommitSha) throw Fail("PUBLISH_RECEIPT_INVALID");
-            var sources = Array("sourceFiles", 256);
-            var published = Array("publishedFiles", 64);
-            var pages = Array("pages", 32);
-            var sourceNames = new HashSet<string>(PathComparer);
-            foreach (var source in sources.EnumerateArray())
-            {
-                var name = source.GetProperty("path").GetString() ?? throw Fail("PUBLISH_RECEIPT_INVALID");
-                var sha = source.GetProperty("sha256").GetString();
-                if (!sourceNames.Add(name) || !IsHex(sha, 64)) throw Fail("PUBLISH_RECEIPT_INVALID");
-                var path = Child(config.SourceRoot, name);
-                var existing = inputs.SingleOrDefault(input => PathComparer.Equals(input.Path, path));
-                var item = existing ?? await Add("publish-source", path, 67_108_864);
-                if (item.Sha256 != sha) throw Fail("PUBLISH_SOURCE_MISMATCH");
-            }
-            var publishedNames = new HashSet<string>(PathComparer);
-            foreach (var item in published.EnumerateArray())
-            {
-                var name = item.GetProperty("path").GetString() ?? throw Fail("PUBLISH_RECEIPT_INVALID");
-                var kind = item.GetProperty("kind").GetString();
-                if (!publishedNames.Add(name) || kind is not ("assembly" or "compiled-map")) throw Fail("PUBLISH_RECEIPT_INVALID");
-                var path = Child(config.PublishedRoot, name);
-                var declared = inputs.SingleOrDefault(input => PathComparer.Equals(input.Path, path) &&
-                    (kind == "assembly" ? input.Role is "primary-assembly" or "dependency-assembly" : input.Role == "page-map"));
-                if (declared is null || declared.Sha256 != item.GetProperty("sha256").GetString()) throw Fail("PUBLISH_ARTIFACT_NOT_DECLARED_OR_MISMATCH");
-            }
-            var pageNames = new HashSet<string>(PathComparer);
-            foreach (var page in pages.EnumerateArray())
-            {
-                var sourcePath = page.TryGetProperty("sourcePath", out var source) && source.ValueKind == JsonValueKind.String
-                    ? source.GetString() : page.GetProperty("virtualPath").GetString()?.TrimStart('/');
-                if (sourcePath is null || !pageNames.Add(sourcePath) || !sourceNames.Contains(sourcePath)) throw Fail("PUBLISH_PAGE_INVALID");
-            }
-            if (config.PageMode == "selected" && config.PageRelativePaths.Any(page => !pageNames.Contains(page))) throw Fail("PUBLISH_SELECTED_PAGE_UNAVAILABLE");
+            await ValidatePublishInventoryAsync(config, receiptRoot, inputs, Add, cancellationToken);
             gaps.Add("PublishReceiptSemanticValidationDeferred");
-
-            JsonElement Array(string name, int max)
-            {
-                var value = root.GetProperty(name);
-                if (value.ValueKind != JsonValueKind.Array || value.GetArrayLength() is < 1 || value.GetArrayLength() > max) throw Fail("PUBLISH_RECEIPT_LIMIT_OR_SHAPE_INVALID");
-                return value;
-            }
         }
         gaps.Add("PdbIdentityValidationDeferred");
         gaps.Add("PageMapValidationDeferred");
@@ -342,13 +305,17 @@ public static class WebFormsReviewPreflightCommand
             config.PrimaryAssemblies is null || config.DependencyAssemblies is null || config.BindingReceipts is null || config.PdbInputs is null || config.PageMaps is null)
             throw Fail("CONFIG_INVALID");
         ValidateReportBudgets(config.Budgets.Reports ?? new());
+        if (config.Budgets.MaxPublishInputFiles is < 1 or > 20_480) throw Fail("BUDGET_INVALID");
         if (!Path.IsPathFullyQualified(config.SourceRoot) || !Path.IsPathFullyQualified(config.PublishedRoot) ||
             (config.ParentScanRoot is not null && !Path.IsPathFullyQualified(config.ParentScanRoot)) ||
             (config.ReceiptRoot is not null && !Path.IsPathFullyQualified(config.ReceiptRoot))) throw Fail("ROOT_PATH_INVALID");
-        var lists = new[] { config.ProjectRelativePaths, config.SourceFolders, config.PageRelativePaths, config.PrimaryAssemblies,
-            config.DependencyAssemblies, config.BindingReceipts, config.PdbInputs, config.PageMaps, config.PublishSourceRelativePaths ?? [] };
+        var lists = new[] { config.ProjectRelativePaths, config.SourceFolders, config.PrimaryAssemblies,
+            config.DependencyAssemblies, config.BindingReceipts, config.PdbInputs };
+        var publishLists = new[] { config.PageRelativePaths, config.PageMaps, config.PublishSourceRelativePaths ?? [] };
         if (config.SourceFolders.Length == 0 || config.PrimaryAssemblies.Length == 0 ||
-            lists.Any(list => list.Length > 256 || list.Any(string.IsNullOrWhiteSpace) || list.Distinct(PathComparer).Count() != list.Length)) throw Fail("CONFIG_INVALID");
+            lists.Any(list => list.Length > 256 || list.Any(string.IsNullOrWhiteSpace) || list.Distinct(PathComparer).Count() != list.Length)
+            || publishLists.Any(list => list.Length > (config.Budgets.MaxPublishInputFiles ?? 256)
+                || list.Any(string.IsNullOrWhiteSpace) || list.Distinct(PathComparer).Count() != list.Length)) throw Fail("CONFIG_INVALID");
         if (config.ProjectMode is not ("projectless" or "solution" or "projects") ||
             (config.ProjectMode == "solution") != (config.SolutionRelativePath is not null) ||
             (config.ProjectMode == "projects") != (config.ProjectRelativePaths.Length > 0)) throw Fail("PROJECT_SELECTION_INVALID");

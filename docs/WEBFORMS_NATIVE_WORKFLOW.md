@@ -3,8 +3,9 @@
 Status: native preflight, input validation, checkpointed fresh scanning and
 immutable compiled-only attachment. Explicit cross-index VB PDB/publish reporting
 joins, checkpointed private report orchestration and bounded evidence retrieval
-are implemented. Native all-page receipt preparation/integration, representative scale and real
-private Windows compiled-site parity remain pending.
+and deterministic receipt partition preparation/pinning are implemented for
+declared selected/all-page scopes. Representative scale, complete compiled-site
+coverage and real private Windows parity remain pending.
 
 The Core compiled-only producer now has a distinct local attachment context
 containing the exact generator, bounded input, original parent manifest/index
@@ -54,9 +55,10 @@ bindings and are accepted only inside a set. A set still requires at least one
 normal page-bearing receipt. This separates inventory chunking from page identity
 without duplicating pages or upgrading inventory bytes to page/build evidence.
 
-Native `prepare` and preflight partition publication are not yet integrated;
-do not manually substitute a set into a pinned native run. This Core contract
-is the foundation for that integration, not all-page or Windows acceptance.
+Native `prepare` produces these sets when a declared inventory exceeds a legacy
+receipt cap. Preflight pins the root and every exact partition; changed/missing
+chunks prevent resume. Never substitute new chunks into a pinned run. This
+supports declared page scopes, not full-site or Windows acceptance.
 
 ## Native operator-declared receipt preparation
 
@@ -72,7 +74,7 @@ This is an explicit operator declaration, not an automatic attestation or proof
 of authentic compilation. Do not supply the flag unless you can make that
 declaration. Missing/wrong attestation, dirty source, ignored/uncommitted selected
 files, absent repository origin, ambiguous maps, unadmitted/duplicate compiled
-bytes or legacy receipt limits reject publication of the new evidence folder.
+bytes or effective input/partition limits reject publication of the new evidence folder.
 There is no prompt, TEMP search, rebuild, binary copy or existing-folder overwrite.
 
 Use a config without existing receipts or preparation provenance. Declare the
@@ -98,12 +100,14 @@ The new evidence root contains:
 preparation-manifest.local.json     input hashes, inspected policy outcomes, gaps and artifact hashes
 compiled-binding.local.json         only explicitly attested primary DLLs
 publish-receipt.local.json          declared source/DLL/map/page membership
+publish-partitions/*.local.json    bounded page or inventory-only chunks, when needed
 review-config.local.json            config for preflight/run with this separate receipt root
 ```
 
 Each derived JSON records exact generator and bounded-input hashes, directly or
-through the config's `preparationProvenance`. The publish receipt keeps its
-established source-roster `boundedInputSha256`; `receiptInputSha256` additionally
+through the config's `preparationProvenance`. Single receipts and individual
+partitions keep the established source-roster `boundedInputSha256`; a set root
+uses the ordered partition commitment described above. `receiptInputSha256` additionally
 pins the complete preparation input, metadata inspection and attestation. These
 are local integrity/provenance commitments, not authenticated signatures.
 Compiler provenance remains unavailable; the legacy `compilerSha256` field holds
@@ -117,13 +121,25 @@ source-type candidate if a declared `App_Web_` assembly exists. Physical map
 completeness is not inferred. `all` mode covers only the `.aspx` members explicitly
 declared in the preparation roster, with an all-pages completeness gap. The
 legacy per-receipt caps remain 256 source files, 64 published files and 32 pages;
-larger sets require future explicit partitioning, never an automatic limit raise.
+larger declared inventories are partitioned deterministically into at most 64
+chunks. Shared membership is retained without duplicating pages, using explicit
+inventory-only chunks when necessary. Core independently validates the complete
+set and its global counts before publication.
+
+Existing configs retain their original `maxInputFiles` admission budget. To opt
+in to a larger declared page/source/map/partition inventory, set the additive
+`budgets.maxPublishInputFiles`, for example `2048` (allowed range 1–20,480).
+This separate role budget does not increase compiled-assembly, PDB, project or
+binding-receipt admission. Hash-byte, JSON, Core set, metadata/IL, graph and
+rendering limits remain independent. Preparation checks that the follow-on run
+can also fit its declared input-count and hash-byte budgets, including actual
+new receipt/config bytes; it never silently raises a limit.
 Git output is bounded to 4,194,304 characters per stream and 15 seconds per check.
 
 Then preflight the generated `review-config.local.json` into a separate new run
-folder and use native `run/resume` below. Receipt generation does not finish
-grouped workbench/handoff integration, all-pages partitioning or
-representative scale/private compiled-site parity. Keep the proven wrappers.
+folder and use native `run/resume` below. Receipt generation itself does not run
+the scanner or finish representative scale/private compiled-site parity. Native
+execution generates the checkpointed workbench and handoffs. Keep the proven wrappers.
 
 The proven PowerShell proof/report workflow remains supported. Preflight alone
 does not execute scans or replace that workflow:
@@ -259,8 +275,9 @@ limits (`maxProjectionInputBytes`, `maxOutputBytes`, `maxProjectionRecords`,
 1,000 surfaces/chains/roots, 10,000 gaps/frontier, 256 MiB canonical projection
 input, 512 MiB aggregate rendered output, 500,000 records and 2,000,000 references.
 The internal combined SQLite uses retained-artifact/hash bounds, not the rendered
-output cap. All-page receipt partitioning and representative eight-times graph
-memory remain separate gates. The graph still materializes after admission.
+output cap. Receipt partitioning is implemented for declared inventory; complete
+compiled-site coverage and representative eight-times graph memory remain separate
+gates. The graph still materializes after admission.
 
 ### Bounded retained evidence retrieval
 

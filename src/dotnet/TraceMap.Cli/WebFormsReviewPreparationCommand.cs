@@ -21,7 +21,7 @@ public sealed record WebFormsReviewSourceMembership(string SourceRelativePath, s
     string GitBlobObjectId, string ComparisonKind, string? NormalizationPolicySha256 = null);
 
 /// <summary>Explicit local receipt generation. Never builds, copies binaries, scans source, or modifies input roots.</summary>
-public static class WebFormsReviewPreparationCommand
+public static partial class WebFormsReviewPreparationCommand
 {
     public const string RuleId = "workflow.webforms.compiled-review-preparation.v1";
     public const string Schema = "webforms-compiled-review-preparation.v1";
@@ -48,18 +48,17 @@ public static class WebFormsReviewPreparationCommand
             if (git.CommitSha != config.SourceCommitSha || string.IsNullOrWhiteSpace(git.RemoteUrl)) throw Fail("SOURCE_REPOSITORY_OR_COMMIT_UNAVAILABLE");
             var sourcePaths = config.PublishSourceRelativePaths.Concat(config.PageRelativePaths)
                 .Select(Normalize).Distinct(Paths).Order(StringComparer.Ordinal).ToArray();
-            if (sourcePaths.Length is < 1 or > 256) throw Fail("SOURCE_MEMBERSHIP_LIMIT");
+            if (sourcePaths.Length < 1 || sourcePaths.Length > Math.Min(16_384, config.Budgets.MaxPublishInputFiles ?? 256)) throw Fail("SOURCE_MEMBERSHIP_LIMIT");
             var membership = await ValidateCommittedSourceAsync(config, sourcePaths, cancellationToken);
             var sourceRows = sourcePaths.Select(path => new SourceFile(path,
                 plan.Inputs.Single(input => Paths.Equals(input.Path, WebFormsReviewPreflightCommand.Child(config.SourceRoot, path))).Sha256)).ToArray();
-            var sourceDigest = Digest(Encoding.UTF8.GetBytes(string.Join("\n", sourceRows.Select(item => item.Path + ":" + item.Sha256)) + "\n"));
             var selectedPages = config.PageMode == "selected" ? config.PageRelativePaths.Select(Normalize).Order(StringComparer.Ordinal).ToArray()
                 : sourcePaths.Where(path => path.EndsWith(".aspx", StringComparison.OrdinalIgnoreCase)).ToArray();
-            if (selectedPages.Length is < 1 or > 32) throw Fail("PAGE_RECEIPT_LIMIT_REQUIRES_PARTITION");
+            if (selectedPages.Length is < 1 or > 2_048) throw Fail("PAGE_RECEIPT_PARTITION_LIMIT");
             var publishedRows = plan.Inputs.Where(input => input.Role is "primary-assembly" or "dependency-assembly" or "page-map")
                 .Select(input => new PublishedFile(Normalize(Path.GetRelativePath(config.PublishedRoot, input.Path)), input.Sha256,
                     input.Role == "page-map" ? "compiled-map" : "assembly")).OrderBy(item => item.Path, StringComparer.Ordinal).ToArray();
-            if (publishedRows.Length is < 1 or > 64) throw Fail("PUBLISHED_RECEIPT_LIMIT_REQUIRES_PARTITION");
+            if (publishedRows.Length is < 1 or > 4_096) throw Fail("PUBLISHED_RECEIPT_PARTITION_LIMIT");
             var maps = new List<Map>();
             foreach (var item in publishedRows.Where(item => item.Kind == "compiled-map"))
             {
@@ -118,42 +117,46 @@ public static class WebFormsReviewPreparationCommand
             if (bindingRows.Length != config.PrimaryAssemblies.Length) throw Fail("PRIMARY_BINDING_COUNT_MISMATCH");
             var bindingDocument = new { schemaVersion = "compiled-input-binding-set.v1", ruleId = RuleId, visibility = "local-only",
                 claimLevel = "operator-attested-review-only-not-build-proof", generatorSha256 = generator, boundedInputSha256 = bounded, bindings = bindingRows };
-            var mapRows = publishedRows.Where(item => item.Kind == "compiled-map").ToArray();
-            var publishDocument = new
-            {
-                schemaVersion = "webforms-publish-binding.v1", ruleId = RuleId, visibility = "local-only", receiptGeneratorSha256 = generator,
-                sourceCommitSha = config.SourceCommitSha, boundedInputSha256 = sourceDigest, receiptInputSha256 = bounded,
-                compilerSha256 = Digest(Encoding.UTF8.GetBytes("operator-declared-existing-publish-compiler-unavailable.v1")),
-                compilerProvenance = "unavailable-existing-output", publishedMapCount = mapRows.Length,
-                mapInventorySha256 = Digest(Encoding.UTF8.GetBytes(string.Join("\n", mapRows.Select(item => item.Path + ":" + item.Sha256)) + "\n")),
-                sourceFiles = sourceRows, publishedFiles = publishedRows, pages
-            };
             // Only a new owned staging directory is written. No input-root copy or modification.
             var parent = Path.GetDirectoryName(root)!;
             Directory.CreateDirectory(parent);
             var staging = Path.Combine(parent, ".webforms-preparation-" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(staging);
             await WriteJsonAsync(Path.Combine(staging, "compiled-binding.local.json"), bindingDocument, 1_048_576, cancellationToken);
-            await WriteJsonAsync(Path.Combine(staging, "publish-receipt.local.json"), publishDocument, 1_048_576, cancellationToken);
+            var publishArtifacts = await WritePublishReceiptsAsync(staging, config, generator, bounded, sourceRows, publishedRows, pages, cancellationToken);
             var validatedOptions = options with { CompiledBindingReceiptPaths = [Path.Combine(staging, "compiled-binding.local.json")],
                 WebFormsPublishReceiptPath = Path.Combine(staging, "publish-receipt.local.json"), WebFormsPublishedRootPath = config.PublishedRoot };
             var checkedBindings = ManagedMetadataExtractor.InspectInputs(validatedOptions, config.SourceCommitSha, cancellationToken);
             if (checkedBindings.Provenance?.Outcomes.Count(item => item.Role == "primary" && item.ProvenanceState == "bound") != bindingRows.Length
                 || checkedBindings.Provenance.Outcomes.Any(item => item.Role == "dependency" && item.ProvenanceState != "unbound")) throw Fail("GENERATED_BINDING_REJECTED");
             var checkedPublish = WebFormsPublishInputInspector.Inspect(validatedOptions, config.SourceCommitSha, cancellationToken);
-            if (checkedPublish?.Status != "bound") throw Fail("GENERATED_PUBLISH_RECEIPT_REJECTED");
+            if (checkedPublish?.Status != "bound" || checkedPublish.SourceFileCount != sourceRows.Length
+                || checkedPublish.PublishedFileCount != publishedRows.Length || checkedPublish.PageCount != pages.Count)
+            {
+                await output.WriteLineAsync($"webFormsPreparation=gap;phase=publish;sourceFiles={sourceRows.Length};publishedFiles={publishedRows.Length};pages={pages.Count};partitions={publishArtifacts.Count - 1}");
+                foreach (var gap in checkedPublish?.GapKinds ?? []) await output.WriteLineAsync("webFormsPreparationGap=" + gap);
+                throw Fail("GENERATED_PUBLISH_RECEIPT_REJECTED");
+            }
             if (checkedBindings.Provenance.GeneratorSha256 != inspected.Provenance.GeneratorSha256
                 || checkedPublish.GeneratorSha256 != inspected.Provenance.GeneratorSha256) throw Fail("GENERATOR_CHANGED");
             var preparedConfig = config with { ReceiptRoot = root, BindingReceipts = ["compiled-binding.local.json"],
                 PublishReceiptRelativePath = "publish-receipt.local.json", PublishSourceRelativePaths = null,
                 PreparationProvenance = new(RuleId, generator, bounded) };
+            var publishInputs = plan.Inputs.Count(input => WebFormsReviewPreflightCommand.IsPublishInventoryRole(input.Role));
+            var partitionInputs = publishArtifacts.Count - 1;
+            if (config.Budgets.MaxPublishInputFiles is { } publishMaximum
+                ? publishInputs + partitionInputs > publishMaximum || plan.Inputs.Count - publishInputs + 2 > config.Budgets.MaxInputFiles
+                : plan.Inputs.Count + 2 + partitionInputs > config.Budgets.MaxInputFiles) throw Fail("FOLLOW_ON_INPUT_COUNT_LIMIT");
             await WriteJsonAsync(Path.Combine(staging, "review-config.local.json"), preparedConfig, 1_048_576, cancellationToken);
             var artifacts = new List<WebFormsReviewArtifact>();
-            foreach (var name in new[] { "compiled-binding.local.json", "publish-receipt.local.json", "review-config.local.json" })
+            foreach (var name in new[] { "compiled-binding.local.json", "review-config.local.json" }.Concat(publishArtifacts).Order(StringComparer.Ordinal))
             {
                 var item = await WebFormsReviewPreflightCommand.HashAsync("prepared-artifact", Path.Combine(staging, name), 1_048_576, cancellationToken);
                 artifacts.Add(new(name, item.Bytes, item.Sha256));
             }
+            var followOnHashBytes = plan.Inputs.Where(input => input.Role != "configuration").Sum(input => input.Bytes)
+                + artifacts.Sum(artifact => artifact.Bytes);
+            if (followOnHashBytes > config.Budgets.MaxTotalHashBytes) throw Fail("FOLLOW_ON_HASH_BYTES_LIMIT");
             var gaps = checkedBindings.GapKinds.Concat(plan.Gaps.Where(gap => gap is not
                     ("BindingValidationDeferred" or "MissingBindingReceiptHashCandidate" or "AmbiguousBindingReceiptHashCandidate" or "PageMapValidationDeferred")))
                 .Concat(["CompilerProvenanceUnavailable", "BuildAuthenticityNotEstablished",
@@ -166,7 +169,7 @@ public static class WebFormsReviewPreparationCommand
                 "explicit-exact-source-commit-for-primary-assemblies", plan.Inputs, membership, checkedBindings, checkedPublish, artifacts, gaps,
                 ["Primary bindings record the operator's declaration, not proof of build freshness, authenticity, runtime loading, dispatch or SQL execution.",
                  "Dependencies remain unbound artifact context. Only explicitly declared source, DLL and map membership is inspected; historical build closure is unknown.",
-                 "All mode covers the declared receipt pages, not every page in the source repository. Legacy receipt limits are 256 source files, 64 published files and 32 pages; partitioning is not automatic.",
+                 "All mode covers the declared receipt pages, not every page in the source repository. Deterministic partitions retain 256 source files, 64 published files and 32 page limits; inventory-only partitions add context, never pages.",
                  "Compiler SHA is the documented unavailable-marker digest, not a claimed compiler binary hash. This local artifact is private and not portable or shareable."]);
             await WriteJsonAsync(Path.Combine(staging, "preparation-manifest.local.json"), receipt, 4_194_304, cancellationToken);
             await WebFormsReviewInputValidation.RecheckAsync(plan, cancellationToken);
@@ -183,6 +186,7 @@ public static class WebFormsReviewPreparationCommand
             cancellationToken.ThrowIfCancellationRequested();
             Directory.Move(staging, root);
             await output.WriteLineAsync($"webFormsPreparation=completed;primaryBindings={bindingRows.Length};contextAssemblies={config.DependencyAssemblies.Length};pages={pages.Count};reviewOnly=true");
+            await output.WriteLineAsync($"webFormsPublishInventory=retained;sourceFiles={sourceRows.Length};publishedFiles={publishedRows.Length};partitions={partitionInputs};perPartitionSources=256;perPartitionPublished=64;perPartitionPages=32");
             await output.WriteLineAsync($"webFormsPreparedConfig={Path.Combine(root, "review-config.local.json")}");
             return 0;
         }
