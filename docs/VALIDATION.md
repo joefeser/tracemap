@@ -3665,8 +3665,8 @@ application workbench without rescanning, run
 The standalone review creates a fresh receipted output; it never rewrites an
 old workbench. Its index links to `compiled-paths.local.html` and the exact
 copied JSON, and `application-handoff.json` records the handoff's raw SHA-256,
-path/gap counts, truncation, and `pageVerdictJoined=false`. The source commit
-must match exactly one packet source. This is a separate local-only,
+path/gap counts, truncation, and `pageVerdictJoined=false`. The repository ID
+and source commit must match exactly one packet source. This is a separate local-only,
 review-only projection, not a page-chain verdict, SQL-query join, or runtime
 execution claim. Do not put these private files in a shareable artifact.
 The short entry point `scripts/wview.ps1` runs the saved-proof replay and
@@ -3674,9 +3674,11 @@ forwards its selected handoff into the standalone workbench. Run
 `pwsh -NoProfile -File scripts/wview.ps1`; optional `-ProofRoot`, `-PacketPath`,
 `-OutputRoot`, and `-ConfigPath` override discovery. It uses the normal local
 page-list configuration by default and does not rebuild, publish, scan, or
-combine. Its public wrapper guard is `scripts/tests/Test-WebFormsView.ps1`.
+combine. An explicitly supplied `-ProofRoot` also admits the saved base-index
+route; automatic discovery remains restricted to higher-work proofs. Its public
+wrapper guard is `scripts/tests/Test-WebFormsView.ps1`.
 When a compiled handoff is supplied without `-PacketPath`, packet discovery
-chooses the newest saved packet with exactly one matching source commit,
+chooses the newest saved packet with exactly one matching repository ID and source commit,
 not merely the newest packet. Discovery is bounded to 64 packets, 128 MiB
 per packet and 512 MiB total read; no compatible packet stops with
 `WEBFORMS_STANDALONE_REVIEW_COMPATIBLE_PACKET_UNAVAILABLE`. Explicitly supplied

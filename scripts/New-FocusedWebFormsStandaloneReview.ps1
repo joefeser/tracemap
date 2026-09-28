@@ -42,6 +42,11 @@ if (!$PacketPath) {
         $handoff = [IO.File]::ReadAllText($handoffFile.FullName) | ConvertFrom-Json -Depth 50
         $sourceCommit = [string]$handoff.provenance.sourceCommitSha
         if ($sourceCommit -cnotmatch '^[0-9a-f]{40}$') { throw 'WEBFORMS_STANDALONE_REVIEW_COMPILED_COMMIT_INVALID' }
+        $repositoryProperty = $handoff.provenance.PSObject.Properties['packetRepositoryId']
+        if ($null -eq $repositoryProperty -or [string]$repositoryProperty.Value -cnotmatch '^repository-[0-9a-f]{24}$') {
+            throw 'WEBFORMS_STANDALONE_REVIEW_COMPILED_REPOSITORY_INVALID'
+        }
+        $sourceRepository = [string]$repositoryProperty.Value
         if ($candidates.Count -gt 64) { throw 'WEBFORMS_STANDALONE_REVIEW_PACKET_DISCOVERY_LIMIT' }
         $latest = $null
         $discoveryBytes = 0L
@@ -50,7 +55,11 @@ if (!$PacketPath) {
             if ($candidate.Length -le 0 -or $candidate.Length -gt 128MB -or $discoveryBytes -gt 512MB) { throw 'WEBFORMS_STANDALONE_REVIEW_PACKET_DISCOVERY_LIMIT' }
             $candidatePacket = [IO.File]::ReadAllText($candidate.FullName) | ConvertFrom-Json -Depth 100
             if ($candidatePacket.schemaVersion -cne 'webforms-modernization-packet.v1') { continue }
-            if (@($candidatePacket.sources | Where-Object { [string]$_.commitSha -ceq $sourceCommit }).Count -eq 1) {
+            if (@($candidatePacket.sources | Where-Object {
+                $identity = $_.PSObject.Properties['repositoryId']
+                [string]$_.commitSha -ceq $sourceCommit -and $null -ne $identity -and
+                    [string]$identity.Value -ceq $sourceRepository
+            }).Count -eq 1) {
                 $latest = $candidate
                 break
             }

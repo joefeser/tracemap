@@ -2469,6 +2469,7 @@ rules:
     limitations:
       - This is navigation metadata over retained packet evidence; it does not add scanner facts, infer business intent, generate a BRD, or prove runtime behavior or migration correctness.
       - The optional evidence-docs corpus is referenced read-only and is not copied, modified, truncated, or deleted.
+      - Supplemental compiled paths require exactly one packet source matching both the retained repository ID and commit; same-commit fork evidence cannot be attached by commit alone.
 
   - id: diagnostic.webforms.application-page-handoff.v1
     name: Web Forms application page handoff

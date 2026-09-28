@@ -69,8 +69,8 @@ $inlineServerEvidence = @{ factId = 'fact-inline-server-one'; ruleId = 'legacy.w
 $packet = [ordered]@{
     schemaVersion = 'webforms-modernization-packet.v1'; packetId = 'packet-one'; ruleId = 'legacy.webforms.modernization-packet.v1'; claimLevel = 'local-only'; coverage = 'reduced'
     sources = @(
-        @{ sourceId = 'source-one'; repositoryId = 'repo-one'; scanId = 'scan-one'; commitSha = ('a' * 40); analysisLevel = 'semantic'; buildStatus = 'succeeded' },
-        @{ sourceId = 'source-two'; repositoryId = 'repo-two'; scanId = 'scan-two'; commitSha = ('b' * 40); analysisLevel = 'semantic'; buildStatus = 'succeeded' }
+        @{ sourceId = 'source-one'; repositoryId = ('repository-' + ('a' * 24)); scanId = 'scan-one'; commitSha = ('a' * 40); analysisLevel = 'semantic'; buildStatus = 'succeeded' },
+        @{ sourceId = 'source-two'; repositoryId = ('repository-' + ('b' * 24)); scanId = 'scan-two'; commitSha = ('b' * 40); analysisLevel = 'semantic'; buildStatus = 'succeeded' }
     )
     summary = @{ projectCount = 1; surfaceCount = 2; eventChainCount = 5; downstreamBoundaryCount = 1; identityStateCount = 1; batchDataMovementCount = 1; structuralSliceCandidateCount = 1; clientBehaviorCount = 3; serverBehaviorCount = 2; gapCount = 2; truncated = $true; truncationReasons = @('legacy-flow:TruncatedByLimit:depth'); coverageReductionReasons = @('source-analysis-reduced','bounded-output-truncated') }
     projects = @(@{ projectId = 'project-one'; surfaceCount = 2; evidence = @(); supportingFactIds = @() })
@@ -246,7 +246,7 @@ try {
     $compiledPathInput = Join-Path $temp 'compiled-path-handoff.local.json'
     $compiledFixture = [ordered]@{
         schemaVersion = 'webforms-compiled-path-handoff.v1'; ruleId = 'diagnostic.webforms.compiled-path-handoff.v1'; claimLevel = 'review-only-static-evidence'
-        provenance = [ordered]@{ sourceCommitSha = ('a' * 40); scanId = 'scan-one'; generatorSha256 = ('c' * 64); boundedInputSha256 = ('d' * 64) }
+        provenance = [ordered]@{ sourceCommitSha = ('a' * 40); packetRepositoryId = ('repository-' + ('a' * 24)); scanId = 'scan-one'; generatorSha256 = ('c' * 64); boundedInputSha256 = ('d' * 64) }
         coverage = [ordered]@{ truncated = $true; gapCount = 3 }
         paths = @([ordered]@{ pathId = 'public-path-001'; classification = 'NeedsReview'; claim = 'review-only-static-path'; terminalKind = 'database-api'; hops = @([ordered]@{
             ordinal = 1; from = [ordered]@{ name = 'namespace:6:Public|names:6:Lookup|method:10:Names_Init'; displayLabel = 'spoofed label' }; to = [ordered]@{ name = 'namespace:6:Public|names:13:DbDataAdapter|method:4:Fill'; displayLabel = 'spoofed label' }
@@ -261,10 +261,10 @@ try {
     $compatiblePacketPath = Join-Path $compatiblePacketFolder 'webforms-modernization.json'
     [IO.File]::Copy($packetPath, $compatiblePacketPath)
     $unrelatedPacketPath = Join-Path $unrelatedPacketFolder 'webforms-modernization.json'
-    [IO.File]::WriteAllText($unrelatedPacketPath, ((@{ schemaVersion = 'webforms-modernization-packet.v1'; sources = @(@{ commitSha = ('f' * 40) }) } | ConvertTo-Json -Depth 5) + "`n"))
+    [IO.File]::WriteAllText($unrelatedPacketPath, ((@{ schemaVersion = 'webforms-modernization-packet.v1'; sources = @(@{ commitSha = ('a' * 40); repositoryId = ('repository-' + ('f' * 24)) }) } | ConvertTo-Json -Depth 5) + "`n"))
     [IO.File]::SetLastWriteTimeUtc($unrelatedPacketPath, [DateTime]::UtcNow.AddMinutes(1))
     $standaloneOutput = @(& $standaloneScript -ConfigPath $standaloneConfig -CompiledPathHandoffPath $compiledPathInput -PageId 'page-001')
-    if (@($standaloneOutput | Where-Object { $_ -eq "standaloneReviewPacket=$compatiblePacketPath" }).Count -ne 1) { throw 'Standalone review selected the newest unrelated packet instead of the source-commit-compatible packet.' }
+    if (@($standaloneOutput | Where-Object { $_ -eq "standaloneReviewPacket=$compatiblePacketPath" }).Count -ne 1) { throw 'Standalone review selected a same-commit wrong-repository packet instead of the identity-compatible packet.' }
     $standaloneRootLine = @($standaloneOutput | Where-Object { $_ -like 'standaloneReviewRoot=*' })
     if ($standaloneRootLine.Count -ne 1) { throw 'Standalone review did not report exactly one review root.' }
     $standaloneRoot = $standaloneRootLine[0].Substring('standaloneReviewRoot='.Length)
@@ -291,11 +291,22 @@ try {
         !$standaloneIndex.Contains('compiled-paths.local.html', [StringComparison]::Ordinal)) {
         throw 'Standalone review did not preserve separate readable compiled-path evidence and provenance.'
     }
+    $compiledFixture.provenance.packetRepositoryId = ('repository-' + ('f' * 24))
+    [IO.File]::WriteAllText($compiledPathInput, (($compiledFixture | ConvertTo-Json -Depth 20) + "`n"), [Text.UTF8Encoding]::new($false))
+    $repositoryMismatchRejected = $false
+    try { & $standaloneScript -PacketPath $packetPath -ConfigPath $standaloneConfig -CompiledPathHandoffPath $compiledPathInput | Out-Null }
+    catch { $repositoryMismatchRejected = $_.Exception.Message.Contains('ApplicationWorkbenchCompiledPathProvenanceMismatch;reasons=packet-source-identity;sourceMatches=0') }
+    if (!$repositoryMismatchRejected) { throw 'Explicit standalone attachment accepted a same-commit wrong-repository handoff.' }
+    $directRepositoryMismatchRejected = $false
+    try { & $scriptPath -PacketPath $packetPath -OutputRoot $outputRoot -OutputDirectory (Join-Path $outputRoot 'wrong-repository') -CompiledPathHandoffPath $compiledPathInput | Out-Null }
+    catch { $directRepositoryMismatchRejected = $_.Exception.Message.Contains('ApplicationWorkbenchCompiledPathProvenanceMismatch;reasons=packet-source-identity;sourceMatches=0') }
+    if (!$directRepositoryMismatchRejected) { throw 'Direct workbench attachment accepted a same-commit wrong-repository handoff.' }
+    $compiledFixture.provenance.packetRepositoryId = ('repository-' + ('a' * 24))
     $compiledFixture.provenance.sourceCommitSha = ('e' * 40)
     [IO.File]::WriteAllText($compiledPathInput, (($compiledFixture | ConvertTo-Json -Depth 20) + "`n"), [Text.UTF8Encoding]::new($false))
     $mismatchRejected = $false
     try { & $standaloneScript -PacketPath $packetPath -ConfigPath $standaloneConfig -CompiledPathHandoffPath $compiledPathInput | Out-Null }
-    catch { $mismatchRejected = $_.Exception.Message.Contains('ApplicationWorkbenchCompiledPathProvenanceMismatch;reasons=packet-source-commit;sourceMatches=0') }
+    catch { $mismatchRejected = $_.Exception.Message.Contains('ApplicationWorkbenchCompiledPathProvenanceMismatch;reasons=packet-source-identity;sourceMatches=0') }
     if (!$mismatchRejected) { throw 'Standalone review accepted a compiled path handoff from another commit.' }
     $missingCompatibleRejected = $false
     try { & $standaloneScript -ConfigPath $standaloneConfig -CompiledPathHandoffPath $compiledPathInput | Out-Null }

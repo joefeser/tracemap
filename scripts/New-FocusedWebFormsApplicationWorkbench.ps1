@@ -257,13 +257,18 @@ if ($CompiledPathHandoffPath) {
     $compiledPathHandoff = [IO.File]::ReadAllText($compiledInput.FullName) | ConvertFrom-Json -Depth 50
     $compiledPaths = @(Values $compiledPathHandoff.paths)
     $compiledCommit = [string]$compiledPathHandoff.provenance.sourceCommitSha
+    $compiledRepository = [string](Property-Value $compiledPathHandoff.provenance 'packetRepositoryId')
     $compiledRejections = [Collections.Generic.List[string]]::new()
     if ($compiledPathHandoff.schemaVersion -cne 'webforms-compiled-path-handoff.v1') { $compiledRejections.Add('schema') }
     if ($compiledPathHandoff.ruleId -cne 'diagnostic.webforms.compiled-path-handoff.v1') { $compiledRejections.Add('rule-id') }
     if ($compiledPathHandoff.claimLevel -cne 'review-only-static-evidence') { $compiledRejections.Add('claim-level') }
     if ($compiledCommit -cnotmatch '^[0-9a-f]{40}$') { $compiledRejections.Add('source-commit-format') }
-    $compiledSourceMatches = @($sources | Where-Object { [string]$_.commitSha -ceq $compiledCommit }).Count
-    if ($compiledSourceMatches -ne 1) { $compiledRejections.Add('packet-source-commit') }
+    if ($compiledRepository -cnotmatch '^repository-[0-9a-f]{24}$') { $compiledRejections.Add('source-repository-format') }
+    $compiledSourceMatches = @($sources | Where-Object {
+        [string]$_.commitSha -ceq $compiledCommit -and
+        [string](Property-Value $_ 'repositoryId') -ceq $compiledRepository
+    }).Count
+    if ($compiledSourceMatches -ne 1) { $compiledRejections.Add('packet-source-identity') }
     if ([string]$compiledPathHandoff.provenance.generatorSha256 -cnotmatch '^[0-9a-f]{64}$') { $compiledRejections.Add('generator-hash') }
     if ([string]$compiledPathHandoff.provenance.boundedInputSha256 -cnotmatch '^[0-9a-f]{64}$') { $compiledRejections.Add('bounded-input-hash') }
     if ($compiledPaths.Count -gt 256) { $compiledRejections.Add('path-limit') }

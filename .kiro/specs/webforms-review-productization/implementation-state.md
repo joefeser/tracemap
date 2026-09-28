@@ -65,6 +65,14 @@ Public claim level: hidden
   2,326/2,326; this repair changes PowerShell projection/orchestration only.
 - Larger-corpus performance and native .NET orchestration remain planned, not
   acceptance claims for this proof closeout.
+- Follow-up exact-head repair: an explicitly selected `wview -ProofRoot`
+  permits its saved base index; automatic discovery remains higher-work only.
+  Both normal workbench attachment and standalone packet discovery now match
+  repository ID plus commit, rejecting same-commit fork evidence. Public view,
+  workbench, handoff, saved-packet, and packet-log guards pass. Refreshed full
+  .NET suite passes 2,326/2,326 (zero failed/skipped); the public publish
+  end-to-end guard also passes. Windows saved-proof acceptance remains a
+  separate operator check.
 
 - Full application workbench with compact application index and per-page
   evidence handoffs.
