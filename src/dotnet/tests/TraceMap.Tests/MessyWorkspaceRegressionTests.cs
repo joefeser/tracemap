@@ -2707,6 +2707,9 @@ public sealed class MessyWorkspaceRegressionTests
         Assert.Contains(report.Paths, path => path.Nodes.Any(node => node.SurfaceKind == "sql-query"));
         Assert.Equal(AttachmentChainKeys(baselineReport), AttachmentChainKeys(report));
         Assert.Equal(entry.CompiledAttachmentLinkSha256, Assert.Single(report.CompiledAttachmentLinks!).BoundedInputSha256);
+        var grouped = GroupedCompiledPathHandoffBuilder.Create(report, AttachmentFileHash(combined));
+        Assert.Equal(JsonSerializer.Serialize(report), JsonSerializer.Serialize(GroupedCompiledPathHandoffBuilder.Restore(grouped)));
+        Assert.Equal(report.Paths.Count, grouped.Chains.Sum(chain => chain.VariantIndexes.Count));
         Assert.All(report.Paths.SelectMany(path => path.Edges).Where(edge => edge.EdgeKind == kind),
             edge => Assert.Equal(entry.CompiledAttachmentLinkSha256, edge.CompiledAttachmentLinkSha256));
         var unlinked = Path.Combine(folder, "attachment-unlinked.sqlite");

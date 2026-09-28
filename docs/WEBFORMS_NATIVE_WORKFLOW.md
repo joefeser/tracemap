@@ -416,6 +416,42 @@ rejection of changed links/embedded manifests/source identity. These tests do no
 establish native end-to-end workbench acceptance, Windows compiled-site parity,
 all-pages coverage, new semantic source reconciliation or representative scale.
 
+### Lossless grouped report projection
+
+`GroupedCompiledPathHandoffBuilder` provides a private .NET projection of an
+already admitted dependency-path report. It indexes exact full node/edge records
+by content hash and keeps ordered references for every original path variant and
+inventory occurrence. The retained header includes all coverage, gaps, sources,
+query, classifications, limitations, traversal and attachment-link provenance.
+Restoration verifies context, record/reference integrity, complete report digest
+and exact chain membership; it reconstructs the original canonical report without
+dropping evidence. Existing path JSON schemas and compatibility scripts are unchanged.
+
+Chains are grouped by ordered node kind, full symbol identity, source index,
+scan and commit. Short labels are for display only; overloads and source identities
+remain separate. This is static presentation grouping, not runtime deduplication.
+The `webforms-compiled-grouped-handoff.v1` artifact records the exact Reporting
+assembly SHA-256 and a bounded-input digest over the independently admitted index
+hash, canonical report hash, generator and configured projection limits. The
+canonical report hash is not a hash of an arbitrary input JSON file's whitespace.
+The caller must validate the actual index bytes separately.
+
+Default projection caps are 256 MiB canonical input, 512 MiB aggregate HTML/JSON
+output, 100,000 paths, 500,000 distinct records and 2,000,000 node/edge references.
+These are explicit projection limits, not upstream graph-memory or eight-times
+scale acceptance. Bounds stop publication rather than silently truncate variants.
+`GroupedCompiledPathReportWriter` writes only new `compiled-paths.local.html` and
+`compiled-paths.handoff.local.json` files and returns actual artifact hashes/bytes.
+Failures leave unadmitted partial bytes for the owning workflow. The caller owns
+output isolation and checkpoint admission. This API is not yet a native operator
+report command or the unified application workbench phase.
+
+All identities and input fingerprints remain local/private; there is no shareable
+projection. The HTML shows each chain once, retains expandable exact identities,
+transition evidence and every path variant, and links to the lossless handoff.
+It does not upgrade page-chain verdicts or claim runtime SQL, source-line identity,
+compiled build authenticity, all-page coverage or final Windows acceptance.
+
 1. Authoritative source/parent/binding validation and resumable .NET phase execution.
 2. Integration of grouped method chains into normal workbench navigation and an
    additive chain index in lossless JSON, without changing page verdicts.

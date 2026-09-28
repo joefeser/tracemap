@@ -97,6 +97,9 @@ scripts/smoke-typescript-endpoints.sh
 .agent-control/tmp
 .agent-control/pr-loop-handoffs
 /outputs/
+# Local browser validation artifacts, not shareable evidence by default.
+/output/playwright/
+/.playwright-cli/
 
 # Restricted-workstation Web Forms page-list settings
 /scripts/Run-FocusedWebFormsPageList.json
