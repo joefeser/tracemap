@@ -1,5 +1,45 @@
 # Web Forms Review Productization Implementation State
 
+## Native report execution and entry workbench (2026-09-28)
+
+- Continued on `codex/webforms-native-preflight` in the managed
+  `webforms-native-attachment` checkout, based on `8762069c`.
+- Operator run/resume now continues beyond its immutable scan checkpoint into
+  explicit combine, the existing full page packet and a separate grouped compiled
+  supplement. Native entry HTML and root JSON retain original page-chain verdicts,
+  full packet records, source/published/receipt locations, exact scan manifests,
+  DLL/input byte hashes and CLI/Reporting generator commitments. No snippets or
+  source rescan occur in this phase. Attachment uses the admitted explicit link.
+- Selected handlers use one bounded graph admission and exact source-index,
+  scan, commit and full symbol roots. Empty/missing selectors never fall back to
+  unrelated roots; global ambiguity remains intact. The graph still materializes
+  after admission, so this is not the eight-times memory gate.
+- Reports share the contiguous hash-chained run journal. Started/failed/cancelled
+  phases reference the completed scan checkpoint; retries allocate fresh report
+  IDs. Producer-calculated hashes must match independently collected bytes before
+  completion. Completed resume revalidates all admitted output without rendering
+  or scanning again. Partial failures remain on disk, unadmitted.
+- Broader focused validation passed 303/303, zero failed/skipped (2 minutes
+  10 seconds), before the final event-fixture/browser-layout adjustments. Final
+  exact-slice validation is recorded below after those adjustments.
+- Final execution plus source/compiled bridge parity passed 55/55, zero
+  failed/skipped (1 minute 20 seconds); after the mobile wrapping repair, the
+  no-build repeat passed 55/55 (1 minute 35 seconds). Builds introduced no compiler
+  or analyzer warnings. The real CLI fixture retains one control/event chain,
+  requests its exact handler root and verifies the root packet canonical digest.
+- Playwright desktop/mobile QA used only the public execution fixture. Expanded
+  long provenance paths initially overflowed mobile; `overflow-wrap:anywhere`
+  repaired it, with viewport/document both 390 pixels. Screenshots were inspected;
+  grouped HTML and native JSON navigation worked. HTML had no console errors;
+  Chromium's raw JSON viewer requested an absent favicon (404 only), not an
+  application failure. Browser and localhost server were closed. The disposable
+  ignored preview harness needed its test EF dependency explicitly pinned to avoid
+  harness-only dependency conflicts; no production dependency change was made.
+- All-page receipt partitioning, complete legacy presentation parity, bounded
+  Claude retrieval, durable relocation/retention, representative scale, full
+  regression and the authorized real Windows compiled-site run remain gates.
+  No proof deletion, wrapper retirement, PR creation or merge occurred.
+
 ## Native immutable attachment execution (2026-09-28)
 
 - Continued on `codex/webforms-native-preflight` in the managed

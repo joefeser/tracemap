@@ -31,6 +31,7 @@ public sealed record CombinedDependencyPathOptions(
     internal int StartingNodeLimit { get; init; } = 250;
     internal IReadOnlySet<string>? StartingFactIds { get; init; }
     public bool ExactFromSymbol { get; init; }
+    internal IReadOnlyList<CombinedPathSymbolRoot>? SymbolRoots { get; init; }
     // Deterministic work bound, including nonterminal/cyclic exploration.
     public int MaxTraversalWork { get; init; } = 100_000;
     // Web Forms packet composition inventories one shortest witness per
@@ -102,7 +103,11 @@ public sealed record CombinedPathQuery(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     string? MessageDirection,
     int MaxTraversalWork = 100_000,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool ExactFromSymbol = false);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool ExactFromSymbol = false)
+{
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<CombinedPathSymbolRoot>? SymbolRoots { get; init; }
+}
 
 public sealed record CombinedPathSummary(
     int SourceCount,
@@ -721,7 +726,7 @@ public static partial class CombinedDependencyPathReporter
                 AlgorithmVersion,
                 CombinedReportHelpers.NormalizeMessageDirection(options.MessageDirection, "paths"),
                 options.MaxTraversalWork,
-                options.ExactFromSymbol),
+                options.ExactFromSymbol) { SymbolRoots = options.SymbolRoots },
             read.Sources.Select(source => legacyMode ? SanitizeSource(source) : source).OrderBy(source => source.Label, StringComparer.Ordinal).ThenBy(source => source.SourceIndexId, StringComparer.Ordinal).ToArray(),
             new CombinedPathSummary(
                 read.Sources.Count,
@@ -5117,7 +5122,14 @@ public static partial class CombinedDependencyPathReporter
     {
         var legacyMode = options.IncludeLegacyRoots || IsLegacyView(options.View);
         IEnumerable<GraphNode> candidates;
-        if (!string.IsNullOrWhiteSpace(options.FromEndpoint))
+        if (options.SymbolRoots is not null)
+        {
+            var roots = options.SymbolRoots.ToHashSet();
+            candidates = graph.Nodes.Values.Where(node => node.NodeKind is "Method" or "Symbol"
+                && node.ScanId is not null && node.CommitSha is not null && node.SymbolId is not null
+                && roots.Contains(new(node.SourceIndexId, node.ScanId, node.CommitSha, node.SymbolId)));
+        }
+        else if (!string.IsNullOrWhiteSpace(options.FromEndpoint))
         {
             var endpoint = ParseEndpointSelector(options.FromEndpoint);
             candidates = graph.Nodes.Values.Where(node =>

@@ -2706,6 +2706,19 @@ public sealed class MessyWorkspaceRegressionTests
             Format: "json", FromSymbol: sourceNode.DisplayName, FromSource: "retained", MaxDepth: 10));
         Assert.Contains(report.Paths, path => path.Nodes.Any(node => node.SurfaceKind == "sql-query"));
         Assert.Equal(AttachmentChainKeys(baselineReport), AttachmentChainKeys(report));
+        var exactRoot = new CombinedPathSymbolRoot(sourceNode.SourceIndexId, sourceNode.ScanId!, sourceNode.CommitSha!, sourceNode.SymbolId!);
+        var selectedOptions = new CombinedDependencyPathOptions(combined, Path.Combine(folder, "selected-paths.json"), Format: "json", MaxDepth: 10);
+        var selected = await CombinedDependencyPathReporter.BuildSelectedSymbolsAsync(selectedOptions, [exactRoot], combinedIndex: true);
+        Assert.Equal(AttachmentChainKeys(report), AttachmentChainKeys(selected));
+        Assert.Equal(exactRoot, Assert.Single(selected.Query.SymbolRoots!));
+        Assert.Empty((await CombinedDependencyPathReporter.BuildSelectedSymbolsAsync(selectedOptions, [], combinedIndex: true)).Paths);
+        Assert.Empty((await CombinedDependencyPathReporter.BuildSelectedSymbolsAsync(selectedOptions,
+            [exactRoot with { SourceIndexId = "wrong-source" }], combinedIndex: true)).Paths);
+        Assert.Empty((await CombinedDependencyPathReporter.BuildSelectedSymbolsAsync(selectedOptions,
+            [exactRoot with { CommitSha = new string('f', 40) }], combinedIndex: true)).Paths);
+        var refused = await CombinedDependencyPathReporter.BuildSelectedSymbolsAsync(selectedOptions, [exactRoot], combinedIndex: true, new(MaxFacts: 1));
+        Assert.Empty(refused.Paths);
+        Assert.True(refused.Summary.Truncated);
         Assert.Equal(entry.CompiledAttachmentLinkSha256, Assert.Single(report.CompiledAttachmentLinks!).BoundedInputSha256);
         var grouped = GroupedCompiledPathHandoffBuilder.Create(report, AttachmentFileHash(combined));
         Assert.Equal(JsonSerializer.Serialize(report), JsonSerializer.Serialize(GroupedCompiledPathHandoffBuilder.Restore(grouped)));

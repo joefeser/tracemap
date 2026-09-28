@@ -86,6 +86,12 @@
       node/edge records, ordered variant references and exact report restoration;
       write new hash-verified HTML/JSON without changing page verdicts. Keep
       native checkpoint/workbench integration and final workflow parity pending.
+    - [x] Execute native private packet/grouped reports in owned append-only
+      attempts anchored to the scan checkpoint; retain full packet semantics,
+      exact full-identity roots, input/DLL/manifest provenance and lossless
+      compiled handoff. Verify failure/cancellation/resume and output tampering.
+      Keep all-page receipt partitioning, retrieval, legacy presentation parity,
+      scale and the real private Windows acceptance gate pending.
   - [ ] Update the work-machine Claude guidance to start from the run manifest
     and retrieve bounded evidence groups instead of loading whole large files.
 - [ ] Expose per-phase budget usage, missing-input guidance, and resumable gaps.

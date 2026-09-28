@@ -2518,14 +2518,29 @@ rules:
     emits:
       - webforms-compiled-review-checkpoint.v1 local-only execution checkpoint
     limitations:
-      - Successful execution ends at scan-completed-reports-pending, not a complete compiled-site review workflow; cross-index parent joins, graph queries and unified reports are not implemented by this phase. Receipt preparation is a separate explicit operator-declaration command.
+      - The scan checkpoint remains scan-completed-reports-pending; operator run/resume then executes separately checkpointed native reports. Reports-completed-review-only means admitted artifact generation, not complete-site, runtime or representative-scale acceptance. Receipt preparation is a separate explicit operator-declaration command.
       - The CLI does not build or publish the site, load assemblies at runtime, infer bindings or attest source ownership; existing receipt policy and reduced metadata/IL/PDB coverage remain authoritative.
       - Resume verifies retained inputs and outputs without a new source scan; a retained snapshot does not validate current unpinned source bytes, clean Git state, runtime behavior or SQL execution.
-      - Attachment and completed attachment resume recompute current bytes over the retained inventory with exact scanner framing. Missing semantic roster members or mismatched bytes refuse admission; equality covers only retained inventory scope, not all current files or historical build/source-line identity. Parent facts are not copied or relabeled; cross-index joins remain pending.
+      - Attachment and completed attachment resume recompute current bytes over the retained inventory with exact scanner framing. Missing semantic roster members or mismatched bytes refuse admission; equality covers only retained inventory scope, not all current files or historical build/source-line identity. Parent facts are not copied or relabeled; reporting joins require the explicit admitted combine contract.
       - Checkpoint generator and input/payload hashes are local integrity commitments, not authenticated signatures; local-only artifacts contain private input fingerprints and must not be shared.
       - Distribution dependency bytes and runtime version participate in execution identity; external SDK/toolchain bytes are not pinned and remain an explicit gap rather than build authenticity or reproducibility proof.
       - Failed or cancelled attempt bytes are retained but not admitted as completed evidence; retry allocates a fresh owned attempt and never rewrites parent scans or old successful artifacts.
       - Configured admission bounds do not establish representative scale or bounded scanner memory; output traversal admits at most 256 filesystem entries and run history at most 256 checkpoints.
+  - id: workflow.webforms.native-report-execution.v1
+    name: Private native checkpointed Web Forms workbench
+    description: Explicitly combines admitted scan inputs, preserves the complete existing page packet and its verdicts, selects bounded full-identity handler roots and writes one private workbench with lossless grouped compiled handoff and exact generator/input commitments.
+    evidenceTier: Tier2Structural
+    emits:
+      - webforms-native-review-handoff.v1 local-only JSON
+      - private native Web Forms review HTML
+    limitations:
+      - Reports are separate append-only owned attempts anchored to the completed scan byte checkpoint. Failure or cancellation retains unadmitted output; resume never rescans or overwrites old report attempts. Completed reuse verifies every admitted artifact hash.
+      - Exact full symbol, source index, scan and commit identities select handler roots. No short-name, label or shared-commit join establishes source authority. Empty or missing roots produce no fallback query; omitted roots and graph limits remain explicit gaps.
+      - The full retained page packet and original verdicts remain authoritative for page chains. Compiled paths are a separate review-only supplement, not runtime SQL execution, page activation or source-line identity.
+      - Actual CLI and Reporting generator hashes, exact combined-index bytes, canonical packet/manifests and grouped handoff hashes bind the root JSON. These are private local integrity commitments, not signed build authenticity or shareable fingerprints.
+      - Existing public packet semantics are preserved; parity with every legacy PowerShell presentation feature and a real private Windows compiled site remains a separate gate.
+      - Configurable graph admission, root, traversal, projection and aggregate rendered-output bounds fail closed. The combined graph still materializes after bounded admission; representative eight-times time, disk and peak-memory acceptance is unverified.
+      - All-page mode remains limited by admitted page packet and receipt membership; complete receipt partitioning and all-pages compiled coverage are explicitly pending. No dependency cleanup, relocation or external publication occurs.
   - id: workflow.compiled-source-attachment.v1
     name: Compiled-only attachment context and limitations
     description: Records exact Core generator, bounded input, parent manifest/index hashes and verified retained source snapshot for a new compiled-only scan using existing metadata, IL, portable PDB and publish receipt policies.

@@ -2,8 +2,9 @@
 
 Status: native preflight, input validation, checkpointed fresh scanning and
 immutable compiled-only attachment. Explicit cross-index VB PDB/publish reporting
-joins are implemented; native report orchestration and unified review reports
-are still pending.
+joins and checkpointed private report orchestration are implemented. All-page
+receipt partitioning, bounded retrieval guidance, representative scale and real
+private Windows compiled-site parity remain pending.
 
 The Core compiled-only producer now has a distinct local attachment context
 containing the exact generator, bounded input, original parent manifest/index
@@ -17,8 +18,8 @@ original parent manifest/index/facts and retained source bytes, then writes a
 separate compiled-only scan in a new owned attempt. Context validation checks
 local integrity, not authenticity. Validated cross-index report joins are now
 consumed by the reporting graph through the explicit combine contract described
-below. Native report orchestration is not implemented yet; the proven report
-wrappers remain required.
+below. Native report orchestration produces a private workbench and grouped
+lossless handoff; retain the proven wrappers until final workflow parity passes.
 
 ## Native operator-declared receipt preparation
 
@@ -127,8 +128,14 @@ The run owns these paths:
 ```text
 run-manifest.json                 immutable preflight/input contract
 checkpoints/0001.json              scan-started checkpoint
-checkpoints/0002.json              completed/failed/cancelled checkpoint
+checkpoints/0002.json              scan-completed/failed/cancelled checkpoint
+checkpoints/0003.json              reports-started checkpoint (successful first scan)
+checkpoints/0004.json              reports-completed/failed/cancelled checkpoint
 attempts/<owned-id>/scan/          five standard scan artifacts; fresh runs also retain snapshot pair
+reports/<owned-id>/index.html      single private entry page
+reports/<owned-id>/handoff.local.json  full retained page packet, input/manifest provenance and compiled link
+reports/<owned-id>/compiled/       grouped method-chain HTML and lossless indexed JSON
+reports/<owned-id>/combined.sqlite internal exact combined evidence, not another source scan
 .native-run.lock                   exclusive process lock, not a discovery hint
 ```
 
@@ -170,7 +177,7 @@ distribution directory.
 `run` refuses an already-started run; use `resume`. Failed/cancelled/interrupted
 attempts remain on disk and a retry uses a new owned ID. A completed resume checks
 input/tool/output hashes and does **not** rerun source scanning. It reports
-`retainedSnapshot=true;sourceRescanned=false`: current unpinned source-file edits
+`sourceRescanned=false`: current unpinned source-file edits
 do not turn a retained snapshot into current-source validation. A changed config,
 selected page, declared DLL/receipt/PDB/map or tool rejects reuse; make a new
 preflight run for new inputs. A changed Git identity also rejects execution.
@@ -190,12 +197,32 @@ Explicit project/solution scans retain the existing compiler-membership behavior
 their additional semantic inputs participate in the scanner's source snapshot.
 These modes have argument-admission coverage here, not full compiled-site parity.
 
-This milestone ends at `scan-completed-reports-pending`. The scan's normal
-`report.md` is available, but no unified workbench, grouped compiled-path handoff
-or graph-query phase is produced here. Raw page maps are not promoted to a
-publish receipt automatically. Attachment completion additionally retains
-`CrossIndexParentJoinsPending`: a valid derived index is not yet a joined
-source-to-compiled workbench or a replacement for the proven reports.
+The scan first records `scan-completed-reports-pending`. Operator `run/resume`
+then admits an explicit combined index and renders the existing page packet plus
+separate compiled method paths. Success records `reports-completed-review-only`
+and prints `webFormsWorkbench` and `webFormsHandoff` paths. The immutable manifest
+and contiguous journal are the source of truth; no newest-folder discovery occurs.
+Report failure/cancellation keeps the scan checkpoint and partial report bytes.
+Resume allocates a fresh report ID without scanning or overwriting old evidence.
+Completed resume verifies scan and report hashes without regenerating reports.
+Generation-complete is not complete coverage, runtime proof or full-site acceptance.
+
+The main handoff embeds the full retained page packet, original rules, tiers,
+verdicts and gaps, input inventory and scan manifests. Its compiled link is pinned
+by exact bytes. The grouped JSON retains all original variants and full identities;
+compact HTML names are display-only. Page-chain verdicts are never upgraded by
+the compiled supplement. Raw page maps are not promoted to a receipt automatically.
+
+An optional `budgets.reports` object configures graph admission (`maxInputFacts`,
+`maxInputEdges`, `maxInputTextBytes`), packet limits (`maxSurfaces`, `maxEventChains`,
+`maxGaps`), handler/frontier limits (`maxCompiledRoots`, `maxFrontier`), and projection
+limits (`maxProjectionInputBytes`, `maxOutputBytes`, `maxProjectionRecords`,
+`maxProjectionReferences`). Defaults are 250,000 facts/edges, 128 MiB graph text,
+1,000 surfaces/chains/roots, 10,000 gaps/frontier, 256 MiB canonical projection
+input, 512 MiB aggregate rendered output, 500,000 records and 2,000,000 references.
+The internal combined SQLite uses retained-artifact/hash bounds, not the rendered
+output cap. All-page receipt partitioning and representative eight-times graph
+memory remain separate gates. The graph still materializes after admission.
 
 An optional `publishReceiptRelativePath` names an existing local-only
 `webforms-publish-binding.v1` receipt under `receiptRoot`, if declared, or the
