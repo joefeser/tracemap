@@ -32,6 +32,29 @@ public static class ManagedMetadataExtractor
     public const string InputLimitation = "Admission proves only that the explicitly supplied bounded bytes were inspected; it does not prove freshness, source ownership, authenticity, runtime load, or completeness.";
     public const string GapLimitation = "This categorical gap reduces only the explicitly bounded compiled-input coverage; it does not prove absence and does not alter source-derived evidence.";
 
+    /// <summary>
+    /// Inspects explicitly configured managed inputs using the same bounded
+    /// readers, receipt classifier and dependency policy as a scan. The returned
+    /// provenance is inventory/binding evidence, not source ownership, build
+    /// authenticity, IL execution or runtime proof. No facts or files are written.
+    /// </summary>
+    public static CompiledInputInspection InspectInputs(
+        ScanOptions options,
+        string scanCommitSha,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        ArgumentException.ThrowIfNullOrWhiteSpace(options.RepoPath);
+        ArgumentException.ThrowIfNullOrWhiteSpace(scanCommitSha);
+        cancellationToken.ThrowIfCancellationRequested();
+        var evaluation = Evaluate(Path.GetFullPath(options.RepoPath), scanCommitSha, options, cancellationToken);
+        var gapKinds = evaluation.Candidates.Where(candidate => candidate.FactType == FactTypes.AnalysisGap)
+            .Select(candidate => candidate.Properties.GetValueOrDefault("gapKind"))
+            .Where(value => !string.IsNullOrWhiteSpace(value)).Select(value => value!)
+            .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+        return new(evaluation.Provenance, gapKinds, evaluation.KnownGaps);
+    }
+
     internal static CompiledInputEvaluation Evaluate(
         string repoPath,
         string scanCommitSha,

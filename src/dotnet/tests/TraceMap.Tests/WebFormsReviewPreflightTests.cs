@@ -130,6 +130,11 @@ public sealed class WebFormsReviewPreflightTests
     [InlineData("work", "BUDGET_INVALID")]
     [InlineData("source", "SOURCE_COMMIT_MISMATCH")]
     [InlineData("relative-root", "ROOT_PATH_INVALID")]
+    [InlineData("metadata-work", "BUDGET_INVALID")]
+    [InlineData("metadata-text", "BUDGET_INVALID")]
+    [InlineData("il-text", "BUDGET_INVALID")]
+    [InlineData("parent-facts", "BUDGET_INVALID")]
+    [InlineData("fact-line", "BUDGET_INVALID")]
     public async Task Invalid_configuration_is_rejected_before_output(string mutation, string expected)
     {
         using var fixture = new Fixture();
@@ -148,6 +153,11 @@ public sealed class WebFormsReviewPreflightTests
             "work" => fixture.Config with { Budgets = fixture.Config.Budgets with { IlMaxWork = 0 } },
             "source" => fixture.Config with { SourceCommitSha = new string('b', 40) },
             "relative-root" => fixture.Config with { SourceRoot = "relative" },
+            "metadata-work" => fixture.Config with { Budgets = fixture.Config.Budgets with { MetadataMaxWork = 0 } },
+            "metadata-text" => fixture.Config with { Budgets = fixture.Config.Budgets with { MetadataMaxText = 70 } },
+            "il-text" => fixture.Config with { Budgets = fixture.Config.Budgets with { IlMaxText = 65_537 } },
+            "parent-facts" => fixture.Config with { Budgets = fixture.Config.Budgets with { MaxParentFacts = 0 } },
+            "fact-line" => fixture.Config with { Budgets = fixture.Config.Budgets with { MaxFactLineChars = 127 } },
             _ => throw new InvalidOperationException()
         };
         var exception = await Assert.ThrowsAnyAsync<Exception>(() => fixture.Build());

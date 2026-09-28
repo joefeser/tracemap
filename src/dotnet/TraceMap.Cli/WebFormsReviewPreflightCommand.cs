@@ -16,7 +16,12 @@ public sealed record WebFormsReviewBudgets(
     long IlMaxWork = 30_000_000,
     int GraphMaxDepth = 20,
     int GraphMaxPaths = 256,
-    long GraphMaxWork = 2_000_000);
+    long GraphMaxWork = 2_000_000,
+    long MetadataMaxWork = 500_000,
+    int MetadataMaxText = 8_192,
+    int IlMaxText = 16_384,
+    long MaxParentFacts = 5_000_000,
+    int MaxFactLineChars = 1_048_576);
 
 public sealed record WebFormsReviewConfig(
     string SchemaVersion,
@@ -252,7 +257,10 @@ public static class WebFormsReviewPreflightCommand
         if (budget.MaxInputFiles is < 1 or > 256 || budget.MaxAssemblyBytes is < 1 or > 1_073_741_824 ||
             budget.MaxRetainedArtifactBytes is < 1 or > 1_099_511_627_776 || budget.MaxTotalHashBytes is < 1 or > 1_099_511_627_776 ||
             budget.IlMaxWork is < 1 or > 100_000_000 || budget.GraphMaxWork is < 1 or > 100_000_000 ||
-            budget.GraphMaxDepth is < 1 or > 20 || budget.GraphMaxPaths is < 1 or > 256) throw Fail("BUDGET_INVALID");
+            budget.GraphMaxDepth is < 1 or > 20 || budget.GraphMaxPaths is < 1 or > 256 ||
+            budget.MetadataMaxWork is < 1 or > 100_000_000 || budget.MetadataMaxText is < 71 or > 65_536 ||
+            budget.IlMaxText is < 71 or > 65_536 || budget.MaxParentFacts is < 1 or > 100_000_000 ||
+            budget.MaxFactLineChars is < 128 or > 16_777_216) throw Fail("BUDGET_INVALID");
     }
     private static void ValidateOutput(string output, WebFormsReviewConfig config)
     {
@@ -270,7 +278,7 @@ public static class WebFormsReviewPreflightCommand
         if (!Contains(root, child) || PathComparer.Equals(root, child)) throw Fail("INPUT_ESCAPES_ROOT");
         return child;
     }
-    private static string PhysicalPath(string path)
+    internal static string PhysicalPath(string path)
     {
         var full = Path.GetFullPath(path);
         var current = Path.GetPathRoot(full)!;
@@ -282,7 +290,7 @@ public static class WebFormsReviewPreflightCommand
         }
         return Path.TrimEndingDirectorySeparator(Path.GetFullPath(current));
     }
-    private static async Task<WebFormsReviewInput> HashAsync(string role, string path, long maximum, CancellationToken token)
+    internal static async Task<WebFormsReviewInput> HashAsync(string role, string path, long maximum, CancellationToken token)
     {
         await using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 65_536, FileOptions.SequentialScan | FileOptions.Asynchronous);
         if (stream.Length > maximum) throw Fail("FILE_BYTES_LIMIT");
@@ -298,7 +306,7 @@ public static class WebFormsReviewPreflightCommand
         }
         return new(role, path, bytes, Convert.ToHexString(hash.GetHashAndReset()).ToLowerInvariant());
     }
-    private static async Task<byte[]> ReadSmallAsync(string path, int maximum, CancellationToken token)
+    internal static async Task<byte[]> ReadSmallAsync(string path, int maximum, CancellationToken token)
     {
         await using var stream = File.OpenRead(path);
         using var output = new MemoryStream();
@@ -311,7 +319,7 @@ public static class WebFormsReviewPreflightCommand
         }
         return output.ToArray();
     }
-    private static void RejectDuplicateProperties(byte[] bytes)
+    internal static void RejectDuplicateProperties(byte[] bytes)
     {
         using var document = JsonDocument.Parse(bytes, new JsonDocumentOptions { MaxDepth = 32 });
         void Visit(JsonElement element)

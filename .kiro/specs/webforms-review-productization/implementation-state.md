@@ -1,5 +1,58 @@
 # Web Forms Review Productization Implementation State
 
+## Active native workflow goal (2026-09-28)
+
+- Owner requested the complete workflow as an active tracked goal after the
+  preflight slice. Continue on `codex/webforms-native-preflight`; preserve the
+  working PowerShell path and its external private proof dependencies.
+- Delivery order: authoritative source/parent/compiled validation; durable
+  resumable fresh/attach execution; normal workbench and grouped compiled-path
+  navigation with lossless indexed JSON; bounded Claude guidance; public parity
+  and representative scale/retention validation; short Windows operator run.
+- Reuse `ManagedMetadataExtractor.Evaluate` semantics through a narrow Core
+  API rather than duplicating binding classification in CLI orchestration.
+  Its receipt-based `bound` state is not build/authenticity/runtime proof.
+  Unbound, stale, dependency and reader-disagreement gaps remain explicit.
+- Parent attachment must validate retained source/index identity and hashes
+  before producing a new derived index; never append to the original scan.
+- The final public acceptance denominator includes selected/all-page fixtures,
+  projectless and project-based sources, fresh/attach/resume/tamper cases,
+  equivalent retained method-chain/evidence identities, and bounded scale
+  metrics. Counts alone are not equivalence proof.
+- Keep private paths/data local. No real work-machine run has been performed
+  by this coordinator. The owner will receive a short command for authorized
+  Windows validation once the complete public-fixture workflow is ready.
+- Cleanup starts with dependency-aware dry-run guidance only. No proof deletion,
+  wrapper retirement, PR merge or source mutation is authorized by this goal.
+- Goal is active, not achieved. Preflight tests establish only the first slice;
+  subsequent implementation and final private validation remain outstanding.
+
+## Native input validation gate (2026-09-28)
+
+- Added `ManagedMetadataExtractor.InspectInputs`, a narrow Core facade over the
+  unchanged scanner evaluation policy, including categorical global gaps. It
+  writes no artifacts and does not perform IL or runtime execution.
+- Added the internal `WebFormsReviewInputValidation` execution gate: pin/recheck
+  explicit inputs and Git identity, inspect compiled receipt policy outcomes,
+  validate retained parent repository/root/snapshot identity, full embedded
+  manifest equality and SQLite integrity, then compare every streamed NDJSON
+  fact with its indexed content. Duplicate, missing, altered and oversized rows
+  fail before any scan/report execution.
+- Read-only immutable SQLite URI inspection supports sidecar-free checkpointed
+  WAL files without creating parent sidecars. Active sidecars are rejected;
+  temporary duplicate-ID tracking is file-backed with a bounded cache. Native
+  SQLite work can be interrupted through the cancellation token.
+- Metadata work/text, IL text, parent fact-count and per-fact line limits are
+  explicit, independently validated config budgets; older configs use defaults.
+- Public focused validation passed 77/77 across the preflight, execution-gate
+  and managed-metadata policy tests. Builds emitted no compiler/analyzer
+  warnings; `git diff --check` passed. Full regression is pending for this
+  milestone, rather than inferred from the prior preflight-only run.
+- This is an internal gate, not a new operator command. It is not yet wired into
+  native fresh/attach/resume execution, which remains the next implementation
+  step. Current source-byte validation still belongs to the actual source scan;
+  retained attachment identity is not a claim about current source contents.
+
 ## Native preflight slice (2026-09-28)
 
 - Branch: `codex/webforms-native-preflight`, based on merged PR #796 at
