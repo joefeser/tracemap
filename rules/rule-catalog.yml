@@ -2512,16 +2512,16 @@ rules:
       - File hashing limits are separate from recorded future IL and graph budgets; streamed hashing does not establish large-corpus runtime or memory acceptance.
       - The manifest contains private paths, source commit and input fingerprints and is not shareable; parent scans and existing output folders are never rewritten.
   - id: workflow.webforms.compiled-review-execution.v1
-    name: Private native fresh Web Forms scan checkpoints
-    description: Executes the existing source and explicitly declared compiled/PDB/IL scanner after input validation, verifies scan manifest/index/facts consistency, and records append-only hash-pinned checkpoints for safe retained-evidence resume.
+    name: Private native fresh and attachment Web Forms scan checkpoints
+    description: Executes a fresh source-plus-compiled scan or a separately owned compiled-only attachment after immutable parent/source validation, verifies scan manifest/index/facts consistency, and records append-only hash-pinned checkpoints for safe retained-evidence resume.
     evidenceTier: Tier2Structural
     emits:
       - webforms-compiled-review-checkpoint.v1 local-only execution checkpoint
     limitations:
-      - Successful execution ends at scan-completed-reports-pending, not a complete compiled-site review workflow; attachment, graph queries and unified reports are not implemented by this phase. Receipt preparation is a separate explicit operator-declaration command.
+      - Successful execution ends at scan-completed-reports-pending, not a complete compiled-site review workflow; cross-index parent joins, graph queries and unified reports are not implemented by this phase. Receipt preparation is a separate explicit operator-declaration command.
       - The CLI does not build or publish the site, load assemblies at runtime, infer bindings or attest source ownership; existing receipt policy and reduced metadata/IL/PDB coverage remain authoritative.
       - Resume verifies retained inputs and outputs without a new source scan; a retained snapshot does not validate current unpinned source bytes, clean Git state, runtime behavior or SQL execution.
-      - The separate attachment input gate recomputes current bytes over the retained inventory with exact scanner framing. Missing semantic roster members or mismatched bytes refuse admission; equality covers only retained inventory scope, not all current files or historical build/source-line identity. No attachment execution or cross-index join is implemented yet.
+      - Attachment and completed attachment resume recompute current bytes over the retained inventory with exact scanner framing. Missing semantic roster members or mismatched bytes refuse admission; equality covers only retained inventory scope, not all current files or historical build/source-line identity. Parent facts are not copied or relabeled; cross-index joins remain pending.
       - Checkpoint generator and input/payload hashes are local integrity commitments, not authenticated signatures; local-only artifacts contain private input fingerprints and must not be shared.
       - Distribution dependency bytes and runtime version participate in execution identity; external SDK/toolchain bytes are not pinned and remain an explicit gap rather than build authenticity or reproducibility proof.
       - Failed or cancelled attempt bytes are retained but not admitted as completed evidence; retry allocates a fresh owned attempt and never rewrites parent scans or old successful artifacts.
@@ -2535,6 +2535,7 @@ rules:
       - AnalysisGap
     limitations:
       - Parent manifest and index hashes must be independently validated by the calling workflow; the Core producer validates context shape and current retained source bytes, not parent index contents or authenticity.
+      - Context validation recomputes its canonical local integrity digest; it is not an authenticated signature or independent parent-artifact validation.
       - Source analysis, builds and semantic source reconciliation are not rerun; parent facts are not copied or relabeled. Cross-index source joins require independently validated parent context and are not supplied by this producer.
       - Every attachment remains reduced, local-only and review-only. Missing bindings, metadata/IL/PDB disagreement and publish gaps retain their original policy. No runtime SQL, source-line identity, clean working tree, authentic compilation or complete-site claim is made.
       - Source verification is an ordered bounded stream before and after extraction; no new source discovery occurs. Existing extractors retain their own work/memory limits, and overall eight-times scale remains unverified.

@@ -117,6 +117,46 @@ internal static class WebFormsReviewInputValidation
     internal static SourceSnapshotInspection ValidateRetainedSourceSnapshot(
         WebFormsReviewPreflightManifest preflight, ScanManifest parent, CancellationToken token)
     {
+        try
+        {
+            var availableBytes = preflight.Configuration.Budgets.MaxTotalHashBytes - preflight.Inputs.Sum(item => item.Bytes);
+            if (availableBytes < 1) throw Fail("PARENT_SOURCE_HASH_BYTES_LIMIT");
+            var observed = SourceSnapshotInspector.InspectOrderedInventory(preflight.Configuration.SourceRoot,
+                ReadLegacyInventory(preflight, token), preflight.Configuration.Budgets.MaxParentFacts, availableBytes, token);
+            if (observed.Digest != parent.SourceSnapshotDigest) throw Fail("PARENT_SOURCE_SNAPSHOT_MISMATCH_OR_INCOMPLETE_INVENTORY");
+            return observed;
+        }
+        catch (SqliteException exception) when (exception.SqliteErrorCode == 9 && token.IsCancellationRequested)
+        { throw new OperationCanceledException(token); }
+        catch (SourceSnapshotException) { throw Fail("PARENT_SOURCE_SNAPSHOT_CHANGED"); }
+        catch (SourceInventoryException) { throw Fail("PARENT_SOURCE_INPUT_UNAVAILABLE"); }
+        catch (InvalidOperationException exception) when (exception.Message.StartsWith("SourceSnapshot", StringComparison.Ordinal))
+        { throw SnapshotFailure(exception); }
+
+    }
+
+    internal sealed record RetainedInventory(Func<IEnumerable<FileInventoryItem>> Read, long MaxFiles, long MaxBytes);
+
+    // Caller must first pass complete immutable parent validation. This exposes
+    // retained membership only, never discovery or a guessed legacy roster.
+    internal static async Task<RetainedInventory> ReadRetainedInventoryAsync(
+        WebFormsReviewPreflightManifest preflight, ScanManifest parent, CancellationToken token)
+    {
+        var maxFiles = preflight.Configuration.Budgets.MaxParentFacts;
+        var maxBytes = preflight.Configuration.Budgets.MaxTotalHashBytes - preflight.Inputs.Sum(item => item.Bytes);
+        if (maxBytes < 1) throw Fail("PARENT_SOURCE_HASH_BYTES_LIMIT");
+        var header = preflight.Inputs.SingleOrDefault(item => item.Role == "parent-" + SourceSnapshotRetention.ManifestName);
+        var roster = preflight.Inputs.SingleOrDefault(item => item.Role == "parent-" + SourceSnapshotRetention.RosterName);
+        if (header is null && roster is null) return new(() => ReadLegacyInventory(preflight, token), maxFiles, maxBytes);
+        if (header is null || roster is null) throw Fail("PARENT_SOURCE_SNAPSHOT_PAIR_INCOMPLETE");
+        var retained = await SourceSnapshotRetention.ReadManifestAsync(header, roster,
+            preflight.Inputs.Single(item => item.Role == "parent-scan-manifest.json"), parent, token);
+        return new(() => SourceSnapshotRetention.ReadRoster(roster, token, retained),
+            Math.Min(maxFiles, retained.MaxFiles), Math.Min(maxBytes, retained.MaxSourceBytes));
+    }
+
+    private static IEnumerable<FileInventoryItem> ReadLegacyInventory(WebFormsReviewPreflightManifest preflight, CancellationToken token)
+    {
         var input = preflight.Inputs.Single(item => item.Role == "parent-index.sqlite");
         RejectSidecars(input.Path);
         using var connection = new SqliteConnection(new SqliteConnectionStringBuilder
@@ -132,47 +172,28 @@ internal static class WebFormsReviewInputValidation
             setup.CommandText = "pragma temp_store=FILE; pragma cache_size=-2048; pragma temp.cache_size=-2048";
             setup.ExecuteNonQuery();
         }
-        try
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+            select file_path, properties_json, rule_id, extractor_id from facts
+            where fact_type=$type order by file_path collate tracemap_ordinal
+            """;
+        command.Parameters.AddWithValue("$type", FactTypes.FileInventoried);
+        using var reader = command.ExecuteReader();
+        while (reader.Read())
         {
-            var availableBytes = preflight.Configuration.Budgets.MaxTotalHashBytes - preflight.Inputs.Sum(item => item.Bytes);
-            if (availableBytes < 1) throw Fail("PARENT_SOURCE_HASH_BYTES_LIMIT");
-            var observed = SourceSnapshotInspector.InspectOrderedInventory(preflight.Configuration.SourceRoot,
-                Inventory(), preflight.Configuration.Budgets.MaxParentFacts, availableBytes, token);
-            if (observed.Digest != parent.SourceSnapshotDigest) throw Fail("PARENT_SOURCE_SNAPSHOT_MISMATCH_OR_INCOMPLETE_INVENTORY");
-            RejectSidecars(input.Path);
-            return observed;
+            token.ThrowIfCancellationRequested();
+            if (reader.GetString(2) != RuleIds.FileInventory || reader.GetString(3) != "FileInventoryExtractor")
+                throw Fail("PARENT_SOURCE_INVENTORY_INVALID");
+            var raw = Encoding.UTF8.GetBytes(reader.GetString(1));
+            WebFormsReviewPreflightCommand.RejectDuplicateProperties(raw);
+            using var properties = JsonDocument.Parse(raw);
+            if (!properties.RootElement.TryGetProperty("kind", out var kind) || kind.ValueKind != JsonValueKind.String
+                || !properties.RootElement.TryGetProperty("sizeBytes", out var size) || size.ValueKind != JsonValueKind.String
+                || !long.TryParse(size.GetString(), NumberStyles.None, CultureInfo.InvariantCulture, out var bytes))
+                throw Fail("PARENT_SOURCE_INVENTORY_INVALID");
+            yield return new(reader.GetString(0), kind.GetString()!, bytes);
         }
-        catch (SqliteException exception) when (exception.SqliteErrorCode == 9 && token.IsCancellationRequested)
-        { throw new OperationCanceledException(token); }
-        catch (SourceSnapshotException) { throw Fail("PARENT_SOURCE_SNAPSHOT_CHANGED"); }
-        catch (SourceInventoryException) { throw Fail("PARENT_SOURCE_INPUT_UNAVAILABLE"); }
-        catch (InvalidOperationException exception) when (exception.Message.StartsWith("SourceSnapshot", StringComparison.Ordinal))
-        { throw SnapshotFailure(exception); }
-
-        IEnumerable<FileInventoryItem> Inventory()
-        {
-            using var command = connection.CreateCommand();
-            command.CommandText = """
-                select file_path, properties_json, rule_id, extractor_id from facts
-                where fact_type=$type order by file_path collate tracemap_ordinal
-                """;
-            command.Parameters.AddWithValue("$type", FactTypes.FileInventoried);
-            using var reader = command.ExecuteReader();
-            while (reader.Read())
-            {
-                token.ThrowIfCancellationRequested();
-                if (reader.GetString(2) != RuleIds.FileInventory || reader.GetString(3) != "FileInventoryExtractor")
-                    throw Fail("PARENT_SOURCE_INVENTORY_INVALID");
-                var raw = Encoding.UTF8.GetBytes(reader.GetString(1));
-                WebFormsReviewPreflightCommand.RejectDuplicateProperties(raw);
-                using var properties = JsonDocument.Parse(raw);
-                if (!properties.RootElement.TryGetProperty("kind", out var kind) || kind.ValueKind != JsonValueKind.String
-                    || !properties.RootElement.TryGetProperty("sizeBytes", out var size) || size.ValueKind != JsonValueKind.String
-                    || !long.TryParse(size.GetString(), NumberStyles.None, CultureInfo.InvariantCulture, out var bytes))
-                    throw Fail("PARENT_SOURCE_INVENTORY_INVALID");
-                yield return new(reader.GetString(0), kind.GetString()!, bytes);
-            }
-        }
+        RejectSidecars(input.Path);
     }
 
     private static InvalidOperationException SnapshotFailure(InvalidOperationException exception) => Fail(exception.Message switch
@@ -187,9 +208,11 @@ internal static class WebFormsReviewInputValidation
         foreach (var input in preflight.Inputs)
         {
             token.ThrowIfCancellationRequested();
+            if (input.Role == "parent-index.sqlite") RejectSidecars(input.Path);
             if (WebFormsReviewPreflightCommand.PhysicalPath(input.Path) != input.Path) throw Fail("INPUT_LOCATOR_CHANGED");
             var observed = await WebFormsReviewPreflightCommand.HashAsync(input.Role, input.Path, input.Bytes, token);
             if (observed.Bytes != input.Bytes || observed.Sha256 != input.Sha256) throw Fail("INPUT_CHANGED");
+            if (input.Role == "parent-index.sqlite") RejectSidecars(input.Path);
         }
     }
 

@@ -62,23 +62,17 @@ public static class CompiledAttachmentProducer
         var pdb = PortablePdbExtractor.Evaluate(root, options, metadata, cancellationToken);
         var il = IlBodyEvidenceExtractor.Evaluate(options, metadata, cancellationToken);
         var publish = WebFormsPublishMapExtractor.Evaluate(root, original.CommitSha, options, cancellationToken);
-        var inputHash = ManagedMetadataExtractor.CanonicalDigest(new
-        {
-            schemaVersion = Schema, ruleId = RuleId, generatorSha256 = generator,
-            scannerVersion = ScannerVersions.TraceMap, parentScanId = original.ScanId,
-            parentManifestSha256 = parent.ManifestSha256, parentIndexSha256 = parent.IndexSha256,
-            parentCommitSha = original.CommitSha, original.ScanRootPathHash,
-            parentSourceSnapshotDigest = original.SourceSnapshotDigest,
-            sourceFiles = source.FileCount, sourceBytes = source.Bytes, maxSourceFiles, maxSourceBytes,
-            compiledInputSha256 = metadata.Provenance.BoundedInputSha256,
-            pdbInputSha256 = pdb.Provenance?.BoundedInputSha256,
-            ilInputSha256 = il.Provenance?.BoundedInputSha256,
-            publishInputSha256 = publish.Provenance?.BoundedInputSha256
-        });
         var context = new CompiledAttachmentContext(Schema, RuleId, EvidenceTiers.Tier2Structural,
-            "local-only", "review-only-static-not-runtime", generator, inputHash,
+            "local-only", "review-only-static-not-runtime", generator, "",
             original.ScanId, parent.ManifestSha256, parent.IndexSha256, original.SourceSnapshotDigest!,
             source.FileCount, source.Bytes, maxSourceFiles, maxSourceBytes, Limitation);
+        var inputHash = ContextDigest(original with
+        {
+            ScannerVersion = ScannerVersions.TraceMap, CompiledInputProvenance = metadata.Provenance,
+            PdbInputProvenance = pdb.Provenance, IlBodyProvenance = il.Provenance,
+            WebFormsPublishProvenance = publish.Provenance
+        }, context);
+        context = context with { BoundedInputSha256 = inputHash };
         var attachmentGaps = new[] { "SourceAnalysisNotRunForAttachment", "BuildNotRunForAttachment",
             "SourceSemanticReconciliationNotRunForAttachment", "CompiledAttachmentReviewOnly" };
         var gaps = original.KnownGaps.Concat(attachmentGaps).Concat(metadata.KnownGaps)
@@ -138,6 +132,43 @@ public static class CompiledAttachmentProducer
             }
         }
     }
+
+    /// <summary>Checks local context integrity, not parent artifact authenticity or contents.</summary>
+    public static void ValidateContext(ScanManifest manifest)
+    {
+        ArgumentNullException.ThrowIfNull(manifest);
+        var context = manifest.CompiledAttachment ?? throw Fail("CONTEXT_MISSING");
+        if (context.SchemaVersion != Schema || context.RuleId != RuleId
+            || context.EvidenceTier != EvidenceTiers.Tier2Structural || context.Visibility != "local-only"
+            || context.ClaimLevel != "review-only-static-not-runtime" || context.Limitation != Limitation
+            || !Sha(context.GeneratorSha256) || !Sha(context.BoundedInputSha256)
+            || !Sha(context.ParentManifestSha256) || !Sha(context.ParentIndexSha256)
+            || !Sha(context.ParentSourceSnapshotDigest) || string.IsNullOrWhiteSpace(context.ParentScanId)
+            || context.ParentSourceSnapshotDigest != manifest.SourceSnapshotDigest
+            || context.SourceFiles < 1 || context.SourceFiles > context.MaxSourceFiles
+            || context.SourceBytes < 0 || context.SourceBytes > context.MaxSourceBytes || context.MaxSourceBytes < 1
+            || manifest.CompiledInputProvenance?.GeneratorSha256 != context.GeneratorSha256
+            || manifest.BuildStatus != "NotRun" || manifest.AnalysisLevel != "CompiledStaticEvidenceReduced"
+            || manifest.ScanId != "scan-compiled-" + context.BoundedInputSha256[..20]
+            || context.BoundedInputSha256 != ContextDigest(manifest, context))
+            throw Fail("CONTEXT_INVALID");
+    }
+
+    private static string ContextDigest(ScanManifest manifest, CompiledAttachmentContext context) =>
+        ManagedMetadataExtractor.CanonicalDigest(new
+        {
+            schemaVersion = Schema, ruleId = RuleId, generatorSha256 = context.GeneratorSha256,
+            scannerVersion = manifest.ScannerVersion, parentScanId = context.ParentScanId,
+            parentManifestSha256 = context.ParentManifestSha256, parentIndexSha256 = context.ParentIndexSha256,
+            parentCommitSha = manifest.CommitSha, manifest.ScanRootPathHash,
+            parentSourceSnapshotDigest = context.ParentSourceSnapshotDigest,
+            sourceFiles = context.SourceFiles, sourceBytes = context.SourceBytes,
+            maxSourceFiles = context.MaxSourceFiles, maxSourceBytes = context.MaxSourceBytes,
+            compiledInputSha256 = manifest.CompiledInputProvenance?.BoundedInputSha256,
+            pdbInputSha256 = manifest.PdbInputProvenance?.BoundedInputSha256,
+            ilInputSha256 = manifest.IlBodyProvenance?.BoundedInputSha256,
+            publishInputSha256 = manifest.WebFormsPublishProvenance?.BoundedInputSha256
+        });
 
     private static string Generator()
     {
