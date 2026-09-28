@@ -10,7 +10,69 @@ not merge wholesale)
 
 Public claim level: hidden
 
+## Selected compiled-proof export closeout (2026-09-27)
+
+- Branch: `codex/webforms-proof-exports`; base: `dev`.
+- Tested code checkpoint: `013317c6ba927566edb8b9d2e6dea882e5692559`.
+- Full .NET suite: 2,326 passed, zero failed/skipped. Focused packet/memory
+  regressions: 54 passed; strengthened combined-limit publication cases: 3
+  passed. Saved-packet, short-view, and application-workbench guards passed.
+- The additional existing-publish end-to-end public guard passed with a stable
+  checkout after an initial attestation-case failure overlapped a documentation
+  commit. Commit drift is a possible explanation, not a proven defect. Its
+  failure now retains categorical stage/count output for future diagnosis.
+- Operator-provided Windows readback at that checkpoint showed a successful
+  saved-proof replay with 41 review-only database-api paths and one selected
+  surface. Screenshots showed the workbench's supplemental link and readable
+  method transitions with per-hop rule/tier/location and expandable identities.
+  This is operator readback, not a coordinator rerun or all-pages validation.
+- The source packet remains reduced/truncated. Saved compiled paths are a
+  separate supplemental artifact, not an upgrade of the page-chain verdict,
+  source-line identity, runtime dispatch, or SQL execution evidence.
+- No private source, DLLs, indexes, paths, or screenshots are checked in.
+- Normal `scan` already supports compiled inputs and binding receipts, but the
+  focused pipeline does not yet offer the complete compiled-site configuration
+  and .NET orchestration contract. The new requirements/tasks describe planned
+  work, not implemented commands or a completed larger-corpus capability.
+- The old 2 GiB combined-index proof-admission ceiling was not a universal scan
+  limit. This proof helper now streams hashes with a 4 GiB index ceiling; the
+  focused pipeline's receipt hashing has a separate 16 GiB artifact ceiling.
+  Packet input admission, IL work, traversal, and output caps are independent.
+  None of these ceilings establishes acceptable memory/time for an eight-times
+  repository. Larger-corpus benchmarks and bounded graph redesign remain open.
+- Retain the working proof and its dependencies until durable archival and
+  reopen/hash verification. Cleanup of unrelated temporary attempts is separate
+  from source/scan/report authority; no automated deletion has been implemented.
+
 ## Completed foundation
+
+### PR #796 consolidated review repair
+
+- SQL replay now always emits a fresh handoff on repeat runs. A missing or
+  ambiguous optional API handler retains the gap proof instead of failing it.
+- API receipt reuse binds exact report bytes and recomputes the saved input
+  digest. Old receipts stop with an explicit recheck-required category;
+  `wview.ps1 -FromSavedProof -RecheckApi` regenerates the graph report without
+  scanning, publishing, or collecting again.
+- Handoffs validate scan-source repository metadata and retain repository
+  identity hashes. Saved packets require repository ID plus commit agreement.
+- Gap rules/tiers are validated; available source IDs, spans, extractor scope,
+  support IDs, and candidate accounting survive projection. JSON and Markdown
+  packet artifacts each have an actual SHA-256 receipt entry.
+- Public publish end-to-end guard passed with a stable checkout, including a
+  missing-handler gap proof. Public handoff, saved-packet, short-view,
+  workbench, and packet-log guards passed. Earlier full .NET checkpoint remains
+  2,326/2,326; this repair changes PowerShell projection/orchestration only.
+- Larger-corpus performance and native .NET orchestration remain planned, not
+  acceptance claims for this proof closeout.
+- Follow-up exact-head repair: an explicitly selected `wview -ProofRoot`
+  permits its saved base index; automatic discovery remains higher-work only.
+  Both normal workbench attachment and standalone packet discovery now match
+  repository ID plus commit, rejecting same-commit fork evidence. Public view,
+  workbench, handoff, saved-packet, and packet-log guards pass. Refreshed full
+  .NET suite passes 2,326/2,326 (zero failed/skipped); the public publish
+  end-to-end guard also passes. Windows saved-proof acceptance remains a
+  separate operator check.
 
 - Full application workbench with compact application index and per-page
   evidence handoffs.

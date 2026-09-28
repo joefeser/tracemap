@@ -3614,7 +3614,106 @@ pwsh -NoProfile -File scripts/tests/Test-ExistingWebFormsPublishProof.ps1
 
 On Windows the guard publishes both mapped two-DLL and updatable four-DLL public no-PDB
 fixtures and requires a `Names_Init` to `sql-query` path with a Tier3 source
-candidate in the mapless case. That Windows case must
+candidate in the mapless case. It also checks that the derived ordered hops,
+rule IDs, evidence tiers, source commit, admitted DLL hashes, and review-only
+status appear in the local `compiled-path-review/handler.local.html` and
+`handler.handoff.local.json` outputs. The scan-time `report.md` inventories the
+published-site binding facts, their bounded-input provenance, and gaps; the
+same retained observations live in `facts.ndjson` and `index.sqlite`. The
+ordered path is a later graph projection from `combined.sqlite`, not an
+additional extracted fact. The handoff JSON hashes its generator and the
+bounded path report, manifest, receipt, and combined index. It is local-only
+and may contain private identities; do not share it as an anonymous artifact.
+The local renderer accepts a path report up to 256 MiB, a combined index up
+to 4 GiB, and at most 250,000 explicit graph gaps. It shows 256 detailed gaps and 128 kind/rule count groups
+at most, with omitted counts; the full bounded input remains committed by its
+SHA-256. An input-limit failure reports only the input slot, measured bytes,
+and limit so a saved proof can be diagnosed without another scan.
+If the SQL-query path count is zero, the local replay runs a unique-handler
+`database-api` graph recheck using the saved `scan-ilwork-30000000` facts and
+`combined-ilwork-30000000.sqlite`, narrowing the terminal to
+`DbDataAdapter.Fill`. With no explicit proof root it selects the latest complete
+high-work proof, not merely the latest lower-work proof; if none is saved, it
+stops before a graph query. The initial publish proof explicitly allows its
+base index before a high-work replay exists. A matching saved, receipted high-work API path report
+is reused after its bounded input hash and exact report-byte SHA-256 are checked, avoiding a repeated graph
+query. Otherwise the graph query runs against the saved high-work index. It
+prints truncation and traversal counts and projects
+the separate receipted report into a fresh `path-recheck-*/compiled-api-review/`
+directory (or a new `compiled-api-review-readable-*` sibling when the first
+projection already exists). The method table uses compact display labels;
+the exact length-prefixed identities remain in the collapsed row detail and
+unchanged in the local JSON. The handoff binds the
+exact scan and index hashes. This is a static database API candidate, not
+a SQL-query join or execution claim. To replay these projections without
+building, publishing, scanning, or combining again, run
+`pwsh -NoProfile -File scripts/Replay-ExistingWebFormsCompiledPathReviews.ps1`;
+it selects the most recent saved complete proof in the local temporary folder.
+Repeated SQL-path replay creates a fresh projection and always emits its handoff
+path. A missing or nonunique optional API handler remains an explicit unavailable
+projection; it does not convert a valid gap proof into a failed scan. Integrity
+errors remain failures. API receipts predating `pathReportSha256` are not trusted:
+run `scripts/wview.ps1 -FromSavedProof -RecheckApi` once to explicitly regenerate
+the bounded graph report from saved inputs, without rescanning or recollecting.
+The handoff validates repository name and remote identity against the matching
+scan source, retains a repository-name hash and packet repository ID, rejects
+gaps without a rule or valid tier, and preserves available gap locations,
+source/fact IDs, extractor versions, evidence scope, and candidate counts.
+To add a saved local compiled-path handoff to a **new** normal private
+application workbench without rescanning, run
+`pwsh -NoProfile -File scripts/New-FocusedWebFormsStandaloneReview.ps1 -PacketPath <webforms-modernization.json> -CompiledPathHandoffPath <handler.handoff.local.json>`.
+The standalone review creates a fresh receipted output; it never rewrites an
+old workbench. Its index links to `compiled-paths.local.html` and the exact
+copied JSON, and `application-handoff.json` records the handoff's raw SHA-256,
+path/gap counts, truncation, and `pageVerdictJoined=false`. The repository ID
+and source commit must match exactly one packet source. This is a separate local-only,
+review-only projection, not a page-chain verdict, SQL-query join, or runtime
+execution claim. Do not put these private files in a shareable artifact.
+The short entry point `scripts/wview.ps1` runs the saved-proof replay and
+forwards its selected handoff into the standalone workbench. Run
+`pwsh -NoProfile -File scripts/wview.ps1`; optional `-ProofRoot`, `-PacketPath`,
+`-OutputRoot`, and `-ConfigPath` override discovery. It uses the normal local
+page-list configuration by default and does not rebuild, publish, scan, or
+combine. An explicitly supplied `-ProofRoot` also admits the saved base-index
+route; automatic discovery remains restricted to higher-work proofs. Its public
+wrapper guard is `scripts/tests/Test-WebFormsView.ps1`.
+When a compiled handoff is supplied without `-PacketPath`, packet discovery
+chooses the newest saved packet with exactly one matching repository ID and source commit,
+not merely the newest packet. Discovery is bounded to 64 packets, 128 MiB
+per packet and 512 MiB total read; no compatible packet stops with
+`WEBFORMS_STANDALONE_REVIEW_COMPATIBLE_PACKET_UNAVAILABLE`. Explicitly supplied
+packets still undergo the same attachment guard. A rejected pairing reports
+categorical reasons and source-match counts, never private source names.
+If no matching normal packet exists, `scripts/wview.ps1 -FromSavedProof`
+explicitly composes a **focused** packet from the exact saved combined index
+and creates its workbench under the proof root. It does not replace full-site
+reports, collect sources, scan, publish, or combine. The index hash must match
+the handoff before and after generation. A fresh local receipt records the
+wrapper SHA-256, CLI assembly SHA-256, bounded index/handoff input digest, and
+packet/Markdown artifact hashes;
+the packet source must match the handoff's repository ID and commit, not commit
+alone. Both JSON and Markdown have independent artifact hashes. Default packet bounds remain in force and
+may yield reduced coverage. The public wrapper guard is
+`scripts/tests/Test-SavedWebFormsProofPacket.ps1`; this mock guard verifies
+orchestration and hash rejection, while the .NET modernization packet tests
+verify the actual reporter.
+The packet reporter accepts a combined index with one or more recorded
+sources, including a focused publish proof combined from one scan. It still
+rejects zero sources, invalid commit identity, missing/ambiguous primary Web
+Forms sources, and source/fact mismatches. A combined schema does not imply
+multi-repository coverage. The public .NET single-source regression verifies
+source identity, deterministic packet bytes, and read-only index handling.
+Combined graph admission limits now follow the single-index partial-output
+contract: preserve bounded inventory and source provenance, emit a Tier4
+input-limit gap, and mark coverage reduced and truncated. Never classify
+paths or downstream boundaries from an incomplete graph. The public
+`WebFormsReportMemoryTests` exercise combined fact, edge, and text limits,
+deterministic output, and unchanged index bytes. This does not raise budgets
+or establish private-site success; separately attached saved compiled paths
+remain review-only and do not change the packet's page verdicts.
+The cross-platform projection guard is
+`pwsh -NoProfile -File scripts/tests/Test-ExistingWebFormsCompiledPathHandoff.ps1`.
+The Windows case must
 pass before using this diagnostic on a private site. For a local-only site
 probe, run from a clean TraceMap checkout:
 

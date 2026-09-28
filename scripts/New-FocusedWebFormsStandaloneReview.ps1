@@ -3,6 +3,7 @@ param(
     [string]$PacketPath = '',
     [string]$OutputRoot = '',
     [string]$ConfigPath = '',
+    [string]$CompiledPathHandoffPath = '',
     [ValidatePattern('^$|^page-[0-9]{3,4}$')]
     [string]$PageId = ''
 )
@@ -30,10 +31,43 @@ $OutputRoot = [IO.Path]::GetFullPath($OutputRoot)
 if (!(Test-Path -LiteralPath $OutputRoot -PathType Container)) { throw 'WEBFORMS_STANDALONE_REVIEW_OUTPUT_ROOT_UNAVAILABLE' }
 
 if (!$PacketPath) {
-    $latest = Get-ChildItem -LiteralPath $OutputRoot -File -Recurse -Filter 'webforms-modernization.json' |
+    $candidates = @(Get-ChildItem -LiteralPath $OutputRoot -File -Recurse -Filter 'webforms-modernization.json' |
         Where-Object { $_.FullName -match '[\\/]webforms-page-list-[^\\/]+[\\/]webforms-modernization\.json$' } |
-        Sort-Object LastWriteTimeUtc, FullName -Descending |
-        Select-Object -First 1
+        Sort-Object LastWriteTimeUtc, FullName -Descending)
+    $latest = $candidates | Select-Object -First 1
+    if ($CompiledPathHandoffPath) {
+        if (!(Test-Path -LiteralPath $CompiledPathHandoffPath -PathType Leaf)) { throw 'WEBFORMS_STANDALONE_REVIEW_COMPILED_HANDOFF_UNAVAILABLE' }
+        $handoffFile = Get-Item -LiteralPath $CompiledPathHandoffPath
+        if ($handoffFile.Length -le 0 -or $handoffFile.Length -gt 16MB) { throw 'WEBFORMS_STANDALONE_REVIEW_COMPILED_HANDOFF_LIMIT' }
+        $handoff = [IO.File]::ReadAllText($handoffFile.FullName) | ConvertFrom-Json -Depth 50
+        $sourceCommit = [string]$handoff.provenance.sourceCommitSha
+        if ($sourceCommit -cnotmatch '^[0-9a-f]{40}$') { throw 'WEBFORMS_STANDALONE_REVIEW_COMPILED_COMMIT_INVALID' }
+        $repositoryProperty = $handoff.provenance.PSObject.Properties['packetRepositoryId']
+        if ($null -eq $repositoryProperty -or [string]$repositoryProperty.Value -cnotmatch '^repository-[0-9a-f]{24}$') {
+            throw 'WEBFORMS_STANDALONE_REVIEW_COMPILED_REPOSITORY_INVALID'
+        }
+        $sourceRepository = [string]$repositoryProperty.Value
+        if ($candidates.Count -gt 64) { throw 'WEBFORMS_STANDALONE_REVIEW_PACKET_DISCOVERY_LIMIT' }
+        $latest = $null
+        $discoveryBytes = 0L
+        foreach ($candidate in $candidates) {
+            $discoveryBytes += $candidate.Length
+            if ($candidate.Length -le 0 -or $candidate.Length -gt 128MB -or $discoveryBytes -gt 512MB) { throw 'WEBFORMS_STANDALONE_REVIEW_PACKET_DISCOVERY_LIMIT' }
+            $candidatePacket = [IO.File]::ReadAllText($candidate.FullName) | ConvertFrom-Json -Depth 100
+            if ($candidatePacket.schemaVersion -cne 'webforms-modernization-packet.v1') { continue }
+            if (@($candidatePacket.sources | Where-Object {
+                $identity = $_.PSObject.Properties['repositoryId']
+                [string]$_.commitSha -ceq $sourceCommit -and $null -ne $identity -and
+                    [string]$identity.Value -ceq $sourceRepository
+            }).Count -eq 1) {
+                $latest = $candidate
+                break
+            }
+        }
+        Write-Output "compiledPathAttachmentSavedPacketCandidates=$($candidates.Count)"
+        Write-Output "compiledPathAttachmentCompatiblePacket=$($null -ne $latest)"
+        if ($null -eq $latest) { throw 'WEBFORMS_STANDALONE_REVIEW_COMPATIBLE_PACKET_UNAVAILABLE' }
+    }
     if ($null -eq $latest) { throw 'WEBFORMS_STANDALONE_REVIEW_PACKET_UNAVAILABLE' }
     $PacketPath = $latest.FullName
 }
@@ -49,7 +83,8 @@ try {
     & (Join-Path $PSScriptRoot 'New-FocusedWebFormsApplicationWorkbench.ps1') `
         -PacketPath $PacketPath `
         -OutputRoot $reviewRoot `
-        -OutputDirectory $workbench
+        -OutputDirectory $workbench `
+        -CompiledPathHandoffPath $CompiledPathHandoffPath
 
     $artifactNames = @(
         'index.html'
@@ -58,6 +93,7 @@ try {
         'application-outliers.shareable.json'
         Get-ChildItem -LiteralPath $workbench -File -Filter '*.handoff.json' | ForEach-Object { $_.Name }
     )
+    if ($CompiledPathHandoffPath) { $artifactNames += @('compiled-paths.local.html', 'compiled-paths.local.json') }
     $artifacts = @($artifactNames | ForEach-Object {
         $path = Join-Path $workbench $_
         if (!(Test-Path -LiteralPath $path -PathType Leaf)) { throw 'WEBFORMS_STANDALONE_REVIEW_WORKBENCH_INCOMPLETE' }
@@ -81,6 +117,8 @@ try {
             inputKind = 'webforms-modernization-packet.v1'
             inputSha256 = (Get-FileHash -LiteralPath $packetFile.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
             inputCanonicalization = 'raw-file-bytes'
+            supplementalCompiledPathKind = if ($CompiledPathHandoffPath) { 'webforms-compiled-path-handoff.v1' } else { 'not-supplied' }
+            supplementalCompiledPathSha256 = if ($CompiledPathHandoffPath) { (Get-FileHash -LiteralPath $CompiledPathHandoffPath -Algorithm SHA256).Hash.ToLowerInvariant() } else { $null }
         }
         run = [ordered]@{
             state = 'completed'

@@ -205,6 +205,27 @@ public sealed class MarkdownReportWriterTests
     }
 
     [Fact]
+    public void Build_reports_published_site_evidence_without_claiming_a_runtime_path()
+    {
+        var manifest = CreateManifest() with
+        {
+            WebFormsPublishProvenance = new WebFormsPublishProvenance(
+                "webforms-publish-provenance.v1", new string('a', 64), new string('b', 64),
+                "bound", [], 2, 4, 1)
+        };
+        var candidate = FactFactory.Create(manifest, FactTypes.WebFormsPublishPageCandidate,
+            RuleIds.LegacyWebFormsPublishMap, EvidenceTiers.Tier3SyntaxOrTextual,
+            new EvidenceSpan("Pages/Lookup.aspx", 1, 1, null, "test", "test/1.0"));
+
+        var report = MarkdownReportWriter.Build(new ScanResult(manifest, [candidate], []));
+
+        Assert.Contains("## Web Forms Published-Site Evidence", report, StringComparison.Ordinal);
+        Assert.Contains("mapless page candidates: `1`", report, StringComparison.Ordinal);
+        Assert.Contains("Tier3 review-only candidates", report, StringComparison.Ordinal);
+        Assert.Contains("not included in this scan-time report", report, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Build_caps_compiled_metadata_rows_and_reports_the_omitted_count()
     {
         var manifest = CreateManifest() with

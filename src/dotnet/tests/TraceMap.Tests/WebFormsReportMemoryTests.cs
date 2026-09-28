@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text.Json;
 using Microsoft.Data.Sqlite;
 using TraceMap.Core;
+using TraceMap.Combine;
 using TraceMap.Reporting;
 using TraceMap.Storage;
 using Xunit.Abstractions;
@@ -157,6 +158,55 @@ public sealed class WebFormsReportMemoryTests(ITestOutputHelper output)
             Assert.Null(chain.TerminalKind);
         });
         Assert.DoesNotContain(packet.Gaps, gap => gap.Classification == "NoBackendEvidence");
+    }
+
+    [Theory]
+    [InlineData("graph-facts")]
+    [InlineData("graph-edges")]
+    [InlineData("graph-text-bytes")]
+    public async Task Combined_graph_limits_preserve_inventory_and_never_classify_partial_paths(string limit)
+    {
+        using var temp = new TempDirectory();
+        var facts = Fixture();
+        if (limit == "graph-facts")
+            for (var i = 0; i < 100; i++)
+                facts.Add(Fact(FactTypes.ArgumentPassed, "csharp.semantic.argument.v1", "Noise" + i, null, 10 + i));
+        if (limit == "graph-text-bytes")
+            facts.Add(Fact(FactTypes.ArgumentPassed, "csharp.semantic.argument.v1", "Noise", null, 10,
+                ("largeUnusedValue", new string('x', 100_000))));
+        var index = Write(temp.Path, facts);
+        var combined = Path.Combine(temp.Path, "combined.sqlite");
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([index], combined, ["existing-publish"]));
+        var hash = Hash(combined);
+        var options = new WebFormsModernizationOptions(combined, "unused", MaxGaps: 1,
+            MaxInputFacts: 100, MaxInputEdges: limit == "graph-edges" ? 1 : 100,
+            MaxInputTextBytes: limit == "graph-text-bytes" ? 50_000 : 1_000_000);
+        var packet = await WebFormsModernizationPacketReporter.BuildAsync(options);
+        Assert.True(packet.Summary.Truncated);
+        Assert.Equal("reduced-static-webforms-modernization", packet.Coverage);
+        Assert.Single(packet.Surfaces);
+        Assert.Single(packet.Sources);
+        Assert.Contains(packet.Gaps, gap => gap.Classification == "WebFormsModernizationInputLimitReached"
+            && gap.EvidenceTier == EvidenceTiers.Tier4Unknown);
+        Assert.Empty(packet.DownstreamBoundaries);
+        Assert.All(packet.EventChains, chain =>
+        {
+            Assert.Equal("UnknownAnalysisGap", chain.Classification);
+            Assert.Null(chain.LegacyPathId);
+            Assert.Null(chain.TerminalKind);
+        });
+        Assert.DoesNotContain(packet.Gaps, gap => gap.Classification == "NoBackendEvidence");
+        var graph = await CombinedDependencyPathReporter.BuildBoundedCombinedIndexReportWithTraversalAsync(
+            PathOptions(combined), new ReportInputBudget(100, limit == "graph-edges" ? 1 : 100,
+                limit == "graph-text-bytes" ? 50_000 : 1_000_000));
+        Assert.Contains(graph.Report.Gaps, gap => gap.GapKind == "GraphInputLimitReached" && gap.Reason == limit);
+        Assert.Empty(graph.Report.Paths);
+        Assert.Equal(JsonSerializer.Serialize(packet), JsonSerializer.Serialize(
+            await WebFormsModernizationPacketReporter.BuildAsync(options)));
+        var written = await WebFormsModernizationPacketReporter.WriteAsync(
+            options with { OutputDirectory = Path.Combine(temp.Path, "packet") });
+        Assert.Contains("WebFormsModernizationInputLimitReached", await File.ReadAllTextAsync(written.JsonPath));
+        Assert.Equal(hash, Hash(combined));
     }
 
     [Theory]

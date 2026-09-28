@@ -92,43 +92,73 @@ public static partial class CombinedDependencyPathReporter
         CancellationToken cancellationToken = default)
     {
         ValidateOptions(options);
-        await using (var connection = new SqliteConnection(new SqliteConnectionStringBuilder
-        {
-            DataSource = options.IndexPath,
-            Mode = SqliteOpenMode.ReadOnly,
-            Cache = SqliteCacheMode.Private,
-            Pooling = false
-        }.ToString()))
-        {
-            await connection.OpenAsync(cancellationToken);
-            if (!await TableExistsAsync(connection, "index_sources", cancellationToken)
-                || !await TableExistsAsync(connection, "combined_facts", cancellationToken))
-            {
-                throw new InvalidDataException("WebFormsModernizationCombinedIndexUnsupported");
-            }
-
-            await AssertCombinedInputLimitAsync(connection, "combined_facts", budget.MaxFacts, "graph-facts", cancellationToken);
-            if (await ViewExistsAsync(connection, "combined_dependency_edges", cancellationToken))
-            {
-                await AssertCombinedInputLimitAsync(connection, "combined_dependency_edges", budget.MaxEdges, "graph-edges", cancellationToken);
-            }
-            await using var bytes = connection.CreateCommand();
-            bytes.CommandText = "select coalesce(sum(length(cast(payload_json as blob))), 0) from combined_facts;";
-            if (Convert.ToInt64(await bytes.ExecuteScalarAsync(cancellationToken)) > budget.MaxTextBytes)
-            {
-                throw new ReportInputLimitException("graph-text-bytes");
-            }
-        }
-
         var sourcePair = ParseSourcePair(options.SourcePair);
-        var (read, graph) = await BuildGraphAsync(
-            options.IndexPath,
-            sourcePair,
-            options.IncludeLegacyRoots || IsLegacyView(options.View),
-            allowSingleIndex: false,
-            cancellationToken,
-            budget);
-        return BuildReportWithTraversalObservations(options, read, graph, sourcePair);
+        IReadOnlyList<CombinedReportSource> sources = [];
+        try
+        {
+            await using (var connection = new SqliteConnection(new SqliteConnectionStringBuilder
+            {
+                DataSource = options.IndexPath,
+                Mode = SqliteOpenMode.ReadOnly,
+                Cache = SqliteCacheMode.Private,
+                Pooling = false
+            }.ToString()))
+            {
+                await connection.OpenAsync(cancellationToken);
+                if (!await TableExistsAsync(connection, "index_sources", cancellationToken)
+                    || !await TableExistsAsync(connection, "combined_facts", cancellationToken))
+                {
+                    throw new InvalidDataException("WebFormsModernizationCombinedIndexUnsupported");
+                }
+
+                // Read only source metadata before admission checks, never reload
+                // the fact graph to recover from a graph-input limit.
+                sources = (await CombinedDependencyReporter.ReadSourcesAsync(connection, cancellationToken))
+                    .Select(row => row.Source).ToArray();
+
+                await AssertCombinedInputLimitAsync(connection, "combined_facts", budget.MaxFacts, "graph-facts", cancellationToken);
+                if (await ViewExistsAsync(connection, "combined_dependency_edges", cancellationToken))
+                {
+                    await AssertCombinedInputLimitAsync(connection, "combined_dependency_edges", budget.MaxEdges, "graph-edges", cancellationToken);
+                }
+                await using var bytes = connection.CreateCommand();
+                bytes.CommandText = "select coalesce(sum(length(cast(payload_json as blob))), 0) from combined_facts;";
+                if (Convert.ToInt64(await bytes.ExecuteScalarAsync(cancellationToken)) > budget.MaxTextBytes)
+                {
+                    throw new ReportInputLimitException("graph-text-bytes");
+                }
+            }
+
+            var (read, graph) = await BuildGraphAsync(
+                options.IndexPath,
+                sourcePair,
+                options.IncludeLegacyRoots || IsLegacyView(options.View),
+                allowSingleIndex: false,
+                cancellationToken,
+                budget);
+            return BuildReportWithTraversalObservations(options, read, graph, sourcePair);
+        }
+        catch (ReportInputLimitException exception)
+        {
+            // As with a single index, incomplete input cannot establish a path
+            // or the absence of an overload/dispatch competitor.
+            var read = new CombinedReadResult(sources, [], [], [], [], new Dictionary<string, long>());
+            var graph = new EvidenceGraph(sources);
+            graph.Gaps.Add(new CombinedPathGap(
+                "gap:webforms:graph-input:" + exception.Limit,
+                "GraphInputLimitReached", CombinedDependencyPathClassifications.UnknownAnalysisGap,
+                "Graph input exceeded a deterministic admission limit; no paths were classified from incomplete input.",
+                null, null, null, null, TruncationGapRuleId, EvidenceTiers.Tier4Unknown,
+                null, null, exception.Limit));
+            var report = BuildReport(options, read, graph, sourcePair);
+            return new CombinedDependencyPathBuildResult(
+                report with
+                {
+                    ReportCoverage = "ReducedCoverage",
+                    Summary = report.Summary with { Truncated = true }
+                },
+                new Dictionary<string, CombinedDependencyTraversalObservation>(StringComparer.Ordinal));
+        }
     }
 
     private static async Task AssertCombinedInputLimitAsync(

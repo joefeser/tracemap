@@ -9,6 +9,12 @@ $TraceMapRoot = [IO.Path]::GetFullPath($TraceMapRoot)
 $source = Join-Path $TraceMapRoot 'samples/messy-dotnet-workspace/vb-pdb-projectless'
 $project = Join-Path $TraceMapRoot 'samples/messy-dotnet-workspace/vb-pdb-build/CompiledProjectless.VB.vbproj'
 $script = Join-Path $TraceMapRoot 'scripts/Invoke-ExistingWebFormsPublishProof.ps1'
+$snapshotWrapper = [IO.File]::ReadAllText((Join-Path $TraceMapRoot 'scripts/wf.ps1'))
+$pin = [regex]::Match($snapshotWrapper, "(?m)^\`$expectedProofBlob = '([0-9a-f]{40})'\s*$")
+$proofBlob = ([string](& git -C $TraceMapRoot hash-object --path=scripts/Invoke-ExistingWebFormsPublishProof.ps1 $script)).Trim()
+if (!$pin.Success -or $LASTEXITCODE -ne 0 -or $pin.Groups[1].Value -cne $proofBlob) {
+    throw 'EXISTING_PUBLISH_TEST_SNAPSHOT_PROOF_PIN_STALE'
+}
 & dotnet build $project --nologo -v quiet | Out-Null
 if ($LASTEXITCODE -ne 0) { throw 'EXISTING_PUBLISH_TEST_BUILD_FAILED' }
 $assembly = Join-Path $TraceMapRoot 'samples/messy-dotnet-workspace/vb-pdb-build/bin/Debug/net10.0/CompiledProjectless.VB.dll'
@@ -23,6 +29,18 @@ try {
     [IO.File]::WriteAllText($map,
         '<preserve virtualPath="/Pages/Lookup.aspx" assembly="CompiledProjectless.VB" type="PublicProof.LookupPage" />',
         [Text.UTF8Encoding]::new($false))
+    $wrongRootFailure = $null
+    try {
+        & (Join-Path $TraceMapRoot 'scripts/wf.ps1') `
+            -SourceSiteRoot (Join-Path $TraceMapRoot 'samples/messy-dotnet-workspace/vb-publish-mapless') `
+            -PublishedRoot (Join-Path $publish 'bin') -PagePath 'Pages/Lookup.aspx' `
+            -HandlerName 'Names_Init' -OutputRoot (Join-Path $temp 'wrong-root') *> $null
+    }
+    catch { $wrongRootFailure = $_.Exception.Message }
+    if ($wrongRootFailure -cne 'WEBFORMS_SNAPSHOT_PUBLISHED_ROOT_IS_BIN' -or
+        (Test-Path -LiteralPath (Join-Path $temp 'wrong-root'))) {
+        throw "EXISTING_PUBLISH_TEST_WRONG_BIN_ROOT_NOT_REJECTED:$wrongRootFailure"
+    }
 
     $output = Join-Path $temp 'proof'
     $lines = @(& $script -SourceSiteRoot $source -PublishedRoot $publish -PagePath 'Pages/Lookup.aspx' `
@@ -77,6 +95,26 @@ try {
         !(Test-Path -LiteralPath (Join-Path $output 'handler-database-api-ilwork-20000000.json') -PathType Leaf)) {
         throw 'EXISTING_PUBLISH_TEST_REPLAY_FAILED'
     }
+    $highApiLines = @(& (Join-Path $TraceMapRoot 'scripts/wp.ps1') `
+        -OutputRoot $output -RecheckCompiledApi -IlMaxWork 20000000 -FillOnly)
+    $highPathLine = @($highApiLines | Where-Object { $_ -cmatch '^compiledApiPathReport=' })
+    $highReceiptLine = @($highApiLines | Where-Object { $_ -cmatch '^compiledApiPathReceipt=' })
+    if ($highApiLines -cnotcontains 'compiledApiStatus=unique-handler' -or
+        $highPathLine.Count -ne 1 -or $highReceiptLine.Count -ne 1) {
+        throw 'EXISTING_PUBLISH_TEST_HIGH_WORK_QUERY_FAILED'
+    }
+    $highReviewRoot = Join-Path $output 'compiled-api-high-work-test'
+    & (Join-Path $TraceMapRoot 'scripts/New-ExistingWebFormsCompiledPathHandoff.ps1') `
+        -ProofRoot $output -PathReportPath ([string]$highPathLine[0].Substring('compiledApiPathReport='.Length)) `
+        -PathReportReceiptPath ([string]$highReceiptLine[0].Substring('compiledApiPathReceipt='.Length)) `
+        -ToSurface database-api -IlMaxWork 20000000 -OutputDirectory $highReviewRoot *> $null
+    $highHandoff = [IO.File]::ReadAllText((Join-Path $highReviewRoot 'handler.handoff.local.json')) |
+        ConvertFrom-Json -Depth 40
+    if ($highHandoff.provenance.scanFolder -cne 'scan-ilwork-20000000' -or
+        $highHandoff.provenance.combinedIndex -cne 'combined-ilwork-20000000.sqlite' -or
+        $highHandoff.provenance.pathReportGeneration.generatorSha256 -cnotmatch '^[0-9a-f]{64}$') {
+        throw 'EXISTING_PUBLISH_TEST_HIGH_WORK_HANDOFF_INVALID'
+    }
     $recheckLines = @(& (Join-Path $TraceMapRoot 'scripts/wp.ps1') `
         -OutputRoot $output -RecheckPathReasons)
     if (@($recheckLines | Where-Object { $_ -cmatch '^pathRecheckPaths=\d+$' }).Count -ne 1 -or
@@ -110,16 +148,40 @@ try {
         @($apiLines | Where-Object { $_ -cmatch '^compiledApiNoTerminal=\d+$' }).Count -ne 1) {
         throw 'EXISTING_PUBLISH_TEST_COMPILED_API_RECHECK_INVALID'
     }
+    $apiReportLines = @($apiLines | Where-Object { $_ -cmatch '^compiledApiPathReport=' })
+    $apiReceiptLines = @($apiLines | Where-Object { $_ -cmatch '^compiledApiPathReceipt=' })
+    if ($apiReportLines.Count -ne 1 -or $apiReceiptLines.Count -ne 1) {
+        throw 'EXISTING_PUBLISH_TEST_COMPILED_API_RECEIPT_UNAVAILABLE'
+    }
+    $apiReviewRoot = Join-Path $output 'compiled-api-test'
+    & (Join-Path $TraceMapRoot 'scripts/New-ExistingWebFormsCompiledPathHandoff.ps1') `
+        -ProofRoot $output `
+        -PathReportPath ([string]$apiReportLines[0].Substring('compiledApiPathReport='.Length)) `
+        -PathReportReceiptPath ([string]$apiReceiptLines[0].Substring('compiledApiPathReceipt='.Length)) `
+        -ToSurface database-api -OutputDirectory $apiReviewRoot *> $null
+    $apiHandoff = [IO.File]::ReadAllText((Join-Path $apiReviewRoot 'handler.handoff.local.json')) |
+        ConvertFrom-Json -Depth 40
+    if ($apiHandoff.query.toSurface -cne 'database-api' -or
+        $apiHandoff.claimLevel -cne 'review-only-static-evidence' -or
+        $apiHandoff.provenance.pathReportGeneration.generatorSha256 -cnotmatch '^[0-9a-f]{64}$' -or
+        !(Test-Path -LiteralPath (Join-Path $apiReviewRoot 'handler.local.html') -PathType Leaf)) {
+        throw 'EXISTING_PUBLISH_TEST_COMPILED_API_HANDOFF_INVALID'
+    }
     function global:Read-Host { param([string]$Prompt) 'yes' }
     try {
         $lowercaseLines = @(& $script -SourceSiteRoot $source -PublishedRoot $publish `
-            -PagePath 'Pages/Lookup.aspx' -HandlerName 'Lookup_Init' `
+            -PagePath 'Pages/Lookup.aspx' -HandlerName 'Unknown_Public_Handler' `
             -OutputRoot (Join-Path $temp 'lowercase-attestation-proof') -TraceMapRoot $TraceMapRoot)
     } finally {
         Remove-Item Function:global:Read-Host -ErrorAction SilentlyContinue
     }
     if ($lowercaseLines -notcontains 'existingPublishScan=bound') {
-        throw 'EXISTING_PUBLISH_TEST_LOWERCASE_ATTESTATION_REJECTED'
+        $stage = @($lowercaseLines | Where-Object { $_ -cmatch '^(existingPublishScan|existingPublishPaths|compiledBoundInputs|compiledContextUnboundInputs|publishGapKinds)=' })
+        throw "EXISTING_PUBLISH_TEST_LOWERCASE_ATTESTATION_REJECTED;stage=$($stage -join ';')"
+    }
+    if ($lowercaseLines -cnotcontains 'compiledReplayApiProjection=unavailable-handler-not-unique' -or
+        @($lowercaseLines | Where-Object { $_ -cmatch '^compiledPathReviewHandoff=' }).Count -ne 1) {
+        throw 'EXISTING_PUBLISH_TEST_OPTIONAL_API_GAP_LOST'
     }
     [IO.File]::WriteAllText($map,
         '<preserve virtualPath="/VirtualSite/Pages/Lookup.aspx" assembly="CompiledProjectless.VB" type="PublicProof.LookupPage" />',
@@ -260,6 +322,32 @@ try {
             -AdditionalAssemblyName @('App_global.asax.dll', 'App_WebReferences.dll') `
             -OutputRoot $maplessProofRoot -TraceMapRoot $TraceMapRoot -OperatorAttestsExactSourceCommit)
         $maplessPaths = [IO.File]::ReadAllText((Join-Path $maplessProofRoot 'handler-paths.json')) | ConvertFrom-Json -Depth 50
+        $maplessHandoffPath = Join-Path $maplessProofRoot 'compiled-path-review/handler.handoff.local.json'
+        $maplessHtmlPath = Join-Path $maplessProofRoot 'compiled-path-review/handler.local.html'
+        if (!(Test-Path -LiteralPath $maplessHandoffPath -PathType Leaf) -or
+            !(Test-Path -LiteralPath $maplessHtmlPath -PathType Leaf)) {
+            throw 'EXISTING_PUBLISH_TEST_MAPLESS_HANDOFF_MISSING'
+        }
+        $maplessHandoff = [IO.File]::ReadAllText($maplessHandoffPath) | ConvertFrom-Json -Depth 40
+        $maplessHtml = [IO.File]::ReadAllText($maplessHtmlPath)
+        $maplessScanReport = [IO.File]::ReadAllText((Join-Path $maplessProofRoot 'scan/report.md'))
+        $maplessFacts = [IO.File]::ReadAllText((Join-Path $maplessProofRoot 'scan/facts.ndjson'))
+        if ($maplessHandoff.schemaVersion -ne 'webforms-compiled-path-handoff.v1' -or
+            $maplessHandoff.claimLevel -ne 'review-only-static-evidence' -or
+            $maplessHandoff.provenance.sourceCommitSha -ne (& git -C $maplessSite rev-parse HEAD).Trim() -or
+            $maplessHandoff.provenance.generatorSha256 -ne (Get-FileHash -LiteralPath (Join-Path $TraceMapRoot 'scripts/New-ExistingWebFormsCompiledPathHandoff.ps1') -Algorithm SHA256).Hash.ToLowerInvariant() -or
+            @($maplessHandoff.paths | Where-Object {
+                $_.claim -eq 'review-only-static-path' -and
+                @($_.hops.edgeKind) -contains 'projectless-publish-method-candidate' -and
+                @($_.hops.edgeKind) -contains 'compiled-il-call'
+            }).Count -lt 1 -or
+            @($maplessHandoff.assemblies | Where-Object { $_.rawFileSha256 -cmatch '^[0-9a-f]{64}$' }).Count -lt 1 -or
+            !$maplessScanReport.Contains('## Web Forms Published-Site Evidence', [StringComparison]::Ordinal) -or
+            !$maplessFacts.Contains('"factType":"WebFormsPublishPageCandidate"', [StringComparison]::Ordinal) -or
+            !$maplessHtml.Contains('review-only-static-path', [StringComparison]::Ordinal) -or
+            !$maplessHtml.Contains('compiled-il-call', [StringComparison]::Ordinal)) {
+            throw 'EXISTING_PUBLISH_TEST_MAPLESS_HANDOFF_INVALID'
+        }
         if ($maplessProof -notcontains 'pageMapMatch=mapless' -or
             $maplessProof -notcontains 'matchedPageMaps=0' -or
             $maplessProof -notcontains 'existingPublishScan=bound' -or
