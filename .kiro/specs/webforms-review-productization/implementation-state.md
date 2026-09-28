@@ -46,8 +46,8 @@
   explicit, independently validated config budgets; older configs use defaults.
 - Public focused validation passed 77/77 across the preflight, execution-gate
   and managed-metadata policy tests. Builds emitted no compiler/analyzer
-  warnings; `git diff --check` passed. Full regression is pending for this
-  milestone, rather than inferred from the prior preflight-only run.
+  warnings; `git diff --check` passed. Full regression at `3d60e2ee` passed
+  2,381/2,381, zero failed/skipped (8 minutes 25 seconds).
 - This is an internal gate, not a new operator command. It is not yet wired into
   native fresh/attach/resume execution, which remains the next implementation
   step. Current source-byte validation still belongs to the actual source scan;
