@@ -276,7 +276,10 @@ internal sealed record CombinedReadResult(
     IReadOnlyList<CombinedFactRow> Facts,
     IReadOnlyList<CombinedDependencyEdgeRow> Edges,
     IReadOnlyDictionary<string, long> ValueOriginEvidenceCounts,
-    bool HasFactExtractorVersion = true);
+    bool HasFactExtractorVersion = true)
+{
+    internal IReadOnlyList<CompiledAttachmentIndexLink> CompiledAttachmentLinks { get; init; } = [];
+}
 
 internal sealed record MessageCandidateEdgeResult(
     IReadOnlyList<CombinedDependencyEdgeRow> Edges,
@@ -430,6 +433,7 @@ public static class CombinedDependencyReporter
     {
         var sourceRows = await ReadSourcesAsync(connection, cancellationToken);
         var sources = sourceRows.Select(row => row.Source).ToArray();
+        var attachmentLinks = await CompiledAttachmentLinkReader.ReadAsync(connection, sourceRows, cancellationToken);
         var knownGaps = new List<CombinedKnownGapRow>();
         var warnings = new List<string>();
         foreach (var row in sourceRows)
@@ -451,7 +455,7 @@ public static class CombinedDependencyReporter
             facts,
             edges,
             valueOriginCounts,
-            hasFactExtractorVersion);
+            hasFactExtractorVersion) { CompiledAttachmentLinks = attachmentLinks };
     }
 
     private static IReadOnlyList<CombinedKnownGapRow> ReadAnalyzerCapabilityKnownGaps(
