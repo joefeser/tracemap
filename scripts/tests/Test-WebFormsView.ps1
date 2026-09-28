@@ -6,7 +6,9 @@ $temp = Join-Path ([IO.Path]::GetTempPath()) ('tracemap-view-test-' + [Guid]::Ne
 try {
     [IO.File]::Copy($script, (Join-Path $temp 'wview.ps1'))
     [IO.File]::WriteAllText((Join-Path $temp 'Replay-ExistingWebFormsCompiledPathReviews.ps1'), @'
-param([string]$ProofRoot, [switch]$RecheckApi)
+param([string]$ProofRoot, [switch]$RecheckApi, [switch]$AllowBaseIndex)
+if ($ProofRoot -and !$AllowBaseIndex) { throw 'Explicit proof did not permit its base index' }
+if (!$ProofRoot -and $AllowBaseIndex) { throw 'Automatic discovery must remain high-work only' }
 if ($RecheckApi) { Write-Output 'publicRecheckApi=forwarded' }
 if ($ProofRoot -eq 'missing') { Write-Output 'compiledReplaySqlProjection=existing'; return }
 Write-Output 'compiledReplayProofRoot=public-proof'
@@ -32,6 +34,8 @@ Write-Output 'savedProofPacket=public-packet.json'
     $savedResult = @(& (Join-Path $temp 'wview.ps1') -FromSavedProof -RecheckApi -OutputRoot public-output -ConfigPath public-config.json)
     if (@($savedResult | Where-Object { $_ -eq 'publicView=passed' }).Count -ne 1 -or
         $savedResult -cnotcontains 'publicRecheckApi=forwarded') { throw 'View did not use the saved proof packet or forward explicit recheck' }
+    $baseResult = @(& (Join-Path $temp 'wview.ps1') -ProofRoot public-proof -FromSavedProof -OutputRoot public-output -ConfigPath public-config.json)
+    if ($baseResult -cnotcontains 'publicView=passed') { throw 'Explicit saved base proof did not produce a workbench' }
     Write-Output 'webFormsViewPublicTests=passed'
 }
 finally { Remove-Item -LiteralPath $temp -Recurse -Force }

@@ -17,7 +17,10 @@ if ($PSVersionTable.PSVersion.Major -lt 7) { throw 'WEBFORMS_VIEW_POWERSHELL_7_R
 $handoffs = [Collections.Generic.List[string]]::new()
 $selectedProofRoot = ''
 $replayArgs = @{}
-if ($ProofRoot) { $replayArgs.ProofRoot = $ProofRoot }
+if ($ProofRoot) {
+    $replayArgs.ProofRoot = $ProofRoot
+    $replayArgs.AllowBaseIndex = $true
+}
 if ($RecheckApi) { $replayArgs.RecheckApi = $true }
 & (Join-Path $PSScriptRoot 'Replay-ExistingWebFormsCompiledPathReviews.ps1') @replayArgs |
     ForEach-Object {
