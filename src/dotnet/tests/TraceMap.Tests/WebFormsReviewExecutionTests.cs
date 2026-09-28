@@ -322,6 +322,47 @@ public sealed class WebFormsReviewExecutionTests
         Assert.DoesNotContain(fixture.Source, fixture.Error.ToString(), StringComparison.Ordinal);
     }
 
+    [Theory]
+    [InlineData("unchanged")]
+    [InlineData("changed")]
+    [InlineData("missing")]
+    public async Task External_receipts_are_used_in_place_and_resume_rechecks_them(string mutation)
+    {
+        using var fixture = new Fixture();
+        fixture.WritePublishReceipt();
+        var evidence = Path.Combine(fixture.Root, "evidence");
+        Directory.CreateDirectory(evidence);
+        var receipt = Path.Combine(evidence, "publish.json");
+        File.Move(Path.Combine(fixture.Published, "receipts", "publish.json"), receipt);
+        var binding = Path.Combine(evidence, "binding.json");
+        File.WriteAllText(binding, "{\"schemaVersion\":\"compiled-input-binding-set.v1\",\"bindings\":[]}");
+        fixture.Config = fixture.Config with { ReceiptRoot = evidence, PublishReceiptRelativePath = "publish.json", BindingReceipts = ["binding.json"] };
+        var publishedBefore = Directory.GetFiles(fixture.Published, "*", SearchOption.AllDirectories).ToDictionary(path => path, Hash);
+        var receiptBefore = Hash(receipt);
+        var bindingBefore = Hash(binding);
+        await fixture.Preflight();
+        Assert.Equal(0, await fixture.Execute("run", async (args, output, error, token) =>
+        {
+            Assert.Equal(receipt, args[Array.IndexOf(args, "--webforms-publish-receipt") + 1]);
+            Assert.Equal(binding, args[Array.IndexOf(args, "--compiled-binding-receipt") + 1]);
+            Assert.Equal(fixture.Published, args[Array.IndexOf(args, "--webforms-published-root") + 1]);
+            return await Scan(args, output, error, token);
+        }));
+        var checkpoint = fixture.LastCheckpoint();
+        Assert.DoesNotContain("PublishMapExecutionPending", checkpoint.Gaps);
+        Assert.DoesNotContain("PublishReceiptCoverageReduced", checkpoint.Gaps);
+        Assert.Equal(receiptBefore, Hash(receipt));
+        Assert.Equal(bindingBefore, Hash(binding));
+        foreach (var pair in publishedBefore) Assert.Equal(pair.Value, Hash(pair.Key));
+        Assert.Equal(publishedBefore.Count, Directory.GetFiles(fixture.Published, "*", SearchOption.AllDirectories).Length);
+        if (mutation == "changed") File.AppendAllText(receipt, "\n");
+        if (mutation == "missing") File.Delete(binding);
+        Assert.Equal(mutation == "unchanged" ? 0 : 1, await fixture.Execute("resume",
+            (_, _, _, _) => throw new InvalidOperationException("must not rescan")));
+        Assert.Equal(2, Directory.GetFiles(Path.Combine(fixture.Run, "checkpoints"), "*.json").Length);
+        Assert.DoesNotContain(evidence, fixture.Error.ToString(), StringComparison.Ordinal);
+    }
+
     private static Task<int> Scan(string[] args, TextWriter output, TextWriter error, CancellationToken token) =>
         TraceMapCommand.RunAsync(["scan", .. args], output, error, token);
     private static string Hash(string path) { using var stream = File.OpenRead(path); return Convert.ToHexString(SHA256.HashData(stream)).ToLowerInvariant(); }

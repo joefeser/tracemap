@@ -78,7 +78,14 @@ publish receipt automatically. `attach` is explicitly refused before
 execution; it must not be approximated by a fresh scan of the parent's source.
 
 An optional `publishReceiptRelativePath` names an existing local-only
-`webforms-publish-binding.v1` receipt under the explicit published root. Receipts
+`webforms-publish-binding.v1` receipt under `receiptRoot`, if declared, or the
+explicit published root by default. `bindingReceipts` use the same receipt root;
+assembly, map and PDB paths always remain relative to `publishedRoot`. The optional
+receipt root is an explicit existing absolute directory, not discovered or created
+by preflight. It is pinned in the private configuration and protected from output
+overlap just like source/publish roots. Changed or missing receipt bytes reject
+resume without rescanning. This permits owned evidence to live separately from the
+read-only site; it does not yet generate that evidence or attest its ownership. Receipts
 can live in a subdirectory: native execution passes the published root separately
 instead of copying the DLLs/maps beside the receipt. Preflight pins receipt source
 file hashes and requires every receipt DLL/map to be a declared assembly/map with
@@ -127,6 +134,7 @@ file is relative to its configured root. No assembly discovery or upload occurs.
   "pageMaps": [],
   "parentScanRoot": null,
   "publishReceiptRelativePath": null,
+  "receiptRoot": null,
   "budgets": {
     "maxInputFiles": 128,
     "maxAssemblyBytes": 67108864,

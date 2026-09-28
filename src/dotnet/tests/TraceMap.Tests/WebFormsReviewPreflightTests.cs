@@ -77,6 +77,45 @@ public sealed class WebFormsReviewPreflightTests
     }
 
     [Fact]
+    public async Task Separate_receipt_root_pins_receipt_bytes_without_writing_to_published_files()
+    {
+        using var fixture = new Fixture();
+        var evidence = WebFormsReviewPreflightCommand.PhysicalPath(Path.Combine(fixture.Root, "evidence"));
+        Directory.CreateDirectory(evidence);
+        var receipt = Path.Combine(evidence, "binding.json");
+        File.WriteAllText(receipt, JsonSerializer.Serialize(new
+        { schemaVersion = "compiled-input-binding-set.v1", bindings = new[] { new { artifactSha256 = Hash(fixture.AssemblyPath) } } }));
+        fixture.Config = fixture.Config with { ReceiptRoot = evidence, BindingReceipts = ["binding.json"] };
+        var publishedBefore = Directory.GetFiles(fixture.Published, "*", SearchOption.AllDirectories).ToDictionary(path => path, Hash);
+        var result = await fixture.Build();
+        Assert.Equal(evidence, result.Configuration.ReceiptRoot);
+        Assert.Contains(result.Inputs, input => input.Role == "binding-receipt" && input.Path == receipt && input.Sha256 == Hash(receipt));
+        Assert.DoesNotContain("MissingBindingReceiptHashCandidate", result.Gaps);
+        foreach (var pair in publishedBefore) Assert.Equal(pair.Value, Hash(pair.Key));
+        Assert.Equal(publishedBefore.Count, Directory.GetFiles(fixture.Published, "*", SearchOption.AllDirectories).Length);
+        var exception = await Assert.ThrowsAnyAsync<Exception>(() => fixture.Build(Path.Combine(evidence, "new-run")));
+        Assert.Equal("WEBFORMS_PREFLIGHT_OUTPUT_OVERLAPS_INPUT", exception.Message);
+    }
+
+    [Theory]
+    [InlineData("relative", "ROOT_PATH_INVALID")]
+    [InlineData("missing", "ROOT_UNAVAILABLE")]
+    [InlineData("escape", "INPUT_ESCAPES_ROOT")]
+    public async Task Separate_receipt_root_rejects_invalid_or_escaped_inputs(string mutation, string suffix)
+    {
+        if (mutation == "escape" && OperatingSystem.IsWindows()) return; // Native junction lane remains required.
+        using var fixture = new Fixture();
+        var evidence = Path.Combine(fixture.Root, "evidence");
+        if (mutation != "missing") Directory.CreateDirectory(evidence);
+        if (mutation == "escape") Directory.CreateSymbolicLink(Path.Combine(evidence, "escape"), fixture.Published);
+        fixture.Config = fixture.Config with { ReceiptRoot = mutation == "relative" ? "relative" : evidence,
+            BindingReceipts = mutation == "escape" ? ["escape/binding.json"] : [] };
+        var exception = await Assert.ThrowsAnyAsync<Exception>(() => fixture.Build());
+        Assert.Equal("WEBFORMS_PREFLIGHT_" + suffix, exception.Message);
+        Assert.False(Directory.Exists(fixture.Output));
+    }
+
+    [Fact]
     public async Task Explicit_root_scope_and_all_page_mode_are_planning_not_all_page_acceptance()
     {
         using var fixture = new Fixture();

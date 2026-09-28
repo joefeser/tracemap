@@ -47,6 +47,30 @@
   compiler/analyzer warnings. This is retained-receipt consumption, not native
   receipt preparation, operator attestation, immutable attachment or complete
   compiled-site/report parity. Those remain active goal requirements.
+- Full regression at committed `a9febf12` passed 2,418/2,418, zero failed/skipped
+  (7 minutes), before the subsequent optional receipt-root change. No compiler
+  or analyzer warnings were emitted.
+
+## Separate native receipt evidence root (2026-09-28)
+
+- Native config can explicitly locate binding/publish receipts outside the
+  read-only published site. Legacy configs still use the published root.
+  Assembly, page-map and PDB paths continue to use the published root only.
+- The receipt root is an existing absolute physically resolved input directory;
+  preflight/execution reject output overlap, escaped receipt locators and changed
+  or missing receipt bytes. Execution consumes receipts in place, never copies
+  them or DLLs and does not create an attestation.
+- This is the input boundary needed for future owned receipt preparation, not
+  receipt generation or a claim that preparation/attachment/reports are complete.
+- Focused validation passed 171/171 across native preflight/input/execution,
+  published-root, Core managed metadata, CLI, local-review and scan receipt
+  regressions, with no compiler/analyzer warnings. New cases cover separate
+  receipt inventory, output overlap, relative/missing/escaped roots and actual
+  fresh/resume receipt consumption/tampering. An initial test expectation used
+  the macOS `/var` alias rather than the resolved physical path; it was corrected
+  before the passing rebuild. Diff and private-path guards passed.
+- The prior committed full-suite result does not validate this later slice;
+  full regression and public compiled-site parity remain separate gates.
 
 ## Native fresh execution and resume (2026-09-28)
 
