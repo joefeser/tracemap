@@ -41,6 +41,12 @@ public sealed record CompiledInputProvenance(
     int OmittedInputCount = 0,
     string? OmittedInputSha256 = null);
 
+/// <summary>In-memory inspection result; callers must separately pin any persisted projection.</summary>
+public sealed record CompiledInputInspection(
+    CompiledInputProvenance? Provenance,
+    IReadOnlyList<string> GapKinds,
+    IReadOnlyList<string> KnownGaps);
+
 public sealed record SourceMetadataReconciliationEntry(
     string ReconciliationState,
     string SourceIdentity,

@@ -50,7 +50,12 @@ file is relative to its configured root. No assembly discovery or upload occurs.
     "ilMaxWork": 30000000,
     "graphMaxDepth": 20,
     "graphMaxPaths": 256,
-    "graphMaxWork": 2000000
+    "graphMaxWork": 2000000,
+    "metadataMaxWork": 500000,
+    "metadataMaxText": 8192,
+    "ilMaxText": 16384,
+    "maxParentFacts": 5000000,
+    "maxFactLineChars": 1048576
   }
 }
 ```
@@ -100,6 +105,35 @@ Source commit preflight checks current Git HEAD; it does not independently attes
 cleanliness or freeze source bytes. Later source-snapshot/index and binding gates
 must pass before execution. Input hashes are rechecked immediately before the
 new run is published, and an existing output is never overwritten.
+
+## Internal execution validation gate
+
+The next native execution layer has a tested internal input gate. It is not a
+new operator command and is not called by inventory-only `preflight` yet.
+
+Managed inspection reuses the exact scanner readers, receipt classification,
+dependency resolution and global gap policy through `ManagedMetadataExtractor.InspectInputs`.
+Hash matches alone never become bindings. Receipt-based `bound` still does not
+prove source ownership, authentic compilation, runtime dispatch or SQL execution.
+Metadata work/text bounds are separate from IL work/text bounds.
+
+Parent validation checks current Git/root identity against the retained manifest,
+its snapshot identity against the complete embedded SQLite manifest, SQLite
+integrity, and every streamed NDJSON fact against its indexed identity, rule,
+tier, symbols, spans, extractor and properties. Duplicate/missing rows fail.
+Facts and SQLite row projections are bounded; duplicate detection uses SQLite's
+file-backed temporary store with a bounded cache instead of an unbounded managed
+set. Active WAL/SHM/journal sidecars are rejected. A sidecar-free checkpointed WAL
+index is opened immutably without creating files in its parent folder. Native
+SQLite checks can be interrupted on cancellation.
+
+All preflight input hashes are rechecked before and after validation. A retained
+parent snapshot is **not** a validation of current source bytes; fresh scans must
+establish their own actual source snapshot. Public gate tests cover receipt
+identity/locator/ambiguity/staleness, parent tampering and count/row limits, escaped
+filesystem names, cancellation and byte-for-byte parent immutability. They do not
+establish private Windows or representative scale acceptance. Orchestration,
+resume, fresh/attach execution and reporting integration remain outstanding.
 
 ## Next slices and acceptance
 

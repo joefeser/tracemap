@@ -35,10 +35,17 @@
     validation explicitly deferred rather than claiming run execution.
   - [ ] Validate authoritative binding and integrate this contract into normal
     resumable source-plus-compiled phase execution.
+    - [x] Add the shared Core inspection facade and an internal immutable parent
+      manifest/index/facts validation gate with bounded input and cancellation
+      tests; keep current-source snapshot and operator execution pending.
 - [ ] Implement .NET orchestration for source-plus-compiled runs and immutable
   attachment to a retained source scan; keep compatibility wrappers.
 - [ ] Integrate compiled evidence into normal packet/docs/handoff navigation
   across selected/all-page modes without upgrading review-only page verdicts.
+  - [ ] Group exact method chains in the HTML while retaining every evidence
+    variant and add an additive chain index to the lossless handoff.
+  - [ ] Update the work-machine Claude guidance to start from the run manifest
+    and retrieve bounded evidence groups instead of loading whole large files.
 - [ ] Expose per-phase budget usage, missing-input guidance, and resumable gaps.
 - [ ] Avoid full combined-graph materialization while retaining global ambiguity
   and cross-assembly evidence; validate deterministic parity.
