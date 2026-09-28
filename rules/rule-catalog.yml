@@ -2540,6 +2540,18 @@ rules:
       - Every attachment remains reduced, local-only and review-only. Missing bindings, metadata/IL/PDB disagreement and publish gaps retain their original policy. No runtime SQL, source-line identity, clean working tree, authentic compilation or complete-site claim is made.
       - Source verification is an ordered bounded stream before and after extraction; no new source discovery occurs. Existing extractors retain their own work/memory limits, and overall eight-times scale remains unverified.
 
+  - id: workflow.compiled-attachment-index-link.v1
+    name: Explicit private compiled attachment index link
+    description: Admits an explicit parent and compiled-only index pair by actual manifest/index bytes and recorded attachment context, preserving original source namespaces and recording exact Combine generator and bounded-input hashes.
+    evidenceTier: Tier2Structural
+    emits:
+      - compiled-attachment-index-link.v1 local-only combined-index relationship
+    limitations:
+      - Links require explicit index and manifest paths; labels, shared commit names and adjacent manifest files never establish attachment authority. Ordinary combine does not infer this relationship.
+      - External and embedded manifest identity, parent content hashes, retained snapshot and repository identity are checked; full fact/NDJSON consistency and current retained-source admission belong to the native parent gate.
+      - Inputs are streamed within explicit hash budgets, sidecars and symbolic paths are rejected, and immutable SQLite URI reads do not rewrite the source indexes. This does not establish bounded graph/scanner memory or representative scale acceptance.
+      - Generator and bounded-input hashes are local integrity commitments, not authenticated signatures. Paths and fingerprints remain private and review-only; no runtime, build authenticity, source-line or all-site claim is made.
+      - The link API does not itself create source-to-compiled graph edges or a unified workbench; reporting integration and public chain parity remain separate required gates.
   - id: workflow.source-snapshot-retention.v1
     name: Complete private source snapshot roster retention
     description: Explicitly retains the scanner's authoritative ordered snapshot inventory, including extra semantic metadata, in a streamed local NDJSON roster and a generator/input/scan/roster hash-bound manifest for later immutable source-byte validation.

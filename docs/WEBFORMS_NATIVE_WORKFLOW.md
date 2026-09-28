@@ -369,6 +369,34 @@ integration remain outstanding.
 
 ## Next slices and acceptance
 
+### Explicit attachment combination contract
+
+The .NET `CombineOptions.CompiledAttachments` API accepts explicit parent and
+attachment index/manifest paths. It never discovers manifests next to an index
+or grants join authority from matching labels or commits. Ordinary combine
+behavior does not create attachment links. This is currently an API foundation,
+not a new operator command or an implemented cross-index report join.
+
+Each declared pair must be present among the combine inputs. Admission streams
+and pins actual index/manifest bytes, rejects SQLite sidecars and symbolic input
+paths, compares the complete external and embedded manifests, validates the
+compiled-only context, and matches exact parent manifest/index hashes, snapshot
+and repository identity. Use physically resolved paths. Manifests are capped at
+4 MiB; index and aggregate hashing caps are explicit API settings (default 16 GiB
+per index and 32 GiB total), not scanner memory or scale acceptance claims.
+
+Only a new output is admitted for attachment combination. Inputs are attached
+through immutable read-only SQLite URIs and rehashed before link publication.
+The additive `compiled_attachment_links` table records exact Combine generator
+and bounded-input hashes, parent/child source IDs, scan IDs, content hashes,
+snapshot and attachment-context hash. Original source namespaces and fact IDs
+remain intact. Its digest is local integrity evidence, not an authenticated
+signature or runtime proof. The normal native parent gate remains responsible
+for complete fact/index/NDJSON and current retained-source admission.
+
+Reporting consumption, per-edge context provenance and public method-chain parity
+are the next steps; keep `CrossIndexParentJoinsPending` until those pass.
+
 1. Authoritative source/parent/binding validation and resumable .NET phase execution.
 2. Integration of grouped method chains into normal workbench navigation and an
    additive chain index in lossless JSON, without changing page verdicts.

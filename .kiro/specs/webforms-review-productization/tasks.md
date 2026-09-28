@@ -69,6 +69,10 @@
     validate original parent/source and derived index/context, and support
     immutable completed resume plus fresh failed/cancelled retries. Preserve
     parent source facts and hashes; keep cross-index joins and reports pending.
+  - [x] Add explicit combine-time parent/attachment contract admission by exact
+    external and embedded manifests, actual index hashes and snapshot/repository
+    identity. Record a generator/input-bound additive link without relabeling
+    facts; keep reporting consumption and method-chain parity pending.
 - [ ] Integrate compiled evidence into normal packet/docs/handoff navigation
   across selected/all-page modes without upgrading review-only page verdicts.
   - [ ] Group exact method chains in the HTML while retaining every evidence
