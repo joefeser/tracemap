@@ -170,7 +170,7 @@ try {
     function global:Read-Host { param([string]$Prompt) 'yes' }
     try {
         $lowercaseLines = @(& $script -SourceSiteRoot $source -PublishedRoot $publish `
-            -PagePath 'Pages/Lookup.aspx' -HandlerName 'Lookup_Init' `
+            -PagePath 'Pages/Lookup.aspx' -HandlerName 'Unknown_Public_Handler' `
             -OutputRoot (Join-Path $temp 'lowercase-attestation-proof') -TraceMapRoot $TraceMapRoot)
     } finally {
         Remove-Item Function:global:Read-Host -ErrorAction SilentlyContinue
@@ -178,6 +178,10 @@ try {
     if ($lowercaseLines -notcontains 'existingPublishScan=bound') {
         $stage = @($lowercaseLines | Where-Object { $_ -cmatch '^(existingPublishScan|existingPublishPaths|compiledBoundInputs|compiledContextUnboundInputs|publishGapKinds)=' })
         throw "EXISTING_PUBLISH_TEST_LOWERCASE_ATTESTATION_REJECTED;stage=$($stage -join ';')"
+    }
+    if ($lowercaseLines -cnotcontains 'compiledReplayApiProjection=unavailable-handler-not-unique' -or
+        @($lowercaseLines | Where-Object { $_ -cmatch '^compiledPathReviewHandoff=' }).Count -ne 1) {
+        throw 'EXISTING_PUBLISH_TEST_OPTIONAL_API_GAP_LOST'
     }
     [IO.File]::WriteAllText($map,
         '<preserve virtualPath="/VirtualSite/Pages/Lookup.aspx" assembly="CompiledProjectless.VB" type="PublicProof.LookupPage" />',

@@ -252,7 +252,8 @@ if ($RecheckPathReasons -or $RecheckCompiledApi) {
         [Text.Encoding]::UTF8.GetBytes($inputInventory))).ToLowerInvariant()
     $receipt = [ordered]@{ schemaVersion = 'webforms-path-recheck.v1'; visibility = 'local-only'
         generatorSha256 = $generatorSha; boundedInputSha256 = $inputSha
-        scanFolder = $scanFolder; combinedIndex = $combinedName }
+        scanFolder = $scanFolder; combinedIndex = $combinedName
+        pathReportSha256 = (Get-FileHash -LiteralPath $recheckPath -Algorithm SHA256).Hash.ToLowerInvariant() }
     [IO.File]::WriteAllText((Join-Path $scratch 'path-recheck.receipt.local.json'),
         (($receipt | ConvertTo-Json -Depth 5) + "`n"), [Text.UTF8Encoding]::new($false))
     $recheck = [IO.File]::ReadAllText($recheckPath) | ConvertFrom-Json -Depth 50

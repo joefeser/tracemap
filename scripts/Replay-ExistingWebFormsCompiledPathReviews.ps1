@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param([string]$ProofRoot, [switch]$AllowBaseIndex)
+param([string]$ProofRoot, [switch]$AllowBaseIndex, [switch]$RecheckApi)
 
 # Replays only bounded graph reporting and local HTML/JSON projection from a
 # saved existing-publish proof. It does not rebuild, publish, scan, or combine.
@@ -29,11 +29,21 @@ function Find-SavedApiReport([string]$Root) {
             !(Test-Path -LiteralPath $receiptPath -PathType Leaf)) { continue }
         $reportFile = Get-Item -LiteralPath $reportPath
         if ($reportFile.Length -le 0 -or $reportFile.Length -gt 268435456) { continue }
+        $receiptFile = Get-Item -LiteralPath $receiptPath
+        if ($receiptFile.Length -le 0 -or $receiptFile.Length -gt 1048576) {
+            throw 'WEBFORMS_COMPILED_REPLAY_API_RECEIPT_INVALID'
+        }
         $receipt = [IO.File]::ReadAllText($receiptPath) | ConvertFrom-Json -Depth 10
         if ($receipt.schemaVersion -cne 'webforms-path-recheck.v1' -or
             $receipt.scanFolder -cne $scanFolder -or
             $receipt.combinedIndex -cne $combinedName -or
             [string]$receipt.boundedInputSha256 -cnotmatch '^[0-9a-f]{64}$') { continue }
+        if ($null -eq $receipt.PSObject.Properties['pathReportSha256']) {
+            throw 'WEBFORMS_COMPILED_REPLAY_API_RECEIPT_RECHECK_REQUIRED'
+        }
+        if ([string]$receipt.pathReportSha256 -cne (Get-FileHash -LiteralPath $reportPath -Algorithm SHA256).Hash.ToLowerInvariant()) {
+            throw 'WEBFORMS_COMPILED_REPLAY_API_REPORT_HASH_MISMATCH'
+        }
         $report = [IO.File]::ReadAllText($reportPath) | ConvertFrom-Json -Depth 50
         if ($report.query.toSurface -cne 'database-api' -or
             $report.query.surfaceName -cne 'DbDataAdapter.Fill' -or
@@ -44,7 +54,7 @@ function Find-SavedApiReport([string]$Root) {
             (Get-FileHash -LiteralPath (Join-Path $Root (Join-Path $scanFolder 'facts.ndjson')) -Algorithm SHA256).Hash.ToLowerInvariant()
         $inputSha = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData(
             [Text.Encoding]::UTF8.GetBytes($inputInventory))).ToLowerInvariant()
-        if ($receipt.boundedInputSha256 -cne $inputSha) { continue }
+        if ($receipt.boundedInputSha256 -cne $inputSha) { throw 'WEBFORMS_COMPILED_REPLAY_API_INPUT_HASH_MISMATCH' }
         return [pscustomobject]@{ Path = $reportPath; Receipt = $receiptPath; Report = $report }
     }
     return $null
@@ -76,7 +86,7 @@ if ($sql.query.toSurface -cne 'sql-query' -or
 Write-Output "compiledReplaySqlPaths=$(@($sql.paths).Count)"
 if (@($sql.paths).Count -eq 0) {
     Write-Output "compiledReplayHighWorkAvailable=$useHighWork"
-    $saved = if ($useHighWork) { Find-SavedApiReport $ProofRoot } else { $null }
+    $saved = if ($useHighWork -and !$RecheckApi) { Find-SavedApiReport $ProofRoot } else { $null }
     Write-Output "compiledReplaySavedApi=$($null -ne $saved)"
     if ($saved) {
         $apiPath = $saved.Path
@@ -96,14 +106,21 @@ if (@($sql.paths).Count -eq 0) {
         })) { Write-Output $line }
         if ($apiStatus.Count -ne 1) { throw 'WEBFORMS_COMPILED_REPLAY_API_STATUS_UNAVAILABLE' }
         if ($apiStatus[0] -cne 'compiledApiStatus=unique-handler') {
-            throw 'WEBFORMS_COMPILED_REPLAY_HANDLER_NOT_UNIQUE'
+            if ($apiStatus[0] -cne 'compiledApiStatus=handler-not-unique') {
+                throw 'WEBFORMS_COMPILED_REPLAY_API_STATUS_INVALID'
+            }
+            Write-Output 'compiledReplayApiProjection=unavailable-handler-not-unique'
+            $apiPath = $null
+            $apiReceipt = $null
+        } else {
+            if ($apiReportLine.Count -ne 1 -or $apiReceiptLine.Count -ne 1) {
+                throw 'WEBFORMS_COMPILED_REPLAY_API_REPORT_UNAVAILABLE'
+            }
+            $apiPath = [string]$apiReportLine[0].Substring('compiledApiPathReport='.Length)
+            $apiReceipt = [string]$apiReceiptLine[0].Substring('compiledApiPathReceipt='.Length)
         }
-        if ($apiReportLine.Count -ne 1 -or $apiReceiptLine.Count -ne 1) {
-            throw 'WEBFORMS_COMPILED_REPLAY_API_REPORT_UNAVAILABLE'
-        }
-        $apiPath = [string]$apiReportLine[0].Substring('compiledApiPathReport='.Length)
-        $apiReceipt = [string]$apiReceiptLine[0].Substring('compiledApiPathReceipt='.Length)
     }
+    if ($apiPath) {
     $reviewDirectory = Join-Path (Split-Path -Parent $apiPath) 'compiled-api-review'
     if (Test-Path -LiteralPath $reviewDirectory) {
         $reviewDirectory = Join-Path (Split-Path -Parent $apiPath) ('compiled-api-review-readable-' + [Guid]::NewGuid().ToString('N').Substring(0, 8))
@@ -112,10 +129,10 @@ if (@($sql.paths).Count -eq 0) {
         -ProofRoot $ProofRoot -PathReportPath $apiPath -PathReportReceiptPath $apiReceipt `
         -ToSurface database-api -IlMaxWork $(if ($useHighWork) { $ilMaxWork } else { 0 }) `
         -OutputDirectory $reviewDirectory
+    }
 }
 $sqlProjection = Join-Path $ProofRoot 'compiled-path-review'
 if (Test-Path -LiteralPath $sqlProjection) {
-    Write-Output 'compiledReplaySqlProjection=existing'
-} else {
-    & (Join-Path $PSScriptRoot 'New-ExistingWebFormsCompiledPathHandoff.ps1') -ProofRoot $ProofRoot
+    $sqlProjection = Join-Path $ProofRoot ('compiled-path-review-' + [Guid]::NewGuid().ToString('N').Substring(0,8))
 }
+& (Join-Path $PSScriptRoot 'New-ExistingWebFormsCompiledPathHandoff.ps1') -ProofRoot $ProofRoot -OutputDirectory $sqlProjection

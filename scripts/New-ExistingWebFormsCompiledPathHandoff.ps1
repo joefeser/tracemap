@@ -27,6 +27,10 @@ function Hash-Input([string]$Path, [long]$Limit, [string]$Slot) {
 }
 function Html([object]$Value) { return [Net.WebUtility]::HtmlEncode([string]$Value) }
 function Values([object]$Value) { if ($null -eq $Value) { return @() }; return @($Value) }
+function Optional([object]$Value, [string]$Name) {
+    $property = $Value.PSObject.Properties[$Name]
+    if ($null -eq $property) { return $null }; return $property.Value
+}
 function Display-Label([string]$Identity) {
     # A display-only projection. Never use this label for matching or evidence identity.
     $member = [regex]::Match($Identity, '\|(?:method|constructor):[0-9]+:([^|]+)')
@@ -73,14 +77,33 @@ if ($ToSurface -eq 'database-api') {
     if ($pathReportReceipt.schemaVersion -cne 'webforms-path-recheck.v1' -or
         [string]$pathReportReceipt.generatorSha256 -cnotmatch '^[0-9a-f]{64}$' -or
         [string]$pathReportReceipt.boundedInputSha256 -cnotmatch '^[0-9a-f]{64}$' -or
-        ($IlMaxWork -ne 0 -and ($pathReportReceipt.scanFolder -cne $scanFolder -or
-            $pathReportReceipt.combinedIndex -cne $combinedName))) {
+        $pathReportReceipt.scanFolder -cne $scanFolder -or
+        $pathReportReceipt.combinedIndex -cne $combinedName -or
+        [string](Optional $pathReportReceipt 'pathReportSha256') -cne $inputHashes.paths) {
+        throw 'WEBFORMS_COMPILED_HANDOFF_API_RECEIPT_INVALID'
+    }
+    $baseReportHash = Hash-Input (Join-Path $ProofRoot 'handler-paths.json') 268435456 'basePathReport'
+    $factsHash = Hash-Input (Join-Path $ProofRoot "$scanFolder/facts.ndjson") 17179869184 'facts'
+    $generationDigest = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData(
+        [Text.Encoding]::UTF8.GetBytes("$($inputHashes.combinedIndex)`n$baseReportHash`n$factsHash"))).ToLowerInvariant()
+    if ($generationDigest -cne $pathReportReceipt.boundedInputSha256) {
         throw 'WEBFORMS_COMPILED_HANDOFF_API_RECEIPT_INVALID'
     }
 }
 $paths = [IO.File]::ReadAllText($pathsPath) | ConvertFrom-Json -Depth 60
 $manifest = [IO.File]::ReadAllText($manifestPath) | ConvertFrom-Json -Depth 40
 $receipt = [IO.File]::ReadAllText($receiptPath) | ConvertFrom-Json -Depth 30
+if ([string]::IsNullOrWhiteSpace([string](Optional $manifest 'repoName')) -or
+    @($paths.sources | Where-Object { $_.scanId -ceq $manifest.scanId -and
+        $_.commitSha -ceq $manifest.commitSha -and
+        [string](Optional $_ 'repoName') -ceq $manifest.repoName -and
+        [string](Optional $_ 'remoteUrl') -ceq [string](Optional $manifest 'remoteUrl') }).Count -ne 1) {
+    throw 'WEBFORMS_COMPILED_HANDOFF_REPOSITORY_MISMATCH'
+}
+$repositorySha = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData(
+    [Text.Encoding]::UTF8.GetBytes([string]$manifest.repoName))).ToLowerInvariant()
+$packetRepositoryId = 'repository-' + [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData(
+    [Text.Encoding]::UTF8.GetBytes("webforms-modernization/repository/v1`0$($manifest.repoName)"))).ToLowerInvariant().Substring(0,24)
 if ([string]$paths.version -ne '1.0' -or [string]$paths.query.toSurface -ne $ToSurface -or
     [string]$manifest.commitSha -cnotmatch '^[0-9a-f]{40}$' -or
     [string]$receipt.sourceCommitSha -cne [string]$manifest.commitSha -or
@@ -139,6 +162,10 @@ $allGaps = @(Values $paths.gaps)
 $retainedGaps = @($allGaps | Select-Object -First 256)
 $gapGroups = [Collections.Generic.SortedDictionary[string, int]]::new([StringComparer]::Ordinal)
 foreach ($gap in $allGaps) {
+    if ([string]::IsNullOrWhiteSpace([string]$gap.ruleId) -or
+        [string]$gap.evidenceTier -cnotin @('Tier1Semantic','Tier2Structural','Tier3SyntaxOrTextual','Tier4Unknown')) {
+        throw 'WEBFORMS_COMPILED_HANDOFF_GAP_INVALID'
+    }
     $key = "$( [string]$gap.gapKind )`t$( [string]$gap.ruleId )"
     if (!$gapGroups.ContainsKey($key)) { $gapGroups[$key] = 0 }
     $gapGroups[$key]++
@@ -162,7 +189,15 @@ $handoff = [ordered]@{
         gapCounts = $gapCounts
         omittedGapGroupCount = [Math]::Max(0, $gapGroups.Count - $gapCounts.Count)
         omittedGapDetailCount = $allGaps.Count - $retainedGaps.Count
-        gaps = @($retainedGaps | ForEach-Object { [ordered]@{ gapKind = [string]$_.gapKind; ruleId = [string]$_.ruleId; evidenceTier = [string]$_.evidenceTier; message = [string]$_.message; reason = [string]$_.reason; commitSha = [string]$_.commitSha } })
+        gaps = @($retainedGaps | ForEach-Object {
+            $projection = [ordered]@{}
+            foreach ($name in @('gapId','gapKind','classification','ruleId','evidenceTier','message','reason','commitSha',
+                'sourceIndexId','sourceLabel','nodeId','combinedFactId','filePath','startLine','endLine','extractorVersion','evidenceScope','supportingFactIds',
+                'candidateCount','candidateLimit','groupedEvidenceCount','supportingFactLimit','callEvidenceCount','relationshipEvidenceCount','registrationEvidenceCount')) {
+                $projection[$name] = Optional $_ $name
+            }
+            $projection
+        })
     }
     assemblies = @(Values $manifest.compiledInputProvenance.outcomes | Where-Object { $_.outcome -eq 'admitted' } | ForEach-Object {
         [ordered]@{ safeLocator = [string]$_.safeLocator; rawFileSha256 = [string]$_.rawFileSha256; assemblyIdentity = [string]$_.assemblyIdentity; provenanceState = [string]$_.provenanceState; gapKinds = @(Values $_.gapKinds) }
@@ -174,6 +209,8 @@ $handoff = [ordered]@{
         'Static calls, SQL text evidence, and a database API candidate do not prove event firing, dispatch, database execution, or branch feasibility.'
     )
 }
+$handoff.provenance.sourceRepositorySha256 = $repositorySha
+$handoff.provenance.packetRepositoryId = $packetRepositoryId
 $OutputDirectory = if ($OutputDirectory) { [IO.Path]::GetFullPath($OutputDirectory) } else {
     Join-Path $ProofRoot $(if ($ToSurface -eq 'database-api') {
         if ($IlMaxWork -ne 0) { "compiled-api-review-ilwork-$IlMaxWork" } else { 'compiled-api-review' }
@@ -210,9 +247,10 @@ $assemblyRows = foreach ($assembly in $handoff.assemblies) {
         (Html $assembly.safeLocator), (Html $assembly.rawFileSha256), (Html $assembly.provenanceState)
 }
 $gapRows = foreach ($gap in $handoff.coverage.gaps) {
-    '<li><code>{0}</code> — <code>{1}</code> ({2}); {3}; commit <code>{4}</code></li>' -f `
+    '<li><code>{0}</code> — <code>{1}</code> ({2}); {3}; commit <code>{4}</code>; location <code>{5}:{6}-{7}</code>; source <code>{8}</code>; fact <code>{9}</code></li>' -f `
         (Html $gap.gapKind), (Html $gap.ruleId), (Html $gap.evidenceTier),
-        (Html $gap.message), (Html $gap.commitSha)
+        (Html $gap.message), (Html $gap.commitSha), (Html $gap.filePath), (Html $gap.startLine),
+        (Html $gap.endLine), (Html $gap.sourceIndexId), (Html $gap.combinedFactId)
 }
 $html = @"
 <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Web Forms compiled path review</title><style>body{font:16px system-ui,sans-serif;max-width:1450px;margin:2rem auto;padding:0 1rem;color:#172033}section{margin:2rem 0;padding:1rem;border:1px solid #ccd5e0;border-radius:8px}.table-wrap{overflow-x:auto}table{border-collapse:collapse;width:100%;table-layout:fixed;margin:1rem 0}th,td{border:1px solid #ccd5e0;padding:.65rem;text-align:left;vertical-align:top;overflow-wrap:anywhere}th{background:#eaf1ff}th:first-child{width:3rem}th:nth-child(2){width:44%}th:nth-child(3){width:23%}code{overflow-wrap:anywhere}td strong{display:block}.arrow{display:block;color:#526078}.identity{font-size:.85rem;margin-top:.4rem}.identity p{margin:.35rem 0}.identity code{word-break:break-all}p.warning{background:#fff1df;border-left:4px solid #a85a00;padding:1rem}small{color:#526078}</style></head><body><h1>Web Forms compiled path review</h1><p class="warning">LOCAL ONLY. These are bounded static, review-only candidates—not runtime execution, page activation, source-line identity, or proof that SQL ran.</p><p>Terminal <code>$(Html $ToSurface)</code>; source commit <code>$(Html $manifest.commitSha)</code>; scan <code>$(Html $manifest.scanId)</code>; paths $($retained.Count); gaps $($allGaps.Count); coverage <code>$(Html $paths.reportCoverage)</code>; truncated <code>$(Html $paths.summary.truncated)</code>. <a href="handler.handoff.local.json">Machine-readable handoff</a>.</p><p>Compact method labels are for reading only. Expand “Exact identities” for the preserved compiler/IL identity; rule IDs and evidence tiers remain on each hop.</p>$($sections -join '')<details><summary>Admitted DLL provenance ($($handoff.assemblies.Count))</summary><ul>$($assemblyRows -join '')</ul></details><details><summary>Explicit graph gaps ($($allGaps.Count))</summary><p>Showing $($retainedGaps.Count) of $($allGaps.Count) gap details; $($handoff.coverage.omittedGapDetailCount) omitted from this display. Exact counts by kind and rule remain in the JSON; the complete bounded report is committed by its input SHA-256.</p><ul>$($gapRows -join '')</ul></details><p>Generator SHA-256 <code>$generatorHash</code>; bounded input SHA-256 <code>$inputDigest</code>.</p></body></html>
