@@ -1,5 +1,27 @@
 # Web Forms Review Productization Implementation State
 
+## Native immutable attachment execution (2026-09-28)
+
+- Continued on `codex/webforms-native-preflight` in the managed
+  `webforms-native-attachment` checkout, based on `c7bdb328`.
+- Native run/resume now executes an explicit attach configuration without the
+  source scanner. It independently validates the immutable original parent,
+  retained source bytes and compiled admission, then writes a separately owned
+  standard scan through the Core compiled-only producer. Exact parent/context
+  provenance is visible in its manifest and Markdown report.
+- Derived manifest/index/NDJSON consistency is checked before completion.
+  Completed resume verifies parent/source/output/context without re-extraction;
+  failed/cancelled attempts remain unadmitted and retries allocate fresh IDs.
+  Parent SQLite sidecars and post-extraction input changes reject admission.
+- Focused validation passed 133/133, zero failed/skipped, covering execution,
+  compiled production, input gates and source snapshot regressions. New cases
+  cover legacy/complete-roster parents, source-scan absence, cancellation,
+  failure/retry, parent/source/context tampering and completed-output tampering.
+- This is not cross-index join or unified report acceptance. Those phases,
+  compiled-site parity, all-pages partitioning, scale, retention and the final
+  authorized private Windows run remain outstanding. No proof cleanup or PR
+  merge occurred. Earlier full-suite results do not validate this later slice.
+
 ## Active native workflow goal (2026-09-28)
 
 - Owner requested the complete workflow as an active tracked goal after the

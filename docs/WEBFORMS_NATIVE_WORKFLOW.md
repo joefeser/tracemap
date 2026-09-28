@@ -1,7 +1,8 @@
 # Native compiled Web Forms workflow
 
-Status: native preflight, input validation and checkpointed fresh scanning.
-Immutable attachment and unified review reports are still pending.
+Status: native preflight, input validation, checkpointed fresh scanning and
+immutable compiled-only attachment. Cross-index joins and unified review reports
+are still pending.
 
 The Core compiled-only producer now has a distinct local attachment context
 containing the exact generator, bounded input, original parent manifest/index
@@ -10,9 +11,11 @@ publish policies without source extractors, builds, file discovery or source
 fact copies. Retained source bytes are checked before and after extraction.
 Parent artifact hashes require independent caller validation; they are not
 authenticated signatures. Source analysis/build status stays not run and the
-derived scan remains reduced and review-only. This producer is not yet wired
-to native `attach` execution or validated cross-index report joins; the existing
-command still refuses attachment and the proven wrappers remain required.
+derived scan remains reduced and review-only. Native `attach` now validates the
+original parent manifest/index/facts and retained source bytes, then writes a
+separate compiled-only scan in a new owned attempt. Context validation checks
+local integrity, not authenticity. Validated cross-index report joins are not
+implemented yet; the proven report wrappers remain required.
 
 ## Native operator-declared receipt preparation
 
@@ -78,7 +81,7 @@ Git output is bounded to 4,194,304 characters per stream and 15 seconds per chec
 
 Then preflight the generated `review-config.local.json` into a separate new run
 folder and use native `run/resume` below. Receipt generation does not finish
-attachment, grouped workbench/handoff integration, all-pages partitioning or
+grouped workbench/handoff integration, all-pages partitioning or
 representative scale/private compiled-site parity. Keep the proven wrappers.
 
 The proven PowerShell proof/report workflow remains supported. Preflight alone
@@ -95,7 +98,7 @@ manifest owns this run ID, explicit input hashes, effective budgets, gaps and
 pending phase states. Its successful creation is **not a successful scan**.
 Retain the external dependencies; relocation and cleanup are not supported yet.
 
-## Native fresh scan and resume
+## Native fresh scan, immutable attachment and resume
 
 After preflight, a `fresh` configuration can execute the normal scanner once,
 including explicitly declared managed metadata, receipts, portable PDB and IL
@@ -106,13 +109,23 @@ tracemap webforms-review run --run <durable-run-root>
 tracemap webforms-review resume --run <durable-run-root>
 ```
 
+The same commands execute an `attach` configuration with an explicit
+`parentScanRoot`. Attachment never runs the source scanner: it checks current
+bytes over the parent's retained snapshot membership before and after compiled
+extraction, then writes the five standard scan artifacts to a separate owned
+scan directory. The parent, source and published inputs remain read-only. The
+derived manifest and Markdown report retain exact parent manifest/index hashes,
+source snapshot, Core generator and bounded-input context. Parent source facts
+are neither copied nor relabeled. Source analysis and builds remain not run;
+the new scan is reduced, local-only and review-only.
+
 The run owns these paths:
 
 ```text
 run-manifest.json                 immutable preflight/input contract
 checkpoints/0001.json              scan-started checkpoint
 checkpoints/0002.json              completed/failed/cancelled checkpoint
-attempts/<owned-id>/scan/          five scan artifacts, receipt, complete snapshot roster/manifest
+attempts/<owned-id>/scan/          five standard scan artifacts; fresh runs also retain snapshot pair
 .native-run.lock                   exclusive process lock, not a discovery hint
 ```
 
@@ -158,6 +171,11 @@ input/tool/output hashes and does **not** rerun source scanning. It reports
 do not turn a retained snapshot into current-source validation. A changed config,
 selected page, declared DLL/receipt/PDB/map or tool rejects reuse; make a new
 preflight run for new inputs. A changed Git identity also rejects execution.
+Completed attachment resume additionally revalidates the original parent and
+current bytes over its retained snapshot membership, plus derived attachment
+context. It does not rerun compiled extraction. Changed retained source bytes,
+parent sidecars or artifact bytes, extra outputs, or changed context reject reuse.
+This is retained-membership validation, not discovery of newly added files.
 
 Source folders restrict direct file inventory. Projectless mode excludes project and
 solution files; explicit solution/project modes pass their selected paths to the
@@ -172,8 +190,9 @@ These modes have argument-admission coverage here, not full compiled-site parity
 This milestone ends at `scan-completed-reports-pending`. The scan's normal
 `report.md` is available, but no unified workbench, grouped compiled-path handoff
 or graph-query phase is produced here. Raw page maps are not promoted to a
-publish receipt automatically. `attach` is explicitly refused before
-execution; it must not be approximated by a fresh scan of the parent's source.
+publish receipt automatically. Attachment completion additionally retains
+`CrossIndexParentJoinsPending`: a valid derived index is not yet a joined
+source-to-compiled workbench or a replacement for the proven reports.
 
 An optional `publishReceiptRelativePath` names an existing local-only
 `webforms-publish-binding.v1` receipt under `receiptRoot`, if declared, or the
@@ -256,8 +275,9 @@ file is relative to its configured root. No assembly discovery or upload occurs.
 - `fresh` inventories inputs for the native source-plus-compiled scan.
 - `attach` requires `parentScanRoot`. Its five required scan artifacts are hashed
   using streaming reads. Source commit and parent manifest commit must match;
-  the execution gate can validate parent repository/index identity, but attachment
-  production and source-to-compiled cross-index joins remain pending.
+  the execution gate validates parent repository/index/fact identity and retained
+  source bytes before producing a separate compiled-only scan. Source-to-compiled
+  cross-index joins remain pending.
   A derived run never appends files to or modifies the parent scan.
 - `projectMode` is exactly `projectless`, `solution` with one solution path, or
   `projects` with a nonempty native JSON path array. Selected files must exist.
@@ -344,8 +364,8 @@ Public gate tests cover receipt
 identity/locator/ambiguity/staleness, parent tampering and count/row limits, escaped
 filesystem names, cancellation and byte-for-byte parent immutability. They do not
 establish private Windows or representative scale acceptance. Fresh execution
-and resume are now implemented; attachment and reporting integration remain
-outstanding.
+and immutable attachment/resume are implemented; cross-index joins and reporting
+integration remain outstanding.
 
 ## Next slices and acceptance
 

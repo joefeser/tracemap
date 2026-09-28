@@ -157,20 +157,123 @@ public sealed class WebFormsReviewExecutionTests
         Assert.DoesNotContain("webFormsExecution=scan-completed", fixture.Output.ToString(), StringComparison.Ordinal);
     }
 
-    [Fact]
-    public async Task Attach_fails_explicitly_without_writing_to_the_parent_or_run()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Attach_produces_a_new_compiled_only_index_and_resume_preserves_parent_and_derived_bytes(bool retainedRoster)
     {
         using var fixture = new Fixture();
         var parent = Path.Combine(fixture.Root, "parent");
-        Assert.Equal(0, await TraceMapCommand.RunAsync(["scan", "--repo", fixture.Source, "--out", parent], TextWriter.Null, TextWriter.Null));
+        Assert.Equal(0, await TraceMapCommand.RunAsync(["scan", "--repo", fixture.Source, "--out", parent,
+            "--include", "Pages/**", "--exclude", "**/*.vbproj", .. retainedRoster ? new[] { "--retain-source-snapshot" } : []], TextWriter.Null, TextWriter.Null));
         fixture.Config = fixture.Config with { Operation = "attach", ParentScanRoot = parent };
         await fixture.Preflight();
         var before = Directory.GetFiles(parent, "*", SearchOption.AllDirectories).ToDictionary(path => path, Hash);
-        Assert.Equal(1, await fixture.Execute("run", (_, _, _, _) => throw new InvalidOperationException("must not execute")));
-        Assert.Contains("ATTACH_EXECUTION_PENDING", fixture.Error.ToString(), StringComparison.Ordinal);
-        Assert.False(Directory.Exists(Path.Combine(fixture.Run, "attempts")));
-        Assert.False(Directory.Exists(Path.Combine(fixture.Run, "checkpoints")));
+        Assert.Equal(0, await fixture.Execute("run", (_, _, _, _) => throw new InvalidOperationException("must not source scan")));
+        var checkpoint = fixture.LastCheckpoint();
+        Assert.Equal("scan-completed-reports-pending", checkpoint.State);
+        Assert.Contains("CrossIndexParentJoinsPending", checkpoint.Gaps);
+        var derivedRoot = Path.Combine(fixture.Run, checkpoint.Attempt, "scan");
+        var derived = JsonSerializer.Deserialize<ScanManifest>(File.ReadAllText(Path.Combine(derivedRoot, "scan-manifest.json")), JsonOptions)!;
+        CompiledAttachmentProducer.ValidateContext(derived);
+        Assert.Equal(Hash(Path.Combine(parent, "index.sqlite")), derived.CompiledAttachment!.ParentIndexSha256);
+        Assert.Equal(Hash(Path.Combine(parent, "scan-manifest.json")), derived.CompiledAttachment.ParentManifestSha256);
+        Assert.Equal("NotRun", derived.BuildStatus);
+        Assert.NotEqual(fixture.Plan().ParentScanId, derived.ScanId);
+        var facts = File.ReadLines(Path.Combine(derivedRoot, "facts.ndjson")).Select(line => JsonSerializer.Deserialize<CodeFact>(line, JsonOptions)!).ToArray();
+        Assert.Contains(facts, fact => fact.FactType == FactTypes.ManagedIlBodyDeclared);
+        Assert.DoesNotContain(facts, fact => fact.FactType is FactTypes.FileInventoried or FactTypes.MethodDeclared or FactTypes.CallEdge);
+        Assert.False(File.Exists(Path.Combine(derivedRoot, SourceSnapshotRetention.RosterName)));
+        var report = File.ReadAllText(Path.Combine(derivedRoot, "report.md"));
+        Assert.Contains(derived.CompiledAttachment.ParentIndexSha256, report, StringComparison.Ordinal);
+        Assert.Contains("Source analysis and builds were not rerun", report, StringComparison.Ordinal);
+        var derivedHashes = Directory.GetFiles(derivedRoot, "*", SearchOption.AllDirectories).ToDictionary(path => path, Hash);
+        Assert.Equal(0, await fixture.Execute("resume", (_, _, _, _) => throw new InvalidOperationException("must not source scan")));
+        Assert.Equal(2, fixture.LastCheckpoint().Sequence);
+        foreach (var pair in derivedHashes) Assert.Equal(pair.Value, Hash(pair.Key));
+        Assert.Equal(before.Count, Directory.GetFiles(parent, "*", SearchOption.AllDirectories).Length);
         foreach (var pair in before) Assert.Equal(pair.Value, Hash(pair.Key));
+        File.AppendAllText(Path.Combine(fixture.Source, "Pages", "Lookup.aspx.vb"), "' changed retained source\n");
+        Assert.Equal(1, await fixture.Execute("resume", (_, _, _, _) => throw new InvalidOperationException("must not source scan")));
+        Assert.DoesNotContain("webFormsExecution=scan-completed", fixture.Output.ToString(), StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Failed_or_cancelled_attachment_keeps_attempt_bytes_and_resumes_without_a_source_scan(bool cancelled)
+    {
+        using var fixture = new Fixture();
+        var parent = await fixture.PreflightAttachment();
+        var hashes = Directory.GetFiles(parent, "*", SearchOption.AllDirectories).ToDictionary(path => path, Hash);
+        using var cancellation = new CancellationTokenSource();
+        Task FailAttempt(WebFormsReviewPreflightManifest _, ScanManifest __, string output, CancellationToken ___)
+        {
+            Directory.CreateDirectory(output);
+            File.WriteAllText(Path.Combine(output, "incomplete.txt"), "retained public failed attachment bytes");
+            if (cancelled) { cancellation.Cancel(); throw new OperationCanceledException(cancellation.Token); }
+            throw new InvalidOperationException("public fixture failure");
+        }
+        var run = fixture.ExecuteAttachment("run", FailAttempt, cancellation.Token);
+        if (cancelled) await Assert.ThrowsAnyAsync<OperationCanceledException>(() => run);
+        else Assert.Equal(1, await run);
+        var failed = fixture.LastCheckpoint();
+        Assert.Equal(cancelled ? "scan-cancelled" : "scan-failed", failed.State);
+        Assert.Empty(failed.Artifacts);
+        var marker = Path.Combine(fixture.Run, failed.Attempt, "scan", "incomplete.txt");
+        var markerHash = Hash(marker);
+        Assert.Equal(0, await fixture.Execute("resume", (_, _, _, _) => throw new InvalidOperationException("must not source scan")));
+        Assert.Equal(4, fixture.LastCheckpoint().Sequence);
+        Assert.NotEqual(failed.Attempt, fixture.LastCheckpoint().Attempt);
+        Assert.Equal(markerHash, Hash(marker));
+        foreach (var pair in hashes) Assert.Equal(pair.Value, Hash(pair.Key));
+    }
+
+    [Theory]
+    [InlineData("parent-report")]
+    [InlineData("parent-sidecar")]
+    [InlineData("source")]
+    [InlineData("derived")]
+    public async Task Post_extraction_parent_source_and_derived_tampering_cannot_admit_completion(string mutation)
+    {
+        using var fixture = new Fixture();
+        var parent = await fixture.PreflightAttachment();
+        Assert.Equal(1, await fixture.ExecuteAttachment("run", async (plan, manifest, output, token) =>
+        {
+            await WebFormsReviewAttachmentExecution.WriteAsync(plan, manifest, output, token);
+            if (mutation == "parent-report") File.AppendAllText(Path.Combine(parent, "report.md"), "changed public fixture");
+            if (mutation == "parent-sidecar") File.WriteAllText(Path.Combine(parent, "index.sqlite-wal"), "active public fixture");
+            if (mutation == "source") File.AppendAllText(Path.Combine(fixture.Source, "Pages", "Lookup.aspx.vb"), "' changed public fixture\n");
+            if (mutation == "derived")
+            {
+                var path = Path.Combine(output, "scan-manifest.json");
+                var derived = JsonSerializer.Deserialize<ScanManifest>(File.ReadAllText(path), JsonOptions)!;
+                File.WriteAllText(path, JsonSerializer.Serialize(derived with
+                { CompiledAttachment = derived.CompiledAttachment! with { ParentIndexSha256 = new string('a', 64) } }, JsonOptions));
+            }
+        }));
+        Assert.Equal("scan-failed", fixture.LastCheckpoint().State);
+        Assert.Null(fixture.LastCheckpoint().ScanId);
+        Assert.DoesNotContain("webFormsExecution=scan-completed", fixture.Output.ToString(), StringComparison.Ordinal);
+        Assert.DoesNotContain(fixture.Root, fixture.Error.ToString(), StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("parent")]
+    [InlineData("output")]
+    [InlineData("extra")]
+    public async Task Attachment_resume_rejects_changed_parent_or_derived_artifacts_without_reextracting(string mutation)
+    {
+        using var fixture = new Fixture();
+        var parent = await fixture.PreflightAttachment();
+        Assert.Equal(0, await fixture.Execute("run", (_, _, _, _) => throw new InvalidOperationException("must not source scan")));
+        var output = Path.Combine(fixture.Run, fixture.LastCheckpoint().Attempt, "scan");
+        if (mutation == "parent") File.AppendAllText(Path.Combine(parent, "report.md"), "changed public fixture");
+        if (mutation == "output") File.AppendAllText(Path.Combine(output, "report.md"), "changed public fixture");
+        if (mutation == "extra") File.WriteAllText(Path.Combine(output, "extra.json"), "{}");
+        Assert.Equal(1, await fixture.ExecuteAttachment("resume", (_, _, _, _) => throw new InvalidOperationException("must not reextract")));
+        Assert.Equal(2, fixture.LastCheckpoint().Sequence);
+        Assert.DoesNotContain("webFormsExecution=scan-completed", fixture.Output.ToString(), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -441,6 +544,21 @@ public sealed class WebFormsReviewExecutionTests
         {
             Output.GetStringBuilder().Clear(); Error.GetStringBuilder().Clear();
             return WebFormsReviewExecutionCommand.RunAsync([action, "--run", Run], Output, Error, runner, token);
+        }
+        public Task<int> ExecuteAttachment(string action, WebFormsReviewAttachmentRunner runner, CancellationToken token = default)
+        {
+            Output.GetStringBuilder().Clear(); Error.GetStringBuilder().Clear();
+            return WebFormsReviewExecutionCommand.RunWithAttachmentAsync([action, "--run", Run], Output, Error,
+                (_, _, _, _) => throw new InvalidOperationException("must not source scan"), runner, token);
+        }
+        public async Task<string> PreflightAttachment()
+        {
+            var parent = Path.Combine(Root, "retained-parent");
+            Assert.Equal(0, await TraceMapCommand.RunAsync(["scan", "--repo", Source, "--out", parent,
+                "--include", "Pages/**", "--exclude", "**/*.vbproj", "--retain-source-snapshot"], TextWriter.Null, TextWriter.Null));
+            Config = Config with { Operation = "attach", ParentScanRoot = parent };
+            await Preflight();
+            return parent;
         }
         public WebFormsReviewPreflightManifest Plan() => JsonSerializer.Deserialize<WebFormsReviewPreflightManifest>(File.ReadAllText(Manifest), JsonOptions)!;
         public WebFormsReviewCheckpoint LastCheckpoint() => JsonSerializer.Deserialize<WebFormsReviewCheckpoint>(File.ReadAllText(

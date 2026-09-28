@@ -65,6 +65,10 @@
     publish policies, verified retained source membership and explicit local
     parent/generator/input context without copying source facts or writing inputs.
     Keep native attachment checkpoints and cross-index report joins pending.
+  - [x] Execute compiled-only attachment in a separately owned native attempt,
+    validate original parent/source and derived index/context, and support
+    immutable completed resume plus fresh failed/cancelled retries. Preserve
+    parent source facts and hashes; keep cross-index joins and reports pending.
 - [ ] Integrate compiled evidence into normal packet/docs/handoff navigation
   across selected/all-page modes without upgrading review-only page verdicts.
   - [ ] Group exact method chains in the HTML while retaining every evidence

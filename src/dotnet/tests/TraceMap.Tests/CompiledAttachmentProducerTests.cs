@@ -15,6 +15,7 @@ public sealed class CompiledAttachmentProducerTests
         var result = fixture.Create();
         var manifest = result.Manifest;
         var context = Assert.IsType<CompiledAttachmentContext>(manifest.CompiledAttachment);
+        CompiledAttachmentProducer.ValidateContext(manifest);
         Assert.Equal(originalJson, JsonSerializer.Serialize(fixture.Parent));
         Assert.Equal(beforeBytes, File.ReadAllBytes(fixture.Source));
         Assert.False(Directory.Exists(fixture.Options.OutputPath));
@@ -149,6 +150,36 @@ public sealed class CompiledAttachmentProducerTests
         var result = fixture.Create();
         var roundtrip = JsonSerializer.Deserialize<ScanManifest>(JsonSerializer.Serialize(result.Manifest))!;
         Assert.Equal(result.Manifest.CompiledAttachment, roundtrip.CompiledAttachment);
+    }
+
+    [Theory]
+    [InlineData("parent")]
+    [InlineData("snapshot")]
+    [InlineData("generator")]
+    [InlineData("input")]
+    [InlineData("limits")]
+    [InlineData("claim")]
+    [InlineData("metadata")]
+    public void Context_revalidation_rejects_stale_parent_generator_limits_claim_and_lane_provenance(string mutation)
+    {
+        using var fixture = new Fixture();
+        var result = fixture.Create();
+        var manifest = result.Manifest;
+        var context = manifest.CompiledAttachment!;
+        context = mutation switch
+        {
+            "parent" => context with { ParentIndexSha256 = new string('d', 64) },
+            "snapshot" => context with { ParentSourceSnapshotDigest = new string('d', 64) },
+            "generator" => context with { GeneratorSha256 = new string('d', 64) },
+            "input" => context with { BoundedInputSha256 = new string('d', 64) },
+            "limits" => context with { MaxSourceFiles = 999 },
+            "claim" => context with { ClaimLevel = "runtime" },
+            _ => context
+        };
+        manifest = manifest with { CompiledAttachment = context };
+        if (mutation == "metadata") manifest = manifest with { CompiledInputProvenance = manifest.CompiledInputProvenance! with { BoundedInputSha256 = new string('d', 64) } };
+        Assert.Equal("COMPILED_ATTACHMENT_CONTEXT_INVALID", Assert.Throws<InvalidOperationException>(() =>
+            CompiledAttachmentProducer.ValidateContext(manifest)).Message);
     }
 
     [Theory]

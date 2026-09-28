@@ -15,7 +15,7 @@ public sealed record WebFormsReviewCheckpoint(
     long FactCount, IReadOnlyList<string> Gaps, IReadOnlyList<WebFormsReviewArtifact> Artifacts,
     string CheckpointPayloadSha256, string RuntimeInputsSha256);
 
-/// <summary>Owned, append-only fresh scan execution. No retained input is rewritten.</summary>
+/// <summary>Owned, append-only fresh/compiled-attachment execution. No retained input is rewritten.</summary>
 public static class WebFormsReviewExecutionCommand
 {
     public const string RuleId = "workflow.webforms.compiled-review-execution.v1";
@@ -26,11 +26,16 @@ public static class WebFormsReviewExecutionCommand
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase, WriteIndented = true,
         UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow, MaxDepth = 32
     };
-    private static readonly string[] Required = ["scan-manifest.json", "facts.ndjson", "index.sqlite", "report.md", "logs/analyzer.log",
+    private static readonly string[] StandardRequired = ["scan-manifest.json", "facts.ndjson", "index.sqlite", "report.md", "logs/analyzer.log"];
+    private static readonly string[] FreshRequired = [.. StandardRequired,
         SourceSnapshotRetention.ManifestName, SourceSnapshotRetention.RosterName];
 
     public static async Task<int> RunAsync(string[] args, TextWriter output, TextWriter error,
-        LocalReviewScanRunner scanRunner, CancellationToken cancellationToken = default)
+        LocalReviewScanRunner scanRunner, CancellationToken cancellationToken = default) =>
+        await RunWithAttachmentAsync(args, output, error, scanRunner, WebFormsReviewAttachmentExecution.WriteAsync, cancellationToken);
+
+    internal static async Task<int> RunWithAttachmentAsync(string[] args, TextWriter output, TextWriter error,
+        LocalReviewScanRunner scanRunner, WebFormsReviewAttachmentRunner attachmentRunner, CancellationToken cancellationToken = default)
     {
         try
         {
@@ -50,10 +55,11 @@ public static class WebFormsReviewExecutionCommand
             var comparable = rebuilt with { RunId = plan.RunId };
             if (!JsonElement.DeepEquals(JsonSerializer.SerializeToElement(plan, JsonOptions),
                     JsonSerializer.SerializeToElement(comparable, JsonOptions))) throw Fail("PREFLIGHT_CHANGED_OR_TOOL_MISMATCH");
-            if (plan.Configuration.Operation != "fresh") throw Fail("ATTACH_EXECUTION_PENDING");
+            var attach = plan.Configuration.Operation == "attach";
+            if (!attach && plan.Configuration.Operation != "fresh") throw Fail("OPERATION_INVALID");
             // BuildAsync checked a prospective child. Check the actual run root's
             // separation too: the root cannot be an ancestor of any input root.
-            foreach (var inputRoot in new[] { plan.Configuration.SourceRoot, plan.Configuration.PublishedRoot, plan.Configuration.ReceiptRoot }.Where(path => path is not null))
+            foreach (var inputRoot in new[] { plan.Configuration.SourceRoot, plan.Configuration.PublishedRoot, plan.Configuration.ReceiptRoot, plan.Configuration.ParentScanRoot }.Where(path => path is not null))
                 if (Within(root, inputRoot!) || Within(inputRoot!, root)) throw Fail("RUN_OVERLAPS_INPUT");
             var runtimeRoot = WebFormsReviewPreflightCommand.PhysicalPath(Path.GetDirectoryName(typeof(WebFormsReviewExecutionCommand).Assembly.Location)!);
             if (Within(runtimeRoot, root) || Within(root, runtimeRoot)) throw Fail("RUN_OVERLAPS_RUNTIME");
@@ -70,7 +76,12 @@ public static class WebFormsReviewExecutionCommand
                 .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
             if (history.Checkpoint?.State == Completed)
             {
-                await VerifyArtifactsAsync(root, history.Checkpoint, plan.Configuration.Budgets, cancellationToken);
+                await VerifyArtifactsAsync(root, history.Checkpoint, plan, cancellationToken);
+                if (attach)
+                {
+                    var retained = await ReadScanManifestAsync(OwnedPath(root, history.Checkpoint.Attempt + "/scan"), cancellationToken);
+                    await WebFormsReviewAttachmentExecution.ValidateDerivedAsync(plan, validated, retained, cancellationToken);
+                }
                 await output.WriteLineAsync($"webFormsExecution={Completed};retainedSnapshot=true;sourceRescanned=false");
                 await output.WriteLineAsync($"webFormsScan={OwnedPath(root, history.Checkpoint.Attempt + "/scan")}");
                 return 0;
@@ -79,35 +90,44 @@ public static class WebFormsReviewExecutionCommand
             var attempt = "attempts/" + Guid.NewGuid().ToString("N");
             var scanPath = OwnedPath(root, attempt + "/scan");
             Directory.CreateDirectory(OwnedPath(root, attempt));
-            var scanArgs = ScanArguments(plan, scanPath);
-            var policyDigest = Digest(JsonSerializer.SerializeToUtf8Bytes(scanArgs, JsonOptions));
+            var policyDigest = PolicyDigest(plan, scanPath);
             var started = Checkpoint("scan-started", [], null, null, 0, validationGaps);
             history = await PublishAsync(root, started, cancellationToken);
             using var scanOutput = new StringWriter(CultureInfo.InvariantCulture);
             using var scanError = new StringWriter(CultureInfo.InvariantCulture);
             try
             {
-                var result = await scanRunner(scanArgs, scanOutput, scanError, cancellationToken);
-                if (result != 0) throw Fail("SCAN_FAILED");
+                if (attach)
+                    await attachmentRunner(plan, validated.ParentManifest ?? throw Fail("PARENT_UNAVAILABLE"), scanPath, cancellationToken);
+                else
+                {
+                    var result = await scanRunner(ScanArguments(plan, scanPath), scanOutput, scanError, cancellationToken);
+                    if (result != 0) throw Fail("SCAN_FAILED");
+                }
                 await WebFormsReviewInputValidation.RecheckAsync(plan, cancellationToken);
                 var git = GitMetadataProvider.Detect(plan.Configuration.SourceRoot);
                 if (git.CommitSha != plan.Configuration.SourceCommitSha) throw Fail("SOURCE_IDENTITY_CHANGED");
                 var artifacts = await CollectArtifactsAsync(root, attempt, plan.Configuration.Budgets, cancellationToken);
-                foreach (var required in Required)
+                foreach (var required in Required(plan))
                     if (!artifacts.Any(artifact => artifact.RelativePath == attempt + "/scan/" + required)) throw Fail("SCAN_ARTIFACT_MISSING");
-                var scanManifestBytes = await WebFormsReviewPreflightCommand.ReadSmallAsync(Path.Combine(scanPath, "scan-manifest.json"), 4_194_304, cancellationToken);
-                WebFormsReviewPreflightCommand.RejectDuplicateProperties(scanManifestBytes);
-                var scanManifest = JsonSerializer.Deserialize<ScanManifest>(scanManifestBytes, JsonOptions) ?? throw Fail("SCAN_MANIFEST_INVALID");
+                var scanManifest = await ReadScanManifestAsync(scanPath, cancellationToken);
                 var validationPlan = ProducedScanPlan(plan, scanPath, scanManifest.ScanId, artifacts, attempt);
                 var checkedScan = await WebFormsReviewInputValidation.ValidateParentAsync(validationPlan, git, cancellationToken);
-                await WebFormsReviewInputValidation.ValidateCompleteOrLegacySnapshotAsync(validationPlan, checkedScan.Manifest, cancellationToken);
+                if (attach)
+                {
+                    await WebFormsReviewAttachmentExecution.ValidateDerivedAsync(plan, validated, checkedScan.Manifest, cancellationToken);
+                    await WebFormsReviewInputValidation.ValidateCompleteOrLegacySnapshotAsync(plan, validated.ParentManifest!, cancellationToken);
+                }
+                else await WebFormsReviewInputValidation.ValidateCompleteOrLegacySnapshotAsync(validationPlan, checkedScan.Manifest, cancellationToken);
                 var publishGaps = checkedScan.Manifest.WebFormsPublishProvenance is null ? new[] { "PublishMapExecutionPending" }
                     : checkedScan.Manifest.WebFormsPublishProvenance.Status == "bound" ? [] : new[] { "PublishReceiptCoverageReduced" };
                 var completed = Checkpoint(Completed, artifacts, checkedScan.Manifest.ScanId,
                     checkedScan.Manifest.SourceSnapshotDigest, checkedScan.Facts, validationGaps
-                        .Concat(["UnifiedReportsPending"]).Concat(publishGaps).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray());
-                await VerifyArtifactsAsync(root, completed, plan.Configuration.Budgets, cancellationToken);
+                        .Concat(["UnifiedReportsPending"]).Concat(attach ? new[] { "CrossIndexParentJoinsPending" } : [])
+                        .Concat(publishGaps).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray());
+                await VerifyArtifactsAsync(root, completed, plan, cancellationToken);
                 await WebFormsReviewInputValidation.RecheckAsync(plan, cancellationToken);
+                if (attach) await WebFormsReviewInputValidation.ValidateCompleteOrLegacySnapshotAsync(plan, validated.ParentManifest!, cancellationToken);
                 var gitAfter = GitMetadataProvider.Detect(plan.Configuration.SourceRoot);
                 if (gitAfter.CommitSha != git.CommitSha || gitAfter.GitRootPath != git.GitRootPath ||
                     gitAfter.RemoteUrl != git.RemoteUrl || gitAfter.ScanRootRelativePath != git.ScanRootRelativePath) throw Fail("SOURCE_IDENTITY_CHANGED");
@@ -122,8 +142,11 @@ public static class WebFormsReviewExecutionCommand
                 if (history.Checkpoint?.State == Completed) throw;
                 // Keep failed attempt bytes. They are not admitted as completed
                 // evidence; resume allocates a new owned attempt rather than overwriting.
-                await PublishAsync(root, Checkpoint(exception is OperationCanceledException ? "scan-cancelled" : "scan-failed",
-                    [], null, null, 0, [exception is OperationCanceledException ? "Cancelled" : "ScanOrArtifactValidationFailed"]), CancellationToken.None);
+                var cancelled = exception is OperationCanceledException || cancellationToken.IsCancellationRequested;
+                await PublishAsync(root, Checkpoint(cancelled ? "scan-cancelled" : "scan-failed",
+                    [], null, null, 0, [cancelled ? "Cancelled" : "ScanOrArtifactValidationFailed"]), CancellationToken.None);
+                if (cancelled && exception is not OperationCanceledException)
+                    throw new OperationCanceledException("Native execution cancelled.", exception, cancellationToken);
                 throw;
             }
 
@@ -141,6 +164,10 @@ public static class WebFormsReviewExecutionCommand
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
         catch (ExecutionException exception) { await error.WriteLineAsync("error: " + exception.Message); return 1; }
         catch (SourceSnapshotRetentionException exception) { await error.WriteLineAsync("error: " + exception.Message); return 1; }
+        catch (InvalidOperationException exception) when (exception.Message.StartsWith("COMPILED_ATTACHMENT_", StringComparison.Ordinal)
+            || exception.Message.StartsWith("WEBFORMS_ATTACHMENT_", StringComparison.Ordinal)
+            || exception.Message.StartsWith("WEBFORMS_REVIEW_", StringComparison.Ordinal))
+        { await error.WriteLineAsync("error: " + exception.Message); return 1; }
         catch (Exception)
         { await error.WriteLineAsync("error: WEBFORMS_EXECUTION_INPUT_OUTPUT_OR_CHECKPOINT_INVALID"); return 1; }
     }
@@ -184,7 +211,7 @@ public static class WebFormsReviewExecutionCommand
         string scanId, IReadOnlyList<WebFormsReviewArtifact> artifacts, string attempt) => plan with
     {
         Configuration = plan.Configuration with { Operation = "attach", ParentScanRoot = scanPath }, ParentScanId = scanId,
-        Inputs = plan.Inputs.Concat(Required.Select(name =>
+        Inputs = plan.Inputs.Where(item => !item.Role.StartsWith("parent-", StringComparison.Ordinal)).Concat(Required(plan).Select(name =>
         {
             var artifact = artifacts.Single(item => item.RelativePath == attempt + "/scan/" + name);
             return new WebFormsReviewInput("parent-" + name, Path.Combine(scanPath, name), artifact.Bytes, artifact.Sha256);
@@ -221,11 +248,11 @@ public static class WebFormsReviewExecutionCommand
         return result.OrderBy(item => item.RelativePath, StringComparer.Ordinal).ToArray();
     }
 
-    private static async Task VerifyArtifactsAsync(string root, WebFormsReviewCheckpoint checkpoint, WebFormsReviewBudgets budgets, CancellationToken token)
+    private static async Task VerifyArtifactsAsync(string root, WebFormsReviewCheckpoint checkpoint, WebFormsReviewPreflightManifest plan, CancellationToken token)
     {
-        var actual = await CollectArtifactsAsync(root, checkpoint.Attempt, budgets, token);
+        var actual = await CollectArtifactsAsync(root, checkpoint.Attempt, plan.Configuration.Budgets, token);
         if (!actual.SequenceEqual(checkpoint.Artifacts)) throw Fail("OUTPUT_CHANGED");
-        foreach (var required in Required)
+        foreach (var required in Required(plan))
             if (!actual.Any(item => item.RelativePath == checkpoint.Attempt + "/scan/" + required)) throw Fail("SCAN_ARTIFACT_MISSING");
     }
 
@@ -253,7 +280,7 @@ public static class WebFormsReviewExecutionCommand
                 checkpoint.Artifacts is null || checkpoint.Artifacts.Count > 256 || checkpoint.Gaps is null ||
                 !ValidAttempt(checkpoint.Attempt) || checkpoint.State is not ("scan-started" or "scan-failed" or "scan-cancelled" or Completed)) throw Fail("CHECKPOINT_INVALID");
             var scanPath = OwnedPath(root, checkpoint.Attempt + "/scan");
-            var policyDigest = Digest(JsonSerializer.SerializeToUtf8Bytes(ScanArguments(plan, scanPath), JsonOptions));
+            var policyDigest = PolicyDigest(plan, scanPath);
             var expectedDigest = Digest(JsonSerializer.SerializeToUtf8Bytes(new
             { preflightSha256 = preflightSha, runtimeInputsSha256 = runtimeSha, policySha256 = policyDigest, sourceSnapshotDigest = checkpoint.SourceSnapshotDigest, artifacts = checkpoint.Artifacts }, JsonOptions));
             if (checkpoint.BoundedInputSha256 != expectedDigest || (checkpoint.State == Completed &&
@@ -266,6 +293,21 @@ public static class WebFormsReviewExecutionCommand
             history = new(checkpoint.Sequence, Digest(bytes), checkpoint);
         }
         return history;
+    }
+
+    private static IReadOnlyList<string> Required(WebFormsReviewPreflightManifest plan) =>
+        plan.Configuration.Operation == "attach" ? StandardRequired : FreshRequired;
+
+    private static string PolicyDigest(WebFormsReviewPreflightManifest plan, string output) =>
+        plan.Configuration.Operation == "attach"
+            ? Digest(JsonSerializer.SerializeToUtf8Bytes(WebFormsReviewAttachmentExecution.Options(plan, output), JsonOptions))
+            : Digest(JsonSerializer.SerializeToUtf8Bytes(ScanArguments(plan, output), JsonOptions));
+
+    private static async Task<ScanManifest> ReadScanManifestAsync(string root, CancellationToken token)
+    {
+        var bytes = await WebFormsReviewPreflightCommand.ReadSmallAsync(Path.Combine(root, "scan-manifest.json"), 4_194_304, token);
+        WebFormsReviewPreflightCommand.RejectDuplicateProperties(bytes);
+        return JsonSerializer.Deserialize<ScanManifest>(bytes, JsonOptions) ?? throw Fail("SCAN_MANIFEST_INVALID");
     }
 
     private static async Task<History> PublishAsync(string root, WebFormsReviewCheckpoint checkpoint, CancellationToken token)
