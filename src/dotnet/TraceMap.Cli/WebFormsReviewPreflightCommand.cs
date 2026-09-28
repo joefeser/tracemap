@@ -42,7 +42,8 @@ public sealed record WebFormsReviewConfig(
     string[] PageMaps,
     string? ParentScanRoot,
     WebFormsReviewBudgets Budgets,
-    string? PublishReceiptRelativePath = null);
+    string? PublishReceiptRelativePath = null,
+    string? ReceiptRoot = null);
 
 public sealed record WebFormsReviewInput(string Role, string Path, long Bytes, string Sha256, string? MetadataName = null);
 public sealed record WebFormsReviewPhase(string Phase, string State, string NextAction);
@@ -133,9 +134,12 @@ public static class WebFormsReviewPreflightCommand
         if (Digest(configBytes) != configInput.Sha256) throw Fail("INPUT_CHANGED");
         ValidateConfig(config);
         config = config with { SourceRoot = PhysicalPath(config.SourceRoot), PublishedRoot = PhysicalPath(config.PublishedRoot),
-            ParentScanRoot = config.ParentScanRoot is null ? null : PhysicalPath(config.ParentScanRoot) };
+            ParentScanRoot = config.ParentScanRoot is null ? null : PhysicalPath(config.ParentScanRoot),
+            ReceiptRoot = config.ReceiptRoot is null ? null : PhysicalPath(config.ReceiptRoot) };
         ValidateOutput(PhysicalPath(outputRoot), config);
-        if (!Directory.Exists(config.SourceRoot) || !Directory.Exists(config.PublishedRoot)) throw Fail("ROOT_UNAVAILABLE");
+        if (!Directory.Exists(config.SourceRoot) || !Directory.Exists(config.PublishedRoot)
+            || (config.ReceiptRoot is not null && !Directory.Exists(config.ReceiptRoot))) throw Fail("ROOT_UNAVAILABLE");
+        var receiptRoot = config.ReceiptRoot ?? config.PublishedRoot;
         var git = (detectGit ?? GitMetadataProvider.Detect)(config.SourceRoot);
         if (git.CommitSha != config.SourceCommitSha) throw Fail("SOURCE_COMMIT_MISMATCH");
         foreach (var folder in config.SourceFolders)
@@ -178,7 +182,7 @@ public static class WebFormsReviewPreflightCommand
         var receiptHashes = new List<string>();
         foreach (var receiptPath in config.BindingReceipts.Order(StringComparer.Ordinal))
         {
-            var input = await Add("binding-receipt", Child(config.PublishedRoot, receiptPath), 1_048_576);
+            var input = await Add("binding-receipt", Child(receiptRoot, receiptPath), 1_048_576);
             var bytes = await ReadSmallAsync(input.Path, 1_048_576, cancellationToken);
             if (Digest(bytes) != input.Sha256) throw Fail("INPUT_CHANGED");
             RejectDuplicateProperties(bytes);
@@ -202,7 +206,7 @@ public static class WebFormsReviewPreflightCommand
         foreach (var map in config.PageMaps.Order(StringComparer.Ordinal)) await Add("page-map", Child(config.PublishedRoot, map), 1_048_576);
         if (config.PublishReceiptRelativePath is not null)
         {
-            var receiptPath = Child(config.PublishedRoot, config.PublishReceiptRelativePath);
+            var receiptPath = Child(receiptRoot, config.PublishReceiptRelativePath);
             var receiptInput = await Add("publish-receipt", receiptPath, 1_048_576);
             var bytes = await ReadSmallAsync(receiptPath, 1_048_576, cancellationToken);
             if (Digest(bytes) != receiptInput.Sha256) throw Fail("INPUT_CHANGED");
@@ -300,7 +304,8 @@ public static class WebFormsReviewPreflightCommand
             config.PrimaryAssemblies is null || config.DependencyAssemblies is null || config.BindingReceipts is null || config.PdbInputs is null || config.PageMaps is null)
             throw Fail("CONFIG_INVALID");
         if (!Path.IsPathFullyQualified(config.SourceRoot) || !Path.IsPathFullyQualified(config.PublishedRoot) ||
-            (config.ParentScanRoot is not null && !Path.IsPathFullyQualified(config.ParentScanRoot))) throw Fail("ROOT_PATH_INVALID");
+            (config.ParentScanRoot is not null && !Path.IsPathFullyQualified(config.ParentScanRoot)) ||
+            (config.ReceiptRoot is not null && !Path.IsPathFullyQualified(config.ReceiptRoot))) throw Fail("ROOT_PATH_INVALID");
         var lists = new[] { config.ProjectRelativePaths, config.SourceFolders, config.PageRelativePaths, config.PrimaryAssemblies,
             config.DependencyAssemblies, config.BindingReceipts, config.PdbInputs, config.PageMaps };
         if (config.SourceFolders.Length == 0 || config.PrimaryAssemblies.Length == 0 ||
@@ -324,7 +329,7 @@ public static class WebFormsReviewPreflightCommand
     private static void ValidateOutput(string output, WebFormsReviewConfig config)
     {
         if (File.Exists(output) || Directory.Exists(output)) throw Fail("OUTPUT_EXISTS");
-        foreach (var root in new[] { config.SourceRoot, config.PublishedRoot, config.ParentScanRoot }.Where(root => root is not null))
+        foreach (var root in new[] { config.SourceRoot, config.PublishedRoot, config.ParentScanRoot, config.ReceiptRoot }.Where(root => root is not null))
             if (Contains(PhysicalPath(root!), output) || Contains(output, PhysicalPath(root!))) throw Fail("OUTPUT_OVERLAPS_INPUT");
     }
     private static bool Contains(string root, string child) => PathComparer.Equals(root, child) ||

@@ -41,6 +41,9 @@
     - [x] Consume an explicitly retained publish receipt from the native config,
       pin its source/DLL/map membership and support a separate published root
       without copying original binaries. Keep operator receipt creation pending.
+    - [x] Admit an explicit separate receipt evidence root while keeping source
+      and published files read-only, old configurations compatible, and receipt
+      bytes/output separation pinned across resume.
 - [ ] Implement .NET orchestration for source-plus-compiled runs and immutable
   attachment to a retained source scan; keep compatibility wrappers.
   - [x] Add checkpointed native fresh execution using the existing scanner and

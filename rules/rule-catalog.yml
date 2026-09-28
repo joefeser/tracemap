@@ -2508,6 +2508,7 @@ rules:
       - Receipt artifact-hash candidates do not establish assembly identity, source ownership, repository binding, build freshness or source-line identity; authoritative scanner binding validation remains pending.
       - Source snapshot, dirty-worktree state, parent repository and index identity, PDB identity and page-map identity remain deferred and are explicit gaps.
       - Inputs are explicit and bounded under declared roots; scattered external DLL discovery, relocation and dependency cleanup are not implemented.
+      - An explicit receiptRoot can locate existing binding and publish receipts outside the published site; its bytes and output separation are checked, but this does not generate receipts, attest ownership or validate a historical compiler.
       - File hashing limits are separate from recorded future IL and graph budgets; streamed hashing does not establish large-corpus runtime or memory acceptance.
       - The manifest contains private paths, source commit and input fingerprints and is not shareable; parent scans and existing output folders are never rewritten.
   - id: workflow.webforms.compiled-review-execution.v1

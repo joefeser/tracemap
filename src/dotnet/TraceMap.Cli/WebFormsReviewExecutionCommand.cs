@@ -52,8 +52,8 @@ public static class WebFormsReviewExecutionCommand
             if (plan.Configuration.Operation != "fresh") throw Fail("ATTACH_EXECUTION_PENDING");
             // BuildAsync checked a prospective child. Check the actual run root's
             // separation too: the root cannot be an ancestor of any input root.
-            foreach (var inputRoot in new[] { plan.Configuration.SourceRoot, plan.Configuration.PublishedRoot })
-                if (Within(root, inputRoot) || Within(inputRoot, root)) throw Fail("RUN_OVERLAPS_INPUT");
+            foreach (var inputRoot in new[] { plan.Configuration.SourceRoot, plan.Configuration.PublishedRoot, plan.Configuration.ReceiptRoot }.Where(path => path is not null))
+                if (Within(root, inputRoot!) || Within(inputRoot!, root)) throw Fail("RUN_OVERLAPS_INPUT");
             var runtimeRoot = WebFormsReviewPreflightCommand.PhysicalPath(Path.GetDirectoryName(typeof(WebFormsReviewExecutionCommand).Assembly.Location)!);
             if (Within(runtimeRoot, root) || Within(root, runtimeRoot)) throw Fail("RUN_OVERLAPS_RUNTIME");
             var lockPath = OwnedPath(root, ".native-run.lock");
