@@ -196,10 +196,51 @@
   output transaction and execution-receipt regressions. Diff and private-path
   guards passed. Full regression at this new committed head is a separate gate;
   the prior 2,472-test result does not carry forward to these changes.
+- Full regression at committed `a5f99d83` subsequently passed 2,494/2,494,
+  zero failed/skipped (7 minutes 2 seconds), before compiled-only production.
 - Compiled-only attachment production, explicit cross-index parent joins,
   unified grouped/indexed reports, Claude guidance, all-pages receipt partitioning,
   public compiled-site parity, scale/retention/relocation and final authorized
   private Windows validation remain outstanding. No PR or merge occurred.
+
+## Compiled-only Core attachment production (2026-09-28)
+
+- Added a Core producer that verifies retained source bytes before/after the
+  existing metadata, IL, portable-PDB and publish-receipt readers. It runs no
+  source extractors, MSBuild, Git discovery or output writer, and returns no
+  source inventory/fact copies. Parent facts/index IDs remain untouched.
+- An additive null-omitted ScanManifest context records exact Core generator,
+  bounded input, declared parent manifest/index hashes, original snapshot and
+  observed/configured source bounds. Independent caller validation of original
+  parent bytes is still required; the Core API does not claim index admission or
+  authenticated signatures. Derived source/build state is explicitly not run,
+  reduced and review-only; original gaps and existing reader gaps are retained.
+- PDB checksum candidates come only from the verified original inventory pass,
+  capped at its configured source count plus one for categorical limit reporting.
+  The PDB reader also stops before sorting beyond that cap, preserving its prior
+  limit verdict. No second caller enumeration can substitute PDB source locators.
+- Focused producer/PDB/publish regression passed 74/74, zero failed/skipped
+  (53 seconds), with no compiler/analyzer warnings. The producer has 17 cases
+  covering exact existing metadata/IL/PDB/publish fact parity, serialization,
+  deterministic identity, no source analysis/output writes, unchanged parent
+  context/source bytes, source changes/limits, invalid parent hashes, prohibited
+  source/build/rewrite options, cancellation and missing inputs. An initial
+  test-only serializer method-group and missing token argument were corrected;
+  a factory-call-count assertion exposed an unnecessary unverified PDB roster
+  enumeration, which was removed in favor of verified bounded capture.
+- These synthetic Core cases do not establish native immutable parent/index
+  admission, public compiled-site chain parity, cross-index report joins, full
+  fresh/attach/resume completion, representative scale or private Windows proof.
+  CLI attach remains refused until execution and parent joins are connected.
+  Grouped/indexed reports, Claude guidance, all-pages partitioning, retention/
+  relocation and final owner validation remain active goal requirements.
+- Broader validation passed 374/374, zero failed/skipped (2 minutes 53 seconds),
+  across compiled attachment, metadata, IL, PDB, semantic reconciliation,
+  publish roots, native preflight/input/preparation/execution, snapshots,
+  scan engine, output transaction and scan receipts. No compiler/analyzer
+  warnings were emitted. Diff and private-path guards passed. Full regression
+  at this later slice remains a separate gate; the 2,494-test result belongs
+  to the preceding `a5f99d83` retention head, not these new changes.
 
 ## Native fresh execution and resume (2026-09-28)
 

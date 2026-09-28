@@ -251,7 +251,7 @@ internal static class PortablePdbExtractor
         ScanManifest manifest,
         PdbInputEvaluation evaluation,
         IReadOnlyList<CodeFact> compiledFacts,
-        IReadOnlyList<FileInventoryItem> inventory,
+        IEnumerable<FileInventoryItem> inventory,
         CancellationToken cancellationToken = default)
     {
         if (evaluation.Provenance is null)
@@ -821,7 +821,7 @@ internal static class PortablePdbExtractor
 
     private static SourceChecksumIndex BuildSourceChecksumIndex(
         string repoPath,
-        IReadOnlyList<FileInventoryItem> inventory,
+        IEnumerable<FileInventoryItem> inventory,
         IReadOnlyList<EvaluatedPdbInput> inputs,
         PdbInputLimits limits,
         long consumedWorkUnits,
@@ -839,6 +839,7 @@ internal static class PortablePdbExtractor
             return SourceChecksumIndex.Empty;
 
         var sources = inventory.Where(item => IsSourceChecksumCandidateKind(item.Kind))
+            .Take(limits.MaxSourceFileCount == int.MaxValue ? int.MaxValue : limits.MaxSourceFileCount + 1)
             .OrderBy(item => item.RelativePath, StringComparer.Ordinal)
             .ToArray();
         if (sources.Length > limits.MaxSourceFileCount)
