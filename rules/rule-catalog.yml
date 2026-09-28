@@ -2553,6 +2553,21 @@ rules:
       - Generator and bounded-input hashes are local integrity commitments, not authenticated signatures. Paths and fingerprints remain private and review-only; no runtime, build authenticity, source-line or all-site claim is made.
       - Reporting validates stored link and embedded-manifest bytes before using its parent source namespace for existing VB PDB/publish candidate rules. Earlier draft rows without embedded-manifest hashes require explicit recombination; no label/commit inference or silent upgrade occurs.
       - Cross-index edges retain a link digest and local path JSON retains the link records. Native report orchestration, new semantic source reconciliation, complete compiled-site parity and the unified workbench remain separate required gates.
+  - id: workflow.webforms.compiled-grouped-handoff.v1
+    name: Private lossless grouped compiled method-path projection
+    description: Groups ordered full method/source identities while indexing exact node and edge records and retaining every original path variant, inventory occurrence, coverage gap and provenance field.
+    evidenceTier: Tier2Structural
+    emits:
+      - webforms-compiled-grouped-handoff.v1 local-only indexed JSON
+      - private grouped compiled method-path HTML
+    limitations:
+      - Full symbol signatures, source index, scan and commit identities determine grouping. Compact HTML labels are display-only and never merge overloads or source identities; grouping is not runtime route deduplication.
+      - Exact record hashes distinguish differing node or edge evidence even when their IDs match. Original path and inventory ordering and all report fields reconstruct losslessly; missing, extra, changed or misgrouped references fail validation rather than discard evidence.
+      - Exact Reporting assembly and bounded canonical report/index/policy hashes are local integrity commitments, not authenticated signatures. The calling workflow must independently admit the actual index bytes; this projection does not establish index or source authenticity.
+      - All paths, symbols, hashes, commits and locations remain private. No shareable projection is supplied, and these private-input fingerprints must not be used in a future shareable artifact.
+      - Explicit byte, path, record and reference bounds apply to an already admitted report, not upstream graph materialization or representative eight-times scanner memory. The writer bounds aggregate JSON and HTML bytes and leaves failed partial output unadmitted.
+      - New fixed-name files never overwrite existing outputs. The caller owns output isolation, input admission and final artifact checkpointing; native report execution and unified workbench navigation remain separate gates.
+      - Page verdicts and original classifications, tiers, gaps, DLL and attachment-link provenance remain unchanged. No runtime SQL, page activation, source-line identity or full-site claim is made.
   - id: workflow.source-snapshot-retention.v1
     name: Complete private source snapshot roster retention
     description: Explicitly retains the scanner's authoritative ordered snapshot inventory, including extra semantic metadata, in a streamed local NDJSON roster and a generator/input/scan/roster hash-bound manifest for later immutable source-byte validation.

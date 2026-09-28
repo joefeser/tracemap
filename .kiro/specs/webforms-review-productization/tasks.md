@@ -82,6 +82,10 @@
   across selected/all-page modes without upgrading review-only page verdicts.
   - [ ] Group exact method chains in the HTML while retaining every evidence
     variant and add an additive chain index to the lossless handoff.
+    - [x] Add a bounded private .NET grouped projection with content-addressed
+      node/edge records, ordered variant references and exact report restoration;
+      write new hash-verified HTML/JSON without changing page verdicts. Keep
+      native checkpoint/workbench integration and final workflow parity pending.
   - [ ] Update the work-machine Claude guidance to start from the run manifest
     and retrieve bounded evidence groups instead of loading whole large files.
 - [ ] Expose per-phase budget usage, missing-input guidance, and resumable gaps.

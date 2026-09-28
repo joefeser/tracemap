@@ -90,6 +90,53 @@
   output and generator bytes must be pinned before workbench admission; current
   `CrossIndexParentJoinsPending` remains until that orchestration actually runs.
 
+## Grouped lossless native report projection (2026-09-28)
+
+- Added the private .NET `GroupedCompiledPathHandoffBuilder` API. It groups
+  ordered full method/source/scan/commit identities, not shortened labels, and
+  indexes exact node/edge content while retaining every original ordered path
+  variant, inventory occurrence, header, gap and attachment-link record.
+- Restoration validates bounded context, exact record references, original
+  canonical report digest and complete chain membership. Differing records
+  with the same node/edge ID remain distinct; overloads and source identities
+  never collapse. A synthetic 41-variant/13-chain shape test is explicitly
+  public regression evidence, not a substitute for the private Windows proof.
+- The handoff records the exact Reporting DLL SHA-256 and canonical admitted
+  report/index/generator/limit input digest. Actual index admission remains
+  the caller's responsibility. All private fingerprints stay local; no
+  shareable projection or authenticated provenance claim is introduced.
+- A new fixed-name private HTML/JSON writer validates the lossless input before
+  allocation, refuses existing outputs and bounds aggregate output bytes.
+  It returns exact output hashes/bytes; partial failures remain unadmitted.
+  The HTML shows one chain with expandable identities, transition evidence
+  and all original variants. Normal schemas, page verdicts and scripts are
+  unchanged. Native report checkpoints/workbench integration remain pending.
+- Broader focused regression passed 227/227, zero failed/skipped (1 minute
+  29 seconds), across grouped projection, public messy-workspace parity,
+  explicit combine, path/report and native execution. No compiler/analyzer
+  warnings were emitted. Tests include exact JSON round trips, changed/extra/
+  missing records, chain/context tampering, explicit budgets, cancellation,
+  stale generator refusal, output preservation and HTML escaping/anchors.
+- Final targeted regression, after the browser-driven responsive refinements,
+  passed 28/28, zero failed/skipped (7 seconds), with no compiler/analyzer
+  warnings. `git diff --check` passed.
+- Browser QA uses only the disposable public regression fixture. Desktop
+  expanded-chain inspection is readable. Playwright inspection exposed cramped
+  mobile columns; these became stacked labeled evidence rows. At 390-pixel
+  mobile width the document width remains 390 pixels. Variant-to-evidence
+  navigation and the JSON link work; the HTML reports zero console errors/
+  warnings after replacing its favicon-only 404 with an inline empty icon.
+  Chrome's separate raw JSON viewer requested its own missing favicon after
+  the successful JSON response; that cosmetic viewer request is not hidden.
+- Next native integration must pin the complete scan manifests and explicit
+  binding/publish receipts alongside this indexed path view, expose admitted
+  DLL byte provenance, and support bounded fact lookup against the exact index
+  hash. The path projection does not replace those admission artifacts or
+  claim independent source/DLL authenticity.
+- This is still a reporting API slice, not completed native workflow, full
+  suite at this new head, Windows compiled-site or eight-times scale acceptance.
+  No private proof folders were read/deleted and no PR was opened/merged.
+
 ## Active native workflow goal (2026-09-28)
 
 - Owner requested the complete workflow as an active tracked goal after the
