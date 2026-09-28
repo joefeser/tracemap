@@ -2510,6 +2510,20 @@ rules:
       - Inputs are explicit and bounded under declared roots; scattered external DLL discovery, relocation and dependency cleanup are not implemented.
       - File hashing limits are separate from recorded future IL and graph budgets; streamed hashing does not establish large-corpus runtime or memory acceptance.
       - The manifest contains private paths, source commit and input fingerprints and is not shareable; parent scans and existing output folders are never rewritten.
+  - id: workflow.webforms.compiled-review-execution.v1
+    name: Private native fresh Web Forms scan checkpoints
+    description: Executes the existing source and explicitly declared compiled/PDB/IL scanner after input validation, verifies scan manifest/index/facts consistency, and records append-only hash-pinned checkpoints for safe retained-evidence resume.
+    evidenceTier: Tier2Structural
+    emits:
+      - webforms-compiled-review-checkpoint.v1 local-only execution checkpoint
+    limitations:
+      - Successful execution ends at scan-completed-reports-pending, not a complete compiled-site review workflow; attachment, publish-map receipt execution, graph queries and unified reports are not implemented by this phase.
+      - The CLI does not build or publish the site, load assemblies at runtime, infer bindings or attest source ownership; existing receipt policy and reduced metadata/IL/PDB coverage remain authoritative.
+      - Resume verifies retained inputs and outputs without a new source scan; a retained snapshot does not validate current unpinned source bytes, clean Git state, runtime behavior or SQL execution.
+      - Checkpoint generator and input/payload hashes are local integrity commitments, not authenticated signatures; local-only artifacts contain private input fingerprints and must not be shared.
+      - Distribution dependency bytes and runtime version participate in execution identity; external SDK/toolchain bytes are not pinned and remain an explicit gap rather than build authenticity or reproducibility proof.
+      - Failed or cancelled attempt bytes are retained but not admitted as completed evidence; retry allocates a fresh owned attempt and never rewrites parent scans or old successful artifacts.
+      - Configured admission bounds do not establish representative scale or bounded scanner memory; output traversal admits at most 256 filesystem entries and run history at most 256 checkpoints.
   - id: diagnostic.webforms.saved-proof-packet.v1
     name: Focused saved Web Forms proof packet receipt
     description: Records exact generator, CLI, index, handoff, and artifact hashes for a new bounded modernization packet composed from an existing focused publish-proof index.
