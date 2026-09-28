@@ -99,6 +99,7 @@ scripts/smoke-typescript-endpoints.sh
 /outputs/
 # Local browser validation artifacts, not shareable evidence by default.
 /output/playwright/
+/output/native-receipt-set-smoke-*/
 /.playwright-cli/
 
 # Restricted-workstation Web Forms page-list settings

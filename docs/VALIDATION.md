@@ -3924,3 +3924,28 @@ source-to-binary join.
 This diagnostic is a separate proof attempt; it does not rewrite the normal
 Web Forms workbench or establish runtime execution, source-line identity,
 complete application reachability, or private-page success.
+
+### Core publish receipt-set contract
+
+`WebFormsPublishReceiptSetTests`, `WebFormsPublishedRootTests` and
+`WebFormsReviewPreparationTests` pin the additive
+`webforms-publish-binding-set.v1` reader and legacy compatibility:
+
+```text
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter "FullyQualifiedName~WebFormsPublishReceiptSetTests|FullyQualifiedName~WebFormsPublishedRootTests|FullyQualifiedName~WebFormsReviewPreparationTests"
+```
+
+The public set fixture declares 67 pages across three independently bounded
+receipts and asserts deterministic binding facts, global unique membership,
+generator/input commitments and unchanged input bytes. Tampered, nested,
+malformed, duplicate-page, cross-partition map ambiguity, cancellation and
+oversize file/identity cases withhold bindings. Explicit inventory-only members
+retain additional context without creating page bindings; standalone or page-bearing
+inventory members and page-less sets are refused. Sets retain the legacy per-file
+and per-partition bounds, an explicit 64-partition cap and conservative 8 GiB
+artifact read/hash admission. No source/build/runtime completeness is inferred.
+
+The existing PowerShell preparer still has its original single-receipt bounds.
+Native partition preparation/preflight integration, the public Windows compiled
+Web Site parity checks and representative eight-times memory/disk/time validation
+remain required; these reader tests do not replace those gates.

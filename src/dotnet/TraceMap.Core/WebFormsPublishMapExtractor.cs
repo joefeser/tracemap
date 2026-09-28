@@ -41,7 +41,7 @@ internal sealed record WebFormsPublishEvaluation(WebFormsPublishProvenance? Prov
     IReadOnlyList<WebFormsPublishAssembly> Assemblies,
     IReadOnlyList<WebFormsPublishPageCandidate>? Candidates = null);
 
-internal static class WebFormsPublishMapExtractor
+internal static partial class WebFormsPublishMapExtractor
 {
     private const int MaxReceiptBytes = 1_048_576;
     private const int MaxMapBytes = 1_048_576;
@@ -52,6 +52,10 @@ internal static class WebFormsPublishMapExtractor
 
     public static WebFormsPublishEvaluation Evaluate(string repoPath, string commitSha,
         ScanOptions options, CancellationToken cancellationToken)
+        => EvaluateReceipt(repoPath, commitSha, options, cancellationToken, allowPartitionSet: true, allowInventoryPartition: false);
+
+    private static WebFormsPublishEvaluation EvaluateReceipt(string repoPath, string commitSha,
+        ScanOptions options, CancellationToken cancellationToken, bool allowPartitionSet, bool allowInventoryPartition)
     {
         if (string.IsNullOrWhiteSpace(options.WebFormsPublishReceiptPath))
             return new WebFormsPublishEvaluation(null, [], [], []);
@@ -88,9 +92,19 @@ internal static class WebFormsPublishMapExtractor
             }
             var bytes = ReadBounded(receiptPath, MaxReceiptBytes);
             boundedInputSha256 = InputDigest(Sha256(bytes), publishedRootHash);
+            using (var document = JsonDocument.Parse(bytes, new JsonDocumentOptions { MaxDepth = 16 }))
+                if (document.RootElement.ValueKind == JsonValueKind.Object
+                    && document.RootElement.TryGetProperty("schemaVersion", out var schema)
+                    && schema.ValueKind == JsonValueKind.String && schema.GetString() == ReceiptSetSchema)
+                {
+                    if (!allowPartitionSet) throw new PublishException("WebFormsPublishNestedReceiptSet");
+                    return EvaluateSet(repoPath, commitSha, options, cancellationToken, receiptPath,
+                        publishRoot, bytes, generatorSha256, boundedInputSha256, publishedRootHash);
+                }
             var receipt = JsonSerializer.Deserialize<PublishReceipt>(bytes,
                 new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase, MaxDepth = 16 });
-            if (receipt?.SchemaVersion != "webforms-publish-binding.v1"
+            var inventoryPartition = receipt?.SchemaVersion == InventoryPartitionSchema && allowInventoryPartition;
+            if (receipt is null || (receipt.SchemaVersion != "webforms-publish-binding.v1" && !inventoryPartition)
                 || receipt.Visibility != "local-only"
                 || receipt.SourceCommitSha != commitSha
                 || !IsSha256(receipt.ReceiptGeneratorSha256)
@@ -102,7 +116,7 @@ internal static class WebFormsPublishMapExtractor
             publishedCount = receipt.PublishedFiles.Count;
             pageCount = receipt.Pages.Count;
             if (sourceCount is < 1 or > MaxSourceFiles || publishedCount is < 1 or > MaxPublishedFiles
-                || pageCount is < 1 or > MaxPages)
+                || (inventoryPartition ? pageCount != 0 : pageCount is < 1 or > MaxPages))
                 throw new PublishException("WebFormsPublishInputLimitExceeded");
             if (HasDuplicatePaths(receipt.SourceFiles.Select(item => item.Path))
                 || HasDuplicatePaths(receipt.PublishedFiles.Select(item => item.Path))
