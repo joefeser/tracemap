@@ -2923,6 +2923,8 @@ rules:
       - The local-only packet omits snippets, raw SQL, configuration values, URLs, connection strings, credentials, source values, repository remotes, and absolute local paths.
       - Web Forms packet input admission bounds retained fact and edge rows, UTF-8 text bytes, per-row size, and graph nodes/edges; these are deterministic admission limits, not a hard OS working-set guarantee. On admission failure, WebFormsModernizationInputLimitReached preserves admitted inventory but no downstream paths or absence classifications are derived from the incomplete graph.
       - A closed audited set of graph-inert syntax facts may be compacted to symbol witnesses; unknown types, declared dependency surfaces, legacy rules, supporting evidence IDs, and repository-wide symbol competitors are preserved. This is not root-specific lazy graph loading.
+      - Bounded combined readers retain every fact row and global source namespace while projecting only the audited graph-consumed properties in SQLite before managed allocation. Source-symbol IDs, VB member/body spans and namespace/import context required by compiled bridges remain explicit. Full facts stay unchanged in the retained index; this does not remove the raw combined admission ceilings or full graph materialization.
+      - Property projection requires a bounded flat string/null object without duplicate keys. Duplicate, nested, numeric, non-object or malformed JSON stays on the applicable full parser path, preserving last-key values, the combined reader's empty malformed-properties result and the single reader's malformed-properties hash instead of coercing values into identity evidence.
 
   - id: legacy.webforms.batch-data-movement.v1
     name: Legacy Web Forms batch and data-movement evidence
@@ -3731,6 +3733,7 @@ rules:
       - Truncation means the returned path set is intentionally partial and must not be treated as complete dependency coverage.
       - The triggering evidence span is best-effort and may point to the nearest traversed node rather than the omitted dependency.
       - Web Forms graph-input admission gaps have no source span and discard the incomplete graph before classification; they do not imply missing runtime dependencies or a clean graph.
+      - Bounded combined input checks projected fact and dependency-edge text bytes before copying row strings into managed memory. Per-row or aggregate refusal discards the graph; noncanonical combined fact namespaces are malformed input, not a guessed identity or clean result.
 
   - id: combined.route-flow.selector.v1
     name: Route-flow selector handling

@@ -429,7 +429,9 @@ public static class CombinedDependencyReporter
         }
     }
 
-    internal static async Task<CombinedReadResult> ReadAsync(SqliteConnection connection, CancellationToken cancellationToken)
+    internal static async Task<CombinedReadResult> ReadAsync(SqliteConnection connection, CancellationToken cancellationToken,
+        Func<SqliteConnection, IReadOnlyList<CombinedReportSource>, bool, bool, CancellationToken,
+            Task<IReadOnlyList<CombinedFactRow>>>? factReader = null, ReportInputBudget? inputBudget = null)
     {
         var sourceRows = await ReadSourcesAsync(connection, cancellationToken);
         var sources = sourceRows.Select(row => row.Source).ToArray();
@@ -444,9 +446,11 @@ public static class CombinedDependencyReporter
 
         var hasFactExtractorId = await ColumnExistsAsync(connection, "combined_facts", "extractor_id", cancellationToken);
         var hasFactExtractorVersion = await ColumnExistsAsync(connection, "combined_facts", "extractor_version", cancellationToken);
-        var facts = await ReadFactsAsync(connection, hasFactExtractorId, hasFactExtractorVersion, cancellationToken);
+        var facts = factReader is null
+            ? await ReadFactsAsync(connection, hasFactExtractorId, hasFactExtractorVersion, cancellationToken)
+            : await factReader(connection, sources, hasFactExtractorId, hasFactExtractorVersion, cancellationToken);
         knownGaps.AddRange(ReadAnalyzerCapabilityKnownGaps(sources, facts, warnings));
-        var edges = await ReadEdgesAsync(connection, cancellationToken);
+        var edges = await ReadEdgesAsync(connection, cancellationToken, inputBudget);
         var valueOriginCounts = await ReadValueOriginEvidenceCountsAsync(connection, cancellationToken);
         return new CombinedReadResult(
             sources,
@@ -674,10 +678,11 @@ public static class CombinedDependencyReporter
         return rows;
     }
 
-    private static async Task<IReadOnlyList<CombinedDependencyEdgeRow>> ReadEdgesAsync(SqliteConnection connection, CancellationToken cancellationToken)
+    private static async Task<IReadOnlyList<CombinedDependencyEdgeRow>> ReadEdgesAsync(SqliteConnection connection,
+        CancellationToken cancellationToken, ReportInputBudget? budget = null)
     {
         await using var command = connection.CreateCommand();
-        command.CommandText = """
+        command.CommandText = $$"""
             select source_index_id,
                    source_label,
                    edge_kind,
@@ -691,7 +696,8 @@ public static class CombinedDependencyReporter
                    evidence_tier,
                    file_path,
                    start_line,
-                   end_line
+                   end_line,
+                   {{(budget is null ? "0" : CombinedDependencyPathReporter.TextByteCountSql("source_index_id", "source_label", "edge_kind", "edge_id", "original_fact_id", "source_symbol", "target_symbol", "target_assembly_name", "target_assembly_version", "rule_id", "evidence_tier", "file_path"))}}
             from combined_dependency_edges
             order by edge_kind, source_label, coalesce(source_symbol, ''), coalesce(target_symbol, ''), file_path, start_line;
             """;
@@ -699,6 +705,7 @@ public static class CombinedDependencyReporter
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         while (await reader.ReadAsync(cancellationToken))
         {
+            budget?.Retain(reader.GetInt64(14), edge: true);
             rows.Add(new CombinedDependencyEdgeRow(
                 reader.GetString(2),
                 reader.GetString(0),
@@ -1869,7 +1876,7 @@ public static class CombinedDependencyReporter
         return trimmed.Length == 0 ? "General" : trimmed;
     }
 
-    private static IReadOnlyDictionary<string, string> ParseProperties(string json)
+    internal static IReadOnlyDictionary<string, string> ParseProperties(string json)
     {
         if (string.IsNullOrWhiteSpace(json))
         {
