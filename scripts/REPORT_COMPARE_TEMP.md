@@ -48,3 +48,19 @@ distinct; repeated chains are not automatically erroneous facts or runtime paths
 Limits: 64 MiB local input, 256 retained paths and 20 hops per path. This is a
 console diagnostic, not a new machine-readable evidence artifact. Public guard:
 `pwsh -NoProfile -File scripts/tests/Test-WGroups.ps1`.
+
+## Compact HTML from the retained handoff
+
+Run `scripts/wcompact.ps1` to open a new local-only grouped view of the comparison's
+after handoff. No scan or report recomputation is needed. The original JSON and
+HTML are never overwritten. Each exact chain appears once, with the exact method
+sequence and all original evidence paths in expandable sections. Rules, tiers,
+locations, source identities and supporting facts remain inspectable. Coverage
+gaps and DLL provenance remain in the linked, byte-unchanged original handoff.
+No group receives a stronger tier by combining its variants.
+
+Rule `diagnostic.webforms.compact-path-review.v1` has the same identity grouping
+and bounds as the console diagnostic. This is a presentation projection of one
+selected proof, not runtime deduplication or all-pages acceptance. Generator and
+bounded-input SHA-256 are shown in the HTML. No new JSON schema is introduced.
+Public guard: `pwsh -NoProfile -File scripts/tests/Test-WCompact.ps1`.
