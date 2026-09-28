@@ -21,7 +21,18 @@ public sealed record WebFormsReviewBudgets(
     int MetadataMaxText = 8_192,
     int IlMaxText = 16_384,
     long MaxParentFacts = 5_000_000,
-    int MaxFactLineChars = 1_048_576);
+    int MaxFactLineChars = 1_048_576)
+{
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public WebFormsReviewReportBudgets? Reports { get; init; }
+}
+
+public sealed record WebFormsReviewReportBudgets(
+    int MaxInputFacts = 250_000, int MaxInputEdges = 250_000, int MaxInputTextBytes = 128 * 1024 * 1024,
+    int MaxSurfaces = 1_000, int MaxEventChains = 1_000, int MaxGaps = 10_000,
+    int MaxCompiledRoots = 1_000, int MaxFrontier = 10_000,
+    long MaxProjectionInputBytes = 256L * 1024 * 1024, long MaxOutputBytes = 512L * 1024 * 1024,
+    int MaxProjectionRecords = 500_000, int MaxProjectionReferences = 2_000_000);
 
 public sealed record WebFormsReviewConfig(
     string SchemaVersion,
@@ -85,10 +96,12 @@ public static class WebFormsReviewPreflightCommand
         Writes local-only run-manifest.json and README.md. No scan/build/publish/binding,
         report rendering, source mutation, cleanup or implicit TEMP discovery occurs.
         This output is preflight only, not a completed review workflow.
-        Run/resume execute fresh source-plus-compiled scans with pinned checkpoints.
+        Run/resume execute fresh scans or immutable compiled attachments and private
+        workbench/grouped handoff reports with pinned, resumable checkpoints.
         Prepare writes separate operator-declared receipts only with an exact-commit
         attestation and explicit publishSourceRelativePaths; it never copies binaries.
-        Attachment and unified reports are not implemented yet; retain the proven wrappers.
+        All-pages receipt partitioning, scale and private Windows parity remain pending;
+        retain the proven wrappers and original evidence until those gates pass.
         """;
 
     public static async Task<int> RunAsync(string[] args, TextWriter output, TextWriter error,
@@ -117,7 +130,7 @@ public static class WebFormsReviewPreflightCommand
             await File.WriteAllTextAsync(Path.Combine(staging, "README.md"),
                 $"# Private Web Forms review run\n\nState: preflight only. Rule: `{RuleId}`.\n\n" +
                 "The manifest is this run's explicit inventory, not proof that scanning, binding or reporting occurred.\n" +
-                "Use webforms-review run/resume --run <this-root> for a fresh scan. Attachment/reports remain pending.\n" +
+                "Use webforms-review run/resume --run <this-root> for the configured fresh/attach scan and private reports.\n" +
                 "Source, publish and parent scans remain external and immutable; this run is not relocatable yet.\n" +
                 "Do not upload this private manifest or delete referenced inputs.\n", cancellationToken);
             Directory.Move(staging, outputRoot); // Never replaces an existing run.
@@ -315,7 +328,7 @@ public static class WebFormsReviewPreflightCommand
              "Map/PDB content, dirty-worktree snapshots, retained index compatibility and parent repository identity require later authoritative validation.",
              "Inputs are explicitly enumerated beneath their declared roots; external/scattered DLLs require a future explicit locator contract, not implicit discovery.",
              "Hash limits are streamed and distinct from configured future IL/graph budgets. No large-corpus throughput, memory or completeness claim is made.",
-             "This local-only manifest is not portable or shareable; relocation, resume, full execution and dependency-aware cleanup are not implemented in this slice."]);
+             "This preflight alone performs no execution. Native run/resume consumes this pinned contract; relocation, full-site acceptance and dependency-aware cleanup remain pending."]);
     }
 
     private static void ValidateConfig(WebFormsReviewConfig config)
@@ -325,6 +338,7 @@ public static class WebFormsReviewPreflightCommand
             config.Budgets is null || config.ProjectRelativePaths is null || config.SourceFolders is null || config.PageRelativePaths is null ||
             config.PrimaryAssemblies is null || config.DependencyAssemblies is null || config.BindingReceipts is null || config.PdbInputs is null || config.PageMaps is null)
             throw Fail("CONFIG_INVALID");
+        ValidateReportBudgets(config.Budgets.Reports ?? new());
         if (!Path.IsPathFullyQualified(config.SourceRoot) || !Path.IsPathFullyQualified(config.PublishedRoot) ||
             (config.ParentScanRoot is not null && !Path.IsPathFullyQualified(config.ParentScanRoot)) ||
             (config.ReceiptRoot is not null && !Path.IsPathFullyQualified(config.ReceiptRoot))) throw Fail("ROOT_PATH_INVALID");
@@ -347,6 +361,16 @@ public static class WebFormsReviewPreflightCommand
             budget.MetadataMaxWork is < 1 or > 100_000_000 || budget.MetadataMaxText is < 71 or > 65_536 ||
             budget.IlMaxText is < 71 or > 65_536 || budget.MaxParentFacts is < 1 or > 100_000_000 ||
             budget.MaxFactLineChars is < 128 or > 16_777_216) throw Fail("BUDGET_INVALID");
+    }
+
+    internal static void ValidateReportBudgets(WebFormsReviewReportBudgets budget)
+    {
+        if (budget.MaxInputFacts <= 0 || budget.MaxInputEdges <= 0 || budget.MaxInputTextBytes <= 0 ||
+            budget.MaxSurfaces <= 0 || budget.MaxEventChains <= 0 || budget.MaxGaps <= 0 ||
+            budget.MaxCompiledRoots is <= 0 or > 10_000 || budget.MaxFrontier <= 0 ||
+            budget.MaxProjectionInputBytes <= 0 || budget.MaxOutputBytes <= 0 ||
+            budget.MaxProjectionRecords <= 0 || budget.MaxProjectionReferences <= 0)
+            throw Fail("REPORT_BUDGET_INVALID");
     }
     private static void ValidateOutput(string output, WebFormsReviewConfig config)
     {

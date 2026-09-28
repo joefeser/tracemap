@@ -13,10 +13,18 @@ public sealed record WebFormsReviewCheckpoint(
     string GeneratorSha256, string PreflightSha256, string BoundedInputSha256,
     string State, string Attempt, string? ScanId, string? SourceSnapshotDigest,
     long FactCount, IReadOnlyList<string> Gaps, IReadOnlyList<WebFormsReviewArtifact> Artifacts,
-    string CheckpointPayloadSha256, string RuntimeInputsSha256);
+    string CheckpointPayloadSha256, string RuntimeInputsSha256)
+{
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public WebFormsReviewReportCheckpointContext? Reports { get; init; }
+}
+
+public sealed record WebFormsReviewReportCheckpointContext(
+    string ReportAttempt, string ScanCheckpointSha256, string ScanArtifactsSha256, string PolicySha256,
+    string? Coverage, int Surfaces, int CompiledPaths, string? ResultBoundedInputSha256);
 
 /// <summary>Owned, append-only fresh/compiled-attachment execution. No retained input is rewritten.</summary>
-public static class WebFormsReviewExecutionCommand
+public static partial class WebFormsReviewExecutionCommand
 {
     public const string RuleId = "workflow.webforms.compiled-review-execution.v1";
     public const string Schema = "webforms-compiled-review-checkpoint.v1";
@@ -32,10 +40,16 @@ public static class WebFormsReviewExecutionCommand
 
     public static async Task<int> RunAsync(string[] args, TextWriter output, TextWriter error,
         LocalReviewScanRunner scanRunner, CancellationToken cancellationToken = default) =>
-        await RunWithAttachmentAsync(args, output, error, scanRunner, WebFormsReviewAttachmentExecution.WriteAsync, cancellationToken);
+        await RunWithReportsAsync(args, output, error, scanRunner, WebFormsReviewAttachmentExecution.WriteAsync,
+            WebFormsReviewReportExecution.WriteAsync, cancellationToken);
 
     internal static async Task<int> RunWithAttachmentAsync(string[] args, TextWriter output, TextWriter error,
-        LocalReviewScanRunner scanRunner, WebFormsReviewAttachmentRunner attachmentRunner, CancellationToken cancellationToken = default)
+        LocalReviewScanRunner scanRunner, WebFormsReviewAttachmentRunner attachmentRunner, CancellationToken cancellationToken = default) =>
+        await RunWithReportsAsync(args, output, error, scanRunner, attachmentRunner, null, cancellationToken);
+
+    internal static async Task<int> RunWithReportsAsync(string[] args, TextWriter output, TextWriter error,
+        LocalReviewScanRunner scanRunner, WebFormsReviewAttachmentRunner attachmentRunner,
+        WebFormsReviewReportRunner? reportRunner, CancellationToken cancellationToken = default)
     {
         try
         {
@@ -74,19 +88,22 @@ public static class WebFormsReviewExecutionCommand
             var validated = await WebFormsReviewInputValidation.ValidateAsync(plan, cancellationToken);
             var validationGaps = validated.Gaps.Concat(["ExternalSdkInputsNotPinned", "SourceCommitDoesNotAssertCleanWorkingTree"])
                 .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
-            if (history.Checkpoint?.State == Completed)
+            if (history.ScanCheckpoint is not null)
             {
-                await VerifyArtifactsAsync(root, history.Checkpoint, plan, cancellationToken);
+                await VerifyArtifactsAsync(root, history.ScanCheckpoint, plan, cancellationToken);
                 if (attach)
                 {
-                    var retained = await ReadScanManifestAsync(OwnedPath(root, history.Checkpoint.Attempt + "/scan"), cancellationToken);
+                    var retained = await ReadScanManifestAsync(OwnedPath(root, history.ScanCheckpoint.Attempt + "/scan"), cancellationToken);
                     await WebFormsReviewAttachmentExecution.ValidateDerivedAsync(plan, validated, retained, cancellationToken);
                 }
+                if (reportRunner is not null)
+                    return await ExecuteReportsAsync(root, plan, preflightSha, runtimeRoot, runtimeSha, history,
+                        reportRunner, output, cancellationToken);
                 await output.WriteLineAsync($"webFormsExecution={Completed};retainedSnapshot=true;sourceRescanned=false");
-                await output.WriteLineAsync($"webFormsScan={OwnedPath(root, history.Checkpoint.Attempt + "/scan")}");
+                await output.WriteLineAsync($"webFormsScan={OwnedPath(root, history.ScanCheckpoint.Attempt + "/scan")}");
                 return 0;
             }
-            if (history.Sequence >= 254) throw Fail("CHECKPOINT_COUNT_LIMIT");
+            if (history.Sequence >= (reportRunner is null ? 254 : 252)) throw Fail("CHECKPOINT_COUNT_LIMIT");
             var attempt = "attempts/" + Guid.NewGuid().ToString("N");
             var scanPath = OwnedPath(root, attempt + "/scan");
             Directory.CreateDirectory(OwnedPath(root, attempt));
@@ -133,6 +150,9 @@ public static class WebFormsReviewExecutionCommand
                     gitAfter.RemoteUrl != git.RemoteUrl || gitAfter.ScanRootRelativePath != git.ScanRootRelativePath) throw Fail("SOURCE_IDENTITY_CHANGED");
                 if (runtimeSha != await RuntimeDigestAsync(runtimeRoot, cancellationToken)) throw Fail("RUNTIME_CHANGED");
                 history = await PublishAsync(root, completed, cancellationToken);
+                if (reportRunner is not null)
+                    return await ExecuteReportsAsync(root, plan, preflightSha, runtimeRoot, runtimeSha, history,
+                        reportRunner, output, cancellationToken);
                 await output.WriteLineAsync($"webFormsExecution={Completed};facts={checkedScan.Facts};reviewOnly=true");
                 await output.WriteLineAsync($"webFormsScan={scanPath}");
                 return 0;
@@ -218,10 +238,13 @@ public static class WebFormsReviewExecutionCommand
         })).ToArray()
     };
 
-    private static async Task<IReadOnlyList<WebFormsReviewArtifact>> CollectArtifactsAsync(string root, string attempt,
+    private static Task<IReadOnlyList<WebFormsReviewArtifact>> CollectArtifactsAsync(string root, string attempt,
+        WebFormsReviewBudgets budgets, CancellationToken token) => CollectUnderAsync(root, attempt + "/scan", budgets, token);
+
+    private static async Task<IReadOnlyList<WebFormsReviewArtifact>> CollectUnderAsync(string root, string relativeRoot,
         WebFormsReviewBudgets budgets, CancellationToken token)
     {
-        var scan = OwnedPath(root, attempt + "/scan");
+        var scan = OwnedPath(root, relativeRoot);
         var result = new List<WebFormsReviewArtifact>();
         long total = 0;
         // Enumerate one directory at a time so symlinked directories are rejected
@@ -251,12 +274,20 @@ public static class WebFormsReviewExecutionCommand
     private static async Task VerifyArtifactsAsync(string root, WebFormsReviewCheckpoint checkpoint, WebFormsReviewPreflightManifest plan, CancellationToken token)
     {
         var actual = await CollectArtifactsAsync(root, checkpoint.Attempt, plan.Configuration.Budgets, token);
+        if (checkpoint.State == WebFormsReviewReportExecution.Completed && checkpoint.Reports is not null)
+            actual = actual.Concat(await CollectUnderAsync(root, checkpoint.Reports.ReportAttempt, plan.Configuration.Budgets, token))
+                .OrderBy(item => item.RelativePath, StringComparer.Ordinal).ToArray();
+        if (actual.Sum(item => item.Bytes) > plan.Configuration.Budgets.MaxTotalHashBytes) throw Fail("OUTPUT_HASH_BYTES_LIMIT");
         if (!actual.SequenceEqual(checkpoint.Artifacts)) throw Fail("OUTPUT_CHANGED");
         foreach (var required in Required(plan))
             if (!actual.Any(item => item.RelativePath == checkpoint.Attempt + "/scan/" + required)) throw Fail("SCAN_ARTIFACT_MISSING");
     }
 
-    private sealed record History(int Sequence, string? Sha256, WebFormsReviewCheckpoint? Checkpoint);
+    private sealed record History(int Sequence, string? Sha256, WebFormsReviewCheckpoint? Checkpoint)
+    {
+        public WebFormsReviewCheckpoint? ScanCheckpoint { get; init; }
+        public string? ScanCheckpointSha256 { get; init; }
+    }
     private static async Task<History> ReadHistoryAsync(string root, WebFormsReviewPreflightManifest plan, string preflightSha, string runtimeSha, CancellationToken token)
     {
         var directory = OwnedPath(root, "checkpoints");
@@ -264,6 +295,8 @@ public static class WebFormsReviewExecutionCommand
         var paths = Directory.EnumerateFiles(directory, "*.json").Take(257).Order(StringComparer.Ordinal).ToArray();
         if (paths.Length > 256) throw Fail("CHECKPOINT_COUNT_LIMIT");
         History history = new(0, null, null);
+        var attempts = new HashSet<string>(StringComparer.Ordinal);
+        var reportAttempts = new HashSet<string>(StringComparer.Ordinal);
         foreach (var path in paths)
         {
             OwnedPath(root, "checkpoints/" + Path.GetFileName(path));
@@ -278,7 +311,17 @@ public static class WebFormsReviewExecutionCommand
                 checkpoint.PreflightSha256 != preflightSha || checkpoint.GeneratorSha256 != plan.GeneratorSha256 ||
                 checkpoint.RuntimeInputsSha256 != runtimeSha ||
                 checkpoint.Artifacts is null || checkpoint.Artifacts.Count > 256 || checkpoint.Gaps is null ||
-                !ValidAttempt(checkpoint.Attempt) || checkpoint.State is not ("scan-started" or "scan-failed" or "scan-cancelled" or Completed)) throw Fail("CHECKPOINT_INVALID");
+                !ValidAttempt(checkpoint.Attempt)) throw Fail("CHECKPOINT_INVALID");
+            if (history.Checkpoint?.State == WebFormsReviewReportExecution.Completed) throw Fail("CHECKPOINT_AFTER_COMPLETION_INVALID");
+            if (checkpoint.State.StartsWith("reports-", StringComparison.Ordinal))
+            {
+                ValidateReportCheckpoint(root, plan, preflightSha, runtimeSha, history, checkpoint, reportAttempts);
+                history = new(checkpoint.Sequence, Digest(bytes), checkpoint)
+                { ScanCheckpoint = history.ScanCheckpoint, ScanCheckpointSha256 = history.ScanCheckpointSha256 };
+                continue;
+            }
+            if (history.ScanCheckpoint is not null || checkpoint.Reports is not null ||
+                checkpoint.State is not ("scan-started" or "scan-failed" or "scan-cancelled" or Completed)) throw Fail("CHECKPOINT_PHASE_INVALID");
             var scanPath = OwnedPath(root, checkpoint.Attempt + "/scan");
             var policyDigest = PolicyDigest(plan, scanPath);
             var expectedDigest = Digest(JsonSerializer.SerializeToUtf8Bytes(new
@@ -289,8 +332,10 @@ public static class WebFormsReviewExecutionCommand
             if (history.Checkpoint?.State == Completed) throw Fail("CHECKPOINT_AFTER_COMPLETION_INVALID");
             if (checkpoint.State != "scan-started" &&
                 (history.Checkpoint?.State != "scan-started" || history.Checkpoint.Attempt != checkpoint.Attempt)) throw Fail("CHECKPOINT_PHASE_INVALID");
-            if (checkpoint.State == "scan-started" && history.Checkpoint?.Attempt == checkpoint.Attempt) throw Fail("CHECKPOINT_ATTEMPT_REUSE_INVALID");
-            history = new(checkpoint.Sequence, Digest(bytes), checkpoint);
+            if (checkpoint.State == "scan-started" && !attempts.Add(checkpoint.Attempt)) throw Fail("CHECKPOINT_ATTEMPT_REUSE_INVALID");
+            history = new(checkpoint.Sequence, Digest(bytes), checkpoint)
+            { ScanCheckpoint = checkpoint.State == Completed ? checkpoint : null,
+              ScanCheckpointSha256 = checkpoint.State == Completed ? Digest(bytes) : null };
         }
         return history;
     }
@@ -310,15 +355,20 @@ public static class WebFormsReviewExecutionCommand
         return JsonSerializer.Deserialize<ScanManifest>(bytes, JsonOptions) ?? throw Fail("SCAN_MANIFEST_INVALID");
     }
 
-    private static async Task<History> PublishAsync(string root, WebFormsReviewCheckpoint checkpoint, CancellationToken token)
+    private static async Task<History> PublishAsync(string root, WebFormsReviewCheckpoint checkpoint, CancellationToken token, History? previous = null)
     {
         var directory = OwnedPath(root, "checkpoints"); Directory.CreateDirectory(directory);
         var bytes = JsonSerializer.SerializeToUtf8Bytes(checkpoint, JsonOptions);
+        if (bytes.Length > 4_194_304) throw Fail("CHECKPOINT_BYTES_LIMIT");
         var staging = OwnedPath(root, "checkpoints/.pending-" + Guid.NewGuid().ToString("N"));
         await using (var stream = new FileStream(staging, FileMode.CreateNew, FileAccess.Write, FileShare.None))
         { await stream.WriteAsync(bytes, token); await stream.FlushAsync(token); stream.Flush(flushToDisk: true); }
         File.Move(staging, OwnedPath(root, "checkpoints/" + checkpoint.Sequence.ToString("D4", CultureInfo.InvariantCulture) + ".json"));
-        return new(checkpoint.Sequence, Digest(bytes), checkpoint);
+        return new(checkpoint.Sequence, Digest(bytes), checkpoint)
+        {
+            ScanCheckpoint = checkpoint.State == Completed ? checkpoint : previous?.ScanCheckpoint,
+            ScanCheckpointSha256 = checkpoint.State == Completed ? Digest(bytes) : previous?.ScanCheckpointSha256
+        };
     }
 
     private static bool ValidAttempt(string value) => value is not null && value.StartsWith("attempts/", StringComparison.Ordinal)

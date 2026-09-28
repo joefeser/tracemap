@@ -300,11 +300,149 @@ public sealed class WebFormsReviewExecutionTests
     public async Task Actual_CLI_dispatch_executes_and_resumes_the_fresh_scan()
     {
         using var fixture = new Fixture();
+        fixture.AddPublicEventFixture();
         await fixture.Preflight();
         Assert.Equal(0, await TraceMapCommand.RunAsync(["webforms-review", "run", "--run", fixture.Run], fixture.Output, fixture.Error));
         Assert.Equal(0, await TraceMapCommand.RunAsync(["webforms-review", "resume", "--run", fixture.Run], fixture.Output, fixture.Error));
-        Assert.Equal("scan-completed-reports-pending", fixture.LastCheckpoint().State);
-        Assert.Equal(2, fixture.LastCheckpoint().Sequence);
+        Assert.Equal("reports-completed-review-only", fixture.LastCheckpoint().State);
+        Assert.Equal(4, fixture.LastCheckpoint().Sequence);
+        var checkpoint = fixture.LastCheckpoint();
+        var report = Path.Combine(fixture.Run, checkpoint.Reports!.ReportAttempt);
+        Assert.True(File.Exists(Path.Combine(report, "index.html")));
+        Assert.True(File.Exists(Path.Combine(report, "handoff.local.json")));
+        Assert.True(File.Exists(Path.Combine(report, "compiled", "compiled-paths.handoff.local.json")));
+        Assert.DoesNotContain("UnifiedReportsPending", checkpoint.Gaps);
+        Assert.Equal(Hash(Path.Combine(fixture.Run, "checkpoints", "0002.json")), checkpoint.Reports.ScanCheckpointSha256);
+        Assert.Contains("sourceRescanned=false", fixture.Output.ToString(), StringComparison.Ordinal);
+        var handoff = JsonSerializer.Deserialize<NativeWebFormsReviewHandoff>(File.ReadAllText(Path.Combine(report, "handoff.local.json")), JsonOptions)!;
+        Assert.NotEmpty(handoff.Packet.EventChains);
+        Assert.True(handoff.RequestedCompiledRoots > 0);
+        Assert.Equal(handoff.PacketSha256, WebFormsReviewReportExecution.CanonicalHash(handoff.Packet, 268_435_456, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task Failed_report_keeps_scan_and_partial_bytes_and_resumes_into_fresh_report_attempt()
+    {
+        using var fixture = new Fixture();
+        await fixture.Preflight();
+        Assert.Equal(0, await fixture.Execute("run", Scan));
+        var scan = fixture.LastCheckpoint();
+        string? marker = null;
+        Assert.Equal(1, await fixture.ExecuteReports("resume", (_, _, path, _) =>
+        {
+            Directory.CreateDirectory(path);
+            marker = Path.Combine(path, "partial.txt"); File.WriteAllText(marker, "retained unadmitted partial bytes");
+            throw new InvalidOperationException("public simulated report failure");
+        }));
+        var failed = fixture.LastCheckpoint();
+        Assert.Equal("reports-failed", failed.State);
+        Assert.Equal(scan.Artifacts, failed.Artifacts);
+        var markerHash = Hash(marker!);
+        Assert.Equal(0, await fixture.ExecuteReports("resume", WebFormsReviewReportExecution.WriteAsync));
+        var complete = fixture.LastCheckpoint();
+        Assert.Equal("reports-completed-review-only", complete.State);
+        Assert.Equal(6, complete.Sequence);
+        Assert.Equal(scan.Attempt, complete.Attempt);
+        Assert.NotEqual(failed.Reports!.ReportAttempt, complete.Reports!.ReportAttempt);
+        Assert.Equal(markerHash, Hash(marker!));
+        foreach (var artifact in scan.Artifacts) Assert.Equal(artifact.Sha256, Hash(Path.Combine(fixture.Run, artifact.RelativePath)));
+    }
+
+    [Fact]
+    public async Task Cancelled_report_is_recorded_without_rescanning_on_resume()
+    {
+        using var fixture = new Fixture();
+        await fixture.Preflight();
+        Assert.Equal(0, await fixture.Execute("run", Scan));
+        using var cancellation = new CancellationTokenSource();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => fixture.ExecuteReports("resume", (_, _, _, _) =>
+        {
+            cancellation.Cancel(); throw new OperationCanceledException(cancellation.Token);
+        }, cancellation.Token));
+        Assert.Equal("reports-cancelled", fixture.LastCheckpoint().State);
+        Assert.Equal(0, await fixture.ExecuteReports("resume", WebFormsReviewReportExecution.WriteAsync));
+        Assert.Equal("reports-completed-review-only", fixture.LastCheckpoint().State);
+    }
+
+    [Theory]
+    [InlineData("before-admission")]
+    [InlineData("completed-resume")]
+    public async Task Changed_report_bytes_refuse_admission_or_completed_resume(string when)
+    {
+        using var fixture = new Fixture();
+        await fixture.Preflight();
+        Assert.Equal(0, await fixture.Execute("run", Scan));
+        var result = await fixture.ExecuteReports("resume", async (plan, scan, path, token) =>
+        {
+            var produced = await WebFormsReviewReportExecution.WriteAsync(plan, scan, path, token);
+            if (when == "before-admission") File.AppendAllText(Path.Combine(path, "index.html"), "changed");
+            return produced;
+        });
+        if (when == "before-admission")
+        {
+            Assert.Equal(1, result);
+            Assert.Equal("reports-failed", fixture.LastCheckpoint().State);
+            Assert.Contains("REPORT_OUTPUT_CHANGED", fixture.Error.ToString(), StringComparison.Ordinal);
+        }
+        else
+        {
+            Assert.Equal(0, result);
+            var complete = fixture.LastCheckpoint();
+            File.AppendAllText(Path.Combine(fixture.Run, complete.Reports!.ReportAttempt, "handoff.local.json"), "changed");
+            Assert.Equal(1, await fixture.ExecuteReports("resume", (_, _, _, _) => throw new InvalidOperationException("must not regenerate")));
+            Assert.Contains("OUTPUT_CHANGED", fixture.Error.ToString(), StringComparison.Ordinal);
+            Assert.Equal(complete.Sequence, fixture.LastCheckpoint().Sequence);
+        }
+    }
+
+    [Fact]
+    public async Task Native_attachment_reports_pin_parent_and_generated_view_without_source_scan()
+    {
+        using var fixture = new Fixture();
+        var parent = await fixture.PreflightAttachment();
+        var parentHash = Hash(Path.Combine(parent, "index.sqlite"));
+        Assert.Equal(0, await fixture.Execute("run", (_, _, _, _) => throw new InvalidOperationException("must not source scan")));
+        Assert.Equal(0, await fixture.ExecuteReports("resume", WebFormsReviewReportExecution.WriteAsync));
+        var checkpoint = fixture.LastCheckpoint();
+        Assert.Equal("reports-completed-review-only", checkpoint.State);
+        Assert.Equal(parentHash, Hash(Path.Combine(parent, "index.sqlite")));
+        var handoff = JsonSerializer.Deserialize<NativeWebFormsReviewHandoff>(File.ReadAllText(Path.Combine(fixture.Run,
+            checkpoint.Reports!.ReportAttempt, "handoff.local.json")), JsonOptions)!;
+        Assert.Equal(2, handoff.ScanManifests.Count);
+        Assert.Equal("review-only-static-not-runtime", handoff.ClaimLevel);
+        Assert.Equal(checkpoint.Reports.ResultBoundedInputSha256, handoff.BoundedInputSha256);
+        Assert.Equal(Hash(typeof(WebFormsReviewExecutionCommand).Assembly.Location), handoff.GeneratorSha256);
+        Assert.Equal(0, await fixture.ExecuteReports("resume", (_, _, _, _) => throw new InvalidOperationException("must not rerender")));
+        Assert.Equal(checkpoint.Sequence, fixture.LastCheckpoint().Sequence);
+    }
+
+    [Fact]
+    public async Task Report_policy_tampering_is_rejected_even_with_a_recomputed_payload_hash()
+    {
+        using var fixture = new Fixture();
+        await fixture.Preflight();
+        Assert.Equal(0, await fixture.Execute("run", Scan));
+        Assert.Equal(0, await fixture.ExecuteReports("resume", WebFormsReviewReportExecution.WriteAsync));
+        var checkpoint = fixture.LastCheckpoint();
+        var changed = checkpoint with { Reports = checkpoint.Reports! with { PolicySha256 = new string('a', 64) }, CheckpointPayloadSha256 = "" };
+        changed = changed with { CheckpointPayloadSha256 = Convert.ToHexStringLower(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(changed, JsonOptions))) };
+        File.WriteAllText(Path.Combine(fixture.Run, "checkpoints", "0004.json"), JsonSerializer.Serialize(changed, JsonOptions));
+        Assert.Equal(1, await fixture.ExecuteReports("resume", (_, _, _, _) => throw new InvalidOperationException("must not execute")));
+        Assert.Contains("REPORT_CONTEXT_INVALID", fixture.Error.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Report_output_limit_keeps_scan_completed_and_partial_report_unadmitted()
+    {
+        using var fixture = new Fixture();
+        fixture.Config = fixture.Config with { Budgets = fixture.Config.Budgets with { Reports = new(MaxOutputBytes: 1) } };
+        await fixture.Preflight();
+        Assert.Equal(0, await fixture.Execute("run", Scan));
+        var scan = fixture.LastCheckpoint();
+        Assert.Equal(1, await fixture.ExecuteReports("resume", WebFormsReviewReportExecution.WriteAsync));
+        Assert.Equal("reports-failed", fixture.LastCheckpoint().State);
+        Assert.Equal(scan.Artifacts, fixture.LastCheckpoint().Artifacts);
+        Assert.True(File.Exists(Path.Combine(fixture.Run, fixture.LastCheckpoint().Reports!.ReportAttempt, "combined.sqlite")));
     }
 
     [Fact]
@@ -540,16 +678,38 @@ public sealed class WebFormsReviewExecutionTests
             Config = Config with { PrimaryAssemblies = mutation == "undeclared-dll" ? ["Public.dll"] : ["bin/Public.dll"],
                 PageMaps = ["Pages/Lookup.aspx.compiled"], PublishReceiptRelativePath = "receipts/publish.json" };
         }
+        public void AddPublicEventFixture()
+        {
+            File.WriteAllText(Path.Combine(Source, "Pages", "Lookup.aspx"), "<%@ Page Language=\"VB\" CodeFile=\"Lookup.aspx.vb\" Inherits=\"Lookup\" %>\n<asp:DropDownList ID=\"Names\" runat=\"server\" OnInit=\"Names_Init\" />");
+            File.WriteAllText(Path.Combine(Source, "Pages", "Lookup.aspx.vb"), "Public Class Lookup\n Protected Sub Names_Init(sender As Object, e As System.EventArgs)\n  System.Console.WriteLine(\"public fixture\")\n End Sub\nEnd Class\n");
+            foreach (var arguments in new[] { new[] { "add", "." }, new[] { "commit", "-qm", "public event fixture" } })
+            {
+                var start = new ProcessStartInfo("git") { WorkingDirectory = Source, RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false };
+                foreach (var argument in arguments) start.ArgumentList.Add(argument);
+                using var process = Process.Start(start)!;
+                var stdout = process.StandardOutput.ReadToEndAsync(); var stderr = process.StandardError.ReadToEndAsync();
+                Assert.True(process.WaitForExit(10_000)); Task.WaitAll(stdout, stderr); Assert.Equal(0, process.ExitCode);
+            }
+            Config = Config with { SourceCommitSha = GitMetadataProvider.Detect(Source).CommitSha };
+        }
         public Task<int> Execute(string action, LocalReviewScanRunner runner, CancellationToken token = default)
         {
             Output.GetStringBuilder().Clear(); Error.GetStringBuilder().Clear();
-            return WebFormsReviewExecutionCommand.RunAsync([action, "--run", Run], Output, Error, runner, token);
+            return WebFormsReviewExecutionCommand.RunWithAttachmentAsync([action, "--run", Run], Output, Error, runner,
+                WebFormsReviewAttachmentExecution.WriteAsync, token);
         }
         public Task<int> ExecuteAttachment(string action, WebFormsReviewAttachmentRunner runner, CancellationToken token = default)
         {
             Output.GetStringBuilder().Clear(); Error.GetStringBuilder().Clear();
             return WebFormsReviewExecutionCommand.RunWithAttachmentAsync([action, "--run", Run], Output, Error,
                 (_, _, _, _) => throw new InvalidOperationException("must not source scan"), runner, token);
+        }
+        public Task<int> ExecuteReports(string action, WebFormsReviewReportRunner runner, CancellationToken token = default)
+        {
+            Output.GetStringBuilder().Clear(); Error.GetStringBuilder().Clear();
+            return WebFormsReviewExecutionCommand.RunWithReportsAsync([action, "--run", Run], Output, Error,
+                (_, _, _, _) => throw new InvalidOperationException("must not source scan"),
+                WebFormsReviewAttachmentExecution.WriteAsync, runner, token);
         }
         public async Task<string> PreflightAttachment()
         {
