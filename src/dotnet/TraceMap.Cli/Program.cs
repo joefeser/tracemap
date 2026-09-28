@@ -38,6 +38,7 @@ public static class TraceMapCommand
                 "version" => VersionHelp(),
                 "validate-index" => "tracemap validate-index --index <path> --commit <sha> --facts <count>",
                 "local-review" => LocalReviewHelp(),
+                "webforms-review" => WebFormsReviewPreflightCommand.Help,
                 "report" => ReportHelp(),
                 "database-design-review" => DatabaseDesignReviewHelp(),
                 "webforms-modernization" => WebFormsModernizationHelp(),
@@ -68,7 +69,7 @@ public static class TraceMapCommand
                 "explorer" => ExplorerHelp(),
                 _ => RootHelp()
             });
-            return command is "scan" or "version" or "validate-index" or "local-review" or "report" or "database-design-review" or "webforms-modernization" or "reduce" or "flow" or "relate" or "export" or "endpoints" or "combine" or "paths" or "route-flow" or "property-flow" or "diff" or "snapshot-diff" or "impact" or "reverse-impact" or "reverse" or "release-review" or "access-review" or "portfolio" or "package-impact" or "package-decision" or "vault" or "docs-export" or "contract-diff" or "baseline" or "evidence-pack" or "explorer" ? 0 : 1;
+            return command is "scan" or "version" or "validate-index" or "local-review" or "webforms-review" or "report" or "database-design-review" or "webforms-modernization" or "reduce" or "flow" or "relate" or "export" or "endpoints" or "combine" or "paths" or "route-flow" or "property-flow" or "diff" or "snapshot-diff" or "impact" or "reverse-impact" or "reverse" or "release-review" or "access-review" or "portfolio" or "package-impact" or "package-decision" or "vault" or "docs-export" or "contract-diff" or "baseline" or "evidence-pack" or "explorer" ? 0 : 1;
         }
 
         using var commandOperation = TraceMapDiagnostics.StartCommand(command);
@@ -80,6 +81,7 @@ public static class TraceMapCommand
                 "version" => await RunVersionAsync(rest, output, error),
                 "validate-index" => await RunValidateIndexAsync(rest, output, error),
                 "local-review" => await LocalReviewCommand.RunAsync(rest, output, error, RunScanAsync, cancellationToken),
+                "webforms-review" => await WebFormsReviewPreflightCommand.RunAsync(rest, output, error, cancellationToken),
                 "report" => await RunReportAsync(rest, output, error, cancellationToken),
                 "database-design-review" => await RunDatabaseDesignReviewAsync(rest, output, error, cancellationToken),
                 "webforms-modernization" => await RunWebFormsModernizationAsync(rest, output, error, cancellationToken),
@@ -2696,6 +2698,7 @@ public static class TraceMapCommand
             Usage:
               tracemap version [--json]
               tracemap local-review run --repo <path> --out <new-output-root> [--webforms-modernization] [--explorer]
+              tracemap webforms-review preflight --config <private-json> --out <new-run-root>
               tracemap scan --repo <path> --out <path>
               tracemap report --index <path> --out <path>
               tracemap database-design-review --index <combined.sqlite> --out <path>
@@ -2727,6 +2730,7 @@ public static class TraceMapCommand
             Commands:
               version   Show installed build identity and bounded local readiness.
               local-review Run a guided local scan and compatible review stages.
+              webforms-review Validate a private compiled Web Forms run contract (preflight only).
               scan      Inventory a repository and emit TraceMap artifacts.
               report    Generate a combined dependency report from a combined index.
               database-design-review Compose existing PostgreSQL design, query, and route evidence.

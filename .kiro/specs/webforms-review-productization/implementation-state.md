@@ -1,5 +1,32 @@
 # Web Forms Review Productization Implementation State
 
+## Native preflight slice (2026-09-28)
+
+- Branch: `codex/webforms-native-preflight`, based on merged PR #796 at
+  `f7891d980c2fd8080b70c14d0ea07a834598d35a`.
+- Scope: `tracemap webforms-review preflight`, a private versioned fresh/attach
+  config, explicit compiled input inventory and new durable run manifest only.
+- No scanner/reducer semantics or proven PowerShell entry points changed. No
+  scans, publishing, binding admission, reports, resume or cleanup occur here.
+- Parent artifacts are streamed and pinned without mutation. Source commit,
+  managed PE header format, configured roots/output separation and receipt hash
+  candidates are checked; source snapshot, repository/index identity, full
+  binding, map and PDB identity are explicitly deferred gaps.
+- The temporary comparison/grouping helpers remain on their separate pushed
+  branch; they are not folded into production by this slice.
+- Operator contract and planned subsequent phases:
+  [`docs/WEBFORMS_NATIVE_WORKFLOW.md`](../../../docs/WEBFORMS_NATIVE_WORKFLOW.md).
+- Validation: final focused preflight tests passed 27/27; the final full .NET
+  suite passed 2,353/2,353, zero failed/skipped. The focused rebuild emitted no
+  compiler/analyzer warnings. `git diff --check` passed.
+- Native CLI preflight smoke against explicit public Web Forms markup and a
+  public managed assembly created only `run-manifest.json` and `README.md`.
+  Its generator digest matched the exact CLI DLL. Existing `scan` smoke against
+  `samples/vb-modern-sample` produced 222 facts with `Level1SemanticAnalysis`.
+  These checks do not establish source/DLL binding or a compiled-site scan.
+- Real private Windows run and eight-times scale acceptance are not established.
+
+
 Record type: historical implementation and validation record
 
 Status: clean-run pipeline present on current `dev`; PR #770 is authoritative

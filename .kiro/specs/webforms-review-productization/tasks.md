@@ -30,6 +30,11 @@
 - [x] Preserve partial modernization packets when combined graph admission
   reaches its budget; never classify incomplete graph paths.
 - [ ] Add published-site input/binding preflight to the normal run configuration.
+  - [x] Add the native private fresh/attach configuration and bounded inventory
+    preflight; keep source snapshot, parent/index and authoritative binding
+    validation explicitly deferred rather than claiming run execution.
+  - [ ] Validate authoritative binding and integrate this contract into normal
+    resumable source-plus-compiled phase execution.
 - [ ] Implement .NET orchestration for source-plus-compiled runs and immutable
   attachment to a retained source scan; keep compatibility wrappers.
 - [ ] Integrate compiled evidence into normal packet/docs/handoff navigation
