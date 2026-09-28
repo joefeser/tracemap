@@ -1,5 +1,38 @@
 # Web Forms Review Productization Implementation State
 
+## Combined graph property allocation runway (2026-09-28)
+
+- Continued on `codex/webforms-native-preflight` based on `c06a406e` after its
+  exact committed runtime passed the full 2,637-test regression. Bounded combined
+  reads now use a connection-local SQLite property projection, retaining every
+  fact row, exact source namespaces, competitors and attachment context. Input
+  indexes and full facts remain immutable; raw admission ceilings are unchanged.
+- Per-row and aggregate fact/edge text admission occurs before copying row
+  strings into managed memory. Noncanonical fact namespaces are rejected rather
+  than reconstructed into invented evidence IDs. The bounded connection uses
+  query-only access, file-backed temporary operations and an 8 MiB page cache.
+- An initial focused run exposed four compiled-chain regressions from omitted
+  source symbol IDs and VB body/signature context. Expectations were not weakened:
+  the shared projection was expanded to retain the fields needed by compiled
+  bridges. The same focused cases then passed 78/78 in 39 seconds. After adding
+  legacy-column and malformed/duplicate property compatibility cases, the final
+  focused suite passed 85/85 in 38 seconds. The wider native regression passed
+  572/572 in 3 minutes 53 seconds. After the final legacy/declared-surface
+  projection guard, the rebuilt focused suite passed 85/85 in 49 seconds, zero
+  failed or skipped. Exact-head full regression for this slice remains pending.
+- An isolated warmed 1,005-row public fixture retained identical complete path
+  JSON while allocating 69,237,792 managed bytes with the full reader versus
+  4,849,728 with the final compact reader; retained projected text was 236,491 bytes.
+  This measures allocation only, not process peak memory or representative scale.
+- Flat string/null property validation prevents duplicate JSON key or non-string
+  coercion from inventing identity metadata. The combined reader retains its
+  existing last-key/empty-malformed-properties semantics; single-index malformed
+  property hashes remain unchanged. The real CLI sample scan completed with
+  136 facts in ignored owned `output/native-receipt-set-smoke-compact-c06a406e`.
+- This is a measured allocation runway, not completion of the indexed graph
+  requirement: the global graph still materializes and source/compiled eight-times
+  disk/time/peak-memory validation, public Windows parity and retention remain open.
+
 ## Native partition preparation and pinning (2026-09-28)
 
 - Continued on `codex/webforms-native-preflight` in the managed attachment
@@ -25,7 +58,10 @@
   in 2 minutes 53 seconds. A real CLI syntax-only public sample scan completed
   with 136 facts in the ignored owned output
   `output/native-receipt-set-smoke-native-b093b98c`.
-  The full regression at the final committed source head remains required. Public
+  Exact-head full regression at `c06a406e4d7e50763c239eca746d342f74bdc6cb`
+  passed 2,637/2,637, zero failed or skipped, in 11 minutes 21 seconds. The CLI
+  sample at that head also completed with 136 facts in the ignored owned
+  `output/native-receipt-set-smoke-c06a406e`. Public
   Windows compilation parity, representative eight-times scale, bounded global
   graph processing, legacy presentation parity and retention remain open. No
   private proof dependencies were deleted and no PR or merge was performed.

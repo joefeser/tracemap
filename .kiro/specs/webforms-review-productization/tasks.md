@@ -111,6 +111,10 @@
 - [ ] Expose per-phase budget usage, missing-input guidance, and resumable gaps.
 - [ ] Avoid full combined-graph materialization while retaining global ambiguity
   and cross-assembly evidence; validate deterministic parity.
+  - [x] Reduce unused combined fact-property allocation in SQLite while retaining
+    every row and all global competitors; preserve compiled bridge identity/body
+    context and admit edge text before allocation. Keep indexed graph traversal
+    and representative peak-memory validation pending.
 - [ ] Benchmark eight-times source-size synthetic corpus and representative
   compiled graph distributions; record disk/time/peak-memory/coverage metrics.
 - [ ] Add dependency-aware retention, durable run location, relocation validation,

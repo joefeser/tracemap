@@ -3966,3 +3966,25 @@ over-page-limit members and explicit/default budget boundaries. These are declar
 inventory fixtures using public PE inputs, not an ASP.NET compilation parity proof.
 The public Windows compiled Web Site parity checks and representative eight-times
 memory/disk/time validation remain required.
+
+### Bounded combined property projection
+
+```text
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter "FullyQualifiedName~WebFormsReportMemoryTests|FullyQualifiedName~MessyWorkspaceRegressionTests"
+```
+
+The combined reader retains all fact rows and source namespaces while projecting
+only audited graph-consumed properties before managed allocation. Tests compare
+complete serialized path reports with the full reader, retain supporting IDs and
+cross-source competitors, check missing legacy extractor columns, reject
+noncanonical identities, and withhold paths on oversized dependency-edge text.
+Duplicate JSON keys, numeric/nested values and non-object property JSON retain
+the combined full parser's exact last-value or empty malformed-properties behavior
+(the single-index parser retains its existing malformed-properties hash behavior).
+Existing compiled attachment/PDB/publish method-chain cases pin the source symbol,
+member identity, body-span and namespace/import context that a source-only
+projection must not omit. The allocation comparison is warmed and isolated from
+parallel test collections; it measures managed allocation, not peak working set.
+Every original fact stays in the read-only combined index. Raw fact/edge/text
+admission and full graph materialization remain: this is not an eight-times scale
+or lazy graph acceptance result.

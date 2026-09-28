@@ -279,6 +279,20 @@ output cap. Receipt partitioning is implemented for declared inventory; complete
 compiled-site coverage and representative eight-times graph memory remain separate
 gates. The graph still materializes after admission.
 
+The bounded combined reader now projects the same audited graph-consumed
+properties used by the single-index reader in SQLite, before allocating .NET
+strings. It retains **every combined fact row**, all source/overload/dispatch
+competitors and attachment links. Unknown fact types, legacy evidence and
+declared surfaces retain their full properties. Source symbol IDs and VB
+member/body-span/namespace fields needed by compiled bridges are preserved.
+Duplicate keys and non-flat/non-string property shapes stay on the full parser
+path, preserving each reader's last-key and malformed-input behavior rather than inventing
+identity fields from SQLite's different JSON lookup semantics.
+Original fact JSON remains unchanged in the retained index; the projection is
+an internal read optimization, not a replacement handoff or evidence deletion.
+Fact/edge text is admitted before allocation. Raw combined admission ceilings
+are not raised, and this is not yet root-specific indexed graph processing.
+
 ### Bounded retained evidence retrieval
 
 New native reports additionally index both complete handoff documents as a

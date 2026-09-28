@@ -465,7 +465,13 @@ public static partial class CombinedDependencyPathReporter
         }.ToString();
         await using var connection = new SqliteConnection(connectionString);
         await connection.OpenAsync(cancellationToken);
-        var read = await ReadPathIndexAsync(connection, indexPath, allowSingleIndex, cancellationToken);
+        if (budget is not null)
+        {
+            await using var command = connection.CreateCommand();
+            command.CommandText = "pragma query_only=on; pragma temp_store=file; pragma cache_size=-8192;";
+            await command.ExecuteNonQueryAsync(cancellationToken);
+        }
+        var read = await ReadPathIndexAsync(connection, indexPath, allowSingleIndex, cancellationToken, budget);
         var endpointFindings = CombinedDependencyReporter.MatchEndpoints(read.Sources, read.Facts);
         var surfaces = CombinedDependencyReporter.BuildSurfaces(read.Facts, read.Sources);
         var graph = BuildGraph(read, endpointFindings, surfaces, sourcePair, includeLegacyRoots, budget);
@@ -1191,14 +1197,16 @@ public static partial class CombinedDependencyPathReporter
         return graph;
     }
 
-    private static async Task<CombinedReadResult> ReadPathIndexAsync(SqliteConnection connection, string indexPath, bool allowSingleIndex, CancellationToken cancellationToken)
+    private static async Task<CombinedReadResult> ReadPathIndexAsync(SqliteConnection connection, string indexPath, bool allowSingleIndex,
+        CancellationToken cancellationToken, ReportInputBudget? budget = null)
     {
         if (await TableExistsAsync(connection, "index_sources", cancellationToken)
             && await TableExistsAsync(connection, "combined_facts", cancellationToken)
             && await ViewExistsAsync(connection, "combined_dependency_edges", cancellationToken))
         {
             await CombinedDependencyReporter.ValidateCombinedIndexAsync(connection, cancellationToken);
-            return await CombinedDependencyReporter.ReadAsync(connection, cancellationToken);
+            return await CombinedDependencyReporter.ReadAsync(connection, cancellationToken, budget is null ? null
+                : (input, sources, hasId, hasVersion, token) => ReadCompactCombinedFactsAsync(input, sources, hasId, hasVersion, budget, token), budget);
         }
 
         if (allowSingleIndex

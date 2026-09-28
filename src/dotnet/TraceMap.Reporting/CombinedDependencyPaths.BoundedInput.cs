@@ -185,7 +185,20 @@ public static partial class CombinedDependencyPathReporter
         // Use SQLite to discard unconsumed large properties before a managed
         // string is allocated. Invalid JSON remains on the ordinary full path.
         return $$"""
-            with projected as (
+            with checked_properties as (
+                select *, case
+                    when fact_type not in ({{types}}, '{{FactTypes.CallEdge}}') or rule_id like 'legacy.%' then 0
+                    when length(cast(properties_json as blob)) > {{ReportInputBudget.MaxRowTextBytes}} then 0
+                    when json_valid(properties_json) then
+                        json_type(properties_json) = 'object'
+                        and json_type(properties_json, '$.surfaceKind') is null
+                        and not exists (select 1 from json_each(properties_json) entries
+                            where entries.type not in ('text', 'null'))
+                        and not exists (select 1 from json_each(properties_json) entries
+                            group by entries.key having count(*) > 1)
+                    else 0 end as projection_safe
+                from facts where {{predicate}}
+            ), projected as (
                 select *,
                     fact_type in ({{types}}) and rule_id not like 'legacy.%'
                     and not (fact_type = 'MethodInvoked'
@@ -196,15 +209,14 @@ public static partial class CombinedDependencyPathReporter
                             or target_symbol like 'System.Data.SqlClient.SqlDataAdapter.Fill(%'
                             or target_symbol like 'global::Microsoft.Data.SqlClient.SqlDataAdapter.Fill(%'
                             or target_symbol like 'Microsoft.Data.SqlClient.SqlDataAdapter.Fill(%'))
-                    and case when length(cast(properties_json as blob)) > {{ReportInputBudget.MaxRowTextBytes}} then 0
-                        when json_valid(properties_json)
+                    and case when projection_safe
                         then json_type(properties_json, '$.surfaceKind') is null
                         else 0 end as symbol_only
-                from facts where {{predicate}}
+                from checked_properties
             ), input as (
                 select fact_id, scan_id, repo, commit_sha, fact_type, rule_id, evidence_tier,
                        source_symbol, target_symbol, contract_element, file_path, start_line, end_line,
-                       case when fact_type = '{{FactTypes.CallEdge}}' and json_valid(properties_json) then
+                       case when fact_type = '{{FactTypes.CallEdge}}' and projection_safe then
                            json_patch(json_object(
                                'argumentCount', coalesce(cast(json_extract(properties_json, '$.argumentCount') as text), ''),
                                'argumentTypes', coalesce(cast(json_extract(properties_json, '$.argumentTypes') as text), ''),
@@ -217,6 +229,7 @@ public static partial class CombinedDependencyPathReporter
                                'callerAssemblyName', coalesce(cast(json_extract(properties_json, '$.callerAssemblyName') as text), ''),
                                'callerName', coalesce(cast(json_extract(properties_json, '$.callerName') as text), ''),
                                'coverageLabel', coalesce(cast(json_extract(properties_json, '$.coverageLabel') as text), ''),
+                               'sourceSymbolId', coalesce(cast(json_extract(properties_json, '$.sourceSymbolId') as text), ''),
                                'receiverName', coalesce(cast(json_extract(properties_json, '$.receiverName') as text), ''),
                                'receiverTypeResolution', coalesce(cast(json_extract(properties_json, '$.receiverTypeResolution') as text), ''),
                                'targetSymbolId', coalesce(cast(json_extract(properties_json, '$.targetSymbolId') as text), ''),
@@ -226,25 +239,37 @@ public static partial class CombinedDependencyPathReporter
                                     else json('{}') end)
                             when fact_type = '{{FactTypes.MethodDeclared}}'
                                 and rule_id = '{{RuleIds.VisualBasicSemanticDeclarations}}'
-                                and json_valid(properties_json) then
+                                and projection_safe then
                             json_object(
                                 'containingType', coalesce(cast(json_extract(properties_json, '$.containingType') as text), ''),
                                 'methodName', coalesce(cast(json_extract(properties_json, '$.methodName') as text), ''),
+                                'name', coalesce(cast(json_extract(properties_json, '$.name') as text), ''),
+                                'memberIdentity', coalesce(cast(json_extract(properties_json, '$.memberIdentity') as text), ''),
+                                'qualifiedContainingType', coalesce(cast(json_extract(properties_json, '$.qualifiedContainingType') as text), ''),
+                                'bodyStartLine', coalesce(cast(json_extract(properties_json, '$.bodyStartLine') as text), ''),
+                                'bodyEndLine', coalesce(cast(json_extract(properties_json, '$.bodyEndLine') as text), ''),
+                                'parameterTypes', coalesce(cast(json_extract(properties_json, '$.parameterTypes') as text), ''),
+                                'lexicalNamespace', coalesce(cast(json_extract(properties_json, '$.lexicalNamespace') as text), ''),
+                                'importedNamespaces', coalesce(cast(json_extract(properties_json, '$.importedNamespaces') as text), ''),
                                 'parameterCount', coalesce(cast(json_extract(properties_json, '$.parameterCount') as text), ''))
                             when fact_type = '{{FactTypes.MethodDeclared}}'
                                 and rule_id = '{{RuleIds.VisualBasicSyntaxDeclarations}}'
-                                and json_valid(properties_json) then
+                                and projection_safe then
                             json_object(
                                 'containingType', coalesce(cast(json_extract(properties_json, '$.containingType') as text), ''),
                                 'qualifiedContainingType', coalesce(cast(json_extract(properties_json, '$.qualifiedContainingType') as text), ''),
                                 'methodName', coalesce(cast(json_extract(properties_json, '$.methodName') as text), ''),
                                 'name', coalesce(cast(json_extract(properties_json, '$.name') as text), ''),
                                 'memberIdentity', coalesce(cast(json_extract(properties_json, '$.memberIdentity') as text), ''),
+                                'bodyStartLine', coalesce(cast(json_extract(properties_json, '$.bodyStartLine') as text), ''),
+                                'bodyEndLine', coalesce(cast(json_extract(properties_json, '$.bodyEndLine') as text), ''),
+                                'lexicalNamespace', coalesce(cast(json_extract(properties_json, '$.lexicalNamespace') as text), ''),
+                                'importedNamespaces', coalesce(cast(json_extract(properties_json, '$.importedNamespaces') as text), ''),
                                 'parameterCount', coalesce(cast(json_extract(properties_json, '$.parameterCount') as text), ''),
                                 'parameterTypes', coalesce(cast(json_extract(properties_json, '$.parameterTypes') as text), ''))
                             when fact_type = '{{FactTypes.FieldDeclared}}'
                                 and rule_id = '{{RuleIds.VisualBasicSyntaxDeclarations}}'
-                                and json_valid(properties_json) then
+                                and projection_safe then
                             json_object(
                                 'containingType', coalesce(cast(json_extract(properties_json, '$.containingType') as text), ''),
                                 'qualifiedContainingType', coalesce(cast(json_extract(properties_json, '$.qualifiedContainingType') as text), ''),
@@ -252,7 +277,7 @@ public static partial class CombinedDependencyPathReporter
                                 'fieldType', coalesce(cast(json_extract(properties_json, '$.fieldType') as text), ''))
                             when fact_type = '{{FactTypes.TypeDeclared}}'
                                 and rule_id = '{{RuleIds.VisualBasicSyntaxDeclarations}}'
-                                and json_valid(properties_json) then
+                                and projection_safe then
                             json_object(
                                 'name', coalesce(cast(json_extract(properties_json, '$.name') as text), ''),
                                 'qualifiedName', coalesce(cast(json_extract(properties_json, '$.qualifiedName') as text), ''),
@@ -894,12 +919,13 @@ public static partial class CombinedDependencyPathReporter
                 && string.Equals(callKind, "SemanticObjectCreation", StringComparison.Ordinal);
     }
 
-    private static CombinedFactRow ReadProjectedFact(SqliteDataReader reader, CombinedReportSource source) => new(
+    private static CombinedFactRow ReadProjectedFact(SqliteDataReader reader, CombinedReportSource source, bool combinedParser = false) => new(
         $"{source.SourceIndexId}:{reader.GetString(0)}", source.SourceIndexId, source.Label,
         reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.GetString(3),
         reader.GetString(4), reader.GetString(5), reader.GetString(6),
         reader.IsDBNull(7) ? null : reader.GetString(7), reader.IsDBNull(8) ? null : reader.GetString(8),
         reader.IsDBNull(9) ? null : reader.GetString(9), reader.GetString(10), reader.GetInt32(11), reader.GetInt32(12),
-        ParseProperties(reader.GetString(13)), reader.IsDBNull(14) ? null : reader.GetString(14),
+        combinedParser ? CombinedDependencyReporter.ParseProperties(reader.GetString(13)) : ParseProperties(reader.GetString(13)),
+        reader.IsDBNull(14) ? null : reader.GetString(14),
         reader.IsDBNull(16) ? null : reader.GetString(16));
 }
