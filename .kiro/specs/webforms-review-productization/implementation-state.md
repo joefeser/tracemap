@@ -21,6 +21,38 @@
   compiled-site parity, all-pages partitioning, scale, retention and the final
   authorized private Windows run remain outstanding. No proof cleanup or PR
   merge occurred. Earlier full-suite results do not validate this later slice.
+- Full regression of this slice at `fd13069c` subsequently passed 2,528/2,528,
+  zero failed/skipped (9 minutes 54 seconds), with no compiler/analyzer warnings.
+  This result precedes the following attachment-combine contract changes.
+
+## Explicit compiled attachment combination contract (2026-09-28)
+
+- Added an opt-in .NET combine contract with explicit parent/attachment index
+  and manifest paths. Ordinary combines infer no links from labels, commit names
+  or adjacent files. Native reporting is not wired to this API yet.
+- Admission pins actual bounded bytes, compares complete external and embedded
+  manifests, validates compiled-only context and exact parent content/snapshot/
+  repository identity, and rejects sidecars or symbolic input paths. Inputs use
+  immutable SQLite URIs. Only a fresh output can be allocated for this operation.
+- The additive link table records actual Combine generator and bounded-input
+  hashes plus original source IDs, scan IDs and artifact/context hashes. Parent
+  fact IDs/namespaces remain unchanged. This is local integrity, not authenticity
+  or source-to-compiled edge proof. Complete fact/NDJSON and retained-source
+  admission remains the separate native parent gate's responsibility.
+- Focused regression passed 85/85, zero failed/skipped (54 seconds), across
+  combine, attachment production and native execution. Cases cover exact hashes,
+  unchanged input bytes, original fact IDs, escaped URI paths, wrong parent/index
+  manifests, duplicate/missing contracts, sidecars, role/aggregate byte budgets,
+  pre-cancellation, existing output preservation and absence of implicit links.
+  No compiler/analyzer warnings were emitted; `git diff --check` passed.
+- An initial fixture hit macOS's temporary-path alias; it now uses the physical
+  path required by the contract. SQLite ATTACH needed the owned main connection
+  opened in URI mode; the positive escaped-path regression pins that behavior.
+  A reused index locator must still pass a smaller manifest-role limit; streamed
+  hashing and fixed-size manifest reads reject growth instead of allocating it.
+- Reporting consumption, per-edge attachment context, native report checkpoints
+  and public method-chain parity are next. This is not final workflow acceptance;
+  the 2,528-test full result above belongs to `fd13069c`, before this contract.
 
 ## Active native workflow goal (2026-09-28)
 
