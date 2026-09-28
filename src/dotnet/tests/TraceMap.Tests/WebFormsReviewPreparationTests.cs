@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using TraceMap.Cli;
 using TraceMap.Core;
 
@@ -185,9 +186,9 @@ public sealed class WebFormsReviewPreparationTests
     }
 
     [Theory]
-    [InlineData("pages", "PAGE_RECEIPT_LIMIT_REQUIRES_PARTITION")]
-    [InlineData("published", "PUBLISHED_RECEIPT_LIMIT_REQUIRES_PARTITION")]
-    public async Task Receipt_limits_are_separate_from_scan_limits_and_never_raised_silently(string kind, string suffix)
+    [InlineData("pages", "MAPLESS_WEB_ASSEMBLY_UNAVAILABLE")]
+    [InlineData("published", "METADATA_INPUT_NOT_UNIQUELY_ADMITTED")]
+    public async Task Larger_inventory_does_not_bypass_mapless_or_metadata_admission(string kind, string suffix)
     {
         using var fixture = new Fixture();
         if (kind == "pages")
@@ -217,6 +218,160 @@ public sealed class WebFormsReviewPreparationTests
         Assert.Equal(1, await fixture.Prepare());
         Assert.Contains("WEBFORMS_PREPARATION_" + suffix, fixture.Error.ToString(), StringComparison.Ordinal);
         Assert.False(Directory.Exists(fixture.Evidence));
+    }
+
+    [Theory]
+    [InlineData(true, false)]
+    [InlineData(false, false)]
+    [InlineData(true, true)]
+    [InlineData(false, true)]
+    public async Task Larger_declared_inventory_is_partitioned_pinned_and_run_without_copying_inputs(bool allPages, bool attach)
+    {
+        using var fixture = new Fixture();
+        fixture.AddLargePublicInventory(allPages);
+        Dictionary<string, string>? parentBefore = null;
+        if (attach)
+        {
+            var parent = Path.Combine(fixture.Root, "source-parent");
+            Assert.Equal(0, await TraceMapCommand.RunAsync(["scan", "--repo", fixture.Source, "--out", parent,
+                "--syntax-only", "true", "--retain-source-snapshot"], fixture.Output, fixture.Error));
+            fixture.Config = fixture.Config with { Operation = "attach", ParentScanRoot = parent };
+            parentBefore = fixture.Hashes(parent);
+        }
+        var sourceBefore = fixture.Hashes(fixture.Source); var publishedBefore = fixture.Hashes(fixture.Published);
+        Assert.Equal(0, await fixture.Prepare());
+        Assert.Equal(string.Empty, fixture.Error.ToString());
+        var manifest = fixture.Manifest();
+        Assert.Equal("bound", manifest.PublishInspection.Status);
+        Assert.Equal(allPages ? 67 : 1, manifest.PublishInspection.PageCount);
+        Assert.Equal(368, manifest.PublishInspection.SourceFileCount);
+        Assert.Equal(69, manifest.PublishInspection.PublishedFileCount);
+        foreach (var pair in sourceBefore) Assert.Equal(pair.Value, Hash(pair.Key));
+        foreach (var pair in publishedBefore) Assert.Equal(pair.Value, Hash(pair.Key));
+        Assert.Equal(sourceBefore.Count, fixture.Hashes(fixture.Source).Count);
+        Assert.Equal(publishedBefore.Count, fixture.Hashes(fixture.Published).Count);
+        var partitions = manifest.Artifacts.Where(item => item.RelativePath.StartsWith("publish-partitions/", StringComparison.Ordinal)).ToArray();
+        Assert.Equal(allPages ? 3 : 2, partitions.Length);
+        var inventoryOnly = 0; var pages = 0;
+        foreach (var partition in partitions)
+        {
+            Assert.Equal(partition.Sha256, Hash(Path.Combine(fixture.Evidence, partition.RelativePath)));
+            using var document = JsonDocument.Parse(File.ReadAllText(Path.Combine(fixture.Evidence, partition.RelativePath)));
+            var root = document.RootElement;
+            Assert.Equal(manifest.GeneratorSha256, root.GetProperty("receiptGeneratorSha256").GetString());
+            Assert.Equal(manifest.BoundedInputSha256, root.GetProperty("receiptInputSha256").GetString());
+            Assert.InRange(root.GetProperty("sourceFiles").GetArrayLength(), 1, 256);
+            Assert.InRange(root.GetProperty("publishedFiles").GetArrayLength(), 1, 64);
+            var count = root.GetProperty("pages").GetArrayLength(); Assert.InRange(count, 0, 32); pages += count;
+            if (root.GetProperty("schemaVersion").GetString() == WebFormsReviewPreflightCommand.PublishInventorySchema)
+            { inventoryOnly++; Assert.Equal(0, count); }
+        }
+        Assert.Equal(allPages ? 67 : 1, pages); Assert.Equal(allPages ? 0 : 1, inventoryOnly);
+        var run = Path.Combine(fixture.Root, "partitioned-run");
+        Assert.Equal(0, await TraceMapCommand.RunAsync(["webforms-review", "preflight", "--config", fixture.PreparedConfig, "--out", run], fixture.Output, fixture.Error));
+        var plan = JsonSerializer.Deserialize<WebFormsReviewPreflightManifest>(File.ReadAllText(Path.Combine(run, "run-manifest.json")), JsonOptions)!;
+        Assert.Equal(partitions.Length, plan.Inputs.Count(input => input.Role == "publish-receipt-partition"));
+        foreach (var partition in partitions)
+            Assert.Contains(plan.Inputs, input => input.Role == "publish-receipt-partition" && input.Sha256 == partition.Sha256);
+        Assert.Equal(0, await TraceMapCommand.RunAsync(["webforms-review", "run", "--run", run], fixture.Output, fixture.Error));
+        var completed = JsonSerializer.Deserialize<WebFormsReviewCheckpoint>(File.ReadAllText(Path.Combine(run, "checkpoints", "0004.json")), JsonOptions)!;
+        Assert.Equal("reports-completed-review-only", completed.State);
+        Assert.Equal(allPages ? 67 : 1, completed.Reports!.Surfaces);
+        var handoff = JsonSerializer.Deserialize<NativeWebFormsReviewHandoff>(File.ReadAllText(Path.Combine(run,
+            completed.Reports.ReportAttempt, WebFormsReviewReportExecution.HandoffName)), JsonOptions)!;
+        Assert.Equal(allPages ? 67 : 1, handoff.Packet.Surfaces.Count);
+        Assert.DoesNotContain("AllPagesCompiledReceiptPartitioningPending", handoff.Gaps);
+        if (allPages) Assert.Contains("AllPagesPublicationCompletenessNotEstablished", handoff.Gaps);
+        Assert.Equal(partitions.Length, handoff.InputInventory.Count(input => input.Role == "publish-receipt-partition"));
+        Assert.Equal(0, await TraceMapCommand.RunAsync(["webforms-review", "resume", "--run", run], fixture.Output, fixture.Error));
+        if (parentBefore is not null)
+        {
+            foreach (var pair in parentBefore) Assert.Equal(pair.Value, Hash(pair.Key));
+            Assert.Equal(parentBefore.Count, fixture.Hashes(fixture.Config.ParentScanRoot!).Count);
+        }
+        File.AppendAllText(Path.Combine(fixture.Evidence, partitions[0].RelativePath), " ");
+        Assert.Equal(1, await TraceMapCommand.RunAsync(["webforms-review", "resume", "--run", run], fixture.Output, fixture.Error));
+        Assert.Equal(4, Directory.GetFiles(Path.Combine(run, "checkpoints"), "*.json").Length);
+        Assert.DoesNotContain(fixture.Source, fixture.Error.ToString(), StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(20_481)]
+    public async Task Publish_inventory_budget_requires_a_valid_explicit_value(int maximum)
+    {
+        using var fixture = new Fixture();
+        fixture.Config = fixture.Config with { Budgets = fixture.Config.Budgets with { MaxPublishInputFiles = maximum } };
+        Assert.Equal(1, await fixture.Prepare());
+        Assert.Contains("WEBFORMS_PREFLIGHT_BUDGET_INVALID", fixture.Error.ToString(), StringComparison.Ordinal);
+        Assert.False(Directory.Exists(fixture.Evidence));
+    }
+
+    [Fact]
+    public async Task Larger_publication_budget_does_not_raise_compiled_or_follow_on_input_budget()
+    {
+        using var fixture = new Fixture();
+        fixture.Config = fixture.Config with { Budgets = fixture.Config.Budgets with { MaxInputFiles = 3, MaxPublishInputFiles = 2048 } };
+        Assert.Equal(1, await fixture.Prepare());
+        Assert.Contains("WEBFORMS_PREPARATION_FOLLOW_ON_INPUT_COUNT_LIMIT", fixture.Error.ToString(), StringComparison.Ordinal);
+        Assert.False(Directory.Exists(fixture.Evidence));
+    }
+
+    [Fact]
+    public async Task Partition_receipts_must_fit_the_follow_on_hash_byte_budget_before_publication()
+    {
+        using var fixture = new Fixture(); fixture.AddLargePublicInventory(allPages: true); fixture.Save();
+        var plan = await WebFormsReviewPreflightCommand.BuildAsync(fixture.ConfigPath, fixture.Evidence);
+        fixture.Config = fixture.Config with { Budgets = fixture.Config.Budgets with { MaxTotalHashBytes = plan.Inputs.Sum(input => input.Bytes) + 1024 } };
+        Assert.Equal(1, await fixture.Prepare());
+        Assert.Contains("WEBFORMS_PREPARATION_FOLLOW_ON_HASH_BYTES_LIMIT", fixture.Error.ToString(), StringComparison.Ordinal);
+        Assert.False(Directory.Exists(fixture.Evidence));
+    }
+
+    [Fact]
+    public async Task Existing_configs_do_not_implicitly_opt_in_to_larger_declared_inventory()
+    {
+        using var fixture = new Fixture(); fixture.AddLargePublicInventory(allPages: true);
+        fixture.Config = fixture.Config with { Budgets = fixture.Config.Budgets with { MaxPublishInputFiles = null } };
+        Assert.Equal(1, await fixture.Prepare());
+        Assert.Contains("WEBFORMS_PREFLIGHT_CONFIG_INVALID", fixture.Error.ToString(), StringComparison.Ordinal);
+        Assert.False(Directory.Exists(fixture.Evidence));
+    }
+
+    [Theory]
+    [InlineData("tamper", "PUBLISH_PARTITION_MISMATCH")]
+    [InlineData("escape", "RELATIVE_PATH_INVALID")]
+    [InlineData("nested", "PUBLISH_RECEIPT_INVALID")]
+    [InlineData("duplicate", "PUBLISH_RECEIPT_INVALID")]
+    [InlineData("page-limit", "PUBLISH_RECEIPT_LIMIT_OR_SHAPE_INVALID")]
+    public async Task Invalid_partition_inventory_never_creates_a_run_or_exposes_input_paths(string mutation, string suffix)
+    {
+        using var fixture = new Fixture(); fixture.AddLargePublicInventory(allPages: true);
+        Assert.Equal(0, await fixture.Prepare());
+        var rootPath = Path.Combine(fixture.Evidence, "publish-receipt.local.json");
+        var root = JsonNode.Parse(File.ReadAllText(rootPath))!.AsObject();
+        var partitions = root["partitions"]!.AsArray();
+        var first = partitions[0]!.AsObject();
+        var partPath = Path.Combine(fixture.Evidence, first["path"]!.GetValue<string>());
+        switch (mutation)
+        {
+            case "tamper": File.AppendAllText(partPath, " "); break;
+            case "escape": first["path"] = "../outside.json"; break;
+            case "nested": File.WriteAllText(partPath, root.ToJsonString()); first["sha256"] = Hash(partPath); break;
+            case "duplicate": partitions[1] = first.DeepClone(); break;
+            case "page-limit":
+                var part = JsonNode.Parse(File.ReadAllText(partPath))!.AsObject();
+                var pages = part["pages"]!.AsArray(); pages.Add(pages[0]!.DeepClone());
+                File.WriteAllText(partPath, part.ToJsonString()); first["sha256"] = Hash(partPath); break;
+        }
+        File.WriteAllText(rootPath, root.ToJsonString());
+        var run = Path.Combine(fixture.Root, "invalid-partition-run");
+        fixture.Output.GetStringBuilder().Clear(); fixture.Error.GetStringBuilder().Clear();
+        Assert.Equal(1, await TraceMapCommand.RunAsync(["webforms-review", "preflight", "--config", fixture.PreparedConfig, "--out", run], fixture.Output, fixture.Error));
+        Assert.Contains("WEBFORMS_PREFLIGHT_" + suffix, fixture.Error.ToString(), StringComparison.Ordinal);
+        Assert.False(Directory.Exists(run));
+        Assert.DoesNotContain(fixture.Source, fixture.Error.ToString(), StringComparison.Ordinal);
+        Assert.DoesNotContain(fixture.Published, fixture.Error.ToString(), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -292,6 +447,29 @@ public sealed class WebFormsReviewPreparationTests
         public string[] Arguments(string? attestation = "default") => attestation is null ? ["prepare", "--config", ConfigPath, "--out", Evidence]
             : ["prepare", "--config", ConfigPath, "--out", Evidence, "--attest-exact-source-commit", attestation == "default" ? Config.SourceCommitSha : attestation];
         public void Save() => File.WriteAllText(ConfigPath, JsonSerializer.Serialize(Config, JsonOptions));
+        public void AddLargePublicInventory(bool allPages)
+        {
+            var sources = new List<string> { "Pages/Lookup.aspx", "Pages/Lookup.aspx.vb" };
+            var maps = new List<string> { "Lookup.aspx.compiled" };
+            for (var number = 1; number < 67; number++)
+            {
+                var page = $"Pages/Public{number:D3}.aspx"; var map = $"Public{number:D3}.aspx.compiled";
+                File.WriteAllText(Path.Combine(Source, page), "<%@ Page Language=\"VB\" Inherits=\"Public.Page\" %>");
+                File.WriteAllText(Path.Combine(Published, map), $"<preserve virtualPath=\"/prefix/{page}\" assembly=\"CompiledEvidence.CSharp\" type=\"Public.Page\" />");
+                sources.Add(page); maps.Add(map);
+            }
+            Directory.CreateDirectory(Path.Combine(Source, "App_Code"));
+            for (var number = 0; number < 300; number++)
+            {
+                var path = $"App_Code/Extra{number:D3}.vb";
+                File.WriteAllText(Path.Combine(Source, path), $"Public Class Extra{number:D3}\nEnd Class\n"); sources.Add(path);
+            }
+            Git("add", "."); Git("commit", "-qm", "public partitioned source inventory");
+            Config = Config with { SourceCommitSha = GitMetadataProvider.Detect(Source).CommitSha,
+                PageMode = allPages ? "all" : "selected", PageRelativePaths = allPages ? [] : ["Pages/Lookup.aspx"],
+                SourceFolders = ["Pages", "App_Code"], PublishSourceRelativePaths = sources.ToArray(), PageMaps = maps.ToArray(),
+                Budgets = Config.Budgets with { MaxPublishInputFiles = 2048 } };
+        }
         public async Task<int> Prepare(string? attestation = "default") { Save(); Output.GetStringBuilder().Clear(); Error.GetStringBuilder().Clear();
             return await TraceMapCommand.RunAsync(["webforms-review", .. Arguments(attestation)], Output, Error); }
         public WebFormsReviewPreparationManifest Manifest() => JsonSerializer.Deserialize<WebFormsReviewPreparationManifest>(File.ReadAllText(Path.Combine(Evidence, "preparation-manifest.local.json")), JsonOptions)!;

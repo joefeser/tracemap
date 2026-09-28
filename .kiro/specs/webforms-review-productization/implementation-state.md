@@ -1,5 +1,35 @@
 # Web Forms Review Productization Implementation State
 
+## Native partition preparation and pinning (2026-09-28)
+
+- Continued on `codex/webforms-native-preflight` in the managed attachment
+  checkout, based on `b093b98c`. Native preparation now emits deterministic
+  bounded page and inventory partitions and validates exact global source,
+  published-file and page counts through Core before publishing an evidence root.
+- Preflight and resume pin every partition. A separately opted-in publication
+  inventory budget preserves old flat admission when omitted and leaves compiled
+  metadata limits unchanged. Follow-on input count and actual hash-byte refusal occur before the
+  final evidence directory is published; failed staging remains unadmitted.
+- Four public integrated cases cover selected/all-page fresh and immutable
+  attachment workflows with 67 declared pages, 368 source files and 69 published
+  files. They retain original source/published/parent hashes, exact generator and
+  bounded-input commitments, checkpointed reports and lossless partition handoff.
+  Completed resume succeeds; changed partition bytes cannot create a checkpoint.
+- Existing larger-inventory refusal tests now assert mapless/metadata admission
+  rather than obsolete single-receipt count caps. Partitioning does not bypass
+  binary admission or turn declared page mappings into compilation proof.
+- Final focused preparation/preflight/receipt-set validation passed 97/97, zero
+  failed or skipped, in 1 minute 14 seconds with no introduced build warnings.
+  This includes the follow-on actual hash-byte budget guard. Before that final
+  additive guard, the broader Web Forms/attachment/grouped suite passed 502/502
+  in 2 minutes 53 seconds. A real CLI syntax-only public sample scan completed
+  with 136 facts in the ignored owned output
+  `output/native-receipt-set-smoke-native-b093b98c`.
+  The full regression at the final committed source head remains required. Public
+  Windows compilation parity, representative eight-times scale, bounded global
+  graph processing, legacy presentation parity and retention remain open. No
+  private proof dependencies were deleted and no PR or merge was performed.
+
 ## Publish receipt partition contract (2026-09-28)
 
 - Continued on `codex/webforms-native-preflight` based on `199ee4a2`.

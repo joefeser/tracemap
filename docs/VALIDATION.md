@@ -3946,6 +3946,23 @@ and per-partition bounds, an explicit 64-partition cap and conservative 8 GiB
 artifact read/hash admission. No source/build/runtime completeness is inferred.
 
 The existing PowerShell preparer still has its original single-receipt bounds.
-Native partition preparation/preflight integration, the public Windows compiled
-Web Site parity checks and representative eight-times memory/disk/time validation
-remain required; these reader tests do not replace those gates.
+Native preparation now emits deterministic sets when declared inventory exceeds
+one receipt, and preflight/resume pins every member. The separate optional
+`budgets.maxPublishInputFiles` admits publication inventory without silently
+raising compiled metadata or other input budgets; omitted budgets retain legacy
+admission. Follow-on configuration input-count and hash-byte admission is checked
+before publication, including the actual newly generated receipt/config bytes.
+
+```text
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter "FullyQualifiedName~WebFormsReviewPreflightTests|FullyQualifiedName~WebFormsReviewPreparationTests|FullyQualifiedName~WebFormsPublishReceiptSetTests"
+```
+
+Public integration fixtures cover selected/all-page scope, both fresh scans and
+immutable attachment, 67 declared pages, 368 sources and 69 publication files.
+They check Core's global counts, partition caps and hashes, completed workbench
+navigation inventories, lossless handoff membership, immutable inputs and resume
+tamper rejection. Negative cases cover escaped/nested/duplicated/tampered or
+over-page-limit members and explicit/default budget boundaries. These are declared
+inventory fixtures using public PE inputs, not an ASP.NET compilation parity proof.
+The public Windows compiled Web Site parity checks and representative eight-times
+memory/disk/time validation remain required.
