@@ -1,5 +1,53 @@
 # Web Forms Review Productization Implementation State
 
+## Indexed bounded combined graph (2026-09-28)
+
+- Continued on `codex/webforms-native-preflight` based on `6562aa86`, whose exact
+  committed runtime passed 2,648/2,648 full regression tests in 10 minutes 55
+  seconds. Source changes below were not rebuilt during that live regression.
+- Bounded combined reports now construct nodes/edges directly in a private
+  temporary SQLite graph, rather than constructing a complete managed graph and
+  spilling it afterward. Exact node/edge IDs remain authoritative. Complete
+  source-namespaced alias membership is indexed and one alias group is loaded at
+  a time; outgoing adjacency is fetched by exact node ID. Dispatch receives a
+  lazy exact-node facade, preserving all competitors and ordinal enumeration.
+- Scratch storage records actual Reporting DLL/input-index SHA-256 and effective
+  storage quota, uses an 8 MiB page cache and defaults to a 512 MiB logical
+  database ceiling. The input is rehashed before returning a report. SQLite owns
+  the temporary file; it is never an emitted/reusable run artifact. Input/proof
+  files are not written or deleted. Storage refusal discards every partial path.
+- Initial focused validation exposed incomplete scratch schema initialization
+  under an artificially tiny quota. Setup now executes/validates each schema
+  statement, refuses insufficient header budgets and tests actual graph growth
+  refusal with a 64 KiB quota. The repaired memory/parity suite passed 30/30.
+- Complete serialized report parity passed for 32/256 public synthetic pages,
+  retaining 224/1,792 nodes and 96/768 edges. Logical storage was 487,424/3,534,848
+  bytes; maximum outgoing rows loaded was one in both cases. This is an 8x page
+  ratio, not representative source/compiled-distribution or peak-memory proof.
+  The wider native suite passed 575/575 in 4 minutes 4 seconds before the final
+  branch-order/cancellation tests and metadata-budget field. After those final
+  changes, the rebuilt focused suite passed 90/90 in 39 seconds, zero failed or
+  skipped, without introduced compiler/analyzer warnings. Exact-head full
+  regression for this indexed slice remains pending.
+- Global admitted fact rows and compiled/dispatch semantic indexes remain
+  managed, and one adversarial alias or outgoing group can still have high
+  fan-out. Sorter scratch files are outside the logical database ceiling. Total
+  disk/time/peak-memory benchmarks, effective phase usage reporting, source/graph
+  allocation completion, real Windows parity and retention/relocation remain
+  active goal work. The overall indexed-graph/scale task remains unchecked.
+- Final source-admission review found that a canonical fact namespace with no
+  source metadata could be skipped by per-source projection. It now fails with
+  `COMBINED_FACT_SOURCE_UNAVAILABLE`; a regression pins unchanged input bytes and
+  prevents silently removing a global competitor. Storage refusal also retains
+  the already-read source metadata. Final rebuilt focused validation passed
+  91/91 in 36 seconds, zero failed or skipped, after these guards. Exact-head
+  full regression for the indexed slice remains pending.
+- The isolated warmed allocation fixture passes with the indexed backend:
+  69,309,224 full-reader bytes versus 14,753,680 indexed compact-reader bytes,
+  retaining all 1,005 facts. This is more total allocation than the earlier
+  in-memory compact reader because indexed lookups deserialize records; no
+  peak-memory or end-to-end performance improvement is inferred from it.
+
 ## Combined graph property allocation runway (2026-09-28)
 
 - Continued on `codex/webforms-native-preflight` based on `c06a406e` after its
@@ -19,7 +67,10 @@
   focused suite passed 85/85 in 38 seconds. The wider native regression passed
   572/572 in 3 minutes 53 seconds. After the final legacy/declared-surface
   projection guard, the rebuilt focused suite passed 85/85 in 49 seconds, zero
-  failed or skipped. Exact-head full regression for this slice remains pending.
+  failed or skipped. Exact-head full regression at
+  `6562aa86809a36246e7ed1428c26179d3bd86997` passed 2,648/2,648, zero failed or
+  skipped, in 10 minutes 55 seconds. Its actual CLI sample scan also completed
+  with 136 facts in ignored owned `output/native-receipt-set-smoke-6562aa86`.
 - An isolated warmed 1,005-row public fixture retained identical complete path
   JSON while allocating 69,237,792 managed bytes with the full reader versus
   4,849,728 with the final compact reader; retained projected text was 236,491 bytes.

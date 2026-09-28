@@ -94,6 +94,7 @@ public static partial class CombinedDependencyPathReporter
         ValidateOptions(options);
         var sourcePair = ParseSourcePair(options.SourcePair);
         IReadOnlyList<CombinedReportSource> sources = [];
+        IndexedGraphStore? store = null;
         try
         {
             await using (var connection = new SqliteConnection(new SqliteConnectionStringBuilder
@@ -116,6 +117,8 @@ public static partial class CombinedDependencyPathReporter
                 sources = (await CombinedDependencyReporter.ReadSourcesAsync(connection, cancellationToken))
                     .Select(row => row.Source).ToArray();
 
+                store = await CreateIndexedGraphStoreAsync(options.IndexPath, budget.MaxGraphStorageBytes, cancellationToken);
+
                 await AssertCombinedInputLimitAsync(connection, "combined_facts", budget.MaxFacts, "graph-facts", cancellationToken);
                 if (await ViewExistsAsync(connection, "combined_dependency_edges", cancellationToken))
                 {
@@ -135,8 +138,11 @@ public static partial class CombinedDependencyPathReporter
                 options.IncludeLegacyRoots || IsLegacyView(options.View),
                 allowSingleIndex: false,
                 cancellationToken,
-                budget);
-            return BuildReportWithTraversalObservations(options, read, graph, sourcePair);
+                budget,
+                store);
+            var result = BuildReportWithTraversalObservations(options, read, graph, sourcePair);
+            await store.AssertInputUnchangedAsync(options.IndexPath, cancellationToken);
+            return result with { GraphStorage = store.Observe(graph.Outgoing) };
         }
         catch (ReportInputLimitException exception)
         {
@@ -159,6 +165,7 @@ public static partial class CombinedDependencyPathReporter
                 },
                 new Dictionary<string, CombinedDependencyTraversalObservation>(StringComparer.Ordinal));
         }
+        finally { store?.Dispose(); }
     }
 
     private static async Task AssertCombinedInputLimitAsync(

@@ -455,7 +455,8 @@ public static partial class CombinedDependencyPathReporter
         bool includeLegacyRoots,
         bool allowSingleIndex,
         CancellationToken cancellationToken,
-        ReportInputBudget? budget = null)
+        ReportInputBudget? budget = null,
+        IndexedGraphStore? graphStorage = null)
     {
         var connectionString = new SqliteConnectionStringBuilder
         {
@@ -474,7 +475,7 @@ public static partial class CombinedDependencyPathReporter
         var read = await ReadPathIndexAsync(connection, indexPath, allowSingleIndex, cancellationToken, budget);
         var endpointFindings = CombinedDependencyReporter.MatchEndpoints(read.Sources, read.Facts);
         var surfaces = CombinedDependencyReporter.BuildSurfaces(read.Facts, read.Sources);
-        var graph = BuildGraph(read, endpointFindings, surfaces, sourcePair, includeLegacyRoots, budget);
+        var graph = BuildGraph(read, endpointFindings, surfaces, sourcePair, includeLegacyRoots, budget, graphStorage);
         return (read, graph);
     }
 
@@ -953,9 +954,10 @@ public static partial class CombinedDependencyPathReporter
         IReadOnlyList<CombinedDependencySurfaceRow> surfaces,
         (string Client, string Server)? sourcePair,
         bool includeLegacyRoots,
-        ReportInputBudget? budget = null)
+        ReportInputBudget? budget = null,
+        IndexedGraphStore? graphStorage = null)
     {
-        var graph = new EvidenceGraph(read.Sources, budget);
+        var graph = new EvidenceGraph(read.Sources, budget, graphStorage);
         var factsById = read.Facts.ToDictionary(fact => fact.CombinedFactId, StringComparer.Ordinal);
         foreach (var fact in read.Facts.OrderBy(fact => fact.CombinedFactId, StringComparer.Ordinal))
         {
@@ -2539,13 +2541,7 @@ public static partial class CombinedDependencyPathReporter
 
     private static void AddSymbolReconciliationEdges(EvidenceGraph graph)
     {
-        var symbolNodes = graph.Nodes.Values
-            .Where(node => node.NodeKind is "Symbol" or "Method" or "Type")
-            .Select(node => (Node: node, Alias: TryCreateSymbolAlias(node.DisplayName)))
-            .Where(pair => pair.Alias is not null)
-            .Select(pair => (pair.Node, Alias: pair.Alias!))
-            .GroupBy(pair => $"{pair.Node.SourceIndexId}\0{pair.Alias.MemberKey}", pair => pair, StringComparer.Ordinal)
-            .ToArray();
+        var symbolNodes = graph.SymbolReconciliationGroups();
 
         foreach (var group in symbolNodes)
         {
@@ -3794,25 +3790,7 @@ public static partial class CombinedDependencyPathReporter
         var relationshipEdges = graph.Edges
             .Where(edge => edge.EdgeKind is "implements" or "inherits" or "overrides")
             .ToArray();
-        var candidateNodes = graph.Nodes.Keys
-            .OrderBy(value => value, StringComparer.Ordinal)
-            .ToDictionary(
-                id => id,
-                id =>
-                {
-                    var node = graph.Nodes[id];
-                    return new StaticDispatchCandidateNode(
-                        node.NodeId,
-                        node.NodeKind,
-                        node.DisplayName,
-                        node.SourceIndexId,
-                        node.SourceLabel,
-                        node.CommitSha,
-                        node.FilePath,
-                        node.StartLine,
-                        node.EndLine);
-                },
-                StringComparer.Ordinal);
+        var candidateNodes = new DispatchGraphNodes(graph.Nodes);
         var registrations = facts
             .Where(fact => fact.FactType == FactTypes.DependencyRegistered)
             .Select(ToStaticDispatchRegistrationFact)
@@ -6567,18 +6545,32 @@ public static partial class CombinedDependencyPathReporter
         return text[..Math.Min(length, text.Length)];
     }
 
-    private sealed class EvidenceGraph(IReadOnlyList<CombinedReportSource> sources, ReportInputBudget? budget = null)
+    private sealed class EvidenceGraph(IReadOnlyList<CombinedReportSource> sources, ReportInputBudget? budget = null,
+        IndexedGraphStore? store = null)
     {
-        public Dictionary<string, GraphNode> Nodes { get; } = new(StringComparer.Ordinal);
-        public List<GraphEdge> Edges { get; } = [];
-        public Dictionary<string, GraphEdge> EdgesById { get; } = new(StringComparer.Ordinal);
-        public Dictionary<string, List<GraphEdge>> Outgoing { get; } = new(StringComparer.Ordinal);
+        public GraphNodes Nodes { get; } = new(store);
+        public GraphEdges Edges { get; } = new(store);
+        public GraphEdgeIds EdgesById { get; } = new(store);
+        public GraphOutgoing Outgoing { get; } = new(store);
         public HashSet<string> CallFactSourceNodeIds { get; } = new(StringComparer.Ordinal);
         public HashSet<string> MethodInvocationSourceNodeIds { get; } = new(StringComparer.Ordinal);
         public HashSet<string> SourceBodyEvidenceNodeIds { get; } = new(StringComparer.Ordinal);
         public HashSet<string> ExactMethodDeclarationNodeIds { get; } = new(StringComparer.Ordinal);
         public List<CombinedPathGap> Gaps { get; } = [];
         private readonly Dictionary<string, CombinedReportSource> sourcesById = sources.ToDictionary(source => source.SourceIndexId, StringComparer.Ordinal);
+
+        public IEnumerable<IReadOnlyList<(GraphNode Node, SymbolAlias Alias)>> SymbolReconciliationGroups()
+        {
+            if (store is not null) return store.SymbolReconciliationGroups();
+            return Nodes.Values
+                .Where(node => node.NodeKind is "Symbol" or "Method" or "Type")
+                .Select(node => (Node: node, Alias: TryCreateSymbolAlias(node.DisplayName)))
+                .Where(pair => pair.Alias is not null)
+                .Select(pair => (pair.Node, Alias: pair.Alias!))
+                .GroupBy(pair => $"{pair.Node.SourceIndexId}\0{pair.Alias.MemberKey}", pair => pair, StringComparer.Ordinal)
+                .Select(group => (IReadOnlyList<(GraphNode Node, SymbolAlias Alias)>)group.ToArray())
+                .ToArray();
+        }
 
         public string? ScannerVersionFor(string sourceIndexId)
         {
@@ -6670,6 +6662,7 @@ public static partial class CombinedDependencyPathReporter
                 throw new ReportInputLimitException("graph-edges");
 
             Edges.Add(edge);
+            if (store is not null) return;
             EdgesById[edge.EdgeId] = edge;
             if (!Outgoing.TryGetValue(edge.FromNodeId, out var list))
             {
@@ -6683,7 +6676,7 @@ public static partial class CombinedDependencyPathReporter
         public void Sort()
         {
             Edges.Sort(CompareEdges);
-            foreach (var pair in Outgoing)
+            foreach (var pair in Outgoing.MemoryEntries)
             {
                 pair.Value.Sort(CompareEdges);
             }
@@ -6718,7 +6711,10 @@ public static partial class CombinedDependencyPathReporter
 
     internal sealed record CombinedDependencyPathBuildResult(
         CombinedDependencyPathReport Report,
-        IReadOnlyDictionary<string, CombinedDependencyTraversalObservation> TraversalByStartingFactId);
+        IReadOnlyDictionary<string, CombinedDependencyTraversalObservation> TraversalByStartingFactId)
+    {
+        internal IndexedGraphUsage? GraphStorage { get; init; }
+    }
 
     internal sealed record CombinedDependencyTraversalObservation(
         int ReachedNodeCount,

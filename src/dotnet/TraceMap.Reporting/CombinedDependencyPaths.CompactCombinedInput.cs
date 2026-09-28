@@ -14,9 +14,19 @@ public static partial class CombinedDependencyPathReporter
     {
         await using (var identity = connection.CreateCommand())
         {
-            identity.CommandText = "select exists(select 1 from combined_facts where combined_fact_id <> source_index_id || ':' || original_fact_id);";
+            identity.CommandText = """
+                select exists(select 1 from combined_facts where combined_fact_id is null
+                    or source_index_id is null or original_fact_id is null
+                    or combined_fact_id <> source_index_id || ':' || original_fact_id);
+                """;
             if (Convert.ToInt64(await identity.ExecuteScalarAsync(token)) != 0)
                 throw new InvalidDataException("COMBINED_FACT_NAMESPACE_INVALID");
+            identity.CommandText = """
+                select exists(select 1 from combined_facts f where not exists
+                    (select 1 from index_sources s where s.source_index_id=f.source_index_id));
+                """;
+            if (Convert.ToInt64(await identity.ExecuteScalarAsync(token)) != 0)
+                throw new InvalidDataException("COMBINED_FACT_SOURCE_UNAVAILABLE");
         }
         var rows = new List<CombinedFactRow>();
         foreach (var source in sources.OrderBy(source => source.SourceIndexId, StringComparer.Ordinal))

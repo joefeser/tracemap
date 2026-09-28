@@ -2539,7 +2539,7 @@ rules:
       - The full retained page packet and original verdicts remain authoritative for page chains. Compiled paths are a separate review-only supplement, not runtime SQL execution, page activation or source-line identity.
       - Actual CLI and Reporting generator hashes, exact combined-index bytes, canonical packet/manifests and grouped handoff hashes bind the root JSON. These are private local integrity commitments, not signed build authenticity or shareable fingerprints.
       - Existing public packet semantics are preserved; parity with every legacy PowerShell presentation feature and a real private Windows compiled site remains a separate gate.
-      - Configurable graph admission, root, traversal, projection and aggregate rendered-output bounds fail closed. The combined graph still materializes after bounded admission; representative eight-times time, disk and peak-memory acceptance is unverified.
+      - Configurable graph admission, root, traversal, projection and aggregate rendered-output bounds fail closed. Bounded combined nodes/edges use an indexed temporary graph; fact rows and global semantic ambiguity indexes remain managed. Representative eight-times time, total disk and peak-memory acceptance is unverified.
       - All-page mode remains limited by admitted page packet and receipt membership; complete receipt partitioning and all-pages compiled coverage are explicitly pending. No dependency cleanup, relocation or external publication occurs.
   - id: workflow.webforms.bounded-evidence-query.v1
     name: Private indexed native Web Forms evidence retrieval
@@ -2923,7 +2923,7 @@ rules:
       - The local-only packet omits snippets, raw SQL, configuration values, URLs, connection strings, credentials, source values, repository remotes, and absolute local paths.
       - Web Forms packet input admission bounds retained fact and edge rows, UTF-8 text bytes, per-row size, and graph nodes/edges; these are deterministic admission limits, not a hard OS working-set guarantee. On admission failure, WebFormsModernizationInputLimitReached preserves admitted inventory but no downstream paths or absence classifications are derived from the incomplete graph.
       - A closed audited set of graph-inert syntax facts may be compacted to symbol witnesses; unknown types, declared dependency surfaces, legacy rules, supporting evidence IDs, and repository-wide symbol competitors are preserved. This is not root-specific lazy graph loading.
-      - Bounded combined readers retain every fact row and global source namespace while projecting only the audited graph-consumed properties in SQLite before managed allocation. Source-symbol IDs, VB member/body spans and namespace/import context required by compiled bridges remain explicit. Full facts stay unchanged in the retained index; this does not remove the raw combined admission ceilings or full graph materialization.
+      - Bounded combined readers retain every fact row and global source namespace while projecting only the audited graph-consumed properties in SQLite before managed allocation. Source-symbol IDs, VB member/body spans and namespace/import context required by compiled bridges remain explicit. Full facts stay unchanged in the retained index. Nodes/edges and exact outgoing adjacency use private indexed scratch storage; raw admission ceilings and global fact/semantic-index allocations remain.
       - Property projection requires a bounded flat string/null object without duplicate keys. Duplicate, nested, numeric, non-object or malformed JSON stays on the applicable full parser path, preserving last-key values, the combined reader's empty malformed-properties result and the single reader's malformed-properties hash instead of coercing values into identity evidence.
 
   - id: legacy.webforms.batch-data-movement.v1
@@ -3734,6 +3734,8 @@ rules:
       - The triggering evidence span is best-effort and may point to the nearest traversed node rather than the omitted dependency.
       - Web Forms graph-input admission gaps have no source span and discard the incomplete graph before classification; they do not imply missing runtime dependencies or a clean graph.
       - Bounded combined input checks projected fact and dependency-edge text bytes before copying row strings into managed memory. Per-row or aggregate refusal discards the graph; noncanonical combined fact namespaces are malformed input, not a guessed identity or clean result.
+      - Indexed bounded combined graph storage pins the Reporting generator and exact input-index hashes and rechecks input bytes before returning a report. Its 512 MiB logical SQLite database ceiling excludes sorter scratch files and is not an OS memory bound. Storage refusal emits graph-storage-bytes and discards all partial paths; the private temporary store is never a reusable run checkpoint.
+      - Bounded per-source combined projection rejects fact rows without retained source-index metadata instead of silently omitting an unknown global competitor. Null or noncanonical fact namespaces remain malformed input, not a clean result.
 
   - id: combined.route-flow.selector.v1
     name: Route-flow selector handling
