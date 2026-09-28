@@ -2518,13 +2518,31 @@ rules:
     emits:
       - webforms-compiled-review-checkpoint.v1 local-only execution checkpoint
     limitations:
-      - Successful execution ends at scan-completed-reports-pending, not a complete compiled-site review workflow; attachment, operator publish-receipt creation, graph queries and unified reports are not implemented by this phase.
+      - Successful execution ends at scan-completed-reports-pending, not a complete compiled-site review workflow; attachment, graph queries and unified reports are not implemented by this phase. Receipt preparation is a separate explicit operator-declaration command.
       - The CLI does not build or publish the site, load assemblies at runtime, infer bindings or attest source ownership; existing receipt policy and reduced metadata/IL/PDB coverage remain authoritative.
       - Resume verifies retained inputs and outputs without a new source scan; a retained snapshot does not validate current unpinned source bytes, clean Git state, runtime behavior or SQL execution.
       - Checkpoint generator and input/payload hashes are local integrity commitments, not authenticated signatures; local-only artifacts contain private input fingerprints and must not be shared.
       - Distribution dependency bytes and runtime version participate in execution identity; external SDK/toolchain bytes are not pinned and remain an explicit gap rather than build authenticity or reproducibility proof.
       - Failed or cancelled attempt bytes are retained but not admitted as completed evidence; retry allocates a fresh owned attempt and never rewrites parent scans or old successful artifacts.
       - Configured admission bounds do not establish representative scale or bounded scanner memory; output traversal admits at most 256 filesystem entries and run history at most 256 checkpoints.
+  - id: workflow.webforms.compiled-review-preparation.v1
+    name: Private native operator-declared Web Forms receipt preparation
+    description: Inspects explicit committed source and managed publish membership, records an exact-commit operator declaration for primary DLLs, validates generated receipts through Core policy and writes pinned private receipts/config in a new evidence root without source scanning or binary copying.
+    evidenceTier: Tier2Structural
+    emits:
+      - webforms-compiled-review-preparation.v1 local-only preparation manifest
+      - compiled-input-binding-set.v1 local-only primary binding receipt
+      - webforms-publish-binding.v1 local-only publish membership receipt
+      - webforms-compiled-review-config.v1 with preparationProvenance
+    limitations:
+      - Requires explicit --attest-exact-source-commit matching the configured commit; bindings record the operator declaration, not authentic build/source ownership, freshness, runtime load, dispatch or SQL execution proof.
+      - Source membership must be explicitly declared, committed and scoped-clean. Historical compiler/build closure remains unknown; dependencies remain unbound artifact context.
+      - Declared source bytes must match committed Git blobs exactly or through explicitly recorded supported built-in CRLF normalization. Assume-unchanged edits are rejected; custom clean filters and working-tree encodings are not used to manufacture a commit match. Raw source SHA-256 and normalization-policy hashes remain explicit.
+      - Maps are explicit inputs, not a discovered physical publish inventory. Zero matching declared maps can produce only the established mapless source-type candidate; multiple matching maps fail.
+      - All mode covers only declared receipt pages and retains a completeness gap. Receipt caps are 256 source files, 64 published files and 32 pages; automatic partitioning and representative scale acceptance are not implemented.
+      - Compiler SHA is a documented unavailable-marker digest, not a compiler binary attribution. Generator/input/artifact hashes are local integrity commitments, not authenticated signatures or portability proof.
+      - Git checks have a 15-second timeout and 4194304-character per-stream cap with optional index writes disabled. JSON publication has independent bounded byte limits.
+      - Failed preparation can retain an unadmitted owned staging directory; no cleanup, implicit reuse, existing-folder overwrite, source scan, binary copy or private Windows parity occurs here.
   - id: diagnostic.webforms.saved-proof-packet.v1
     name: Focused saved Web Forms proof packet receipt
     description: Records exact generator, CLI, index, handoff, and artifact hashes for a new bounded modernization packet composed from an existing focused publish-proof index.

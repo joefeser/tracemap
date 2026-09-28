@@ -17,6 +17,20 @@ public sealed record WebFormsPublishProvenance(
     int PageCount,
     string? PublishedRootPathHash = null);
 
+/// <summary>Read-only receipt inspection through the scanner's authoritative policy. Not build or runtime proof.</summary>
+public static class WebFormsPublishInputInspector
+{
+    public static WebFormsPublishProvenance? Inspect(ScanOptions options, string scanCommitSha,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        ArgumentException.ThrowIfNullOrWhiteSpace(options.RepoPath);
+        ArgumentException.ThrowIfNullOrWhiteSpace(scanCommitSha);
+        cancellationToken.ThrowIfCancellationRequested();
+        return WebFormsPublishMapExtractor.Evaluate(Path.GetFullPath(options.RepoPath), scanCommitSha, options, cancellationToken).Provenance;
+    }
+}
+
 internal sealed record WebFormsPublishPage(string SourcePath, string AssemblyName,
     string AssemblySha256, string GeneratedType, string MapSha256);
 internal sealed record WebFormsPublishPageCandidate(string SourcePath);

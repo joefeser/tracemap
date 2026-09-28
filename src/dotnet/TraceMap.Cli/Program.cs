@@ -83,6 +83,8 @@ public static class TraceMapCommand
                 "local-review" => await LocalReviewCommand.RunAsync(rest, output, error, RunScanAsync, cancellationToken),
                 "webforms-review" => rest.FirstOrDefault() is "run" or "resume"
                     ? await WebFormsReviewExecutionCommand.RunAsync(rest, output, error, RunScanAsync, cancellationToken)
+                    : rest.FirstOrDefault() == "prepare"
+                    ? await WebFormsReviewPreparationCommand.RunAsync(rest, output, error, cancellationToken)
                     : await WebFormsReviewPreflightCommand.RunAsync(rest, output, error, cancellationToken),
                 "report" => await RunReportAsync(rest, output, error, cancellationToken),
                 "database-design-review" => await RunDatabaseDesignReviewAsync(rest, output, error, cancellationToken),
@@ -2740,7 +2742,7 @@ public static class TraceMapCommand
             Commands:
               version   Show installed build identity and bounded local readiness.
               local-review Run a guided local scan and compatible review stages.
-              webforms-review Validate a private compiled Web Forms run contract (preflight only).
+              webforms-review Validate private inputs, prepare declared receipts and checkpoint fresh scans.
               scan      Inventory a repository and emit TraceMap artifacts.
               report    Generate a combined dependency report from a combined index.
               database-design-review Compose existing PostgreSQL design, query, and route evidence.

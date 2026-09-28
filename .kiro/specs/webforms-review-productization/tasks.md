@@ -44,6 +44,10 @@
     - [x] Admit an explicit separate receipt evidence root while keeping source
       and published files read-only, old configurations compatible, and receipt
       bytes/output separation pinned across resume.
+    - [x] Add native explicit operator-declared preparation of primary binding
+      and source/publish-map receipts in a new evidence root, validate them through
+      Core policy, and generate a pinned follow-on config without copying binaries.
+      Keep all-pages receipt partitioning and compiled-site parity pending.
 - [ ] Implement .NET orchestration for source-plus-compiled runs and immutable
   attachment to a retained source scan; keep compatibility wrappers.
   - [x] Add checkpointed native fresh execution using the existing scanner and

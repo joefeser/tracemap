@@ -3,6 +3,73 @@
 Status: native preflight, input validation and checkpointed fresh scanning.
 Immutable attachment and unified review reports are still pending.
 
+## Native operator-declared receipt preparation
+
+For an authorized existing publish whose primary DLLs you can attest came from
+the exact clean source commit, the native preparation command creates receipts
+in a **new evidence folder**, without scanning source or copying published bytes:
+
+```text
+tracemap webforms-review prepare --config <private-json> --out <new-evidence-root> --attest-exact-source-commit <exact-40-character-commit>
+```
+
+This is an explicit operator declaration, not an automatic attestation or proof
+of authentic compilation. Do not supply the flag unless you can make that
+declaration. Missing/wrong attestation, dirty source, ignored/uncommitted selected
+files, absent repository origin, ambiguous maps, unadmitted/duplicate compiled
+bytes or legacy receipt limits reject publication of the new evidence folder.
+There is no prompt, TEMP search, rebuild, binary copy or existing-folder overwrite.
+
+Use a config without existing receipts or preparation provenance. Declare the
+additional source membership through `publishSourceRelativePaths`, for example
+`["Pages/Lookup.aspx.vb", "App_Code/PublicData.vb", "Web.config"]`.
+Selected page markup is included automatically. These are bounded membership
+inputs, **not** the historical compiler's complete source/config/dependency
+closure. Assembly/dependency/map/PDB declarations remain explicit. The command
+checks committed membership and clean scoped Git state, with optional Git index
+writes disabled. Each declared source is also compared with its committed Git
+blob, so assume-unchanged flags cannot hide source edits. Exact bytes or supported
+Git built-in CRLF normalization are recorded per source; normalized comparisons
+pin their attribute/config policy and retain a normalization gap. Custom clean
+filters and working-tree encodings are not used to manufacture a commit match;
+unsupported transforms fail. Raw source SHA-256 values remain unchanged by this
+comparison. Primary DLL bindings record your attestation; dependency DLLs
+remain unbound artifact context. Native Core metadata and publish-receipt policy
+inspect the generated receipts before admission.
+
+The new evidence root contains:
+
+```text
+preparation-manifest.local.json     input hashes, inspected policy outcomes, gaps and artifact hashes
+compiled-binding.local.json         only explicitly attested primary DLLs
+publish-receipt.local.json          declared source/DLL/map/page membership
+review-config.local.json            config for preflight/run with this separate receipt root
+```
+
+Each derived JSON records exact generator and bounded-input hashes, directly or
+through the config's `preparationProvenance`. The publish receipt keeps its
+established source-roster `boundedInputSha256`; `receiptInputSha256` additionally
+pins the complete preparation input, metadata inspection and attestation. These
+are local integrity/provenance commitments, not authenticated signatures.
+Compiler provenance remains unavailable; the legacy `compilerSha256` field holds
+the documented unavailable-marker digest, **not a compiler binary hash**.
+Failed preparation can retain an unadmitted owned `.webforms-preparation-*`
+staging folder; it is not a completed evidence root and is not discovered for reuse.
+
+Exact or uniquely prefixed declared maps are accepted; multiple matching maps
+fail. A page with no matching **declared** map can retain the established mapless
+source-type candidate if a declared `App_Web_` assembly exists. Physical map
+completeness is not inferred. `all` mode covers only the `.aspx` members explicitly
+declared in the preparation roster, with an all-pages completeness gap. The
+legacy per-receipt caps remain 256 source files, 64 published files and 32 pages;
+larger sets require future explicit partitioning, never an automatic limit raise.
+Git output is bounded to 4,194,304 characters per stream and 15 seconds per check.
+
+Then preflight the generated `review-config.local.json` into a separate new run
+folder and use native `run/resume` below. Receipt generation does not finish
+attachment, grouped workbench/handoff integration, all-pages partitioning or
+representative scale/private compiled-site parity. Keep the proven wrappers.
+
 The proven PowerShell proof/report workflow remains supported. Preflight alone
 does not execute scans or replace that workflow:
 
@@ -95,7 +162,7 @@ validates source membership and page-map content during the scan; bad map conten
 remains reduced coverage, not a source/compiled join. Mapless receipts retain their
 existing declared-map-inventory limitations. None of this creates an operator
 attestation, validates a historical compiler or proves the DLLs came from this
-source. Native operator-declared receipt preparation remains outstanding.
+source. Native preparation is a separate explicit operator-declaration command.
 
 Normal `scan` also supports `--webforms-published-root <absolute-path>` together
 with `--webforms-publish-receipt`. If absent, the established receipt-directory
@@ -135,6 +202,8 @@ file is relative to its configured root. No assembly discovery or upload occurs.
   "parentScanRoot": null,
   "publishReceiptRelativePath": null,
   "receiptRoot": null,
+  "publishSourceRelativePaths": null,
+  "preparationProvenance": null,
   "budgets": {
     "maxInputFiles": 128,
     "maxAssemblyBytes": 67108864,
