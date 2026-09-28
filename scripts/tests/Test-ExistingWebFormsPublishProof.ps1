@@ -176,7 +176,8 @@ try {
         Remove-Item Function:global:Read-Host -ErrorAction SilentlyContinue
     }
     if ($lowercaseLines -notcontains 'existingPublishScan=bound') {
-        throw 'EXISTING_PUBLISH_TEST_LOWERCASE_ATTESTATION_REJECTED'
+        $stage = @($lowercaseLines | Where-Object { $_ -cmatch '^(existingPublishScan|existingPublishPaths|compiledBoundInputs|compiledContextUnboundInputs|publishGapKinds)=' })
+        throw "EXISTING_PUBLISH_TEST_LOWERCASE_ATTESTATION_REJECTED;stage=$($stage -join ';')"
     }
     [IO.File]::WriteAllText($map,
         '<preserve virtualPath="/VirtualSite/Pages/Lookup.aspx" assembly="CompiledProjectless.VB" type="PublicProof.LookupPage" />',

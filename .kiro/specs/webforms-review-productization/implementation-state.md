@@ -17,6 +17,10 @@ Public claim level: hidden
 - Full .NET suite: 2,326 passed, zero failed/skipped. Focused packet/memory
   regressions: 54 passed; strengthened combined-limit publication cases: 3
   passed. Saved-packet, short-view, and application-workbench guards passed.
+- The additional existing-publish end-to-end public guard passed with a stable
+  checkout after an initial attestation-case failure overlapped a documentation
+  commit. Commit drift is a possible explanation, not a proven defect. Its
+  failure now retains categorical stage/count output for future diagnosis.
 - Operator-provided Windows readback at that checkpoint showed a successful
   saved-proof replay with 41 review-only database-api paths and one selected
   surface. Screenshots showed the workbench's supplemental link and readable
