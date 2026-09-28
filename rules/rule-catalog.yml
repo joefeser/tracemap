@@ -2497,6 +2497,19 @@ rules:
       - A zero SQL-query path may have a separate exact-handler database-api candidate path; these are different terminal claims and remain in separate local HTML and JSON outputs.
       - Saved API report reuse requires both exact input and report-byte hashes; older receipts require an explicit bounded graph recheck, not a new source scan.
       - Gap details retain available source, span, extractor and evidence identifiers; missing rules or invalid tiers reject the projection.
+  - id: workflow.webforms.compiled-review-preflight.v1
+    name: Private native compiled Web Forms run preflight
+    description: Validates an explicit fresh or immutable-attachment configuration and records bounded streamed input hashes, managed PE header names, phase plans and deferred-validation gaps in a new local-only run manifest.
+    evidenceTier: Tier2Structural
+    emits:
+      - webforms-compiled-review-run.v1 local-only preflight manifest
+    limitations:
+      - No scan, build, publish, runtime assembly load, binding admission, graph traversal, report generation, resume or cleanup occurs in this phase.
+      - Receipt artifact-hash candidates do not establish assembly identity, source ownership, repository binding, build freshness or source-line identity; authoritative scanner binding validation remains pending.
+      - Source snapshot, dirty-worktree state, parent repository and index identity, PDB identity and page-map identity remain deferred and are explicit gaps.
+      - Inputs are explicit and bounded under declared roots; scattered external DLL discovery, relocation and dependency cleanup are not implemented.
+      - File hashing limits are separate from recorded future IL and graph budgets; streamed hashing does not establish large-corpus runtime or memory acceptance.
+      - The manifest contains private paths, source commit and input fingerprints and is not shareable; parent scans and existing output folders are never rewritten.
   - id: diagnostic.webforms.saved-proof-packet.v1
     name: Focused saved Web Forms proof packet receipt
     description: Records exact generator, CLI, index, handoff, and artifact hashes for a new bounded modernization packet composed from an existing focused publish-proof index.
