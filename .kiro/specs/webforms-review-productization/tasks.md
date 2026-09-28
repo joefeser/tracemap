@@ -57,6 +57,10 @@
     snapshot framing; reject changed or incomplete retained inventories rather
     than guessing semantic inputs or rescanning parent source.
     Keep compiled-only attachment production and cross-index joins pending.
+  - [x] Retain the scanner's complete authoritative snapshot roster with explicit
+    local generator/input headers, a hash-bound manifest, streamed membership and
+    exact parent/source admission, including uninventoried semantic metadata.
+    Preserve default scan/fact identities and legacy exact-inventory validation.
 - [ ] Integrate compiled evidence into normal packet/docs/handoff navigation
   across selected/all-page modes without upgrading review-only page verdicts.
   - [ ] Group exact method chains in the HTML while retaining every evidence

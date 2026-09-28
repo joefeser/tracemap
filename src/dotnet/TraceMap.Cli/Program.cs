@@ -262,7 +262,7 @@ public static class TraceMapCommand
 
     private static async Task<int> RunScanAsync(string[] args, TextWriter output, TextWriter error, CancellationToken cancellationToken)
     {
-        var values = ParseOptions(args);
+        var values = ParseOptions(args, "--retain-source-snapshot");
         if (!values.TryGetValue("--repo", out var repoPath) || string.IsNullOrWhiteSpace(repoPath))
         {
             await error.WriteLineAsync("error: scan requires --repo <path>.");
@@ -327,6 +327,14 @@ public static class TraceMapCommand
 
         var sqlValidationSummaryPaths = values.GetMany("--sql-validation-summary");
         var sqlValidationAsOf = ParseSqlValidationAsOf(values, sqlValidationSummaryPaths);
+        var retainSnapshot = values.HasFlag("--retain-source-snapshot");
+        if (!retainSnapshot && new[] { "--source-snapshot-max-files", "--source-snapshot-max-source-bytes", "--source-snapshot-max-roster-bytes" }
+            .Any(key => values.Keys.Contains(key, StringComparer.Ordinal)))
+            throw new ArgumentException("Source snapshot limits require --retain-source-snapshot.");
+        var snapshotMaxFiles = ParsePositiveLong(values, "--source-snapshot-max-files", 1_000_000);
+        var snapshotMaxSourceBytes = ParsePositiveLong(values, "--source-snapshot-max-source-bytes", 68_719_476_736);
+        var snapshotMaxRosterBytes = ParsePositiveLong(values, "--source-snapshot-max-roster-bytes", 67_108_864);
+        if (retainSnapshot) SourceSnapshotRetention.ValidateLimits(snapshotMaxFiles, snapshotMaxSourceBytes, snapshotMaxRosterBytes);
 
         var scanOptions = new ScanOptions(
             repoPath,
@@ -462,6 +470,17 @@ public static class TraceMapCommand
                         receiptOperation.Complete("succeeded", result.Manifest.AnalysisLevel, "manifest-written");
                     });
                 }
+                if (retainSnapshot)
+                {
+                    using var retainedOperation = receiptRecorder.StartStage("artifact-write", "source-snapshot-retention",
+                        result.Manifest.AnalysisLevel, "occurred", "completed");
+                    await RunReceiptStageAsync(retainedOperation, async () =>
+                    {
+                        await SourceSnapshotRetention.WriteAsync(artifactOutputPath, repoPath, result,
+                            snapshotMaxFiles, snapshotMaxSourceBytes, snapshotMaxRosterBytes, cancellationToken);
+                        retainedOperation.Complete("succeeded", result.Manifest.AnalysisLevel, "source-snapshot-roster-retained");
+                    });
+                }
                 using (var receiptOperation = receiptRecorder.StartStage("artifact-write", "facts-write", result.Manifest.AnalysisLevel, "occurred", "completed"))
                 {
                     await RunReceiptStageAsync(receiptOperation, async () =>
@@ -573,7 +592,8 @@ public static class TraceMapCommand
             }
             if (ex is OperationCanceledException && cancellationToken.IsCancellationRequested)
                 throw;
-            await error.WriteLineAsync($"error: {ScanReceiptRecorder.ClassifyOutputFailure(ex)}");
+            await error.WriteLineAsync($"error: {(ex is SourceSnapshotRetentionException retainedFailure
+                ? retainedFailure.Message : ScanReceiptRecorder.ClassifyOutputFailure(ex))}");
             return 1;
         }
 
@@ -2844,6 +2864,11 @@ public static class TraceMapCommand
               --exact-source-max-files <count>
               --exact-source-max-bytes <count>
                                        Hard file/byte limits for exact source scope (defaults: 256 files, 64 MiB); candidate enumeration has a separate hard limit.
+              --retain-source-snapshot Retain the complete local byte-snapshot roster for later immutable attachment; no source snippets or runtime proof.
+              --source-snapshot-max-files <count>
+              --source-snapshot-max-source-bytes <count>
+              --source-snapshot-max-roster-bytes <count>
+                                       Retention admission limits (defaults: 1000000 files, 64 GiB raw source, 64 MiB streamed roster); requires --retain-source-snapshot.
               --target-framework <tfm> MSBuild TargetFramework property for semantic load.
               --restore                Run dotnet restore for selected solution/project targets before semantic load.
               --binlog <path>          Explicit local MSBuild binary log to ingest offline. Repeatable; never discovered.

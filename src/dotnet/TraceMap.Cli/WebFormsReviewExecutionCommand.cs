@@ -26,7 +26,8 @@ public static class WebFormsReviewExecutionCommand
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase, WriteIndented = true,
         UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow, MaxDepth = 32
     };
-    private static readonly string[] Required = ["scan-manifest.json", "facts.ndjson", "index.sqlite", "report.md", "logs/analyzer.log"];
+    private static readonly string[] Required = ["scan-manifest.json", "facts.ndjson", "index.sqlite", "report.md", "logs/analyzer.log",
+        SourceSnapshotRetention.ManifestName, SourceSnapshotRetention.RosterName];
 
     public static async Task<int> RunAsync(string[] args, TextWriter output, TextWriter error,
         LocalReviewScanRunner scanRunner, CancellationToken cancellationToken = default)
@@ -99,6 +100,7 @@ public static class WebFormsReviewExecutionCommand
                 var scanManifest = JsonSerializer.Deserialize<ScanManifest>(scanManifestBytes, JsonOptions) ?? throw Fail("SCAN_MANIFEST_INVALID");
                 var validationPlan = ProducedScanPlan(plan, scanPath, scanManifest.ScanId, artifacts, attempt);
                 var checkedScan = await WebFormsReviewInputValidation.ValidateParentAsync(validationPlan, git, cancellationToken);
+                await WebFormsReviewInputValidation.ValidateCompleteOrLegacySnapshotAsync(validationPlan, checkedScan.Manifest, cancellationToken);
                 var publishGaps = checkedScan.Manifest.WebFormsPublishProvenance is null ? new[] { "PublishMapExecutionPending" }
                     : checkedScan.Manifest.WebFormsPublishProvenance.Status == "bound" ? [] : new[] { "PublishReceiptCoverageReduced" };
                 var completed = Checkpoint(Completed, artifacts, checkedScan.Manifest.ScanId,
@@ -138,6 +140,7 @@ public static class WebFormsReviewExecutionCommand
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
         catch (ExecutionException exception) { await error.WriteLineAsync("error: " + exception.Message); return 1; }
+        catch (SourceSnapshotRetentionException exception) { await error.WriteLineAsync("error: " + exception.Message); return 1; }
         catch (Exception)
         { await error.WriteLineAsync("error: WEBFORMS_EXECUTION_INPUT_OUTPUT_OR_CHECKPOINT_INVALID"); return 1; }
     }
@@ -147,7 +150,10 @@ public static class WebFormsReviewExecutionCommand
         var config = plan.Configuration;
         var budget = config.Budgets;
         if (config.SourceFolders.Any(folder => folder.Contains('*'))) throw Fail("SOURCE_SCOPE_GLOB_UNSUPPORTED");
-        var args = new List<string> { "--repo", config.SourceRoot, "--out", output, "--il-body-evidence" };
+        var args = new List<string> { "--repo", config.SourceRoot, "--out", output, "--il-body-evidence", "--retain-source-snapshot" };
+        Add("--source-snapshot-max-files", budget.MaxParentFacts);
+        Add("--source-snapshot-max-source-bytes", budget.MaxTotalHashBytes);
+        Add("--source-snapshot-max-roster-bytes", budget.MaxRetainedArtifactBytes);
         foreach (var folder in config.SourceFolders.Order(StringComparer.Ordinal)) Add("--include", folder == "." ? "**/*" : folder.Replace('\\', '/') + "/**/*");
         if (config.ProjectMode == "projectless")
             foreach (var extension in new[] { "sln", "csproj", "vbproj", "fsproj", "sqlproj" }) Add("--exclude", "**/*." + extension);

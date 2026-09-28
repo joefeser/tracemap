@@ -191,7 +191,13 @@ public sealed record GitMetadata(
 public sealed record ScanResult(
     ScanManifest Manifest,
     IReadOnlyList<CodeFact> Facts,
-    IReadOnlyList<FileInventoryItem> Inventory);
+    IReadOnlyList<FileInventoryItem> Inventory)
+{
+    // Includes semantic metadata that may not have FileInventoried facts.
+    // This execution-only value is not a new implicit serialized artifact.
+    [JsonIgnore]
+    public IReadOnlyList<FileInventoryItem>? SourceSnapshotInventory { get; init; }
+}
 
 public static class EvidenceTiers
 {

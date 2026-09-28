@@ -2526,6 +2526,22 @@ rules:
       - Distribution dependency bytes and runtime version participate in execution identity; external SDK/toolchain bytes are not pinned and remain an explicit gap rather than build authenticity or reproducibility proof.
       - Failed or cancelled attempt bytes are retained but not admitted as completed evidence; retry allocates a fresh owned attempt and never rewrites parent scans or old successful artifacts.
       - Configured admission bounds do not establish representative scale or bounded scanner memory; output traversal admits at most 256 filesystem entries and run history at most 256 checkpoints.
+  - id: workflow.source-snapshot-retention.v1
+    name: Complete private source snapshot roster retention
+    description: Explicitly retains the scanner's authoritative ordered snapshot inventory, including extra semantic metadata, in a streamed local NDJSON roster and a generator/input/scan/roster hash-bound manifest for later immutable source-byte validation.
+    evidenceTier: Tier2Structural
+    emits:
+      - source-snapshot-retention.v1 local-only manifest
+      - source-snapshot-roster.v1 local-only complete snapshot NDJSON roster
+    limitations:
+      - Records relative paths, kinds and byte sizes without source snippets. Private paths and source/input fingerprints must not be shared.
+      - The roster has its own generator/input header: its bounded input SHA-256 is the scanner's exact framed raw-source snapshot digest, while the companion manifest binds the original scan and complete roster bytes. The reader checks header identity before yielding membership.
+      - Exact CLI and Core generator hashes plus original scan-manifest, raw snapshot and roster hashes are local integrity commitments, not authenticated signatures, clean-commit or historical build provenance.
+      - Source bytes must reproduce the existing scanner snapshot before and after retention; this neither discovers new files nor reruns source analysis or proves runtime dispatch, SQL execution or source-line identity.
+      - Normal scan output remains unchanged unless --retain-source-snapshot is explicitly requested; native fresh execution requests it and pins both artifacts in completed checkpoints.
+      - Native parent validation requires exact paired artifact/scan/roster identity and actual count/byte equality. Legacy parents without the pair may use only existing inventory facts and must fail on an incomplete or mismatched snapshot; missing pair members never trigger an implicit downgrade.
+      - Explicit file, raw-source-byte, roster-byte and 32768-character line bounds apply. These are retention/admission limits, not global scanner-memory or representative eight-times scale acceptance.
+      - SourceSnapshotInventory is an execution-only additive ScanResult property and is excluded from implicit JSON serialization. Required five scan artifacts, fact/scan identity and normal schemas remain unchanged.
   - id: workflow.webforms.compiled-review-preparation.v1
     name: Private native operator-declared Web Forms receipt preparation
     description: Inspects explicit committed source and managed publish membership, records an exact-commit operator declaration for primary DLLs, validates generated receipts through Core policy and writes pinned private receipts/config in a new evidence root without source scanning or binary copying.

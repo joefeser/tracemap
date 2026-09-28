@@ -467,7 +467,8 @@ public static class ScanEngine
                 : TraceMapDiagnosticOutcome.Succeeded,
             manifest.AnalysisLevel,
             manifest.BuildStatus);
-        var result = new ScanResult(manifest, facts, inventory);
+        var result = new ScanResult(manifest, facts, inventory)
+        { SourceSnapshotInventory = authoritativeSnapshotInventory };
         receiptRecorder?.Bind(result);
         return result;
     }
