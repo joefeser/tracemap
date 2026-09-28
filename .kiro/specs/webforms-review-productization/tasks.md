@@ -48,6 +48,10 @@
       and source/publish-map receipts in a new evidence root, validate them through
       Core policy, and generate a pinned follow-on config without copying binaries.
       Keep all-pages receipt partitioning and compiled-site parity pending.
+    - [x] Add an all-or-none Core publish receipt-set reader that retains legacy
+      per-partition bounds, exact partition/generator/input commitments and global
+      source/assembly/page/map ambiguity checks. Keep native partition preparation,
+      preflight pinning and all-page coverage acceptance pending.
 - [ ] Implement .NET orchestration for source-plus-compiled runs and immutable
   attachment to a retained source scan; keep compatibility wrappers.
   - [x] Add checkpointed native fresh execution using the existing scanner and

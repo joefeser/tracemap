@@ -1,5 +1,48 @@
 # Web Forms Review Productization Implementation State
 
+## Publish receipt partition contract (2026-09-28)
+
+- Continued on `codex/webforms-native-preflight` based on `199ee4a2`.
+  That exact committed native retrieval/reporting runtime passed the full .NET
+  regression: 2,602/2,602, zero failures/skips, 10 minutes 17 seconds. This pass
+  preceded the receipt-set changes below and does not validate those changes.
+- The existing Core publish option now admits a private
+  `webforms-publish-binding-set.v1` container with exact generator, source commit,
+  ordered partition SHA-256 roster and bounded input framing. Each of at most
+  64 non-nested partitions retains the legacy 1 MiB/256 source/64 published/32
+  page bounds. Conservative repeated artifact read/hash admission is capped at
+  8 GiB and retained map virtual paths at 4,096 characters.
+- Admission is all-or-none. Exact repeated source/assembly membership is
+  coalesced; case aliases, conflicting rows, repeated pages and cross-partition
+  mapped/mapless ambiguity withhold every binding. Source/published and receipt
+  bytes are rechecked before success. Facts retain the established rule, tiers,
+  generator/input commitments and review-only limitations.
+- Explicit inventory-only partitions carry additional nonempty source/published
+  inventories with zero page bindings and unchanged byte/count caps. They are
+  valid only inside a set with normal page-bearing receipts, never standalone
+  publish proof. This supports shared-inventory chunking without duplicating
+  pages to satisfy per-receipt count limits.
+- Initial focused receipt-set, legacy root and preparation validation passed
+  51/51; broad Web Forms/attachment/grouping regression passed 486/486 (3 minutes
+  15 seconds), before inventory-only support. Final focused checks after that
+  addition passed 54/54 (14 seconds), zero failures/skips, with no introduced
+  build warnings/errors.
+  Public fixtures cover 67 pages across three partitions, stable materialized
+  facts, unchanged input bytes, malformed/tampered/nested/duplicate receipts,
+  global map ambiguity, cancellation, inventory-only context without fake pages,
+  and oversize file/identity refusal.
+- A real CLI syntax-only scan of public `vb-publish-projectless` completed with
+  136 facts. Its owned local output is retained under
+  `output/native-receipt-set-smoke-199ee4a2` and ignored, not published. The final
+  CLI smoke after inventory-only support also passed with 136 facts under
+  `output/native-receipt-set-smoke-final-199ee4a2`. Final broad Web Forms,
+  attachment and grouping regression passed 489/489, zero failures/skips,
+  3 minutes 18 seconds, after inventory-only support.
+- Native partition preparation and preflight pinning remain the next required
+  integration. This Core reader is not an all-page native workflow, compiled-site
+  parity, representative scale or private Windows acceptance claim. No existing
+  proof, wrappers, inputs or dependencies were deleted; no PR or merge occurred.
+
 ## Bounded native evidence retrieval and Claude guidance (2026-09-28)
 
 - Continued on `codex/webforms-native-preflight` in the managed attachment

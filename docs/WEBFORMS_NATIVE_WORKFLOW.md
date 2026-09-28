@@ -2,8 +2,8 @@
 
 Status: native preflight, input validation, checkpointed fresh scanning and
 immutable compiled-only attachment. Explicit cross-index VB PDB/publish reporting
-joins and checkpointed private report orchestration are implemented. All-page
-receipt partitioning, bounded retrieval guidance, representative scale and real
+joins, checkpointed private report orchestration and bounded evidence retrieval
+are implemented. Native all-page receipt preparation/integration, representative scale and real
 private Windows compiled-site parity remain pending.
 
 The Core compiled-only producer now has a distinct local attachment context
@@ -20,6 +20,43 @@ local integrity, not authenticity. Validated cross-index report joins are now
 consumed by the reporting graph through the explicit combine contract described
 below. Native report orchestration produces a private workbench and grouped
 lossless handoff; retain the proven wrappers until final workflow parity passes.
+
+### Bounded publish receipt sets (Core contract)
+
+The scanner's existing `--webforms-publish-receipt` input also accepts a private
+`webforms-publish-binding-set.v1` container. Each ordered partition reference
+has a safe receipt-relative path and exact SHA-256. The container records
+`legacy.webforms.publish-map.v1`, local-only visibility, the operator-declared
+review-only claim, exact receipt generator SHA-256, source commit and bounded
+input digest. That digest uses UTF-8 framing of the schema, generator, commit
+and ordinally sorted `path:sha256` partition rows, each terminated by a newline.
+These are byte commitments, not authenticated attestations.
+
+A set has at most 64 non-nested receipts of at most 1 MiB each. Each partition
+retains the existing 256-source-file, 64-published-file and 32-page limits;
+partitioning does not silently raise them. Conservative repeated artifact
+read/hash admission is capped at 8 GiB and retained map virtual paths at 4,096
+characters for the set, separately from graph and
+rendering budgets. Source and published bytes are rechecked before admission.
+
+The whole set is admitted or withheld. Repeated exact source/assembly membership
+is retained once; conflicting hashes/kinds, case-aliased paths, repeated page
+identities, invalid partitions and cross-partition map ambiguity are gaps. Every
+mapless page must have no matching map in the union of declared maps, and every
+mapped page must have exactly one global match. No ambient files are discovered.
+An admitted set still covers only its declared inventory, not every page of an
+application or its historical build closure.
+
+Explicit `webforms-publish-inventory-partition.v1` members may retain zero pages
+to carry additional shared source or DLL/map inventories. They keep the same
+nonempty source/published inventories and byte/count limits, cannot contain page
+bindings and are accepted only inside a set. A set still requires at least one
+normal page-bearing receipt. This separates inventory chunking from page identity
+without duplicating pages or upgrading inventory bytes to page/build evidence.
+
+Native `prepare` and preflight partition publication are not yet integrated;
+do not manually substitute a set into a pinned native run. This Core contract
+is the foundation for that integration, not all-page or Windows acceptance.
 
 ## Native operator-declared receipt preparation
 

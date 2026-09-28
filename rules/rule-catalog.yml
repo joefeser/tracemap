@@ -2670,9 +2670,10 @@ rules:
   - id: legacy.webforms.publish-map.v1
     name: Explicit Web Forms publish-map binding
     description: Re-verifies a bounded local-only publish receipt against exact current source bytes, emitted DLL/map bytes, the source commit, and each declared .compiled page mapping before emitting page-to-assembly evidence.
-    evidenceTier: Tier2Structural or Tier4Unknown
+    evidenceTier: Tier2Structural, Tier3SyntaxOrTextual or Tier4Unknown
     emits:
       - WebFormsPublishPageMapped
+      - WebFormsPublishPageCandidate
       - WebFormsPublishSourceBound
       - WebFormsPublishAssemblyBound
       - AnalysisGap
@@ -2681,6 +2682,9 @@ rules:
       - The receipt is operator-declared. Matching hashes and a .compiled map establish static page-to-assembly correspondence for the declared build inputs; they do not independently prove the compiler ran, source-method identity, PDB lines, deployment, page activation, or runtime execution.
       - A virtual application-root prefix may differ from the source-relative page path only when the local preparer finds one unique suffix match and records the distinct sourcePath explicitly. The exact .compiled bytes remain unchanged; multiple candidates or a mismatched declared source path are gaps, not guessed joins.
       - Input count, file size, path, duplicate, content, commit, XML, and mapping failures withhold the entire receipt behind Tier4 gaps. No ambient publish output is discovered, and a gap never means the page or assembly is absent.
+      - A local-only webforms-publish-binding-set.v1 container may declare at most 64 exact-hash non-nested receipts, each retaining 1 MiB, 256 source, 64 published and 32 page bounds. Its exact generator and bounded input digest commit to the source commit and ordered path/hash partition roster; conservative repeated artifact read/hash admission is capped at 8 GiB and retained map virtual paths at 4096 characters. This is integrity, not authentication or complete-site proof.
+      - Partition sets admit all partitions or none. Exact repeated membership is coalesced, conflicting hashes/kinds or case aliases are rejected, pages cannot repeat, and mapped/mapless correspondence is checked against the entire declared map union before any binding facts are emitted. Native partition preparation and all-page workflow acceptance remain separate gates.
+      - Explicit webforms-publish-inventory-partition.v1 members have zero page bindings and the same nonempty source/published inventory and byte/count bounds; they are valid only inside a set that also has normal page-bearing receipts. They add declared inventory context, never fake pages or build/runtime proof.
       - Raw local receipt and source/artifact hashes remain local-only. Shareable projections must not expose private paths, symbols, or commitments to raw private source artifacts.
 
   - id: legacy.webforms.inventory.v1
