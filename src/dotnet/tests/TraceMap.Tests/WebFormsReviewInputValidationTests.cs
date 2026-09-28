@@ -89,8 +89,9 @@ public sealed class WebFormsReviewInputValidationTests
         var result = await WebFormsReviewInputValidation.ValidateAsync(plan);
         Assert.NotNull(result.ParentManifest);
         Assert.True(result.ParentFactCount > 0);
-        Assert.Equal("retained-parent-identity-validated", result.SourceState);
-        Assert.Contains("RetainedSourceSnapshotNotCurrentSourceValidation", result.Gaps);
+        Assert.Equal("retained-parent-source-snapshot-verified", result.SourceState);
+        Assert.Contains("RetainedSnapshotScopeNotFullCurrentInventory", result.Gaps);
+        Assert.DoesNotContain("RetainedSourceSnapshotNotCurrentSourceValidation", result.Gaps);
         Assert.Equal(before.OrderBy(pair => pair.Key), fixture.ParentHashes().OrderBy(pair => pair.Key));
         Assert.DoesNotContain(Directory.GetFiles(fixture.Parent, "*", SearchOption.AllDirectories),
             path => path.EndsWith("-wal", StringComparison.Ordinal) || path.EndsWith("-shm", StringComparison.Ordinal));
@@ -205,15 +206,113 @@ public sealed class WebFormsReviewInputValidationTests
         Assert.Equal("WEBFORMS_REVIEW_SOURCE_IDENTITY_CHANGED", changedHead.Message);
     }
 
-    [Fact]
-    public async Task Retained_attachment_does_not_claim_to_revalidate_current_source_bytes()
+    [Theory]
+    [InlineData("same-size", "PARENT_SOURCE_SNAPSHOT_MISMATCH_OR_INCOMPLETE_INVENTORY")]
+    [InlineData("size-change", "PARENT_SOURCE_SNAPSHOT_CHANGED")]
+    [InlineData("missing", "PARENT_SOURCE_INPUT_UNAVAILABLE")]
+    [InlineData("link", "PARENT_SOURCE_LINKED_INPUT")]
+    public async Task Retained_attachment_refuses_changed_missing_or_linked_current_source(string mutation, string code)
     {
         using var fixture = new Fixture();
         await fixture.CreateParent();
-        File.AppendAllText(Path.Combine(fixture.Source, "Lookup.aspx.vb"), "\n' current source differs from the retained snapshot\n");
+        var before = fixture.ParentHashes();
+        var path = Path.Combine(fixture.Source, "Lookup.aspx.vb");
+        switch (mutation)
+        {
+            case "same-size": File.WriteAllText(path, File.ReadAllText(path).Replace("Load", "Save", StringComparison.Ordinal)); break;
+            case "size-change": File.AppendAllText(path, "\n' changed source\n"); break;
+            case "missing": File.Delete(path); break;
+            case "link":
+                var destination = Path.Combine(fixture.Root, "other.vb");
+                File.Move(path, destination);
+                File.CreateSymbolicLink(path, destination);
+                break;
+        }
+        var plan = await fixture.Plan();
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            WebFormsReviewInputValidation.ValidateAsync(plan));
+        Assert.Equal("WEBFORMS_REVIEW_" + code, error.Message);
+        Assert.Equal(before.OrderBy(pair => pair.Key), fixture.ParentHashes().OrderBy(pair => pair.Key));
+        Assert.False(Directory.Exists(fixture.Output));
+    }
+
+    [Fact]
+    public async Task Snapshot_gate_does_not_guess_missing_semantic_roster_members_or_expand_to_new_files()
+    {
+        using var fixture = new Fixture();
+        await fixture.CreateParent();
+        var plan = await fixture.Plan();
+        var parent = (await WebFormsReviewInputValidation.ValidateParentAsync(plan,
+            GitMetadataProvider.Detect(fixture.Source), default)).Manifest;
+        File.WriteAllText(Path.Combine(fixture.Source, "NewUnanalyzed.vb"), "Public Class NewUnanalyzed\nEnd Class\n");
+        var snapshot = WebFormsReviewInputValidation.ValidateRetainedSourceSnapshot(plan, parent, default);
+        Assert.Equal(parent.SourceSnapshotDigest, snapshot.Digest);
+        Assert.Equal(2, snapshot.FileCount);
+        var missingRoster = parent with { SourceSnapshotDigest = new string('a', 64) };
+        var error = Assert.Throws<InvalidOperationException>(() =>
+            WebFormsReviewInputValidation.ValidateRetainedSourceSnapshot(plan, missingRoster, default));
+        Assert.Equal("WEBFORMS_REVIEW_PARENT_SOURCE_SNAPSHOT_MISMATCH_OR_INCOMPLETE_INVENTORY", error.Message);
+    }
+
+    [Fact]
+    public async Task Snapshot_gate_enforces_the_remaining_hash_byte_budget()
+    {
+        using var fixture = new Fixture();
+        await fixture.CreateParent();
+        var plan = await fixture.Plan();
+        var parent = (await WebFormsReviewInputValidation.ValidateParentAsync(plan,
+            GitMetadataProvider.Detect(fixture.Source), default)).Manifest;
+        var bounded = plan with { Configuration = plan.Configuration with
+        { Budgets = plan.Configuration.Budgets with { MaxTotalHashBytes = plan.Inputs.Sum(item => item.Bytes) + 1 } } };
+        var error = Assert.Throws<InvalidOperationException>(() =>
+            WebFormsReviewInputValidation.ValidateRetainedSourceSnapshot(bounded, parent, default));
+        Assert.Equal("WEBFORMS_REVIEW_PARENT_SOURCE_INPUT_LIMIT", error.Message);
+    }
+
+    [Fact]
+    public async Task Actual_scoped_parent_with_uninventoried_semantic_metadata_is_refused_not_guessed()
+    {
+        using var fixture = new Fixture();
+        Directory.CreateDirectory(Path.Combine(fixture.Source, "pages"));
+        File.WriteAllText(Path.Combine(fixture.Source, "pages", "Scoped.vb"), "Public Class Scoped\nEnd Class\n");
+        File.WriteAllText(Path.Combine(fixture.Source, "pages", "Scoped.vbproj"),
+            "<Project Sdk=\"Microsoft.NET.Sdk\"><PropertyGroup><TargetFramework>net10.0</TargetFramework></PropertyGroup></Project>");
+        File.WriteAllText(Path.Combine(fixture.Source, "Directory.Build.props"), "<Project />");
+        fixture.Git("add", ".");
+        fixture.Git("commit", "-qm", "public scoped metadata");
+        fixture.Config = fixture.Config with { SourceCommitSha = GitMetadataProvider.Detect(fixture.Source).CommitSha };
+        await fixture.CreateParent("--project", "pages/Scoped.vbproj");
+        var plan = await fixture.Plan();
+        var parent = (await WebFormsReviewInputValidation.ValidateParentAsync(plan,
+            GitMetadataProvider.Detect(fixture.Source), default)).Manifest;
+        using (var connection = fixture.OpenIndex())
+        using (var command = connection.CreateCommand())
+        {
+            command.CommandText = "select count(*) from facts where fact_type=$type and file_path='Directory.Build.props'";
+            command.Parameters.AddWithValue("$type", FactTypes.FileInventoried);
+            Assert.Equal(0L, command.ExecuteScalar());
+        }
+        var before = fixture.ParentHashes();
+        var error = Assert.Throws<InvalidOperationException>(() =>
+            WebFormsReviewInputValidation.ValidateRetainedSourceSnapshot(plan, parent, default));
+        Assert.Equal("WEBFORMS_REVIEW_PARENT_SOURCE_SNAPSHOT_MISMATCH_OR_INCOMPLETE_INVENTORY", error.Message);
+        Assert.Equal(before.OrderBy(pair => pair.Key), fixture.ParentHashes().OrderBy(pair => pair.Key));
+    }
+
+    [Fact]
+    public async Task SQLite_roster_order_matches_scanner_UTF16_ordinal_order_not_UTF8_binary_order()
+    {
+        using var fixture = new Fixture();
+        File.WriteAllText(Path.Combine(fixture.Source, "\uE000.vb"), "Public Class PrivateUseName\nEnd Class\n");
+        File.WriteAllText(Path.Combine(fixture.Source, "\U0001F600.vb"), "Public Class SupplementaryName\nEnd Class\n");
+        fixture.Git("add", ".");
+        fixture.Git("commit", "-qm", "public Unicode inventory");
+        fixture.Config = fixture.Config with { SourceCommitSha = GitMetadataProvider.Detect(fixture.Source).CommitSha };
+        await fixture.CreateParent();
+        var before = fixture.ParentHashes();
         var result = await WebFormsReviewInputValidation.ValidateAsync(await fixture.Plan());
-        Assert.Contains("RetainedSourceSnapshotNotCurrentSourceValidation", result.Gaps);
-        Assert.Equal("retained-parent-identity-validated", result.SourceState);
+        Assert.Equal("retained-parent-source-snapshot-verified", result.SourceState);
+        Assert.Equal(before.OrderBy(pair => pair.Key), fixture.ParentHashes().OrderBy(pair => pair.Key));
     }
 
     private sealed class Fixture : IDisposable
@@ -278,11 +377,11 @@ public sealed class WebFormsReviewInputValidationTests
             return await WebFormsReviewPreflightCommand.BuildAsync(configPath, Output);
         }
 
-        public async Task CreateParent()
+        public async Task CreateParent(params string[] extraArguments)
         {
             using var output = new StringWriter();
             using var error = new StringWriter();
-            Assert.Equal(0, await TraceMapCommand.RunAsync(["scan", "--repo", Source, "--out", Parent], output, error));
+            Assert.Equal(0, await TraceMapCommand.RunAsync(["scan", "--repo", Source, "--out", Parent, .. extraArguments], output, error));
             Config = Config with { Operation = "attach", ParentScanRoot = Parent };
         }
 

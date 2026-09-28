@@ -292,9 +292,19 @@ set. Active WAL/SHM/journal sidecars are rejected. A sidecar-free checkpointed W
 index is opened immutably without creating files in its parent folder. Native
 SQLite checks can be interrupted on cancellation.
 
-All preflight input hashes are rechecked before and after validation. A retained
-parent snapshot is **not** a validation of current source bytes; fresh scans must
-establish their own actual source snapshot. Public gate tests cover receipt
+All preflight input hashes are rechecked before and after validation. Attachment
+input validation additionally streams the retained `FileInventoried` roster from
+the immutable index and recomputes current bytes with the scanner's exact snapshot
+framing, twice around validation. The original digest must match exactly. The
+ordered stream is bounded by `maxParentFacts` and the remaining `maxTotalHashBytes`
+per hash pass; it rejects unsafe, duplicate, linked, missing or changed members.
+It does not discover extra files or rerun semantic extraction. A retained roster
+that omitted semantic metadata inputs fails with
+`PARENT_SOURCE_SNAPSHOT_MISMATCH_OR_INCOMPLETE_INVENTORY`; those members are not
+guessed. An exact match establishes only the retained snapshot's declared scope,
+not full current-repository coverage, clean Git state, historical build identity
+or source-line identity. Fresh scans still establish their own snapshot.
+Public gate tests cover receipt
 identity/locator/ambiguity/staleness, parent tampering and count/row limits, escaped
 filesystem names, cancellation and byte-for-byte parent immutability. They do not
 establish private Windows or representative scale acceptance. Fresh execution

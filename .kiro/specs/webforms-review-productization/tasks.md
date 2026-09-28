@@ -53,6 +53,10 @@
   - [x] Add checkpointed native fresh execution using the existing scanner and
     immutable preflight, fresh owned retry attempts and hash-verified resume.
     Keep attachment/publish-map production and unified reports pending.
+  - [x] Add a bounded read-only retained-source byte gate using the exact scanner
+    snapshot framing; reject changed or incomplete retained inventories rather
+    than guessing semantic inputs or rescanning parent source.
+    Keep compiled-only attachment production and cross-index joins pending.
 - [ ] Integrate compiled evidence into normal packet/docs/handoff navigation
   across selected/all-page modes without upgrading review-only page verdicts.
   - [ ] Group exact method chains in the HTML while retaining every evidence

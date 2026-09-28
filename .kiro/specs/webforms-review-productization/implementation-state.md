@@ -109,13 +109,50 @@
   The initial CRLF fixture changed attributes without renormalizing its index;
   Git correctly reported it dirty. The fixture now models a clean normalized
   checkout before exercising preparation. Builds emitted no compiler/analyzer
-  warnings; diff and private-path guards passed. Full regression is the next
-  separate committed-head gate. The source/DLL fixture checks
+  warnings; diff and private-path guards passed. Full regression at committed
+  `372f79b2` passed 2,451/2,451, zero failed/skipped (7 minutes 17 seconds).
+  The source/DLL fixture checks
   receipt policy and native prepare/preflight/run plumbing; it is not compiled
   handler-chain parity, an eight-times benchmark or private Windows evidence.
 - Native immutable attachment, unified/grouped/indexed reports, bounded Claude
   guidance, all-pages partitioning, scale/retention and final authorized private
   Windows validation remain active goal requirements. No PR or merge occurred.
+
+## Retained-source snapshot admission gate (2026-09-28)
+
+- Added a shared Core ordered-stream snapshot inspection API using exactly the
+  existing scanner's framed path/kind/size/raw-byte digest. The original scanner
+  framing and snapshot identity remain unchanged; cancellation is now checked
+  during each file's chunked hashing, not only between files.
+- Native attachment input validation, after full immutable parent/index/NDJSON
+  checks, streams retained FileInventoried membership and requires current bytes
+  to reproduce the original source snapshot. It repeats this check around the
+  final input rehash. The source state distinguishes verified retained snapshot
+  scope from fresh-scan pending state; new unretained files are not discovered or
+  included. Clean Git/build/runtime/all-pages/source-line claims are not made.
+- No full managed inventory set is constructed. SQLite uses an ordinal collation,
+  file-backed temporary sorting and bounded caches; file count and raw hash bytes
+  are admitted under the existing parent fact and remaining hash-byte bounds.
+  Unsafe, duplicate, linked, missing, size-changed and same-size byte-changed
+  members fail. A real project-scoped fixture confirms extra semantic metadata
+  can belong to the original snapshot without FileInventoried rows; it fails
+  with an explicit mismatch-or-incomplete-inventory reason, never guessed members.
+- Final broader focused validation passed 169/169, zero failed/skipped (56 seconds),
+  across snapshot inspector, parent/input, native preflight/execution/preparation
+  and scanner regressions. The first build caught a test-only missing async lambda;
+  a subsequent fixture used an unsupported folder option and was corrected to
+  actual project selection. Both were corrected before the passing run; no
+  production guard was weakened. Final cases also pin SQLite roster ordering to
+  the scanner's UTF-16 ordinal ordering rather than SQLite UTF-8 binary ordering;
+  a supplementary/Private Use Unicode filename fixture passes exact snapshot
+  equality without parent mutation. The ordering-only second recheck passed
+  43/43 before this final broader run. Builds emitted no compiler/analyzer
+  warnings. Full regression at the new committed head remains a separate gate.
+- This advances authoritative attachment input validation, not attachment
+  production. Complete snapshot-membership retention for future source scans,
+  compiled-only derived scan production, explicit cross-index parent context,
+  unified/indexed reports and all other goal acceptance remain outstanding.
+  No private proof dependency, Windows data, PR or merge was touched.
 
 ## Native fresh execution and resume (2026-09-28)
 
