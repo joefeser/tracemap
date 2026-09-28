@@ -99,9 +99,11 @@ public static class WebFormsReviewExecutionCommand
                 var scanManifest = JsonSerializer.Deserialize<ScanManifest>(scanManifestBytes, JsonOptions) ?? throw Fail("SCAN_MANIFEST_INVALID");
                 var validationPlan = ProducedScanPlan(plan, scanPath, scanManifest.ScanId, artifacts, attempt);
                 var checkedScan = await WebFormsReviewInputValidation.ValidateParentAsync(validationPlan, git, cancellationToken);
+                var publishGaps = checkedScan.Manifest.WebFormsPublishProvenance is null ? new[] { "PublishMapExecutionPending" }
+                    : checkedScan.Manifest.WebFormsPublishProvenance.Status == "bound" ? [] : new[] { "PublishReceiptCoverageReduced" };
                 var completed = Checkpoint(Completed, artifacts, checkedScan.Manifest.ScanId,
                     checkedScan.Manifest.SourceSnapshotDigest, checkedScan.Facts, validationGaps
-                        .Concat(["UnifiedReportsPending", "PublishMapExecutionPending"]).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray());
+                        .Concat(["UnifiedReportsPending"]).Concat(publishGaps).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray());
                 await VerifyArtifactsAsync(root, completed, plan.Configuration.Budgets, cancellationToken);
                 await WebFormsReviewInputValidation.RecheckAsync(plan, cancellationToken);
                 var gitAfter = GitMetadataProvider.Detect(plan.Configuration.SourceRoot);
@@ -157,6 +159,9 @@ public static class WebFormsReviewExecutionCommand
         foreach (var (role, option) in new[] { ("primary-assembly", "--compiled-input"), ("dependency-assembly", "--compiled-dependency"),
             ("binding-receipt", "--compiled-binding-receipt"), ("pdb", "--pdb-input") })
             foreach (var input in plan.Inputs.Where(input => input.Role == role).OrderBy(input => input.Path, StringComparer.Ordinal)) Add(option, input.Path);
+        var publishReceipt = plan.Inputs.SingleOrDefault(input => input.Role == "publish-receipt");
+        if (publishReceipt is not null)
+        { Add("--webforms-publish-receipt", publishReceipt.Path); Add("--webforms-published-root", config.PublishedRoot); }
         Add("--compiled-max-artifacts", budget.MaxInputFiles);
         Add("--compiled-max-file-bytes", budget.MaxAssemblyBytes);
         Add("--compiled-max-text", budget.MetadataMaxText);

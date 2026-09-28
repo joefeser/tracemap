@@ -274,6 +274,13 @@ public static class TraceMapCommand
         }
 
         var rewriteBefore = values.GetMany("--il-rewrite-before");
+        if (values.TryGetValue("--webforms-published-root", out var declaredPublishedRoot)
+            && !string.IsNullOrWhiteSpace(declaredPublishedRoot)
+            && (!values.TryGetValue("--webforms-publish-receipt", out var declaredPublishReceipt) || string.IsNullOrWhiteSpace(declaredPublishReceipt)))
+        {
+            await error.WriteLineAsync("error: --webforms-published-root requires --webforms-publish-receipt.");
+            return 1;
+        }
         var rewriteAfter = values.GetMany("--il-rewrite-after");
         if (!values.HasFlag("--il-rewrite-evidence") && (rewriteBefore.Count > 0 || rewriteAfter.Count > 0))
         {
@@ -378,7 +385,8 @@ public static class TraceMapCommand
             WebFormsPublishReceiptPath: values.GetValueOrDefault("--webforms-publish-receipt"),
             ExactSourceScope: values.HasFlag("--exact-source-scope"),
             ExactSourceMaxFiles: ParsePositiveInt(values, "--exact-source-max-files", 256),
-            ExactSourceMaxBytes: ParsePositiveLong(values, "--exact-source-max-bytes", 67_108_864));
+            ExactSourceMaxBytes: ParsePositiveLong(values, "--exact-source-max-bytes", 67_108_864),
+            WebFormsPublishedRootPath: values.GetValueOrDefault("--webforms-published-root"));
         var receiptRecorder = new ScanReceiptRecorder(
             scanOptions,
             sqlValidationSummaryPaths.Append(sqlValidationAsOf?.ToString("O") ?? string.Empty));
@@ -2846,6 +2854,8 @@ public static class TraceMapCommand
                                        Optional compiled-input-binding-set.v1 receipt. Repeatable.
               --webforms-publish-receipt <path>
                                        Explicit local-only webforms-publish-binding.v1 receipt. Never discovered.
+              --webforms-published-root <absolute-path>
+                                       Optional explicit published-file root, independent of receipt location. Hash checked, never written.
               --pdb-input <path>       Explicit portable PDB, assembly with embedded portable PDB, or Windows PDB input. Repeatable; never discovered.
               --compiled-max-artifacts <count>
               --compiled-max-file-bytes <count>

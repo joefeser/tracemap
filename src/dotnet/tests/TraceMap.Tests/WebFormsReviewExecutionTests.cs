@@ -280,6 +280,48 @@ public sealed class WebFormsReviewExecutionTests
         Assert.Equal("WEBFORMS_EXECUTION_SOURCE_SCOPE_GLOB_UNSUPPORTED", exception.Message);
     }
 
+    [Fact]
+    public async Task Native_receipt_references_original_published_files_and_pins_its_source_membership()
+    {
+        using var fixture = new Fixture();
+        fixture.WritePublishReceipt();
+        var publishedBefore = Directory.GetFiles(fixture.Published, "*", SearchOption.AllDirectories).ToDictionary(path => path, Hash);
+        await fixture.Preflight();
+        var plan = fixture.Plan();
+        Assert.Contains(plan.Inputs, input => input.Role == "publish-receipt");
+        Assert.Contains(plan.Inputs, input => input.Role == "publish-source" && input.Path.EndsWith("Lookup.aspx.vb", StringComparison.Ordinal));
+        Assert.Equal(1, plan.Inputs.Count(input => input.Path.EndsWith("Lookup.aspx", StringComparison.Ordinal)));
+        Assert.Equal(0, await fixture.Execute("run", Scan));
+        var checkpoint = fixture.LastCheckpoint();
+        Assert.DoesNotContain("PublishMapExecutionPending", checkpoint.Gaps);
+        Assert.Contains("BuildAuthenticityNotEstablished", checkpoint.Gaps);
+        var scanPath = Path.Combine(fixture.Run, checkpoint.Attempt, "scan");
+        var manifest = JsonSerializer.Deserialize<ScanManifest>(File.ReadAllText(Path.Combine(scanPath, "scan-manifest.json")), JsonOptions)!;
+        Assert.Equal("bound", manifest.WebFormsPublishProvenance!.Status);
+        Assert.NotNull(manifest.WebFormsPublishProvenance.PublishedRootPathHash);
+        var facts = File.ReadLines(Path.Combine(scanPath, "facts.ndjson")).Select(line => JsonSerializer.Deserialize<CodeFact>(line, JsonOptions)!).ToArray();
+        Assert.Single(facts, fact => fact.FactType == FactTypes.WebFormsPublishPageMapped);
+        Assert.DoesNotContain(checkpoint.Artifacts, item => item.RelativePath.EndsWith(".dll", StringComparison.Ordinal));
+        foreach (var item in publishedBefore) Assert.Equal(item.Value, Hash(item.Key));
+    }
+
+    [Theory]
+    [InlineData("source-hash")]
+    [InlineData("undeclared-dll")]
+    [InlineData("page")]
+    [InlineData("duplicate")]
+    [InlineData("escape")]
+    [InlineData("commit")]
+    public async Task Invalid_publish_receipt_cannot_start_a_native_run(string mutation)
+    {
+        using var fixture = new Fixture();
+        fixture.WritePublishReceipt(mutation);
+        File.WriteAllText(fixture.ConfigPath, JsonSerializer.Serialize(fixture.Config, JsonOptions));
+        Assert.Equal(1, await TraceMapCommand.RunAsync(["webforms-review", "preflight", "--config", fixture.ConfigPath, "--out", fixture.Run], fixture.Output, fixture.Error));
+        Assert.False(Directory.Exists(fixture.Run));
+        Assert.DoesNotContain(fixture.Source, fixture.Error.ToString(), StringComparison.Ordinal);
+    }
+
     private static Task<int> Scan(string[] args, TextWriter output, TextWriter error, CancellationToken token) =>
         TraceMapCommand.RunAsync(["scan", .. args], output, error, token);
     private static string Hash(string path) { using var stream = File.OpenRead(path); return Convert.ToHexString(SHA256.HashData(stream)).ToLowerInvariant(); }
@@ -323,6 +365,34 @@ public sealed class WebFormsReviewExecutionTests
             File.WriteAllText(ConfigPath, JsonSerializer.Serialize(Config, JsonOptions));
             Assert.Equal(0, await TraceMapCommand.RunAsync(["webforms-review", "preflight", "--config", ConfigPath, "--out", Run], Output, Error));
             Output.GetStringBuilder().Clear(); Error.GetStringBuilder().Clear();
+        }
+        public void WritePublishReceipt(string? mutation = null)
+        {
+            Directory.CreateDirectory(Path.Combine(Published, "bin"));
+            Directory.CreateDirectory(Path.Combine(Published, "Pages"));
+            Directory.CreateDirectory(Path.Combine(Published, "receipts"));
+            File.Copy(Path.Combine(Published, "Public.dll"), Path.Combine(Published, "bin", "Public.dll"));
+            File.WriteAllText(Path.Combine(Published, "Pages", "Lookup.aspx.compiled"), "<preserve virtualPath=\"/Pages/Lookup.aspx\" assembly=\"Public\" type=\"Public.GeneratedPage\" />");
+            var sources = new[] { "Pages/Lookup.aspx", "Pages/Lookup.aspx.vb" }.Select(path => new
+            { path, sha256 = mutation == "source-hash" ? new string('a', 64) : Hash(Path.Combine(Source, path)) }).ToArray();
+            var sourceDigest = Convert.ToHexString(SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(string.Join("\n", sources.Select(source => source.path + ":" + source.sha256)) + "\n"))).ToLowerInvariant();
+            var published = new[]
+            {
+                new { path = mutation == "escape" ? "../bin/Public.dll" : "bin/Public.dll", sha256 = Hash(Path.Combine(Published, "bin", "Public.dll")), kind = "assembly" },
+                new { path = "Pages/Lookup.aspx.compiled", sha256 = Hash(Path.Combine(Published, "Pages", "Lookup.aspx.compiled")), kind = "compiled-map" }
+            };
+            var receipt = new
+            {
+                schemaVersion = "webforms-publish-binding.v1", visibility = "local-only", sourceCommitSha = mutation == "commit" ? new string('a', 40) : Config.SourceCommitSha,
+                receiptGeneratorSha256 = Hash(typeof(WebFormsReviewExecutionTests).Assembly.Location),
+                compilerSha256 = new string('a', 64), compilerProvenance = "unavailable-public-input-membership-test-not-build-proof",
+                boundedInputSha256 = sourceDigest, sourceFiles = mutation == "duplicate" ? [.. sources, sources[0]] : sources,
+                publishedFiles = published,
+                pages = new[] { new { virtualPath = "/Pages/Lookup.aspx", sourcePath = mutation == "page" ? "Pages/Other.aspx" : "Pages/Lookup.aspx", assembly = "Public", generatedType = "Public.GeneratedPage", mapPath = "Pages/Lookup.aspx.compiled" } }
+            };
+            File.WriteAllText(Path.Combine(Published, "receipts", "publish.json"), JsonSerializer.Serialize(receipt, JsonOptions));
+            Config = Config with { PrimaryAssemblies = mutation == "undeclared-dll" ? ["Public.dll"] : ["bin/Public.dll"],
+                PageMaps = ["Pages/Lookup.aspx.compiled"], PublishReceiptRelativePath = "receipts/publish.json" };
         }
         public Task<int> Execute(string action, LocalReviewScanRunner runner, CancellationToken token = default)
         {
