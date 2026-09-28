@@ -184,6 +184,8 @@ public static partial class WebFormsReviewExecutionCommand
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
         catch (ExecutionException exception) { await error.WriteLineAsync("error: " + exception.Message); return 1; }
         catch (SourceSnapshotRetentionException exception) { await error.WriteLineAsync("error: " + exception.Message); return 1; }
+        catch (InvalidDataException exception) when (SafeReportFailure(exception) is not null)
+        { await error.WriteLineAsync("error: " + SafeReportFailure(exception)); return 1; }
         catch (InvalidOperationException exception) when (exception.Message.StartsWith("COMPILED_ATTACHMENT_", StringComparison.Ordinal)
             || exception.Message.StartsWith("WEBFORMS_ATTACHMENT_", StringComparison.Ordinal)
             || exception.Message.StartsWith("WEBFORMS_REVIEW_", StringComparison.Ordinal))
@@ -387,6 +389,12 @@ public static partial class WebFormsReviewExecutionCommand
     private static string Digest(byte[] bytes) => Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
     private static string PayloadDigest(WebFormsReviewCheckpoint checkpoint) =>
         Digest(JsonSerializer.SerializeToUtf8Bytes(checkpoint with { CheckpointPayloadSha256 = "" }, JsonOptions));
+
+    private static string? SafeReportFailure(Exception exception) => exception is InvalidDataException && exception.Message.Length <= 128 &&
+        exception.Message.All(character => character is >= 'A' and <= 'Z' or '_') &&
+        (exception.Message.StartsWith("WEBFORMS_EVIDENCE_", StringComparison.Ordinal) ||
+         exception.Message.StartsWith("WEBFORMS_NATIVE_REPORT_", StringComparison.Ordinal) ||
+         exception.Message.StartsWith("WEBFORMS_GROUPED_HANDOFF_", StringComparison.Ordinal)) ? exception.Message : null;
 
     internal static async Task<string> RuntimeDigestAsync(string directory, CancellationToken token)
     {

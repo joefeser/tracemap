@@ -110,7 +110,8 @@ public static partial class WebFormsReviewExecutionCommand
             if (history.Checkpoint?.State == WebFormsReviewReportExecution.Completed) throw;
             var cancelled = exception is OperationCanceledException || token.IsCancellationRequested;
             history = await PublishAsync(root, Create(cancelled ? ReportsCancelled : ReportsFailed, scan.Artifacts,
-                [cancelled ? "Cancelled" : "ReportOrArtifactValidationFailed"], context), CancellationToken.None, history);
+                cancelled ? ["Cancelled"] : SafeReportFailure(exception) is { } category
+                    ? ["ReportOrArtifactValidationFailed", category] : ["ReportOrArtifactValidationFailed"], context), CancellationToken.None, history);
             if (cancelled && exception is not OperationCanceledException)
                 throw new OperationCanceledException("Native report execution cancelled.", exception, token);
             throw;

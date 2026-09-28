@@ -20,7 +20,10 @@ public sealed record NativeWebFormsReviewHandoff(
     IReadOnlyList<ScanManifest> ScanManifests, WebFormsModernizationPacket Packet,
     string CompiledHandoffRelativePath, string CompiledHandoffSha256,
     int RequestedCompiledRoots, int OmittedCompiledRoots, IReadOnlyList<string> Gaps,
-    IReadOnlyList<string> Limitations);
+    IReadOnlyList<string> Limitations)
+{
+    public string? EvidenceIndexRelativePath { get; init; }
+}
 
 internal static class WebFormsReviewReportExecution
 {
@@ -130,7 +133,8 @@ internal static class WebFormsReviewReportExecution
              "No source excerpts, source scan, build, runtime SQL execution, cleanup or external publication occurred in the report phase.",
              "Exact index/input/DLL/manifest hashes retain local byte provenance, not build authenticity or source-line identity.",
              "Graph admission remains bounded and may fail closed before classifying paths. Representative eight-times scale remains unverified.",
-             "All identities, locations, commits and input fingerprints remain private; this is not a shareable artifact."]);
+             "All identities, locations, commits and input fingerprints remain private; this is not a shareable artifact."])
+            { EvidenceIndexRelativePath = WebFormsReviewEvidenceIndex.Name };
         var remaining = budget.MaxOutputBytes - compiled.OutputBytes - selectionBytes;
         var outputBudget = new ByteBudget(remaining, cancellationToken);
         string handoffHash;
@@ -163,6 +167,8 @@ internal static class WebFormsReviewReportExecution
         };
         if (selectionPath is not null) generated.Add(new("selected-pages.local.txt", selectionBytes,
             Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(string.Join('\n', config.PageRelativePaths) + "\n")))));
+        generated.Add(await WebFormsReviewEvidenceIndex.WriteAsync(reportPath, plan.RunId, handoffHash, compiled.HandoffSha256,
+            budget.MaxOutputBytes, config.Budgets.MaxRetainedArtifactBytes, cancellationToken));
         return new(handoff.Coverage, packet.Surfaces.Count, paths.Paths.Count, handoff.Gaps, inputHash,
             generated.OrderBy(item => item.RelativePath, StringComparer.Ordinal).ToArray());
     }
@@ -174,6 +180,7 @@ internal static class WebFormsReviewReportExecution
         W("<h1>Native Web Forms review workbench</h1><p class=\"notice\">PRIVATE — retained static evidence only. Compiled paths do not override page-chain verdicts and do not prove SQL executed.</p>");
         W($"<p>Run {H(handoff.RunId)} · coverage {H(handoff.Coverage)} · page mode {H(handoff.Configuration.PageMode)} · {handoff.Packet.Surfaces.Count} retained surfaces. <a href=\"{HandoffName}\">Native handoff JSON</a></p>");
         W($"<p><a href=\"compiled/{GroupedCompiledPathReportWriter.HtmlName}\">Compiled method paths</a>: {chains} exact chains, {paths} evidence variants. Requested roots {handoff.RequestedCompiledRoots}; omitted roots {handoff.OmittedCompiledRoots}. <a href=\"compiled/{GroupedCompiledPathReportWriter.HandoffName}\">Lossless compiled handoff</a></p>");
+        W("<p>For bounded machine review, use <code>tracemap webforms-review query --run &lt;this durable run root&gt;</code>. The checkpoint owns the read-only evidence index; do not load the entire handoff to inspect one page or chain.</p>");
         W("<p>Call accounting: P = retained chain-associated call projections; F = distinct retained fact/scan/commit identities; S = retained normalized site identities. Missing site IDs are reported separately, not guessed.</p><table><thead><tr><th>Page / controls</th><th>Calls P / F / S</th><th>Retained page-chain verdicts</th></tr></thead><tbody>");
         foreach (var surface in handoff.Packet.Surfaces)
         {
