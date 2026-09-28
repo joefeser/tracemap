@@ -43,7 +43,11 @@ public sealed record WebFormsReviewConfig(
     string? ParentScanRoot,
     WebFormsReviewBudgets Budgets,
     string? PublishReceiptRelativePath = null,
-    string? ReceiptRoot = null);
+    string? ReceiptRoot = null,
+    string[]? PublishSourceRelativePaths = null,
+    WebFormsReviewConfigProvenance? PreparationProvenance = null);
+
+public sealed record WebFormsReviewConfigProvenance(string RuleId, string GeneratorSha256, string BoundedInputSha256);
 
 public sealed record WebFormsReviewInput(string Role, string Path, long Bytes, string Sha256, string? MetadataName = null);
 public sealed record WebFormsReviewPhase(string Phase, string State, string NextAction);
@@ -75,12 +79,15 @@ public static class WebFormsReviewPreflightCommand
         tracemap webforms-review preflight --config <private-json> --out <new-durable-run-root>
         tracemap webforms-review run --run <durable-run-root>
         tracemap webforms-review resume --run <durable-run-root>
+        tracemap webforms-review prepare --config <private-json> --out <new-evidence-root> --attest-exact-source-commit <commit>
 
         Validates the fresh/attach run contract and inventories explicit compiled inputs.
         Writes local-only run-manifest.json and README.md. No scan/build/publish/binding,
         report rendering, source mutation, cleanup or implicit TEMP discovery occurs.
         This output is preflight only, not a completed review workflow.
         Run/resume execute fresh source-plus-compiled scans with pinned checkpoints.
+        Prepare writes separate operator-declared receipts only with an exact-commit
+        attestation and explicit publishSourceRelativePaths; it never copies binaries.
         Attachment and unified reports are not implemented yet; retain the proven wrappers.
         """;
 
@@ -165,6 +172,11 @@ public static class WebFormsReviewPreflightCommand
         if (config.SolutionRelativePath is not null) await Add("solution", Child(config.SourceRoot, config.SolutionRelativePath), 4_194_304);
         foreach (var project in config.ProjectRelativePaths.Order(StringComparer.Ordinal)) await Add("project", Child(config.SourceRoot, project), 4_194_304);
         foreach (var page in config.PageRelativePaths.Order(StringComparer.Ordinal)) await Add("selected-page", Child(config.SourceRoot, page), 4_194_304);
+        foreach (var source in (config.PublishSourceRelativePaths ?? []).Order(StringComparer.Ordinal))
+        {
+            var path = Child(config.SourceRoot, source);
+            if (!inputs.Any(input => PathComparer.Equals(input.Path, path))) await Add("preparation-source", path, 67_108_864);
+        }
         foreach (var (role, names) in new[] { ("primary-assembly", config.PrimaryAssemblies), ("dependency-assembly", config.DependencyAssemblies) })
         {
             foreach (var name in names.Order(StringComparer.Ordinal))
@@ -307,7 +319,7 @@ public static class WebFormsReviewPreflightCommand
             (config.ParentScanRoot is not null && !Path.IsPathFullyQualified(config.ParentScanRoot)) ||
             (config.ReceiptRoot is not null && !Path.IsPathFullyQualified(config.ReceiptRoot))) throw Fail("ROOT_PATH_INVALID");
         var lists = new[] { config.ProjectRelativePaths, config.SourceFolders, config.PageRelativePaths, config.PrimaryAssemblies,
-            config.DependencyAssemblies, config.BindingReceipts, config.PdbInputs, config.PageMaps };
+            config.DependencyAssemblies, config.BindingReceipts, config.PdbInputs, config.PageMaps, config.PublishSourceRelativePaths ?? [] };
         if (config.SourceFolders.Length == 0 || config.PrimaryAssemblies.Length == 0 ||
             lists.Any(list => list.Length > 256 || list.Any(string.IsNullOrWhiteSpace) || list.Distinct(PathComparer).Count() != list.Length)) throw Fail("CONFIG_INVALID");
         if (config.ProjectMode is not ("projectless" or "solution" or "projects") ||
@@ -334,7 +346,7 @@ public static class WebFormsReviewPreflightCommand
     }
     private static bool Contains(string root, string child) => PathComparer.Equals(root, child) ||
         child.StartsWith(Path.EndsInDirectorySeparator(root) ? root : root + Path.DirectorySeparatorChar, PathComparison);
-    private static string Child(string root, string relative)
+    internal static string Child(string root, string relative)
     {
         if (string.IsNullOrWhiteSpace(relative) || Path.IsPathRooted(relative) || relative.Contains(':') ||
             relative.Replace('\\', '/').Split('/').Any(segment => segment is "" or "." or "..")) throw Fail("RELATIVE_PATH_INVALID");
@@ -400,5 +412,5 @@ public static class WebFormsReviewPreflightCommand
     private static bool IsHex(string? value, int length) => value?.Length == length && value.All(character => character is >= '0' and <= '9' or >= 'a' and <= 'f');
     private static string Digest(byte[] bytes) => Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
     private static PreflightException Fail(string suffix) => new("WEBFORMS_PREFLIGHT_" + suffix);
-    private sealed class PreflightException(string code) : Exception(code) { public string Code { get; } = code; }
+    internal sealed class PreflightException(string code) : Exception(code) { public string Code { get; } = code; }
 }

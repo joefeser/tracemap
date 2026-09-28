@@ -72,6 +72,51 @@
 - The prior committed full-suite result does not validate this later slice;
   full regression and public compiled-site parity remain separate gates.
 
+## Native operator-declared preparation (2026-09-28)
+
+- Added `webforms-review prepare --config <private-json> --out <new-evidence-root>
+  --attest-exact-source-commit <commit>`. The exact configured source commit must
+  be explicitly attested; this command never asks a model to infer or create
+  owner authority. Public fixture declarations are synthetic tests only.
+- Config declares a bounded `publishSourceRelativePaths` roster. Selected-page
+  markup is also pinned; all mode covers only declared markup and retains a
+  completeness gap. Git checks require committed membership and scoped-clean
+  source with optional index writes disabled, bounded output and a timeout.
+  Declared file bytes are independently compared with committed blobs, including
+  Windows case aliases and explicit built-in CRLF normalization; assume-unchanged
+  source edits cannot hide behind Git status. Custom clean/encoding transforms
+  are rejected on mismatches. Per-source blob/comparison/policy evidence joins
+  the preparation bounded input and is checked again before output admission.
+- Metadata is inspected using the shared Core policy without an expensive source
+  scan. Only uniquely admitted primary bytes receive operator-declared bindings;
+  dependencies remain unbound context. Both generated binding and publish
+  receipts pass independent Core inspection before output admission.
+- The new evidence root owns only pinned receipts, a preparation manifest and a
+  follow-on config using its separate receipt root. Exact CLI/Core generator and
+  actual bounded input hashes are retained. Source, published bytes, parent
+  scans and working PowerShell proof remain untouched; no binary copy occurs.
+- Known compiler provenance stays unavailable using the established marker,
+  never a fabricated compiler attribution. Mapless candidates are relative to
+  the declared inventory, not physical publish completeness. Existing 256-source,
+  64-published, 32-page receipt caps are explicit; automatic partitioning remains
+  required future work rather than a silently widened or all-pages claim.
+- Final focused validation passed 250/250, zero failed/skipped, across native
+  preflight/input/execution/preparation, publish-root, managed metadata, CLI,
+  local-review, scan receipts and messy-workspace regressions (1 minute 12
+  seconds). Preparation has 26 cases including source-blob mismatches hidden by
+  assume-unchanged, clean CRLF normalization across a buffer boundary, unsupported
+  transforms, nested roots, typed budgets and actual prepare/preflight/run.
+  The initial CRLF fixture changed attributes without renormalizing its index;
+  Git correctly reported it dirty. The fixture now models a clean normalized
+  checkout before exercising preparation. Builds emitted no compiler/analyzer
+  warnings; diff and private-path guards passed. Full regression is the next
+  separate committed-head gate. The source/DLL fixture checks
+  receipt policy and native prepare/preflight/run plumbing; it is not compiled
+  handler-chain parity, an eight-times benchmark or private Windows evidence.
+- Native immutable attachment, unified/grouped/indexed reports, bounded Claude
+  guidance, all-pages partitioning, scale/retention and final authorized private
+  Windows validation remain active goal requirements. No PR or merge occurred.
+
 ## Native fresh execution and resume (2026-09-28)
 
 - Added `webforms-review run/resume --run <explicit-root>` for fresh configs.
