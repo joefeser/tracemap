@@ -3,6 +3,17 @@
 Status: native preflight, input validation and checkpointed fresh scanning.
 Immutable attachment and unified review reports are still pending.
 
+The Core compiled-only producer now has a distinct local attachment context
+containing the exact generator, bounded input, original parent manifest/index
+hashes and retained source snapshot. It reuses the existing metadata/IL/PDB/
+publish policies without source extractors, builds, file discovery or source
+fact copies. Retained source bytes are checked before and after extraction.
+Parent artifact hashes require independent caller validation; they are not
+authenticated signatures. Source analysis/build status stays not run and the
+derived scan remains reduced and review-only. This producer is not yet wired
+to native `attach` execution or validated cross-index report joins; the existing
+command still refuses attachment and the proven wrappers remain required.
+
 ## Native operator-declared receipt preparation
 
 For an authorized existing publish whose primary DLLs you can attest came from

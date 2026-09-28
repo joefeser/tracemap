@@ -2526,6 +2526,19 @@ rules:
       - Distribution dependency bytes and runtime version participate in execution identity; external SDK/toolchain bytes are not pinned and remain an explicit gap rather than build authenticity or reproducibility proof.
       - Failed or cancelled attempt bytes are retained but not admitted as completed evidence; retry allocates a fresh owned attempt and never rewrites parent scans or old successful artifacts.
       - Configured admission bounds do not establish representative scale or bounded scanner memory; output traversal admits at most 256 filesystem entries and run history at most 256 checkpoints.
+  - id: workflow.compiled-source-attachment.v1
+    name: Compiled-only attachment context and limitations
+    description: Records exact Core generator, bounded input, parent manifest/index hashes and verified retained source snapshot for a new compiled-only scan using existing metadata, IL, portable PDB and publish receipt policies.
+    evidenceTier: Tier2Structural
+    emits:
+      - compiled-source-attachment.v1 local-only manifest context
+      - AnalysisGap
+    limitations:
+      - Parent manifest and index hashes must be independently validated by the calling workflow; the Core producer validates context shape and current retained source bytes, not parent index contents or authenticity.
+      - Source analysis, builds and semantic source reconciliation are not rerun; parent facts are not copied or relabeled. Cross-index source joins require independently validated parent context and are not supplied by this producer.
+      - Every attachment remains reduced, local-only and review-only. Missing bindings, metadata/IL/PDB disagreement and publish gaps retain their original policy. No runtime SQL, source-line identity, clean working tree, authentic compilation or complete-site claim is made.
+      - Source verification is an ordered bounded stream before and after extraction; no new source discovery occurs. Existing extractors retain their own work/memory limits, and overall eight-times scale remains unverified.
+
   - id: workflow.source-snapshot-retention.v1
     name: Complete private source snapshot roster retention
     description: Explicitly retains the scanner's authoritative ordered snapshot inventory, including extra semantic metadata, in a streamed local NDJSON roster and a generator/input/scan/roster hash-bound manifest for later immutable source-byte validation.

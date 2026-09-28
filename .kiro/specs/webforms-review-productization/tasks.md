@@ -61,6 +61,10 @@
     local generator/input headers, a hash-bound manifest, streamed membership and
     exact parent/source admission, including uninventoried semantic metadata.
     Preserve default scan/fact identities and legacy exact-inventory validation.
+  - [x] Add a compiled-only Core producer using the existing metadata/IL/PDB/
+    publish policies, verified retained source membership and explicit local
+    parent/generator/input context without copying source facts or writing inputs.
+    Keep native attachment checkpoints and cross-index report joins pending.
 - [ ] Integrate compiled evidence into normal packet/docs/handoff navigation
   across selected/all-page modes without upgrading review-only page verdicts.
   - [ ] Group exact method chains in the HTML while retaining every evidence

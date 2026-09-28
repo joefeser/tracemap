@@ -31,6 +31,11 @@ public sealed record ScanManifest(
     IlRewritePdbProvenance? IlRewritePdbProvenance = null,
     WebFormsPublishProvenance? WebFormsPublishProvenance = null) : IJsonOnDeserialized
 {
+    // Additive context for a compiled-only derived scan. Ordinary scans keep
+    // their existing serialized shape, and parent source facts are not copied.
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public CompiledAttachmentContext? CompiledAttachment { get; init; }
+
     public string? SourceSnapshotDigest { get; init; } = ValidateSourceSnapshotDigest(SourceSnapshotDigest);
 
     void IJsonOnDeserialized.OnDeserialized()
