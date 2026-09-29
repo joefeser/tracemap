@@ -51,6 +51,33 @@ try {
     if ($reportOutput -notcontains 'reportPartial.compiledJson=missing') { throw 'Report footprint missing later-stage absence' }
     if ($reportOutput -notcontains 'phaseUsage.3=reports;elapsedMs=1234;maxObservedWorkingSetBytes=987654;samples=2;sampled-parent-process-only') { throw 'Safe phase usage missing' }
     if (($reportOutput -join "`n") -match 'private|tracemap-status-helper-test') { throw 'Report footprint leaked private content' }
+    $configDir = Join-Path (Split-Path (Split-Path $run -Parent) -Parent) 'configuration'
+    [void][IO.Directory]::CreateDirectory($configDir)
+    $config = Join-Path $configDir 'review-config.local.json'
+    [IO.File]::WriteAllText($config, '{"pageMode":"selected","budgets":{"graphMaxDepth":20,"graphMaxPaths":256,"graphMaxWork":2000000}}')
+    $before = Get-ChildItem -LiteralPath $temp -File -Recurse | ForEach-Object { "$($_.FullName):$([Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([IO.File]::ReadAllBytes($_.FullName))))" }
+    $repo = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
+    $project = Join-Path $repo 'src/dotnet/TraceMap.ReportProbe/TraceMap.ReportProbe.csproj'
+    & dotnet build $project --nologo --verbosity quiet | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'Probe build failed' }
+    $probe = Join-Path $repo 'src/dotnet/TraceMap.ReportProbe/bin/Debug/net10.0/TraceMap.ReportProbe.dll'
+    $probeOutput = @(& dotnet $probe $config $report)
+    if ($LASTEXITCODE -ne 1 -or ($probeOutput -join "`n") -notmatch 'probe.failureStage=packet;exceptionType=') {
+        throw 'Probe did not identify malformed public fixture at packet stage'
+    }
+    if (($probeOutput -join "`n") -match 'private combined|private page|tracemap-status-helper-test') { throw 'Probe leaked private fixture content' }
+    $start.ArgumentList.Clear()
+    foreach ($argument in @('-NoProfile', '-File', $helper, '-RunRoot', $run, '-Probe')) { [void]$start.ArgumentList.Add($argument) }
+    $process = [Diagnostics.Process]::Start($start)
+    $helperProbeOutput = $process.StandardOutput.ReadToEnd()
+    $helperProbeError = $process.StandardError.ReadToEnd()
+    if (!$process.WaitForExit(20000) -or $process.ExitCode -eq 0 -or
+        $helperProbeOutput -notmatch 'probe.failureStage=packet;exceptionType=') {
+        throw "Status probe selection failed: $helperProbeError"
+    }
+    if ($helperProbeOutput -match 'private combined|private page|tracemap-status-helper-test') {
+        throw 'Status probe leaked private fixture content'
+    }
     $after = Get-ChildItem -LiteralPath $temp -File -Recurse | ForEach-Object { "$($_.FullName):$([Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([IO.File]::ReadAllBytes($_.FullName))))" }
     if (Compare-Object $before $after) { throw 'Status helper changed retained bytes' }
     Write-Output 'webFormsRunStatusHelperPublicTests=passed'
