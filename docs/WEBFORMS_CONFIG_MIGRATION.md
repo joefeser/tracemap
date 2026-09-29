@@ -249,3 +249,11 @@ them. The migration receipt binds the exact draft bytes, not later owner edits.
 ## Completed report gap diagnostics
 
 Run `./scripts/wstatus.ps1 -Gaps` and select the completed verification run (for example `verify-4`). This uses that run's retained tool and checkpointed bounded evidence query, printing only sanitized compiled gap kinds/reasons and returned/omitted counts. It does not print raw handoff JSON, private paths or hashes, rebuild tools, resume, or scan. The first 50 retained gaps are inspected; omitted counts remain explicit. This is diagnosis, not parity proof.
+
+### New-plan report admission capacity
+
+New preflights materialize an omitted `budgets.reports` from the declared scan capacity: fact and edge pools use `maxParentFacts`; text and disk-backed graph storage use `maxRetainedArtifactBytes`, capped at 16 GiB (graph storage has a 64 KiB minimum). Text limits now accept 64-bit JSON numbers. Explicit report budgets are preserved unchanged, including small fail-closed caps. Search depth/work/path, frontier, publication and output limits are not increased.
+
+This removes the hidden 250,000-fact/128 MiB report bottleneck for configurations that already permit larger retained scans. A selected page still admits the global graph so overload, dispatch and cross-source competitors are retained. Capacity is not a memory reservation or a performance guarantee; larger admitted graphs may consume substantially more time, working set and scratch disk. Admission can still fail closed at another configured limit.
+
+Historical plans/checkpoints retain their original policy; do not edit them to upgrade budgets. Start a new verification folder with `./scripts/wverify.ps1 -Run`; the tool scans source again but does not rebuild the website. Keep the earlier run as the comparison baseline. Artifact completion is not parity: compare exact chains and evidence variants before acceptance.

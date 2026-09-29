@@ -45,8 +45,36 @@ public sealed class WebFormsReviewPreflightTests
         Assert.Equal(256, defaults.GraphMaxPaths);
         fixture.Config = fixture.Config with { Budgets = defaults with { GraphMaxPaths = paths } };
         var result = await fixture.Build();
-        Assert.Equal(defaults with { GraphMaxPaths = paths }, result.Configuration.Budgets);
+        Assert.Equal(defaults with { GraphMaxPaths = paths, Reports = WebFormsReviewPreflightCommand.ResolveNewReportBudgets(defaults) }, result.Configuration.Budgets);
         Assert.False(Directory.Exists(fixture.Output));
+    }
+
+    [Fact]
+    public async Task New_plan_materializes_large_scan_report_admission_without_changing_explicit_limits()
+    {
+        using var fixture = new Fixture();
+        var declared = fixture.Config.Budgets with { MaxParentFacts = 750_000, MaxRetainedArtifactBytes = 4L * 1024 * 1024 * 1024 };
+        fixture.Config = fixture.Config with { Budgets = declared };
+        var plan = await fixture.Build();
+        var effective = plan.Configuration.Budgets.Reports!;
+        Assert.Equal(750_000, effective.MaxInputFacts);
+        Assert.Equal(750_000, effective.MaxInputEdges);
+        Assert.Equal(4L * 1024 * 1024 * 1024, effective.MaxInputTextBytes);
+        Assert.Equal(effective.MaxInputTextBytes, effective.MaxGraphStorageBytes);
+        Assert.Equal(new WebFormsReviewReportBudgets().MaxOutputBytes, effective.MaxOutputBytes);
+        Assert.Null(fixture.Config.Budgets.Reports);
+        var explicitLimits = new WebFormsReviewReportBudgets(MaxInputFacts: 123);
+        fixture.Config = fixture.Config with { Budgets = declared with { Reports = explicitLimits } };
+        Assert.Equal(explicitLimits, (await fixture.Build()).Configuration.Budgets.Reports);
+        Assert.False(Directory.Exists(fixture.Output));
+    }
+
+    [Fact]
+    public void Implicit_graph_storage_remains_hard_bounded()
+    {
+        var effective = WebFormsReviewPreflightCommand.ResolveNewReportBudgets(new(MaxRetainedArtifactBytes: 1_099_511_627_776));
+        Assert.Equal(16L * 1024 * 1024 * 1024, effective.MaxGraphStorageBytes);
+        Assert.Equal(16L * 1024 * 1024 * 1024, effective.MaxInputTextBytes);
     }
 
     [Fact]

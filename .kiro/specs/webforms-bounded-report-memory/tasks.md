@@ -1,5 +1,7 @@
 # Web Forms bounded report memory
 
+- [x] Materialize new native-plan report admission from declared scan capacity while preserving explicit caps and historical checkpoint policies; regress selected-root admission and refusal.
+
 - [x] Audit the full-index path reader, graph ambiguity dependencies, and packet writer.
 - [x] Record the conservative projection and fail-closed admission design.
 - [x] Implement opt-in compact/bounded single-index path input for Web Forms packets.

@@ -21,7 +21,7 @@ public sealed record WebFormsModernizationOptions(
     int MaxBatchDataMovement = 1_000,
     int MaxInputFacts = 250_000,
     int MaxInputEdges = 250_000,
-    int MaxInputTextBytes = 128 * 1024 * 1024,
+    long MaxInputTextBytes = 128 * 1024 * 1024,
     string? SurfaceListPath = null,
     int MaxTraversalWork = 100_000,
     int MaxFrontier = 10_000)

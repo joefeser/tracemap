@@ -1,5 +1,25 @@
 # Implementation state
 
+## Native preflight capacity consistency (2026-09-29)
+
+Branch `codex/webforms-config-migration`. Private retained diagnostics confirmed
+`GraphInputLimitReached` with `graph-facts`: native reporting used unrelated
+250,000-fact defaults while the scan configuration admitted a larger corpus.
+New preflights now explicitly materialize report fact/edge capacity from
+`MaxParentFacts` and text/scratch capacity from the retained artifact bound,
+capped at 16 GiB. Explicit report budgets and historical null-policy digests
+remain unchanged. Text capacity is a 64-bit byte count. No selector pruning or
+unbounded graph admission was introduced; traversal/frontier/output caps remain.
+Larger admission can cost more working set and scratch disk. Historical completed
+runs cannot be upgraded in place; new verification is required. Private-corpus
+path parity and representative scale remain unverified pending owner readback.
+
+Validation: 166 focused preflight/execution/selected-root tests passed; CLI and
+ReportProbe builds had zero warnings/errors; gap-status public tests passed.
+Full .NET suite was not run for this bounded change. An initial test pass had
+stale expected storage defaults plus a runtime-hash race from a concurrent build;
+the corrected expectations and serialized no-build rerun passed completely.
+
 ## Independent snapshot and handler-graph admission (2026-09-14)
 
 Large private indexes exposed a budget-ordering defect: the packet snapshot and
