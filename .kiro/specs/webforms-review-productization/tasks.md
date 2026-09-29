@@ -200,6 +200,12 @@
     private acceptance and any explicitly authorized cleanup remain separate gates.
 - [ ] Validate the new workflow on an authorized real repository before replacing
   the current proof wrappers; parallelization follows correctness and scale work.
+  - [x] Retain original tool/runtime locators and provide an explicit verified
+    copy of the pinned distribution without modifying completed runs or copying
+    external runtime/SDK/source/published bytes. Historical absence must stay
+    unknown. Rebuilt focused validation passed 212 tests, followed by 16 final
+    tool-copy/resume/refusal tests. External dependency closure and the final
+    exact-head regression/private Windows gates remain separate.
 
 ## Private decision workflow
 

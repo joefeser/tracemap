@@ -39,6 +39,10 @@ phase peak, quota, child-process total or performance forecast. Failed-attempt
 measurements do not admit failed artifacts. A different reader generator is not permission
 to resume. Stop and return any incomplete, busy or invalid state to the owner;
 an evidence-review session must not execute its suggested run/resume action.
+Optional originalTool is the checkpointed original distribution/runtime locator,
+not a current availability check or a self-contained SDK. Historical absence
+stays unknown. Tool-copy manifests are private operational evidence; reviewing
+one does not authorize retaining, relocating or executing a tool distribution.
 
 Only use
 the approved executable and run root inside the authorized environment. Native
