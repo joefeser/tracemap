@@ -1667,6 +1667,21 @@ not recorded here.
 
 ## Remaining follow-up
 
+### Local config migration branch (2026-09-29)
+
+- Branch `codex/webforms-config-migration` starts from merged dev `8cae5664`.
+  No private user configs are available here or committed. The local .NET
+  `migrate-config` command converts the known pipeline JSON/JSONC schema into a
+  separate native draft and hash-bound local receipt; `wmigrate.ps1` is only a
+  short build/launch/prompt helper for one or two explicitly named review roots.
+- Existing source/folder/project/page settings are preserved. Missing commit,
+  publish inventory/membership and binding/attestation are never inferred.
+  Drafts remain not ready; discover and virtual-route cases require owner input.
+  Original config/scans remain immutable; two-repository merge replacement is
+  not implemented or claimed by this config migration.
+- Validation results are recorded with the final commit handoff; user-machine
+  acceptance remains separate. No cleanup, scans or publishing are performed.
+
 ### PR #797 round-one review repair (2026-09-29)
 
 - Owner authorized up to four review/fix rounds, no merge. Initial settled ACK

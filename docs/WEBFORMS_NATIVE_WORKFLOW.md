@@ -24,6 +24,9 @@ attestation or automatic limit increase.
 
 ## Configure once
 
+For existing PowerShell configs, use the [local migration helper](WEBFORMS_CONFIG_MIGRATION.md).
+It writes separate drafts and a missing-input checklist without changing old runs.
+
 Use private plain JSON, not the legacy PowerShell JSONC schema. Comments,
 unknown/duplicate properties and trailing commas are rejected. Forward slashes
 simplify Windows paths. Replace every example path, commit and inventory entry

@@ -83,6 +83,8 @@ public static class TraceMapCommand
                 "local-review" => await LocalReviewCommand.RunAsync(rest, output, error, RunScanAsync, cancellationToken),
                 "webforms-review" => rest.FirstOrDefault() == "start"
                     ? await WebFormsReviewStartCommand.RunAsync(rest, output, error, RunNativeReviewScanAsync, cancellationToken)
+                    : rest.FirstOrDefault() == "migrate-config"
+                    ? await WebFormsConfigMigrationCommand.RunAsync(rest, output, error, cancellationToken)
                     : rest.FirstOrDefault() is "run" or "resume"
                     ? await WebFormsReviewExecutionCommand.RunAsync(rest, output, error, RunNativeReviewScanAsync, cancellationToken)
                     : rest.FirstOrDefault() == "query"

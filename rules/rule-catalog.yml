@@ -3,6 +3,18 @@
 # - deferred: documented future/planned rule that must not appear in emitted facts.
 # Existing rules without an explicit status are treated as active.
 rules:
+  - id: workflow.webforms.config-migration.v1
+    name: Local legacy Web Forms config migration draft
+    description: Maps bounded known legacy JSON or JSONC scan settings into a separate native draft with exact generator and input hashes.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - webforms-config-migration.v1 local-only receipt
+      - review.draft.json local-only native config bytes bound by the migration receipt
+    limitations:
+      - Migration is local-only syntactic mapping, not preflight, collection, binding, compilation or runtime evidence.
+      - Exact commit, published inventory, receipts and source-to-DLL authority are never inferred; drafts remain not ready to run.
+      - Discover selection and virtual page routes require explicit owner resolution; separate repositories are not merged.
+      - Original configs and retained artifacts stay unchanged; existing destinations and ambiguous or unsupported schemas are refused.
   - id: dotnet.compiled.input.v1
     name: Explicit bounded managed input
     description: Records an explicitly declared managed assembly or dependency admitted under the deterministic compiled-input policy with local-only byte and provenance digests.

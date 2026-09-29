@@ -1,5 +1,8 @@
 # Tasks
 
+- [x] Add local legacy-config migration into separate native drafts, preserving
+  originals and recording hashes, missing owner inputs and unsupported scope.
+
 ## Public and work — highest priority
 
 - [x] Add a language-neutral public quickstart.
