@@ -257,3 +257,15 @@ New preflights materialize an omitted `budgets.reports` from the declared scan c
 This removes the hidden 250,000-fact/128 MiB report bottleneck for configurations that already permit larger retained scans. A selected page still admits the global graph so overload, dispatch and cross-source competitors are retained. Capacity is not a memory reservation or a performance guarantee; larger admitted graphs may consume substantially more time, working set and scratch disk. Admission can still fail closed at another configured limit.
 
 Historical plans/checkpoints retain their original policy; do not edit them to upgrade budgets. Start a new verification folder with `./scripts/wverify.ps1 -Run`; the tool scans source again but does not rebuild the website. Keep the earlier run as the comparison baseline. Artifact completion is not parity: compare exact chains and evidence variants before acceptance.
+
+### Recover a retained evidence-node-limit failure without another scan
+
+Run `./scripts/wstatus.ps1 -Recover -Open` and select the failed run (for example `verify-5`). The helper builds the current tool, verifies the source scan checkpoint and the internally linked report hashes, and creates a separate `recovered-reports` bundle beside the original `review` folder. On Windows `-Open` opens its workbench after success. An existing recovery folder is never overwritten; select a new name after a failed recovery.
+
+Recovery is restricted to `WEBFORMS_EVIDENCE_NODE_LIMIT` failures with complete report handoffs. It copies the existing handoffs, renders a recovery-labeled workbench, and rebuilds only the JSON-token query index. It does not rescan source, recollect DLL evidence, rerun graph traversal, change original checkpoints, or declare the original run completed. Hashing and bounded in-memory grouped-handoff validation still consume resources. Partial recovery files remain on failure, without a completed recovery receipt.
+
+New implicit report plans materialize `maxEvidenceNodes=20000000`; explicit report configurations can choose 2 through 50000000 nodes. An absent property in historical/explicit reports retains the old 2000000-node bound. Index construction bulk-loads tokens before building unique lookup indexes; duplicate properties still fail admission. Index byte caps and per-query 2048-node/128-KiB response caps remain unchanged. Old two-million-node contexts remain readable. Capacity is not private-corpus acceptance or a runtime guarantee.
+
+Bounded access to a recovered bundle uses `tracemap webforms-review query-recovery --bundle <bundle>`, with the same `--document`, `--pointer`, `--offset`, `--limit`, and `--depth` options as normal query. It returns a distinct recovery claim level and verifies the recovery receipt/index, not the current source or a completed original checkpoint. The recovery receipt binds the exact current generator and its bounded retained input/artifact hashes. All files remain private.
+
+The excessive I/O seen in full native graph composition has not been root-caused. This recovery bypasses those graph phases rather than claiming that the entire fresh-report performance problem is solved.

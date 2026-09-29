@@ -1218,6 +1218,49 @@ public sealed class WebFormsReviewExecutionTests
         TraceMapCommand.RunAsync(["scan", .. args], output, error, token);
     private static string Hash(string path) { using var stream = File.OpenRead(path); return Convert.ToHexString(SHA256.HashData(stream)).ToLowerInvariant(); }
 
+    [Theory]
+    [InlineData("unchanged")]
+    [InlineData("compiled")]
+    [InlineData("application")]
+    [InlineData("scan")]
+    [InlineData("existing-output")]
+    public async Task Report_recovery_reuses_consistent_failed_outputs_in_separate_bundle_and_refuses_tampering(string mutation)
+    {
+        using var fixture = new Fixture(); fixture.AddPublicEventFixture();
+        fixture.Config = fixture.Config with { Budgets = fixture.Config.Budgets with { Reports = new() { MaxEvidenceNodes = 7 } } };
+        await fixture.Preflight(); Assert.Equal(0, await fixture.Execute("run", Scan));
+        Assert.Equal(1, await fixture.ExecuteReports("resume", WebFormsReviewReportExecution.WriteAsync));
+        var failed = fixture.LastCheckpoint(); Assert.Contains("WEBFORMS_EVIDENCE_NODE_LIMIT", failed.Gaps);
+        var attempt = Path.Combine(fixture.Run, failed.Reports!.ReportAttempt);
+        var target = Path.Combine(fixture.Root, "recovered");
+        if (mutation == "compiled") File.AppendAllText(Path.Combine(attempt, "compiled/compiled-paths.handoff.local.json"), " ");
+        if (mutation == "application") File.AppendAllText(Path.Combine(attempt, "handoff.local.json"), "invalid");
+        if (mutation == "scan") File.AppendAllText(Path.Combine(fixture.Run, failed.Artifacts[0].RelativePath), "invalid");
+        if (mutation == "existing-output") Directory.CreateDirectory(target);
+        var before = Directory.GetFiles(fixture.Run, "*", SearchOption.AllDirectories).ToDictionary(path => path, Hash);
+        using var output = new StringWriter(); using var error = new StringWriter();
+        var exit = await TraceMapCommand.RunAsync(["webforms-review", "recover-reports", "--run", fixture.Run, "--out", target], output, error);
+        if (mutation == "unchanged")
+        {
+            Assert.True(exit == 0, error.ToString());
+            Assert.Contains("no-graph-traversal", output.ToString());
+            var receipt = JsonSerializer.Deserialize<WebFormsReportRecoveryReceipt>(File.ReadAllText(Path.Combine(target,
+                WebFormsReviewExecutionCommand.RecoveryName)), JsonOptions)!;
+            Assert.Equal("recovered-static-reports-original-run-not-completed", receipt.ClaimLevel);
+            Assert.Equal(WebFormsReviewExecutionCommand.RecoveryHash(receipt), receipt.BoundedInputSha256);
+            Assert.Equal("reports-failed", fixture.LastCheckpoint().State);
+            using var query = new StringWriter();
+            Assert.Equal(0, await TraceMapCommand.RunAsync(["webforms-review", "query-recovery", "--bundle", target,
+                "--document", "compiled", "--pointer", "/chains", "--depth", "0"], query, error));
+            Assert.Contains("recovered-static-reports-original-run-not-completed", query.ToString());
+            File.AppendAllText(Path.Combine(target, WebFormsReviewEvidenceIndex.Name), "tamper");
+            Assert.Equal(1, await TraceMapCommand.RunAsync(["webforms-review", "query-recovery", "--bundle", target], TextWriter.Null, error));
+        }
+        else { Assert.Equal(1, exit); Assert.DoesNotContain(fixture.Root, error.ToString()); Assert.False(File.Exists(Path.Combine(target, WebFormsReviewExecutionCommand.RecoveryName))); }
+        Assert.Equal(before.Count, Directory.GetFiles(fixture.Run, "*", SearchOption.AllDirectories).Length);
+        foreach (var (path, hash) in before) Assert.Equal(hash, Hash(path));
+    }
+
     private sealed class Fixture : IDisposable
     {
         public string Root { get; }

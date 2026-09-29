@@ -123,7 +123,7 @@ public static partial class WebFormsReviewExecutionCommand
         int Number(string key, int defaultValue, int maximum) => !options.TryGetValue(key, out var value) ? defaultValue :
             int.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out var number) && number <= maximum ? number : throw WebFormsReviewEvidenceIndex.Invalid("QUERY_ARGUMENT_INVALID");
         var query = new WebFormsEvidenceQuery(options.GetValueOrDefault("--document", "application"), options.GetValueOrDefault("--pointer", ""),
-            Number("--offset", 0, WebFormsReviewEvidenceIndex.MaxNodes), Number("--limit", 16, 50), Number("--depth", 1, 8));
+            Number("--offset", 0, WebFormsReviewEvidenceIndex.MaxSupportedNodes), Number("--limit", 16, 50), Number("--depth", 1, 8));
         if (query.Document is not ("application" or "compiled") || query.Limit == 0) throw WebFormsReviewEvidenceIndex.Invalid("QUERY_ARGUMENT_INVALID");
         _ = Segments(query.Pointer);
         return query;

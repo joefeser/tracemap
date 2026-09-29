@@ -1,5 +1,29 @@
 # Implementation state
 
+## Evidence-node limit and report-only recovery (2026-09-29)
+
+Private verify-5 completed its scan and generated handoffs/workbench, then failed
+the hard-coded 2,000,000-token evidence-index limit. New implicit plans explicitly
+select 20,000,000 tokens (supported ceiling 50,000,000); historical absent settings
+retain 2,000,000 and old contexts remain readable. Index construction now builds
+unique secondary indexes after bulk token insertion; duplicate-property admission
+and response/storage/token limits remain enforced.
+
+`wstatus.ps1 -Recover -Open` invokes current-tool `recover-reports` against the
+exact selected failed run. Recovery verifies scan artifacts, original report
+hash commitments and grouped evidence consistency, then copies handoffs/renders
+a new workbench/rebuilds the query index in a separate bundle. It neither changes
+old checkpoints nor claims original completion. A new generator/input-bound
+receipt owns its artifacts; `query-recovery` returns a distinct recovery claim.
+Partial recovery remains on failure. Full native graph repeated-read performance
+is still unresolved; recovery bypasses it, without implying private path parity.
+
+Validation: 187 focused evidence-query/preflight/execution tests passed, including
+more than 2,000,000 synthetic indexed nodes, historical context readback, explicit
+small-cap refusal, duplicate/cancellation handling, recovery tamper cases and
+unchanged original files. Gap/recovery PowerShell helper tests passed. Full .NET
+suite and private-corpus recovery/parity remain unverified.
+
 ## Native preflight capacity consistency (2026-09-29)
 
 Branch `codex/webforms-config-migration`. Private retained diagnostics confirmed

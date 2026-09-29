@@ -1,5 +1,7 @@
 # Web Forms bounded report memory
 
+- [x] Make evidence-token capacity explicit and backward-compatible; bulk-load lookup indexes and recover node-limit report failures into separately labeled private bundles without rescanning.
+
 - [x] Materialize new native-plan report admission from declared scan capacity while preserving explicit caps and historical checkpoint policies; regress selected-root admission and refusal.
 
 - [x] Audit the full-index path reader, graph ambiguity dependencies, and packet writer.
