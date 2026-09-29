@@ -49,6 +49,12 @@ try {
     if ($reportOutput -notcontains 'reportPartial.combined=present;bytes=22') { throw 'Report footprint missing combined index count' }
     if ($reportOutput -notcontains 'reportPartial.selectedPages=present;bytes=18') { throw 'Report footprint missing selected pages count' }
     if ($reportOutput -notcontains 'reportPartial.compiledJson=missing') { throw 'Report footprint missing later-stage absence' }
+    if (@($reportOutput | Where-Object { $_ -match '^reportPartial\.compiledDirectory=present;pathChars=[0-9]+$' }).Count -ne 1) {
+        throw 'Report footprint missing compiled directory state'
+    }
+    if (@($reportOutput | Where-Object { $_ -match '^reportPartial\.volumeAvailableBytes=([0-9]+|unavailable);sampled-now-not-at-failure$' }).Count -ne 1) {
+        throw 'Report footprint missing safe volume availability'
+    }
     if ($reportOutput -notcontains 'phaseUsage.3=reports;elapsedMs=1234;maxObservedWorkingSetBytes=987654;samples=2;sampled-parent-process-only') { throw 'Safe phase usage missing' }
     if (($reportOutput -join "`n") -match 'private|tracemap-status-helper-test') { throw 'Report footprint leaked private content' }
     $configDir = Join-Path (Split-Path (Split-Path $run -Parent) -Parent) 'configuration'

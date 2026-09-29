@@ -101,6 +101,19 @@ if ($null -ne $last -and (Safe-Code $last.state) -eq 'reports-failed') {
     $attempt = [string]$last.reports.reportAttempt
     if ($attempt -cnotmatch '^reports/[0-9a-f]{32}$') { throw 'WEBFORMS_STATUS_REPORT_ATTEMPT_INVALID' }
     $report = Join-Path $RunRoot $attempt
+    $compiledDirectory = Join-Path $report 'compiled'
+    $compiledState = 'missing'
+    if (Test-Path -LiteralPath $compiledDirectory -PathType Container) {
+        $directory = Get-Item -LiteralPath $compiledDirectory
+        $compiledState = if (($directory.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { 'linked' } else { 'present' }
+    }
+    Write-Output "reportPartial.compiledDirectory=$compiledState;pathChars=$($compiledDirectory.Length)"
+    try {
+        $volume = [IO.DriveInfo]::new([IO.Path]::GetPathRoot($report))
+        Write-Output "reportPartial.volumeAvailableBytes=$(Safe-Count $volume.AvailableFreeSpace);sampled-now-not-at-failure"
+    } catch {
+        Write-Output 'reportPartial.volumeAvailableBytes=unavailable;sampled-now-not-at-failure'
+    }
     $expected = [ordered]@{
         combined = 'combined.sqlite'
         selectedPages = 'selected-pages.local.txt'
