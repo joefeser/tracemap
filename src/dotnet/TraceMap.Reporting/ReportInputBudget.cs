@@ -12,7 +12,9 @@ internal sealed class ReportInputBudget(int maxFacts, int maxEdges, long maxText
     public int MaxFacts { get; } = maxFacts > 0 ? maxFacts : throw new ArgumentOutOfRangeException(nameof(maxFacts));
     public int MaxEdges { get; } = maxEdges > 0 ? maxEdges : throw new ArgumentOutOfRangeException(nameof(maxEdges));
     public long MaxTextBytes { get; } = maxTextBytes > 0 ? maxTextBytes : throw new ArgumentOutOfRangeException(nameof(maxTextBytes));
-    internal long MaxGraphStorageBytes { get; init; } = 512L * 1024 * 1024;
+    internal const long DefaultMaxGraphStorageBytes = CombinedPathAdmissionLimits.DefaultMaxGraphStorageBytes;
+    internal long MaxGraphStorageBytes { get; init; } = DefaultMaxGraphStorageBytes;
+    internal Action<string>? GraphStageObserver { get; init; }
     public long FactsVisited { get; private set; }
     public int FactsRetained { get; private set; }
     public int EdgesRetained { get; private set; }

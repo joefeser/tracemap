@@ -17,6 +17,11 @@ and contiguous checkpoint journal. The native report phase writes a lossless
 `review-evidence.sqlite` beside its HTML and JSON and pins its bytes in the
 completed checkpoint. Do not load the large handoffs or facts wholesale:
 
+When the owner used the one-command native `start`, the pinned run is the
+explicit review folder's `run/` child, not its `evidence/` child or a TEMP
+folder selected by age. `start` is an execution command, not an allowed action
+for an evidence-only reviewer.
+
 ```text
 tracemap webforms-review status --run <durable-run-root> --json
 tracemap webforms-review query --run <durable-run-root>
@@ -45,7 +50,7 @@ The legacy start/continue/source-review wrappers below do **not** accept native
 run roots. Their completed receipt/grant/session contracts remain unchanged.
 Native Claude launching/session management is not added by the read-only query
 command; follow the organization's existing approved launcher and permission
-process. Never grant source access or execute native run/resume during evidence
+process. Never grant source access or execute native start/prepare/preflight/run/resume during evidence
 review. Real work-machine/private compiled-site acceptance remains required.
 
 ### Legacy PowerShell retained review root

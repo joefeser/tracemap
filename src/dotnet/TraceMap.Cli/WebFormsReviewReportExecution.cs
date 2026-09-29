@@ -84,7 +84,8 @@ internal static class WebFormsReviewReportExecution
             MaxDepth: config.Budgets.GraphMaxDepth, MaxPaths: config.Budgets.GraphMaxPaths,
             MaxInputFacts: budget.MaxInputFacts, MaxInputEdges: budget.MaxInputEdges,
             MaxInputTextBytes: budget.MaxInputTextBytes, SurfaceListPath: selectionPath,
-            MaxTraversalWork: checked((int)config.Budgets.GraphMaxWork), MaxFrontier: budget.MaxFrontier), cancellationToken);
+            MaxTraversalWork: checked((int)config.Budgets.GraphMaxWork), MaxFrontier: budget.MaxFrontier)
+            { MaxGraphStorageBytes = budget.MaxGraphStorageBytes }, cancellationToken);
         var source = combined.Sources.Single(item => item.Label == "retained");
         var allRoots = packet.EventChains.Where(chain => !string.IsNullOrWhiteSpace(chain.HandlerSymbol))
             .Select(chain => new CombinedPathSymbolRoot(source.SourceIndexId, source.ScanId, source.CommitSha, chain.HandlerSymbol!))
@@ -94,7 +95,8 @@ internal static class WebFormsReviewReportExecution
             ToSurface: "database-api", IncludeLegacyRoots: true, MaxDepth: config.Budgets.GraphMaxDepth,
             MaxPaths: config.Budgets.GraphMaxPaths, MaxFrontier: budget.MaxFrontier)
             { MaxTraversalWork = checked((int)config.Budgets.GraphMaxWork) }, roots, combinedIndex: true,
-            new(budget.MaxInputFacts, budget.MaxInputEdges, budget.MaxInputTextBytes), cancellationToken);
+            new(budget.MaxInputFacts, budget.MaxInputEdges, budget.MaxInputTextBytes)
+            { MaxGraphStorageBytes = budget.MaxGraphStorageBytes }, cancellationToken);
         var index = await WebFormsReviewPreflightCommand.HashAsync("combined-index", indexPath, config.Budgets.MaxRetainedArtifactBytes, cancellationToken);
         var projectionLimits = new GroupedCompiledPathLimits(budget.MaxProjectionInputBytes, budget.MaxOutputBytes - selectionBytes,
             Math.Max(1, config.Budgets.GraphMaxPaths), budget.MaxProjectionRecords, budget.MaxProjectionReferences);

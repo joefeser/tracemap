@@ -4,8 +4,9 @@ Status: native preflight, input validation, checkpointed fresh scanning and
 immutable compiled-only attachment. Explicit cross-index VB PDB/publish reporting
 joins, checkpointed private report orchestration and bounded evidence retrieval
 and deterministic receipt partition preparation/pinning are implemented for
-declared selected/all-page scopes. Representative scale, complete compiled-site
-coverage and real private Windows parity remain pending.
+declared selected/all-page scopes. Strict fresh synthetic 32/256-page scale
+passes with explicitly declared budgets; complete compiled-site coverage,
+transient resource instrumentation and real private Windows parity remain pending.
 
 The Core compiled-only producer now has a distinct local attachment context
 containing the exact generator, bounded input, original parent manifest/index
@@ -21,6 +22,33 @@ local integrity, not authenticity. Validated cross-index report joins are now
 consumed by the reporting graph through the explicit combine contract described
 below. Native report orchestration produces a private workbench and grouped
 lossless handoff; retain the proven wrappers until final workflow parity passes.
+
+## One-command native start
+
+Keep the source and existing compiled website in their original locations. Put
+their exact paths, commit, selected/all-page scope and explicit budgets in the
+private config once. Then start a new explicitly named durable review folder:
+
+```text
+tracemap webforms-review start --config review.json --out review-monday --attest-exact-source-commit <exact-40-character-source-commit>
+```
+
+Only supply that attestation if you can declare that the selected primary DLLs
+came from that exact clean source commit. `start` does not infer it from the
+config, build or copy the compiled site, find the newest TEMP folder, or increase
+budgets. It composes the existing preparation, preflight and execution gates.
+With an already prepared config containing explicit binding/publish receipts,
+omit the attestation and use `start --config prepared.json --out review-monday`.
+Missing receipts without explicit attestation are rejected before output creation.
+
+The new root contains `evidence/` when preparation was requested and `run/` with
+the pinned manifest, append-only attempts/checkpoints and both document sets.
+The command prints the exact workbench, handoff and pinned run paths. Existing
+roots, source/publish/parent/receipt overlap and runtime overlap are refused.
+Failed owned outputs remain intact. Once `run/run-manifest.json` exists, recover
+with `tracemap webforms-review resume --run review-monday/run`; do not repeat
+preparation or select a replacement folder by timestamp. The advanced three-step
+commands below remain supported. No cleanup or wrapper removal is automatic.
 
 ### Bounded publish receipt sets (Core contract)
 
@@ -368,7 +396,7 @@ compact HTML names are display-only. Page-chain verdicts are never upgraded by
 the compiled supplement. Raw page maps are not promoted to a receipt automatically.
 
 An optional `budgets.reports` object configures graph admission (`maxInputFacts`,
-`maxInputEdges`, `maxInputTextBytes`), packet limits (`maxSurfaces`, `maxEventChains`,
+`maxInputEdges`, `maxInputTextBytes`, optional `maxGraphStorageBytes`), packet limits (`maxSurfaces`, `maxEventChains`,
 `maxGaps`), handler/frontier limits (`maxCompiledRoots`, `maxFrontier`), and projection
 limits (`maxProjectionInputBytes`, `maxOutputBytes`, `maxProjectionRecords`,
 `maxProjectionReferences`). Defaults are 250,000 facts/edges, 128 MiB graph text,
@@ -396,8 +424,14 @@ Fact/edge text is admitted before allocation. Raw combined admission ceilings
 are not raised.
 
 Bounded combined admitted facts, graph nodes, edges and outgoing adjacency reside
-in a private temporary SQLite database, with an 8 MiB page cache and a 512 MiB logical
-database ceiling. This is not an emitted run artifact or a reusable checkpoint:
+in a private temporary SQLite database, with an 8 MiB page cache and a default
+512 MiB logical database ceiling. Native configuration can explicitly declare
+`budgets.reports.maxGraphStorageBytes` between 64 KiB and 16 GiB. Omission preserves
+the historical default and configuration serialization; an explicit value is
+hash-bound, displayed by status, and applied to both packet and compiled-path
+graphs. It does not increase input, traversal work, path or output limits, or
+guarantee that the machine has sufficient disk or memory.
+This is not an emitted run artifact or a reusable checkpoint:
 SQLite owns the temporary file and disposes it with the connection. The header
 pins the exact Reporting DLL SHA-256 and full input-index SHA-256; input bytes are
 streamed again before a report can be returned. No input index is written.
@@ -408,13 +442,60 @@ for Unicode. A private order roster pins global and per-node positions. Random
 access loads at most 64 records with a 512 KiB serialized page target; one
 already-admitted larger record is retained alone. Reverse traversal uses this
 same list without materializing a reversed whole-node array.
+The private v2 store losslessly frames each raw UTF-8 JSON payload with its byte
+length. Decode requires the exact declared length; invalid modes,
+oversize declarations, truncated or trailing bytes are rejected. The 512 KiB
+outgoing page target still measures JSON bytes, excluding the framing header.
+IDs, alias keys, ordering columns and every admitted row remain unchanged.
+The experimental Brotli encoding is not active: it slowed the smaller stress
+case and still failed to admit the larger graph. Framing validates row bounds;
+it is not a compression or representative-scale claim.
 Fact admission streams each compact projected row directly into this database.
+Published-page bridge joins build each complete typed inventory once and use
+source/file lookups rather than re-decoding the entire scratch fact table per
+page and handler. The qualified method index keeps all bound name/assembly/type
+competitors and opaque fallback identities; the original receipt, type, span,
+name and boundness predicates still gate each edge. Mapless type counts retain
+unbound competitors, and duplicate page/binding/declaration rows remain ambiguous.
+These type-specific inventories still allocate managed memory; measured larger
+workflow throughput and peak-memory acceptance remain required.
+Legacy terminal fan-out classification uses a global incoming-edge index and
+reads at most five index references per threshold check, without decoding the
+entire edge inventory for each retained path. Every admitted edge still
+contributes, including unrelated candidate edges to that exact terminal. This
+preserves the existing threshold/classification, not distinct-root or runtime
+caller counts. Local graph diagnostics retain incoming-query/reference counts
+and global edge-payload reads separately from traversal work.
 Exact combined-ID and source/original-ID lookups read only the requested row;
 global identity-order traversal uses the index's .NET ordinal collation. All
 admitted rows remain available, including unrelated competitors. Surface
 projection is a repeatable lazy list rather than another full fact-input array.
 Storage refusal discards the graph and returns the existing reduced-coverage
 `GraphInputLimitReached` gap with reason `graph-storage-bytes`, not partial paths.
+For local capacity diagnosis, the explicit retained-index storage test accepts
+`TRACEMAP_GRAPH_DIAGNOSTIC_INDEX` and `TRACEMAP_GRAPH_DIAGNOSTIC_OUT` together.
+The latter must be a new owned directory. Optional
+`TRACEMAP_GRAPH_DIAGNOSTIC_STORAGE_BYTES` explicitly declares the scratch budget
+within the same 64 KiB to 16 GiB range; omission uses 512 MiB.
+Optional `TRACEMAP_GRAPH_DIAGNOSTIC_TEXT_BYTES` declares serialized input text
+from 1 byte through Int32.MaxValue; omission uses 512 MiB. This is a separate
+diagnostic input admission bound, not a row, scratch or production-default change.
+Its local-only receipt binds exact
+test/Reporting generators, full input bytes, actual query options and budgets;
+the input is rehashed unchanged after read-only replay. Allocation snapshots are
+sampled before successful scratch writes. On refusal, these prior samples and
+successful-write counters are unvalidated partial observations, not an admitted
+graph. No damaged scratch store is inspected after storage-full; unavailable
+allocation/dbstat data remains unknown. Graph-stage observations measure wall-clock
+intervals between fixed stage boundaries, including waits and GC, not CPU time or
+complete CLI phase durations. They contain no method or source-path labels.
+This does not measure OS memory or
+temporary sorter disk, and is not a replacement for the native end-to-end gate.
+The local diagnostic also flushes at most 32 fixed-name stage entries to
+`graph-stages.ndjson` (at most 64 KiB). Every entry carries the exact test and
+Reporting generator hashes plus bounded input commitment. Entries describe an
+incomplete attempt, never admission; the completed receipt hashes this trace.
+This permits checking progress without uploading private methods or source paths.
 
 The storage ceiling includes fact storage and the order roster, excludes SQLite
 sorter scratch files, and is not an OS working-set guarantee. Type-specific
@@ -492,7 +573,13 @@ root and receipt-byte digest behavior are unchanged. An explicit root participat
 in the publish bounded-input digest through its path hash and is never written.
 
 Execution uses configured metadata/IL budgets and normal portable-PDB defaults
-with configured artifact count/file size. Output admission is bounded separately
+with configured artifact count/file size. Optional `budgets.ilMaxBodies` accepts 1 through 1,000,000
+and is hash-bound, passed to `scan --il-max-bodies`, and shown in native status.
+Omission preserves the scanner's 50,000-body default and historical JSON shape.
+A metadata-admitted assembly can still be refused by the IL body-count limit;
+graph storage or work increases do not repair missing IL evidence. The stress
+profile explicitly declares 250,000 bodies, not a larger production default.
+Output admission is bounded separately
 to 256 filesystem entries, configured per-artifact/total hash bytes, and 256
 checkpoints. Source scanning and graph scale acceptance remain unproven; streaming
 artifact hashes do not make the scanner's fact collection memory-bounded.
@@ -628,17 +715,29 @@ For a sparse compiled-graph stress diagnostic, use
 the same 32/256-page, exact-eight-times-source cases while adding 24,000/192,000
 distinct unreachable compiled methods. This exercises full global inventory,
 not just a larger reachable route. The diagnostic config explicitly uses two
-million metadata work units and report admission of one million facts, 500,000
-edges and 512 MiB text; production defaults, path/work caps and the internal
-512 MiB graph-store ceiling are unchanged. The receipt records declared sparse
+million metadata work units, 250,000 IL bodies, and report admission of one million facts, 500,000
+edges, 1 GiB text and 4 GiB scratch storage; production defaults and path/work
+caps are unchanged. The receipt records the declared scratch budget, sparse
 methods, observed graph nodes/edges and categorical input refusals. A refused
 graph must classify zero paths and remain partial; that is evidence of a ceiling,
 not a successful large-graph acceptance. Every input and failed output is retained.
-The first retained graph diagnostic admitted the 24,000-method case (49,228 graph
+The first retained graph diagnostic, using the default 512 MiB scratch budget,
+admitted the 24,000-method case (49,228 graph
 nodes and 128 compiled variants), but the 192,000-method case hit the unchanged
-internal `graph-storage-bytes` ceiling. All 192,000 sparse methods were collected;
-the refused graph correctly emitted zero compiled paths. This capacity follow-up
-is open; a passing refusal test must not be reported as large-graph support.
+`graph-storage-bytes` ceiling. All 192,000 sparse methods were collected;
+the refused graph correctly emitted zero compiled paths. That historical refusal
+is not large-graph support. The subsequent strict fresh run on 2026-09-29 admits
+the complete global inventory under the explicit 4 GiB scratch / 1 GiB text /
+250,000-body profile, retains 128/1,024 paths and 32/256 surfaces, and verifies
+immutable completed resume. Native run time was 32.97/304.76 seconds with OS
+peak resident usage 941,457,408/4,185,030,656 bytes and retained run disk
+629,400,563/5,034,029,161 bytes. Coverage remains partial and cycle-truncated.
+These measured synthetic bounds do not imply arbitrary or private-site support;
+production defaults remain unchanged. See
+[strict fresh scale evidence](validation/webforms-native-scale-2026-09-29.md).
+Set `TRACEMAP_WEBFORMS_REQUIRE_GRAPH_ADMISSION=1` alongside the graph profile
+when validating a storage improvement. That acceptance run must admit both
+graphs and retain all four branches per page; a correct refusal fails the test.
 The earlier 256-page diagnostic retained all four compiled branches per page
 but hit `ProjectlessPublishMemberWorkLimit` for source member joins. Qualified
 candidate indexing now clears that limit in the same declared corpus while

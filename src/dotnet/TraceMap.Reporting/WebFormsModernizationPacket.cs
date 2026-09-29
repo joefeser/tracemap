@@ -24,7 +24,11 @@ public sealed record WebFormsModernizationOptions(
     int MaxInputTextBytes = 128 * 1024 * 1024,
     string? SurfaceListPath = null,
     int MaxTraversalWork = 100_000,
-    int MaxFrontier = 10_000);
+    int MaxFrontier = 10_000)
+{
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public long? MaxGraphStorageBytes { get; init; }
+}
 
 public sealed record WebFormsModernizationResult(
     WebFormsModernizationPacket Packet,
@@ -470,7 +474,8 @@ public static class WebFormsModernizationPacketReporter
         // Snapshot admission and graph composition are separate bounded reads. Sharing the
         // mutable budget lets a large snapshot consume the graph's entire allowance before
         // a selected handler can be traversed.
-        var graphBudget = new ReportInputBudget(options.MaxInputFacts, options.MaxInputEdges, options.MaxInputTextBytes);
+        var graphBudget = new ReportInputBudget(options.MaxInputFacts, options.MaxInputEdges, options.MaxInputTextBytes)
+            { MaxGraphStorageBytes = options.MaxGraphStorageBytes ?? ReportInputBudget.DefaultMaxGraphStorageBytes };
         var graphOptions = new CombinedDependencyPathOptions(
             options.IndexPath,
             Path.Combine(Path.GetTempPath(), "tracemap-webforms-modernization-unused"),
@@ -2024,6 +2029,8 @@ public static class WebFormsModernizationPacketReporter
         if (options.SurfaceListPath is not null && !File.Exists(options.SurfaceListPath)) throw new FileNotFoundException("WebFormsSurfaceListUnavailable");
         if (options.MaxSurfaces <= 0 || options.MaxEventChains <= 0 || options.MaxCandidates <= 0 || options.MaxGaps <= 0 || options.MaxDepth <= 0 || options.MaxPaths <= 0 || options.MaxBoundaries <= 0 || options.MaxIdentityState <= 0 || options.MaxBatchDataMovement <= 0 || options.MaxInputFacts <= 0 || options.MaxInputEdges <= 0 || options.MaxInputTextBytes <= 0 || options.MaxTraversalWork <= 0 || options.MaxFrontier <= 0)
             throw new ArgumentOutOfRangeException(nameof(options), "Web Forms modernization bounds must be positive.");
+        if (options.MaxGraphStorageBytes is { } storage && (storage < 64 * 1024 || storage > 16L * 1024 * 1024 * 1024))
+            throw new ArgumentOutOfRangeException(nameof(options), "Graph storage must be between 64 KiB and 16 GiB.");
     }
 
     private static string SurfaceIdentity(CodeFact fact) =>

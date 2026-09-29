@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text.Json;
 using Microsoft.Data.Sqlite;
@@ -69,6 +70,14 @@ public sealed class WebFormsReportMemoryTests(ITestOutputHelper output)
         Assert.False(actual.Report.Summary.Truncated);
         Assert.InRange(actual.GraphStorage!.MaximumOutgoingRowsLoaded, 1, 64);
         Assert.True(actual.GraphStorage.MaximumOutgoingRowsLoaded < branches);
+        if (legacy)
+        {
+            Assert.True(actual.GraphStorage.IncomingCountQueries >= actual.Report.Paths.Count);
+            Assert.InRange(actual.GraphStorage.IncomingReferenceRowsObserved.GetValueOrDefault(),
+                0, 5 * actual.GraphStorage.IncomingCountQueries.GetValueOrDefault());
+            Assert.InRange(actual.GraphStorage.GlobalEdgePayloadRowsRead.GetValueOrDefault(),
+                0, 16L * actual.GraphStorage.StoredEdges);
+        }
         Assert.Equal(hash, Hash(combined));
         output.WriteLine($"branches={branches};legacy={legacy};paths={actual.Report.Paths.Count};maximumOutgoingRowsLoaded={actual.GraphStorage.MaximumOutgoingRowsLoaded};logicalStorageBytes={actual.GraphStorage.LogicalStorageBytes}");
     }
@@ -91,16 +100,56 @@ public sealed class WebFormsReportMemoryTests(ITestOutputHelper output)
         Assert.Equal(JsonSerializer.Serialize(expected), JsonSerializer.Serialize(actual.Report));
         var usage = Assert.IsType<CombinedDependencyPathReporter.IndexedGraphUsage>(actual.GraphStorage);
         Assert.Equal("sqlite-temporary", usage.Engine);
+        Assert.Equal("length-framed-json-v1", usage.PayloadEncoding);
+        Assert.NotNull(usage.StageElapsedMilliseconds);
+        Assert.Contains("initial-nodes", usage.StageElapsedMilliseconds.Keys);
+        Assert.Contains("report-traversal", usage.StageElapsedMilliseconds.Keys);
+        Assert.InRange(usage.StageElapsedMilliseconds.Count, 1, 32);
+        Assert.All(usage.StageElapsedMilliseconds.Values, milliseconds => Assert.True(milliseconds >= 0));
+        Assert.True(usage.PayloadDecodedBytes > 0);
+        Assert.True(usage.PayloadFrameBytes > 0);
+        Assert.Equal(usage.PayloadDecodedBytes + 9L * (usage.StoredFacts + usage.StoredNodes + usage.StoredEdges), usage.PayloadFrameBytes);
         Assert.Equal(hash.ToLowerInvariant(), usage.InputSha256);
         Assert.Equal(Hash(typeof(CombinedDependencyPathReporter).Assembly.Location).ToLowerInvariant(), usage.GeneratorSha256);
         Assert.Equal(expected.Summary.GraphNodeCount, usage.StoredNodes);
         Assert.Equal(expected.Summary.GraphEdgeCount, usage.StoredEdges);
         Assert.Equal(pages * Fixture().Count, usage.StoredFacts);
-        Assert.InRange(usage.LogicalStorageBytes, 4_096, 512L * 1024 * 1024);
+        Assert.NotNull(usage.LogicalStorageBytes);
+        Assert.InRange(usage.LogicalStorageBytes.GetValueOrDefault(), 4_096, 512L * 1024 * 1024);
         Assert.InRange(usage.MaximumOutgoingRowsLoaded, 1, 20);
         Assert.True(usage.MaximumOutgoingRowsLoaded < usage.StoredEdges);
         Assert.Equal(hash, Hash(combined));
         output.WriteLine($"pages={pages};nodes={usage.StoredNodes};edges={usage.StoredEdges};logicalStorageBytes={usage.LogicalStorageBytes};maxOutgoingRows={usage.MaximumOutgoingRowsLoaded}");
+    }
+
+    [Fact]
+    public async Task Framed_outgoing_pages_budget_decoded_bytes_and_preserve_every_branch()
+    {
+        using var temp = new TempDirectory();
+        const string root = "Synthetic.Page.Load()";
+        var facts = new List<CodeFact> { Fact(FactTypes.MethodDeclared, "csharp.semantic.method.v1", root, null, 1) };
+        for (var index = 0; index < 3; index++)
+        {
+            var target = $"Synthetic.Store{index:D4}.Save()";
+            var call = Fact(FactTypes.CallEdge, "csharp.semantic.call.v1", root, target, 2 + index);
+            facts.Add(call with { Evidence = call.Evidence with
+                { FilePath = "Pages/" + new string('x', 300_000) + index + ".aspx" } });
+            facts.Add(Fact(FactTypes.QueryPatternDetected, RuleIds.CSharpSyntaxQueryPattern, target, $"query:{index}", 10 + index,
+                ("operationName", "SELECT"), ("tableName", $"synthetic_orders_{index}"), ("sqlSourceKind", "literal-string")));
+        }
+        var combined = Path.Combine(temp.Path, "combined.sqlite");
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([Write(temp.Path, facts)], combined, ["page"]));
+        var hash = Hash(combined);
+        var options = new CombinedDependencyPathOptions(combined, "unused", FromSymbol: root, ToSurface: "sql-query")
+            { ExactFromSymbol = true };
+        var expected = await CombinedDependencyPathReporter.BuildReportAsync(options);
+        var actual = await CombinedDependencyPathReporter.BuildBoundedCombinedIndexReportWithTraversalAsync(options, Budget());
+        Assert.Equal(JsonSerializer.Serialize(expected), JsonSerializer.Serialize(actual.Report));
+        Assert.Equal(3, actual.Report.Paths.Count);
+        var usage = Assert.IsType<CombinedDependencyPathReporter.IndexedGraphUsage>(actual.GraphStorage);
+        Assert.InRange(usage.MaximumOutgoingDecodedBytesLoaded.GetValueOrDefault(), 300_000, 512 * 1024);
+        Assert.True(usage.PayloadFrameBytes > usage.PayloadDecodedBytes);
+        Assert.Equal(hash, Hash(combined));
     }
 
     [Fact]
@@ -118,7 +167,137 @@ public sealed class WebFormsReportMemoryTests(ITestOutputHelper output)
         Assert.True(result.Report.Summary.Truncated);
         Assert.Single(result.Report.Sources);
         Assert.Null(result.GraphStorage);
+        // This deliberately tiny bound can refuse schema creation before a
+        // store exists; unavailable storage observations remain unknown.
+        Assert.Null(result.RefusedGraphStorage);
         Assert.Equal(hash, Hash(combined));
+    }
+
+    [Fact]
+    public async Task Explicit_scratch_budget_reaches_packet_and_selected_symbol_graphs_without_mutating_input()
+    {
+        using var temp = new TempDirectory();
+        var index = Path.Combine(temp.Path, "combined.sqlite");
+        var combined = await CombinedIndexBuilder.CombineAsync(new CombineOptions([Write(temp.Path,
+            Enumerable.Range(0, 32).SelectMany(value => Fixture($"{value:D4}")))], index, ["page"]));
+        var before = Hash(index);
+        var source = Assert.Single(combined.Sources);
+        var roots = new[] { new CombinedPathSymbolRoot(source.SourceIndexId, source.ScanId,
+            source.CommitSha, "Sample.Page0000.Load()") };
+        var options = new CombinedDependencyPathOptions(index, temp.Path, ToSurface: "sql-query", IncludeLegacyRoots: true);
+        var refused = await CombinedDependencyPathReporter.BuildSelectedSymbolsAsync(options, roots, true,
+            new() { MaxGraphStorageBytes = 64 * 1024 });
+        Assert.Contains(refused.Gaps, gap => gap.GapKind == "GraphInputLimitReached" && gap.Reason == "graph-storage-bytes");
+        Assert.Empty(refused.Paths);
+        var admitted = await CombinedDependencyPathReporter.BuildSelectedSymbolsAsync(options, roots, true,
+            new() { MaxGraphStorageBytes = 8L * 1024 * 1024 });
+        Assert.DoesNotContain(admitted.Gaps, gap => gap.GapKind == "GraphInputLimitReached");
+        Assert.NotEmpty(admitted.Paths);
+        var packetOptions = new WebFormsModernizationOptions(index, temp.Path);
+        var refusedPacket = await WebFormsModernizationPacketReporter.BuildAsync(packetOptions with
+            { MaxGraphStorageBytes = 64 * 1024 });
+        Assert.Contains(refusedPacket.Gaps, gap => gap.Classification == "WebFormsModernizationInputLimitReached");
+        var admittedPacket = await WebFormsModernizationPacketReporter.BuildAsync(packetOptions with
+            { MaxGraphStorageBytes = 8L * 1024 * 1024 });
+        Assert.DoesNotContain(admittedPacket.Gaps, gap => gap.Classification == "WebFormsModernizationInputLimitReached");
+        Assert.Equal(32, admittedPacket.Surfaces.Count);
+        Assert.True(admittedPacket.Summary.TraversalWorkUnits > 0);
+        Assert.Equal(before, Hash(index));
+    }
+
+    [Fact]
+    public async Task Indexed_graph_storage_diagnostic_replays_an_explicit_retained_index_without_mutation()
+    {
+        using var temp = new TempDirectory();
+        var retained = Environment.GetEnvironmentVariable("TRACEMAP_GRAPH_DIAGNOSTIC_INDEX");
+        var retainedOutput = Environment.GetEnvironmentVariable("TRACEMAP_GRAPH_DIAGNOSTIC_OUT");
+        if (retained is null && retainedOutput is not null || retained is not null && string.IsNullOrWhiteSpace(retainedOutput))
+            throw new InvalidOperationException("Retained diagnostic requires both explicit index and new output directory.");
+        var index = retained is null ? Path.Combine(temp.Path, "combined.sqlite") : Path.GetFullPath(retained);
+        if (retained is null)
+            await CombinedIndexBuilder.CombineAsync(new CombineOptions([Write(temp.Path,
+                Enumerable.Range(0, 32).SelectMany(value => Fixture($"{value:D4}")))], index, ["page"]));
+        var root = retainedOutput is null ? Path.Combine(temp.Path, "diagnostic") : Path.GetFullPath(retainedOutput);
+        Assert.False(Directory.Exists(root), "Diagnostic output must be new; no retained input or previous output is overwritten.");
+        Directory.CreateDirectory(root);
+        var before = Hash(index).ToLowerInvariant();
+        var selectedStorage = Environment.GetEnvironmentVariable("TRACEMAP_GRAPH_DIAGNOSTIC_STORAGE_BYTES");
+        var storageLimit = retained is null ? 128 * 1024 : selectedStorage is null ? 512L * 1024 * 1024
+            : long.Parse(selectedStorage, System.Globalization.CultureInfo.InvariantCulture);
+        Assert.InRange(storageLimit, 64 * 1024, 16L * 1024 * 1024 * 1024);
+        var selectedText = Environment.GetEnvironmentVariable("TRACEMAP_GRAPH_DIAGNOSTIC_TEXT_BYTES");
+        var textLimit = selectedText is null ? 512L * 1024 * 1024
+            : long.Parse(selectedText, System.Globalization.CultureInfo.InvariantCulture);
+        Assert.InRange(textLimit, 1, int.MaxValue);
+        var budget = new ReportInputBudget(1_000_000, 500_000, textLimit) { MaxGraphStorageBytes = storageLimit };
+        var options = PathOptions(index);
+        var bounded = JsonSerializer.SerializeToUtf8Bytes(new { inputIndexSha256 = before,
+            maxFacts = budget.MaxFacts, maxEdges = budget.MaxEdges, maxTextBytes = budget.MaxTextBytes,
+            maxGraphStorageBytes = storageLimit, options });
+        var boundedHash = Convert.ToHexString(SHA256.HashData(bounded)).ToLowerInvariant();
+        var testGenerator = Hash(typeof(WebFormsReportMemoryTests).Assembly.Location).ToLowerInvariant();
+        var reportingGenerator = Hash(typeof(CombinedDependencyPathReporter).Assembly.Location).ToLowerInvariant();
+        var stagePath = Path.Combine(root, "graph-stages.ndjson");
+        using var stageStream = new FileStream(stagePath, FileMode.CreateNew, FileAccess.Write, FileShare.Read);
+        using var stages = new StreamWriter(stageStream, new System.Text.UTF8Encoding(false)) { AutoFlush = true };
+        var started = Stopwatch.GetTimestamp();
+        var stageCount = 0;
+        void ObserveStage(string stage)
+        {
+            Assert.InRange(++stageCount, 1, 32);
+            Assert.All(stage, character => Assert.True(character is >= 'a' and <= 'z' or '-'));
+            stages.WriteLine(JsonSerializer.Serialize(new { schemaVersion = "diagnostic.webforms.graph-storage.v1",
+                ruleId = "diagnostic.webforms.graph-storage.v1", evidenceTier = EvidenceTiers.Tier4Unknown,
+                visibility = "local-only", observationState = "attempt-stage-entry-not-admission",
+                generatorSha256 = testGenerator, reportingGeneratorSha256 = reportingGenerator,
+                boundedInputSha256 = boundedHash, inputIndexSha256 = before,
+                stage, elapsedMilliseconds = (long)Stopwatch.GetElapsedTime(started).TotalMilliseconds }));
+        }
+        ObserveStage("attempt-start");
+        budget = new(budget.MaxFacts, budget.MaxEdges, budget.MaxTextBytes)
+            { MaxGraphStorageBytes = storageLimit, GraphStageObserver = ObserveStage };
+        var result = await CombinedDependencyPathReporter.BuildBoundedCombinedIndexReportWithTraversalAsync(options, budget);
+        var refused = result.Report.Gaps.Any(gap => gap.GapKind == "GraphInputLimitReached");
+        var usage = refused ? result.RefusedGraphStorage : result.GraphStorage;
+        Assert.NotNull(usage);
+        Assert.Equal(before, usage.InputSha256);
+        Assert.Equal(Hash(typeof(CombinedDependencyPathReporter).Assembly.Location).ToLowerInvariant(), usage.GeneratorSha256);
+        Assert.Equal(before, Hash(index).ToLowerInvariant());
+        if (refused)
+        {
+            Assert.Empty(result.Report.Paths);
+            Assert.Equal(0, result.Report.Summary.GraphNodeCount);
+            Assert.True(result.Report.Summary.Truncated);
+        }
+        if (retained is null) Assert.True(refused);
+        var stageBytes = stageStream.Length;
+        stages.Dispose();
+        stageStream.Dispose();
+        Assert.InRange(stageBytes, 1, 64 * 1024);
+        Assert.Equal(stageCount, File.ReadLines(stagePath).Count());
+        foreach (var line in File.ReadLines(stagePath))
+        {
+            using var entry = JsonDocument.Parse(line);
+            Assert.Equal(boundedHash, entry.RootElement.GetProperty("boundedInputSha256").GetString());
+            Assert.Equal(testGenerator, entry.RootElement.GetProperty("generatorSha256").GetString());
+        }
+        var receipt = new { schemaVersion = "diagnostic.webforms.graph-storage.v1",
+            ruleId = "diagnostic.webforms.graph-storage.v1", evidenceTier = EvidenceTiers.Tier4Unknown,
+            visibility = "local-only", claimLevel = "review-only-static-not-runtime",
+            generatorSha256 = testGenerator, boundedInputSha256 = boundedHash,
+            stageTraceSha256 = Hash(stagePath).ToLowerInvariant(),
+            inputIndexSha256 = before, maxGraphStorageBytes = storageLimit,
+            state = refused ? "admission-refused-partial-counts-only" : "admitted", usage,
+            limitations = new[] { "Scratch counts on refusal are successful-write observations, never classified graph or path counts.",
+                "Refused allocation samples precede the failed write and are not final file sizes; an unreadable disposable store is never queried after SQLITE_FULL.",
+                "Physical object allocation is unknown when SQLite dbstat is unavailable.",
+                "Stage timings are wall-clock intervals between graph-stage boundaries, including waits and GC; they are not CPU times or native CLI phase timings.",
+                "This diagnostic does not measure OS memory or transient sorter disk peak." } };
+        await File.WriteAllBytesAsync(Path.Combine(root, "graph-storage.receipt.json"), JsonSerializer.SerializeToUtf8Bytes(receipt,
+            new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase, WriteIndented = true }));
+        output.WriteLine($"graphDiagnostic.refused={refused};phase={usage.StoragePhase};facts={usage.StoredFacts};nodes={usage.StoredNodes};edges={usage.StoredEdges};logicalBytes={usage.LogicalStorageBytes}");
+        foreach (var stage in usage.StageElapsedMilliseconds ?? new Dictionary<string, long>())
+            output.WriteLine($"graphDiagnostic.stage={stage.Key};elapsedMs={stage.Value}");
     }
 
     [Fact]

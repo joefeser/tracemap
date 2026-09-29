@@ -35,8 +35,10 @@ public sealed class WebFormsNativeScaleTests(ITestOutputHelper output)
         Assert.Equal(32, module.Types.Single(type => type.Name == "SparseCompiledInventory").Methods.Count);
         var config = JsonSerializer.Deserialize<WebFormsReviewConfig>(File.ReadAllText(first.ConfigPath), JsonOptions)!;
         Assert.Equal(2_000_000, config.Budgets.MetadataMaxWork);
+        Assert.Equal(250_000, config.Budgets.IlMaxBodies);
         Assert.Equal(1_000_000, config.Budgets.Reports!.MaxInputFacts);
-        Assert.Equal(512 * 1024 * 1024, config.Budgets.Reports.MaxInputTextBytes);
+        Assert.Equal(1024 * 1024 * 1024, config.Budgets.Reports.MaxInputTextBytes);
+        Assert.Equal(4L * 1024 * 1024 * 1024, config.Budgets.Reports.MaxGraphStorageBytes);
         Assert.Equal(new WebFormsReviewBudgets().GraphMaxWork, config.Budgets.GraphMaxWork);
     }
 
@@ -47,6 +49,10 @@ public sealed class WebFormsNativeScaleTests(ITestOutputHelper output)
         if (profile is not (null or "" or "1" or "graph"))
             throw new InvalidOperationException("TRACEMAP_WEBFORMS_NATIVE_SCALE must be absent, 1 or graph.");
         var graphStress = profile == "graph";
+        var admissionRequirement = Environment.GetEnvironmentVariable("TRACEMAP_WEBFORMS_REQUIRE_GRAPH_ADMISSION");
+        if (admissionRequirement is not (null or "" or "1") || admissionRequirement == "1" && !graphStress)
+            throw new InvalidOperationException("Graph admission requirement must be absent or 1 with the graph profile.");
+        var requireGraphAdmission = admissionRequirement == "1";
         var large = profile is "1" or "graph";
         var retained = Environment.GetEnvironmentVariable("TRACEMAP_WEBFORMS_SCALE_OUT");
         if (large && string.IsNullOrWhiteSpace(retained))
@@ -73,6 +79,15 @@ public sealed class WebFormsNativeScaleTests(ITestOutputHelper output)
                 var checkpoint = JsonSerializer.Deserialize<WebFormsReviewCheckpoint>(File.ReadAllText(
                     Path.Combine(fixture.Run, "checkpoints", "0004.json")), JsonOptions)!;
                 Assert.Equal("reports-completed-review-only", checkpoint.State);
+                if (requireGraphAdmission)
+                {
+                    using var scan = JsonDocument.Parse(File.ReadAllText(Path.Combine(fixture.Run,
+                        checkpoint.Attempt, "scan", "scan-manifest.json")));
+                    var il = scan.RootElement.GetProperty("ilBodyProvenance");
+                    Assert.Equal(250_000, il.GetProperty("effectiveLimits").GetProperty("maxBodyCount").GetInt32());
+                    Assert.All(il.GetProperty("outcomes").EnumerateArray(), outcome =>
+                        Assert.Equal("admitted", outcome.GetProperty("outcome").GetString()));
+                }
                 var retainedSparseMethods = CountRetainedSparseMethods(Path.Combine(fixture.Run, checkpoint.Attempt, "scan", "index.sqlite"), sparseMethods);
                 Assert.NotNull(checkpoint.Reports);
                 if (!graphStress) Assert.Equal(pages, checkpoint.Reports.Surfaces);
@@ -98,6 +113,15 @@ public sealed class WebFormsNativeScaleTests(ITestOutputHelper output)
                 Assert.Equal(checkpoint.Reports.CompiledPaths, restored.Paths.Count);
                 Assert.DoesNotContain(restored.Gaps, gap => gap.GapKind == "ProjectlessPublishMemberWorkLimit");
                 var inputRefused = restored.Gaps.Any(gap => gap.GapKind == "GraphInputLimitReached");
+                if (requireGraphAdmission)
+                {
+                    Assert.False(inputRefused, "Required stress-graph admission failed; a correct refusal is not acceptance.");
+                    Assert.Equal(pages, handoff.Packet.Surfaces.Count);
+                    Assert.DoesNotContain(handoff.Packet.Gaps,
+                        gap => gap.Classification == "WebFormsModernizationInputLimitReached");
+                    Assert.True(handoff.Packet.Summary.TraversalWorkUnits > 0,
+                        "The packet graph must also traverse the declared corpus, not merely retain surface inventory.");
+                }
                 if (inputRefused)
                 {
                     Assert.True(graphStress, "The ordinary declared corpus must remain admitted.");
@@ -168,11 +192,13 @@ public sealed class WebFormsNativeScaleTests(ITestOutputHelper output)
                 cliGeneratorSha256 = Hash(CliPath()), boundedInputSha256 = HashBytes(JsonSerializer.SerializeToUtf8Bytes(input, JsonOptions)),
                 scope = graphStress ? "public-synthetic-32-256-pages-and-24000-192000-sparse-methods" : large ? "public-synthetic-32-256-pages-and-8x-source-bytes" : "public-synthetic-ci-smoke-1-8-pages",
                 claimLevel = "review-only-static-not-runtime", cases,
+                requireGraphAdmission,
+                graphStorageBytes = graphStress ? 4L * 1024 * 1024 * 1024 : CombinedPathAdmissionLimits.DefaultMaxGraphStorageBytes,
                 limitations = new[] { "Generated PE/IL fixtures are not an aspnet_compiler acceptance run.",
                     "CLI OS peak excludes fixture generation and is not a simultaneous aggregate working-set measure.",
                     "Retained disk bytes exclude OS temporary sorter peak and transient private graph files.",
                     "Source bytes do not predict arbitrary graph fan-out; private Windows acceptance remains separate.",
-                    "Graph stress uses explicit diagnostic-only metadata and report-input budgets; no production defaults or internal graph-storage ceiling are raised.",
+                    "Graph stress explicitly declares 4 GiB scratch storage, 1 GiB input text and 250000 IL bodies alongside metadata and report-input budgets; production defaults remain unchanged.",
                     "A graph-input refusal is retained as partial coverage with zero classified paths, not successful large-graph admission." } };
             File.WriteAllBytes(Path.Combine(root, "native-scale.receipt.json"), JsonSerializer.SerializeToUtf8Bytes(receipt, JsonOptions));
         }
@@ -307,8 +333,9 @@ public sealed class WebFormsNativeScaleTests(ITestOutputHelper output)
                 MetadataMaxWork: sparseMethods == 0 ? 500_000 : 2_000_000)
             {
                 MaxPublishInputFiles = 8192,
+                IlMaxBodies = sparseMethods == 0 ? null : 250_000,
                 Reports = sparseMethods == 0 ? null : new(MaxInputFacts: 1_000_000, MaxInputEdges: 500_000,
-                    MaxInputTextBytes: 512 * 1024 * 1024)
+                    MaxInputTextBytes: 1024 * 1024 * 1024) { MaxGraphStorageBytes = 4L * 1024 * 1024 * 1024 }
             };
             ConfiguredTraversalWork = budgets.GraphMaxWork;
             var config = new WebFormsReviewConfig(WebFormsReviewPreflightCommand.ConfigSchema, "fresh", Source, Commit,

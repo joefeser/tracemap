@@ -11,6 +11,139 @@ public sealed class WebFormsReviewPreparationTests
 {
     private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase, WriteIndented = true };
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Start_prepares_pins_and_renders_fresh_or_immutable_attachment_in_one_owned_root(bool attach)
+    {
+        using var fixture = new Fixture();
+        string? parent = null;
+        if (attach)
+        {
+            parent = Path.Combine(fixture.Root, "parent");
+            Assert.Equal(0, await TraceMapCommand.RunAsync(["scan", "--repo", fixture.Source, "--out", parent,
+                "--retain-source-snapshot"], TextWriter.Null, fixture.Error));
+            fixture.Config = fixture.Config with { Operation = "attach", ParentScanRoot = parent };
+        }
+        fixture.Save();
+        var source = fixture.Hashes(fixture.Source); var published = fixture.Hashes(fixture.Published);
+        var parentBefore = parent is null ? null : fixture.Hashes(parent);
+        var review = Path.Combine(fixture.Root, "review");
+        Assert.True(await TraceMapCommand.RunAsync(["webforms-review", "start", "--config", fixture.ConfigPath,
+            "--out", review, "--attest-exact-source-commit", fixture.Config.SourceCommitSha], fixture.Output, fixture.Error) == 0,
+            fixture.Error.ToString());
+        var run = Path.Combine(review, "run");
+        var checkpoint = JsonSerializer.Deserialize<WebFormsReviewCheckpoint>(File.ReadAllText(
+            Path.Combine(run, "checkpoints", "0004.json")), JsonOptions)!;
+        Assert.Equal("reports-completed-review-only", checkpoint.State);
+        Assert.True(File.Exists(Path.Combine(review, "evidence", "preparation-manifest.local.json")));
+        Assert.True(File.Exists(Path.Combine(run, checkpoint.Reports!.ReportAttempt, "index.html")));
+        Assert.True(File.Exists(Path.Combine(run, checkpoint.Reports.ReportAttempt, "compiled", "compiled-paths.handoff.local.json")));
+        var beforeResume = fixture.Hashes(review);
+        Assert.Equal(0, await TraceMapCommand.RunAsync(["webforms-review", "resume", "--run", run], fixture.Output, fixture.Error));
+        Assert.Equal(beforeResume.OrderBy(item => item.Key), fixture.Hashes(review).OrderBy(item => item.Key));
+        Assert.Equal(source.OrderBy(item => item.Key), fixture.Hashes(fixture.Source).OrderBy(item => item.Key));
+        Assert.Equal(published.OrderBy(item => item.Key), fixture.Hashes(fixture.Published).OrderBy(item => item.Key));
+        if (parent is not null) Assert.Equal(parentBefore!.OrderBy(item => item.Key), fixture.Hashes(parent).OrderBy(item => item.Key));
+        Assert.Equal(1, await TraceMapCommand.RunAsync(["webforms-review", "start", "--config", fixture.ConfigPath,
+            "--out", review, "--attest-exact-source-commit", fixture.Config.SourceCommitSha], fixture.Output, fixture.Error));
+        Assert.Equal(beforeResume.OrderBy(item => item.Key), fixture.Hashes(review).OrderBy(item => item.Key));
+    }
+
+    [Fact]
+    public async Task Start_accepts_existing_explicit_receipts_without_minting_an_attestation()
+    {
+        using var fixture = new Fixture();
+        Assert.Equal(0, await fixture.Prepare());
+        var before = fixture.Hashes(fixture.Evidence);
+        var review = Path.Combine(fixture.Root, "review-existing");
+        Assert.Equal(0, await TraceMapCommand.RunAsync(["webforms-review", "start", "--config", fixture.PreparedConfig,
+            "--out", review], fixture.Output, fixture.Error));
+        Assert.False(Directory.Exists(Path.Combine(review, "evidence")));
+        Assert.True(File.Exists(Path.Combine(review, "run", "checkpoints", "0004.json")));
+        Assert.Equal(before.OrderBy(item => item.Key), fixture.Hashes(fixture.Evidence).OrderBy(item => item.Key));
+    }
+
+    [Theory]
+    [InlineData("missing-attestation", "RECEIPTS_OR_EXPLICIT_ATTESTATION_REQUIRED")]
+    [InlineData("wrong-attestation", "ATTESTATION_COMMIT_MISMATCH")]
+    [InlineData("no-sources", "EXPLICIT_SOURCE_MEMBERSHIP_REQUIRED")]
+    [InlineData("overlap", "OUTPUT_OVERLAPS_INPUT")]
+    public async Task Start_rejects_missing_authority_or_unsafe_roots_before_output(string mutation, string category)
+    {
+        using var fixture = new Fixture();
+        if (mutation == "no-sources") fixture.Config = fixture.Config with { PublishSourceRelativePaths = null };
+        fixture.Save();
+        var review = mutation == "overlap" ? Path.Combine(fixture.Source, "new-review") : Path.Combine(fixture.Root, "review");
+        var args = new List<string> { "webforms-review", "start", "--config", fixture.ConfigPath, "--out", review };
+        if (mutation != "missing-attestation") args.AddRange(["--attest-exact-source-commit",
+            mutation == "wrong-attestation" ? new string('a', 40) : fixture.Config.SourceCommitSha]);
+        Assert.Equal(1, await TraceMapCommand.RunAsync(args.ToArray(), fixture.Output, fixture.Error));
+        Assert.Contains(category, fixture.Error.ToString(), StringComparison.Ordinal);
+        Assert.False(Directory.Exists(review));
+    }
+
+    [Fact]
+    public async Task Start_preserves_failed_scan_and_exposes_the_exact_pinned_resume_root()
+    {
+        using var fixture = new Fixture(); fixture.Save();
+        var review = Path.Combine(fixture.Root, "failed-review");
+        Assert.Equal(1, await WebFormsReviewStartCommand.RunAsync(["start", "--config", fixture.ConfigPath,
+            "--out", review, "--attest-exact-source-commit", fixture.Config.SourceCommitSha], fixture.Output, fixture.Error,
+            (_, _, _, _) => Task.FromResult(1)));
+        var run = Path.Combine(review, "run");
+        var checkpoint = JsonSerializer.Deserialize<WebFormsReviewCheckpoint>(File.ReadAllText(
+            Path.Combine(run, "checkpoints", "0002.json")), JsonOptions)!;
+        Assert.Equal("scan-failed", checkpoint.State);
+        Assert.Contains("webFormsPinnedRun=" + run, fixture.Output.ToString(), StringComparison.Ordinal);
+        var evidence = fixture.Hashes(Path.Combine(review, "evidence"));
+        Assert.Equal(0, await TraceMapCommand.RunAsync(["webforms-review", "resume", "--run", run], fixture.Output, fixture.Error));
+        Assert.True(File.Exists(Path.Combine(run, "checkpoints", "0006.json")));
+        Assert.Equal(evidence.OrderBy(item => item.Key), fixture.Hashes(Path.Combine(review, "evidence")).OrderBy(item => item.Key));
+    }
+
+    [Fact]
+    public async Task Start_honors_pre_cancelled_input_without_creating_output()
+    {
+        using var fixture = new Fixture(); fixture.Save();
+        var review = Path.Combine(fixture.Root, "cancelled-review");
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => WebFormsReviewStartCommand.RunAsync(
+            ["start", "--config", fixture.ConfigPath, "--out", review, "--attest-exact-source-commit", fixture.Config.SourceCommitSha],
+            fixture.Output, fixture.Error, (_, _, _, _) => throw new InvalidOperationException("must not run"), new CancellationToken(true)));
+        Assert.False(Directory.Exists(review));
+    }
+
+    [Theory]
+    [InlineData("webFormsPreparation=completed")]
+    [InlineData("webFormsPreflight=completed")]
+    public async Task Start_rejects_configuration_changes_between_admission_phases(string boundary)
+    {
+        using var fixture = new Fixture(); fixture.Save();
+        var review = Path.Combine(fixture.Root, "changed-config-review");
+        using var output = new BoundaryWriter(boundary, () =>
+        {
+            fixture.Config = fixture.Config with { Budgets = fixture.Config.Budgets with { GraphMaxPaths = 255 } };
+            fixture.Save();
+        });
+        Assert.Equal(1, await WebFormsReviewStartCommand.RunAsync(["start", "--config", fixture.ConfigPath,
+            "--out", review, "--attest-exact-source-commit", fixture.Config.SourceCommitSha], output, fixture.Error,
+            (_, _, _, _) => throw new InvalidOperationException("changed configuration must not scan")));
+        Assert.Contains("WEBFORMS_NATIVE_START_CONFIGURATION_CHANGED", fixture.Error.ToString(), StringComparison.Ordinal);
+        Assert.True(File.Exists(Path.Combine(review, "evidence", "preparation-manifest.local.json")));
+        Assert.False(Directory.Exists(Path.Combine(review, "run", "checkpoints")));
+    }
+
+    private sealed class BoundaryWriter(string prefix, Action mutate) : StringWriter
+    {
+        private bool changed;
+        public override Task WriteLineAsync(string? value)
+        {
+            if (!changed && value?.StartsWith(prefix, StringComparison.Ordinal) == true)
+            { changed = true; mutate(); }
+            return base.WriteLineAsync(value);
+        }
+    }
+
     [Fact]
     public async Task Preparation_reuses_core_policy_binds_only_attested_primary_and_runs_from_external_receipts()
     {

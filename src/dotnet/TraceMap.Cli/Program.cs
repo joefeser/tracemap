@@ -81,7 +81,9 @@ public static class TraceMapCommand
                 "version" => await RunVersionAsync(rest, output, error),
                 "validate-index" => await RunValidateIndexAsync(rest, output, error),
                 "local-review" => await LocalReviewCommand.RunAsync(rest, output, error, RunScanAsync, cancellationToken),
-                "webforms-review" => rest.FirstOrDefault() is "run" or "resume"
+                "webforms-review" => rest.FirstOrDefault() == "start"
+                    ? await WebFormsReviewStartCommand.RunAsync(rest, output, error, RunScanAsync, cancellationToken)
+                    : rest.FirstOrDefault() is "run" or "resume"
                     ? await WebFormsReviewExecutionCommand.RunAsync(rest, output, error, RunScanAsync, cancellationToken)
                     : rest.FirstOrDefault() == "query"
                     ? await WebFormsReviewExecutionCommand.QueryAsync(rest, output, error, cancellationToken)

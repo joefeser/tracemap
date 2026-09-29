@@ -8,6 +8,62 @@ namespace TraceMap.Tests;
 public sealed class PublishMemberCandidateIndexTests
 {
     [Fact]
+    public void Page_join_inventory_reads_each_typed_roster_once_and_retains_all_competitors()
+    {
+        var row = Method("Wanted", "Entry", "hash-a");
+        var facts = new List<CombinedFactRow>
+        {
+            row, row with { CombinedFactId = "duplicate-method" },
+            Properties(row with { CombinedFactId = "unbound-method" }, ("provenanceState", "unbound")),
+            row with { FactType = FactTypes.WebFormsPageDeclared, FilePath = "Page.aspx" },
+            row with { FactType = FactTypes.WebFormsPageDeclared, FilePath = "Page.aspx", CombinedFactId = "duplicate-page" },
+            row with { FactType = FactTypes.ManagedTypeDeclared },
+            Properties(row with { FactType = FactTypes.ManagedTypeDeclared, CombinedFactId = "unbound-type" }, ("provenanceState", "unbound")),
+            Properties(row with { FactType = FactTypes.WebFormsHandlerResolved }, ("markupFile", "Page.aspx")),
+            row with { FactType = FactTypes.WebFormsPublishSourceBound, FilePath = "Page.aspx.vb" },
+            row with { FactType = FactTypes.WebFormsPublishSourceBound, FilePath = "Page.aspx.vb", CombinedFactId = "duplicate-binding" },
+            row with { FactType = FactTypes.MethodDeclared, RuleId = RuleIds.VisualBasicSyntaxDeclarations, FilePath = "Page.aspx.vb" }
+        };
+        facts.AddRange(Enumerable.Range(0, 1000).Select(number => Method("Sparse" + number, "Unused" + number, "hash-a")));
+        facts.AddRange(Enumerable.Range(0, 7000).Select(number => row with
+            { FactType = "UnknownPublicFixture", CombinedFactId = "irrelevant-" + number }));
+        var counted = new CountedFacts(facts);
+        var inventory = new CombinedDependencyPathReporter.PublishPageCandidateInventory(counted);
+        Assert.Equal(7, counted.Enumerations);
+        Assert.Equal(7L * facts.Count, counted.RowsRead);
+        for (var page = 0; page < 1000; page++)
+        {
+            Assert.Equal(2, inventory.Pages[("source", "Page.aspx")].Length);
+            Assert.Equal(2, inventory.Types["source"].Length);
+            Assert.Contains(inventory.Types["source"], type => type.Properties["provenanceState"] == "unbound");
+            Assert.Single(inventory.Handlers[("source", "Page.aspx")]);
+            Assert.Equal(2, inventory.Bindings[("source", "Page.aspx.vb")].Length);
+            Assert.Single(inventory.Declarations[("source", "Page.aspx.vb")]);
+            var selected = inventory.Methods.Select("source", "ENTRY", TypePath("Wanted"), new HashSet<string?> { "hash-a" });
+            Assert.Equal(2, selected.QualifiedCandidates.Count);
+            Assert.Equal(2, selected.NamedCount);
+            Assert.All(selected.QualifiedCandidates, method => Assert.Equal("bound", method.Properties["provenanceState"]));
+        }
+        Assert.Equal(7, counted.Enumerations);
+        Assert.Equal(7L * facts.Count, counted.RowsRead);
+        Assert.False(inventory.Pages.ContainsKey(("other-source", "Page.aspx")));
+    }
+
+    private sealed class CountedFacts(IReadOnlyList<CombinedFactRow> rows) : IReadOnlyList<CombinedFactRow>
+    {
+        internal int Enumerations { get; private set; }
+        internal long RowsRead { get; private set; }
+        public int Count => rows.Count;
+        public CombinedFactRow this[int index] => rows[index];
+        public IEnumerator<CombinedFactRow> GetEnumerator()
+        {
+            Enumerations++;
+            foreach (var row in rows) { RowsRead++; yield return row; }
+        }
+        System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => GetEnumerator();
+    }
+
+    [Fact]
     public async Task Qualified_competitor_work_exhaustion_withholds_the_entire_member_pass()
     {
         using var temp = new TempDirectory();

@@ -224,6 +224,7 @@ public static partial class WebFormsReviewExecutionCommand
         Add("--pdb-max-artifacts", budget.MaxInputFiles);
         Add("--pdb-max-file-bytes", budget.MaxAssemblyBytes);
         Add("--il-max-text", budget.IlMaxText);
+        if (budget.IlMaxBodies is { } bodies) Add("--il-max-bodies", bodies);
         Add("--il-max-work", budget.IlMaxWork);
         return args.ToArray();
         void Add(string option, object value) { args.Add(option); args.Add(Convert.ToString(value, CultureInfo.InvariantCulture)!); }

@@ -25,6 +25,8 @@ public sealed class WebFormsReviewExecutionTests
         Assert.Equal(64, status.BoundedInputSha256.Length); Assert.All(status.Phases, phase => Assert.Null(phase.WorkUnitsUsed));
         Assert.Equal(fixture.Config.Operation, status.Operation); Assert.Equal(fixture.Config.PageMode, status.PageMode);
         Assert.Equal(fixture.Config.SourceCommitSha, status.SourceCommitSha);
+        Assert.Equal(fixture.Config.Budgets.IlMaxBodies ?? 50_000,
+            status.Phases.Single(phase => phase.Name == "scan").ConfiguredLimits["ilBodies"]);
         Assert.Contains(status.NextActions, action => action.Arguments.FirstOrDefault() == "run");
         Assert.False(File.Exists(Path.Combine(fixture.Run, ".native-run.lock")));
         foreach (var (path, sha) in before) Assert.Equal(sha, Hash(path));
@@ -72,6 +74,8 @@ public sealed class WebFormsReviewExecutionTests
             Assert.Equal(checkpoint.Reports.CompiledPaths, reports.ObservedCounts["compiledVariants"]);
             Assert.Equal(fixture.Config.Budgets.GraphMaxPaths, reports.ConfiguredLimits["pathsPerGraphQuery"]);
             Assert.Equal(fixture.Config.Budgets.GraphMaxWork, reports.ConfiguredLimits["traversalWorkPerGraphQuery"]);
+            Assert.Equal(fixture.Config.Budgets.Reports?.MaxGraphStorageBytes ?? 512L * 1024 * 1024,
+                reports.ConfiguredLimits["graphStorageBytes"]);
             Assert.NotNull(reports.WorkUnitsUsed);
             Assert.InRange(reports.WorkUnitsUsed.GetValueOrDefault(), 0, fixture.Config.Budgets.GraphMaxWork * 2);
             Assert.Equal(reports.WorkUnitsUsed, reports.ObservedCounts["compiledTraversalWorkUnits"] + reports.ObservedCounts["pageTraversalWorkUnits"]);
@@ -456,7 +460,8 @@ public sealed class WebFormsReviewExecutionTests
         var parent = Path.Combine(fixture.Root, "parent");
         Assert.Equal(0, await TraceMapCommand.RunAsync(["scan", "--repo", fixture.Source, "--out", parent,
             "--include", "Pages/**", "--exclude", "**/*.vbproj", .. retainedRoster ? new[] { "--retain-source-snapshot" } : []], TextWriter.Null, TextWriter.Null));
-        fixture.Config = fixture.Config with { Operation = "attach", ParentScanRoot = parent };
+        fixture.Config = fixture.Config with { Operation = "attach", ParentScanRoot = parent,
+            Budgets = fixture.Config.Budgets with { IlMaxBodies = retainedRoster ? 250_000 : null } };
         await fixture.Preflight();
         var before = Directory.GetFiles(parent, "*", SearchOption.AllDirectories).ToDictionary(path => path, Hash);
         Assert.Equal(0, await fixture.Execute("run", (_, _, _, _) => throw new InvalidOperationException("must not source scan")));
@@ -466,6 +471,7 @@ public sealed class WebFormsReviewExecutionTests
         var derivedRoot = Path.Combine(fixture.Run, checkpoint.Attempt, "scan");
         var derived = JsonSerializer.Deserialize<ScanManifest>(File.ReadAllText(Path.Combine(derivedRoot, "scan-manifest.json")), JsonOptions)!;
         CompiledAttachmentProducer.ValidateContext(derived);
+        Assert.Equal(retainedRoster ? 250_000 : 50_000, derived.IlBodyProvenance!.EffectiveLimits.MaxBodyCount);
         Assert.Equal(Hash(Path.Combine(parent, "index.sqlite")), derived.CompiledAttachment!.ParentIndexSha256);
         Assert.Equal(Hash(Path.Combine(parent, "scan-manifest.json")), derived.CompiledAttachment.ParentManifestSha256);
         Assert.Equal("NotRun", derived.BuildStatus);

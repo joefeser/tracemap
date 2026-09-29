@@ -2506,6 +2506,19 @@ rules:
       - Generated PE/IL is never executed and does not prove authentic ASP.NET compilation, source equivalence, runtime dispatch or SQL execution.
       - Source padding and declared pages are controlled dimensions, not predictors of arbitrary graph fan-out or customer corpus performance.
       - Sparse compiled-method count is an explicit generator input and participates in the bounded input commitment alongside the exact source roster and page count; identical source bytes do not imply identical generated PE inventory.
+  - id: diagnostic.webforms.graph-storage.v1
+    name: Local explicit indexed graph storage diagnostic
+    description: Replays one explicit retained index read-only with bounded graph admission and records private scratch object allocations and refused partial inventory observations under exact generator and input commitments.
+    evidenceTier: Tier4Unknown
+    emits: [diagnostic.webforms.graph-storage.v1 local-only receipt]
+    limitations:
+      - A refused store's retained fact/node/edge counters are partial admission observations, not classified graph or path counts; all classified paths remain empty after refusal.
+      - Physical table and index allocation is unknown when SQLite dbstat is unavailable. Logical storage excludes temporary sorter disk and is not OS memory consumption.
+      - Refused allocation samples precede the failed write and are not final file sizes. With journaling disabled a full scratch store can be unreadable; diagnostics use only prior samples and managed successful-write counters, never recover or classify that damaged graph.
+      - The receipt pins its test generator, the Reporting generator, full input index hash, actual query options and admission budgets. It is local-only and contains no method identities or source text.
+      - Fixed graph-stage timings are wall-clock boundary intervals including waits and GC, not CPU time, complete CLI phase durations, OS peak memory or transient sorter disk. Refused timings describe the incomplete attempt, never successful graph acceptance.
+      - The diagnostic stage trace has at most 32 fixed-name entries and 64 KiB, with exact test/Reporting generator and bounded input commitments on every entry. Stage entry does not prove stage completion or admission; the completed receipt hashes the trace, and no private method or path labels are emitted.
+      - Replaying a retained index does not prove fresh scan, build authenticity, complete site coverage, runtime dispatch or SQL execution; existing output directories are never overwritten.
   - id: diagnostic.webforms.native-scale.v1
     name: Public native Web Forms subprocess scale diagnostic
     description: Records pinned generator and bounded corpus input hashes with elapsed time, OS peak resident usage, retained disk and review-only retained coverage from separate native CLI processes.
@@ -2515,7 +2528,7 @@ rules:
       - OS peak covers each CLI process, not fixture generation or a simultaneous aggregate working set; no sampled working-set or allocated-byte metric substitutes for peak resident usage.
       - Retained disk excludes transient graph and OS sorter disk peaks. Explicit benchmark output must be new and remains retained, including failure artifacts.
       - The ordinary 1/8-page smoke and opt-in 32/256-page eight-times-source corpus do not establish private Windows, authentic compiled-site or arbitrary graph acceptance.
-      - The graph opt-in adds 24000/192000 distinct unreachable compiled methods with explicit diagnostic-only metadata/report-input caps. Production defaults and the internal graph-storage ceiling are unchanged. A categorical graph-input refusal must retain zero classified paths and is not successful stress-graph admission.
+      - The graph opt-in adds 24000/192000 distinct unreachable compiled methods with explicit diagnostic metadata/report-input caps, 250000 IL bodies, 1 GiB input text and 4 GiB scratch storage. Production defaults remain unchanged, including the 50000 IL-body and 512 MiB scratch defaults. Strict acceptance requires IL outcomes admitted and all four terminal branches per page. A categorical graph-input refusal must retain zero classified paths and is not successful stress-graph admission.
       - Generated static database-API paths remain review-only; coverage, truncation and provenance gaps are retained rather than promoted to runtime conclusions.
   - id: workflow.webforms.compiled-review-preflight.v1
     name: Private native compiled Web Forms run preflight
@@ -2531,6 +2544,8 @@ rules:
       - An explicit receiptRoot can locate existing binding and publish receipts outside the published site; its bytes and output separation are checked, but this does not generate receipts, attest ownership or validate a historical compiler.
       - File hashing limits are separate from recorded future IL and graph budgets; streamed hashing does not establish large-corpus runtime or memory acceptance.
       - Graph path retention defaults to 256 and accepts an explicit 1 through 4096 value; increasing it does not increase depth, work, admission or output caps and never proves complete traversal.
+      - Optional report maxGraphStorageBytes declares 64 KiB through 16 GiB of logical scratch SQLite storage for both graph queries; absence preserves 512 MiB and historical configuration serialization. The value is hash-bound and visible in status, but does not establish available disk, bound sorter scratch or OS memory, or raise other report limits.
+      - Optional ilMaxBodies declares 1 through 1000000 bodies and is hash-bound, enforced by native scan and visible in status. Omission preserves 50000 and historical JSON shape. Metadata admission does not imply IL admission; raising graph limits does not repair missing body evidence.
       - The manifest contains private paths, source commit and input fingerprints and is not shareable; parent scans and existing output folders are never rewritten.
   - id: workflow.webforms.compiled-review-execution.v1
     name: Private native fresh and attachment Web Forms scan checkpoints
@@ -2539,6 +2554,7 @@ rules:
     emits:
       - webforms-compiled-review-checkpoint.v1 local-only execution checkpoint
     limitations:
+      - Native start is only composition of preparation, preflight and execution in a newly reserved explicit root with evidence/run children. Receipt generation requires an explicit exact-commit attestation; otherwise existing explicit receipts are required. It never invents authority, searches TEMP, rewrites prior roots, changes budgets or cleans failed attempts. Resume names the pinned run child and does not repeat preparation.
       - The scan checkpoint remains scan-completed-reports-pending; operator run/resume then executes separately checkpointed native reports. Reports-completed-review-only means admitted artifact generation, not complete-site, runtime or representative-scale acceptance. Receipt preparation is a separate explicit operator-declaration command.
       - The CLI does not build or publish the site, load assemblies at runtime, infer bindings or attest source ownership; existing receipt policy and reduced metadata/IL/PDB coverage remain authoritative.
       - Resume verifies retained inputs and outputs without a new source scan; a retained snapshot does not validate current unpinned source bytes, clean Git state, runtime behavior or SQL execution.
@@ -3249,7 +3265,7 @@ rules:
       - Syntax-only, name-only, ambiguous, generated-code-uncertain, high fan-out, or partial-terminal evidence cannot produce StrongStaticPath.
       - Interface and override candidate hops cap legacy flow and Web Forms boundary classifications at NeedsReviewStaticPath; a complete static terminal inventory does not resolve the runtime receiver.
       - Reduced coverage and missing extractors produce ReducedCoverage or AnalysisGap rather than clean absence.
-      - The v1 high fan-out threshold is five or more inbound candidate paths from distinct roots to one terminal identity, or generic ambiguous terminal keys such as status, id, name, value, result, or response. This conservative placeholder requires calibration against redacted legacy validation data, including false-positive and false-negative metrics by terminal kind.
+      - The implemented v1 high fan-out threshold counts five or more retained incoming graph edges to one exact terminal identity, or generic ambiguous terminal keys such as status, id, name, value, result, or response. It does not count distinct roots or runtime callers. Indexed classification reads at most five global incoming index references and preserves the same threshold without per-path whole-edge payload decoding. This conservative placeholder requires calibration against redacted legacy validation data, including false-positive and false-negative metrics by terminal kind.
 
   - id: legacy.flow.gap-propagation.v1
     name: Legacy flow gap propagation
@@ -3733,6 +3749,7 @@ rules:
       - Other source methods named by the verified receipt may join a uniquely admitted method with the complete qualified type path and compatible parameter shapes. VB page, handler, containing-type, method, and parameter spelling is matched case-insensitively; intrinsic aliases, including unsigned integers and SByte, use their defined System type, while unqualified non-intrinsic names must match a retained lexical namespace or explicit non-aliased Imports scope. Unscoped names, case-equivalent ambiguous overloads, and ambiguous assembly identities fail closed. Both directions are candidate edges so a compiled IL walk can re-enter retained source evidence, not an exact method-location claim.
       - The member-candidate pass preflights its bounded source/member comparison work before emitting any of its edges; work-limit exhaustion withholds the pass and emits a Tier4 gap.
       - The unchanged 100000 comparison cap counts safely length-framed qualified-type candidates and every opaque name-matched fallback, not unrelated declaring types. Global admitted source/name and receipt-bound assembly counts remain available for gap reasons; same-type overloads, duplicate rows and assembly competitors are never deduplicated. Generic, nested, malformed or delimiter-bearing identities keep the historical name-wide fallback and may still exhaust the cap.
+      - Published-page joins build complete typed source/file inventories once instead of re-decoding every admitted fact per map and handler. Mapless generated-type uniqueness retains unbound competitors, and duplicate pages, receipt bindings, handler declarations and bound metadata methods remain ambiguous. Qualified method selection retains opaque fallback rows and the original final receipt/hash/type/name/span predicates. Type-specific managed allocation and representative resource acceptance remain separate limits.
       - A compiled-only attachment may use retained pages, handlers and method declarations from its explicitly validated parent index. Publish/metadata/IL facts remain in the attachment namespace, supporting fact IDs are unchanged, and cross-index edges record the admitted link digest. This does not create Tier1 source identity or upgrade page verdicts.
 
   - id: combined.paths.projectless-vb-receiver-bridge.v1
@@ -3795,7 +3812,8 @@ rules:
       - The triggering evidence span is best-effort and may point to the nearest traversed node rather than the omitted dependency.
       - Web Forms graph-input admission gaps have no source span and discard the incomplete graph before classification; they do not imply missing runtime dependencies or a clean graph.
       - Bounded combined input checks projected fact and dependency-edge text bytes before copying row strings into managed memory. Per-row or aggregate refusal discards the graph; noncanonical combined fact namespaces are malformed input, not a guessed identity or clean result.
-      - Indexed bounded combined graph storage pins the Reporting generator and exact input-index hashes and rechecks input bytes before returning a report. Its 512 MiB logical SQLite database ceiling includes admitted projected facts and the edge-order roster, excludes sorter scratch files, and is not an OS memory bound. Storage refusal emits graph-storage-bytes and discards all partial paths; the private temporary store is never a reusable run checkpoint.
+      - Indexed bounded combined graph storage pins the Reporting generator and exact input-index hashes and rechecks input bytes before returning a report. Its default 512 MiB logical SQLite database ceiling includes admitted projected facts and the edge-order roster; native reports may explicitly declare 64 KiB through 16 GiB, bound in their configuration and status. The ceiling excludes sorter scratch files and is not an OS memory bound. Storage refusal emits graph-storage-bytes and discards all partial paths; the private temporary store is never a reusable run checkpoint.
+      - Private v2 scratch rows use lossless length-framed raw UTF-8 JSON with exact declared-size validation. Outgoing cache budgets count JSON bytes excluding framing headers. All global competitors and published evidence identities remain unchanged; representative admission must be measured separately. Experimental Brotli compression was rejected after slowdown and continued large-graph refusal.
       - Bounded per-source combined projection rejects fact rows without retained source-index metadata instead of silently omitting an unknown global competitor. Null or noncanonical fact namespaces remain malformed input, not a clean result.
 
   - id: combined.route-flow.selector.v1

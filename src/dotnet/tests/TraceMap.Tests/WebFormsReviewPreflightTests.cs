@@ -65,6 +65,69 @@ public sealed class WebFormsReviewPreflightTests
     }
 
     [Fact]
+    public async Task Explicit_scratch_storage_is_hash_bound_and_absent_from_historical_default_serialization()
+    {
+        using var fixture = new Fixture();
+        var defaults = new WebFormsReviewReportBudgets();
+        Assert.Null(defaults.MaxGraphStorageBytes);
+        Assert.DoesNotContain("maxGraphStorageBytes", JsonSerializer.Serialize(defaults, JsonOptions));
+        fixture.Config = fixture.Config with { Budgets = fixture.Config.Budgets with { Reports = defaults } };
+        var original = await fixture.Build();
+        var selected = 2L * 1024 * 1024 * 1024;
+        fixture.Config = fixture.Config with { Budgets = fixture.Config.Budgets with
+            { Reports = defaults with { MaxGraphStorageBytes = selected } } };
+        var explicitPlan = await fixture.Build();
+        Assert.NotEqual(original.BoundedInputSha256, explicitPlan.BoundedInputSha256);
+        Assert.Equal(selected, explicitPlan.Configuration.Budgets.Reports!.MaxGraphStorageBytes);
+        Assert.Equal(defaults.MaxInputTextBytes, explicitPlan.Configuration.Budgets.Reports.MaxInputTextBytes);
+        Assert.False(Directory.Exists(fixture.Output));
+    }
+
+    [Theory]
+    [InlineData(0L)]
+    [InlineData(65535L)]
+    [InlineData(17179869185L)]
+    public void Invalid_scratch_storage_budget_is_rejected(long bytes)
+    {
+        var error = Assert.Throws<WebFormsReviewPreflightCommand.PreflightException>(() => WebFormsReviewPreflightCommand.ValidateReportBudgets(
+            new WebFormsReviewReportBudgets { MaxGraphStorageBytes = bytes }));
+        Assert.Contains("REPORT_BUDGET_INVALID", error.Message);
+    }
+
+    [Fact]
+    public async Task Explicit_il_body_budget_is_hash_bound_without_changing_historical_defaults()
+    {
+        using var fixture = new Fixture();
+        var defaults = new WebFormsReviewBudgets();
+        Assert.Null(defaults.IlMaxBodies);
+        Assert.DoesNotContain("ilMaxBodies", JsonSerializer.Serialize(defaults, JsonOptions));
+        var original = await fixture.Build();
+        fixture.Config = fixture.Config with { Budgets = defaults with { IlMaxBodies = 250_000 } };
+        var selected = await fixture.Build();
+        Assert.NotEqual(original.BoundedInputSha256, selected.BoundedInputSha256);
+        Assert.Equal(250_000, selected.Configuration.Budgets.IlMaxBodies);
+        Assert.Equal(defaults.IlMaxWork, selected.Configuration.Budgets.IlMaxWork);
+        var originalArgs = WebFormsReviewExecutionCommand.ScanArguments(original, "public-output");
+        Assert.DoesNotContain("--il-max-bodies", originalArgs);
+        var args = WebFormsReviewExecutionCommand.ScanArguments(selected, "public-output");
+        Assert.Equal("250000", args[Array.IndexOf(args, "--il-max-bodies") + 1]);
+        Assert.Equal(50_000, WebFormsReviewAttachmentExecution.Options(original, "public-output").IlBodyLimits!.MaxBodyCount);
+        Assert.Equal(250_000, WebFormsReviewAttachmentExecution.Options(selected, "public-output").IlBodyLimits!.MaxBodyCount);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    [InlineData(1000001)]
+    public async Task Invalid_il_body_budget_is_rejected(int bodies)
+    {
+        using var fixture = new Fixture();
+        fixture.Config = fixture.Config with { Budgets = fixture.Config.Budgets with { IlMaxBodies = bodies } };
+        var error = await Assert.ThrowsAsync<WebFormsReviewPreflightCommand.PreflightException>(() => fixture.Build());
+        Assert.Contains("BUDGET_INVALID", error.Message);
+    }
+
+    [Fact]
     public async Task Receipt_hash_candidate_never_becomes_source_binding()
     {
         using var fixture = new Fixture();

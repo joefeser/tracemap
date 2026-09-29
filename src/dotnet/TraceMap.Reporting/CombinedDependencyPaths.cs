@@ -478,8 +478,11 @@ public static partial class CombinedDependencyPathReporter
             command.CommandText = "pragma query_only=on; pragma temp_store=file; pragma cache_size=-8192;";
             await command.ExecuteNonQueryAsync(cancellationToken);
         }
+        graphStorage?.MarkObservationStage("path-index-read");
         var read = await ReadPathIndexAsync(connection, indexPath, allowSingleIndex, cancellationToken, budget, graphStorage?.Facts);
+        graphStorage?.MarkObservationStage("endpoint-matching");
         var endpointFindings = CombinedDependencyReporter.MatchEndpoints(read.Sources, read.Facts);
+        graphStorage?.MarkObservationStage("surface-inventory");
         var surfaces = CombinedDependencyReporter.BuildSurfaces(read.Facts, read.Sources);
         var graph = BuildGraph(read, endpointFindings, surfaces, sourcePair, includeLegacyRoots, budget, graphStorage);
         return (read, graph);
@@ -964,6 +967,7 @@ public static partial class CombinedDependencyPathReporter
         IndexedGraphStore? graphStorage = null)
     {
         var graph = new EvidenceGraph(read.Sources, budget, graphStorage);
+        graphStorage?.MarkObservationStage("initial-nodes");
         var factsById = CombinedFactsById(read.Facts);
         foreach (var fact in IdentityOrderedFacts(read.Facts))
         {
@@ -998,6 +1002,7 @@ public static partial class CombinedDependencyPathReporter
             }
         }
 
+        graphStorage?.MarkObservationStage("source-edges");
         foreach (var edge in read.Edges)
         {
             if (string.IsNullOrWhiteSpace(edge.SourceSymbol) || string.IsNullOrWhiteSpace(edge.TargetSymbol))
@@ -1077,6 +1082,7 @@ public static partial class CombinedDependencyPathReporter
                 "calls"));
         }
 
+        graphStorage?.MarkObservationStage("surface-projection");
         var remotingFacts = read.Facts
             .Where(IsRemotingFact)
             .OrderBy(fact => fact.CombinedFactId, StringComparer.Ordinal)
@@ -1153,10 +1159,12 @@ public static partial class CombinedDependencyPathReporter
 
         if (includeLegacyRoots)
         {
+            graphStorage?.MarkObservationStage("legacy-roots");
             AddLegacyFlowNodesAndEdges(graph, read.Facts, surfaces);
             AddLegacyAvailabilityGaps(graph, read);
         }
 
+        graphStorage?.MarkObservationStage("endpoint-edges");
         foreach (var finding in endpointFindings)
         {
             if (sourcePair is not null
@@ -1193,12 +1201,19 @@ public static partial class CombinedDependencyPathReporter
                 finding.ServerEndLine ?? finding.ClientEndLine));
         }
 
+        graphStorage?.MarkObservationStage("symbol-reconciliation");
         AddSymbolReconciliationEdges(graph);
-        AddBoundCompiledIlEdges(graph, read.Facts, read.CompiledAttachmentLinks);
+        graphStorage?.MarkObservationStage("compiled-il");
+        AddBoundCompiledIlEdges(graph, read.Facts, read.CompiledAttachmentLinks, graphStorage);
+        graphStorage?.MarkObservationStage("vb-receiver-bridges");
         AddProjectlessVisualBasicReceiverBridgeEdges(graph, read.Facts);
+        graphStorage?.MarkObservationStage("vb-implicit-receiver-bridges");
         AddProjectlessVisualBasicImplicitReceiverBridgeEdges(graph, read.Facts);
+        graphStorage?.MarkObservationStage("vb-constructor-bridges");
         AddProjectlessVisualBasicConstructorBridgeEdges(graph, read.Facts);
+        graphStorage?.MarkObservationStage("dispatch-candidates");
         AddDispatchCandidateEdges(graph, read.Facts, read.Sources, read.HasFactExtractorVersion);
+        graphStorage?.MarkObservationStage("edge-order");
         graph.Sort();
         return graph;
     }
@@ -4883,7 +4898,7 @@ public static partial class CombinedDependencyPathReporter
 
         var genericTerminal = terminal is not null && IsGenericTerminalKey(terminal.SurfaceName ?? terminal.DisplayName);
         var highFanOut = terminal is not null
-            && graph.Edges.Count(edge => edge.ToNodeId == terminal.NodeId) >= 5;
+            && graph.Edges.HasAtLeastIncomingEdges(terminal.NodeId, 5);
         if (path.Edges.Any(edge => edge.EvidenceTier == EvidenceTiers.Tier3SyntaxOrTextual)
             || path.Edges.Any(edge => edge.EdgeKind is "interface-candidate" or "override-candidate")
             || path.Edges.Any(edge => edge.EdgeKind == "symbol-reconciliation" || IsLegacyFlowProjectionEdge(edge.EdgeKind))
@@ -6701,6 +6716,7 @@ public static partial class CombinedDependencyPathReporter
         IReadOnlyDictionary<string, CombinedDependencyTraversalObservation> TraversalByStartingFactId)
     {
         internal IndexedGraphUsage? GraphStorage { get; init; }
+        internal IndexedGraphUsage? RefusedGraphStorage { get; init; }
     }
 
     internal sealed record CombinedDependencyTraversalObservation(

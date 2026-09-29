@@ -1,5 +1,15 @@
 # TraceMap Validation Guide
 
+For native one-command start, run the preparation, preflight, execution and
+native-scale suites. Pin explicit receipt/attestation authority, new-root
+reservation, original-config stability across phases, fresh and immutable
+attachment, failed-scan recovery and byte-identical completed resume. The
+2026-09-29 rebuilt slice passed 182 checks with zero failures/skips; final
+exact-head regression and private Windows acceptance remain separate gates.
+Strict fresh synthetic 32/256-page scale retains all 24,000/192,000 sparse
+methods and 128/1,024 static paths under declared stress budgets; see
+[measured scale and limitations](validation/webforms-native-scale-2026-09-29.md).
+
 For native graph-query work accounting, run the combined dependency-path,
 grouped compiled handoff, Web Forms packet, native execution/status and native
 subprocess-scale suites. Pin a shared two-root work/path cap, exact exhaustion,

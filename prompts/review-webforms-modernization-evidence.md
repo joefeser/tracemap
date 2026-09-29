@@ -17,7 +17,7 @@ and `checkpoints/`, start with this workflow. You may read the small immutable
 manifest and checkpoint records, but do **not** load `handoff.local.json`, the
 grouped compiled JSON, SQLite files, or scan facts wholesale. Use only the owner's
 approved TraceMap executable and run root. Do not execute `run`, `resume`,
-`prepare`, a source scanner, arbitrary SQL, or a cleanup command during review.
+`start`, `prepare`, `preflight`, a source scanner, arbitrary SQL, or a cleanup command during review.
 
 1. Run `tracemap webforms-review status --run <owner-supplied-run-root> --json`
    first. Record operation, selected/all-page scope, retained source commit,
