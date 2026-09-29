@@ -1,5 +1,12 @@
 # TraceMap Validation Guide
 
+Git identity probing must distinguish process exit from complete redirected
+output. A timed-out, faulted, cancelled or required-empty pipe read is a failed
+probe and participates in the existing single bounded retry; an intentionally
+empty repository prefix remains valid. `GitMetadataOutputTests` pins this
+distinction without scheduling-dependent sleeps. A targeted identity fixture
+pass does not replace a new exact-head full regression after a failure.
+
 For native compiled Web Forms completed-run copies, validate the execution,
 preflight, preparation, input-validation, evidence-query and native-scale suites.
 The 2026-09-28 rebuilt slice passed 201 tests with zero failures/skips in 3 minutes
