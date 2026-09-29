@@ -2,7 +2,8 @@
 param(
     [string]$RunRoot,
     [string]$SearchRoot,
-    [switch]$Probe
+    [switch]$Probe,
+    [switch]$ProbeWriter
 )
 
 Set-StrictMode -Version Latest
@@ -151,7 +152,10 @@ if ($Probe) {
     & dotnet build $probeProject --nologo --verbosity quiet | Out-Null
     if ($LASTEXITCODE -ne 0) { throw 'WEBFORMS_STATUS_PROBE_BUILD_FAILED' }
     $probeDll = Join-Path $PSScriptRoot '../src/dotnet/TraceMap.ReportProbe/bin/Debug/net10.0/TraceMap.ReportProbe.dll'
-    & dotnet $probeDll $configuration $report
+    $probeArgs = @($configuration, $report)
+    if ($ProbeWriter) { $probeArgs += '--writer' }
+    & dotnet $probeDll @probeArgs
     if ($LASTEXITCODE -ne 0) { throw 'WEBFORMS_STATUS_PROBE_STAGE_FAILED;originals-preserved' }
 }
+elseif ($ProbeWriter) { throw 'WEBFORMS_STATUS_PROBE_WRITER_REQUIRES_PROBE' }
 Write-Output 'status=retained-checkpoints-only;no-resume;no-inputs-changed'

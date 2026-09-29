@@ -181,6 +181,12 @@ time and use temporary graph storage while reading the private index; keep all
 output local and share only the `probe.*` lines. A passing probe narrows the
 failure to writer or later stages, not report completion. Do not rebuild the
 pinned CLI or resume until the cause is understood.
+After the read-only stages pass, `-Probe -ProbeWriter` also replays the writer
+into a new private TEMP scratch directory, then removes that directory. It
+does not write to the retained failed run or rescan. A process kill or cleanup
+failure can leave private scratch files; the latter prints a safe folder label
+for local cleanup. A passing scratch writer does not prove the original target
+directory or later native artifact admission will succeed.
 This is a quick diagnostic, not authenticated checkpoint validation; the native
 `webforms-review status --run` command remains authoritative. Neither command
 resumes or repeats the failed work.
