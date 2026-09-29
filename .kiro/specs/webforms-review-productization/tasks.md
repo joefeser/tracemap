@@ -144,6 +144,14 @@
     and admitted resume artifacts. Keep private graph scale and transient disk peak
     pending. The observed member work-limit follow-up is covered above; other
     representative graph distributions and whole-workflow throughput remain open.
+  - [x] Run retained sparse compiled inventory stress at 24,000/192,000 methods,
+    with explicit diagnostic budgets, actual graph/resource counts and fail-closed
+    capacity gaps. Preserve the public inputs and all failed/completed artifacts.
+    The 192,000-method graph hit the unchanged internal graph-storage ceiling;
+    this verifies fail-closed reporting, not successful representative admission.
+  - [ ] Reduce indexed graph storage amplification and retain graph-admission
+    usage; revalidate the retained 192,000-method case without hiding capacity
+    gaps, discarding global competitors or silently raising production bounds.
 - [ ] Add dependency-aware retention, durable run location, relocation validation,
   and dry-run-first cleanup; do not delete the working proof before verification.
   - [x] Add explicit completed-run verified copies with original policy-root

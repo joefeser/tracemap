@@ -2505,6 +2505,7 @@ rules:
     limitations:
       - Generated PE/IL is never executed and does not prove authentic ASP.NET compilation, source equivalence, runtime dispatch or SQL execution.
       - Source padding and declared pages are controlled dimensions, not predictors of arbitrary graph fan-out or customer corpus performance.
+      - Sparse compiled-method count is an explicit generator input and participates in the bounded input commitment alongside the exact source roster and page count; identical source bytes do not imply identical generated PE inventory.
   - id: diagnostic.webforms.native-scale.v1
     name: Public native Web Forms subprocess scale diagnostic
     description: Records pinned generator and bounded corpus input hashes with elapsed time, OS peak resident usage, retained disk and review-only retained coverage from separate native CLI processes.
@@ -2514,6 +2515,7 @@ rules:
       - OS peak covers each CLI process, not fixture generation or a simultaneous aggregate working set; no sampled working-set or allocated-byte metric substitutes for peak resident usage.
       - Retained disk excludes transient graph and OS sorter disk peaks. Explicit benchmark output must be new and remains retained, including failure artifacts.
       - The ordinary 1/8-page smoke and opt-in 32/256-page eight-times-source corpus do not establish private Windows, authentic compiled-site or arbitrary graph acceptance.
+      - The graph opt-in adds 24000/192000 distinct unreachable compiled methods with explicit diagnostic-only metadata/report-input caps. Production defaults and the internal graph-storage ceiling are unchanged. A categorical graph-input refusal must retain zero classified paths and is not successful stress-graph admission.
       - Generated static database-API paths remain review-only; coverage, truncation and provenance gaps are retained rather than promoted to runtime conclusions.
   - id: workflow.webforms.compiled-review-preflight.v1
     name: Private native compiled Web Forms run preflight

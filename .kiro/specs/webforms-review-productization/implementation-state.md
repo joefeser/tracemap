@@ -1,5 +1,46 @@
 # Web Forms Review Productization Implementation State
 
+## Sparse compiled-graph stress (2026-09-28)
+
+- Added source for an explicit graph diagnostic profile: same 32/256 declared
+  pages and exact-eight-times source bytes, plus 24,000/192,000 distinct sparse
+  compiled methods. This exercises global inventory instead of multiplying only
+  selected paths. Sparse generator parameters participate in the exact bounded
+  input commitment; identical source alone cannot identify generated PE bytes.
+- Diagnostic configuration explicitly declares two-million metadata work and
+  one-million fact/500,000 edge/512 MiB text admission. Production defaults,
+  graph search caps and the internal 512 MiB graph-store bound are unchanged.
+  Scan admission verifies the exact unique sparse method name range from the
+  read-only retained index. Successful graph admission must observe at least that
+  many nodes and retain four branches per
+  page. A graph-input refusal must classify zero paths and record partial state,
+  observed counts and categorical gaps, not be relabeled full acceptance.
+- Exact pushed 9797b6a3ceccf71631a864a8943161b7c0527b9b regression
+  terminated green: 2,721 passed, zero failed/skipped in 13 minutes 59 seconds.
+  Runtime binaries were rebuilt only after that process terminated. The rebuilt
+  scale class passed 2/2, including the input-commitment fixture and ordinary
+  1/8-page CLI smoke, with no introduced build warnings. The retained sparse
+  stress run completed at output/native-scale-sparse-graph-20260928. No proof
+  was deleted.
+- The retained 24,000-method case has completed reports: 49,781 facts,
+  49,228 graph nodes, 49,024 edges, all 32 pages and 128 compiled variants.
+  Page/compiled traversal counters are 2,944/1,408. OS timing recorded
+  135.69 seconds and 1,063,288,832 bytes maximum resident size for run.
+  Coverage remains partial-static-review, not runtime or authentic ASP.NET
+  acceptance.
+- The 192,000-method case retained all 192,000 unique sparse methods and
+  202,518 facts, with all 256 source surfaces. Graph admission hit the unchanged
+  internal 512 MiB graph-storage budget (`graph-storage-bytes`), producing an
+  explicit GraphInputLimitReached gap, zero graph nodes/edges and zero compiled
+  paths. Run took 45,937 ms and peaked at 2,461,483,008 resident bytes; retained
+  run disk was 2,469,452,155 bytes. This is fail-closed capacity evidence, not
+  successful representative graph admission. Do not raise the ceiling silently.
+- The two-case subprocess diagnostic passed 1/1 in 3 minutes 35 seconds. Its
+  retained native-scale.receipt.json binds the exact test/CLI generators and
+  corpus inputs. Both source/page and sparse-method counts are exact eight-times.
+  The next scaling slice must address indexed graph storage amplification and
+  retain graph-admission/storage observations; private acceptance remains open.
+
 ## Native graph-query work scope (2026-09-28)
 
 - Inspection after 389f1a19 found an incorrect new status/documentation label:

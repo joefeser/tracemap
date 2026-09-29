@@ -622,6 +622,23 @@ truncation. It also retains measured page/compiled traversal work and the shared
 per-query cap; these are deterministic search counters, not CPU or runtime calls.
 Retained disk excludes transient graph/sorter disk peak; these public
 synthetic observations do not establish arbitrary graph or private Windows scale.
+
+For a sparse compiled-graph stress diagnostic, use
+`TRACEMAP_WEBFORMS_NATIVE_SCALE=graph` with a new explicit output root. It retains
+the same 32/256-page, exact-eight-times-source cases while adding 24,000/192,000
+distinct unreachable compiled methods. This exercises full global inventory,
+not just a larger reachable route. The diagnostic config explicitly uses two
+million metadata work units and report admission of one million facts, 500,000
+edges and 512 MiB text; production defaults, path/work caps and the internal
+512 MiB graph-store ceiling are unchanged. The receipt records declared sparse
+methods, observed graph nodes/edges and categorical input refusals. A refused
+graph must classify zero paths and remain partial; that is evidence of a ceiling,
+not a successful large-graph acceptance. Every input and failed output is retained.
+The first retained graph diagnostic admitted the 24,000-method case (49,228 graph
+nodes and 128 compiled variants), but the 192,000-method case hit the unchanged
+internal `graph-storage-bytes` ceiling. All 192,000 sparse methods were collected;
+the refused graph correctly emitted zero compiled paths. This capacity follow-up
+is open; a passing refusal test must not be reported as large-graph support.
 The earlier 256-page diagnostic retained all four compiled branches per page
 but hit `ProjectlessPublishMemberWorkLimit` for source member joins. Qualified
 candidate indexing now clears that limit in the same declared corpus while
