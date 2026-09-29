@@ -1253,6 +1253,10 @@ public sealed class WebFormsReviewExecutionTests
             Assert.Equal(0, await TraceMapCommand.RunAsync(["webforms-review", "query-recovery", "--bundle", target,
                 "--document", "compiled", "--pointer", "/chains", "--depth", "0"], query, error));
             Assert.Contains("recovered-static-reports-original-run-not-completed", query.ToString());
+            using var handlerQuery = new StringWriter();
+            Assert.Equal(0, await TraceMapCommand.RunAsync(["webforms-review", "query-recovery", "--bundle", target,
+                "--handler", "MissingHandler"], handlerQuery, error));
+            Assert.Contains("/handler-summary/exactChains", handlerQuery.ToString());
             File.AppendAllText(Path.Combine(target, WebFormsReviewEvidenceIndex.Name), "tamper");
             Assert.Equal(1, await TraceMapCommand.RunAsync(["webforms-review", "query-recovery", "--bundle", target], TextWriter.Null, error));
         }

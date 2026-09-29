@@ -1195,3 +1195,15 @@ unrelated output root or local configuration. Regression coverage exercises the
 strict schema, byte ceiling, and both clean-checkout explicit-input modes. The
 operator handoff now describes the ignored JSON workflow instead of editing the
 runner source.
+
+## Recovered handler comparison (2026-09-29)
+
+On `codex/webforms-config-migration`, recovery readback showed nonzero compiled
+paths but a shared path cap across multiple requested handlers. This is not
+evidence of lost C# port logic or single-handler parity. `whandler.ps1` uses the
+recovery evidence index to count one method's retained exact chains and evidence
+variants, reporting distinct source/scan/commit/symbol roots and global truncation.
+The response is bounded, provenance-bound, private, and review-only: no full
+handoff deserialization, scan, or graph traversal. Six focused .NET tests and the
+public script test passed. Owner handler readback and full-graph repeated-I/O
+cause remain pending. No runtime, full coverage, or parity claim.

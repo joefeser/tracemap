@@ -142,7 +142,10 @@ public static partial class WebFormsReviewExecutionCommand
         {
             if (args.Length < 3 || args[0] != "query-recovery" || args[1] != "--bundle") throw Fail("RECOVERY_QUERY_ARGUMENT_INVALID");
             var root = WebFormsReviewPreflightCommand.PhysicalPath(args[2]);
-            var query = ParseQuery(args[3..]);
+            var handlerMode = args.Length == 5 && args[3] == "--handler";
+            var query = handlerMode
+                ? new WebFormsEvidenceQuery("compiled", "/handler-summary") { Handler = args[4] }
+                : ParseQuery(args[3..]);
             var receiptPath = OwnedPath(root, RecoveryName);
             using var receiptLock = new FileStream(receiptPath, FileMode.Open, FileAccess.Read, FileShare.Read);
             var receiptBytes = await WebFormsReviewPreflightCommand.ReadSmallAsync(receiptPath, 4_194_304, token);
@@ -167,7 +170,8 @@ public static partial class WebFormsReviewExecutionCommand
                 await connection.OpenAsync(token);
                 context = WebFormsReviewEvidenceIndex.ReadContext(connection, receipt.RunId, app.Sha256, compiled.Sha256);
                 if (context.MaxNodes != receipt.MaxEvidenceNodes || admitted.Bytes > context.MaxIndexBytes) throw Fail("RECOVERY_CONTEXT_INVALID");
-                (result, truncated) = ReadQuery(connection, query, token);
+                (result, truncated) = query.Handler is null ? ReadQuery(connection, query, token)
+                    : (ReadHandlerSummary(connection, query.Handler, token), false);
             }
             var generator = await WebFormsReviewPreflightCommand.HashAsync("query-generator", typeof(WebFormsReviewExecutionCommand).Assembly.Location, 67_108_864, token);
             var response = new WebFormsEvidenceResponse("webforms-review-evidence-slice.v1", WebFormsReviewEvidenceIndex.Rule,
