@@ -2422,7 +2422,8 @@ public static class TraceMapCommand
                 continue;
             }
 
-            if (index + 1 >= args.Length || args[index + 1].StartsWith("--", StringComparison.Ordinal))
+            // Native scan arguments are generated key/value pairs, not caller CLI tokens.
+            if (index + 1 >= args.Length || (!preserveOptionValues && args[index + 1].StartsWith("--", StringComparison.Ordinal)))
             {
                 throw new ArgumentException($"Missing value for {arg}.");
             }

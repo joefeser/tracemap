@@ -25,6 +25,9 @@
 
 ## Compiled Web Site productization — implemented native path and acceptance gates
 
+- [x] PR #797 round-two regression guard: consume generated native scan values
+  positionally even when a relative source folder begins with `--`; preserve
+  legacy public CLI missing-value behavior.
 - [x] PR #797 round-one regression guards: keep native structured scan values
   literal (including commas), share read-only query locks while blocking writers,
   distinguish lock I/O from index corruption, and reject mixed solution/project

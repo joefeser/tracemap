@@ -67,7 +67,8 @@ or historical compiler-input closure. Declare C# `.aspx.cs` or VB `.aspx.vb`
 membership as appropriate in `publishSourceRelativePaths`; selected markup is
 included automatically.
 
-Native configured paths are literal values, including commas. Native selected
+Native configured paths are literal values, including commas and relative
+source-folder names beginning with `--`. Native selected
 page lists are literal path lines, not CSV or comment/header rows; legacy
 standalone page-list CSV parsing remains unchanged.
 

@@ -802,13 +802,24 @@ public sealed class WebFormsReviewExecutionTests
         Assert.Equal(2, fixture.LastCheckpoint().Sequence);
     }
 
+    [Fact]
+    public async Task Public_scan_still_rejects_option_like_tokens_as_missing_values()
+    {
+        using var output = new StringWriter(); using var error = new StringWriter();
+        Assert.Equal(1, await TraceMapCommand.RunAsync(["scan", "--include", "--legacy"], output, error));
+        Assert.Empty(output.ToString());
+        Assert.Contains("Missing value for --include.", error.ToString(), StringComparison.Ordinal);
+    }
+
     [Theory]
-    [InlineData("")]
-    [InlineData(",literal")]
-    public async Task Actual_CLI_dispatch_executes_and_resumes_the_fresh_scan(string pathSuffix)
+    [InlineData("", "Pages")]
+    [InlineData(",literal", "Pages,literal")]
+    [InlineData("", "--legacy")]
+    [InlineData(",literal", "--legacy,literal")]
+    public async Task Actual_CLI_dispatch_executes_and_resumes_the_fresh_scan(string pathSuffix, string sourceFolder)
     {
         using var fixture = new Fixture(pathSuffix);
-        fixture.AddPublicEventFixture(commaScope: pathSuffix.Length > 0);
+        fixture.AddPublicEventFixture(sourceFolder);
         await fixture.Preflight();
         Assert.Equal(0, await TraceMapCommand.RunAsync(["webforms-review", "run", "--run", fixture.Run], fixture.Output, fixture.Error));
         Assert.Equal(0, await TraceMapCommand.RunAsync(["webforms-review", "resume", "--run", fixture.Run], fixture.Output, fixture.Error));
@@ -1262,14 +1273,14 @@ public sealed class WebFormsReviewExecutionTests
             Config = Config with { PrimaryAssemblies = mutation == "undeclared-dll" ? ["Public.dll"] : ["bin/Public.dll"],
                 PageMaps = ["Pages/Lookup.aspx.compiled"], PublishReceiptRelativePath = "receipts/publish.json" };
         }
-        public void AddPublicEventFixture(bool commaScope = false)
+        public void AddPublicEventFixture(string sourceFolder = "Pages")
         {
             File.WriteAllText(Path.Combine(Source, "Pages", "Lookup.aspx"), "<%@ Page Language=\"VB\" CodeFile=\"Lookup.aspx.vb\" Inherits=\"Lookup\" %>\n<asp:DropDownList ID=\"Names\" runat=\"server\" OnInit=\"Names_Init\" />");
             File.WriteAllText(Path.Combine(Source, "Pages", "Lookup.aspx.vb"), "Public Class Lookup\n Protected Sub Names_Init(sender As Object, e As System.EventArgs)\n  System.Console.WriteLine(\"public fixture\")\n End Sub\nEnd Class\n");
-            if (commaScope)
+            if (sourceFolder != "Pages")
             {
-                Directory.Move(Path.Combine(Source, "Pages"), Path.Combine(Source, "Pages,literal"));
-                Config = Config with { SourceFolders = ["Pages,literal"], PageRelativePaths = ["Pages,literal/Lookup.aspx"] };
+                Directory.Move(Path.Combine(Source, "Pages"), Path.Combine(Source, sourceFolder));
+                Config = Config with { SourceFolders = [sourceFolder], PageRelativePaths = [$"{sourceFolder}/Lookup.aspx"] };
             }
             foreach (var arguments in new[] { new[] { "add", "." }, new[] { "commit", "-qm", "public event fixture" } })
             {

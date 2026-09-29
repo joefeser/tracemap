@@ -1695,6 +1695,17 @@ not recorded here.
   focused run passed before that strengthened regression; it is not the final
   head gate. Commit and rebuild before the full exact-head validation/push.
 
+### PR #797 round-two review repair (2026-09-29)
+
+- Fresh Codex review on `ff3b2a9b` identified native relative source folders
+  beginning with `--` being rejected as missing option values after preflight.
+  Reproduced with `--legacy` and `--legacy,literal`: both failed while the
+  existing ordinary/comma cases passed. Generated native key/value pairs now
+  consume values positionally; caller-facing legacy CLI parsing is unchanged.
+- The real native scan/report/resume regression matrix retains handler evidence
+  for all four folder/root combinations. Final head validation belongs to the
+  PR settlement receipts; earlier round-one receipts remain historical.
+
 Consolidate the long manual compatibility reference only after its diagnostic
 and recovery entry points have equivalent behavioral tests. Ticket automation
 and licensing remain deliberately separate private follow-up work.
