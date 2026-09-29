@@ -187,6 +187,14 @@ does not write to the retained failed run or rescan. A process kill or cleanup
 failure can leave private scratch files; the latter prints a safe folder label
 for local cleanup. A passing scratch writer does not prove the original target
 directory or later native artifact admission will succeed.
+Only after the owner decides to try the preserved scan's report phase again,
+`-Resume` selects the same run and invokes the pinned native CLI without a
+build. It first requires a native read-only status with a failed report,
+verified retained scan artifacts and a reader matching the original generator.
+The native resume rechecks runtime and private inputs, allocates a new report
+attempt and never reruns the admitted scan. It can still fail and retain more
+private partial files; do not delete earlier attempts. `-Resume` cannot be
+combined with probe switches.
 This is a quick diagnostic, not authenticated checkpoint validation; the native
 `webforms-review status --run` command remains authoritative. Neither command
 resumes or repeats the failed work.
