@@ -98,6 +98,7 @@ public static partial class WebFormsReviewPreflightCommand
         tracemap webforms-review start --config <private-json> --out <new-review-root> [--attest-exact-source-commit <commit>]
         tracemap webforms-review migrate-config --review-root <legacy-root> --out <new-config-folder>
         tracemap webforms-review migrate-config --config <legacy-json-or-jsonc> --out <new-config-folder>
+        tracemap webforms-review import-proof --config <draft-json> --proof-root <explicit-retained-proof> --published-root <original-publish> --out <new-config-folder>
         tracemap webforms-review preflight --config <private-json> --out <new-durable-run-root>
         tracemap webforms-review run --run <durable-run-root>
         tracemap webforms-review resume --run <durable-run-root>
@@ -324,7 +325,7 @@ public static partial class WebFormsReviewPreflightCommand
              "This preflight alone performs no execution. Native run/resume consumes this pinned contract; only completed runs support explicit verified copies and protect-only retention planning. Full-site acceptance and authorized cleanup remain pending."]);
     }
 
-    private static void ValidateConfig(WebFormsReviewConfig config)
+    internal static void ValidateConfig(WebFormsReviewConfig config)
     {
         if (config.SchemaVersion != ConfigSchema || config.Operation is not ("fresh" or "attach") ||
             !IsHex(config.SourceCommitSha, 40) || string.IsNullOrWhiteSpace(config.SourceRoot) || string.IsNullOrWhiteSpace(config.PublishedRoot) ||

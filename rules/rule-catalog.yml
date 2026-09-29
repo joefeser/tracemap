@@ -3,6 +3,19 @@
 # - deferred: documented future/planned rule that must not appear in emitted facts.
 # Existing rules without an explicit status are treated as active.
 rules:
+  - id: workflow.webforms.retained-proof-import.v1
+    name: Explicit verified legacy publish proof import
+    description: Imports an explicitly selected bounded legacy publish and binding receipt into a new native configuration after current source, repository, commit, inventory digest, DLL hash and binding admission checks.
+    evidenceTier: Tier2Structural
+    emits:
+      - webforms-retained-proof-import.v1 local-only verification receipt
+      - review-config.local.json local-only configuration bound by exact generator and bounded input hashes
+    limitations:
+      - Retained owner attestation is carried unchanged, not newly issued or authenticated compiler provenance.
+      - Only webforms-publish-binding.v1 with an explicit legacy assemblyInventory and matching compiled-input-binding-set.v1 is accepted; missing or mismatched records stop import.
+      - Selected page scope comes from the baseline receipt; original source and project scopes and budgets are preserved and broader page coverage is not inferred.
+      - Dependency context stays unbound and input verification is not completed scanning, report parity, a two-repository merge or runtime proof.
+      - Originals remain external and unchanged; output overlaps, existing destinations, unsafe paths and changed inputs are refused. Failed staging remains unadmitted.
   - id: workflow.webforms.config-migration.v1
     name: Local legacy Web Forms config migration draft
     description: Maps bounded known legacy JSON or JSONC scan settings into a separate native draft with exact generator and input hashes.

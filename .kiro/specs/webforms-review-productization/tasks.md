@@ -1,5 +1,10 @@
 # Tasks
 
+- [x] Add explicit retained legacy publish-proof import and a short verification
+  launcher, carrying original receipts, primary/context distinctions and bounded
+  selected-page scope. Verify current bytes, clean committed membership, receipt
+  commitments and primary metadata admission without issuing new attestation.
+  Private Windows report parity and two-source merge replacement remain open.
 - [x] Add local legacy-config migration into separate native drafts, preserving
   originals and recording hashes, missing owner inputs and unsupported scope.
 

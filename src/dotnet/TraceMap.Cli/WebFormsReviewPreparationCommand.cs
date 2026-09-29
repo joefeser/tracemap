@@ -196,7 +196,7 @@ public static partial class WebFormsReviewPreparationCommand
         catch (Exception) { await error.WriteLineAsync("error: WEBFORMS_PREPARATION_INPUT_OR_OUTPUT_INVALID"); return 1; }
     }
 
-    private static async Task<IReadOnlyList<WebFormsReviewSourceMembership>> ValidateCommittedSourceAsync(WebFormsReviewConfig config, string[] sources, CancellationToken token)
+    internal static async Task<IReadOnlyList<WebFormsReviewSourceMembership>> ValidateCommittedSourceAsync(WebFormsReviewConfig config, string[] sources, CancellationToken token)
     {
         var tree = (await GitAsync(config.SourceRoot, ["ls-tree", "-r", "-z", "HEAD", "--", "."], token)).Split('\0', StringSplitOptions.RemoveEmptyEntries);
         var tracked = new Dictionary<string, (string Path, string ObjectId)>(Paths);

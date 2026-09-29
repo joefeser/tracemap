@@ -1,0 +1,250 @@
+using System.Diagnostics;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
+using System.Text.Json.Nodes;
+using TraceMap.Cli;
+using TraceMap.Core;
+
+namespace TraceMap.Tests;
+
+public sealed class WebFormsProofImportTests
+{
+    private static readonly JsonSerializerOptions Options = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase, WriteIndented = true };
+
+    [Fact]
+    public async Task Imports_exact_legacy_receipts_and_proves_bound_inputs_without_scanning_or_overwriting()
+    {
+        using var f = new Fixture();
+        var originals = f.InputHashes();
+        Assert.Equal(0, await f.Run());
+        Assert.Empty(f.Error.ToString());
+        Assert.DoesNotContain(f.Root, f.Output.ToString(), StringComparison.Ordinal);
+        var config = JsonSerializer.Deserialize<WebFormsReviewConfig>(File.ReadAllBytes(f.ImportedConfig), Options)!;
+        Assert.Equal(f.Commit, config.SourceCommitSha);
+        Assert.Equal(f.Published, config.PublishedRoot);
+        Assert.Equal(f.Proof, config.ReceiptRoot);
+        Assert.Equal(new[] { "bin/CompiledEvidence.CSharp.dll" }, config.PrimaryAssemblies);
+        Assert.Equal(new[] { "bin/CompiledEvidence.VisualBasic.dll" }, config.DependencyAssemblies);
+        Assert.Equal("selected", config.PageMode);
+        Assert.Equal(new[] { "Lookup.aspx" }, config.PageRelativePaths);
+        Assert.Equal(f.Draft.SourceFolders, config.SourceFolders);
+        Assert.Equal(f.Draft.Budgets, config.Budgets);
+        Assert.Null(config.PublishSourceRelativePaths);
+        using var receipt = JsonDocument.Parse(File.ReadAllBytes(Path.Combine(f.Out, "proof-import.local.json")));
+        var audit = receipt.RootElement;
+        Assert.Equal("verified-inputs-not-scanned", audit.GetProperty("state").GetString());
+        Assert.Equal(Hash(File.ReadAllBytes(typeof(WebFormsProofImportCommand).Assembly.Location)), audit.GetProperty("generatorSha256").GetString());
+        Assert.Equal(config.PreparationProvenance!.BoundedInputSha256, audit.GetProperty("boundedInputSha256").GetString());
+        Assert.Equal(Hash(File.ReadAllBytes(f.ImportedConfig)), audit.GetProperty("outputConfigSha256").GetString());
+        Assert.Equal(Hash(File.ReadAllBytes(f.PublishReceipt)), audit.GetProperty("retainedPublishReceiptSha256").GetString());
+        var imported = Directory.GetFiles(f.Out).ToDictionary(path => path, path => Hash(File.ReadAllBytes(path)));
+        Assert.Equal(1, await f.Run()); Assert.Contains("OUTPUT_EXISTS", f.Error.ToString(), StringComparison.Ordinal);
+        foreach (var pair in originals) Assert.Equal(pair.Value, Hash(File.ReadAllBytes(pair.Key)));
+        foreach (var pair in imported) Assert.Equal(pair.Value, Hash(File.ReadAllBytes(pair.Key)));
+        Assert.Equal(new[] { "proof-import.local.json", "review-config.local.json" }, Directory.GetFiles(f.Out).Select(Path.GetFileName).Order(StringComparer.Ordinal));
+    }
+
+    [Theory]
+    [InlineData("source-bytes", "SOURCE_BYTES_MISMATCH")]
+    [InlineData("published-bytes", "PUBLISHED_BYTES_MISMATCH")]
+    [InlineData("commit", "SOURCE_COMMIT_OR_REPOSITORY_MISMATCH")]
+    [InlineData("repository", "RECEIPT_REPOSITORY_DIGEST_MISMATCH")]
+    [InlineData("duplicate", "DUPLICATE_PATH")]
+    [InlineData("traversal", "RELATIVE_PATH_INVALID")]
+    [InlineData("digest", "RECEIPT_DIGEST_MISMATCH")]
+    [InlineData("binding", "BINDING_SOURCE_OR_DUPLICATE_MISMATCH")]
+    [InlineData("binding-digest", "BINDING_DIGEST_MISMATCH")]
+    [InlineData("dirty-extra", "SOURCE_DIRTY")]
+    [InlineData("json-duplicate", "JSON_DUPLICATE_PROPERTY")]
+    [InlineData("oversize", "FILE_BYTES_LIMIT")]
+    public async Task Refuses_changed_or_ambiguous_inputs_without_publishing_settings(string scenario, string code)
+    {
+        using var f = new Fixture();
+        switch (scenario)
+        {
+            case "source-bytes": File.AppendAllText(Path.Combine(f.Source, "Lookup.aspx"), "changed"); break;
+            case "published-bytes": File.AppendAllText(f.Primary, "changed"); break;
+            case "commit": f.Git("commit", "--allow-empty", "-qm", "new source commit"); break;
+            case "repository": f.Git("remote", "set-url", "origin", "https://example.invalid/different.git"); break;
+            case "dirty-extra": File.WriteAllText(Path.Combine(f.Source, "extra.txt"), "untracked"); break;
+            case "duplicate": f.ChangePublish(root => root["assemblyInventory"]!.AsArray().Add(root["assemblyInventory"]![0]!.DeepClone())); break;
+            case "traversal": f.ChangePublish(root => root["sourceFiles"]![0]!["path"] = "../escape.aspx"); break;
+            case "digest": f.ChangePublish(root => root["boundedInputSha256"] = new string('a', 64)); break;
+            case "binding": f.ChangeBinding(root => root["bindings"]![0]!["binarySourceCommitSha"] = new string('a', 40)); break;
+            case "binding-digest": f.ChangeBinding(root => root["boundedInputSha256"] = new string('a', 64)); break;
+            case "json-duplicate": File.WriteAllText(f.PublishReceipt, "{\"schemaVersion\":\"a\",\"schemaVersion\":\"b\"}"); break;
+            case "oversize": File.WriteAllText(f.PublishReceipt, new string(' ', 1_048_577)); break;
+        }
+        Assert.Equal(1, await f.Run());
+        Assert.Contains(code, f.Error.ToString(), StringComparison.Ordinal);
+        Assert.DoesNotContain(f.Root, f.Error.ToString(), StringComparison.Ordinal);
+        Assert.False(Directory.Exists(f.Out));
+    }
+
+    [Fact]
+    public async Task A_backend_draft_cannot_silently_inherit_the_websites_source_identity()
+    {
+        using var f = new Fixture();
+        var backend = Path.Combine(f.Root, "backend"); Directory.CreateDirectory(backend);
+        File.WriteAllText(f.ConfigPath, JsonSerializer.Serialize(f.Draft with { SourceRoot = backend }, Options));
+        Assert.Equal(1, await f.Run()); Assert.False(Directory.Exists(f.Out));
+        Assert.Contains("SOURCE_COMMIT_OR_REPOSITORY_MISMATCH", f.Error.ToString(), StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("safeLocator")]
+    [InlineData("assemblyIdentity")]
+    public async Task Matching_hashes_and_valid_receipt_digests_do_not_bypass_binding_policy(string field)
+    {
+        using var f = new Fixture();
+        f.ChangeBinding(root =>
+        {
+            root["bindings"]![0]![field] = "not-the-recorded-identity";
+            using var publish = JsonDocument.Parse(File.ReadAllBytes(f.PublishReceipt));
+            var receipt = publish.RootElement;
+            var item = root["bindings"]![0]!;
+            var lines = $"{item["safeLocator"]}:{item["artifactSha256"]}:{item["assemblyIdentity"]}:{item["binarySourceCommitSha"]}\n" +
+                $"source:{receipt.GetProperty("boundedInputSha256").GetString()}\n" +
+                $"source-repository:{HashText("https://example.invalid/public-proof.git")}\n" +
+                $"assembly-inventory:{receipt.GetProperty("assemblyInventorySha256").GetString()}\n" +
+                $"map-inventory:{receipt.GetProperty("mapInventorySha256").GetString()}\n";
+            root["boundedInputSha256"] = HashText(lines);
+        });
+        Assert.Equal(1, await f.Run());
+        Assert.Contains("RETAINED_BINDING_NOT_ADMITTED", f.Error.ToString(), StringComparison.Ordinal);
+        Assert.False(Directory.Exists(f.Out));
+        Assert.Empty(Directory.GetFiles(f.Root, "proof-import.local.json", SearchOption.AllDirectories));
+    }
+
+    [Theory]
+    [InlineData("relative-source")]
+    [InlineData("selected-inventory")]
+    public async Task Existing_owner_selections_are_not_silently_overwritten(string scenario)
+    {
+        using var f = new Fixture();
+        var draft = scenario == "relative-source" ? f.Draft with { SourceRoot = "." }
+            : f.Draft with { PrimaryAssemblies = ["bin/OwnerChosen.dll"] };
+        File.WriteAllText(f.ConfigPath, JsonSerializer.Serialize(draft, Options));
+        Assert.Equal(1, await f.Run()); Assert.Contains("FRESH_DRAFT_REQUIRED", f.Error.ToString(), StringComparison.Ordinal);
+        Assert.False(Directory.Exists(f.Out));
+    }
+
+    [Fact]
+    public async Task Output_inside_any_input_is_refused_before_staging()
+    {
+        using var f = new Fixture();
+        foreach (var root in new[] { f.Source, f.Published, f.Proof, Path.GetDirectoryName(f.ConfigPath)! })
+        {
+            f.Out = Path.Combine(root, "never-write");
+            Assert.Equal(1, await f.Run()); Assert.Contains("OUTPUT_OVERLAPS_INPUT", f.Error.ToString(), StringComparison.Ordinal);
+            Assert.False(Directory.Exists(f.Out));
+        }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Short_helper_uses_real_native_import_and_scans_only_when_requested(bool run)
+    {
+        using var f = new Fixture();
+        var pwsh = OperatingSystem.IsWindows() ? "pwsh" : "/opt/homebrew/bin/pwsh";
+        if (!File.Exists(pwsh) && !OperatingSystem.IsWindows()) return; // Platform-specific helper smoke; direct native cases always run.
+        var reviewRoot = Path.Combine(f.Root, "review-root");
+        Directory.CreateDirectory(Path.Combine(reviewRoot, "native-config"));
+        File.Copy(f.ConfigPath, Path.Combine(reviewRoot, "native-config/review.draft.json"));
+        var originals = f.InputHashes();
+        var repository = Fixture.FindRepo();
+        using var process = new Process { StartInfo = new(pwsh) { WorkingDirectory = repository, RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false } };
+        foreach (var argument in new[] { "-NoProfile", "-File", Path.Combine(repository, "scripts/wverify.ps1"), "-ReviewRoot", reviewRoot,
+                     "-ProofRoot", f.Proof, "-PublishedRoot", f.Published, "-OutputRoot", f.Out, "-NoBuild" }) process.StartInfo.ArgumentList.Add(argument);
+        if (run) process.StartInfo.ArgumentList.Add("-Run");
+        process.Start(); var stdout = process.StandardOutput.ReadToEndAsync(); var stderr = process.StandardError.ReadToEndAsync();
+        using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(2));
+        try { await process.WaitForExitAsync(timeout.Token); }
+        catch (OperationCanceledException) { process.Kill(entireProcessTree: true); throw; }
+        var standardOutput = await stdout; var standardError = await stderr;
+        Assert.True(process.ExitCode == 0, standardOutput + standardError);
+        Assert.Contains(run ? "completion is not a parity verdict" : "Verified inputs only; no scan or reports ran", standardOutput, StringComparison.Ordinal);
+        Assert.True(File.Exists(Path.Combine(f.Out, "configuration/review-config.local.json")));
+        Assert.Equal(run, Directory.Exists(Path.Combine(f.Out, "review")));
+        if (run) Assert.True(File.Exists(Path.Combine(f.Out, "review/run/run-manifest.json")));
+        foreach (var pair in originals) Assert.Equal(pair.Value, Hash(File.ReadAllBytes(pair.Key)));
+    }
+
+    private sealed class Fixture : IDisposable
+    {
+        public string Root { get; } = WebFormsReviewPreflightCommand.PhysicalPath(Path.Combine(Path.GetTempPath(), "tracemap proof import public-" + Guid.NewGuid().ToString("N")));
+        public string Source => Path.Combine(Root, "source");
+        public string Published => Path.Combine(Root, "published");
+        public string Proof => Path.Combine(Root, "proof");
+        public string ConfigPath => Path.Combine(Root, "draft", "review.draft.json");
+        public string PublishReceipt => Path.Combine(Proof, "publish-receipt.local.json");
+        public string BindingReceipt => Path.Combine(Proof, "compiled-binding.local.json");
+        public string Primary => Path.Combine(Published, "bin", "CompiledEvidence.CSharp.dll");
+        public string ImportedConfig => Path.Combine(Out, "review-config.local.json");
+        public string Out { get; set; }
+        public string Commit { get; }
+        public WebFormsReviewConfig Draft { get; }
+        public StringWriter Output { get; } = new(); public StringWriter Error { get; } = new();
+        public Fixture()
+        {
+            Out = Path.Combine(Root, "imported");
+            Directory.CreateDirectory(Source); Directory.CreateDirectory(Path.Combine(Published, "bin"));
+            Directory.CreateDirectory(Proof); Directory.CreateDirectory(Path.GetDirectoryName(ConfigPath)!);
+            File.WriteAllText(Path.Combine(Source, "Lookup.aspx"), "<%@ Page Language=\"VB\" Inherits=\"Public.Page\" %>");
+            var repository = FindRepo();
+            File.Copy(Path.Combine(repository, "samples/compiled-dotnet-evidence/csharp/bin/Debug/net10.0/CompiledEvidence.CSharp.dll"), Primary);
+            var dependency = Path.Combine(Published, "bin/CompiledEvidence.VisualBasic.dll");
+            File.Copy(Path.Combine(repository, "samples/compiled-dotnet-evidence/vb/bin/Debug/net10.0/CompiledEvidence.VisualBasic.dll"), dependency);
+            Git("init", "-q"); Git("config", "user.name", "Public fixture"); Git("config", "user.email", "public@example.invalid");
+            Git("config", "core.autocrlf", "false"); Git("remote", "add", "origin", "https://example.invalid/public-proof.git");
+            Git("add", "."); Git("commit", "-qm", "public source"); Commit = GitMetadataProvider.Detect(Source).CommitSha;
+            Draft = new(WebFormsReviewPreflightCommand.ConfigSchema, "fresh", Source, "", "projectless", null, [], ["."], "all", [], "", [], [], [], [], [], null, new());
+            File.WriteAllText(ConfigPath, JsonSerializer.Serialize(Draft, Options));
+            var sourceHash = Hash(File.ReadAllBytes(Path.Combine(Source, "Lookup.aspx")));
+            var primaryHash = Hash(File.ReadAllBytes(Primary)); var dependencyHash = Hash(File.ReadAllBytes(dependency));
+            var sourceDigest = HashText($"Lookup.aspx:{sourceHash}\n");
+            var inventoryDigest = HashText($"bin/CompiledEvidence.CSharp.dll:{primaryHash}:selected\nbin/CompiledEvidence.VisualBasic.dll:{dependencyHash}:artifact-context-no-source-commit\n");
+            var mapDigest = HashText("\n"); var repositoryDigest = HashText("https://example.invalid/public-proof.git");
+            File.WriteAllText(PublishReceipt, JsonSerializer.Serialize(new {
+                schemaVersion = "webforms-publish-binding.v1", visibility = "local-only", receiptGeneratorSha256 = new string('b', 64),
+                compilerSha256 = new string('c', 64), compilerProvenance = "unavailable-existing-output", sourceCommitSha = Commit,
+                boundedInputSha256 = sourceDigest, assemblyInventorySha256 = inventoryDigest, mapInventorySha256 = mapDigest,
+                receiptInputSha256 = HashText($"source:{repositoryDigest}\ncommit:{Commit}\nsource:{sourceDigest}\nassemblies:{inventoryDigest}\nmaps:{mapDigest}\n"),
+                sourceFiles = new[] { new { path = "Lookup.aspx", sha256 = sourceHash } },
+                assemblyInventory = new[] { new { path = "bin/CompiledEvidence.CSharp.dll", sha256 = primaryHash, disposition = "selected" },
+                    new { path = "bin/CompiledEvidence.VisualBasic.dll", sha256 = dependencyHash, disposition = "artifact-context-no-source-commit" } },
+                publishedFiles = new[] { new { path = "bin/CompiledEvidence.CSharp.dll", sha256 = primaryHash, kind = "assembly" },
+                    new { path = "bin/CompiledEvidence.VisualBasic.dll", sha256 = dependencyHash, kind = "assembly" } },
+                pages = new[] { new { sourcePath = "Lookup.aspx", virtualPath = "/Lookup.aspx", bindingKind = "mapless-source-type-candidate" } }
+            }, Options));
+            var inspected = ManagedMetadataExtractor.InspectInputs(new ScanOptions(Source, "unused", CompiledInputPaths: [Primary]), Commit);
+            var item = inspected.Provenance!.Outcomes.Single();
+            File.WriteAllText(BindingReceipt, JsonSerializer.Serialize(new { schemaVersion = "compiled-input-binding-set.v1", generatorSha256 = new string('b', 64),
+                boundedInputSha256 = HashText($"{item.SafeLocator}:{primaryHash}:{item.AssemblyIdentity}:{Commit}\nsource:{sourceDigest}\nsource-repository:{repositoryDigest}\nassembly-inventory:{inventoryDigest}\nmap-inventory:{mapDigest}\n"),
+                bindings = new[] { new { schemaVersion = "compiled-input-binding.v1", safeLocator = item.SafeLocator, artifactSha256 = primaryHash,
+                    assemblyIdentity = item.AssemblyIdentity, binarySourceRepository = "https://example.invalid/public-proof.git", binarySourceCommitSha = Commit,
+                    binaryBuildIdentity = "operator-attested-existing-publish:" + sourceDigest } } }, Options));
+        }
+        public async Task<int> Run() { Output.GetStringBuilder().Clear(); Error.GetStringBuilder().Clear(); return await TraceMapCommand.RunAsync(
+            ["webforms-review", "import-proof", "--config", ConfigPath, "--proof-root", Proof, "--published-root", Published, "--out", Out], Output, Error); }
+        public Dictionary<string, string> InputHashes() => new[] { ConfigPath, PublishReceipt, BindingReceipt, Primary, Path.Combine(Source, "Lookup.aspx") }.ToDictionary(path => path, path => Hash(File.ReadAllBytes(path)));
+        public void ChangePublish(Action<JsonObject> edit) => Change(PublishReceipt, edit);
+        public void ChangeBinding(Action<JsonObject> edit) => Change(BindingReceipt, edit);
+        private static void Change(string path, Action<JsonObject> edit) { var root = JsonNode.Parse(File.ReadAllText(path))!.AsObject(); edit(root); File.WriteAllText(path, root.ToJsonString(Options)); }
+        public void Git(params string[] arguments)
+        {
+            using var process = new Process { StartInfo = new("git") { WorkingDirectory = Source, RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false } };
+            process.StartInfo.Environment["GIT_OPTIONAL_LOCKS"] = "0";
+            foreach (var arg in arguments) process.StartInfo.ArgumentList.Add(arg);
+            process.Start(); var stdout = process.StandardOutput.ReadToEndAsync(); var stderr = process.StandardError.ReadToEndAsync();
+            Assert.True(process.WaitForExit(10_000)); Task.WaitAll(stdout, stderr); Assert.Equal(0, process.ExitCode);
+        }
+        public static string FindRepo() { for (var directory = new DirectoryInfo(AppContext.BaseDirectory); directory is not null; directory = directory.Parent)
+            if (File.Exists(Path.Combine(directory.FullName, "AGENTS.md"))) return directory.FullName; throw new InvalidOperationException("Public fixture unavailable"); }
+        public void Dispose() { Output.Dispose(); Error.Dispose(); if (Directory.Exists(Root)) Directory.Delete(Root, true); }
+    }
+    private static string Hash(byte[] bytes) => Convert.ToHexStringLower(SHA256.HashData(bytes));
+    private static string HashText(string text) => Hash(Encoding.UTF8.GetBytes(text));
+}
