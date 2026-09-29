@@ -59,17 +59,33 @@ their provenance are not rewritten. Missing or mismatched evidence stops it;
 it does not substitute current HEAD for a historical commit or create a new
 source-to-DLL attestation.
 
+For an exact older proof-copy locator that no longer names the same DLL after
+the move, the importer can project that locator into a separate, hash-bound
+local binding receipt. It requires the recorded locator to equal the path from
+the explicitly selected website base to that proof's copied DLL, plus matching
+copied/published DLL hashes and metadata identity. The original binding and
+publish receipts stay unchanged. The projected record carries their original
+source/build claims; it is not a new owner or compiler attestation. Arbitrary
+locator, identity, hash or commit disagreements still stop admission. Windows
+external DLL paths now receive root-neutral external locators.
+
 The new default output is `<copied-review>/native-proof-verification/`:
 
 - `configuration/review-config.local.json`: verified settings, bound by the
   paired import receipt and native configuration provenance.
 - `configuration/proof-import.local.json`: exact generator/input/output hashes,
   carried receipt commitments, scope, gaps and limitations.
+- When a legacy locator needed projection, `configuration/compiled-binding.local.json`
+  is the derived, hash-bound locator record and
+  `configuration/publish-receipt.local.json` is a byte-identical snapshot of
+  the original publish receipt. The config points to this local pair; the
+  originals remain at the selected proof folder.
 - `review/run/`: only with `-Run`, a new native run with application and compiled
   document sets. Use its printed workbench/handoff paths.
 
 Without `-Run`, the command verifies inputs only. Existing output is refused;
-use an explicit new `-OutputRoot` for another attempt. Failures preserve any
+if the default folder exists, the helper requests a short new run-folder name.
+You can also use an explicit new `-OutputRoot`. Failures preserve any
 diagnostic staging, but a failed staging directory is not an admitted import or
 completed run. After an interrupted native run, use native status/resume on its
 printed `review/run` path rather than rerunning the import into existing output.
@@ -135,6 +151,9 @@ method identity, raw hash or private path is printed. It writes no review/proof
 inputs or output folders and never scans; the helper may rebuild the tool unless
 `-NoBuild` is supplied. Do not combine `-Diagnose` with `-Run`. A successful
 diagnostic is not full preflight, configuration admission or report parity.
+The read-only diagnostic shows the *original* retained locator state; it does
+not perform or publish a projection. Run the normal helper for that verified
+relocation and native preflight.
 
 ### When retained proof is unavailable
 

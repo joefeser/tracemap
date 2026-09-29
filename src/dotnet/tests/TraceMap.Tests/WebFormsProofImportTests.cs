@@ -113,6 +113,67 @@ public sealed class WebFormsProofImportTests
         Assert.Equal(Hash(File.ReadAllBytes(f.PublishReceipt)), receipt.RootElement.GetProperty("retainedPublishReceiptSha256").GetString());
     }
 
+    [Fact]
+    public async Task Exact_legacy_proof_copy_locator_is_projected_without_reissuing_owner_attestation()
+    {
+        using var f = new Fixture(nested: true);
+        var copied = Path.Combine(f.Proof, "bin", f.PrimaryName);
+        Directory.CreateDirectory(Path.GetDirectoryName(copied)!);
+        File.Copy(f.Primary, copied);
+        var original = JsonNode.Parse(File.ReadAllText(f.BindingReceipt))!.AsObject();
+        var originalBinding = original["bindings"]![0]!.DeepClone();
+        var oldLocator = FileInventory.NormalizeRelativePath(Path.GetRelativePath(Path.Combine(f.Source, "UBid"), copied));
+        f.ChangeBinding(root =>
+        {
+            root["bindings"]![0]!["safeLocator"] = oldLocator;
+            using var publish = JsonDocument.Parse(File.ReadAllBytes(f.PublishReceipt));
+            var receipt = publish.RootElement;
+            var item = root["bindings"]![0]!;
+            root["boundedInputSha256"] = HashText($"{item["safeLocator"]}:{item["artifactSha256"]}:{item["assemblyIdentity"]}:{item["binarySourceCommitSha"]}\n"
+                + $"source:{receipt.GetProperty("boundedInputSha256").GetString()}\n"
+                + $"source-repository:{HashText("https://example.invalid/public-proof.git")}\n"
+                + $"assembly-inventory:{receipt.GetProperty("assemblyInventorySha256").GetString()}\n"
+                + $"map-inventory:{receipt.GetProperty("mapInventorySha256").GetString()}\n");
+        });
+        var originals = f.InputHashes();
+        Assert.Equal(0, await f.Run("UBid"));
+        var config = JsonSerializer.Deserialize<WebFormsReviewConfig>(File.ReadAllBytes(f.ImportedConfig), Options)!;
+        Assert.Equal(f.Out, config.ReceiptRoot);
+        var projectedPath = Path.Combine(f.Out, "compiled-binding.local.json");
+        using var projected = JsonDocument.Parse(File.ReadAllBytes(projectedPath));
+        var newBinding = projected.RootElement.GetProperty("bindings")[0];
+        Assert.StartsWith("__external__/primary/", newBinding.GetProperty("safeLocator").GetString(), StringComparison.Ordinal);
+        foreach (var field in new[] { "artifactSha256", "assemblyIdentity", "binarySourceRepository", "binarySourceCommitSha", "binaryBuildIdentity" })
+            Assert.Equal(originalBinding[field]!.GetValue<string>(), newBinding.GetProperty(field).GetString());
+        Assert.Equal(Hash(File.ReadAllBytes(f.BindingReceipt)), projected.RootElement.GetProperty("locatorProjection").GetProperty("retainedBindingReceiptSha256").GetString());
+        Assert.Equal(Hash(File.ReadAllBytes(f.PublishReceipt)), Hash(File.ReadAllBytes(Path.Combine(f.Out, "publish-receipt.local.json"))));
+        Assert.Equal(1, projected.RootElement.GetProperty("locatorProjection").GetProperty("projections").GetArrayLength());
+        using var audit = JsonDocument.Parse(File.ReadAllBytes(Path.Combine(f.Out, "proof-import.local.json")));
+        Assert.Equal(1, audit.RootElement.GetProperty("locatorProjectionCount").GetInt32());
+        Assert.Equal(Hash(File.ReadAllBytes(projectedPath)), audit.RootElement.GetProperty("projectedBindingReceiptSha256").GetString());
+        var finalPlan = await WebFormsReviewPreflightCommand.BuildAsync(f.ImportedConfig, Path.Combine(f.Root, "next-review"));
+        var finalValidation = await WebFormsReviewInputValidation.ValidateAsync(finalPlan);
+        Assert.All(finalValidation.CompiledProvenance!.Outcomes.Where(item => item.Role == "primary"),
+            item => Assert.Equal("bound", item.ProvenanceState));
+        foreach (var pair in originals) Assert.Equal(pair.Value, Hash(File.ReadAllBytes(pair.Key)));
+        Assert.Contains("newAttestation=false", f.Output.ToString(), StringComparison.Ordinal);
+        Assert.DoesNotContain(f.Root, f.Output.ToString(), StringComparison.Ordinal);
+        File.AppendAllText(copied, "changed-proof-copy");
+        f.Out = Path.Combine(f.Root, "tampered-output");
+        Assert.Equal(1, await f.Run("UBid"));
+        Assert.Contains("PUBLISHED_BYTES_MISMATCH", f.Error.ToString(), StringComparison.Ordinal);
+        Assert.False(Directory.Exists(f.Out));
+    }
+
+    [Fact]
+    public void External_locator_classification_is_portable_for_windows_parent_segments()
+    {
+        Assert.False(ManagedMetadataExtractor.IsRepositoryRelativeLocator("..\\private\\App_Code.dll"));
+        Assert.False(ManagedMetadataExtractor.IsRepositoryRelativeLocator("../private/App_Code.dll"));
+        Assert.False(ManagedMetadataExtractor.IsRepositoryRelativeLocator(".."));
+        Assert.True(ManagedMetadataExtractor.IsRepositoryRelativeLocator("UBid\\bin\\App_Code.dll"));
+    }
+
     [Theory]
     [InlineData("../UBid", "RELATIVE_PATH_INVALID")]
     [InlineData("/UBid", "RELATIVE_PATH_INVALID")]

@@ -1801,3 +1801,21 @@ and licensing remain deliberately separate private follow-up work.
   tests plus all three final locator/identity/traversal diagnostic cases passed;
   zero warnings, failures or skips. Private-path and whitespace guards passed.
   No private acceptance or whole-repository-suite rerun is claimed.
+
+### Retained locator projection (2026-09-29)
+
+- Owner's read-only private diagnostic established 2 expected/observed primary
+  DLLs, 0 locator matches, and 2 retained `../` locators. Admission was
+  unbound; metadata-reader disagreement and unresolved reference gaps remain.
+- Fixed Windows external-path classification so machine-root-relative paths
+  cannot be treated as repository children. The importer projects only exact
+  original proof-copy coordinates, checks both copied and published bytes and
+  assembly identity, and emits a separate generator/input-hashed local binding
+  receipt. Original owner receipts and source/build claims are unchanged.
+- The helper preserves prior failed output and asks for a new short run-folder
+  name. Private native rerun and baseline document comparison remain required;
+  synthetic tests cannot establish private report parity.
+- Validation: whole solution builds with zero warnings/errors; 657 targeted Web
+  Forms, managed metadata and scan-execution-receipt tests passed with zero
+  failures/skips. The final tampered proof-copy refusal test was rerun after its
+  last edit and passed. Private rerun and whole-repository tests remain unrun.

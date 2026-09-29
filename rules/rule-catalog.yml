@@ -15,6 +15,7 @@ rules:
       - Only webforms-publish-binding.v1 with an explicit legacy assemblyInventory and matching compiled-input-binding-set.v1 is accepted; missing or mismatched records stop import.
       - Selected page scope comes from the baseline receipt; original source and project scopes and budgets are preserved and broader page coverage is not inferred.
       - A website-relative receipt requires an explicit repository-relative source base. The base is hash-bound in the import and execution scope; original receipt bytes and virtual routes are unchanged and discovery never selects a base.
+      - An exact historical proof-copy locator may be projected into a separate local binding receipt only after the copied and published bytes, original locator, assembly identity, repository and commit are verified. Original receipts are unchanged; this is not a new source-to-binary or compiler attestation. Arbitrary locator or identity mismatches remain gaps.
       - Dependency context stays unbound and input verification is not completed scanning, report parity, a two-repository merge or runtime proof.
       - Originals remain external and unchanged; output overlaps, existing destinations, unsafe paths and changed inputs are refused. Failed staging remains unadmitted.
   - id: workflow.webforms.config-migration.v1

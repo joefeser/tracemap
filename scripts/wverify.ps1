@@ -48,7 +48,17 @@ foreach ($name in @('publish-receipt.local.json', 'compiled-binding.local.json')
     if (!(Test-Path -LiteralPath (Join-Path $ProofRoot $name) -PathType Leaf)) { throw 'WEBFORMS_VERIFY_RETAINED_RECEIPTS_UNAVAILABLE' }
 }
 if (!(Test-Path -LiteralPath (Join-Path $PublishedRoot 'bin') -PathType Container)) { throw 'WEBFORMS_VERIFY_PUBLISHED_BIN_UNAVAILABLE' }
-if ([string]::IsNullOrWhiteSpace($OutputRoot)) { $OutputRoot = Join-Path $ReviewRoot 'native-proof-verification' }
+if ([string]::IsNullOrWhiteSpace($OutputRoot)) {
+    $OutputRoot = Join-Path $ReviewRoot 'native-proof-verification'
+    if (!$Diagnose -and (Test-Path -LiteralPath $OutputRoot)) {
+        Write-Host 'Previous verification folder exists and will be preserved.'
+        $runName = Microsoft.PowerShell.Utility\Read-Host 'New run folder name (for example verify-2)'
+        if ([string]::IsNullOrWhiteSpace($runName) -or $runName -notmatch '^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$') {
+            throw 'WEBFORMS_VERIFY_NEW_RUN_NAME_INVALID'
+        }
+        $OutputRoot = Join-Path $ReviewRoot $runName
+    }
+}
 $OutputRoot = [IO.Path]::GetFullPath($OutputRoot)
 if (!$Diagnose -and (Test-Path -LiteralPath $OutputRoot)) { throw 'WEBFORMS_VERIFY_OUTPUT_EXISTS;preserved-unchanged-select-a-new-OutputRoot' }
 $repo = Split-Path $PSScriptRoot -Parent
