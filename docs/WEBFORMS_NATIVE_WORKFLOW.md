@@ -67,6 +67,10 @@ or historical compiler-input closure. Declare C# `.aspx.cs` or VB `.aspx.vb`
 membership as appropriate in `publishSourceRelativePaths`; selected markup is
 included automatically.
 
+Native configured paths are literal values, including commas. Native selected
+page lists are literal path lines, not CSV or comment/header rows; legacy
+standalone page-list CSV parsing remains unchanged.
+
 DLLs, portable PDBs and page maps are explicit published-relative lists. Do not
 invent missing files or generated assembly names. Missing maps may produce
 bounded mapless candidates, not inferred complete map coverage.
@@ -190,6 +194,11 @@ tracemap webforms-review query --run review-monday/run --document compiled --poi
 Responses are capped at 128 KiB and 2,048 nodes. Omitted children are explicit;
 retrieve another slice rather than inferring absence. Evidence review does not
 authorize source access, fixes, rescanning, execution or tickets.
+
+Concurrent evidence queries share a read lock; native writers still require an
+exclusive lock. `WEBFORMS_EVIDENCE_QUERY_RUN_BUSY_OR_LOCK_UNAVAILABLE` indicates
+lock contention or lock I/O failure, not a finding that the evidence index is
+corrupt. Retry after the conflicting operation finishes; do not regenerate it.
 
 ## Durable completed-run copies and retention planning
 

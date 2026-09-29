@@ -25,6 +25,12 @@
 
 ## Compiled Web Site productization — implemented native path and acceptance gates
 
+- [x] PR #797 round-one regression guards: keep native structured scan values
+  literal (including commas), share read-only query locks while blocking writers,
+  distinguish lock I/O from index corruption, and reject mixed solution/project
+  selection before execution. Candidate-bound validation is recorded in the
+  implementation state; public parity does not retire private Windows acceptance.
+
 - [x] Project a saved selected-handler compiled proof into readable HTML and
   exact handoff JSON, separately attached to the application workbench.
 - [x] Preserve partial modernization packets when combined graph admission

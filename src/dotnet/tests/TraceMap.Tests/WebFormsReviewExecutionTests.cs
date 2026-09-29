@@ -802,11 +802,13 @@ public sealed class WebFormsReviewExecutionTests
         Assert.Equal(2, fixture.LastCheckpoint().Sequence);
     }
 
-    [Fact]
-    public async Task Actual_CLI_dispatch_executes_and_resumes_the_fresh_scan()
+    [Theory]
+    [InlineData("")]
+    [InlineData(",literal")]
+    public async Task Actual_CLI_dispatch_executes_and_resumes_the_fresh_scan(string pathSuffix)
     {
-        using var fixture = new Fixture();
-        fixture.AddPublicEventFixture();
+        using var fixture = new Fixture(pathSuffix);
+        fixture.AddPublicEventFixture(commaScope: pathSuffix.Length > 0);
         await fixture.Preflight();
         Assert.Equal(0, await TraceMapCommand.RunAsync(["webforms-review", "run", "--run", fixture.Run], fixture.Output, fixture.Error));
         Assert.Equal(0, await TraceMapCommand.RunAsync(["webforms-review", "resume", "--run", fixture.Run], fixture.Output, fixture.Error));
@@ -835,6 +837,36 @@ public sealed class WebFormsReviewExecutionTests
         Assert.Equal(Hash(typeof(WebFormsReviewExecutionCommand).Assembly.Location), slice.GeneratorSha256);
         Assert.Equal(Hash(Path.Combine(report, "review-evidence.sqlite")), slice.IndexSha256);
         Assert.Equal(4, fixture.LastCheckpoint().Sequence);
+    }
+
+    [Fact]
+    public async Task Queries_share_read_locks_but_report_exclusive_lock_contention_without_claiming_index_corruption()
+    {
+        using var fixture = new Fixture(); await fixture.Preflight();
+        Assert.Equal(0, await fixture.Execute("run", Scan));
+        Assert.Equal(0, await fixture.ExecuteReports("resume", WebFormsReviewReportExecution.WriteAsync));
+        var before = Directory.GetFiles(fixture.Run, "*", SearchOption.AllDirectories).ToDictionary(path => path, Hash);
+        var args = new[] { "webforms-review", "query", "--run", fixture.Run, "--pointer", "/coverage", "--depth", "0" };
+        using (var reader = new FileStream(Path.Combine(fixture.Run, ".native-run.lock"), FileMode.Open, FileAccess.Read, FileShare.Read))
+        {
+            using var firstOutput = new StringWriter(); using var secondOutput = new StringWriter();
+            using var firstError = new StringWriter(); using var secondError = new StringWriter();
+            var results = await Task.WhenAll(TraceMapCommand.RunAsync(args, firstOutput, firstError), TraceMapCommand.RunAsync(args, secondOutput, secondError));
+            Assert.All(results, result => Assert.Equal(0, result));
+            Assert.Empty(firstError.ToString()); Assert.Empty(secondError.ToString());
+            Assert.Equal(firstOutput.ToString(), secondOutput.ToString());
+            Assert.Throws<IOException>(() => new FileStream(Path.Combine(fixture.Run, ".native-run.lock"), FileMode.Open, FileAccess.ReadWrite, FileShare.None));
+        }
+        using (var writer = new FileStream(Path.Combine(fixture.Run, ".native-run.lock"), FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+        {
+            using var output = new StringWriter(); using var error = new StringWriter();
+            Assert.Equal(1, await TraceMapCommand.RunAsync(args, output, error));
+            Assert.Empty(output.ToString());
+            Assert.Contains("WEBFORMS_EVIDENCE_QUERY_RUN_BUSY_OR_LOCK_UNAVAILABLE", error.ToString(), StringComparison.Ordinal);
+            Assert.DoesNotContain("INDEX_INVALID", error.ToString(), StringComparison.Ordinal);
+        }
+        foreach (var item in before) Assert.Equal(item.Value, Hash(item.Key));
+        Assert.Equal(before.Count, Directory.GetFiles(fixture.Run, "*", SearchOption.AllDirectories).Length);
     }
 
     [Theory]
@@ -1059,6 +1091,7 @@ public sealed class WebFormsReviewExecutionTests
         var args = WebFormsReviewExecutionCommand.ScanArguments(plan, "public-output");
         Assert.Contains(Enumerable.Range(0, args.Length - 1), index => args[index] == "--include" && args[index + 1] == relative);
         Assert.Contains(Enumerable.Range(0, args.Length - 1), index => args[index] == (mode == "projects" ? "--project" : "--solution") && args[index + 1] == relative);
+        Assert.DoesNotContain(mode == "projects" ? "--solution" : "--project", args);
         Assert.DoesNotContain("--restore", args);
     }
 
@@ -1162,7 +1195,7 @@ public sealed class WebFormsReviewExecutionTests
 
     private sealed class Fixture : IDisposable
     {
-        public string Root { get; } = WebFormsReviewPreflightCommand.PhysicalPath(Path.Combine(Path.GetTempPath(), "tracemap native execution #&%-" + Guid.NewGuid().ToString("N")));
+        public string Root { get; }
         public string Source => Path.Combine(Root, "source");
         public string Published => Path.Combine(Root, "published");
         public string Run => Path.Combine(Root, "run");
@@ -1171,8 +1204,9 @@ public sealed class WebFormsReviewExecutionTests
         public WebFormsReviewConfig Config { get; set; }
         public StringWriter Output { get; } = new();
         public StringWriter Error { get; } = new();
-        public Fixture()
+        public Fixture(string pathSuffix = "")
         {
+            Root = WebFormsReviewPreflightCommand.PhysicalPath(Path.Combine(Path.GetTempPath(), "tracemap native execution #&%-" + Guid.NewGuid().ToString("N") + pathSuffix));
             Directory.CreateDirectory(Path.Combine(Source, "Pages"));
             Directory.CreateDirectory(Path.Combine(Source, "Unselected"));
             Directory.CreateDirectory(Published);
@@ -1228,10 +1262,15 @@ public sealed class WebFormsReviewExecutionTests
             Config = Config with { PrimaryAssemblies = mutation == "undeclared-dll" ? ["Public.dll"] : ["bin/Public.dll"],
                 PageMaps = ["Pages/Lookup.aspx.compiled"], PublishReceiptRelativePath = "receipts/publish.json" };
         }
-        public void AddPublicEventFixture()
+        public void AddPublicEventFixture(bool commaScope = false)
         {
             File.WriteAllText(Path.Combine(Source, "Pages", "Lookup.aspx"), "<%@ Page Language=\"VB\" CodeFile=\"Lookup.aspx.vb\" Inherits=\"Lookup\" %>\n<asp:DropDownList ID=\"Names\" runat=\"server\" OnInit=\"Names_Init\" />");
             File.WriteAllText(Path.Combine(Source, "Pages", "Lookup.aspx.vb"), "Public Class Lookup\n Protected Sub Names_Init(sender As Object, e As System.EventArgs)\n  System.Console.WriteLine(\"public fixture\")\n End Sub\nEnd Class\n");
+            if (commaScope)
+            {
+                Directory.Move(Path.Combine(Source, "Pages"), Path.Combine(Source, "Pages,literal"));
+                Config = Config with { SourceFolders = ["Pages,literal"], PageRelativePaths = ["Pages,literal/Lookup.aspx"] };
+            }
             foreach (var arguments in new[] { new[] { "add", "." }, new[] { "commit", "-qm", "public event fixture" } })
             {
                 var start = new ProcessStartInfo("git") { WorkingDirectory = Source, RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false };

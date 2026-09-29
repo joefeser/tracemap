@@ -28,7 +28,7 @@ public sealed class WebFormsReviewPreparationTests
         fixture.Save();
         var source = fixture.Hashes(fixture.Source); var published = fixture.Hashes(fixture.Published);
         var parentBefore = parent is null ? null : fixture.Hashes(parent);
-        var review = Path.Combine(fixture.Root, "review");
+        var review = Path.Combine(fixture.Root, "review,literal");
         Assert.True(await TraceMapCommand.RunAsync(["webforms-review", "start", "--config", fixture.ConfigPath,
             "--out", review, "--attest-exact-source-commit", fixture.Config.SourceCommitSha], fixture.Output, fixture.Error) == 0,
             fixture.Error.ToString());

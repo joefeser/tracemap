@@ -236,6 +236,8 @@ public sealed class WebFormsReviewPreflightTests
     [Theory]
     [InlineData("schema", "CONFIG_INVALID")]
     [InlineData("mode", "PROJECT_SELECTION_INVALID")]
+    [InlineData("solution-and-projects", "PROJECT_SELECTION_INVALID")]
+    [InlineData("projects-and-solution", "PROJECT_SELECTION_INVALID")]
     [InlineData("all-pages", "PAGE_SELECTION_INVALID")]
     [InlineData("parent", "PARENT_SELECTION_INVALID")]
     [InlineData("duplicate", "CONFIG_INVALID")]
@@ -261,6 +263,8 @@ public sealed class WebFormsReviewPreflightTests
         {
             "schema" => fixture.Config with { SchemaVersion = "other" },
             "mode" => fixture.Config with { ProjectMode = "solution" },
+            "solution-and-projects" => fixture.Config with { ProjectMode = "solution", SolutionRelativePath = "Public.sln", ProjectRelativePaths = ["Public.vbproj"] },
+            "projects-and-solution" => fixture.Config with { ProjectMode = "projects", SolutionRelativePath = "Public.sln", ProjectRelativePaths = ["Public.vbproj"] },
             "all-pages" => fixture.Config with { PageMode = "all" },
             "parent" => fixture.Config with { Operation = "attach" },
             "duplicate" => fixture.Config with { PrimaryAssemblies = ["bin/Public.dll", "bin/Public.dll"] },

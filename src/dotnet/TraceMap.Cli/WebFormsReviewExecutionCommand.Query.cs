@@ -35,7 +35,7 @@ public static partial class WebFormsReviewExecutionCommand
             if (args.Length < 3 || args[0] != "query" || args[1] != "--run") throw WebFormsReviewEvidenceIndex.Invalid("QUERY_ARGUMENT_INVALID");
             var root = WebFormsReviewPreflightCommand.PhysicalPath(args[2]);
             var query = ParseQuery(args[3..]);
-            using var runLock = new FileStream(OwnedPath(root, ".native-run.lock"), FileMode.Open, FileAccess.Read, FileShare.None);
+            using var runLock = AcquireQueryRunLock(root);
             var planBytes = await WebFormsReviewPreflightCommand.ReadSmallAsync(OwnedPath(root, "run-manifest.json"), 4_194_304, token);
             WebFormsReviewPreflightCommand.RejectDuplicateProperties(planBytes);
             var plan = JsonSerializer.Deserialize<WebFormsReviewPreflightManifest>(planBytes, JsonOptions) ?? throw Fail("PREFLIGHT_INVALID");
@@ -103,6 +103,14 @@ public static partial class WebFormsReviewExecutionCommand
         catch (InvalidDataException exception) when (exception.Message == "WEBFORMS_NATIVE_REPORT_OUTPUT_LIMIT")
         { await error.WriteLineAsync("error: WEBFORMS_EVIDENCE_QUERY_RESPONSE_LIMIT"); return 1; }
         catch (Exception) { await error.WriteLineAsync("error: WEBFORMS_EVIDENCE_QUERY_INPUT_OR_INDEX_INVALID"); return 1; }
+    }
+
+    private static FileStream AcquireQueryRunLock(string root)
+    {
+        var path = OwnedPath(root, ".native-run.lock");
+        try { return new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read); }
+        catch (IOException exception) when (exception is not FileNotFoundException and not DirectoryNotFoundException)
+        { throw WebFormsReviewEvidenceIndex.Invalid("QUERY_RUN_BUSY_OR_LOCK_UNAVAILABLE"); }
     }
 
     internal static WebFormsEvidenceQuery ParseQuery(string[] args)

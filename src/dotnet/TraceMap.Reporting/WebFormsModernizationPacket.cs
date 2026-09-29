@@ -28,6 +28,8 @@ public sealed record WebFormsModernizationOptions(
 {
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public long? MaxGraphStorageBytes { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool LiteralSurfaceListPaths { get; init; }
 }
 
 public sealed record WebFormsModernizationResult(
@@ -465,7 +467,8 @@ public static class WebFormsModernizationPacketReporter
         var snapshot = await ReadSnapshotAsync(options.IndexPath, snapshotBudget, cancellationToken);
         var surfaceSelection = options.SurfaceListPath is null
             ? null
-            : await ResolveSurfaceSelectionAsync(snapshot.Facts, options.SurfaceListPath, snapshot.InputLimit is not null, cancellationToken);
+            : await ResolveSurfaceSelectionAsync(snapshot.Facts, options.SurfaceListPath, snapshot.InputLimit is not null, cancellationToken,
+                options.LiteralSurfaceListPaths);
         var selectedSurfaceIds = surfaceSelection?.Items
             .Where(item => item.Status == "matched")
             .SelectMany(item => item.SurfaceIds)
@@ -1929,7 +1932,8 @@ public static class WebFormsModernizationPacketReporter
         IReadOnlyList<CodeFact> facts,
         string surfaceListPath,
         bool factSnapshotTruncated,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool literalPaths)
     {
         if (!File.Exists(surfaceListPath)) throw new FileNotFoundException("WebFormsSurfaceListUnavailable");
         const int maximumBytes = 4 * 1024 * 1024;
@@ -1948,7 +1952,7 @@ public static class WebFormsModernizationPacketReporter
                 lines.Add(line);
             }
         }
-        var requests = lines.Select(ExtractSurfaceListValue)
+        var requests = literalPaths ? lines.Where(line => line.Length > 0).ToArray() : lines.Select(ExtractSurfaceListValue)
             .Where(value => value is not null)
             .Cast<string>()
             .Where(value => !IsSurfaceListHeader(value))

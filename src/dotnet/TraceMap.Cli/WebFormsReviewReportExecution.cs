@@ -38,6 +38,7 @@ internal static class WebFormsReviewReportExecution
         schemaVersion = Schema, ruleId = RuleId, scanPath, reportPath,
         operation = plan.Configuration.Operation, scope = plan.Configuration.PageMode,
         pages = plan.Configuration.PageRelativePaths,
+        surfaceListFormat = "literal-path-lines-v1",
         budgets = plan.Configuration.Budgets.Reports ?? new(),
         plan.Configuration.Budgets.GraphMaxDepth, plan.Configuration.Budgets.GraphMaxPaths,
         plan.Configuration.Budgets.GraphMaxWork,
@@ -85,7 +86,7 @@ internal static class WebFormsReviewReportExecution
             MaxInputFacts: budget.MaxInputFacts, MaxInputEdges: budget.MaxInputEdges,
             MaxInputTextBytes: budget.MaxInputTextBytes, SurfaceListPath: selectionPath,
             MaxTraversalWork: checked((int)config.Budgets.GraphMaxWork), MaxFrontier: budget.MaxFrontier)
-            { MaxGraphStorageBytes = budget.MaxGraphStorageBytes }, cancellationToken);
+            { MaxGraphStorageBytes = budget.MaxGraphStorageBytes, LiteralSurfaceListPaths = true }, cancellationToken);
         var source = combined.Sources.Single(item => item.Label == "retained");
         var allRoots = packet.EventChains.Where(chain => !string.IsNullOrWhiteSpace(chain.HandlerSymbol))
             .Select(chain => new CombinedPathSymbolRoot(source.SourceIndexId, source.ScanId, source.CommitSha, chain.HandlerSymbol!))
