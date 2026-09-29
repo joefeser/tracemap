@@ -96,6 +96,8 @@ public static partial class WebFormsReviewPreflightCommand
 
     public const string Help = """
         tracemap webforms-review start --config <private-json> --out <new-review-root> [--attest-exact-source-commit <commit>]
+        tracemap webforms-review migrate-config --review-root <legacy-root> --out <new-config-folder>
+        tracemap webforms-review migrate-config --config <legacy-json-or-jsonc> --out <new-config-folder>
         tracemap webforms-review preflight --config <private-json> --out <new-durable-run-root>
         tracemap webforms-review run --run <durable-run-root>
         tracemap webforms-review resume --run <durable-run-root>
