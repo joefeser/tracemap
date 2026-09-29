@@ -299,11 +299,11 @@ public static class TraceMapCommand
         }
 
         var rewriteBefore = values.GetMany("--il-rewrite-before");
-        if (values.TryGetValue("--webforms-published-root", out var declaredPublishedRoot)
-            && !string.IsNullOrWhiteSpace(declaredPublishedRoot)
+        if ((values.TryGetValue("--webforms-published-root", out var declaredPublishedRoot)
+            && !string.IsNullOrWhiteSpace(declaredPublishedRoot) || values.TryGetValue("--webforms-publish-source-base", out _))
             && (!values.TryGetValue("--webforms-publish-receipt", out var declaredPublishReceipt) || string.IsNullOrWhiteSpace(declaredPublishReceipt)))
         {
-            await error.WriteLineAsync("error: --webforms-published-root requires --webforms-publish-receipt.");
+            await error.WriteLineAsync("error: --webforms-published-root requires --webforms-publish-receipt; --webforms-publish-source-base also requires that receipt.");
             return 1;
         }
         var rewriteAfter = values.GetMany("--il-rewrite-after");
@@ -419,7 +419,8 @@ public static class TraceMapCommand
             ExactSourceScope: values.HasFlag("--exact-source-scope"),
             ExactSourceMaxFiles: ParsePositiveInt(values, "--exact-source-max-files", 256),
             ExactSourceMaxBytes: ParsePositiveLong(values, "--exact-source-max-bytes", 67_108_864),
-            WebFormsPublishedRootPath: values.GetValueOrDefault("--webforms-published-root"));
+            WebFormsPublishedRootPath: values.GetValueOrDefault("--webforms-published-root"),
+            WebFormsPublishSourceRelativeBase: values.GetValueOrDefault("--webforms-publish-source-base"));
         var receiptRecorder = new ScanReceiptRecorder(
             scanOptions,
             sqlValidationSummaryPaths.Append(sqlValidationAsOf?.ToString("O") ?? string.Empty));
@@ -2910,6 +2911,8 @@ public static class TraceMapCommand
                                        Explicit local-only webforms-publish-binding.v1 receipt. Never discovered.
               --webforms-published-root <absolute-path>
                                        Optional explicit published-file root, independent of receipt location. Hash checked, never written.
+              --webforms-publish-source-base <repo-relative-folder>
+                                       Explicit receipt source-path base inside the repository; receipts remain unchanged.
               --pdb-input <path>       Explicit portable PDB, assembly with embedded portable PDB, or Windows PDB input. Repeatable; never discovered.
               --compiled-max-artifacts <count>
               --compiled-max-file-bytes <count>

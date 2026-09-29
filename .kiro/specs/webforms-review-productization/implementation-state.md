@@ -1765,3 +1765,23 @@ and licensing remain deliberately separate private follow-up work.
   migration/import/preparation tests passed with zero failures/skips; private
   path guard and diff whitespace checks passed. The prior 2,840-test full-suite
   pass belongs to the parent head, not this diagnostic repair.
+
+### Explicit retained receipt source base (2026-09-29)
+
+- Owner confirmed the configured root is the unchanged repository root, while
+  the website is a child folder and old receipts use website-relative paths.
+  The importer previously interpreted these paths at the repository root.
+- Added explicit import/helper source-base selection and an additive native
+  config field. Repository/source/project scopes and receipt bytes are preserved;
+  selected page and emitted evidence paths use the repository-relative prefix.
+- The base is bound into import, publish provenance and scan authorization
+  fingerprints and propagated through preflight, fresh execution and attachment.
+  No base discovery, root mutation, receipt rewriting or new attestation.
+- Public regressions cover root and nested website layouts, unsafe bases,
+  changed bytes, virtual-route preservation and the real helper/native pipeline.
+  Private document parity remains owner verification, not a synthetic-test claim.
+- Validation: clean solution build (zero warnings/errors), 651 broader Web Forms/
+  scan-receipt/attachment tests and 156 final focused import/migration/preparation/
+  publish/receipt tests passed, zero failures/skips. The focused run includes the
+  final added partition-base and nested-repository regressions. Private-path and
+  whitespace guards passed; the whole-repository suite was not rerun for this slice.

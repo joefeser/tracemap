@@ -227,6 +227,7 @@ public static partial class WebFormsReviewExecutionCommand
         var publishReceipt = plan.Inputs.SingleOrDefault(input => input.Role == "publish-receipt");
         if (publishReceipt is not null)
         { Add("--webforms-publish-receipt", publishReceipt.Path); Add("--webforms-published-root", config.PublishedRoot); }
+        if (config.PublishSourceRelativeBase is not null) Add("--webforms-publish-source-base", config.PublishSourceRelativeBase);
         Add("--compiled-max-artifacts", budget.MaxInputFiles);
         Add("--compiled-max-file-bytes", budget.MaxAssemblyBytes);
         Add("--compiled-max-text", budget.MetadataMaxText);
