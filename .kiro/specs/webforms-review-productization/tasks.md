@@ -239,6 +239,9 @@
 
 ## Release checks
 
+- [x] Classify external managed DLL paths portably on Windows and project only
+  exact, hash- and identity-verified legacy proof-copy locators into a separate
+  local receipt without rewriting owner attestation; preserve refusal cases.
 - [x] Add a read-only retained-binding diagnostic with closed state/gap codes
   and counts only, preserving original and failed-output bytes without scans,
   locator rebinding or new attestations; test the real helper and refusal cases.

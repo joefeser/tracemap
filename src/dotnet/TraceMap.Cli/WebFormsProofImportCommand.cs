@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.Json.Nodes;
 using TraceMap.Core;
 
 namespace TraceMap.Cli;
@@ -177,8 +178,51 @@ public static class WebFormsProofImportCommand
                 return 0;
             }
             var generator = Hash(await File.ReadAllBytesAsync(typeof(WebFormsProofImportCommand).Assembly.Location, token));
+            stage = "binding-locator-projection";
+            // Only relocate the exact legacy proof-copy coordinate. Hash equality alone
+            // never authorizes an arbitrary locator or assembly identity replacement.
+            var budgetForProjection = config.Budgets;
+            var observedInputs = ManagedMetadataExtractor.InspectInputs(new ScanOptions(sourceRoot, "unused-locator-projection",
+                CompiledInputPaths: primary.Select(name => WebFormsReviewPreflightCommand.Child(published, name)).ToArray(),
+                CompiledInputLimits: new(MaxArtifactCount: budgetForProjection.MaxInputFiles, MaxFileSizeBytes: budgetForProjection.MaxAssemblyBytes,
+                    MaxTextLength: budgetForProjection.MetadataMaxText, MaxTotalWorkUnits: budgetForProjection.MetadataMaxWork)), commit, token);
+            var projectedBinding = JsonNode.Parse(bindingBytes)!.AsObject();
+            var projections = new List<object>();
+            var copiedInputs = new List<(string Path, string Sha)>();
+            foreach (var item in projectedBinding["bindings"]!.AsArray())
+            {
+                var sha = item!["artifactSha256"]!.GetValue<string>();
+                var oldLocator = item["safeLocator"]!.GetValue<string>();
+                var observed = observedInputs.Provenance?.Outcomes.SingleOrDefault(value => value.Role == "primary" && value.RawFileSha256 == sha);
+                if (observed is null || observed.Outcome != "admitted" || observedInputs.Provenance!.OmittedInputCount != 0)
+                    throw Fail("RETAINED_BINDING_NOT_ADMITTED");
+                if (oldLocator == observed.SafeLocator) continue; // Core still validates identity and authority below.
+                var name = inventory.Single(value => Text(value, "sha256") == sha && primary.Contains(Text(value, "path")));
+                var copiedPath = WebFormsReviewPreflightCommand.Child(proof, Text(name, "path"));
+                var legacyLocator = FileInventory.NormalizeRelativePath(Path.GetRelativePath(receiptSourceRoot, copiedPath));
+                if (!oldLocator.StartsWith("../", StringComparison.Ordinal) || oldLocator != legacyLocator
+                    || item["assemblyIdentity"]!.GetValue<string>() != observed.AssemblyIdentity)
+                    throw Fail("RETAINED_BINDING_NOT_ADMITTED");
+                await Check("retained-proof-copy", copiedPath, sha, 67_108_864);
+                copiedInputs.Add((copiedPath, sha));
+                projections.Add(new { originalSafeLocator = oldLocator, projectedSafeLocator = observed.SafeLocator,
+                    artifactSha256 = sha, assemblyIdentity = observed.AssemblyIdentity });
+                item["safeLocator"] = observed.SafeLocator;
+            }
             var bounded = Hash(JsonSerializer.SerializeToUtf8Bytes(new { draftSha256 = Hash(draftBytes), publishReceiptSha256 = Hash(publishBytes),
-                bindingReceiptSha256 = Hash(bindingBytes), sourceCommitSha = commit, sourceRelativeBase = sourceBase, inputCommitments, membership }, JsonOptions));
+                bindingReceiptSha256 = Hash(bindingBytes), sourceCommitSha = commit, sourceRelativeBase = sourceBase, inputCommitments, membership, projections }, JsonOptions));
+            byte[]? projectedBindingBytes = null;
+            if (projections.Count > 0)
+            {
+                projectedBinding["generatorSha256"] = generator;
+                projectedBinding["boundedInputSha256"] = bounded;
+                projectedBinding["locatorProjection"] = JsonSerializer.SerializeToNode(new { ruleId = RuleId, visibility = "local-only",
+                    retainedBindingReceiptSha256 = Hash(bindingBytes), retainedGeneratorSha256 = Text(binding, "generatorSha256"),
+                    retainedBoundedInputSha256 = Text(binding, "boundedInputSha256"), projections,
+                    limitation = "Exact legacy proof-copy relocation only; original source/build attestation is carried unchanged, not newly issued." }, JsonOptions);
+                projectedBindingBytes = JsonSerializer.SerializeToUtf8Bytes(projectedBinding, JsonOptions);
+                config = config with { ReceiptRoot = destination };
+            }
             config = config with { PreparationProvenance = new(RuleId, generator, bounded) };
             var configBytes = JsonSerializer.SerializeToUtf8Bytes(config, JsonOptions);
             var parent = Path.GetDirectoryName(destination)!;
@@ -187,7 +231,15 @@ public static class WebFormsProofImportCommand
             var staging = Path.Combine(parent, ".webforms-proof-import-" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(staging);
             var stagedConfig = Path.Combine(staging, "review-config.local.json");
-            await WriteNew(stagedConfig, configBytes, token);
+            var validationConfigBytes = projectedBindingBytes is null ? configBytes
+                : JsonSerializer.SerializeToUtf8Bytes(config with { ReceiptRoot = staging }, JsonOptions);
+            await WriteNew(stagedConfig, validationConfigBytes, token);
+            if (projectedBindingBytes is not null)
+            {
+                await WriteNew(Path.Combine(staging, "compiled-binding.local.json"), projectedBindingBytes, token);
+                // Byte-identical snapshot, not a new publish receipt or attestation.
+                await WriteNew(Path.Combine(staging, "publish-receipt.local.json"), publishBytes, token);
+            }
             stage = "native-preflight";
             var plan = await WebFormsReviewPreflightCommand.BuildAsync(stagedConfig, destination, token);
             stage = "binding-admission";
@@ -203,19 +255,30 @@ public static class WebFormsProofImportCommand
             foreach (var row in inventory) await Check("recheck-inventory", WebFormsReviewPreflightCommand.Child(published, Text(row, "path")), Text(row, "sha256"), 67_108_864);
             foreach (var row in sources) await Check("recheck-source", WebFormsReviewPreflightCommand.Child(receiptSourceRoot, Text(row, "path")), Text(row, "sha256"), 67_108_864);
             foreach (var row in files) await Check("recheck-published", WebFormsReviewPreflightCommand.Child(published, Text(row, "path")), Text(row, "sha256"), 67_108_864);
+            foreach (var copy in copiedInputs) await Check("recheck-proof-copy", copy.Path, copy.Sha, 67_108_864);
             var gitAfter = GitMetadataProvider.Detect(sourceRoot);
             var baseGitAfter = GitMetadataProvider.Detect(receiptSourceRoot);
             if (gitAfter.CommitSha != git.CommitSha || gitAfter.RemoteUrl != git.RemoteUrl || gitAfter.GitRootPath != git.GitRootPath
                 || gitAfter.ScanRootRelativePath != git.ScanRootRelativePath || baseGitAfter.GitRootPath != git.GitRootPath
                 || baseGitAfter.CommitSha != git.CommitSha || baseGitAfter.RemoteUrl != git.RemoteUrl
                 || baseGitAfter.ScanRootRelativePath != baseGit.ScanRootRelativePath) throw Fail("SOURCE_IDENTITY_CHANGED");
-            if (Hash(await Read(stagedConfig, token)) != Hash(configBytes)) throw Fail("OUTPUT_CONFIG_CHANGED");
+            if (Hash(await Read(stagedConfig, token)) != Hash(validationConfigBytes)) throw Fail("OUTPUT_CONFIG_CHANGED");
+            if (projectedBindingBytes is not null)
+            {
+                await Same(Path.Combine(staging, "compiled-binding.local.json"), projectedBindingBytes);
+                await Same(Path.Combine(staging, "publish-receipt.local.json"), publishBytes);
+                // Only the transaction-owned config changes its receipt root on publication.
+                // Native start rechecks the final, destination-bound configuration.
+                await File.WriteAllBytesAsync(stagedConfig, configBytes, token);
+                if (Hash(await Read(stagedConfig, token)) != Hash(configBytes)) throw Fail("OUTPUT_CONFIG_CHANGED");
+            }
             var audit = new { schemaVersion = "webforms-retained-proof-import.v1", ruleId = RuleId, evidenceTier = "Tier2Structural", visibility = "local-only",
                 state = "verified-inputs-not-scanned", generatorSha256 = generator, boundedInputSha256 = bounded,
                 outputConfigSha256 = Hash(configBytes), sourceCommitSha = commit, sourceRelativeBase = sourceBase,
                 primaryAssemblies = primary.Count, dependencies = dependencies.Count,
                 pages = pageNames.Length, retainedPublishReceiptSha256 = Hash(publishBytes), retainedBindingReceiptSha256 = Hash(bindingBytes),
                 originalDraftSha256 = Hash(draftBytes), gaps = plan.Gaps.Concat(validated.Gaps).Distinct().Order(StringComparer.Ordinal).ToArray(),
+                locatorProjectionCount = projections.Count, projectedBindingReceiptSha256 = projectedBindingBytes is null ? null : Hash(projectedBindingBytes),
                 limitations = new[] { "Retained owner attestation is carried, not newly issued or authenticated compiler proof.",
                     "Selected page scope comes from the baseline receipt, not the wider migration draft; source/project scopes and budgets are preserved.",
                     "Inputs remain external. No scan, report comparison, all-pages claim, two-repository merge or runtime execution validation was performed.",
@@ -225,6 +288,7 @@ public static class WebFormsProofImportCommand
             token.ThrowIfCancellationRequested();
             Directory.Move(staging, destination);
             await output.WriteLineAsync($"proofImport=verified-inputs-not-scanned;primary={primary.Count};dependencies={dependencies.Count};pages={pageNames.Length};originalsUnchanged=true");
+            await output.WriteLineAsync($"bindingLocatorProjection=hash-and-identity-verified;count={projections.Count};newAttestation=false");
             await output.WriteLineAsync("nextAction=start-native-verification-from-review-config.local.json-in-a-new-output-folder");
             return 0;
 
