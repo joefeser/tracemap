@@ -281,7 +281,7 @@ public sealed class WebFormsReviewExecutionTests
             Assert.Equal(checkpoint.Reports.CompiledPaths, reports.ObservedCounts["compiledVariants"]);
             Assert.Equal(fixture.Config.Budgets.GraphMaxPaths, reports.ConfiguredLimits["pathsPerGraphQuery"]);
             Assert.Equal(fixture.Config.Budgets.GraphMaxWork, reports.ConfiguredLimits["traversalWorkPerGraphQuery"]);
-            Assert.Equal(fixture.Config.Budgets.Reports?.MaxGraphStorageBytes ?? 512L * 1024 * 1024,
+            Assert.Equal(WebFormsReviewPreflightCommand.ResolveNewReportBudgets(fixture.Config.Budgets).MaxGraphStorageBytes,
                 reports.ConfiguredLimits["graphStorageBytes"]);
             Assert.NotNull(reports.WorkUnitsUsed);
             Assert.InRange(reports.WorkUnitsUsed.GetValueOrDefault(), 0, fixture.Config.Budgets.GraphMaxWork * 2);

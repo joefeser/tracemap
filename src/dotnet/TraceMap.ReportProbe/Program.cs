@@ -42,7 +42,7 @@ try
     var maxPaths = Int(budgets, "graphMaxPaths", 256);
     var maxFacts = Int(reports, "maxInputFacts", 250_000);
     var maxEdges = Int(reports, "maxInputEdges", 250_000);
-    var maxText = Int(reports, "maxInputTextBytes", 128 * 1024 * 1024);
+    var maxText = Long(reports, "maxInputTextBytes", 128 * 1024 * 1024);
     var maxFrontier = Int(reports, "maxFrontier", 10_000);
     var maxGraphStorage = Long(reports, "maxGraphStorageBytes", 512L * 1024 * 1024);
 

@@ -32,7 +32,7 @@ public sealed record WebFormsReviewBudgets(
 }
 
 public sealed record WebFormsReviewReportBudgets(
-    int MaxInputFacts = 250_000, int MaxInputEdges = 250_000, int MaxInputTextBytes = 128 * 1024 * 1024,
+    int MaxInputFacts = 250_000, int MaxInputEdges = 250_000, long MaxInputTextBytes = 128 * 1024 * 1024,
     int MaxSurfaces = 1_000, int MaxEventChains = 1_000, int MaxGaps = 10_000,
     int MaxCompiledRoots = 1_000, int MaxFrontier = 10_000,
     long MaxProjectionInputBytes = 256L * 1024 * 1024, long MaxOutputBytes = 512L * 1024 * 1024,
@@ -188,6 +188,9 @@ public static partial class WebFormsReviewPreflightCommand
         var config = JsonSerializer.Deserialize<WebFormsReviewConfig>(configBytes, JsonOptions) ?? throw Fail("CONFIG_INVALID");
         if (Digest(configBytes) != configInput.Sha256) throw Fail("INPUT_CHANGED");
         ValidateConfig(config);
+        // Materialize new-plan defaults, never reinterpret a retained plan's
+        // null Reports policy. Explicit report caps remain caller authority.
+        config = config with { Budgets = config.Budgets with { Reports = ResolveNewReportBudgets(config.Budgets) } };
         config = config with { SourceRoot = PhysicalPath(config.SourceRoot), PublishedRoot = PhysicalPath(config.PublishedRoot),
             ParentScanRoot = config.ParentScanRoot is null ? null : PhysicalPath(config.ParentScanRoot),
             ReceiptRoot = config.ReceiptRoot is null ? null : PhysicalPath(config.ReceiptRoot) };
@@ -379,6 +382,19 @@ public static partial class WebFormsReviewPreflightCommand
             throw Fail("REPORT_BUDGET_INVALID");
         if (budget.MaxGraphStorageBytes is { } storage && (storage < 64 * 1024 || storage > 16L * 1024 * 1024 * 1024))
             throw Fail("REPORT_BUDGET_INVALID");
+    }
+
+    internal static WebFormsReviewReportBudgets ResolveNewReportBudgets(WebFormsReviewBudgets budgets)
+    {
+        if (budgets.Reports is { } explicitBudgets) return explicitBudgets;
+        // A selected page still needs global overload/dispatch competitors.
+        // Its admission pool must not silently shrink below the declared scan
+        // capacity. Search, frontier and output limits remain independent.
+        const long maximumStorage = 16L * 1024 * 1024 * 1024;
+        return new(MaxInputFacts: checked((int)budgets.MaxParentFacts),
+            MaxInputEdges: checked((int)budgets.MaxParentFacts),
+            MaxInputTextBytes: Math.Min(budgets.MaxRetainedArtifactBytes, maximumStorage))
+        { MaxGraphStorageBytes = Math.Clamp(budgets.MaxRetainedArtifactBytes, 64 * 1024, maximumStorage) };
     }
     private static void ValidateOutput(string output, WebFormsReviewConfig config)
     {
