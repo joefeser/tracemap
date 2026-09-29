@@ -1748,3 +1748,20 @@ not recorded here.
 Consolidate the long manual compatibility reference only after its diagnostic
 and recovery entry points have equivalent behavioral tests. Ticket automation
 and licensing remain deliberately separate private follow-up work.
+
+### Retained-proof import diagnostic repair (2026-09-29)
+
+- Private Windows verification stopped with the generic input/output-invalid
+  code before any scan. Its exact cause is not established by the screenshot.
+- Import now reports a closed stage and safe failure category; missing required
+  receipt fields expose only schema field names, never private paths or raw
+  JSON/IO exception text. Preparation failures are handled by the direct import
+  entry point, not only the outer CLI dispatcher.
+- Added direct-entry negative regressions for missing draft/receipts/source/DLL,
+  missing receipt fields/rosters, malformed JSON and dirty source scope. No root
+  rebasing, receipt rewriting, new attestation or verification bypass was added.
+- Private acceptance still requires a rerun and actual document comparison.
+- Repair validation: solution build passed with zero warnings/errors; 92 focused
+  migration/import/preparation tests passed with zero failures/skips; private
+  path guard and diff whitespace checks passed. The prior 2,840-test full-suite
+  pass belongs to the parent head, not this diagnostic repair.

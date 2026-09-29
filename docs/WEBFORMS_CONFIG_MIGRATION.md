@@ -94,6 +94,15 @@ The direct native command is:
 tracemap webforms-review import-proof --config review.draft.json --proof-root retained-proof --published-root original-publish --out new-config-folder
 ```
 
+Import failures print a public-safe reason and a closed stage label, not private
+paths or raw exception text. For example, `FILE_OR_DIRECTORY_UNAVAILABLE` at
+`stage=source-roster` means a receipt-relative source file is unavailable under
+the draft's source root; it does not prove the source changed. A missing field
+is identified by its schema field name. Preserve the inputs and report that
+single diagnostic line; do not upload the receipts or automatically rebase
+their paths. No scan starts on an import failure. Failed staging remains
+unadmitted and must not be overwritten on retry.
+
 ### When retained proof is unavailable
 
 The old schema does not contain the exact source commit, compiled-site root,
