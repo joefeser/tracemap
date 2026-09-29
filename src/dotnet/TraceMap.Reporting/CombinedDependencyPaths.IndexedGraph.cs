@@ -368,7 +368,8 @@ public static partial class CombinedDependencyPathReporter
                     StoragePhase = storagePhase, ObjectStorageBytes = ReadObjectStorageBytes(),
                     GlobalEdgePayloadRowsRead = globalEdgePayloadRowsRead,
                     IncomingCountQueries = incomingCountQueries, IncomingReferenceRowsObserved = incomingReferenceRowsObserved,
-                    StageElapsedMilliseconds = ObserveStageMilliseconds() };
+                    StageElapsedMilliseconds = ObserveStageMilliseconds(), FactPayloadRowsRead = factPayloadRowsRead,
+                    FactPayloadBytesRead = factPayloadBytesRead, FactPayloadRowsByStage = new Dictionary<string, long>(factRowsByStage) };
         }
 
         public IndexedGraphUsage ObserveRefused() => new("sqlite-temporary", generatorSha256, inputSha256,
@@ -381,7 +382,8 @@ public static partial class CombinedDependencyPathReporter
                 AllocationSnapshotSuccessfulWrites = snapshotWrites, SuccessfulWritesBeforeRefusal = successfulWrites,
                 GlobalEdgePayloadRowsRead = globalEdgePayloadRowsRead,
                 IncomingCountQueries = incomingCountQueries, IncomingReferenceRowsObserved = incomingReferenceRowsObserved,
-                StageElapsedMilliseconds = ObserveStageMilliseconds() };
+                StageElapsedMilliseconds = ObserveStageMilliseconds(), FactPayloadRowsRead = factPayloadRowsRead,
+                FactPayloadBytesRead = factPayloadBytesRead, FactPayloadRowsByStage = new Dictionary<string, long>(factRowsByStage) };
 
         private IReadOnlyDictionary<string, long>? ReadObjectStorageBytes()
         {
@@ -554,6 +556,9 @@ public static partial class CombinedDependencyPathReporter
         public long? GlobalEdgePayloadRowsRead { get; init; }
         public long? IncomingCountQueries { get; init; }
         public long? IncomingReferenceRowsObserved { get; init; }
+        public long FactPayloadRowsRead { get; init; }
+        public long FactPayloadBytesRead { get; init; }
+        public IReadOnlyDictionary<string, long>? FactPayloadRowsByStage { get; init; }
     }
 
     private static async Task<IndexedGraphStore> CreateIndexedGraphStoreAsync(string inputPath, long maxStorageBytes, CancellationToken token,

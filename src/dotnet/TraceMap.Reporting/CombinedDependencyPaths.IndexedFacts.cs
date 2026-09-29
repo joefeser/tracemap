@@ -19,6 +19,9 @@ public static partial class CombinedDependencyPathReporter
     private sealed partial class IndexedGraphStore
     {
         private int storedFactCount;
+        private long factPayloadRowsRead;
+        private long factPayloadBytesRead;
+        private readonly Dictionary<string, long> factRowsByStage = new(StringComparer.Ordinal);
         public IIndexedCombinedFacts Facts { get; }
 
         private void AddFact(CombinedFactRow fact)
@@ -53,7 +56,7 @@ public static partial class CombinedDependencyPathReporter
             while (reader.Read())
             {
                 token.ThrowIfCancellationRequested();
-                yield return IndexedGraphPayload.Decode<CombinedFactRow>((byte[])reader.GetValue(0));
+                yield return DecodeFact((byte[])reader.GetValue(0));
             }
         }
 
@@ -62,7 +65,7 @@ public static partial class CombinedDependencyPathReporter
             if ((uint)index >= (uint)storedFactCount) throw new ArgumentOutOfRangeException(nameof(index));
             using var command = Command("select payload from graph_facts where ordinal=$ordinal;");
             command.Parameters.AddWithValue("$ordinal", index + 1);
-            return IndexedGraphPayload.Decode<CombinedFactRow>((byte[])command.ExecuteScalar()!);
+            return DecodeFact((byte[])command.ExecuteScalar()!);
         }
 
         private int SourceKeyCount()
@@ -82,7 +85,7 @@ public static partial class CombinedDependencyPathReporter
             using var command = Command("select payload from graph_facts where " + (sourceKey ? "source_key" : "id")
                 + "=$id order by id collate graph_ordinal limit 1;", id);
             var payload = command.ExecuteScalar() as byte[];
-            fact = payload is null ? null! : IndexedGraphPayload.Decode<CombinedFactRow>(payload);
+            fact = payload is null ? null! : DecodeFact(payload);
             return payload is not null;
         }
 
@@ -92,8 +95,16 @@ public static partial class CombinedDependencyPathReporter
             command.Parameters.AddWithValue("$source", key.SourceIndexId);
             command.Parameters.AddWithValue("$original", key.OriginalFactId);
             var payload = command.ExecuteScalar() as byte[];
-            facts = payload is null ? [] : [IndexedGraphPayload.Decode<CombinedFactRow>(payload)];
+            facts = payload is null ? [] : [DecodeFact(payload)];
             return payload is not null;
+        }
+
+        private CombinedFactRow DecodeFact(byte[] payload)
+        {
+            factPayloadRowsRead = checked(factPayloadRowsRead + 1);
+            factPayloadBytesRead = checked(factPayloadBytesRead + payload.LongLength);
+            factRowsByStage[observationStage] = checked(factRowsByStage.GetValueOrDefault(observationStage) + 1);
+            return IndexedGraphPayload.Decode<CombinedFactRow>(payload);
         }
 
         private sealed class IndexedFactRows(IndexedGraphStore store) : IIndexedCombinedFacts

@@ -75,4 +75,7 @@
 - [x] Move the private index, output root, and form list into an ignored validated JSON configuration with a generic checked-in example.
 - [x] Harden local configuration type, row, and byte validation and preserve config-free explicit diagnostics.
 - [x] Add bounded recovery-index handler counts with explicit root ambiguity and global truncation, plus public .NET/script tests.
+- [x] Add a separate exact single-handler requery over the verified retained combined index, preserving global competitors and original checkpoints.
+- [x] Pin historical exact-symbol versus source-bound indexed paths and lossless variants with a seven-root shared-budget synthetic regression.
+- [x] Add provenance-bound graph-stage timings and logical fact-payload read counters; avoid full-payload scans for typed reconciliation/gap lookups.
 - [ ] Compare owner-retained handler results to the historical handler-specific baseline without treating aggregate counts as parity.

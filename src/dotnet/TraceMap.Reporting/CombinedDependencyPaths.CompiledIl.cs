@@ -125,8 +125,7 @@ public static partial class CombinedDependencyPathReporter
             .ToDictionary(group => group.Key, group => group.Select(fact => fact.SourceSymbol!)
                 .Distinct(StringComparer.Ordinal).ToArray());
 
-        foreach (var join in facts.Where(fact => fact.FactType == FactTypes.SourceMetadataIdentityReconciled
-                     && fact.EvidenceTier == EvidenceTiers.Tier1Semantic
+        foreach (var join in FactsOfTypes(facts, FactTypes.SourceMetadataIdentityReconciled).Where(fact => fact.EvidenceTier == EvidenceTiers.Tier1Semantic
                      && fact.Properties.GetValueOrDefault("compiledProvenanceState") == "bound")
                  .OrderBy(fact => fact.CombinedFactId, StringComparer.Ordinal))
         {
@@ -759,8 +758,7 @@ public static partial class CombinedDependencyPathReporter
             .GroupBy(fact => (fact.SourceIndexId, fact.Properties.GetValueOrDefault("metadataPdbReconciliationFactId")))
             .ToDictionary(group => group.Key, group => group.ToArray());
 
-        foreach (var join in facts.Where(fact => fact.FactType == FactTypes.MetadataPdbMethodReconciled
-                     && fact.Properties.GetValueOrDefault("pdbProvenanceState") == "bound")
+        foreach (var join in FactsOfTypes(facts, FactTypes.MetadataPdbMethodReconciled).Where(fact => fact.Properties.GetValueOrDefault("pdbProvenanceState") == "bound")
                  .OrderBy(fact => fact.CombinedFactId, StringComparer.Ordinal))
         {
             if (string.IsNullOrWhiteSpace(join.Properties.GetValueOrDefault("pdbBoundedInputSha256"))

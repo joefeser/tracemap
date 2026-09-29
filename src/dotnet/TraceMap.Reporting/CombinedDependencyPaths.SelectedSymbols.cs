@@ -3,12 +3,20 @@ using System.Text.Json.Serialization;
 namespace TraceMap.Reporting;
 
 public sealed record CombinedPathSymbolRoot(string SourceIndexId, string ScanId, string CommitSha, string SymbolId);
+public sealed record CombinedPathGraphObservation(string GeneratorSha256, string InputSha256, string ObservationState,
+    int StoredFacts, int StoredNodes, int StoredEdges, long FactPayloadRowsRead, long FactPayloadBytesRead,
+    IReadOnlyDictionary<string, long>? StageElapsedMilliseconds, IReadOnlyDictionary<string, long>? FactPayloadRowsByStage);
 public sealed record CombinedPathAdmissionLimits(int MaxFacts = 250_000, int MaxEdges = 250_000,
     long MaxTextBytes = 128L * 1024 * 1024)
 {
     public const long DefaultMaxGraphStorageBytes = 512L * 1024 * 1024;
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public long? MaxGraphStorageBytes { get; init; }
+    // Observation only; deliberately excluded from serialized policy/provenance.
+    [JsonIgnore]
+    public Action<string>? GraphStageObserver { get; init; }
+    [JsonIgnore]
+    public Action<CombinedPathGraphObservation>? GraphObservationObserver { get; init; }
 }
 
 public static partial class CombinedDependencyPathReporter
@@ -32,9 +40,15 @@ public static partial class CombinedDependencyPathReporter
             throw new InvalidDataException("COMPILED_SELECTED_SYMBOL_ROOTS_INVALID");
         var selected = options with { SymbolRoots = roots.ToArray(), StartingNodeLimit = Math.Max(1, roots.Count) };
         var budget = new ReportInputBudget(limits.MaxFacts, limits.MaxEdges, limits.MaxTextBytes)
-            { MaxGraphStorageBytes = limits.MaxGraphStorageBytes ?? CombinedPathAdmissionLimits.DefaultMaxGraphStorageBytes };
-        return combinedIndex
-            ? (await BuildBoundedCombinedIndexReportWithTraversalAsync(selected, budget, cancellationToken)).Report
-            : (await BuildBoundedSingleIndexReportWithTraversalAsync(selected, budget, cancellationToken)).Report;
+            { MaxGraphStorageBytes = limits.MaxGraphStorageBytes ?? CombinedPathAdmissionLimits.DefaultMaxGraphStorageBytes,
+                GraphStageObserver = limits.GraphStageObserver };
+        var result = combinedIndex
+            ? await BuildBoundedCombinedIndexReportWithTraversalAsync(selected, budget, cancellationToken)
+            : await BuildBoundedSingleIndexReportWithTraversalAsync(selected, budget, cancellationToken);
+        if ((result.GraphStorage ?? result.RefusedGraphStorage) is { } usage)
+            limits.GraphObservationObserver?.Invoke(new(usage.GeneratorSha256, usage.InputSha256, usage.ObservationState,
+                usage.StoredFacts, usage.StoredNodes, usage.StoredEdges, usage.FactPayloadRowsRead, usage.FactPayloadBytesRead,
+                usage.StageElapsedMilliseconds, usage.FactPayloadRowsByStage));
+        return result.Report;
     }
 }
