@@ -239,6 +239,10 @@
 
 ## Release checks
 
+- [x] Preserve repository-root configuration when importing website-relative
+  retained receipts using an explicit hash-bound source base across preflight,
+  fresh execution and compiled attachment; retain original receipts and test
+  the nested website helper/scan flow plus unsafe and foreign-repository refusal.
 - [x] Run focused PowerShell tests for each script slice.
 - [x] Run the relevant .NET tests and pinned validation workflow.
 - [x] Confirm every new machine-readable artifact records generator/input hashes.

@@ -14,6 +14,7 @@ rules:
       - Retained owner attestation is carried unchanged, not newly issued or authenticated compiler provenance.
       - Only webforms-publish-binding.v1 with an explicit legacy assemblyInventory and matching compiled-input-binding-set.v1 is accepted; missing or mismatched records stop import.
       - Selected page scope comes from the baseline receipt; original source and project scopes and budgets are preserved and broader page coverage is not inferred.
+      - A website-relative receipt requires an explicit repository-relative source base. The base is hash-bound in the import and execution scope; original receipt bytes and virtual routes are unchanged and discovery never selects a base.
       - Dependency context stays unbound and input verification is not completed scanning, report parity, a two-repository merge or runtime proof.
       - Originals remain external and unchanged; output overlaps, existing destinations, unsafe paths and changed inputs are refused. Failed staging remains unadmitted.
   - id: workflow.webforms.config-migration.v1
@@ -2830,6 +2831,7 @@ rules:
       - AnalysisGap
     limitations:
       - Published files default to the receipt directory. An explicit caller-supplied absolute root may locate the same declared bytes elsewhere; its path hash participates in the bounded input digest and never proves source ownership, authentic compilation or a complete publish inventory.
+      - An explicit repository-relative receipt source base maps unchanged website-relative receipt paths to repository-relative evidence. It participates in the bounded input and scan-scope hashes; virtual routes and receipt source digests retain their original coordinate system. Unsafe paths, missing inputs and hash mismatches withhold evidence; no base is discovered.
       - The receipt is operator-declared. Matching hashes and a .compiled map establish static page-to-assembly correspondence for the declared build inputs; they do not independently prove the compiler ran, source-method identity, PDB lines, deployment, page activation, or runtime execution.
       - A virtual application-root prefix may differ from the source-relative page path only when the local preparer finds one unique suffix match and records the distinct sourcePath explicitly. The exact .compiled bytes remain unchanged; multiple candidates or a mismatched declared source path are gaps, not guessed joins.
       - Input count, file size, path, duplicate, content, commit, XML, and mapping failures withhold the entire receipt behind Tier4 gaps. No ambient publish output is discovered, and a gap never means the page or assembly is absent.
