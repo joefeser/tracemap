@@ -125,14 +125,19 @@
     all-fact identity lookup copies and lazy-project surface inputs; preserve exact
     historical parity and the existing allocation guard. Keep type-specific
     ambiguity indexes and representative peak-memory/throughput gates pending.
+  - [x] Index safely framed qualified publish member candidates and complete
+    page/file membership, preserve global name/assembly counts and every opaque
+    fallback/overload competitor, and retain the 100,000 work cap. Pin 400-type
+    joins, same-type ambiguity, cap refusal and 32/256-page native evidence.
 - [ ] Benchmark eight-times source-size synthetic corpus and representative
   compiled graph distributions; record disk/time/peak-memory/coverage metrics.
   - [x] Add a real-CLI subprocess diagnostic with 32/256 declared pages, exact
     eight-times source bytes, generated cross-assembly PE/IL, overload competitors
     and four terminal branches per page; record OS peak resident usage, elapsed
     time, retained disk and separate packet/compiled truncation. Preserve inputs
-    and admitted resume artifacts. Keep private graph scale, transient disk peak
-    and the observed publish-member join work-limit follow-up pending.
+    and admitted resume artifacts. Keep private graph scale and transient disk peak
+    pending. The observed member work-limit follow-up is covered above; other
+    representative graph distributions and whole-workflow throughput remain open.
 - [ ] Add dependency-aware retention, durable run location, relocation validation,
   and dry-run-first cleanup; do not delete the working proof before verification.
 - [ ] Validate the new workflow on an authorized real repository before replacing

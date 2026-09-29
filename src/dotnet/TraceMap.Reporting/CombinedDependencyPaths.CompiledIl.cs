@@ -470,12 +470,13 @@ public static partial class CombinedDependencyPathReporter
     {
         var pageSourceKeys = FactsOfTypes(facts, FactTypes.WebFormsPublishPageMapped, FactTypes.WebFormsPublishPageCandidate)
             .Select(fact => (RetainedSourceIndex(fact.SourceIndexId, parents), fact.FilePath)).ToHashSet();
+        var pagesByFile = FactsOfTypes(facts, FactTypes.WebFormsPageDeclared)
+            .GroupBy(fact => (fact.SourceIndexId, fact.FilePath))
+            .ToDictionary(group => group.Key, group => group.ToArray());
         foreach (var mapped in FactsOfTypes(facts, FactTypes.WebFormsPublishPageMapped, FactTypes.WebFormsPublishPageCandidate))
         {
             var parentIndex = RetainedSourceIndex(mapped.SourceIndexId, parents);
-            foreach (var page in facts.Where(fact => fact.SourceIndexId == parentIndex
-                         && fact.FactType == FactTypes.WebFormsPageDeclared
-                         && fact.FilePath == mapped.FilePath))
+            foreach (var page in pagesByFile.GetValueOrDefault((parentIndex, mapped.FilePath)) ?? [])
             {
                 var linkedCode = page.Properties.GetValueOrDefault("linkedCodePath");
                 if (!string.IsNullOrWhiteSpace(linkedCode)) pageSourceKeys.Add((parentIndex, linkedCode));
@@ -491,18 +492,17 @@ public static partial class CombinedDependencyPathReporter
         var declarationsByFile = FactsOfTypes(facts, FactTypes.MethodDeclared).Where(fact => fact.RuleId == RuleIds.VisualBasicSyntaxDeclarations)
             .GroupBy(fact => (fact.SourceIndexId, fact.FilePath))
             .ToDictionary(group => group.Key, group => group.ToArray());
-        var methodsByName = FactsOfTypes(facts, FactTypes.ManagedMethodDeclared).Where(fact => fact.Properties.GetValueOrDefault("provenanceState") == "bound")
-            .GroupBy(fact => (fact.SourceIndexId,
-                Name: fact.Properties.GetValueOrDefault("metadataName")?.ToUpperInvariant()))
-            .ToDictionary(group => group.Key, group => group.ToArray());
+        var methodIndex = new PublishMemberCandidateIndex(FactsOfTypes(facts, FactTypes.ManagedMethodDeclared)
+            .Where(fact => fact.Properties.GetValueOrDefault("provenanceState") == "bound"));
         long candidateWork = 0;
         foreach (var source in sourceInputs)
         {
             if (!declarationsByFile.TryGetValue((RetainedSourceIndex(source.SourceIndexId, parents), source.FilePath), out var declarations)) continue;
             foreach (var declaration in declarations)
             {
-                var key = (source.SourceIndexId, declaration.Properties.GetValueOrDefault("name")?.ToUpperInvariant());
-                candidateWork += methodsByName.GetValueOrDefault(key)?.Length ?? 0;
+                if (!TrySimpleTypePath(declaration.Properties.GetValueOrDefault("qualifiedContainingType"), out var typePath)) continue;
+                candidateWork += methodIndex.CandidateWork(source.SourceIndexId,
+                    declaration.Properties.GetValueOrDefault("name"), typePath);
                 if (candidateWork <= 100_000) continue;
                 AddCompiledIlGap(graph, source, "ProjectlessPublishMemberWorkLimit",
                     "bounded-publish-member-join-work-exceeded", null, ProjectlessPublishCandidateRuleId);
@@ -531,18 +531,15 @@ public static partial class CombinedDependencyPathReporter
                 if (!TrySimpleTypePath(typeName, out var typePath) || string.IsNullOrWhiteSpace(name)
                     || name.Equals("New", StringComparison.OrdinalIgnoreCase) || string.IsNullOrWhiteSpace(memberIdentity))
                     continue;
-                var named = methodsByName.GetValueOrDefault((source.SourceIndexId, name.ToUpperInvariant())) ?? [];
-                var inBoundAssembly = named.Where(fact =>
-                    hashes.Contains(fact.Properties.GetValueOrDefault("rawFileSha256"))).ToArray();
-                var inQualifiedType = inBoundAssembly.Where(fact =>
-                    fact.TargetSymbol?.Contains("|type:" + typePath + "|arity:0|method:", StringComparison.OrdinalIgnoreCase) == true).ToArray();
+                var selection = methodIndex.Select(source.SourceIndexId, name, typePath, hashes);
+                var inQualifiedType = selection.QualifiedCandidates;
                 var candidates = inQualifiedType.Where(fact =>
                     PublishCandidateSignatureMatches(declaration, fact)).ToArray();
                 if (candidates.Length != 1)
                 {
                     AddCompiledIlGap(graph, declaration, "ProjectlessPublishMemberAmbiguous",
-                        PublishMemberGapReason(named.Length, inBoundAssembly.Length,
-                            inQualifiedType.Length, candidates.Length),
+                        PublishMemberGapReason(selection.NamedCount, selection.BoundAssemblyCount,
+                            inQualifiedType.Count, candidates.Length),
                         candidates.Length, ProjectlessPublishCandidateRuleId);
                     continue;
                 }

@@ -47,3 +47,36 @@ budget for this diagnostic; its default remains 256 and other limits are unchang
 The retained local diagnostic directory is
 `output/native-scale-32-256-final-20260928`. Existing proof directories and
 PowerShell compatibility workflows were not deleted or replaced.
+
+## Qualified member-index rerun
+
+The final rebuilt member-index/memory/native-scale suite passed 54/54 with no
+failures or skips. Safely framed qualified types now narrow comparison work;
+global source/name and receipt-bound assembly counts remain intact for gap
+classification. Opaque, nested, malformed and delimiter-bearing identities use
+the historical fallback. The 100,000 cap is unchanged, and end-to-end tests prove
+that sufficient same-type competitors still withhold the entire member pass.
+Another public fixture retains 800 candidate edges for 400 same-name types;
+duplicating one same-type method withholds its edges as ambiguous.
+
+| Rerun observation | 32 pages | 256 pages |
+| --- | ---: | ---: |
+| Retained compiled paths | 128 | 1,024 |
+| Evidence + run bytes | 22,796,063 | 177,531,917 |
+| Run elapsed ms | 7,363 | 236,527 |
+| Run OS peak resident bytes | 219,250,688 | 386,105,344 |
+| Packet / compiled truncation | true / true | true / true |
+
+The 256-page case retains 8,192 graph edges (previously 7,168), no
+`ProjectlessPublishMemberWorkLimit`, and 256 cycle gaps. All four terminal
+branches per page, the grouped handoff and immutable input/resume rosters pass.
+Restored source member candidates do not become exact source/binary or runtime
+identity. The observed memory peak is lower, but elapsed time is higher; this is
+one observation on the same machine, not a throughput or statistical improvement
+claim. Coverage remains partial and reduced. The broader representative graph,
+transient disk and private Windows gates remain open.
+
+The retained rerun directory is
+`output/native-scale-qualified-member-index-20260928`, with exact generator/input
+commitments and every phase metric in its local receipt. Earlier observations
+and proof directories remain intact.
