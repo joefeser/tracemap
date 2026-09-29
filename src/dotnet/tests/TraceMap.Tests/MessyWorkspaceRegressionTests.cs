@@ -2590,6 +2590,165 @@ public sealed class MessyWorkspaceRegressionTests
             .ToList();
 
 
+    [Theory]
+    [InlineData(false, false, false)]
+    [InlineData(true, false, false)]
+    [InlineData(false, true, false)]
+    [InlineData(true, true, false)]
+    [InlineData(true, false, true)]
+    public async Task Explicit_attachment_retains_projectless_pdb_or_publish_method_chains(bool publish, bool ambiguous, bool members)
+    {
+        using var temp = new TempDirectory();
+        var folder = WebFormsReviewPreflightCommand.PhysicalPath(temp.Path);
+        var source = MessyRoot("vb-pdb-projectless");
+        if (members)
+        {
+            // A public synthetic extra declaration exercises review-candidate
+            // membership, not historical compiler/source authenticity.
+            var original = source; source = Path.Combine(folder, "public-member-source");
+            Directory.CreateDirectory(Path.Combine(source, "Pages")); Directory.CreateDirectory(Path.Combine(source, "App_Code"));
+            File.Copy(Path.Combine(original, "Pages", "Lookup.aspx"), Path.Combine(source, "Pages", "Lookup.aspx"));
+            File.Copy(Path.Combine(original, "Pages", "Lookup.aspx.vb"), Path.Combine(source, "Pages", "Lookup.aspx.vb"));
+            File.Copy(Path.Combine(original, "Pages", "Lookup.aspx.vb"), Path.Combine(source, "App_Code", "Member.vb"));
+            AttachmentFixtureGit(source, "init"); AttachmentFixtureGit(source, "add", ".");
+            AttachmentFixtureGit(source, "-c", "user.name=Public Fixture", "-c", "user.email=fixture@example.invalid", "commit", "-m", "Public fixture source");
+        }
+        var assembly = Path.Combine(MessyRoot("vb-pdb-build"), "bin", "Debug", "net10.0", "CompiledProjectless.VB.dll");
+        var pdb = Path.ChangeExtension(assembly, ".pdb");
+        var receipt = publish ? Path.Combine(folder, "publish", "publish-receipt.local.json") : null;
+        var primary = assembly;
+        if (publish)
+        {
+            var published = Path.GetDirectoryName(receipt!)!;
+            Directory.CreateDirectory(Path.Combine(published, "bin")); Directory.CreateDirectory(Path.Combine(published, "Pages"));
+            primary = Path.Combine(published, "bin", "CompiledProjectless.VB.dll"); File.Copy(assembly, primary);
+            var map = Path.Combine(published, "Pages", "Lookup.aspx.compiled");
+            File.WriteAllText(map, "<preserve virtualPath=\"/Pages/Lookup.aspx\" assembly=\"CompiledProjectless.VB\" type=\"PublicProof.LookupPage\" />");
+            var files = (members ? new[] { "Pages/Lookup.aspx", "Pages/Lookup.aspx.vb", "App_Code/Member.vb" }
+                : new[] { "Pages/Lookup.aspx", "Pages/Lookup.aspx.vb" }).Select(path => new
+            { path, sha256 = AttachmentFileHash(Path.Combine(source, path)) }).OrderBy(item => item.path, StringComparer.Ordinal).ToArray();
+            var digest = AttachmentTextHash(string.Join("\n", files.Select(item => $"{item.path}:{item.sha256}")) + "\n");
+            File.WriteAllText(receipt!, JsonSerializer.Serialize(new
+            {
+                schemaVersion = "webforms-publish-binding.v1", visibility = "local-only",
+                receiptGeneratorSha256 = AttachmentTextHash("public-fixture-generator"), compilerSha256 = AttachmentTextHash("public-fixture-compiler"),
+                sourceCommitSha = GitMetadataProvider.Detect(source).CommitSha, boundedInputSha256 = digest, sourceFiles = files,
+                publishedFiles = new[] {
+                    new { path = "bin/CompiledProjectless.VB.dll", sha256 = AttachmentFileHash(primary), kind = "assembly" },
+                    new { path = "Pages/Lookup.aspx.compiled", sha256 = AttachmentFileHash(map), kind = "compiled-map" } },
+                pages = new[] { new { virtualPath = "/Pages/Lookup.aspx", assembly = "CompiledProjectless.VB", generatedType = "PublicProof.LookupPage", mapPath = "Pages/Lookup.aspx.compiled" } }
+            }));
+        }
+        var baseline = ScanBoundRoot(temp, members ? source : "vb-pdb-projectless", "attachment-baseline", [primary], publish ? null : [pdb],
+            ilBody: true, webFormsPublishReceipt: receipt);
+        var parent = ScanEngine.Scan(new(source, Path.Combine(folder, "parent-unused")));
+        if (ambiguous)
+        {
+            var declaration = parent.Facts.Single(fact => fact.FactType == FactTypes.MethodDeclared
+                && fact.RuleId == RuleIds.VisualBasicSyntaxDeclarations && fact.Properties.GetValueOrDefault("name") == "Lookup_Init");
+            parent = parent with { Facts = [.. parent.Facts, declaration with { FactId = "fact-public-duplicate-attachment-handler" }] };
+        }
+        var parentIndex = Path.Combine(folder, "attachment-parent.sqlite"); var parentManifest = Path.Combine(folder, "attachment-parent.json");
+        SqliteIndexWriter.Write(parentIndex, parent.Manifest, parent.Facts); await ManifestWriter.WriteAsync(parentManifest, parent.Manifest);
+        var derived = CompiledAttachmentProducer.Create(new(parent.Manifest, AttachmentFileHash(parentManifest), AttachmentFileHash(parentIndex)),
+            new(source, Path.Combine(folder, "attachment-unused"), CompiledInputPaths: [primary],
+                CompiledBindingReceiptPaths: [Path.Combine(temp.Path, "attachment-baseline-binding-receipt.json")],
+                PdbInputPaths: publish ? null : [pdb], IlBodyEvidence: true, WebFormsPublishReceiptPath: receipt),
+            () => parent.SourceSnapshotInventory!, 1000, 1024 * 1024);
+        var childIndex = Path.Combine(folder, "attachment-child.sqlite"); var childManifest = Path.Combine(folder, "attachment-child.json");
+        SqliteIndexWriter.Write(childIndex, derived.Manifest, derived.Facts); await ManifestWriter.WriteAsync(childManifest, derived.Manifest);
+        var generated = ScanBoundRoot(temp, "root-generated", "attachment-generated",
+            [Path.Combine(MessyRoot("root-generated"), "bin", "Debug", "net10.0", "GeneratedSite.dll")], ilBody: true);
+        var generatedIndex = Path.Combine(folder, "attachment-generated.sqlite"); SqliteIndexWriter.Write(generatedIndex, generated.Manifest, generated.Facts);
+        var baselineIndex = Path.Combine(folder, "attachment-baseline.sqlite"); SqliteIndexWriter.Write(baselineIndex, baseline.Manifest, baseline.Facts);
+        var baselineCombined = Path.Combine(folder, "attachment-baseline-combined.sqlite");
+        await CombinedIndexBuilder.CombineAsync(new([baselineIndex, generatedIndex], baselineCombined, ["retained", "generated"]));
+        var combined = Path.Combine(folder, "attachment-linked-combined.sqlite");
+        await CombinedIndexBuilder.CombineAsync(new([parentIndex, childIndex, generatedIndex], combined, ["retained", "compiled", "generated"])
+        { CompiledAttachments = [new(parentIndex, parentManifest, childIndex, childManifest)] });
+        var baselineGraph = await CombinedDependencyPathReporter.BuildGraphInventoryAsync(baselineCombined);
+        var graph = await CombinedDependencyPathReporter.BuildGraphInventoryAsync(combined);
+        var kind = publish ? "projectless-publish-method-candidate" : "projectless-source-pdb-identity";
+        if (ambiguous)
+        {
+            Assert.DoesNotContain(graph.Edges, edge => edge.EdgeKind == kind);
+            Assert.Contains(graph.Gaps, gap => gap.GapKind == (publish ? "ProjectlessPublishSourceAmbiguous" : "ProjectlessPdbMethodAmbiguous"));
+            return;
+        }
+        var entry = Assert.Single(graph.Edges, edge => edge.EdgeKind == kind
+            && graph.Nodes.Single(node => node.NodeId == edge.FromNodeId).DisplayName.Contains("Lookup_Init", StringComparison.Ordinal));
+        Assert.NotNull(entry.CompiledAttachmentLinkSha256);
+        var sourceNode = graph.Nodes.Single(node => node.NodeId == entry.FromNodeId);
+        var compiledNode = graph.Nodes.Single(node => node.NodeId == entry.ToNodeId);
+        Assert.NotEqual(sourceNode.SourceIndexId, compiledNode.SourceIndexId);
+        Assert.Equal("retained", sourceNode.SourceLabel); Assert.Equal("compiled", compiledNode.SourceLabel);
+        Assert.Contains(entry.SupportingFactIds, id => id.StartsWith(sourceNode.SourceIndexId + ":", StringComparison.Ordinal));
+        Assert.Contains(entry.SupportingFactIds, id => id.StartsWith(compiledNode.SourceIndexId + ":", StringComparison.Ordinal));
+        if (members)
+        {
+            var memberEdges = graph.Edges.Where(edge => edge.EdgeKind == "projectless-publish-member-candidate"
+                && edge.FilePath == "App_Code/Member.vb").ToArray();
+            Assert.Equal(2, memberEdges.Length);
+            Assert.All(memberEdges, edge =>
+            {
+                Assert.Equal(EvidenceTiers.Tier3SyntaxOrTextual, edge.EvidenceTier);
+                Assert.Equal(entry.CompiledAttachmentLinkSha256, edge.CompiledAttachmentLinkSha256);
+                Assert.NotEqual(graph.Nodes.Single(node => node.NodeId == edge.FromNodeId).SourceIndexId,
+                    graph.Nodes.Single(node => node.NodeId == edge.ToNodeId).SourceIndexId);
+            });
+        }
+        var baselineEntry = Assert.Single(baselineGraph.Edges, edge => edge.EdgeKind == kind
+            && baselineGraph.Nodes.Single(node => node.NodeId == edge.FromNodeId).DisplayName.Contains("Lookup_Init", StringComparison.Ordinal));
+        var baselineReport = await CombinedDependencyPathReporter.BuildReportAsync(new(baselineCombined, Path.Combine(folder, "baseline-paths.json"),
+            Format: "json", FromSymbol: baselineGraph.Nodes.Single(node => node.NodeId == baselineEntry.FromNodeId).DisplayName,
+            FromSource: "retained", MaxDepth: 10));
+        var report = await CombinedDependencyPathReporter.BuildReportAsync(new(combined, Path.Combine(folder, "attachment-paths.json"),
+            Format: "json", FromSymbol: sourceNode.DisplayName, FromSource: "retained", MaxDepth: 10));
+        Assert.Contains(report.Paths, path => path.Nodes.Any(node => node.SurfaceKind == "sql-query"));
+        Assert.Equal(AttachmentChainKeys(baselineReport), AttachmentChainKeys(report));
+        var exactRoot = new CombinedPathSymbolRoot(sourceNode.SourceIndexId, sourceNode.ScanId!, sourceNode.CommitSha!, sourceNode.SymbolId!);
+        var selectedOptions = new CombinedDependencyPathOptions(combined, Path.Combine(folder, "selected-paths.json"), Format: "json", MaxDepth: 10);
+        var selected = await CombinedDependencyPathReporter.BuildSelectedSymbolsAsync(selectedOptions, [exactRoot], combinedIndex: true);
+        Assert.Equal(AttachmentChainKeys(report), AttachmentChainKeys(selected));
+        Assert.Equal(exactRoot, Assert.Single(selected.Query.SymbolRoots!));
+        Assert.Empty((await CombinedDependencyPathReporter.BuildSelectedSymbolsAsync(selectedOptions, [], combinedIndex: true)).Paths);
+        Assert.Empty((await CombinedDependencyPathReporter.BuildSelectedSymbolsAsync(selectedOptions,
+            [exactRoot with { SourceIndexId = "wrong-source" }], combinedIndex: true)).Paths);
+        Assert.Empty((await CombinedDependencyPathReporter.BuildSelectedSymbolsAsync(selectedOptions,
+            [exactRoot with { CommitSha = new string('f', 40) }], combinedIndex: true)).Paths);
+        var refused = await CombinedDependencyPathReporter.BuildSelectedSymbolsAsync(selectedOptions, [exactRoot], combinedIndex: true, new(MaxFacts: 1));
+        Assert.Empty(refused.Paths);
+        Assert.True(refused.Summary.Truncated);
+        Assert.Equal(entry.CompiledAttachmentLinkSha256, Assert.Single(report.CompiledAttachmentLinks!).BoundedInputSha256);
+        var grouped = GroupedCompiledPathHandoffBuilder.Create(report, AttachmentFileHash(combined));
+        Assert.Equal(JsonSerializer.Serialize(report), JsonSerializer.Serialize(GroupedCompiledPathHandoffBuilder.Restore(grouped)));
+        Assert.Equal(report.Paths.Count, grouped.Chains.Sum(chain => chain.VariantIndexes.Count));
+        Assert.All(report.Paths.SelectMany(path => path.Edges).Where(edge => edge.EdgeKind == kind),
+            edge => Assert.Equal(entry.CompiledAttachmentLinkSha256, edge.CompiledAttachmentLinkSha256));
+        var unlinked = Path.Combine(folder, "attachment-unlinked.sqlite");
+        await CombinedIndexBuilder.CombineAsync(new([parentIndex, childIndex, generatedIndex], unlinked, ["retained", "compiled", "generated"]));
+        var unlinkedGraph = await CombinedDependencyPathReporter.BuildGraphInventoryAsync(unlinked);
+        Assert.DoesNotContain(unlinkedGraph.Edges, edge => edge.EdgeKind == kind);
+        Assert.Null((await CombinedDependencyPathReporter.BuildReportAsync(new(unlinked, Path.Combine(folder, "unlinked-paths.json"),
+            Format: "json", FromSymbol: sourceNode.DisplayName, FromSource: "retained", MaxDepth: 10))).CompiledAttachmentLinks);
+    }
+
+    private static string[] AttachmentChainKeys(CombinedDependencyPathReport report) => report.Paths
+        .Where(path => path.Nodes.Any(node => node.SurfaceKind == "sql-query"))
+        .Select(path => path.Classification + "::" + string.Join("|", path.Nodes.Select(node => node.DisplayName)) + "::" +
+            string.Join("|", path.Edges.Select(edge => $"{edge.EdgeKind}:{edge.RuleId}:{edge.EvidenceTier}:{edge.FilePath}:{edge.StartLine}:{edge.EndLine}")))
+        .Order(StringComparer.Ordinal).ToArray();
+    private static string AttachmentFileHash(string path) { using var stream = File.OpenRead(path); return Convert.ToHexString(SHA256.HashData(stream)).ToLowerInvariant(); }
+    private static string AttachmentTextHash(string text) => Convert.ToHexString(SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(text))).ToLowerInvariant();
+    private static void AttachmentFixtureGit(string root, params string[] arguments)
+    {
+        var start = new ProcessStartInfo("git") { WorkingDirectory = root, UseShellExecute = false,
+            RedirectStandardOutput = true, RedirectStandardError = true };
+        foreach (var argument in arguments) start.ArgumentList.Add(argument);
+        using var process = Process.Start(start)!; var output = process.StandardOutput.ReadToEndAsync(); var error = process.StandardError.ReadToEndAsync();
+        Assert.True(process.WaitForExit(15_000)); Task.WaitAll(output, error); Assert.Equal(0, process.ExitCode);
+    }
+
     private static (ScanResult Scan, string IndexPath) ScanRoot(TempDirectory temp, string rootName, string label)
     {
         var repo = MessyRoot(rootName);

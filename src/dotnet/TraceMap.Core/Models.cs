@@ -31,6 +31,11 @@ public sealed record ScanManifest(
     IlRewritePdbProvenance? IlRewritePdbProvenance = null,
     WebFormsPublishProvenance? WebFormsPublishProvenance = null) : IJsonOnDeserialized
 {
+    // Additive context for a compiled-only derived scan. Ordinary scans keep
+    // their existing serialized shape, and parent source facts are not copied.
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public CompiledAttachmentContext? CompiledAttachment { get; init; }
+
     public string? SourceSnapshotDigest { get; init; } = ValidateSourceSnapshotDigest(SourceSnapshotDigest);
 
     void IJsonOnDeserialized.OnDeserialized()
@@ -171,7 +176,8 @@ public sealed record ScanOptions(
     string? WebFormsPublishReceiptPath = null,
     bool ExactSourceScope = false,
     int ExactSourceMaxFiles = 256,
-    long ExactSourceMaxBytes = 67_108_864);
+    long ExactSourceMaxBytes = 67_108_864,
+    string? WebFormsPublishedRootPath = null);
 
 public sealed record FileInventoryItem(
     string RelativePath,
@@ -190,7 +196,13 @@ public sealed record GitMetadata(
 public sealed record ScanResult(
     ScanManifest Manifest,
     IReadOnlyList<CodeFact> Facts,
-    IReadOnlyList<FileInventoryItem> Inventory);
+    IReadOnlyList<FileInventoryItem> Inventory)
+{
+    // Includes semantic metadata that may not have FileInventoried facts.
+    // This execution-only value is not a new implicit serialized artifact.
+    [JsonIgnore]
+    public IReadOnlyList<FileInventoryItem>? SourceSnapshotInventory { get; init; }
+}
 
 public static class EvidenceTiers
 {
@@ -698,7 +710,7 @@ public static class ScannerVersions
     public const string LegacyAsmxExtractor = "legacy-asmx/0.2.0";
     public const string LegacyRemotingExtractor = "legacy-remoting/0.1.0";
     public const string LegacyWebFormsExtractor = "legacy-webforms/0.13.4";
-    public const string WebFormsPublishMapExtractor = "webforms-publish-map/0.1.0";
+    public const string WebFormsPublishMapExtractor = "webforms-publish-map/0.1.1";
     public const string LegacyWinFormsExtractor = "legacy-winforms/0.1.0";
     public const string LegacyAspNetExtractor = "legacy-aspnet/0.2.0";
     public const string LegacyBatchDataMovementExtractor = "legacy-batch-data-movement/0.2.0";

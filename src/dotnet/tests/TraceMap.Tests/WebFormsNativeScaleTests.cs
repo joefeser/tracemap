@@ -1,0 +1,475 @@
+using System.Diagnostics;
+using System.Globalization;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
+using System.Text.RegularExpressions;
+using Mono.Cecil;
+using Mono.Cecil.Cil;
+using Microsoft.Data.Sqlite;
+using TraceMap.Cli;
+using TraceMap.Core;
+using TraceMap.Reporting;
+using Xunit.Abstractions;
+
+namespace TraceMap.Tests;
+
+[Collection("WebForms isolated allocation")]
+public sealed class WebFormsNativeScaleTests(ITestOutputHelper output)
+{
+    private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase, WriteIndented = true };
+
+    [Fact]
+    public void Graph_stress_corpus_pins_sparse_method_inputs_and_explicit_diagnostic_budgets()
+    {
+        using var temporary = new TempDirectory();
+        var first = new Corpus(Path.Combine(temporary.Path, "first"), 1, 32);
+        var second = new Corpus(Path.Combine(temporary.Path, "second"), 1, 64);
+        Assert.Equal(first.SourceBytes, second.SourceBytes);
+        Assert.Equal(RosterHash(first.Source), RosterHash(second.Source));
+        using var firstReceipt = JsonDocument.Parse(File.ReadAllText(Path.Combine(first.Root, "corpus-generator.receipt.json")));
+        using var secondReceipt = JsonDocument.Parse(File.ReadAllText(Path.Combine(second.Root, "corpus-generator.receipt.json")));
+        Assert.NotEqual(firstReceipt.RootElement.GetProperty("boundedInputSha256").GetString(),
+            secondReceipt.RootElement.GetProperty("boundedInputSha256").GetString());
+        using var module = ModuleDefinition.ReadModule(Path.Combine(first.Published, "bin", "Synthetic.Data.dll"));
+        Assert.Equal(32, module.Types.Single(type => type.Name == "SparseCompiledInventory").Methods.Count);
+        var config = JsonSerializer.Deserialize<WebFormsReviewConfig>(File.ReadAllText(first.ConfigPath), JsonOptions)!;
+        Assert.Equal(2_000_000, config.Budgets.MetadataMaxWork);
+        Assert.Equal(250_000, config.Budgets.IlMaxBodies);
+        Assert.Equal(1_000_000, config.Budgets.Reports!.MaxInputFacts);
+        Assert.Equal(1024 * 1024 * 1024, config.Budgets.Reports.MaxInputTextBytes);
+        Assert.Equal(4L * 1024 * 1024 * 1024, config.Budgets.Reports.MaxGraphStorageBytes);
+        Assert.Equal(new WebFormsReviewBudgets().GraphMaxWork, config.Budgets.GraphMaxWork);
+    }
+
+    [Fact]
+    public async Task Native_subprocess_scale_retains_declared_pages_and_records_observed_resource_usage()
+    {
+        var profile = Environment.GetEnvironmentVariable("TRACEMAP_WEBFORMS_NATIVE_SCALE");
+        if (profile is not (null or "" or "1" or "graph"))
+            throw new InvalidOperationException("TRACEMAP_WEBFORMS_NATIVE_SCALE must be absent, 1 or graph.");
+        var graphStress = profile == "graph";
+        var admissionRequirement = Environment.GetEnvironmentVariable("TRACEMAP_WEBFORMS_REQUIRE_GRAPH_ADMISSION");
+        if (admissionRequirement is not (null or "" or "1") || admissionRequirement == "1" && !graphStress)
+            throw new InvalidOperationException("Graph admission requirement must be absent or 1 with the graph profile.");
+        var requireGraphAdmission = admissionRequirement == "1";
+        var large = profile is "1" or "graph";
+        var retained = Environment.GetEnvironmentVariable("TRACEMAP_WEBFORMS_SCALE_OUT");
+        if (large && string.IsNullOrWhiteSpace(retained))
+            throw new InvalidOperationException("Set TRACEMAP_WEBFORMS_SCALE_OUT to a new owned public benchmark directory.");
+        var root = retained is null ? Path.Combine(Path.GetTempPath(), "tracemap-native-scale-" + Guid.NewGuid().ToString("N"))
+            : Path.GetFullPath(retained);
+        Assert.False(Directory.Exists(root), "Benchmark output must be a new owned directory; existing runs are never overwritten.");
+        Directory.CreateDirectory(root);
+        try
+        {
+            var cases = new List<ScaleCase>();
+            foreach (var pages in large ? new[] { 32, 256 } : new[] { 1, 8 })
+            {
+                var sparseMethods = graphStress ? checked(pages * 750) : 0;
+                var fixture = new Corpus(Path.Combine(root, "pages-" + pages.ToString(CultureInfo.InvariantCulture)), pages, sparseMethods);
+                var beforeSource = RosterHash(fixture.Source);
+                var beforePublished = RosterHash(fixture.Published);
+                var phases = new List<PhaseUsage>();
+                phases.Add(await RunCli(fixture.Root, "prepare", ["webforms-review", "prepare", "--config", fixture.ConfigPath,
+                    "--out", fixture.Evidence, "--attest-exact-source-commit", fixture.Commit]));
+                phases.Add(await RunCli(fixture.Root, "preflight", ["webforms-review", "preflight", "--config",
+                    Path.Combine(fixture.Evidence, "review-config.local.json"), "--out", fixture.Run]));
+                phases.Add(await RunCli(fixture.Root, "run", ["webforms-review", "run", "--run", fixture.Run]));
+                var checkpoint = JsonSerializer.Deserialize<WebFormsReviewCheckpoint>(File.ReadAllText(
+                    Path.Combine(fixture.Run, "checkpoints", "0004.json")), JsonOptions)!;
+                Assert.Equal("reports-completed-review-only", checkpoint.State);
+                var scanCheckpoint = JsonSerializer.Deserialize<WebFormsReviewCheckpoint>(File.ReadAllText(
+                    Path.Combine(fixture.Run, "checkpoints", "0002.json")), JsonOptions)!;
+                Assert.NotNull(scanCheckpoint.PhaseUsage); Assert.NotNull(checkpoint.PhaseUsage);
+                var runUsage = phases.Single(item => item.Phase == "run");
+                foreach (var usage in new[] { scanCheckpoint.PhaseUsage!, checkpoint.PhaseUsage! })
+                {
+                    Assert.Equal(WebFormsReviewPhaseObservation.Rule, usage.RuleId);
+                    Assert.Equal(WebFormsReviewPhaseObservation.Scope, usage.MeasurementScope);
+                    Assert.Equal("local-only", usage.Visibility);
+                    Assert.InRange(usage.ElapsedMilliseconds, 0, runUsage.ElapsedMilliseconds + 1000);
+                    Assert.Equal(usage.SuccessfulMemorySamples == 0, usage.MaximumObservedWorkingSetBytes is null);
+                }
+                Assert.Equal("scan", scanCheckpoint.PhaseUsage!.Phase);
+                Assert.Equal("reports", checkpoint.PhaseUsage!.Phase);
+                Assert.InRange(scanCheckpoint.PhaseUsage.ElapsedMilliseconds + checkpoint.PhaseUsage.ElapsedMilliseconds,
+                    0, runUsage.ElapsedMilliseconds + 1000);
+                var scanManifest = JsonSerializer.Deserialize<ScanManifest>(File.ReadAllText(Path.Combine(fixture.Run,
+                    checkpoint.Attempt, "scan", "scan-manifest.json")), JsonOptions)!;
+                var metadataWork = Assert.IsType<CompiledAdmissionWorkUsage>(scanManifest.CompiledInputProvenance!.AdmissionWork);
+                var ilWork = Assert.IsType<CompiledAdmissionWorkUsage>(scanManifest.IlBodyProvenance!.AdmissionWork);
+                CompiledAdmissionWorkUsage.Validate(metadataWork, "metadata", scanManifest.CompiledInputProvenance.GeneratorSha256,
+                    scanManifest.CompiledInputProvenance.BoundedInputSha256, scanManifest.CompiledInputProvenance.EffectiveLimits.MaxTotalWorkUnits);
+                CompiledAdmissionWorkUsage.Validate(ilWork, "il-body", scanManifest.IlBodyProvenance.GeneratorSha256,
+                    scanManifest.IlBodyProvenance.BoundedInputSha256, scanManifest.IlBodyProvenance.EffectiveLimits.MaxTotalWorkUnits);
+                Assert.InRange(metadataWork.ConsumedWorkUnits, 1, metadataWork.MaxWorkUnits);
+                Assert.InRange(ilWork.ConsumedWorkUnits, 1, ilWork.MaxWorkUnits);
+                using var statusOutput = new StringWriter(); using var statusError = new StringWriter();
+                Assert.Equal(0, await TraceMapCommand.RunAsync(["webforms-review", "status", "--run", fixture.Run, "--json"], statusOutput, statusError));
+                var status = JsonSerializer.Deserialize<WebFormsReviewStatus>(statusOutput.ToString(), JsonOptions)!;
+                Assert.Equal(JsonSerializer.Serialize(new[] { metadataWork, ilWork }, JsonOptions),
+                    JsonSerializer.Serialize(status.Phases.Single(phase => phase.Name == "scan").AdmissionWork, JsonOptions));
+                if (requireGraphAdmission)
+                {
+                    using var scan = JsonDocument.Parse(File.ReadAllText(Path.Combine(fixture.Run,
+                        checkpoint.Attempt, "scan", "scan-manifest.json")));
+                    var il = scan.RootElement.GetProperty("ilBodyProvenance");
+                    Assert.Equal(250_000, il.GetProperty("effectiveLimits").GetProperty("maxBodyCount").GetInt32());
+                    Assert.All(il.GetProperty("outcomes").EnumerateArray(), outcome =>
+                        Assert.Equal("admitted", outcome.GetProperty("outcome").GetString()));
+                }
+                var retainedSparseMethods = CountRetainedSparseMethods(Path.Combine(fixture.Run, checkpoint.Attempt, "scan", "index.sqlite"), sparseMethods);
+                Assert.NotNull(checkpoint.Reports);
+                if (!graphStress) Assert.Equal(pages, checkpoint.Reports.Surfaces);
+                if (!graphStress) Assert.True(checkpoint.Reports.CompiledPaths >= pages * 4, "Every declared page must retain all four compiled terminal branches.");
+                var handoffPath = Path.Combine(fixture.Run, checkpoint.Reports.ReportAttempt, "handoff.local.json");
+                var handoff = JsonSerializer.Deserialize<NativeWebFormsReviewHandoff>(File.ReadAllText(handoffPath), JsonOptions)!;
+                Assert.Equal("review-only-static-not-runtime", handoff.ClaimLevel);
+                if (!graphStress) Assert.Equal(pages, handoff.Packet.Surfaces.Count);
+                else
+                {
+                    Assert.InRange(handoff.Packet.Surfaces.Count, 0, pages);
+                    if (handoff.Packet.Surfaces.Count < pages) Assert.True(handoff.Packet.Summary.Truncated);
+                }
+                var compiled = JsonSerializer.Deserialize<GroupedCompiledPathHandoff>(File.ReadAllText(
+                    Path.Combine(fixture.Run, checkpoint.Reports.ReportAttempt, handoff.CompiledHandoffRelativePath)), JsonOptions)!;
+                Assert.Equal(handoff.CompiledHandoffSha256, Hash(Path.Combine(fixture.Run,
+                    checkpoint.Reports.ReportAttempt, handoff.CompiledHandoffRelativePath)));
+                var restored = GroupedCompiledPathHandoffBuilder.Restore(compiled);
+                Assert.NotNull(restored.Summary.TraversalWorkUnits);
+                Assert.NotNull(handoff.Packet.Summary.TraversalWorkUnits);
+                Assert.InRange(restored.Summary.TraversalWorkUnits.GetValueOrDefault(), graphStress ? 0 : 1, fixture.ConfiguredTraversalWork);
+                Assert.InRange(handoff.Packet.Summary.TraversalWorkUnits.GetValueOrDefault(), graphStress ? 0 : 1, fixture.ConfiguredTraversalWork);
+                Assert.Equal(checkpoint.Reports.CompiledPaths, restored.Paths.Count);
+                Assert.DoesNotContain(restored.Gaps, gap => gap.GapKind == "ProjectlessPublishMemberWorkLimit");
+                var inputRefused = restored.Gaps.Any(gap => gap.GapKind == "GraphInputLimitReached");
+                if (requireGraphAdmission)
+                {
+                    Assert.False(inputRefused, "Required stress-graph admission failed; a correct refusal is not acceptance.");
+                    Assert.Equal(pages, handoff.Packet.Surfaces.Count);
+                    Assert.DoesNotContain(handoff.Packet.Gaps,
+                        gap => gap.Classification == "WebFormsModernizationInputLimitReached");
+                    Assert.True(handoff.Packet.Summary.TraversalWorkUnits > 0,
+                        "The packet graph must also traverse the declared corpus, not merely retain surface inventory.");
+                }
+                if (inputRefused)
+                {
+                    Assert.True(graphStress, "The ordinary declared corpus must remain admitted.");
+                    Assert.Empty(restored.Paths);
+                    Assert.True(restored.Summary.Truncated);
+                    Assert.Equal(0, restored.Summary.GraphNodeCount);
+                }
+                else if (graphStress)
+                {
+                    Assert.True(restored.Summary.GraphNodeCount >= sparseMethods,
+                        "The admitted stress graph must include the large inventory, not just selected reachable paths.");
+                    Assert.True(checkpoint.Reports.CompiledPaths >= pages * 4);
+                }
+                for (var page = 0; page < (inputRefused ? 0 : pages); page++)
+                {
+                    var handler = $"Synthetic.Page{page:D4}.Page_Load(Object,EventArgs)";
+                    var branches = restored.Paths.Where(path => path.Nodes[0].SymbolId == handler)
+                        .SelectMany(path => path.Nodes.Select(node => node.SymbolId))
+                        .Where(symbol => symbol is not null && symbol.Contains($"|names:9:Store{page:D4}|", StringComparison.Ordinal))
+                        .ToArray();
+                    for (var branch = 0; branch < 4; branch++)
+                        Assert.Contains(branches, symbol => symbol!.Contains($"|method:6:Fetch{branch}|", StringComparison.Ordinal));
+                }
+                Assert.Equal(beforeSource, RosterHash(fixture.Source));
+                Assert.Equal(beforePublished, RosterHash(fixture.Published));
+                var artifactsBefore = RosterHash(fixture.Run);
+                phases.Add(await RunCli(fixture.Root, "resume", ["webforms-review", "resume", "--run", fixture.Run]));
+                Assert.Equal(artifactsBefore, RosterHash(fixture.Run));
+                var item = new ScaleCase(pages, fixture.SourceBytes, beforeSource, beforePublished,
+                    Hash(fixture.ConfigPath), DirectoryBytes(fixture.Published), DirectoryBytes(fixture.Evidence), DirectoryBytes(fixture.Run),
+                    checkpoint.FactCount, checkpoint.Reports.CompiledPaths, handoff.Coverage, handoff.Packet.Summary.Truncated,
+                    restored.Summary.Truncated,
+                    handoff.Gaps.OrderBy(value => value, StringComparer.Ordinal).ToArray(), phases)
+                {
+                    PageTraversalWorkUnits = handoff.Packet.Summary.TraversalWorkUnits,
+                    CompiledTraversalWorkUnits = restored.Summary.TraversalWorkUnits,
+                    TraversalWorkLimitPerQuery = fixture.ConfiguredTraversalWork,
+                    SparseCompiledMethods = sparseMethods, RetainedSparseCompiledMethods = retainedSparseMethods,
+                    CompiledGraphNodes = restored.Summary.GraphNodeCount,
+                    CompiledGraphEdges = restored.Summary.GraphEdgeCount,
+                    RetainedSurfaces = handoff.Packet.Surfaces.Count,
+                    GraphInputRefused = inputRefused,
+                    ScanAttemptUsage = scanCheckpoint.PhaseUsage,
+                    MetadataAdmissionWork = metadataWork, IlAdmissionWork = ilWork,
+                    ReportAttemptUsage = checkpoint.PhaseUsage,
+                    CompiledGapKinds = restored.Gaps.GroupBy(gap => gap.GapKind, StringComparer.Ordinal)
+                        .OrderBy(group => group.Key, StringComparer.Ordinal).ToDictionary(group => group.Key, group => group.Count(), StringComparer.Ordinal)
+                };
+                cases.Add(item);
+                output.WriteLine($"nativeScale.pages={pages};sourceBytes={item.SourceBytes};publishedBytes={item.PublishedBytes};retainedDiskBytes={item.EvidenceBytes + item.RunBytes};facts={item.Facts};compiledPaths={item.CompiledPaths};coverage={item.Coverage};packetTruncated={item.PacketTruncated};compiledTruncated={item.CompiledTruncated}");
+                output.WriteLine($"nativeScale.traversalWork=page:{item.PageTraversalWorkUnits};compiled:{item.CompiledTraversalWorkUnits};limitPerQuery={item.TraversalWorkLimitPerQuery};sharedAcrossSelectedRoots=true");
+                output.WriteLine($"nativeScale.graph=sparseMethods:{item.SparseCompiledMethods};nodes:{item.CompiledGraphNodes};edges:{item.CompiledGraphEdges};inputRefused:{item.GraphInputRefused}");
+                foreach (var phase in phases)
+                    output.WriteLine($"nativeScale.phase={phase.Phase};elapsedMs={phase.ElapsedMilliseconds};peakResidentBytes={phase.PeakResidentBytes?.ToString(CultureInfo.InvariantCulture) ?? "unavailable"};measurement={phase.Measurement}");
+            }
+            Assert.Equal(cases[0].SourceBytes * 8, cases[1].SourceBytes);
+            Assert.Equal(cases[0].Pages * 8, cases[1].Pages);
+            if (graphStress) Assert.Equal(cases[0].SparseCompiledMethods * 8, cases[1].SparseCompiledMethods);
+            if (large)
+            {
+                Assert.True(cases[0].SourceBytes >= 2 * 1024 * 1024);
+                Assert.True(cases[1].SourceBytes >= 16 * 1024 * 1024);
+                Assert.All(cases.SelectMany(item => item.Phases), phase => Assert.True(phase.PeakResidentBytes > 0,
+                    "Representative acceptance requires an OS peak metric, not samples or allocated-byte counts."));
+            }
+            var input = new { cases = cases.Select(item => new { item.Pages, item.SourceBytes, item.SourceRosterSha256,
+                item.PublishedRosterSha256, item.ConfigSha256 }).ToArray() };
+            var receipt = new { schemaVersion = "diagnostic.webforms.native-scale.v1", ruleId = "diagnostic.webforms.native-scale.v1",
+                evidenceTier = EvidenceTiers.Tier4Unknown, visibility = "local-only",
+                generatorSha256 = Hash(typeof(WebFormsNativeScaleTests).Assembly.Location),
+                cliGeneratorSha256 = Hash(CliPath()), boundedInputSha256 = HashBytes(JsonSerializer.SerializeToUtf8Bytes(input, JsonOptions)),
+                scope = graphStress ? "public-synthetic-32-256-pages-and-24000-192000-sparse-methods" : large ? "public-synthetic-32-256-pages-and-8x-source-bytes" : "public-synthetic-ci-smoke-1-8-pages",
+                claimLevel = "review-only-static-not-runtime", cases,
+                requireGraphAdmission,
+                graphStorageBytes = graphStress ? 4L * 1024 * 1024 * 1024 : CombinedPathAdmissionLimits.DefaultMaxGraphStorageBytes,
+                limitations = new[] { "Generated PE/IL fixtures are not an aspnet_compiler acceptance run.",
+                    "CLI OS peak excludes fixture generation and is not a simultaneous aggregate working-set measure.",
+                    "Retained disk bytes exclude OS temporary sorter peak and transient private graph files.",
+                    "Source bytes do not predict arbitrary graph fan-out; private Windows acceptance remains separate.",
+                    "Graph stress explicitly declares 4 GiB scratch storage, 1 GiB input text and 250000 IL bodies alongside metadata and report-input budgets; production defaults remain unchanged.",
+                    "A graph-input refusal is retained as partial coverage with zero classified paths, not successful large-graph admission." } };
+            File.WriteAllBytes(Path.Combine(root, "native-scale.receipt.json"), JsonSerializer.SerializeToUtf8Bytes(receipt, JsonOptions));
+        }
+        finally
+        {
+            // Only the unretained synthetic CI fixture is disposable. An explicit
+            // benchmark directory is retained, including failures, for inspection.
+            if (retained is null && Directory.Exists(root)) Directory.Delete(root, recursive: true);
+        }
+    }
+
+    private static async Task<PhaseUsage> RunCli(string root, string phase, string[] args)
+    {
+        var unix = OperatingSystem.IsMacOS() || OperatingSystem.IsLinux();
+        if (unix) Assert.True(File.Exists("/usr/bin/time"), "OS timing utility is required for peak resident measurements.");
+        var host = Environment.GetEnvironmentVariable("DOTNET_HOST_PATH") ?? Environment.ProcessPath!;
+        Assert.Contains("dotnet", Path.GetFileNameWithoutExtension(host), StringComparison.OrdinalIgnoreCase);
+        var timing = Path.Combine(root, phase + ".usage.txt");
+        using var process = new Process { StartInfo = new(unix ? "/usr/bin/time" : host)
+            { WorkingDirectory = root, RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false } };
+        if (unix)
+        {
+            process.StartInfo.ArgumentList.Add(OperatingSystem.IsMacOS() ? "-l" : "-v");
+            process.StartInfo.ArgumentList.Add("-o"); process.StartInfo.ArgumentList.Add(timing);
+            process.StartInfo.ArgumentList.Add(host);
+        }
+        process.StartInfo.ArgumentList.Add(CliPath());
+        foreach (var arg in args) process.StartInfo.ArgumentList.Add(arg);
+        process.StartInfo.Environment["LC_ALL"] = "C";
+        var clock = Stopwatch.StartNew();
+        Assert.True(process.Start());
+        var stdout = process.StandardOutput.ReadToEndAsync(); var stderr = process.StandardError.ReadToEndAsync();
+        using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(20));
+        try { await process.WaitForExitAsync(timeout.Token); }
+        catch { if (!process.HasExited) process.Kill(entireProcessTree: true); throw; }
+        clock.Stop();
+        File.WriteAllText(Path.Combine(root, phase + ".stdout.local.log"), await stdout);
+        File.WriteAllText(Path.Combine(root, phase + ".stderr.local.log"), await stderr);
+        Assert.Equal(0, process.ExitCode);
+        long? peak = null;
+        if (unix)
+        {
+            var text = File.ReadAllText(timing);
+            var match = Regex.Match(text, OperatingSystem.IsMacOS() ? @"(?m)^\s*(\d+)\s+maximum resident set size\s*$"
+                : @"Maximum resident set size \(kbytes\):\s*(\d+)", RegexOptions.CultureInvariant);
+            Assert.True(match.Success, "OS peak resident metric was not found; do not substitute a sampled working set.");
+            peak = checked(long.Parse(match.Groups[1].Value, CultureInfo.InvariantCulture) * (OperatingSystem.IsMacOS() ? 1 : 1024));
+            Assert.True(peak > 0);
+        }
+        return new(phase, clock.ElapsedMilliseconds, peak, OperatingSystem.IsMacOS() ? "macos-time-rusage-maxrss-bytes"
+            : OperatingSystem.IsLinux() ? "linux-time-maxrss-kib-converted-to-bytes" : "os-peak-unavailable");
+    }
+
+    private static int CountRetainedSparseMethods(string indexPath, int expected)
+    {
+        if (expected == 0) return 0;
+        using var connection = new SqliteConnection(new SqliteConnectionStringBuilder
+            { DataSource = indexPath, Mode = SqliteOpenMode.ReadOnly, Pooling = false }.ToString());
+        connection.Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT count(*), count(DISTINCT json_extract(properties_json,'$.metadataName')),
+                min(json_extract(properties_json,'$.metadataName')), max(json_extract(properties_json,'$.metadataName'))
+            FROM facts WHERE fact_type=$type AND rule_id=$rule
+                AND instr(target_symbol,'SparseCompiledInventory')>0
+                AND json_extract(properties_json,'$.metadataName') GLOB 'Unused[0-9][0-9][0-9][0-9][0-9][0-9]'
+            """;
+        command.Parameters.AddWithValue("$type", FactTypes.ManagedMethodDeclared);
+        command.Parameters.AddWithValue("$rule", RuleIds.DotNetCompiledMember);
+        using var reader = command.ExecuteReader(); Assert.True(reader.Read());
+        Assert.Equal(expected, reader.GetInt64(0)); Assert.Equal(expected, reader.GetInt64(1));
+        Assert.Equal("Unused000000", reader.GetString(2));
+        Assert.Equal($"Unused{expected - 1:D6}", reader.GetString(3));
+        return checked((int)reader.GetInt64(0));
+    }
+
+    private sealed record PhaseUsage(string Phase, long ElapsedMilliseconds, long? PeakResidentBytes, string Measurement);
+    private sealed record ScaleCase(int Pages, long SourceBytes, string SourceRosterSha256, string PublishedRosterSha256,
+        string ConfigSha256, long PublishedBytes, long EvidenceBytes, long RunBytes, long? Facts, int CompiledPaths,
+        string Coverage, bool PacketTruncated, bool CompiledTruncated, IReadOnlyList<string> Gaps, IReadOnlyList<PhaseUsage> Phases)
+    {
+        public int? PageTraversalWorkUnits { get; init; }
+        public int? CompiledTraversalWorkUnits { get; init; }
+        public long TraversalWorkLimitPerQuery { get; init; }
+        public int SparseCompiledMethods { get; init; }
+        public int RetainedSparseCompiledMethods { get; init; }
+        public int CompiledGraphNodes { get; init; }
+        public int CompiledGraphEdges { get; init; }
+        public int RetainedSurfaces { get; init; }
+        public bool GraphInputRefused { get; init; }
+        public WebFormsReviewPhaseUsage? ScanAttemptUsage { get; init; }
+        public WebFormsReviewPhaseUsage? ReportAttemptUsage { get; init; }
+        public CompiledAdmissionWorkUsage? MetadataAdmissionWork { get; init; }
+        public CompiledAdmissionWorkUsage? IlAdmissionWork { get; init; }
+        public IReadOnlyDictionary<string, int> CompiledGapKinds { get; init; } = new Dictionary<string, int>();
+    }
+
+    private sealed class Corpus
+    {
+        public string Root { get; }
+        public string Source => Path.Combine(Root, "source");
+        public string Published => Path.Combine(Root, "published");
+        public string Evidence => Path.Combine(Root, "evidence");
+        public string Run => Path.Combine(Root, "run");
+        public string ConfigPath => Path.Combine(Root, "review-config.local.json");
+        public string Commit { get; }
+        public long SourceBytes { get; }
+        public long ConfiguredTraversalWork { get; }
+        public Corpus(string root, int pages, int sparseMethods = 0)
+        {
+            Root = root;
+            Directory.CreateDirectory(Path.Combine(Source, "Pages")); Directory.CreateDirectory(Path.Combine(Source, "App_Code"));
+            Directory.CreateDirectory(Path.Combine(Published, "bin"));
+            var maps = new List<string>(); var sourcePaths = new List<string>();
+            for (var number = 0; number < pages; number++)
+            {
+                var name = $"Page{number:D4}";
+                WriteSized(Path.Combine(Source, "Pages", name + ".aspx"),
+                    $"<%@ Page Language=\"VB\" CodeFile=\"{name}.aspx.vb\" Inherits=\"Synthetic.{name}\" AutoEventWireup=\"true\" %>\n", 256, markup: true);
+                WriteSized(Path.Combine(Source, "Pages", name + ".aspx.vb"),
+                    $"Imports System\nNamespace Synthetic\nPublic Class {name}\n Public Sub Page_Load(sender As Object, e As EventArgs)\n  Store{number:D4}.Entry(\"public_proc\")\n End Sub\nEnd Class\nEnd Namespace\n", 65536);
+                WriteSized(Path.Combine(Source, "App_Code", $"Store{number:D4}.vb"),
+                    $"Namespace Synthetic\nPublic Class Store{number:D4}\n Public Shared Sub Entry(name As String)\n End Sub\n Public Shared Sub Entry(number As Integer)\n End Sub\nEnd Class\nEnd Namespace\n", 4096);
+                sourcePaths.AddRange(["Pages/" + name + ".aspx", "Pages/" + name + ".aspx.vb", $"App_Code/Store{number:D4}.vb"]);
+                var map = name + ".aspx.compiled"; maps.Add(map);
+                File.WriteAllText(Path.Combine(Published, map), $"<preserve virtualPath=\"/public/Pages/{name}.aspx\" assembly=\"Synthetic.WebSite\" type=\"Synthetic.{name}\"/>\n");
+            }
+            SourceBytes = DirectoryBytes(Source);
+            CreateAssemblies(pages, sparseMethods);
+            Git(Source, "init", "-q"); Git(Source, "config", "user.name", "Public scale fixture");
+            Git(Source, "config", "user.email", "public@example.invalid"); Git(Source, "config", "core.autocrlf", "false");
+            Git(Source, "remote", "add", "origin", "https://example.invalid/public-scale.git");
+            Git(Source, "add", "."); Git(Source, "commit", "-qm", "Public deterministic scale source");
+            Commit = GitMetadataProvider.Detect(Source).CommitSha;
+            var budgets = new WebFormsReviewBudgets(GraphMaxPaths: 4096,
+                MetadataMaxWork: sparseMethods == 0 ? 500_000 : 2_000_000)
+            {
+                MaxPublishInputFiles = 8192,
+                IlMaxBodies = sparseMethods == 0 ? null : 250_000,
+                Reports = sparseMethods == 0 ? null : new(MaxInputFacts: 1_000_000, MaxInputEdges: 500_000,
+                    MaxInputTextBytes: 1024 * 1024 * 1024) { MaxGraphStorageBytes = 4L * 1024 * 1024 * 1024 }
+            };
+            ConfiguredTraversalWork = budgets.GraphMaxWork;
+            var config = new WebFormsReviewConfig(WebFormsReviewPreflightCommand.ConfigSchema, "fresh", Source, Commit,
+                "projectless", null, [], ["Pages", "App_Code"], "all", [], Published,
+                ["bin/Synthetic.WebSite.dll", "bin/Synthetic.Data.dll"], [], [], [], maps.ToArray(), null,
+                budgets, PublishSourceRelativePaths: sourcePaths.ToArray());
+            File.WriteAllText(ConfigPath, JsonSerializer.Serialize(config, JsonOptions));
+            var generator = new { schemaVersion = "diagnostic.webforms.synthetic-corpus.v1", ruleId = "diagnostic.webforms.synthetic-corpus.v1",
+                evidenceTier = EvidenceTiers.Tier4Unknown, visibility = "local-only", generatorSha256 = Hash(typeof(Corpus).Assembly.Location),
+                boundedInputSha256 = HashBytes(JsonSerializer.SerializeToUtf8Bytes(new
+                    { sourceRosterSha256 = RosterHash(Source), pages, sparseMethods }, JsonOptions)),
+                pages, sparseMethods, sourceBytes = SourceBytes,
+                artifacts = Directory.GetFiles(Published, "*", SearchOption.AllDirectories).OrderBy(path => path, StringComparer.Ordinal)
+                    .Select(path => new { relativePath = Path.GetRelativePath(Published, path).Replace('\\', '/'), sha256 = Hash(path) }).ToArray(),
+                claimLevel = "generated-pe-il-not-aspnet-compiled" };
+            File.WriteAllText(Path.Combine(Root, "corpus-generator.receipt.json"), JsonSerializer.Serialize(generator, JsonOptions));
+        }
+        private void CreateAssemblies(int pages, int sparseMethods)
+        {
+            using var data = AssemblyDefinition.CreateAssembly(new("Synthetic.Data", new Version(1, 0)), "Synthetic.Data", ModuleKind.Dll);
+            using var site = AssemblyDefinition.CreateAssembly(new("Synthetic.WebSite", new Version(1, 0)), "Synthetic.WebSite", ModuleKind.Dll);
+            var dm = data.MainModule; var sm = site.MainModule;
+            dm.Mvid = new Guid("10000000-0000-0000-0000-000000000001"); sm.Mvid = new Guid("10000000-0000-0000-0000-000000000002");
+            var framework = new AssemblyNameReference("System.Data", new Version(4, 0, 0, 0)); dm.AssemblyReferences.Add(framework);
+            var adapter = new TypeReference("System.Data.Common", "DbDataAdapter", dm, framework);
+            var dataset = new TypeReference("System.Data", "DataSet", dm, framework);
+            var fill = new MethodReference("Fill", dm.TypeSystem.Int32, adapter) { HasThis = true }; fill.Parameters.Add(new(dataset));
+            if (sparseMethods > 0)
+            {
+                var sparse = new TypeDefinition("Synthetic", "SparseCompiledInventory", Mono.Cecil.TypeAttributes.Public, dm.TypeSystem.Object);
+                dm.Types.Add(sparse);
+                for (var methodIndex = 0; methodIndex < sparseMethods; methodIndex++)
+                    Method(sparse, $"Unused{methodIndex:D6}", dm.TypeSystem.Void).Body.Instructions.Add(Instruction.Create(OpCodes.Ret));
+            }
+            for (var number = 0; number < pages; number++)
+            {
+                var store = new TypeDefinition("Synthetic", $"Store{number:D4}", Mono.Cecil.TypeAttributes.Public, dm.TypeSystem.Object); dm.Types.Add(store);
+                var entry = Method(store, "Entry", dm.TypeSystem.Void); entry.Parameters.Add(new(dm.TypeSystem.String));
+                var overload = Method(store, "Entry", dm.TypeSystem.Void); overload.Parameters.Add(new(dm.TypeSystem.Int32));
+                overload.Body.Instructions.Add(Instruction.Create(OpCodes.Ret));
+                for (var branch = 0; branch < 4; branch++)
+                {
+                    var fetch = Method(store, "Fetch" + branch, dm.TypeSystem.Void);
+                    fetch.Body.Instructions.Add(Instruction.Create(OpCodes.Ldnull)); fetch.Body.Instructions.Add(Instruction.Create(OpCodes.Ldnull));
+                    fetch.Body.Instructions.Add(Instruction.Create(OpCodes.Callvirt, fill)); fetch.Body.Instructions.Add(Instruction.Create(OpCodes.Pop));
+                    fetch.Body.Instructions.Add(Instruction.Create(OpCodes.Ret)); entry.Body.Instructions.Add(Instruction.Create(OpCodes.Call, fetch));
+                }
+                entry.Body.Instructions.Add(Instruction.Create(OpCodes.Ret));
+                var page = new TypeDefinition("Synthetic", $"Page{number:D4}", Mono.Cecil.TypeAttributes.Public, sm.TypeSystem.Object); sm.Types.Add(page);
+                var handler = new MethodDefinition("Page_Load", Mono.Cecil.MethodAttributes.Public, sm.TypeSystem.Void); page.Methods.Add(handler);
+                handler.Parameters.Add(new(sm.TypeSystem.Object));
+                handler.Parameters.Add(new(new TypeReference("System", "EventArgs", sm, sm.TypeSystem.CoreLibrary)));
+                handler.Body.Instructions.Add(Instruction.Create(OpCodes.Ldstr, "public_proc"));
+                handler.Body.Instructions.Add(Instruction.Create(OpCodes.Call, sm.ImportReference(entry)));
+                handler.Body.Instructions.Add(Instruction.Create(OpCodes.Ret));
+            }
+            data.Write(Path.Combine(Published, "bin", "Synthetic.Data.dll")); site.Write(Path.Combine(Published, "bin", "Synthetic.WebSite.dll"));
+        }
+        private static MethodDefinition Method(TypeDefinition type, string name, TypeReference result)
+        { var method = new MethodDefinition(name, Mono.Cecil.MethodAttributes.Public | Mono.Cecil.MethodAttributes.Static, result); type.Methods.Add(method); return method; }
+    }
+
+    private static void WriteSized(string path, string text, int bytes, bool markup = false)
+    {
+        var suffix = markup ? "<!--" : "'"; var end = markup ? "-->\n" : "\n";
+        var value = text + suffix + new string(' ', bytes - Encoding.UTF8.GetByteCount(text + suffix + end)) + end;
+        File.WriteAllText(path, value, new UTF8Encoding(false));
+        Assert.Equal(bytes, new FileInfo(path).Length);
+    }
+    private static string CliPath()
+    {
+        var config = new DirectoryInfo(AppContext.BaseDirectory).Parent!.Name;
+        for (var directory = new DirectoryInfo(AppContext.BaseDirectory); directory is not null; directory = directory.Parent)
+            if (File.Exists(Path.Combine(directory.FullName, "AGENTS.md")))
+                return Path.Combine(directory.FullName, "src", "dotnet", "TraceMap.Cli", "bin", config, "net10.0", "tracemap.dll");
+        throw new InvalidOperationException("CLI build unavailable");
+    }
+    private static void Git(string root, params string[] args)
+    {
+        using var process = new Process { StartInfo = new("git") { WorkingDirectory = root, UseShellExecute = false,
+            RedirectStandardOutput = true, RedirectStandardError = true } };
+        foreach (var arg in args) process.StartInfo.ArgumentList.Add(arg);
+        process.Start(); var stdout = process.StandardOutput.ReadToEndAsync(); var stderr = process.StandardError.ReadToEndAsync();
+        Assert.True(process.WaitForExit(30_000)); Task.WaitAll(stdout, stderr); Assert.Equal(0, process.ExitCode);
+    }
+    private static long DirectoryBytes(string root) => Directory.GetFiles(root, "*", SearchOption.AllDirectories)
+        .Where(path => !Path.GetRelativePath(root, path).Split(Path.DirectorySeparatorChar).Contains(".git", StringComparer.Ordinal))
+        .Sum(path => new FileInfo(path).Length);
+    private static string RosterHash(string root)
+    {
+        var entries = Directory.GetFiles(root, "*", SearchOption.AllDirectories)
+            .Where(path => !Path.GetRelativePath(root, path).Split(Path.DirectorySeparatorChar).Contains(".git", StringComparer.Ordinal))
+            .Select(path => new { path = Path.GetRelativePath(root, path).Replace('\\', '/'), sha256 = Hash(path) })
+            .OrderBy(item => item.path, StringComparer.Ordinal).ToArray();
+        return HashBytes(JsonSerializer.SerializeToUtf8Bytes(entries, JsonOptions));
+    }
+    private static string Hash(string path) { using var stream = File.OpenRead(path); return Convert.ToHexString(SHA256.HashData(stream)).ToLowerInvariant(); }
+    private static string HashBytes(byte[] bytes) => Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
+}

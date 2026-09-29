@@ -38,6 +38,7 @@ public static class TraceMapCommand
                 "version" => VersionHelp(),
                 "validate-index" => "tracemap validate-index --index <path> --commit <sha> --facts <count>",
                 "local-review" => LocalReviewHelp(),
+                "webforms-review" => WebFormsReviewPreflightCommand.Help,
                 "report" => ReportHelp(),
                 "database-design-review" => DatabaseDesignReviewHelp(),
                 "webforms-modernization" => WebFormsModernizationHelp(),
@@ -68,7 +69,7 @@ public static class TraceMapCommand
                 "explorer" => ExplorerHelp(),
                 _ => RootHelp()
             });
-            return command is "scan" or "version" or "validate-index" or "local-review" or "report" or "database-design-review" or "webforms-modernization" or "reduce" or "flow" or "relate" or "export" or "endpoints" or "combine" or "paths" or "route-flow" or "property-flow" or "diff" or "snapshot-diff" or "impact" or "reverse-impact" or "reverse" or "release-review" or "access-review" or "portfolio" or "package-impact" or "package-decision" or "vault" or "docs-export" or "contract-diff" or "baseline" or "evidence-pack" or "explorer" ? 0 : 1;
+            return command is "scan" or "version" or "validate-index" or "local-review" or "webforms-review" or "report" or "database-design-review" or "webforms-modernization" or "reduce" or "flow" or "relate" or "export" or "endpoints" or "combine" or "paths" or "route-flow" or "property-flow" or "diff" or "snapshot-diff" or "impact" or "reverse-impact" or "reverse" or "release-review" or "access-review" or "portfolio" or "package-impact" or "package-decision" or "vault" or "docs-export" or "contract-diff" or "baseline" or "evidence-pack" or "explorer" ? 0 : 1;
         }
 
         using var commandOperation = TraceMapDiagnostics.StartCommand(command);
@@ -80,6 +81,21 @@ public static class TraceMapCommand
                 "version" => await RunVersionAsync(rest, output, error),
                 "validate-index" => await RunValidateIndexAsync(rest, output, error),
                 "local-review" => await LocalReviewCommand.RunAsync(rest, output, error, RunScanAsync, cancellationToken),
+                "webforms-review" => rest.FirstOrDefault() == "start"
+                    ? await WebFormsReviewStartCommand.RunAsync(rest, output, error, RunNativeReviewScanAsync, cancellationToken)
+                    : rest.FirstOrDefault() is "run" or "resume"
+                    ? await WebFormsReviewExecutionCommand.RunAsync(rest, output, error, RunNativeReviewScanAsync, cancellationToken)
+                    : rest.FirstOrDefault() == "query"
+                    ? await WebFormsReviewExecutionCommand.QueryAsync(rest, output, error, cancellationToken)
+                    : rest.FirstOrDefault() == "status"
+                    ? await WebFormsReviewExecutionCommand.StatusAsync(rest, output, error, cancellationToken)
+                    : rest.FirstOrDefault() == "retain-tool"
+                    ? await WebFormsReviewExecutionCommand.RetainToolAsync(rest, output, error, cancellationToken)
+                    : rest.FirstOrDefault() is "relocate" or "retention-plan"
+                    ? await WebFormsReviewExecutionCommand.RetentionAsync(rest, output, error, cancellationToken)
+                    : rest.FirstOrDefault() == "prepare"
+                    ? await WebFormsReviewPreparationCommand.RunAsync(rest, output, error, cancellationToken)
+                    : await WebFormsReviewPreflightCommand.RunAsync(rest, output, error, cancellationToken),
                 "report" => await RunReportAsync(rest, output, error, cancellationToken),
                 "database-design-review" => await RunDatabaseDesignReviewAsync(rest, output, error, cancellationToken),
                 "webforms-modernization" => await RunWebFormsModernizationAsync(rest, output, error, cancellationToken),
@@ -254,9 +270,18 @@ public static class TraceMapCommand
         return values.HasFlag("--exit-code") && result.HasActionableFindings ? 1 : 0;
     }
 
-    private static async Task<int> RunScanAsync(string[] args, TextWriter output, TextWriter error, CancellationToken cancellationToken)
+    private static Task<int> RunScanAsync(string[] args, TextWriter output, TextWriter error, CancellationToken cancellationToken) =>
+        RunScanWithOptionsAsync(args, output, error, cancellationToken, preserveOptionValues: false);
+
+    // Native configuration already supplies one structured value per option. Do not
+    // apply the public scan CLI's historical comma-list expansion to those paths.
+    private static Task<int> RunNativeReviewScanAsync(string[] args, TextWriter output, TextWriter error, CancellationToken cancellationToken) =>
+        RunScanWithOptionsAsync(args, output, error, cancellationToken, preserveOptionValues: true);
+
+    private static async Task<int> RunScanWithOptionsAsync(string[] args, TextWriter output, TextWriter error,
+        CancellationToken cancellationToken, bool preserveOptionValues)
     {
-        var values = ParseOptions(args);
+        var values = ParseOptions(args, preserveOptionValues, "--retain-source-snapshot");
         if (!values.TryGetValue("--repo", out var repoPath) || string.IsNullOrWhiteSpace(repoPath))
         {
             await error.WriteLineAsync("error: scan requires --repo <path>.");
@@ -270,6 +295,13 @@ public static class TraceMapCommand
         }
 
         var rewriteBefore = values.GetMany("--il-rewrite-before");
+        if (values.TryGetValue("--webforms-published-root", out var declaredPublishedRoot)
+            && !string.IsNullOrWhiteSpace(declaredPublishedRoot)
+            && (!values.TryGetValue("--webforms-publish-receipt", out var declaredPublishReceipt) || string.IsNullOrWhiteSpace(declaredPublishReceipt)))
+        {
+            await error.WriteLineAsync("error: --webforms-published-root requires --webforms-publish-receipt.");
+            return 1;
+        }
         var rewriteAfter = values.GetMany("--il-rewrite-after");
         if (!values.HasFlag("--il-rewrite-evidence") && (rewriteBefore.Count > 0 || rewriteAfter.Count > 0))
         {
@@ -314,6 +346,14 @@ public static class TraceMapCommand
 
         var sqlValidationSummaryPaths = values.GetMany("--sql-validation-summary");
         var sqlValidationAsOf = ParseSqlValidationAsOf(values, sqlValidationSummaryPaths);
+        var retainSnapshot = values.HasFlag("--retain-source-snapshot");
+        if (!retainSnapshot && new[] { "--source-snapshot-max-files", "--source-snapshot-max-source-bytes", "--source-snapshot-max-roster-bytes" }
+            .Any(key => values.Keys.Contains(key, StringComparer.Ordinal)))
+            throw new ArgumentException("Source snapshot limits require --retain-source-snapshot.");
+        var snapshotMaxFiles = ParsePositiveLong(values, "--source-snapshot-max-files", 1_000_000);
+        var snapshotMaxSourceBytes = ParsePositiveLong(values, "--source-snapshot-max-source-bytes", 68_719_476_736);
+        var snapshotMaxRosterBytes = ParsePositiveLong(values, "--source-snapshot-max-roster-bytes", 67_108_864);
+        if (retainSnapshot) SourceSnapshotRetention.ValidateLimits(snapshotMaxFiles, snapshotMaxSourceBytes, snapshotMaxRosterBytes);
 
         var scanOptions = new ScanOptions(
             repoPath,
@@ -374,7 +414,8 @@ public static class TraceMapCommand
             WebFormsPublishReceiptPath: values.GetValueOrDefault("--webforms-publish-receipt"),
             ExactSourceScope: values.HasFlag("--exact-source-scope"),
             ExactSourceMaxFiles: ParsePositiveInt(values, "--exact-source-max-files", 256),
-            ExactSourceMaxBytes: ParsePositiveLong(values, "--exact-source-max-bytes", 67_108_864));
+            ExactSourceMaxBytes: ParsePositiveLong(values, "--exact-source-max-bytes", 67_108_864),
+            WebFormsPublishedRootPath: values.GetValueOrDefault("--webforms-published-root"));
         var receiptRecorder = new ScanReceiptRecorder(
             scanOptions,
             sqlValidationSummaryPaths.Append(sqlValidationAsOf?.ToString("O") ?? string.Empty));
@@ -446,6 +487,17 @@ public static class TraceMapCommand
                         await ManifestWriter.WriteAsync(Path.Combine(artifactOutputPath, "scan-manifest.json"), result.Manifest, cancellationToken);
                         operation.Complete(TraceMapDiagnosticOutcome.Succeeded);
                         receiptOperation.Complete("succeeded", result.Manifest.AnalysisLevel, "manifest-written");
+                    });
+                }
+                if (retainSnapshot)
+                {
+                    using var retainedOperation = receiptRecorder.StartStage("artifact-write", "source-snapshot-retention",
+                        result.Manifest.AnalysisLevel, "occurred", "completed");
+                    await RunReceiptStageAsync(retainedOperation, async () =>
+                    {
+                        await SourceSnapshotRetention.WriteAsync(artifactOutputPath, repoPath, result,
+                            snapshotMaxFiles, snapshotMaxSourceBytes, snapshotMaxRosterBytes, cancellationToken);
+                        retainedOperation.Complete("succeeded", result.Manifest.AnalysisLevel, "source-snapshot-roster-retained");
                     });
                 }
                 using (var receiptOperation = receiptRecorder.StartStage("artifact-write", "facts-write", result.Manifest.AnalysisLevel, "occurred", "completed"))
@@ -559,7 +611,8 @@ public static class TraceMapCommand
             }
             if (ex is OperationCanceledException && cancellationToken.IsCancellationRequested)
                 throw;
-            await error.WriteLineAsync($"error: {ScanReceiptRecorder.ClassifyOutputFailure(ex)}");
+            await error.WriteLineAsync($"error: {(ex is SourceSnapshotRetentionException retainedFailure
+                ? retainedFailure.Message : ScanReceiptRecorder.ClassifyOutputFailure(ex))}");
             return 1;
         }
 
@@ -2348,6 +2401,9 @@ public static class TraceMapCommand
     }
 
     private static ParsedOptions ParseOptions(string[] args, params string[] additionalFlags)
+        => ParseOptions(args, preserveOptionValues: false, additionalFlags);
+
+    private static ParsedOptions ParseOptions(string[] args, bool preserveOptionValues, params string[] additionalFlags)
     {
         var values = new Dictionary<string, List<string>>(StringComparer.Ordinal);
         var flags = new HashSet<string>(StringComparer.Ordinal);
@@ -2366,7 +2422,8 @@ public static class TraceMapCommand
                 continue;
             }
 
-            if (index + 1 >= args.Length || args[index + 1].StartsWith("--", StringComparison.Ordinal))
+            // Native scan arguments are generated key/value pairs, not caller CLI tokens.
+            if (index + 1 >= args.Length || (!preserveOptionValues && args[index + 1].StartsWith("--", StringComparison.Ordinal)))
             {
                 throw new ArgumentException($"Missing value for {arg}.");
             }
@@ -2378,7 +2435,7 @@ public static class TraceMapCommand
             }
 
             var rawValue = args[++index];
-            if (arg is "--surface-list" or "--from-symbol") list.Add(rawValue);
+            if (preserveOptionValues || arg is "--surface-list" or "--from-symbol") list.Add(rawValue);
             else list.AddRange(rawValue.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
         }
 
@@ -2696,6 +2753,7 @@ public static class TraceMapCommand
             Usage:
               tracemap version [--json]
               tracemap local-review run --repo <path> --out <new-output-root> [--webforms-modernization] [--explorer]
+              tracemap webforms-review preflight --config <private-json> --out <new-run-root>
               tracemap scan --repo <path> --out <path>
               tracemap report --index <path> --out <path>
               tracemap database-design-review --index <combined.sqlite> --out <path>
@@ -2727,6 +2785,7 @@ public static class TraceMapCommand
             Commands:
               version   Show installed build identity and bounded local readiness.
               local-review Run a guided local scan and compatible review stages.
+              webforms-review Validate private inputs, prepare declared receipts and checkpoint fresh scans.
               scan      Inventory a repository and emit TraceMap artifacts.
               report    Generate a combined dependency report from a combined index.
               database-design-review Compose existing PostgreSQL design, query, and route evidence.
@@ -2828,6 +2887,11 @@ public static class TraceMapCommand
               --exact-source-max-files <count>
               --exact-source-max-bytes <count>
                                        Hard file/byte limits for exact source scope (defaults: 256 files, 64 MiB); candidate enumeration has a separate hard limit.
+              --retain-source-snapshot Retain the complete local byte-snapshot roster for later immutable attachment; no source snippets or runtime proof.
+              --source-snapshot-max-files <count>
+              --source-snapshot-max-source-bytes <count>
+              --source-snapshot-max-roster-bytes <count>
+                                       Retention admission limits (defaults: 1000000 files, 64 GiB raw source, 64 MiB streamed roster); requires --retain-source-snapshot.
               --target-framework <tfm> MSBuild TargetFramework property for semantic load.
               --restore                Run dotnet restore for selected solution/project targets before semantic load.
               --binlog <path>          Explicit local MSBuild binary log to ingest offline. Repeatable; never discovered.
@@ -2840,6 +2904,8 @@ public static class TraceMapCommand
                                        Optional compiled-input-binding-set.v1 receipt. Repeatable.
               --webforms-publish-receipt <path>
                                        Explicit local-only webforms-publish-binding.v1 receipt. Never discovered.
+              --webforms-published-root <absolute-path>
+                                       Optional explicit published-file root, independent of receipt location. Hash checked, never written.
               --pdb-input <path>       Explicit portable PDB, assembly with embedded portable PDB, or Windows PDB input. Repeatable; never discovered.
               --compiled-max-artifacts <count>
               --compiled-max-file-bytes <count>

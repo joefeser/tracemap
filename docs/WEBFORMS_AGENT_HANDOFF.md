@@ -10,6 +10,62 @@ Use the private application workbench only inside the authorized environment.
 For an identity-free discussion, provide only the alias-only outlier JSON and
 its matching shareable HTML.
 
+### Native .NET retained run
+
+For a native run, use the owner-supplied durable root, its `run-manifest.json`
+and contiguous checkpoint journal. The native report phase writes a lossless
+`review-evidence.sqlite` beside its HTML and JSON and pins its bytes in the
+completed checkpoint. Do not load the large handoffs or facts wholesale:
+
+When the owner used the one-command native `start`, the pinned run is the
+explicit review folder's `run/` child, not its `evidence/` child or a TEMP
+folder selected by age. `start` is an execution command, not an allowed action
+for an evidence-only reviewer.
+
+```text
+tracemap webforms-review status --run <durable-run-root> --json
+tracemap webforms-review query --run <durable-run-root>
+tracemap webforms-review query --run <durable-run-root> --document application --pointer /packet/summary --depth 2 --limit 10
+tracemap webforms-review query --run <durable-run-root> --document compiled --pointer /chains --offset 0 --limit 5 --depth 2
+```
+
+Start with status to establish the operation, selected/all-page scope, retained
+source commit, completed state, coverage, categorical truncation reasons and
+missing input locators. It verifies retained artifacts, not current external
+source or publish bytes. Unknown phase consumption stays unknown; configured
+limits are not measured usage. Optional resourceUsage observes elapsed scan/report-attempt time and
+sampled parent-process working set only: memory is a lower bound, not an exact
+phase peak, quota, child-process total or performance forecast. Failed-attempt
+measurements do not admit failed artifacts. A different reader generator is not permission
+to resume. Stop and return any incomplete, busy or invalid state to the owner;
+an evidence-review session must not execute its suggested run/resume action.
+Optional originalTool is the checkpointed original distribution/runtime locator,
+not a current availability check or a self-contained SDK. Historical absence
+stays unknown. Tool-copy manifests are private operational evidence; reviewing
+one does not authorize retaining, relocating or executing a tool distribution.
+Optional admissionWork contains independently bounded metadata/IL logical credits
+and denied aggregate reservation counts, not CPU, runtime calls or total scan
+work. Per-input caps and preflight failures remain separate gaps; credits can
+remain consumed for an input later withheld. Preserve scope and unknown old fields.
+
+The checked-in [review prompt](../prompts/review-webforms-modernization-evidence.md)
+now distinguishes native query review from the legacy workflow below. Only use
+the approved executable and run root inside the authorized environment. Native
+queries are read-only and source-free; they do not invoke Claude, scan, render,
+repair, reconnect, or write files. Query output is private and review-only.
+Output is capped at 128 KiB/2,048 nodes, depth 0–8 and 1–50 children per container.
+Choose exact child pointers or smaller depth/limit after a bounded refusal.
+Retained coverage, path truncation and retrieval omissions are separate states.
+
+The legacy start/continue/source-review wrappers below do **not** accept native
+run roots. Their completed receipt/grant/session contracts remain unchanged.
+Native Claude launching/session management is not added by the read-only query
+command; follow the organization's existing approved launcher and permission
+process. Never grant source access or execute native start/prepare/preflight/run/resume during evidence
+review. Real work-machine/private compiled-site acceptance remains required.
+
+### Legacy PowerShell retained review root
+
 For the one-root pipeline, set the review root and use its fixed stage paths:
 
 ```powershell

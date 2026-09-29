@@ -467,7 +467,8 @@ public static class ScanEngine
                 : TraceMapDiagnosticOutcome.Succeeded,
             manifest.AnalysisLevel,
             manifest.BuildStatus);
-        var result = new ScanResult(manifest, facts, inventory);
+        var result = new ScanResult(manifest, facts, inventory)
+        { SourceSnapshotInventory = authoritativeSnapshotInventory };
         receiptRecorder?.Bind(result);
         return result;
     }
@@ -547,6 +548,13 @@ public static class ScanEngine
     internal static string CreateSourceSnapshotDigest(
         string repoPath,
         IReadOnlyList<FileInventoryItem> inventory,
+        CancellationToken cancellationToken = default) =>
+        CreateOrderedSourceSnapshotDigest(repoPath,
+            inventory.OrderBy(candidate => candidate.RelativePath, StringComparer.Ordinal), cancellationToken);
+
+    internal static string CreateOrderedSourceSnapshotDigest(
+        string repoPath,
+        IEnumerable<FileInventoryItem> inventory,
         CancellationToken cancellationToken = default)
     {
         using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
@@ -555,7 +563,7 @@ public static class ScanEngine
 
         try
         {
-            foreach (var item in inventory.OrderBy(candidate => candidate.RelativePath, StringComparer.Ordinal))
+            foreach (var item in inventory)
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 AppendString(hash, item.RelativePath, lengthBuffer);
@@ -572,6 +580,7 @@ public static class ScanEngine
                 int read;
                 while ((read = stream.Read(buffer, 0, buffer.Length)) > 0)
                 {
+                    cancellationToken.ThrowIfCancellationRequested();
                     hash.AppendData(buffer.AsSpan(0, read));
                     bytesRead += read;
                 }

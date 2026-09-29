@@ -1,6 +1,6 @@
 # Requirements
 
-Status: planned
+Status: native compiled workflow implemented; final regression and private Windows acceptance gated
 Readiness: public-and-work-first
 Public claim level: hidden
 
@@ -64,7 +64,7 @@ Every newly derived machine-readable artifact records the exact generator
 SHA-256 and a bounded SHA-256 of its actual input. Shareable artifacts hash only
 their privacy-projected input.
 
-### Requirement 7: Compiled Web Site workflow and scale (planned)
+### Requirement 7: Compiled Web Site workflow and scale
 
 1. Make optional published-site inputs part of the normal configured run. Keep
    source roots, published roots, scan artifacts, and report outputs distinct;

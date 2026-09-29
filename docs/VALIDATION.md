@@ -1,5 +1,39 @@
 # TraceMap Validation Guide
 
+For native one-command start, run the preparation, preflight, execution and
+native-scale suites. Pin explicit receipt/attestation authority, new-root
+reservation, original-config stability across phases, fresh and immutable
+attachment, failed-scan recovery and byte-identical completed resume. The
+2026-09-29 rebuilt slice passed 182 checks with zero failures/skips; final
+exact-head regression and private Windows acceptance remain separate gates.
+Strict fresh synthetic 32/256-page scale retains all 24,000/192,000 sparse
+methods and 128/1,024 static paths under declared stress budgets; see
+[measured scale and limitations](validation/webforms-native-scale-2026-09-29.md).
+
+For native graph-query work accounting, run the combined dependency-path,
+grouped compiled handoff, Web Forms packet, native execution/status and native
+subprocess-scale suites. Pin a shared two-root work/path cap, exact exhaustion,
+no-terminal search work, optional historical counters and grouped round-trip.
+Page and compiled queries each share a budget across their roots; their measured
+sum is not graph-admission or total phase work. Verify an old retained run still
+reports missing measurements as unknown without rewriting its proof.
+
+Git identity probing must distinguish process exit from complete redirected
+output. A timed-out, faulted, cancelled or required-empty pipe read is a failed
+probe and participates in the existing single bounded retry; an intentionally
+empty repository prefix remains valid. `GitMetadataOutputTests` pins this
+distinction without scheduling-dependent sleeps. A targeted identity fixture
+pass does not replace a new exact-head full regression after a failure.
+
+For native compiled Web Forms completed-run copies, validate the execution,
+preflight, preparation, input-validation, evidence-query and native-scale suites.
+The 2026-09-28 rebuilt slice passed 201 tests with zero failures/skips in 3 minutes
+10 seconds; exact-head full regression is a separate gate. A retained public
+256-page/1,024-variant run survived two verified copies and bounded retrieval.
+These are local static-artifact checks, not private Windows junction, full-site,
+runtime SQL or cleanup acceptance. See
+[native workflow relocation and retention](WEBFORMS_NATIVE_WORKFLOW.md#durable-completed-run-copies-and-retention-planning).
+
 This guide defines the repeatable checks used to validate language adapters and cross-index analysis. It complements `docs/ACCEPTANCE.md`: acceptance defines expected behavior, while this file describes the concrete sample and open-source smoke set.
 
 For an operator-oriented multi-repository Angular/.NET scan, combination, and
@@ -3924,3 +3958,100 @@ source-to-binary join.
 This diagnostic is a separate proof attempt; it does not rewrite the normal
 Web Forms workbench or establish runtime execution, source-line identity,
 complete application reachability, or private-page success.
+
+### Core publish receipt-set contract
+
+`WebFormsPublishReceiptSetTests`, `WebFormsPublishedRootTests` and
+`WebFormsReviewPreparationTests` pin the additive
+`webforms-publish-binding-set.v1` reader and legacy compatibility:
+
+```text
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter "FullyQualifiedName~WebFormsPublishReceiptSetTests|FullyQualifiedName~WebFormsPublishedRootTests|FullyQualifiedName~WebFormsReviewPreparationTests"
+```
+
+The public set fixture declares 67 pages across three independently bounded
+receipts and asserts deterministic binding facts, global unique membership,
+generator/input commitments and unchanged input bytes. Tampered, nested,
+malformed, duplicate-page, cross-partition map ambiguity, cancellation and
+oversize file/identity cases withhold bindings. Explicit inventory-only members
+retain additional context without creating page bindings; standalone or page-bearing
+inventory members and page-less sets are refused. Sets retain the legacy per-file
+and per-partition bounds, an explicit 64-partition cap and conservative 8 GiB
+artifact read/hash admission. No source/build/runtime completeness is inferred.
+
+The existing PowerShell preparer still has its original single-receipt bounds.
+Native preparation now emits deterministic sets when declared inventory exceeds
+one receipt, and preflight/resume pins every member. The separate optional
+`budgets.maxPublishInputFiles` admits publication inventory without silently
+raising compiled metadata or other input budgets; omitted budgets retain legacy
+admission. Follow-on configuration input-count and hash-byte admission is checked
+before publication, including the actual newly generated receipt/config bytes.
+
+```text
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter "FullyQualifiedName~WebFormsReviewPreflightTests|FullyQualifiedName~WebFormsReviewPreparationTests|FullyQualifiedName~WebFormsPublishReceiptSetTests"
+```
+
+Public integration fixtures cover selected/all-page scope, both fresh scans and
+immutable attachment, 67 declared pages, 368 sources and 69 publication files.
+They check Core's global counts, partition caps and hashes, completed workbench
+navigation inventories, lossless handoff membership, immutable inputs and resume
+tamper rejection. Negative cases cover escaped/nested/duplicated/tampered or
+over-page-limit members and explicit/default budget boundaries. These are declared
+inventory fixtures using public PE inputs, not an ASP.NET compilation parity proof.
+The public Windows compiled Web Site parity checks and representative eight-times
+memory/disk/time validation remain required.
+
+### Bounded combined property projection
+
+```text
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter "FullyQualifiedName~WebFormsReportMemoryTests|FullyQualifiedName~MessyWorkspaceRegressionTests"
+```
+
+The combined reader retains all fact rows and source namespaces while projecting
+only audited graph-consumed properties before managed allocation. Tests compare
+complete serialized path reports with the full reader, retain supporting IDs and
+cross-source competitors, check missing legacy extractor columns, reject
+noncanonical identities, and withhold paths on oversized dependency-edge text.
+Facts whose source-index metadata is absent are rejected, never silently skipped
+by the per-source projection; global competitors cannot disappear that way.
+Duplicate JSON keys, numeric/nested values and non-object property JSON retain
+the combined full parser's exact last-value or empty malformed-properties behavior
+(the single-index parser retains its existing malformed-properties hash behavior).
+Existing compiled attachment/PDB/publish method-chain cases pin the source symbol,
+member identity, body-span and namespace/import context that a source-only
+projection must not omit. The allocation comparison is warmed and isolated from
+parallel test collections; it measures managed allocation, not peak working set.
+Every original fact stays in the read-only combined index. Raw fact/edge/text
+admission and global fact/semantic-index allocations remain: the allocation
+comparison alone is not an eight-times scale or peak-working-set acceptance result.
+
+### Indexed bounded combined graph
+
+The same focused command exercises the private temporary SQLite graph backend.
+Admitted compact facts, nodes and edges are inserted directly into it; there is
+no complete managed fact list or graph followed by a spill. Exact fact-ID and
+source/original-ID facades use indexed row reads, and ordered fact traversal uses
+the .NET ordinal collation. Surface projection retains a lazy repeatable list
+instead of a second full fact-input array. Global aliases retain their complete
+source namespace, with one reconciliation group loaded at a time. Outgoing
+adjacency is paged by exact node ID and local position, at most 64 records with a
+512 KiB serialized target (one already-admitted oversized record is retained
+alone). Reverse traversal does not materialize a full reversed adjacency array.
+SQLite ordering uses an explicit .NET
+ordinal collation, preserving supplementary/BMP Unicode and null-path ordering.
+The backend remains private and ephemeral, pins actual generator/input hashes,
+rechecks input bytes before returning a report, and never writes the input index.
+
+Public 32/256-page cases compare complete serialized reports with the historical
+reader and observe all retained fact and graph node/edge counts, logical database bytes and maximum
+outgoing rows loaded. Dedicated 128/1,024-branch cases retain all 129/1,025 paths and compare
+complete reports in both legacy depth-first and ordinary breadth-first traversal;
+no outgoing page exceeds 64 rows. Tests also pin branch ordering, unchanged
+input/directory contents, cancellation, and fail-closed refusal at a small storage quota. The
+cross-source fixture retains identical original fact IDs independently in each
+namespace. The allocation guard remains unchanged; total allocations are not a
+peak-working-set measurement. The
+default logical database ceiling is 512 MiB, including facts and the order roster;
+the page cache is 8 MiB. Sorter temporary files are outside that logical ceiling,
+and type-specific semantic indexes remain managed. These checks do not replace representative 8x source and
+compiled-distribution elapsed-time, total-disk and peak-memory measurements.

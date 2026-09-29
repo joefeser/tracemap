@@ -55,6 +55,11 @@ public sealed class IlBodyEvidenceExtractorTests
         Assert.Equal(IlBodyEvidenceExtractor.SchemaVersion, provenance.SchemaVersion);
         Assert.Equal("il-complete", provenance.CoverageState);
         Assert.Equal("local-only", provenance.ArtifactVisibility);
+        var usage = Assert.IsType<CompiledAdmissionWorkUsage>(provenance.AdmissionWork);
+        Assert.InRange(usage.ConsumedWorkUnits, 1, provenance.EffectiveLimits.MaxTotalWorkUnits);
+        Assert.Equal(0, usage.RefusedAggregateRequests);
+        CompiledAdmissionWorkUsage.Validate(usage, "il-body", provenance.GeneratorSha256,
+            provenance.BoundedInputSha256, provenance.EffectiveLimits.MaxTotalWorkUnits);
         Assert.All(provenance.Outcomes, outcome =>
         {
             Assert.Equal("admitted", outcome.Outcome);
@@ -548,6 +553,9 @@ public sealed class IlBodyEvidenceExtractorTests
             CompiledInputPaths: [fixture.Assembly],
             IlBodyEvidence: true,
             IlBodyLimits: new IlBodyLimits(MaxTotalWorkUnits: 8)));
+
+        Assert.InRange(result.Manifest.IlBodyProvenance!.AdmissionWork!.ConsumedWorkUnits, 0, 8);
+        Assert.Equal(1, result.Manifest.IlBodyProvenance.AdmissionWork.RefusedAggregateRequests);
 
         Assert.Contains(result.Facts, fact => fact.RuleId == RuleIds.DotNetIlGap
             && fact.Properties.GetValueOrDefault("gapKind") == "IlTotalWorkLimitExceeded");
