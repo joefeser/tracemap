@@ -1831,3 +1831,9 @@ and licensing remain deliberately separate private follow-up work.
   scan, mutate inputs or claim authoritative checkpoint validation. A public
   PowerShell test covers direct path, numeric selection, privacy redaction and
   byte preservation.
+- The owner's checkpoint summary then showed scan completion at sequence 2 and
+  a failed report attempt at sequence 4, with only the generic report/artifact
+  validation gap. Extended the helper to accept the unique folder name and
+  report fixed partial-output presence/byte counts, without reading their
+  contents or repeating the retained scan. The exact private report failure
+  remains unestablished pending that read-only footprint.
