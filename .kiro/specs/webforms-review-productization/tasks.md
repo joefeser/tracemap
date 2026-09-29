@@ -239,6 +239,9 @@
 
 ## Release checks
 
+- [x] Add a read-only retained-binding diagnostic with closed state/gap codes
+  and counts only, preserving original and failed-output bytes without scans,
+  locator rebinding or new attestations; test the real helper and refusal cases.
 - [x] Preserve repository-root configuration when importing website-relative
   retained receipts using an explicit hash-bound source base across preflight,
   fresh execution and compiled attachment; retain original receipts and test

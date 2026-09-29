@@ -120,6 +120,22 @@ single diagnostic line; do not upload the receipts or automatically rebase
 their paths. No scan starts on an import failure. Failed staging remains
 unadmitted and must not be overwritten on retry.
 
+For a compiled binding admission failure, use the short read-only diagnostic:
+
+```powershell
+.\scripts\wverify.ps1 -Diagnose
+```
+
+Select the same explicit inputs and website base. This mode can read alongside
+an existing failed output root without overwriting or deleting it. It validates
+the original bounded receipt/source inventories and committed membership, then
+prints only admission state/gap codes, expected/observed primary counts, locator
+match counts and retained traversal-locator counts. No DLL locator, assembly or
+method identity, raw hash or private path is printed. It writes no review/proof
+inputs or output folders and never scans; the helper may rebuild the tool unless
+`-NoBuild` is supplied. Do not combine `-Diagnose` with `-Run`. A successful
+diagnostic is not full preflight, configuration admission or report parity.
+
 ### When retained proof is unavailable
 
 The old schema does not contain the exact source commit, compiled-site root,

@@ -22,16 +22,18 @@ public static class WebFormsProofImportCommand
         var stage = "arguments";
         try
         {
-            if (args.Length is not (9 or 11) || args[0] != "import-proof" || args[1] != "--config" || args[3] != "--proof-root"
+            var diagnoseOnly = args.Length > 0 && args[^1] == "--diagnose";
+            var argumentCount = args.Length - (diagnoseOnly ? 1 : 0);
+            if (argumentCount is not (9 or 11) || args[0] != "import-proof" || args[1] != "--config" || args[3] != "--proof-root"
                 || args[5] != "--published-root" || args[7] != "--out"
-                || args.Length == 11 && args[9] != "--source-base") throw Fail("ARGUMENTS");
-            var sourceBase = args.Length == 11 ? args[10] : ".";
+                || argumentCount == 11 && args[9] != "--source-base") throw Fail("ARGUMENTS");
+            var sourceBase = argumentCount == 11 ? args[10] : ".";
             if (sourceBase == ".") sourceBase = null;
             var draftPath = WebFormsReviewPreflightCommand.PhysicalPath(args[2]);
             var proof = WebFormsReviewPreflightCommand.PhysicalPath(args[4]);
             var published = WebFormsReviewPreflightCommand.PhysicalPath(args[6]);
             var destination = WebFormsReviewPreflightCommand.PhysicalPath(args[8]);
-            if (File.Exists(destination) || Directory.Exists(destination)) throw Fail("OUTPUT_EXISTS");
+            if (!diagnoseOnly && (File.Exists(destination) || Directory.Exists(destination))) throw Fail("OUTPUT_EXISTS");
             stage = "migration-draft";
             var draftBytes = await Read(draftPath, token);
             var draft = JsonSerializer.Deserialize<WebFormsReviewConfig>(draftBytes, JsonOptions) ?? throw Fail("CONFIG_INVALID");
@@ -159,6 +161,21 @@ public static class WebFormsProofImportCommand
             WebFormsReviewPreflightCommand.ValidateConfig(config);
             var repoSourceNames = sourceNames.Select(RepoName).ToArray();
             var membership = await WebFormsReviewPreparationCommand.ValidateCommittedSourceAsync(config, repoSourceNames, token);
+            if (diagnoseOnly)
+            {
+                stage = "binding-admission";
+                var budget = config.Budgets;
+                var inspection = ManagedMetadataExtractor.InspectInputs(new ScanOptions(sourceRoot, "unused-read-only-diagnostic",
+                    CompiledInputPaths: primary.Select(name => WebFormsReviewPreflightCommand.Child(published, name)).ToArray(),
+                    CompiledDependencyPaths: dependencies.Select(name => WebFormsReviewPreflightCommand.Child(published, name)).ToArray(),
+                    CompiledBindingReceiptPaths: [bindingPath],
+                    CompiledInputLimits: new(MaxArtifactCount: budget.MaxInputFiles, MaxFileSizeBytes: budget.MaxAssemblyBytes,
+                        MaxTextLength: budget.MetadataMaxText, MaxTotalWorkUnits: budget.MetadataMaxWork)), commit, token);
+                await PrintAdmission(inspection.Provenance, inspection.GapKinds);
+                await output.WriteLineAsync("proofImportDiagnostic=read-only;no-configuration-written;no-scan-started");
+                if (!Admitted(inspection.Provenance)) throw Fail("RETAINED_BINDING_NOT_ADMITTED");
+                return 0;
+            }
             var generator = Hash(await File.ReadAllBytesAsync(typeof(WebFormsProofImportCommand).Assembly.Location, token));
             var bounded = Hash(JsonSerializer.SerializeToUtf8Bytes(new { draftSha256 = Hash(draftBytes), publishReceiptSha256 = Hash(publishBytes),
                 bindingReceiptSha256 = Hash(bindingBytes), sourceCommitSha = commit, sourceRelativeBase = sourceBase, inputCommitments, membership }, JsonOptions));
@@ -175,8 +192,11 @@ public static class WebFormsProofImportCommand
             var plan = await WebFormsReviewPreflightCommand.BuildAsync(stagedConfig, destination, token);
             stage = "binding-admission";
             var validated = await WebFormsReviewInputValidation.ValidateAsync(plan, token);
-            var primaryOutcomes = validated.CompiledProvenance.Outcomes.Where(item => item.Role == "primary").ToArray();
-            if (primaryOutcomes.Length != primary.Count || primaryOutcomes.Any(item => item.Outcome != "admitted" || item.ProvenanceState != "bound")) throw Fail("RETAINED_BINDING_NOT_ADMITTED");
+            if (!Admitted(validated.CompiledProvenance))
+            {
+                await PrintAdmission(validated.CompiledProvenance, validated.Gaps);
+                throw Fail("RETAINED_BINDING_NOT_ADMITTED");
+            }
             stage = "input-recheck";
             await WebFormsReviewPreparationCommand.ValidateCommittedSourceAsync(config, repoSourceNames, token);
             await Same(draftPath, draftBytes); await Same(publishPath, publishBytes); await Same(bindingPath, bindingBytes);
@@ -217,6 +237,22 @@ public static class WebFormsProofImportCommand
             }
             async Task Same(string path, byte[] bytes) { if (Hash(await Read(path, token)) != Hash(bytes)) throw Fail("INPUT_CHANGED"); }
             string RepoName(string name) => sourceBase is null ? name : sourceBase + "/" + name;
+            bool Admitted(CompiledInputProvenance? provenance)
+            {
+                var outcomes = provenance?.Outcomes.Where(item => item.Role == "primary").ToArray();
+                return outcomes?.Length == primary.Count && outcomes.All(item => item.Outcome == "admitted" && item.ProvenanceState == "bound");
+            }
+            async Task PrintAdmission(CompiledInputProvenance? provenance, IReadOnlyList<string> gaps)
+            {
+                var outcomes = provenance?.Outcomes.Where(item => item.Role == "primary").ToArray() ?? [];
+                var locators = bindings.Select(item => Text(item, "safeLocator")).ToHashSet(StringComparer.Ordinal);
+                await output.WriteLineAsync($"bindingDiagnostic=counts-only;primaryExpected={primary.Count};primaryObserved={outcomes.Length};omitted={provenance?.OmittedInputCount ?? 0};locatorMatches={outcomes.Count(item => locators.Contains(item.SafeLocator))};retainedTraversalLocators={locators.Count(value => value.StartsWith("../", StringComparison.Ordinal) || value.StartsWith("..\\", StringComparison.Ordinal))}");
+                foreach (var group in outcomes.GroupBy(item => (item.Outcome, item.ProvenanceState)).OrderBy(group => group.Key.Outcome, StringComparer.Ordinal)
+                    .ThenBy(group => group.Key.ProvenanceState, StringComparer.Ordinal))
+                    await output.WriteLineAsync($"bindingDiagnostic.outcome={SafeCode(group.Key.Outcome)};state={SafeCode(group.Key.ProvenanceState)};count={group.Count()}");
+                foreach (var gap in outcomes.SelectMany(item => item.GapKinds).Concat(gaps).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal))
+                    await output.WriteLineAsync("bindingDiagnostic.gap=" + SafeCode(gap));
+            }
         }
         catch (OperationCanceledException) when (token.IsCancellationRequested) { throw; }
         catch (WebFormsReviewPreflightCommand.PreflightException ex) { return await Report(ex.Code); }
@@ -286,6 +322,7 @@ public static class WebFormsProofImportCommand
         static string Prefix(string path) => Path.EndsInDirectorySeparator(path) ? path : path + Path.DirectorySeparatorChar;
     }
     private static bool Hex(string value, int length) => value.Length == length && value.All(character => character is >= '0' and <= '9' or >= 'a' and <= 'f');
+    private static string SafeCode(string code) => code.Length is > 0 and <= 96 && code.All(character => char.IsAsciiLetterOrDigit(character) || character == '-') ? code : "other";
     private static string Hash(byte[] bytes) => Convert.ToHexStringLower(SHA256.HashData(bytes));
     private static ImportException Fail(string code) => new("WEBFORMS_PROOF_IMPORT_" + code);
     private sealed class ImportException(string message) : InvalidOperationException(message);

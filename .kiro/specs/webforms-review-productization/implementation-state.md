@@ -1785,3 +1785,19 @@ and licensing remain deliberately separate private follow-up work.
   publish/receipt tests passed, zero failures/skips. The focused run includes the
   final added partition-base and nested-repository regressions. Private-path and
   whitespace guards passed; the whole-repository suite was not rerun for this slice.
+
+### Read-only retained binding admission diagnostic (2026-09-29)
+
+- Private rerun passed source-base, byte/commit/receipt checks but stopped at
+  retained compiled binding admission. The cause is not established by that
+  screenshot. Inspection found a possible historical Windows relative-locator
+  issue; no receipt rebind, metadata-policy bypass or attestation was inferred.
+- Added explicit helper/native diagnostic mode with counts and closed gap/state
+  codes only, no artifacts or scan. Existing failed outputs and original proof
+  inputs are retained unchanged. Normal failures also report admission counts.
+- Public tests pin locator/identity rejection summaries, original/staging/output
+  byte preservation and real helper diagnostics for root/nested layouts.
+- Validation: clean solution build, 104 focused import/migration/preparation
+  tests plus all three final locator/identity/traversal diagnostic cases passed;
+  zero warnings, failures or skips. Private-path and whitespace guards passed.
+  No private acceptance or whole-repository-suite rerun is claimed.
