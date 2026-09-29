@@ -34,6 +34,21 @@ public sealed class WebFormsReviewPreflightTests
         Assert.Equal(first.Inputs.Sum(input => input.Bytes), first.HashedBytes);
     }
 
+    [Theory]
+    [InlineData(256)]
+    [InlineData(257)]
+    [InlineData(4096)]
+    public async Task Explicit_graph_path_budget_is_retained_without_raising_other_defaults(int paths)
+    {
+        using var fixture = new Fixture();
+        var defaults = new WebFormsReviewBudgets();
+        Assert.Equal(256, defaults.GraphMaxPaths);
+        fixture.Config = fixture.Config with { Budgets = defaults with { GraphMaxPaths = paths } };
+        var result = await fixture.Build();
+        Assert.Equal(defaults with { GraphMaxPaths = paths }, result.Configuration.Budgets);
+        Assert.False(Directory.Exists(fixture.Output));
+    }
+
     [Fact]
     public async Task Attachment_inventories_all_parent_artifacts_without_mutating_them()
     {
@@ -174,6 +189,8 @@ public sealed class WebFormsReviewPreflightTests
     [InlineData("il-text", "BUDGET_INVALID")]
     [InlineData("parent-facts", "BUDGET_INVALID")]
     [InlineData("fact-line", "BUDGET_INVALID")]
+    [InlineData("graph-path-low", "BUDGET_INVALID")]
+    [InlineData("graph-path-high", "BUDGET_INVALID")]
     public async Task Invalid_configuration_is_rejected_before_output(string mutation, string expected)
     {
         using var fixture = new Fixture();
@@ -197,6 +214,8 @@ public sealed class WebFormsReviewPreflightTests
             "il-text" => fixture.Config with { Budgets = fixture.Config.Budgets with { IlMaxText = 65_537 } },
             "parent-facts" => fixture.Config with { Budgets = fixture.Config.Budgets with { MaxParentFacts = 0 } },
             "fact-line" => fixture.Config with { Budgets = fixture.Config.Budgets with { MaxFactLineChars = 127 } },
+            "graph-path-low" => fixture.Config with { Budgets = fixture.Config.Budgets with { GraphMaxPaths = 0 } },
+            "graph-path-high" => fixture.Config with { Budgets = fixture.Config.Budgets with { GraphMaxPaths = 4097 } },
             _ => throw new InvalidOperationException()
         };
         var exception = await Assert.ThrowsAnyAsync<Exception>(() => fixture.Build());

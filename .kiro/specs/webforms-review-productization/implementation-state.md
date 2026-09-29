@@ -1,5 +1,36 @@
 # Web Forms Review Productization Implementation State
 
+## Native subprocess source-size scale diagnostic (2026-09-28)
+
+- Added a public generated VB/PE/IL corpus and real-CLI prepare/preflight/run/
+  completed-resume diagnostic. Normal smoke is 1/8 pages; explicit retained
+  benchmark is 32/256 pages with 2,236,416/17,891,328 source bytes (exactly 8x).
+  Each page has four cross-assembly terminal branches and an overload competitor.
+  Tests restore the grouped handoff, verify every page/branch by exact symbol
+  identity, and pin unchanged source/published bytes and resume output rosters.
+- Initial prepare refused GraphMaxPaths=4096 at the former 256 ceiling. Native
+  preflight now admits explicitly configured 1..4096 paths; default 256 and all
+  depth/work/admission/output budgets remain unchanged. Boundary/default tests
+  reject zero/4097 before output and retain all other budget values.
+- Final focused benchmark plus preflight regression passed 42/42, no failures
+  or skips, in 3 minutes 36 seconds without introduced build warnings. It retained
+  1,780/14,100 facts, 128/1,024 compiled paths and 22,814,356/175,574,091 evidence
+  plus run bytes. OS-measured run peaks were 225,771,520/439,500,800 resident bytes;
+  run times 6,826/189,785 ms. This is not linear-throughput acceptance.
+- Packet/compiled truncation were both true at 32 pages and false at 256 pages.
+  The latter still retains ProjectlessPublishMemberWorkLimit: name-only candidate
+  matching crosses its 100,000 work bound and withholds source member bridges.
+  Therefore no truncation is not complete coverage. All four compiled branches
+  per page remain retained; source-bridge completeness is not claimed. Next slice
+  should index qualified member candidates while retaining every global competitor
+  and the existing work cap, then rerun this diagnostic.
+- Benchmark output is retained read-only in ignored owned
+  output/native-scale-32-256-final-20260928. Exact test/CLI generator and bounded
+  corpus input commitments are in native-scale.receipt.json. Generated IL is
+  not aspnet_compiler acceptance; retained disk excludes transient graph/sorter
+  peak. Private Windows graph scale, relocation/retention and proof replacement
+  remain open; no proof dependencies or compatibility scripts were removed.
+
 ## Indexed admitted fact rows (2026-09-28)
 
 - Continued from pushed `3a2c3dbd` while its exact-head full regression remained
@@ -30,7 +61,10 @@
   rerun recorded 51,914,128 versus 69,576,840 bytes, retaining all 1,005 facts.
   The actual CLI sample scan completed with 201 facts and explicit reduced
   semantic coverage in ignored owned `output/native-receipt-set-smoke-indexed-facts-3a2c3dbd`.
-  Exact-head full regression remains pending. Type-specific compiled/dispatch arrays, reconciliation alias
+  Exact-head full regression at `2f190445b54dbac7649c45fbf22d8192ae6f8916` passed
+  2,659/2,659, zero failed/skipped, in 11 minutes 4 seconds. This is slower than
+  the preceding adjacency slice's full suite; throughput is not inferred improved.
+  Type-specific compiled/dispatch arrays, reconciliation alias
   groups and retained output still allocate managed memory. This is not a whole-
   workflow peak-memory or representative eight-times scale acceptance claim.
 

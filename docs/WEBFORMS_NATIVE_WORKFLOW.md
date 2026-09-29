@@ -481,8 +481,15 @@ Config/receipt JSON is capped at 1 MiB, selected files and parent manifest at
 reader. These facts are not an eight-times corpus performance acceptance claim.
 
 Preflight records IL and graph work limits without consuming them. Native fresh
-execution enforces metadata/IL budgets; graph traversal is not yet executed.
+execution enforces metadata/IL budgets; the separately checkpointed report phase
+enforces graph traversal and projection budgets.
 No budget is automatically raised.
+Native report traversal accepts an explicitly configured `budgets.graphMaxPaths`
+from 1 through 4,096; the default remains 256. Increasing this path-retention
+budget does not increase depth, work, graph admission, projection or rendered
+output limits, and does not promise that all paths will fit. The effective value
+is pinned in the run configuration and report policy; refusal and truncation
+remain explicit review gaps.
 The input canonicalization is UTF-8 camel-case indented JSON of config SHA-256
 and ordered input records (role then physical path). The manifest records its
 exact CLI-assembly generator hash and actual bounded input hash. Run ID is not
@@ -493,6 +500,30 @@ Source commit preflight checks current Git HEAD; it does not independently attes
 cleanliness or freeze source bytes. Later source-snapshot/index and binding gates
 must pass before execution. Input hashes are rechecked immediately before the
 new run is published, and an existing output is never overwritten.
+
+## Public subprocess scale diagnostic
+
+`WebFormsNativeScaleTests` runs the real CLI in separate processes for receipt
+preparation, preflight, execution and immutable completed resume. Its ordinary
+CI smoke uses 1/8 pages. An explicit opt-in uses 32/256 pages with exactly eight
+times the source bytes, cross-assembly calls, an overload competitor and four
+database-API branches per page. Generated PE/IL is never executed and is not an
+ASP.NET compilation claim. Both declared assemblies are explicitly byte-bound
+operator candidates; missing compiler authenticity remains a gap.
+
+For the larger diagnostic, set `TRACEMAP_WEBFORMS_NATIVE_SCALE=1` and
+`TRACEMAP_WEBFORMS_SCALE_OUT` to a new absolute owned directory, then run
+`dotnet test` with filter `FullyQualifiedName~WebFormsNativeScaleTests`. Existing
+directories are refused. Explicit outputs, including failures, are retained.
+The receipt pins the test/CLI generators and bounded corpus input hashes, records
+elapsed time and actual OS peak resident usage per CLI process (`time -l` on
+macOS or `time -v` on Linux), retained disk bytes, facts, paths, coverage and
+truncation. Retained disk excludes transient graph/sorter disk peak; these public
+synthetic observations do not establish arbitrary graph or private Windows scale.
+The recorded 256-page diagnostic retained all four compiled branches per page
+but hit `ProjectlessPublishMemberWorkLimit` for source member joins. A false
+truncation flag does not clear that coverage gap. See the
+[bounded benchmark observations](validation/webforms-native-scale-2026-09-28.md).
 
 ## Internal execution validation gate
 
