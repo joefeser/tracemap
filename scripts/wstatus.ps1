@@ -12,6 +12,13 @@ function Safe-Code([object]$Value) {
     if ($code -cmatch '^[A-Za-z0-9_.-]{1,96}$') { return $code }
     return 'redacted'
 }
+function Safe-Count([object]$Value) {
+    $number = [long]0
+    if ($null -ne $Value -and [long]::TryParse([string]$Value, [ref]$number) -and $number -ge 0) {
+        return [string]$number
+    }
+    return 'unavailable'
+}
 
 if ([string]::IsNullOrWhiteSpace($RunRoot)) {
     if ([string]::IsNullOrWhiteSpace($SearchRoot)) {
@@ -82,6 +89,12 @@ foreach ($file in @($files | Select-Object -Last 8)) {
     $retained = @($gaps | Select-Object -First 20 | ForEach-Object { Safe-Code $_ })
     $suffix = if ($gaps.Count -gt 20) { ',more' } else { '' }
     Write-Output "checkpoint=$sequence;state=$state;gaps=$($retained -join ',')$suffix"
+    if ($state -in @('scan-completed-reports-pending', 'scan-failed', 'reports-failed', 'reports-cancelled', 'reports-completed-review-only')) {
+        $usage = if ($null -ne $item.PSObject.Properties['phaseUsage']) { $item.phaseUsage } else { $null }
+        if ($null -ne $usage -and (Safe-Code $usage.phase) -in @('scan', 'reports')) {
+            Write-Output "phaseUsage.$sequence=$($usage.phase);elapsedMs=$(Safe-Count $usage.elapsedMilliseconds);maxObservedWorkingSetBytes=$(Safe-Count $usage.maximumObservedWorkingSetBytes);samples=$(Safe-Count $usage.successfulMemorySamples);sampled-parent-process-only"
+        }
+    }
 }
 if ($null -ne $last -and (Safe-Code $last.state) -eq 'reports-failed') {
     $attempt = [string]$last.reports.reportAttempt
