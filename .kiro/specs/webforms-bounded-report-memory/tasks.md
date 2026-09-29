@@ -74,3 +74,5 @@
 - [x] Publish one compatibility-preserving operator guide for the focused review workflow and diagnostic scripts.
 - [x] Move the private index, output root, and form list into an ignored validated JSON configuration with a generic checked-in example.
 - [x] Harden local configuration type, row, and byte validation and preserve config-free explicit diagnostics.
+- [x] Add bounded recovery-index handler counts with explicit root ambiguity and global truncation, plus public .NET/script tests.
+- [ ] Compare owner-retained handler results to the historical handler-specific baseline without treating aggregate counts as parity.

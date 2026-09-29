@@ -6,7 +6,11 @@ using Microsoft.Data.Sqlite;
 
 namespace TraceMap.Cli;
 
-internal sealed record WebFormsEvidenceQuery(string Document, string Pointer, int Offset = 0, int Limit = 16, int Depth = 1);
+internal sealed record WebFormsEvidenceQuery(string Document, string Pointer, int Offset = 0, int Limit = 16, int Depth = 1)
+{
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Handler { get; init; }
+}
 public sealed record WebFormsEvidenceItem(string Pointer, string Kind, JsonElement? Value,
     int ChildCount, int Offset, int ReturnedChildren, int OmittedChildren, IReadOnlyList<WebFormsEvidenceItem> Children)
 {
