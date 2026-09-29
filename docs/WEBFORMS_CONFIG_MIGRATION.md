@@ -187,6 +187,13 @@ does not write to the retained failed run or rescan. A process kill or cleanup
 failure can leave private scratch files; the latter prints a safe folder label
 for local cleanup. A passing scratch writer does not prove the original target
 directory or later native artifact admission will succeed.
+Native report failures now retain a fixed, private-safe stage code for combine,
+packet, paths, index hash, grouped projection, or compiled writer failures.
+The code identifies where an attempt stopped; it does not establish a root
+cause, report parity, or permission to delete any partial output. A fresh
+combine closes its SQLite writer connection instead of retaining a pooled
+handle before same-process report reads. This addresses a plausible Windows
+handoff failure, but private-run acceptance still requires a completed report.
 Only after the owner decides to try the preserved scan's report phase again,
 `-Resume` selects the same run and invokes the pinned native CLI without a
 build. It first requires a native read-only status with a failed report,

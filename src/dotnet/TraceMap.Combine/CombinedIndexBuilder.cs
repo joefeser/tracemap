@@ -32,9 +32,14 @@ public static class CombinedIndexBuilder
             using var reservation = new FileStream(outputPath, FileMode.CreateNew, FileAccess.Write, FileShare.None);
         }
 
-        var connectionString = attachments is null ? $"Data Source={outputPath}"
-            : new SqliteConnectionStringBuilder
-            { DataSource = new Uri(outputPath).AbsoluteUri, Mode = SqliteOpenMode.ReadWrite, Pooling = false }.ToString();
+        // Report composition reads this file immediately after CombineAsync returns.
+        // Do not leave a pooled writer handle behind, including on the fresh path.
+        var connectionString = new SqliteConnectionStringBuilder
+        {
+            DataSource = attachments is null ? outputPath : new Uri(outputPath).AbsoluteUri,
+            Mode = attachments is null ? SqliteOpenMode.ReadWriteCreate : SqliteOpenMode.ReadWrite,
+            Pooling = false
+        }.ToString();
         await using var connection = new SqliteConnection(connectionString);
         await connection.OpenAsync(cancellationToken);
         await CreateSchemaAsync(connection, cancellationToken);

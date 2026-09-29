@@ -987,6 +987,20 @@ public sealed class WebFormsReviewExecutionTests
     }
 
     [Fact]
+    public async Task Native_report_failure_identifies_stage_without_exposing_private_paths()
+    {
+        using var fixture = new Fixture();
+        await fixture.Preflight();
+        var plan = JsonSerializer.Deserialize<WebFormsReviewPreflightManifest>(
+            File.ReadAllText(Path.Combine(fixture.Run, "run-manifest.json")), JsonOptions)!;
+        var exception = await Assert.ThrowsAsync<InvalidDataException>(() =>
+            WebFormsReviewReportExecution.WriteAsync(plan, Path.Combine(fixture.Run, "missing-scan"),
+                Path.Combine(fixture.Run, "failed-report"), CancellationToken.None));
+        Assert.Equal("WEBFORMS_NATIVE_REPORT_COMBINE_FAILED", exception.Message);
+        Assert.DoesNotContain(fixture.Root, exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Native_attachment_reports_pin_parent_and_generated_view_without_source_scan()
     {
         using var fixture = new Fixture();
