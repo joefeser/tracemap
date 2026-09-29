@@ -382,6 +382,7 @@ public sealed class WebFormsReviewPreflightTests
         Assert.Contains("Preflight success alone", output.ToString(), StringComparison.Ordinal);
         Assert.Contains("is not a completed workflow", output.ToString(), StringComparison.Ordinal);
         Assert.Contains("Start composes preparation", output.ToString(), StringComparison.Ordinal);
+        Assert.Contains("Arbitrary graph capacity, full-site coverage and private Windows parity remain unproven", output.ToString(), StringComparison.Ordinal);
     }
 
     private static string Hash(string path) { using var stream = File.OpenRead(path); return Convert.ToHexString(SHA256.HashData(stream)).ToLowerInvariant(); }

@@ -1,4 +1,5 @@
 using System.Text.Json;
+using TraceMap.Core;
 using Microsoft.Data.Sqlite;
 
 namespace TraceMap.Cli;
@@ -11,6 +12,8 @@ public sealed record WebFormsReviewStatusPhase(string Name, string State, string
     public string? WorkUnitsScope { get; init; }
     [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
     public WebFormsReviewPhaseUsage? ResourceUsage { get; init; }
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<CompiledAdmissionWorkUsage>? AdmissionWork { get; init; }
 }
 public sealed record WebFormsReviewStatusAction(string Kind, string Instruction, string? Command, IReadOnlyList<string> Arguments);
 public sealed record WebFormsReviewLocatorStatus(string Role, int Present, int Missing);
@@ -89,6 +92,23 @@ public static partial class WebFormsReviewExecutionCommand
                 verified = true;
             }
             var scanArtifacts = history.ScanCheckpoint?.Artifacts ?? [];
+            var admissionWork = new List<CompiledAdmissionWorkUsage>();
+            if (history.ScanCheckpoint is { } completedScan)
+            {
+                var scanManifest = await ReadScanManifestAsync(OwnedPath(root, completedScan.Attempt + "/scan"), token);
+                if (scanManifest.CompiledInputProvenance is { } metadata)
+                {
+                    CompiledAdmissionWorkUsage.Validate(metadata.AdmissionWork, "metadata", metadata.GeneratorSha256,
+                        metadata.BoundedInputSha256, metadata.EffectiveLimits.MaxTotalWorkUnits);
+                    if (metadata.AdmissionWork is { } usage) admissionWork.Add(usage);
+                }
+                if (scanManifest.IlBodyProvenance is { } il)
+                {
+                    CompiledAdmissionWorkUsage.Validate(il.AdmissionWork, "il-body", il.GeneratorSha256,
+                        il.BoundedInputSha256, il.EffectiveLimits.MaxTotalWorkUnits);
+                    if (il.AdmissionWork is { } usage) admissionWork.Add(usage);
+                }
+            }
             phases.Add(new("scan", history.ScanCheckpoint is null ? state.StartsWith("scan-", StringComparison.Ordinal) ? state : "pending" : "retained-completed",
                 "admitted owned scan artifacts; not current source or historical build equivalence",
                 new Dictionary<string, long> { ["retainedFacts"] = history.ScanCheckpoint?.FactCount ?? 0,
@@ -96,9 +116,10 @@ public static partial class WebFormsReviewExecutionCommand
                 new Dictionary<string, long> { ["metadataWorkUnits"] = budget.MetadataMaxWork, ["ilWorkUnits"] = budget.IlMaxWork,
                     ["ilBodies"] = budget.IlMaxBodies ?? 50_000,
                     ["artifactBytesPerFile"] = budget.MaxRetainedArtifactBytes, ["totalHashBytes"] = budget.MaxTotalHashBytes },
-                null, ["Retained fact and artifact counts are not metadata/IL work consumption. Exact phase peak, child-process usage and transient disk peak were not recorded.",
+                null, ["Retained fact and artifact counts are not metadata/IL work consumption. Optional AdmissionWork records each collector's independent logical credit consumption, not total scan work. Exact phase peak, child-process usage and transient disk peak were not recorded.",
                     "ResourceUsage is an optional retained attempt observation; absent historical elapsed time and memory samples remain unknown."])
-                { ResourceUsage = history.ScanCheckpoint?.PhaseUsage
+                { AdmissionWork = admissionWork.Count == 0 ? null : admissionWork,
+                    ResourceUsage = history.ScanCheckpoint?.PhaseUsage
                     ?? (checkpoint?.State is "scan-failed" or "scan-cancelled" ? checkpoint.PhaseUsage : null) });
             var gapKinds = new Dictionary<string, int>(StringComparer.Ordinal);
             IReadOnlyDictionary<string, int> truncations = new Dictionary<string, int>(StringComparer.Ordinal);
@@ -223,6 +244,8 @@ public static partial class WebFormsReviewExecutionCommand
                 if (workbench is not null) await output.WriteLineAsync($"webFormsWorkbench={workbench}");
                 foreach (var phase in phases.Where(item => item.ResourceUsage is not null))
                     await output.WriteLineAsync($"phaseUsage={phase.Name};elapsedMs={phase.ResourceUsage!.ElapsedMilliseconds};observedWorkingSetBytes={phase.ResourceUsage.MaximumObservedWorkingSetBytes?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "unknown"};memorySamples={phase.ResourceUsage.SuccessfulMemorySamples};exactPhasePeak=false;childrenIncluded=false");
+                foreach (var usage in admissionWork)
+                    await output.WriteLineAsync($"admissionWork={usage.Phase};credits={usage.ConsumedWorkUnits};max={usage.MaxWorkUnits};refusedAggregateRequests={usage.RefusedAggregateRequests};scope={usage.WorkUnitsScope};totalScanWork=false");
                 foreach (var action in actions) await output.WriteLineAsync($"nextAction={action.Kind}: {action.Instruction}");
                 await output.WriteLineAsync("workUsage=not-fully-retained;use-status-json-for-configured-limits-and-observed-counts;cleanup=false");
             }

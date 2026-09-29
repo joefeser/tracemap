@@ -29,6 +29,10 @@ approved TraceMap executable and run root. Do not execute `run`, `resume`,
    Optional originalTool is a retained locator declaration, not current tool/SDK
    availability or permission to copy or execute a distribution. Historical
    absence is unknown; tool-copy manifests remain private operational evidence.
+   Optional admissionWork records separate metadata/IL logical budget credits
+   and denied aggregate reservations, not CPU, runtime calls or total scan work.
+   Per-input caps/preflight failures stay separate, and consumed credits do not
+   admit an input that later fails. Preserve collector scope and unknown history.
    Measured page/compiled traversal counters share each query's budget across
    all selected roots; their sum is not total phase work, runtime calls or a
    performance forecast. Preserve each counter's scope. Status is not fresh

@@ -23,17 +23,17 @@
 - [ ] Consolidate the 450-line focused review reference after compatibility
   wrappers and recovery paths are pinned by tests.
 
-## Compiled Web Site productization — planned follow-up
+## Compiled Web Site productization — implemented native path and acceptance gates
 
 - [x] Project a saved selected-handler compiled proof into readable HTML and
   exact handoff JSON, separately attached to the application workbench.
 - [x] Preserve partial modernization packets when combined graph admission
   reaches its budget; never classify incomplete graph paths.
-- [ ] Add published-site input/binding preflight to the normal run configuration.
+- [x] Add published-site input/binding preflight to the normal run configuration.
   - [x] Add the native private fresh/attach configuration and bounded inventory
     preflight; keep source snapshot, parent/index and authoritative binding
     validation explicitly deferred rather than claiming run execution.
-  - [ ] Validate authoritative binding and integrate this contract into normal
+  - [x] Validate authoritative binding and integrate this contract into normal
     resumable source-plus-compiled phase execution.
     - [x] Add the shared Core inspection facade and an internal immutable parent
       manifest/index/facts validation gate with bounded input and cancellation
@@ -58,7 +58,7 @@
       Test selected/all-page fresh and immutable attachment workflows with 67
       declared pages and 368 source files. Keep compiled-site parity and
       representative scale acceptance pending.
-- [ ] Implement .NET orchestration for source-plus-compiled runs and immutable
+- [x] Implement .NET orchestration for source-plus-compiled runs and immutable
   attachment to a retained source scan; keep compatibility wrappers.
   - [x] Compose the existing receipt/preflight/run gates in one native start
     command with an explicitly named new evidence/run root. Require existing
@@ -95,9 +95,9 @@
     public baseline method-chain/rule/tier/span/classification parity plus
     ambiguity and tamper rejection. Keep native report phase and full compiled-site
     acceptance pending.
-- [ ] Integrate compiled evidence into normal packet/docs/handoff navigation
+- [x] Integrate compiled evidence into normal packet/docs/handoff navigation
   across selected/all-page modes without upgrading review-only page verdicts.
-  - [ ] Group exact method chains in the HTML while retaining every evidence
+  - [x] Group exact method chains in the HTML while retaining every evidence
     variant and add an additive chain index to the lossless handoff.
     - [x] Add a bounded private .NET grouped projection with content-addressed
       node/edge records, ordered variant references and exact report restoration;
@@ -122,6 +122,11 @@
     consumption from zero; retain full instrumentation as a separate acceptance gap.
   - [x] Retain actual graph-query traversal work, label its shared selected-root
     scope and preserve unknown historical counters without rewriting old proof.
+  - [x] Retain independent metadata/IL logical aggregate admission credits and
+    denied request counts in generator/input-bound local provenance; project
+    verified records through native status. Preserve per-input outcome gaps,
+    historical absence and unchanged materialized fact identities. Initial
+    focused validation passed 192 tests; final rebuilt regression remains gated.
   - [x] Retain scan/report-attempt elapsed time and constant-space sampled
     parent-process working-set observations, including failed/cancelled attempts.
     Label memory as a lower bound, not an exact phase peak or quota; preserve
@@ -129,7 +134,7 @@
     Metadata/IL work, child-process usage and transient disk peak stay separate.
     Focused rebuilt validation passed 197 tests; the exact-head full gate is
     required before publication.
-- [ ] Avoid full combined-graph materialization while retaining global ambiguity
+- [x] Avoid full combined-graph materialization while retaining global ambiguity
   and cross-assembly evidence; validate deterministic parity.
   - [x] Reduce unused combined fact-property allocation in SQLite while retaining
     every row and all global competitors; preserve compiled bridge identity/body
@@ -190,7 +195,8 @@
     historical 50,000 default and omitted JSON field, validate 1 through 1,000,000,
     pass the explicit value to scan and expose it in status. Pin unchanged work
     limits, configuration hashes and rejection tests; require actual IL admission
-    in the strict large-corpus gate. Full large graph acceptance remains pending.
+    in the strict large-corpus gate. Strict fresh 32/256-page large graph admission
+    passed again at 0992a1fc in 5 minutes 53 seconds; private acceptance remains open.
 - [ ] Add dependency-aware retention, durable run location, relocation validation,
   and dry-run-first cleanup; do not delete the working proof before verification.
   - [x] Add explicit completed-run verified copies with original policy-root

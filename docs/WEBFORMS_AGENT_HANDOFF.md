@@ -43,6 +43,10 @@ Optional originalTool is the checkpointed original distribution/runtime locator,
 not a current availability check or a self-contained SDK. Historical absence
 stays unknown. Tool-copy manifests are private operational evidence; reviewing
 one does not authorize retaining, relocating or executing a tool distribution.
+Optional admissionWork contains independently bounded metadata/IL logical credits
+and denied aggregate reservation counts, not CPU, runtime calls or total scan
+work. Per-input caps and preflight failures remain separate gaps; credits can
+remain consumed for an input later withheld. Preserve scope and unknown old fields.
 
 The checked-in [review prompt](../prompts/review-webforms-modernization-evidence.md)
 now distinguishes native query review from the legacy workflow below. Only use

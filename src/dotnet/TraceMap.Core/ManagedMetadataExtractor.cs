@@ -286,7 +286,9 @@ public static class ManagedMetadataExtractor
             "local-only",
             coverage,
             omittedDescriptors.Length,
-            omittedInputSha256);
+            omittedInputSha256)
+        { AdmissionWork = CompiledAdmissionWorkUsage.Create("metadata", generatorSha256, boundedInputSha256,
+            workBudget.Consumed, workBudget.RefusedRequests, limits.MaxTotalWorkUnits) };
 
         var candidatesWithProvenance = evaluated
             .SelectMany(item => MaterializeInputCandidates(item, boundedInputSha256, generatorSha256, coverage))
@@ -1605,11 +1607,17 @@ public static class ManagedMetadataExtractor
     private sealed class WorkBudget(long remaining)
     {
         private long _remaining = remaining;
+        private readonly long maximum = remaining;
+        public long Consumed => maximum - _remaining;
+        public long RefusedRequests { get; private set; }
 
         public bool TryConsume(long units)
         {
             if (units < 0 || units > _remaining)
+            {
+                RefusedRequests++;
                 return false;
+            }
             _remaining -= units;
             return true;
         }

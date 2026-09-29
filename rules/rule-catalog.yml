@@ -2590,6 +2590,19 @@ rules:
       - Metadata/IL budget work, graph admission work, CPU usage and transient disk peak are not collected here. Retained artifact bytes and independently bounded graph traversal work remain separate counters.
       - Missing or nonpositive memory readings remain unknown, not invented zero. Historical checkpoints omit the additive field; readers do not rewrite, rescan or manufacture old measurements.
       - Collector generator and bounded input commitments are inherited from the containing checkpoint; status separately binds the reader and retained checkpoint. Local integrity hashes are not authenticated OS profiling or build/runtime/SQL evidence.
+  - id: dotnet.compiled.admission-work-usage.v1
+    name: Private compiled collector logical admission usage
+    description: Retains exact successful aggregate budget reservations and denied aggregate-request counts for the independent metadata and IL body collectors, with exact Core generator, source-input and bounded measurement commitments; native status projects the verified retained records.
+    evidenceTier: Tier2Structural
+    emits:
+      - compiled-admission-work-usage.v1 nested in local-only compiled metadata or IL provenance
+      - bounded native status admissionWork projection
+    limitations:
+      - Logical policy credits, not CPU instructions, elapsed time, allocation, runtime calls, total extraction or total scan work. Metadata receipt/dual-reader and IL dual-reader scopes remain independent.
+      - Reservations can be consumed before an input later fails admission. Denied aggregate-request counts exclude per-input caps, preflight exceptions, unreadable and skipped inputs; outcome gaps retain those causes separately.
+      - Zero admitted credits or denied requests does not prove no work, clean coverage, available capacity or permission to increase limits. Failed native artifacts are not admitted merely because a collector observed usage.
+      - Historical missing fields remain unknown and omitted; new measurement output does not change existing metadata/IL bounded-input frames or materialized fact identities.
+      - Exact generator and source-input hashes plus bounded measurement scope/counters are private integrity commitments, not authenticated profiling, source/binary ownership or build/runtime/SQL proof.
   - id: workflow.webforms.compiled-review-location.v1
     name: Explicit private completed-run location copy
     description: Copies a selected hash-verified completed native run into a new separate durable root while retaining original checkpoint and artifact bytes and recording exact generator, bounded file roster, original policy locator and destination commitments.

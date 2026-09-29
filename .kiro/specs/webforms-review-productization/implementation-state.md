@@ -1,5 +1,59 @@
 # Web Forms Review Productization Implementation State
 
+## Current gates (2026-09-29, admission accounting and operator consolidation)
+
+- Added separate generator/input-bound metadata and IL logical admission usage,
+  with successful aggregate reservations and aggregate refusal counts. These are
+  not CPU/runtime/total-scan work; per-input caps and failed/skipped inputs retain
+  their own outcome gaps. Historical missing fields and materialized fact
+  identities are preserved. Native status validates and projects known records.
+- Initial rebuilt focused gate 91862 passed 192 tests in 4 minutes 7 seconds.
+  Subsequent gate 9677 passed 192 and failed one assertion in 4 minutes 26 seconds:
+  a historical timing-only test incorrectly expected the independently retained
+  admission records to be absent. That source assertion is corrected; its failed
+  result is preserved, not relabeled green. Full rebuilt solution gate 11702
+  passed on the corrected source: 2,800 tests, zero failed/skipped in 14 minutes
+  40 seconds. The candidate is not a committed exact-head gate yet. Subsequent
+  help wording distinguishes the passing public stress case from unproven
+  arbitrary graph capacity; final rebuilt validation covers that small change.
+  Rebuilt CLI SHA-256 53973e32ab94d2f70f70964ac846b5491f4891f1b3a1746ba296022996adcc8a;
+  Core e5c4dd1c908f88d2f3600e2a890f5759b7c6783f3a756f8fee3c9f993146f069;
+  tests 127d8ce18e6c45c757d5e517ac6155ee16bd332486bf7afa39b61540079193e4.
+  This gate covers dirty candidate source, not a new committed exact head.
+- Replaced the long native slice-history document with a shorter current
+  operator contract. Original notes are preserved under docs/history; the
+  PowerShell quickstart is explicitly the compatibility path. Native start,
+  config/receipt authority, one run root, status/resume, independent limits,
+  grouped lossless retrieval and protect-only retention are documented together.
+- Added docs/validation/webforms-native-completion-audit-2026-09-29.md mapping
+  each goal requirement to implementation/tests and the authorized Windows
+  start/status/resume commands. Interactive file-URL browser inspection was
+  denied by browser policy; no workaround was attempted and no new visual pass
+  is claimed. Actual renderer/navigation and parity tests remain separate proof.
+- Next: commit this owned candidate,
+  rebuild the clean committed head, run final full no-build regression and strict
+  graph scale sequentially with an absolute output root outside distributions.
+  Keep final results/receipts without rebuilding their pinned binaries. Audit
+  original objective before completion; no merge or deletion is authorized.
+- No private Windows run, push, PR, merge, folder deletion or wrapper replacement
+  occurred. Final exact-head regression/scale and private operator acceptance
+  remain distinct gates; do not infer completion from a local subset.
+
+## Tool durability exact-head gates (2026-09-29, strict fresh scale passed)
+
+- Tool durability committed as 0992a1fce6b2ebcb71063309cca1566b12b9ea40.
+  Exact-head solution build 20741 passed in 13.53 seconds, zero warnings/errors.
+  Strict fresh 32/256-page graph-admission scale 79958 passed in 5 minutes
+  53 seconds, one test, zero failed/skipped. Its receipt is preserved under
+  src/dotnet/tests/TraceMap.Tests/bin/Debug/net10.0/output/native-scale-retained-tool-fresh-20260929/native-scale.receipt.json.
+  The relative output option resolved against the test working directory;
+  subsequent benchmarks must use an absolute root outside tool distributions.
+- Exact CLI SHA-256 0e83b9d379bfc3cc100d9008cfc9a244b5f7d6a6776659b017bcbfd7d5cde00d;
+  Reporting 2ad5373e5ed3d5635222040cce524a7c3b739a7a2581f30a2df3e2d3a53d46ad;
+  tests 9148a8a1edbecfbf2b5a35c40a3de1c7096a2b22dc53e11051cac6069390ba2d.
+  These binary hashes cover the committed tool-durability slice, not the later
+  admission accounting. Publication/private acceptance remain gated.
+
 ## Original tool durability (2026-09-29, rebuilt focused validation passed)
 
 - Phase observations/help fix committed as fc8e56a166874221c68b90a67d7a0a4c5b2d9ca0.
