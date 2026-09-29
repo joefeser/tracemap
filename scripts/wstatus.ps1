@@ -5,6 +5,8 @@ param(
     [switch]$Probe,
     [switch]$ProbeWriter,
     [Alias('Gaps')][switch]$CompiledGaps,
+    [switch]$Recover,
+    [Alias('Open')][switch]$OpenRecovery,
     [switch]$Resume
 )
 
@@ -12,6 +14,8 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 if ($Resume -and ($Probe -or $ProbeWriter)) { throw 'WEBFORMS_STATUS_RESUME_PROBE_CONFLICT' }
 if ($CompiledGaps -and ($Resume -or $Probe -or $ProbeWriter)) { throw 'WEBFORMS_STATUS_GAPS_MODE_CONFLICT' }
+if ($Recover -and ($Resume -or $Probe -or $ProbeWriter -or $CompiledGaps)) { throw 'WEBFORMS_STATUS_RECOVERY_MODE_CONFLICT' }
+if ($OpenRecovery -and !$Recover) { throw 'WEBFORMS_STATUS_OPEN_REQUIRES_RECOVERY' }
 
 function Safe-Code([object]$Value) {
     $code = [string]$Value
@@ -185,6 +189,25 @@ if ($Resume) {
     Write-Output 'resume=owner-requested;native-checkpoint-admitted;report-only-if-runtime-and-inputs-still-match'
     & dotnet $cli webforms-review resume --run $RunRoot
     if ($LASTEXITCODE -ne 0) { throw 'WEBFORMS_STATUS_RESUME_FAILED;preserve-all-attempts' }
+}
+elseif ($Recover) {
+    if ($null -eq $last -or (Safe-Code $last.state) -ne 'reports-failed' -or
+        @($last.gaps) -notcontains 'WEBFORMS_EVIDENCE_NODE_LIMIT') { throw 'WEBFORMS_STATUS_RECOVERY_REQUIRES_NODE_LIMIT_FAILURE' }
+    $verificationRoot = Split-Path (Split-Path $RunRoot -Parent) -Parent
+    $destination = Join-Path $verificationRoot 'recovered-reports'
+    if (Test-Path -LiteralPath $destination) {
+        $name = Microsoft.PowerShell.Utility\Read-Host 'Recovery folder exists and is preserved. Enter a new recovery folder name'
+        if ($name -cnotmatch '^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$') { throw 'WEBFORMS_STATUS_RECOVERY_NAME_INVALID' }
+        $destination = Join-Path $verificationRoot $name
+    }
+    $repo = Split-Path $PSScriptRoot -Parent
+    & dotnet build (Join-Path $repo 'src/dotnet/TraceMap.Cli/TraceMap.Cli.csproj') --nologo --verbosity quiet | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'WEBFORMS_STATUS_RECOVERY_BUILD_FAILED' }
+    $cli = Join-Path $repo 'src/dotnet/TraceMap.Cli/bin/Debug/net10.0/tracemap.dll'
+    & dotnet $cli webforms-review recover-reports --run $RunRoot --out $destination
+    if ($LASTEXITCODE -ne 0) { throw 'WEBFORMS_STATUS_RECOVERY_FAILED;originals-preserved;partial-recovery-preserved' }
+    if ($OpenRecovery -and $IsWindows) { Invoke-Item -LiteralPath (Join-Path $destination 'index.html') }
+    Write-Output 'recovery=separate-bundle;original-run-still-failed;no-scan;no-graph-traversal'
 }
 elseif ($CompiledGaps) {
     if ($null -eq $last -or (Safe-Code $last.state) -ne 'reports-completed-review-only') {

@@ -173,7 +173,8 @@ internal static class WebFormsReviewReportExecution
         if (selectionPath is not null) generated.Add(new("selected-pages.local.txt", selectionBytes,
             Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(string.Join('\n', config.PageRelativePaths) + "\n")))));
         generated.Add(await WebFormsReviewEvidenceIndex.WriteAsync(reportPath, plan.RunId, handoffHash, compiled.HandoffSha256,
-            budget.MaxOutputBytes, config.Budgets.MaxRetainedArtifactBytes, cancellationToken));
+            budget.MaxOutputBytes, config.Budgets.MaxRetainedArtifactBytes, cancellationToken,
+            budget.MaxEvidenceNodes ?? WebFormsReviewEvidenceIndex.MaxNodes));
         return new(handoff.Coverage, packet.Surfaces.Count, paths.Paths.Count, handoff.Gaps, inputHash,
             generated.OrderBy(item => item.RelativePath, StringComparer.Ordinal).ToArray());
     }
@@ -202,7 +203,8 @@ internal static class WebFormsReviewReportExecution
         return new InvalidDataException("WEBFORMS_NATIVE_REPORT_" + stage + "_FAILED", exception);
     }
 
-    private static void Render(TextWriter writer, NativeWebFormsReviewHandoff handoff, int paths, int chains, int? compiledWork, CancellationToken token)
+    internal static void Render(TextWriter writer, NativeWebFormsReviewHandoff handoff, int paths, int chains, int? compiledWork, CancellationToken token,
+        bool recovered = false)
     {
         void W(string value) { token.ThrowIfCancellationRequested(); writer.WriteLine(value); }
         W("<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><link rel=\"icon\" href=\"data:,\"><title>Native Web Forms review workbench</title><style>body{font:16px/1.5 system-ui,sans-serif;margin:2rem auto;padding:0 1rem;max-width:1100px;color:#17212b;overflow-wrap:anywhere}section{margin:1rem 0;border:1px solid #ccd8e3;padding:1rem}.notice{border-left:4px solid #a34024;background:#fff4e9;padding:1rem}td,th{border:1px solid #ccd8e3;padding:.5rem;text-align:left;vertical-align:top;overflow-wrap:anywhere}table{border-collapse:collapse;width:100%;table-layout:fixed}code,pre{white-space:pre-wrap;overflow-wrap:anywhere}a{color:#12599b}summary{cursor:pointer}@media(max-width:650px){thead{display:none}table,tbody,tr,td{display:block;width:auto}tr{margin:.5rem 0}td:before{content:attr(data-label);display:block;font-weight:bold}td+td{border-top:0}}</style></head><body>");
@@ -210,7 +212,9 @@ internal static class WebFormsReviewReportExecution
         W($"<p>Run {H(handoff.RunId)} · coverage {H(handoff.Coverage)} · page mode {H(handoff.Configuration.PageMode)} · {handoff.Packet.Surfaces.Count} retained surfaces. <a href=\"{HandoffName}\">Native handoff JSON</a></p>");
         W($"<p><a href=\"compiled/{GroupedCompiledPathReportWriter.HtmlName}\">Compiled method paths</a>: {chains} exact chains, {paths} evidence variants. Requested roots {handoff.RequestedCompiledRoots}; omitted roots {handoff.OmittedCompiledRoots}. <a href=\"compiled/{GroupedCompiledPathReportWriter.HandoffName}\">Lossless compiled handoff</a></p>");
         W($"<p>Measured traversal work units: page query {handoff.Packet.Summary.TraversalWorkUnits?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "unknown"}; compiled query {compiledWork?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "unknown"}. Each query shares its {handoff.Configuration.Budgets.GraphMaxWork} work-unit and {handoff.Configuration.Budgets.GraphMaxPaths} path limits across all selected roots. These are search counters, not runtime calls, graph-admission work, elapsed time or memory.</p>");
-        W("<p>For bounded machine review, use <code>tracemap webforms-review query --run &lt;this durable run root&gt;</code>. The checkpoint owns the read-only evidence index; do not load the entire handoff to inspect one page or chain.</p>");
+        if (recovered)
+            W("<p>Recovered local report bundle: original run remains failed. This is not parity or runtime proof. <a href=\"report-recovery.local.json\">Recovery provenance</a></p><p>For bounded machine review, use <code>tracemap webforms-review query-recovery --bundle &lt;this recovery bundle&gt;</code>. Do not load the entire handoff to inspect one page or chain.</p>");
+        else W("<p>For bounded machine review, use <code>tracemap webforms-review query --run &lt;this durable run root&gt;</code>. The checkpoint owns the read-only evidence index; do not load the entire handoff to inspect one page or chain.</p>");
         W("<p>Call accounting: P = retained chain-associated call projections; F = distinct retained fact/scan/commit identities; S = retained normalized site identities. Missing site IDs are reported separately, not guessed.</p><table><thead><tr><th>Page / controls</th><th>Calls P / F / S</th><th>Retained page-chain verdicts</th></tr></thead><tbody>");
         foreach (var surface in handoff.Packet.Surfaces)
         {

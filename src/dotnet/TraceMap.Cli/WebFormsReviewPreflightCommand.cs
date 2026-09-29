@@ -39,6 +39,8 @@ public sealed record WebFormsReviewReportBudgets(
     int MaxProjectionRecords = 500_000, int MaxProjectionReferences = 2_000_000)
 {
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? MaxEvidenceNodes { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public long? MaxGraphStorageBytes { get; init; }
 }
 
@@ -111,6 +113,9 @@ public static partial class WebFormsReviewPreflightCommand
         tracemap webforms-review retain-tool --run <completed-run-root> --out <new-tool-root>
 
         Preflight validates the fresh/attach contract and explicit compiled inventory.
+        recover-reports --run <failed-run> --out <new-bundle> recovers retained
+        node-limit report outputs without scanning or changing the original run.
+        query-recovery --bundle <bundle> accepts the same bounded query options.
         It writes local-only run-manifest.json and README.md without scanning,
         binding admission, report rendering or execution. Preflight success alone
         is not a completed workflow. No command builds/publishes the site, mutates
@@ -374,6 +379,7 @@ public static partial class WebFormsReviewPreflightCommand
 
     internal static void ValidateReportBudgets(WebFormsReviewReportBudgets budget)
     {
+        if (budget.MaxEvidenceNodes is < 2 or > WebFormsReviewEvidenceIndex.MaxSupportedNodes) throw Fail("REPORT_BUDGET_INVALID");
         if (budget.MaxInputFacts <= 0 || budget.MaxInputEdges <= 0 || budget.MaxInputTextBytes <= 0 ||
             budget.MaxSurfaces <= 0 || budget.MaxEventChains <= 0 || budget.MaxGaps <= 0 ||
             budget.MaxCompiledRoots is <= 0 or > 10_000 || budget.MaxFrontier <= 0 ||
@@ -394,7 +400,8 @@ public static partial class WebFormsReviewPreflightCommand
         return new(MaxInputFacts: checked((int)budgets.MaxParentFacts),
             MaxInputEdges: checked((int)budgets.MaxParentFacts),
             MaxInputTextBytes: Math.Min(budgets.MaxRetainedArtifactBytes, maximumStorage))
-        { MaxGraphStorageBytes = Math.Clamp(budgets.MaxRetainedArtifactBytes, 64 * 1024, maximumStorage) };
+        { MaxGraphStorageBytes = Math.Clamp(budgets.MaxRetainedArtifactBytes, 64 * 1024, maximumStorage),
+          MaxEvidenceNodes = WebFormsReviewEvidenceIndex.NewPlanMaxNodes };
     }
     private static void ValidateOutput(string output, WebFormsReviewConfig config)
     {
