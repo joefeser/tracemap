@@ -165,7 +165,12 @@ if ($Resume) {
         throw 'WEBFORMS_STATUS_RESUME_REQUIRES_FAILED_REPORT'
     }
     $repo = Split-Path $PSScriptRoot -Parent
-    $cli = Join-Path $repo 'src/dotnet/TraceMap.Cli/bin/Debug/net10.0/tracemap.dll'
+    $verificationRoot = Split-Path (Split-Path $RunRoot -Parent) -Parent
+    $cli = Join-Path $verificationRoot 'tool/tracemap.dll'
+    if (!(Test-Path -LiteralPath $cli -PathType Leaf)) {
+        # Historical runs predate per-run tool retention.
+        $cli = Join-Path $repo 'src/dotnet/TraceMap.Cli/bin/Debug/net10.0/tracemap.dll'
+    }
     if (!(Test-Path -LiteralPath $cli -PathType Leaf)) { throw 'WEBFORMS_STATUS_ORIGINAL_CLI_UNAVAILABLE' }
     $statusJson = @(& dotnet $cli webforms-review status --run $RunRoot --json)
     if ($LASTEXITCODE -ne 0) { throw 'WEBFORMS_STATUS_NATIVE_STATUS_FAILED;no-resume-started' }

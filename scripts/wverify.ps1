@@ -68,6 +68,7 @@ if (!$NoBuild) {
     if ($LASTEXITCODE -ne 0) { throw 'WEBFORMS_VERIFY_TOOL_BUILD_FAILED' }
 }
 $cli = Join-Path $repo 'src/dotnet/TraceMap.Cli/bin/Debug/net10.0/tracemap.dll'
+$cliSha = (Get-FileHash -LiteralPath $cli -Algorithm SHA256).Hash
 $configuration = Join-Path $OutputRoot 'configuration'
 $diagnosticArgs = @()
 if ($Diagnose) { $diagnosticArgs = @('--diagnose') }
@@ -82,8 +83,16 @@ $config = Join-Path $configuration 'review-config.local.json'
 Write-Host "verifiedConfiguration=$config"
 Write-Host "verificationReceipt=$(Join-Path $configuration 'proof-import.local.json')"
 if ($Run) {
+    # Execute from a private, hash-checked snapshot so later pulls/builds cannot
+    # replace the exact CLI distribution pinned by this run's checkpoints.
+    $toolRoot = Join-Path $OutputRoot 'tool'
+    & (Join-Path $PSScriptRoot 'wtoolcopy.ps1') -SourceRoot (Split-Path $cli -Parent) -DestinationRoot $toolRoot
+    $runCli = Join-Path $toolRoot 'tracemap.dll'
+    if ((Get-FileHash -LiteralPath $runCli -Algorithm SHA256).Hash -cne $cliSha) {
+        throw 'WEBFORMS_VERIFY_TOOL_CHANGED_AFTER_IMPORT;no-scan-started;partial-copy-preserved'
+    }
     $review = Join-Path $OutputRoot 'review'
-    dotnet $cli webforms-review start --config $config --out $review
+    dotnet $runCli webforms-review start --config $config --out $review
     if ($LASTEXITCODE -ne 0) { throw 'WEBFORMS_VERIFY_RUN_FAILED;preserve-output-for-diagnostics' }
     Write-Host 'Native documents generated separately. Compare against the retained baseline; completion is not a parity verdict.'
 } else {

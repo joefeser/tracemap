@@ -82,6 +82,9 @@ The new default output is `<copied-review>/native-proof-verification/`:
   originals remain at the selected proof folder.
 - `review/run/`: only with `-Run`, a new native run with application and compiled
   document sets. Use its printed workbench/handoff paths.
+- `tool/`: only with `-Run`, a hash-checked local copy of the CLI distribution
+  used to start that run. Later pulls and builds cannot replace those bytes.
+  This does not copy or pin the external .NET runtime, SDK or private inputs.
 
 Without `-Run`, the command verifies inputs only. Existing output is refused;
 if the default folder exists, the helper requests a short new run-folder name.
@@ -196,7 +199,9 @@ handle before same-process report reads. This addresses a plausible Windows
 handoff failure, but private-run acceptance still requires a completed report.
 Only after the owner decides to try the preserved scan's report phase again,
 `-Resume` selects the same run and invokes the pinned native CLI without a
-build. It first requires a native read-only status with a failed report,
+build. New runs use their adjacent `tool/` copy; historical runs without one
+fall back to the current checkout and may fail the generator guard after a
+rebuild. It first requires a native read-only status with a failed report,
 verified retained scan artifacts and a reader matching the original generator.
 The native resume rechecks runtime and private inputs, allocates a new report
 attempt and never reruns the admitted scan. It can still fail and retain more
