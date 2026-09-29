@@ -2572,12 +2572,24 @@ rules:
       - concise private operator status text
     limitations:
       - Point-in-time retained evidence only; no fresh-source, binding, build, original runtime, SQL execution or complete-site acceptance. Input presence is not byte or source-roster equality.
-      - Unknown work, elapsed, peak-memory and transient-disk consumption remains null or an explicit usage gap. Native graph queries share their path/work limit across all selected roots. Retained page/compiled traversal counters measure those independently bounded queries; their sum can reach twice the per-query cap and is not graph admission or total report-phase work. Historical absent counters remain unknown. Artifact bytes are not rendered-output consumption.
+      - Unknown work, exact phase peak and transient-disk consumption remains null or an explicit usage gap. Optional checkpointed ResourceUsage retains scan/report-attempt elapsed time and sampled parent-process working-set lower bounds, not an exact peak, quota or child-process measurement. Native graph queries share their path/work limit across all selected roots. Retained page/compiled traversal counters measure those independently bounded queries; their sum can reach twice the per-query cap and is not graph admission or total report-phase work. Historical absent counters remain unknown. Artifact bytes are not rendered-output consumption.
       - Completed admitted artifacts are hash-checked. Bounded summaries are read from the pinned immutable evidence index; whole handoffs, private source and unadmitted attempts are not loaded or repaired.
       - JSON is capped at 128 KiB; compiled gap kinds retain at most 50 entries and checkpoint gaps at most 64 with explicit omitted counts. Original artifacts remain lossless.
       - Indexed truncation reasons are counted independently using fixed categories; unrecognized reasons are aggregated as other-retained-reason, not copied as private free-form messages or assumed work exhaustion.
       - Busy, changed or unavailable owned evidence is refused without a completion response. Original-tool resume admission is separate; no TEMP discovery, cleanup or publication occurs.
       - Private paths and hashes are local integrity commitments, not authenticated signatures or shareable projected evidence.
+  - id: workflow.webforms.phase-observation.v1
+    name: Private native Web Forms attempt resource observation
+    description: Retains monotonic elapsed time and constant-space sampled parent-process working-set observations in terminal scan/report checkpoints and exposes the exact retained observations through native status.
+    evidenceTier: Tier4Unknown
+    emits:
+      - webforms-review-phase-usage.v1 nested in a generator/input/payload-bound local-only checkpoint
+    limitations:
+      - Start/end and requested one-second samples produce only a maximum-observed lower bound, not an exact OS or phase peak, memory quota, available capacity or forecast. Child and adapter subprocesses are excluded; scheduling and unavailable readings can miss spikes.
+      - Elapsed time covers the owned scan/report attempt and final artifact/input/runtime validation, excluding prior preflight/admission and checkpoint publication. Successful, failed and cancelled attempt states stay distinct; resource observations do not admit failed artifacts.
+      - Metadata/IL budget work, graph admission work, CPU usage and transient disk peak are not collected here. Retained artifact bytes and independently bounded graph traversal work remain separate counters.
+      - Missing or nonpositive memory readings remain unknown, not invented zero. Historical checkpoints omit the additive field; readers do not rewrite, rescan or manufacture old measurements.
+      - Collector generator and bounded input commitments are inherited from the containing checkpoint; status separately binds the reader and retained checkpoint. Local integrity hashes are not authenticated OS profiling or build/runtime/SQL evidence.
   - id: workflow.webforms.compiled-review-location.v1
     name: Explicit private completed-run location copy
     description: Copies a selected hash-verified completed native run into a new separate durable root while retaining original checkpoint and artifact bytes and recording exact generator, bounded file roster, original policy locator and destination commitments.

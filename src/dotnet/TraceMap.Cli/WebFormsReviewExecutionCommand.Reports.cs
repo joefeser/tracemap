@@ -76,6 +76,7 @@ public static partial class WebFormsReviewExecutionCommand
         var context = new WebFormsReviewReportCheckpointContext(attempt, history.ScanCheckpointSha256!, ScanArtifactsDigest(scan),
             ReportPolicyDigest(plan, scanPath, reportPath), null, 0, 0, null);
         history = await PublishAsync(root, Create(ReportsStarted, scan.Artifacts, scan.Gaps, context), token, history);
+        using var observation = new WebFormsReviewPhaseObservation("reports");
         try
         {
             var result = await runner(plan, scanPath, reportPath, token);
@@ -101,6 +102,8 @@ public static partial class WebFormsReviewExecutionCommand
                 context with { Coverage = result.Coverage, Surfaces = result.Surfaces, CompiledPaths = result.CompiledPaths,
                     ResultBoundedInputSha256 = result.BoundedInputSha256 });
             await VerifyArtifactsAsync(root, completed, plan, token);
+            completed = completed with { PhaseUsage = observation.Finish() };
+            completed = completed with { CheckpointPayloadSha256 = PayloadDigest(completed) };
             history = await PublishAsync(root, completed, token, history);
             await PrintAsync(completed);
             return 0;
@@ -111,18 +114,19 @@ public static partial class WebFormsReviewExecutionCommand
             var cancelled = exception is OperationCanceledException || token.IsCancellationRequested;
             history = await PublishAsync(root, Create(cancelled ? ReportsCancelled : ReportsFailed, scan.Artifacts,
                 cancelled ? ["Cancelled"] : SafeReportFailure(exception) is { } category
-                    ? ["ReportOrArtifactValidationFailed", category] : ["ReportOrArtifactValidationFailed"], context), CancellationToken.None, history);
+                    ? ["ReportOrArtifactValidationFailed", category] : ["ReportOrArtifactValidationFailed"], context, observation.Finish()), CancellationToken.None, history);
             if (cancelled && exception is not OperationCanceledException)
                 throw new OperationCanceledException("Native report execution cancelled.", exception, token);
             throw;
         }
 
         WebFormsReviewCheckpoint Create(string state, IReadOnlyList<WebFormsReviewArtifact> artifacts,
-            IReadOnlyList<string> gaps, WebFormsReviewReportCheckpointContext reportContext)
+            IReadOnlyList<string> gaps, WebFormsReviewReportCheckpointContext reportContext, WebFormsReviewPhaseUsage? usage = null)
         {
             var value = new WebFormsReviewCheckpoint(Schema, RuleId, "local-only", "review-only-static-not-runtime", plan.RunId,
                 history.Sequence + 1, history.Sha256, plan.GeneratorSha256, preflightSha, "", state, scan.Attempt,
-                scan.ScanId, scan.SourceSnapshotDigest, scan.FactCount, gaps, artifacts, "", runtimeSha) { Reports = reportContext };
+                scan.ScanId, scan.SourceSnapshotDigest, scan.FactCount, gaps, artifacts, "", runtimeSha)
+                { Reports = reportContext, PhaseUsage = usage };
             value = value with { BoundedInputSha256 = ReportBoundedDigest(preflightSha, runtimeSha, value) };
             return value with { CheckpointPayloadSha256 = PayloadDigest(value) };
         }

@@ -379,7 +379,9 @@ public sealed class WebFormsReviewPreflightTests
         Assert.DoesNotContain(fixture.Root, error.ToString(), StringComparison.Ordinal);
         Assert.False(Directory.Exists(fixture.Output));
         Assert.Equal(0, await TraceMapCommand.RunAsync(["webforms-review", "--help"], output, error));
-        Assert.Contains("preflight only", output.ToString(), StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Preflight success alone", output.ToString(), StringComparison.Ordinal);
+        Assert.Contains("is not a completed workflow", output.ToString(), StringComparison.Ordinal);
+        Assert.Contains("Start composes preparation", output.ToString(), StringComparison.Ordinal);
     }
 
     private static string Hash(string path) { using var stream = File.OpenRead(path); return Convert.ToHexString(SHA256.HashData(stream)).ToLowerInvariant(); }

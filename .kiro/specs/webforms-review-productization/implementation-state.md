@@ -1,5 +1,45 @@
 # Web Forms Review Productization Implementation State
 
+## Production phase observations (2026-09-29, focused rebuilt validation passed)
+
+- Exact-head regression 5568 ended against 872bba50 binaries in 13 minutes
+  40 seconds: 2,749 passed, one failed, zero skipped. The sole failure expects
+  old generic preflight-only help text. Source assertion now pins the updated
+  explicit preflight/start distinction. No runtime/admission regression was
+  reported, but the final gate is failed, not green; retain that result.
+- Added optional nested phaseUsage to terminal scan/report checkpoints, with
+  elapsed attempt time and constant-space start/end/requested one-second parent
+  working-set samples. Measurements inherit checkpoint generator/input/payload
+  commitments, retain their own rule/tier/scope/limitations and do not change
+  static report/fact identities. Exact OS phase peak, child/adaptor usage, CPU,
+  metadata/IL work and transient disk remain explicit gaps, not fake zero.
+- Status projects the exact retained attempt observations; old absent fields
+  remain unknown. Success/failure/cancellation and artifact admission remain
+  separate. Source tests pin sampled aggregates/idempotent finish, null/invalid
+  readings, historical resume without rewrite, nine malformed-usage categories,
+  actual scan/report/failed/cancelled/status/relocated contexts. Native subprocess
+  scale now retains both attempt observations and verifies their scopes, nullable
+  readings and elapsed time within the measured whole CLI run; completed resume
+  still must preserve checkpoint bytes. Rebuilt focused validation 81726 passed
+  197 tests, zero failed/skipped in 2 minutes 51 seconds, with no compiler
+  warnings reported. Full solution build 48118 passed in 3.85 seconds with
+  zero warnings/errors. Exact-head full regression remains required before
+  publication; this is not whole-workflow completion.
+
+## Current committed validation target (2026-09-29, help contract failure recorded)
+
+- Source slice committed as 872bba506039d54a8cc9efc489d26bab7d20c754 on
+  codex/webforms-native-preflight. No push, PR, merge or cleanup occurred.
+- Rebuilt that exact head with full solution build 27318: 12.60 seconds,
+  zero warnings/errors. Final full no-build regression 5568 ended with one
+  stale help assertion failure, 2,749 passed and zero skipped in 13 minutes
+  40 seconds. Source fix and phase-observation validation are above. Require
+  a new passing full gate before pushing; focused starter and earlier full
+  regression results below are not substitutes for that final gate.
+- Goal remains active. Continue production phase/resource observations,
+  durable original tool/runtime/dependency handling and the authorized private
+  Windows acceptance contract. Preserve every proof, public failure and wrapper.
+
 ## One-command starter (2026-09-29, focused validation passed)
 
 - Added native start composition: explicit config/new review root, optional
