@@ -276,7 +276,10 @@ internal sealed record CombinedReadResult(
     IReadOnlyList<CombinedFactRow> Facts,
     IReadOnlyList<CombinedDependencyEdgeRow> Edges,
     IReadOnlyDictionary<string, long> ValueOriginEvidenceCounts,
-    bool HasFactExtractorVersion = true);
+    bool HasFactExtractorVersion = true)
+{
+    internal IReadOnlyList<CompiledAttachmentIndexLink> CompiledAttachmentLinks { get; init; } = [];
+}
 
 internal sealed record MessageCandidateEdgeResult(
     IReadOnlyList<CombinedDependencyEdgeRow> Edges,
@@ -426,10 +429,13 @@ public static class CombinedDependencyReporter
         }
     }
 
-    internal static async Task<CombinedReadResult> ReadAsync(SqliteConnection connection, CancellationToken cancellationToken)
+    internal static async Task<CombinedReadResult> ReadAsync(SqliteConnection connection, CancellationToken cancellationToken,
+        Func<SqliteConnection, IReadOnlyList<CombinedReportSource>, bool, bool, CancellationToken,
+            Task<IReadOnlyList<CombinedFactRow>>>? factReader = null, ReportInputBudget? inputBudget = null)
     {
         var sourceRows = await ReadSourcesAsync(connection, cancellationToken);
         var sources = sourceRows.Select(row => row.Source).ToArray();
+        var attachmentLinks = await CompiledAttachmentLinkReader.ReadAsync(connection, sourceRows, cancellationToken);
         var knownGaps = new List<CombinedKnownGapRow>();
         var warnings = new List<string>();
         foreach (var row in sourceRows)
@@ -440,9 +446,11 @@ public static class CombinedDependencyReporter
 
         var hasFactExtractorId = await ColumnExistsAsync(connection, "combined_facts", "extractor_id", cancellationToken);
         var hasFactExtractorVersion = await ColumnExistsAsync(connection, "combined_facts", "extractor_version", cancellationToken);
-        var facts = await ReadFactsAsync(connection, hasFactExtractorId, hasFactExtractorVersion, cancellationToken);
+        var facts = factReader is null
+            ? await ReadFactsAsync(connection, hasFactExtractorId, hasFactExtractorVersion, cancellationToken)
+            : await factReader(connection, sources, hasFactExtractorId, hasFactExtractorVersion, cancellationToken);
         knownGaps.AddRange(ReadAnalyzerCapabilityKnownGaps(sources, facts, warnings));
-        var edges = await ReadEdgesAsync(connection, cancellationToken);
+        var edges = await ReadEdgesAsync(connection, cancellationToken, inputBudget);
         var valueOriginCounts = await ReadValueOriginEvidenceCountsAsync(connection, cancellationToken);
         return new CombinedReadResult(
             sources,
@@ -451,7 +459,7 @@ public static class CombinedDependencyReporter
             facts,
             edges,
             valueOriginCounts,
-            hasFactExtractorVersion);
+            hasFactExtractorVersion) { CompiledAttachmentLinks = attachmentLinks };
     }
 
     private static IReadOnlyList<CombinedKnownGapRow> ReadAnalyzerCapabilityKnownGaps(
@@ -460,8 +468,7 @@ public static class CombinedDependencyReporter
         List<string> warnings)
     {
         var sourceById = sources.ToDictionary(source => source.SourceIndexId, StringComparer.Ordinal);
-        return facts
-            .Where(fact => fact.FactType == FactTypes.AnalyzerCapabilityDiagnostic)
+        return CombinedDependencyPathReporter.FactsOfTypes(facts, FactTypes.AnalyzerCapabilityDiagnostic)
             .Select(fact => new
             {
                 Fact = fact,
@@ -670,10 +677,11 @@ public static class CombinedDependencyReporter
         return rows;
     }
 
-    private static async Task<IReadOnlyList<CombinedDependencyEdgeRow>> ReadEdgesAsync(SqliteConnection connection, CancellationToken cancellationToken)
+    private static async Task<IReadOnlyList<CombinedDependencyEdgeRow>> ReadEdgesAsync(SqliteConnection connection,
+        CancellationToken cancellationToken, ReportInputBudget? budget = null)
     {
         await using var command = connection.CreateCommand();
-        command.CommandText = """
+        command.CommandText = $$"""
             select source_index_id,
                    source_label,
                    edge_kind,
@@ -687,7 +695,8 @@ public static class CombinedDependencyReporter
                    evidence_tier,
                    file_path,
                    start_line,
-                   end_line
+                   end_line,
+                   {{(budget is null ? "0" : CombinedDependencyPathReporter.TextByteCountSql("source_index_id", "source_label", "edge_kind", "edge_id", "original_fact_id", "source_symbol", "target_symbol", "target_assembly_name", "target_assembly_version", "rule_id", "evidence_tier", "file_path"))}}
             from combined_dependency_edges
             order by edge_kind, source_label, coalesce(source_symbol, ''), coalesce(target_symbol, ''), file_path, start_line;
             """;
@@ -695,6 +704,7 @@ public static class CombinedDependencyReporter
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         while (await reader.ReadAsync(cancellationToken))
         {
+            budget?.Retain(reader.GetInt64(14), edge: true);
             rows.Add(new CombinedDependencyEdgeRow(
                 reader.GetString(2),
                 reader.GetString(0),
@@ -718,8 +728,7 @@ public static class CombinedDependencyReporter
     internal static IReadOnlyList<CombinedEndpointFinding> MatchEndpoints(IReadOnlyList<CombinedReportSource> sources, IReadOnlyList<CombinedFactRow> facts)
     {
         var sourceById = sources.ToDictionary(source => source.SourceIndexId, StringComparer.Ordinal);
-        var candidates = facts
-            .Where(fact => fact.FactType is FactTypes.HttpCallDetected or FactTypes.HttpRouteBinding)
+        var candidates = CombinedDependencyPathReporter.FactsOfTypes(facts, FactTypes.HttpCallDetected, FactTypes.HttpRouteBinding)
             .Select(ToEndpointCandidate)
             .Where(candidate => candidate.IsClient || candidate.IsServer)
             .ToArray();
@@ -939,7 +948,7 @@ public static class CombinedDependencyReporter
     {
         var extractorVersionsBySource = sources?.ToDictionary(source => source.SourceIndexId, source => source.ScannerVersion, StringComparer.Ordinal)
             ?? new Dictionary<string, string>(StringComparer.Ordinal);
-        return CombinedSurfaceProjection.BuildSurfaces(facts.Select(fact => ToSurfaceProjectionInput(fact, extractorVersionsBySource.GetValueOrDefault(fact.SourceIndexId))).ToArray())
+        return CombinedSurfaceProjection.BuildSurfaces(new ProjectedSurfaceFacts(facts, extractorVersionsBySource))
             .Select(ToSurfaceRow)
             .OrderBy(surface => surface.SurfaceKind, StringComparer.Ordinal)
             .ThenBy(surface => surface.SourceLabel, StringComparer.Ordinal)
@@ -947,6 +956,19 @@ public static class CombinedDependencyReporter
             .ThenBy(surface => surface.FilePath, StringComparer.Ordinal)
             .ThenBy(surface => surface.StartLine)
             .ToArray();
+    }
+
+    // Preserve Core's repeatable list contract without copying every input fact
+    // and its properties into a second complete managed surface-input array.
+    private sealed class ProjectedSurfaceFacts(IReadOnlyList<CombinedFactRow> facts,
+        IReadOnlyDictionary<string, string> extractorVersions) : IReadOnlyList<CombinedSurfaceFactInput>
+    {
+        public int Count => facts.Count;
+        public CombinedSurfaceFactInput this[int index] => Project(facts[index]);
+        private CombinedSurfaceFactInput Project(CombinedFactRow fact)
+            => ToSurfaceProjectionInput(fact, extractorVersions.GetValueOrDefault(fact.SourceIndexId));
+        public IEnumerator<CombinedSurfaceFactInput> GetEnumerator() => facts.Select(Project).GetEnumerator();
+        System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => GetEnumerator();
     }
 
     private static CombinedSurfaceFactInput ToSurfaceProjectionInput(CombinedFactRow fact, string? extractorVersion = null)
@@ -1865,7 +1887,7 @@ public static class CombinedDependencyReporter
         return trimmed.Length == 0 ? "General" : trimmed;
     }
 
-    private static IReadOnlyDictionary<string, string> ParseProperties(string json)
+    internal static IReadOnlyDictionary<string, string> ParseProperties(string json)
     {
         if (string.IsNullOrWhiteSpace(json))
         {

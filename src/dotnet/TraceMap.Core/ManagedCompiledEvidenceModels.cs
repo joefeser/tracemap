@@ -39,7 +39,17 @@ public sealed record CompiledInputProvenance(
     string ArtifactVisibility,
     string CoverageState,
     int OmittedInputCount = 0,
-    string? OmittedInputSha256 = null);
+    string? OmittedInputSha256 = null)
+{
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public CompiledAdmissionWorkUsage? AdmissionWork { get; init; }
+}
+
+/// <summary>In-memory inspection result; callers must separately pin any persisted projection.</summary>
+public sealed record CompiledInputInspection(
+    CompiledInputProvenance? Provenance,
+    IReadOnlyList<string> GapKinds,
+    IReadOnlyList<string> KnownGaps);
 
 public sealed record SourceMetadataReconciliationEntry(
     string ReconciliationState,

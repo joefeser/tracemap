@@ -14,6 +14,26 @@ namespace TraceMap.Tests;
 public sealed class ManagedMetadataExtractorTests
 {
     [Fact]
+    public void Metadata_aggregate_reservations_account_for_admitted_and_refused_inputs_without_changing_fact_identity()
+    {
+        using var temporary = new TempDirectory(); var repo = FindRepoRoot(); var commit = Git(repo, "rev-parse", "HEAD");
+        var assembly = FixtureAssemblies(repo).CSharp; var first = Path.Combine(temporary.Path, "first.dll");
+        var second = Path.Combine(temporary.Path, "second.dll"); File.Copy(assembly, first); File.Copy(assembly, second);
+        var maximum = ManagedMetadataExtractor.PreflightManagedInput(File.ReadAllBytes(assembly), new CompiledInputLimits());
+        var evaluation = ManagedMetadataExtractor.Evaluate(repo, commit, new ScanOptions(repo, "unused",
+            CompiledInputPaths: [first, second], CompiledInputLimits: new CompiledInputLimits(MaxTotalWorkUnits: maximum)));
+        var provenance = evaluation.Provenance!; var usage = provenance.AdmissionWork!;
+        Assert.Equal(maximum, usage.ConsumedWorkUnits); Assert.Equal(1, usage.RefusedAggregateRequests);
+        AssertGap(evaluation, "ManagedInputTotalWorkLimitExceeded");
+        CompiledAdmissionWorkUsage.Validate(usage, "metadata", provenance.GeneratorSha256, provenance.BoundedInputSha256, maximum);
+        var legacy = provenance with { AdmissionWork = null };
+        Assert.DoesNotContain("AdmissionWork", JsonSerializer.Serialize(legacy), StringComparison.Ordinal);
+        Assert.Null(JsonSerializer.Deserialize<CompiledInputProvenance>(JsonSerializer.Serialize(legacy))!.AdmissionWork);
+        Assert.Equal(JsonSerializer.Serialize(ManagedMetadataExtractor.MaterializeFacts(Manifest(commit, provenance), evaluation)),
+            JsonSerializer.Serialize(ManagedMetadataExtractor.MaterializeFacts(Manifest(commit, legacy), evaluation with { Provenance = legacy })));
+    }
+
+    [Fact]
     public void Portable_fixture_matrix_retains_exact_cross_language_metadata_identities()
     {
         var repo = FindRepoRoot();
@@ -30,6 +50,11 @@ public sealed class ManagedMetadataExtractorTests
         Assert.NotNull(evaluation.Provenance);
         Assert.Equal(3, evaluation.Provenance.Outcomes.Count);
         Assert.Equal("local-only", evaluation.Provenance.ArtifactVisibility);
+        var usage = Assert.IsType<CompiledAdmissionWorkUsage>(evaluation.Provenance.AdmissionWork);
+        Assert.InRange(usage.ConsumedWorkUnits, 1, evaluation.Provenance.EffectiveLimits.MaxTotalWorkUnits);
+        Assert.Equal(0, usage.RefusedAggregateRequests);
+        CompiledAdmissionWorkUsage.Validate(usage, "metadata", evaluation.Provenance.GeneratorSha256,
+            evaluation.Provenance.BoundedInputSha256, evaluation.Provenance.EffectiveLimits.MaxTotalWorkUnits);
         Assert.Equal(
             Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(typeof(ManagedMetadataExtractor).Assembly.Location))).ToLowerInvariant(),
             evaluation.Provenance.GeneratorSha256);
@@ -384,6 +409,8 @@ public sealed class ManagedMetadataExtractorTests
             CompiledInputPaths: [fixture],
             CompiledInputLimits: new CompiledInputLimits(MaxTotalWorkUnits: 1)));
         AssertGap(workLimited, "ManagedInputTotalWorkLimitExceeded");
+        Assert.Equal(0, workLimited.Provenance!.AdmissionWork!.ConsumedWorkUnits);
+        Assert.Equal(0, workLimited.Provenance.AdmissionWork.RefusedAggregateRequests); // Per-input preflight fails before reservation.
         var sizeLimited = ManagedMetadataExtractor.Evaluate(repo, commit, new ScanOptions(repo, "unused",
             CompiledInputPaths: [native],
             CompiledInputLimits: new CompiledInputLimits(MaxFileSizeBytes: 1)));

@@ -1,6 +1,12 @@
 # Web Forms Review Quickstart
 
-This is the shortest supported path from an authorized ASP.NET Web Forms
+For the native .NET source-plus-compiled workflow, start with the
+[native operator guide](WEBFORMS_NATIVE_WORKFLOW.md). It uses one explicit
+configuration, one start command and one durable run root, including immutable
+attachment to a retained source scan. Its JSON configuration is not the JSONC
+configuration used by the compatibility scripts below.
+
+This page preserves the supported PowerShell compatibility path from an authorized ASP.NET Web Forms
 checkout to a private application workbench and an optional evidence handoff.
 It applies to C# and VB.NET applications, including old Web Site projects that
 do not have a usable `.csproj` or `.vbproj`.

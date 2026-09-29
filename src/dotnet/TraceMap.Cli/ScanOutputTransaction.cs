@@ -121,11 +121,19 @@ internal static class ScanOutputTransaction
             "index.sqlite",
             "report.md",
             "scan-receipt.json",
+            SourceSnapshotRetention.ManifestName,
+            SourceSnapshotRetention.RosterName,
             "sql-runbook.json",
             "sql-runbook.md",
             "logs"
         };
         if (entries.Any(path => !allowedRootEntries.Contains(Path.GetFileName(path)))) return false;
+        var snapshotManifest = Path.Combine(outputPath, SourceSnapshotRetention.ManifestName);
+        var snapshotRoster = Path.Combine(outputPath, SourceSnapshotRetention.RosterName);
+        if (Path.Exists(snapshotManifest) != Path.Exists(snapshotRoster)) return false;
+        if (Path.Exists(snapshotManifest) && (!File.Exists(snapshotManifest) || !File.Exists(snapshotRoster)
+            || (File.GetAttributes(snapshotManifest) & FileAttributes.ReparsePoint) != 0
+            || (File.GetAttributes(snapshotRoster) & FileAttributes.ReparsePoint) != 0)) return false;
         var logsPath = Path.Combine(outputPath, "logs");
         if (!Directory.Exists(logsPath)) return false;
         var logEntries = Directory.EnumerateFileSystemEntries(logsPath).ToArray();

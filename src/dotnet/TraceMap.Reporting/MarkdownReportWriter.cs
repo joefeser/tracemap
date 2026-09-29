@@ -70,6 +70,21 @@ public static class MarkdownReportWriter
         }
 
         AddBuildEnvironmentDiagnostics(lines, result);
+        if (manifest.CompiledAttachment is { } attachment)
+        {
+            lines.AddRange([
+                "", "## Compiled-only Parent Attachment", "",
+                "LOCAL ONLY. Source analysis and builds were not rerun; parent facts were not copied or relabeled. Static review-only evidence, not runtime execution or SQL proof.", "",
+                $"- Parent scan: `{attachment.ParentScanId}`",
+                $"- Parent manifest SHA-256: `{attachment.ParentManifestSha256}`",
+                $"- Parent index SHA-256: `{attachment.ParentIndexSha256}`",
+                $"- Retained source snapshot SHA-256: `{attachment.ParentSourceSnapshotDigest}`",
+                $"- Verified source files/bytes: `{attachment.SourceFiles}` / `{attachment.SourceBytes}`",
+                $"- Generator SHA-256: `{attachment.GeneratorSha256}`",
+                $"- Bounded input SHA-256: `{attachment.BoundedInputSha256}`", "",
+                attachment.Limitation
+            ]);
+        }
         AddAnalyzerCapabilityDiagnostics(lines, result);
         AddCompiledMetadataEvidence(lines, result);
         AddWebFormsPublishEvidence(lines, result);

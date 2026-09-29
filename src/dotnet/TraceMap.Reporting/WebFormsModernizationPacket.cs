@@ -24,7 +24,13 @@ public sealed record WebFormsModernizationOptions(
     int MaxInputTextBytes = 128 * 1024 * 1024,
     string? SurfaceListPath = null,
     int MaxTraversalWork = 100_000,
-    int MaxFrontier = 10_000);
+    int MaxFrontier = 10_000)
+{
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public long? MaxGraphStorageBytes { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool LiteralSurfaceListPaths { get; init; }
+}
 
 public sealed record WebFormsModernizationResult(
     WebFormsModernizationPacket Packet,
@@ -90,6 +96,8 @@ public sealed record WebFormsModernizationSummary(
     int GapCount,
     bool Truncated)
 {
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public int? TraversalWorkUnits { get; init; }
     public int ClientBehaviorCount { get; init; }
     public int ServerBehaviorCount { get; init; }
     public IReadOnlyList<string> TruncationReasons { get; init; } = [];
@@ -459,7 +467,8 @@ public static class WebFormsModernizationPacketReporter
         var snapshot = await ReadSnapshotAsync(options.IndexPath, snapshotBudget, cancellationToken);
         var surfaceSelection = options.SurfaceListPath is null
             ? null
-            : await ResolveSurfaceSelectionAsync(snapshot.Facts, options.SurfaceListPath, snapshot.InputLimit is not null, cancellationToken);
+            : await ResolveSurfaceSelectionAsync(snapshot.Facts, options.SurfaceListPath, snapshot.InputLimit is not null, cancellationToken,
+                options.LiteralSurfaceListPaths);
         var selectedSurfaceIds = surfaceSelection?.Items
             .Where(item => item.Status == "matched")
             .SelectMany(item => item.SurfaceIds)
@@ -468,7 +477,8 @@ public static class WebFormsModernizationPacketReporter
         // Snapshot admission and graph composition are separate bounded reads. Sharing the
         // mutable budget lets a large snapshot consume the graph's entire allowance before
         // a selected handler can be traversed.
-        var graphBudget = new ReportInputBudget(options.MaxInputFacts, options.MaxInputEdges, options.MaxInputTextBytes);
+        var graphBudget = new ReportInputBudget(options.MaxInputFacts, options.MaxInputEdges, options.MaxInputTextBytes)
+            { MaxGraphStorageBytes = options.MaxGraphStorageBytes ?? ReportInputBudget.DefaultMaxGraphStorageBytes };
         var graphOptions = new CombinedDependencyPathOptions(
             options.IndexPath,
             Path.Combine(Path.GetTempPath(), "tracemap-webforms-modernization-unused"),
@@ -1173,6 +1183,7 @@ public static class WebFormsModernizationPacketReporter
             sources,
             new(projects.Length, surfaces.Length, chains.Count, boundaries.Count, identityState.Length, batchDataMovement.Length, candidates.Count, uniqueGaps.Length, truncated)
             {
+                TraversalWorkUnits = legacyFlow.Summary.TraversalWorkUnits,
                 ClientBehaviorCount = clientBehavior.Length,
                 ServerBehaviorCount = serverBehavior.Length,
                 TruncationReasons = truncationReasons,
@@ -1921,7 +1932,8 @@ public static class WebFormsModernizationPacketReporter
         IReadOnlyList<CodeFact> facts,
         string surfaceListPath,
         bool factSnapshotTruncated,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool literalPaths)
     {
         if (!File.Exists(surfaceListPath)) throw new FileNotFoundException("WebFormsSurfaceListUnavailable");
         const int maximumBytes = 4 * 1024 * 1024;
@@ -1940,7 +1952,7 @@ public static class WebFormsModernizationPacketReporter
                 lines.Add(line);
             }
         }
-        var requests = lines.Select(ExtractSurfaceListValue)
+        var requests = literalPaths ? lines.Where(line => line.Length > 0).ToArray() : lines.Select(ExtractSurfaceListValue)
             .Where(value => value is not null)
             .Cast<string>()
             .Where(value => !IsSurfaceListHeader(value))
@@ -2021,6 +2033,8 @@ public static class WebFormsModernizationPacketReporter
         if (options.SurfaceListPath is not null && !File.Exists(options.SurfaceListPath)) throw new FileNotFoundException("WebFormsSurfaceListUnavailable");
         if (options.MaxSurfaces <= 0 || options.MaxEventChains <= 0 || options.MaxCandidates <= 0 || options.MaxGaps <= 0 || options.MaxDepth <= 0 || options.MaxPaths <= 0 || options.MaxBoundaries <= 0 || options.MaxIdentityState <= 0 || options.MaxBatchDataMovement <= 0 || options.MaxInputFacts <= 0 || options.MaxInputEdges <= 0 || options.MaxInputTextBytes <= 0 || options.MaxTraversalWork <= 0 || options.MaxFrontier <= 0)
             throw new ArgumentOutOfRangeException(nameof(options), "Web Forms modernization bounds must be positive.");
+        if (options.MaxGraphStorageBytes is { } storage && (storage < 64 * 1024 || storage > 16L * 1024 * 1024 * 1024))
+            throw new ArgumentOutOfRangeException(nameof(options), "Graph storage must be between 64 KiB and 16 GiB.");
     }
 
     private static string SurfaceIdentity(CodeFact fact) =>

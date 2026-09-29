@@ -2898,6 +2898,27 @@ public sealed class WebFormsModernizationPacketTests
     }
 
     [Fact]
+    public async Task Literal_surface_selection_preserves_commas_quotes_and_hashes_without_changing_legacy_csv()
+    {
+        using var temp = new TempDirectory();
+        var manifest = Manifest("Succeeded") with { AnalysisLevel = "Level1SemanticAnalysis" };
+        var index = Path.Combine(temp.Path, "index.sqlite");
+        var paths = new[] { "Area/A,literal.aspx", "#literal.aspx", "Area/\"quoted\".aspx" };
+        SqliteIndexWriter.Write(index, manifest, paths.Select((path, ordinal) => Page("surface:" + ordinal, path, manifest)).ToArray());
+        var list = Path.Combine(temp.Path, "pages.txt");
+        await File.WriteAllTextAsync(list, string.Join('\n', paths) + "\n");
+        var literal = await WebFormsModernizationPacketReporter.BuildAsync(new(index, Path.Combine(temp.Path, "literal"), SurfaceListPath: list)
+            { LiteralSurfaceListPaths = true });
+        Assert.Equal(3, literal.SurfaceSelection!.RequestedCount);
+        Assert.Equal(3, literal.SurfaceSelection.MatchedCount);
+        Assert.Equal(3, literal.Surfaces.Count);
+        var legacy = await WebFormsModernizationPacketReporter.BuildAsync(new(index, Path.Combine(temp.Path, "legacy"), SurfaceListPath: list));
+        Assert.Equal(2, legacy.SurfaceSelection!.RequestedCount);
+        Assert.Equal(1, legacy.SurfaceSelection.MatchedCount);
+        Assert.NotEqual(literal.PacketId, legacy.PacketId);
+    }
+
+    [Fact]
     public async Task Surface_selection_round_trips_repeated_and_truncated_requests_and_aliases_affect_packet_identity()
     {
         using var temp = new TempDirectory();

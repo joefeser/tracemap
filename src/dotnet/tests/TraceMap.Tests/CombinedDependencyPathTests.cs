@@ -11,6 +11,46 @@ namespace TraceMap.Tests;
 
 public sealed class CombinedDependencyPathTests
 {
+    [Fact]
+    public void Historical_path_summary_keeps_unrecorded_work_unknown_and_new_measurement_round_trips()
+    {
+        var historical = new CombinedPathSummary(1, 3, 2, 1, 0, 1, false);
+        var bytes = JsonSerializer.Serialize(historical);
+        Assert.DoesNotContain("TraversalWorkUnits", bytes, StringComparison.Ordinal);
+        Assert.Null(JsonSerializer.Deserialize<CombinedPathSummary>(bytes)!.TraversalWorkUnits);
+        var measured = historical with { TraversalWorkUnits = 17 };
+        Assert.Equal(17, JsonSerializer.Deserialize<CombinedPathSummary>(JsonSerializer.Serialize(measured))!.TraversalWorkUnits);
+    }
+
+    [Fact]
+    public async Task Selected_symbol_roots_share_one_traversal_work_and_path_budget()
+    {
+        using var temp = new TempDirectory();
+        var manifest = Manifest("server", "shared-query-work") with { CommitSha = new string('a', 40) };
+        var index = Path.Combine(temp.Path, "index.sqlite");
+        var combined = Path.Combine(temp.Path, "combined.sqlite");
+        var facts = Enumerable.Range(0, 2).SelectMany(root => new[]
+        {
+            CallFact(manifest, $"Root.R{root}()", $"Leaf.L{root}()", "Graph.cs", root + 1),
+            QueryPatternFact(manifest, $"Leaf.L{root}()", "Graph.cs", root + 10)
+        }).ToArray();
+        SqliteIndexWriter.Write(index, manifest, facts);
+        var result = await CombinedIndexBuilder.CombineAsync(new CombineOptions([index], combined, ["server"]));
+        var source = Assert.Single(result.Sources);
+        var roots = Enumerable.Range(0, 2).Select(root => new CombinedPathSymbolRoot(
+            source.SourceIndexId, source.ScanId, source.CommitSha, $"Root.R{root}()")).ToArray();
+        var options = new CombinedDependencyPathOptions(combined, temp.Path, ToSurface: "sql-query", IncludeLegacyRoots: true)
+            { MaxTraversalWork = 3 };
+        var workBounded = await CombinedDependencyPathReporter.BuildSelectedSymbolsAsync(options, roots, combinedIndex: true);
+        Assert.Equal(2, workBounded.Summary.SelectorCandidateCount);
+        Assert.Equal(3, workBounded.Summary.TraversalWorkUnits);
+        Assert.Contains(workBounded.Gaps, gap => gap.Reason == "work");
+        var pathBounded = await CombinedDependencyPathReporter.BuildSelectedSymbolsAsync(
+            options with { MaxTraversalWork = 100, MaxPaths = 1 }, roots, combinedIndex: true);
+        Assert.Single(pathBounded.Paths);
+        Assert.Contains(pathBounded.Gaps, gap => gap.Reason == "path");
+    }
+
     [Theory]
     [InlineData(0, 0, 0, 0, "bound-method-name-unavailable")]
     [InlineData(1, 0, 0, 0, "method-absent-from-receipt-bound-assemblies")]
@@ -55,6 +95,8 @@ public sealed class CombinedDependencyPathTests
             MaxDepth: 8, MaxPaths: 1000, MaxFrontier: 24);
         var first = await CombinedDependencyPathReporter.WriteAsync(options);
         Assert.Equal(64, first.Report.Paths.Count);
+        Assert.NotNull(first.Report.Summary.TraversalWorkUnits);
+        Assert.InRange(first.Report.Summary.TraversalWorkUnits.GetValueOrDefault(), 1, options.MaxTraversalWork);
         Assert.DoesNotContain(first.Report.Gaps, gap => gap.GapKind == "TruncatedByLimit");
         var breadthFirst = await CombinedDependencyPathReporter.WriteAsync(options with { View = null });
         Assert.Contains(breadthFirst.Report.Gaps, gap => gap.Reason == "frontier" && gap.GapKind == "TruncatedByLimit");
@@ -78,6 +120,7 @@ public sealed class CombinedDependencyPathTests
         var workBounded = await CombinedDependencyPathReporter.WriteAsync(workOptions);
         Assert.Contains(workBounded.Report.Gaps, gap => gap.Reason == "work" && gap.GapKind == "TruncatedByLimit");
         Assert.True(workBounded.Report.Paths.Count < 64);
+        Assert.Equal(20, workBounded.Report.Summary.TraversalWorkUnits);
         var workAgain = await CombinedDependencyPathReporter.WriteAsync(workOptions);
         Assert.Equal(JsonSerializer.Serialize(workBounded.Report), JsonSerializer.Serialize(workAgain.Report));
         var noTerminalIndex = Path.Combine(temp.Path, "no-terminal.sqlite");
@@ -86,6 +129,7 @@ public sealed class CombinedDependencyPathTests
         await CombinedIndexBuilder.CombineAsync(new CombineOptions([noTerminalIndex], noTerminalCombined, ["server"]));
         var noTerminal = await CombinedDependencyPathReporter.WriteAsync(workOptions with { IndexPath = noTerminalCombined });
         Assert.Contains(noTerminal.Report.Gaps, gap => gap.Reason == "work" && gap.GapKind == "TruncatedByLimit");
+        Assert.Equal(20, noTerminal.Report.Summary.TraversalWorkUnits);
     }
 
     [Fact]
