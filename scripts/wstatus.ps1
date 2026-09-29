@@ -4,12 +4,14 @@ param(
     [string]$SearchRoot,
     [switch]$Probe,
     [switch]$ProbeWriter,
+    [Alias('Gaps')][switch]$CompiledGaps,
     [switch]$Resume
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 if ($Resume -and ($Probe -or $ProbeWriter)) { throw 'WEBFORMS_STATUS_RESUME_PROBE_CONFLICT' }
+if ($CompiledGaps -and ($Resume -or $Probe -or $ProbeWriter)) { throw 'WEBFORMS_STATUS_GAPS_MODE_CONFLICT' }
 
 function Safe-Code([object]$Value) {
     $code = [string]$Value
@@ -183,5 +185,30 @@ if ($Resume) {
     Write-Output 'resume=owner-requested;native-checkpoint-admitted;report-only-if-runtime-and-inputs-still-match'
     & dotnet $cli webforms-review resume --run $RunRoot
     if ($LASTEXITCODE -ne 0) { throw 'WEBFORMS_STATUS_RESUME_FAILED;preserve-all-attempts' }
+}
+elseif ($CompiledGaps) {
+    if ($null -eq $last -or (Safe-Code $last.state) -ne 'reports-completed-review-only') {
+        throw 'WEBFORMS_STATUS_GAPS_REQUIRES_COMPLETED_REPORT'
+    }
+    $verificationRoot = Split-Path (Split-Path $RunRoot -Parent) -Parent
+    $cli = Join-Path $verificationRoot 'tool/tracemap.dll'
+    if (!(Test-Path -LiteralPath $cli -PathType Leaf)) { throw 'WEBFORMS_STATUS_RETAINED_TOOL_UNAVAILABLE' }
+    # The native query validates checkpoint/index integrity and bounds the slice.
+    # Never print its raw JSON: it includes private identity commitments.
+    $queryJson = @(& dotnet $cli webforms-review query --run $RunRoot --document compiled --pointer /header/gaps --limit 50 --depth 2 2>&1)
+    if ($LASTEXITCODE -ne 0) { throw 'WEBFORMS_STATUS_GAP_QUERY_FAILED;originals-preserved' }
+    try {
+        $query = ($queryJson -join "`n") | ConvertFrom-Json
+        $gapItems = @($query.result.children)
+        foreach ($gap in $gapItems) {
+            $kind = @($gap.children | Where-Object { $_.pointer -match '/gapKind$' })
+            $reason = @($gap.children | Where-Object { $_.pointer -match '/reason$' })
+            if ($kind.Count -ne 1 -or $reason.Count -gt 1) { throw 'invalid-shape' }
+            $reasonCode = if ($reason.Count -eq 1 -and $null -ne $reason[0].value) { Safe-Code $reason[0].value } else { 'none' }
+            Write-Output "compiledGap.kind=$(Safe-Code $kind[0].value);reason=$reasonCode"
+        }
+        Write-Output "compiledGap.returned=$($gapItems.Count);omitted=$(Safe-Count $query.result.omittedChildren)"
+    } catch { throw 'WEBFORMS_STATUS_GAP_QUERY_INVALID;originals-preserved' }
+    Write-Output 'gapQuery=retained-index-only;no-resume;no-scan;no-inputs-changed'
 }
 else { Write-Output 'status=retained-checkpoints-only;no-resume;no-inputs-changed' }

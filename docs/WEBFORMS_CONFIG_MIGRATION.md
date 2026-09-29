@@ -245,3 +245,7 @@ It does not support the older three-field page-list-only config, which lacks
 source and project scope. Failed staging folders are retained, not admitted as
 completed migrations. Keep all generated files private; do not commit or upload
 them. The migration receipt binds the exact draft bytes, not later owner edits.
+
+## Completed report gap diagnostics
+
+Run `./scripts/wstatus.ps1 -Gaps` and select the completed verification run (for example `verify-4`). This uses that run's retained tool and checkpointed bounded evidence query, printing only sanitized compiled gap kinds/reasons and returned/omitted counts. It does not print raw handoff JSON, private paths or hashes, rebuild tools, resume, or scan. The first 50 retained gaps are inspected; omitted counts remain explicit. This is diagnosis, not parity proof.
