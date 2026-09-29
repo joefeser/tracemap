@@ -327,7 +327,7 @@ public static partial class WebFormsReviewPreflightCommand
         if (budget.MaxInputFiles is < 1 or > 256 || budget.MaxAssemblyBytes is < 1 or > 1_073_741_824 ||
             budget.MaxRetainedArtifactBytes is < 1 or > 1_099_511_627_776 || budget.MaxTotalHashBytes is < 1 or > 1_099_511_627_776 ||
             budget.IlMaxWork is < 1 or > 100_000_000 || budget.GraphMaxWork is < 1 or > 100_000_000 ||
-            budget.GraphMaxDepth is < 1 or > 20 || budget.GraphMaxPaths is < 1 or > 256 ||
+            budget.GraphMaxDepth is < 1 or > 20 || budget.GraphMaxPaths is < 1 or > 4096 ||
             budget.MetadataMaxWork is < 1 or > 100_000_000 || budget.MetadataMaxText is < 71 or > 65_536 ||
             budget.IlMaxText is < 71 or > 65_536 || budget.MaxParentFacts is < 1 or > 100_000_000 ||
             budget.MaxFactLineChars is < 128 or > 16_777_216) throw Fail("BUDGET_INVALID");

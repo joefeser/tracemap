@@ -2497,6 +2497,24 @@ rules:
       - A zero SQL-query path may have a separate exact-handler database-api candidate path; these are different terminal claims and remain in separate local HTML and JSON outputs.
       - Saved API report reuse requires both exact input and report-byte hashes; older receipts require an explicit bounded graph recheck, not a new source scan.
       - Gap details retain available source, span, extractor and evidence identifiers; missing rules or invalid tiers reject the projection.
+  - id: diagnostic.webforms.synthetic-corpus.v1
+    name: Public synthetic Web Forms scale corpus receipt
+    description: Records the exact generator, bounded source roster and generated PE/IL artifact hashes for a public deterministic native workflow test corpus.
+    evidenceTier: Tier4Unknown
+    emits: [diagnostic.webforms.synthetic-corpus.v1 local-only receipt]
+    limitations:
+      - Generated PE/IL is never executed and does not prove authentic ASP.NET compilation, source equivalence, runtime dispatch or SQL execution.
+      - Source padding and declared pages are controlled dimensions, not predictors of arbitrary graph fan-out or customer corpus performance.
+  - id: diagnostic.webforms.native-scale.v1
+    name: Public native Web Forms subprocess scale diagnostic
+    description: Records pinned generator and bounded corpus input hashes with elapsed time, OS peak resident usage, retained disk and review-only retained coverage from separate native CLI processes.
+    evidenceTier: Tier4Unknown
+    emits: [diagnostic.webforms.native-scale.v1 local-only receipt]
+    limitations:
+      - OS peak covers each CLI process, not fixture generation or a simultaneous aggregate working set; no sampled working-set or allocated-byte metric substitutes for peak resident usage.
+      - Retained disk excludes transient graph and OS sorter disk peaks. Explicit benchmark output must be new and remains retained, including failure artifacts.
+      - The ordinary 1/8-page smoke and opt-in 32/256-page eight-times-source corpus do not establish private Windows, authentic compiled-site or arbitrary graph acceptance.
+      - Generated static database-API paths remain review-only; coverage, truncation and provenance gaps are retained rather than promoted to runtime conclusions.
   - id: workflow.webforms.compiled-review-preflight.v1
     name: Private native compiled Web Forms run preflight
     description: Validates an explicit fresh or immutable-attachment configuration and records bounded streamed input hashes, managed PE header names, phase plans and deferred-validation gaps in a new local-only run manifest.
@@ -2510,6 +2528,7 @@ rules:
       - Inputs are explicit and bounded under declared roots; scattered external DLL discovery, relocation and dependency cleanup are not implemented.
       - An explicit receiptRoot can locate existing binding and publish receipts outside the published site; its bytes and output separation are checked, but this does not generate receipts, attest ownership or validate a historical compiler.
       - File hashing limits are separate from recorded future IL and graph budgets; streamed hashing does not establish large-corpus runtime or memory acceptance.
+      - Graph path retention defaults to 256 and accepts an explicit 1 through 4096 value; increasing it does not increase depth, work, admission or output caps and never proves complete traversal.
       - The manifest contains private paths, source commit and input fingerprints and is not shareable; parent scans and existing output folders are never rewritten.
   - id: workflow.webforms.compiled-review-execution.v1
     name: Private native fresh and attachment Web Forms scan checkpoints

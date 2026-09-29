@@ -127,6 +127,12 @@
     ambiguity indexes and representative peak-memory/throughput gates pending.
 - [ ] Benchmark eight-times source-size synthetic corpus and representative
   compiled graph distributions; record disk/time/peak-memory/coverage metrics.
+  - [x] Add a real-CLI subprocess diagnostic with 32/256 declared pages, exact
+    eight-times source bytes, generated cross-assembly PE/IL, overload competitors
+    and four terminal branches per page; record OS peak resident usage, elapsed
+    time, retained disk and separate packet/compiled truncation. Preserve inputs
+    and admitted resume artifacts. Keep private graph scale, transient disk peak
+    and the observed publish-member join work-limit follow-up pending.
 - [ ] Add dependency-aware retention, durable run location, relocation validation,
   and dry-run-first cleanup; do not delete the working proof before verification.
 - [ ] Validate the new workflow on an authorized real repository before replacing
