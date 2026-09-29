@@ -11,6 +11,63 @@ public sealed class WebFormsReviewExecutionTests
     private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase, WriteIndented = true };
 
     [Fact]
+    public async Task Historical_checkpoint_without_phase_usage_remains_unknown_and_resumes_without_rewriting()
+    {
+        using var fixture = new Fixture(); await fixture.Preflight();
+        Assert.Equal(0, await fixture.Execute("run", Scan));
+        RewriteCheckpoint(fixture, fixture.LastCheckpoint() with { PhaseUsage = null });
+        var before = Directory.GetFiles(fixture.Run, "*", SearchOption.AllDirectories).ToDictionary(path => path, Hash);
+        using var output = new StringWriter();
+        Assert.Equal(0, await TraceMapCommand.RunAsync(["webforms-review", "status", "--run", fixture.Run, "--json"], output, fixture.Error));
+        var status = JsonSerializer.Deserialize<WebFormsReviewStatus>(output.ToString(), JsonOptions)!;
+        Assert.All(status.Phases, phase => Assert.Null(phase.ResourceUsage));
+        Assert.Equal(0, await fixture.Execute("resume", (_, _, _, _) => throw new InvalidOperationException("must not rescan")));
+        foreach (var item in before) Assert.Equal(item.Value, Hash(item.Key));
+        Assert.Equal(before.Count, Directory.GetFiles(fixture.Run, "*", SearchOption.AllDirectories).Length);
+    }
+
+    [Theory]
+    [InlineData("rule")]
+    [InlineData("tier")]
+    [InlineData("phase")]
+    [InlineData("scope")]
+    [InlineData("elapsed")]
+    [InlineData("samples")]
+    [InlineData("interval")]
+    [InlineData("memory")]
+    [InlineData("limitations")]
+    public async Task Malformed_phase_usage_is_refused_even_with_a_recomputed_payload_hash(string mutation)
+    {
+        using var fixture = new Fixture(); await fixture.Preflight();
+        Assert.Equal(1, await fixture.Execute("run", (_, _, _, _) => Task.FromResult(1)));
+        var checkpoint = fixture.LastCheckpoint();
+        var usage = checkpoint.PhaseUsage!;
+        usage = mutation switch
+        {
+            "rule" => usage with { RuleId = "unknown" },
+            "tier" => usage with { EvidenceTier = "Tier1Semantic" },
+            "phase" => usage with { Phase = "reports" },
+            "scope" => usage with { MeasurementScope = "exact-phase-peak" },
+            "elapsed" => usage with { ElapsedMilliseconds = -1 },
+            "samples" => usage with { SuccessfulMemorySamples = -1 },
+            "interval" => usage with { RequestedSamplingIntervalMilliseconds = 0 },
+            "memory" => usage with { SuccessfulMemorySamples = 1, MaximumObservedWorkingSetBytes = 0 },
+            _ => usage with { Limitations = [] }
+        };
+        RewriteCheckpoint(fixture, checkpoint with { PhaseUsage = usage });
+        Assert.Equal(1, await fixture.Execute("resume", (_, _, _, _) => throw new InvalidOperationException("must not scan")));
+        Assert.Contains("PHASE_USAGE_INVALID", fixture.Error.ToString(), StringComparison.Ordinal);
+    }
+
+    private static void RewriteCheckpoint(Fixture fixture, WebFormsReviewCheckpoint checkpoint)
+    {
+        var digest = Convert.ToHexStringLower(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(
+            checkpoint with { CheckpointPayloadSha256 = "" }, JsonOptions)));
+        File.WriteAllText(Path.Combine(fixture.Run, "checkpoints", checkpoint.Sequence.ToString("D4", System.Globalization.CultureInfo.InvariantCulture) + ".json"),
+            JsonSerializer.Serialize(checkpoint with { CheckpointPayloadSha256 = digest }, JsonOptions));
+    }
+
+    [Fact]
     public async Task Preflight_status_is_read_only_and_does_not_create_a_lock_or_invent_execution_usage()
     {
         using var fixture = new Fixture(); await fixture.Preflight();
@@ -23,6 +80,7 @@ public sealed class WebFormsReviewExecutionTests
         Assert.Equal("local-only", status.Visibility); Assert.Equal("retained-status-not-fresh-source-or-runtime", status.ClaimLevel);
         Assert.Equal(Hash(typeof(WebFormsReviewExecutionCommand).Assembly.Location), status.GeneratorSha256);
         Assert.Equal(64, status.BoundedInputSha256.Length); Assert.All(status.Phases, phase => Assert.Null(phase.WorkUnitsUsed));
+        Assert.All(status.Phases, phase => Assert.Null(phase.ResourceUsage));
         Assert.Equal(fixture.Config.Operation, status.Operation); Assert.Equal(fixture.Config.PageMode, status.PageMode);
         Assert.Equal(fixture.Config.SourceCommitSha, status.SourceCommitSha);
         Assert.Equal(fixture.Config.Budgets.IlMaxBodies ?? 50_000,
@@ -63,6 +121,13 @@ public sealed class WebFormsReviewExecutionTests
         Assert.Equal(fixture.Config.SourceCommitSha, status.SourceCommitSha);
         Assert.Equal(scenario != "scan-failed", status.RetainedArtifactsVerified);
         Assert.All(status.Phases, phase => Assert.NotEmpty(phase.UsageGaps));
+        Assert.Null(status.Phases.Single(phase => phase.Name == "preflight").ResourceUsage);
+        Assert.NotNull(status.Phases.Single(phase => phase.Name == "scan").ResourceUsage);
+        var activeUsage = status.Phases.Single(phase => phase.Name == (scenario.StartsWith("reports-", StringComparison.Ordinal)
+            || scenario is "relocated" or "missing-inputs" ? "reports" : "scan")).ResourceUsage!;
+        Assert.True(activeUsage.ElapsedMilliseconds >= 0);
+        Assert.Equal(WebFormsReviewPhaseObservation.Rule, activeUsage.RuleId);
+        Assert.Equal(JsonSerializer.Serialize(checkpoint.PhaseUsage, JsonOptions), JsonSerializer.Serialize(activeUsage, JsonOptions));
         Assert.All(status.Phases.Where(phase => phase.Name != "reports"), phase => Assert.Null(phase.WorkUnitsUsed));
         var complete = checkpoint.State == "reports-completed-review-only";
         Assert.Equal(complete, status.WorkbenchPath is not null);
@@ -95,6 +160,7 @@ public sealed class WebFormsReviewExecutionTests
         Assert.Equal(0, await TraceMapCommand.RunAsync(["webforms-review", "status", "--run", root], text, fixture.Error));
         Assert.Contains("resumeAdmissionPerformed=false", text.ToString(), StringComparison.Ordinal);
         Assert.Contains("workUsage=not-fully-retained", text.ToString(), StringComparison.Ordinal);
+        Assert.Contains("exactPhasePeak=false;childrenIncluded=false", text.ToString(), StringComparison.Ordinal);
         if (complete) Assert.Contains("sharedAcrossSelectedRoots=true", text.ToString(), StringComparison.Ordinal);
     }
 
@@ -366,6 +432,7 @@ public sealed class WebFormsReviewExecutionTests
         }));
         var failed = fixture.LastCheckpoint();
         Assert.Equal("scan-failed", failed.State);
+        Assert.Equal("scan", failed.PhaseUsage!.Phase);
         Assert.Empty(failed.Artifacts);
         Assert.Null(failed.ScanId);
         var retained = Path.Combine(fixture.Run, failed.Attempt, "scan", "incomplete.txt");
@@ -389,6 +456,7 @@ public sealed class WebFormsReviewExecutionTests
             throw new OperationCanceledException(cancellation.Token);
         }, cancellation.Token));
         Assert.Equal("scan-cancelled", fixture.LastCheckpoint().State);
+        Assert.Equal("scan", fixture.LastCheckpoint().PhaseUsage!.Phase);
         Assert.Equal(0, await fixture.Execute("resume", Scan));
     }
 
@@ -672,6 +740,7 @@ public sealed class WebFormsReviewExecutionTests
         }));
         var failed = fixture.LastCheckpoint();
         Assert.Equal("reports-failed", failed.State);
+        Assert.Equal("reports", failed.PhaseUsage!.Phase);
         Assert.Equal(scan.Artifacts, failed.Artifacts);
         var markerHash = Hash(marker!);
         Assert.Equal(0, await fixture.ExecuteReports("resume", WebFormsReviewReportExecution.WriteAsync));
@@ -696,6 +765,7 @@ public sealed class WebFormsReviewExecutionTests
             cancellation.Cancel(); throw new OperationCanceledException(cancellation.Token);
         }, cancellation.Token));
         Assert.Equal("reports-cancelled", fixture.LastCheckpoint().State);
+        Assert.Equal("reports", fixture.LastCheckpoint().PhaseUsage!.Phase);
         Assert.Equal(0, await fixture.ExecuteReports("resume", WebFormsReviewReportExecution.WriteAsync));
         Assert.Equal("reports-completed-review-only", fixture.LastCheckpoint().State);
     }

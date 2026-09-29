@@ -17,6 +17,8 @@ public sealed record WebFormsReviewCheckpoint(
 {
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public WebFormsReviewReportCheckpointContext? Reports { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public WebFormsReviewPhaseUsage? PhaseUsage { get; init; }
 }
 
 public sealed record WebFormsReviewReportCheckpointContext(
@@ -112,6 +114,7 @@ public static partial class WebFormsReviewExecutionCommand
             history = await PublishAsync(root, started, cancellationToken);
             using var scanOutput = new StringWriter(CultureInfo.InvariantCulture);
             using var scanError = new StringWriter(CultureInfo.InvariantCulture);
+            using var observation = new WebFormsReviewPhaseObservation("scan");
             try
             {
                 if (attach)
@@ -138,10 +141,11 @@ public static partial class WebFormsReviewExecutionCommand
                 else await WebFormsReviewInputValidation.ValidateCompleteOrLegacySnapshotAsync(validationPlan, checkedScan.Manifest, cancellationToken);
                 var publishGaps = checkedScan.Manifest.WebFormsPublishProvenance is null ? new[] { "PublishMapExecutionPending" }
                     : checkedScan.Manifest.WebFormsPublishProvenance.Status == "bound" ? [] : new[] { "PublishReceiptCoverageReduced" };
-                var completed = Checkpoint(Completed, artifacts, checkedScan.Manifest.ScanId,
-                    checkedScan.Manifest.SourceSnapshotDigest, checkedScan.Facts, validationGaps
+                var completedGaps = validationGaps
                         .Concat(["UnifiedReportsPending"]).Concat(attach ? new[] { "CrossIndexParentJoinsPending" } : [])
-                        .Concat(publishGaps).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray());
+                        .Concat(publishGaps).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+                var completed = Checkpoint(Completed, artifacts, checkedScan.Manifest.ScanId,
+                    checkedScan.Manifest.SourceSnapshotDigest, checkedScan.Facts, completedGaps);
                 await VerifyArtifactsAsync(root, completed, plan, cancellationToken);
                 await WebFormsReviewInputValidation.RecheckAsync(plan, cancellationToken);
                 if (attach) await WebFormsReviewInputValidation.ValidateCompleteOrLegacySnapshotAsync(plan, validated.ParentManifest!, cancellationToken);
@@ -149,6 +153,8 @@ public static partial class WebFormsReviewExecutionCommand
                 if (gitAfter.CommitSha != git.CommitSha || gitAfter.GitRootPath != git.GitRootPath ||
                     gitAfter.RemoteUrl != git.RemoteUrl || gitAfter.ScanRootRelativePath != git.ScanRootRelativePath) throw Fail("SOURCE_IDENTITY_CHANGED");
                 if (runtimeSha != await RuntimeDigestAsync(runtimeRoot, cancellationToken)) throw Fail("RUNTIME_CHANGED");
+                completed = Checkpoint(Completed, artifacts, checkedScan.Manifest.ScanId,
+                    checkedScan.Manifest.SourceSnapshotDigest, checkedScan.Facts, completedGaps, observation.Finish());
                 history = await PublishAsync(root, completed, cancellationToken);
                 if (reportRunner is not null)
                     return await ExecuteReportsAsync(root, plan, preflightSha, runtimeRoot, runtimeSha, history,
@@ -164,20 +170,20 @@ public static partial class WebFormsReviewExecutionCommand
                 // evidence; resume allocates a new owned attempt rather than overwriting.
                 var cancelled = exception is OperationCanceledException || cancellationToken.IsCancellationRequested;
                 await PublishAsync(root, Checkpoint(cancelled ? "scan-cancelled" : "scan-failed",
-                    [], null, null, 0, [cancelled ? "Cancelled" : "ScanOrArtifactValidationFailed"]), CancellationToken.None);
+                    [], null, null, 0, [cancelled ? "Cancelled" : "ScanOrArtifactValidationFailed"], observation.Finish()), CancellationToken.None);
                 if (cancelled && exception is not OperationCanceledException)
                     throw new OperationCanceledException("Native execution cancelled.", exception, cancellationToken);
                 throw;
             }
 
             WebFormsReviewCheckpoint Checkpoint(string state, IReadOnlyList<WebFormsReviewArtifact> artifacts,
-                string? scanId, string? snapshot, long factCount, IReadOnlyList<string> gaps)
+                string? scanId, string? snapshot, long factCount, IReadOnlyList<string> gaps, WebFormsReviewPhaseUsage? usage = null)
             {
                 var bounded = Digest(JsonSerializer.SerializeToUtf8Bytes(new
                 { preflightSha256 = preflightSha, runtimeInputsSha256 = runtimeSha, policySha256 = policyDigest, sourceSnapshotDigest = snapshot, artifacts }, JsonOptions));
                 var checkpoint = new WebFormsReviewCheckpoint(Schema, RuleId, "local-only", "review-only-static-not-runtime", plan.RunId,
                     history.Sequence + 1, history.Sha256, plan.GeneratorSha256, preflightSha, bounded,
-                    state, attempt, scanId, snapshot, factCount, gaps, artifacts, "", runtimeSha);
+                    state, attempt, scanId, snapshot, factCount, gaps, artifacts, "", runtimeSha) { PhaseUsage = usage };
                 return checkpoint with { CheckpointPayloadSha256 = PayloadDigest(checkpoint) };
             }
         }
@@ -310,6 +316,7 @@ public static partial class WebFormsReviewExecutionCommand
             WebFormsReviewPreflightCommand.RejectDuplicateProperties(bytes);
             var checkpoint = JsonSerializer.Deserialize<WebFormsReviewCheckpoint>(bytes, JsonOptions) ?? throw Fail("CHECKPOINT_INVALID");
             if (checkpoint.CheckpointPayloadSha256 != PayloadDigest(checkpoint)) throw Fail("CHECKPOINT_PAYLOAD_CHANGED");
+            ValidatePhaseUsage(checkpoint);
             if (checkpoint.SchemaVersion != Schema || checkpoint.RuleId != RuleId || checkpoint.Visibility != "local-only" ||
                 checkpoint.ClaimLevel != "review-only-static-not-runtime" || checkpoint.RunId != plan.RunId ||
                 checkpoint.Sequence != history.Sequence + 1 || checkpoint.PreviousCheckpointSha256 != history.Sha256 ||

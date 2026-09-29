@@ -211,6 +211,22 @@ are retained. This sum can reach twice the per-query cap; graph-admission work
 remains a separate gap. Aggregate artifact bytes are not the renderer's byte
 counter. Do not infer elapsed/peak/transient usage from retained file counts.
 
+New terminal scan/report checkpoints retain optional `phaseUsage` observations
+under `workflow.webforms.phase-observation.v1`, with the containing checkpoint's
+exact collector generator/input/payload commitments. Status exposes them as
+`resourceUsage` on the corresponding phase and prints short `phaseUsage=` lines.
+They measure elapsed attempt time through final artifact/input/runtime validation
+(excluding prior preflight/admission and checkpoint publication), plus a constant-
+space maximum over parent-process working-set readings at start/end and requested
+one-second intervals. The memory value is only an observed lower bound, never an
+exact OS/phase peak or memory quota. Child/adaptor processes and scheduling-missed
+spikes are excluded. Unavailable/nonpositive readings remain `null` with zero
+successful samples, not zero memory use. Earlier checkpoints omit the additive
+field and are not rewritten to invent measurements. Failed/cancelled measurements
+do not admit their partial artifacts. CPU, metadata/IL work, graph-admission work
+and transient disk peak remain separate unknown counters; these observations do
+not establish coverage, capacity or runtime SQL execution.
+
 Completed scan/report artifacts are rehashed before status is reported; compact
 report counts come from bounded reads of the checkpointed evidence index, not
 whole handoffs. Preflight and failed/interrupted attempts remain distinct from

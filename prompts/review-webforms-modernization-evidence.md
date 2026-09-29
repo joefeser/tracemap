@@ -23,6 +23,9 @@ approved TraceMap executable and run root. Do not execute `run`, `resume`,
    first. Record operation, selected/all-page scope, retained source commit,
    coverage, configured limits, observed counts and categorical truncation
    reasons. Unknown work/time/peak usage is not zero.
+   Optional resourceUsage contains attempt elapsed time and sampled parent-process
+   working-set lower bounds, not exact peaks, memory quotas, child-process totals,
+   admitted failed artifacts or a basis for automatic budget increases.
    Measured page/compiled traversal counters share each query's budget across
    all selected roots; their sum is not total phase work, runtime calls or a
    performance forecast. Preserve each counter's scope. Status is not fresh

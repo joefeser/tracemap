@@ -9,6 +9,8 @@ public sealed record WebFormsReviewStatusPhase(string Name, string State, string
 {
     [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
     public string? WorkUnitsScope { get; init; }
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public WebFormsReviewPhaseUsage? ResourceUsage { get; init; }
 }
 public sealed record WebFormsReviewStatusAction(string Kind, string Instruction, string? Command, IReadOnlyList<string> Arguments);
 public sealed record WebFormsReviewLocatorStatus(string Role, int Present, int Missing);
@@ -92,7 +94,10 @@ public static partial class WebFormsReviewExecutionCommand
                 new Dictionary<string, long> { ["metadataWorkUnits"] = budget.MetadataMaxWork, ["ilWorkUnits"] = budget.IlMaxWork,
                     ["ilBodies"] = budget.IlMaxBodies ?? 50_000,
                     ["artifactBytesPerFile"] = budget.MaxRetainedArtifactBytes, ["totalHashBytes"] = budget.MaxTotalHashBytes },
-                null, ["Retained fact and artifact counts are not metadata/IL work consumption. Work, time and peak usage were not recorded."]));
+                null, ["Retained fact and artifact counts are not metadata/IL work consumption. Exact phase peak, child-process usage and transient disk peak were not recorded.",
+                    "ResourceUsage is an optional retained attempt observation; absent historical elapsed time and memory samples remain unknown."])
+                { ResourceUsage = history.ScanCheckpoint?.PhaseUsage
+                    ?? (checkpoint?.State is "scan-failed" or "scan-cancelled" ? checkpoint.PhaseUsage : null) });
             var gapKinds = new Dictionary<string, int>(StringComparer.Ordinal);
             IReadOnlyDictionary<string, int> truncations = new Dictionary<string, int>(StringComparer.Ordinal);
             var omittedKinds = 0;
@@ -165,9 +170,10 @@ public static partial class WebFormsReviewExecutionCommand
                     ["depthPerPath"] = budget.GraphMaxDepth, ["traversalWorkPerGraphQuery"] = budget.GraphMaxWork,
                     ["projectionInputBytes"] = reportBudget.MaxProjectionInputBytes, ["renderedOutputBytes"] = reportBudget.MaxOutputBytes },
                 compiledWork is not null && pageWork is not null ? checked(compiledWork.Value + pageWork.Value) : null,
-                ["Work usage sums only the independently bounded page and compiled traversal queries when both are retained. Graph admission, transient disk, elapsed time and peak usage remain separate unavailable counters.",
+                ["Work usage sums only the independently bounded page and compiled traversal queries when both are retained. Graph admission, exact phase peak, child-process usage and transient disk peak remain separate unavailable counters.",
                     "Aggregate artifact bytes include combined storage and are not the rendered-output byte counter. Null work usage never means zero or complete coverage."])
-                { WorkUnitsScope = compiledWork is null || pageWork is null ? null : "page-and-compiled-graph-query-traversal-all-selected-roots" });
+                { WorkUnitsScope = compiledWork is null || pageWork is null ? null : "page-and-compiled-graph-query-traversal-all-selected-roots",
+                    ResourceUsage = checkpoint?.State.StartsWith("reports-", StringComparison.Ordinal) == true ? checkpoint.PhaseUsage : null });
             var observedLocators = plan.Inputs.Select(input => (input.Role, Present: File.Exists(input.Path))).ToArray();
             var locators = observedLocators.GroupBy(input => input.Role, StringComparer.Ordinal).OrderBy(group => group.Key, StringComparer.Ordinal)
                 .Select(group => new WebFormsReviewLocatorStatus(group.Key, group.Count(input => input.Present), group.Count(input => !input.Present))).ToArray();
@@ -211,6 +217,8 @@ public static partial class WebFormsReviewExecutionCommand
                 if (truncations.Count > 0) await output.WriteLineAsync("compiledTruncations=" + string.Join(',', truncations.Select(item => item.Key + ":" + item.Value)));
                 if (reportCounts.Count > 0) await output.WriteLineAsync($"traversalWork=page:{pageWork?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "unknown"};compiled:{compiledWork?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "unknown"};limitPerGraphQuery={budget.GraphMaxWork};sharedAcrossSelectedRoots=true");
                 if (workbench is not null) await output.WriteLineAsync($"webFormsWorkbench={workbench}");
+                foreach (var phase in phases.Where(item => item.ResourceUsage is not null))
+                    await output.WriteLineAsync($"phaseUsage={phase.Name};elapsedMs={phase.ResourceUsage!.ElapsedMilliseconds};observedWorkingSetBytes={phase.ResourceUsage.MaximumObservedWorkingSetBytes?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "unknown"};memorySamples={phase.ResourceUsage.SuccessfulMemorySamples};exactPhasePeak=false;childrenIncluded=false");
                 foreach (var action in actions) await output.WriteLineAsync($"nextAction={action.Kind}: {action.Instruction}");
                 await output.WriteLineAsync("workUsage=not-fully-retained;use-status-json-for-configured-limits-and-observed-counts;cleanup=false");
             }

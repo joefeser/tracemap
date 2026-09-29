@@ -122,6 +122,13 @@
     consumption from zero; retain full instrumentation as a separate acceptance gap.
   - [x] Retain actual graph-query traversal work, label its shared selected-root
     scope and preserve unknown historical counters without rewriting old proof.
+  - [x] Retain scan/report-attempt elapsed time and constant-space sampled
+    parent-process working-set observations, including failed/cancelled attempts.
+    Label memory as a lower bound, not an exact phase peak or quota; preserve
+    historical absence and validate nested measurement scope in checkpoint/status.
+    Metadata/IL work, child-process usage and transient disk peak stay separate.
+    Focused rebuilt validation passed 197 tests; the exact-head full gate is
+    required before publication.
 - [ ] Avoid full combined-graph materialization while retaining global ambiguity
   and cross-assembly evidence; validate deterministic parity.
   - [x] Reduce unused combined fact-property allocation in SQLite while retaining

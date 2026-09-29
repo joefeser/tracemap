@@ -79,6 +79,22 @@ public sealed class WebFormsNativeScaleTests(ITestOutputHelper output)
                 var checkpoint = JsonSerializer.Deserialize<WebFormsReviewCheckpoint>(File.ReadAllText(
                     Path.Combine(fixture.Run, "checkpoints", "0004.json")), JsonOptions)!;
                 Assert.Equal("reports-completed-review-only", checkpoint.State);
+                var scanCheckpoint = JsonSerializer.Deserialize<WebFormsReviewCheckpoint>(File.ReadAllText(
+                    Path.Combine(fixture.Run, "checkpoints", "0002.json")), JsonOptions)!;
+                Assert.NotNull(scanCheckpoint.PhaseUsage); Assert.NotNull(checkpoint.PhaseUsage);
+                var runUsage = phases.Single(item => item.Phase == "run");
+                foreach (var usage in new[] { scanCheckpoint.PhaseUsage!, checkpoint.PhaseUsage! })
+                {
+                    Assert.Equal(WebFormsReviewPhaseObservation.Rule, usage.RuleId);
+                    Assert.Equal(WebFormsReviewPhaseObservation.Scope, usage.MeasurementScope);
+                    Assert.Equal("local-only", usage.Visibility);
+                    Assert.InRange(usage.ElapsedMilliseconds, 0, runUsage.ElapsedMilliseconds + 1000);
+                    Assert.Equal(usage.SuccessfulMemorySamples == 0, usage.MaximumObservedWorkingSetBytes is null);
+                }
+                Assert.Equal("scan", scanCheckpoint.PhaseUsage!.Phase);
+                Assert.Equal("reports", checkpoint.PhaseUsage!.Phase);
+                Assert.InRange(scanCheckpoint.PhaseUsage.ElapsedMilliseconds + checkpoint.PhaseUsage.ElapsedMilliseconds,
+                    0, runUsage.ElapsedMilliseconds + 1000);
                 if (requireGraphAdmission)
                 {
                     using var scan = JsonDocument.Parse(File.ReadAllText(Path.Combine(fixture.Run,
@@ -164,6 +180,8 @@ public sealed class WebFormsNativeScaleTests(ITestOutputHelper output)
                     CompiledGraphEdges = restored.Summary.GraphEdgeCount,
                     RetainedSurfaces = handoff.Packet.Surfaces.Count,
                     GraphInputRefused = inputRefused,
+                    ScanAttemptUsage = scanCheckpoint.PhaseUsage,
+                    ReportAttemptUsage = checkpoint.PhaseUsage,
                     CompiledGapKinds = restored.Gaps.GroupBy(gap => gap.GapKind, StringComparer.Ordinal)
                         .OrderBy(group => group.Key, StringComparer.Ordinal).ToDictionary(group => group.Key, group => group.Count(), StringComparer.Ordinal)
                 };
@@ -289,6 +307,8 @@ public sealed class WebFormsNativeScaleTests(ITestOutputHelper output)
         public int CompiledGraphEdges { get; init; }
         public int RetainedSurfaces { get; init; }
         public bool GraphInputRefused { get; init; }
+        public WebFormsReviewPhaseUsage? ScanAttemptUsage { get; init; }
+        public WebFormsReviewPhaseUsage? ReportAttemptUsage { get; init; }
         public IReadOnlyDictionary<string, int> CompiledGapKinds { get; init; } = new Dictionary<string, int>();
     }
 
