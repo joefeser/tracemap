@@ -270,4 +270,43 @@ Bounded access to a recovered bundle uses `tracemap webforms-review query-recove
 
 For a like-for-like handler comparison, run `./scripts/whandler.ps1` and enter the recovered report folder. Its default handler is `BidGroupNamesDDL_Init`; `-Handler <method-name>` selects another literal method name. It invokes `query-recovery --bundle <bundle> --handler <method-name>`, verifies the recovery index, and prints only retained exact-chain/variant counts, distinct source/scan/commit/symbol root identity counts, inspected variants, and the report truncation flag. The indexed projection admits at most 4096 variants, chains, and total chain references; it does not load either full handoff or traverse a graph. Method-name matching may identify multiple roots; this ambiguity is explicit, never merged into a parity claim. A globally truncated result can omit this handler's paths, so even matching historical counts is not complete-path or parity proof. No inputs or failed checkpoints are changed. The query response uses the existing bounded-evidence rule and binds the handler selector and result to its exact generator and indexed input hashes.
 
+### Independent handler requery (no scan)
+
+When the shared-root report is truncated, run `./scripts/whandler.ps1 -Requery -Open`
+and enter that same recovered report folder. The helper uses its sibling
+`review/run`, builds the current tool, and writes a new sibling `handler-requery`
+folder. Existing output is preserved and a new safe folder name is required.
+The native command is `webforms-review requery-handler --run <failed-run>
+--bundle <recovery-bundle> --handler <literal-method-name> --out <new-folder>`.
+It verifies the original manifest/checkpoint commitments, the recovery receipt
+and evidence index, and the exact combined-index bytes. One unambiguous exact
+source/scan/commit/symbol root is required. It does not load either full recovered
+handoff merely to select the root.
+
+This **does** repeat bounded global graph construction and a single-handler
+traversal; it does **not** scan source, collect DLLs, rebuild the website, combine
+indexes, or rewrite original checkpoints. All global overload/dispatch
+competitors remain admitted. Depth, path, work, frontier, graph-input, graph
+storage, and projection bounds come from the retained plan. Path/work capacity
+is independent for this one-root comparison, not silently raised for the
+seven-root report. The legacy `wpath.ps1` also called the C# path reporter; it
+selected one exact handler. Synthetic regression fixtures pin equivalent
+single-root retained paths and lossless evidence variants for the full reader
+and disk-backed reader, including shared-root cap truncation. They are not
+private-corpus parity evidence.
+
+Fixed `handlerGraphStage` readbacks identify active graph phases. After graph
+completion, per-stage elapsed milliseconds and scratch fact payload-row counts
+are printed. Aggregate `logicalFactPayloadBytes` counts application-level
+scratch row reads, **not** physical disk I/O; it must not be equated with a
+Windows process I/O counter. The separate `handler-requery.local.json` receipt
+uses rule `workflow.webforms.retained-handler-requery.v1`, binds the exact CLI
+and reporting generators, original input commitments, selected root, bounded
+query, observations, and generated artifact hashes. It remains private,
+review-only static evidence. Matching a historical count alone does not prove
+the same path identities, complete coverage, authenticated build, or runtime
+SQL execution. The failed run stays failed. The full-run repeated-I/O cause
+remains unproven; indexed typed reconciliation/gap lookups remove avoidable
+full-payload passes but are not a demonstrated explanation for that counter.
+
 The excessive I/O seen in full native graph composition has not been root-caused. This recovery bypasses those graph phases rather than claiming that the entire fresh-report performance problem is solved.

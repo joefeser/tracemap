@@ -2711,6 +2711,15 @@ public sealed class MessyWorkspaceRegressionTests
         var selected = await CombinedDependencyPathReporter.BuildSelectedSymbolsAsync(selectedOptions, [exactRoot], combinedIndex: true);
         Assert.Equal(AttachmentChainKeys(report), AttachmentChainKeys(selected));
         Assert.Equal(exactRoot, Assert.Single(selected.Query.SymbolRoots!));
+        var historicalExact = await CombinedDependencyPathReporter.BuildReportAsync(selectedOptions with
+            { FromSymbol = exactRoot.SymbolId, FromSource = "retained", ExactFromSymbol = true });
+        var indexedExact = await CombinedDependencyPathReporter.BuildSelectedSymbolsAsync(selectedOptions with
+            { ExactFromSymbol = true }, [exactRoot], combinedIndex: true);
+        Assert.Equal(AttachmentChainKeys(historicalExact), AttachmentChainKeys(indexedExact));
+        var historicalGrouped = GroupedCompiledPathHandoffBuilder.Create(historicalExact, AttachmentFileHash(combined));
+        var indexedGrouped = GroupedCompiledPathHandoffBuilder.Create(indexedExact, AttachmentFileHash(combined));
+        Assert.Equal(historicalGrouped.Chains.Count, indexedGrouped.Chains.Count);
+        Assert.Equal(historicalGrouped.Variants.Count, indexedGrouped.Variants.Count);
         Assert.Empty((await CombinedDependencyPathReporter.BuildSelectedSymbolsAsync(selectedOptions, [], combinedIndex: true)).Paths);
         Assert.Empty((await CombinedDependencyPathReporter.BuildSelectedSymbolsAsync(selectedOptions,
             [exactRoot with { SourceIndexId = "wrong-source" }], combinedIndex: true)).Paths);

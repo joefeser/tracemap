@@ -841,8 +841,8 @@ public static class CombinedDependencyReporter
 
         foreach (var source in sources.Where(source => SourceHasCredibilityGap(source)))
         {
-            var gap = facts
-                .Where(fact => fact.SourceIndexId == source.SourceIndexId && fact.FactType == FactTypes.AnalysisGap)
+            var gap = CombinedDependencyPathReporter.FactsOfTypes(facts, FactTypes.AnalysisGap)
+                .Where(fact => fact.SourceIndexId == source.SourceIndexId)
                 .OrderBy(fact => fact.FilePath, StringComparer.Ordinal)
                 .ThenBy(fact => fact.StartLine)
                 .FirstOrDefault();

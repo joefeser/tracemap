@@ -95,6 +95,8 @@ public static class TraceMapCommand
                     ? await WebFormsReviewExecutionCommand.RecoverReportsAsync(rest, output, error, cancellationToken)
                     : rest.FirstOrDefault() == "query-recovery"
                     ? await WebFormsReviewExecutionCommand.QueryRecoveryAsync(rest, output, error, cancellationToken)
+                    : rest.FirstOrDefault() == "requery-handler"
+                    ? await WebFormsReviewExecutionCommand.RequeryHandlerAsync(rest, output, error, cancellationToken)
                     : rest.FirstOrDefault() == "status"
                     ? await WebFormsReviewExecutionCommand.StatusAsync(rest, output, error, cancellationToken)
                     : rest.FirstOrDefault() == "retain-tool"

@@ -1257,6 +1257,23 @@ public sealed class WebFormsReviewExecutionTests
             Assert.Equal(0, await TraceMapCommand.RunAsync(["webforms-review", "query-recovery", "--bundle", target,
                 "--handler", "MissingHandler"], handlerQuery, error));
             Assert.Contains("/handler-summary/exactChains", handlerQuery.ToString());
+            var handlerFolder = Path.Combine(fixture.Root, "handler-query");
+            using var requeryOutput = new StringWriter();
+            Assert.Equal(0, await TraceMapCommand.RunAsync(["webforms-review", "requery-handler", "--run", fixture.Run,
+                "--bundle", target, "--handler", "Names_Init", "--out", handlerFolder], requeryOutput, error));
+            var handlerReceipt = JsonSerializer.Deserialize<WebFormsHandlerRequeryReceipt>(File.ReadAllText(Path.Combine(handlerFolder,
+                WebFormsReviewExecutionCommand.HandlerRequeryName)), JsonOptions)!;
+            Assert.Equal(WebFormsReviewExecutionCommand.HandlerRequeryHash(handlerReceipt), handlerReceipt.BoundedInputSha256);
+            Assert.True(handlerReceipt.Query.ExactFromSymbol);
+            Assert.Single(handlerReceipt.Query.SymbolRoots!);
+            Assert.NotNull(handlerReceipt.GraphObservation);
+            Assert.Equal(handlerReceipt.CombinedIndexSha256, handlerReceipt.GraphObservation.InputSha256);
+            Assert.Contains("no-scan;no-combine", requeryOutput.ToString());
+            Assert.Equal(1, await TraceMapCommand.RunAsync(["webforms-review", "requery-handler", "--run", fixture.Run,
+                "--bundle", target, "--handler", "Names_Init", "--out", handlerFolder], TextWriter.Null, error));
+            Assert.Equal(1, await TraceMapCommand.RunAsync(["webforms-review", "requery-handler", "--run", fixture.Run,
+                "--bundle", target, "--handler", "MissingHandler", "--out", Path.Combine(fixture.Root, "missing-handler")], TextWriter.Null, error));
+            Assert.False(Directory.Exists(Path.Combine(fixture.Root, "missing-handler")));
             File.AppendAllText(Path.Combine(target, WebFormsReviewEvidenceIndex.Name), "tamper");
             Assert.Equal(1, await TraceMapCommand.RunAsync(["webforms-review", "query-recovery", "--bundle", target], TextWriter.Null, error));
         }

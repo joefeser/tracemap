@@ -1,5 +1,40 @@
 # Implementation state
 
+## Exact handler requery and read observations (2026-09-29)
+
+Branch `codex/webforms-config-migration`. Owner's recovered handler readback was
+below the earlier handler-specific baseline and the aggregate report was capped.
+Inspection of legacy `wpath.ps1` confirmed it called the same C# path reporter
+with one exact symbol; the native report selected several source-bound roots
+under one shared path/work budget. This is a confirmed scope difference, not
+proof of missing port logic.
+
+`whandler.ps1 -Requery -Open` now invokes `requery-handler` against the exact
+failed run and its recovery bundle. It verifies their manifest/checkpoint/index
+commitments, selects one unambiguous source/scan/commit/symbol root through the
+bounded recovery index, hashes the retained combined index, and repeats only
+bounded global graph construction plus that root's traversal. All global
+competitors remain present. A separate new output owns its grouped handoff,
+HTML and generator/input-bound requery receipt. No scan, combine, website build,
+original checkpoint completion, or edits to the recovery bundle occur. Existing
+outputs, cancellation/failure partials and original artifacts are preserved.
+
+Fixed stage readbacks and receipt-bound per-stage elapsed milliseconds and
+logical fact-payload row/byte reads help localize expensive work. These are not
+physical I/O counters. Typed source-metadata/PDB reconciliation lookups and
+per-source endpoint analysis-gap lookups now use the existing fact-type index
+instead of decoding the complete fact corpus to filter it. The full observed
+Windows repeated-I/O cause is still unproven.
+
+Validation: 245 focused .NET report/memory/execution/query tests passed; 11 final
+integration checks passed, including all five public compiled/PDB/publish
+attachment cases. The seven-root synthetic fixture demonstrates shared 256-path
+truncation while the isolated 13-chain/41-variant fixture exactly matches the
+historical full-reader path evidence. This synthetic count is not private parity
+evidence. Three PowerShell helper tests passed; CLI build had zero warnings and
+errors. Full .NET suite and owner-retained isolated handler readback remain
+pending. Matching counts alone will not close path-identity parity.
+
 ## Evidence-node limit and report-only recovery (2026-09-29)
 
 Private verify-5 completed its scan and generated handoffs/workbench, then failed

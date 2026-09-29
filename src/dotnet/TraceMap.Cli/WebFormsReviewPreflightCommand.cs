@@ -116,6 +116,9 @@ public static partial class WebFormsReviewPreflightCommand
         recover-reports --run <failed-run> --out <new-bundle> recovers retained
         node-limit report outputs without scanning or changing the original run.
         query-recovery --bundle <bundle> accepts the same bounded query options.
+        query-recovery --bundle <bundle> --handler <method-name> counts retained handler paths only.
+        requery-handler --run <failed-run> --bundle <recovery-bundle> --handler <method-name> --out <new-folder>
+          builds a separate single-root report from the verified retained combined index; no scan or combine.
         It writes local-only run-manifest.json and README.md without scanning,
         binding admission, report rendering or execution. Preflight success alone
         is not a completed workflow. No command builds/publishes the site, mutates
