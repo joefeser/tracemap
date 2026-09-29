@@ -82,9 +82,9 @@ public static class TraceMapCommand
                 "validate-index" => await RunValidateIndexAsync(rest, output, error),
                 "local-review" => await LocalReviewCommand.RunAsync(rest, output, error, RunScanAsync, cancellationToken),
                 "webforms-review" => rest.FirstOrDefault() == "start"
-                    ? await WebFormsReviewStartCommand.RunAsync(rest, output, error, RunScanAsync, cancellationToken)
+                    ? await WebFormsReviewStartCommand.RunAsync(rest, output, error, RunNativeReviewScanAsync, cancellationToken)
                     : rest.FirstOrDefault() is "run" or "resume"
-                    ? await WebFormsReviewExecutionCommand.RunAsync(rest, output, error, RunScanAsync, cancellationToken)
+                    ? await WebFormsReviewExecutionCommand.RunAsync(rest, output, error, RunNativeReviewScanAsync, cancellationToken)
                     : rest.FirstOrDefault() == "query"
                     ? await WebFormsReviewExecutionCommand.QueryAsync(rest, output, error, cancellationToken)
                     : rest.FirstOrDefault() == "status"
@@ -270,9 +270,18 @@ public static class TraceMapCommand
         return values.HasFlag("--exit-code") && result.HasActionableFindings ? 1 : 0;
     }
 
-    private static async Task<int> RunScanAsync(string[] args, TextWriter output, TextWriter error, CancellationToken cancellationToken)
+    private static Task<int> RunScanAsync(string[] args, TextWriter output, TextWriter error, CancellationToken cancellationToken) =>
+        RunScanWithOptionsAsync(args, output, error, cancellationToken, preserveOptionValues: false);
+
+    // Native configuration already supplies one structured value per option. Do not
+    // apply the public scan CLI's historical comma-list expansion to those paths.
+    private static Task<int> RunNativeReviewScanAsync(string[] args, TextWriter output, TextWriter error, CancellationToken cancellationToken) =>
+        RunScanWithOptionsAsync(args, output, error, cancellationToken, preserveOptionValues: true);
+
+    private static async Task<int> RunScanWithOptionsAsync(string[] args, TextWriter output, TextWriter error,
+        CancellationToken cancellationToken, bool preserveOptionValues)
     {
-        var values = ParseOptions(args, "--retain-source-snapshot");
+        var values = ParseOptions(args, preserveOptionValues, "--retain-source-snapshot");
         if (!values.TryGetValue("--repo", out var repoPath) || string.IsNullOrWhiteSpace(repoPath))
         {
             await error.WriteLineAsync("error: scan requires --repo <path>.");
@@ -2392,6 +2401,9 @@ public static class TraceMapCommand
     }
 
     private static ParsedOptions ParseOptions(string[] args, params string[] additionalFlags)
+        => ParseOptions(args, preserveOptionValues: false, additionalFlags);
+
+    private static ParsedOptions ParseOptions(string[] args, bool preserveOptionValues, params string[] additionalFlags)
     {
         var values = new Dictionary<string, List<string>>(StringComparer.Ordinal);
         var flags = new HashSet<string>(StringComparer.Ordinal);
@@ -2422,7 +2434,7 @@ public static class TraceMapCommand
             }
 
             var rawValue = args[++index];
-            if (arg is "--surface-list" or "--from-symbol") list.Add(rawValue);
+            if (preserveOptionValues || arg is "--surface-list" or "--from-symbol") list.Add(rawValue);
             else list.AddRange(rawValue.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
         }
 

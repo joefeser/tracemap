@@ -1667,6 +1667,34 @@ not recorded here.
 
 ## Remaining follow-up
 
+### PR #797 round-one review repair (2026-09-29)
+
+- Owner authorized up to four review/fix rounds, no merge. Initial settled ACK
+  on `e829c36c85f96449660bd8ce58b88ad950e6e4d3` reported three unresolved
+  threads, no held findings, and zero pending/failed checks.
+- Preserve native structured scan option values without comma-list expansion;
+  ordinary `scan` and legacy local-review parsing stay unchanged. Actual native
+  fresh/report/resume tests include comma-containing roots, compiled paths and
+  selected source-folder globs; start also uses a comma-containing output root.
+- Read-only evidence queries share read locks, continue to exclude writers and
+  retain hash/checkpoint revalidation. Lock-open I/O is reported as busy or lock
+  unavailable, not corrupt index. Other operations keep their existing locks.
+- The strengthened comma regression also exposed native selected-page lines
+  being reparsed as CSV. Native reporting now declares literal-path line mode;
+  legacy page-list CSV/header/comment parsing remains default. Tests distinguish
+  comma, quote and hash-containing literal names from legacy requests.
+- The solution/project fallback comment is unreachable in this native config:
+  `solution` and `projects` are mutually exclusive at preflight. Added both
+  mixed-mode rejection regressions and opposite-argument absence assertions;
+  do not expand this PR into semantic-extractor behavior changes.
+- Focused and final exact-head regression results will be recorded in the PR
+  settlement evidence. Historical passing receipts remain tied to their heads;
+  private Windows acceptance, wrapper retirement and cleanup remain separate.
+- Final round-one focused regression matrix passed 30 tests, zero failures or
+  skips (15 seconds), after the literal page-list fix. The earlier 174-test
+  focused run passed before that strengthened regression; it is not the final
+  head gate. Commit and rebuild before the full exact-head validation/push.
+
 Consolidate the long manual compatibility reference only after its diagnostic
 and recovery entry points have equivalent behavioral tests. Ticket automation
 and licensing remain deliberately separate private follow-up work.
