@@ -18,6 +18,8 @@ public static class WebFormsProofImportCommand
 
     public static async Task<int> RunAsync(string[] args, TextWriter output, TextWriter error, CancellationToken token = default)
     {
+        // Closed, public-safe stage names: never print exception messages containing private paths.
+        var stage = "arguments";
         try
         {
             if (args.Length != 9 || args[0] != "import-proof" || args[1] != "--config" || args[3] != "--proof-root"
@@ -27,6 +29,7 @@ public static class WebFormsProofImportCommand
             var published = WebFormsReviewPreflightCommand.PhysicalPath(args[6]);
             var destination = WebFormsReviewPreflightCommand.PhysicalPath(args[8]);
             if (File.Exists(destination) || Directory.Exists(destination)) throw Fail("OUTPUT_EXISTS");
+            stage = "migration-draft";
             var draftBytes = await Read(draftPath, token);
             var draft = JsonSerializer.Deserialize<WebFormsReviewConfig>(draftBytes, JsonOptions) ?? throw Fail("CONFIG_INVALID");
             if (draft.SchemaVersion != WebFormsReviewPreflightCommand.ConfigSchema || draft.Operation != "fresh"
@@ -45,20 +48,25 @@ public static class WebFormsProofImportCommand
                 if (Overlap(root, destination)) throw Fail("OUTPUT_OVERLAPS_INPUT");
             var publishPath = WebFormsReviewPreflightCommand.Child(proof, "publish-receipt.local.json");
             var bindingPath = WebFormsReviewPreflightCommand.Child(proof, "compiled-binding.local.json");
+            stage = "publish-receipt";
             var publishBytes = await Read(publishPath, token);
+            stage = "binding-receipt";
             var bindingBytes = await Read(bindingPath, token);
             using var publishDocument = JsonDocument.Parse(publishBytes);
             using var bindingDocument = JsonDocument.Parse(bindingBytes);
             var receipt = publishDocument.RootElement;
             var binding = bindingDocument.RootElement;
+            stage = "receipt-schema";
             if (Text(receipt, "schemaVersion") != "webforms-publish-binding.v1" || Text(receipt, "visibility") != "local-only"
                 || Text(binding, "schemaVersion") != "compiled-input-binding-set.v1"
                 || !Hex(Text(receipt, "receiptGeneratorSha256"), 64) || !Hex(Text(binding, "generatorSha256"), 64)
                 || !Hex(Text(binding, "boundedInputSha256"), 64)) throw Fail("RECEIPT_SCHEMA_OR_PROVENANCE");
             var commit = Text(receipt, "sourceCommitSha");
+            stage = "source-identity";
             var git = GitMetadataProvider.Detect(sourceRoot);
             if (!Hex(commit, 40) || git.CommitSha != commit || string.IsNullOrWhiteSpace(git.RemoteUrl)) throw Fail("SOURCE_COMMIT_OR_REPOSITORY_MISMATCH");
             if (!string.IsNullOrEmpty(draft.SourceCommitSha) && draft.SourceCommitSha != commit) throw Fail("DRAFT_COMMIT_MISMATCH");
+            stage = "receipt-rosters";
             var sources = Rows(receipt, "sourceFiles", 256);
             var files = Rows(receipt, "publishedFiles", 64);
             var inventory = Rows(receipt, "assemblyInventory", 256);
@@ -70,12 +78,14 @@ public static class WebFormsProofImportCommand
             var fileNames = UniquePaths(files);
             _ = UniquePaths(inventory);
             var sourceLines = new List<string>(); var assemblyLines = new List<string>(); var mapLines = new List<string>();
+            stage = "source-roster";
             foreach (var row in sources)
             {
                 var name = Text(row, "path"); var sha = Text(row, "sha256");
                 await Check("source", WebFormsReviewPreflightCommand.Child(sourceRoot, name), sha, 67_108_864);
                 sourceLines.Add($"{name}:{sha}");
             }
+            stage = "assembly-inventory";
             foreach (var row in inventory)
             {
                 var name = Text(row, "path"); var sha = Text(row, "sha256"); var disposition = Text(row, "disposition");
@@ -87,6 +97,7 @@ public static class WebFormsProofImportCommand
                 // Even out-of-scope recorded DLLs must still match the baseline inventory.
                 await Check("published-inventory", WebFormsReviewPreflightCommand.Child(published, name), sha, 67_108_864);
             }
+            stage = "published-roster";
             foreach (var row in files)
             {
                 var name = Text(row, "path"); var sha = Text(row, "sha256"); var kind = Text(row, "kind");
@@ -101,6 +112,7 @@ public static class WebFormsProofImportCommand
                 await Check("published", WebFormsReviewPreflightCommand.Child(published, name), sha, 67_108_864);
             }
             if (primary.Count == 0 || primary.Concat(dependencies).Any(name => !fileNames.Contains(name))) throw Fail("PRIMARY_INVENTORY_INCOMPLETE");
+            stage = "receipt-commitments";
             var sourceDigest = Hash(Encoding.UTF8.GetBytes(string.Join('\n', sourceLines) + "\n"));
             var inventoryDigest = Hash(Encoding.UTF8.GetBytes(string.Join('\n', assemblyLines) + "\n"));
             var mapDigest = Hash(Encoding.UTF8.GetBytes(string.Join('\n', mapLines.Order(StringComparer.Ordinal)) + "\n"));
@@ -109,6 +121,7 @@ public static class WebFormsProofImportCommand
             var repositoryDigest = Hash(Encoding.UTF8.GetBytes(git.RemoteUrl));
             var receiptDigest = Hash(Encoding.UTF8.GetBytes($"source:{repositoryDigest}\ncommit:{commit}\nsource:{sourceDigest}\nassemblies:{inventoryDigest}\nmaps:{mapDigest}\n"));
             if (Text(receipt, "receiptInputSha256") != receiptDigest) throw Fail("RECEIPT_REPOSITORY_DIGEST_MISMATCH");
+            stage = "binding-commitments";
             var boundHashes = new HashSet<string>(StringComparer.Ordinal);
             foreach (var item in bindings)
             {
@@ -121,6 +134,7 @@ public static class WebFormsProofImportCommand
                 .Select(item => $"{Text(item, "safeLocator")}:{Text(item, "artifactSha256")}:{Text(item, "assemblyIdentity")}:{Text(item, "binarySourceCommitSha")}").ToList();
             bindingLines.AddRange([$"source:{sourceDigest}", $"source-repository:{repositoryDigest}", $"assembly-inventory:{inventoryDigest}", $"map-inventory:{mapDigest}"]);
             if (Text(binding, "boundedInputSha256") != Hash(Encoding.UTF8.GetBytes(string.Join('\n', bindingLines) + "\n"))) throw Fail("BINDING_DIGEST_MISMATCH");
+            stage = "page-scope";
             var pageNames = pages.Select(page => Text(page, "sourcePath")).ToArray();
             if (pageNames.Distinct(StringComparer.OrdinalIgnoreCase).Count() != pageNames.Length
                 || pageNames.Any(page => !sourceNames.Contains(page) || !page.EndsWith(".aspx", StringComparison.OrdinalIgnoreCase))) throw Fail("PAGE_SCOPE_INVALID");
@@ -129,6 +143,7 @@ public static class WebFormsProofImportCommand
                 BindingReceipts = ["compiled-binding.local.json"], PageMaps = maps.Order(StringComparer.Ordinal).ToArray(),
                 ReceiptRoot = proof, PublishReceiptRelativePath = "publish-receipt.local.json", PublishSourceRelativePaths = null,
                 PageMode = "selected", PageRelativePaths = pageNames, PdbInputs = [] };
+            stage = "source-membership";
             WebFormsReviewPreflightCommand.ValidateConfig(config);
             var membership = await WebFormsReviewPreparationCommand.ValidateCommittedSourceAsync(config, sourceNames.ToArray(), token);
             var generator = Hash(await File.ReadAllBytesAsync(typeof(WebFormsProofImportCommand).Assembly.Location, token));
@@ -137,15 +152,19 @@ public static class WebFormsProofImportCommand
             config = config with { PreparationProvenance = new(RuleId, generator, bounded) };
             var configBytes = JsonSerializer.SerializeToUtf8Bytes(config, JsonOptions);
             var parent = Path.GetDirectoryName(destination)!;
+            stage = "output-staging";
             Directory.CreateDirectory(parent);
             var staging = Path.Combine(parent, ".webforms-proof-import-" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(staging);
             var stagedConfig = Path.Combine(staging, "review-config.local.json");
             await WriteNew(stagedConfig, configBytes, token);
+            stage = "native-preflight";
             var plan = await WebFormsReviewPreflightCommand.BuildAsync(stagedConfig, destination, token);
+            stage = "binding-admission";
             var validated = await WebFormsReviewInputValidation.ValidateAsync(plan, token);
             var primaryOutcomes = validated.CompiledProvenance.Outcomes.Where(item => item.Role == "primary").ToArray();
             if (primaryOutcomes.Length != primary.Count || primaryOutcomes.Any(item => item.Outcome != "admitted" || item.ProvenanceState != "bound")) throw Fail("RETAINED_BINDING_NOT_ADMITTED");
+            stage = "input-recheck";
             await WebFormsReviewPreparationCommand.ValidateCommittedSourceAsync(config, sourceNames.ToArray(), token);
             await Same(draftPath, draftBytes); await Same(publishPath, publishBytes); await Same(bindingPath, bindingBytes);
             foreach (var row in inventory) await Check("recheck-inventory", WebFormsReviewPreflightCommand.Child(published, Text(row, "path")), Text(row, "sha256"), 67_108_864);
@@ -164,6 +183,7 @@ public static class WebFormsProofImportCommand
                     "Selected page scope comes from the baseline receipt, not the wider migration draft; source/project scopes and budgets are preserved.",
                     "Inputs remain external. No scan, report comparison, all-pages claim, two-repository merge or runtime execution validation was performed.",
                     "Dependency context remains unbound; imported settings must pass native start gates again. Failed staging is retained but not admitted." } };
+            stage = "output-publication";
             await WriteNew(Path.Combine(staging, "proof-import.local.json"), JsonSerializer.SerializeToUtf8Bytes(audit, JsonOptions), token);
             token.ThrowIfCancellationRequested();
             Directory.Move(staging, destination);
@@ -181,14 +201,32 @@ public static class WebFormsProofImportCommand
             async Task Same(string path, byte[] bytes) { if (Hash(await Read(path, token)) != Hash(bytes)) throw Fail("INPUT_CHANGED"); }
         }
         catch (OperationCanceledException) when (token.IsCancellationRequested) { throw; }
-        catch (WebFormsReviewPreflightCommand.PreflightException ex) { await error.WriteLineAsync(ex.Code); return 1; }
+        catch (WebFormsReviewPreflightCommand.PreflightException ex) { return await Report(ex.Code); }
+        catch (WebFormsReviewPreparationCommand.PreparationException ex) { return await Report(ex.Message); }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException or ArgumentException or InvalidOperationException or KeyNotFoundException)
-        { await error.WriteLineAsync(ex is ImportException ? ex.Message : "WEBFORMS_PROOF_IMPORT_INPUT_OR_OUTPUT_INVALID"); return 1; }
+        {
+            var code = ex switch
+            {
+                ImportException => ex.Message,
+                FileNotFoundException or DirectoryNotFoundException => "WEBFORMS_PROOF_IMPORT_FILE_OR_DIRECTORY_UNAVAILABLE",
+                UnauthorizedAccessException => "WEBFORMS_PROOF_IMPORT_ACCESS_DENIED",
+                JsonException => "WEBFORMS_PROOF_IMPORT_JSON_INVALID",
+                IOException => "WEBFORMS_PROOF_IMPORT_IO_FAILED",
+                _ => "WEBFORMS_PROOF_IMPORT_INPUT_OR_OUTPUT_INVALID"
+            };
+            return await Report(code);
+        }
+
+        async Task<int> Report(string code)
+        {
+            await error.WriteLineAsync($"{code};stage={stage};no-scan-started");
+            return 1;
+        }
     }
 
     private static JsonElement[] Rows(JsonElement root, string name, int limit)
     {
-        var value = root.GetProperty(name);
+        var value = Required(root, name);
         if (value.ValueKind != JsonValueKind.Array || value.GetArrayLength() is < 1 || value.GetArrayLength() > limit) throw Fail("RECEIPT_LIMIT_OR_SHAPE");
         return value.EnumerateArray().ToArray();
     }
@@ -200,9 +238,16 @@ public static class WebFormsProofImportCommand
     }
     private static string Text(JsonElement root, string name)
     {
-        var item = root.GetProperty(name);
+        var item = Required(root, name);
         if (item.ValueKind != JsonValueKind.String || string.IsNullOrWhiteSpace(item.GetString()) || item.GetString()!.Any(char.IsControl)) throw Fail("RECEIPT_VALUE_INVALID");
         return item.GetString()!;
+    }
+    private static JsonElement Required(JsonElement root, string name)
+    {
+        // name is supplied only by this command, never by receipt content.
+        if (root.ValueKind != JsonValueKind.Object || !root.TryGetProperty(name, out var value))
+            throw Fail("RECEIPT_FIELD_UNAVAILABLE;field=" + name);
+        return value;
     }
     private static async Task<byte[]> Read(string path, CancellationToken token)
     {

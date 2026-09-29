@@ -93,6 +93,42 @@ public sealed class WebFormsProofImportTests
     }
 
     [Theory]
+    [InlineData("draft", "FILE_OR_DIRECTORY_UNAVAILABLE", "migration-draft")]
+    [InlineData("publish-receipt", "FILE_OR_DIRECTORY_UNAVAILABLE", "publish-receipt")]
+    [InlineData("binding-receipt", "FILE_OR_DIRECTORY_UNAVAILABLE", "binding-receipt")]
+    [InlineData("source", "FILE_OR_DIRECTORY_UNAVAILABLE", "source-roster")]
+    [InlineData("dll", "FILE_OR_DIRECTORY_UNAVAILABLE", "assembly-inventory")]
+    [InlineData("field", "RECEIPT_FIELD_UNAVAILABLE;field=receiptGeneratorSha256", "receipt-schema")]
+    [InlineData("roster", "RECEIPT_FIELD_UNAVAILABLE;field=assemblyInventory", "receipt-rosters")]
+    [InlineData("json", "JSON_INVALID", "publish-receipt")]
+    [InlineData("dirty", "SOURCE_DIRTY", "source-membership")]
+    public async Task Direct_import_reports_safe_stage_and_reason_without_private_paths(string scenario, string code, string stage)
+    {
+        using var f = new Fixture();
+        switch (scenario)
+        {
+            case "draft": File.Delete(f.ConfigPath); break;
+            case "publish-receipt": File.Delete(f.PublishReceipt); break;
+            case "binding-receipt": File.Delete(f.BindingReceipt); break;
+            case "source": f.ChangePublish(root => root["sourceFiles"]![0]!["path"] = "private-missing-source.aspx"); break;
+            case "dll": File.Delete(f.Primary); break;
+            case "field": f.ChangePublish(root => root.Remove("receiptGeneratorSha256")); break;
+            case "roster": f.ChangePublish(root => root.Remove("assemblyInventory")); break;
+            case "json": File.WriteAllText(f.PublishReceipt, "{\"private-secret\": invalid}"); break;
+            case "dirty": File.WriteAllText(Path.Combine(f.Source, "private-untracked.txt"), "private-secret"); break;
+        }
+        Assert.Equal(1, await WebFormsProofImportCommand.RunAsync(
+            ["import-proof", "--config", f.ConfigPath, "--proof-root", f.Proof, "--published-root", f.Published, "--out", f.Out], f.Output, f.Error));
+        var diagnostic = f.Error.ToString();
+        Assert.Contains(code, diagnostic, StringComparison.Ordinal);
+        Assert.Contains($";stage={stage};no-scan-started", diagnostic, StringComparison.Ordinal);
+        Assert.DoesNotContain(f.Root, diagnostic, StringComparison.Ordinal);
+        Assert.DoesNotContain("private-", diagnostic, StringComparison.Ordinal);
+        Assert.False(Directory.Exists(f.Out));
+        Assert.Empty(Directory.GetFiles(f.Root, "proof-import.local.json", SearchOption.AllDirectories));
+    }
+
+    [Theory]
     [InlineData("safeLocator")]
     [InlineData("assemblyIdentity")]
     public async Task Matching_hashes_and_valid_receipt_digests_do_not_bypass_binding_policy(string field)

@@ -328,7 +328,7 @@ public static partial class WebFormsReviewPreparationCommand
     private static string Normalize(string path) => path.Replace('\\', '/');
     private static string Digest(byte[] bytes) => Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
     private static PreparationException Fail(string suffix) => new("WEBFORMS_PREPARATION_" + suffix);
-    private sealed class PreparationException(string code) : Exception(code);
+    internal sealed class PreparationException(string code) : Exception(code);
     private sealed record SourceFile(string Path, string Sha256);
     private sealed record PublishedFile(string Path, string Sha256, string Kind);
     private sealed record Map(string Path, string VirtualPath, string? Assembly, string? GeneratedType);
