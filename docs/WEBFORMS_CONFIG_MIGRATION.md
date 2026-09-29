@@ -169,6 +169,9 @@ layout, pass `-RunRoot` with the exact path printed after `webFormsPinnedRun=`.
 The prompt accepts either the number or a unique run-folder name. For a failed
 report checkpoint, it also prints presence and byte counts for fixed expected
 report files; these partial files are not admitted or read as report content.
+It also prints whether the fixed compiled output directory exists, its path
+length (not the path), and current volume free bytes. Free space sampled now
+does not establish free space at the time of failure.
 For an existing `reports-failed` checkpoint, `-Probe` separately replays the
 bounded packet, compiled-path, index-hash, grouped-projection and handoff-restore stages against
 the retained combined index. It builds a separate diagnostic executable, not
