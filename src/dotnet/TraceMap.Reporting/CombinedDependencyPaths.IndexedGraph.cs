@@ -17,6 +17,7 @@ public static partial class CombinedDependencyPathReporter
         private long ordinal;
         private readonly string inputSha256;
         private readonly CancellationToken token;
+        public int MaximumOutgoingRowsLoaded { get; private set; }
         public int NodeCount { get; private set; }
         public int EdgeCount { get; private set; }
 
@@ -47,6 +48,9 @@ public static partial class CombinedDependencyPathReporter
                         rank integer not null, file_path text, line integer not null,
                         payload text not null, ordinal integer not null);
                     create index graph_edges_from on graph_edges(from_id, ordinal);
+                    create table graph_edge_order(global_order integer primary key, from_id text not null,
+                        local_order integer not null, edge_id text not null unique);
+                    create unique index graph_edge_order_from on graph_edge_order(from_id, local_order);
                     create table graph_aliases(node_id text primary key, member_key text not null,
                         type_key text, signature_key text, ordinal integer not null);
                     create index graph_aliases_member on graph_aliases(member_key, ordinal);
@@ -68,8 +72,8 @@ public static partial class CombinedDependencyPathReporter
                 command.Parameters.AddWithValue("$maximum", maxStorageBytes.ToString(System.Globalization.CultureInfo.InvariantCulture));
                 command.ExecuteNonQuery();
                 using var verify = connection.CreateCommand();
-                verify.CommandText = "select count(*) from sqlite_master where type='table' and name in ('graph_metadata','graph_nodes','graph_edges','graph_aliases');";
-                if (Convert.ToInt64(verify.ExecuteScalar()) != 4)
+                verify.CommandText = "select count(*) from sqlite_master where type='table' and name in ('graph_metadata','graph_nodes','graph_edges','graph_aliases','graph_edge_order');";
+                if (Convert.ToInt64(verify.ExecuteScalar()) != 5)
                     throw new InvalidDataException("COMBINED_GRAPH_STORAGE_SCHEMA_INVALID");
             }
             catch (SqliteException exception) when (exception.SqliteErrorCode == 13)
@@ -102,6 +106,7 @@ public static partial class CombinedDependencyPathReporter
 
         public bool AddNode(GraphNode node)
         {
+            if (sorted) throw new InvalidOperationException("COMBINED_GRAPH_STORAGE_FROZEN");
             using var command = Command("insert or ignore into graph_nodes values($id,$name,$payload,$ordinal);", node.NodeId);
             command.Parameters.AddWithValue("$name", node.DisplayName);
             command.Parameters.AddWithValue("$payload", JsonSerializer.Serialize(node));
@@ -143,6 +148,7 @@ public static partial class CombinedDependencyPathReporter
 
         public void AddEdge(GraphEdge edge)
         {
+            if (sorted) throw new InvalidOperationException("COMBINED_GRAPH_STORAGE_FROZEN");
             using var command = Command("insert into graph_edges values($id,$from,$to,$rank,$file,$line,$payload,$ordinal);", edge.EdgeId);
             command.Parameters.AddWithValue("$from", edge.FromNodeId);
             command.Parameters.AddWithValue("$to", edge.ToNodeId);
@@ -157,14 +163,82 @@ public static partial class CombinedDependencyPathReporter
 
         public IEnumerable<GraphEdge> Edges(string? from = null)
         {
-            var order = sorted
-                ? "e.rank, n.display_name collate graph_ordinal, e.file_path collate graph_ordinal, e.line, e.id collate graph_ordinal"
-                : "e.ordinal";
-            using var command = Command("select e.payload from graph_edges e join graph_nodes n on n.id=e.to_id "
-                + (from is null ? "" : "where e.from_id=$id ") + "order by " + order + ";", from);
+            var sql = sorted
+                ? "select e.payload from graph_edge_order o join graph_edges e on e.id=o.edge_id "
+                    + (from is null ? "order by o.global_order;" : "where o.from_id=$id order by o.local_order;")
+                : "select payload from graph_edges " + (from is null ? "" : "where from_id=$id ") + "order by ordinal;";
+            using var command = Command(sql, from);
             using var reader = command.ExecuteReader();
             while (reader.Read())
-            { token.ThrowIfCancellationRequested(); yield return JsonSerializer.Deserialize<GraphEdge>(reader.GetString(0))!; }
+            {
+                token.ThrowIfCancellationRequested();
+                if (from is not null) MaximumOutgoingRowsLoaded = Math.Max(MaximumOutgoingRowsLoaded, 1);
+                yield return JsonSerializer.Deserialize<GraphEdge>(reader.GetString(0))!;
+            }
+        }
+
+        public IReadOnlyList<GraphEdge> Outgoing(string id)
+        {
+            using var count = Command("select count(*) from graph_edges where from_id=$id;", id);
+            return new IndexedOutgoingEdges(this, id, checked((int)Convert.ToInt64(count.ExecuteScalar())));
+        }
+
+        private IReadOnlyList<GraphEdge> ReadOutgoingPage(string id, int startIndex)
+        {
+            using var command = Command(sorted ? """
+                select e.payload,length(cast(e.payload as blob)) from graph_edge_order o
+                join graph_edges e on e.id=o.edge_id
+                where o.from_id=$id and o.local_order >= $position order by o.local_order limit 64;
+                """ : """
+                select payload,length(cast(payload as blob)) from graph_edges
+                where from_id=$id order by ordinal limit 64 offset $offset;
+                """, id);
+            command.Parameters.AddWithValue(sorted ? "$position" : "$offset", sorted ? startIndex + 1 : startIndex);
+            using var reader = command.ExecuteReader();
+            var rows = new List<GraphEdge>();
+            long bytes = 0;
+            while (reader.Read())
+            {
+                token.ThrowIfCancellationRequested();
+                var rowBytes = reader.GetInt64(1);
+                // One already-admitted large row can exceed the cache target;
+                // never retain a second row in that case or silently skip it.
+                if (rows.Count != 0 && rowBytes > 512 * 1024 - bytes) break;
+                rows.Add(JsonSerializer.Deserialize<GraphEdge>(reader.GetString(0))!);
+                bytes += rowBytes;
+            }
+            MaximumOutgoingRowsLoaded = Math.Max(MaximumOutgoingRowsLoaded, rows.Count);
+            return rows;
+        }
+
+        private sealed class IndexedOutgoingEdges(IndexedGraphStore store, string id, int count) : IReadOnlyList<GraphEdge>
+        {
+            private int pageStart = -1;
+            private IReadOnlyList<GraphEdge> page = [];
+            public int Count => count;
+            public GraphEdge this[int index]
+            {
+                get
+                {
+                    if ((uint)index >= (uint)Count) throw new ArgumentOutOfRangeException(nameof(index));
+                    if (index < pageStart || index >= pageStart + page.Count)
+                    {
+                        page = [];
+                        pageStart = index / 64 * 64;
+                        page = store.ReadOutgoingPage(id, pageStart);
+                        if (index >= pageStart + page.Count)
+                        {
+                            page = [];
+                            pageStart = index;
+                            page = store.ReadOutgoingPage(id, index);
+                        }
+                        if (page.Count == 0) throw new InvalidDataException("COMBINED_GRAPH_ORDER_INCOMPLETE");
+                    }
+                    return page[index - pageStart];
+                }
+            }
+            public IEnumerator<GraphEdge> GetEnumerator() => store.Edges(id).GetEnumerator();
+            IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
         }
 
         private static int Write(SqliteCommand command)
@@ -182,7 +256,16 @@ public static partial class CombinedDependencyPathReporter
                 throw new InvalidDataException("COMBINED_GRAPH_INPUT_CHANGED");
         }
 
-        public void Sort() => sorted = true;
+        public void Sort()
+        {
+            if (sorted) return;
+            const string order = "e.rank,n.display_name collate graph_ordinal,e.file_path collate graph_ordinal,e.line,e.id collate graph_ordinal";
+            using var command = Command("insert into graph_edge_order select row_number() over (order by " + order
+                + "),e.from_id,row_number() over (partition by e.from_id order by " + order
+                + "),e.id from graph_edges e join graph_nodes n on n.id=e.to_id;");
+            if (Write(command) != EdgeCount) throw new InvalidDataException("COMBINED_GRAPH_ORDER_INCOMPLETE");
+            sorted = true;
+        }
 
         public IndexedGraphUsage Observe(GraphOutgoing outgoing)
         {
@@ -275,16 +358,34 @@ public static partial class CombinedDependencyPathReporter
     private sealed class GraphOutgoing(IndexedGraphStore? store)
     {
         private readonly Dictionary<string, List<GraphEdge>> memory = new(StringComparer.Ordinal);
-        public int MaximumRowsLoaded { get; private set; }
-        public bool TryGetValue(string id, out List<GraphEdge> edges)
+        public int MaximumRowsLoaded => store?.MaximumOutgoingRowsLoaded ?? 0;
+        public bool TryGetValue(string id, out IReadOnlyList<GraphEdge> edges)
         {
-            if (store is null) return memory.TryGetValue(id, out edges!);
-            edges = store.Edges(id).ToList();
-            MaximumRowsLoaded = Math.Max(MaximumRowsLoaded, edges.Count);
+            if (store is null)
+            {
+                var found = memory.TryGetValue(id, out var retained);
+                edges = retained!;
+                return found;
+            }
+            edges = store.Outgoing(id);
             return edges.Count != 0;
         }
-        public List<GraphEdge> this[string id] { set => memory[id] = value; }
+        public void Add(GraphEdge edge)
+        {
+            if (!memory.TryGetValue(edge.FromNodeId, out var rows)) memory[edge.FromNodeId] = rows = [];
+            rows.Add(edge);
+        }
         public IEnumerable<KeyValuePair<string, List<GraphEdge>>> MemoryEntries => memory;
+    }
+
+    private sealed class ReversedGraphEdges(IReadOnlyList<GraphEdge> edges) : IReadOnlyList<GraphEdge>
+    {
+        public int Count => edges.Count;
+        public GraphEdge this[int index] => (uint)index < (uint)Count
+            ? edges[Count - index - 1] : throw new ArgumentOutOfRangeException(nameof(index));
+        public IEnumerator<GraphEdge> GetEnumerator()
+        { for (var index = 0; index < Count; index++) yield return this[index]; }
+        IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
     }
 
     private sealed class DispatchGraphNodes(GraphNodes nodes) : IReadOnlyDictionary<string, StaticDispatchCandidateNode>

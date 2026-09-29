@@ -16,6 +16,39 @@ public sealed class WebFormsAllocationCollection { }
 public sealed class WebFormsReportMemoryTests(ITestOutputHelper output)
 {
     [Theory]
+    [InlineData(128, true)]
+    [InlineData(1024, true)]
+    [InlineData(128, false)]
+    [InlineData(1024, false)]
+    public async Task Indexed_high_fanout_paging_preserves_every_branch_in_both_traversal_directions(int branches, bool legacy)
+    {
+        using var temp = new TempDirectory();
+        var facts = Fixture();
+        for (var index = 0; index < branches; index++)
+        {
+            var target = $"Synthetic.Store{index:D5}.Save()";
+            facts.Add(Fact(FactTypes.CallEdge, "csharp.semantic.call.v1", "Sample.Page.Load()", target, 40));
+            facts.Add(Fact(FactTypes.QueryPatternDetected, RuleIds.CSharpSyntaxQueryPattern, target, $"query:{index:D5}", 41,
+                ("operationName", "SELECT"), ("tableName", $"synthetic_orders_{index:D5}"), ("sqlSourceKind", "literal-string")));
+        }
+        var combined = Path.Combine(temp.Path, "combined.sqlite");
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([Write(temp.Path, facts)], combined, ["page"]));
+        var hash = Hash(combined);
+        var options = legacy ? PathOptions(combined) with { MaxPaths = branches + 10 }
+            : new CombinedDependencyPathOptions(combined, "unused", FromSymbol: "Sample.Page.Load()",
+                ToSurface: "sql-query", MaxPaths: branches + 10) { ExactFromSymbol = true };
+        var expected = await CombinedDependencyPathReporter.BuildReportAsync(options);
+        var actual = await CombinedDependencyPathReporter.BuildBoundedCombinedIndexReportWithTraversalAsync(options, Budget());
+        Assert.Equal(JsonSerializer.Serialize(expected), JsonSerializer.Serialize(actual.Report));
+        Assert.Equal(branches + 1, actual.Report.Paths.Count);
+        Assert.False(actual.Report.Summary.Truncated);
+        Assert.InRange(actual.GraphStorage!.MaximumOutgoingRowsLoaded, 1, 64);
+        Assert.True(actual.GraphStorage.MaximumOutgoingRowsLoaded < branches);
+        Assert.Equal(hash, Hash(combined));
+        output.WriteLine($"branches={branches};legacy={legacy};paths={actual.Report.Paths.Count};maximumOutgoingRowsLoaded={actual.GraphStorage.MaximumOutgoingRowsLoaded};logicalStorageBytes={actual.GraphStorage.LogicalStorageBytes}");
+    }
+
+    [Theory]
     [InlineData(32)]
     [InlineData(256)]
     public async Task Indexed_combined_graph_retains_global_parity_without_loading_all_outgoing_edges(int pages)

@@ -1,5 +1,29 @@
 # Web Forms Review Productization Implementation State
 
+## Paged outgoing adjacency (2026-09-28)
+
+- Continued from exact tested `3007644d` without rebuilding during its full suite.
+  Outgoing adjacency is now an indexed read-only list backed by a dense global/
+  local order roster. Each random-access page loads at most 64 records, targeting
+  512 KiB serialized payload; one already-admitted oversized record is retained
+  alone. Reverse traversal wraps the list rather than allocating a full array.
+  The roster is included in the existing logical storage quota; construction is
+  frozen after sorting, and incomplete positions fail closed.
+- Focused memory/parity suite passed 37/37, zero failed/skipped, in 7 seconds.
+  Dedicated 128/1,024-branch cases passed 4/4, retaining all 129/1,025 paths with
+  complete historical JSON parity in legacy depth-first and ordinary breadth-
+  first traversal. Maximum outgoing rows loaded was 64. The 1,024-branch cases
+  used 6,496,256/6,488,064 logical database bytes and took 4 seconds/388 ms in the
+  dedicated detailed run. These are fixture measurements, not source/compiled
+  end-to-end peak-memory or representative eight-times scale acceptance.
+- Broader native regression passed 582/582, zero failed/skipped, in 3 minutes
+  57 seconds. Actual CLI scan of `samples/vb-webforms-sample` completed with 201
+  facts and explicit `Level1SemanticAnalysisReduced` coverage in ignored owned
+  `output/native-receipt-set-smoke-paged-3007644d`. Global facts,
+  semantic indexes and adversarial alias groups still use managed memory. No
+  existing proof folder was written or deleted; private Windows, phase usage,
+  relocation/retention and representative scale gates remain active goal work.
+
 ## Indexed bounded combined graph (2026-09-28)
 
 - Continued on `codex/webforms-native-preflight` based on `6562aa86`, whose exact
@@ -28,7 +52,9 @@
   branch-order/cancellation tests and metadata-budget field. After those final
   changes, the rebuilt focused suite passed 90/90 in 39 seconds, zero failed or
   skipped, without introduced compiler/analyzer warnings. Exact-head full
-  regression for this indexed slice remains pending.
+  regression at `3007644d51cdbe7f2cc965c5effa71be407b4f1b` passed 2,654/2,654,
+  zero failed or skipped, in 8 minutes 52 seconds. Its actual CLI sample scan
+  completed with 136 facts in ignored owned `output/native-receipt-set-smoke-3007644d`.
 - Global admitted fact rows and compiled/dispatch semantic indexes remain
   managed, and one adversarial alias or outgoing group can still have high
   fan-out. Sorter scratch files are outside the logical database ceiling. Total
@@ -41,7 +67,7 @@
   prevents silently removing a global competitor. Storage refusal also retains
   the already-read source metadata. Final rebuilt focused validation passed
   91/91 in 36 seconds, zero failed or skipped, after these guards. Exact-head
-  full regression for the indexed slice remains pending.
+  full regression for the indexed slice passed as recorded above.
 - The isolated warmed allocation fixture passes with the indexed backend:
   69,309,224 full-reader bytes versus 14,753,680 indexed compact-reader bytes,
   retaining all 1,005 facts. This is more total allocation than the earlier

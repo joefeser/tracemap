@@ -302,11 +302,16 @@ pins the exact Reporting DLL SHA-256 and full input-index SHA-256; input bytes a
 streamed again before a report can be returned. No input index is written.
 Source/overload/dispatch competitors are not pruned. Symbol reconciliation uses
 an indexed alias roster and loads one global alias group at a time; traversal
-loads one node's outgoing edges, using .NET ordinal ordering even for Unicode.
+reads outgoing edges through an indexed list, using .NET ordinal ordering even
+for Unicode. A private order roster pins global and per-node positions. Random
+access loads at most 64 records with a 512 KiB serialized page target; one
+already-admitted larger record is retained alone. Reverse traversal uses this
+same list without materializing a reversed whole-node array.
 Storage refusal discards the graph and returns the existing reduced-coverage
 `GraphInputLimitReached` gap with reason `graph-storage-bytes`, not partial paths.
 
-The storage ceiling excludes SQLite sorter scratch files and is not an OS
+The storage ceiling includes the order roster, excludes SQLite sorter scratch
+files, and is not an OS
 working-set guarantee. Fact rows, compiled binding/dispatch metadata, alias-group
 fan-out and selected traversal/output records still have managed allocations.
 The 32/256-page public parity fixture proves an eight-times page-count ratio,

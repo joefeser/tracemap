@@ -119,6 +119,8 @@
     scratch graph; preserve complete global alias groups, exact ordinal outgoing
     order and lossless historical report parity. Keep global fact/semantic-index
     allocation and representative source/compiled peak-memory acceptance pending.
+  - [x] Page high-fan-out outgoing adjacency without reversed whole-node arrays;
+    preserve every branch and exact report parity in both traversal directions.
 - [ ] Benchmark eight-times source-size synthetic corpus and representative
   compiled graph distributions; record disk/time/peak-memory/coverage metrics.
 - [ ] Add dependency-aware retention, durable run location, relocation validation,
