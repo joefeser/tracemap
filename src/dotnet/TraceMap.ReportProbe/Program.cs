@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Microsoft.Data.Sqlite;
 using TraceMap.Reporting;
 
@@ -93,14 +94,17 @@ try
         Long(reports, "maxOutputBytes", 512L * 1024 * 1024) - selectionBytes,
         Math.Max(1, maxPaths), Int(reports, "maxProjectionRecords", 500_000),
         Int(reports, "maxProjectionReferences", 2_000_000));
-    _ = GroupedCompiledPathHandoffBuilder.Create(paths, hash, projection);
+    var grouped = GroupedCompiledPathHandoffBuilder.Create(paths, hash, projection);
     Console.WriteLine("probe.groupedProjection=passed");
+    stage = "grouped-restore";
+    _ = GroupedCompiledPathHandoffBuilder.Restore(grouped, projection);
+    Console.WriteLine("probe.groupedRestore=passed");
     Console.WriteLine("probe.result=writer-or-later-not-tested;read-only;no-scan");
     return 0;
 }
 catch (Exception exception)
 {
-    Console.WriteLine($"probe.failureStage={stage};exceptionType={SafeType(exception)};traceMapFrame={SafeFrame(exception)};no-private-content");
+    Console.WriteLine($"probe.failureStage={stage};exceptionType={SafeType(exception)};code={SafeCode(exception)};traceMapFrame={SafeFrame(exception)};no-private-content");
     return 1;
 }
 
@@ -117,6 +121,9 @@ static string SafeType(Exception exception) => exception switch
     ArgumentException => "Argument", InvalidOperationException => "InvalidOperation",
     OperationCanceledException => "Cancelled", _ => "Other"
 };
+static string SafeCode(Exception exception) => exception is InvalidDataException &&
+    Regex.IsMatch(exception.Message, "^WEBFORMS_(GROUPED_HANDOFF|GROUPED_REPORT|NATIVE_REPORT)_[A-Z_]{1,80}$",
+        RegexOptions.CultureInvariant) ? exception.Message : "unavailable";
 static string SafeFrame(Exception exception)
 {
     foreach (var frame in new StackTrace(exception).GetFrames() ?? [])
