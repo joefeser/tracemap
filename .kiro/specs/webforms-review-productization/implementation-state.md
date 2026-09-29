@@ -1,5 +1,39 @@
 # Web Forms Review Productization Implementation State
 
+## Indexed admitted fact rows (2026-09-28)
+
+- Continued from pushed `3a2c3dbd` while its exact-head full regression remained
+  live; runtime binaries were not rebuilt during that run. Source changes stream
+  each compact admitted fact into private transient storage before graph building
+  rather than retaining a complete fact list. Exact combined-ID and source/
+  original-ID dictionary facades fetch requested rows; identity-order enumeration
+  uses the pinned .NET ordinal collation. No competitor or source row is pruned.
+- Surface projection now wraps the fact list lazily rather than constructing a
+  second complete projection-input array. Existing ordinary readers preserve
+  their duplicate-ID behavior; canonical combined storage enforces exact source
+  namespaces. New parity coverage retains repeated original IDs across sources.
+  Fact storage shares the existing quota, generator/input header and lifetime.
+- Initial build exposed a fixture-only `Repo`/`RepoName` typo, corrected before
+  execution. First runtime parity passed but the unchanged allocation guard
+  caught repeated lazy full scans: 137,966,552 allocated bytes versus 69,561,912
+  in the historical reader. Indexed fact-type queries now deserialize only the
+  requested rule inputs; they do not prune the retained fact set. The repaired
+  memory suite passed 38/38. A dedicated isolated run recorded 61,297,520 versus
+  69,577,304 allocated bytes while retaining all 1,005 rows. This is higher total
+  allocation than the previous compact-list design, not proof of peak-memory or
+  end-to-end throughput improvement.
+- Broader native/compiled/grouped/combined-report regression passed 605/605,
+  zero failed/skipped, in 4 minutes 14 seconds before the final source-key/PDB
+  lookup facade and per-source-copy removal. Final rebuilt memory plus compiled
+  messy-workspace regression passed 96/96, zero failed/skipped, in 45 seconds,
+  without introduced compiler/analyzer warnings. A final dedicated allocation
+  rerun recorded 51,914,128 versus 69,576,840 bytes, retaining all 1,005 facts.
+  The actual CLI sample scan completed with 201 facts and explicit reduced
+  semantic coverage in ignored owned `output/native-receipt-set-smoke-indexed-facts-3a2c3dbd`.
+  Exact-head full regression remains pending. Type-specific compiled/dispatch arrays, reconciliation alias
+  groups and retained output still allocate managed memory. This is not a whole-
+  workflow peak-memory or representative eight-times scale acceptance claim.
+
 ## Paged outgoing adjacency (2026-09-28)
 
 - Continued from exact tested `3007644d` without rebuilding during its full suite.
@@ -23,6 +57,9 @@
   semantic indexes and adversarial alias groups still use managed memory. No
   existing proof folder was written or deleted; private Windows, phase usage,
   relocation/retention and representative scale gates remain active goal work.
+- Exact pushed-head full regression at `3a2c3dbd` passed 2,658/2,658, zero failed
+  or skipped, in 8 minutes 50 seconds. It covered the paged adjacency slice, not
+  the subsequently uncommitted indexed fact changes.
 
 ## Indexed bounded combined graph (2026-09-28)
 

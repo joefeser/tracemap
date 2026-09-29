@@ -20,18 +20,14 @@ public static partial class CombinedDependencyPathReporter
         var terminalCallers = graph.Edges
             .Where(edge => edge.EdgeKind == "compiled-database-api-candidate")
             .Select(edge => edge.FromNodeId).Distinct(StringComparer.Ordinal).ToArray();
-        var factsByCombinedId = read.Facts.GroupBy(fact => fact.CombinedFactId, StringComparer.Ordinal)
-            .Where(group => group.Count() == 1)
-            .ToDictionary(group => group.Key, group => group.Single(), StringComparer.Ordinal);
-        var factsByOriginalId = read.Facts
-            .GroupBy(fact => (fact.SourceIndexId, fact.OriginalFactId))
-            .ToDictionary(group => group.Key, group => group.ToArray());
+        var factsByCombinedId = CombinedFactsById(read.Facts, uniqueOnly: true);
+        var factsByOriginalId = CombinedFactsByOriginalId(read.Facts);
         var reasons = new Dictionary<string, int>(StringComparer.Ordinal);
         var unresolved = 0;
         var reachableFill = 0;
         var reachableUnrecognizedFill = 0;
-        foreach (var call in read.Facts.Where(fact => fact.FactType == FactTypes.ManagedIlCallObserved
-                     && fact.Properties.GetValueOrDefault("referenceKind") == "memberref"
+        foreach (var call in FactsOfTypes(read.Facts, FactTypes.ManagedIlCallObserved).Where(fact =>
+                     fact.Properties.GetValueOrDefault("referenceKind") == "memberref"
                      && (fact.Properties.GetValueOrDefault("targetIdentity") ?? string.Empty)
                          .Contains("|member:4:Fill|", StringComparison.Ordinal)))
         {
@@ -83,15 +79,13 @@ public static partial class CombinedDependencyPathReporter
         AddProjectlessPdbIdentityEdges(graph, facts, parents);
         AddProjectlessPublishCandidateEdges(graph, facts, parents);
         AddProjectlessPublishMemberCandidates(graph, facts, parents);
-        var ilCalls = facts.Where(fact => fact.FactType == FactTypes.ManagedIlCallObserved).ToArray();
+        var ilCalls = FactsOfTypes(facts, FactTypes.ManagedIlCallObserved).ToArray();
         if (ilCalls.Length == 0)
             return;
 
-        var factsByOriginalId = facts
-            .GroupBy(fact => (fact.SourceIndexId, fact.OriginalFactId))
-            .ToDictionary(group => group.Key, group => group.ToArray());
-        var methods = facts
-            .Where(fact => fact.FactType == FactTypes.ManagedMethodDeclared && !string.IsNullOrWhiteSpace(fact.TargetSymbol))
+        var factsByOriginalId = CombinedFactsByOriginalId(facts);
+        var methods = FactsOfTypes(facts, FactTypes.ManagedMethodDeclared)
+            .Where(fact => !string.IsNullOrWhiteSpace(fact.TargetSymbol))
             .ToArray();
         var methodsByIdentity = methods
             .GroupBy(fact => (fact.SourceIndexId, fact.TargetSymbol!))
@@ -116,13 +110,11 @@ public static partial class CombinedDependencyPathReporter
             .Select(value => "memberref|type:scope(" + value + ")type(")
             .Distinct(StringComparer.Ordinal)
             .ToArray();
-        var bodiesByOriginalId = facts
-            .Where(fact => fact.FactType == FactTypes.ManagedIlBodyDeclared)
+        var bodiesByOriginalId = FactsOfTypes(facts, FactTypes.ManagedIlBodyDeclared)
             .GroupBy(fact => (fact.SourceIndexId, fact.OriginalFactId))
             .ToDictionary(group => group.Key, group => group.ToArray());
-        var sourceDisplaysBySymbolId = facts
-            .Where(fact => fact.FactType == FactTypes.CallEdge
-                && fact.EvidenceTier == EvidenceTiers.Tier1Semantic
+        var sourceDisplaysBySymbolId = FactsOfTypes(facts, FactTypes.CallEdge)
+            .Where(fact => fact.EvidenceTier == EvidenceTiers.Tier1Semantic
                 && !string.IsNullOrWhiteSpace(fact.SourceSymbol)
                 && !string.IsNullOrWhiteSpace(fact.Properties.GetValueOrDefault("sourceSymbolId")))
             .GroupBy(fact => (fact.SourceIndexId, fact.Properties["sourceSymbolId"]))
@@ -327,7 +319,7 @@ public static partial class CombinedDependencyPathReporter
     private static void AddProjectlessPublishCandidateEdges(EvidenceGraph graph, IReadOnlyList<CombinedFactRow> facts,
         IReadOnlyDictionary<string, CompiledAttachmentIndexLink> parents)
     {
-        var maps = facts.Where(fact => (fact.FactType == FactTypes.WebFormsPublishPageMapped
+        var maps = FactsOfTypes(facts, FactTypes.WebFormsPublishPageMapped, FactTypes.WebFormsPublishPageCandidate).Where(fact => (fact.FactType == FactTypes.WebFormsPublishPageMapped
                 && fact.RuleId == RuleIds.LegacyWebFormsPublishMap
                 && fact.EvidenceTier == EvidenceTiers.Tier2Structural)
                 || (fact.FactType == FactTypes.WebFormsPublishPageCandidate
@@ -476,9 +468,9 @@ public static partial class CombinedDependencyPathReporter
     private static void AddProjectlessPublishMemberCandidates(EvidenceGraph graph, IReadOnlyList<CombinedFactRow> facts,
         IReadOnlyDictionary<string, CompiledAttachmentIndexLink> parents)
     {
-        var pageSourceKeys = facts.Where(fact => fact.FactType is FactTypes.WebFormsPublishPageMapped or FactTypes.WebFormsPublishPageCandidate)
+        var pageSourceKeys = FactsOfTypes(facts, FactTypes.WebFormsPublishPageMapped, FactTypes.WebFormsPublishPageCandidate)
             .Select(fact => (RetainedSourceIndex(fact.SourceIndexId, parents), fact.FilePath)).ToHashSet();
-        foreach (var mapped in facts.Where(fact => fact.FactType is FactTypes.WebFormsPublishPageMapped or FactTypes.WebFormsPublishPageCandidate))
+        foreach (var mapped in FactsOfTypes(facts, FactTypes.WebFormsPublishPageMapped, FactTypes.WebFormsPublishPageCandidate))
         {
             var parentIndex = RetainedSourceIndex(mapped.SourceIndexId, parents);
             foreach (var page in facts.Where(fact => fact.SourceIndexId == parentIndex
@@ -489,21 +481,17 @@ public static partial class CombinedDependencyPathReporter
                 if (!string.IsNullOrWhiteSpace(linkedCode)) pageSourceKeys.Add((parentIndex, linkedCode));
             }
         }
-        var assemblies = facts.Where(fact => fact.FactType == FactTypes.WebFormsPublishAssemblyBound
-                && fact.RuleId == RuleIds.LegacyWebFormsPublishMap
+        var assemblies = FactsOfTypes(facts, FactTypes.WebFormsPublishAssemblyBound).Where(fact => fact.RuleId == RuleIds.LegacyWebFormsPublishMap
                 && fact.EvidenceTier == EvidenceTiers.Tier2Structural)
             .ToArray();
-        var sourceInputs = facts.Where(fact => fact.FactType == FactTypes.WebFormsPublishSourceBound
-                     && fact.RuleId == RuleIds.LegacyWebFormsPublishMap
+        var sourceInputs = FactsOfTypes(facts, FactTypes.WebFormsPublishSourceBound).Where(fact => fact.RuleId == RuleIds.LegacyWebFormsPublishMap
                      && fact.EvidenceTier == EvidenceTiers.Tier2Structural
                      && !pageSourceKeys.Contains((RetainedSourceIndex(fact.SourceIndexId, parents), fact.FilePath)))
                  .OrderBy(fact => fact.CombinedFactId, StringComparer.Ordinal).ToArray();
-        var declarationsByFile = facts.Where(fact => fact.FactType == FactTypes.MethodDeclared
-                && fact.RuleId == RuleIds.VisualBasicSyntaxDeclarations)
+        var declarationsByFile = FactsOfTypes(facts, FactTypes.MethodDeclared).Where(fact => fact.RuleId == RuleIds.VisualBasicSyntaxDeclarations)
             .GroupBy(fact => (fact.SourceIndexId, fact.FilePath))
             .ToDictionary(group => group.Key, group => group.ToArray());
-        var methodsByName = facts.Where(fact => fact.FactType == FactTypes.ManagedMethodDeclared
-                && fact.Properties.GetValueOrDefault("provenanceState") == "bound")
+        var methodsByName = FactsOfTypes(facts, FactTypes.ManagedMethodDeclared).Where(fact => fact.Properties.GetValueOrDefault("provenanceState") == "bound")
             .GroupBy(fact => (fact.SourceIndexId,
                 Name: fact.Properties.GetValueOrDefault("metadataName")?.ToUpperInvariant()))
             .ToDictionary(group => group.Key, group => group.ToArray());
@@ -756,8 +744,7 @@ public static partial class CombinedDependencyPathReporter
     private static void AddProjectlessPdbIdentityEdges(EvidenceGraph graph, IReadOnlyList<CombinedFactRow> facts,
         IReadOnlyDictionary<string, CompiledAttachmentIndexLink> parents)
     {
-        var declarations = facts.Where(fact => fact.FactType == FactTypes.MethodDeclared
-                && ((fact.RuleId == RuleIds.VisualBasicSyntaxDeclarations
+        var declarations = FactsOfTypes(facts, FactTypes.MethodDeclared).Where(fact => ((fact.RuleId == RuleIds.VisualBasicSyntaxDeclarations
                      && fact.EvidenceTier == EvidenceTiers.Tier3SyntaxOrTextual)
                     || (fact.RuleId == RuleIds.VisualBasicSemanticDeclarations
                         && fact.EvidenceTier == EvidenceTiers.Tier1Semantic))
@@ -770,17 +757,14 @@ public static partial class CombinedDependencyPathReporter
             .GroupBy(fact => (fact.SourceIndexId, fact.FilePath))
             .ToDictionary(group => group.Key, group => group.ToArray());
 
-        var byOriginalId = facts.GroupBy(fact => (fact.SourceIndexId, fact.OriginalFactId))
-            .ToDictionary(group => group.Key, group => group.ToArray());
-        var methodIdentityCounts = facts.Where(fact => fact.FactType == FactTypes.ManagedMethodDeclared
-                && !string.IsNullOrWhiteSpace(fact.TargetSymbol))
+        var byOriginalId = CombinedFactsByOriginalId(facts);
+        var methodIdentityCounts = FactsOfTypes(facts, FactTypes.ManagedMethodDeclared).Where(fact => !string.IsNullOrWhiteSpace(fact.TargetSymbol))
             .GroupBy(fact => (fact.SourceIndexId, fact.TargetSymbol!))
             .ToDictionary(group => group.Key, group => group.Count());
-        var documentJoins = facts.Where(fact => fact.FactType == FactTypes.PdbSourceDocumentReconciled
-                && fact.Properties.GetValueOrDefault("pdbProvenanceState") == "bound")
+        var documentJoins = FactsOfTypes(facts, FactTypes.PdbSourceDocumentReconciled).Where(fact => fact.Properties.GetValueOrDefault("pdbProvenanceState") == "bound")
             .GroupBy(fact => (fact.SourceIndexId, fact.Properties.GetValueOrDefault("pdbDocumentFactId")))
             .ToDictionary(group => group.Key, group => group.ToArray());
-        var pointsByMethodJoin = facts.Where(fact => fact.FactType == FactTypes.PdbSequencePointDeclared)
+        var pointsByMethodJoin = FactsOfTypes(facts, FactTypes.PdbSequencePointDeclared)
             .GroupBy(fact => (fact.SourceIndexId, fact.Properties.GetValueOrDefault("metadataPdbReconciliationFactId")))
             .ToDictionary(group => group.Key, group => group.ToArray());
 

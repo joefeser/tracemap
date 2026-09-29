@@ -10,7 +10,7 @@ public static partial class CombinedDependencyPathReporter
     // This private scratch database is never published or discovered for reuse.
     // SQLite owns its temporary file and removes it on connection disposal. The
     // byte commitments identify the exact generator and input, not authenticity.
-    private sealed class IndexedGraphStore : IDisposable
+    private sealed partial class IndexedGraphStore : IDisposable
     {
         private readonly SqliteConnection connection;
         private bool sorted;
@@ -27,6 +27,7 @@ public static partial class CombinedDependencyPathReporter
             if (maxStorageBytes < 64 * 1024) throw new ReportInputLimitException("graph-storage-bytes");
             this.inputSha256 = inputSha256;
             this.token = token;
+            Facts = new IndexedFactRows(this);
             connection = new SqliteConnection(new SqliteConnectionStringBuilder
             {
                 DataSource = "", Pooling = false, Cache = SqliteCacheMode.Private
@@ -43,6 +44,13 @@ public static partial class CombinedDependencyPathReporter
                     pragma temp_store=file;
                     pragma cache_size=-8192;
                     create table graph_metadata(key text primary key, value text not null);
+                    create table graph_facts(ordinal integer primary key, id text not null unique,
+                        source_id text not null, original_id text not null, source_key text not null,
+                        fact_type text not null, payload text not null);
+                    create unique index graph_facts_original on graph_facts(source_id,original_id);
+                    create index graph_facts_identity_order on graph_facts(id collate graph_ordinal);
+                    create index graph_facts_type_order on graph_facts(fact_type,ordinal);
+                    create index graph_facts_source_key on graph_facts(source_key,id collate graph_ordinal);
                     create table graph_nodes(id text primary key, display_name text not null, payload text not null, ordinal integer not null);
                     create table graph_edges(id text primary key, from_id text not null, to_id text not null,
                         rank integer not null, file_path text, line integer not null,
@@ -72,8 +80,8 @@ public static partial class CombinedDependencyPathReporter
                 command.Parameters.AddWithValue("$maximum", maxStorageBytes.ToString(System.Globalization.CultureInfo.InvariantCulture));
                 command.ExecuteNonQuery();
                 using var verify = connection.CreateCommand();
-                verify.CommandText = "select count(*) from sqlite_master where type='table' and name in ('graph_metadata','graph_nodes','graph_edges','graph_aliases','graph_edge_order');";
-                if (Convert.ToInt64(verify.ExecuteScalar()) != 5)
+                verify.CommandText = "select count(*) from sqlite_master where type='table' and name in ('graph_metadata','graph_facts','graph_nodes','graph_edges','graph_aliases','graph_edge_order');";
+                if (Convert.ToInt64(verify.ExecuteScalar()) != 6)
                     throw new InvalidDataException("COMBINED_GRAPH_STORAGE_SCHEMA_INVALID");
             }
             catch (SqliteException exception) when (exception.SqliteErrorCode == 13)
@@ -272,7 +280,8 @@ public static partial class CombinedDependencyPathReporter
             using var size = Command("select (select page_count from pragma_page_count) * (select page_size from pragma_page_size);");
             using var generator = Command("select value from graph_metadata where key='generatorSha256';");
             return new IndexedGraphUsage("sqlite-temporary", (string)generator.ExecuteScalar()!, inputSha256,
-                NodeCount, EdgeCount, Convert.ToInt64(size.ExecuteScalar()), outgoing.MaximumRowsLoaded);
+                NodeCount, EdgeCount, Convert.ToInt64(size.ExecuteScalar()), outgoing.MaximumRowsLoaded)
+                { StoredFacts = storedFactCount };
         }
 
         public IEnumerable<IReadOnlyList<(GraphNode Node, SymbolAlias Alias)>> SymbolReconciliationGroups()
@@ -409,7 +418,10 @@ public static partial class CombinedDependencyPathReporter
     }
 
     internal sealed record IndexedGraphUsage(string Engine, string GeneratorSha256, string InputSha256,
-        int StoredNodes, int StoredEdges, long LogicalStorageBytes, int MaximumOutgoingRowsLoaded);
+        int StoredNodes, int StoredEdges, long LogicalStorageBytes, int MaximumOutgoingRowsLoaded)
+    {
+        public int StoredFacts { get; init; }
+    }
 
     private static async Task<IndexedGraphStore> CreateIndexedGraphStoreAsync(string inputPath, long maxStorageBytes, CancellationToken token)
     {
