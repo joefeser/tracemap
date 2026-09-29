@@ -1682,6 +1682,30 @@ not recorded here.
 - Validation results are recorded with the final commit handoff; user-machine
   acceptance remains separate. No cleanup, scans or publishing are performed.
 
+### Retained baseline proof import (2026-09-29)
+
+- The user confirmed unchanged source/solution and existing aspnet_compiler
+  output and authorized building/pushing the verification helper. The actual
+  private input files remain on the user's Windows machine, not in this repo.
+- Native `import-proof` accepts an exact draft, retained proof root and original
+  publish root, verifies legacy source/assembly/map and binding commitments,
+  exact source commit/remote, clean committed source membership, raw retained
+  source/DLL bytes, and primary metadata binding admission. It never issues a
+  new attestation, edits source, infers ownership from DLL names or substitutes
+  another commit/root when inputs do not match.
+- Legacy selected DLLs remain primary; artifact context stays unbound dependency
+  context. Baseline selected pages are explicit in the output and receipt;
+  migration draft source/project scopes and budgets stay unchanged. Retained
+  source/publish/binding receipts remain external and byte-identical.
+- `wverify.ps1` is a prompt/build/launch helper. TEMP candidates require explicit
+  owner selection, not newest discovery. Default is input verification only;
+  `-Run` invokes existing native start into a separate output for new document
+  generation. Existing output and overlaps are refused; no cleanup or original
+  solution rebuild is performed. Private parity is not claimed, and backend
+  source scopes/two-repository merging remain separate existing-workflow gates.
+- Public direct/import/helper validation and final-head build/full-suite results
+  are recorded in the handoff. No private config, path or input was committed.
+
 ### PR #797 round-one review repair (2026-09-29)
 
 - Owner authorized up to four review/fix rounds, no merge. Initial settled ACK
