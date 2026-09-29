@@ -166,6 +166,9 @@ It searches only bounded immediate folders under the sibling
 `tracemap-output` directory, asks for the pinned run by number, and prints recent
 sequence/state/gap codes without paths, hashes, or report contents. For another
 layout, pass `-RunRoot` with the exact path printed after `webFormsPinnedRun=`.
+The prompt accepts either the number or a unique run-folder name. For a failed
+report checkpoint, it also prints presence and byte counts for fixed expected
+report files; these partial files are not admitted or read as report content.
 This is a quick diagnostic, not authenticated checkpoint validation; the native
 `webforms-review status --run` command remains authoritative. Neither command
 resumes or repeats the failed work.

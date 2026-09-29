@@ -41,12 +41,16 @@ if ([string]::IsNullOrWhiteSpace($RunRoot)) {
     for ($i = 0; $i -lt $candidates.Count; $i++) {
         Write-Host "[$($i + 1)] runFolder=$(Safe-Code $candidates[$i].Label)"
     }
-    $selection = Microsoft.PowerShell.Utility\Read-Host 'Pinned run: enter its number'
+    $selection = Microsoft.PowerShell.Utility\Read-Host 'Pinned run: enter its number or unique run folder name'
     $number = 0
-    if (![int]::TryParse($selection, [ref]$number) -or $number -lt 1 -or $number -gt $candidates.Count) {
-        throw 'WEBFORMS_STATUS_RUN_SELECTION_INVALID'
+    if (![int]::TryParse($selection, [ref]$number)) {
+        $named = @($candidates | Where-Object { $_.Label -ceq $selection })
+        if ($named.Count -ne 1) { throw 'WEBFORMS_STATUS_RUN_SELECTION_INVALID' }
+        $RunRoot = $named[0].Path
+    } else {
+        if ($number -lt 1 -or $number -gt $candidates.Count) { throw 'WEBFORMS_STATUS_RUN_SELECTION_INVALID' }
+        $RunRoot = $candidates[$number - 1].Path
     }
-    $RunRoot = $candidates[$number - 1].Path
 }
 
 $RunRoot = [IO.Path]::GetFullPath($RunRoot.Trim().Trim('"'))
@@ -63,6 +67,7 @@ if ($files.Count -gt 256 -or @($files | Where-Object { $_.Name -cnotmatch '^[0-9
     throw 'WEBFORMS_STATUS_CHECKPOINT_SET_INVALID'
 }
 Write-Output "checkpointCount=$($files.Count);readOnly=true;no-scan-started"
+$last = $null
 foreach ($file in @($files | Select-Object -Last 8)) {
     if ($file.Length -gt 4194304) { throw 'WEBFORMS_STATUS_CHECKPOINT_BYTES_LIMIT' }
     try { $item = Get-Content -LiteralPath $file.FullName -Raw | ConvertFrom-Json }
@@ -72,9 +77,38 @@ foreach ($file in @($files | Select-Object -Last 8)) {
         throw 'WEBFORMS_STATUS_CHECKPOINT_SEQUENCE_INVALID'
     }
     $state = Safe-Code $item.state
+    $last = $item
     $gaps = @($item.gaps | Select-Object -First 21)
     $retained = @($gaps | Select-Object -First 20 | ForEach-Object { Safe-Code $_ })
     $suffix = if ($gaps.Count -gt 20) { ',more' } else { '' }
     Write-Output "checkpoint=$sequence;state=$state;gaps=$($retained -join ',')$suffix"
+}
+if ($null -ne $last -and (Safe-Code $last.state) -eq 'reports-failed') {
+    $attempt = [string]$last.reports.reportAttempt
+    if ($attempt -cnotmatch '^reports/[0-9a-f]{32}$') { throw 'WEBFORMS_STATUS_REPORT_ATTEMPT_INVALID' }
+    $report = Join-Path $RunRoot $attempt
+    $expected = [ordered]@{
+        combined = 'combined.sqlite'
+        selectedPages = 'selected-pages.local.txt'
+        compiledJson = 'compiled/compiled-paths.handoff.local.json'
+        compiledHtml = 'compiled/compiled-paths.local.html'
+        handoff = 'handoff.local.json'
+        html = 'index.html'
+        evidenceIndex = 'review-evidence.sqlite'
+    }
+    foreach ($name in $expected.Keys) {
+        $file = Join-Path $report $expected[$name]
+        if (!(Test-Path -LiteralPath $file -PathType Leaf)) {
+            Write-Output "reportPartial.$name=missing"
+            continue
+        }
+        $entry = Get-Item -LiteralPath $file
+        if (($entry.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+            Write-Output "reportPartial.$name=linked"
+            continue
+        }
+        Write-Output "reportPartial.$name=present;bytes=$($entry.Length)"
+    }
+    Write-Output 'reportPartial=unadmitted-file-presence-only;no-content-read'
 }
 Write-Output 'status=retained-checkpoints-only;no-resume;no-inputs-changed'
