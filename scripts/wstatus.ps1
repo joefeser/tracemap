@@ -3,11 +3,13 @@ param(
     [string]$RunRoot,
     [string]$SearchRoot,
     [switch]$Probe,
-    [switch]$ProbeWriter
+    [switch]$ProbeWriter,
+    [switch]$Resume
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+if ($Resume -and ($Probe -or $ProbeWriter)) { throw 'WEBFORMS_STATUS_RESUME_PROBE_CONFLICT' }
 
 function Safe-Code([object]$Value) {
     $code = [string]$Value
@@ -158,4 +160,23 @@ if ($Probe) {
     if ($LASTEXITCODE -ne 0) { throw 'WEBFORMS_STATUS_PROBE_STAGE_FAILED;originals-preserved' }
 }
 elseif ($ProbeWriter) { throw 'WEBFORMS_STATUS_PROBE_WRITER_REQUIRES_PROBE' }
-Write-Output 'status=retained-checkpoints-only;no-resume;no-inputs-changed'
+if ($Resume) {
+    if ($null -eq $last -or (Safe-Code $last.state) -ne 'reports-failed') {
+        throw 'WEBFORMS_STATUS_RESUME_REQUIRES_FAILED_REPORT'
+    }
+    $repo = Split-Path $PSScriptRoot -Parent
+    $cli = Join-Path $repo 'src/dotnet/TraceMap.Cli/bin/Debug/net10.0/tracemap.dll'
+    if (!(Test-Path -LiteralPath $cli -PathType Leaf)) { throw 'WEBFORMS_STATUS_ORIGINAL_CLI_UNAVAILABLE' }
+    $statusJson = @(& dotnet $cli webforms-review status --run $RunRoot --json)
+    if ($LASTEXITCODE -ne 0) { throw 'WEBFORMS_STATUS_NATIVE_STATUS_FAILED;no-resume-started' }
+    try { $native = ($statusJson -join "`n") | ConvertFrom-Json }
+    catch { throw 'WEBFORMS_STATUS_NATIVE_STATUS_INVALID;no-resume-started' }
+    if ($native.state -cne 'reports-failed' -or $native.retainedArtifactsVerified -ne $true -or
+        $native.readerMatchesOriginalGenerator -ne $true) {
+        throw 'WEBFORMS_STATUS_NATIVE_RESUME_GUARD_FAILED;no-resume-started'
+    }
+    Write-Output 'resume=owner-requested;native-checkpoint-admitted;report-only-if-runtime-and-inputs-still-match'
+    & dotnet $cli webforms-review resume --run $RunRoot
+    if ($LASTEXITCODE -ne 0) { throw 'WEBFORMS_STATUS_RESUME_FAILED;preserve-all-attempts' }
+}
+else { Write-Output 'status=retained-checkpoints-only;no-resume;no-inputs-changed' }

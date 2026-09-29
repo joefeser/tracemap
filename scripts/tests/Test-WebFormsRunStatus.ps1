@@ -84,6 +84,18 @@ try {
     if ($helperProbeOutput -match 'private combined|private page|tracemap-status-helper-test') {
         throw 'Status probe leaked private fixture content'
     }
+    $start.ArgumentList.Clear()
+    foreach ($argument in @('-NoProfile', '-File', $helper, '-RunRoot', $run, '-Resume')) { [void]$start.ArgumentList.Add($argument) }
+    $process = [Diagnostics.Process]::Start($start)
+    $resumeOutput = $process.StandardOutput.ReadToEnd()
+    $resumeError = $process.StandardError.ReadToEnd()
+    if (!$process.WaitForExit(20000) -or $process.ExitCode -eq 0 -or
+        $resumeError -notmatch 'WEBFORMS_STATUS_(NATIVE_STATUS_FAILED;no-resume-started|ORIGINAL_CLI_UNAVAILABLE)') {
+        throw 'Invalid retained run was not blocked before native resume'
+    }
+    if (($resumeOutput + $resumeError) -match 'private combined|private page|tracemap-status-helper-test') {
+        throw 'Resume guard leaked private fixture content'
+    }
     $after = Get-ChildItem -LiteralPath $temp -File -Recurse | ForEach-Object { "$($_.FullName):$([Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([IO.File]::ReadAllBytes($_.FullName))))" }
     if (Compare-Object $before $after) { throw 'Status helper changed retained bytes' }
     Write-Output 'webFormsRunStatusHelperPublicTests=passed'
