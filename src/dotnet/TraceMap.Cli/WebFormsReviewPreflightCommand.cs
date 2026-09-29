@@ -94,6 +94,8 @@ public static partial class WebFormsReviewPreflightCommand
         tracemap webforms-review resume --run <durable-run-root>
         tracemap webforms-review query --run <durable-run-root> [--document application|compiled] [--pointer <JSON-pointer>] [--offset <n>] [--limit <1-50>] [--depth <0-8>]
         tracemap webforms-review prepare --config <private-json> --out <new-evidence-root> --attest-exact-source-commit <commit>
+        tracemap webforms-review relocate --run <completed-run-root> --out <new-durable-run-root>
+        tracemap webforms-review retention-plan --run <completed-run-root>
 
         Validates the fresh/attach run contract and inventories explicit compiled inputs.
         Writes local-only run-manifest.json and README.md. No scan/build/publish/binding,
@@ -106,6 +108,9 @@ public static partial class WebFormsReviewPreflightCommand
         Prepare writes separate operator-declared receipts only with an exact-commit
         attestation and explicit publishSourceRelativePaths; it never copies binaries.
         Prepare partitions larger declared inventories without raising per-receipt limits.
+        Relocate copies hash-verified completed artifacts and checkpoints, preserving
+        original policy digests, external input locations and the original run.
+        Retention-plan emits local-only protect-only JSON; it never authorizes deletion.
         Scale, full-site coverage and private Windows parity remain pending;
         retain the proven wrappers and original evidence until those gates pass.
         """;
@@ -137,7 +142,7 @@ public static partial class WebFormsReviewPreflightCommand
                 $"# Private Web Forms review run\n\nState: preflight only. Rule: `{RuleId}`.\n\n" +
                 "The manifest is this run's explicit inventory, not proof that scanning, binding or reporting occurred.\n" +
                 "Use webforms-review run/resume --run <this-root> for the configured fresh/attach scan and private reports.\n" +
-                "Source, publish and parent scans remain external and immutable; this run is not relocatable yet.\n" +
+                "Source, publish and parent scans remain external and immutable. Only completed native runs support explicit verified copies; preserve all proof dependencies.\n" +
                 "Do not upload this private manifest or delete referenced inputs.\n", cancellationToken);
             Directory.Move(staging, outputRoot); // Never replaces an existing run.
             await output.WriteLineAsync($"webFormsPreflight=completed;inputs={manifest.Inputs.Count};gaps={manifest.Gaps.Count}");
@@ -294,7 +299,7 @@ public static partial class WebFormsReviewPreflightCommand
              "Map/PDB content, dirty-worktree snapshots, retained index compatibility and parent repository identity require later authoritative validation.",
              "Inputs are explicitly enumerated beneath their declared roots; external/scattered DLLs require a future explicit locator contract, not implicit discovery.",
              "Hash limits are streamed and distinct from configured future IL/graph budgets. No large-corpus throughput, memory or completeness claim is made.",
-             "This preflight alone performs no execution. Native run/resume consumes this pinned contract; relocation, full-site acceptance and dependency-aware cleanup remain pending."]);
+             "This preflight alone performs no execution. Native run/resume consumes this pinned contract; only completed runs support explicit verified copies and protect-only retention planning. Full-site acceptance and authorized cleanup remain pending."]);
     }
 
     private static void ValidateConfig(WebFormsReviewConfig config)

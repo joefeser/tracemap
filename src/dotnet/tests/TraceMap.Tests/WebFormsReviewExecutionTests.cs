@@ -11,6 +11,198 @@ public sealed class WebFormsReviewExecutionTests
     private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase, WriteIndented = true };
 
     [Fact]
+    public async Task Completed_relocation_preserves_original_checkpoints_artifacts_query_and_resume_without_rewriting()
+    {
+        using var fixture = new Fixture();
+        await fixture.Preflight();
+        Assert.Equal(0, await fixture.Execute("run", Scan));
+        Assert.Equal(0, await fixture.ExecuteReports("resume", WebFormsReviewReportExecution.WriteAsync));
+        var checkpoint = fixture.LastCheckpoint();
+        var before = Directory.GetFiles(fixture.Run, "*", SearchOption.AllDirectories)
+            .ToDictionary(path => Path.GetRelativePath(fixture.Run, path), Hash, StringComparer.Ordinal);
+        File.WriteAllText(Path.Combine(fixture.Run, "unadmitted-private-marker.txt"), "must remain only in source run");
+        var destination = Path.Combine(fixture.Root, "durable-copy");
+        Assert.Equal(0, await Native(["relocate", "--run", fixture.Run, "--out", destination]));
+        Assert.False(File.Exists(Path.Combine(destination, "unadmitted-private-marker.txt")));
+        Assert.True(File.Exists(Path.Combine(fixture.Run, "unadmitted-private-marker.txt")));
+        foreach (var (relative, sha) in before)
+        {
+            Assert.Equal(sha, Hash(Path.Combine(fixture.Run, relative)));
+            Assert.Equal(sha, Hash(Path.Combine(destination, relative)));
+        }
+        var location = JsonSerializer.Deserialize<WebFormsReviewLocation>(File.ReadAllText(Path.Combine(destination,
+            WebFormsReviewExecutionCommand.LocationName)), JsonOptions)!;
+        Assert.Equal(fixture.Run, location.OriginalPolicyRoot); Assert.Equal(destination, location.CurrentRoot);
+        Assert.Equal(Hash(typeof(WebFormsReviewExecutionCommand).Assembly.Location), location.GeneratorSha256);
+        Assert.Equal(64, location.BoundedInputSha256.Length); Assert.Equal("local-only", location.Visibility);
+        Assert.Equal(0, await Native(["query", "--run", destination, "--pointer", "/coverage", "--depth", "0"]));
+        Assert.Equal(0, await WebFormsReviewExecutionCommand.RunWithReportsAsync(["resume", "--run", destination],
+            TextWriter.Null, fixture.Error, (_, _, _, _) => throw new InvalidOperationException("must not scan"),
+            (_, _, _, _) => throw new InvalidOperationException("must not attach"),
+            (_, _, _, _) => throw new InvalidOperationException("must not render")));
+        Assert.Equal(checkpoint.Sequence, Directory.GetFiles(Path.Combine(destination, "checkpoints"), "*.json").Length);
+        var second = Path.Combine(fixture.Root, "second-copy");
+        Assert.Equal(0, await Native(["relocate", "--run", destination, "--out", second]));
+        var secondLocation = JsonSerializer.Deserialize<WebFormsReviewLocation>(File.ReadAllText(Path.Combine(second,
+            WebFormsReviewExecutionCommand.LocationName)), JsonOptions)!;
+        Assert.Equal(fixture.Run, secondLocation.OriginalPolicyRoot);
+        Assert.Equal(Hash(Path.Combine(destination, WebFormsReviewExecutionCommand.LocationName)), secondLocation.PreviousLocationSha256);
+        // Old locations need not exist for a read-only query; no old-root reads or redirects.
+        Directory.Move(fixture.Run, Path.Combine(fixture.Root, "original-preserved-elsewhere"));
+        Directory.Move(destination, Path.Combine(fixture.Root, "first-copy-preserved-elsewhere"));
+        Assert.Equal(0, await Native(["query", "--run", second, "--pointer", "/coverage", "--depth", "0"]));
+        Directory.Move(fixture.Source, Path.Combine(fixture.Root, "source-preserved-elsewhere"));
+        Directory.Move(fixture.Published, Path.Combine(fixture.Root, "published-preserved-elsewhere"));
+        Assert.Equal(0, await Native(["retention-plan", "--run", second]));
+        Assert.Equal(0, await Native(["query", "--run", second, "--pointer", "/coverage", "--depth", "0"]));
+
+        async Task<int> Native(string[] args)
+        {
+            fixture.Error.GetStringBuilder().Clear();
+            return await TraceMapCommand.RunAsync(["webforms-review", .. args], TextWriter.Null, fixture.Error);
+        }
+    }
+
+    [Fact]
+    public async Task Retention_plan_is_hash_bound_protect_only_and_does_not_change_run_or_external_dependencies()
+    {
+        using var fixture = new Fixture();
+        var parent = await fixture.PreflightAttachment();
+        Assert.Equal(0, await fixture.Execute("run", (_, _, _, _) => throw new InvalidOperationException("no scan")));
+        Assert.Equal(0, await fixture.ExecuteReports("resume", WebFormsReviewReportExecution.WriteAsync));
+        var before = Directory.GetFiles(fixture.Root, "*", SearchOption.AllDirectories).ToDictionary(path => path, Hash);
+        using var output = new StringWriter();
+        Assert.Equal(0, await TraceMapCommand.RunAsync(["webforms-review", "retention-plan", "--run", fixture.Run], output, fixture.Error));
+        var plan = JsonSerializer.Deserialize<WebFormsReviewRetentionPlan>(output.ToString(), JsonOptions)!;
+        Assert.Equal("dry-run-protect-only", plan.Mode); Assert.Empty(plan.DeletionCandidates);
+        Assert.Equal("local-only", plan.Visibility); Assert.Equal(64, plan.BoundedInputSha256.Length);
+        Assert.Equal(Hash(typeof(WebFormsReviewExecutionCommand).Assembly.Location), plan.GeneratorSha256);
+        Assert.Contains(plan.ProtectedDependencies, item => item.Role == "parent-scan-root" && item.Path == parent);
+        Assert.Contains(plan.ProtectedDependencies, item => item.Role == "source-root" && item.Path == fixture.Source);
+        Assert.Contains(plan.ProtectedDependencies, item => item.Role == "published-root" && item.Path == fixture.Published);
+        Assert.Equal(before.Keys.Order(StringComparer.Ordinal), Directory.GetFiles(fixture.Root, "*", SearchOption.AllDirectories).Order(StringComparer.Ordinal));
+        foreach (var (path, sha) in before) Assert.Equal(sha, Hash(path));
+    }
+
+    [Theory]
+    [InlineData("incomplete")]
+    [InlineData("changed-artifact")]
+    [InlineData("changed-checkpoint")]
+    [InlineData("source-overlap")]
+    [InlineData("published-overlap")]
+    [InlineData("run-overlap")]
+    [InlineData("existing-output")]
+    [InlineData("active-lock")]
+    public async Task Relocation_refuses_unadmitted_changed_overlapping_or_busy_runs(string scenario)
+    {
+        using var fixture = new Fixture(); await fixture.Preflight();
+        Assert.Equal(0, await fixture.Execute("run", Scan));
+        if (scenario != "incomplete") Assert.Equal(0, await fixture.ExecuteReports("resume", WebFormsReviewReportExecution.WriteAsync));
+        var checkpoint = fixture.LastCheckpoint();
+        var destination = scenario switch
+        {
+            "source-overlap" => Path.Combine(fixture.Source, "copy"),
+            "published-overlap" => Path.Combine(fixture.Published, "copy"),
+            "run-overlap" => Path.Combine(fixture.Run, "copy"),
+            _ => Path.Combine(fixture.Root, "copy")
+        };
+        if (scenario == "changed-artifact") File.AppendAllText(Path.Combine(fixture.Run, checkpoint.Artifacts[0].RelativePath), "changed");
+        if (scenario == "changed-checkpoint") File.AppendAllText(Path.Combine(fixture.Run, "checkpoints", "0001.json"), "changed");
+        if (scenario == "existing-output") Directory.CreateDirectory(destination);
+        using var held = scenario == "active-lock" ? new FileStream(Path.Combine(fixture.Run, ".native-run.lock"), FileMode.Open, FileAccess.Read, FileShare.None) : null;
+        using var output = new StringWriter();
+        Assert.Equal(1, await TraceMapCommand.RunAsync(["webforms-review", "relocate", "--run", fixture.Run, "--out", destination], output, fixture.Error));
+        Assert.Empty(output.ToString()); Assert.True(File.Exists(fixture.Manifest));
+        Assert.False(File.Exists(Path.Combine(destination, WebFormsReviewExecutionCommand.LocationName)));
+    }
+
+    [Theory]
+    [InlineData("location-changed")]
+    [InlineData("missing-location")]
+    [InlineData("copied-again-manually")]
+    [InlineData("changed-index")]
+    public async Task Relocated_query_refuses_invalid_location_or_owned_evidence(string scenario)
+    {
+        using var fixture = new Fixture(); await fixture.Preflight();
+        Assert.Equal(0, await fixture.Execute("run", Scan));
+        Assert.Equal(0, await fixture.ExecuteReports("resume", WebFormsReviewReportExecution.WriteAsync));
+        var destination = Path.Combine(fixture.Root, "copy");
+        Assert.Equal(0, await TraceMapCommand.RunAsync(["webforms-review", "relocate", "--run", fixture.Run, "--out", destination], TextWriter.Null, fixture.Error));
+        var location = Path.Combine(destination, WebFormsReviewExecutionCommand.LocationName);
+        if (scenario == "location-changed") File.AppendAllText(location, "changed");
+        if (scenario == "missing-location") File.Move(location, Path.Combine(fixture.Root, "preserved-location.json"));
+        if (scenario == "copied-again-manually")
+        {
+            var moved = Path.Combine(fixture.Root, "unregistered-move"); Directory.Move(destination, moved); destination = moved;
+        }
+        if (scenario == "changed-index") File.AppendAllText(Path.Combine(destination, fixture.LastCheckpoint().Reports!.ReportAttempt, "review-evidence.sqlite"), "changed");
+        using var output = new StringWriter();
+        Assert.Equal(1, await TraceMapCommand.RunAsync(["webforms-review", "query", "--run", destination], output, fixture.Error));
+        Assert.Empty(output.ToString());
+    }
+
+    [Fact]
+    public async Task Relocation_policy_root_tampering_is_rejected_even_with_recomputed_location_hashes()
+    {
+        using var fixture = new Fixture(); await fixture.Preflight();
+        Assert.Equal(0, await fixture.Execute("run", Scan));
+        Assert.Equal(0, await fixture.ExecuteReports("resume", WebFormsReviewReportExecution.WriteAsync));
+        var destination = Path.Combine(fixture.Root, "copy");
+        Assert.Equal(0, await TraceMapCommand.RunAsync(["webforms-review", "relocate", "--run", fixture.Run, "--out", destination], TextWriter.Null, fixture.Error));
+        var path = Path.Combine(destination, WebFormsReviewExecutionCommand.LocationName);
+        var location = JsonSerializer.Deserialize<WebFormsReviewLocation>(File.ReadAllText(path), JsonOptions)!;
+        location = location with { OriginalPolicyRoot = Path.Combine(fixture.Root, "wrong-original-root") };
+        location = location with { BoundedInputSha256 = Digest(new
+        {
+            location.GeneratorSha256, location.RunId, location.PreflightSha256, location.CheckpointSha256, location.ArtifactsSha256,
+            location.OriginalPolicyRoot, location.CurrentRoot, location.CopiedFromRoot, location.PreviousLocationSha256, location.CopiedFiles
+        }), PayloadSha256 = "" };
+        location = location with { PayloadSha256 = Digest(location) };
+        File.WriteAllText(path, JsonSerializer.Serialize(location, JsonOptions));
+        using var output = new StringWriter();
+        Assert.Equal(1, await TraceMapCommand.RunAsync(["webforms-review", "query", "--run", destination], output, fixture.Error));
+        Assert.Empty(output.ToString());
+        Assert.Contains("CHECKPOINT_INVALID", fixture.Error.ToString(), StringComparison.Ordinal);
+
+        static string Digest<T>(T value) => Convert.ToHexStringLower(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(value, JsonOptions)));
+    }
+
+    [Theory]
+    [InlineData("scan")]
+    [InlineData("reports")]
+    public async Task Relocated_history_never_uses_original_policy_locators_to_bypass_current_owned_links(string phase)
+    {
+        if (OperatingSystem.IsWindows()) return; // Native Windows junction acceptance remains required.
+        using var fixture = new Fixture(); await fixture.Preflight();
+        Assert.Equal(0, await fixture.Execute("run", Scan));
+        Assert.Equal(0, await fixture.ExecuteReports("resume", WebFormsReviewReportExecution.WriteAsync));
+        var destination = Path.Combine(fixture.Root, "copy");
+        Assert.Equal(0, await TraceMapCommand.RunAsync(["webforms-review", "relocate", "--run", fixture.Run, "--out", destination], TextWriter.Null, fixture.Error));
+        var checkpoint = fixture.LastCheckpoint();
+        var directory = Path.Combine(destination, phase == "scan" ? checkpoint.Attempt + "/scan" : checkpoint.Reports!.ReportAttempt);
+        var preserved = Path.Combine(fixture.Root, "unowned-" + phase);
+        Directory.Move(directory, preserved); Directory.CreateSymbolicLink(directory, preserved);
+        using var output = new StringWriter();
+        Assert.Equal(1, await TraceMapCommand.RunAsync(["webforms-review", "query", "--run", destination], output, fixture.Error));
+        Assert.Empty(output.ToString()); Assert.Contains("OUTPUT_LINK_INVALID", fixture.Error.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Cancelled_relocation_does_not_create_a_completed_copy_or_delete_source_proof()
+    {
+        using var fixture = new Fixture(); await fixture.Preflight();
+        Assert.Equal(0, await fixture.Execute("run", Scan));
+        Assert.Equal(0, await fixture.ExecuteReports("resume", WebFormsReviewReportExecution.WriteAsync));
+        var checkpointHash = Hash(Path.Combine(fixture.Run, "checkpoints", "0004.json"));
+        var destination = Path.Combine(fixture.Root, "cancelled-copy");
+        using var cancellation = new CancellationTokenSource(); cancellation.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => TraceMapCommand.RunAsync(
+            ["webforms-review", "relocate", "--run", fixture.Run, "--out", destination], TextWriter.Null, fixture.Error, cancellation.Token));
+        Assert.False(Directory.Exists(destination));
+        Assert.Equal(checkpointHash, Hash(Path.Combine(fixture.Run, "checkpoints", "0004.json")));
+    }
+
+    [Fact]
     public async Task Fresh_executes_one_normal_scan_and_resume_keeps_retained_evidence_unchanged()
     {
         using var fixture = new Fixture();

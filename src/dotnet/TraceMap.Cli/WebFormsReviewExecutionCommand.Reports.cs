@@ -31,7 +31,7 @@ public static partial class WebFormsReviewExecutionCommand
             !ValidReportAttempt(context.ReportAttempt) || checkpoint.Attempt != scan.Attempt || checkpoint.ScanId != scan.ScanId ||
             checkpoint.SourceSnapshotDigest != scan.SourceSnapshotDigest || checkpoint.FactCount != scan.FactCount ||
             context.ScanCheckpointSha256 != history.ScanCheckpointSha256 || context.ScanArtifactsSha256 != ScanArtifactsDigest(scan) ||
-            context.PolicySha256 != ReportPolicyDigest(plan, OwnedPath(root, scan.Attempt + "/scan"), OwnedPath(root, context.ReportAttempt)) ||
+            context.PolicySha256 != ReportPolicyDigest(plan, LexicalOwnedPath(root, scan.Attempt + "/scan"), LexicalOwnedPath(root, context.ReportAttempt)) ||
             checkpoint.BoundedInputSha256 != ReportBoundedDigest(preflight, runtime, checkpoint)) throw Fail("REPORT_CONTEXT_INVALID");
         if (checkpoint.State == ReportsStarted)
         {
