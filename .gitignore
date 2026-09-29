@@ -101,6 +101,7 @@ scripts/smoke-typescript-endpoints.sh
 /output/playwright/
 /output/native-receipt-set-smoke-*/
 /output/native-scale-*/
+/output/native-traversal-work-*/
 /.playwright-cli/
 
 # Restricted-workstation Web Forms page-list settings

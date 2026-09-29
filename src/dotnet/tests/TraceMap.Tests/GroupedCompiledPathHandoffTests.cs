@@ -13,7 +13,9 @@ public sealed class GroupedCompiledPathHandoffTests
     public void Exact_chains_group_without_losing_variants_overloads_or_source_identity()
     {
         var report = Report();
+        report = report with { Summary = report.Summary with { TraversalWorkUnits = 17 } };
         var packet = GroupedCompiledPathHandoffBuilder.Create(report, IndexHash);
+        Assert.Equal(17, packet.Header.Summary.TraversalWorkUnits);
         Assert.Equal(4, packet.Variants.Count);
         Assert.Equal(3, packet.Chains.Count);
         Assert.Equal(new[] { 0, 1 }, Assert.Single(packet.Chains, chain => chain.VariantIndexes.Count == 2).VariantIndexes);

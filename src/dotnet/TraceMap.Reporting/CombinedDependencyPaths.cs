@@ -116,7 +116,13 @@ public sealed record CombinedPathSummary(
     int PathCount,
     int GapCount,
     int SelectorCandidateCount,
-    bool Truncated);
+    bool Truncated)
+{
+    // Search's actual counter, shared by all roots in this one query. Null in
+    // historical reports means unrecorded, not zero. Graph admission is separate.
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? TraversalWorkUnits { get; init; }
+}
 
 public sealed record CombinedPath(
     string PathId,
@@ -742,7 +748,7 @@ public static partial class CombinedDependencyPathReporter
                 sortedPaths.Length,
                 sortedGaps.Length,
                 selectorCandidateCount,
-                truncated),
+                truncated) { TraversalWorkUnits = search?.Work ?? 0 },
             sortedPaths,
             sortedGaps,
             new CombinedPathInventory(
@@ -4485,7 +4491,7 @@ public static partial class CombinedDependencyPathReporter
                     PathEnumerationTruncationReasons = item.Value.PathEnumerationTruncationReasons.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
                     ReachableTerminalNodeIds = item.Value.ReachableTerminalNodeIds.OrderBy(value => value, StringComparer.Ordinal).ToArray()
                 },
-                StringComparer.Ordinal));
+                StringComparer.Ordinal)) { Work = work };
     }
 
     private static TerminalInventoryResult FindDistinctTerminalWitnesses(
@@ -6732,7 +6738,10 @@ public static partial class CombinedDependencyPathReporter
         IReadOnlyList<CombinedPathGap> Gaps,
         bool Truncated,
         IReadOnlySet<string> ReachedNodeIds,
-        IReadOnlyDictionary<string, CombinedDependencyTraversalObservation> TraversalByRootNodeId);
+        IReadOnlyDictionary<string, CombinedDependencyTraversalObservation> TraversalByRootNodeId)
+    {
+        public int Work { get; init; }
+    }
 
     private sealed record PathState(
         string RootNodeId,

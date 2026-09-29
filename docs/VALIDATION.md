@@ -1,5 +1,13 @@
 # TraceMap Validation Guide
 
+For native graph-query work accounting, run the combined dependency-path,
+grouped compiled handoff, Web Forms packet, native execution/status and native
+subprocess-scale suites. Pin a shared two-root work/path cap, exact exhaustion,
+no-terminal search work, optional historical counters and grouped round-trip.
+Page and compiled queries each share a budget across their roots; their measured
+sum is not graph-admission or total phase work. Verify an old retained run still
+reports missing measurements as unknown without rewriting its proof.
+
 Git identity probing must distinguish process exit from complete redirected
 output. A timed-out, faulted, cancelled or required-empty pipe read is a failed
 probe and participates in the existing single bounded retry; an intentionally

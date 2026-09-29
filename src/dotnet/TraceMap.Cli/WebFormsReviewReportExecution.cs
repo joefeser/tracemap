@@ -151,7 +151,7 @@ internal static class WebFormsReviewReportExecution
         await using (var bounded = new BoundedStream(file, outputBudget))
         using (var writer = new StreamWriter(bounded, new UTF8Encoding(false), 4096, leaveOpen: true))
         {
-            Render(writer, handoff, paths.Paths.Count, grouped.Chains.Count, cancellationToken);
+            Render(writer, handoff, paths.Paths.Count, grouped.Chains.Count, paths.Summary.TraversalWorkUnits, cancellationToken);
             await writer.FlushAsync(cancellationToken);
             htmlHash = bounded.Digest();
         }
@@ -173,13 +173,14 @@ internal static class WebFormsReviewReportExecution
             generated.OrderBy(item => item.RelativePath, StringComparer.Ordinal).ToArray());
     }
 
-    private static void Render(TextWriter writer, NativeWebFormsReviewHandoff handoff, int paths, int chains, CancellationToken token)
+    private static void Render(TextWriter writer, NativeWebFormsReviewHandoff handoff, int paths, int chains, int? compiledWork, CancellationToken token)
     {
         void W(string value) { token.ThrowIfCancellationRequested(); writer.WriteLine(value); }
         W("<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><link rel=\"icon\" href=\"data:,\"><title>Native Web Forms review workbench</title><style>body{font:16px/1.5 system-ui,sans-serif;margin:2rem auto;padding:0 1rem;max-width:1100px;color:#17212b;overflow-wrap:anywhere}section{margin:1rem 0;border:1px solid #ccd8e3;padding:1rem}.notice{border-left:4px solid #a34024;background:#fff4e9;padding:1rem}td,th{border:1px solid #ccd8e3;padding:.5rem;text-align:left;vertical-align:top;overflow-wrap:anywhere}table{border-collapse:collapse;width:100%;table-layout:fixed}code,pre{white-space:pre-wrap;overflow-wrap:anywhere}a{color:#12599b}summary{cursor:pointer}@media(max-width:650px){thead{display:none}table,tbody,tr,td{display:block;width:auto}tr{margin:.5rem 0}td:before{content:attr(data-label);display:block;font-weight:bold}td+td{border-top:0}}</style></head><body>");
         W("<h1>Native Web Forms review workbench</h1><p class=\"notice\">PRIVATE — retained static evidence only. Compiled paths do not override page-chain verdicts and do not prove SQL executed.</p>");
         W($"<p>Run {H(handoff.RunId)} · coverage {H(handoff.Coverage)} · page mode {H(handoff.Configuration.PageMode)} · {handoff.Packet.Surfaces.Count} retained surfaces. <a href=\"{HandoffName}\">Native handoff JSON</a></p>");
         W($"<p><a href=\"compiled/{GroupedCompiledPathReportWriter.HtmlName}\">Compiled method paths</a>: {chains} exact chains, {paths} evidence variants. Requested roots {handoff.RequestedCompiledRoots}; omitted roots {handoff.OmittedCompiledRoots}. <a href=\"compiled/{GroupedCompiledPathReportWriter.HandoffName}\">Lossless compiled handoff</a></p>");
+        W($"<p>Measured traversal work units: page query {handoff.Packet.Summary.TraversalWorkUnits?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "unknown"}; compiled query {compiledWork?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "unknown"}. Each query shares its {handoff.Configuration.Budgets.GraphMaxWork} work-unit and {handoff.Configuration.Budgets.GraphMaxPaths} path limits across all selected roots. These are search counters, not runtime calls, graph-admission work, elapsed time or memory.</p>");
         W("<p>For bounded machine review, use <code>tracemap webforms-review query --run &lt;this durable run root&gt;</code>. The checkpoint owns the read-only evidence index; do not load the entire handoff to inspect one page or chain.</p>");
         W("<p>Call accounting: P = retained chain-associated call projections; F = distinct retained fact/scan/commit identities; S = retained normalized site identities. Missing site IDs are reported separately, not guessed.</p><table><thead><tr><th>Page / controls</th><th>Calls P / F / S</th><th>Retained page-chain verdicts</th></tr></thead><tbody>");
         foreach (var surface in handoff.Packet.Surfaces)

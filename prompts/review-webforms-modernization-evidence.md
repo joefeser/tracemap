@@ -22,7 +22,10 @@ approved TraceMap executable and run root. Do not execute `run`, `resume`,
 1. Run `tracemap webforms-review status --run <owner-supplied-run-root> --json`
    first. Record operation, selected/all-page scope, retained source commit,
    coverage, configured limits, observed counts and categorical truncation
-   reasons. Unknown work/time/peak usage is not zero. Status is not fresh
+   reasons. Unknown work/time/peak usage is not zero.
+   Measured page/compiled traversal counters share each query's budget across
+   all selected roots; their sum is not total phase work, runtime calls or a
+   performance forecast. Preserve each counter's scope. Status is not fresh
    external-input validation or resume admission. Stop on an incomplete, busy,
    invalid or failed state; return it to the owner without executing suggested
    run/resume actions. Then run

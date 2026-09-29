@@ -1,5 +1,53 @@
 # Web Forms Review Productization Implementation State
 
+## Native graph-query work scope (2026-09-28)
+
+- Inspection after 389f1a19 found an incorrect new status/documentation label:
+  native packet and selected-symbol reporting each invokes one graph search over
+  its selected roots. MaxPaths and MaxTraversalWork are shared across that query,
+  not independently available to every root. Corrected status keys and docs;
+  the earlier per-root wording below is superseded, not an acceptance claim.
+- New optional path-summary traversalWorkUnits carries the search's existing
+  actual counter, including terminal inventory and shortest-witness work. It does
+  not change search limits, path selection, traversal order or retained evidence.
+  Grouped projection retains it losslessly under existing generator/input hashes.
+  Historical summaries omit the field and remain unknown without mutation.
+- Native packet summary carries the page query's counter. Status retrieves both
+  bounded summary counters and labels their sum's scope as
+  page-and-compiled-graph-query-traversal-all-selected-roots. Graph input,
+  phase elapsed/peak/transient usage remain explicit separate gaps. Regression
+  source pins work exhaustion, no-terminal work and historical null/round-trip.
+  No runtime binaries were rebuilt while exact 389f1a19 full regression is live.
+  Final rebuild, regression and old/new retained-run smokes remain required.
+- Exact pushed 389f1a195b8e3672667b7510cfbe609bcc9b0683 full regression
+  terminated green: 2,719 passed, zero failed/skipped in 12 minutes 34 seconds.
+  This includes the Git output-admission fix and original status implementation,
+  not the subsequent query-scope/counter source edits. Runtime rebuilding began
+  only after that process was terminal.
+- Rebuilt query-scope/counter execution, indexed query, combined path, grouped
+  handoff, packet and ordinary native-scale regression passed 218/218, zero
+  failed/skipped, in 3 minutes 19 seconds with no introduced build warnings.
+  Subsequent benchmark receipt counter assertions still require their own build.
+- Actual new CLI status verified the old relocated 256-page/1,024-variant run,
+  retained partial coverage and showed page/compiled work as unknown. Original
+  checkpoint/artifact bytes were not rewritten. New status labels its two-million
+  work cap per graph query, shared across selected roots.
+- Final rebuilt native subprocess diagnostic passed 1/1 in 8 seconds and
+  retained an explicit public 1/8-page receipt at
+  output/native-traversal-work-smoke-20260928. The eight-page case retained 460
+  facts/32 variants, page work 736 and compiled work 352, with independent
+  two-million per-query caps. Actual CLI status verified that run and these
+  counters with the original generator match, preserving partial coverage and
+  eight cycle truncations. Workbench HTML also exposes the measured counters
+  with their limitations. This is a smoke, not representative/private scale.
+- Final ordinary CLI sample scan passed with 27 facts and
+  Level1SemanticAnalysis. Explicit diagnostic/smoke outputs are retained locally
+  and narrowly ignored by Git, not committed or deleted.
+- Traversal accounting subtask is checked. Phase elapsed/peak/transient usage,
+  graph/metadata/IL admission consumption and representative private graph scale
+  remain open. No old proof, parent input or completed artifact was deleted or
+  rewritten. Exact new committed-head full regression remains to be launched.
+
 ## Native operational status and Git output admission (2026-09-28)
 
 - Exact-head full regression at 8d299bbe3500c30736e6a1e4e53026777413bf27

@@ -113,6 +113,8 @@
     indexed path/group/gap counts, declared limits, missing-input locator guidance
     and next actions. Explicitly distinguish unknown work/time/peak/transient
     consumption from zero; retain full instrumentation as a separate acceptance gap.
+  - [x] Retain actual graph-query traversal work, label its shared selected-root
+    scope and preserve unknown historical counters without rewriting old proof.
 - [ ] Avoid full combined-graph materialization while retaining global ambiguity
   and cross-assembly evidence; validate deterministic parity.
   - [x] Reduce unused combined fact-property allocation in SQLite while retaining
