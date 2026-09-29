@@ -140,6 +140,11 @@
     representative graph distributions and whole-workflow throughput remain open.
 - [ ] Add dependency-aware retention, durable run location, relocation validation,
   and dry-run-first cleanup; do not delete the working proof before verification.
+  - [x] Add explicit completed-run verified copies with original policy-root
+    anchors and a local-only protect-only dependency inventory. Preserve original
+    checkpoint/artifact bytes, external input locators and all old proof folders;
+    pin two-hop query/resume, tamper, overlap and busy-run tests. Cross-platform
+    private acceptance and any explicitly authorized cleanup remain separate gates.
 - [ ] Validate the new workflow on an authorized real repository before replacing
   the current proof wrappers; parallelization follows correctness and scale work.
 

@@ -1,5 +1,57 @@
 # Web Forms Review Productization Implementation State
 
+## Explicit completed-run copies and protect-only retention (2026-09-28)
+
+- Exact pushed da2ce561b236b71a971277893df9514c5861ac95 full regression passed
+  2,680/2,680, zero failed/skipped, in 12 minutes 17 seconds. Runtime binaries
+  remained unchanged until that run terminated. This evidence covers the
+  qualified member index, not the new relocation source below.
+- Added native `relocate --run ... --out ...` for completed runs only. It copies
+  admitted scan/report artifacts, original manifest/checkpoint chain and optional
+  README into an explicitly new separate root. Existing artifact/checkpoint bytes
+  are never rewritten. Source run locks, bounded streamed copy hashes, source
+  rechecks and sibling-directory publication precede completion output. Failed
+  staging and all original proof folders are retained, not deleted.
+- New private location metadata pins current generator, bounded copy roster,
+  original policy root, destination and original completed checkpoint/artifact
+  anchor. History checks use the original root only as a lexical policy digest
+  input; owned file access continues under the current physical run root.
+  Two-hop copies carry the previous locator hash without depending on old-root
+  availability for read-only queries. Completed execution resume retains its
+  original generator/runtime and external-input validation gates.
+- Added `retention-plan --run ...`: a hash-bound local protect-only dependency
+  inventory on stdout. Every admitted artifact is rehashed, external roots/files
+  and previous proof locations are protected declarations, and deletion
+  candidates are always empty. Unknown files, abandoned attempts and other runs
+  remain protected. This is not machine-wide cleanup safety or deletion approval.
+- A rebuilt CLI copied the retained public 256-page diagnostic (1,024 paths) to
+  `output/native-scale-relocated-256-20260928`, preserving the original run.
+  Bounded compiled query succeeded from the new root, and retention planning
+  returned 20 retained files, 1,044 protected dependencies and zero deletion
+  candidates. Both new outputs carry current generator and bounded-input hashes.
+  This observation precedes final rebuilt regression and is not private Windows
+  parity, original-generator resume, runtime proof or complete-site acceptance.
+- Initial execution regression passed 67/67 in 3 minutes 1 second. Broader
+  rebuilt native execution/preflight/preparation/input validation/query/normal
+  scale regression passed 199/199 in 2 minutes 55 seconds. Final rebuilt source
+  adds physical admission of current owned scan/report paths separately from
+  original lexical policy digests and two link-rejection tests; it passed 201/201,
+  zero failed/skipped, in 3 minutes 10 seconds with no introduced build warnings.
+  Windows junction cases still require the native Windows lane; portable tests
+  do not establish that private platform gate.
+- Final actual CLI performed a second copy at
+  `output/native-scale-relocated-final-256-20260928`; bounded `/variants` retrieval
+  exposes all 1,024 retained variants, independently of retrieval-slice omissions.
+  Current-reader query and protect-only retention succeeded after rebuild.
+  The ordinary checked-in modern sample scan passed with 27 facts and
+  Level1SemanticAnalysis. No runtime SQL, private-site or cleanup claim is made.
+- The completed-copy/retention implementation subtask is checked; broader
+  dependency-aware cleanup, original runtime location retention, cross-platform
+  private acceptance, phase budget guidance, representative graph scale and the
+  final short private Windows operator workflow remain open. No proof was
+  deleted and no PR/merge action occurred. Full regression for this new slice
+  remains to be launched at its committed head.
+
 ## Qualified publish member candidate index (2026-09-28)
 
 - Continued from pushed d8d9d77d while its exact-head full regression remained

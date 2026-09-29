@@ -2,6 +2,15 @@
 
 Operator examples use generic site, page, and handler names. Historical receipts remain bound to their recorded input bytes; genericized examples do not establish a fresh platform validation result.
 
+For native compiled Web Forms completed-run copies, validate the execution,
+preflight, preparation, input-validation, evidence-query and native-scale suites.
+The 2026-09-28 rebuilt slice passed 201 tests with zero failures/skips in 3 minutes
+10 seconds; exact-head full regression is a separate gate. A retained public
+256-page/1,024-variant run survived two verified copies and bounded retrieval.
+These are local static-artifact checks, not private Windows junction, full-site,
+runtime SQL or cleanup acceptance. See
+[native workflow relocation and retention](WEBFORMS_NATIVE_WORKFLOW.md#durable-completed-run-copies-and-retention-planning).
+
 This guide defines the repeatable checks used to validate language adapters and cross-index analysis. It complements `docs/ACCEPTANCE.md`: acceptance defines expected behavior, while this file describes the concrete sample and open-source smoke set.
 
 For an operator-oriented multi-repository Angular/.NET scan, combination, and

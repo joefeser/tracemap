@@ -292,6 +292,8 @@ public static partial class WebFormsReviewExecutionCommand
     }
     private static async Task<History> ReadHistoryAsync(string root, WebFormsReviewPreflightManifest plan, string preflightSha, string runtimeSha, CancellationToken token)
     {
+        var location = await ReadLocationAsync(root, plan, preflightSha, token);
+        var policyRoot = location?.OriginalPolicyRoot ?? root;
         var directory = OwnedPath(root, "checkpoints");
         if (!Directory.Exists(directory)) return new(0, null, null);
         var paths = Directory.EnumerateFiles(directory, "*.json").Take(257).Order(StringComparer.Ordinal).ToArray();
@@ -315,16 +317,20 @@ public static partial class WebFormsReviewExecutionCommand
                 checkpoint.Artifacts is null || checkpoint.Artifacts.Count > 256 || checkpoint.Gaps is null ||
                 !ValidAttempt(checkpoint.Attempt)) throw Fail("CHECKPOINT_INVALID");
             if (history.Checkpoint?.State == WebFormsReviewReportExecution.Completed) throw Fail("CHECKPOINT_AFTER_COMPLETION_INVALID");
+            // Policy hashes may use a retained original locator, but physical
+            // path/link admission always applies to the current owned tree.
+            var ownedScanPath = OwnedPath(root, checkpoint.Attempt + "/scan");
             if (checkpoint.State.StartsWith("reports-", StringComparison.Ordinal))
             {
-                ValidateReportCheckpoint(root, plan, preflightSha, runtimeSha, history, checkpoint, reportAttempts);
+                if (checkpoint.Reports is not null) OwnedPath(root, checkpoint.Reports.ReportAttempt);
+                ValidateReportCheckpoint(policyRoot, plan, preflightSha, runtimeSha, history, checkpoint, reportAttempts);
                 history = new(checkpoint.Sequence, Digest(bytes), checkpoint)
                 { ScanCheckpoint = history.ScanCheckpoint, ScanCheckpointSha256 = history.ScanCheckpointSha256 };
                 continue;
             }
             if (history.ScanCheckpoint is not null || checkpoint.Reports is not null ||
                 checkpoint.State is not ("scan-started" or "scan-failed" or "scan-cancelled" or Completed)) throw Fail("CHECKPOINT_PHASE_INVALID");
-            var scanPath = OwnedPath(root, checkpoint.Attempt + "/scan");
+            var scanPath = location is null ? ownedScanPath : LexicalOwnedPath(policyRoot, checkpoint.Attempt + "/scan");
             var policyDigest = PolicyDigest(plan, scanPath);
             var expectedDigest = Digest(JsonSerializer.SerializeToUtf8Bytes(new
             { preflightSha256 = preflightSha, runtimeInputsSha256 = runtimeSha, policySha256 = policyDigest, sourceSnapshotDigest = checkpoint.SourceSnapshotDigest, artifacts = checkpoint.Artifacts }, JsonOptions));
@@ -339,6 +345,9 @@ public static partial class WebFormsReviewExecutionCommand
             { ScanCheckpoint = checkpoint.State == Completed ? checkpoint : null,
               ScanCheckpointSha256 = checkpoint.State == Completed ? Digest(bytes) : null };
         }
+        if (location is not null && (history.Checkpoint?.State != WebFormsReviewReportExecution.Completed ||
+            history.Sha256 != location.CheckpointSha256 || ScanArtifactsDigest(history.Checkpoint) != location.ArtifactsSha256))
+            throw Fail("LOCATION_ANCHOR_CHANGED");
         return history;
     }
 
@@ -377,10 +386,17 @@ public static partial class WebFormsReviewExecutionCommand
         && value.Length == 41 && Guid.TryParseExact(value[9..], "N", out _);
     private static string OwnedPath(string root, string relative)
     {
+        var path = LexicalOwnedPath(root, relative);
+        if (WebFormsReviewPreflightCommand.PhysicalPath(path) != path) throw Fail("OUTPUT_LINK_INVALID");
+        return path;
+    }
+    private static string LexicalOwnedPath(string root, string relative)
+    {
         if (string.IsNullOrWhiteSpace(relative) || Path.IsPathRooted(relative) || relative.Contains(':') ||
+            relative.Contains('\\') ||
             relative.Split('/').Any(segment => segment is "" or "." or "..")) throw Fail("OUTPUT_LOCATOR_INVALID");
         var path = Path.GetFullPath(Path.Combine(root, relative.Replace('/', Path.DirectorySeparatorChar)));
-        if (!Within(root, path) || WebFormsReviewPreflightCommand.PhysicalPath(path) != path) throw Fail("OUTPUT_LINK_INVALID");
+        if (!Within(root, path)) throw Fail("OUTPUT_LINK_INVALID");
         return path;
     }
     private static bool Within(string root, string path) => path.StartsWith(Path.TrimEndingDirectorySeparator(root) + Path.DirectorySeparatorChar,

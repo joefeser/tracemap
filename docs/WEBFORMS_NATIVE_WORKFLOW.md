@@ -153,7 +153,63 @@ parent scan roots (and must not contain those roots). It contains only
 `run-manifest.json` and `README.md`. There is no timestamp/TEMP search. The
 manifest owns this run ID, explicit input hashes, effective budgets, gaps and
 pending phase states. Its successful creation is **not a successful scan**.
-Retain the external dependencies; relocation and cleanup are not supported yet.
+Retain the external dependencies. Completed native runs support explicit verified
+copying and a protect-only retention plan below; cleanup is never automatic.
+
+## Durable completed-run copies and retention planning
+
+Use the explicit native run root, not the newest TEMP folder:
+
+```text
+tracemap webforms-review relocate --run <completed-run-root> --out <new-durable-run-root>
+tracemap webforms-review retention-plan --run <completed-run-root>
+```
+
+`relocate` is a **copy**, not a move or purge. It requires completed native reports,
+locks the selected run, verifies every admitted scan/report artifact, and copies
+their original bytes together with the manifest, checkpoint chain and optional
+README. A new local-only `run-location.local.json` records the exact current
+generator, bounded copy roster, original policy root, destination, checkpoint and
+artifact commitments. Existing checkpoints, handoffs and evidence identities are
+not rewritten. Repeated explicit copies preserve the original policy root and a
+previous-location hash. A hand-copied/moved folder with stale or absent location
+metadata is not admitted at its new path.
+
+All owned artifact reads resolve beneath the current run root. The original root
+is used only to reconstruct existing policy digests, not to redirect file reads;
+it need not remain available for a bounded read-only `query`. Embedded private
+paths and source/DLL locators remain original evidence, not freshly rewritten
+source-line identities. Query still verifies only its admitted evidence index;
+relocation and retention planning verify the complete admitted artifact roster.
+
+Source checkout, published DLLs, receipt roots, retained parent scans and original
+tool/SDK dependencies are **not copied or revalidated** by relocation. Completed
+`resume` retains its stricter original-generator/runtime and external-input gates;
+copying does not make an old run executable with a new tool distribution. A
+compatible read-only query may use a newer reader without claiming fresh scan
+or runtime validation. Preserve the tool installation and proof wrappers.
+
+The destination must be new and separate from the selected run, declared inputs,
+previous proof locations and current runtime. Failed/cancelled staging folders
+remain inspectable as unadmitted `.pending-*` copies. Unknown files and abandoned
+attempts are not copied, and the original run is never removed. Publication uses
+a same-filesystem sibling-directory rename after hash verification; it is not
+an authenticated backup or a guarantee against hostile concurrent filesystem
+replacement.
+
+If interrupted after directory publication, the destination may already contain
+a valid completed copy despite a missing success message. Inspect that explicit
+destination with `query` or `retention-plan`; do not overwrite it or delete the
+original to retry.
+
+`retention-plan` returns JSON on stdout with generator/input commitments, verified
+retained-file hashes and protected dependency paths. It is local-only and may
+contain private paths/fingerprints. Its mode is `dry-run-protect-only` and its
+deletion candidate list is always empty. The emitted plan is capped at 16 MiB;
+oversized output is refused rather than silently omitting dependencies. Unknown
+folders, old proof runs and unadmitted attempts remain protected. This is a bounded per-run inventory, **not
+a machine-wide dependency graph or deletion approval**. Legacy PowerShell proof
+folders do not have native checkpoints and are not eligible for these commands.
 
 ## Native fresh scan, immutable attachment and resume
 

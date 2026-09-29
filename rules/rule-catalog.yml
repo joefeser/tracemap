@@ -2525,7 +2525,7 @@ rules:
       - No scan, build, publish, runtime assembly load, binding admission, graph traversal, report generation, resume or cleanup occurs in this phase.
       - Receipt artifact-hash candidates do not establish assembly identity, source ownership, repository binding, build freshness or source-line identity; authoritative scanner binding validation remains pending.
       - Source snapshot, dirty-worktree state, parent repository and index identity, PDB identity and page-map identity remain deferred and are explicit gaps.
-      - Inputs are explicit and bounded under declared roots; scattered external DLL discovery, relocation and dependency cleanup are not implemented.
+      - Inputs are explicit and bounded under declared roots; scattered external DLL discovery is not implemented. Verified relocation copies and protect-only retention planning are separate completed-run commands, not preflight or cleanup.
       - An explicit receiptRoot can locate existing binding and publish receipts outside the published site; its bytes and output separation are checked, but this does not generate receipts, attest ownership or validate a historical compiler.
       - File hashing limits are separate from recorded future IL and graph budgets; streamed hashing does not establish large-corpus runtime or memory acceptance.
       - Graph path retention defaults to 256 and accepts an explicit 1 through 4096 value; increasing it does not increase depth, work, admission or output caps and never proves complete traversal.
@@ -2545,6 +2545,29 @@ rules:
       - Distribution dependency bytes and runtime version participate in execution identity; external SDK/toolchain bytes are not pinned and remain an explicit gap rather than build authenticity or reproducibility proof.
       - Failed or cancelled attempt bytes are retained but not admitted as completed evidence; retry allocates a fresh owned attempt and never rewrites parent scans or old successful artifacts.
       - Configured admission bounds do not establish representative scale or bounded scanner memory; output traversal admits at most 256 filesystem entries and run history at most 256 checkpoints.
+  - id: workflow.webforms.compiled-review-location.v1
+    name: Explicit private completed-run location copy
+    description: Copies a selected hash-verified completed native run into a new separate durable root while retaining original checkpoint and artifact bytes and recording exact generator, bounded file roster, original policy locator and destination commitments.
+    evidenceTier: Tier2Structural
+    emits:
+      - webforms-review-location.v1 local-only location record
+    limitations:
+      - Only completed native reports qualify. Legacy proof folders, failed attempts and unknown files are not migrated; the original run is never deleted.
+      - Owned reads resolve under the current root; the original policy root is a lexical digest input only. No external source, published DLL, receipt, parent scan, original runtime or SDK dependency is copied or freshly validated.
+      - Query may read a compatible retained index with a newer reader; completed resume still requires the original generator/runtime and external-input gates. Relocation is not a tool migration or source-line identity change.
+      - Every copied artifact and checkpoint is bounded and rehashed; integrity commitments are private and unauthenticated. This is not build, runtime, complete-site or hostile-filesystem backup proof.
+      - Failed copy staging is retained for inspection. Same-filesystem directory publication does not authorize cleanup or replace explicit private Windows parity acceptance.
+  - id: workflow.webforms.compiled-review-retention.v1
+    name: Private completed-run protect-only retention plan
+    description: Verifies a selected completed native run and emits a generator/input-bound local dependency inventory with an empty deletion list and explicit protection of retained artifacts, declared external inputs and prior proof locations.
+    evidenceTier: Tier2Structural
+    emits:
+      - webforms-review-retention-plan.v1 local-only dependency plan
+    limitations:
+      - Dry-run-protect-only; no files are changed or deleted and no deletion is approved. Unknown files, abandoned attempts, other runs and original proof locations remain protected.
+      - Retained artifact hashes are checked; external paths are declared dependencies, not freshly validated bytes. The original tool/runtime locator and external SDK are not fully retained and must be preserved separately.
+      - This bounded explicit-run inventory is not machine-wide reference discovery or proof that any other folder is unused. Private paths and fingerprints are not shareable.
+      - Output is capped at 16 MiB and refused in full if exceeded; declared dependency membership is never silently truncated into deletion safety.
   - id: workflow.webforms.native-report-execution.v1
     name: Private native checkpointed Web Forms workbench
     description: Explicitly combines admitted scan inputs, preserves the complete existing page packet and its verdicts, selects bounded full-identity handler roots and writes one private workbench with lossless grouped compiled handoff and exact generator/input commitments.
