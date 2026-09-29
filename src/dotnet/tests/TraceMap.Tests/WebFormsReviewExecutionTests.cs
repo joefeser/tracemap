@@ -214,6 +214,7 @@ public sealed class WebFormsReviewExecutionTests
         Assert.Equal(Hash(typeof(WebFormsReviewExecutionCommand).Assembly.Location), status.GeneratorSha256);
         Assert.Equal(64, status.BoundedInputSha256.Length); Assert.All(status.Phases, phase => Assert.Null(phase.WorkUnitsUsed));
         Assert.All(status.Phases, phase => Assert.Null(phase.ResourceUsage));
+        Assert.All(status.Phases, phase => Assert.Null(phase.AdmissionWork));
         Assert.Equal(fixture.Config.Operation, status.Operation); Assert.Equal(fixture.Config.PageMode, status.PageMode);
         Assert.Equal(fixture.Config.SourceCommitSha, status.SourceCommitSha);
         Assert.Equal(fixture.Config.Budgets.IlMaxBodies ?? 50_000,
@@ -250,6 +251,14 @@ public sealed class WebFormsReviewExecutionTests
         var status = JsonSerializer.Deserialize<WebFormsReviewStatus>(output.ToString(), JsonOptions)!;
         var checkpoint = fixture.LastCheckpoint();
         Assert.Equal(checkpoint.State, status.State); Assert.Equal(checkpoint.Sequence, status.CheckpointSequence);
+        var admissionWork = status.Phases.Single(phase => phase.Name == "scan").AdmissionWork;
+        if (scenario == "scan-failed") Assert.Null(admissionWork);
+        else
+        {
+            Assert.NotNull(admissionWork); Assert.Equal(2, admissionWork.Count);
+            Assert.All(admissionWork, usage => Assert.InRange(usage.ConsumedWorkUnits, 1, usage.MaxWorkUnits));
+            Assert.Equal(new[] { "metadata", "il-body" }, admissionWork.Select(usage => usage.Phase));
+        }
         Assert.Equal(fixture.Config.Operation, status.Operation); Assert.Equal(fixture.Config.PageMode, status.PageMode);
         Assert.Equal(fixture.Config.SourceCommitSha, status.SourceCommitSha);
         Assert.Equal(scenario != "scan-failed", status.RetainedArtifactsVerified);

@@ -192,7 +192,9 @@ internal static class IlBodyEvidenceExtractor
             outcomes,
             boundedInputSha256,
             "local-only",
-            coverage);
+            coverage)
+        { AdmissionWork = CompiledAdmissionWorkUsage.Create("il-body", generatorSha256, boundedInputSha256,
+            workBudget.Consumed, workBudget.RefusedRequests, limits.MaxTotalWorkUnits) };
         var knownGaps = DistinctGapKinds(outcomes, globalGapKinds)
             .Select(value => $"IL body evidence coverage reduced: {value}.")
             .ToArray();
@@ -1466,10 +1468,16 @@ internal static class IlBodyEvidenceExtractor
     internal sealed class IlWorkBudget(long maximum)
     {
         private long remaining = maximum;
+        private readonly long initialMaximum = maximum;
+        internal long Consumed => initialMaximum - remaining;
+        internal long RefusedRequests { get; private set; }
         public bool TryConsume(long units)
         {
-            if (units > remaining)
+            if (units < 0 || units > remaining)
+            {
+                RefusedRequests++;
                 return false;
+            }
             remaining -= units;
             return true;
         }

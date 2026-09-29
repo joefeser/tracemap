@@ -131,7 +131,7 @@ public static partial class WebFormsReviewPreflightCommand
         Retain-tool copies the original checkpointed distribution bytes into a new
         explicit folder. It preserves the original tool/run and never executes the
         copy or packages the external .NET runtime, SDK, source or compiled site.
-        Scale, full-site coverage and private Windows parity remain pending;
+        Arbitrary graph capacity, full-site coverage and private Windows parity remain unproven;
         retain the proven wrappers and original evidence until those gates pass.
         """;
 

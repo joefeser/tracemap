@@ -1,5 +1,12 @@
 # Focused Web Forms review workflow
 
+For new native .NET source-plus-compiled runs or immutable attachment, use the
+[native operator guide](../../docs/WEBFORMS_NATIVE_WORKFLOW.md). It has one
+explicit config and run root; it does not discover the newest TEMP folder.
+The PowerShell commands below remain the preserved compatibility/recovery
+reference until the authorized private Windows comparison passes. Do not mix
+their JSONC configuration with the native JSON schema.
+
 For the shortest C# or VB.NET operator path, start with the [Web Forms review
 quickstart](../../docs/WEBFORMS_REVIEW_QUICKSTART.md). This file is the full
 reference for optional review overlays, exceptional-handler inspection,

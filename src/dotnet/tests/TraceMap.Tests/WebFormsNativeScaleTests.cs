@@ -95,6 +95,21 @@ public sealed class WebFormsNativeScaleTests(ITestOutputHelper output)
                 Assert.Equal("reports", checkpoint.PhaseUsage!.Phase);
                 Assert.InRange(scanCheckpoint.PhaseUsage.ElapsedMilliseconds + checkpoint.PhaseUsage.ElapsedMilliseconds,
                     0, runUsage.ElapsedMilliseconds + 1000);
+                var scanManifest = JsonSerializer.Deserialize<ScanManifest>(File.ReadAllText(Path.Combine(fixture.Run,
+                    checkpoint.Attempt, "scan", "scan-manifest.json")), JsonOptions)!;
+                var metadataWork = Assert.IsType<CompiledAdmissionWorkUsage>(scanManifest.CompiledInputProvenance!.AdmissionWork);
+                var ilWork = Assert.IsType<CompiledAdmissionWorkUsage>(scanManifest.IlBodyProvenance!.AdmissionWork);
+                CompiledAdmissionWorkUsage.Validate(metadataWork, "metadata", scanManifest.CompiledInputProvenance.GeneratorSha256,
+                    scanManifest.CompiledInputProvenance.BoundedInputSha256, scanManifest.CompiledInputProvenance.EffectiveLimits.MaxTotalWorkUnits);
+                CompiledAdmissionWorkUsage.Validate(ilWork, "il-body", scanManifest.IlBodyProvenance.GeneratorSha256,
+                    scanManifest.IlBodyProvenance.BoundedInputSha256, scanManifest.IlBodyProvenance.EffectiveLimits.MaxTotalWorkUnits);
+                Assert.InRange(metadataWork.ConsumedWorkUnits, 1, metadataWork.MaxWorkUnits);
+                Assert.InRange(ilWork.ConsumedWorkUnits, 1, ilWork.MaxWorkUnits);
+                using var statusOutput = new StringWriter(); using var statusError = new StringWriter();
+                Assert.Equal(0, await TraceMapCommand.RunAsync(["webforms-review", "status", "--run", fixture.Run, "--json"], statusOutput, statusError));
+                var status = JsonSerializer.Deserialize<WebFormsReviewStatus>(statusOutput.ToString(), JsonOptions)!;
+                Assert.Equal(JsonSerializer.Serialize(new[] { metadataWork, ilWork }, JsonOptions),
+                    JsonSerializer.Serialize(status.Phases.Single(phase => phase.Name == "scan").AdmissionWork, JsonOptions));
                 if (requireGraphAdmission)
                 {
                     using var scan = JsonDocument.Parse(File.ReadAllText(Path.Combine(fixture.Run,
@@ -181,6 +196,7 @@ public sealed class WebFormsNativeScaleTests(ITestOutputHelper output)
                     RetainedSurfaces = handoff.Packet.Surfaces.Count,
                     GraphInputRefused = inputRefused,
                     ScanAttemptUsage = scanCheckpoint.PhaseUsage,
+                    MetadataAdmissionWork = metadataWork, IlAdmissionWork = ilWork,
                     ReportAttemptUsage = checkpoint.PhaseUsage,
                     CompiledGapKinds = restored.Gaps.GroupBy(gap => gap.GapKind, StringComparer.Ordinal)
                         .OrderBy(group => group.Key, StringComparer.Ordinal).ToDictionary(group => group.Key, group => group.Count(), StringComparer.Ordinal)
@@ -309,6 +325,8 @@ public sealed class WebFormsNativeScaleTests(ITestOutputHelper output)
         public bool GraphInputRefused { get; init; }
         public WebFormsReviewPhaseUsage? ScanAttemptUsage { get; init; }
         public WebFormsReviewPhaseUsage? ReportAttemptUsage { get; init; }
+        public CompiledAdmissionWorkUsage? MetadataAdmissionWork { get; init; }
+        public CompiledAdmissionWorkUsage? IlAdmissionWork { get; init; }
         public IReadOnlyDictionary<string, int> CompiledGapKinds { get; init; } = new Dictionary<string, int>();
     }
 

@@ -33,7 +33,11 @@ public sealed record IlBodyProvenance(
     IReadOnlyList<IlInputOutcome> Outcomes,
     string BoundedInputSha256,
     string ArtifactVisibility,
-    string CoverageState);
+    string CoverageState)
+{
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public CompiledAdmissionWorkUsage? AdmissionWork { get; init; }
+}
 
 internal sealed record IlCallObservation(
     long Offset,
