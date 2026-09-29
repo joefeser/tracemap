@@ -11,6 +11,10 @@ prompted. These are the folders containing `config/webforms-review.jsonc` (or
 the legacy `.json`), not the source repositories or compiled website. Leave the
 second prompt blank for one config. The helper builds the .NET CLI once and
 delegates all conversion to it; no PowerShell migration engine is introduced.
+With no arguments the helper explicitly requests input; a blank first answer
+stops immediately. All folders are checked for exactly one legacy config before
+building. Quoted pasted folder paths are accepted. Missing or ambiguous configs
+produce a local selection diagnostic without running collection or conversion.
 
 Each review folder gains a new `native-config/` containing:
 
