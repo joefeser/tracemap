@@ -4302,7 +4302,7 @@ public static partial class CombinedDependencyPathReporter
             }
 
             IReadOnlyList<GraphEdge> orderedOutgoing = depthFirst
-                ? outgoing.AsEnumerable().Reverse().ToArray()
+                ? new ReversedGraphEdges(outgoing)
                 : outgoing;
             var enqueuedChild = false;
             var paused = false;
@@ -6664,13 +6664,7 @@ public static partial class CombinedDependencyPathReporter
             Edges.Add(edge);
             if (store is not null) return;
             EdgesById[edge.EdgeId] = edge;
-            if (!Outgoing.TryGetValue(edge.FromNodeId, out var list))
-            {
-                list = [];
-                Outgoing[edge.FromNodeId] = list;
-            }
-
-            list.Add(edge);
+            Outgoing.Add(edge);
         }
 
         public void Sort()
