@@ -58,6 +58,7 @@ public sealed class WebFormsNativeScaleTests(ITestOutputHelper output)
                     checkpoint.Reports.ReportAttempt, handoff.CompiledHandoffRelativePath)));
                 var restored = GroupedCompiledPathHandoffBuilder.Restore(compiled);
                 Assert.Equal(checkpoint.Reports.CompiledPaths, restored.Paths.Count);
+                Assert.DoesNotContain(restored.Gaps, gap => gap.GapKind == "ProjectlessPublishMemberWorkLimit");
                 for (var page = 0; page < pages; page++)
                 {
                     var handler = $"Synthetic.Page{page:D4}.Page_Load(Object,EventArgs)";

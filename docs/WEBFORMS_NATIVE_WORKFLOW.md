@@ -520,9 +520,13 @@ elapsed time and actual OS peak resident usage per CLI process (`time -l` on
 macOS or `time -v` on Linux), retained disk bytes, facts, paths, coverage and
 truncation. Retained disk excludes transient graph/sorter disk peak; these public
 synthetic observations do not establish arbitrary graph or private Windows scale.
-The recorded 256-page diagnostic retained all four compiled branches per page
-but hit `ProjectlessPublishMemberWorkLimit` for source member joins. A false
-truncation flag does not clear that coverage gap. See the
+The earlier 256-page diagnostic retained all four compiled branches per page
+but hit `ProjectlessPublishMemberWorkLimit` for source member joins. Qualified
+candidate indexing now clears that limit in the same declared corpus while
+preserving global name/assembly counts, opaque fallback rows and the existing
+100,000 work cap. The rerun retains all branches and restores candidate edges;
+cycle truncation remains explicit. A false truncation flag never clears other
+coverage gaps. See the
 [bounded benchmark observations](validation/webforms-native-scale-2026-09-28.md).
 
 ## Internal execution validation gate

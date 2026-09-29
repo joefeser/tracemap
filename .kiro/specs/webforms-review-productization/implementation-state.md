@@ -1,5 +1,51 @@
 # Web Forms Review Productization Implementation State
 
+## Qualified publish member candidate index (2026-09-28)
+
+- Continued from pushed d8d9d77d while its exact-head full regression remained
+  live; no runtime binaries have been rebuilt during that run. New source replaces
+  the name-wide member candidate array with global name/assembly counts and
+  qualified-type buckets. Only a safely framed simple declaring type narrows
+  candidate work; opaque, nested, malformed or delimiter-bearing identity rows
+  retain the historical predicate and name-wide work accounting. No row or
+  overload/assembly competitor is deduplicated, and the 100,000 cap is unchanged.
+- Source/page membership uses one complete typed file-key index rather than
+  repeatedly deserializing all facts for every mapped page. Tests added for
+  400 same-name types, duplicate same-type ambiguity, global name/assembly gap
+  counts, case matching and opaque identity predicate parity. Native scale now
+  explicitly rejects the previously observed member work-limit gap.
+- Exact pushed d8d9d77dc85192040d61902d0912ac152f1e7c09 full regression passed
+  2,665/2,665 with no failures or skips in 13 minutes 3 seconds. Build, focused
+  regression for the final new source remains to be run at its committed head.
+  Initial rebuilt member-index/messy-workspace/memory validation passed 111/111,
+  no failures/skips, in 1 minute 10 seconds. One xUnit collection-size warning
+  was repaired with Assert.Single before the final rebuild. The prior
+  benchmark observations remain historical rather than being rewritten as an
+  improvement claim. This slice does not finish all semantic-index allocation,
+  private Windows acceptance, relocation or cleanup.
+- Final rebuilt index/memory/native-scale regression passed 54/54 with no failures
+  or skips in 4 minutes 39 seconds; the analyzer warning did not recur. The actual
+  32/256-page CLI runs retained 128/1,024 paths and immutable source/published/
+  completed-resume rosters. The larger case no longer has the member work-limit
+  gap, and retains 8,192 graph edges versus the earlier 7,168. Both cases now
+  expose cycle truncation. Run times were 7,363/236,527 ms and OS peak resident
+  usage 219,250,688/386,105,344 bytes. Retained evidence plus run bytes were
+  22,796,063/177,531,917. This single observation is not a speedup claim: larger
+  execution took longer while restoring candidate edges withheld previously.
+  Owned ignored output/native-scale-qualified-member-index-20260928 retains the
+  exact generator/input receipt and phase diagnostics; no old proof was removed.
+- Final normal 1/8-page native smoke also passed (1/1, 10 seconds). Actual CLI
+  scan of checked-in samples/modern-sample completed with 27 facts and explicit
+  Level1SemanticAnalysis in owned ignored
+  output/native-receipt-set-smoke-qualified-members-d8d9d77d. This sample scan is
+  not compiled-site or private Windows acceptance.
+- Read-only next-slice audit: report policy hashes currently include physical
+  scan/report paths (WebFormsReviewExecutionCommand.Reports.cs), so copying a
+  completed run to a new root alone cannot pass report-context admission.
+  Relocation needs an explicit hash-bound original/current locator contract,
+  not rewritten checkpoint bytes or timestamp-based discovery. External source,
+  published, receipt and parent inputs must remain verified dependencies.
+
 ## Native subprocess source-size scale diagnostic (2026-09-28)
 
 - Added a public generated VB/PE/IL corpus and real-CLI prepare/preflight/run/
