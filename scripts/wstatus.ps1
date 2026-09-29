@@ -1,7 +1,8 @@
 [CmdletBinding()]
 param(
     [string]$RunRoot,
-    [string]$SearchRoot
+    [string]$SearchRoot,
+    [switch]$Probe
 )
 
 Set-StrictMode -Version Latest
@@ -123,5 +124,21 @@ if ($null -ne $last -and (Safe-Code $last.state) -eq 'reports-failed') {
         Write-Output "reportPartial.$name=present;bytes=$($entry.Length)"
     }
     Write-Output 'reportPartial=unadmitted-file-presence-only;no-content-read'
+}
+if ($Probe) {
+    if ($null -eq $last -or (Safe-Code $last.state) -ne 'reports-failed') {
+        throw 'WEBFORMS_STATUS_PROBE_REQUIRES_FAILED_REPORT'
+    }
+    $verificationRoot = Split-Path (Split-Path $RunRoot -Parent) -Parent
+    $configuration = Join-Path $verificationRoot 'configuration/review-config.local.json'
+    if (!(Test-Path -LiteralPath $configuration -PathType Leaf)) {
+        throw 'WEBFORMS_STATUS_PROBE_CONFIG_UNAVAILABLE'
+    }
+    $probeProject = Join-Path $PSScriptRoot '../src/dotnet/TraceMap.ReportProbe/TraceMap.ReportProbe.csproj'
+    & dotnet build $probeProject --nologo --verbosity quiet | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'WEBFORMS_STATUS_PROBE_BUILD_FAILED' }
+    $probeDll = Join-Path $PSScriptRoot '../src/dotnet/TraceMap.ReportProbe/bin/Debug/net10.0/TraceMap.ReportProbe.dll'
+    & dotnet $probeDll $configuration $report
+    if ($LASTEXITCODE -ne 0) { throw 'WEBFORMS_STATUS_PROBE_STAGE_FAILED;originals-preserved' }
 }
 Write-Output 'status=retained-checkpoints-only;no-resume;no-inputs-changed'

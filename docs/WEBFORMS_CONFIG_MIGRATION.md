@@ -169,6 +169,15 @@ layout, pass `-RunRoot` with the exact path printed after `webFormsPinnedRun=`.
 The prompt accepts either the number or a unique run-folder name. For a failed
 report checkpoint, it also prints presence and byte counts for fixed expected
 report files; these partial files are not admitted or read as report content.
+For an existing `reports-failed` checkpoint, `-Probe` separately replays the
+bounded packet, compiled-path, index-hash and grouped-projection stages against
+the retained combined index. It builds a separate diagnostic executable, not
+the pinned TraceMap CLI, and prints only fixed stage/type identifiers and
+code-owned frame names. It does not scan or alter the retained run. It may take
+time and use temporary graph storage while reading the private index; keep all
+output local and share only the `probe.*` lines. A passing probe narrows the
+failure to writer or later stages, not report completion. Do not rebuild the
+pinned CLI or resume until the cause is understood.
 This is a quick diagnostic, not authenticated checkpoint validation; the native
 `webforms-review status --run` command remains authoritative. Neither command
 resumes or repeats the failed work.
