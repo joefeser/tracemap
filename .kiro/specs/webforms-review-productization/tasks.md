@@ -60,6 +60,13 @@
       representative scale acceptance pending.
 - [ ] Implement .NET orchestration for source-plus-compiled runs and immutable
   attachment to a retained source scan; keep compatibility wrappers.
+  - [x] Compose the existing receipt/preflight/run gates in one native start
+    command with an explicitly named new evidence/run root. Require existing
+    receipts or an explicit exact-commit attestation; preserve failed output
+    and expose the exact resume root. Pin fresh/attachment, authority rejection,
+    overlap, cancellation, between-phase config changes and immutable resume
+    without TEMP discovery. Focused rebuilt gate passed 182 checks; final full
+    regression and private Windows acceptance remain separate requirements.
   - [x] Add checkpointed native fresh execution using the existing scanner and
     immutable preflight, fresh owned retry attempts and hash-verified resume.
     Keep attachment/publish-map production and unified reports pending.
@@ -135,6 +142,16 @@
     page/file membership, preserve global name/assembly counts and every opaque
     fallback/overload competitor, and retain the 100,000 work cap. Pin 400-type
     joins, same-type ambiguity, cap refusal and 32/256-page native evidence.
+  - [x] Replace per-map/per-handler full-fact reads in published-page bridges
+    with complete typed source/file rosters and the qualified method index;
+    preserve original final predicates and every relevant duplicate/unbound
+    competitor. Pin fixed roster reads independent of 1,000 page lookups and
+    public attachment regression. Large throughput/peak acceptance stays below.
+  - [x] Replace per-path full edge-payload decoding for terminal fan-out with
+    an indexed global threshold query reading at most five references. Preserve
+    every contributing edge and exact legacy classification/report parity;
+    guard 128/1,024 branches and measured bounded global payload reads. Fresh
+    representative workflow acceptance remains below.
 - [ ] Benchmark eight-times source-size synthetic corpus and representative
   compiled graph distributions; record disk/time/peak-memory/coverage metrics.
   - [x] Add a real-CLI subprocess diagnostic with 32/256 declared pages, exact
@@ -149,9 +166,24 @@
     capacity gaps. Preserve the public inputs and all failed/completed artifacts.
     The 192,000-method graph hit the unchanged internal graph-storage ceiling;
     this verifies fail-closed reporting, not successful representative admission.
-  - [ ] Reduce indexed graph storage amplification and retain graph-admission
+  - [x] Reduce indexed graph storage amplification and retain graph-admission
     usage; revalidate the retained 192,000-method case without hiding capacity
     gaps, discarding global competitors or silently raising production bounds.
+    Raw framed storage retains the full 398,101-fact/393,740-node/392,192-edge
+    graph within an explicitly declared 4 GiB scratch budget. Strict fresh
+    32/256-page validation retains all 128/1,024 required paths and immutable
+    resume; production defaults stay unchanged. Other distributions, transient
+    disk peak and private Windows acceptance remain separate gates.
+  - [x] Expose an optional hash-bound native scratch-storage budget, preserve
+    the historical 512 MiB default, validate 64 KiB through 16 GiB, and show the
+    declared limit in status. Focused coverage and strict fresh 32/256-page
+    admission/throughput pass under the explicit budget; private acceptance
+    and transient disk measurement remain pending.
+  - [x] Expose an optional hash-bound IL body inventory budget, preserve the
+    historical 50,000 default and omitted JSON field, validate 1 through 1,000,000,
+    pass the explicit value to scan and expose it in status. Pin unchanged work
+    limits, configuration hashes and rejection tests; require actual IL admission
+    in the strict large-corpus gate. Full large graph acceptance remains pending.
 - [ ] Add dependency-aware retention, durable run location, relocation validation,
   and dry-run-first cleanup; do not delete the working proof before verification.
   - [x] Add explicit completed-run verified copies with original policy-root

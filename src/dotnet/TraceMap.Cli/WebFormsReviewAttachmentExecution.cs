@@ -19,7 +19,8 @@ internal static class WebFormsReviewAttachmentExecution
                 MaxTextLength: budget.MetadataMaxText, MaxTotalWorkUnits: budget.MetadataMaxWork),
             PdbInputPaths: Paths("pdb"), PdbInputLimits: new(MaxArtifactCount: budget.MaxInputFiles,
                 MaxFileSizeBytes: budget.MaxAssemblyBytes), IlBodyEvidence: true,
-            IlBodyLimits: new(MaxTextLength: budget.IlMaxText, MaxTotalWorkUnits: budget.IlMaxWork),
+            IlBodyLimits: new(MaxBodyCount: budget.IlMaxBodies ?? 50_000,
+                MaxTextLength: budget.IlMaxText, MaxTotalWorkUnits: budget.IlMaxWork),
             WebFormsPublishReceiptPath: plan.Inputs.SingleOrDefault(item => item.Role == "publish-receipt")?.Path,
             WebFormsPublishedRootPath: config.PublishedRoot);
         string[] Paths(string role) => plan.Inputs.Where(item => item.Role == role)

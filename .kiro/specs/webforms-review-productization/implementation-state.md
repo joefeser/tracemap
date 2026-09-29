@@ -1,5 +1,327 @@
 # Web Forms Review Productization Implementation State
 
+## One-command starter (2026-09-29, focused validation passed)
+
+- Added native start composition: explicit config/new review root, optional
+  exact-commit attestation only for receipt preparation, then pinned preflight
+  and ordinary fresh/attachment execution. Existing explicit receipts require
+  no new attestation. Admission gates, budgets and source/published paths remain
+  unchanged. Atomic new-root reservation refuses replacement; failed outputs
+  remain intact and print the exact run/ resume root. No discovery or cleanup.
+- Added fresh/attachment + completed resume, existing receipts, missing/wrong
+  authority, source membership, overlap, failed-scan retry and precancellation
+  tests, plus changed-config rejection between preparation/preflight/execution.
+  Full no-build regression 97195 completed against the successful scale binaries:
+  2,739 passed, zero failed/skipped in 11 minutes 46 seconds. Starter rebuild
+  and focused validation 93397 passed 182/182 in 3 minutes 29 seconds, zero
+  failed/skipped and no compiler warnings. CLI help smoke exits zero. A final
+  help clarification passed full-solution build 75562 in 7.93 seconds with zero
+  warnings/errors. After committing this validated source slice, rebuild and
+  run final full regression against that exact committed head before pushing.
+  The goal is not complete: production phase usage, durable tool/dependency
+  availability and authorized private Windows parity remain open.
+
+## Indexed terminal fan-out classification (2026-09-29, fresh scale passed)
+
+- Fresh strict run 11551 stayed CPU-active beyond eleven minutes. Source audit
+  found ClassifyLegacy decoding/counting every global edge for every path:
+  392,192 edges multiplied by 1,024 required variants. This is distinct from
+  page-join admission. Explicit SIGINT stopped only owned native CLI PID 92794;
+  terminal test failed after 13 minutes 26 seconds with child exit 130. Owned
+  PIDs 92794/92793/88780/89236 are absent. The retained scan and incomplete
+  reports remain in output/native-scale-full-il-4g-fresh-20260928; checkpoint
+  0003 remains reports-started and is not completed report evidence. No aggregate
+  success receipt exists. This is an intentionally cancelled incomplete attempt.
+- Added an incoming-edge SQLite index and threshold query reading at most five
+  references per classification, never edge payloads. All global edges contribute
+  exactly as before; the memory branch uses the same threshold. No ambiguity,
+  classification, rule, tier, path ordering or full-inventory admission is pruned.
+  Diagnostic counters expose incoming queries/references and global edge payload
+  reads. Existing 128/1,024-branch legacy guards now require bounded global
+  payload reads independent of retained paths, exact parity and <=5 references
+  per incoming query. Corrected the rule catalog's older distinct-root wording:
+  the implementation counts incoming edges, not distinct/runtime callers.
+- Rebuild in 82603 passed 114/114 focused memory, publication, preflight, codec,
+  profile and real native attachment checks in 11 seconds, zero failed/skipped
+  and no warnings. Attachment now respects explicit/default IL body budgets.
+- Fresh strict 32/256 scale run 90412 passed in 6 minutes 14 seconds into
+  output/native-scale-indexed-fanout-fresh-20260929. Both IL inventories and graph
+  queries admitted; all 24,000/192,000 sparse methods, 32/256 surfaces and
+  128/1,024 required static paths were retained. Completed resume preserved
+  run bytes and source/published rosters. Coverage remains partial, including
+  cycle truncation; generated PE/IL is not an aspnet_compiler acceptance run.
+- Actual native run elapsed 32,970/304,763 ms with OS peak resident usage
+  941,457,408/4,185,030,656 bytes. Retained run disk was
+  629,400,563/5,034,029,161 bytes; transient scratch/sorter disk peak is not
+  measured. Large global graph retained 393,740 nodes and 392,192 edges.
+  Explicit stress limits remain 250,000 IL bodies, 1 GiB input text and 4 GiB
+  graph scratch; production defaults are unchanged. Native CLI generator
+  4336c1776ca9474ab8982e9cae87c0e5ed870ab2484e487863dd37db4ad75ab9;
+  test generator 9f4e8bf01aadcfee6bdf5566ac1f271dea5690a389afd6cca922fd818d7cfd23;
+  bounded input bf1eacc4e9837dc10929bbaae5478ad51415f991092d452b804e0444943b59eb.
+- Full no-build regression 97195 passed against those same binaries: 2,739
+  passed, zero failed/skipped in 11 minutes 46 seconds. New starter source
+  requires a separate rebuilt focused gate and final full regression.
+  Private acceptance, production phase instrumentation and durable dependency
+  packaging remain open. Original proof and every failed attempt are preserved.
+
+## Full IL inventory capacity gate (2026-09-28, in progress)
+
+- Previous turn made concrete source progress (explicit IL body budget and
+  130 focused passes). This continuation reverified live handle 21300; it then
+  failed terminally in 2 minutes 40 seconds. Both data/site IL outcomes are now
+  admitted under the explicit 250,000-body budget; large graph refusal is
+  graph-text-bytes, with zero classified paths/nodes. All 256 surfaces remain
+  retained. This is a capacity failure, not acceptance or source evidence loss.
+- Read-only SQLite measurement of the retained full combined input records
+  398,101 facts and 743,548,761 serialized payload bytes, exceeding the explicit
+  512 MiB diagnostic input-text budget. The stress profile now explicitly
+  declares 1 GiB input text, leaving its 2 GiB storage, fact/edge/path/work caps
+  unchanged. No production default changes.
+- The retained-index storage diagnostic now optionally declares text bytes
+  with TRACEMAP_GRAPH_DIAGNOSTIC_TEXT_BYTES, validates 1 through Int32.MaxValue,
+  and binds the effective value in its exact diagnostic input. Default remains
+  512 MiB. Rebuild and two focused checks passed in session 31901 (2/2, 868 ms).
+- Full retained replay in session 8476 finished in 34 seconds. It categorically
+  refused storage during initial nodes under explicit 1 GiB text / 2 GiB scratch:
+  398,101 successful facts, 152,338 successful nodes, zero edges and last valid
+  logical allocation 2,143,473,664 bytes. These are partial successful writes,
+  not an admitted graph. Input SHA 10978c52d1182b573e317e426fcee31fa8792add69cc5a6ddf115355d6b1ecd5
+  was rehashed unchanged. Receipt and fixed stage trace stay retained in
+  output/native-scale-full-il-storage-2g-replay-20260928.
+- Full retained replay with explicitly declared 4 GiB scratch finished in 82800:
+  1/1 passed in 1 minute 58 seconds. Its categorical receipt in
+  output/native-scale-full-il-storage-4g-replay-20260928 records admitted,
+  398,101 facts, 393,740 nodes, 392,192 edges and 3,877,765,120 logical scratch
+  bytes. Same full input rehashed unchanged. Test generator
+  89e4db66bf88cea7929f6411f3eb78430ab809cd217347c0ff36d006621056dd;
+  Reporting cbc823ec75bee7cee5a68a9451e8492f3c629c6baf15387e73a07d02ef7ad8b9;
+  bounded diagnostic input b7d3b42a2fa8e8b9ad5213f1b394cf03761cd165c3853af8255ca21af94d3ae0.
+  This proves full retained admission, not fresh workflow or OS-peak acceptance.
+- The stress profile now explicitly pins the measured 4 GiB scratch allowance
+  alongside 1 GiB input text and 250,000 IL bodies. Production defaults remain
+  unchanged. Tiny profile guard rebuilt and passed 1/1 in session 59638 (672 ms,
+  no warnings). Strict fresh 32/256 run is now live; require all four branches
+  per page, complete IL inventory and immutable resume. Output root is
+  output/native-scale-full-il-4g-fresh-20260928. No runtime rebuild until it ends.
+  Preserve all inputs, old failures and partial observations.
+- Live strict fresh handle is 11551. Read-only wiring audit also found the native
+  compiled-only attachment options still used the default IL body count. Source
+  now passes the same optional budget/default into attachment; direct option
+  checks and real attachment manifest checks cover both default and explicit
+  values. These later source edits are not rebuilt yet, preserving the live
+  fresh benchmark's exact generators. Rebuild/validate after 11551 terminates;
+  do not claim this earlier fresh measurement as an exact later CLI generator.
+
+## Published-page join throughput (2026-09-28, in progress)
+
+- Prior turn was concrete progress: 173 focused checks and a hash-bound live
+  stage trace. This turn reverified session 43166/process tree and its compiled-il
+  entry at 25,210 ms; after more than six minutes it still had not left that stage.
+  Explicit SIGINT stopped only owned runner 69227, terminal exit 1, and all
+  PIDs 69227/69686/69689 are absent. The partial trace stays retained and is
+  not an admission receipt. Original combined index rehashed unchanged.
+- AddProjectlessPublishCandidateEdges now constructs complete typed rosters
+  once, keys pages/handlers/bindings/declarations by exact source/file, retains
+  every generated-type competitor including unbound mapless candidates, and
+  reuses qualified method indexing with the original final receipt/hash/type/
+  name/span predicates. This replaces repeated global fact decoding, not global
+  inventory admission. Type-specific managed allocations remain a separate gate.
+- New guard uses 8,011 public rows and 1,000 repeated page lookups: exactly seven
+  complete typed roster passes, no further fact reads; duplicate pages/bindings/
+  methods and unbound type competitors remain present. Metadata method boundness
+  follows the original page predicate. The qualified fallback roster is unchanged.
+- Focused publication/memory/native/attachment coverage passed 69/69, zero
+  failed/skipped, 23 seconds in sessions 50650 and 33303, no compiler warnings.
+  The latter rebuild adds compiled substage boundaries for PDB identity,
+  published pages, member candidates and metadata/IL edge work. This is public
+  static fixture coverage, not authentic private ASP.NET/Windows acceptance.
+- Retained large replay finished in terminal 8337: one test passed in 44 seconds.
+  output/native-scale-storage-page-joins-2g-replay-20260928/graph-storage.receipt.json
+  categorically records admitted, 202,518 facts, 197,132 nodes, 3,072 edges and
+  1,466,482,688 logical scratch bytes under the explicit 2 GiB budget. Original
+  input SHA remains bf3a8f03767af85602dc4e3176736e60e7c7ab7b919464988b18bb4b57018afe.
+  Reporting generator is cbc823ec75bee7cee5a68a9451e8492f3c629c6baf15387e73a07d02ef7ad8b9;
+  bounded diagnostic input is e1800e25488129551fb26b54144179aef9ddc550dc958d2cad94345e559d34d6.
+  Published-page joins took 2,061 ms; traversal took 1,790 ms. These are local
+  diagnostic wall intervals, not production phase/OS-peak/transient-disk metrics.
+- Strict fresh native 32/256-page acceptance in terminal 37521 failed after
+  3 minutes 21 seconds; output/native-scale-page-joins-declared-storage-20260928
+  stays retained. The 32-page run retained 128 paths, 49,228 nodes and 49,024
+  edges in 49,067 ms with OS peak 913,195,008 bytes, then resumed byte-identically.
+  The 256-page graph admitted 197,132 nodes but zero paths and 3,072 edges.
+  Its scan manifest categorically records IlBodyCountLimitExceeded on the data
+  assembly under maxBodyCount 50,000: metadata admission was not IL admission.
+  This is not successful large end-to-end acceptance or a throughput-only gap.
+- Added optional native ilMaxBodies, absent historically/default 50,000, validated
+  1 through 1,000,000, hash-bound, passed to --il-max-bodies and exposed in status.
+  The graph stress profile explicitly declares 250,000 and the strict test now
+  requires all IL outcomes admitted before graph/path acceptance. Focused checks
+  in 33121 passed 130/130, zero failed/skipped, 2 minutes 36 seconds, no compiler
+  warnings. A later two-test rebuild in 58270 pins status and strict IL assertions:
+  2/2 passed in one second, no warnings. New strict fresh run is live in session
+  21300, output/native-scale-explicit-il-bodies-2g-20260928, declaring 250,000
+  IL bodies and unchanged explicit 2 GiB graph storage. Do not rebuild runtime
+  binaries until it ends. Inspect IL outcomes before graph capacity/branch
+  acceptance; preserve every output on failure. Full regression, actual complete
+  graph capacity, production phase metrics and private acceptance stay open.
+  No merge, proof deletion or hidden production-default increase occurred.
+
+## Throughput diagnosis and live stage trace (2026-09-28, in progress)
+
+- The previous continuation made concrete source progress and verified a live
+  wait. This turn reverified terminal session 53655 and its exact process tree.
+  The retained 192,000-method query remained active beyond twenty minutes,
+  exhausting the native fresh workflow's per-phase timeout for just one query.
+  Explicit SIGINT canceled only owned runner PID 10376; terminal exit was 1
+  (Attempting to cancel the build), and PIDs 10376/10827/10831 are now absent.
+  This is an incomplete canceled attempt, not graph admission or storage refusal.
+- Rehashed the original combined index after cancellation: unchanged
+  bf3a8f03767af85602dc4e3176736e60e7c7ab7b919464988b18bb4b57018afe.
+  output/native-scale-storage-declared-2g-replay-20260928 remains retained with
+  no generated receipt. No proof dependency was deleted and no merge occurred.
+- The diagnostic now flushes a maximum of 32 fixed stage entries / 64 KiB to
+  graph-stages.ndjson. Every entry binds exact test/Reporting generators and
+  the actual bounded input/query/budgets, and says attempt-stage-entry-not-admission.
+  Completed receipt hashes this trace. No method/path/source labels are printed.
+  Internal graph stage callbacks are diagnostic-only; published graph evidence
+  remains deterministic. Stage times include waits/GC, not CPU or OS peak.
+- Rebuild plus focused validation finished in terminal session 19044: 173 passed,
+  zero failed/skipped, 3 minutes 5 seconds; no compiler warnings. This includes
+  explicit scratch admission/refusal through both graph APIs and bounded trace
+  commitments. It is not representative large-graph acceptance.
+- Instrumented retained-index diagnosis is live in terminal session 43166 into
+  output/native-scale-storage-staged-2g-replay-20260928. Testhost PID 69689,
+  runner 69227 and vstest 69686 are confirmed live. Do not rebuild their binaries.
+  Trace binds Reporting e9979f0e49484395d27d7188e6266d4cce9a0719b4e0182b42a592c86cb45296
+  and test b633b2f9d916866f23a3825a9c22925868dedc7327f4b28f48ee3c0d005002d0.
+  It entered compiled-il at 25,210 ms after passing read/inventory/nodes/source
+  edges/legacy roots/symbol reconciliation, and remains in that stage. There is
+  no final admission receipt yet.
+- Source inspection found repeated full-fact enumerations inside each map and
+  handler of AddProjectlessPublishCandidateEdges, despite the earlier qualified
+  member-candidate index fix. Next replace those repeated reads with exact
+  indexed/type-qualified inventories, preserving every relevant bound/unbound,
+  overload, source-file and receipt competitor, then pin parity and actual
+  enumeration work before remeasuring. A staged sub-observation can further
+  isolate compiled helper costs if needed. Require strict fresh dual-graph
+  acceptance after throughput is corrected. Capacity,
+  per-phase production resource instrumentation and private acceptance stay open.
+
+## Explicit scratch budget and raw framing (2026-09-28, in progress)
+
+- Removed the unsuccessful Brotli experiment from the active scratch codec.
+  Raw UTF-8 JSON now uses exact length framing; all global competitors, decoded
+  cache bounds, ordering and published identities remain unchanged.
+- Native report configuration can explicitly declare maxGraphStorageBytes from
+  64 KiB through 16 GiB. Omission preserves 512 MiB and historical serialization.
+  The declared value is hash-bound, shown in status, and passed to packet and
+  compiled-path queries independently of input/work/path/output limits.
+- The public graph stress profile explicitly declares 2 GiB, and its receipt
+  exposes that budget. Admission and throughput remain unverified until a new
+  measured replay and strict end-to-end run pass. No production default was
+  silently increased and no refusal counts as large-graph success.
+- Initial rebuilt focused coverage had 169 passing and three failing cases:
+  invalid-budget tests expected the wrong exception type. They now pin the
+  existing typed PreflightException. Rebuilt focused coverage passed 172/172,
+  zero failed/skipped, in 2 minutes 6 seconds. The later strict dual-graph gate
+  and explicit 2 GiB corpus configuration rebuilt successfully; its tiny corpus
+  test passed 1/1 in 592 ms. git diff --check is clean.
+- Read-only retained 192,000-method replay is running with explicit 2 GiB scratch
+  storage into output/native-scale-storage-declared-2g-replay-20260928. It has not
+  returned a receipt or admission result after eight minutes. Terminal session
+  53655 owns the test; testhost PID 10831 remains active. No runtime binary may
+  be rebuilt until it ends. A short native process sample is retained in
+  /tmp/dotnet_2026-09-28_225414_vznT.sample.txt; managed symbols are unresolved,
+  so it cannot identify the slow managed stage. This is not a throughput pass.
+- Added a direct test for low-budget refusal versus explicit-budget admission
+  through both public packet and selected-symbol APIs. It is not rebuilt yet;
+  run it after the retained replay terminates, then run strict fresh graph
+  acceptance under the declared budget. Preserve every previous output.
+- The prior goal turn was concrete progress (explicit budget, corrected typed
+  tests, 172-test pass); this continuation confirms the same replay handle and
+  testhost live at thirteen minutes. Observation timeout is not process exit.
+  No restart, rebuild, deletion or merge occurred.
+- Added internal fixed graph-stage wall-time observations for index reads,
+  endpoint/surface work, nodes/edges, reconciliation, IL/VB/dispatch bridges,
+  sort, report traversal and input rehash. They are retained only in the
+  generator/input-bound local diagnostic usage, not in deterministic published
+  path evidence. Refusal retains incomplete timings and never gains paths.
+  Timings include waits/GC and do not claim CPU time, CLI-phase timing, OS peak
+  or transient disk. Tests and limitations are updated in source; rebuild and
+  validation remain pending until live session 53655 ends. Diff check is clean.
+- The compression sections below record superseded experimental observations,
+  not the active codec or a completed scale solution. All failed inputs and
+  outputs remain retained, and no private proof cleanup or merge was performed.
+
+## Storage refusal allocation diagnostic (2026-09-28, in progress)
+
+- Strict compressed graph acceptance terminated failed (1 failed, 6 minutes
+  37 seconds): the 192,000-method case still refused graph-storage-bytes.
+  Its completed partial reports and every input remain retained; no aggregate
+  success receipt was emitted. Compression is not a completed scale fix.
+- Added internal storage phase and bounded SQLite dbstat allocation snapshots
+  every 8,192 successful scratch writes. With journaling disabled, SQLITE_FULL
+  can leave the disposable scratch database unreadable. Refusal uses only prior
+  successful snapshots and managed write counters, never queries/reuses that
+  damaged graph. Missing snapshots/dbstat remain unknown, not zero. Classified
+  paths and graph counts remain empty on refusal.
+- A local explicit retained-index diagnostic binds exact test/Reporting
+  generators, complete input-index SHA, actual query options and budgets. It
+  emits no methods/source text and cannot overwrite an existing output. The
+  tiny schema-refusal test correctly has no store observation; a separate
+  128 KiB fixture exercises post-schema refusal snapshots.
+- Rebuilt codec/graph-memory coverage passed 45/45, zero failed/skipped, in
+  15 seconds with no build warnings. The retained 192,000-method combined index
+  was replayed read-only into output/native-scale-storage-replay-20260928:
+  1/1 passed in 19 seconds and rehashed the original index unchanged. Refusal
+  occurred in nodes after 202,518 successful fact writes and 43,191 node writes,
+  with zero edges. Last valid logical allocation sample was 525,299,712 bytes;
+  final successful-write payload counters were 588,291,796 decoded and
+  300,340,120 framed bytes. The dbstat facility is unavailable on this SQLite
+  build, so physical object allocations remain null, not invented estimates.
+- This identifies global scratch admission, not selected traversal, as the
+  current capacity bottleneck. The operator workflow still needs an explicit
+  declared scratch-storage budget instead of a hidden fixed ceiling, with the
+  existing default preserved and actual large-graph/throughput acceptance under
+  its declared budget. Compression's slowdown must also be resolved; it cannot
+  be shipped as the finished scale solution merely because parity passes.
+
+## Lossless private graph payload storage (2026-09-28, in progress)
+
+- Source now encodes every private fact/node/edge JSON row in a v2 scratch
+  database as a length-framed raw-or-Brotli blob, retaining compression only
+  when smaller. No input/published artifact, identity, alias key, ordering or
+  graph-storage ceiling changes. Decode rejects oversized declarations and
+  requires exact decoded size and complete compressed-frame consumption.
+- Random-access outgoing pages continue to budget decoded JSON bytes, not the
+  smaller compressed frame. Internal usage observations record actual decoded
+  and stored payload bytes separately; this is not an OS memory guarantee.
+- Added raw Unicode/escaping, compressed null/identity round-trip, deterministic
+  encoding, truncated/trailing/invalid-mode/oversize frame source tests. Existing
+  graph parity/all-branch tests remain the integration oracle. Added an explicit
+  graph-admission-required diagnostic flag so a fail-closed refusal cannot pass
+  the forthcoming storage acceptance run.
+- Exact pushed 6d306274136add97b6bdea278c868f12d394114c full regression
+  terminated green: 2,722 passed, zero failed/skipped in 12 minutes 59 seconds.
+  Runtime rebuild started only afterward. New source validation is in progress:
+  codec/graph/native coverage, followed by a fresh required-admission graph run.
+  A new parity fixture budgets highly compressible 300 KB edge rows by decoded
+  bytes and requires all three branches. Rebuilt codec, graph-memory and native
+  scale coverage passed 46/46 in 23 seconds, zero failed/skipped and no build
+  warnings. An initial test-fixture compile typo was fixed before this pass.
+  Strict retained admission is running at output/native-scale-compressed-graph-20260928
+  with TRACEMAP_WEBFORMS_REQUIRE_GRAPH_ADMISSION=1; its outcome remains pending.
+  The compressed 24,000-method case completed reports with all 32 surfaces and
+  128 compiled variants. Run recorded 302.39 seconds and 883,343,360 maximum
+  resident bytes versus the earlier 135.71 seconds/1,063,288,832 bytes: observed
+  peak is lower, but run time is over twice as long. The 192,000-method case is
+  running next. Capacity and throughput both require the terminal measurements;
+  do not claim improved overall scale from compression or focused parity alone.
+  The rebuilt ordinary CLI sample completed with 27 facts and
+  Level1SemanticAnalysis at output/native-traversal-work-compressed-sample-smoke-20260928.
+  Original stress inputs and PowerShell proof remain untouched.
+
 ## Sparse compiled-graph stress (2026-09-28)
 
 - Added source for an explicit graph diagnostic profile: same 32/256 declared

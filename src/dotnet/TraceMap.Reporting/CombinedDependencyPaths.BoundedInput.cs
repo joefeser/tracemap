@@ -117,7 +117,8 @@ public static partial class CombinedDependencyPathReporter
                 sources = (await CombinedDependencyReporter.ReadSourcesAsync(connection, cancellationToken))
                     .Select(row => row.Source).ToArray();
 
-                store = await CreateIndexedGraphStoreAsync(options.IndexPath, budget.MaxGraphStorageBytes, cancellationToken);
+                store = await CreateIndexedGraphStoreAsync(options.IndexPath, budget.MaxGraphStorageBytes, cancellationToken,
+                    budget.GraphStageObserver);
 
                 await AssertCombinedInputLimitAsync(connection, "combined_facts", budget.MaxFacts, "graph-facts", cancellationToken);
                 if (await ViewExistsAsync(connection, "combined_dependency_edges", cancellationToken))
@@ -140,7 +141,9 @@ public static partial class CombinedDependencyPathReporter
                 cancellationToken,
                 budget,
                 store);
+            store.MarkObservationStage("report-traversal");
             var result = BuildReportWithTraversalObservations(options, read, graph, sourcePair);
+            store.MarkObservationStage("input-rehash");
             await store.AssertInputUnchangedAsync(options.IndexPath, cancellationToken);
             return result with { GraphStorage = store.Observe(graph.Outgoing) };
         }
@@ -163,7 +166,8 @@ public static partial class CombinedDependencyPathReporter
                     ReportCoverage = "ReducedCoverage",
                     Summary = report.Summary with { Truncated = true }
                 },
-                new Dictionary<string, CombinedDependencyTraversalObservation>(StringComparer.Ordinal));
+                new Dictionary<string, CombinedDependencyTraversalObservation>(StringComparer.Ordinal))
+                { RefusedGraphStorage = store?.ObserveRefused() };
         }
         finally { store?.Dispose(); }
     }

@@ -27,6 +27,8 @@ public sealed record WebFormsReviewBudgets(
     public WebFormsReviewReportBudgets? Reports { get; init; }
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public int? MaxPublishInputFiles { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? IlMaxBodies { get; init; }
 }
 
 public sealed record WebFormsReviewReportBudgets(
@@ -34,7 +36,11 @@ public sealed record WebFormsReviewReportBudgets(
     int MaxSurfaces = 1_000, int MaxEventChains = 1_000, int MaxGaps = 10_000,
     int MaxCompiledRoots = 1_000, int MaxFrontier = 10_000,
     long MaxProjectionInputBytes = 256L * 1024 * 1024, long MaxOutputBytes = 512L * 1024 * 1024,
-    int MaxProjectionRecords = 500_000, int MaxProjectionReferences = 2_000_000);
+    int MaxProjectionRecords = 500_000, int MaxProjectionReferences = 2_000_000)
+{
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public long? MaxGraphStorageBytes { get; init; }
+}
 
 public sealed record WebFormsReviewConfig(
     string SchemaVersion,
@@ -89,6 +95,7 @@ public static partial class WebFormsReviewPreflightCommand
     private static readonly StringComparison PathComparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
 
     public const string Help = """
+        tracemap webforms-review start --config <private-json> --out <new-review-root> [--attest-exact-source-commit <commit>]
         tracemap webforms-review preflight --config <private-json> --out <new-durable-run-root>
         tracemap webforms-review run --run <durable-run-root>
         tracemap webforms-review resume --run <durable-run-root>
@@ -98,10 +105,11 @@ public static partial class WebFormsReviewPreflightCommand
         tracemap webforms-review relocate --run <completed-run-root> --out <new-durable-run-root>
         tracemap webforms-review retention-plan --run <completed-run-root>
 
-        Validates the fresh/attach run contract and inventories explicit compiled inputs.
-        Writes local-only run-manifest.json and README.md. No scan/build/publish/binding,
-        report rendering, source mutation, cleanup or implicit TEMP discovery occurs.
-        This output is preflight only, not a completed review workflow.
+        Preflight validates the fresh/attach contract and explicit compiled inventory.
+        It writes local-only run-manifest.json and README.md without scanning,
+        binding admission, report rendering or execution. Preflight success alone
+        is not a completed workflow. No command builds/publishes the site, mutates
+        input source, cleans old evidence or performs implicit TEMP discovery.
         Run/resume execute fresh scans or immutable compiled attachments and private
         workbench/grouped handoff reports with pinned, resumable checkpoints.
         Query reads only a completed run's checkpointed evidence index, returning
@@ -112,6 +120,10 @@ public static partial class WebFormsReviewPreflightCommand
         Prepare writes separate operator-declared receipts only with an exact-commit
         attestation and explicit publishSourceRelativePaths; it never copies binaries.
         Prepare partitions larger declared inventories without raising per-receipt limits.
+        Start composes preparation (only with explicit attestation), preflight and
+        execution in one new folder with evidence/ and run/ children. Without
+        attestation, existing explicit receipts are required. Failures preserve
+        owned output; resume names the pinned run/ child, never repeats discovery.
         Relocate copies hash-verified completed artifacts and checkpoints, preserving
         original policy digests, external input locations and the original run.
         Retention-plan emits local-only protect-only JSON; it never authorizes deletion.
@@ -339,6 +351,7 @@ public static partial class WebFormsReviewPreflightCommand
             budget.GraphMaxDepth is < 1 or > 20 || budget.GraphMaxPaths is < 1 or > 4096 ||
             budget.MetadataMaxWork is < 1 or > 100_000_000 || budget.MetadataMaxText is < 71 or > 65_536 ||
             budget.IlMaxText is < 71 or > 65_536 || budget.MaxParentFacts is < 1 or > 100_000_000 ||
+            budget.IlMaxBodies is < 1 or > 1_000_000 ||
             budget.MaxFactLineChars is < 128 or > 16_777_216) throw Fail("BUDGET_INVALID");
     }
 
@@ -349,6 +362,8 @@ public static partial class WebFormsReviewPreflightCommand
             budget.MaxCompiledRoots is <= 0 or > 10_000 || budget.MaxFrontier <= 0 ||
             budget.MaxProjectionInputBytes <= 0 || budget.MaxOutputBytes <= 0 ||
             budget.MaxProjectionRecords <= 0 || budget.MaxProjectionReferences <= 0)
+            throw Fail("REPORT_BUDGET_INVALID");
+        if (budget.MaxGraphStorageBytes is { } storage && (storage < 64 * 1024 || storage > 16L * 1024 * 1024 * 1024))
             throw Fail("REPORT_BUDGET_INVALID");
     }
     private static void ValidateOutput(string output, WebFormsReviewConfig config)

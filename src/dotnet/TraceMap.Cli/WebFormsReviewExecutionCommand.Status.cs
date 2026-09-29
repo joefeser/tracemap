@@ -90,6 +90,7 @@ public static partial class WebFormsReviewExecutionCommand
                 new Dictionary<string, long> { ["retainedFacts"] = history.ScanCheckpoint?.FactCount ?? 0,
                     ["artifactFiles"] = scanArtifacts.Count, ["artifactBytes"] = scanArtifacts.Sum(item => item.Bytes) },
                 new Dictionary<string, long> { ["metadataWorkUnits"] = budget.MetadataMaxWork, ["ilWorkUnits"] = budget.IlMaxWork,
+                    ["ilBodies"] = budget.IlMaxBodies ?? 50_000,
                     ["artifactBytesPerFile"] = budget.MaxRetainedArtifactBytes, ["totalHashBytes"] = budget.MaxTotalHashBytes },
                 null, ["Retained fact and artifact counts are not metadata/IL work consumption. Work, time and peak usage were not recorded."]));
             var gapKinds = new Dictionary<string, int>(StringComparer.Ordinal);
@@ -158,6 +159,7 @@ public static partial class WebFormsReviewExecutionCommand
                 "retained aggregate counts; each graph query shares its path/work budget across all selected roots",
                 reportCounts, new Dictionary<string, long> { ["inputFacts"] = reportBudget.MaxInputFacts,
                     ["inputEdges"] = reportBudget.MaxInputEdges, ["inputTextBytes"] = reportBudget.MaxInputTextBytes,
+                    ["graphStorageBytes"] = reportBudget.MaxGraphStorageBytes ?? TraceMap.Reporting.CombinedPathAdmissionLimits.DefaultMaxGraphStorageBytes,
                     ["surfaces"] = reportBudget.MaxSurfaces, ["eventChains"] = reportBudget.MaxEventChains,
                     ["compiledRoots"] = reportBudget.MaxCompiledRoots, ["pathsPerGraphQuery"] = budget.GraphMaxPaths,
                     ["depthPerPath"] = budget.GraphMaxDepth, ["traversalWorkPerGraphQuery"] = budget.GraphMaxWork,

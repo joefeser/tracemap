@@ -1,6 +1,6 @@
 using System.Collections;
+using System.Diagnostics;
 using System.Security.Cryptography;
-using System.Text.Json;
 using Microsoft.Data.Sqlite;
 
 namespace TraceMap.Reporting;
@@ -16,17 +16,55 @@ public static partial class CombinedDependencyPathReporter
         private bool sorted;
         private long ordinal;
         private readonly string inputSha256;
+        private readonly string generatorSha256;
         private readonly CancellationToken token;
+        private long payloadDecodedBytes;
+        private long payloadFrameBytes;
+        private long globalEdgePayloadRowsRead;
+        private long incomingCountQueries;
+        private long incomingReferenceRowsObserved;
+        private string storagePhase = "schema";
+        private long successfulWrites;
+        private long? snapshotLogicalBytes;
+        private long? snapshotWrites;
+        private IReadOnlyDictionary<string, long>? snapshotObjectBytes;
+        private readonly Dictionary<string, long> observationTicks = new(StringComparer.Ordinal);
+        private string observationStage = "schema";
+        private long observationStarted = Stopwatch.GetTimestamp();
+        private readonly Action<string>? stageObserver;
         public int MaximumOutgoingRowsLoaded { get; private set; }
+        public long MaximumOutgoingDecodedBytesLoaded { get; private set; }
         public int NodeCount { get; private set; }
         public int EdgeCount { get; private set; }
 
-        public IndexedGraphStore(string generatorSha256, string inputSha256, long maxStorageBytes, CancellationToken token)
+        public void MarkObservationStage(string stage)
+        {
+            var now = Stopwatch.GetTimestamp();
+            observationTicks[observationStage] = checked(observationTicks.GetValueOrDefault(observationStage)
+                + now - observationStarted);
+            observationStage = stage;
+            observationStarted = now;
+            stageObserver?.Invoke(stage);
+        }
+
+        private IReadOnlyDictionary<string, long> ObserveStageMilliseconds()
+        {
+            var ticks = new Dictionary<string, long>(observationTicks, StringComparer.Ordinal);
+            ticks[observationStage] = checked(ticks.GetValueOrDefault(observationStage)
+                + Stopwatch.GetTimestamp() - observationStarted);
+            return ticks.OrderBy(pair => pair.Key, StringComparer.Ordinal).ToDictionary(pair => pair.Key,
+                pair => (long)(pair.Value * 1000d / Stopwatch.Frequency), StringComparer.Ordinal);
+        }
+
+        public IndexedGraphStore(string generatorSha256, string inputSha256, long maxStorageBytes, CancellationToken token,
+            Action<string>? stageObserver = null)
         {
             if (maxStorageBytes < 4096) throw new ArgumentOutOfRangeException(nameof(maxStorageBytes));
             if (maxStorageBytes < 64 * 1024) throw new ReportInputLimitException("graph-storage-bytes");
             this.inputSha256 = inputSha256;
+            this.generatorSha256 = generatorSha256;
             this.token = token;
+            this.stageObserver = stageObserver;
             Facts = new IndexedFactRows(this);
             connection = new SqliteConnection(new SqliteConnectionStringBuilder
             {
@@ -46,16 +84,17 @@ public static partial class CombinedDependencyPathReporter
                     create table graph_metadata(key text primary key, value text not null);
                     create table graph_facts(ordinal integer primary key, id text not null unique,
                         source_id text not null, original_id text not null, source_key text not null,
-                        fact_type text not null, payload text not null);
+                        fact_type text not null, payload blob not null);
                     create unique index graph_facts_original on graph_facts(source_id,original_id);
                     create index graph_facts_identity_order on graph_facts(id collate graph_ordinal);
                     create index graph_facts_type_order on graph_facts(fact_type,ordinal);
                     create index graph_facts_source_key on graph_facts(source_key,id collate graph_ordinal);
-                    create table graph_nodes(id text primary key, display_name text not null, payload text not null, ordinal integer not null);
+                    create table graph_nodes(id text primary key, display_name text not null, payload blob not null, ordinal integer not null);
                     create table graph_edges(id text primary key, from_id text not null, to_id text not null,
                         rank integer not null, file_path text, line integer not null,
-                        payload text not null, ordinal integer not null);
+                        payload blob not null, ordinal integer not null, payload_bytes integer not null);
                     create index graph_edges_from on graph_edges(from_id, ordinal);
+                    create index graph_edges_to on graph_edges(to_id);
                     create table graph_edge_order(global_order integer primary key, from_id text not null,
                         local_order integer not null, edge_id text not null unique);
                     create unique index graph_edge_order_from on graph_edge_order(from_id, local_order);
@@ -71,7 +110,8 @@ public static partial class CombinedDependencyPathReporter
                 }
                 using var command = connection.CreateCommand();
                 command.CommandText = """
-                    insert into graph_metadata values ('schema', 'private.transient-path-graph.v1'),
+                    insert into graph_metadata values ('schema', 'private.transient-path-graph.v2'),
+                        ('payloadEncoding', 'length-framed-json-v1'),
                         ('generatorSha256', $generator), ('boundedInputSha256', $input),
                         ('maxStorageBytes', $maximum);
                     """;
@@ -107,20 +147,22 @@ public static partial class CombinedDependencyPathReporter
         public bool TryGetNode(string id, out GraphNode node)
         {
             using var command = Command("select payload from graph_nodes where id=$id;", id);
-            var json = command.ExecuteScalar() as string;
-            node = json is null ? null! : JsonSerializer.Deserialize<GraphNode>(json)!;
-            return json is not null;
+            var payload = command.ExecuteScalar() as byte[];
+            node = payload is null ? null! : IndexedGraphPayload.Decode<GraphNode>(payload);
+            return payload is not null;
         }
 
         public bool AddNode(GraphNode node)
         {
+            storagePhase = "nodes";
             if (sorted) throw new InvalidOperationException("COMBINED_GRAPH_STORAGE_FROZEN");
             using var command = Command("insert or ignore into graph_nodes values($id,$name,$payload,$ordinal);", node.NodeId);
             command.Parameters.AddWithValue("$name", node.DisplayName);
-            command.Parameters.AddWithValue("$payload", JsonSerializer.Serialize(node));
+            var payload = IndexedGraphPayload.Encode(node);
+            command.Parameters.AddWithValue("$payload", payload);
             command.Parameters.AddWithValue("$ordinal", ordinal++);
             var added = Write(command) != 0;
-            if (added) NodeCount++;
+            if (added) { NodeCount++; RecordPayload(payload); }
             return added;
         }
 
@@ -130,7 +172,7 @@ public static partial class CombinedDependencyPathReporter
                 + (identityOrder ? "id collate graph_ordinal" : "ordinal") + ";");
             using var reader = command.ExecuteReader();
             while (reader.Read())
-            { token.ThrowIfCancellationRequested(); yield return JsonSerializer.Deserialize<GraphNode>(reader.GetString(0))!; }
+            { token.ThrowIfCancellationRequested(); yield return IndexedGraphPayload.Decode<GraphNode>((byte[])reader.GetValue(0)); }
         }
 
         public IEnumerable<string> NodeIds()
@@ -147,25 +189,42 @@ public static partial class CombinedDependencyPathReporter
             return Convert.ToInt64(command.ExecuteScalar()) != 0;
         }
 
+        public bool HasAtLeastIncomingEdges(string id, int minimum)
+        {
+            if (minimum <= 0) throw new ArgumentOutOfRangeException(nameof(minimum));
+            // Classification only asks whether the global count reaches a
+            // threshold. Read at most that many index keys, never edge payloads.
+            using var command = Command("select count(*) from (select 1 from graph_edges where to_id=$id limit $minimum);", id);
+            command.Parameters.AddWithValue("$minimum", minimum);
+            var observed = Convert.ToInt64(command.ExecuteScalar());
+            incomingCountQueries++;
+            incomingReferenceRowsObserved = checked(incomingReferenceRowsObserved + observed);
+            return observed >= minimum;
+        }
+
         public GraphEdge Edge(string id)
         {
             using var command = Command("select payload from graph_edges where id=$id;", id);
-            var json = command.ExecuteScalar() as string ?? throw new KeyNotFoundException();
-            return JsonSerializer.Deserialize<GraphEdge>(json)!;
+            var payload = command.ExecuteScalar() as byte[] ?? throw new KeyNotFoundException();
+            return IndexedGraphPayload.Decode<GraphEdge>(payload);
         }
 
         public void AddEdge(GraphEdge edge)
         {
+            storagePhase = "edges";
             if (sorted) throw new InvalidOperationException("COMBINED_GRAPH_STORAGE_FROZEN");
-            using var command = Command("insert into graph_edges values($id,$from,$to,$rank,$file,$line,$payload,$ordinal);", edge.EdgeId);
+            using var command = Command("insert into graph_edges values($id,$from,$to,$rank,$file,$line,$payload,$ordinal,$bytes);", edge.EdgeId);
             command.Parameters.AddWithValue("$from", edge.FromNodeId);
             command.Parameters.AddWithValue("$to", edge.ToNodeId);
             command.Parameters.AddWithValue("$rank", EdgeRank(edge.EdgeKind));
             command.Parameters.AddWithValue("$file", (object?)edge.FilePath ?? DBNull.Value);
             command.Parameters.AddWithValue("$line", edge.StartLine ?? 0);
-            command.Parameters.AddWithValue("$payload", JsonSerializer.Serialize(edge));
+            var payload = IndexedGraphPayload.Encode(edge);
+            command.Parameters.AddWithValue("$payload", payload);
+            command.Parameters.AddWithValue("$bytes", IndexedGraphPayload.DecodedLength(payload));
             command.Parameters.AddWithValue("$ordinal", ordinal++);
             Write(command);
+            RecordPayload(payload);
             EdgeCount++;
         }
 
@@ -180,8 +239,9 @@ public static partial class CombinedDependencyPathReporter
             while (reader.Read())
             {
                 token.ThrowIfCancellationRequested();
+                if (from is null) globalEdgePayloadRowsRead++;
                 if (from is not null) MaximumOutgoingRowsLoaded = Math.Max(MaximumOutgoingRowsLoaded, 1);
-                yield return JsonSerializer.Deserialize<GraphEdge>(reader.GetString(0))!;
+                yield return IndexedGraphPayload.Decode<GraphEdge>((byte[])reader.GetValue(0));
             }
         }
 
@@ -194,11 +254,11 @@ public static partial class CombinedDependencyPathReporter
         private IReadOnlyList<GraphEdge> ReadOutgoingPage(string id, int startIndex)
         {
             using var command = Command(sorted ? """
-                select e.payload,length(cast(e.payload as blob)) from graph_edge_order o
+                select e.payload,e.payload_bytes from graph_edge_order o
                 join graph_edges e on e.id=o.edge_id
                 where o.from_id=$id and o.local_order >= $position order by o.local_order limit 64;
                 """ : """
-                select payload,length(cast(payload as blob)) from graph_edges
+                select payload,payload_bytes from graph_edges
                 where from_id=$id order by ordinal limit 64 offset $offset;
                 """, id);
             command.Parameters.AddWithValue(sorted ? "$position" : "$offset", sorted ? startIndex + 1 : startIndex);
@@ -212,10 +272,14 @@ public static partial class CombinedDependencyPathReporter
                 // One already-admitted large row can exceed the cache target;
                 // never retain a second row in that case or silently skip it.
                 if (rows.Count != 0 && rowBytes > 512 * 1024 - bytes) break;
-                rows.Add(JsonSerializer.Deserialize<GraphEdge>(reader.GetString(0))!);
+                var payload = (byte[])reader.GetValue(0);
+                if (IndexedGraphPayload.DecodedLength(payload) != rowBytes)
+                    throw new InvalidDataException("COMBINED_GRAPH_PAYLOAD_INVALID");
+                rows.Add(IndexedGraphPayload.Decode<GraphEdge>(payload));
                 bytes += rowBytes;
             }
             MaximumOutgoingRowsLoaded = Math.Max(MaximumOutgoingRowsLoaded, rows.Count);
+            MaximumOutgoingDecodedBytesLoaded = Math.Max(MaximumOutgoingDecodedBytesLoaded, bytes);
             return rows;
         }
 
@@ -249,11 +313,27 @@ public static partial class CombinedDependencyPathReporter
             IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
         }
 
-        private static int Write(SqliteCommand command)
+        private int Write(SqliteCommand command)
         {
-            try { return command.ExecuteNonQuery(); }
+            // journal_mode=off means SQLITE_FULL can leave the disposable store
+            // unreadable. Capture bounded allocation observations while it is
+            // still valid; never inspect a damaged store to recover a graph.
+            if (successfulWrites % 8192 == 0)
+            {
+                using var size = Command("select (select page_count from pragma_page_count) * (select page_size from pragma_page_size);");
+                snapshotLogicalBytes = Convert.ToInt64(size.ExecuteScalar());
+                snapshotObjectBytes = ReadObjectStorageBytes();
+                snapshotWrites = successfulWrites;
+            }
+            try { var rows = command.ExecuteNonQuery(); successfulWrites++; return rows; }
             catch (SqliteException exception) when (exception.SqliteErrorCode == 13)
             { throw new ReportInputLimitException("graph-storage-bytes"); }
+        }
+
+        private void RecordPayload(byte[] payload)
+        {
+            payloadDecodedBytes = checked(payloadDecodedBytes + IndexedGraphPayload.DecodedLength(payload));
+            payloadFrameBytes = checked(payloadFrameBytes + payload.Length);
         }
 
         public async Task AssertInputUnchangedAsync(string inputPath, CancellationToken cancellationToken)
@@ -267,6 +347,7 @@ public static partial class CombinedDependencyPathReporter
         public void Sort()
         {
             if (sorted) return;
+            storagePhase = "edge-order";
             const string order = "e.rank,n.display_name collate graph_ordinal,e.file_path collate graph_ordinal,e.line,e.id collate graph_ordinal";
             using var command = Command("insert into graph_edge_order select row_number() over (order by " + order
                 + "),e.from_id,row_number() over (partition by e.from_id order by " + order
@@ -275,13 +356,49 @@ public static partial class CombinedDependencyPathReporter
             sorted = true;
         }
 
-        public IndexedGraphUsage Observe(GraphOutgoing outgoing)
+        public IndexedGraphUsage Observe(GraphOutgoing? outgoing = null)
         {
             using var size = Command("select (select page_count from pragma_page_count) * (select page_size from pragma_page_size);");
             using var generator = Command("select value from graph_metadata where key='generatorSha256';");
             return new IndexedGraphUsage("sqlite-temporary", (string)generator.ExecuteScalar()!, inputSha256,
-                NodeCount, EdgeCount, Convert.ToInt64(size.ExecuteScalar()), outgoing.MaximumRowsLoaded)
-                { StoredFacts = storedFactCount };
+                NodeCount, EdgeCount, Convert.ToInt64(size.ExecuteScalar()), outgoing?.MaximumRowsLoaded ?? MaximumOutgoingRowsLoaded)
+                { StoredFacts = storedFactCount, PayloadEncoding = "length-framed-json-v1",
+                    PayloadDecodedBytes = payloadDecodedBytes, PayloadFrameBytes = payloadFrameBytes,
+                    MaximumOutgoingDecodedBytesLoaded = MaximumOutgoingDecodedBytesLoaded,
+                    StoragePhase = storagePhase, ObjectStorageBytes = ReadObjectStorageBytes(),
+                    GlobalEdgePayloadRowsRead = globalEdgePayloadRowsRead,
+                    IncomingCountQueries = incomingCountQueries, IncomingReferenceRowsObserved = incomingReferenceRowsObserved,
+                    StageElapsedMilliseconds = ObserveStageMilliseconds() };
+        }
+
+        public IndexedGraphUsage ObserveRefused() => new("sqlite-temporary", generatorSha256, inputSha256,
+            NodeCount, EdgeCount, snapshotLogicalBytes, MaximumOutgoingRowsLoaded)
+            { StoredFacts = storedFactCount, PayloadEncoding = "length-framed-json-v1",
+                PayloadDecodedBytes = payloadDecodedBytes, PayloadFrameBytes = payloadFrameBytes,
+                MaximumOutgoingDecodedBytesLoaded = MaximumOutgoingDecodedBytesLoaded,
+                StoragePhase = storagePhase, ObjectStorageBytes = snapshotObjectBytes,
+                ObservationState = "last-successful-write-snapshot-not-admitted",
+                AllocationSnapshotSuccessfulWrites = snapshotWrites, SuccessfulWritesBeforeRefusal = successfulWrites,
+                GlobalEdgePayloadRowsRead = globalEdgePayloadRowsRead,
+                IncomingCountQueries = incomingCountQueries, IncomingReferenceRowsObserved = incomingReferenceRowsObserved,
+                StageElapsedMilliseconds = ObserveStageMilliseconds() };
+
+        private IReadOnlyDictionary<string, long>? ReadObjectStorageBytes()
+        {
+            try
+            {
+                using var command = Command("select name,sum(pgsize) from dbstat group by name order by name collate graph_ordinal limit 64;");
+                using var reader = command.ExecuteReader();
+                var rows = new SortedDictionary<string, long>(StringComparer.Ordinal);
+                while (reader.Read()) rows.Add(reader.GetString(0), reader.GetInt64(1));
+                return rows;
+            }
+            catch (SqliteException exception) when (exception.SqliteErrorCode == 1)
+            {
+                // The optional dbstat capability can be absent in another SQLite
+                // build. Unknown physical allocation is never reported as zero.
+                return null;
+            }
         }
 
         public IEnumerable<IReadOnlyList<(GraphNode Node, SymbolAlias Alias)>> SymbolReconciliationGroups()
@@ -291,6 +408,7 @@ public static partial class CombinedDependencyPathReporter
                 if (node.NodeKind is not ("Symbol" or "Method" or "Type")) continue;
                 var alias = TryCreateSymbolAlias(node.DisplayName);
                 if (alias is null) continue;
+                storagePhase = "aliases";
                 using var insert = Command("insert into graph_aliases values($id,$member,$type,$signature,$ordinal);", node.NodeId);
                 insert.Parameters.AddWithValue("$member", node.SourceIndexId + "\0" + alias.MemberKey);
                 insert.Parameters.AddWithValue("$type", (object?)alias.TypeKey ?? DBNull.Value);
@@ -312,7 +430,7 @@ public static partial class CombinedDependencyPathReporter
                 while (reader.Read())
                 {
                     token.ThrowIfCancellationRequested();
-                    var node = JsonSerializer.Deserialize<GraphNode>(reader.GetString(0))!;
+                    var node = IndexedGraphPayload.Decode<GraphNode>((byte[])reader.GetValue(0));
                     var alias = TryCreateSymbolAlias(node.DisplayName)!;
                     rows.Add((node, alias));
                 }
@@ -346,6 +464,8 @@ public static partial class CombinedDependencyPathReporter
     {
         private readonly List<GraphEdge> memory = [];
         public int Count => store?.EdgeCount ?? memory.Count;
+        public bool HasAtLeastIncomingEdges(string id, int minimum) => store?.HasAtLeastIncomingEdges(id, minimum)
+            ?? memory.Where(edge => edge.ToNodeId == id).Take(minimum).Count() >= minimum;
         public void Add(GraphEdge edge) { if (store is null) memory.Add(edge); else store.AddEdge(edge); }
         public void Sort(Comparison<GraphEdge> comparison)
         { if (store is null) memory.Sort(comparison); else store.Sort(); }
@@ -418,17 +538,31 @@ public static partial class CombinedDependencyPathReporter
     }
 
     internal sealed record IndexedGraphUsage(string Engine, string GeneratorSha256, string InputSha256,
-        int StoredNodes, int StoredEdges, long LogicalStorageBytes, int MaximumOutgoingRowsLoaded)
+        int StoredNodes, int StoredEdges, long? LogicalStorageBytes, int MaximumOutgoingRowsLoaded)
     {
         public int StoredFacts { get; init; }
+        public string? PayloadEncoding { get; init; }
+        public long? PayloadDecodedBytes { get; init; }
+        public long? PayloadFrameBytes { get; init; }
+        public long? MaximumOutgoingDecodedBytesLoaded { get; init; }
+        public string? StoragePhase { get; init; }
+        public IReadOnlyDictionary<string, long>? ObjectStorageBytes { get; init; }
+        public string ObservationState { get; init; } = "admitted";
+        public long? AllocationSnapshotSuccessfulWrites { get; init; }
+        public long? SuccessfulWritesBeforeRefusal { get; init; }
+        public IReadOnlyDictionary<string, long>? StageElapsedMilliseconds { get; init; }
+        public long? GlobalEdgePayloadRowsRead { get; init; }
+        public long? IncomingCountQueries { get; init; }
+        public long? IncomingReferenceRowsObserved { get; init; }
     }
 
-    private static async Task<IndexedGraphStore> CreateIndexedGraphStoreAsync(string inputPath, long maxStorageBytes, CancellationToken token)
+    private static async Task<IndexedGraphStore> CreateIndexedGraphStoreAsync(string inputPath, long maxStorageBytes, CancellationToken token,
+        Action<string>? stageObserver = null)
     {
         await using var input = File.OpenRead(inputPath);
         var inputHash = Convert.ToHexString(await SHA256.HashDataAsync(input, token)).ToLowerInvariant();
         await using var generator = File.OpenRead(typeof(CombinedDependencyPathReporter).Assembly.Location);
         var generatorHash = Convert.ToHexString(await SHA256.HashDataAsync(generator, token)).ToLowerInvariant();
-        return new IndexedGraphStore(generatorHash, inputHash, maxStorageBytes, token);
+        return new IndexedGraphStore(generatorHash, inputHash, maxStorageBytes, token, stageObserver);
     }
 }

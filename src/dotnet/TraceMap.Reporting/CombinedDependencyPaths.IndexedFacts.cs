@@ -1,5 +1,4 @@
 using System.Collections;
-using System.Text.Json;
 
 namespace TraceMap.Reporting;
 
@@ -24,6 +23,7 @@ public static partial class CombinedDependencyPathReporter
 
         private void AddFact(CombinedFactRow fact)
         {
+            storagePhase = "facts";
             if (sorted) throw new InvalidOperationException("COMBINED_GRAPH_STORAGE_FROZEN");
             using var command = Command("insert into graph_facts values($ordinal,$id,$source,$original,$key,$type,$payload);", fact.CombinedFactId);
             command.Parameters.AddWithValue("$ordinal", storedFactCount + 1);
@@ -31,8 +31,10 @@ public static partial class CombinedDependencyPathReporter
             command.Parameters.AddWithValue("$original", fact.OriginalFactId);
             command.Parameters.AddWithValue("$key", SourceFactKey(fact.SourceIndexId, fact.OriginalFactId));
             command.Parameters.AddWithValue("$type", fact.FactType);
-            command.Parameters.AddWithValue("$payload", JsonSerializer.Serialize(fact));
+            var payload = IndexedGraphPayload.Encode(fact);
+            command.Parameters.AddWithValue("$payload", payload);
             Write(command);
+            RecordPayload(payload);
             storedFactCount++;
         }
 
@@ -51,7 +53,7 @@ public static partial class CombinedDependencyPathReporter
             while (reader.Read())
             {
                 token.ThrowIfCancellationRequested();
-                yield return JsonSerializer.Deserialize<CombinedFactRow>(reader.GetString(0))!;
+                yield return IndexedGraphPayload.Decode<CombinedFactRow>((byte[])reader.GetValue(0));
             }
         }
 
@@ -60,7 +62,7 @@ public static partial class CombinedDependencyPathReporter
             if ((uint)index >= (uint)storedFactCount) throw new ArgumentOutOfRangeException(nameof(index));
             using var command = Command("select payload from graph_facts where ordinal=$ordinal;");
             command.Parameters.AddWithValue("$ordinal", index + 1);
-            return JsonSerializer.Deserialize<CombinedFactRow>((string)command.ExecuteScalar()!)!;
+            return IndexedGraphPayload.Decode<CombinedFactRow>((byte[])command.ExecuteScalar()!);
         }
 
         private int SourceKeyCount()
@@ -79,9 +81,9 @@ public static partial class CombinedDependencyPathReporter
         {
             using var command = Command("select payload from graph_facts where " + (sourceKey ? "source_key" : "id")
                 + "=$id order by id collate graph_ordinal limit 1;", id);
-            var json = command.ExecuteScalar() as string;
-            fact = json is null ? null! : JsonSerializer.Deserialize<CombinedFactRow>(json)!;
-            return json is not null;
+            var payload = command.ExecuteScalar() as byte[];
+            fact = payload is null ? null! : IndexedGraphPayload.Decode<CombinedFactRow>(payload);
+            return payload is not null;
         }
 
         private bool TryGetOriginalFact((string SourceIndexId, string OriginalFactId) key, out CombinedFactRow[] facts)
@@ -89,9 +91,9 @@ public static partial class CombinedDependencyPathReporter
             using var command = Command("select payload from graph_facts where source_id=$source and original_id=$original;");
             command.Parameters.AddWithValue("$source", key.SourceIndexId);
             command.Parameters.AddWithValue("$original", key.OriginalFactId);
-            var json = command.ExecuteScalar() as string;
-            facts = json is null ? [] : [JsonSerializer.Deserialize<CombinedFactRow>(json)!];
-            return json is not null;
+            var payload = command.ExecuteScalar() as byte[];
+            facts = payload is null ? [] : [IndexedGraphPayload.Decode<CombinedFactRow>(payload)];
+            return payload is not null;
         }
 
         private sealed class IndexedFactRows(IndexedGraphStore store) : IIndexedCombinedFacts
