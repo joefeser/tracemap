@@ -189,14 +189,15 @@ public sealed class WebFormsProofImportTests
     }
 
     [Theory]
-    [InlineData("safeLocator")]
-    [InlineData("assemblyIdentity")]
-    public async Task Matching_hashes_and_valid_receipt_digests_do_not_bypass_binding_policy(string field)
+    [InlineData("safeLocator", false)]
+    [InlineData("assemblyIdentity", false)]
+    [InlineData("safeLocator", true)]
+    public async Task Matching_hashes_and_valid_receipt_digests_do_not_bypass_binding_policy(string field, bool traversal)
     {
         using var f = new Fixture();
         f.ChangeBinding(root =>
         {
-            root["bindings"]![0]![field] = "not-the-recorded-identity";
+            root["bindings"]![0]![field] = traversal ? "../private-copy/artifact.dll" : "not-the-recorded-identity";
             using var publish = JsonDocument.Parse(File.ReadAllBytes(f.PublishReceipt));
             var receipt = publish.RootElement;
             var item = root["bindings"]![0]!;
@@ -211,6 +212,19 @@ public sealed class WebFormsProofImportTests
         Assert.Contains("RETAINED_BINDING_NOT_ADMITTED", f.Error.ToString(), StringComparison.Ordinal);
         Assert.False(Directory.Exists(f.Out));
         Assert.Empty(Directory.GetFiles(f.Root, "proof-import.local.json", SearchOption.AllDirectories));
+        Directory.CreateDirectory(f.Out);
+        File.WriteAllText(Path.Combine(f.Out, "preserve.txt"), "private-preserved-marker");
+        var before = Directory.GetFiles(f.Root, "*", SearchOption.AllDirectories).ToDictionary(path => path, path => Hash(File.ReadAllBytes(path)));
+        Assert.Equal(1, await f.Run(diagnoseOnly: true));
+        Assert.Contains(field == "safeLocator" ? "locatorMatches=0" : "locatorMatches=1", f.Output.ToString(), StringComparison.Ordinal);
+        Assert.Contains(field == "safeLocator" ? "bindingDiagnostic.gap=UnboundManagedInput" : "bindingDiagnostic.gap=ManagedInputProvenanceMismatch", f.Output.ToString(), StringComparison.Ordinal);
+        Assert.Contains("no-configuration-written;no-scan-started", f.Output.ToString(), StringComparison.Ordinal);
+        Assert.DoesNotContain(f.Root, f.Output.ToString(), StringComparison.Ordinal);
+        Assert.DoesNotContain("not-the-recorded-identity", f.Output.ToString(), StringComparison.Ordinal);
+        Assert.DoesNotContain("private-copy", f.Output.ToString(), StringComparison.Ordinal);
+        Assert.Contains(traversal ? "retainedTraversalLocators=1" : "retainedTraversalLocators=0", f.Output.ToString(), StringComparison.Ordinal);
+        var after = Directory.GetFiles(f.Root, "*", SearchOption.AllDirectories).ToDictionary(path => path, path => Hash(File.ReadAllBytes(path)));
+        Assert.Equal(before.OrderBy(pair => pair.Key), after.OrderBy(pair => pair.Key));
     }
 
     [Theory]
@@ -239,11 +253,13 @@ public sealed class WebFormsProofImportTests
     }
 
     [Theory]
-    [InlineData(false, false)]
-    [InlineData(true, false)]
-    [InlineData(false, true)]
-    [InlineData(true, true)]
-    public async Task Short_helper_uses_real_native_import_and_scans_only_when_requested(bool run, bool nested)
+    [InlineData(false, false, false)]
+    [InlineData(true, false, false)]
+    [InlineData(false, true, false)]
+    [InlineData(true, true, false)]
+    [InlineData(false, false, true)]
+    [InlineData(false, true, true)]
+    public async Task Short_helper_uses_real_native_import_and_scans_only_when_requested(bool run, bool nested, bool diagnose)
     {
         using var f = new Fixture(nested);
         var pwsh = OperatingSystem.IsWindows() ? "pwsh" : "/opt/homebrew/bin/pwsh";
@@ -252,17 +268,34 @@ public sealed class WebFormsProofImportTests
         Directory.CreateDirectory(Path.Combine(reviewRoot, "native-config"));
         File.Copy(f.ConfigPath, Path.Combine(reviewRoot, "native-config/review.draft.json"));
         var originals = f.InputHashes();
+        if (diagnose)
+        {
+            Directory.CreateDirectory(f.Out);
+            File.WriteAllText(Path.Combine(f.Out, "preserve.txt"), "private-preserved-marker");
+        }
         var repository = Fixture.FindRepo();
         using var process = new Process { StartInfo = new(pwsh) { WorkingDirectory = repository, RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false } };
         foreach (var argument in new[] { "-NoProfile", "-File", Path.Combine(repository, "scripts/wverify.ps1"), "-ReviewRoot", reviewRoot,
                      "-ProofRoot", f.Proof, "-PublishedRoot", f.Published, "-SourceBase", nested ? "UBid" : ".", "-OutputRoot", f.Out, "-NoBuild" }) process.StartInfo.ArgumentList.Add(argument);
         if (run) process.StartInfo.ArgumentList.Add("-Run");
+        if (diagnose) process.StartInfo.ArgumentList.Add("-Diagnose");
         process.Start(); var stdout = process.StandardOutput.ReadToEndAsync(); var stderr = process.StandardError.ReadToEndAsync();
         using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(2));
         try { await process.WaitForExitAsync(timeout.Token); }
         catch (OperationCanceledException) { process.Kill(entireProcessTree: true); throw; }
         var standardOutput = await stdout; var standardError = await stderr;
         Assert.True(process.ExitCode == 0, standardOutput + standardError);
+        if (diagnose)
+        {
+            Assert.Contains("bindingDiagnostic=counts-only", standardOutput, StringComparison.Ordinal);
+            Assert.Contains("locatorMatches=1", standardOutput, StringComparison.Ordinal);
+            Assert.Contains("no-configuration-written;no-scan-started", standardOutput, StringComparison.Ordinal);
+            Assert.DoesNotContain(f.Root, standardOutput, StringComparison.Ordinal);
+            Assert.DoesNotContain("private-preserved-marker", standardOutput, StringComparison.Ordinal);
+            Assert.Equal(new[] { "preserve.txt" }, Directory.GetFiles(f.Out, "*", SearchOption.AllDirectories).Select(Path.GetFileName));
+            foreach (var pair in originals) Assert.Equal(pair.Value, Hash(File.ReadAllBytes(pair.Key)));
+            return;
+        }
         Assert.Contains(run ? "completion is not a parity verdict" : "Verified inputs only; no scan or reports ran", standardOutput, StringComparison.Ordinal);
         Assert.True(File.Exists(Path.Combine(f.Out, "configuration/review-config.local.json")));
         var config = JsonSerializer.Deserialize<WebFormsReviewConfig>(File.ReadAllBytes(Path.Combine(f.Out, "configuration/review-config.local.json")), Options)!;
@@ -348,9 +381,10 @@ public sealed class WebFormsProofImportTests
                     assemblyIdentity = item.AssemblyIdentity, binarySourceRepository = "https://example.invalid/public-proof.git", binarySourceCommitSha = Commit,
                     binaryBuildIdentity = "operator-attested-existing-publish:" + sourceDigest } } }, Options));
         }
-        public async Task<int> Run(string? sourceBase = null) { Output.GetStringBuilder().Clear(); Error.GetStringBuilder().Clear();
+        public async Task<int> Run(string? sourceBase = null, bool diagnoseOnly = false) { Output.GetStringBuilder().Clear(); Error.GetStringBuilder().Clear();
             var args = new List<string> { "webforms-review", "import-proof", "--config", ConfigPath, "--proof-root", Proof, "--published-root", Published, "--out", Out };
             if (sourceBase is not null) args.AddRange(["--source-base", sourceBase]);
+            if (diagnoseOnly) args.Add("--diagnose");
             return await TraceMapCommand.RunAsync(args.ToArray(), Output, Error); }
         public Dictionary<string, string> InputHashes() => new[] { ConfigPath, PublishReceipt, BindingReceipt, Primary, PagePath }.ToDictionary(path => path, path => Hash(File.ReadAllBytes(path)));
         public void ChangePublish(Action<JsonObject> edit) => Change(PublishReceipt, edit);

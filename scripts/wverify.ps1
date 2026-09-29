@@ -6,11 +6,13 @@ param(
     [string]$SourceBase,
     [string]$OutputRoot,
     [switch]$Run,
+    [switch]$Diagnose,
     [switch]$NoBuild
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+if ($Run -and $Diagnose) { throw 'WEBFORMS_VERIFY_DIAGNOSE_CANNOT_RUN' }
 function Read-Required([string]$Value, [string]$Prompt) {
     if ([string]::IsNullOrWhiteSpace($Value)) { $Value = Microsoft.PowerShell.Utility\Read-Host $Prompt }
     if ([string]::IsNullOrWhiteSpace($Value)) { throw 'WEBFORMS_VERIFY_SELECTION_REQUIRED' }
@@ -48,7 +50,7 @@ foreach ($name in @('publish-receipt.local.json', 'compiled-binding.local.json')
 if (!(Test-Path -LiteralPath (Join-Path $PublishedRoot 'bin') -PathType Container)) { throw 'WEBFORMS_VERIFY_PUBLISHED_BIN_UNAVAILABLE' }
 if ([string]::IsNullOrWhiteSpace($OutputRoot)) { $OutputRoot = Join-Path $ReviewRoot 'native-proof-verification' }
 $OutputRoot = [IO.Path]::GetFullPath($OutputRoot)
-if (Test-Path -LiteralPath $OutputRoot) { throw 'WEBFORMS_VERIFY_OUTPUT_EXISTS;preserved-unchanged-select-a-new-OutputRoot' }
+if (!$Diagnose -and (Test-Path -LiteralPath $OutputRoot)) { throw 'WEBFORMS_VERIFY_OUTPUT_EXISTS;preserved-unchanged-select-a-new-OutputRoot' }
 $repo = Split-Path $PSScriptRoot -Parent
 $project = Join-Path $repo 'src/dotnet/TraceMap.Cli/TraceMap.Cli.csproj'
 if (!$NoBuild) {
@@ -57,7 +59,14 @@ if (!$NoBuild) {
 }
 $cli = Join-Path $repo 'src/dotnet/TraceMap.Cli/bin/Debug/net10.0/tracemap.dll'
 $configuration = Join-Path $OutputRoot 'configuration'
-dotnet $cli webforms-review import-proof --config $draft --proof-root $ProofRoot --published-root $PublishedRoot --out $configuration --source-base $SourceBase
+$diagnosticArgs = @()
+if ($Diagnose) { $diagnosticArgs = @('--diagnose') }
+dotnet $cli webforms-review import-proof --config $draft --proof-root $ProofRoot --published-root $PublishedRoot --out $configuration --source-base $SourceBase @diagnosticArgs
+if ($Diagnose) {
+    Write-Host 'Diagnostics only: no review/proof inputs or output folders were written; no scan started.'
+    if ($LASTEXITCODE -ne 0) { throw 'WEBFORMS_VERIFY_DIAGNOSIS_NOT_ADMITTED;originals-preserved' }
+    return
+}
 if ($LASTEXITCODE -ne 0) { throw 'WEBFORMS_VERIFY_IMPORT_FAILED;original-inputs-preserved;no-scan-started' }
 $config = Join-Path $configuration 'review-config.local.json'
 Write-Host "verifiedConfiguration=$config"
