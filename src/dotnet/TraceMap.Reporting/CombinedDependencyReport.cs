@@ -468,8 +468,7 @@ public static class CombinedDependencyReporter
         List<string> warnings)
     {
         var sourceById = sources.ToDictionary(source => source.SourceIndexId, StringComparer.Ordinal);
-        return facts
-            .Where(fact => fact.FactType == FactTypes.AnalyzerCapabilityDiagnostic)
+        return CombinedDependencyPathReporter.FactsOfTypes(facts, FactTypes.AnalyzerCapabilityDiagnostic)
             .Select(fact => new
             {
                 Fact = fact,
@@ -729,8 +728,7 @@ public static class CombinedDependencyReporter
     internal static IReadOnlyList<CombinedEndpointFinding> MatchEndpoints(IReadOnlyList<CombinedReportSource> sources, IReadOnlyList<CombinedFactRow> facts)
     {
         var sourceById = sources.ToDictionary(source => source.SourceIndexId, StringComparer.Ordinal);
-        var candidates = facts
-            .Where(fact => fact.FactType is FactTypes.HttpCallDetected or FactTypes.HttpRouteBinding)
+        var candidates = CombinedDependencyPathReporter.FactsOfTypes(facts, FactTypes.HttpCallDetected, FactTypes.HttpRouteBinding)
             .Select(ToEndpointCandidate)
             .Where(candidate => candidate.IsClient || candidate.IsServer)
             .ToArray();
@@ -950,7 +948,7 @@ public static class CombinedDependencyReporter
     {
         var extractorVersionsBySource = sources?.ToDictionary(source => source.SourceIndexId, source => source.ScannerVersion, StringComparer.Ordinal)
             ?? new Dictionary<string, string>(StringComparer.Ordinal);
-        return CombinedSurfaceProjection.BuildSurfaces(facts.Select(fact => ToSurfaceProjectionInput(fact, extractorVersionsBySource.GetValueOrDefault(fact.SourceIndexId))).ToArray())
+        return CombinedSurfaceProjection.BuildSurfaces(new ProjectedSurfaceFacts(facts, extractorVersionsBySource))
             .Select(ToSurfaceRow)
             .OrderBy(surface => surface.SurfaceKind, StringComparer.Ordinal)
             .ThenBy(surface => surface.SourceLabel, StringComparer.Ordinal)
@@ -958,6 +956,19 @@ public static class CombinedDependencyReporter
             .ThenBy(surface => surface.FilePath, StringComparer.Ordinal)
             .ThenBy(surface => surface.StartLine)
             .ToArray();
+    }
+
+    // Preserve Core's repeatable list contract without copying every input fact
+    // and its properties into a second complete managed surface-input array.
+    private sealed class ProjectedSurfaceFacts(IReadOnlyList<CombinedFactRow> facts,
+        IReadOnlyDictionary<string, string> extractorVersions) : IReadOnlyList<CombinedSurfaceFactInput>
+    {
+        public int Count => facts.Count;
+        public CombinedSurfaceFactInput this[int index] => Project(facts[index]);
+        private CombinedSurfaceFactInput Project(CombinedFactRow fact)
+            => ToSurfaceProjectionInput(fact, extractorVersions.GetValueOrDefault(fact.SourceIndexId));
+        public IEnumerator<CombinedSurfaceFactInput> GetEnumerator() => facts.Select(Project).GetEnumerator();
+        System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => GetEnumerator();
     }
 
     private static CombinedSurfaceFactInput ToSurfaceProjectionInput(CombinedFactRow fact, string? extractorVersion = null)

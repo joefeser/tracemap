@@ -10,7 +10,8 @@ public static partial class CombinedDependencyPathReporter
     // must remain visible to the existing global graph rules.
     internal static async Task<IReadOnlyList<CombinedFactRow>> ReadCompactCombinedFactsAsync(
         SqliteConnection connection, IReadOnlyList<CombinedReportSource> sources,
-        bool hasExtractorId, bool hasExtractorVersion, ReportInputBudget budget, CancellationToken token)
+        bool hasExtractorId, bool hasExtractorVersion, ReportInputBudget budget, CancellationToken token,
+        IIndexedCombinedFacts? storage = null)
     {
         await using (var identity = connection.CreateCommand())
         {
@@ -28,7 +29,7 @@ public static partial class CombinedDependencyPathReporter
             if (Convert.ToInt64(await identity.ExecuteScalarAsync(token)) != 0)
                 throw new InvalidDataException("COMBINED_FACT_SOURCE_UNAVAILABLE");
         }
-        var rows = new List<CombinedFactRow>();
+        var rows = storage is null ? new List<CombinedFactRow>() : null;
         foreach (var source in sources.OrderBy(source => source.SourceIndexId, StringComparer.Ordinal))
         {
             token.ThrowIfCancellationRequested();
@@ -53,9 +54,10 @@ public static partial class CombinedDependencyPathReporter
                 budget.VisitFact();
                 var bytes = reader.GetInt64(17);
                 budget.Retain(bytes);
-                rows.Add(ReadProjectedFact(reader, source, combinedParser: true));
+                var fact = ReadProjectedFact(reader, source, combinedParser: true);
+                if (storage is null) rows!.Add(fact); else storage.Add(fact);
             }
         }
-        return rows;
+        return storage ?? (IReadOnlyList<CombinedFactRow>)rows!;
     }
 }

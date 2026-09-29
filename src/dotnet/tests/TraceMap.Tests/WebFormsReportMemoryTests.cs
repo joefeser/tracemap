@@ -15,6 +15,31 @@ public sealed class WebFormsAllocationCollection { }
 [Collection("WebForms isolated allocation")]
 public sealed class WebFormsReportMemoryTests(ITestOutputHelper output)
 {
+    [Fact]
+    public async Task Indexed_fact_storage_retains_identical_original_ids_in_distinct_source_namespaces()
+    {
+        using var temp = new TempDirectory();
+        var facts = Fixture();
+        var first = Path.Combine(temp.Path, "first.sqlite");
+        var second = Path.Combine(temp.Path, "second.sqlite");
+        SqliteIndexWriter.Write(first, Manifest(), facts);
+        var secondManifest = Manifest() with { ScanId = "scan-second", RepoName = "synthetic-second-repo" };
+        SqliteIndexWriter.Write(second, secondManifest, facts.Select(fact => fact with
+            { ScanId = secondManifest.ScanId, Repo = secondManifest.RepoName }).ToArray());
+        var combined = Path.Combine(temp.Path, "combined.sqlite");
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([first, second], combined, ["first", "second"]));
+        var hash = Hash(combined);
+        var options = PathOptions(combined);
+        var expected = await CombinedDependencyPathReporter.BuildReportAsync(options);
+        var actual = await CombinedDependencyPathReporter.BuildBoundedCombinedIndexReportWithTraversalAsync(options, Budget());
+        Assert.Equal(JsonSerializer.Serialize(expected), JsonSerializer.Serialize(actual.Report));
+        Assert.Equal(2 * facts.Count, actual.GraphStorage!.StoredFacts);
+        Assert.Equal(2, actual.Report.Sources.Count);
+        Assert.Contains(actual.Report.Paths, path => path.Nodes.Any(node => node.SourceLabel == "first"));
+        Assert.Contains(actual.Report.Paths, path => path.Nodes.Any(node => node.SourceLabel == "second"));
+        Assert.Equal(hash, Hash(combined));
+    }
+
     [Theory]
     [InlineData(128, true)]
     [InlineData(1024, true)]
@@ -70,6 +95,7 @@ public sealed class WebFormsReportMemoryTests(ITestOutputHelper output)
         Assert.Equal(Hash(typeof(CombinedDependencyPathReporter).Assembly.Location).ToLowerInvariant(), usage.GeneratorSha256);
         Assert.Equal(expected.Summary.GraphNodeCount, usage.StoredNodes);
         Assert.Equal(expected.Summary.GraphEdgeCount, usage.StoredEdges);
+        Assert.Equal(pages * Fixture().Count, usage.StoredFacts);
         Assert.InRange(usage.LogicalStorageBytes, 4_096, 512L * 1024 * 1024);
         Assert.InRange(usage.MaximumOutgoingRowsLoaded, 1, 20);
         Assert.True(usage.MaximumOutgoingRowsLoaded < usage.StoredEdges);
@@ -304,6 +330,7 @@ public sealed class WebFormsReportMemoryTests(ITestOutputHelper output)
         var compactBytes = GC.GetTotalAllocatedBytes(precise: true) - start;
         Assert.Equal(JsonSerializer.Serialize(expected), JsonSerializer.Serialize(actual.Report));
         Assert.Equal(1000 + Fixture().Count, budget.FactsRetained);
+        Assert.Equal(budget.FactsRetained, actual.GraphStorage!.StoredFacts);
         Assert.True(compactBytes < fullBytes, $"compact={compactBytes};full={fullBytes}");
         output.WriteLine($"combinedFullAllocatedBytes={fullBytes};combinedCompactAllocatedBytes={compactBytes};factsRetained={budget.FactsRetained};textRetained={budget.TextBytesRetained}");
         static ReportInputBudget LargeBudget() => new(10_000, 10_000, 64L * 1024 * 1024);

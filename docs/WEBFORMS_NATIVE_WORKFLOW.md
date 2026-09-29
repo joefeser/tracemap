@@ -278,7 +278,8 @@ The internal combined SQLite uses retained-artifact/hash bounds, not the rendere
 output cap. Receipt partitioning is implemented for declared inventory; complete
 compiled-site coverage and representative eight-times graph memory remain separate
 gates. Bounded combined reports use the indexed scratch graph described below;
-admitted fact rows and global semantic ambiguity indexes still use managed memory.
+type-specific semantic ambiguity indexes still use managed memory. Admitted fact
+rows use the private indexed storage described below, not a complete managed list.
 
 The bounded combined reader now projects the same audited graph-consumed
 properties used by the single-index reader in SQLite, before allocating .NET
@@ -294,8 +295,8 @@ an internal read optimization, not a replacement handoff or evidence deletion.
 Fact/edge text is admitted before allocation. Raw combined admission ceilings
 are not raised.
 
-Bounded combined graph nodes, edges and outgoing adjacency now reside in a
-private temporary SQLite database, with an 8 MiB page cache and a 512 MiB logical
+Bounded combined admitted facts, graph nodes, edges and outgoing adjacency reside
+in a private temporary SQLite database, with an 8 MiB page cache and a 512 MiB logical
 database ceiling. This is not an emitted run artifact or a reusable checkpoint:
 SQLite owns the temporary file and disposes it with the connection. The header
 pins the exact Reporting DLL SHA-256 and full input-index SHA-256; input bytes are
@@ -307,12 +308,17 @@ for Unicode. A private order roster pins global and per-node positions. Random
 access loads at most 64 records with a 512 KiB serialized page target; one
 already-admitted larger record is retained alone. Reverse traversal uses this
 same list without materializing a reversed whole-node array.
+Fact admission streams each compact projected row directly into this database.
+Exact combined-ID and source/original-ID lookups read only the requested row;
+global identity-order traversal uses the index's .NET ordinal collation. All
+admitted rows remain available, including unrelated competitors. Surface
+projection is a repeatable lazy list rather than another full fact-input array.
 Storage refusal discards the graph and returns the existing reduced-coverage
 `GraphInputLimitReached` gap with reason `graph-storage-bytes`, not partial paths.
 
-The storage ceiling includes the order roster, excludes SQLite sorter scratch
-files, and is not an OS
-working-set guarantee. Fact rows, compiled binding/dispatch metadata, alias-group
+The storage ceiling includes fact storage and the order roster, excludes SQLite
+sorter scratch files, and is not an OS working-set guarantee. Type-specific
+compiled binding/dispatch metadata, alias-group
 fan-out and selected traversal/output records still have managed allocations.
 The 32/256-page public parity fixture proves an eight-times page-count ratio,
 not representative source or compiled-graph disk/time/peak-memory acceptance.

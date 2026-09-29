@@ -3994,8 +3994,11 @@ comparison alone is not an eight-times scale or peak-working-set acceptance resu
 ### Indexed bounded combined graph
 
 The same focused command exercises the private temporary SQLite graph backend.
-Nodes and edges are inserted directly into it during graph construction; there is
-no full in-memory graph followed by a spill. Global aliases retain their complete
+Admitted compact facts, nodes and edges are inserted directly into it; there is
+no complete managed fact list or graph followed by a spill. Exact fact-ID and
+source/original-ID facades use indexed row reads, and ordered fact traversal uses
+the .NET ordinal collation. Surface projection retains a lazy repeatable list
+instead of a second full fact-input array. Global aliases retain their complete
 source namespace, with one reconciliation group loaded at a time. Outgoing
 adjacency is paged by exact node ID and local position, at most 64 records with a
 512 KiB serialized target (one already-admitted oversized record is retained
@@ -4006,13 +4009,15 @@ The backend remains private and ephemeral, pins actual generator/input hashes,
 rechecks input bytes before returning a report, and never writes the input index.
 
 Public 32/256-page cases compare complete serialized reports with the historical
-reader and observe all graph node/edge counts, logical database bytes and maximum
+reader and observe all retained fact and graph node/edge counts, logical database bytes and maximum
 outgoing rows loaded. Dedicated 128/1,024-branch cases retain all 129/1,025 paths and compare
 complete reports in both legacy depth-first and ordinary breadth-first traversal;
 no outgoing page exceeds 64 rows. Tests also pin branch ordering, unchanged
 input/directory contents, cancellation, and fail-closed refusal at a small storage quota. The
-default logical database ceiling is 512 MiB, including the order roster; the page
-cache is 8 MiB. Sorter
-temporary files are outside that logical ceiling, and facts/global semantic
-indexes remain managed. These checks do not replace representative 8x source and
+cross-source fixture retains identical original fact IDs independently in each
+namespace. The allocation guard remains unchanged; total allocations are not a
+peak-working-set measurement. The
+default logical database ceiling is 512 MiB, including facts and the order roster;
+the page cache is 8 MiB. Sorter temporary files are outside that logical ceiling,
+and type-specific semantic indexes remain managed. These checks do not replace representative 8x source and
 compiled-distribution elapsed-time, total-disk and peak-memory measurements.

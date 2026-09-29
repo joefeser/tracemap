@@ -117,10 +117,14 @@
     and representative peak-memory validation pending.
   - [x] Construct bounded combined nodes/edges directly in a private indexed
     scratch graph; preserve complete global alias groups, exact ordinal outgoing
-    order and lossless historical report parity. Keep global fact/semantic-index
+    order and lossless historical report parity. Keep type-specific semantic-index
     allocation and representative source/compiled peak-memory acceptance pending.
   - [x] Page high-fan-out outgoing adjacency without reversed whole-node arrays;
     preserve every branch and exact report parity in both traversal directions.
+  - [x] Stream every admitted compact fact into indexed scratch storage, replace
+    all-fact identity lookup copies and lazy-project surface inputs; preserve exact
+    historical parity and the existing allocation guard. Keep type-specific
+    ambiguity indexes and representative peak-memory/throughput gates pending.
 - [ ] Benchmark eight-times source-size synthetic corpus and representative
   compiled graph distributions; record disk/time/peak-memory/coverage metrics.
 - [ ] Add dependency-aware retention, durable run location, relocation validation,

@@ -472,7 +472,7 @@ public static partial class CombinedDependencyPathReporter
             command.CommandText = "pragma query_only=on; pragma temp_store=file; pragma cache_size=-8192;";
             await command.ExecuteNonQueryAsync(cancellationToken);
         }
-        var read = await ReadPathIndexAsync(connection, indexPath, allowSingleIndex, cancellationToken, budget);
+        var read = await ReadPathIndexAsync(connection, indexPath, allowSingleIndex, cancellationToken, budget, graphStorage?.Facts);
         var endpointFindings = CombinedDependencyReporter.MatchEndpoints(read.Sources, read.Facts);
         var surfaces = CombinedDependencyReporter.BuildSurfaces(read.Facts, read.Sources);
         var graph = BuildGraph(read, endpointFindings, surfaces, sourcePair, includeLegacyRoots, budget, graphStorage);
@@ -958,8 +958,8 @@ public static partial class CombinedDependencyPathReporter
         IndexedGraphStore? graphStorage = null)
     {
         var graph = new EvidenceGraph(read.Sources, budget, graphStorage);
-        var factsById = read.Facts.ToDictionary(fact => fact.CombinedFactId, StringComparer.Ordinal);
-        foreach (var fact in read.Facts.OrderBy(fact => fact.CombinedFactId, StringComparer.Ordinal))
+        var factsById = CombinedFactsById(read.Facts);
+        foreach (var fact in IdentityOrderedFacts(read.Facts))
         {
             if (fact.FactType is FactTypes.HttpCallDetected or FactTypes.HttpRouteBinding)
             {
@@ -1045,9 +1045,8 @@ public static partial class CombinedDependencyPathReporter
         // absent. Preserve the exact compiler-resolved graph edge in that case.
         // The identity matches the normalized edge identity, so ordinary indexes
         // deduplicate here and retain their existing behavior.
-        foreach (var fact in read.Facts
-            .Where(fact => fact.FactType == FactTypes.CallEdge
-                && fact.EvidenceTier == EvidenceTiers.Tier1Semantic
+        foreach (var fact in FactsOfTypes(read.Facts, FactTypes.CallEdge)
+            .Where(fact => fact.EvidenceTier == EvidenceTiers.Tier1Semantic
                 && !string.IsNullOrWhiteSpace(fact.SourceSymbol)
                 && !string.IsNullOrWhiteSpace(fact.TargetSymbol))
             .OrderBy(fact => fact.CombinedFactId, StringComparer.Ordinal))
@@ -1076,8 +1075,7 @@ public static partial class CombinedDependencyPathReporter
             .Where(IsRemotingFact)
             .OrderBy(fact => fact.CombinedFactId, StringComparer.Ordinal)
             .ToArray();
-        var callFacts = read.Facts
-            .Where(fact => fact.FactType == FactTypes.CallEdge)
+        var callFacts = FactsOfTypes(read.Facts, FactTypes.CallEdge)
             .OrderBy(fact => fact.CombinedFactId, StringComparer.Ordinal)
             .ToArray();
         var configureCallersByConfig = RemotingConfigureCallersByConfig(remotingFacts, callFacts);
@@ -1200,7 +1198,7 @@ public static partial class CombinedDependencyPathReporter
     }
 
     private static async Task<CombinedReadResult> ReadPathIndexAsync(SqliteConnection connection, string indexPath, bool allowSingleIndex,
-        CancellationToken cancellationToken, ReportInputBudget? budget = null)
+        CancellationToken cancellationToken, ReportInputBudget? budget = null, IIndexedCombinedFacts? factStorage = null)
     {
         if (await TableExistsAsync(connection, "index_sources", cancellationToken)
             && await TableExistsAsync(connection, "combined_facts", cancellationToken)
@@ -1208,7 +1206,7 @@ public static partial class CombinedDependencyPathReporter
         {
             await CombinedDependencyReporter.ValidateCombinedIndexAsync(connection, cancellationToken);
             return await CombinedDependencyReporter.ReadAsync(connection, cancellationToken, budget is null ? null
-                : (input, sources, hasId, hasVersion, token) => ReadCompactCombinedFactsAsync(input, sources, hasId, hasVersion, budget, token), budget);
+                : (input, sources, hasId, hasVersion, token) => ReadCompactCombinedFactsAsync(input, sources, hasId, hasVersion, budget, token, factStorage), budget);
         }
 
         if (allowSingleIndex
@@ -1543,14 +1541,12 @@ public static partial class CombinedDependencyPathReporter
 
     private static void AddLegacyFlowNodesAndEdges(EvidenceGraph graph, IReadOnlyList<CombinedFactRow> facts, IReadOnlyList<CombinedDependencySurfaceRow> surfaces)
     {
-        var factsBySourceOriginalId = facts
-            .GroupBy(fact => SourceFactKey(fact.SourceIndexId, fact.OriginalFactId), StringComparer.Ordinal)
-            .ToDictionary(group => group.Key, group => group.OrderBy(fact => fact.CombinedFactId, StringComparer.Ordinal).First(), StringComparer.Ordinal);
+        var factsBySourceOriginalId = CombinedFactsBySourceKey(facts);
         var surfacesByKind = surfaces
             .GroupBy(surface => surface.SurfaceKind, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.Ordinal);
 
-        foreach (var handler in facts.Where(fact => fact.FactType is FactTypes.WebFormsHandlerResolved or FactTypes.WinFormsHandlerResolved).OrderBy(fact => fact.CombinedFactId, StringComparer.Ordinal))
+        foreach (var handler in FactsOfTypes(facts, FactTypes.WebFormsHandlerResolved, FactTypes.WinFormsHandlerResolved).OrderBy(fact => fact.CombinedFactId, StringComparer.Ordinal))
         {
             var root = handler.FactType == FactTypes.WinFormsHandlerResolved ? ToWinFormsRootNode(handler) : ToWebFormsRootNode(handler);
             graph.AddNode(root);
@@ -1576,7 +1572,7 @@ public static partial class CombinedDependencyPathReporter
 
         AddUnresolvedRootGaps(graph, facts);
 
-        foreach (var mapping in facts.Where(fact => fact.FactType == FactTypes.WcfServiceReferenceMapping).OrderBy(fact => fact.CombinedFactId, StringComparer.Ordinal))
+        foreach (var mapping in FactsOfTypes(facts, FactTypes.WcfServiceReferenceMapping).OrderBy(fact => fact.CombinedFactId, StringComparer.Ordinal))
         {
             var operation = ToWcfOperationSurfaceNode(mapping);
             graph.AddNode(operation);
@@ -1628,7 +1624,7 @@ public static partial class CombinedDependencyPathReporter
             }
         }
 
-        foreach (var projection in facts.Where(fact => fact.FactType is FactTypes.WebFormsEventFlowProjected or FactTypes.WinFormsHandlerFlowProjected).OrderBy(fact => fact.CombinedFactId, StringComparer.Ordinal))
+        foreach (var projection in FactsOfTypes(facts, FactTypes.WebFormsEventFlowProjected, FactTypes.WinFormsHandlerFlowProjected).OrderBy(fact => fact.CombinedFactId, StringComparer.Ordinal))
         {
             AddHandlerOwnedCallProjectionEdges(graph, projection, factsBySourceOriginalId);
             AddProjectionEdge(graph, projection, factsBySourceOriginalId, surfacesByKind);
@@ -1639,19 +1635,17 @@ public static partial class CombinedDependencyPathReporter
 
     private static void AddUnresolvedRootGaps(EvidenceGraph graph, IReadOnlyList<CombinedFactRow> facts)
     {
-        var resolvedBindingIds = facts
-            .Where(fact => fact.FactType is FactTypes.WebFormsHandlerResolved or FactTypes.WinFormsHandlerResolved)
+        var resolvedBindingIds = FactsOfTypes(facts, FactTypes.WebFormsHandlerResolved, FactTypes.WinFormsHandlerResolved)
             .SelectMany(fact => SplitList(CombinedDependencyReporter.FirstValue(fact.Properties, "supportingFactIds"))
                 .Select(id => SourceFactKey(fact.SourceIndexId, id)))
             .ToHashSet(StringComparer.Ordinal);
-        var resolvedHandlerKeys = facts
-            .Where(fact => fact.FactType is FactTypes.WebFormsHandlerResolved or FactTypes.WinFormsHandlerResolved)
+        var resolvedHandlerKeys = FactsOfTypes(facts, FactTypes.WebFormsHandlerResolved, FactTypes.WinFormsHandlerResolved)
             .Select(fact => UiBindingKey(fact))
             .Where(key => key is not null)
             .Select(key => key!)
             .ToHashSet(StringComparer.Ordinal);
 
-        foreach (var binding in facts.Where(fact => fact.FactType is FactTypes.WebFormsEventBindingDeclared or FactTypes.WebFormsClientHttpRequestCandidate or FactTypes.WinFormsEventBindingDeclared).OrderBy(fact => fact.CombinedFactId, StringComparer.Ordinal))
+        foreach (var binding in FactsOfTypes(facts, FactTypes.WebFormsEventBindingDeclared, FactTypes.WebFormsClientHttpRequestCandidate, FactTypes.WinFormsEventBindingDeclared).OrderBy(fact => fact.CombinedFactId, StringComparer.Ordinal))
         {
             var bindingKey = UiBindingKey(binding);
             if (resolvedBindingIds.Contains(SourceFactKey(binding.SourceIndexId, binding.OriginalFactId))
@@ -1680,7 +1674,7 @@ public static partial class CombinedDependencyPathReporter
     private static void AddLegacyAvailabilityGaps(EvidenceGraph graph, CombinedReadResult read)
     {
         var first = read.Sources.OrderBy(source => source.Label, StringComparer.Ordinal).FirstOrDefault();
-        if (!read.Facts.Any(fact => fact.FactType is FactTypes.WebFormsEventBindingDeclared or FactTypes.WebFormsHandlerResolved or FactTypes.WinFormsEventBindingDeclared or FactTypes.WinFormsHandlerResolved or FactTypes.HttpRouteBinding or FactTypes.WcfServiceHostDeclared or FactTypes.WcfOperationContractDeclared))
+        if (!FactsOfTypes(read.Facts, FactTypes.WebFormsEventBindingDeclared, FactTypes.WebFormsHandlerResolved, FactTypes.WinFormsEventBindingDeclared, FactTypes.WinFormsHandlerResolved, FactTypes.HttpRouteBinding, FactTypes.WcfServiceHostDeclared, FactTypes.WcfOperationContractDeclared).Any())
         {
             graph.Gaps.Add(new CombinedPathGap(
                 "gap:legacy:no-roots-found",
@@ -1749,8 +1743,7 @@ public static partial class CombinedDependencyPathReporter
         var remotingBySourceOriginalId = remotingFacts
             .GroupBy(fact => SourceFactKey(fact.SourceIndexId, fact.OriginalFactId), StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.OrderBy(fact => fact.CombinedFactId, StringComparer.Ordinal).First(), StringComparer.Ordinal);
-        var callFacts = facts
-            .Where(fact => fact.FactType == FactTypes.CallEdge)
+        var callFacts = FactsOfTypes(facts, FactTypes.CallEdge)
             .OrderBy(fact => fact.CombinedFactId, StringComparer.Ordinal)
             .ToArray();
         var configureCallersByConfig = RemotingConfigureCallersByConfig(remotingFacts, callFacts);
@@ -1829,8 +1822,8 @@ public static partial class CombinedDependencyPathReporter
             }
         }
 
-        foreach (var gapFact in facts
-            .Where(fact => fact.FactType == FactTypes.AnalysisGap && fact.RuleId.StartsWith("legacy.remoting.", StringComparison.Ordinal))
+        foreach (var gapFact in FactsOfTypes(facts, FactTypes.AnalysisGap)
+            .Where(fact => fact.RuleId.StartsWith("legacy.remoting.", StringComparison.Ordinal))
             .OrderBy(fact => fact.CombinedFactId, StringComparer.Ordinal))
         {
             var code = CombinedDependencyReporter.FirstValue(gapFact.Properties, "classification", "gapKind", "reason") ?? "RemotingAnalysisGap";
@@ -1852,8 +1845,8 @@ public static partial class CombinedDependencyPathReporter
                 continue;
             }
 
-            var sourceFacts = read.Facts.Where(fact => fact.SourceIndexId == source.SourceIndexId).ToArray();
-            if (sourceFacts.Any(IsRemotingFact) || sourceFacts.Any(fact => fact.FactType == FactTypes.AnalysisGap && fact.RuleId.StartsWith("legacy.remoting.", StringComparison.Ordinal)))
+            if (read.Facts.Any(fact => fact.SourceIndexId == source.SourceIndexId
+                && (IsRemotingFact(fact) || fact.FactType == FactTypes.AnalysisGap && fact.RuleId.StartsWith("legacy.remoting.", StringComparison.Ordinal))))
             {
                 continue;
             }
@@ -2623,9 +2616,8 @@ public static partial class CombinedDependencyPathReporter
         EvidenceGraph graph,
         IReadOnlyList<CombinedFactRow> facts)
     {
-        var syntaxCalls = facts
-            .Where(fact => fact.FactType == FactTypes.CallEdge
-                && fact.RuleId == RuleIds.VisualBasicSyntaxCallGraph
+        var syntaxCalls = FactsOfTypes(facts, FactTypes.CallEdge)
+            .Where(fact => fact.RuleId == RuleIds.VisualBasicSyntaxCallGraph
                 && string.Equals(CombinedDependencyReporter.FirstValue(fact.Properties, "callKind"), "SyntaxInvocation", StringComparison.Ordinal)
                 && (!string.IsNullOrWhiteSpace(CombinedDependencyReporter.FirstValue(fact.Properties, "receiverName"))
                     || string.Equals(CombinedDependencyReporter.FirstValue(fact.Properties, "receiverTypeResolution"),
@@ -3008,18 +3000,16 @@ public static partial class CombinedDependencyPathReporter
         EvidenceGraph graph,
         IReadOnlyList<CombinedFactRow> facts)
     {
-        var declarations = facts
-            .Where(fact => fact.FactType == FactTypes.MethodDeclared
-                && fact.RuleId == RuleIds.VisualBasicSyntaxDeclarations
+        var declarations = FactsOfTypes(facts, FactTypes.MethodDeclared)
+            .Where(fact => fact.RuleId == RuleIds.VisualBasicSyntaxDeclarations
                 && fact.EvidenceTier == EvidenceTiers.Tier3SyntaxOrTextual
                 && !string.IsNullOrWhiteSpace(CombinedDependencyReporter.FirstValue(fact.Properties, "memberIdentity"))
                 && !string.IsNullOrWhiteSpace(CombinedDependencyReporter.FirstValue(fact.Properties, "qualifiedContainingType", "containingType"))
                 && !string.IsNullOrWhiteSpace(CombinedDependencyReporter.FirstValue(fact.Properties, "methodName", "name")))
             .OrderBy(fact => fact.CombinedFactId, StringComparer.Ordinal)
             .ToArray();
-        var typeDeclarations = facts
-            .Where(fact => fact.FactType == FactTypes.TypeDeclared
-                && fact.RuleId == RuleIds.VisualBasicSyntaxDeclarations
+        var typeDeclarations = FactsOfTypes(facts, FactTypes.TypeDeclared)
+            .Where(fact => fact.RuleId == RuleIds.VisualBasicSyntaxDeclarations
                 && fact.EvidenceTier == EvidenceTiers.Tier3SyntaxOrTextual)
             .ToArray();
         var bodyFacts = facts
@@ -3112,9 +3102,8 @@ public static partial class CombinedDependencyPathReporter
         EvidenceGraph graph,
         IReadOnlyList<CombinedFactRow> facts)
     {
-        var constructors = facts
-            .Where(fact => fact.FactType == FactTypes.MethodDeclared
-                && fact.RuleId == RuleIds.VisualBasicSyntaxDeclarations
+        var constructors = FactsOfTypes(facts, FactTypes.MethodDeclared)
+            .Where(fact => fact.RuleId == RuleIds.VisualBasicSyntaxDeclarations
                 && fact.EvidenceTier == EvidenceTiers.Tier3SyntaxOrTextual
                 && string.Equals(CombinedDependencyReporter.FirstValue(fact.Properties, "methodName", "name"), "New", StringComparison.OrdinalIgnoreCase)
                 && !string.IsNullOrWhiteSpace(CombinedDependencyReporter.FirstValue(fact.Properties, "memberIdentity")))
@@ -3786,20 +3775,18 @@ public static partial class CombinedDependencyPathReporter
             return;
         }
 
-        var factsById = facts.ToDictionary(fact => fact.CombinedFactId, StringComparer.Ordinal);
+        var factsById = CombinedFactsById(facts);
         var relationshipEdges = graph.Edges
             .Where(edge => edge.EdgeKind is "implements" or "inherits" or "overrides")
             .ToArray();
         var candidateNodes = new DispatchGraphNodes(graph.Nodes);
-        var registrations = facts
-            .Where(fact => fact.FactType == FactTypes.DependencyRegistered)
+        var registrations = FactsOfTypes(facts, FactTypes.DependencyRegistered)
             .Select(ToStaticDispatchRegistrationFact)
             .Where(registration => registration is not null)
             .Select(registration => registration!)
             .OrderBy(registration => registration.FactId, StringComparer.Ordinal)
             .ToArray();
-        var callTargets = facts
-            .Where(fact => fact.FactType == FactTypes.CallEdge)
+        var callTargets = FactsOfTypes(facts, FactTypes.CallEdge)
             .Where(fact => !string.IsNullOrWhiteSpace(fact.TargetSymbol))
             .Select(fact => new StaticDispatchCallTarget(
                 fact.CombinedFactId,
