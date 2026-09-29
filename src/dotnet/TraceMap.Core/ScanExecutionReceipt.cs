@@ -131,7 +131,9 @@ public sealed class ScanReceiptRecorder
             Normalize(options.CompiledBindingReceiptPaths),
             (options.WebFormsPublishReceiptPath?.Trim() ?? string.Empty)
                 + (options.WebFormsPublishedRootPath is null ? string.Empty
-                    : "\nexplicit-published-root:" + FactFactory.Hash(options.WebFormsPublishedRootPath.Trim(), 64)),
+                    : "\nexplicit-published-root:" + FactFactory.Hash(options.WebFormsPublishedRootPath.Trim(), 64))
+                + (options.WebFormsPublishSourceRelativeBase is null or "." ? string.Empty
+                    : "\nexplicit-publish-source-base:" + FactFactory.Hash(options.WebFormsPublishSourceRelativeBase, 64)),
             options.CompiledInputLimits?.ToString() ?? string.Empty,
             Normalize(options.PdbInputPaths),
             options.PdbInputLimits?.ToString() ?? string.Empty,

@@ -64,7 +64,8 @@ public sealed record WebFormsReviewConfig(
     string? PublishReceiptRelativePath = null,
     string? ReceiptRoot = null,
     string[]? PublishSourceRelativePaths = null,
-    WebFormsReviewConfigProvenance? PreparationProvenance = null);
+    WebFormsReviewConfigProvenance? PreparationProvenance = null,
+    string? PublishSourceRelativeBase = null);
 
 public sealed record WebFormsReviewConfigProvenance(string RuleId, string GeneratorSha256, string BoundedInputSha256);
 
@@ -98,7 +99,7 @@ public static partial class WebFormsReviewPreflightCommand
         tracemap webforms-review start --config <private-json> --out <new-review-root> [--attest-exact-source-commit <commit>]
         tracemap webforms-review migrate-config --review-root <legacy-root> --out <new-config-folder>
         tracemap webforms-review migrate-config --config <legacy-json-or-jsonc> --out <new-config-folder>
-        tracemap webforms-review import-proof --config <draft-json> --proof-root <explicit-retained-proof> --published-root <original-publish> --out <new-config-folder>
+        tracemap webforms-review import-proof --config <draft-json> --proof-root <explicit-retained-proof> --published-root <original-publish> --out <new-config-folder> [--source-base <repo-relative-website-folder>]
         tracemap webforms-review preflight --config <private-json> --out <new-durable-run-root>
         tracemap webforms-review run --run <durable-run-root>
         tracemap webforms-review resume --run <durable-run-root>
@@ -333,6 +334,12 @@ public static partial class WebFormsReviewPreflightCommand
             config.PrimaryAssemblies is null || config.DependencyAssemblies is null || config.BindingReceipts is null || config.PdbInputs is null || config.PageMaps is null)
             throw Fail("CONFIG_INVALID");
         ValidateReportBudgets(config.Budgets.Reports ?? new());
+        if (config.PublishSourceRelativeBase is not null)
+        {
+            _ = Child(config.SourceRoot, config.PublishSourceRelativeBase);
+            if (config.PublishSourceRelativeBase.Contains('\\') || config.PublishReceiptRelativePath is null)
+                throw Fail("PUBLISH_SOURCE_BASE_INVALID");
+        }
         if (config.Budgets.MaxPublishInputFiles is < 1 or > 20_480) throw Fail("BUDGET_INVALID");
         if (!Path.IsPathFullyQualified(config.SourceRoot) || !Path.IsPathFullyQualified(config.PublishedRoot) ||
             (config.ParentScanRoot is not null && !Path.IsPathFullyQualified(config.ParentScanRoot)) ||
@@ -389,6 +396,8 @@ public static partial class WebFormsReviewPreflightCommand
         if (!Contains(root, child) || PathComparer.Equals(root, child)) throw Fail("INPUT_ESCAPES_ROOT");
         return child;
     }
+    internal static string ReceiptSourcePath(WebFormsReviewConfig config, string path) =>
+        config.PublishSourceRelativeBase is null ? path : config.PublishSourceRelativeBase + "/" + path;
     internal static string PhysicalPath(string path)
     {
         var full = Path.GetFullPath(path);
