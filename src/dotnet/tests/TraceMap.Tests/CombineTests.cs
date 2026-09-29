@@ -87,6 +87,11 @@ public sealed class CombineTests
         Assert.Contains("TraceMap combine completed:", output.ToString());
         Assert.True(File.Exists(combinedPath));
 
+        // The report pipeline opens the combined index immediately in the same
+        // process. No pooled writer handle may outlive CombineAsync on Windows.
+        using (var exclusive = new FileStream(combinedPath, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+            Assert.True(exclusive.Length > 0);
+
         await using var connection = new SqliteConnection($"Data Source={combinedPath}");
         await connection.OpenAsync();
 

@@ -67,7 +67,7 @@ internal static class WebFormsReviewReportExecution
         };
         if (Directory.Exists(reportPath) || File.Exists(reportPath)) throw Invalid("OUTPUT_EXISTS");
         Directory.CreateDirectory(reportPath);
-        var combined = await CombinedIndexBuilder.CombineAsync(options, cancellationToken);
+        var combined = await StageAsync("COMBINE", () => CombinedIndexBuilder.CombineAsync(options, cancellationToken));
         string? selectionPath = null;
         long selectionBytes = 0;
         if (config.PageMode == "selected")
@@ -80,30 +80,32 @@ internal static class WebFormsReviewReportExecution
             await using var stream = new FileStream(selectionPath, FileMode.CreateNew, FileAccess.Write, FileShare.None);
             await stream.WriteAsync(selection, cancellationToken);
         }
-        var packet = await WebFormsModernizationPacketReporter.BuildAsync(new(indexPath, reportPath,
+        var packet = await StageAsync("PACKET", () => WebFormsModernizationPacketReporter.BuildAsync(new(indexPath, reportPath,
             MaxSurfaces: budget.MaxSurfaces, MaxEventChains: budget.MaxEventChains, MaxGaps: budget.MaxGaps,
             MaxDepth: config.Budgets.GraphMaxDepth, MaxPaths: config.Budgets.GraphMaxPaths,
             MaxInputFacts: budget.MaxInputFacts, MaxInputEdges: budget.MaxInputEdges,
             MaxInputTextBytes: budget.MaxInputTextBytes, SurfaceListPath: selectionPath,
             MaxTraversalWork: checked((int)config.Budgets.GraphMaxWork), MaxFrontier: budget.MaxFrontier)
-            { MaxGraphStorageBytes = budget.MaxGraphStorageBytes, LiteralSurfaceListPaths = true }, cancellationToken);
+            { MaxGraphStorageBytes = budget.MaxGraphStorageBytes, LiteralSurfaceListPaths = true }, cancellationToken));
         var source = combined.Sources.Single(item => item.Label == "retained");
         var allRoots = packet.EventChains.Where(chain => !string.IsNullOrWhiteSpace(chain.HandlerSymbol))
             .Select(chain => new CombinedPathSymbolRoot(source.SourceIndexId, source.ScanId, source.CommitSha, chain.HandlerSymbol!))
             .Distinct().OrderBy(root => root.SymbolId, StringComparer.Ordinal).ToArray();
         var roots = allRoots.Take(budget.MaxCompiledRoots).ToArray();
-        var paths = await CombinedDependencyPathReporter.BuildSelectedSymbolsAsync(new(indexPath, reportPath,
+        var paths = await StageAsync("PATHS", () => CombinedDependencyPathReporter.BuildSelectedSymbolsAsync(new(indexPath, reportPath,
             ToSurface: "database-api", IncludeLegacyRoots: true, MaxDepth: config.Budgets.GraphMaxDepth,
             MaxPaths: config.Budgets.GraphMaxPaths, MaxFrontier: budget.MaxFrontier)
             { MaxTraversalWork = checked((int)config.Budgets.GraphMaxWork) }, roots, combinedIndex: true,
             new(budget.MaxInputFacts, budget.MaxInputEdges, budget.MaxInputTextBytes)
-            { MaxGraphStorageBytes = budget.MaxGraphStorageBytes }, cancellationToken);
-        var index = await WebFormsReviewPreflightCommand.HashAsync("combined-index", indexPath, config.Budgets.MaxRetainedArtifactBytes, cancellationToken);
+            { MaxGraphStorageBytes = budget.MaxGraphStorageBytes }, cancellationToken));
+        var index = await StageAsync("INDEX_HASH", () => WebFormsReviewPreflightCommand.HashAsync("combined-index", indexPath,
+            config.Budgets.MaxRetainedArtifactBytes, cancellationToken));
         var projectionLimits = new GroupedCompiledPathLimits(budget.MaxProjectionInputBytes, budget.MaxOutputBytes - selectionBytes,
             Math.Max(1, config.Budgets.GraphMaxPaths), budget.MaxProjectionRecords, budget.MaxProjectionReferences);
-        var grouped = GroupedCompiledPathHandoffBuilder.Create(paths, index.Sha256, projectionLimits, cancellationToken);
-        var compiled = await GroupedCompiledPathReportWriter.WriteAsync(grouped, Path.Combine(reportPath, "compiled"),
-            projectionLimits, cancellationToken);
+        var grouped = Stage("GROUPED_PROJECTION", () => GroupedCompiledPathHandoffBuilder.Create(paths, index.Sha256,
+            projectionLimits, cancellationToken));
+        var compiled = await StageAsync("COMPILED_WRITER", () => GroupedCompiledPathReportWriter.WriteAsync(grouped,
+            Path.Combine(reportPath, "compiled"), projectionLimits, cancellationToken));
         var gaps = new List<string>();
         if (packet.Summary.Truncated) gaps.Add("PagePacketTruncated");
         if (paths.Summary.Truncated) gaps.Add("CompiledPathsTruncated");
@@ -174,6 +176,30 @@ internal static class WebFormsReviewReportExecution
             budget.MaxOutputBytes, config.Budgets.MaxRetainedArtifactBytes, cancellationToken));
         return new(handoff.Coverage, packet.Surfaces.Count, paths.Paths.Count, handoff.Gaps, inputHash,
             generated.OrderBy(item => item.RelativePath, StringComparer.Ordinal).ToArray());
+    }
+
+    private static async Task<T> StageAsync<T>(string stage, Func<Task<T>> action)
+    {
+        try { return await action(); }
+        catch (Exception exception) when (exception is not OperationCanceledException and not OutOfMemoryException)
+        { throw StageFailure(stage, exception); }
+    }
+
+    private static T Stage<T>(string stage, Func<T> action)
+    {
+        try { return action(); }
+        catch (Exception exception) when (exception is not OperationCanceledException and not OutOfMemoryException)
+        { throw StageFailure(stage, exception); }
+    }
+
+    private static Exception StageFailure(string stage, Exception exception)
+    {
+        if (exception is InvalidDataException invalid && invalid.Message.Length <= 128 &&
+            invalid.Message.StartsWith("WEBFORMS_", StringComparison.Ordinal) &&
+            invalid.Message.All(character => character is >= 'A' and <= 'Z' or '_')) return exception;
+        // A fixed stage label is safe to publish; exception messages and private
+        // paths remain inside the local exception chain and are never printed.
+        return new InvalidDataException("WEBFORMS_NATIVE_REPORT_" + stage + "_FAILED", exception);
     }
 
     private static void Render(TextWriter writer, NativeWebFormsReviewHandoff handoff, int paths, int chains, int? compiledWork, CancellationToken token)
