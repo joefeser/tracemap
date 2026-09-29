@@ -1819,3 +1819,15 @@ and licensing remain deliberately separate private follow-up work.
   Forms, managed metadata and scan-execution-receipt tests passed with zero
   failures/skips. The final tampered proof-copy refusal test was rerun after its
   last edit and passed. Private rerun and whole-repository tests remain unrun.
+
+### Pinned run failure triage helper (2026-09-29)
+
+- The owner's next private attempt imported and projected both primary bindings,
+  preflighted 106 inputs, then failed after a roughly ten-minute native run with
+  a generic checkpoint/input/output category. No report completion or private
+  parity is established by that screenshot.
+- Added a read-only, bounded `wstatus.ps1` selector for retained runs. It emits
+  only recent checkpoint sequence/state/gap codes and does not build, resume,
+  scan, mutate inputs or claim authoritative checkpoint validation. A public
+  PowerShell test covers direct path, numeric selection, privacy redaction and
+  byte preservation.

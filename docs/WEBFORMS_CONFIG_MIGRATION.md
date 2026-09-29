@@ -155,6 +155,21 @@ The read-only diagnostic shows the *original* retained locator state; it does
 not perform or publish a projection. Run the normal helper for that verified
 relocation and native preflight.
 
+If a native `-Run` stops after preflight, preserve its output and use the short
+read-only checkpoint summary from the TraceMap repository root:
+
+```powershell
+.\scripts\wstatus.ps1
+```
+
+It searches only bounded immediate folders under the sibling
+`tracemap-output` directory, asks for the pinned run by number, and prints recent
+sequence/state/gap codes without paths, hashes, or report contents. For another
+layout, pass `-RunRoot` with the exact path printed after `webFormsPinnedRun=`.
+This is a quick diagnostic, not authenticated checkpoint validation; the native
+`webforms-review status --run` command remains authoritative. Neither command
+resumes or repeats the failed work.
+
 ### When retained proof is unavailable
 
 The old schema does not contain the exact source commit, compiled-site root,
