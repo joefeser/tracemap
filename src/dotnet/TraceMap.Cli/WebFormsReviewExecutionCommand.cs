@@ -19,6 +19,8 @@ public sealed record WebFormsReviewCheckpoint(
     public WebFormsReviewReportCheckpointContext? Reports { get; init; }
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public WebFormsReviewPhaseUsage? PhaseUsage { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public WebFormsReviewToolDistribution? ToolDistribution { get; init; }
 }
 
 public sealed record WebFormsReviewReportCheckpointContext(
@@ -86,6 +88,7 @@ public static partial class WebFormsReviewExecutionCommand
             var preflightSha = Digest(bytes);
             var runtimeSha = await RuntimeDigestAsync(runtimeRoot, cancellationToken);
             var history = await ReadHistoryAsync(root, plan, preflightSha, runtimeSha, cancellationToken);
+            var toolDistribution = history.Sequence == 0 ? DescribeTool(runtimeRoot, runtimeSha) : history.Checkpoint?.ToolDistribution;
             if (args[0] == "run" && history.Checkpoint is not null) throw Fail("RUN_ALREADY_STARTED_USE_RESUME");
             var validated = await WebFormsReviewInputValidation.ValidateAsync(plan, cancellationToken);
             var validationGaps = validated.Gaps.Concat(["ExternalSdkInputsNotPinned", "SourceCommitDoesNotAssertCleanWorkingTree"])
@@ -183,7 +186,8 @@ public static partial class WebFormsReviewExecutionCommand
                 { preflightSha256 = preflightSha, runtimeInputsSha256 = runtimeSha, policySha256 = policyDigest, sourceSnapshotDigest = snapshot, artifacts }, JsonOptions));
                 var checkpoint = new WebFormsReviewCheckpoint(Schema, RuleId, "local-only", "review-only-static-not-runtime", plan.RunId,
                     history.Sequence + 1, history.Sha256, plan.GeneratorSha256, preflightSha, bounded,
-                    state, attempt, scanId, snapshot, factCount, gaps, artifacts, "", runtimeSha) { PhaseUsage = usage };
+                    state, attempt, scanId, snapshot, factCount, gaps, artifacts, "", runtimeSha)
+                    { PhaseUsage = usage, ToolDistribution = toolDistribution };
                 return checkpoint with { CheckpointPayloadSha256 = PayloadDigest(checkpoint) };
             }
         }
@@ -317,6 +321,7 @@ public static partial class WebFormsReviewExecutionCommand
             var checkpoint = JsonSerializer.Deserialize<WebFormsReviewCheckpoint>(bytes, JsonOptions) ?? throw Fail("CHECKPOINT_INVALID");
             if (checkpoint.CheckpointPayloadSha256 != PayloadDigest(checkpoint)) throw Fail("CHECKPOINT_PAYLOAD_CHANGED");
             ValidatePhaseUsage(checkpoint);
+            ValidateToolDistribution(checkpoint);
             if (checkpoint.SchemaVersion != Schema || checkpoint.RuleId != RuleId || checkpoint.Visibility != "local-only" ||
                 checkpoint.ClaimLevel != "review-only-static-not-runtime" || checkpoint.RunId != plan.RunId ||
                 checkpoint.Sequence != history.Sequence + 1 || checkpoint.PreviousCheckpointSha256 != history.Sha256 ||
@@ -421,6 +426,13 @@ public static partial class WebFormsReviewExecutionCommand
          exception.Message.StartsWith("WEBFORMS_GROUPED_HANDOFF_", StringComparison.Ordinal)) ? exception.Message : null;
 
     internal static async Task<string> RuntimeDigestAsync(string directory, CancellationToken token)
+        => RuntimeInventoryDigest(await RuntimeInventoryAsync(directory, token));
+
+    private static string RuntimeInventoryDigest(IReadOnlyList<WebFormsReviewArtifact> files) =>
+        Digest(JsonSerializer.SerializeToUtf8Bytes(new
+        { runtimeVersion = Environment.Version.ToString(), files }, JsonOptions));
+
+    private static async Task<IReadOnlyList<WebFormsReviewArtifact>> RuntimeInventoryAsync(string directory, CancellationToken token)
     {
         var root = WebFormsReviewPreflightCommand.PhysicalPath(directory);
         var files = new List<WebFormsReviewArtifact>();
@@ -445,8 +457,7 @@ public static partial class WebFormsReviewExecutionCommand
             }
         }
         if (files.Count == 0) throw Fail("RUNTIME_UNAVAILABLE");
-        return Digest(JsonSerializer.SerializeToUtf8Bytes(new
-        { runtimeVersion = Environment.Version.ToString(), files = files.OrderBy(file => file.RelativePath, StringComparer.Ordinal).ToArray() }, JsonOptions));
+        return files.OrderBy(file => file.RelativePath, StringComparer.Ordinal).ToArray();
     }
     private static ExecutionException Fail(string suffix) => new("WEBFORMS_EXECUTION_" + suffix);
     private sealed class ExecutionException(string code) : Exception(code);

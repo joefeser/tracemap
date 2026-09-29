@@ -42,7 +42,7 @@ public static partial class WebFormsReviewExecutionCommand
                 typeof(WebFormsReviewExecutionCommand).Assembly.Location, 67_108_864, token);
             if (!relocating)
             {
-                var dependencies = ProtectedDependencies(root, retained.Plan, retained.Location);
+                var dependencies = ProtectedDependencies(root, retained.Plan, retained.Location, retained.History.Checkpoint?.ToolDistribution);
                 var bounded = Digest(JsonSerializer.SerializeToUtf8Bytes(new
                 {
                     generator.Sha256, retained.Plan.RunId, root, retained.PreflightSha256,
@@ -56,7 +56,7 @@ public static partial class WebFormsReviewExecutionCommand
                     ["Only this explicitly selected completed native run was inspected; no TEMP discovery or cleanup occurred.",
                      "Retained artifacts were hash-verified. External dependency paths are protected declarations, not freshly validated source or DLL bytes.",
                      "Unknown files, abandoned attempts, other runs and previous locations remain protected; none are deletion candidates.",
-                     "The original generator/runtime distribution and external SDK may be needed for resume. Their original locator is not fully retained; preserve your tool installation and proof wrappers.",
+                     "Original tool/runtime locators, when retained, are protected declarations rather than current availability. Historical absence remains unknown; preserve tool installations and proof wrappers. External SDK bytes are not pinned.",
                      "Private paths and hashes are local integrity commitments, not authenticated build provenance or shareable evidence."]);
                 var rechecked = await ReadCompletedRunAsync(root, token);
                 if (retained.History.Sha256 != rechecked.History.Sha256 || retained.PreflightSha256 != rechecked.PreflightSha256 ||
@@ -69,10 +69,10 @@ public static partial class WebFormsReviewExecutionCommand
             }
 
             var destination = WebFormsReviewPreflightCommand.PhysicalPath(args[4]);
-            ValidateRelocationDestination(root, destination, retained.Plan, retained.Location);
+            ValidateRelocationDestination(root, destination, retained.Plan, retained.Location, retained.History.Checkpoint?.ToolDistribution);
             // Reserve an owned sibling. On failure it remains inspectable; no old proof is removed.
             var staging = destination + ".pending-" + Guid.NewGuid().ToString("N");
-            ValidateRelocationDestination(root, staging, retained.Plan, retained.Location);
+            ValidateRelocationDestination(root, staging, retained.Plan, retained.Location, retained.History.Checkpoint?.ToolDistribution);
             Directory.CreateDirectory(staging);
             using (var destinationLock = new FileStream(OwnedPath(staging, ".native-run.lock"), FileMode.CreateNew,
                 FileAccess.ReadWrite, FileShare.None))
@@ -102,7 +102,7 @@ public static partial class WebFormsReviewExecutionCommand
                     throw Fail("LOCATION_SOURCE_CHANGED");
                 token.ThrowIfCancellationRequested();
             }
-            ValidateRelocationDestination(root, destination, retained.Plan, retained.Location);
+            ValidateRelocationDestination(root, destination, retained.Plan, retained.Location, retained.History.Checkpoint?.ToolDistribution);
             Directory.Move(staging, destination);
             using var publishedLock = new FileStream(OwnedPath(destination, ".native-run.lock"), FileMode.Open, FileAccess.Read, FileShare.None);
             var published = await ReadCompletedRunAsync(destination, token);
@@ -165,7 +165,7 @@ public static partial class WebFormsReviewExecutionCommand
     }
 
     private static IReadOnlyList<WebFormsReviewProtectedDependency> ProtectedDependencies(string root, WebFormsReviewPreflightManifest plan,
-        WebFormsReviewLocation? location = null)
+        WebFormsReviewLocation? location = null, WebFormsReviewToolDistribution? tool = null)
     {
         var result = new List<WebFormsReviewProtectedDependency> { new("owned-run", root, "hash-verified-retain") };
         if (location is not null)
@@ -179,17 +179,22 @@ public static partial class WebFormsReviewExecutionCommand
         foreach (var input in plan.Inputs)
             result.Add(new(input.Role, input.Path, "pinned-external-retain-not-revalidated"));
         result.Add(new("current-tool-distribution", Path.GetDirectoryName(typeof(WebFormsReviewExecutionCommand).Assembly.Location)!,
-            "current-reader-only-original-generator-location-unavailable"));
+            "current-reader-retain-not-original-generator-availability"));
+        if (tool is not null)
+        {
+            result.Add(new("original-tool-distribution", tool.DistributionRoot, "checkpointed-declaration-retain-not-revalidated"));
+            result.Add(new("original-dotnet-runtime", tool.DotnetRuntimeRoot, "declared-external-retain-bytes-not-pinned"));
+        }
         return result.Distinct().OrderBy(item => item.Role, StringComparer.Ordinal).ThenBy(item => item.Path, StringComparer.Ordinal).ToArray();
     }
 
     private static void ValidateRelocationDestination(string source, string destination, WebFormsReviewPreflightManifest plan,
-        WebFormsReviewLocation? location = null)
+        WebFormsReviewLocation? location = null, WebFormsReviewToolDistribution? tool = null)
     {
         if (File.Exists(destination) || Directory.Exists(destination)) throw Fail("LOCATION_OUTPUT_EXISTS");
         if (Within(source, destination) || Within(destination, source)) throw Fail("LOCATION_OVERLAPS_RUN");
         var runtime = WebFormsReviewPreflightCommand.PhysicalPath(Path.GetDirectoryName(typeof(WebFormsReviewExecutionCommand).Assembly.Location)!);
-        foreach (var dependency in ProtectedDependencies(source, plan, location).Select(item => item.Path).Append(runtime))
+        foreach (var dependency in ProtectedDependencies(source, plan, location, tool).Select(item => item.Path).Append(runtime))
             if (Within(dependency, destination) || Within(destination, dependency)) throw Fail("LOCATION_OVERLAPS_DEPENDENCY");
         if (WebFormsReviewPreflightCommand.PhysicalPath(destination) != destination) throw Fail("LOCATION_OUTPUT_LINK_INVALID");
     }

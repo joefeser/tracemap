@@ -126,7 +126,8 @@ public static partial class WebFormsReviewExecutionCommand
             var value = new WebFormsReviewCheckpoint(Schema, RuleId, "local-only", "review-only-static-not-runtime", plan.RunId,
                 history.Sequence + 1, history.Sha256, plan.GeneratorSha256, preflightSha, "", state, scan.Attempt,
                 scan.ScanId, scan.SourceSnapshotDigest, scan.FactCount, gaps, artifacts, "", runtimeSha)
-                { Reports = reportContext, PhaseUsage = usage };
+                { Reports = reportContext, PhaseUsage = usage,
+                    ToolDistribution = history.Checkpoint?.ToolDistribution };
             value = value with { BoundedInputSha256 = ReportBoundedDigest(preflightSha, runtimeSha, value) };
             return value with { CheckpointPayloadSha256 = PayloadDigest(value) };
         }

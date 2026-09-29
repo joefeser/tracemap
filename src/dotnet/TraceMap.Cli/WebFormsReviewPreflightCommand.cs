@@ -104,6 +104,7 @@ public static partial class WebFormsReviewPreflightCommand
         tracemap webforms-review prepare --config <private-json> --out <new-evidence-root> --attest-exact-source-commit <commit>
         tracemap webforms-review relocate --run <completed-run-root> --out <new-durable-run-root>
         tracemap webforms-review retention-plan --run <completed-run-root>
+        tracemap webforms-review retain-tool --run <completed-run-root> --out <new-tool-root>
 
         Preflight validates the fresh/attach contract and explicit compiled inventory.
         It writes local-only run-manifest.json and README.md without scanning,
@@ -127,6 +128,9 @@ public static partial class WebFormsReviewPreflightCommand
         Relocate copies hash-verified completed artifacts and checkpoints, preserving
         original policy digests, external input locations and the original run.
         Retention-plan emits local-only protect-only JSON; it never authorizes deletion.
+        Retain-tool copies the original checkpointed distribution bytes into a new
+        explicit folder. It preserves the original tool/run and never executes the
+        copy or packages the external .NET runtime, SDK, source or compiled site.
         Scale, full-site coverage and private Windows parity remain pending;
         retain the proven wrappers and original evidence until those gates pass.
         """;

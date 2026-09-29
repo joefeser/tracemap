@@ -1,5 +1,36 @@
 # Web Forms Review Productization Implementation State
 
+## Original tool durability (2026-09-29, rebuilt focused validation passed)
+
+- Phase observations/help fix committed as fc8e56a166874221c68b90a67d7a0a4c5b2d9ca0.
+  Exact-head full solution rebuild 8548 passed in 12.91 seconds with zero
+  warnings/errors. Full no-build regression 42876 passed on these binaries:
+  2,765 passed, zero failed/skipped in 14 minutes 27 seconds. This validates
+  the committed phase-observation/help slice, not the later dirty tool-copy source.
+  CLI SHA-256 590ab837468341ca090f343acc5c9005e3295a947e3e4ebcc8afda1db3da0b87;
+  Reporting f979fe19bd1b5dcd6293b5e3d59ec35b6504a0ecd61094a5bfd06f3c1243d70a;
+  tests d795b9084ab95959fef58d38fc0b7c3d054df360fa0f5b60b28b252746df1b14.
+- New source retains optional original distribution/entry/runtime locators with
+  the existing runtime digest in checkpoint payloads. Status projects declarations
+  without an availability claim; retention protects original locations.
+  Historical absent fields remain absent even after failed-attempt/report resume.
+- Added explicit retain-tool for a completed native run: lock/verify run, inspect
+  original bounded distribution, copy to a new separate folder, hash/recheck both
+  sides and publish a generator/input/checkpoint/file/payload-bound local manifest.
+  No copied code is executed, no run/source/site/SDK bytes are changed, and all
+  failure staging/original proof remains preserved. External runtime/SDK/adaptor
+  closure stays unpinned; the distribution copy is not self-contained or portable.
+- Source tests cover actual distribution copy and subprocess completed resume,
+  immutable run bytes, protection-only dependency plans, historical missing
+  locations, missing/changed tools, runtime mismatch, overlap/existing output and
+  eight malformed locator categories. Rebuilt focused validation 65239 passed
+  212 tests, zero failed/skipped in 4 minutes 45 seconds with no compiler
+  warnings reported. A subsequent entry-DLL/generator-hash guard and wrong-entry
+  refusal case passed rebuilt focused tool validation 82273: 16 passed, zero
+  failed/skipped in 36 seconds, no compiler warnings reported. Exact-head full
+  regression and representative scale still gate publication of this slice.
+  No push, PR, merge or cleanup occurred. Whole goal remains active.
+
 ## Production phase observations (2026-09-29, focused rebuilt validation passed)
 
 - Exact-head regression 5568 ended against 872bba50 binaries in 13 minutes

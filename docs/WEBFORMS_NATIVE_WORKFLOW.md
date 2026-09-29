@@ -277,6 +277,39 @@ copying does not make an old run executable with a new tool distribution. A
 compatible read-only query may use a newer reader without claiming fresh scan
 or runtime validation. Preserve the tool installation and proof wrappers.
 
+New runs also retain `toolDistribution` in their checkpoints: the original
+distribution/entry and external .NET runtime locators, runtime version, pinned
+distribution digest, rule and limitations. Status projects this as `originalTool`
+without checking its current availability. Retention plans protect these declared
+locations. Historical absent fields stay unknown; resume never invents them.
+
+For a completed new native run, explicitly preserve the original pinned tool:
+
+```text
+tracemap webforms-review retain-tool --run review-monday/run --out review-monday/tool
+dotnet review-monday/tool/tracemap.dll webforms-review resume --run review-monday/run
+```
+
+The first command locks/rehashes the completed run and original distribution,
+copies exactly the previously pinned DLL/executable/native/deps/runtimeconfig
+selection into a new folder, verifies it again and writes `tool-copy.local.json`
+with generator, bounded input, checkpoint, file and payload commitments. It does
+not execute the copy, change the run, infer a replacement tool, or copy source,
+published DLLs, receipts or parent scans. Missing original locators/bytes, changed
+distribution/runtime version, existing output and overlap are refused. Failed
+`.pending-*` folders are retained, not discovered for reuse. The selection retains
+the existing 512-file/256-MiB-per-file/2-GiB-total/4096-entry bounds; the manifest
+is capped at 1 MiB and is local-only.
+
+The second command is a separate execution request using the copied original
+bytes and the original strict resume gates; do not substitute a newer tool.
+The external .NET runtime, SDK and adapters are **not copied or pinned**. Keep
+the required runtime version and SDK/toolchain installations. This is not a
+self-contained/portable toolchain, backup attestation or deletion approval.
+Keep the explicit copied tool folder and its manifest; it is not automatically
+included when relocating the run. The copy manifest anchors its exact dependency
+on the original completed checkpoint without rewriting that immutable run.
+
 The destination must be new and separate from the selected run, declared inputs,
 previous proof locations and current runtime. Failed/cancelled staging folders
 remain inspectable as unadmitted `.pending-*` copies. Unknown files and abandoned

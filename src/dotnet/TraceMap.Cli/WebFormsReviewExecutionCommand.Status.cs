@@ -28,6 +28,8 @@ public sealed record WebFormsReviewStatus(
     public string Operation { get; init; } = "";
     public string PageMode { get; init; } = "";
     public string SourceCommitSha { get; init; } = "";
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public WebFormsReviewToolDistribution? OriginalTool { get; init; }
 }
 
 public static partial class WebFormsReviewExecutionCommand
@@ -200,7 +202,8 @@ public static partial class WebFormsReviewExecutionCommand
                  "Unknown usage is null or explicitly listed as a gap, not invented zero, success or unused capacity.",
                  "Only bounded indexed summaries were retrieved; no whole handoff, source snippets, scanning, repair, cleanup or LLM calls occurred.",
                  "Private paths and hashes are local integrity commitments. This response is not a shareable projection or deletion approval."])
-            { Operation = plan.Configuration.Operation, PageMode = plan.Configuration.PageMode, SourceCommitSha = plan.Configuration.SourceCommitSha };
+            { Operation = plan.Configuration.Operation, PageMode = plan.Configuration.PageMode, SourceCommitSha = plan.Configuration.SourceCommitSha,
+                OriginalTool = checkpoint?.ToolDistribution };
             status = status with { BoundedInputSha256 = Digest(JsonSerializer.SerializeToUtf8Bytes(status, JsonOptions)) };
             var rechecked = await ReadHistoryAsync(root, plan, preflight, runtime, token);
             if (rechecked.Sha256 != history.Sha256 || rechecked.Sequence != history.Sequence ||
@@ -213,6 +216,7 @@ public static partial class WebFormsReviewExecutionCommand
             {
                 await output.WriteLineAsync($"webFormsStatus={state};operation={status.Operation};pageMode={status.PageMode};retainedArtifactsVerified={verified};coverage={coverage}");
                 await output.WriteLineAsync($"checkpoints={history.Sequence};facts={history.ScanCheckpoint?.FactCount ?? 0};missingInputLocators={locators.Sum(item => item.Missing)};readerMatchesOriginalGenerator={status.ReaderMatchesOriginalGenerator};resumeAdmissionPerformed=false");
+                await output.WriteLineAsync($"originalToolLocation={(status.OriginalTool is null ? "unknown-historical" : "retained-declaration-not-current-availability")};externalSdkPinned=false");
                 if (reportCounts.Count > 0) await output.WriteLineAsync($"surfaces={reportCounts["surfaces"]};compiledVariants={reportCounts["compiledVariants"]};compiledGroups={reportCounts["compiledGroups"]};compiledGaps={reportCounts["compiledGaps"]};compiledTruncated={reportCounts["compiledTruncated"] != 0}");
                 if (truncations.Count > 0) await output.WriteLineAsync("compiledTruncations=" + string.Join(',', truncations.Select(item => item.Key + ":" + item.Value)));
                 if (reportCounts.Count > 0) await output.WriteLineAsync($"traversalWork=page:{pageWork?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "unknown"};compiled:{compiledWork?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "unknown"};limitPerGraphQuery={budget.GraphMaxWork};sharedAcrossSelectedRoots=true");

@@ -11,6 +11,139 @@ public sealed class WebFormsReviewExecutionTests
     private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase, WriteIndented = true };
 
     [Fact]
+    public async Task Retained_tool_copy_matches_the_pinned_distribution_without_rewriting_run_or_copying_external_runtime()
+    {
+        using var fixture = new Fixture(); fixture.AddPublicEventFixture(); await fixture.Preflight();
+        Assert.Equal(0, await fixture.Execute("run", Scan));
+        Assert.Equal(0, await fixture.ExecuteReports("resume", WebFormsReviewReportExecution.WriteAsync));
+        var tool = fixture.LastCheckpoint().ToolDistribution!;
+        Assert.Equal(WebFormsReviewExecutionCommand.ToolLocationRule, tool.RuleId);
+        Assert.Equal(Environment.Version.ToString(), tool.RuntimeVersion);
+        Assert.Equal(fixture.LastCheckpoint().RuntimeInputsSha256, tool.RuntimeInputsSha256);
+        var before = Directory.GetFiles(fixture.Run, "*", SearchOption.AllDirectories).ToDictionary(path => path, Hash);
+        var target = Path.Combine(fixture.Root, "retained-tool");
+        using var output = new StringWriter();
+        Assert.Equal(0, await TraceMapCommand.RunAsync(["webforms-review", "retain-tool", "--run", fixture.Run, "--out", target], output, fixture.Error));
+        Assert.Contains("copiedCodeExecuted=false", output.ToString(), StringComparison.Ordinal);
+        Assert.Equal(tool.RuntimeInputsSha256, await WebFormsReviewExecutionCommand.RuntimeDigestAsync(target, default));
+        var copy = JsonSerializer.Deserialize<WebFormsReviewToolCopy>(File.ReadAllText(Path.Combine(target, WebFormsReviewExecutionCommand.ToolCopyName)), JsonOptions)!;
+        Assert.Equal(WebFormsReviewExecutionCommand.ToolCopyRule, copy.RuleId);
+        Assert.Equal("local-only", copy.Visibility);
+        Assert.Equal(Hash(typeof(WebFormsReviewExecutionCommand).Assembly.Location), copy.GeneratorSha256);
+        Assert.Equal(64, copy.BoundedInputSha256.Length);
+        Assert.Equal(Convert.ToHexStringLower(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(copy with { PayloadSha256 = "" }, JsonOptions))), copy.PayloadSha256);
+        Assert.All(copy.Files, file => Assert.Equal(file.Sha256, Hash(Path.Combine(target, file.RelativePath))));
+        Assert.Equal(Hash(Path.Combine(tool.DistributionRoot, tool.EntryRelativePath)), Hash(Path.Combine(target, tool.EntryRelativePath)));
+        Assert.Equal(copy.Files.Count + 1, Directory.GetFiles(target, "*", SearchOption.AllDirectories).Length);
+        var host = Environment.GetEnvironmentVariable("DOTNET_HOST_PATH");
+        var start = new ProcessStartInfo(string.IsNullOrWhiteSpace(host) ? "dotnet" : host)
+            { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false };
+        foreach (var argument in new[] { Path.Combine(target, tool.EntryRelativePath), "webforms-review", "resume", "--run", fixture.Run })
+            start.ArgumentList.Add(argument);
+        using (var process = Process.Start(start)!)
+        using (var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(120)))
+        {
+            var stdout = process.StandardOutput.ReadToEndAsync(timeout.Token);
+            var stderr = process.StandardError.ReadToEndAsync(timeout.Token);
+            try
+            {
+                await process.WaitForExitAsync(timeout.Token);
+                Assert.Equal(0, process.ExitCode);
+                Assert.Contains("sourceRescanned=false", await stdout, StringComparison.Ordinal);
+                Assert.Empty(await stderr);
+            }
+            finally { if (!process.HasExited) process.Kill(entireProcessTree: true); }
+        }
+        Assert.Equal(1, await TraceMapCommand.RunAsync(["webforms-review", "retain-tool", "--run", fixture.Run, "--out", target], TextWriter.Null, fixture.Error));
+        Assert.Contains("LOCATION_OUTPUT_EXISTS", fixture.Error.ToString(), StringComparison.Ordinal);
+        foreach (var item in before) Assert.Equal(item.Value, Hash(item.Key));
+        Assert.Equal(before.Count, Directory.GetFiles(fixture.Run, "*", SearchOption.AllDirectories).Length);
+        using var retention = new StringWriter();
+        Assert.Equal(0, await TraceMapCommand.RunAsync(["webforms-review", "retention-plan", "--run", fixture.Run], retention, fixture.Error));
+        var plan = JsonSerializer.Deserialize<WebFormsReviewRetentionPlan>(retention.ToString(), JsonOptions)!;
+        Assert.Contains(plan.ProtectedDependencies, item => item.Role == "original-tool-distribution" && item.Path == tool.DistributionRoot);
+        Assert.Contains(plan.ProtectedDependencies, item => item.Role == "original-dotnet-runtime" && item.Path == tool.DotnetRuntimeRoot);
+        Assert.Empty(plan.DeletionCandidates);
+    }
+
+    [Theory]
+    [InlineData("missing-location", "ORIGINAL_TOOL_LOCATION_UNAVAILABLE")]
+    [InlineData("missing-original", "ORIGINAL_TOOL_UNAVAILABLE")]
+    [InlineData("changed-original", "ORIGINAL_TOOL_CHANGED")]
+    [InlineData("runtime-version", "TOOL_RUNTIME_VERSION_MISMATCH")]
+    [InlineData("wrong-entry", "ORIGINAL_TOOL_ENTRY_MISMATCH")]
+    [InlineData("source-overlap", "LOCATION_OVERLAPS_DEPENDENCY")]
+    public async Task Tool_copy_refuses_missing_changed_or_overlapping_dependencies_without_output(string scenario, string category)
+    {
+        using var fixture = new Fixture(); fixture.AddPublicEventFixture(); await fixture.Preflight();
+        Assert.Equal(0, await fixture.Execute("run", Scan));
+        Assert.Equal(0, await fixture.ExecuteReports("resume", WebFormsReviewReportExecution.WriteAsync));
+        var checkpoint = fixture.LastCheckpoint(); var tool = checkpoint.ToolDistribution!;
+        if (scenario == "missing-location") tool = null!;
+        if (scenario == "missing-original") tool = tool with { DistributionRoot = Path.Combine(fixture.Root, "missing-tool") };
+        if (scenario == "changed-original")
+        {
+            var different = Path.Combine(fixture.Root, "different-tool"); Directory.CreateDirectory(different);
+            File.WriteAllText(Path.Combine(different, "different.dll"), "synthetic-not-an-assembly");
+            tool = tool with { DistributionRoot = different };
+        }
+        if (scenario == "runtime-version") tool = tool with { RuntimeVersion = "999.0.0" };
+        if (scenario == "wrong-entry") tool = tool with { EntryRelativePath = Path.GetFileName(typeof(ScanOptions).Assembly.Location) };
+        RewriteCheckpoint(fixture, checkpoint with { ToolDistribution = tool });
+        var target = scenario == "source-overlap" ? Path.Combine(fixture.Source, "tool-copy") : Path.Combine(fixture.Root, "retained-tool");
+        Assert.Equal(1, await TraceMapCommand.RunAsync(["webforms-review", "retain-tool", "--run", fixture.Run, "--out", target], TextWriter.Null, fixture.Error));
+        Assert.Contains(category, fixture.Error.ToString(), StringComparison.Ordinal);
+        Assert.False(Directory.Exists(target));
+        Assert.Empty(Directory.GetDirectories(fixture.Root, "retained-tool.pending-*"));
+    }
+
+    [Theory]
+    [InlineData("rule")]
+    [InlineData("tier")]
+    [InlineData("relative-distribution")]
+    [InlineData("relative-runtime")]
+    [InlineData("entry")]
+    [InlineData("runtime")]
+    [InlineData("hash")]
+    [InlineData("limitations")]
+    public async Task Invalid_tool_location_is_rejected_before_resume_even_with_recomputed_payload(string mutation)
+    {
+        using var fixture = new Fixture(); await fixture.Preflight();
+        Assert.Equal(1, await fixture.Execute("run", (_, _, _, _) => Task.FromResult(1)));
+        var checkpoint = fixture.LastCheckpoint(); var tool = checkpoint.ToolDistribution!;
+        tool = mutation switch
+        {
+            "rule" => tool with { RuleId = "unknown" },
+            "tier" => tool with { EvidenceTier = "Tier1Semantic" },
+            "relative-distribution" => tool with { DistributionRoot = "relative" },
+            "relative-runtime" => tool with { DotnetRuntimeRoot = "relative" },
+            "entry" => tool with { EntryRelativePath = "../tracemap.dll" },
+            "runtime" => tool with { RuntimeVersion = "invalid" },
+            "hash" => tool with { RuntimeInputsSha256 = new string('a', 64) },
+            _ => tool with { Limitations = [] }
+        };
+        RewriteCheckpoint(fixture, checkpoint with { ToolDistribution = tool });
+        Assert.Equal(1, await fixture.Execute("resume", (_, _, _, _) => throw new InvalidOperationException("must not scan")));
+        Assert.Contains("TOOL_LOCATION_INVALID", fixture.Error.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Historical_absent_tool_location_stays_unknown_on_status_and_completed_resume()
+    {
+        using var fixture = new Fixture(); await fixture.Preflight();
+        Assert.Equal(0, await fixture.Execute("run", Scan));
+        RewriteCheckpoint(fixture, fixture.LastCheckpoint() with { ToolDistribution = null });
+        var before = Directory.GetFiles(fixture.Run, "*", SearchOption.AllDirectories).ToDictionary(path => path, Hash);
+        using var output = new StringWriter();
+        Assert.Equal(0, await TraceMapCommand.RunAsync(["webforms-review", "status", "--run", fixture.Run, "--json"], output, fixture.Error));
+        Assert.Null(JsonSerializer.Deserialize<WebFormsReviewStatus>(output.ToString(), JsonOptions)!.OriginalTool);
+        Assert.Equal(0, await fixture.Execute("resume", (_, _, _, _) => throw new InvalidOperationException("must not rescan")));
+        Assert.Null(fixture.LastCheckpoint().ToolDistribution);
+        foreach (var item in before) Assert.Equal(item.Value, Hash(item.Key));
+        Assert.Equal(before.Count, Directory.GetFiles(fixture.Run, "*", SearchOption.AllDirectories).Length);
+    }
+
+    [Fact]
     public async Task Historical_checkpoint_without_phase_usage_remains_unknown_and_resumes_without_rewriting()
     {
         using var fixture = new Fixture(); await fixture.Preflight();
