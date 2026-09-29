@@ -3,6 +3,7 @@ param(
     [string]$ReviewRoot,
     [string]$ProofRoot,
     [string]$PublishedRoot,
+    [string]$SourceBase,
     [string]$OutputRoot,
     [switch]$Run,
     [switch]$NoBuild
@@ -36,6 +37,11 @@ if ([string]::IsNullOrWhiteSpace($ProofRoot)) {
 }
 $ProofRoot = Read-Required $ProofRoot 'Retained proof folder (contains publish-receipt and compiled-binding)'
 $PublishedRoot = Read-Required $PublishedRoot 'Original compiled website folder (parent of bin)'
+if ([string]::IsNullOrWhiteSpace($SourceBase)) {
+    $SourceBase = Microsoft.PowerShell.Utility\Read-Host 'Website folder relative to repository root (for example WebSite; enter . only if website is at repository root)'
+}
+if ([string]::IsNullOrWhiteSpace($SourceBase)) { throw 'WEBFORMS_VERIFY_SOURCE_BASE_REQUIRED' }
+$SourceBase = $SourceBase.Trim().Trim('"')
 foreach ($name in @('publish-receipt.local.json', 'compiled-binding.local.json')) {
     if (!(Test-Path -LiteralPath (Join-Path $ProofRoot $name) -PathType Leaf)) { throw 'WEBFORMS_VERIFY_RETAINED_RECEIPTS_UNAVAILABLE' }
 }
@@ -51,7 +57,7 @@ if (!$NoBuild) {
 }
 $cli = Join-Path $repo 'src/dotnet/TraceMap.Cli/bin/Debug/net10.0/tracemap.dll'
 $configuration = Join-Path $OutputRoot 'configuration'
-dotnet $cli webforms-review import-proof --config $draft --proof-root $ProofRoot --published-root $PublishedRoot --out $configuration
+dotnet $cli webforms-review import-proof --config $draft --proof-root $ProofRoot --published-root $PublishedRoot --out $configuration --source-base $SourceBase
 if ($LASTEXITCODE -ne 0) { throw 'WEBFORMS_VERIFY_IMPORT_FAILED;original-inputs-preserved;no-scan-started' }
 $config = Join-Path $configuration 'review-config.local.json'
 Write-Host "verifiedConfiguration=$config"

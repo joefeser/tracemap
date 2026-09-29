@@ -55,9 +55,18 @@ with authorized real inputs; do not run this example unchanged.
   "receiptRoot": null,
   "publishSourceRelativePaths": ["Pages/Lookup.aspx.vb", "App_Code/PublicData.vb", "Web.config"],
   "preparationProvenance": null,
+  "publishSourceRelativeBase": null,
   "budgets": {}
 }
 ```
+
+`publishSourceRelativeBase` is an optional, explicit repository-relative website
+folder for importing retained receipts whose source paths start inside that
+folder. It is not a replacement for `sourceRoot` or a new source scope. Leave it
+null for root-relative receipts and native preparation. Retained-proof import
+sets it from `--source-base`; original receipts and virtual routes are unchanged,
+and all hashes/commit checks still apply. See
+[retained-proof migration](WEBFORMS_CONFIG_MIGRATION.md) for the short helper.
 
 `projectMode` is `projectless`, `solution` with one solution-relative path, or
 `projects` with a nonempty project-relative path array. `sourceFolders` restricts

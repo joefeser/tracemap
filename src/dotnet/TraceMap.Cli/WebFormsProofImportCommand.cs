@@ -22,8 +22,11 @@ public static class WebFormsProofImportCommand
         var stage = "arguments";
         try
         {
-            if (args.Length != 9 || args[0] != "import-proof" || args[1] != "--config" || args[3] != "--proof-root"
-                || args[5] != "--published-root" || args[7] != "--out") throw Fail("ARGUMENTS");
+            if (args.Length is not (9 or 11) || args[0] != "import-proof" || args[1] != "--config" || args[3] != "--proof-root"
+                || args[5] != "--published-root" || args[7] != "--out"
+                || args.Length == 11 && args[9] != "--source-base") throw Fail("ARGUMENTS");
+            var sourceBase = args.Length == 11 ? args[10] : ".";
+            if (sourceBase == ".") sourceBase = null;
             var draftPath = WebFormsReviewPreflightCommand.PhysicalPath(args[2]);
             var proof = WebFormsReviewPreflightCommand.PhysicalPath(args[4]);
             var published = WebFormsReviewPreflightCommand.PhysicalPath(args[6]);
@@ -38,12 +41,20 @@ public static class WebFormsProofImportCommand
                 || draft.PageMaps is not { Length: 0 } || draft.PdbInputs is not { Length: 0 }
                 || draft.PublishSourceRelativePaths is { Length: > 0 }
                 || draft.PublishReceiptRelativePath is not null || draft.ReceiptRoot is not null || draft.PreparationProvenance is not null
+                || draft.PublishSourceRelativeBase is not null
                 || !Path.IsPathFullyQualified(draft.SourceRoot))
                 throw Fail("FRESH_DRAFT_REQUIRED");
             if (!string.IsNullOrEmpty(draft.PublishedRoot) && !WebFormsReviewPreflightCommand.PhysicalPath(draft.PublishedRoot).Equals(published,
                     OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal))
                 throw Fail("DRAFT_PUBLISHED_ROOT_MISMATCH");
             var sourceRoot = WebFormsReviewPreflightCommand.PhysicalPath(draft.SourceRoot);
+            stage = "receipt-source-base";
+            var receiptSourceRoot = sourceBase is null ? sourceRoot : WebFormsReviewPreflightCommand.Child(sourceRoot, sourceBase);
+            if (sourceBase?.Contains('\\') == true || !Directory.Exists(receiptSourceRoot)) throw Fail("SOURCE_BASE_INVALID");
+            var sourceGit = GitMetadataProvider.Detect(sourceRoot);
+            var baseGit = GitMetadataProvider.Detect(receiptSourceRoot);
+            if (baseGit.GitRootPath != sourceGit.GitRootPath || baseGit.CommitSha != sourceGit.CommitSha
+                || baseGit.RemoteUrl != sourceGit.RemoteUrl) throw Fail("SOURCE_BASE_REPOSITORY_MISMATCH");
             foreach (var root in new[] { sourceRoot, published, proof, Path.GetDirectoryName(draftPath)! })
                 if (Overlap(root, destination)) throw Fail("OUTPUT_OVERLAPS_INPUT");
             var publishPath = WebFormsReviewPreflightCommand.Child(proof, "publish-receipt.local.json");
@@ -82,7 +93,7 @@ public static class WebFormsProofImportCommand
             foreach (var row in sources)
             {
                 var name = Text(row, "path"); var sha = Text(row, "sha256");
-                await Check("source", WebFormsReviewPreflightCommand.Child(sourceRoot, name), sha, 67_108_864);
+                await Check("source", WebFormsReviewPreflightCommand.Child(receiptSourceRoot, name), sha, 67_108_864);
                 sourceLines.Add($"{name}:{sha}");
             }
             stage = "assembly-inventory";
@@ -142,13 +153,15 @@ public static class WebFormsProofImportCommand
                 PrimaryAssemblies = primary.Order(StringComparer.Ordinal).ToArray(), DependencyAssemblies = dependencies.Order(StringComparer.Ordinal).ToArray(),
                 BindingReceipts = ["compiled-binding.local.json"], PageMaps = maps.Order(StringComparer.Ordinal).ToArray(),
                 ReceiptRoot = proof, PublishReceiptRelativePath = "publish-receipt.local.json", PublishSourceRelativePaths = null,
-                PageMode = "selected", PageRelativePaths = pageNames, PdbInputs = [] };
+                PageMode = "selected", PageRelativePaths = pageNames.Select(RepoName).ToArray(), PdbInputs = [],
+                PublishSourceRelativeBase = sourceBase };
             stage = "source-membership";
             WebFormsReviewPreflightCommand.ValidateConfig(config);
-            var membership = await WebFormsReviewPreparationCommand.ValidateCommittedSourceAsync(config, sourceNames.ToArray(), token);
+            var repoSourceNames = sourceNames.Select(RepoName).ToArray();
+            var membership = await WebFormsReviewPreparationCommand.ValidateCommittedSourceAsync(config, repoSourceNames, token);
             var generator = Hash(await File.ReadAllBytesAsync(typeof(WebFormsProofImportCommand).Assembly.Location, token));
             var bounded = Hash(JsonSerializer.SerializeToUtf8Bytes(new { draftSha256 = Hash(draftBytes), publishReceiptSha256 = Hash(publishBytes),
-                bindingReceiptSha256 = Hash(bindingBytes), sourceCommitSha = commit, inputCommitments, membership }, JsonOptions));
+                bindingReceiptSha256 = Hash(bindingBytes), sourceCommitSha = commit, sourceRelativeBase = sourceBase, inputCommitments, membership }, JsonOptions));
             config = config with { PreparationProvenance = new(RuleId, generator, bounded) };
             var configBytes = JsonSerializer.SerializeToUtf8Bytes(config, JsonOptions);
             var parent = Path.GetDirectoryName(destination)!;
@@ -165,18 +178,22 @@ public static class WebFormsProofImportCommand
             var primaryOutcomes = validated.CompiledProvenance.Outcomes.Where(item => item.Role == "primary").ToArray();
             if (primaryOutcomes.Length != primary.Count || primaryOutcomes.Any(item => item.Outcome != "admitted" || item.ProvenanceState != "bound")) throw Fail("RETAINED_BINDING_NOT_ADMITTED");
             stage = "input-recheck";
-            await WebFormsReviewPreparationCommand.ValidateCommittedSourceAsync(config, sourceNames.ToArray(), token);
+            await WebFormsReviewPreparationCommand.ValidateCommittedSourceAsync(config, repoSourceNames, token);
             await Same(draftPath, draftBytes); await Same(publishPath, publishBytes); await Same(bindingPath, bindingBytes);
             foreach (var row in inventory) await Check("recheck-inventory", WebFormsReviewPreflightCommand.Child(published, Text(row, "path")), Text(row, "sha256"), 67_108_864);
-            foreach (var row in sources) await Check("recheck-source", WebFormsReviewPreflightCommand.Child(sourceRoot, Text(row, "path")), Text(row, "sha256"), 67_108_864);
+            foreach (var row in sources) await Check("recheck-source", WebFormsReviewPreflightCommand.Child(receiptSourceRoot, Text(row, "path")), Text(row, "sha256"), 67_108_864);
             foreach (var row in files) await Check("recheck-published", WebFormsReviewPreflightCommand.Child(published, Text(row, "path")), Text(row, "sha256"), 67_108_864);
             var gitAfter = GitMetadataProvider.Detect(sourceRoot);
+            var baseGitAfter = GitMetadataProvider.Detect(receiptSourceRoot);
             if (gitAfter.CommitSha != git.CommitSha || gitAfter.RemoteUrl != git.RemoteUrl || gitAfter.GitRootPath != git.GitRootPath
-                || gitAfter.ScanRootRelativePath != git.ScanRootRelativePath) throw Fail("SOURCE_IDENTITY_CHANGED");
+                || gitAfter.ScanRootRelativePath != git.ScanRootRelativePath || baseGitAfter.GitRootPath != git.GitRootPath
+                || baseGitAfter.CommitSha != git.CommitSha || baseGitAfter.RemoteUrl != git.RemoteUrl
+                || baseGitAfter.ScanRootRelativePath != baseGit.ScanRootRelativePath) throw Fail("SOURCE_IDENTITY_CHANGED");
             if (Hash(await Read(stagedConfig, token)) != Hash(configBytes)) throw Fail("OUTPUT_CONFIG_CHANGED");
             var audit = new { schemaVersion = "webforms-retained-proof-import.v1", ruleId = RuleId, evidenceTier = "Tier2Structural", visibility = "local-only",
                 state = "verified-inputs-not-scanned", generatorSha256 = generator, boundedInputSha256 = bounded,
-                outputConfigSha256 = Hash(configBytes), sourceCommitSha = commit, primaryAssemblies = primary.Count, dependencies = dependencies.Count,
+                outputConfigSha256 = Hash(configBytes), sourceCommitSha = commit, sourceRelativeBase = sourceBase,
+                primaryAssemblies = primary.Count, dependencies = dependencies.Count,
                 pages = pageNames.Length, retainedPublishReceiptSha256 = Hash(publishBytes), retainedBindingReceiptSha256 = Hash(bindingBytes),
                 originalDraftSha256 = Hash(draftBytes), gaps = plan.Gaps.Concat(validated.Gaps).Distinct().Order(StringComparer.Ordinal).ToArray(),
                 limitations = new[] { "Retained owner attestation is carried, not newly issued or authenticated compiler proof.",
@@ -199,6 +216,7 @@ public static class WebFormsProofImportCommand
                 if (!role.StartsWith("recheck", StringComparison.Ordinal)) inputCommitments.Add(new { role, observed.Path, observed.Bytes, observed.Sha256 });
             }
             async Task Same(string path, byte[] bytes) { if (Hash(await Read(path, token)) != Hash(bytes)) throw Fail("INPUT_CHANGED"); }
+            string RepoName(string name) => sourceBase is null ? name : sourceBase + "/" + name;
         }
         catch (OperationCanceledException) when (token.IsCancellationRequested) { throw; }
         catch (WebFormsReviewPreflightCommand.PreflightException ex) { return await Report(ex.Code); }

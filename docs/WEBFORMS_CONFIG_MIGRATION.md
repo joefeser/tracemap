@@ -91,8 +91,25 @@ public synthetic tests.
 The direct native command is:
 
 ```text
-tracemap webforms-review import-proof --config review.draft.json --proof-root retained-proof --published-root original-publish --out new-config-folder
+tracemap webforms-review import-proof --config review.draft.json --proof-root retained-proof --published-root original-publish --out new-config-folder --source-base website-folder
 ```
+
+The helper also asks for the **website folder relative to the repository root**.
+For a repository containing `Website/Default.aspx`, enter `Website` when the
+retained receipt lists `Default.aspx`. Enter `.` only when receipt paths already
+start at the configured repository root. This is an explicit selection, not
+recursive discovery or a newest-folder heuristic. The native command defaults
+to the existing root-relative behavior when `--source-base` is omitted.
+
+The imported config keeps `sourceRoot`, source/project scopes and budgets
+unchanged. Its additive `publishSourceRelativeBase` records the chosen base;
+selected page paths and emitted source evidence are repository-relative, while
+receipt paths, virtual routes and original binding/publish bytes remain
+unchanged. The base is included in the import's bounded-input hash, Core publish
+provenance and authorized scan-scope fingerprint. Preflight, fresh scans and
+compiled attachments use the same mapping. Files must still match their original
+hashes and committed Git membership. Unsafe, missing, symlink-escaping or
+different-repository bases are refused; no fallback or new attestation is made.
 
 Import failures print a public-safe reason and a closed stage label, not private
 paths or raw exception text. For example, `FILE_OR_DIRECTORY_UNAVAILABLE` at

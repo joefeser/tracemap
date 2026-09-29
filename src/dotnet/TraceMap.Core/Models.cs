@@ -177,7 +177,8 @@ public sealed record ScanOptions(
     bool ExactSourceScope = false,
     int ExactSourceMaxFiles = 256,
     long ExactSourceMaxBytes = 67_108_864,
-    string? WebFormsPublishedRootPath = null);
+    string? WebFormsPublishedRootPath = null,
+    string? WebFormsPublishSourceRelativeBase = null);
 
 public sealed record FileInventoryItem(
     string RelativePath,

@@ -82,7 +82,8 @@ internal static partial class WebFormsPublishMapExtractor
                 || receipt.SourceFiles.Any(item => item is null) || receipt.PublishedFiles.Any(item => item is null)
                 || receipt.Pages.Any(item => item is null))
                 throw new PublishException("WebFormsPublishReceiptSetInvalid");
-            foreach (var source in receipt.SourceFiles) AdmitHashWork(ResolveChild(repoPath, source.Path), MaxArtifactBytes);
+            foreach (var source in receipt.SourceFiles) AdmitHashWork(ResolveChild(repoPath,
+                SourceName(options.WebFormsPublishSourceRelativeBase, source.Path)), MaxArtifactBytes);
             foreach (var file in receipt.PublishedFiles)
                 AdmitHashWork(ResolveChild(publishRoot, file.Path), file.Kind == "compiled-map" ? MaxMapBytes : MaxArtifactBytes,
                     file.Kind == "compiled-map" ? receipt.Pages.Count + 2 : 1);
@@ -161,14 +162,15 @@ internal static partial class WebFormsPublishMapExtractor
         if (Sha256(ReadBounded(setPath, MaxReceiptBytes)) != Sha256(setBytes))
             throw new PublishException("WebFormsPublishPartitionMismatch");
         foreach (var source in sources)
-            Recheck(ResolveChild(repoPath, source.Key), source.Value, MaxArtifactBytes);
+            Recheck(ResolveChild(repoPath, SourceName(options.WebFormsPublishSourceRelativeBase, source.Key)), source.Value, MaxArtifactBytes);
         foreach (var file in published)
             Recheck(ResolveChild(publishRoot, file.Key), file.Value.Sha256,
                 file.Value.Kind == "compiled-map" ? MaxMapBytes : MaxArtifactBytes);
         var provenance = new WebFormsPublishProvenance("webforms-publish-provenance.v1", generatorSha256, inputSha256,
-            "bound", [], sources.Count, published.Count, allPages.Count, publishedRootHash);
+            "bound", [], sources.Count, published.Count, allPages.Count, publishedRootHash,
+            options.WebFormsPublishSourceRelativeBase is "." ? null : options.WebFormsPublishSourceRelativeBase);
         return new(provenance, mapped.OrderBy(page => page.SourcePath, StringComparer.Ordinal).ToArray(),
-            sources.Keys.Order(StringComparer.Ordinal).ToArray(),
+            sources.Keys.Select(path => SourceName(options.WebFormsPublishSourceRelativeBase, path)).Order(StringComparer.Ordinal).ToArray(),
             published.Where(item => item.Value.Kind == "assembly").OrderBy(item => item.Key, StringComparer.Ordinal)
                 .Select(item => new WebFormsPublishAssembly(item.Key, item.Value.Sha256)).ToArray(),
             candidates.OrderBy(page => page.SourcePath, StringComparer.Ordinal).ToArray());

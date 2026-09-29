@@ -92,6 +92,66 @@ public sealed class WebFormsProofImportTests
         Assert.Contains("SOURCE_COMMIT_OR_REPOSITORY_MISMATCH", f.Error.ToString(), StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task Nested_website_requires_explicit_base_and_preserves_repo_scope_and_receipt_bytes()
+    {
+        using var f = new Fixture(nested: true);
+        var originals = f.InputHashes();
+        Assert.Equal(1, await f.Run());
+        Assert.Contains("stage=source-roster", f.Error.ToString(), StringComparison.Ordinal);
+        Assert.Equal(0, await f.Run("UBid"));
+        var config = JsonSerializer.Deserialize<WebFormsReviewConfig>(File.ReadAllBytes(f.ImportedConfig), Options)!;
+        Assert.Equal(f.Source, config.SourceRoot);
+        Assert.Equal(f.Draft.SourceFolders, config.SourceFolders);
+        Assert.Equal("UBid", config.PublishSourceRelativeBase);
+        Assert.Equal(new[] { "UBid/Lookup.aspx" }, config.PageRelativePaths);
+        var plan = await WebFormsReviewPreflightCommand.BuildAsync(f.ImportedConfig, Path.Combine(f.Root, "attachment-option-check"));
+        Assert.Equal("UBid", WebFormsReviewAttachmentExecution.Options(plan, "unused").WebFormsPublishSourceRelativeBase);
+        foreach (var pair in originals) Assert.Equal(pair.Value, Hash(File.ReadAllBytes(pair.Key)));
+        using var receipt = JsonDocument.Parse(File.ReadAllBytes(Path.Combine(f.Out, "proof-import.local.json")));
+        Assert.Equal("UBid", receipt.RootElement.GetProperty("sourceRelativeBase").GetString());
+        Assert.Equal(Hash(File.ReadAllBytes(f.PublishReceipt)), receipt.RootElement.GetProperty("retainedPublishReceiptSha256").GetString());
+    }
+
+    [Theory]
+    [InlineData("../UBid", "RELATIVE_PATH_INVALID")]
+    [InlineData("/UBid", "RELATIVE_PATH_INVALID")]
+    [InlineData("UBid/../UBid", "RELATIVE_PATH_INVALID")]
+    [InlineData("missing", "SOURCE_BASE_INVALID")]
+    [InlineData("UBid\\child", "SOURCE_BASE_INVALID")]
+    public async Task Invalid_source_bases_are_not_discovered_or_silently_replaced(string sourceBase, string code)
+    {
+        using var f = new Fixture(nested: true);
+        Assert.Equal(1, await f.Run(sourceBase));
+        Assert.Contains(code, f.Error.ToString(), StringComparison.Ordinal);
+        Assert.False(Directory.Exists(f.Out));
+    }
+
+    [Fact]
+    public async Task Explicit_source_base_does_not_bypass_changed_source_or_receipt_traversal()
+    {
+        using var f = new Fixture(nested: true);
+        File.AppendAllText(f.PagePath, "changed");
+        Assert.Equal(1, await f.Run("UBid"));
+        Assert.Contains("SOURCE_BYTES_MISMATCH", f.Error.ToString(), StringComparison.Ordinal);
+        f.ChangePublish(root => root["sourceFiles"]![0]!["path"] = "../Lookup.aspx");
+        Assert.Equal(1, await f.Run("UBid"));
+        Assert.Contains("RELATIVE_PATH_INVALID", f.Error.ToString(), StringComparison.Ordinal);
+        Assert.False(Directory.Exists(f.Out));
+    }
+
+    [Fact]
+    public async Task Website_base_cannot_select_an_independent_nested_repository()
+    {
+        using var f = new Fixture(nested: true);
+        using var git = new Process { StartInfo = new("git") { WorkingDirectory = Path.GetDirectoryName(f.PagePath)!, UseShellExecute = false } };
+        git.StartInfo.ArgumentList.Add("init"); git.StartInfo.ArgumentList.Add("-q");
+        git.Start(); await git.WaitForExitAsync(); Assert.Equal(0, git.ExitCode);
+        Assert.Equal(1, await f.Run("UBid"));
+        Assert.Contains("SOURCE_BASE_REPOSITORY_MISMATCH", f.Error.ToString(), StringComparison.Ordinal);
+        Assert.False(Directory.Exists(f.Out));
+    }
+
     [Theory]
     [InlineData("draft", "FILE_OR_DIRECTORY_UNAVAILABLE", "migration-draft")]
     [InlineData("publish-receipt", "FILE_OR_DIRECTORY_UNAVAILABLE", "publish-receipt")]
@@ -179,11 +239,13 @@ public sealed class WebFormsProofImportTests
     }
 
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task Short_helper_uses_real_native_import_and_scans_only_when_requested(bool run)
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    public async Task Short_helper_uses_real_native_import_and_scans_only_when_requested(bool run, bool nested)
     {
-        using var f = new Fixture();
+        using var f = new Fixture(nested);
         var pwsh = OperatingSystem.IsWindows() ? "pwsh" : "/opt/homebrew/bin/pwsh";
         if (!File.Exists(pwsh) && !OperatingSystem.IsWindows()) return; // Platform-specific helper smoke; direct native cases always run.
         var reviewRoot = Path.Combine(f.Root, "review-root");
@@ -193,7 +255,7 @@ public sealed class WebFormsProofImportTests
         var repository = Fixture.FindRepo();
         using var process = new Process { StartInfo = new(pwsh) { WorkingDirectory = repository, RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false } };
         foreach (var argument in new[] { "-NoProfile", "-File", Path.Combine(repository, "scripts/wverify.ps1"), "-ReviewRoot", reviewRoot,
-                     "-ProofRoot", f.Proof, "-PublishedRoot", f.Published, "-OutputRoot", f.Out, "-NoBuild" }) process.StartInfo.ArgumentList.Add(argument);
+                     "-ProofRoot", f.Proof, "-PublishedRoot", f.Published, "-SourceBase", nested ? "UBid" : ".", "-OutputRoot", f.Out, "-NoBuild" }) process.StartInfo.ArgumentList.Add(argument);
         if (run) process.StartInfo.ArgumentList.Add("-Run");
         process.Start(); var stdout = process.StandardOutput.ReadToEndAsync(); var stderr = process.StandardError.ReadToEndAsync();
         using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(2));
@@ -203,8 +265,25 @@ public sealed class WebFormsProofImportTests
         Assert.True(process.ExitCode == 0, standardOutput + standardError);
         Assert.Contains(run ? "completion is not a parity verdict" : "Verified inputs only; no scan or reports ran", standardOutput, StringComparison.Ordinal);
         Assert.True(File.Exists(Path.Combine(f.Out, "configuration/review-config.local.json")));
+        var config = JsonSerializer.Deserialize<WebFormsReviewConfig>(File.ReadAllBytes(Path.Combine(f.Out, "configuration/review-config.local.json")), Options)!;
+        Assert.Equal(f.Source, config.SourceRoot);
+        Assert.Equal(new[] { "." }, config.SourceFolders);
+        Assert.Equal(nested ? "UBid" : null, config.PublishSourceRelativeBase);
+        Assert.Equal(new[] { nested ? "UBid/Lookup.aspx" : "Lookup.aspx" }, config.PageRelativePaths);
         Assert.Equal(run, Directory.Exists(Path.Combine(f.Out, "review")));
-        if (run) Assert.True(File.Exists(Path.Combine(f.Out, "review/run/run-manifest.json")));
+        if (run)
+        {
+            Assert.True(File.Exists(Path.Combine(f.Out, "review/run/run-manifest.json")));
+            if (nested)
+            {
+                var manifestPath = Assert.Single(Directory.GetFiles(Path.Combine(f.Out, "review"), "scan-manifest.json", SearchOption.AllDirectories));
+                using var manifest = JsonDocument.Parse(File.ReadAllBytes(manifestPath));
+                Assert.Equal("bound", manifest.RootElement.GetProperty("webFormsPublishProvenance").GetProperty("status").GetString());
+                Assert.Equal("UBid", manifest.RootElement.GetProperty("webFormsPublishProvenance").GetProperty("sourceRelativeBase").GetString());
+                var facts = File.ReadAllText(Path.Combine(Path.GetDirectoryName(manifestPath)!, "facts.ndjson"));
+                Assert.Contains("UBid/Lookup.aspx", facts, StringComparison.Ordinal);
+            }
+        }
         foreach (var pair in originals) Assert.Equal(pair.Value, Hash(File.ReadAllBytes(pair.Key)));
     }
 
@@ -217,18 +296,23 @@ public sealed class WebFormsProofImportTests
         public string ConfigPath => Path.Combine(Root, "draft", "review.draft.json");
         public string PublishReceipt => Path.Combine(Proof, "publish-receipt.local.json");
         public string BindingReceipt => Path.Combine(Proof, "compiled-binding.local.json");
-        public string Primary => Path.Combine(Published, "bin", "CompiledEvidence.CSharp.dll");
+        public string PrimaryName { get; }
+        public string Primary => Path.Combine(Published, "bin", PrimaryName);
+        public string PagePath { get; }
         public string ImportedConfig => Path.Combine(Out, "review-config.local.json");
         public string Out { get; set; }
         public string Commit { get; }
         public WebFormsReviewConfig Draft { get; }
         public StringWriter Output { get; } = new(); public StringWriter Error { get; } = new();
-        public Fixture()
+        public Fixture(bool nested = false)
         {
+            PrimaryName = nested ? "App_Web_Public.dll" : "CompiledEvidence.CSharp.dll";
+            PagePath = Path.Combine(Source, nested ? "UBid/Lookup.aspx" : "Lookup.aspx");
             Out = Path.Combine(Root, "imported");
             Directory.CreateDirectory(Source); Directory.CreateDirectory(Path.Combine(Published, "bin"));
             Directory.CreateDirectory(Proof); Directory.CreateDirectory(Path.GetDirectoryName(ConfigPath)!);
-            File.WriteAllText(Path.Combine(Source, "Lookup.aspx"), "<%@ Page Language=\"VB\" Inherits=\"Public.Page\" %>");
+            Directory.CreateDirectory(Path.GetDirectoryName(PagePath)!);
+            File.WriteAllText(PagePath, "<%@ Page Language=\"VB\" Inherits=\"Public.Page\" %>");
             var repository = FindRepo();
             File.Copy(Path.Combine(repository, "samples/compiled-dotnet-evidence/csharp/bin/Debug/net10.0/CompiledEvidence.CSharp.dll"), Primary);
             var dependency = Path.Combine(Published, "bin/CompiledEvidence.VisualBasic.dll");
@@ -238,10 +322,10 @@ public sealed class WebFormsProofImportTests
             Git("add", "."); Git("commit", "-qm", "public source"); Commit = GitMetadataProvider.Detect(Source).CommitSha;
             Draft = new(WebFormsReviewPreflightCommand.ConfigSchema, "fresh", Source, "", "projectless", null, [], ["."], "all", [], "", [], [], [], [], [], null, new());
             File.WriteAllText(ConfigPath, JsonSerializer.Serialize(Draft, Options));
-            var sourceHash = Hash(File.ReadAllBytes(Path.Combine(Source, "Lookup.aspx")));
+            var sourceHash = Hash(File.ReadAllBytes(PagePath));
             var primaryHash = Hash(File.ReadAllBytes(Primary)); var dependencyHash = Hash(File.ReadAllBytes(dependency));
             var sourceDigest = HashText($"Lookup.aspx:{sourceHash}\n");
-            var inventoryDigest = HashText($"bin/CompiledEvidence.CSharp.dll:{primaryHash}:selected\nbin/CompiledEvidence.VisualBasic.dll:{dependencyHash}:artifact-context-no-source-commit\n");
+            var inventoryDigest = HashText($"bin/{PrimaryName}:{primaryHash}:selected\nbin/CompiledEvidence.VisualBasic.dll:{dependencyHash}:artifact-context-no-source-commit\n");
             var mapDigest = HashText("\n"); var repositoryDigest = HashText("https://example.invalid/public-proof.git");
             File.WriteAllText(PublishReceipt, JsonSerializer.Serialize(new {
                 schemaVersion = "webforms-publish-binding.v1", visibility = "local-only", receiptGeneratorSha256 = new string('b', 64),
@@ -249,10 +333,11 @@ public sealed class WebFormsProofImportTests
                 boundedInputSha256 = sourceDigest, assemblyInventorySha256 = inventoryDigest, mapInventorySha256 = mapDigest,
                 receiptInputSha256 = HashText($"source:{repositoryDigest}\ncommit:{Commit}\nsource:{sourceDigest}\nassemblies:{inventoryDigest}\nmaps:{mapDigest}\n"),
                 sourceFiles = new[] { new { path = "Lookup.aspx", sha256 = sourceHash } },
-                assemblyInventory = new[] { new { path = "bin/CompiledEvidence.CSharp.dll", sha256 = primaryHash, disposition = "selected" },
+                assemblyInventory = new[] { new { path = "bin/" + PrimaryName, sha256 = primaryHash, disposition = "selected" },
                     new { path = "bin/CompiledEvidence.VisualBasic.dll", sha256 = dependencyHash, disposition = "artifact-context-no-source-commit" } },
-                publishedFiles = new[] { new { path = "bin/CompiledEvidence.CSharp.dll", sha256 = primaryHash, kind = "assembly" },
+                publishedFiles = new[] { new { path = "bin/" + PrimaryName, sha256 = primaryHash, kind = "assembly" },
                     new { path = "bin/CompiledEvidence.VisualBasic.dll", sha256 = dependencyHash, kind = "assembly" } },
+                publishedMapCount = 0,
                 pages = new[] { new { sourcePath = "Lookup.aspx", virtualPath = "/Lookup.aspx", bindingKind = "mapless-source-type-candidate" } }
             }, Options));
             var inspected = ManagedMetadataExtractor.InspectInputs(new ScanOptions(Source, "unused", CompiledInputPaths: [Primary]), Commit);
@@ -263,9 +348,11 @@ public sealed class WebFormsProofImportTests
                     assemblyIdentity = item.AssemblyIdentity, binarySourceRepository = "https://example.invalid/public-proof.git", binarySourceCommitSha = Commit,
                     binaryBuildIdentity = "operator-attested-existing-publish:" + sourceDigest } } }, Options));
         }
-        public async Task<int> Run() { Output.GetStringBuilder().Clear(); Error.GetStringBuilder().Clear(); return await TraceMapCommand.RunAsync(
-            ["webforms-review", "import-proof", "--config", ConfigPath, "--proof-root", Proof, "--published-root", Published, "--out", Out], Output, Error); }
-        public Dictionary<string, string> InputHashes() => new[] { ConfigPath, PublishReceipt, BindingReceipt, Primary, Path.Combine(Source, "Lookup.aspx") }.ToDictionary(path => path, path => Hash(File.ReadAllBytes(path)));
+        public async Task<int> Run(string? sourceBase = null) { Output.GetStringBuilder().Clear(); Error.GetStringBuilder().Clear();
+            var args = new List<string> { "webforms-review", "import-proof", "--config", ConfigPath, "--proof-root", Proof, "--published-root", Published, "--out", Out };
+            if (sourceBase is not null) args.AddRange(["--source-base", sourceBase]);
+            return await TraceMapCommand.RunAsync(args.ToArray(), Output, Error); }
+        public Dictionary<string, string> InputHashes() => new[] { ConfigPath, PublishReceipt, BindingReceipt, Primary, PagePath }.ToDictionary(path => path, path => Hash(File.ReadAllBytes(path)));
         public void ChangePublish(Action<JsonObject> edit) => Change(PublishReceipt, edit);
         public void ChangeBinding(Action<JsonObject> edit) => Change(BindingReceipt, edit);
         private static void Change(string path, Action<JsonObject> edit) { var root = JsonNode.Parse(File.ReadAllText(path))!.AsObject(); edit(root); File.WriteAllText(path, root.ToJsonString(Options)); }

@@ -22,7 +22,8 @@ internal static class WebFormsReviewAttachmentExecution
             IlBodyLimits: new(MaxBodyCount: budget.IlMaxBodies ?? 50_000,
                 MaxTextLength: budget.IlMaxText, MaxTotalWorkUnits: budget.IlMaxWork),
             WebFormsPublishReceiptPath: plan.Inputs.SingleOrDefault(item => item.Role == "publish-receipt")?.Path,
-            WebFormsPublishedRootPath: config.PublishedRoot);
+            WebFormsPublishedRootPath: config.PublishedRoot,
+            WebFormsPublishSourceRelativeBase: config.PublishSourceRelativeBase);
         string[] Paths(string role) => plan.Inputs.Where(item => item.Role == role)
             .OrderBy(item => item.Path, StringComparer.Ordinal).Select(item => item.Path).ToArray();
     }
