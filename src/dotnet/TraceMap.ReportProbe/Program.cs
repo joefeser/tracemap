@@ -5,9 +5,10 @@ using System.Text.RegularExpressions;
 using Microsoft.Data.Sqlite;
 using TraceMap.Reporting;
 
-// Read-only replay of the native report's bounded composition stages. Never print
-// private input, exception messages, symbols, paths, or stack traces.
-if (args.Length != 2)
+// Replay bounded report composition without altering the retained run. The
+// optional writer replay creates and removes a private scratch folder in TEMP.
+// Never print input, exception messages, symbols, paths, or stack traces.
+if (args.Length is not (2 or 3) || args.Length == 3 && args[2] != "--writer")
 {
     Console.WriteLine("probe=invalid-arguments");
     return 2;
@@ -99,7 +100,33 @@ try
     stage = "grouped-restore";
     _ = GroupedCompiledPathHandoffBuilder.Restore(grouped, projection);
     Console.WriteLine("probe.groupedRestore=passed");
-    Console.WriteLine("probe.result=writer-or-later-not-tested;read-only;no-scan");
+    if (args.Length == 3)
+    {
+        stage = "writer";
+        var scratchLabel = "tracemap-report-probe-" + Guid.NewGuid().ToString("N");
+        var scratchRoot = Path.Combine(Path.GetTempPath(), scratchLabel);
+        try
+        {
+            await GroupedCompiledPathReportWriter.WriteAsync(grouped, Path.Combine(scratchRoot, "compiled"), projection);
+            Console.WriteLine("probe.writer=passed");
+        }
+        finally
+        {
+            try
+            {
+                if (Directory.Exists(scratchRoot)) Directory.Delete(scratchRoot, recursive: true);
+                Console.WriteLine("probe.scratchCleanup=passed");
+            }
+            catch
+            {
+                stage = "scratch-cleanup";
+                Console.WriteLine($"probe.scratchCleanup=failed;label={scratchLabel}");
+                throw new IOException("PROBE_SCRATCH_CLEANUP_FAILED");
+            }
+        }
+        Console.WriteLine("probe.result=writer-passed;later-native-validation-not-tested;no-scan");
+    }
+    else Console.WriteLine("probe.result=writer-or-later-not-tested;read-only;no-scan");
     return 0;
 }
 catch (Exception exception)
