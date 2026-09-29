@@ -90,6 +90,8 @@ public sealed record WebFormsModernizationSummary(
     int GapCount,
     bool Truncated)
 {
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public int? TraversalWorkUnits { get; init; }
     public int ClientBehaviorCount { get; init; }
     public int ServerBehaviorCount { get; init; }
     public IReadOnlyList<string> TruncationReasons { get; init; } = [];
@@ -1173,6 +1175,7 @@ public static class WebFormsModernizationPacketReporter
             sources,
             new(projects.Length, surfaces.Length, chains.Count, boundaries.Count, identityState.Length, batchDataMovement.Length, candidates.Count, uniqueGaps.Length, truncated)
             {
+                TraversalWorkUnits = legacyFlow.Summary.TraversalWorkUnits,
                 ClientBehaviorCount = clientBehavior.Length,
                 ServerBehaviorCount = serverBehavior.Length,
                 TruncationReasons = truncationReasons,

@@ -173,10 +173,15 @@ Truncation reasons are aggregated separately as cycle/depth/frontier/work/path/
 selector categories; other retained reasons remain an explicit category, not
 free-form messages. This prevents cycle protection from looking like exhausted
 work capacity and does not recommend raising limits automatically.
-Unknown work consumption is `null`, never zero or unused capacity. Aggregate
-path variants can exceed the configured **per-root** path cap; aggregate artifact
-bytes are not the renderer's byte counter. Do not infer elapsed/peak/transient
-usage from retained file counts.
+Unknown work consumption is `null`, never zero or unused capacity. New path
+summaries retain the actual search work counter. In native reporting, each page
+or compiled graph query shares its path/work limit across all selected roots;
+each query's counter is not total report-phase work. Historical summaries
+without the field remain unknown. Status identifies this counter's scope as
+`page-and-compiled-graph-query-traversal-all-selected-roots` when both counters
+are retained. This sum can reach twice the per-query cap; graph-admission work
+remains a separate gap. Aggregate artifact bytes are not the renderer's byte
+counter. Do not infer elapsed/peak/transient usage from retained file counts.
 
 Completed scan/report artifacts are rehashed before status is reported; compact
 report counts come from bounded reads of the checkpointed evidence index, not
@@ -613,7 +618,9 @@ directories are refused. Explicit outputs, including failures, are retained.
 The receipt pins the test/CLI generators and bounded corpus input hashes, records
 elapsed time and actual OS peak resident usage per CLI process (`time -l` on
 macOS or `time -v` on Linux), retained disk bytes, facts, paths, coverage and
-truncation. Retained disk excludes transient graph/sorter disk peak; these public
+truncation. It also retains measured page/compiled traversal work and the shared
+per-query cap; these are deterministic search counters, not CPU or runtime calls.
+Retained disk excludes transient graph/sorter disk peak; these public
 synthetic observations do not establish arbitrary graph or private Windows scale.
 The earlier 256-page diagnostic retained all four compiled branches per page
 but hit `ProjectlessPublishMemberWorkLimit` for source member joins. Qualified

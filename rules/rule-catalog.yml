@@ -2554,7 +2554,7 @@ rules:
       - concise private operator status text
     limitations:
       - Point-in-time retained evidence only; no fresh-source, binding, build, original runtime, SQL execution or complete-site acceptance. Input presence is not byte or source-roster equality.
-      - Unknown work, elapsed, peak-memory and transient-disk consumption remains null or an explicit usage gap. Aggregate variant counts are not per-root path usage, and artifact bytes are not rendered-output consumption.
+      - Unknown work, elapsed, peak-memory and transient-disk consumption remains null or an explicit usage gap. Native graph queries share their path/work limit across all selected roots. Retained page/compiled traversal counters measure those independently bounded queries; their sum can reach twice the per-query cap and is not graph admission or total report-phase work. Historical absent counters remain unknown. Artifact bytes are not rendered-output consumption.
       - Completed admitted artifacts are hash-checked. Bounded summaries are read from the pinned immutable evidence index; whole handoffs, private source and unadmitted attempts are not loaded or repaired.
       - JSON is capped at 128 KiB; compiled gap kinds retain at most 50 entries and checkpoint gaps at most 64 with explicit omitted counts. Original artifacts remain lossless.
       - Indexed truncation reasons are counted independently using fixed categories; unrecognized reasons are aggregated as other-retained-reason, not copied as private free-form messages or assumed work exhaustion.
@@ -3788,6 +3788,7 @@ rules:
       - TruncatedByLimit path gap
       - GraphInputLimitReached path gap
     limitations:
+      - New path summaries retain the deterministic traversal work counter, including terminal inventory and witness search, shared across all roots in one search query. It is not graph-admission work, elapsed time, memory, runtime calls or per-root capacity. Historical summaries may omit this optional counter; absence is unknown, not zero. Selector misses may correctly record zero traversal without asserting a complete graph.
       - Truncation means the returned path set is intentionally partial and must not be treated as complete dependency coverage.
       - The triggering evidence span is best-effort and may point to the nearest traversed node rather than the omitted dependency.
       - Web Forms graph-input admission gaps have no source span and discard the incomplete graph before classification; they do not imply missing runtime dependencies or a clean graph.

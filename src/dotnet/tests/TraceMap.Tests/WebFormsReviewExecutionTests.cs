@@ -60,7 +60,8 @@ public sealed class WebFormsReviewExecutionTests
         Assert.Equal(fixture.Config.Operation, status.Operation); Assert.Equal(fixture.Config.PageMode, status.PageMode);
         Assert.Equal(fixture.Config.SourceCommitSha, status.SourceCommitSha);
         Assert.Equal(scenario != "scan-failed", status.RetainedArtifactsVerified);
-        Assert.All(status.Phases, phase => { Assert.Null(phase.WorkUnitsUsed); Assert.NotEmpty(phase.UsageGaps); });
+        Assert.All(status.Phases, phase => Assert.NotEmpty(phase.UsageGaps));
+        Assert.All(status.Phases.Where(phase => phase.Name != "reports"), phase => Assert.Null(phase.WorkUnitsUsed));
         var complete = checkpoint.State == "reports-completed-review-only";
         Assert.Equal(complete, status.WorkbenchPath is not null);
         Assert.Contains(status.NextActions, action => action.Arguments.FirstOrDefault() == (complete ? "query" : "resume"));
@@ -69,9 +70,16 @@ public sealed class WebFormsReviewExecutionTests
             var reports = status.Phases.Single(phase => phase.Name == "reports");
             Assert.Equal(checkpoint.Reports!.Surfaces, reports.ObservedCounts["surfaces"]);
             Assert.Equal(checkpoint.Reports.CompiledPaths, reports.ObservedCounts["compiledVariants"]);
-            Assert.Equal(fixture.Config.Budgets.GraphMaxPaths, reports.ConfiguredLimits["pathsPerRoot"]);
+            Assert.Equal(fixture.Config.Budgets.GraphMaxPaths, reports.ConfiguredLimits["pathsPerGraphQuery"]);
+            Assert.Equal(fixture.Config.Budgets.GraphMaxWork, reports.ConfiguredLimits["traversalWorkPerGraphQuery"]);
+            Assert.NotNull(reports.WorkUnitsUsed);
+            Assert.InRange(reports.WorkUnitsUsed.GetValueOrDefault(), 0, fixture.Config.Budgets.GraphMaxWork * 2);
+            Assert.Equal(reports.WorkUnitsUsed, reports.ObservedCounts["compiledTraversalWorkUnits"] + reports.ObservedCounts["pageTraversalWorkUnits"]);
+            Assert.Equal("page-and-compiled-graph-query-traversal-all-selected-roots", reports.WorkUnitsScope);
+            Assert.Contains("Measured traversal work units: page query", File.ReadAllText(status.WorkbenchPath!), StringComparison.Ordinal);
             Assert.Equal(checkpoint.Reports.Coverage, status.Coverage);
         }
+        else Assert.Null(status.Phases.Single(phase => phase.Name == "reports").WorkUnitsUsed);
         if (scenario == "missing-inputs")
         {
             Assert.True(status.InputLocators.Sum(item => item.Missing) > 0);
@@ -83,6 +91,7 @@ public sealed class WebFormsReviewExecutionTests
         Assert.Equal(0, await TraceMapCommand.RunAsync(["webforms-review", "status", "--run", root], text, fixture.Error));
         Assert.Contains("resumeAdmissionPerformed=false", text.ToString(), StringComparison.Ordinal);
         Assert.Contains("workUsage=not-fully-retained", text.ToString(), StringComparison.Ordinal);
+        if (complete) Assert.Contains("sharedAcrossSelectedRoots=true", text.ToString(), StringComparison.Ordinal);
     }
 
     [Theory]

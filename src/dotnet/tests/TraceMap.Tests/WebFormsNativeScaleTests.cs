@@ -57,6 +57,10 @@ public sealed class WebFormsNativeScaleTests(ITestOutputHelper output)
                 Assert.Equal(handoff.CompiledHandoffSha256, Hash(Path.Combine(fixture.Run,
                     checkpoint.Reports.ReportAttempt, handoff.CompiledHandoffRelativePath)));
                 var restored = GroupedCompiledPathHandoffBuilder.Restore(compiled);
+                Assert.NotNull(restored.Summary.TraversalWorkUnits);
+                Assert.NotNull(handoff.Packet.Summary.TraversalWorkUnits);
+                Assert.InRange(restored.Summary.TraversalWorkUnits.GetValueOrDefault(), 1, fixture.ConfiguredTraversalWork);
+                Assert.InRange(handoff.Packet.Summary.TraversalWorkUnits.GetValueOrDefault(), 1, fixture.ConfiguredTraversalWork);
                 Assert.Equal(checkpoint.Reports.CompiledPaths, restored.Paths.Count);
                 Assert.DoesNotContain(restored.Gaps, gap => gap.GapKind == "ProjectlessPublishMemberWorkLimit");
                 for (var page = 0; page < pages; page++)
@@ -78,9 +82,15 @@ public sealed class WebFormsNativeScaleTests(ITestOutputHelper output)
                     Hash(fixture.ConfigPath), DirectoryBytes(fixture.Published), DirectoryBytes(fixture.Evidence), DirectoryBytes(fixture.Run),
                     checkpoint.FactCount, checkpoint.Reports.CompiledPaths, handoff.Coverage, handoff.Packet.Summary.Truncated,
                     restored.Summary.Truncated,
-                    handoff.Gaps.OrderBy(value => value, StringComparer.Ordinal).ToArray(), phases);
+                    handoff.Gaps.OrderBy(value => value, StringComparer.Ordinal).ToArray(), phases)
+                {
+                    PageTraversalWorkUnits = handoff.Packet.Summary.TraversalWorkUnits,
+                    CompiledTraversalWorkUnits = restored.Summary.TraversalWorkUnits,
+                    TraversalWorkLimitPerQuery = fixture.ConfiguredTraversalWork
+                };
                 cases.Add(item);
                 output.WriteLine($"nativeScale.pages={pages};sourceBytes={item.SourceBytes};publishedBytes={item.PublishedBytes};retainedDiskBytes={item.EvidenceBytes + item.RunBytes};facts={item.Facts};compiledPaths={item.CompiledPaths};coverage={item.Coverage};packetTruncated={item.PacketTruncated};compiledTruncated={item.CompiledTruncated}");
+                output.WriteLine($"nativeScale.traversalWork=page:{item.PageTraversalWorkUnits};compiled:{item.CompiledTraversalWorkUnits};limitPerQuery={item.TraversalWorkLimitPerQuery};sharedAcrossSelectedRoots=true");
                 foreach (var phase in phases)
                     output.WriteLine($"nativeScale.phase={phase.Phase};elapsedMs={phase.ElapsedMilliseconds};peakResidentBytes={phase.PeakResidentBytes?.ToString(CultureInfo.InvariantCulture) ?? "unavailable"};measurement={phase.Measurement}");
             }
@@ -160,7 +170,12 @@ public sealed class WebFormsNativeScaleTests(ITestOutputHelper output)
     private sealed record PhaseUsage(string Phase, long ElapsedMilliseconds, long? PeakResidentBytes, string Measurement);
     private sealed record ScaleCase(int Pages, long SourceBytes, string SourceRosterSha256, string PublishedRosterSha256,
         string ConfigSha256, long PublishedBytes, long EvidenceBytes, long RunBytes, long? Facts, int CompiledPaths,
-        string Coverage, bool PacketTruncated, bool CompiledTruncated, IReadOnlyList<string> Gaps, IReadOnlyList<PhaseUsage> Phases);
+        string Coverage, bool PacketTruncated, bool CompiledTruncated, IReadOnlyList<string> Gaps, IReadOnlyList<PhaseUsage> Phases)
+    {
+        public int? PageTraversalWorkUnits { get; init; }
+        public int? CompiledTraversalWorkUnits { get; init; }
+        public long TraversalWorkLimitPerQuery { get; init; }
+    }
 
     private sealed class Corpus
     {
@@ -172,6 +187,7 @@ public sealed class WebFormsNativeScaleTests(ITestOutputHelper output)
         public string ConfigPath => Path.Combine(Root, "review-config.local.json");
         public string Commit { get; }
         public long SourceBytes { get; }
+        public long ConfiguredTraversalWork { get; }
         public Corpus(string root, int pages)
         {
             Root = root;
@@ -198,10 +214,12 @@ public sealed class WebFormsNativeScaleTests(ITestOutputHelper output)
             Git(Source, "remote", "add", "origin", "https://example.invalid/public-scale.git");
             Git(Source, "add", "."); Git(Source, "commit", "-qm", "Public deterministic scale source");
             Commit = GitMetadataProvider.Detect(Source).CommitSha;
+            var budgets = new WebFormsReviewBudgets(GraphMaxPaths: 4096) { MaxPublishInputFiles = 8192 };
+            ConfiguredTraversalWork = budgets.GraphMaxWork;
             var config = new WebFormsReviewConfig(WebFormsReviewPreflightCommand.ConfigSchema, "fresh", Source, Commit,
                 "projectless", null, [], ["Pages", "App_Code"], "all", [], Published,
                 ["bin/Synthetic.WebSite.dll", "bin/Synthetic.Data.dll"], [], [], [], maps.ToArray(), null,
-                new WebFormsReviewBudgets(GraphMaxPaths: 4096) { MaxPublishInputFiles = 8192 }, PublishSourceRelativePaths: sourcePaths.ToArray());
+                budgets, PublishSourceRelativePaths: sourcePaths.ToArray());
             File.WriteAllText(ConfigPath, JsonSerializer.Serialize(config, JsonOptions));
             var generator = new { schemaVersion = "diagnostic.webforms.synthetic-corpus.v1", ruleId = "diagnostic.webforms.synthetic-corpus.v1",
                 evidenceTier = EvidenceTiers.Tier4Unknown, visibility = "local-only", generatorSha256 = Hash(typeof(Corpus).Assembly.Location),

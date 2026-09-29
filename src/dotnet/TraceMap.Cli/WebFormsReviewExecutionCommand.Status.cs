@@ -5,7 +5,11 @@ namespace TraceMap.Cli;
 
 public sealed record WebFormsReviewStatusPhase(string Name, string State, string ObservationScope,
     IReadOnlyDictionary<string, long> ObservedCounts, IReadOnlyDictionary<string, long> ConfiguredLimits,
-    long? WorkUnitsUsed, IReadOnlyList<string> UsageGaps);
+    long? WorkUnitsUsed, IReadOnlyList<string> UsageGaps)
+{
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public string? WorkUnitsScope { get; init; }
+}
 public sealed record WebFormsReviewStatusAction(string Kind, string Instruction, string? Command, IReadOnlyList<string> Arguments);
 public sealed record WebFormsReviewLocatorStatus(string Role, int Present, int Missing);
 public sealed record WebFormsReviewStatus(
@@ -94,6 +98,8 @@ public static partial class WebFormsReviewExecutionCommand
             var reportCounts = new Dictionary<string, long>();
             var reportBudget = budget.Reports ?? new();
             var coverage = checkpoint?.Reports?.Coverage ?? "not-reported";
+            long? compiledWork = null;
+            long? pageWork = null;
             string? workbench = null;
             if (checkpoint?.State == WebFormsReviewReportExecution.Completed)
             {
@@ -118,6 +124,12 @@ public static partial class WebFormsReviewExecutionCommand
                 reportCounts["compiledGraphEdges"] = Number("compiled", "/header/summary/graphEdgeCount");
                 reportCounts["compiledGaps"] = Number("compiled", "/header/summary/gapCount");
                 reportCounts["compiledTruncated"] = Flag("compiled", "/header/summary/truncated") ? 1 : 0;
+                // Older summaries omit this counter. Absence is unknown, not
+                // invented zero and not a reason to rewrite historical proof.
+                compiledWork = SummaryWork("compiled", "/header/summary");
+                pageWork = SummaryWork("application", "/packet/summary");
+                if (compiledWork is not null) reportCounts["compiledTraversalWorkUnits"] = compiledWork.Value;
+                if (pageWork is not null) reportCounts["pageTraversalWorkUnits"] = pageWork.Value;
                 reportCounts["requestedCompiledRoots"] = Number("application", "/requestedCompiledRoots");
                 reportCounts["omittedCompiledRoots"] = Number("application", "/omittedCompiledRoots");
                 var kinds = ReadQuery(connection, new("compiled", "/header/inventory/gapsByKind", Limit: 50, Depth: 1), token).Result;
@@ -132,17 +144,28 @@ public static partial class WebFormsReviewExecutionCommand
                 WebFormsEvidenceItem Container(string document, string pointer) => ReadQuery(connection, new(document, pointer, Depth: 0), token).Result;
                 long Number(string document, string pointer) => Container(document, pointer).Value!.Value.GetInt64();
                 bool Flag(string document, string pointer) => Container(document, pointer).Value!.Value.GetBoolean();
+                long? SummaryWork(string document, string pointer)
+                {
+                    var summary = ReadQuery(connection, new(document, pointer, Limit: 16, Depth: 1), token).Result;
+                    var item = summary.Children.SingleOrDefault(child => child.Pointer == pointer + "/traversalWorkUnits");
+                    if (item is null) return null;
+                    var value = item.Value!.Value.GetInt64();
+                    if (value < 0 || value > budget.GraphMaxWork) throw Fail("STATUS_TRAVERSAL_WORK_INVALID");
+                    return value;
+                }
             }
             phases.Add(new("reports", checkpoint?.Reports is null ? "pending" : checkpoint.State,
-                "retained aggregate counts; graph path limit is per selected root, not across all variants",
+                "retained aggregate counts; each graph query shares its path/work budget across all selected roots",
                 reportCounts, new Dictionary<string, long> { ["inputFacts"] = reportBudget.MaxInputFacts,
                     ["inputEdges"] = reportBudget.MaxInputEdges, ["inputTextBytes"] = reportBudget.MaxInputTextBytes,
                     ["surfaces"] = reportBudget.MaxSurfaces, ["eventChains"] = reportBudget.MaxEventChains,
-                    ["compiledRoots"] = reportBudget.MaxCompiledRoots, ["pathsPerRoot"] = budget.GraphMaxPaths,
-                    ["depthPerPath"] = budget.GraphMaxDepth, ["traversalWorkPerRoot"] = budget.GraphMaxWork,
+                    ["compiledRoots"] = reportBudget.MaxCompiledRoots, ["pathsPerGraphQuery"] = budget.GraphMaxPaths,
+                    ["depthPerPath"] = budget.GraphMaxDepth, ["traversalWorkPerGraphQuery"] = budget.GraphMaxWork,
                     ["projectionInputBytes"] = reportBudget.MaxProjectionInputBytes, ["renderedOutputBytes"] = reportBudget.MaxOutputBytes },
-                null, ["Graph admission text/fact consumption, traversal work, transient disk, elapsed time and peak usage were not fully retained.",
-                    "Aggregate artifact bytes include combined storage and are not the rendered-output byte counter. Null work usage never means zero or complete coverage."]));
+                compiledWork is not null && pageWork is not null ? checked(compiledWork.Value + pageWork.Value) : null,
+                ["Work usage sums only the independently bounded page and compiled traversal queries when both are retained. Graph admission, transient disk, elapsed time and peak usage remain separate unavailable counters.",
+                    "Aggregate artifact bytes include combined storage and are not the rendered-output byte counter. Null work usage never means zero or complete coverage."])
+                { WorkUnitsScope = compiledWork is null || pageWork is null ? null : "page-and-compiled-graph-query-traversal-all-selected-roots" });
             var observedLocators = plan.Inputs.Select(input => (input.Role, Present: File.Exists(input.Path))).ToArray();
             var locators = observedLocators.GroupBy(input => input.Role, StringComparer.Ordinal).OrderBy(group => group.Key, StringComparer.Ordinal)
                 .Select(group => new WebFormsReviewLocatorStatus(group.Key, group.Count(input => input.Present), group.Count(input => !input.Present))).ToArray();
@@ -184,6 +207,7 @@ public static partial class WebFormsReviewExecutionCommand
                 await output.WriteLineAsync($"checkpoints={history.Sequence};facts={history.ScanCheckpoint?.FactCount ?? 0};missingInputLocators={locators.Sum(item => item.Missing)};readerMatchesOriginalGenerator={status.ReaderMatchesOriginalGenerator};resumeAdmissionPerformed=false");
                 if (reportCounts.Count > 0) await output.WriteLineAsync($"surfaces={reportCounts["surfaces"]};compiledVariants={reportCounts["compiledVariants"]};compiledGroups={reportCounts["compiledGroups"]};compiledGaps={reportCounts["compiledGaps"]};compiledTruncated={reportCounts["compiledTruncated"] != 0}");
                 if (truncations.Count > 0) await output.WriteLineAsync("compiledTruncations=" + string.Join(',', truncations.Select(item => item.Key + ":" + item.Value)));
+                if (reportCounts.Count > 0) await output.WriteLineAsync($"traversalWork=page:{pageWork?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "unknown"};compiled:{compiledWork?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "unknown"};limitPerGraphQuery={budget.GraphMaxWork};sharedAcrossSelectedRoots=true");
                 if (workbench is not null) await output.WriteLineAsync($"webFormsWorkbench={workbench}");
                 foreach (var action in actions) await output.WriteLineAsync($"nextAction={action.Kind}: {action.Instruction}");
                 await output.WriteLineAsync("workUsage=not-fully-retained;use-status-json-for-configured-limits-and-observed-counts;cleanup=false");
