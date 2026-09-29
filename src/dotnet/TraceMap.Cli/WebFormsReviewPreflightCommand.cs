@@ -92,6 +92,7 @@ public static partial class WebFormsReviewPreflightCommand
         tracemap webforms-review preflight --config <private-json> --out <new-durable-run-root>
         tracemap webforms-review run --run <durable-run-root>
         tracemap webforms-review resume --run <durable-run-root>
+        tracemap webforms-review status --run <durable-run-root> [--json]
         tracemap webforms-review query --run <durable-run-root> [--document application|compiled] [--pointer <JSON-pointer>] [--offset <n>] [--limit <1-50>] [--depth <0-8>]
         tracemap webforms-review prepare --config <private-json> --out <new-evidence-root> --attest-exact-source-commit <commit>
         tracemap webforms-review relocate --run <completed-run-root> --out <new-durable-run-root>
@@ -105,6 +106,9 @@ public static partial class WebFormsReviewPreflightCommand
         workbench/grouped handoff reports with pinned, resumable checkpoints.
         Query reads only a completed run's checkpointed evidence index, returning
         at most 128 KiB and 2048 nodes; it never scans, repairs or reads source.
+        Status verifies retained artifacts and retrieves bounded indexed summaries;
+        it lists observed counts, configured limits, unavailable usage and next actions.
+        It never performs fresh-source validation or treats unknown work usage as zero.
         Prepare writes separate operator-declared receipts only with an exact-commit
         attestation and explicit publishSourceRelativePaths; it never copies binaries.
         Prepare partitions larger declared inventories without raising per-receipt limits.

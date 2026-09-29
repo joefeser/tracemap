@@ -109,6 +109,10 @@
     legacy launch/session wrappers remain unchanged. Real work-machine acceptance
     remains part of the final private validation gate.
 - [ ] Expose per-phase budget usage, missing-input guidance, and resumable gaps.
+  - [x] Add a bounded native status command with verified retained phase state,
+    indexed path/group/gap counts, declared limits, missing-input locator guidance
+    and next actions. Explicitly distinguish unknown work/time/peak/transient
+    consumption from zero; retain full instrumentation as a separate acceptance gap.
 - [ ] Avoid full combined-graph materialization while retaining global ambiguity
   and cross-assembly evidence; validate deterministic parity.
   - [x] Reduce unused combined fact-property allocation in SQLite while retaining

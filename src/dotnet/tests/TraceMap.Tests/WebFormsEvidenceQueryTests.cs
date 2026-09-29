@@ -9,6 +9,36 @@ namespace TraceMap.Tests;
 public sealed class WebFormsEvidenceQueryTests
 {
     [Fact]
+    public async Task Status_truncation_aggregation_distinguishes_cycle_from_work_and_never_retains_free_form_reasons()
+    {
+        using var fixture = new Fixture();
+        fixture.Inputs(new { }, new
+        {
+            header = new
+            {
+                gaps = new[]
+                {
+                    new { gapKind = "TruncatedByLimit", reason = "cycle" },
+                    new { gapKind = "TruncatedByLimit", reason = "cycle" },
+                    new { gapKind = "TruncatedByLimit", reason = "work" },
+                    new { gapKind = "TruncatedByLimit", reason = "selector-candidates" },
+                    new { gapKind = "TruncatedByLimit", reason = "public fixture free-form value must not be returned" },
+                    new { gapKind = "OtherGap", reason = "work" }
+                }
+            },
+            unrelated = new[] { new { gapKind = "TruncatedByLimit", reason = "path" } }
+        });
+        await fixture.Write(); using var connection = fixture.Open();
+        var result = WebFormsReviewExecutionCommand.ReadStatusTruncationReasons(connection, CancellationToken.None);
+        Assert.Equal(4, result.Count); Assert.Equal(2, result["cycle"]); Assert.Equal(1, result["work"]);
+        Assert.Equal(1, result["selector-candidates"]); Assert.Equal(1, result["other-retained-reason"]);
+        Assert.DoesNotContain("path", result.Keys);
+        Assert.DoesNotContain(result.Keys, key => key.Contains("fixture", StringComparison.Ordinal));
+        using var cancelled = new CancellationTokenSource(); cancelled.Cancel();
+        Assert.ThrowsAny<OperationCanceledException>(() => WebFormsReviewExecutionCommand.ReadStatusTruncationReasons(connection, cancelled.Token));
+    }
+
+    [Fact]
     public async Task Streaming_index_preserves_values_order_unicode_and_escaped_property_names_deterministically()
     {
         using var fixture = new Fixture();

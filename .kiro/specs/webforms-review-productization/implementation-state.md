@@ -1,5 +1,51 @@
 # Web Forms Review Productization Implementation State
 
+## Native operational status and Git output admission (2026-09-28)
+
+- Exact-head full regression at 8d299bbe3500c30736e6a1e4e53026777413bf27
+  terminated with 2,697 passed, one failed, zero skipped in 11 minutes 52 seconds.
+  CSharpIdentityReceiverFixtureTests reported a generated repository scan commit
+  of `unknown`. This is not a green full-regression result and is not reclassified
+  as harmless test noise.
+- Inspection found that GitMetadataProvider ignored the redirected-pipe drain
+  timeout result and returned Failed=false with null output if an async read had
+  not completed successfully. New source marks incomplete, faulted, cancelled
+  or required-empty output as a failed probe so the existing single retry applies.
+  Process timeout, output-drain timeout and retry count are unchanged; successful
+  empty repository prefixes remain valid. Deterministic pending/fault/cancel/
+  empty/trimmed-output unit tests pin this distinction. This admission gap is
+  verified from code; it is a plausible contributor, not a proven root cause of
+  the one observed fixture failure. Final rebuilt regression remains required.
+- New native `status --run ... [--json]` source reads immutable retained history,
+  verifies admitted artifacts and bounded indexed summary tokens, and gives
+  observed phase/count/coverage/gap state, configured limits, missing declared
+  input locators, the workbench path and a next action. It never scans, repairs,
+  searches TEMP, reads full handoffs or approves cleanup. New machine output has
+  exact current generator and bounded-input commitments and is local-only.
+- Unknown work/time/peak/transient-disk consumption is explicitly unavailable,
+  not zero. Aggregate variants are distinct from per-root path caps, and artifact
+  bytes from renderer byte usage. Status lists at most 50 compiled gap kinds and
+  64 checkpoint gaps with omission counts; lossless original artifacts remain.
+- Source-only edits were made while the full regression remained live; no runtime
+  binary rebuild occurred during that run. Added preflight, failed scan/report,
+  completed, relocated, missing-input, tamper and busy-run status tests. Native
+  Windows/private parity, full phase instrumentation and representative scale
+  remain separate goal gates.
+- Rebuilt broader native/Git/identity regression passed 224/224, zero failed or
+  skipped in 3 minutes 36 seconds. The final scope/commit status fields and strict
+  configuration admission then passed a rebuilt focused 37/37, zero failed or
+  skipped in 18 seconds with no introduced build warnings. This includes the
+  previously failing identity fixture but does not replace full regression.
+- Actual final CLI status verified the relocated 256-page public run: fresh/all,
+  14,100 facts, 1,024 variants/groups, 516 compiled gaps and 256 cycle truncations.
+  It correctly retained partial coverage and reported a different reader
+  generator without implying resume admission. The ordinary sample scan passed
+  with 27 facts and Level1SemanticAnalysis. No proof was deleted.
+- The bounded status subtask is checked; production usage instrumentation stays
+  open. Native Claude evidence guidance now begins with status then bounded
+  queries, not source access, whole-file reads or executing suggested resume
+  actions. Exact committed-head full regression remains to be launched.
+
 ## Explicit completed-run copies and protect-only retention (2026-09-28)
 
 - Exact pushed da2ce561b236b71a971277893df9514c5861ac95 full regression passed

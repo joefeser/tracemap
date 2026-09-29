@@ -156,6 +156,45 @@ pending phase states. Its successful creation is **not a successful scan**.
 Retain the external dependencies. Completed native runs support explicit verified
 copying and a protect-only retention plan below; cleanup is never automatic.
 
+## Native operational status
+
+```text
+tracemap webforms-review status --run <durable-run-root>
+tracemap webforms-review status --run <durable-run-root> --json
+```
+
+The default view is a short operator summary with fresh/attach operation,
+selected/all-page scope, retained phase state, verified
+output status, coverage, fact/path/group counts, missing declared input locators,
+the workbench path and a next action. It does not search TEMP or rescan. The
+local-only JSON adds the retained source commit, generator/input commitments, per-phase observed counts,
+configured limits, categorical compiled-gap counts and explicit usage gaps.
+Truncation reasons are aggregated separately as cycle/depth/frontier/work/path/
+selector categories; other retained reasons remain an explicit category, not
+free-form messages. This prevents cycle protection from looking like exhausted
+work capacity and does not recommend raising limits automatically.
+Unknown work consumption is `null`, never zero or unused capacity. Aggregate
+path variants can exceed the configured **per-root** path cap; aggregate artifact
+bytes are not the renderer's byte counter. Do not infer elapsed/peak/transient
+usage from retained file counts.
+
+Completed scan/report artifacts are rehashed before status is reported; compact
+report counts come from bounded reads of the checkpointed evidence index, not
+whole handoffs. Preflight and failed/interrupted attempts remain distinct from
+admitted completion. A present input locator does not establish unchanged bytes,
+source snapshot equality, original runtime availability or permission to resume.
+The command checks only explicitly pinned file locators, not all current source
+or complete snapshot-roster membership. Missing locators direct the operator to
+restore original inputs, not select newer folders. Resume keeps its original
+tool/runtime and authoritative input gates. A busy run is refused rather than
+showing a falsely stable completion state.
+
+Status is a point-in-time private observation, not fresh-source, build, runtime
+SQL or full-site acceptance. JSON is capped at 128 KiB and refuses corrupt
+checkpoints/artifacts or an unavailable index without a completion output.
+Categorical gap kinds and checkpoint gaps have explicit omission counts when
+their status projection is bounded; the original handoffs remain lossless.
+
 ## Durable completed-run copies and retention planning
 
 Use the explicit native run root, not the newest TEMP folder:

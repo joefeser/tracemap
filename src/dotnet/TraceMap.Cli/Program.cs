@@ -85,6 +85,8 @@ public static class TraceMapCommand
                     ? await WebFormsReviewExecutionCommand.RunAsync(rest, output, error, RunScanAsync, cancellationToken)
                     : rest.FirstOrDefault() == "query"
                     ? await WebFormsReviewExecutionCommand.QueryAsync(rest, output, error, cancellationToken)
+                    : rest.FirstOrDefault() == "status"
+                    ? await WebFormsReviewExecutionCommand.StatusAsync(rest, output, error, cancellationToken)
                     : rest.FirstOrDefault() is "relocate" or "retention-plan"
                     ? await WebFormsReviewExecutionCommand.RetentionAsync(rest, output, error, cancellationToken)
                     : rest.FirstOrDefault() == "prepare"

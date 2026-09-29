@@ -18,10 +18,19 @@ and contiguous checkpoint journal. The native report phase writes a lossless
 completed checkpoint. Do not load the large handoffs or facts wholesale:
 
 ```text
+tracemap webforms-review status --run <durable-run-root> --json
 tracemap webforms-review query --run <durable-run-root>
 tracemap webforms-review query --run <durable-run-root> --document application --pointer /packet/summary --depth 2 --limit 10
 tracemap webforms-review query --run <durable-run-root> --document compiled --pointer /chains --offset 0 --limit 5 --depth 2
 ```
+
+Start with status to establish the operation, selected/all-page scope, retained
+source commit, completed state, coverage, categorical truncation reasons and
+missing input locators. It verifies retained artifacts, not current external
+source or publish bytes. Unknown phase consumption stays unknown; configured
+limits are not measured usage. A different reader generator is not permission
+to resume. Stop and return any incomplete, busy or invalid state to the owner;
+an evidence-review session must not execute its suggested run/resume action.
 
 The checked-in [review prompt](../prompts/review-webforms-modernization-evidence.md)
 now distinguishes native query review from the legacy workflow below. Only use

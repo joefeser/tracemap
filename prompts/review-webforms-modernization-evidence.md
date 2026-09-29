@@ -19,7 +19,14 @@ grouped compiled JSON, SQLite files, or scan facts wholesale. Use only the owner
 approved TraceMap executable and run root. Do not execute `run`, `resume`,
 `prepare`, a source scanner, arbitrary SQL, or a cleanup command during review.
 
-1. Run `tracemap webforms-review query --run <owner-supplied-run-root>`. It must
+1. Run `tracemap webforms-review status --run <owner-supplied-run-root> --json`
+   first. Record operation, selected/all-page scope, retained source commit,
+   coverage, configured limits, observed counts and categorical truncation
+   reasons. Unknown work/time/peak usage is not zero. Status is not fresh
+   external-input validation or resume admission. Stop on an incomplete, busy,
+   invalid or failed state; return it to the owner without executing suggested
+   run/resume actions. Then run
+   `tracemap webforms-review query --run <owner-supplied-run-root>`. It must
    succeed against `reports-completed-review-only` and a checkpointed evidence
    index. Record slice schema, generator/index provenance, private/review-only
    status, coverage, omitted children and limitations. Stop on any mismatch or

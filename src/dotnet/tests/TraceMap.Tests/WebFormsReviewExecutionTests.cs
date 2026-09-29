@@ -11,6 +11,95 @@ public sealed class WebFormsReviewExecutionTests
     private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase, WriteIndented = true };
 
     [Fact]
+    public async Task Preflight_status_is_read_only_and_does_not_create_a_lock_or_invent_execution_usage()
+    {
+        using var fixture = new Fixture(); await fixture.Preflight();
+        var before = Directory.GetFiles(fixture.Run, "*", SearchOption.AllDirectories).ToDictionary(path => path, Hash);
+        using var output = new StringWriter();
+        Assert.Equal(0, await TraceMapCommand.RunAsync(["webforms-review", "status", "--run", fixture.Run, "--json"], output, fixture.Error));
+        var status = JsonSerializer.Deserialize<WebFormsReviewStatus>(output.ToString(), JsonOptions)!;
+        Assert.Equal("preflight-completed-with-deferred-validation", status.State); Assert.Equal(0, status.CheckpointSequence);
+        Assert.False(status.RetainedArtifactsVerified); Assert.Null(status.WorkbenchPath);
+        Assert.Equal("local-only", status.Visibility); Assert.Equal("retained-status-not-fresh-source-or-runtime", status.ClaimLevel);
+        Assert.Equal(Hash(typeof(WebFormsReviewExecutionCommand).Assembly.Location), status.GeneratorSha256);
+        Assert.Equal(64, status.BoundedInputSha256.Length); Assert.All(status.Phases, phase => Assert.Null(phase.WorkUnitsUsed));
+        Assert.Equal(fixture.Config.Operation, status.Operation); Assert.Equal(fixture.Config.PageMode, status.PageMode);
+        Assert.Equal(fixture.Config.SourceCommitSha, status.SourceCommitSha);
+        Assert.Contains(status.NextActions, action => action.Arguments.FirstOrDefault() == "run");
+        Assert.False(File.Exists(Path.Combine(fixture.Run, ".native-run.lock")));
+        foreach (var (path, sha) in before) Assert.Equal(sha, Hash(path));
+        Assert.Equal(before.Count, Directory.GetFiles(fixture.Run, "*", SearchOption.AllDirectories).Length);
+    }
+
+    [Theory]
+    [InlineData("scan-failed")]
+    [InlineData("scan-completed")]
+    [InlineData("reports-failed")]
+    [InlineData("reports-completed")]
+    [InlineData("relocated")]
+    [InlineData("missing-inputs")]
+    public async Task Native_status_reports_actual_retained_state_and_bounded_counts_without_scanning_or_repair(string scenario)
+    {
+        using var fixture = new Fixture(); fixture.AddPublicEventFixture(); await fixture.Preflight();
+        Assert.Equal(scenario == "scan-failed" ? 1 : 0, await fixture.Execute("run", scenario == "scan-failed" ? (_, _, _, _) => Task.FromResult(1) : Scan));
+        if (scenario == "reports-failed") Assert.Equal(1, await fixture.ExecuteReports("resume", (_, _, _, _) => throw new InvalidOperationException("public failure")));
+        else if (scenario is not ("scan-failed" or "scan-completed")) Assert.Equal(0, await fixture.ExecuteReports("resume", WebFormsReviewReportExecution.WriteAsync));
+        var root = fixture.Run;
+        if (scenario == "relocated")
+        {
+            root = Path.Combine(fixture.Root, "copy");
+            Assert.Equal(0, await TraceMapCommand.RunAsync(["webforms-review", "relocate", "--run", fixture.Run, "--out", root], TextWriter.Null, fixture.Error));
+        }
+        if (scenario == "missing-inputs") Directory.Move(fixture.Source, Path.Combine(fixture.Root, "source-preserved-elsewhere"));
+        var before = Directory.GetFiles(root, "*", SearchOption.AllDirectories).ToDictionary(path => path, Hash);
+        using var output = new StringWriter();
+        Assert.Equal(0, await TraceMapCommand.RunAsync(["webforms-review", "status", "--run", root, "--json"], output, fixture.Error));
+        var status = JsonSerializer.Deserialize<WebFormsReviewStatus>(output.ToString(), JsonOptions)!;
+        var checkpoint = fixture.LastCheckpoint();
+        Assert.Equal(checkpoint.State, status.State); Assert.Equal(checkpoint.Sequence, status.CheckpointSequence);
+        Assert.Equal(fixture.Config.Operation, status.Operation); Assert.Equal(fixture.Config.PageMode, status.PageMode);
+        Assert.Equal(fixture.Config.SourceCommitSha, status.SourceCommitSha);
+        Assert.Equal(scenario != "scan-failed", status.RetainedArtifactsVerified);
+        Assert.All(status.Phases, phase => { Assert.Null(phase.WorkUnitsUsed); Assert.NotEmpty(phase.UsageGaps); });
+        var complete = checkpoint.State == "reports-completed-review-only";
+        Assert.Equal(complete, status.WorkbenchPath is not null);
+        Assert.Contains(status.NextActions, action => action.Arguments.FirstOrDefault() == (complete ? "query" : "resume"));
+        if (complete)
+        {
+            var reports = status.Phases.Single(phase => phase.Name == "reports");
+            Assert.Equal(checkpoint.Reports!.Surfaces, reports.ObservedCounts["surfaces"]);
+            Assert.Equal(checkpoint.Reports.CompiledPaths, reports.ObservedCounts["compiledVariants"]);
+            Assert.Equal(fixture.Config.Budgets.GraphMaxPaths, reports.ConfiguredLimits["pathsPerRoot"]);
+            Assert.Equal(checkpoint.Reports.Coverage, status.Coverage);
+        }
+        if (scenario == "missing-inputs")
+        {
+            Assert.True(status.InputLocators.Sum(item => item.Missing) > 0);
+            Assert.Contains(status.NextActions, action => action.Kind == "restore-input-locators");
+        }
+        foreach (var (path, sha) in before) Assert.Equal(sha, Hash(path));
+        Assert.Equal(before.Count, Directory.GetFiles(root, "*", SearchOption.AllDirectories).Length);
+        using var text = new StringWriter();
+        Assert.Equal(0, await TraceMapCommand.RunAsync(["webforms-review", "status", "--run", root], text, fixture.Error));
+        Assert.Contains("resumeAdmissionPerformed=false", text.ToString(), StringComparison.Ordinal);
+        Assert.Contains("workUsage=not-fully-retained", text.ToString(), StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("changed-artifact")]
+    [InlineData("busy")]
+    public async Task Native_status_refuses_corrupt_or_concurrently_locked_evidence(string scenario)
+    {
+        using var fixture = new Fixture(); await fixture.Preflight(); Assert.Equal(0, await fixture.Execute("run", Scan));
+        var checkpoint = fixture.LastCheckpoint();
+        if (scenario == "changed-artifact") File.AppendAllText(Path.Combine(fixture.Run, checkpoint.Artifacts[0].RelativePath), "changed");
+        using var held = scenario == "busy" ? new FileStream(Path.Combine(fixture.Run, ".native-run.lock"), FileMode.Open, FileAccess.Read, FileShare.None) : null;
+        using var output = new StringWriter();
+        Assert.Equal(1, await TraceMapCommand.RunAsync(["webforms-review", "status", "--run", fixture.Run, "--json"], output, fixture.Error));
+        Assert.Empty(output.ToString()); Assert.Equal(checkpoint.Sequence, fixture.LastCheckpoint().Sequence);
+    }
+
+    [Fact]
     public async Task Completed_relocation_preserves_original_checkpoints_artifacts_query_and_resume_without_rewriting()
     {
         using var fixture = new Fixture();

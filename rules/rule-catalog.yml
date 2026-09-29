@@ -2545,6 +2545,21 @@ rules:
       - Distribution dependency bytes and runtime version participate in execution identity; external SDK/toolchain bytes are not pinned and remain an explicit gap rather than build authenticity or reproducibility proof.
       - Failed or cancelled attempt bytes are retained but not admitted as completed evidence; retry allocates a fresh owned attempt and never rewrites parent scans or old successful artifacts.
       - Configured admission bounds do not establish representative scale or bounded scanner memory; output traversal admits at most 256 filesystem entries and run history at most 256 checkpoints.
+  - id: workflow.webforms.compiled-review-status.v1
+    name: Private retained native Web Forms operational status
+    description: Reads an explicitly selected retained run, verifies admitted artifacts and bounded indexed summaries, and reports phase states, observed counts, configured limits, locator presence, categorical coverage gaps and resumable next actions without execution or repair.
+    evidenceTier: Tier2Structural
+    emits:
+      - webforms-review-status.v1 local-only operational JSON
+      - concise private operator status text
+    limitations:
+      - Point-in-time retained evidence only; no fresh-source, binding, build, original runtime, SQL execution or complete-site acceptance. Input presence is not byte or source-roster equality.
+      - Unknown work, elapsed, peak-memory and transient-disk consumption remains null or an explicit usage gap. Aggregate variant counts are not per-root path usage, and artifact bytes are not rendered-output consumption.
+      - Completed admitted artifacts are hash-checked. Bounded summaries are read from the pinned immutable evidence index; whole handoffs, private source and unadmitted attempts are not loaded or repaired.
+      - JSON is capped at 128 KiB; compiled gap kinds retain at most 50 entries and checkpoint gaps at most 64 with explicit omitted counts. Original artifacts remain lossless.
+      - Indexed truncation reasons are counted independently using fixed categories; unrecognized reasons are aggregated as other-retained-reason, not copied as private free-form messages or assumed work exhaustion.
+      - Busy, changed or unavailable owned evidence is refused without a completion response. Original-tool resume admission is separate; no TEMP discovery, cleanup or publication occurs.
+      - Private paths and hashes are local integrity commitments, not authenticated signatures or shareable projected evidence.
   - id: workflow.webforms.compiled-review-location.v1
     name: Explicit private completed-run location copy
     description: Copies a selected hash-verified completed native run into a new separate durable root while retaining original checkpoint and artifact bytes and recording exact generator, bounded file roster, original policy locator and destination commitments.
