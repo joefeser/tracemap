@@ -3,13 +3,30 @@ param([string[]]$ReviewRoots = @())
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
-if ($ReviewRoots.Count -eq 0) {
-    $ReviewRoots = @(
-        (Read-Host 'Copied Web Forms review folder (the folder containing config)'),
-        (Read-Host 'Copied backend review folder (leave blank to migrate only one)')
-    ) | Where-Object { ![string]::IsNullOrWhiteSpace($_) }
+if (!$PSBoundParameters.ContainsKey('ReviewRoots')) {
+    Write-Host 'Select the copied review folders. Nothing will be scanned or overwritten.'
+    $first = Read-Host 'Copied Web Forms review folder (parent of config)'
+    if ([string]::IsNullOrWhiteSpace($first)) { throw 'WEBFORMS_CONFIG_MIGRATION_REVIEW_ROOT_REQUIRED' }
+    $second = Read-Host 'Copied backend review folder (leave blank to migrate only one)'
+    $ReviewRoots = @($first, $second)
 }
+$ReviewRoots = @($ReviewRoots | Where-Object { ![string]::IsNullOrWhiteSpace($_) } | ForEach-Object { $_.Trim().Trim('"') })
 if ($ReviewRoots.Count -eq 0) { throw 'WEBFORMS_CONFIG_MIGRATION_REVIEW_ROOT_REQUIRED' }
+# Check every selection before spending time building or producing any drafts.
+foreach ($root in $ReviewRoots) {
+    $configFolder = Join-Path $root 'config'
+    $configs = @('webforms-review.json', 'webforms-review.jsonc' | ForEach-Object {
+        $candidate = Join-Path $configFolder $_
+        if (Test-Path -LiteralPath $candidate -PathType Leaf) { $candidate }
+    })
+    if ($configs.Count -ne 1) {
+        Write-Host "Selected review folder: $root"
+        throw "WEBFORMS_CONFIG_MIGRATION_CONFIG_SELECTION: expected exactly one config/webforms-review.json or .jsonc; found $($configs.Count). Select the parent of config."
+    }
+    if (Test-Path -LiteralPath (Join-Path $root 'native-config')) {
+        throw 'WEBFORMS_CONFIG_MIGRATION_OUTPUT_EXISTS: native-config already exists; preserved unchanged.'
+    }
+}
 $repo = Split-Path $PSScriptRoot -Parent
 $project = Join-Path $repo 'src/dotnet/TraceMap.Cli/TraceMap.Cli.csproj'
 dotnet build $project --nologo --verbosity quiet
