@@ -17,6 +17,11 @@ function Value($obj, [string]$name) {
 function Json($obj) { ConvertTo-Json -InputObject $obj -Depth 100 -Compress }
 function Hash([string]$text) { [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($text))).ToLowerInvariant() }
 function Html([string]$text) { [Net.WebUtility]::HtmlEncode($text) }
+function BoundedText([string]$text, [int]$limit = 1024) {
+    if ($text.Length -gt $limit) { return $text.Substring(0, $limit) + ' [display truncated]' }
+    return $text
+}
+function JsonHtml($obj, [int]$limit = 65536) { Html (BoundedText (Json $obj) $limit) }
 $stream = [IO.File]::Open($Report, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::Read)
 try {
     if ($stream.Length -gt 256MB) { throw 'WEBFORMS_SQL_ROUTE_INPUT_LIMIT' }
@@ -92,25 +97,56 @@ $generator = (Get-FileHash -LiteralPath $PSCommandPath -Algorithm SHA256).Hash.T
 $bounded = Hash ("webforms-handler-sql-ledger.v1`n$inputHash`n$generator")
 $html = [Text.StringBuilder]::new()
 [void]$html.AppendLine('<!doctype html><html lang="en"><meta charset="utf-8"><title>Handler SQL evidence ledger</title><style>body{font:16px/1.5 system-ui;margin:2rem;max-width:1100px}pre{white-space:pre-wrap;overflow-wrap:anywhere}</style><h1>Handler SQL evidence ledger</h1><p>PRIVATE, partial, as-supplied static evidence. Rule workflow.webforms.handler-sql-ledger.v1; Tier4Unknown. Native input admission is not performed. No scan, graph walk, SQL execution, runtime dispatch or parity proof. Database API reachability does not identify command text or a stored procedure. No SQL is inferred from method names. Source bridges remain candidates, not IL calls.</p>')
-[void]$html.AppendLine('<h2>Saved query and coverage</h2><pre>' + (Html (Json @{ query = (Value $header 'query'); coverage = (Value $header 'reportCoverage'); summary = (Value $header 'summary'); sources = (Value $header 'sources') })) + '</pre>')
+[void]$html.AppendLine('<h2>Saved query and coverage</h2><pre>' + (JsonHtml @{ query = (Value $header 'query'); coverage = (Value $header 'reportCoverage'); summary = (Value $header 'summary'); sources = (Value $header 'sources') }) + '</pre>')
 [void]$html.AppendLine("<p>Retained route-record groups: $($groups.Count); retained variants: $($rows.Count); database surface occurrences: $databaseNodes; SQL surface occurrences: $sqlNodes. Groups use full node records; these counts are not chain-parity counts. Occurrences include repeated evidence variants.</p>")
 [void]$html.AppendLine('<p>GAP: This projection does not establish command-text or parameter propagation from the handler. A sql-query surface can be a framework API terminal, including Fill; its presence is not proof of a resolved SQL statement. Null evidence fields remain unavailable. Any retained table/operation/hash is shown only as supplied, without proving its binding to an executed command.</p>')
 if ($sqlNodes -eq 0) { [void]$html.AppendLine('<p>GAP: No retained SQL query/persistence surface in these paths. Command text, procedure identity and SQL parameter values are unresolved here. A Fill endpoint alone does not close this gap.</p>') }
 $shown = 0
+$routeDisplayBytes = 0
 foreach ($key in $groups.Keys) {
-    if ($shown -ge 500) { break }; $shown++
+    if ($shown -ge 500) { break }
     $group = $groups[$key]
-    [void]$html.AppendLine('<details><summary>' + (Html "$key — $($group.variants) variants") + '</summary><h3>Route labels (not SQL)</h3><pre>' + (Html ($group.labels -join "`n→ ")) + '</pre><h3>Retained database / SQL surface fields</h3><pre>' + (Html (Json $group.endpoints)) + '</pre><h3>Non-IL transitions</h3><pre>' + (Html (Json @($group.bridges))) + '</pre>')
+    $section = '<details><summary>' + (Html "$key — $($group.variants) variants") + '</summary><h3>Route labels (not SQL)</h3><pre>' + (Html (BoundedText ($group.labels -join "`n→ ") 65536)) + '</pre><h3>Retained database / SQL surface fields</h3><pre>' + (JsonHtml $group.endpoints) + '</pre><h3>Non-IL transitions</h3><pre>' + (JsonHtml @($group.bridges)) + '</pre>'
+    $sectionBytes = [Text.Encoding]::UTF8.GetByteCount($section)
+    if ($routeDisplayBytes + $sectionBytes -gt 8MB) { break }
+    $routeDisplayBytes += $sectionBytes; $shown++
+    [void]$html.AppendLine($section)
     if ($group.endpoints.Count -eq 0) { [void]$html.AppendLine('<p>GAP: No recognized retained database surface for this route.</p>') }
     if ($group.edgeEvidenceMissing) { [void]$html.AppendLine('<p>GAP: Edge evidence absent in at least one variant; transition scope cannot be classified.</p>') }
     [void]$html.AppendLine('</details>')
 }
-[void]$html.AppendLine('<h2>Retained report gaps</h2><pre>' + (Html (Json (Value $header 'gaps'))) + '</pre>')
+[void]$html.AppendLine('<h2>Retained report gaps (bounded summary)</h2>')
+$gapGroups = [Collections.Generic.SortedDictionary[string,object]]::new([StringComparer]::Ordinal)
+$gapCount = 0; $ungroupedGaps = 0
+foreach ($gap in (Value $header 'gaps')) {
+    if ($gap -isnot [Collections.IDictionary]) { throw 'WEBFORMS_SQL_ROUTE_GAP_INVALID' }
+    $gapCount++
+    $kind = [string](Value $gap 'gapKind'); $reason = [string](Value $gap 'reason')
+    $gapKey = Hash (Json @($kind, $reason))
+    if (!$gapGroups.ContainsKey($gapKey)) {
+        if ($gapGroups.Count -ge 1000) { $ungroupedGaps++; continue }
+        $gapGroups[$gapKey] = @{ kind = (BoundedText $kind); reason = (BoundedText $reason); count = 0; samples = [Collections.Generic.List[object]]::new() }
+    }
+    $bucket = $gapGroups[$gapKey]; $bucket.count++
+    if ($bucket.samples.Count -lt 3) {
+        $sample = @{}
+        foreach ($field in @('gapId','ruleId','evidenceTier','nodeId','combinedFactId','filePath','startLine','endLine','commitSha','extractorVersion','evidenceScope','message')) { $sample[$field] = BoundedText ([string](Value $gap $field)) }
+        $bucket.samples.Add($sample)
+    }
+}
+$gapShown = 0
+foreach ($key in $gapGroups.Keys) {
+    if ($gapShown -ge 200) { break }; $gapShown++
+    $bucket = $gapGroups[$key]
+    [void]$html.AppendLine('<details><summary>' + (Html "$($bucket.kind) / $($bucket.reason) — $($bucket.count) gaps") + '</summary><pre>' + (JsonHtml $bucket.samples.ToArray() 8192) + '</pre></details>')
+}
+[void]$html.AppendLine("<p>Retained gaps: $gapCount; grouped categories: $($gapGroups.Count); displayed categories: $gapShown; overflow-category gaps: $ungroupedGaps. At most 3 samples per category, fields limited to 1,024 characters. This is a display projection, not complete gap evidence; originals remain unchanged.</p>")
 [void]$html.AppendLine("<p>Displayed groups: $shown (limit 500). All input groups contribute to counts.</p><pre>Generator SHA-256: $generator`nBounded input SHA-256: $bounded`nInput file SHA-256: $inputHash</pre></html>")
 $bytes = [Text.Encoding]::UTF8.GetBytes($html.ToString())
 if ($bytes.Length -gt 32MB) { throw 'WEBFORMS_SQL_ROUTE_OUTPUT_LIMIT' }
 $output = [IO.File]::Open($OutputPath, [IO.FileMode]::CreateNew, [IO.FileAccess]::Write, [IO.FileShare]::None)
 try { $output.Write($bytes) } finally { $output.Dispose() }
 Write-Output "sqlRoute.exactGroups=$($groups.Count);variants=$($rows.Count);databaseSurfaceOccurrences=$databaseNodes;sqlSurfaceOccurrences=$sqlNodes"
+Write-Output "sqlRoute.retainedGaps=$gapCount;gapCategories=$($gapGroups.Count);displayedGapCategories=$gapShown;overflowCategoryGaps=$ungroupedGaps;displayedRouteGroups=$shown"
 Write-Output 'sqlRoute=local-ledger-written;partial;unadmitted-input;no-scan;no-traversal;no-sql-executed'
 if ($Open) { Invoke-Item -LiteralPath $OutputPath }
