@@ -14,5 +14,11 @@ try {
     $result = @(& $helper -RunFolder $folder)
     if ($result -notcontains 'commandFacts.ManagedIlCallValuesObserved=0' -or
         $result -notcontains 'commandFacts.ManagedIlDatabaseCommandCandidate=0') { throw 'Zero counts incorrect' }
+    [IO.File]::WriteAllText($path, (' ' * 32760) + '{"properties":{"gapKind":"IlCommandUnknownCallEffects"}}' + "`n" +
+        '{"properties":{"gapKind":"IlCommandBindingWorkLimit"}}')
+    $result = @(& $helper -RunFolder $folder)
+    if ($result -notcontains 'commandFacts.gap.IlCommandUnknownCallEffects=1' -or
+        $result -notcontains 'commandFacts.gap.IlCommandBindingWorkLimit=1' -or
+        $result -notcontains 'commandFacts.gap.IlCommandTextBindingUnavailable=0') { throw 'Gap counts incorrect' }
     Write-Output 'webFormsCommandFactsPublicTests=passed'
 } finally { [IO.Directory]::Delete($folder, $true) }
