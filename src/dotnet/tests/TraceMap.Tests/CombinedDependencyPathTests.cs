@@ -11,6 +11,31 @@ namespace TraceMap.Tests;
 
 public sealed class CombinedDependencyPathTests
 {
+    [Fact]
+    public async Task Incomplete_reverse_distance_pass_is_discarded_without_hiding_the_selected_path()
+    {
+        using var temp = new TempDirectory();
+        var manifest = Manifest("server", "reverse-distance-fallback") with { CommitSha = new string('a', 40) };
+        var index = Path.Combine(temp.Path, "index.sqlite");
+        var combined = Path.Combine(temp.Path, "combined.sqlite");
+        var facts = new List<CodeFact>
+        {
+            CallFact(manifest, "Selected.Root()", "Shared.Query()", "Graph.cs", 1),
+            QueryPatternFact(manifest, "Shared.Query()", "Graph.cs", 2)
+        };
+        facts.AddRange(Enumerable.Range(0, 40).Select(n =>
+            CallFact(manifest, $"Unrelated.R{n}()", "Shared.Query()", "Noise.cs", n + 10)));
+        SqliteIndexWriter.Write(index, manifest, facts);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([index], combined, ["server"]));
+        var report = await CombinedDependencyPathReporter.BuildReportAsync(new(combined, temp.Path,
+            FromSymbol: "Selected.Root()", ToSurface: "sql-query", IncludeLegacyRoots: true,
+            MaxDepth: 4, MaxFrontier: 8) { ExactFromSymbol = true, MaxTraversalWork = 1024 });
+        Assert.Single(report.Paths);
+        Assert.Contains(report.Paths[0].Nodes, node => node.SymbolId == "Shared.Query()");
+        Assert.DoesNotContain(report.Gaps, gap => gap.GapKind == "TruncatedByLimit" && gap.Reason == "work");
+        Assert.InRange(report.Summary.TraversalWorkUnits!.Value, 1, 1024);
+    }
+
     [Theory]
     [InlineData("compiled-il-call", true, true)]
     [InlineData("compiled-il-callvirt-candidate", true, true)]

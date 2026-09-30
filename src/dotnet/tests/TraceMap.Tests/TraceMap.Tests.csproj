@@ -28,6 +28,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="../../../../samples/fixture-build/deep-projectless/DeepWebsite.vbproj" ReferenceOutputAssembly="false" SkipGetTargetFrameworkProperties="true" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\..\TraceMap.Core\TraceMap.Core.csproj" />
     <ProjectReference Include="..\..\TraceMap.Storage\TraceMap.Storage.csproj" />
     <ProjectReference Include="..\..\TraceMap.Reporting\TraceMap.Reporting.csproj" />

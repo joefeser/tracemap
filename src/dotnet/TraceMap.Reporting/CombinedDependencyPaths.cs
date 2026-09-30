@@ -333,7 +333,7 @@ public static partial class CombinedDependencyPathReporter
     private const int MaxTraversalDiagnosticShapes = 32;
     private const string Version = "1.0";
     private const string Algorithm = "bounded-bfs";
-    private const string AlgorithmVersion = "1.2";
+    private const string AlgorithmVersion = "1.3";
     private const int MarkdownPathLimit = 100;
     private const int MarkdownInventoryLimit = 200;
     private const string EndpointMatchRuleId = "combined.paths.endpoint-match.v1";
@@ -4146,6 +4146,35 @@ public static partial class CombinedDependencyPathReporter
                 or "projectless-source-pdb-identity" or "projectless-publish-member-candidate"
                 or "projectless-publish-method-candidate");
 
+    private static (Dictionary<string, int>? Distances, int Work) FindTerminalDistances(
+        EvidenceGraph graph, IReadOnlySet<string> terminals, int maxDepth, int maxStates, int maxWork)
+    {
+        if (terminals.Count > maxStates) return (null, 0);
+        var distances = terminals.Order(StringComparer.Ordinal).ToDictionary(id => id, _ => 0, StringComparer.Ordinal);
+        var pending = new Queue<string>(distances.Keys);
+        var work = 0;
+        while (pending.TryDequeue(out var node))
+        {
+            if (work >= maxWork) return (null, work);
+            work++;
+            var depth = distances[node];
+            if (depth >= maxDepth) continue;
+            using var predecessors = graph.Incoming.Predecessors(node).GetEnumerator();
+            while (true)
+            {
+                if (work >= maxWork) return (null, work);
+                if (!predecessors.MoveNext()) break;
+                work++;
+                var predecessor = predecessors.Current;
+                if (distances.ContainsKey(predecessor)) continue;
+                if (distances.Count >= maxStates) return (null, work);
+                distances.Add(predecessor, depth + 1);
+                pending.Enqueue(predecessor);
+            }
+        }
+        return (distances, work);
+    }
+
     private static SearchResult Search(EvidenceGraph graph, IReadOnlyList<GraphNode> starts, IReadOnlySet<string> terminalNodeIds, int maxDepth, int maxPaths, int maxFrontier, bool depthFirst = false, int maxTraversalWork = 100_000, bool inventoryDistinctTerminals = false, bool compiledOnly = false)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxTraversalWork);
@@ -4198,6 +4227,18 @@ public static partial class CombinedDependencyPathReporter
         var sequence = 0;
         var work = 0;
         var workExhausted = false;
+        Dictionary<string, int>? terminalDistances = null;
+        if (depthFirst && !compiledOnly && !inventoryDistinctTerminals
+            && terminalNodeIds.Count > 0 && maxTraversalWork >= 1024)
+        {
+            // A reverse over-approximation can only rule out a depth-bounded
+            // completion; it cannot admit a path or prove runtime reachability.
+            // Charge every visited key/reference to the same global work budget.
+            // If the bounded pass is incomplete, discard it and enumerate as
+            // before. Never prune using a partial reverse index.
+            (terminalDistances, work) = FindTerminalDistances(graph, terminalNodeIds,
+                maxDepth, maxFrontier, maxTraversalWork / 4);
+        }
         if (inventoryDistinctTerminals)
         {
             var inventory = FindDistinctTerminalWitnesses(
@@ -4396,6 +4437,19 @@ public static partial class CombinedDependencyPathReporter
                 // Once attached, source reconciliation/receiver/constructor edges
                 // cannot be used to leave and re-enter the compiled call tree.
                 if (compiledOnly && !CompiledBaselineAllowsEdge(edge.EdgeKind, state.CompiledBaselineEntered)) continue;
+                if (terminalDistances is not null && terminalDistances.ContainsKey(state.RootNodeId)
+                    && (!terminalDistances.TryGetValue(edge.ToNodeId, out var remainingDepth)
+                    || remainingDepth > maxDepth - state.EdgeIds.Count - 1))
+                {
+                    // The over-approximate graph cannot finish this branch inside
+                    // the depth cap. Retain an explicit depth gap; do not turn
+                    // pruning into a NoBackendEvidence or completeness claim.
+                    truncated = true;
+                    traversal[state.RootNodeId].MarkTruncated("depth");
+                    RecordNodeShape(traversal[state.RootNodeId], edge.ToNodeId, frontier: true);
+                    gaps.Add(TruncatedGap("depth", edge.ToNodeId, graph));
+                    continue;
+                }
                 if (IsDispatchCandidateCrossHop(graph, state, edge))
                 {
                     edgeFilteredByDispatchCrossHop = true;
@@ -6439,6 +6493,15 @@ public static partial class CombinedDependencyPathReporter
     {
         return edgeKind switch
         {
+            // Encoded calls and their evidenced root attachments must be walked
+            // before source alias/receiver detours. Otherwise a deep mixed graph
+            // can enumerate exponentially many bridge variants without ever
+            // reaching its already-admitted IL terminal. This changes scheduling,
+            // not admission, evidence tiers, or the global work/path limits.
+            "compiled-il-call" or "compiled-il-callvirt-candidate"
+                or "compiled-database-api-candidate" or "compiled-source-identity"
+                or "projectless-source-pdb-identity" or "projectless-publish-member-candidate"
+                or "projectless-publish-method-candidate" => 0,
             "endpoint-match" => 0,
             "calls" => 1,
             "creates" => 2,
@@ -6624,6 +6687,7 @@ public static partial class CombinedDependencyPathReporter
         public GraphEdges Edges { get; } = new(store);
         public GraphEdgeIds EdgesById { get; } = new(store);
         public GraphOutgoing Outgoing { get; } = new(store);
+        public GraphIncoming Incoming { get; } = new(store);
         public HashSet<string> CallFactSourceNodeIds { get; } = new(StringComparer.Ordinal);
         public HashSet<string> MethodInvocationSourceNodeIds { get; } = new(StringComparer.Ordinal);
         public HashSet<string> SourceBodyEvidenceNodeIds { get; } = new(StringComparer.Ordinal);
@@ -6751,6 +6815,7 @@ public static partial class CombinedDependencyPathReporter
                 throw new ReportInputLimitException("graph-edges");
 
             Edges.Add(edge);
+            Incoming.Add(edge);
             if (store is not null) return;
             EdgesById[edge.EdgeId] = edge;
             Outgoing.Add(edge);

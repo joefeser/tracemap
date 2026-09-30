@@ -1,0 +1,103 @@
+#Requires -Version 7.0
+[CmdletBinding()]
+param(
+    [string]$TraceMapRoot = (Split-Path (Split-Path $PSScriptRoot -Parent) -Parent),
+    [string]$OutputRoot,
+    [switch]$RequireWindowsPublish
+)
+Set-StrictMode -Version Latest
+$ErrorActionPreference = 'Stop'
+if ($RequireWindowsPublish -and !$IsWindows) { throw 'DEEP_CORPUS_WINDOWS_REQUIRED' }
+$TraceMapRoot = [IO.Path]::GetFullPath($TraceMapRoot)
+$output = if ($OutputRoot) { [IO.Path]::GetFullPath($OutputRoot) } else {
+    Join-Path ([IO.Path]::GetTempPath()) ('tracemap-deep-corpus-' + [guid]::NewGuid().ToString('N'))
+}
+if (Test-Path -LiteralPath $output) { throw 'DEEP_CORPUS_OUTPUT_NOT_FRESH' }
+[void][IO.Directory]::CreateDirectory($output)
+$previous = $env:TRACEMAP_DEEP_CORPUS_ROOT
+try {
+    $env:TRACEMAP_DEEP_CORPUS_ROOT = $output
+    $sourceInputs = @(
+        'samples/messy-dotnet-workspace/vb-deep-projectless/Lookup.aspx',
+        'samples/messy-dotnet-workspace/vb-deep-projectless/Lookup.aspx.vb',
+        'samples/messy-dotnet-workspace/vb-deep-projectless/Web.config',
+        'samples/messy-dotnet-workspace/vb-publish-crossdll-framework/PublicProof.Framework.vbproj',
+        'samples/fixture-build/deep-projectless/DeepWebsite.vbproj',
+        'src/dotnet/tests/TraceMap.Tests/IlCommandBindingExtractorTests.cs',
+        'src/dotnet/tests/TraceMap.Tests/DeepProjectlessNativeWorkflowTests.cs',
+        'src/dotnet/tests/TraceMap.Tests/WindowsDeepCorpusTheoryAttribute.cs',
+        'src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj',
+        'src/dotnet/tests/TraceMap.Tests/CombinedDependencyPathTests.cs',
+        'src/dotnet/TraceMap.Reporting/CombinedDependencyPaths.cs',
+        'src/dotnet/TraceMap.Reporting/CombinedDependencyPaths.IndexedGraph.cs',
+        'scripts/validation/Test-PublicWebFormsPublish.ps1'
+    )
+    function SourceRoster {
+        $provider = Join-Path $TraceMapRoot 'samples/messy-dotnet-workspace/vb-publish-crossdll-framework'
+        $inputs = @($sourceInputs) + @(Get-ChildItem -LiteralPath $provider -File -Filter '*.vb' |
+            ForEach-Object { [IO.Path]::GetRelativePath($TraceMapRoot, $_.FullName).Replace('\', '/') })
+        @($inputs | Sort-Object | ForEach-Object {
+            $path = Join-Path $TraceMapRoot $_
+            if ((Get-Item -LiteralPath $path).Length -gt 1048576) { throw 'DEEP_CORPUS_INPUT_LIMIT' }
+            $_ + ':' + (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant()
+        })
+    }
+    $beforeInputs = @(SourceRoster)
+    $generatorSha = (Get-FileHash -LiteralPath $PSCommandPath -Algorithm SHA256).Hash.ToLowerInvariant()
+    $project = Join-Path $TraceMapRoot 'src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj'
+    & dotnet test $project --filter 'FullyQualifiedName~Deep_projectless' --verbosity minimal `
+        --logger 'trx;LogFileName=deep-corpus.trx' --results-directory (Join-Path $output 'tests')
+    if ($LASTEXITCODE -ne 0) { throw 'DEEP_CORPUS_TEST_FAILED;outputs-preserved' }
+    $trx = Join-Path $output 'tests/deep-corpus.trx'
+    if (!(Test-Path -LiteralPath $trx -PathType Leaf)) { throw 'DEEP_CORPUS_TEST_RECEIPT_MISSING' }
+    [xml]$results = [IO.File]::ReadAllText($trx)
+    $rows = @($results.SelectNodes('//*[local-name()="UnitTestResult"]'))
+    $passed = @($rows | Where-Object { $_.outcome -ceq 'Passed' }).Count
+    $skipped = @($rows | Where-Object { $_.outcome -ceq 'NotExecuted' }).Count
+    $windowsPassed = @($rows | Where-Object {
+        $_.testName -like '*Deep_projectless_Windows_ASPNET_publish*' -and $_.outcome -ceq 'Passed'
+    }).Count
+    $nativePassed = @($rows | Where-Object {
+        $_.testName -like '*Deep_projectless_native_start*' -and $_.outcome -ceq 'Passed'
+    }).Count
+    if ($passed -lt 12 -or $nativePassed -ne 1 -or @($rows | Where-Object { $_.outcome -notin @('Passed', 'NotExecuted') }).Count -ne 0) {
+        throw 'DEEP_CORPUS_TEST_RECEIPT_NOT_ADMITTED'
+    }
+    if ($RequireWindowsPublish -and $windowsPassed -ne 2) { throw 'DEEP_CORPUS_WINDOWS_ACCEPTANCE_MISSING' }
+    $inputLines = @(SourceRoster)
+    if (($inputLines -join "`n") -cne ($beforeInputs -join "`n") -or
+        $generatorSha -cne (Get-FileHash -LiteralPath $PSCommandPath -Algorithm SHA256).Hash.ToLowerInvariant()) {
+        throw 'DEEP_CORPUS_INPUT_CHANGED;outputs-preserved-not-admitted'
+    }
+    $execution = Join-Path $TraceMapRoot 'src/dotnet/tests/TraceMap.Tests/bin/Debug/net10.0'
+    $executionPaths = @('TraceMap.Tests.dll', 'TraceMap.Core.dll', 'TraceMap.Reporting.dll', 'TraceMap.Combine.dll', 'TraceMap.Storage.dll')
+    $inputLines += @($executionPaths | ForEach-Object {
+        'execution/' + $_ + ':' + (Get-FileHash -LiteralPath (Join-Path $execution $_) -Algorithm SHA256).Hash.ToLowerInvariant()
+    })
+    $inputLines += 'test-result:' + (Get-FileHash -LiteralPath $trx -Algorithm SHA256).Hash.ToLowerInvariant()
+    $inputSha = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData(
+        [Text.Encoding]::UTF8.GetBytes(($inputLines -join "`n") + "`n"))).ToLowerInvariant()
+    $receipt = [ordered]@{
+        schemaVersion = 'deep-projectless-corpus-validation.v1'
+        ruleId = 'validation.deep-projectless-corpus.v1'
+        evidenceTier = 'Tier2Structural'
+        visibility = 'local-only'
+        generatorSha256 = $generatorSha
+        boundedInputSha256 = $inputSha
+        boundedInputs = $inputLines
+        passedTests = $passed
+        skippedTests = $skipped
+        windowsPublishTestsPassed = $windowsPassed
+        windowsPublishAcceptance = if ($windowsPassed -eq 2) { 'tested' } else { 'not-run' }
+        limitations = @('Synthetic static corpus only; no database methods executed.',
+            'Logical graph payload counters and artifact caps are not physical drive-read measurements.',
+            'No private-assembly, parameter-value, runtime-dispatch or migration-completeness claim.')
+    }
+    [IO.File]::WriteAllText((Join-Path $output 'validation.local.json'),
+        (($receipt | ConvertTo-Json -Depth 6) + "`n"), [Text.UTF8Encoding]::new($false))
+    Write-Output "deepCorpus.passed=$passed;skipped=$skipped;windowsPublishPassed=$windowsPassed"
+    Write-Output "deepCorpus.output=$output"
+    Write-Output 'deepCorpus=synthetic-static-validation;no-sql-executed;not-private-acceptance'
+} finally {
+    $env:TRACEMAP_DEEP_CORPUS_ROOT = $previous
+}

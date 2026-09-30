@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net48</TargetFramework>
+    <RootNamespace></RootNamespace>
+    <AssemblyName>PublicProof.DeepWebsite</AssemblyName>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <DebugType>portable</DebugType>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../../messy-dotnet-workspace/vb-deep-projectless/Lookup.aspx.vb" Link="Lookup.aspx.vb" />
+    <ProjectReference Include="../../messy-dotnet-workspace/vb-publish-crossdll-framework/PublicProof.Framework.vbproj" />
+    <Reference Include="System.Data" />
+    <Reference Include="System.Web" />
+  </ItemGroup>
+</Project>

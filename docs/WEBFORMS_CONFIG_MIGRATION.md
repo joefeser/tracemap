@@ -1,5 +1,27 @@
 # Migrate existing private Web Forms configs
 
+## Mixed-query traversal repair: work-machine validation
+
+Algorithm 1.3 prioritizes admitted IL calls and prunes depth-infeasible mixed
+branches using a complete, bounded reverse-distance pass. The synthetic native
+regression now retains six routes across five handlers in 391 work units, rather
+than exhausting 100,000 with no routes. Limits and evidence tiers are unchanged;
+depth/cycle gaps remain partial. This is not a physical drive-I/O or private
+application acceptance result.
+
+After pulling and building the repair, first run the small synthetic corpus on
+Windows with PowerShell 7, .NET 10 SDK and the ASP.NET Framework compiler:
+
+```powershell
+.\scripts\validation\Test-DeepProjectlessCorpus.ps1 -RequireWindowsPublish -OutputRoot "$env:USERPROFILE\tracemap-deep-corpus-1"
+```
+
+Return that output folder for inspection. If it passes, use
+`.\scripts\wcmdverify.ps1 -Open` with the retained proof and a new verification
+output folder. Existing runs use immutable older tool snapshots; resuming them
+does not apply this repair. Do not overwrite or delete old proofs/reports, and
+do not treat successful synthetic publishing as private migration completeness.
+
 ## Source command-binding extraction boundary
 
 The VB semantic extractor now retains compiler-resolved `CommandText`

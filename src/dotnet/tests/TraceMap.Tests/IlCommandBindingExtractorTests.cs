@@ -1,4 +1,8 @@
 using System.Text.Json;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.RegularExpressions;
+using System.Diagnostics;
 using Mono.Cecil;
 using Mono.Cecil.Cil;
 using TraceMap.Core;
@@ -11,6 +15,204 @@ namespace TraceMap.Tests;
 public sealed class IlCommandBindingExtractorTests
 {
     private const string PrivateLiteral = "private-fixture-procedure-never-retained";
+
+    [Theory]
+    [InlineData(true, 24, true, true)]
+    [InlineData(true, 24, false, true)]
+    [InlineData(false, 24, true, false)]
+    [InlineData(true, 8, true, false)]
+    public async Task Deep_projectless_handler_crosses_provider_dll_and_binds_command_through_twelve_layers(
+        bool includeProvider, int depth, bool compiledOnly, bool expectedPath)
+    {
+        var report = await DeepReportAsync("Lookup_Click", compiledOnly, includeProvider: includeProvider, depth: depth);
+        if (!expectedPath)
+        {
+            Assert.Empty(report.Paths);
+            Assert.NotEmpty(report.Gaps);
+            if (depth == 8) Assert.Contains(report.Gaps, gap => gap.GapKind == "TruncatedByLimit" && gap.Reason == "depth");
+            return;
+        }
+        var path = Assert.Single(report.Paths);
+        var ordered = string.Join("\n", path.Nodes.Select(node => node.SymbolId));
+        var previous = -1;
+        for (var layer = 1; layer <= 12; layer++)
+        {
+            var position = ordered.IndexOf($"Layer{layer:00}", StringComparison.Ordinal);
+            Assert.True(position > previous, $"Missing or out-of-order Layer{layer:00}");
+            previous = position;
+        }
+        Assert.Contains("PublicProof.DeepWebsite", ordered);
+        Assert.Contains("PublicProof.Framework", ordered);
+        var endpoint = Assert.Single(path.Nodes, node => node.SurfaceName == "DbDataAdapter.Fill");
+        var binding = Assert.IsType<CompiledCommandConfigurationCandidate>(endpoint.CommandBinding);
+        Assert.Equal("constant-on-encoded-call-path", binding.CommandTextFromPath!.State);
+        Assert.Equal("method-local-constant", binding.CommandTypeFromPath!.State);
+        Assert.True(binding.CommandTextFromPath.Steps.Count >= 14);
+        Assert.Equal(DeepTextIdentity("public.deep_lookup"),
+            binding.CommandTextFromPath.Origin.Identity);
+        Assert.Equal("4", binding.CommandTypeFromPath.Origin.Identity);
+        Assert.Equal(new[] { "Lookup_Click" }.Concat(Enumerable.Range(1, 12).Select(n => $"Layer{n:00}"))
+            .Concat(["Run", "Run", "DbDataAdapter.Fill"]), path.Nodes.Select(DeepMethodName));
+        Assert.DoesNotContain(path.Nodes, node => node.SymbolId?.Contains("DeepDecoy", StringComparison.Ordinal) == true);
+        Assert.InRange(report.Summary.TraversalWorkUnits!.Value, 1, 100_000);
+    }
+
+    [Theory]
+    [InlineData("Branch_Click", true, 2)]
+    [InlineData("Branch_Click", false, 2)]
+    [InlineData("Cycle_Click", true, 1)]
+    [InlineData("Cycle_Click", false, 1)]
+    [InlineData("Unknown_Click", true, 1)]
+    [InlineData("Comparison_Click", true, 1)]
+    public async Task Deep_projectless_branch_cycle_and_unknown_values_are_evidence_bounded(
+        string handler, bool compiledOnly, int expectedPaths)
+    {
+        var report = await DeepReportAsync(handler, compiledOnly);
+        Assert.Equal(expectedPaths, report.Paths.Count);
+        Assert.All(report.Paths, path => Assert.DoesNotContain(path.Nodes,
+            node => node.SymbolId?.Contains("DeepDecoy", StringComparison.Ordinal) == true));
+        Assert.All(report.Paths, path => Assert.Equal(path.Nodes.Count - 1, path.Edges.Count));
+        if (handler == "Cycle_Click")
+        {
+            Assert.Contains(report.Gaps, gap => gap.GapKind == "TruncatedByLimit" && gap.Reason == "cycle");
+            Assert.DoesNotContain(report.Paths.SelectMany(path => path.Nodes), node => DeepMethodName(node) == "CycleB");
+        }
+        var hashes = report.Paths.Select(path => Assert.IsType<CompiledCommandConfigurationCandidate>(
+            Assert.Single(path.Nodes, node => node.SurfaceName == "DbDataAdapter.Fill").CommandBinding).CommandTextFromPath!).ToArray();
+        if (handler is "Unknown_Click" or "Comparison_Click")
+        {
+            Assert.All(hashes, value => Assert.NotEqual("constant-on-encoded-call-path", value.State));
+            Assert.All(hashes, value => Assert.NotEmpty(value.Gaps));
+        }
+        else
+        {
+            var expected = handler == "Branch_Click" ? new[] { "public.branch_left", "public.branch_right" } : ["public.cycle_exit"];
+            Assert.Equal(expected.Select(DeepTextIdentity).Order(),
+                hashes.Select(value => value.Origin.Identity).Order());
+            Assert.All(hashes, value => Assert.Equal("constant-on-encoded-call-path", value.State));
+        }
+    }
+
+    [Fact]
+    public async Task Deep_projectless_repeated_queries_are_deterministic_and_work_exhaustion_is_explicit()
+    {
+        var report = await DeepReportAsync("Branch_Click", true);
+        var repeated = await DeepReportAsync("Branch_Click", true);
+        // Compare method sequences and values, not cross-scan IDs or timing observations.
+        Assert.Equal(report.Paths.Select(path => string.Join("/", path.Nodes.Select(DeepMethodName))),
+            repeated.Paths.Select(path => string.Join("/", path.Nodes.Select(DeepMethodName))));
+        Assert.Equal(report.Paths.Select(path => path.Nodes.Last().CommandBinding!.CommandTextFromPath!.Origin),
+            repeated.Paths.Select(path => path.Nodes.Last().CommandBinding!.CommandTextFromPath!.Origin));
+        var limited = await DeepReportAsync("Lookup_Click", true, work: 1);
+        Assert.Empty(limited.Paths);
+        Assert.True(limited.Summary.Truncated);
+        Assert.Contains(limited.Gaps, gap => gap.GapKind == "TruncatedByLimit" && gap.Reason == "work");
+        Assert.InRange(limited.Summary.TraversalWorkUnits!.Value, 0, 1);
+    }
+
+    private static string DeepMethodName(CombinedPathNode node)
+    {
+        if (node.SurfaceName is not null) return node.SurfaceName;
+        var match = Regex.Match(node.SymbolId ?? "", @"\|method:\d+:([^|]+)\|");
+        Assert.True(match.Success, $"Expected exact compiled method identity: {node.NodeKind}");
+        return match.Groups[1].Value;
+    }
+
+    private static string DeepTextIdentity(string text) =>
+        $"str:{text.Length}:{Convert.ToHexStringLower(SHA256.HashData(Encoding.Unicode.GetBytes(text)))}";
+
+    [WindowsDeepCorpusTheory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Deep_projectless_Windows_ASPNET_publish_preserves_exact_chain_and_command_binding(bool updatable)
+    {
+        var repo = FindRepoRoot();
+        var retainedRoot = Environment.GetEnvironmentVariable("TRACEMAP_DEEP_CORPUS_ROOT");
+        var published = retainedRoot is null
+            ? Path.Combine(Path.GetTempPath(), "tracemap-deep-windows-" + Guid.NewGuid().ToString("N"))
+            : Path.Combine(retainedRoot, updatable ? "publish-mapless" : "publish-mapped");
+        var start = new ProcessStartInfo("pwsh")
+        { UseShellExecute = false, RedirectStandardOutput = true, RedirectStandardError = true };
+        var script = Path.Combine(repo, "scripts", "validation", "Test-PublicWebFormsPublish.ps1");
+        foreach (var argument in new[] { "-NoProfile", "-File", script, "-TraceMapRoot", repo, "-OutputRoot", published, "-DeepChain" })
+            start.ArgumentList.Add(argument);
+        // Run both mapped and mapless authentic ASP.NET compiler outputs.
+        if (updatable) start.ArgumentList.Add("-Updatable");
+        using var process = Process.Start(start)!;
+        var stdout = process.StandardOutput.ReadToEndAsync();
+        var stderr = process.StandardError.ReadToEndAsync();
+        using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(2));
+        try { await process.WaitForExitAsync(timeout.Token); }
+        catch (OperationCanceledException) { process.Kill(entireProcessTree: true); throw; }
+        Assert.True(process.ExitCode == 0, $"Publish failed; preserved output={published}\n{await stdout}\n{await stderr}");
+        using var receipt = JsonDocument.Parse(File.ReadAllBytes(Path.Combine(published, "publish-receipt.local.json")));
+        var proof = receipt.RootElement;
+        Assert.Equal(Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(script))),
+            proof.GetProperty("receiptGeneratorSha256").GetString());
+        Assert.Matches("^[0-9a-f]{64}$", proof.GetProperty("frameworkBoundedInputSha256").GetString()!);
+        Assert.Matches("^[0-9a-f]{64}$", proof.GetProperty("boundedInputSha256").GetString()!);
+        Assert.Equal("Lookup.aspx", proof.GetProperty("pages")[0].GetProperty("sourcePath").GetString());
+        foreach (var artifact in proof.GetProperty("publishedFiles").EnumerateArray())
+        {
+            var file = Path.Combine(published, artifact.GetProperty("path").GetString()!);
+            Assert.Equal(artifact.GetProperty("sha256").GetString(), Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(file))));
+        }
+        Assert.Empty(Directory.GetFiles(published, "*.pdb", SearchOption.AllDirectories));
+        var report = await DeepReportAsync("Lookup_Click", true, publishedRoot: published);
+        var path = Assert.Single(report.Paths);
+        Assert.Equal(new[] { "Lookup_Click" }.Concat(Enumerable.Range(1, 12).Select(n => $"Layer{n:00}"))
+            .Concat(["Run", "Run", "DbDataAdapter.Fill"]), path.Nodes.Select(DeepMethodName));
+        var binding = Assert.IsType<CompiledCommandConfigurationCandidate>(path.Nodes.Last().CommandBinding);
+        Assert.Equal(DeepTextIdentity("public.deep_lookup"), binding.CommandTextFromPath!.Origin.Identity);
+        Assert.Equal("constant-on-encoded-call-path", binding.CommandTextFromPath.State);
+        // Keep the authentic small corpus for transfer back to macOS. No private inputs.
+        Assert.True(Directory.Exists(published));
+        Console.WriteLine($"deepCorpus.windowsPublish={published}");
+    }
+
+    private static async Task<CombinedDependencyPathReport> DeepReportAsync(string handler, bool compiledOnly,
+        int work = 100_000, string? publishedRoot = null, bool includeProvider = true, int depth = 24)
+    {
+        var repo = FindRepoRoot();
+        var sourcePath = Path.Combine(repo, "samples", "messy-dotnet-workspace", "vb-deep-projectless");
+        Assert.Empty(Directory.GetFiles(sourcePath, "*.*proj", SearchOption.AllDirectories));
+        var configuration = new DirectoryInfo(AppContext.BaseDirectory).Parent!.Name;
+        var bin = publishedRoot is null ? Path.Combine(repo, "samples", "fixture-build", "deep-projectless", "bin", configuration, "net48")
+            : Path.Combine(publishedRoot, "bin");
+        var dlls = Directory.GetFiles(bin, "*.dll").Where(path => includeProvider || Path.GetFileName(path) != "PublicProof.Framework.dll").ToArray();
+        var root = Directory.CreateTempSubdirectory("tracemap-deep-regression-").FullName;
+        var clock = Stopwatch.StartNew();
+        try
+        {
+            var scan = ScanEngine.Scan(new ScanOptions(sourcePath, Path.Combine(root, "scan"),
+                CompiledInputPaths: dlls, IlBodyEvidence: true,
+                WebFormsPublishReceiptPath: publishedRoot is null ? null : Path.Combine(publishedRoot, "publish-receipt.local.json")));
+            Assert.InRange(scan.Facts.Count, 1, 10_000);
+            var entry = Assert.Single(scan.Facts, fact => fact.FactType == FactTypes.ManagedMethodDeclared
+                && fact.TargetSymbol!.Contains("DeepLookup|", StringComparison.Ordinal)
+                && fact.TargetSymbol.Contains($"|method:{handler.Length}:{handler}|", StringComparison.Ordinal));
+            var index = Path.Combine(root, "index.sqlite");
+            var combined = Path.Combine(root, "combined.sqlite");
+            SqliteIndexWriter.Write(index, scan.Manifest, scan.Facts);
+            var combine = await CombinedIndexBuilder.CombineAsync(new CombineOptions([index], combined, ["public-deep-regression"]));
+            var source = Assert.Single(combine.Sources);
+            CombinedPathGraphObservation? observed = null;
+            var report = await CombinedDependencyPathReporter.BuildSelectedSymbolsAsync(
+                new CombinedDependencyPathOptions(combined, root, ToSurface: "database-api", SurfaceName: "DbDataAdapter.Fill", MaxDepth: depth)
+                { CompiledOnly = compiledOnly, ExactFromSymbol = true, MaxTraversalWork = work },
+                [new(source.SourceIndexId, source.ScanId, source.CommitSha, entry.TargetSymbol!)], combinedIndex: true,
+                limits: new(MaxFacts: 10_000, MaxEdges: 10_000, MaxTextBytes: 32 * 1024 * 1024)
+                { MaxGraphStorageBytes = 32 * 1024 * 1024, GraphObservationObserver = value => observed = value });
+            Assert.NotNull(observed);
+            Assert.InRange(observed.FactPayloadBytesRead, 0, 32 * 1024 * 1024);
+            Assert.InRange(observed.FactPayloadRowsRead, 0, 100_000);
+            Assert.InRange(report.Summary.TraversalWorkUnits!.Value, 0, work);
+            Assert.InRange(Directory.GetFiles(root, "*", SearchOption.AllDirectories).Sum(file => new FileInfo(file).Length), 1, 32 * 1024 * 1024);
+            Assert.True(clock.Elapsed < TimeSpan.FromSeconds(60), "Tiny corpus exceeded the generous 60-second end-to-end guard.");
+            return report;
+        }
+        finally { Directory.Delete(root, recursive: true); }
+    }
 
     [Fact]
     public async Task Real_legacy_VB_ref_arrays_debug_fields_and_mapping_loops_retain_command_candidate()
