@@ -84,11 +84,13 @@ public static partial class CombinedDependencyPathReporter
                     create table graph_metadata(key text primary key, value text not null);
                     create table graph_facts(ordinal integer primary key, id text not null unique,
                         source_id text not null, original_id text not null, source_key text not null,
-                        fact_type text not null, payload blob not null);
+                        fact_type text not null, payload blob not null, il_call_reference text);
                     create unique index graph_facts_original on graph_facts(source_id,original_id);
                     create index graph_facts_identity_order on graph_facts(id collate graph_ordinal);
                     create index graph_facts_type_order on graph_facts(fact_type,ordinal);
                     create index graph_facts_source_key on graph_facts(source_key,id collate graph_ordinal);
+                    create index graph_facts_il_call_reference on graph_facts(fact_type,source_id,il_call_reference,ordinal)
+                        where il_call_reference is not null;
                     create table graph_nodes(id text primary key, display_name text not null, payload blob not null, ordinal integer not null);
                     create table graph_edges(id text primary key, from_id text not null, to_id text not null,
                         rank integer not null, file_path text, line integer not null,
@@ -110,7 +112,7 @@ public static partial class CombinedDependencyPathReporter
                 }
                 using var command = connection.CreateCommand();
                 command.CommandText = """
-                    insert into graph_metadata values ('schema', 'private.transient-path-graph.v2'),
+                    insert into graph_metadata values ('schema', 'private.transient-path-graph.v3'),
                         ('payloadEncoding', 'length-framed-json-v1'),
                         ('generatorSha256', $generator), ('boundedInputSha256', $input),
                         ('maxStorageBytes', $maximum);
