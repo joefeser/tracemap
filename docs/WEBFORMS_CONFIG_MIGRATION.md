@@ -499,6 +499,14 @@ The excessive I/O seen in full native graph composition has not been root-caused
 
 ## Fresh compiled command-value validation
 
+If the ledger reports zero command bindings, run `./scripts/wcmdfacts.ps1`.
+Enter the verification folder, or press Enter for `verify-6` under the Windows
+user profile. It streams retained native `facts.ndjson` files and prints operand
+and command-candidate fact-type marker counts, including explicit zeros. Counts
+include all found attempts (at most 32 files / 64 GiB); they are text diagnostics,
+not native artifact admission or proof that a selected handler reaches them.
+It does not build, rescan, traverse, or modify files.
+
 After pulling the fix, use PowerShell 7 from the repository root:
 
 ```powershell
