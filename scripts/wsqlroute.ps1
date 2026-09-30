@@ -128,8 +128,14 @@ $html = [Text.StringBuilder]::new()
 [void]$html.AppendLine('<h2>Saved query and coverage</h2><pre>' + (JsonHtml @{ query = (Value $header 'query'); coverage = (Value $header 'reportCoverage'); summary = (Value $header 'summary'); sources = (Value $header 'sources') }) + '</pre>')
 [void]$html.AppendLine('<p>Handler filter: ' + (Html $(if ($Handler) { $Handler } else { 'none; all retained roots' })) + '. This selects retained rows only, not a new compiled-only traversal.</p>')
 [void]$html.AppendLine("<p>Retained route-record groups: $($groups.Count); retained variants: $($rows.Count); database surface occurrences: $databaseNodes; SQL surface occurrences: $sqlNodes. Groups use full node records; these counts are not chain-parity counts. Occurrences include repeated evidence variants.</p>")
-[void]$html.AppendLine('<p>GAP: This projection does not establish command-text or parameter propagation from the handler. A sql-query surface can be a framework API terminal, including Fill; its presence is not proof of a resolved SQL statement. Null evidence fields remain unavailable. Any retained table/operation/hash is shown only as supplied, without proving its binding to an executed command.</p>')
-if ($sqlNodes -eq 0) { [void]$html.AppendLine('<p>GAP: No retained SQL query/persistence surface in these paths. Command text, procedure identity and SQL parameter values are unresolved here. A Fill endpoint alone does not close this gap.</p>') }
+[void]$html.AppendLine("<h2>Retained command-binding candidates</h2><p>Binding occurrences: $commandBindings; constant command-text fingerprints: $constantTexts; StoredProcedure type candidates: $procedureTypes; unresolved command-text candidates: $unresolvedTexts. Counts include repeated evidence variants and do not count distinct procedures. Text fingerprints retain hashes rather than readable command text.</p>")
+if ($commandBindings -gt 0) {
+    [void]$html.AppendLine('<p>Retained commandBinding fields carry static operand candidates, including method-local or encoded-call-path origins where supplied. Expand a route to inspect those fields and its non-IL transitions. This ledger displays supplied evidence without independently validating the binding. Runtime command selection, SQL parameter values and execution remain unverified.</p>')
+} else {
+    [void]$html.AppendLine('<p>GAP: No retained command-binding candidates in these paths. This projection does not establish command-text or parameter propagation from the handler.</p>')
+}
+[void]$html.AppendLine('<p>A sql-query surface can be a framework API terminal, including Fill; its presence alone does not prove a resolved SQL statement. Null evidence fields remain unavailable. Any retained table/operation/hash is shown only as supplied, without proving its binding to an executed command.</p>')
+if ($sqlNodes -eq 0) { [void]$html.AppendLine('<p>GAP: No retained SQL query/persistence surface in these paths. Database API nodes may still carry command-binding candidates counted above. Readable procedure names, SQL statement bodies and SQL parameter values are not established by this summary.</p>') }
 $shown = 0
 $routeDisplayBytes = 0
 foreach ($key in $groups.Keys) {

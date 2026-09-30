@@ -1,5 +1,29 @@
 # Implementation state
 
+## Owner fresh-run result and ledger wording (2026-09-30)
+
+Owner-supplied screenshots show a fresh run at f32c6ee9 completed native reports.
+The selected handler's ledger reports 27 route-record groups, 45 variants and
+45 command-binding occurrences: 42 constant-text fingerprints, 42 stored-procedure
+type candidates and 3 unresolved-text candidates. The saved broad query reports
+algorithm 1.3, 20,504 work units and 256 paths with truncation. This confirms the
+observed zero-command-binding failure has changed on the owner's application;
+counts overlap across variants and do not identify 42 distinct procedures.
+Private raw artifacts have not been independently admitted, exhaustive baseline
+parity is still open, and physical drive reads were not measured in these images.
+
+The ledger still printed an unconditional unresolved-command-text warning from
+before command-binding support. Added the existing console counters to its HTML
+and conditioned the missing-binding warning on the retained bindings. SQL-surface
+absence remains distinct from command-binding candidates on database API nodes.
+The helper only projects saved results; this display repair requires no scan.
+The SQL ledger regression covers both present and absent command bindings and
+passed, along with command-verification orchestration, privacy and diff checks.
+The scanner code is unchanged from the full 2,996-pass local suite and 14-pass
+authentic Windows corpus. The traversal/command-evidence repair goal is satisfied
+at its stated scope; complete private migration coverage is not part of that
+acceptance and remains unproven.
+
 ## Authentic Windows corpus accepted (2026-09-30)
 
 Code head 6dbdf2baf64c3e8ce510ac2c4aa8483eed6f6372 passed CI run 36788401704:

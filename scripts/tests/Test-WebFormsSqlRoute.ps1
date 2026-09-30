@@ -53,6 +53,16 @@ try {
     $result = @(& $helper -Report $folder -Handler Selected -OutputPath (Join-Path $folder 'selected.html'))
     if ($result -notcontains 'sqlRoute.exactGroups=1;variants=1;databaseSurfaceOccurrences=1;sqlSurfaceOccurrences=0' -or
         $result -notcontains 'sqlRoute.commandBindings=1;constantTextCandidates=1;storedProcedureTypeCandidates=1;unresolvedTextCandidates=0;asSupplied=true') { throw 'Handler command counts incorrect' }
+    $html = [IO.File]::ReadAllText((Join-Path $folder 'selected.html'))
+    foreach ($expected in @('Binding occurrences: 1; constant command-text fingerprints: 1; StoredProcedure type candidates: 1; unresolved command-text candidates: 0', 'do not count distinct procedures', 'encoded-call-path origins', 'without independently validating the binding')) {
+        if (!$html.Contains($expected)) { throw "Missing command summary: $expected" }
+    }
+    if ($html.Contains('Command text, procedure identity and SQL parameter values are unresolved here') -or $html.Contains('No retained command-binding candidates')) { throw 'Resolved candidates contradicted by blanket gap' }
+    $unboundFill = $fill.Clone(); $unboundFill.Remove('commandBinding')
+    Save @{ query = @{}; paths = @(@{ nodes = @($selectedRoot,$unboundFill); edges = @($bridge) }) } $inputFile
+    $null = & $helper -Report $folder -Handler Selected -OutputPath (Join-Path $folder 'unbound.html')
+    $html = [IO.File]::ReadAllText((Join-Path $folder 'unbound.html'))
+    if (!$html.Contains('No retained command-binding candidates') -or !$html.Contains('Binding occurrences: 0; constant command-text fingerprints: 0')) { throw 'Missing unbound gap' }
     try { & $helper -Report $folder -Handler Missing -OutputPath (Join-Path $folder 'missing.html'); throw 'Missing handler accepted' }
     catch { if ($_.Exception.Message -ne 'WEBFORMS_SQL_ROUTE_HANDLER_MISSING_OR_AMBIGUOUS') { throw } }
     $duplicateRoot = $selectedRoot.Clone(); $duplicateRoot.nodeId = 'handler-duplicate'
