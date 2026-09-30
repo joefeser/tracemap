@@ -24,8 +24,11 @@ public static partial class WebFormsReviewExecutionCommand
         var failureStage = "arguments";
         try
         {
-            if (args.Length != 9 || args[0] != "requery-handler" || args[1] != "--run" ||
+            if (args.Length is not (9 or 11) || args[0] != "requery-handler" || args[1] != "--run" ||
                 args[3] != "--bundle" || args[5] != "--handler" || args[7] != "--out") throw Fail("HANDLER_REQUERY_ARGUMENT_INVALID");
+            if (args.Length == 11 && (args[9] != "--surface-name" || args[10] != "DbDataAdapter.Fill"))
+                throw Fail("HANDLER_REQUERY_SURFACE_INVALID");
+            var surfaceName = args.Length == 11 ? args[10] : null;
             var run = WebFormsReviewPreflightCommand.PhysicalPath(args[2]);
             var bundle = WebFormsReviewPreflightCommand.PhysicalPath(args[4]);
             var handler = args[6];
@@ -80,10 +83,11 @@ public static partial class WebFormsReviewExecutionCommand
             var config = plan.Configuration;
             var budget = config.Budgets.Reports ?? new();
             WebFormsReviewPreflightCommand.ValidateReportBudgets(budget);
-            var options = new CombinedDependencyPathOptions(indexPath, destination, ToSurface: "database-api", IncludeLegacyRoots: true,
+            var options = new CombinedDependencyPathOptions(indexPath, destination, ToSurface: "database-api", SurfaceName: surfaceName, IncludeLegacyRoots: true,
                 MaxDepth: config.Budgets.GraphMaxDepth, MaxPaths: config.Budgets.GraphMaxPaths, MaxFrontier: budget.MaxFrontier)
             { ExactFromSymbol = true, MaxTraversalWork = checked((int)config.Budgets.GraphMaxWork) };
             await output.WriteLineAsync($"handlerStage=graph-started;maxPaths={options.MaxPaths};maxWork={options.MaxTraversalWork};single-root=true");
+            await output.WriteLineAsync($"handlerQuery.terminalScope={(surfaceName is null ? "all-database-api" : "DbDataAdapter.Fill")};mixed-source-and-compiled=true");
             CombinedPathGraphObservation? observation = null;
             failureStage = "graph";
             var paths = await CombinedDependencyPathReporter.BuildSelectedSymbolsAsync(options, roots, true,

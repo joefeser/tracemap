@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param([string]$Bundle, [string]$Handler = 'BidGroupNamesDDL_Init', [switch]$Requery, [switch]$Open)
+param([string]$Bundle, [string]$Handler = 'BidGroupNamesDDL_Init', [switch]$Requery, [switch]$FillOnly, [switch]$Open)
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 if ([string]::IsNullOrWhiteSpace($Bundle)) {
@@ -7,6 +7,7 @@ if ([string]::IsNullOrWhiteSpace($Bundle)) {
 }
 if ($Handler -cnotmatch '^[A-Za-z0-9_]{1,128}$') { throw 'WEBFORMS_HANDLER_INVALID' }
 if ($Open -and !$Requery) { throw 'WEBFORMS_HANDLER_OPEN_REQUIRES_REQUERY' }
+if ($FillOnly -and !$Requery) { throw 'WEBFORMS_HANDLER_FILL_REQUIRES_REQUERY' }
 $repo = Split-Path $PSScriptRoot -Parent
 & dotnet build (Join-Path $repo 'src/dotnet/TraceMap.Cli/TraceMap.Cli.csproj') --nologo --verbosity quiet | Out-Null
 if ($LASTEXITCODE -ne 0) { throw 'WEBFORMS_HANDLER_BUILD_FAILED' }
@@ -14,13 +15,15 @@ $cli = Join-Path $repo 'src/dotnet/TraceMap.Cli/bin/Debug/net10.0/tracemap.dll'
 if ($Requery) {
     $verificationRoot = Split-Path $Bundle -Parent
     $run = Join-Path $verificationRoot 'review/run'
-    $destination = Join-Path $verificationRoot 'handler-requery'
+    $destination = Join-Path $verificationRoot $(if ($FillOnly) { 'handler-requery-fill' } else { 'handler-requery' })
     if (Test-Path -LiteralPath $destination) {
         $name = Microsoft.PowerShell.Utility\Read-Host 'Handler report exists and is preserved. Enter a new report folder name'
         if ($name -cnotmatch '^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$') { throw 'WEBFORMS_HANDLER_OUTPUT_NAME_INVALID' }
         $destination = Join-Path $verificationRoot $name
     }
-    & dotnet $cli webforms-review requery-handler --run $run --bundle $Bundle --handler $Handler --out $destination
+    $queryArguments = @($cli, 'webforms-review', 'requery-handler', '--run', $run, '--bundle', $Bundle, '--handler', $Handler, '--out', $destination)
+    if ($FillOnly) { $queryArguments += @('--surface-name', 'DbDataAdapter.Fill') }
+    & dotnet @queryArguments
     if ($LASTEXITCODE -ne 0) { throw 'WEBFORMS_HANDLER_REQUERY_FAILED;originals-preserved;partial-output-preserved' }
     if ($Open -and $IsWindows) { Invoke-Item -LiteralPath (Join-Path $destination 'compiled-paths.local.html') }
     return

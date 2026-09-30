@@ -1,5 +1,29 @@
 # Implementation state
 
+## Explicit retained Fill-only comparison scope (2026-09-29)
+
+`whandler.ps1 -Requery -FillOnly -Open` now forwards the exact allowlisted
+`--surface-name DbDataAdapter.Fill` selector and uses a separate default
+`handler-requery-fill` destination. The default all-database-api scope remains
+unchanged. Invalid surface names fail before output writes. The existing receipt
+query/bounded-input digest includes the filter. Global graph admission, source
+bridges, overload/dispatch competitors and budgets are unchanged; no claim of
+IL-only execution or old/new parity. This repeats graph construction/traversal,
+not scan/combine. The owner's Chain 11 photographs retain the intended constructor,
+business/data layer and both framework overloads through the Fill candidate.
+
+Code inspection confirms Cecil and SRM both decode/check IL bodies in
+IlBodyEvidenceExtractor; the reporting bridge consumes those retained agreed
+calls, matching exact MethodDef/assembly-scoped MemberRef targets. Callvirt is
+candidate evidence and calli cannot supply a named member target. No replacement
+IL decoder, assembly loading or guessed external resolution was added.
+
+Validation: 30 grouped/recovery tests, 44 IL body extractor tests and the PowerShell handler guard passed,
+including query filter receipt binding, unchanged original index, invalid-filter
+refusal, default behavior and isolated output. CLI build had zero warnings/errors;
+diff check passed. Private Fill-only count/path
+comparison remains pending and cannot be inferred from passing synthetic tests.
+
 ## Pre-PR reconciliation and local label regression (2026-09-29)
 
 The earlier readable-path change `a9267263` shortened canonical method symbols

@@ -6,6 +6,7 @@ function global:dotnet {
     if ($args[0] -eq 'build') { return }
     if ($args -contains 'requery-handler') {
         if (($args -join ' ') -notmatch 'requery-handler --run .+review/run --bundle synthetic/recovered --handler BidGroupNamesDDL_Init --out .+handler-requery') { throw 'Wrong independent requery' }
+        if ($args -contains '--surface-name' -and ($args -join ' ') -notmatch 'handler-requery-fill --surface-name DbDataAdapter.Fill$') { throw 'Wrong Fill query' }
         if ($global:handlerFail) { $global:LASTEXITCODE = 1; return }
         'handlerRequery=completed-separate-report;no-scan;no-combine'
         return
@@ -20,6 +21,10 @@ try {
     if (($output -join "`n") -match 'private|do-not-print') { throw 'Privacy leak' }
     $requery = @(& $helper -Bundle synthetic/recovered -Requery)
     if ($requery -notcontains 'handlerRequery=completed-separate-report;no-scan;no-combine') { throw 'Missing requery' }
+    $fill = @(& $helper -Bundle synthetic/recovered -Requery -FillOnly)
+    if ($fill -notcontains 'handlerRequery=completed-separate-report;no-scan;no-combine') { throw 'Missing Fill requery' }
+    try { & $helper -Bundle synthetic -FillOnly; throw 'Expected Fill guard' }
+    catch { if ($_.Exception.Message -ne 'WEBFORMS_HANDLER_FILL_REQUIRES_REQUERY') { throw } }
     $global:handlerFail = $true
     try { & $helper -Bundle synthetic | Out-Null; throw 'Expected failure' }
     catch { if ($_.Exception.Message -ne 'WEBFORMS_HANDLER_QUERY_FAILED;originals-preserved') { throw } }

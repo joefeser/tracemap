@@ -7,6 +7,29 @@ shared report redaction, changing graph edges, or changing lossless JSON. Labels
 are display-only; complete identities and evidence remain in expandable details.
 Existing report files are not rewritten by this change.
 
+## Compare the retained handler using the old Fill-only terminal scope
+
+```powershell
+.\scripts\whandler.ps1 -Requery -FillOnly -Open
+```
+
+Enter the existing `verify-5\recovered-reports` folder. The new default output
+is `verify-5\handler-requery-fill`; existing folders are preserved. This repeats
+bounded global graph construction and one exact handler traversal, so it can
+take as long as the prior requery. It does not scan, combine or rebuild the site.
+The terminal filter selects `DbDataAdapter.Fill`, as the old `wpath.ps1 -FillOnly`
+did. It does not prune graph competitors, remove source bridges, or imply
+historical count/path parity. The filter is recorded in the hashed receipt query.
+
+Mono.Cecil IL is already part of this traversal: the scanner independently
+decodes admitted IL with Cecil and System.Reflection.Metadata, retains agreed
+body/call evidence, and the report graph projects uniquely matched MethodDef or
+assembly-scoped MemberRef targets. Direct `call` and `newobj` become compiled
+call edges; `callvirt` remains a candidate because the encoded operand alone
+does not select the runtime receiver. Source/compiled joins and VB syntax
+bridges are separately labeled, not promoted to IL-call evidence. `calli` has
+no uniquely named member target and cannot be silently treated as an exact call.
+
 ## Inspect one handler-requery chain without rerunning it
 
 ```powershell
