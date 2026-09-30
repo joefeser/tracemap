@@ -13,7 +13,8 @@ Raw command strings are not stored. No new SQL statement is inferred.
 This requires a compiler-resolved source scan. It does not retrofit the saved
 projectless/compiled-only reports or recover string values from their existing
 IL call facts. Do not rerun the saved ledger expecting new SQL evidence. IL
-command-value extraction and private handler-to-command binding remain open.
+command-value extraction now exists, but private handler-to-command acceptance
+remains open until a fresh owner scan produces the expected candidates.
 
 
 ## Extract saved handler database and SQL evidence
@@ -499,6 +500,16 @@ The excessive I/O seen in full native graph composition has not been root-caused
 
 ## Fresh compiled command-value validation
 
+IL extractor 0.1.9 / policy v7 handles the synthetic legacy VB patterns that
+previously yielded zero candidates: debug field/array writes, byref array reads,
+struct/local addresses, checked loops, timeout/transaction setters and table
+mappings. Addresses/byref operands remain unknown in exported value facts;
+only non-byref scalar command-text origins can cross an exact caller path.
+Object stores/address exposure still invalidate affected command state, and
+wrong or unknown API contracts remain gaps. These changes require a **new scan**;
+they cannot repair the already retained `verify-6` facts. Use a new full output
+path such as `<user-profile>\verify-7`, never overwrite the old run.
+
 If the ledger reports zero command bindings, run `./scripts/wcmdfacts.ps1`.
 Enter the verification folder, or press Enter for `verify-6` under the Windows
 user profile. It streams retained native `facts.ndjson` files and prints operand
@@ -507,6 +518,8 @@ gap counts, including explicit zeros. Counts
 include all found attempts (at most 32 files / 64 GiB); they are text diagnostics,
 not native artifact admission or proof that a selected handler reaches them.
 It does not build, rescan, traverse, or modify files.
+After a new `verify-7` run, supply that folder explicitly; the helper's Enter
+default still selects the older `verify-6` folder.
 
 After pulling the fix, use PowerShell 7 from the repository root:
 

@@ -1,5 +1,47 @@
 # Implementation state
 
+## Legacy VB operand repair after owner zero-candidate validation (2026-09-30)
+
+The owner fresh scan observed call-value facts but zero command candidates.
+That result supersedes the earlier local completion language for private
+acceptance. Correct provider IL evidence showed ordinary debug-field stores,
+byref arrays, struct/local addresses, checked arithmetic and mapping loops, plus
+timeout/transaction/mapping APIs that the local fixture had not exercised.
+
+IL 0.1.9 / policy v7 now retains stack shape for these operations without
+claiming heap values. Stores/address reads and calls expose affected objects;
+exposed slots remain exposure-capable on later writes. Address identity depth,
+length and per-instruction origin retention are bounded, and exposure work is
+charged. Unknown calls preserve only unexposed allocation-local receivers;
+argument/call-result origins and escaped objects remain conservatively aliased.
+Known byref call shapes retain non-byref scalar origins. Exported addresses and
+byref operands are unknown, not concrete caller values. Leave drops locals and
+potentially rewritten arguments while re-establishing an empty evaluation stack.
+
+Exact encoded timeout/transaction setters and table-mapping getter/Add contracts
+preserve text/type only. Wrong overloads and mapping escapes discard state.
+A public synthetic net48 VB legacy wrapper exercises the real compiler output,
+with debug fields, ref arrays, struct parameters, loops and all three API shapes.
+Its native encoded caller path carries hashed text through two wrapper calls
+to Fill with a StoredProcedure enum candidate. No private source was copied.
+
+Validation: the full .NET suite passed 2980 tests, zero failures/skips, in
+14m21s before the final address-size guard and three additional regressions.
+The final solution rebuild had zero warnings/errors; the final 122-test IL/native
+slice passed with zero failures/skips in 1m34s. A direct CLI scan of the public
+VB fixture emitted 631 facts and three command candidates, with Level1 semantic
+source analysis, and passed adapter-artifact conformance. Compiled artifact
+context, branch feasibility, command parameters and runtime proof remain partial.
+The CLI smoke requires an absolute compiled-input path; a relative input is
+resolved against the source root, not the invoking working directory.
+
+PowerShell command-facts, immutable command-verification orchestration and
+tool-copy tests passed. Seven artifact-validator tests and the private-path/diff
+guards passed; the unchanged validator test emitted its existing SQLite
+ResourceWarning. Unchanged TypeScript/JVM/Python adapters were not rerun for this
+.NET-only repair. Owner Windows acceptance remains open and requires a new
+output run; old evidence is unchanged and cannot gain the new extractor facts.
+
 ## Fresh command validation workflow and final local gates (2026-09-30)
 
 The implementation requirement is complete locally: independently agreed bounded

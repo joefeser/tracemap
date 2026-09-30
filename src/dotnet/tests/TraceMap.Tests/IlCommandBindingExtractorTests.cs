@@ -13,6 +13,83 @@ public sealed class IlCommandBindingExtractorTests
     private const string PrivateLiteral = "private-fixture-procedure-never-retained";
 
     [Fact]
+    public async Task Real_legacy_VB_ref_arrays_debug_fields_and_mapping_loops_retain_command_candidate()
+    {
+        var path = Path.Combine(FindRepoRoot(), "samples", "messy-dotnet-workspace", "vb-publish-crossdll-framework", "bin",
+            new DirectoryInfo(AppContext.BaseDirectory).Parent!.Name, "net48", "PublicProof.Framework.dll");
+        var bytes = File.ReadAllBytes(path); var limits = new IlBodyLimits();
+        var left = IlBodyEvidenceExtractor.ReadCecilBodies(bytes, limits, new(200_000), CancellationToken.None, true);
+        var right = IlBodyEvidenceExtractor.ReadSystemReflectionMetadataBodies(bytes, limits, new(200_000), CancellationToken.None, true);
+        Assert.Empty(IlBodyEvidenceExtractor.CompareBodies(left, right));
+        var bodies = IlBodyEvidenceExtractor.AgreeValueFlows(left.Bodies, right.Bodies)
+            .Where(body => body.MethodIdentity.Contains("PublicLegacyCommandFlow|", StringComparison.Ordinal)).ToArray();
+        var commandBody = Assert.Single(bodies, body => IlCommandBindingExtractor.Extract(body).Bindings.Count > 0);
+        var binding = Assert.Single(IlCommandBindingExtractor.Extract(commandBody).Bindings);
+        Assert.Equal(new IlValueOrigin("argument-slot", "1"), binding.CommandText);
+        Assert.Equal(new IlValueOrigin("constant-int32", "4"), binding.CommandType);
+        Assert.DoesNotContain("IlValueInstructionUnavailable", commandBody.ValueFlow!.Gaps);
+        Assert.DoesNotContain("IlValueStackUnavailable", commandBody.ValueFlow.Gaps);
+        Assert.DoesNotContain("IlValueStackMergeUnavailable", commandBody.ValueFlow.Gaps);
+        var wrapper = Assert.Single(bodies, body => body.Calls.Any(call => call.StackShape?.ByReferenceParameters == "011"));
+        var forward = Assert.Single(wrapper.ValueFlow!.Calls, value => wrapper.Calls.Single(call => call.Offset == value.Offset).StackShape?.ByReferenceParameters == "011");
+        Assert.Equal("control-flow-candidate", forward.State);
+        Assert.Equal(new IlValueOrigin("argument-slot", "1"), forward.Arguments[0]);
+        Assert.All(forward.Arguments.Skip(1), value => Assert.Equal("local-address", value.Kind));
+        var root = Directory.CreateTempSubdirectory("tracemap-legacy-command-").FullName;
+        var sourcePath = Path.GetDirectoryName(Path.GetDirectoryName(Path.GetDirectoryName(Path.GetDirectoryName(path))))!;
+        var scan = ScanEngine.Scan(new ScanOptions(sourcePath, Path.Combine(root, "out"), CompiledInputPaths: [path], IlBodyEvidence: true));
+        var entry = Assert.Single(scan.Facts, fact => fact.FactType == FactTypes.ManagedMethodDeclared
+            && fact.TargetSymbol!.Contains("PublicLegacyCommandEntry", StringComparison.Ordinal)
+            && fact.TargetSymbol.Contains("|method:3:Run|", StringComparison.Ordinal));
+        var index = Path.Combine(root, "index.sqlite"); var combined = Path.Combine(root, "combined.sqlite");
+        SqliteIndexWriter.Write(index, scan.Manifest, scan.Facts);
+        var combine = await CombinedIndexBuilder.CombineAsync(new CombineOptions([index], combined, ["public-legacy-fixture"]));
+        var source = Assert.Single(combine.Sources);
+        var selector = new CombinedPathSymbolRoot(source.SourceIndexId, source.ScanId, source.CommitSha, entry.TargetSymbol!);
+        var report = await CombinedDependencyPathReporter.BuildSelectedSymbolsAsync(
+            new CombinedDependencyPathOptions(combined, root, ToSurface: "database-api", SurfaceName: "DbDataAdapter.Fill", MaxDepth: 10)
+            { CompiledOnly = true, ExactFromSymbol = true, MaxTraversalWork = 10_000 }, [selector], combinedIndex: true);
+        var endpoint = Assert.Single(Assert.Single(report.Paths).Nodes, node => node.SurfaceName == "DbDataAdapter.Fill");
+        var projected = Assert.IsType<CompiledCommandConfigurationCandidate>(endpoint.CommandBinding);
+        Assert.Equal("constant-on-encoded-call-path", projected.CommandTextFromPath!.State);
+        Assert.Equal("method-local-constant", projected.CommandTypeFromPath!.State);
+        Assert.Equal(2, projected.CommandTextFromPath.Steps.Count);
+        Assert.All(scan.Facts.Where(fact => fact.FactType == FactTypes.ManagedIlCallValuesObserved), fact =>
+            Assert.DoesNotContain("local-address", fact.Properties["argumentOrigins"], StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [InlineData("timeout", true)]
+    [InlineData("wrong-timeout", false)]
+    [InlineData("transaction", true)]
+    [InlineData("wrong-transaction", false)]
+    [InlineData("mapping", true)]
+    [InlineData("wrong-mapping", false)]
+    [InlineData("mapping-escape", false)]
+    [InlineData("field-debug", true)]
+    [InlineData("unrelated-unknown", true)]
+    [InlineData("field-escape", false)]
+    [InlineData("array-escape", false)]
+    [InlineData("byref-escape", false)]
+    [InlineData("indirect-escape", false)]
+    [InlineData("boxed-escape", false)]
+    [InlineData("address-before-assignment", false)]
+    [InlineData("field-indirect-debug", true)]
+    [InlineData("field-indirect-escape", false)]
+    public void Bookkeeping_preserves_text_but_wrong_contracts_and_object_exposure_do_not(string effect, bool expected)
+    {
+        var (body, _) = Fixture(extraEffect: effect);
+        var bindings = IlCommandBindingExtractor.Extract(body).Bindings;
+        if (expected)
+        {
+            var binding = Assert.Single(bindings);
+            Assert.Equal("constant-string-hash", binding.CommandText.Kind);
+            Assert.Equal(new IlValueOrigin("constant-int32", "4"), binding.CommandType);
+        }
+        else Assert.Empty(bindings);
+    }
+
+    [Fact]
     public async Task Real_VB_net48_wrapper_retains_both_normal_command_endpoints_with_provenance()
     {
         var sourcePath = Path.Combine(FindRepoRoot(), "samples", "messy-dotnet-workspace", "vb-publish-crossdll-framework");
@@ -24,7 +101,8 @@ public sealed class IlCommandBindingExtractorTests
         var srm = IlBodyEvidenceExtractor.ReadSystemReflectionMetadataBodies(bytes, limits, new IlBodyEvidenceExtractor.IlWorkBudget(100_000), CancellationToken.None);
         Assert.Empty(IlBodyEvidenceExtractor.CompareBodies(cecil, srm));
         var body = Assert.Single(IlBodyEvidenceExtractor.AgreeValueFlows(cecil.Bodies, srm.Bodies),
-            candidate => IlCommandBindingExtractor.Extract(candidate).Bindings.Count > 0);
+            candidate => candidate.MethodIdentity.Contains("PublicSqlDataAccess|", StringComparison.Ordinal)
+                && IlCommandBindingExtractor.Extract(candidate).Bindings.Count > 0);
         var bindings = IlCommandBindingExtractor.Extract(body).Bindings;
         Assert.Equal(2, bindings.Count);
         Assert.All(bindings, binding => {
@@ -34,7 +112,10 @@ public sealed class IlCommandBindingExtractorTests
         Assert.Contains("IlValueExceptionFlowUnavailable", body.ValueFlow!.Gaps);
         var root = Directory.CreateTempSubdirectory("tracemap-real-vb-command-").FullName;
         var scan = ScanEngine.Scan(new ScanOptions(sourcePath, Path.Combine(root, "out"), CompiledInputPaths: [assemblyPath], IlBodyEvidence: true));
-        var candidates = scan.Facts.Where(fact => fact.FactType == FactTypes.ManagedIlDatabaseCommandCandidate).ToArray();
+        var candidates = scan.Facts.Where(fact => fact.FactType == FactTypes.ManagedIlDatabaseCommandCandidate
+            && scan.Facts.Any(bodyFact => bodyFact.FactId == fact.Properties["ilBodyFactId"]
+                && scan.Facts.Any(method => method.FactId == bodyFact.Properties["compiledFactId"]
+                    && method.TargetSymbol!.Contains("PublicSqlDataAccess", StringComparison.Ordinal)))).ToArray();
         Assert.Equal(2, candidates.Length);
         var bodyFact = scan.Facts.Single(fact => fact.FactId == candidates[0].Properties["ilBodyFactId"]);
         var method = scan.Facts.Single(fact => fact.FactId == bodyFact.Properties["compiledFactId"]);
@@ -358,7 +439,7 @@ public sealed class IlCommandBindingExtractorTests
     private static (IlBodyObservation Body, byte[] Bytes) Fixture(bool argumentText = false,
         bool branch = false, bool mutation = false, bool lookalike = false, bool wrongTextSetter = false,
         int wrapperDepth = 0, bool instanceRun = false, bool parameterLoop = false, string loopEffect = "none", bool parameterOnly = false,
-        bool usingRegions = false, bool addRange = false)
+        bool usingRegions = false, bool addRange = false, string extraEffect = "none")
     {
         using var assembly = AssemblyDefinition.CreateAssembly(new AssemblyNameDefinition("CommandFixture", new Version(1, 0)), "CommandFixture", ModuleKind.Dll);
         var module = assembly.MainModule;
@@ -452,6 +533,81 @@ public sealed class IlCommandBindingExtractorTests
             var mutate = new MethodReference("Mutate", module.TypeSystem.Void, type);
             mutate.Parameters.Add(new ParameterDefinition(command));
             il.Emit(OpCodes.Ldloc_0); il.Emit(OpCodes.Call, mutate);
+        }
+        if (extraEffect is "timeout" or "wrong-timeout")
+        {
+            il.Emit(OpCodes.Ldloc_0); il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Callvirt, Method(command, "set_CommandTimeout", module.TypeSystem.Void,
+                extraEffect == "timeout" ? module.TypeSystem.Int32 : module.TypeSystem.Object));
+        }
+        if (extraEffect is "transaction" or "wrong-transaction")
+        {
+            il.Emit(OpCodes.Ldloc_0); il.Emit(OpCodes.Ldnull);
+            il.Emit(OpCodes.Callvirt, Method(command, "set_Transaction", module.TypeSystem.Void,
+                extraEffect == "transaction" ? Type("System.Data.SqlClient", "SqlTransaction") : module.TypeSystem.Object));
+        }
+        if (extraEffect is "mapping" or "wrong-mapping" or "mapping-escape")
+        {
+            var mapping = Type("System.Data.Common", "DataTableMappingCollection");
+            il.Emit(OpCodes.Ldloc_1); il.Emit(OpCodes.Callvirt, Method(adapterBase, "get_TableMappings", mapping));
+            if (extraEffect == "mapping-escape")
+            { var mutate = new MethodReference("MutateMappings", module.TypeSystem.Void, type); mutate.Parameters.Add(new(mapping)); il.Emit(OpCodes.Call, mutate); }
+            else
+            {
+                il.Emit(OpCodes.Ldstr, "Table"); il.Emit(OpCodes.Ldstr, "Result");
+                il.Emit(OpCodes.Callvirt, Method(mapping, "Add", Type("System.Data.Common", "DataTableMapping"),
+                    module.TypeSystem.String, extraEffect == "mapping" ? module.TypeSystem.String : module.TypeSystem.Object)); il.Emit(OpCodes.Pop);
+            }
+        }
+        if (extraEffect is "field-debug" or "field-escape")
+        {
+            var field = new FieldDefinition("Stored", FieldAttributes.Public | FieldAttributes.Static,
+                extraEffect == "field-debug" ? module.TypeSystem.String : command); type.Fields.Add(field);
+            if (extraEffect == "field-debug") il.Emit(OpCodes.Ldstr, "debug"); else il.Emit(OpCodes.Ldloc_0);
+            il.Emit(OpCodes.Stsfld, field);
+        }
+        if (extraEffect == "array-escape")
+        {
+            il.Emit(OpCodes.Ldc_I4_1); il.Emit(OpCodes.Newarr, module.TypeSystem.Object);
+            il.Emit(OpCodes.Ldc_I4_0); il.Emit(OpCodes.Ldloc_0); il.Emit(OpCodes.Stelem_Ref);
+        }
+        if (extraEffect is "field-indirect-debug" or "field-indirect-escape")
+        {
+            var field = new FieldDefinition("Indirect", FieldAttributes.Public | FieldAttributes.Static,
+                extraEffect == "field-indirect-debug" ? module.TypeSystem.String : command); type.Fields.Add(field);
+            il.Emit(OpCodes.Ldsflda, field);
+            if (extraEffect == "field-indirect-debug") il.Emit(OpCodes.Ldstr, "debug"); else il.Emit(OpCodes.Ldloc_0);
+            il.Emit(OpCodes.Stind_Ref);
+        }
+        if (extraEffect is "byref-escape" or "indirect-escape" or "address-before-assignment")
+        {
+            var indirect = extraEffect == "indirect-escape";
+            var mutate = new MethodReference("MutateRef", module.TypeSystem.Void, type); mutate.Parameters.Add(new(indirect ? command : new ByReferenceType(command)));
+            if (extraEffect == "address-before-assignment")
+            {
+                // Taking an address before copying a configured command into
+                // its slot must expose the current object, not the old null.
+                var alias = new VariableDefinition(command); var address = new VariableDefinition(new ByReferenceType(command));
+                method.Body.Variables.Add(alias); method.Body.Variables.Add(address);
+                il.Emit(OpCodes.Ldnull); il.Emit(OpCodes.Stloc, alias);
+                il.Emit(OpCodes.Ldloca, alias); il.Emit(OpCodes.Stloc, address);
+                il.Emit(OpCodes.Ldloc_0); il.Emit(OpCodes.Stloc, alias); il.Emit(OpCodes.Ldloc, address);
+            }
+            else il.Emit(OpCodes.Ldloca_S, method.Body.Variables[0]);
+            if (indirect) il.Emit(OpCodes.Ldind_Ref);
+            il.Emit(OpCodes.Call, mutate);
+        }
+        if (extraEffect == "boxed-escape")
+        {
+            var mutate = new MethodReference("MutateBox", module.TypeSystem.Void, type); mutate.Parameters.Add(new(module.TypeSystem.Object));
+            il.Emit(OpCodes.Ldloc_0); il.Emit(OpCodes.Box, command); il.Emit(OpCodes.Call, mutate);
+        }
+        if (extraEffect is "unrelated-unknown" or "field-debug")
+        {
+            var unrelated = new MethodReference("Unrelated", module.TypeSystem.Void, type); unrelated.Parameters.Add(new(module.TypeSystem.Object));
+            // A field read is unknown, but cannot alias an unexposed allocation.
+            var field = new FieldDefinition("External", FieldAttributes.Public | FieldAttributes.Static, module.TypeSystem.Object); type.Fields.Add(field);
+            il.Emit(OpCodes.Ldsfld, field); il.Emit(OpCodes.Call, unrelated);
         }
         il.Append(endpointLoad);
         il.Emit(OpCodes.Newobj, Method(dataSet, ".ctor", module.TypeSystem.Void));

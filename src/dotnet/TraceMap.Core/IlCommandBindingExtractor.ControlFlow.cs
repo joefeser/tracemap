@@ -54,7 +54,7 @@ internal static partial class IlCommandBindingExtractor
         }
         while (queue.TryDequeue(out var offset))
         {
-            queued.Remove(offset); var input = states[offset]; var cost = input.Cost;
+            queued.Remove(offset); var input = states[offset]; var cost = input.Cost * (1 + (byOffset[offset].ExposedOrigins?.Count ?? 0));
             if ((work += cost) > MaxWorkUnits || input.Cost > MaxTrackedReceivers + 1 || aggregateBudget?.TryConsume(cost) == false)
                 return new([], ["IlCommandBindingWorkLimit"]);
             var state = input.Copy(); Apply(offset, state, false);
@@ -71,7 +71,8 @@ internal static partial class IlCommandBindingExtractor
         // Emit from converged input states only, never intermediate loop visits.
         foreach (var offset in states.Keys.Order())
         {
-            if ((work += states[offset].Cost) > MaxWorkUnits || aggregateBudget?.TryConsume(states[offset].Cost) == false)
+            var cost = states[offset].Cost * (1 + (byOffset[offset].ExposedOrigins?.Count ?? 0));
+            if ((work += cost) > MaxWorkUnits || aggregateBudget?.TryConsume(cost) == false)
                 return new([], ["IlCommandBindingWorkLimit"]);
             Apply(offset, states[offset].Copy(), true);
         }
@@ -80,10 +81,12 @@ internal static partial class IlCommandBindingExtractor
         void Apply(long offset, ConfigurationState state, bool emit)
         {
             if (byOffset[offset].InvalidatesConfiguration) state.Clear();
+            foreach (var origin in byOffset[offset].ExposedOrigins ?? []) InvalidatePassed([origin]);
             if (!operands.TryGetValue(offset, out var values)) return;
             if (values.State != "control-flow-candidate" || !calls.TryGetValue(offset, out var call))
             { state.Clear(); gaps.Add("IlCommandOperandsUnavailable"); return; }
             var api = Classify(call);
+            if (api == Api.NonTextCommandConfiguration) return;
             if (api == Api.CommandConstructor && ObjectOrigin(values.Result))
             {
                 var textConstructor = values.Arguments.Count > 0 && FirstParameterIsString(call.TargetIdentity);
@@ -105,6 +108,9 @@ internal static partial class IlCommandBindingExtractor
             { state.Adapters[values.Receiver] = new(values.Arguments[0], offset); return; }
             if (api == Api.Parameters && ObjectOrigin(values.Result) && state.Commands.ContainsKey(values.Receiver))
             { state.Collections[values.Result] = values.Receiver; return; }
+            if (api == Api.TableMappings && ObjectOrigin(values.Result) && state.Adapters.ContainsKey(values.Receiver))
+            { state.Collections[values.Result] = values.Receiver; return; }
+            if (api == Api.TableMappingMutation && state.Collections.ContainsKey(values.Receiver)) return;
             if (api == Api.ParameterMutation && state.Collections.ContainsKey(values.Receiver))
             { if (emit) gaps.Add("IlCommandParameterFlowUnavailable"); return; }
             if (api is Api.Fill or Api.Execute)
@@ -134,19 +140,25 @@ internal static partial class IlCommandBindingExtractor
 
             void Invalidate()
             {
-                // Unknown operands can alias any tracked receiver.
-                if (values.Arguments.Any(value => value.Kind == "unknown")
-                    || call.StackShape?.HasThis == true && call.Opcode != "newobj" && values.Receiver.Kind == "unknown")
+                InvalidatePassed(values.Arguments.Append(values.Receiver));
+            }
+
+            void InvalidatePassed(IEnumerable<IlValueOrigin> origins)
+            {
+                // An unknown heap value cannot name an unexposed allocation.
+                // Every heap store/address exposure is processed separately;
+                // external/argument-derived objects remain conservatively aliased.
+                var passed = origins.Select(IlValueAddresses.Target).ToHashSet();
+                if (passed.Any(value => value.Kind == "address-unavailable"))
                 { state.Clear(); gaps.Add("IlCommandUnknownCallEffects"); return; }
-                var passed = values.Arguments.Append(values.Receiver).ToHashSet();
                 foreach (var pair in state.Collections) if (passed.Contains(pair.Key) || state.Escaped.Contains(pair.Key)) state.Escaped.Add(pair.Value);
                 foreach (var pair in state.Adapters)
-                    if (pair.Key.Kind == "argument-slot" || passed.Contains(pair.Key) || state.Escaped.Contains(pair.Key)) state.Escaped.Add(pair.Value.Command);
+                    if (pair.Key.Kind is "argument-slot" or "call-result" || passed.Contains(pair.Key) || state.Escaped.Contains(pair.Key)) state.Escaped.Add(pair.Value.Command);
                 foreach (var key in state.Commands.Keys.ToArray())
-                    if (key.Kind == "argument-slot" || passed.Contains(key) || state.Escaped.Contains(key))
+                    if (key.Kind is "argument-slot" or "call-result" || passed.Contains(key) || state.Escaped.Contains(key))
                     { state.Commands.Remove(key); state.Escaped.Add(key); gaps.Add("IlCommandUnknownCallEffects"); }
                 foreach (var key in state.Adapters.Keys.ToArray())
-                    if (key.Kind == "argument-slot" || passed.Contains(key) || state.Escaped.Contains(key))
+                    if (key.Kind is "argument-slot" or "call-result" || passed.Contains(key) || state.Escaped.Contains(key))
                     { state.Adapters.Remove(key); state.Escaped.Add(key); gaps.Add("IlCommandUnknownCallEffects"); }
                 foreach (var key in state.Collections.Keys.ToArray())
                     if (passed.Contains(key) || state.Escaped.Contains(key) || state.Escaped.Contains(state.Collections[key]))
