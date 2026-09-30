@@ -11,6 +11,27 @@ namespace TraceMap.Tests;
 
 public sealed class CombinedDependencyPathTests
 {
+    [Theory]
+    [InlineData("compiled-il-call", true, true)]
+    [InlineData("compiled-il-callvirt-candidate", true, true)]
+    [InlineData("compiled-database-api-candidate", true, true)]
+    [InlineData("legacy-root-selection", false, true)]
+    [InlineData("legacy-root-selection", true, false)]
+    [InlineData("compiled-source-identity", false, true)]
+    [InlineData("compiled-source-identity", true, false)]
+    [InlineData("projectless-source-pdb-identity", false, true)]
+    [InlineData("projectless-source-pdb-identity", true, false)]
+    [InlineData("projectless-publish-member-candidate", false, true)]
+    [InlineData("projectless-publish-member-candidate", true, false)]
+    [InlineData("projectless-publish-method-candidate", false, true)]
+    [InlineData("projectless-pdb-compiled-to-source", true, false)]
+    [InlineData("projectless-vb-receiver-bridge", false, false)]
+    [InlineData("projectless-vb-constructor-bridge", false, false)]
+    [InlineData("symbol-reconciliation", true, false)]
+    [InlineData("calls", false, false)]
+    public void Compiled_baseline_allows_one_root_attachment_then_only_il_edges(string kind, bool entered, bool expected)
+        => Assert.Equal(expected, CombinedDependencyPathReporter.CompiledBaselineAllowsEdge(kind, entered));
+
     [Fact]
     public void Historical_path_summary_keeps_unrecorded_work_unknown_and_new_measurement_round_trips()
     {
@@ -49,6 +70,13 @@ public sealed class CombinedDependencyPathTests
             options with { MaxTraversalWork = 100, MaxPaths = 1 }, roots, combinedIndex: true);
         Assert.Single(pathBounded.Paths);
         Assert.Contains(pathBounded.Gaps, gap => gap.Reason == "path");
+        var compiled = await CombinedDependencyPathReporter.BuildSelectedSymbolsAsync(
+            options with { MaxTraversalWork = 100, CompiledOnly = true }, roots, combinedIndex: true);
+        Assert.Empty(compiled.Paths); // Source calls must not masquerade as compiled calls.
+        Assert.Contains(compiled.Gaps, gap => gap.GapKind == "CompiledBaselineNoPath"
+            && gap.RuleId == "combined.paths.query-gap.v1" && gap.EvidenceTier == EvidenceTiers.Tier4Unknown);
+        Assert.Equal("compiled-il-with-root-attachment", compiled.Query.TraversalScope);
+        Assert.Equal(2, compiled.Summary.SelectorCandidateCount);
         // The old exact-symbol invocation and a single source-bound native root
         // must retain the same evidence, while the shared query can omit it.
         foreach (var root in roots)

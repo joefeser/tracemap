@@ -31,6 +31,7 @@ public sealed record CombinedDependencyPathOptions(
     internal int StartingNodeLimit { get; init; } = 250;
     internal IReadOnlySet<string>? StartingFactIds { get; init; }
     public bool ExactFromSymbol { get; init; }
+    public bool CompiledOnly { get; init; }
     internal IReadOnlyList<CombinedPathSymbolRoot>? SymbolRoots { get; init; }
     // Deterministic work bound, including nonterminal/cyclic exploration.
     public int MaxTraversalWork { get; init; } = 100_000;
@@ -107,6 +108,8 @@ public sealed record CombinedPathQuery(
 {
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public IReadOnlyList<CombinedPathSymbolRoot>? SymbolRoots { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? TraversalScope { get; init; }
 }
 
 public sealed record CombinedPathSummary(
@@ -400,7 +403,7 @@ public static partial class CombinedDependencyPathReporter
             return (report, starts.Select(node => node.NodeId).ToHashSet(StringComparer.Ordinal));
         }
 
-        return (report, Search(graph, starts, terminalNodes, options.MaxDepth, options.MaxPaths, options.MaxFrontier, options.IncludeLegacyRoots || IsLegacyView(options.View), options.MaxTraversalWork, options.InventoryDistinctTerminals).ReachedNodeIds);
+        return (report, Search(graph, starts, terminalNodes, options.MaxDepth, options.MaxPaths, options.MaxFrontier, options.IncludeLegacyRoots || IsLegacyView(options.View), options.MaxTraversalWork, options.InventoryDistinctTerminals, options.CompiledOnly).ReachedNodeIds);
     }
 
     internal static async Task<CombinedPathGraphInventory> BuildGraphInventoryAsync(
@@ -519,6 +522,8 @@ public static partial class CombinedDependencyPathReporter
             throw new ArgumentException("--max-traversal-work must be a positive integer.");
         }
         if (options.StartingNodeLimit <= 0) throw new ArgumentOutOfRangeException(nameof(options));
+        if (options.CompiledOnly && options.InventoryDistinctTerminals)
+            throw new ArgumentException("Compiled-only traversal does not support terminal inventory traversal.");
 
         if (!string.IsNullOrWhiteSpace(options.ToSurface))
         {
@@ -595,7 +600,7 @@ public static partial class CombinedDependencyPathReporter
             // Preserve bounded outgoing-graph observations even when the index
             // contains no supported terminal surface. The public path result
             // remains SelectorNoMatch and makes no terminal claim.
-            search = Search(graph, startNodes, terminalNodes, options.MaxDepth, options.MaxPaths, options.MaxFrontier, legacyMode, options.MaxTraversalWork, options.InventoryDistinctTerminals);
+            search = Search(graph, startNodes, terminalNodes, options.MaxDepth, options.MaxPaths, options.MaxFrontier, legacyMode, options.MaxTraversalWork, options.InventoryDistinctTerminals, options.CompiledOnly);
             gaps.AddRange(search.Gaps);
             truncated = truncated || search.Truncated;
             gaps.Add(new CombinedPathGap(
@@ -615,15 +620,24 @@ public static partial class CombinedDependencyPathReporter
         }
         else
         {
-            search = Search(graph, startNodes, terminalNodes, options.MaxDepth, options.MaxPaths, options.MaxFrontier, legacyMode, options.MaxTraversalWork, options.InventoryDistinctTerminals);
+            search = Search(graph, startNodes, terminalNodes, options.MaxDepth, options.MaxPaths, options.MaxFrontier, legacyMode, options.MaxTraversalWork, options.InventoryDistinctTerminals, options.CompiledOnly);
             paths.AddRange(search.Paths);
             gaps.AddRange(search.Gaps);
             truncated = truncated || search.Truncated;
 
             if (paths.Count == 0)
             {
-                var gap = CreateNoPathGap(read, graph, startNodes, options.MaxDepth, options.MaxFrontier, legacyMode);
-                if (legacyMode && gap.Classification == CombinedDependencyPathClassifications.NoBackendEvidence)
+                var gap = options.CompiledOnly
+                    ? new CombinedPathGap("gap:compiled-baseline:no-path", "CompiledBaselineNoPath",
+                        CombinedDependencyPathClassifications.AnalysisGap,
+                        "No terminal path was retained under the compiled-only edge scope. Source bridges were excluded; this does not prove absence of backend behavior.",
+                        null, sourceFilter, startNodes[0].NodeId, null, QueryGapRuleId, EvidenceTiers.Tier4Unknown, null, null, "compiled-scope")
+                    : CreateNoPathGap(read, graph, startNodes, options.MaxDepth, options.MaxFrontier, legacyMode);
+                if (options.CompiledOnly)
+                {
+                    gaps.Add(gap);
+                }
+                else if (legacyMode && gap.Classification == CombinedDependencyPathClassifications.NoBackendEvidence)
                 {
                     paths.AddRange(startNodes
                         .Take(options.MaxPaths)
@@ -742,7 +756,7 @@ public static partial class CombinedDependencyPathReporter
                 AlgorithmVersion,
                 CombinedReportHelpers.NormalizeMessageDirection(options.MessageDirection, "paths"),
                 options.MaxTraversalWork,
-                options.ExactFromSymbol) { SymbolRoots = options.SymbolRoots },
+                options.ExactFromSymbol) { SymbolRoots = options.SymbolRoots, TraversalScope = options.CompiledOnly ? "compiled-il-with-root-attachment" : null },
             read.Sources.Select(source => legacyMode ? SanitizeSource(source) : source).OrderBy(source => source.Label, StringComparer.Ordinal).ThenBy(source => source.SourceIndexId, StringComparer.Ordinal).ToArray(),
             new CombinedPathSummary(
                 read.Sources.Count,
@@ -763,6 +777,8 @@ public static partial class CombinedDependencyPathReporter
                 participatingNodes,
                 participatingEdges),
             ReportLimitations(legacyMode, participatingNodes, sortedGaps)
+                .Concat(options.CompiledOnly ? new[]
+                { "Compiled-IL scope permits at most one evidenced root attachment, then only retained compiled calls and compiled database API candidates. Source bridges are excluded; root attachment is not IL, runtime dispatch, build authenticity or historical parity proof." } : [])
                 .Concat(read.CompiledAttachmentLinks.Count == 0 ? [] : new[]
                 { "Compiled attachment joins use an explicitly validated local parent/index link and preserve original fact namespaces. They remain static review evidence, not runtime execution, source-line identity, build authenticity or full-site coverage." }).ToArray())
         {
@@ -4091,7 +4107,13 @@ public static partial class CombinedDependencyPathReporter
         return cleaned.Length == 0 ? null : cleaned.ToLowerInvariant();
     }
 
-    private static SearchResult Search(EvidenceGraph graph, IReadOnlyList<GraphNode> starts, IReadOnlySet<string> terminalNodeIds, int maxDepth, int maxPaths, int maxFrontier, bool depthFirst = false, int maxTraversalWork = 100_000, bool inventoryDistinctTerminals = false)
+    internal static bool CompiledBaselineAllowsEdge(string kind, bool enteredCompiled)
+        => kind is "compiled-il-call" or "compiled-il-callvirt-candidate" or "compiled-database-api-candidate"
+            || (!enteredCompiled && kind is "legacy-root-selection" or "compiled-source-identity"
+                or "projectless-source-pdb-identity" or "projectless-publish-member-candidate"
+                or "projectless-publish-method-candidate");
+
+    private static SearchResult Search(EvidenceGraph graph, IReadOnlyList<GraphNode> starts, IReadOnlySet<string> terminalNodeIds, int maxDepth, int maxPaths, int maxFrontier, bool depthFirst = false, int maxTraversalWork = 100_000, bool inventoryDistinctTerminals = false, bool compiledOnly = false)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxTraversalWork);
         // Legacy reports enumerate bounded evidence paths, not shortest paths.
@@ -4337,6 +4359,10 @@ public static partial class CombinedDependencyPathReporter
                 }
                 CountWork(state.RootNodeId);
                 var edge = orderedOutgoing[edgeIndex];
+                // Root attachment preserves its evidence tier; it is not an IL call.
+                // Once attached, source reconciliation/receiver/constructor edges
+                // cannot be used to leave and re-enter the compiled call tree.
+                if (compiledOnly && !CompiledBaselineAllowsEdge(edge.EdgeKind, state.CompiledBaselineEntered)) continue;
                 if (IsDispatchCandidateCrossHop(graph, state, edge))
                 {
                     edgeFilteredByDispatchCrossHop = true;
@@ -4369,7 +4395,8 @@ public static partial class CombinedDependencyPathReporter
                     observation.TraversedEdgeKinds.Add(edge.EdgeKind);
                     observation.TraversedRuleIds.Add(edge.RuleId);
                 }
-                var next = new PathState(state.RootNodeId, [.. state.NodeIds, edge.ToNodeId], [.. state.EdgeIds, edge.EdgeId]);
+                var next = new PathState(state.RootNodeId, [.. state.NodeIds, edge.ToNodeId], [.. state.EdgeIds, edge.EdgeId])
+                { CompiledBaselineEntered = state.CompiledBaselineEntered || edge.EdgeKind != "legacy-root-selection" };
                 if (depthFirst) EnqueueFirst(next);
                 else EnqueueLast(next);
                 reachedNodeIds.Add(edge.ToNodeId);
@@ -6764,7 +6791,10 @@ public static partial class CombinedDependencyPathReporter
         IReadOnlyList<string> NodeIds,
         IReadOnlyList<string> EdgeIds,
         int NextOutgoingIndex = 0,
-        bool TraversedOutgoing = false);
+        bool TraversedOutgoing = false)
+    {
+        public bool CompiledBaselineEntered { get; init; }
+    }
 
     private enum DispatchTraversalMode
     {

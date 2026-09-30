@@ -1279,9 +1279,23 @@ public sealed class WebFormsReviewExecutionTests
             Assert.Equal(WebFormsReviewExecutionCommand.HandlerRequeryHash(fillReceipt), fillReceipt.BoundedInputSha256);
             Assert.Equal(handlerReceipt.CombinedIndexSha256, fillReceipt.CombinedIndexSha256);
             Assert.Contains("handlerQuery.terminalScope=DbDataAdapter.Fill", fillOutput.ToString());
+            var compiledFolder = Path.Combine(fixture.Root, "handler-compiled-query");
+            using var compiledOutput = new StringWriter();
+            Assert.Equal(0, await TraceMapCommand.RunAsync(["webforms-review", "requery-handler", "--run", fixture.Run,
+                "--bundle", target, "--handler", "Names_Init", "--out", compiledFolder, "--surface-name", "DbDataAdapter.Fill",
+                "--traversal-scope", "compiled-il"], compiledOutput, error));
+            var compiledReceipt = JsonSerializer.Deserialize<WebFormsHandlerRequeryReceipt>(File.ReadAllText(Path.Combine(compiledFolder,
+                WebFormsReviewExecutionCommand.HandlerRequeryName)), JsonOptions)!;
+            Assert.Equal("compiled-il-with-root-attachment", compiledReceipt.Query.TraversalScope);
+            Assert.Equal(WebFormsReviewExecutionCommand.HandlerRequeryHash(compiledReceipt), compiledReceipt.BoundedInputSha256);
+            Assert.Equal(handlerReceipt.CombinedIndexSha256, compiledReceipt.CombinedIndexSha256);
+            Assert.NotEqual(compiledReceipt.BoundedInputSha256, fillReceipt.BoundedInputSha256);
             var badScope = Path.Combine(fixture.Root, "bad-scope");
             Assert.Equal(1, await TraceMapCommand.RunAsync(["webforms-review", "requery-handler", "--run", fixture.Run,
                 "--bundle", target, "--handler", "Names_Init", "--out", badScope, "--surface-name", "Wrong"], TextWriter.Null, error));
+            Assert.False(Directory.Exists(badScope));
+            Assert.Equal(1, await TraceMapCommand.RunAsync(["webforms-review", "requery-handler", "--run", fixture.Run,
+                "--bundle", target, "--handler", "Names_Init", "--out", badScope, "--traversal-scope", "Wrong"], TextWriter.Null, error));
             Assert.False(Directory.Exists(badScope));
             Assert.Equal(1, await TraceMapCommand.RunAsync(["webforms-review", "requery-handler", "--run", fixture.Run,
                 "--bundle", target, "--handler", "Names_Init", "--out", handlerFolder], TextWriter.Null, error));
