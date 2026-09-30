@@ -15,8 +15,15 @@ if ($files.Count -eq 0 -or $files.Count -gt 32) { throw 'WEBFORMS_COMMAND_FACT_F
 # Count the native compact NDJSON fact-type markers using bounded buffers.
 # This is a read-only diagnostic across retained attempts, not receipt validation.
 $types = @('ManagedIlCallValuesObserved', 'ManagedIlDatabaseCommandCandidate')
-$counts = [long[]]::new($types.Count)
-$markers = @($types | ForEach-Object { '"factType":"' + $_ + '"' })
+$gaps = @('IlCommandBindingWorkLimit','IlCommandValueEvidenceUnavailable','IlCommandOperandsUnavailable',
+    'IlCommandAdapterConstructorUnsupported','IlCommandAdapterBindingUnavailable','IlCommandTextBindingUnavailable',
+    'IlCommandUnknownCallEffects','IlCommandTextCallerBindingRequired','IlCommandTextReturnBindingUnavailable',
+    'IlCommandTypeBindingUnavailable','IlCommandParameterFlowUnavailable','IlValueControlFlowWorkLimit',
+    'IlValueControlFlowInstructionLimit','IlValueControlFlowSlotLimit','IlValueStackUnavailable',
+    'IlValueStackMergeUnavailable','IlValueInstructionUnavailable','IlValueCallShapeUnavailable')
+$counts = [long[]]::new($types.Count + $gaps.Count)
+$markers = @($types | ForEach-Object { '"factType":"' + $_ + '"' }) +
+    @($gaps | ForEach-Object { '"gapKind":"' + $_ + '"' })
 $keep = ($markers | ForEach-Object Length | Measure-Object -Maximum).Maximum - 1
 $total = 0L
 foreach ($file in $files) {
@@ -44,4 +51,5 @@ foreach ($file in $files) {
 }
 Write-Output "commandFacts.files=$($files.Count)"
 for ($i = 0; $i -lt $types.Count; $i++) { Write-Output "commandFacts.$($types[$i])=$($counts[$i])" }
+for ($i = 0; $i -lt $gaps.Count; $i++) { Write-Output "commandFacts.gap.$($gaps[$i])=$($counts[$types.Count + $i])" }
 Write-Output 'commandFacts=retained-native-text-counts;all-found-attempts;no-native-validation;no-scan;no-traversal;no-inputs-changed'
