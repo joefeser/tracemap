@@ -686,7 +686,7 @@ public static class ScannerVersions
     public const string CSharpAspNetSyntaxRouteExtractor = "csharp-aspnet-syntax-route/0.1.0";
     public const string CSharpIntegrationSyntaxExtractor = "csharp-integration-syntax/0.3.0";
     public const string CSharpSemanticExtractor = "csharp-semantic/0.21.1";
-    public const string VisualBasicSemanticExtractor = "vb-semantic/0.8.4";
+    public const string VisualBasicSemanticExtractor = "vb-semantic/0.8.5";
     public const string VisualBasicSyntaxExtractor = "vb-syntax/0.3.22";
     public const string CSharpPropertyMappingExtractor = "csharp-property-mapping/0.1.0";
     public const string FrameworkMigrationEvidenceExtractor = "framework-migration/0.1.0";

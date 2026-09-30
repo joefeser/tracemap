@@ -2077,6 +2077,58 @@ public static class VisualBasicSemanticExtractor
         foreach (var assignment in root.DescendantNodes().OfType<AssignmentStatementSyntax>())
         {
             if (!assignment.IsKind(SyntaxKind.SimpleAssignmentStatement)
+                || assignment.Left is not MemberAccessExpressionSyntax access
+                || model.GetSymbolInfo(access).Symbol is not IPropertySymbol property)
+            {
+                continue;
+            }
+            var commandText = property.Name.Equals("CommandText", StringComparison.OrdinalIgnoreCase)
+                && IsAdoNetType(property.ContainingType, "System.Data.Common.DbCommand");
+            var adapterCommand = property.Name is "SelectCommand" or "InsertCommand" or "UpdateCommand" or "DeleteCommand"
+                && IsAdoNetType(property.ContainingType, "System.Data.Common.DbDataAdapter");
+            if (!commandText && !adapterCommand) continue;
+
+            var enclosing = model.GetEnclosingSymbol(assignment.SpanStart);
+            var receiver = model.GetSymbolInfo(access.Expression).Symbol;
+            var assigned = model.GetSymbolInfo(assignment.Right).Symbol;
+            var properties = new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["configurationKind"] = commandText ? "command-text-assignment" : "adapter-command-assignment",
+                ["frameworkFamily"] = "ado-net",
+                ["limitations"] = "Compiler-resolved property assignment only; no alias flow, branch feasibility, last-write dominance, cross-method propagation, runtime command association, SQL execution or effects are proven. Raw command text and parameter values are not retained."
+            };
+            AddSymbolProperties(properties, "source", enclosing);
+            AddSymbolProperties(properties, "target", property);
+            AddSymbolProperties(properties, commandText ? "commandReceiver" : "adapterReceiver", receiver);
+            AddSymbolProperties(properties, commandText ? "assignedValue" : "commandReceiver", assigned);
+            AddAssemblyProperties(properties, enclosing?.ContainingAssembly, property.ContainingAssembly);
+            if (commandText)
+            {
+                var constant = model.GetConstantValue(assignment.Right);
+                properties["commandTextClassification"] = constant.HasValue && constant.Value is string
+                    ? "compile-time-constant-hashed" : "dynamic-or-nonconstant";
+                if (constant.HasValue && constant.Value is string text)
+                {
+                    properties["commandTextHash"] = FactFactory.Hash(text, 64);
+                    properties["commandTextLength"] = text.Length.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                }
+            }
+            else
+            {
+                properties["adapterCommandProperty"] = property.Name;
+                properties["commandBindingClassification"] = receiver is not null
+                    && assigned is ILocalSymbol or IParameterSymbol or IFieldSymbol
+                    ? "direct-symbol-assignment" : "unavailable-or-nondirect";
+            }
+            facts.Add(CreateSemanticFact(FactTypes.SqlCommandDetected, RuleIds.DatabaseSqlText,
+                projectPath, filePath, assignment, sourceSymbol: enclosing?.ToDisplayString(SymbolFormat),
+                targetSymbol: property.ContainingType.ToDisplayString(SymbolFormat),
+                contractElement: property.Name, properties: properties));
+        }
+
+        foreach (var assignment in root.DescendantNodes().OfType<AssignmentStatementSyntax>())
+        {
+            if (!assignment.IsKind(SyntaxKind.SimpleAssignmentStatement)
                 || assignment.Left is not MemberAccessExpressionSyntax memberAccess
                 || model.GetSymbolInfo(memberAccess).Symbol is not IPropertySymbol property
                 || !property.Name.Equals("CommandType", StringComparison.OrdinalIgnoreCase)

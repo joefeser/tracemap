@@ -1,5 +1,28 @@
 # Implementation state
 
+## Source command-assignment extraction slice (2026-09-30)
+
+Owner ledger succeeds with 18 groups / 56 variants, 56 database API occurrences
+and zero SQL surfaces. Inspected retained Fill nodes have no command/table/text
+hash evidence. This is an extraction/binding gap, not a report-rendering fix.
+IL body observations currently retain calls and hashes, not command-value flow.
+
+Found and corrected a separate concrete VB semantic boundary omission:
+CommandText property assignments and DbDataAdapter command assignments were
+not emitted. They now retain compiler-resolved receiver identities, constant
+text hashes or dynamic classification, and direct-symbol binding candidates.
+No raw text, parameter values, last-write/alias/branch/runtime binding is claimed.
+Extractor version advances to vb-semantic/0.8.5. Framework lookalikes are rejected.
+
+Validation: five ADO.NET boundary tests and 89 VB-focused tests passed. Modern
+VB CLI smoke emitted 222 facts with Level1SemanticAnalysis and passed artifact
+conformance. All 32 Web Forms composition/code-path review checks passed.
+The build introduced no compiler warnings. Full .NET regression
+and pinned CommunityVB OSS smoke are deferred for this bounded slice; they are
+required before PR readiness. This source slice does not fix the private
+projectless/IL-only command-value path. End-to-end SQL binding remains open;
+do not rerun the old ledger as if it can acquire new facts.
+
 ## SQL ledger output-cap correction (2026-09-30)
 
 Owner run at 3fab3a84 failed WEBFORMS_SQL_ROUTE_OUTPUT_LIMIT before output
