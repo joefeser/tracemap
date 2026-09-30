@@ -24,6 +24,12 @@ silently discarded; group counts are not chain-parity counts.
 Input is capped at 256 MiB, 10,000 variants, 2,048 nodes/edges per variant and
 500,000 combined references. Output is capped at 32 MiB with at most 500 groups
 displayed. Exact helper and input hashes bind the bounded-input receipt.
+Route display additionally has an 8 MiB budget, with individual sections clipped
+at 65,536 characters. Report gaps are counted by kind/reason rather than copied
+wholesale: at most 1,000 retained categories, 200 displayed categories and three
+samples per category. Sample fields are limited to 1,024 characters and each
+category's sample display to 8,192 characters. Overflow and displayed counts are
+explicit; original files retain the complete evidence.
 
 
 ## Compare saved handler routes

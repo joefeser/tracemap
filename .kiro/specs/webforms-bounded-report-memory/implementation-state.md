@@ -1,5 +1,21 @@
 # Implementation state
 
+## SQL ledger output-cap correction (2026-09-30)
+
+Owner run at 3fab3a84 failed WEBFORMS_SQL_ROUTE_OUTPUT_LIMIT before output
+creation. The helper rendered the entire retained gap array, contradicting its
+bounded display intent. Replaced that dump with kind/reason counts and bounded
+samples: 1,000 categories admitted, 200 shown, three samples per category,
+1,024 characters per field and 8,192 characters per sample section. Overflow
+counts and display truncation are explicit. Route display has an 8 MiB budget
+and individual text/JSON sections are clipped at 65,536 characters. The existing
+32 MiB final output cap remains; private inputs are not modified.
+
+Regression uses 6,000 repeated gaps with a >32 MiB message payload (and HTML
+escaping expansion) and requires successful output below 100 KiB with exact
+gap counts and explicit truncation. Existing raw/grouped and reference/escaping
+tests remain required. This fixes rendering only, not SQL binding or coverage.
+
 ## Saved handler SQL evidence ledger (2026-09-30)
 
 Owner photos show the historical cart routes use downstream publish-member

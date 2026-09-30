@@ -33,6 +33,15 @@ try {
     Save @{ query = @{}; paths = @(@{ nodes = @($root,$sql); edges = @() }, @{ nodes = @($root,$otherSql); edges = @() }) } $inputFile
     $result = @(& $helper -Report $folder -OutputPath (Join-Path $folder 'different-evidence.html'))
     if ($result -notcontains 'sqlRoute.exactGroups=2;variants=2;databaseSurfaceOccurrences=2;sqlSurfaceOccurrences=2') { throw 'Differing evidence collapsed' }
+    # The old helper copied this >32 MiB gap payload into HTML and failed.
+    $largeGaps = @(1..6000 | ForEach-Object { @{ gapKind = 'LargeSyntheticGap'; reason = 'repeated'; message = ('<' * 6000); ruleId = 'test.large'; evidenceTier = 'Tier4Unknown' } })
+    Save @{ query = @{}; paths = @(@{ nodes = @($root,$fill); edges = @($bridge) }); gaps = $largeGaps } $inputFile
+    $largeOutput = Join-Path $folder 'large-gaps.html'
+    $result = @(& $helper -Report $folder -OutputPath $largeOutput)
+    if ($result -notcontains 'sqlRoute.retainedGaps=6000;gapCategories=1;displayedGapCategories=1;overflowCategoryGaps=0;displayedRouteGroups=1') { throw 'Large gap counts wrong' }
+    if ((Get-Item $largeOutput).Length -gt 100000) { throw 'Gap output not bounded' }
+    $html = [IO.File]::ReadAllText($largeOutput)
+    if (!$html.Contains('display truncated') -or !$html.Contains('6000 gaps')) { throw 'Gap truncation not explicit' }
     Save @{ schemaVersion = 'webforms-compiled-grouped-handoff.v1'; header = @{}; nodes = @{}; edges = @{}; variants = @(@{ nodeReferences = @('missing'); edgeReferences = @() }) } $inputFile
     try { & $helper -Report $folder -OutputPath (Join-Path $folder 'bad.html'); throw 'Missing ref accepted' } catch { if ($_.Exception.Message -ne 'WEBFORMS_SQL_ROUTE_REFERENCE_MISSING') { throw } }
     if (Test-Path (Join-Path $folder 'bad.html')) { throw 'Invalid output written' }
