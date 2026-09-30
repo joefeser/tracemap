@@ -1,5 +1,23 @@
 # Implementation state
 
+## Saved handler SQL evidence ledger (2026-09-30)
+
+Owner photos show the historical cart routes use downstream publish-member
+candidates and projectless VB receiver bridges, and the bid-group route uses
+VB constructor/receiver bridges. All three symbol hints occur in the saved
+mixed-mode output with 3 / 1 / 3 variants. This resolves this particular count
+discrepancy as a scope difference, not general route parity or complete coverage.
+
+Added `wsqlroute.ps1 -Open`: bounded, file-only raw/grouped path projection of
+database API and retained SQL surfaces, including node rule/tier/span/provenance,
+non-IL transition kinds and original report gaps. No SQL is inferred from method
+names or Fill; absent SQL surfaces and edges remain gaps. Input/output hashes
+bind the private HTML, references fail closed and existing output is preserved.
+Public PowerShell tests cover grouped/raw input, SQL/no-SQL cases, bridges,
+escaping, source preservation, differing node evidence, repeat filenames,
+explicit collision and missing references. Owner ledger readback is pending;
+no SQL command, parameter propagation or runtime completion is claimed.
+
 ## Historical-only edge and mixed-mode diagnosis (2026-09-30)
 
 Owner comparison confirms 13 historical symbol sequences / 41 variants versus
