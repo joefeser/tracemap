@@ -2,6 +2,16 @@
 
 ## Owner handler requery readback and chain diagnostic (2026-09-29)
 
+Owner hit the diagnostic's 64 MiB JSON cap. The revised v2 helper streams the
+already-generated HTML instead, extracts one complete chain section, and renders
+all its collapsed evidence as safely re-encoded plain text. It hashes the locked
+HTML and selector, never opens the JSON inventory or combined index, and retains
+create-new output semantics. HTML is capped at 512 MiB, a selected section at
+8 MiB and each rendered line at 1 MiB. Tests pass with an oversized unused JSON,
+chain isolation, encoded method names, evidence visibility, immutable input,
+output collision, missing chain and incomplete section rejection. The v1 limits
+and JSON readback description below are historical and superseded by v2.
+
 Owner photographs at `74d2e417` show the isolated query completed with 28 chains,
 116 variants, 1,579,018 work units and truncation (cycle/depth gaps). Those counts
 do not establish identity parity with the historical 13/41 baseline. Visible
