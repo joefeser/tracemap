@@ -44,7 +44,14 @@ internal sealed record IlCallObservation(
     string Opcode,
     string ReferenceKind,
     string ReferenceToken,
-    string TargetIdentity);
+    string TargetIdentity,
+    IlCallStackShape? StackShape = null);
+
+internal sealed record IlCallStackShape(int ParameterCount, bool HasThis, bool ReturnsValue, bool Supported);
+internal sealed record IlValueOrigin(string Kind, string Identity);
+internal sealed record IlCallValueObservation(long Offset, int Region, string State,
+    IlValueOrigin Receiver, IReadOnlyList<IlValueOrigin> Arguments, IlValueOrigin Result);
+internal sealed record IlValueFlowObservation(IReadOnlyList<IlCallValueObservation> Calls, IReadOnlyList<string> Gaps);
 
 internal sealed record IlBodyObservation(
     string MetadataToken,
@@ -65,7 +72,8 @@ internal sealed record IlBodyObservation(
     string BodyIdentity,
     string BodySha256,
     IReadOnlyList<IlCallObservation> Calls,
-    IReadOnlyList<string>? DiagnosticInstructions = null);
+    IReadOnlyList<string>? DiagnosticInstructions = null,
+    IlValueFlowObservation? ValueFlow = null);
 
 internal sealed record EvaluatedIlInput(
     IlInputOutcome Outcome,

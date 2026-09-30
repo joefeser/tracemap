@@ -1,5 +1,25 @@
 # Implementation state
 
+## Compiled operand-origin foundation in progress (2026-09-30)
+
+The active goal is the actual compiled-IL command/receiver binding fix, not
+another saved-report projection. The owned lane now has a bounded local
+operand tracker over both independently decoded streams. It retains hashed
+literal, argument-slot, allocation and call-result origins at exact call sites.
+Value observations join to admitted body/call facts and carry the existing
+exact generator and bounded-input hashes. Rule dotnet.compiled.il-values.v1
+labels these Tier3 candidates; unsupported flow and value-reader disagreement
+emit explicit gaps without upgrading or replacing body evidence.
+
+Initial build passed with zero warnings. All 51 operand/body tests passed,
+including fact joins, provenance and privacy after materialization. The final
+eight focused operand/reader-disagreement regressions also passed after isolating
+value disagreement from independently admitted body evidence.
+This foundation is not the SQL fix: exception flow currently withholds all
+origins, and command configuration, endpoint binding, interprocedural argument
+substitution, end-to-end fixtures and the Windows validation script remain open.
+The overall compiled command-value task checkbox remains unchecked.
+
 ## Source command-assignment extraction slice (2026-09-30)
 
 Owner ledger succeeds with 18 groups / 56 variants, 56 database API occurrences
