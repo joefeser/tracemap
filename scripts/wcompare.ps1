@@ -16,7 +16,13 @@ if (!$Historical) {
 }
 if (!$Current) { $Current = Read-Host 'Current handler report folder or JSON file (full path)' }
 if (Test-Path -LiteralPath $Current -PathType Container) { $Current = Join-Path $Current 'compiled-paths.handoff.local.json' }
-if (!$OutputPath) { $OutputPath = Join-Path (Split-Path $Current -Parent) 'chain-comparison.local.html' }
+if (!$OutputPath) {
+    $parent = Split-Path $Current -Parent
+    $OutputPath = Join-Path $parent 'chain-comparison.local.html'
+    for ($number = 2; (Test-Path -LiteralPath $OutputPath) -and $number -le 1000; $number++) {
+        $OutputPath = Join-Path $parent "chain-comparison-$number.local.html"
+    }
+}
 if (Test-Path -LiteralPath $OutputPath) { throw 'WEBFORMS_COMPARE_OUTPUT_EXISTS' }
 function Value($object, [string]$name) {
     if ($object -is [Collections.IDictionary] -and $object.Contains($name)) { return ,($object[$name]) }
@@ -59,7 +65,7 @@ function ReadReport([string]$path) {
         foreach ($row in $raw) { $paths.Add($row) }
     }
     $exact = [Collections.Generic.Dictionary[string,object]]::new([StringComparer]::Ordinal)
-    $symbols = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+    $symbols = [Collections.Generic.Dictionary[string,object]]::new([StringComparer]::Ordinal)
     $totalNodes = 0
     foreach ($row in $paths) {
         $nodes = Value $row 'nodes'
@@ -82,7 +88,9 @@ function ReadReport([string]$path) {
             $labels.Add($label)
         }
         $key = HashText (Json $identity.ToArray())
-        [void]$symbols.Add((HashText (Json $symbolSequence.ToArray())))
+        $symbolKey = HashText (Json $symbolSequence.ToArray())
+        if (!$symbols.ContainsKey($symbolKey)) { $symbols[$symbolKey] = @{ count = 0; labels = $labels.ToArray() } }
+        $symbols[$symbolKey].count++
         if (!$exact.ContainsKey($key)) { $exact[$key] = @{ count = 0; labels = $labels.ToArray() } }
         $exact[$key].count++
     }
@@ -94,7 +102,11 @@ $leftOnly = @($left.exact.Keys | Where-Object { !$right.exact.ContainsKey($_) } 
 $rightOnly = @($right.exact.Keys | Where-Object { !$left.exact.ContainsKey($_) } | Sort-Object)
 $shared = @($left.exact.Keys | Where-Object { $right.exact.ContainsKey($_) })
 $variantDifferences = @($shared | Where-Object { $left.exact[$_].count -ne $right.exact[$_].count } | Sort-Object)
-$symbolMatches = @($left.symbols | Where-Object { $right.symbols.Contains($_) }).Count
+$symbolShared = @($left.symbols.Keys | Where-Object { $right.symbols.ContainsKey($_) } | Sort-Object)
+$symbolMatches = $symbolShared.Count
+$symbolLeftOnly = @($left.symbols.Keys | Where-Object { !$right.symbols.ContainsKey($_) } | Sort-Object)
+$symbolRightOnly = @($right.symbols.Keys | Where-Object { !$left.symbols.ContainsKey($_) } | Sort-Object)
+$symbolVariantDifferences = @($symbolShared | Where-Object { $left.symbols[$_].count -ne $right.symbols[$_].count })
 $generator = (Get-FileHash -LiteralPath $PSCommandPath -Algorithm SHA256).Hash.ToLowerInvariant()
 $bounded = HashText ("webforms-chain-comparison.v1`n$($left.hash)`n$($right.hash)`n$generator")
 function Convert-ComparisonHtml([string]$text) { return [Net.WebUtility]::HtmlEncode($text) }
@@ -102,19 +114,26 @@ $html = [Text.StringBuilder]::new()
 [void]$html.AppendLine('<!doctype html><html lang="en"><meta charset="utf-8"><title>Local chain comparison</title><style>body{font:16px/1.5 system-ui;margin:2rem;max-width:1200px}pre{white-space:pre-wrap;overflow-wrap:anywhere}td,th{border:1px solid #aaa;padding:.5rem;vertical-align:top}table{border-collapse:collapse}</style><h1>Local chain comparison</h1>')
 [void]$html.AppendLine('<p>PRIVATE diagnostic. Input JSON is read as supplied; native receipts and hashes are not admitted by this helper. Rule workflow.webforms.chain-comparison.v1; Tier4Unknown. Exact sequence equality includes source, scan and commit identity. Symbol-only matches omit those identities and are comparison hints. No parity or runtime conclusion.</p>')
 [void]$html.AppendLine("<p>Historical: $($left.exact.Count) exact sequences / $($left.variants) variants. Current: $($right.exact.Count) / $($right.variants). Shared exact sequences: $($shared.Count). Historical only: $($leftOnly.Count). Current only: $($rightOnly.Count). Shared sequences with variant-count differences: $($variantDifferences.Count). Symbol-only sequence matches: $symbolMatches.</p>")
+[void]$html.AppendLine("<p>Symbol-only hints: $($left.symbols.Count) historical / $($right.symbols.Count) current unique sequences; $symbolMatches shared; $($symbolLeftOnly.Count) historical only; $($symbolRightOnly.Count) current only; $($symbolVariantDifferences.Count) shared sequences with variant-count differences. These omit provenance identity and are not exact route parity.</p>")
 [void]$html.AppendLine('<h2>Query settings and coverage</h2><table><tr><th>Historical</th><th>Current</th></tr><tr>')
 foreach ($report in @($left, $right)) {
     [void]$html.AppendLine('<td><pre>' + (Convert-ComparisonHtml (Json @{ query = (Value $report.header 'query'); summary = (Value $report.header 'summary'); coverage = (Value $report.header 'reportCoverage'); sources = (Value $report.header 'sources'); declaredIndexSha256 = $report.indexHash })) + '</pre></td>')
 }
 [void]$html.AppendLine('</tr></table>')
 $shown = 0
-foreach ($side in @(@{ title = 'Historical only'; keys = $leftOnly; report = $left }, @{ title = 'Current only'; keys = $rightOnly; report = $right }, @{ title = 'Shared sequence, variant count changed'; keys = $variantDifferences; report = $left })) {
+foreach ($side in @(
+    @{ title = 'Historical-only symbol sequences (hints)'; keys = $symbolLeftOnly; entries = $left.symbols; left = $left.symbols; right = $right.symbols },
+    @{ title = 'Current-only symbol sequences (hints)'; keys = $symbolRightOnly; entries = $right.symbols; left = $left.symbols; right = $right.symbols },
+    @{ title = 'Shared symbol sequence, variant count changed (hint)'; keys = $symbolVariantDifferences; entries = $left.symbols; left = $left.symbols; right = $right.symbols },
+    @{ title = 'Historical only (exact identity)'; keys = $leftOnly; entries = $left.exact; left = $left.exact; right = $right.exact },
+    @{ title = 'Current only (exact identity)'; keys = $rightOnly; entries = $right.exact; left = $left.exact; right = $right.exact },
+    @{ title = 'Shared exact sequence, variant count changed'; keys = $variantDifferences; entries = $left.exact; left = $left.exact; right = $right.exact })) {
     [void]$html.AppendLine('<h2>' + $side.title + '</h2>')
     foreach ($key in $side.keys) {
         if ($shown -ge 500) { break }
         $shown++
-        $entry = $side.report.exact[$key]
-        $counts = if ($right.exact.ContainsKey($key) -and $left.exact.ContainsKey($key)) { "$($left.exact[$key].count) historical / $($right.exact[$key].count) current" } else { "$($entry.count) variants" }
+        $entry = $side.entries[$key]
+        $counts = if ($side.right.ContainsKey($key) -and $side.left.ContainsKey($key)) { "$($side.left[$key].count) historical / $($side.right[$key].count) current" } else { "$($entry.count) variants" }
         [void]$html.AppendLine('<details><summary>' + (Convert-ComparisonHtml "$key — $counts") + '</summary><pre>' + (Convert-ComparisonHtml ($entry.labels -join "`n→ ")) + '</pre></details>')
     }
 }
@@ -126,5 +145,6 @@ try { $output.Write($bytes) } finally { $output.Dispose() }
 Write-Output "compare.historicalChains=$($left.exact.Count);historicalVariants=$($left.variants)"
 Write-Output "compare.currentChains=$($right.exact.Count);currentVariants=$($right.variants)"
 Write-Output "compare.sharedExact=$($shared.Count);historicalOnly=$($leftOnly.Count);currentOnly=$($rightOnly.Count);variantCountDifferences=$($variantDifferences.Count);symbolSequenceMatches=$symbolMatches"
+Write-Output "compare.symbolHistorical=$($left.symbols.Count);symbolCurrent=$($right.symbols.Count);symbolShared=$symbolMatches;symbolHistoricalOnly=$($symbolLeftOnly.Count);symbolCurrentOnly=$($symbolRightOnly.Count);symbolVariantCountDifferences=$($symbolVariantDifferences.Count)"
 Write-Output 'compare=local-diagnostic-written;unadmitted-inputs;no-scan;no-traversal'
 if ($Open) { Invoke-Item -LiteralPath $OutputPath }
