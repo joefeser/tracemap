@@ -7,7 +7,7 @@ internal static partial class IlCommandBindingExtractor
     internal const string Schema = "il-command-binding.v1";
     internal const int MaxTrackedReceivers = 128;
     internal const int MaxWorkUnits = 200_000;
-    internal const string Limitation = "Bounded static command configuration candidate, not SQL execution. Framework APIs are recognized from exact encoded assembly/type/member scope, not loaded or authenticated. Normal control-flow joins retain only identical configuration records; exception boundaries and possibly mutating calls discard configuration. Exact modelled parameter-collection operations preserve text/type only, not parameter values or order. Escaped collections invalidate their owning command. Argument slots require separately evidenced caller substitution. No raw command text, branch feasibility, field alias, provider dispatch, parameter values or runtime identity is established.";
+    internal const string Limitation = "Bounded static command configuration candidate, not SQL execution. Framework APIs are recognized from exact encoded assembly/type/member scope, not loaded or authenticated. Normal control-flow joins retain only identical configuration records, including within protected blocks. Handler/filter entries start without pre-exception configuration; leave and possibly mutating calls discard it. Exception dispatch and finally continuations are unmodelled. Exact modelled parameter-collection operations preserve text/type only, not parameter values or order. Escaped collections invalidate their owning command. Argument slots require separately evidenced caller substitution. No raw command text, branch feasibility, field alias, provider dispatch, parameter values or runtime identity is established.";
     private static readonly IlValueOrigin Unknown = new("unknown", "");
 
     internal static IlCommandBindingResult Extract(IlBodyObservation body, IlBodyEvidenceExtractor.IlWorkBudget? aggregateBudget = null)
@@ -185,6 +185,8 @@ internal static partial class IlCommandBindingExtractor
             var parameters = ParameterSection(identity);
             if (Method("Add") && call.StackShape.ParameterCount == 1
                 && parameters == "(type(namespace:6:System|names:6:Object))->type(namespace:6:System|names:5:Int32)") return Api.ParameterMutation;
+            if (Method("AddRange") && call.StackShape.ParameterCount == 1
+                && parameters == "(type(namespace:6:System|names:5:Array))->type(namespace:6:System|names:4:Void)") return Api.ParameterMutation;
             if (Method("Clear") && call.StackShape.ParameterCount == 0
                 && parameters == "()->type(namespace:6:System|names:4:Void)") return Api.ParameterMutation;
             if (Method("RemoveAt") && call.StackShape.ParameterCount == 1
@@ -195,6 +197,8 @@ internal static partial class IlCommandBindingExtractor
                 var name = collection.Item2.Replace("Collection", "", StringComparison.Ordinal);
                 var parameterType = $"{scope})type(namespace:{collection.Item1.Length}:{collection.Item1}|names:{name.Length}:{name})";
                 if (Method("Add") && call.StackShape.ParameterCount == 1 && parameters == $"({parameterType})->{parameterType}") return Api.ParameterMutation;
+                if (Method("AddRange") && call.StackShape.ParameterCount == 1
+                    && parameters == $"({parameterType}[])->type(namespace:6:System|names:4:Void)") return Api.ParameterMutation;
                 if (Method("AddWithValue") && call.StackShape.ParameterCount == 2
                     && parameters == $"(type(namespace:6:System|names:6:String),type(namespace:6:System|names:6:Object))->{parameterType}") return Api.ParameterMutation;
             }

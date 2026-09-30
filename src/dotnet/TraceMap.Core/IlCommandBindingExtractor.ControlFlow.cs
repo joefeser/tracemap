@@ -45,6 +45,13 @@ internal static partial class IlCommandBindingExtractor
         var queue = new Queue<long>(); var queued = new HashSet<long>();
         var gaps = new SortedSet<string>(StringComparer.Ordinal); var bindings = new List<IlCommandBindingObservation>();
         queue.Enqueue(nodes[0].Offset); queued.Add(nodes[0].Offset); var work = 0;
+        foreach (var node in nodes.Where(node => node.ExceptionEntryStackCount >= 0))
+        {
+            if (++work > MaxWorkUnits || aggregateBudget?.TryConsume(1) == false)
+                return new([], ["IlCommandBindingWorkLimit"]);
+            if (!states.TryAdd(node.Offset, new ConfigurationState())) states[node.Offset].Clear();
+            if (queued.Add(node.Offset)) queue.Enqueue(node.Offset);
+        }
         while (queue.TryDequeue(out var offset))
         {
             queued.Remove(offset); var input = states[offset]; var cost = input.Cost;

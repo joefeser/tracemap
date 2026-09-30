@@ -86,7 +86,7 @@
   - [x] Retain dual-decoded method-local operands with exact body/call fact joins, hashed strings, work bounds and explicit unsupported-flow gaps.
   - [x] Bind straight-line command text/type candidates to the same command/adapter endpoint; validate provenance joins in compiled path reports and preserve evidence in the local ledger.
   - [x] Substitute caller arguments across exact retained IL call paths without merging source-only candidate bridges.
-  - [ ] Cover command configuration through relevant control-flow/parameter construction with conservative joins and targeted compiled fixtures.
+  - [x] Cover command configuration through relevant control-flow/parameter construction with conservative joins and targeted compiled fixtures.
   - [ ] Supply and validate the immutable-tool Windows workflow, run required broader gates, and push the completed fix.
 - [x] Add a bounded local chain diagnostic showing exact retained identities and ordered connecting rules without rescanning or traversing.
 - [x] Reconcile pre-PR readable-label and receiver fixes with native reporting; restore local compiled labels from exact retained symbols without changing graph or privacy projections.
