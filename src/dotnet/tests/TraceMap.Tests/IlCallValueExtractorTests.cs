@@ -47,17 +47,79 @@ public sealed class IlCallValueExtractorTests
             "3:3:nop:-", "4:4:ldloc.0:-", "5:5:call:m:consume"
         ], [Call(5, "call", new(1, false, false, true))], 8, false);
         Assert.Equal("unknown", Assert.Single(Assert.Single(flow.Calls).Arguments).Kind);
-        Assert.Contains("IlValueControlFlowBoundary", flow.Gaps);
+        Assert.NotNull(flow.ControlFlow);
     }
 
     [Fact]
-    public void Invalidated_overwritten_argument_is_not_relabelled_as_original_caller_slot()
+    public void Unconditional_branch_preserves_the_actual_overwritten_argument_not_original_slot()
     {
         var flow = IlCallValueExtractor.Extract([
             "0:0:ldstr:str:3:abcdef", "1:1:starg.s:v:0", "2:2:br.s:br:0x3",
             "3:3:ldarg.0:-", "4:4:call:m:consume"
         ], [Call(4, "call", new(1, false, false, true))], 8, false);
+        Assert.Equal(new IlValueOrigin("constant-string-hash", "str:3:abcdef"), Assert.Single(Assert.Single(flow.Calls).Arguments));
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void Conditional_join_retains_only_equal_origins(bool equal)
+    {
+        var flow = IlCallValueExtractor.Extract([
+            "0:0:ldarg.0:-", "1:1:brfalse.s:br:0x5", "2:2:ldstr:str:3:aaa", "3:3:stloc.0:-",
+            "4:4:br.s:br:0x7", $"5:5:ldstr:str:3:{(equal ? "aaa" : "bbb")}", "6:6:stloc.0:-",
+            "7:7:ldloc.0:-", "8:8:call:m:consume", "9:9:ret:-"
+        ], [Call(8, "call", new(1, false, false, true))], 8, false);
+        var argument = Assert.Single(Assert.Single(flow.Calls).Arguments);
+        Assert.Equal(equal ? "constant-string-hash" : "unknown", argument.Kind);
+        Assert.Equal("control-flow-candidate", Assert.Single(flow.Calls).State);
+        Assert.NotNull(flow.ControlFlow);
+    }
+
+    [Fact]
+    public void Loop_fixed_point_preserves_unchanged_receiver_and_widens_counter()
+    {
+        var instructions = new[] {
+            "0:0:newobj:m:ctor", "1:1:stloc.0:-", "2:2:ldc.i4.0:-", "3:3:stloc.1:-",
+            "4:4:ldloc.0:-", "5:5:callvirt:m:use", "6:6:ldloc.1:-", "7:7:ldc.i4.1:-",
+            "8:8:add:-", "9:9:stloc.1:-", "10:a:ldloc.1:-", "11:b:ldc.i4.4:-",
+            "12:c:blt.s:br:0x4", "13:d:ldloc.0:-", "14:e:callvirt:m:use", "15:f:ret:-"
+        };
+        var calls = new[] { Call(0, "newobj", new(0, true, false, true)),
+            Call(5, "callvirt", new(0, true, false, true)), Call(14, "callvirt", new(0, true, false, true)) };
+        var flow = IlCallValueExtractor.Extract(instructions, calls, 8, false);
+        Assert.Equal(3, flow.Calls.Count);
+        Assert.All(flow.Calls.Skip(1), call => Assert.Equal(new IlValueOrigin("allocation-site", "0"), call.Receiver));
+        Assert.Equal(System.Text.Json.JsonSerializer.Serialize(flow),
+            System.Text.Json.JsonSerializer.Serialize(IlCallValueExtractor.Extract(instructions, calls, 8, false)));
+    }
+
+    [Fact]
+    public void Address_exposure_does_not_recreate_an_original_argument_after_clear()
+    {
+        var flow = IlCallValueExtractor.Extract([
+            "0:0:br.s:br:0x1", "1:1:ldarga.s:v:0", "2:2:pop:-", "3:3:ldarg.0:-", "4:4:call:m:use"
+        ], [Call(4, "call", new(1, false, false, true))], 8, false);
         Assert.Equal("unknown", Assert.Single(Assert.Single(flow.Calls).Arguments).Kind);
+        Assert.Equal("stack-unavailable", Assert.Single(flow.Calls).State);
+    }
+
+    [Fact]
+    public void Control_flow_instruction_and_fixed_point_work_limits_withhold_all_operands()
+    {
+        var oversized = Enumerable.Repeat("0:0:br.s:br:0x0", IlControlFlowValueExtractor.MaxInstructions + 1).ToArray();
+        var instructionLimited = IlControlFlowValueExtractor.Extract(oversized, [], 8);
+        Assert.Empty(instructionLimited.Calls);
+        Assert.Contains("IlValueControlFlowInstructionLimit", instructionLimited.Gaps);
+        var instructions = new List<string>();
+        void Add(string opcode, string operand = "-") => instructions.Add($"{instructions.Count}:{instructions.Count:x}:{opcode}:{operand}");
+        for (var slot = 0; slot < 100; slot++) { Add("ldarg.0"); Add("stloc.s", $"v:{slot}"); }
+        for (var index = 0; index < 3000; index++) Add("nop");
+        Add("br.s", "br:0xc8");
+        var workLimited = IlControlFlowValueExtractor.Extract(instructions, [], 8);
+        Assert.Empty(workLimited.Calls);
+        Assert.Contains("IlValueControlFlowWorkLimit", workLimited.Gaps);
+        Assert.Equal(IlControlFlowValueExtractor.MaxWorkUnits, workLimited.WorkUnits);
     }
 
     [Fact]

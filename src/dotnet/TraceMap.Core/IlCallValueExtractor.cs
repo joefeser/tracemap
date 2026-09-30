@@ -7,13 +7,18 @@ namespace TraceMap.Core;
 internal static class IlCallValueExtractor
 {
     internal const string Schema = "il-call-values.v1";
-    internal const string Limitation = "Bounded method-local straight-line operand origins only. Strings are length plus SHA-256 of exact UTF-16 code units, never raw text. Argument slots are not values. Object origins are allocation/call-site identities, not runtime objects. Control-flow/exception boundaries, unsupported instructions and byref operations invalidate operand state. Non-byref calls preserve slot origins, not object configuration; consumers must invalidate configuration across unknown call effects. No alias, field, branch feasibility, last-write, interprocedural binding, SQL execution or runtime dispatch is proven.";
+    internal const string Limitation = "Bounded method-local operand origins only. Normal branch/loop flow uses equality-only fixed-point joins; exception flow remains a reduced local lane. Strings are length plus SHA-256 of exact UTF-16 code units, never raw text. Argument slots are not values. Object origins are allocation/call-site identities, not runtime objects. Unsupported instructions, byref operations, stack failures and work limits invalidate or withhold operand state. Non-byref calls preserve slot origins, not object configuration; consumers must invalidate configuration across unknown call effects. No heap alias, field value, branch feasibility, interprocedural binding, SQL execution or runtime dispatch is proven.";
     private static readonly IlValueOrigin Unknown = new("unknown", "");
 
     internal static IlValueFlowObservation Extract(IReadOnlyList<string> instructions,
         IReadOnlyList<IlCallObservation> calls, int maxStack, bool hasExceptionRegions,
         IReadOnlyCollection<long>? exceptionBoundaries = null)
     {
+        // Exception edges remain in the explicitly reduced local lane. Normal
+        // branch/loop flow uses a bounded fixed point with equality-only joins.
+        if (!hasExceptionRegions && instructions.Any(instruction => instruction.Split(':', 4)[3].StartsWith("br:0x", StringComparison.Ordinal)
+                || instruction.Split(':', 4)[3].StartsWith("sw:", StringComparison.Ordinal)))
+            return IlControlFlowValueExtractor.Extract(instructions, calls, maxStack);
         var events = new List<IlCallValueObservation>();
         var gaps = new SortedSet<string>(StringComparer.Ordinal);
         var stack = new List<IlValueOrigin>();

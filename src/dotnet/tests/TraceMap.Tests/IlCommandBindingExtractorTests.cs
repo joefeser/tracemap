@@ -12,6 +12,31 @@ public sealed class IlCommandBindingExtractorTests
 {
     private const string PrivateLiteral = "private-fixture-procedure-never-retained";
 
+    [Theory]
+    [InlineData("none", true, true)]
+    [InlineData("none", true, false)]
+    [InlineData("collection-escape", false, true)]
+    [InlineData("collection-escape", false, false)]
+    [InlineData("command-escape", false, true)]
+    [InlineData("conditional-text", false, true)]
+    [InlineData("wrong-signature", false, true)]
+    [InlineData("wrong-signature", false, false)]
+    public void Parameter_loop_preserves_only_unexposed_agreed_configuration(string effect, bool expected, bool loop)
+    {
+        var (body, _) = Fixture(parameterLoop: loop, parameterOnly: !loop, loopEffect: effect);
+        if (loop) Assert.NotNull(body.ValueFlow!.ControlFlow);
+        else Assert.Null(body.ValueFlow!.ControlFlow);
+        var result = IlCommandBindingExtractor.Extract(body);
+        if (expected)
+        {
+            var binding = Assert.Single(result.Bindings);
+            Assert.Equal("constant-string-hash", binding.CommandText.Kind);
+            Assert.Equal(new IlValueOrigin("constant-int32", "4"), binding.CommandType);
+            Assert.Contains("IlCommandParameterFlowUnavailable", result.Gaps);
+        }
+        else Assert.Empty(result.Bindings);
+    }
+
     [Fact]
     public void Independent_readers_bind_command_configuration_to_adapter_fill()
     {
@@ -63,19 +88,51 @@ public sealed class IlCommandBindingExtractorTests
         Assert.Contains("IlCommandTextBindingUnavailable", result.Gaps);
     }
 
-    [Fact]
-    public void Aggregate_work_limit_fails_closed_without_partial_body_bindings()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Aggregate_work_limit_fails_closed_without_partial_body_bindings(bool parameterLoop)
     {
-        var (body, _) = Fixture();
+        var (body, _) = Fixture(parameterLoop: parameterLoop);
         var result = IlCommandBindingExtractor.Extract(body, new IlBodyEvidenceExtractor.IlWorkBudget(1));
         Assert.Empty(result.Bindings);
         Assert.Contains("IlCommandBindingWorkLimit", result.Gaps);
     }
 
     [Fact]
-    public void Scan_materializes_joined_command_candidates_with_exact_provenance_and_no_literal()
+    public void Independent_control_flow_disagreement_withholds_all_command_candidates()
     {
-        var (_, bytes) = Fixture();
+        var (body, _) = Fixture(parameterLoop: true);
+        var nodes = body.ValueFlow!.ControlFlow!.ToArray();
+        nodes[0] = nodes[0] with { InvalidatesConfiguration = !nodes[0].InvalidatesConfiguration };
+        var disagreed = Assert.Single(IlBodyEvidenceExtractor.AgreeValueFlows([body],
+            [body with { ValueFlow = body.ValueFlow with { ControlFlow = nodes } }]));
+        Assert.Contains("IlValueReaderDisagreementOrLimit", disagreed.ValueFlow!.Gaps);
+        Assert.Empty(IlCommandBindingExtractor.Extract(disagreed).Bindings);
+    }
+
+    [Fact]
+    public void Exhausted_operand_budget_preserves_independently_decoded_body_and_call_evidence()
+    {
+        var (_, bytes) = Fixture(parameterLoop: true);
+        var limits = new IlBodyLimits();
+        var cecil = IlBodyEvidenceExtractor.ReadCecilBodies(bytes, limits, new IlBodyEvidenceExtractor.IlWorkBudget(100_000),
+            CancellationToken.None, valueBudget: new IlBodyEvidenceExtractor.IlWorkBudget(1));
+        var srm = IlBodyEvidenceExtractor.ReadSystemReflectionMetadataBodies(bytes, limits, new IlBodyEvidenceExtractor.IlWorkBudget(100_000),
+            CancellationToken.None, valueBudget: new IlBodyEvidenceExtractor.IlWorkBudget(1));
+        Assert.Empty(IlBodyEvidenceExtractor.CompareBodies(cecil, srm));
+        var body = Assert.Single(IlBodyEvidenceExtractor.AgreeValueFlows(cecil.Bodies, srm.Bodies));
+        Assert.NotEmpty(body.Calls);
+        Assert.Contains("IlValueWorkLimitExceeded", body.ValueFlow!.Gaps);
+        Assert.Empty(IlCommandBindingExtractor.Extract(body).Bindings);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Scan_materializes_joined_command_candidates_with_exact_provenance_and_no_literal(bool parameterLoop)
+    {
+        var (_, bytes) = Fixture(parameterLoop: parameterLoop);
         var root = Directory.CreateTempSubdirectory("tracemap-il-command-test-").FullName;
         var assemblyPath = Path.Combine(root, "CommandFixture.dll");
         File.WriteAllBytes(assemblyPath, bytes);
@@ -99,11 +156,13 @@ public sealed class IlCommandBindingExtractorTests
     }
 
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task Compiled_handler_path_retains_command_binding_only_with_exact_fact_provenance(bool tamper)
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    public async Task Compiled_handler_path_retains_command_binding_only_with_exact_fact_provenance(bool tamper, bool parameterLoop)
     {
-        var (_, bytes) = Fixture();
+        var (_, bytes) = Fixture(parameterLoop: parameterLoop);
         var root = Directory.CreateTempSubdirectory("tracemap-il-command-path-").FullName;
         var assemblyPath = Path.Combine(root, "CommandFixture.dll");
         File.WriteAllBytes(assemblyPath, bytes);
@@ -231,7 +290,7 @@ public sealed class IlCommandBindingExtractorTests
 
     private static (IlBodyObservation Body, byte[] Bytes) Fixture(bool argumentText = false,
         bool branch = false, bool mutation = false, bool lookalike = false, bool wrongTextSetter = false,
-        int wrapperDepth = 0, bool instanceRun = false)
+        int wrapperDepth = 0, bool instanceRun = false, bool parameterLoop = false, string loopEffect = "none", bool parameterOnly = false)
     {
         using var assembly = AssemblyDefinition.CreateAssembly(new AssemblyNameDefinition("CommandFixture", new Version(1, 0)), "CommandFixture", ModuleKind.Dll);
         var module = assembly.MainModule;
@@ -259,6 +318,7 @@ public sealed class IlCommandBindingExtractorTests
         method.Body.InitLocals = true;
         method.Body.Variables.Add(new VariableDefinition(command));
         method.Body.Variables.Add(new VariableDefinition(adapter));
+        if (parameterLoop || parameterOnly) method.Body.Variables.Add(new VariableDefinition(module.TypeSystem.Int32));
         var il = method.Body.GetILProcessor();
         var endpointLoad = Instruction.Create(OpCodes.Ldloc_1);
         if (branch) il.Emit(OpCodes.Br, endpointLoad);
@@ -274,6 +334,43 @@ public sealed class IlCommandBindingExtractorTests
         il.Emit(OpCodes.Ldloc_0);
         il.Emit(OpCodes.Newobj, Method(adapter, ".ctor", module.TypeSystem.Void, command));
         il.Emit(OpCodes.Stloc_1);
+        if (parameterLoop || parameterOnly)
+        {
+            var collection = Type("System.Data.SqlClient", "SqlParameterCollection");
+            var parameter = Type("System.Data.SqlClient", "SqlParameter");
+            il.Emit(OpCodes.Ldc_I4_0); il.Emit(OpCodes.Stloc_2);
+            var loop = Instruction.Create(OpCodes.Ldloc_0); il.Append(loop);
+            il.Emit(OpCodes.Callvirt, Method(command, "get_Parameters", collection));
+            if (loopEffect == "collection-escape")
+            {
+                var mutateCollection = new MethodReference("MutateCollection", module.TypeSystem.Void, type);
+                mutateCollection.Parameters.Add(new ParameterDefinition(collection)); il.Emit(OpCodes.Call, mutateCollection);
+            }
+            else
+            {
+                il.Emit(OpCodes.Newobj, Method(parameter, ".ctor", module.TypeSystem.Void));
+                il.Emit(OpCodes.Callvirt, Method(collection, "Add", module.TypeSystem.Int32,
+                    loopEffect == "wrong-signature" ? command : module.TypeSystem.Object)); il.Emit(OpCodes.Pop);
+            }
+            if (loopEffect == "command-escape")
+            {
+                var mutateCommand = new MethodReference("MutateCommand", module.TypeSystem.Void, type);
+                mutateCommand.Parameters.Add(new ParameterDefinition(command));
+                il.Emit(OpCodes.Ldloc_0); il.Emit(OpCodes.Call, mutateCommand);
+            }
+            if (loopEffect == "conditional-text")
+            {
+                var skip = Instruction.Create(OpCodes.Nop);
+                il.Emit(OpCodes.Ldloc_2); il.Emit(OpCodes.Brfalse_S, skip);
+                il.Emit(OpCodes.Ldloc_0); il.Emit(OpCodes.Ldstr, "different-private-text");
+                il.Emit(OpCodes.Callvirt, Method(commandBase, "set_CommandText", module.TypeSystem.Void, module.TypeSystem.String)); il.Append(skip);
+            }
+            if (parameterLoop)
+            {
+                il.Emit(OpCodes.Ldloc_2); il.Emit(OpCodes.Ldc_I4_1); il.Emit(OpCodes.Add); il.Emit(OpCodes.Stloc_2);
+                il.Emit(OpCodes.Ldloc_2); il.Emit(OpCodes.Ldc_I4_3); il.Emit(OpCodes.Blt_S, loop);
+            }
+        }
         if (mutation)
         {
             var mutate = new MethodReference("Mutate", module.TypeSystem.Void, type);
