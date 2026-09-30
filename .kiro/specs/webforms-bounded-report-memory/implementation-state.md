@@ -1,5 +1,23 @@
 # Implementation state
 
+## Saved historical/current route comparison (2026-09-30)
+
+Owner `wprewalk` readback is false for the saved compiled-only 10 / 34 report.
+Added `wcompare.ps1 -Open` to read an original raw handler JSON and the current
+raw or native grouped handoff. It discovers historical handler database API
+JSON files within retained proof directories and asks for an explicit selection.
+Both reports are grouped with the same exact identity-field projection; variant
+counts remain separate. Symbol-only sequence overlap is a hint because it omits
+scan provenance. Query, coverage, declared source/index context and file hashes
+are shown in local HTML. No native admission, rescan or graph traversal is claimed.
+The helper binds its generator and ordered input file hashes to the diagnostic.
+
+Regression checks passed for raw/grouped comparison, variant-count changes,
+cross-scan identity differences, empty reports, missing references, output
+collision, HTML escaping and input preservation. Actual private route diagnosis
+remains pending the owner's comparison output; no traversal fix is inferred
+from arithmetic alone.
+
 ## Independent review: compiled-only depth prewalk leak (2026-09-30)
 
 Independently reproduced the review's F1 on `b9223223`: the main compiled-only
