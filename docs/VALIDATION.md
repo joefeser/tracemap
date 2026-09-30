@@ -14,6 +14,10 @@ resume. The current macOS slice passes 12 cases and visibly skips the authentic
 Windows publish theory. Require both mapped/mapless ASP.NET outputs on Windows
 with `-RequireWindowsPublish`; an unrun publish is never accepted as a pass.
 See [corpus commands and limitations](../samples/fixture-build/deep-projectless/README.md).
+The `Deep projectless Windows validation` CI lane runs this same wrapper with
+required mapped/mapless publishing on a Windows runner and retains the public
+synthetic result folder even when tests fail. Its result must be inspected at the
+exact tested head; private application validation remains a separate owner gate.
 
 The native five-handler mixed query now prioritizes encoded IL transitions and
 uses a bounded reverse terminal-distance pass to prune branches that cannot finish

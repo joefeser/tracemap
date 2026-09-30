@@ -2,6 +2,13 @@
 
 ## Mixed-query traversal repair locally validated (2026-09-30)
 
+The first completion continuation verified d3ff0281 at origin with a clean local
+worktree. Only the private-path CI guard ran at that head; the existing Windows
+workflow filters do not include this corpus. Added a public-only Windows CI lane
+to execute the same required-publish wrapper, preserving both successes and
+failed-attempt artifacts for exact-head inspection. Authentic Windows results
+remain pending; no new private scan is launched by CI.
+
 The previous corpus-only goal was closed too narrowly; the actual work-machine
 fix remains the acceptance target. A native mixed-report assertion reproduced
 zero deep routes under the 100,000-work limit before the repair. IL-first edge
