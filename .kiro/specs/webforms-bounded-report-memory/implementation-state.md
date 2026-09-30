@@ -36,7 +36,10 @@ No unrelated dependency update was performed.
 Windows-native PDB/ILAsm, private full-site and historical dotnetperf acceptance
 are not run on this macOS host. Original private runs remain untouched; no
 resolved procedure identity, executed SQL, complete coverage or parity is
-claimed. Push and final task bookkeeping remain pending at this checkpoint.
+claimed. The complete implementation and workflow were pushed normally to
+`origin/codex/webforms-config-migration` at `af420d56` after the local gates.
+The compiled command-value implementation task is complete; the separate
+owner-retained historical comparison checkbox remains open for private validation.
 
 ## Protected-region wrapper and AddRange validated (2026-09-30)
 
