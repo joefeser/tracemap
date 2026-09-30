@@ -5085,6 +5085,8 @@ rules:
       - SqlTextUsed
       - AnalysisGap
     limitations:
+      - Compiler-resolved Visual Basic CommandText assignments retain constant hashes and receiver identities; dynamic values have no text hash. Adapter command assignments retain direct symbol candidates, not executed command bindings.
+      - Command/adapter assignment facts do not prove alias flow, branch feasibility, last-write dominance, cross-method propagation, or parameter values. Framework lookalike properties are not accepted as semantic ADO.NET evidence.
       - SQL text evidence stores hashes and lengths only; table and column guesses belong on database.sql.shape.v1 QueryPatternDetected facts.
       - C# syntax fallback may classify any complete SQL-like string literal whose first token is a supported SQL verb, even outside a recognized framework call shape.
       - Dynamic SQL construction emits reduced-coverage boundary evidence instead of complete SQL text.

@@ -1,5 +1,21 @@
 # Migrate existing private Web Forms configs
 
+## Source command-binding extraction boundary
+
+The VB semantic extractor now retains compiler-resolved `CommandText`
+assignments (constant hash/length or dynamic classification) and adapter
+`SelectCommand`/`InsertCommand`/`UpdateCommand`/`DeleteCommand` assignments.
+Command and adapter receiver symbol IDs allow later bounded correlation with
+operation receivers. These are assignment candidates, not proof of the final
+command, branch feasibility, alias flow, parameter propagation or execution.
+Raw command strings are not stored. No new SQL statement is inferred.
+
+This requires a compiler-resolved source scan. It does not retrofit the saved
+projectless/compiled-only reports or recover string values from their existing
+IL call facts. Do not rerun the saved ledger expecting new SQL evidence. IL
+command-value extraction and private handler-to-command binding remain open.
+
+
 ## Extract saved handler database and SQL evidence
 
 ```powershell
