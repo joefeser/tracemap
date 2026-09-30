@@ -1,5 +1,38 @@
 # Implementation state
 
+## Independent review: compiled-only depth prewalk leak (2026-09-30)
+
+Independently reproduced the review's F1 on `b9223223`: the main compiled-only
+walk depth-truncated, then unrestricted FindShortestTerminalWitness emitted a
+`calls -> surface-evidence` source shortcut with TerminalReachabilityPrewalk.
+That positive path suppressed CompiledBaselineNoPath and expanded reachable
+diagnostics. The review repro was promoted into product tests, with controls
+for valid compiled Fill chains and historical mixed depth recovery.
+
+Fix: skip the unrestricted depth-recovery prewalk for compiled-only queries.
+Their normal bounded IL walk and depth gaps remain authoritative. No new BFS
+policy was introduced. An attachment and terminal each consume a depth edge.
+Owner readback 10 chains / 34 variants at b9223223 is provisional; the photos
+do not establish whether the fallback ran in that specific artifact.
+The fallback skips any root with a positive TerminalPathCount and emits at
+most one witness per zero-terminal root. With one selected root and 34 retained
+variants, depth truncation alone is insufficient to infer contamination.
+`wprewalk.ps1` streams the saved grouped HTML and prints only marker presence,
+without a build, graph walk, native validation or output artifact.
+
+Historical `abcfe32b:wpath.ps1` uses all database APIs, default traversal work
+and raw path-row counts. Later wpath supports Fill and provider filters.
+Those code differences do not establish which exact invocation/artifacts
+produced the historical 13 / 41 grouped readback. Route parity requires its
+actual query provenance and sequences; counts alone remain insufficient.
+
+Validation: the imported leak regression failed on b9223223 before the fix.
+After the fix, 52 focused scope/grouped/attachment tests and six legacy-prewalk/
+report-recovery tests passed. The marker helper passed split-buffer, absence,
+missing-input, content privacy and input-preservation checks. CLI build:
+zero warnings/errors; diff check passed. Full .NET suite and private readback
+were not executed. The historical route comparison remains open.
+
 ## Separate compiled call-tree baseline (2026-09-30)
 
 Owner Fill-only photographs show 18 exact chains / 56 variants, 1,579,018

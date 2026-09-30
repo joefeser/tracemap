@@ -4427,7 +4427,10 @@ public static partial class CombinedDependencyPathReporter
         // reached the depth frontier without a terminal, perform one bounded,
         // cycle-safe reachability prewalk and retain a deterministic shortest
         // terminal witness. Other truncated branches remain explicitly partial.
-        if (!inventoryDistinctTerminals && !workExhausted && paths.Count < maxPaths && terminalNodeIds.Count > 0)
+        // The prewalk has no compiled root-attachment state or edge scope.
+        // Compiled-only queries must retain the depth gap instead of admitting
+        // an unrestricted witness (and inflating their reachable-node diagnostics).
+        if (!compiledOnly && !inventoryDistinctTerminals && !workExhausted && paths.Count < maxPaths && terminalNodeIds.Count > 0)
         {
             foreach (var start in starts
                 .OrderBy(node => node.SourceLabel, StringComparer.Ordinal)
