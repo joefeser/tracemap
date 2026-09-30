@@ -1,5 +1,35 @@
 # Implementation state
 
+## Pre-PR reconciliation and local label regression (2026-09-29)
+
+The earlier readable-path change `a9267263` shortened canonical method symbols
+in the PowerShell local handoff. Native writer `8762069c` ported that formatter,
+but only supplied `DisplayName`. The graph's general safe-display policy hashes
+canonical compiled identities because `publicKeyToken` contains `token`. Exact
+`SymbolId` remains in the private lossless handoff. Native local-only rendering
+now uses that retained canonical method/constructor symbol when its display is
+redacted; normal global/shared privacy projections and graph matching are
+unchanged. HTML labels are escaped and never used for grouping or identity.
+Regression tests pin method and constructor labels with publicKeyToken, exact
+identity detail, unchanged JSON and lossless restore.
+
+The earlier `037ac6e2` inline-object-creation exclusion from implicit-Me bridging
+and `6783dc0b` constructor qualification are ancestors of current HEAD and their
+guards remain in the current implementation. The IL bridge diff from PR #797's
+merge head `8cae5664` contains indexed fact-type lookups, not target matching
+changes. These inspections do not establish equality of the owner's old/new
+private index bytes or complete private path parity. Old `wpath.ps1` also offers
+an explicit Fill-only query and provider selection; the isolated native query
+currently selects all database APIs. Do not conflate differently scoped counts.
+
+Validation: 35 focused grouped-report and constructor/inline-receiver tests
+passed, plus five public explicit-attachment cases. The Windows mapless provider
+test returns early on macOS, so its nominal pass is not execution evidence; that
+aspnet_compile/decoy check remains deferred to Windows. CLI build had zero
+warnings/errors and diff check passed. Full .NET suite and private historical
+path-identity parity remain unverified. Existing reports are immutable; the repair applies
+to newly generated reports and does not require an immediate owner graph rerun.
+
 ## Owner handler requery readback and chain diagnostic (2026-09-29)
 
 Owner hit the diagnostic's 64 MiB JSON cap. The revised v2 helper streams the

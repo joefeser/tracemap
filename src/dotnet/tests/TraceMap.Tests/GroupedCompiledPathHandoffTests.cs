@@ -172,6 +172,32 @@ public sealed class GroupedCompiledPathHandoffTests
         finally { if (Directory.Exists(folder)) Directory.Delete(folder, recursive: true); }
     }
 
+    [Theory]
+    [InlineData("method:6:Lookup", "Lookup")]
+    [InlineData("constructor:5:.ctor", "New")]
+    public async Task Local_compiled_labels_use_retained_symbols_when_general_display_is_redacted(string member, string label)
+    {
+        var folder = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "tracemap-compiled-label-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var report = Report();
+            var symbol = "assembly:name:6:Public|version:7:1.0.0.0|culture:7:neutral|publicKeyToken:4:null|" +
+                "type:namespace:7:Fixture|names:5:Model|arity:0|" + member + "|arity:0|call:default|hasThis:true|explicitThis:false|()->type(namespace:6:System|names:4:Void)";
+            var template = report.Paths[0];
+            report = report with { Paths = [template with { Nodes = [Node("compiled", symbol) with { DisplayName = "redacted-hash:fixture" }] }] };
+            var packet = GroupedCompiledPathHandoffBuilder.Create(report, IndexHash);
+            var result = await GroupedCompiledPathReportWriter.WriteAsync(packet, folder);
+            var html = await File.ReadAllTextAsync(result.HtmlPath);
+            Assert.Contains($"<p>Fixture.Model.{label}()</p>", html);
+            Assert.Contains(System.Net.WebUtility.HtmlEncode(symbol), html); // exact identity remains in the detail, not replaced
+            var restored = JsonSerializer.Deserialize<GroupedCompiledPathHandoff>(await File.ReadAllTextAsync(result.HandoffPath),
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true })!;
+            Assert.Equal(JsonSerializer.Serialize(report), JsonSerializer.Serialize(GroupedCompiledPathHandoffBuilder.Restore(restored)));
+            Assert.Equal("redacted-hash:fixture", Assert.Single(restored.Nodes.Values, node => node.NodeId == "compiled").DisplayName);
+        }
+        finally { if (Directory.Exists(folder)) Directory.Delete(folder, recursive: true); }
+    }
+
     [Fact]
     public async Task Cancellation_invalid_context_and_stale_generator_refuse_before_output_allocation()
     {
