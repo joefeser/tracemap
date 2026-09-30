@@ -147,8 +147,91 @@ public sealed class IlCommandBindingExtractorTests
         Assert.All(path.Edges, edge => Assert.True(CombinedDependencyPathReporter.CompiledBaselineAllowsEdge(edge.EdgeKind, true)));
     }
 
+    [Theory]
+    [InlineData(1, false, "none")]
+    [InlineData(2, false, "none")]
+    [InlineData(1, true, "none")]
+    [InlineData(2, false, "missing")]
+    [InlineData(2, false, "changed")]
+    [InlineData(2, false, "ambiguous")]
+    [InlineData(2, false, "source-bridge")]
+    public async Task Compiled_caller_argument_substitution_is_path_specific_and_provenance_bound(int hops, bool instance, string tamper)
+    {
+        var (_, bytes) = Fixture(argumentText: true, wrapperDepth: hops, instanceRun: instance);
+        var root = Directory.CreateTempSubdirectory("tracemap-il-command-caller-").FullName;
+        var assemblyPath = Path.Combine(root, "CommandFixture.dll"); File.WriteAllBytes(assemblyPath, bytes);
+        var scan = ScanEngine.Scan(new ScanOptions(Path.Combine(FindRepoRoot(), "samples", "vb-modern-sample"),
+            Path.Combine(root, "out"), CompiledInputPaths: [assemblyPath], IlBodyEvidence: true));
+        var entry = Assert.Single(scan.Facts, fact => fact.FactType == FactTypes.ManagedMethodDeclared
+            && fact.Properties.GetValueOrDefault("metadataName") == "Entry");
+        var entryBody = Assert.Single(scan.Facts, fact => fact.FactType == FactTypes.ManagedIlBodyDeclared
+            && fact.Properties.GetValueOrDefault("compiledFactId") == entry.FactId);
+        var entryCall = Assert.Single(scan.Facts, fact => fact.FactType == FactTypes.ManagedIlCallObserved
+            && fact.Properties.GetValueOrDefault("ilBodyFactId") == entryBody.FactId
+            && fact.Properties.GetValueOrDefault("opcode") == "call");
+        var operand = Assert.Single(scan.Facts, fact => fact.FactType == FactTypes.ManagedIlCallValuesObserved
+            && fact.Properties.GetValueOrDefault("ilCallFactId") == entryCall.FactId);
+        var facts = scan.Facts.ToList();
+        if (tamper == "missing") facts.Remove(operand);
+        if (tamper == "changed")
+            facts[facts.IndexOf(operand)] = operand with
+            { Properties = new Dictionary<string, string>(operand.Properties) { ["ilBoundedInputSha256"] = new string('f', 64) } };
+        if (tamper == "ambiguous")
+            facts.Add(FactFactory.Create(scan.Manifest, operand.FactType, operand.RuleId, operand.EvidenceTier,
+                operand.Evidence, targetSymbol: operand.TargetSymbol, contractElement: operand.ContractElement,
+                properties: new Dictionary<string, string>(operand.Properties) { ["syntheticCompetitor"] = "true" }));
+        if (tamper == "source-bridge")
+        {
+            facts.Remove(entryCall);
+            facts.Add(FactFactory.Create(scan.Manifest, FactTypes.CallEdge, RuleIds.CSharpSemanticCallGraph,
+                EvidenceTiers.Tier1Semantic, new EvidenceSpan("synthetic.cs", 1, 1, null, "test", "test/1"),
+                sourceSymbol: entry.TargetSymbol, targetSymbol: entryCall.Properties["targetIdentity"],
+                properties: new Dictionary<string, string> { ["callKind"] = "method", ["targetSymbolId"] = entryCall.Properties["targetIdentity"] }));
+        }
+        var index = Path.Combine(root, "index.sqlite"); var combined = Path.Combine(root, "combined.sqlite");
+        SqliteIndexWriter.Write(index, scan.Manifest, facts);
+        var combine = await CombinedIndexBuilder.CombineAsync(new CombineOptions([index], combined, ["fixture"]));
+        var source = Assert.Single(combine.Sources);
+        var selector = new CombinedPathSymbolRoot(source.SourceIndexId, source.ScanId, source.CommitSha, entry.TargetSymbol!);
+        var options = new CombinedDependencyPathOptions(combined, root, ToSurface: "database-api", SurfaceName: "DbDataAdapter.Fill", MaxDepth: 10)
+        { CompiledOnly = tamper != "source-bridge", ExactFromSymbol = true, MaxTraversalWork = 10_000 };
+        var report = await CombinedDependencyPathReporter.BuildSelectedSymbolsAsync(options, [selector], combinedIndex: true);
+        var endpoint = Assert.Single(Assert.Single(report.Paths).Nodes, node => node.SurfaceName == "DbDataAdapter.Fill");
+        var binding = Assert.IsType<CompiledCommandConfigurationCandidate>(endpoint.CommandBinding);
+        Assert.Equal("argument-slot", binding.CommandTextOrigin.Kind);
+        Assert.Equal(instance ? "1" : "0", binding.CommandTextOrigin.Identity);
+        var mapped = Assert.IsType<CompiledCommandPathValueBinding>(binding.CommandTextFromPath);
+        if (tamper == "none")
+        {
+            Assert.Equal("constant-on-encoded-call-path", mapped.State);
+            Assert.Equal("constant-string-hash", mapped.Origin.Kind);
+            Assert.Equal(hops, mapped.Steps.Count);
+            Assert.Empty(mapped.Gaps);
+            Assert.Equal(Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(
+                File.ReadAllBytes(typeof(CombinedDependencyPathReporter).Assembly.Location))), mapped.GeneratorSha256);
+            Assert.Matches("^[0-9a-f]{64}$", mapped.BoundedInputSha256);
+        }
+        else if (tamper == "source-bridge")
+        {
+            Assert.Equal("unresolved-non-il-bridge", mapped.State);
+            Assert.Contains("IlCommandNonIlCallerBridge", mapped.Gaps);
+        }
+        else
+        {
+            Assert.Equal("unresolved-call-evidence", mapped.State);
+            Assert.Equal("argument-slot", mapped.Origin.Kind);
+            Assert.Contains(mapped.Gaps, gap => gap is "IlCommandCallerOperandMissingOrAmbiguous" or "IlCommandCallerOperandProvenanceUnavailable");
+        }
+        Assert.DoesNotContain(PrivateLiteral, JsonSerializer.Serialize(report), StringComparison.Ordinal);
+        var repeated = await CombinedDependencyPathReporter.BuildSelectedSymbolsAsync(options, [selector], combinedIndex: true);
+        var repeatedBinding = Assert.Single(Assert.Single(repeated.Paths).Nodes,
+            node => node.SurfaceName == "DbDataAdapter.Fill").CommandBinding;
+        Assert.Equal(JsonSerializer.Serialize(binding), JsonSerializer.Serialize(repeatedBinding));
+    }
+
     private static (IlBodyObservation Body, byte[] Bytes) Fixture(bool argumentText = false,
-        bool branch = false, bool mutation = false, bool lookalike = false, bool wrongTextSetter = false)
+        bool branch = false, bool mutation = false, bool lookalike = false, bool wrongTextSetter = false,
+        int wrapperDepth = 0, bool instanceRun = false)
     {
         using var assembly = AssemblyDefinition.CreateAssembly(new AssemblyNameDefinition("CommandFixture", new Version(1, 0)), "CommandFixture", ModuleKind.Dll);
         var module = assembly.MainModule;
@@ -170,7 +253,7 @@ public sealed class IlCommandBindingExtractorTests
         }
         var type = new TypeDefinition("Fixture", "Handler", TypeAttributes.Public, module.TypeSystem.Object);
         module.Types.Add(type);
-        var method = new MethodDefinition("Run", MethodAttributes.Public | MethodAttributes.Static, module.TypeSystem.Void);
+        var method = new MethodDefinition("Run", MethodAttributes.Public | (instanceRun ? 0 : MethodAttributes.Static), module.TypeSystem.Void);
         if (argumentText) method.Parameters.Add(new ParameterDefinition(module.TypeSystem.String));
         type.Methods.Add(method);
         method.Body.InitLocals = true;
@@ -182,7 +265,7 @@ public sealed class IlCommandBindingExtractorTests
         il.Emit(OpCodes.Newobj, Method(command, ".ctor", module.TypeSystem.Void));
         il.Emit(OpCodes.Stloc_0);
         il.Emit(OpCodes.Ldloc_0);
-        if (argumentText) il.Emit(OpCodes.Ldarg_0); else il.Emit(OpCodes.Ldstr, PrivateLiteral);
+        if (argumentText) il.Emit(instanceRun ? OpCodes.Ldarg_1 : OpCodes.Ldarg_0); else il.Emit(OpCodes.Ldstr, PrivateLiteral);
         il.Emit(OpCodes.Callvirt, Method(commandBase, "set_CommandText", module.TypeSystem.Void,
             wrongTextSetter ? module.TypeSystem.Object : module.TypeSystem.String));
         il.Emit(OpCodes.Ldloc_0);
@@ -201,6 +284,28 @@ public sealed class IlCommandBindingExtractorTests
         il.Emit(OpCodes.Newobj, Method(dataSet, ".ctor", module.TypeSystem.Void));
         il.Emit(OpCodes.Callvirt, Method(adapterBase, "Fill", module.TypeSystem.Int32, dataSet));
         il.Emit(OpCodes.Pop); il.Emit(OpCodes.Ret);
+        MethodDefinition? instanceConstructor = null;
+        if (instanceRun)
+        {
+            instanceConstructor = new MethodDefinition(".ctor", MethodAttributes.Public | MethodAttributes.SpecialName
+                | MethodAttributes.RTSpecialName, module.TypeSystem.Void);
+            type.Methods.Add(instanceConstructor);
+            var ctorIl = instanceConstructor.Body.GetILProcessor(); ctorIl.Emit(OpCodes.Ldarg_0);
+            ctorIl.Emit(OpCodes.Call, Method(module.TypeSystem.Object, ".ctor", module.TypeSystem.Void)); ctorIl.Emit(OpCodes.Ret);
+        }
+        var target = method;
+        for (var level = 1; level <= wrapperDepth; level++)
+        {
+            var entry = level == wrapperDepth;
+            var forward = new MethodDefinition(entry ? "Entry" : $"Forward{level}",
+                MethodAttributes.Public | MethodAttributes.Static, module.TypeSystem.Void);
+            if (!entry) forward.Parameters.Add(new ParameterDefinition(module.TypeSystem.String));
+            type.Methods.Add(forward);
+            var forwardIl = forward.Body.GetILProcessor();
+            if (target.HasThis) forwardIl.Emit(OpCodes.Newobj, instanceConstructor!);
+            if (entry) forwardIl.Emit(OpCodes.Ldstr, PrivateLiteral); else forwardIl.Emit(OpCodes.Ldarg_0);
+            forwardIl.Emit(OpCodes.Call, target); forwardIl.Emit(OpCodes.Ret); target = forward;
+        }
         using var stream = new MemoryStream();
         assembly.Write(stream);
         var bytes = stream.ToArray();
@@ -208,7 +313,8 @@ public sealed class IlCommandBindingExtractorTests
         var cecil = IlBodyEvidenceExtractor.ReadCecilBodies(bytes, limits, new IlBodyEvidenceExtractor.IlWorkBudget(100_000), CancellationToken.None);
         var srm = IlBodyEvidenceExtractor.ReadSystemReflectionMetadataBodies(bytes, limits, new IlBodyEvidenceExtractor.IlWorkBudget(100_000), CancellationToken.None);
         Assert.Empty(IlBodyEvidenceExtractor.CompareBodies(cecil, srm));
-        var body = Assert.Single(IlBodyEvidenceExtractor.AgreeValueFlows(cecil.Bodies, srm.Bodies));
+        var body = Assert.Single(IlBodyEvidenceExtractor.AgreeValueFlows(cecil.Bodies, srm.Bodies),
+            item => item.MethodIdentity.Contains("|method:3:Run|", StringComparison.Ordinal));
         Assert.DoesNotContain("IlValueReaderDisagreementOrLimit", body.ValueFlow!.Gaps);
         return (body, bytes);
     }

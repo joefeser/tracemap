@@ -193,7 +193,7 @@ public static partial class CombinedDependencyPathReporter
             {
                 var commandCandidates = commandsByCall.GetValueOrDefault((call.SourceIndexId, call.OriginalFactId));
                 var binding = commandCandidates is { Length: 1 }
-                    ? ReadCompiledCommandBinding(commandCandidates[0], call, body, factsByOriginalId) : null;
+                    ? ReadCompiledCommandBinding(commandCandidates[0], call, body, caller, factsByOriginalId) : null;
                 if (commandCandidates is { Length: > 0 } && binding is null)
                     AddCompiledIlGap(graph, call, "CompiledIlCommandBindingUnavailable", "command-binding-join-invalid-or-ambiguous", commandCandidates.Length);
                 AddCompiledDatabaseApiCandidate(graph, call, body, caller, api, binding);
@@ -333,7 +333,7 @@ public static partial class CombinedDependencyPathReporter
     }
 
     private static CompiledCommandConfigurationCandidate? ReadCompiledCommandBinding(CombinedFactRow candidate,
-        CombinedFactRow call, CombinedFactRow body,
+        CombinedFactRow call, CombinedFactRow body, CombinedFactRow caller,
         IReadOnlyDictionary<(string SourceIndexId, string OriginalFactId), CombinedFactRow[]> facts)
     {
         if (candidate.RuleId != RuleIds.DotNetIlCommandBinding || candidate.EvidenceTier != EvidenceTiers.Tier3SyntaxOrTextual
@@ -375,7 +375,8 @@ public static partial class CombinedDependencyPathReporter
                 || type?.Kind is not ("unknown" or "constant-int32" or "argument-slot" or "call-result")) return null;
             return new("il-command-binding.v1", candidate.CombinedFactId, body.CombinedFactId, call.CombinedFactId,
                 combinedIds, receiver, endpoint, text, type,
-                candidate.Properties["ilGeneratorSha256"], candidate.Properties["ilBoundedInputSha256"]);
+                candidate.Properties["ilGeneratorSha256"], candidate.Properties["ilBoundedInputSha256"])
+            { ContainingMethodFactId = caller.CombinedFactId };
         }
         catch (JsonException) { return null; }
     }

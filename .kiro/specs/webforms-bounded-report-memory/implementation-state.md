@@ -1,5 +1,30 @@
 # Implementation state
 
+## Exact compiled caller substitution in progress (2026-09-30)
+
+Command text/type argument slots now map through the ordered encoded IL call
+path, with separate static/instance slot numbering, exact target/body/caller
+joins and unique operand facts. Source-only bridges, missing/ambiguous operands,
+changed provenance, unavailable slots and unresolved root arguments stop with
+explicit nested gaps. Encoded callvirt targets retain a dispatch gap. Strings
+stay hashed; no SQL is inferred from names or hashes.
+
+The local-only compiled-command-path-value.v1 candidate binds the exact reporting
+assembly SHA-256 and a bounded consumed-input projection, including rejected
+operand candidates. Limits are 64 caller hops, 128 operands and two competing
+operand records per lookup. Indexed graphs use a dedicated scratch SQL lookup
+rather than a second full payload dictionary; scratch schema is v3. Native call
+value facts additionally retain independently agreed call shape and IL extractor
+version is 0.1.6.
+
+All 17 focused command-binding tests passed, including multi-hop compiled
+wrappers, instance slots, absent/ambiguous/changed operand facts and a source-only
+bridge with orphaned IL operand evidence. Repeated queries retain identical
+binding projections. The broader stable-binary IL/path/native regression passed
+all 195 selected tests. Relevant control-flow/parameter
+configuration, broader gates, immutable-tool Windows workflow and final push
+remain open. This milestone does not complete the goal or validate private runs.
+
 ## Compiled command configuration and path projection in progress (2026-09-30)
 
 The scanner now derives independently decoded straight-line command text/type

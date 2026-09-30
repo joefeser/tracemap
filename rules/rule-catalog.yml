@@ -186,6 +186,19 @@ rules:
       - The supported command constructors model the standard Text enum default only as an encoded-framework API contract candidate; command-type assignments override it in the same straight-line region. Missing type and parameter propagation remain explicit gaps.
       - At most 128 receiver states and 200000 work units are admitted per body. The derivation phase also shares an aggregate bound equal to the policy-bound IL MaxTotalWorkUnits across all inputs. Exhaustion withholds all command candidates for that body without revoking admitted body/call facts.
 
+  - id: combined.paths.compiled-command-value.v1
+    status: active
+    name: Encoded IL call-path command argument candidate
+    description: Substitutes a retained command text or type argument slot through the exact ordered compiled call edges of one retained path, using unique provenance-matched call operand facts and encoded method signatures.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits: [compiled-command-path-value.v1]
+    limitations:
+      - This local-only derived candidate is not SQL execution, procedure identity, provider dispatch, runtime object identity or handler parity. It does not upgrade the underlying command configuration or path coverage.
+      - Only encoded compiled IL calls are followed. Source-only and projectless candidate bridges stop substitution explicitly. Encoded callvirt targets retain an explicit virtual-dispatch gap even when a constant origin is recovered.
+      - Static and instance argument slots are mapped separately; missing, malformed, ambiguous, changed-provenance and unavailable slots stop substitution. Root arguments and call-return values remain unresolved.
+      - Strings retain only exact UTF-16 length and hash. At most 64 caller hops, 128 arguments per call and two competing operand records are inspected per value; existing query path and output bounds remain in force.
+      - Each derived value retains the exact reporting assembly SHA-256 and SHA-256 of its bounded consumed projection, including rejected operand candidates, inspected edge identities and exact native fact provenance. Oversized selected properties are represented by length and digest. The artifact is local-only, not a shareable privacy projection.
+
   - id: dotnet.compiled.il-gap.v1
     status: active
     name: IL body and call coverage gap

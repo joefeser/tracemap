@@ -10,6 +10,7 @@ public static partial class CombinedDependencyPathReporter
     {
         void Add(CombinedFactRow fact);
         IEnumerable<CombinedFactRow> OfTypes(IReadOnlyList<string> types);
+        IReadOnlyList<CombinedFactRow> CallOperandFacts(string sourceIndexId, string originalCallFactId);
         IEnumerable<CombinedFactRow> IdentityOrdered { get; }
         IReadOnlyDictionary<string, CombinedFactRow> ByCombinedId { get; }
         IReadOnlyDictionary<string, CombinedFactRow> BySourceKey { get; }
@@ -28,12 +29,14 @@ public static partial class CombinedDependencyPathReporter
         {
             storagePhase = "facts";
             if (sorted) throw new InvalidOperationException("COMBINED_GRAPH_STORAGE_FROZEN");
-            using var command = Command("insert into graph_facts values($ordinal,$id,$source,$original,$key,$type,$payload);", fact.CombinedFactId);
+            using var command = Command("insert into graph_facts values($ordinal,$id,$source,$original,$key,$type,$payload,$call);", fact.CombinedFactId);
             command.Parameters.AddWithValue("$ordinal", storedFactCount + 1);
             command.Parameters.AddWithValue("$source", fact.SourceIndexId);
             command.Parameters.AddWithValue("$original", fact.OriginalFactId);
             command.Parameters.AddWithValue("$key", SourceFactKey(fact.SourceIndexId, fact.OriginalFactId));
             command.Parameters.AddWithValue("$type", fact.FactType);
+            command.Parameters.AddWithValue("$call", fact.FactType == TraceMap.Core.FactTypes.ManagedIlCallValuesObserved
+                ? (object?)fact.Properties.GetValueOrDefault("ilCallFactId") ?? DBNull.Value : DBNull.Value);
             var payload = IndexedGraphPayload.Encode(fact);
             command.Parameters.AddWithValue("$payload", payload);
             Write(command);
@@ -107,12 +110,27 @@ public static partial class CombinedDependencyPathReporter
             return IndexedGraphPayload.Decode<CombinedFactRow>(payload);
         }
 
+        private IReadOnlyList<CombinedFactRow> ReadCallOperandFacts(string sourceIndexId, string originalCallFactId)
+        {
+            using var command = Command("select payload from graph_facts where fact_type=$type and source_id=$source "
+                + "and il_call_reference=$call order by ordinal limit 2;");
+            command.Parameters.AddWithValue("$type", TraceMap.Core.FactTypes.ManagedIlCallValuesObserved);
+            command.Parameters.AddWithValue("$source", sourceIndexId);
+            command.Parameters.AddWithValue("$call", originalCallFactId);
+            using var reader = command.ExecuteReader();
+            var rows = new List<CombinedFactRow>();
+            while (reader.Read()) rows.Add(DecodeFact((byte[])reader.GetValue(0)));
+            return rows;
+        }
+
         private sealed class IndexedFactRows(IndexedGraphStore store) : IIndexedCombinedFacts
         {
             public int Count => store.storedFactCount;
             public CombinedFactRow this[int index] => store.FactAt(index);
             public void Add(CombinedFactRow fact) => store.AddFact(fact);
             public IEnumerable<CombinedFactRow> OfTypes(IReadOnlyList<string> types) => store.ReadFacts(types: types);
+            public IReadOnlyList<CombinedFactRow> CallOperandFacts(string sourceIndexId, string originalCallFactId)
+                => store.ReadCallOperandFacts(sourceIndexId, originalCallFactId);
             public IEnumerable<CombinedFactRow> IdentityOrdered => store.ReadFacts(identityOrder: true);
             public IReadOnlyDictionary<string, CombinedFactRow> ByCombinedId { get; } = new IndexedFactsById(store);
             public IReadOnlyDictionary<string, CombinedFactRow> BySourceKey { get; } = new IndexedFactsById(store, sourceKey: true);

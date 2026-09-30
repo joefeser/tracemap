@@ -185,7 +185,23 @@ public sealed record CompiledCommandConfigurationCandidate(
     CompiledCommandOperandOrigin EndpointReceiverOrigin,
     CompiledCommandOperandOrigin CommandTextOrigin,
     CompiledCommandOperandOrigin CommandTypeOrigin,
-    string GeneratorSha256, string BoundedInputSha256);
+    string GeneratorSha256, string BoundedInputSha256)
+{
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? ContainingMethodFactId { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public CompiledCommandPathValueBinding? CommandTextFromPath { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public CompiledCommandPathValueBinding? CommandTypeFromPath { get; init; }
+}
+
+public sealed record CompiledCommandValueStep(string CallFactId, string OperandFactId,
+    string CallerBodyFactId, string CallerMethodFactId, string TargetMethodFactId,
+    int TargetArgumentSlot, string Opcode, string GeneratorSha256, string BoundedInputSha256);
+public sealed record CompiledCommandPathValueBinding(string Schema, string RuleId, string EvidenceTier,
+    string State, CompiledCommandOperandOrigin Origin, string OriginBodyFactId,
+    IReadOnlyList<CompiledCommandValueStep> Steps, IReadOnlyList<string> Gaps,
+    string GeneratorSha256, string BoundedInputSha256, string ArtifactVisibility = "local-only");
 
 public sealed record CombinedPathEdge(
     string EdgeId,
@@ -995,6 +1011,7 @@ public static partial class CombinedDependencyPathReporter
         IndexedGraphStore? graphStorage = null)
     {
         var graph = new EvidenceGraph(read.Sources, budget, graphStorage);
+        graph.CommandFacts = read.Facts;
         graphStorage?.MarkObservationStage("initial-nodes");
         var factsById = CombinedFactsById(read.Facts);
         foreach (var fact in IdentityOrderedFacts(read.Facts))
@@ -4851,6 +4868,7 @@ public static partial class CombinedDependencyPathReporter
     {
         var nodes = state.NodeIds.Select(nodeId => graph.Nodes[nodeId].ToReportNode()).ToArray();
         var edges = state.EdgeIds.Select(edgeId => graph.EdgesById[edgeId].ToReportEdge()).ToArray();
+        ProjectCompiledCommandValues(graph, nodes, edges);
         var classification = Classify(edges);
         return new CombinedPath(
             pathId,
@@ -6611,6 +6629,23 @@ public static partial class CombinedDependencyPathReporter
         public HashSet<string> SourceBodyEvidenceNodeIds { get; } = new(StringComparer.Ordinal);
         public HashSet<string> ExactMethodDeclarationNodeIds { get; } = new(StringComparer.Ordinal);
         public List<CombinedPathGap> Gaps { get; } = [];
+        public IReadOnlyList<CombinedFactRow> CommandFacts { get; set; } = [];
+        public string? CommandProjectionGeneratorSha256 { get; set; }
+        private IReadOnlyDictionary<string, CombinedFactRow>? commandFactsByCombinedId;
+        private IReadOnlyDictionary<(string SourceIndexId, string OriginalFactId), CombinedFactRow[]>? commandFactsByOriginalId;
+        public IReadOnlyDictionary<string, CombinedFactRow> CommandFactsByCombinedId
+            => commandFactsByCombinedId ??= CombinedFactsById(CommandFacts, uniqueOnly: true);
+        public IReadOnlyDictionary<(string SourceIndexId, string OriginalFactId), CombinedFactRow[]> CommandFactsByOriginalId
+            => commandFactsByOriginalId ??= CombinedFactsByOriginalId(CommandFacts);
+        private Dictionary<(string SourceIndexId, string CallFactId), CombinedFactRow[]>? commandOperandFacts;
+        public IReadOnlyList<CombinedFactRow> CommandOperandFacts(string sourceIndexId, string callFactId)
+        {
+            commandOperandFacts ??= FactsOfTypes(CommandFacts, FactTypes.ManagedIlCallValuesObserved)
+                .Where(fact => !string.IsNullOrWhiteSpace(fact.Properties.GetValueOrDefault("ilCallFactId")))
+                .GroupBy(fact => (fact.SourceIndexId, CallFactId: fact.Properties["ilCallFactId"]))
+                .ToDictionary(group => group.Key, group => group.Take(2).ToArray());
+            return commandOperandFacts.GetValueOrDefault((sourceIndexId, callFactId)) ?? [];
+        }
         private readonly Dictionary<string, CombinedReportSource> sourcesById = sources.ToDictionary(source => source.SourceIndexId, StringComparer.Ordinal);
 
         public IEnumerable<IReadOnlyList<(GraphNode Node, SymbolAlias Alias)>> SymbolReconciliationGroups()
