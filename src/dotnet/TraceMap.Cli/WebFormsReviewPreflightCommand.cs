@@ -117,7 +117,7 @@ public static partial class WebFormsReviewPreflightCommand
         node-limit report outputs without scanning or changing the original run.
         query-recovery --bundle <bundle> accepts the same bounded query options.
         query-recovery --bundle <bundle> --handler <method-name> counts retained handler paths only.
-        requery-handler --run <failed-run> --bundle <recovery-bundle> --handler <method-name> --out <new-folder> [--surface-name DbDataAdapter.Fill]
+        requery-handler --run <failed-run> --bundle <recovery-bundle> --handler <method-name> --out <new-folder> [--surface-name DbDataAdapter.Fill] [--traversal-scope compiled-il]
           builds a separate single-root report from the verified retained combined index; no scan or combine.
         It writes local-only run-manifest.json and README.md without scanning,
         binding admission, report rendering or execution. Preflight success alone

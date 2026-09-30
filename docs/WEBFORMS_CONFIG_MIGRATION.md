@@ -9,6 +9,31 @@ Existing report files are not rewritten by this change.
 
 ## Compare the retained handler using the old Fill-only terminal scope
 
+For the separate compiled call-tree baseline:
+
+```powershell
+.\scripts\whandler.ps1 -Requery -CompiledOnly -FillOnly -Open
+```
+
+Enter `verify-5\recovered-reports`. Output goes to a new
+`verify-5\handler-requery-compiled-fill` folder. The query allows root selection
+and one existing evidenced source-to-compiled attachment, then only
+`compiled-il-call`, `compiled-il-callvirt-candidate` and
+`compiled-database-api-candidate` edges. Source calls, receiver/constructor
+bridges and compiled-to-source return hops are excluded during traversal, not
+filtered from an already capped mixed result. All global admission competitors
+remain available; no symbol is guessed to compensate for a missing attachment.
+The root attachment keeps its original tier and can be a publish candidate;
+this is not an authenticated-build or source-line identity claim. Callvirt still
+does not prove runtime dispatch. Missing paths under this scope are gaps, not
+proof that backend behavior is absent. The hashed query records
+`traversalScope=compiled-il-with-root-attachment`. Historical queries omit this
+optional field. Defaults and the mixed query below remain unchanged.
+
+Graph construction is still repeated, so this is not a promise of a faster run.
+The owner Fill-only mixed readback retained 18 chains / 56 variants and cycle/depth
+gaps; those counts do not establish equality to the historical 13 / 41 result.
+
 ```powershell
 .\scripts\whandler.ps1 -Requery -FillOnly -Open
 ```

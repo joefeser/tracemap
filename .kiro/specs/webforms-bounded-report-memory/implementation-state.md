@@ -1,5 +1,27 @@
 # Implementation state
 
+## Separate compiled call-tree baseline (2026-09-30)
+
+Owner Fill-only photographs show 18 exact chains / 56 variants, 1,579,018
+traversal work units and cycle/depth gaps. Names are readable; mixed paths still
+include source bridges and cannot close historical 13 / 41 parity.
+
+Added `whandler -Requery -CompiledOnly -FillOnly -Open`, isolated default folder
+`handler-requery-compiled-fill`. Traversal permits one existing root attachment
+(semantic identity, PDB identity or publish candidate), then only compiled IL
+call/callvirt/database endpoint edges. It cannot return through source to gain
+extra paths. Full competitor admission and prior budgets stay unchanged.
+Optional query `TraversalScope` is included in the derived receipt input hash;
+legacy queries omit it. No runtime/dispatch/build authenticity claim. An empty
+restricted walk emits a scoped gap rather than NoBackendEvidence placeholders.
+
+Validation: 221 path/recovery/grouped-report tests passed; after the final
+Tier4 query-gap refinement, 28 focused scope/recovery/attachment tests passed.
+PowerShell handler dispatch/guards passed. CLI build: zero warnings/errors;
+diff check passed. Synthetic explicit PDB and publish attachment walks actually
+executed on macOS; Windows-only ASP.NET publish smoke and the full .NET suite
+were not run. Private compiled-only readback remains pending.
+
 ## Explicit retained Fill-only comparison scope (2026-09-29)
 
 `whandler.ps1 -Requery -FillOnly -Open` now forwards the exact allowlisted

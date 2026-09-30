@@ -24,11 +24,16 @@ public static partial class WebFormsReviewExecutionCommand
         var failureStage = "arguments";
         try
         {
-            if (args.Length is not (9 or 11) || args[0] != "requery-handler" || args[1] != "--run" ||
+            if (args.Length is not (9 or 11 or 13) || args[0] != "requery-handler" || args[1] != "--run" ||
                 args[3] != "--bundle" || args[5] != "--handler" || args[7] != "--out") throw Fail("HANDLER_REQUERY_ARGUMENT_INVALID");
-            if (args.Length == 11 && (args[9] != "--surface-name" || args[10] != "DbDataAdapter.Fill"))
-                throw Fail("HANDLER_REQUERY_SURFACE_INVALID");
-            var surfaceName = args.Length == 11 ? args[10] : null;
+            string? surfaceName = null;
+            var compiledOnly = false;
+            for (var i = 9; i < args.Length; i += 2)
+            {
+                if (args[i] == "--surface-name" && args[i + 1] == "DbDataAdapter.Fill" && surfaceName is null) surfaceName = args[i + 1];
+                else if (args[i] == "--traversal-scope" && args[i + 1] == "compiled-il" && !compiledOnly) compiledOnly = true;
+                else throw Fail("HANDLER_REQUERY_SURFACE_OR_SCOPE_INVALID");
+            }
             var run = WebFormsReviewPreflightCommand.PhysicalPath(args[2]);
             var bundle = WebFormsReviewPreflightCommand.PhysicalPath(args[4]);
             var handler = args[6];
@@ -85,9 +90,10 @@ public static partial class WebFormsReviewExecutionCommand
             WebFormsReviewPreflightCommand.ValidateReportBudgets(budget);
             var options = new CombinedDependencyPathOptions(indexPath, destination, ToSurface: "database-api", SurfaceName: surfaceName, IncludeLegacyRoots: true,
                 MaxDepth: config.Budgets.GraphMaxDepth, MaxPaths: config.Budgets.GraphMaxPaths, MaxFrontier: budget.MaxFrontier)
-            { ExactFromSymbol = true, MaxTraversalWork = checked((int)config.Budgets.GraphMaxWork) };
+            { ExactFromSymbol = true, CompiledOnly = compiledOnly, MaxTraversalWork = checked((int)config.Budgets.GraphMaxWork) };
             await output.WriteLineAsync($"handlerStage=graph-started;maxPaths={options.MaxPaths};maxWork={options.MaxTraversalWork};single-root=true");
-            await output.WriteLineAsync($"handlerQuery.terminalScope={(surfaceName is null ? "all-database-api" : "DbDataAdapter.Fill")};mixed-source-and-compiled=true");
+            await output.WriteLineAsync($"handlerQuery.terminalScope={(surfaceName is null ? "all-database-api" : "DbDataAdapter.Fill")};mixed-source-and-compiled={(compiledOnly ? "false" : "true")}");
+            await output.WriteLineAsync($"handlerQuery.traversalScope={(compiledOnly ? "compiled-il-with-root-attachment" : "mixed")};root-attachment-not-il-proof=true");
             CombinedPathGraphObservation? observation = null;
             failureStage = "graph";
             var paths = await CombinedDependencyPathReporter.BuildSelectedSymbolsAsync(options, roots, true,
