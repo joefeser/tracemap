@@ -166,7 +166,18 @@ public sealed class DeepProjectlessNativeWorkflowTests
             // The native root also retains a full CLI distribution, not just reports.
             Assert.InRange(Directory.GetFiles(review, "*", SearchOption.AllDirectories).Sum(file => new FileInfo(file).Length), 1, 128 * 1024 * 1024);
         }
-        finally { Directory.Delete(root, recursive: true); }
+        finally
+        {
+            // Git marks object files read-only on Windows. This root is created
+            // and owned solely by this synthetic test; never touch the checkout.
+            foreach (var file in Directory.GetFiles(root, "*", SearchOption.AllDirectories))
+            {
+                var attributes = File.GetAttributes(file);
+                if ((attributes & FileAttributes.ReadOnly) != 0)
+                    File.SetAttributes(file, attributes & ~FileAttributes.ReadOnly);
+            }
+            Directory.Delete(root, recursive: true);
+        }
     }
 
     private static string[] Roster(string root) => Directory.GetFiles(root, "*", SearchOption.AllDirectories)

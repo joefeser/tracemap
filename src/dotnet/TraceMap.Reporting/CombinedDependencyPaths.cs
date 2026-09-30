@@ -2701,13 +2701,13 @@ public static partial class CombinedDependencyPathReporter
             return;
         }
 
-        var creations = facts
+        var creations = FactsOfTypes(facts, FactTypes.CallEdge)
             .Where(fact => fact.FactType == FactTypes.CallEdge
                 && IsSupportedVisualBasicReceiverCreation(fact)
                 && !string.IsNullOrWhiteSpace(CombinedDependencyReporter.FirstValue(fact.Properties, "assignedTo"))
                 && !string.IsNullOrWhiteSpace(CombinedDependencyReporter.FirstValue(fact.Properties, "calleeContainingType", "calleeName")))
             .ToArray();
-        var declarations = facts
+        var declarations = FactsOfTypes(facts, FactTypes.MethodDeclared)
             .Where(fact => fact.FactType == FactTypes.MethodDeclared
                 && fact.RuleId == RuleIds.VisualBasicSemanticDeclarations
                 && fact.EvidenceTier == EvidenceTiers.Tier1Semantic
@@ -2715,26 +2715,26 @@ public static partial class CombinedDependencyPathReporter
                 && !string.IsNullOrWhiteSpace(CombinedDependencyReporter.FirstValue(fact.Properties, "containingType"))
                 && !string.IsNullOrWhiteSpace(CombinedDependencyReporter.FirstValue(fact.Properties, "methodName")))
             .ToArray();
-        var syntaxDeclarations = facts
+        var syntaxDeclarations = FactsOfTypes(facts, FactTypes.MethodDeclared)
             .Where(fact => fact.FactType == FactTypes.MethodDeclared
                 && fact.RuleId == RuleIds.VisualBasicSyntaxDeclarations
                 && fact.EvidenceTier == EvidenceTiers.Tier3SyntaxOrTextual
                 && !string.IsNullOrWhiteSpace(CombinedDependencyReporter.FirstValue(fact.Properties, "containingType"))
                 && !string.IsNullOrWhiteSpace(CombinedDependencyReporter.FirstValue(fact.Properties, "methodName", "name")))
             .ToArray();
-        var fieldDeclarations = facts
+        var fieldDeclarations = FactsOfTypes(facts, FactTypes.FieldDeclared)
             .Where(fact => fact.FactType == FactTypes.FieldDeclared
                 && fact.RuleId == RuleIds.VisualBasicSyntaxDeclarations
                 && !string.IsNullOrWhiteSpace(CombinedDependencyReporter.FirstValue(fact.Properties, "containingType"))
                 && !string.IsNullOrWhiteSpace(CombinedDependencyReporter.FirstValue(fact.Properties, "fieldName")))
             .ToArray();
-        var syntaxTypeDeclarations = facts
+        var syntaxTypeDeclarations = FactsOfTypes(facts, FactTypes.TypeDeclared)
             .Where(fact => fact.FactType == FactTypes.TypeDeclared
                 && fact.RuleId == RuleIds.VisualBasicSyntaxDeclarations
                 && fact.EvidenceTier == EvidenceTiers.Tier3SyntaxOrTextual
                 && !string.IsNullOrWhiteSpace(CombinedDependencyReporter.FirstValue(fact.Properties, "name", "qualifiedName")))
             .ToArray();
-        var receiverBodyFacts = facts
+        var receiverBodyFacts = FactsOfTypes(facts, FactTypes.CallEdge, FactTypes.MethodInvoked, FactTypes.ObjectCreated)
             .Where(fact => IsVisualBasicReceiverBodyFact(fact)
                 && VisualBasicQualifiedMemberKey(fact.SourceSymbol) is not null)
             .Select(fact => new { Fact = fact, Member = VisualBasicQualifiedMemberKey(fact.SourceSymbol)!.Value })
@@ -3082,13 +3082,13 @@ public static partial class CombinedDependencyPathReporter
             .Where(fact => fact.RuleId == RuleIds.VisualBasicSyntaxDeclarations
                 && fact.EvidenceTier == EvidenceTiers.Tier3SyntaxOrTextual)
             .ToArray();
-        var bodyFacts = facts
+        var bodyFacts = FactsOfTypes(facts, FactTypes.CallEdge, FactTypes.MethodInvoked, FactTypes.ObjectCreated)
             .Where(fact => IsVisualBasicReceiverBodyFact(fact)
                 && !string.IsNullOrWhiteSpace(fact.SourceSymbol))
             .GroupBy(fact => fact.SourceSymbol!.Trim(), StringComparer.OrdinalIgnoreCase)
             .ToDictionary(group => group.Key, group => group.OrderBy(fact => fact.CombinedFactId, StringComparer.Ordinal).ToArray(), StringComparer.OrdinalIgnoreCase);
 
-        foreach (var call in facts
+        foreach (var call in FactsOfTypes(facts, FactTypes.CallEdge)
             .Where(fact => fact.FactType == FactTypes.CallEdge
                 && fact.RuleId == RuleIds.VisualBasicSyntaxCallGraph
                 && string.Equals(CombinedDependencyReporter.FirstValue(fact.Properties, "callKind"), "SyntaxInvocation", StringComparison.Ordinal)
@@ -3186,7 +3186,7 @@ public static partial class CombinedDependencyPathReporter
                 + CombinedDependencyReporter.FirstValue(fact.Properties, "parameterCount"), StringComparer.OrdinalIgnoreCase)
             .ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.OrdinalIgnoreCase);
 
-        var bodyFacts = facts
+        var bodyFacts = FactsOfTypes(facts, FactTypes.CallEdge, FactTypes.MethodInvoked, FactTypes.ObjectCreated)
             .Where(fact => IsVisualBasicReceiverBodyFact(fact)
                 && !string.IsNullOrWhiteSpace(fact.SourceSymbol))
             .GroupBy(fact => $"{fact.SourceIndexId}\0{fact.SourceSymbol}", StringComparer.OrdinalIgnoreCase)
@@ -3194,7 +3194,7 @@ public static partial class CombinedDependencyPathReporter
                 group => group.OrderBy(fact => fact.CombinedFactId, StringComparer.Ordinal).ToArray(),
                 StringComparer.OrdinalIgnoreCase);
 
-        foreach (var creation in facts
+        foreach (var creation in FactsOfTypes(facts, FactTypes.ObjectCreated)
             .Where(fact => fact.FactType == FactTypes.ObjectCreated
                 && fact.RuleId == RuleIds.VisualBasicSyntaxObjectCreation
                 && fact.EvidenceTier == EvidenceTiers.Tier3SyntaxOrTextual

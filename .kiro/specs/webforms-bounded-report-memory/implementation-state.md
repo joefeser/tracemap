@@ -1,5 +1,28 @@
 # Implementation state
 
+## Authentic Windows corpus follow-up (2026-09-30)
+
+CI run 36787260898 at 4c94db97 built both actual ASP.NET publish modes. It failed
+two checks: mapped graph logical reads were 42,887,673 bytes against the unchanged
+32-MiB guard, and Git read-only object files prevented synthetic native cleanup.
+The retained native output still reported six mixed routes in 391 work units;
+cleanup failure is not promoted to test acceptance.
+
+Downloaded the public published DLLs and reproduced the mapped read excess on
+macOS. VB receiver/implicit/constructor bridges still performed full fact-table
+decodes for predicates limited to known fact types. Changed their input iterators
+to indexed FactsOfTypes queries without changing their candidate predicates or
+ambiguity rules. The same mapped replay fell from 13,943 rows/42,434,281 bytes to
+6,432 rows/19,094,075 bytes. The 32-MiB bound is unchanged; dedicated bridge-stage
+guards cap the small corpus at 200 payload rows per receiver stage. Synthetic
+native teardown clears only the ReadOnly bit on test-owned temporary files before
+deletion. The public replay override used for diagnosis was removed.
+
+The focused 231-test slice passed with one explicit Windows skip and no warnings.
+Final full-suite validation and a fresh authentic Windows CI run are pending.
+These logical read counts are not physical drive-I/O measurements or private
+application acceptance.
+
 ## Mixed-query traversal repair locally validated (2026-09-30)
 
 The first completion continuation verified d3ff0281 at origin with a clean local

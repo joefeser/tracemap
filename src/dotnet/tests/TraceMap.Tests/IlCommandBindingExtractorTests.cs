@@ -204,6 +204,9 @@ public sealed class IlCommandBindingExtractorTests
                 limits: new(MaxFacts: 10_000, MaxEdges: 10_000, MaxTextBytes: 32 * 1024 * 1024)
                 { MaxGraphStorageBytes = 32 * 1024 * 1024, GraphObservationObserver = value => observed = value });
             Assert.NotNull(observed);
+            Console.WriteLine($"deepGraph.reads={JsonSerializer.Serialize(observed)}");
+            Assert.InRange(observed.FactPayloadRowsByStage!["vb-receiver-bridges"], 0, 200);
+            Assert.InRange(observed.FactPayloadRowsByStage["vb-implicit-receiver-bridges"], 0, 200);
             Assert.InRange(observed.FactPayloadBytesRead, 0, 32 * 1024 * 1024);
             Assert.InRange(observed.FactPayloadRowsRead, 0, 100_000);
             Assert.InRange(report.Summary.TraversalWorkUnits!.Value, 0, work);
