@@ -98,7 +98,7 @@
   - [x] Cover command configuration through relevant control-flow/parameter construction with conservative joins and targeted compiled fixtures.
   - [x] Supply and validate the immutable-tool Windows workflow, run required broader gates, and push the completed fix.
   - [x] Reproduce legacy VB debug-field/ref-array/struct/mapping patterns with actual net48 compiler output; preserve non-byref caller values while rejecting stores, address escapes and wrong API contracts.
-  - [ ] Confirm a new owner-retained Windows scan emits command candidates and binds the selected handler; the older zero-candidate scan does not satisfy this acceptance gate.
+  - [x] Confirm a new owner-retained Windows scan emits command candidates and binds the selected handler; owner-supplied screenshots of a fresh run at f32c6ee9 show 45 binding occurrences, 42 constant-text candidates, 42 StoredProcedure-type candidates and 3 unresolved-text candidates. This is observed console/report evidence, not independent admission of private artifacts or complete route parity.
 - [x] Add a bounded local chain diagnostic showing exact retained identities and ordered connecting rules without rescanning or traversing.
 - [x] Reconcile pre-PR readable-label and receiver fixes with native reporting; restore local compiled labels from exact retained symbols without changing graph or privacy projections.
 - [x] Restore explicit Fill-only terminal query scope for retained handler comparison and bind that scope into the requery receipt.
