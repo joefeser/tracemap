@@ -27,7 +27,7 @@ namespace TraceMap.Core;
 internal static class IlBodyEvidenceExtractor
 {
     internal const string SchemaVersion = "il-body-provenance.v1";
-    internal const string PolicyVersion = "explicit-il-body-evidence.v4";
+    internal const string PolicyVersion = "explicit-il-body-evidence.v5";
     internal const string IlLocationKind = "managed-il-v1";
     internal const string BodyLimitation = "IL body evidence proves only that the admitted assembly contains this exact bounded operand-aware instruction stream at this module-local method row; it does not prove execution, dispatch, reachability, behavior, source ownership, semantic equivalence, or rewrite preservation.";
     internal const string CallLimitation = "A call site records the static member reference or calli standalone signature encoded in this module's IL; a calli signature does not identify a target member. No call site proves execution, virtual dispatch resolution, target presence, cross-assembly resolution, call-graph reachability, or rewrite equivalence.";
@@ -74,6 +74,10 @@ internal static class IlBodyEvidenceExtractor
                 null,
                 globalGapKinds.ToArray()), []));
         var workBudget = new IlWorkBudget(limits.MaxTotalWorkUnits);
+        // Value derivation may fail independently; it must not spend the raw
+        // body/call admission budget or retire independently decoded bodies.
+        var srmValueBudget = new IlWorkBudget(limits.MaxTotalWorkUnits);
+        var cecilValueBudget = new IlWorkBudget(limits.MaxTotalWorkUnits);
         foreach (var artifact in admitted)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -94,8 +98,8 @@ internal static class IlBodyEvidenceExtractor
                 // The raw reader runs first so every bound (opcode table,
                 // operand extent, switch table, string limit) is validated
                 // before Mono.Cecil materializes the same operand.
-                var srm = ReadSystemReflectionMetadataBodies(bytes, limits, workBudget, cancellationToken);
-                var cecil = ReadCecilBodies(bytes, limits, workBudget, cancellationToken);
+                var srm = ReadSystemReflectionMetadataBodies(bytes, limits, workBudget, cancellationToken, valueBudget: srmValueBudget);
+                var cecil = ReadCecilBodies(bytes, limits, workBudget, cancellationToken, valueBudget: cecilValueBudget);
                 var disagreements = CompareBodies(cecil, srm);
                 cecil = cecil with { Bodies = AgreeValueFlows(cecil.Bodies, srm.Bodies) };
                 if (disagreements.Count > 0)
@@ -163,6 +167,8 @@ internal static class IlBodyEvidenceExtractor
             extractorIdentities = new[] { ScannerVersions.IlBodyEvidenceExtractor, "system-reflection-metadata/10.0.0", "mono-cecil/0.11.6" },
             expectedInputs = expected,
             effectiveLimits = limits,
+            controlFlowValueLimits = new { IlControlFlowValueExtractor.MaxInstructions, IlControlFlowValueExtractor.MaxSlots, IlControlFlowValueExtractor.MaxWorkUnits },
+            valueDerivationAggregateWorkPerReader = limits.MaxTotalWorkUnits,
             outcomes = outcomes.Select(item => new
             {
                 item.SafeLocator,
@@ -440,8 +446,10 @@ internal static class IlBodyEvidenceExtractor
         IlBodyLimits limits,
         IlWorkBudget budget,
         CancellationToken cancellationToken,
-        bool retainDiagnosticInstructions = false)
+        bool retainDiagnosticInstructions = false,
+        IlWorkBudget? valueBudget = null)
     {
+        valueBudget ??= new IlWorkBudget(limits.MaxTotalWorkUnits);
         using var stream = new MemoryStream(bytes, writable: false);
         using var resolver = new ManagedMetadataExtractor.RejectingAssemblyResolver();
         using var module = CecilModuleDefinition.ReadModule(stream, new ReaderParameters
@@ -475,7 +483,7 @@ internal static class IlBodyEvidenceExtractor
                     MetadataTokens.MethodDefinitionHandle(checked((int)method.MetadataToken.RID)));
                 var rawIl = rawPe.GetMethodBody(rawMethod.RelativeVirtualAddress).GetILBytes()
                     ?? throw new IlEvidenceException("MalformedIlBody");
-                bodies.Add(ReadCecilBody(method, rawIl, assemblyIdentity, limits, budget, retainDiagnosticInstructions));
+                bodies.Add(ReadCecilBody(method, rawIl, assemblyIdentity, limits, budget, retainDiagnosticInstructions, valueBudget));
             }
         }
         return new IlReaderResult(assemblyIdentity, module.Name, module.Mvid.ToString("D", CultureInfo.InvariantCulture), bodies);
@@ -487,7 +495,8 @@ internal static class IlBodyEvidenceExtractor
         string assemblyIdentity,
         IlBodyLimits limits,
         IlWorkBudget budget,
-        bool retainDiagnosticInstructions)
+        bool retainDiagnosticInstructions,
+        IlWorkBudget valueBudget)
     {
         var body = method.Body;
         var memberKind = method.IsConstructor ? "constructor" : "method";
@@ -553,7 +562,7 @@ internal static class IlBodyEvidenceExtractor
             bodySha256,
             calls,
             retainDiagnosticInstructions ? instructions : null,
-            ExtractCallValues(instructions, calls, body.MaxStackSize, handlers, budget));
+            ExtractCallValues(instructions, calls, body.MaxStackSize, handlers, valueBudget));
     }
 
     // Cecil and Reflection.Emit may use different display names for an opcode.
@@ -848,8 +857,10 @@ internal static class IlBodyEvidenceExtractor
         IlBodyLimits limits,
         IlWorkBudget budget,
         CancellationToken cancellationToken,
-        bool retainDiagnosticInstructions = false)
+        bool retainDiagnosticInstructions = false,
+        IlWorkBudget? valueBudget = null)
     {
+        valueBudget ??= new IlWorkBudget(limits.MaxTotalWorkUnits);
         using var stream = new MemoryStream(bytes, writable: false);
         using var pe = new PEReader(stream, PEStreamOptions.LeaveOpen);
         var reader = pe.GetMetadataReader();
@@ -881,7 +892,7 @@ internal static class IlBodyEvidenceExtractor
             if (!budget.TryConsume(1))
                 throw new IlEvidenceException("IlTotalWorkLimitExceeded");
             bodies.Add(ReadSrmBody(pe, reader, provider, handle, method, assemblyIdentity, limits, budget,
-                retainDiagnosticInstructions));
+                retainDiagnosticInstructions, valueBudget));
         }
         return new IlReaderResult(assemblyIdentity, moduleName, reader.GetGuid(moduleDefinition.Mvid).ToString("D", CultureInfo.InvariantCulture), bodies);
     }
@@ -895,7 +906,8 @@ internal static class IlBodyEvidenceExtractor
         string assemblyIdentity,
         IlBodyLimits limits,
         IlWorkBudget budget,
-        bool retainDiagnosticInstructions)
+        bool retainDiagnosticInstructions,
+        IlWorkBudget valueBudget)
     {
         var body = pe.GetMethodBody(method.RelativeVirtualAddress);
         var il = body.GetILBytes() ?? throw new IlEvidenceException("MalformedIlBody");
@@ -1001,7 +1013,7 @@ internal static class IlBodyEvidenceExtractor
             bodySha256,
             calls,
             retainDiagnosticInstructions ? instructions : null,
-            ExtractCallValues(instructions, calls, body.MaxStack, handlers, budget));
+            ExtractCallValues(instructions, calls, body.MaxStack, handlers, valueBudget));
     }
 
     private static (string Kind, string Token, string Identity) SrmBoundedTarget(string kind, string token, string identity, IlBodyLimits limits)
@@ -1329,7 +1341,8 @@ internal static class IlBodyEvidenceExtractor
             }
             if (parts[7] != "-1") boundaries.Add(long.Parse(parts[7], NumberStyles.HexNumber, CultureInfo.InvariantCulture));
         }
-        return IlCallValueExtractor.Extract(instructions, calls, maxStack, handlers.Count != 0, boundaries);
+        var flow = IlCallValueExtractor.Extract(instructions, calls, maxStack, handlers.Count != 0, boundaries);
+        return budget.TryConsume(flow.WorkUnits) ? flow : new([], ["IlValueControlFlowAggregateWorkLimit"]);
     }
 
     private static IlCallStackShape SrmCallStackShape(MetadataReader reader,

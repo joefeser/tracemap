@@ -1,5 +1,44 @@
 # Implementation state
 
+## Normal-flow command/parameter loops in progress (2026-09-30)
+
+Normal branches and loops now use independently decoded equality-only operand
+fixed points, with 20000 instruction, 256 slot and 200000 work-unit body bounds.
+Actual fixed-point work is charged to a separate aggregate value budget per
+reader, equal to MaxTotalWorkUnits and isolated from raw body/call admission;
+successor cloning and merging is charged before allocation, including wide
+switch fan-out. Policy v5 binds these limits, and IL extractor version is 0.1.7.
+
+The command binder consumes the agreed control graph, intersects exact command
+and adapter configuration records at joins, and emits endpoints only after
+convergence. Exact encoded get_Parameters plus supported Add/AddWithValue/Clear/
+RemoveAt contracts preserve text/type, not parameter values or ordering.
+Unknown calls receiving a collection invalidate its owning command. Wrong
+collection signatures, command escape and conflicting assignments fail closed.
+The linear lane models the same collection contracts. Caller mapping accepts
+both straight-line and converged normal-flow operand candidates.
+
+All 45 focused operand/command tests passed before the final fan-out charge
+hardening. Tests include independently decoded synthetic parameter loops,
+straight-line collection use, conflicting assignments, command/collection
+escape, incorrect signatures, native fact and compiled path provenance joins,
+control-graph reader disagreement, deterministic convergence and work limits.
+The broader stable-binary regression passed all 213 selected tests after that
+hardening. A subsequent audit isolated value derivation budgets from raw body/
+call admission and added a regression proving exhausted operand budgets retain
+both readers' agreed bodies and calls. The focused 90-test gate and final
+214-test IL/path/native regression both passed against unchanged binaries.
+
+Exception-region bodies still use the reduced local lane: exception-edge and
+loop configuration inside protected regions need a targeted audit/fixture before
+closing the control-flow task. The existing public synthetic
+samples/messy-dotnet-workspace/vb-publish-crossdll-framework/PublicSqlDataAccess.vb
+is an authoritative next fixture: its Using command/adapter regions, conditional
+ExecuteNonQuery versus Fill, and typed AddRange must be covered before claiming
+the wrapper pattern is handled. AddRange is not yet in the supported collection
+contract set. Broader final gates, immutable-tool Windows
+workflow and push remain open. No private acceptance or SQL execution is claimed.
+
 ## Exact compiled caller substitution in progress (2026-09-30)
 
 Command text/type argument slots now map through the ordered encoded IL call

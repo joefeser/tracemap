@@ -135,7 +135,7 @@ public static partial class CombinedDependencyPathReporter
         var operandFact = value; var bodyFact = body; var callFact = call;
         if (value.RuleId != RuleIds.DotNetIlValues || value.EvidenceTier != EvidenceTiers.Tier3SyntaxOrTextual
             || value.Properties.GetValueOrDefault("valueSchema") != "il-call-values.v1"
-            || value.Properties.GetValueOrDefault("valueState") != "straight-line-candidate"
+            || value.Properties.GetValueOrDefault("valueState") is not ("straight-line-candidate" or "control-flow-candidate")
             || value.Properties.GetValueOrDefault("callShapeSupported") != "true"
             || value.Properties.GetValueOrDefault("ilBodyFactId") != body.OriginalFactId
             || value.Properties.GetValueOrDefault("ilOffset") != call.Properties.GetValueOrDefault("ilOffset")

@@ -51,7 +51,9 @@ internal sealed record IlCallStackShape(int ParameterCount, bool HasThis, bool R
 internal sealed record IlValueOrigin(string Kind, string Identity);
 internal sealed record IlCallValueObservation(long Offset, int Region, string State,
     IlValueOrigin Receiver, IReadOnlyList<IlValueOrigin> Arguments, IlValueOrigin Result);
-internal sealed record IlValueFlowObservation(IReadOnlyList<IlCallValueObservation> Calls, IReadOnlyList<string> Gaps);
+internal sealed record IlValueControlNode(long Offset, IReadOnlyList<long> Successors, bool InvalidatesConfiguration);
+internal sealed record IlValueFlowObservation(IReadOnlyList<IlCallValueObservation> Calls, IReadOnlyList<string> Gaps,
+    IReadOnlyList<IlValueControlNode>? ControlFlow = null, int WorkUnits = 0);
 
 internal sealed record IlBodyObservation(
     string MetadataToken,

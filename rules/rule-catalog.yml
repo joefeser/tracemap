@@ -169,20 +169,22 @@ rules:
     limitations:
       - Straight-line origin candidates only, not command binding or SQL evidence. Argument slots are not concrete values and allocation or call-site origins are not runtime objects.
       - Literal strings retain only length and SHA-256 of exact UTF-16 code units, never raw text. No SQL statement or stored procedure is inferred from a method name or string hash.
-      - Branch targets and exception-region boundaries invalidate local state; no origin is merged across control flow. Unknown exception boundaries, unsupported operations, by-reference signatures, stack failures and reader or work-limit disagreement withhold origins explicitly.
+      - Normal branches and loops use a bounded fixed point retaining an origin only when all reached predecessor states agree. Branch feasibility is not established. Exception-region bodies remain in the reduced local lane with boundary invalidation, not exception-edge reconstruction.
+      - Normal-flow analysis admits at most 20000 instructions, 256 tracked slots and 200000 work units per body. Actual fixed-point work is charged to a separate aggregate value-derivation budget per reader equal to policy MaxTotalWorkUnits, not the raw body/call admission budget. Unsupported operations, by-reference signatures, stack failures and reader or work-limit disagreement withhold origins explicitly.
       - Non-byref calls preserve slot origins only, not object configuration. Consumers must invalidate command state across unknown effects; alias, field, last-write, interprocedural propagation, virtual dispatch and execution are not established by this rule.
       - Body and call evidence can remain admitted while value coverage is partial. Value facts carry the exact IL generator and bounded-input hashes and cannot upgrade source or runtime coverage.
 
   - id: dotnet.compiled.il-command-binding.v1
     status: active
     name: Bounded IL database-command configuration candidate
-    description: Joins a command text/type configuration to an Execute or adapter Fill call through exact method-local receiver origins in an independently agreed straight-line IL region, retaining the contributing body/call fact IDs and exact generator/input hashes.
+    description: Joins a command text/type configuration to an Execute or adapter Fill call through exact method-local receiver origins and conservative normal-flow configuration joins, retaining independently agreed body/call fact IDs and exact generator/input hashes.
     evidenceTier: Tier3SyntaxOrTextual
     emits: [ManagedIlDatabaseCommandCandidate, AnalysisGap]
     limitations:
       - A static configuration candidate is not SQL execution, a resolved SQL statement, procedure identity, provider dispatch, runtime object identity or handler parity. Encoded framework assembly/type/member scopes are recognized without loading or authenticating those assemblies.
       - Command strings remain exact UTF-16 length and SHA-256 only. Argument slots and call-result origins are unresolved until separately evidenced substitution; raw strings and parameter values are not retained.
-      - Configuration is discarded at branch targets, exception boundaries, unsupported operand flow and potentially mutating calls. Non-escaped allocation-local receivers may survive an unrelated non-byref call; argument-derived or escaped receivers are invalidated. No field alias, callback effects, interprocedural effects or last-write across branches is proven.
+      - Normal-flow joins retain only identical command configuration and adapter attachment records from all reached predecessors. Exception boundaries, unsupported operand flow and potentially mutating calls discard configuration. Non-escaped allocation-local receivers may survive an unrelated non-byref call; argument-derived or escaped receivers are invalidated. No field alias, callback effects, interprocedural effects or branch feasibility is proven.
+      - Exact encoded get_Parameters and supported parameter-collection Add, AddWithValue, Clear and RemoveAt contracts preserve command text/type only. No parameter values, parameter ordering or provider behavior is proven. Unknown calls receiving a collection invalidate its owning command. Unsupported collection signatures are not assumed harmless.
       - The supported command constructors model the standard Text enum default only as an encoded-framework API contract candidate; command-type assignments override it in the same straight-line region. Missing type and parameter propagation remain explicit gaps.
       - At most 128 receiver states and 200000 work units are admitted per body. The derivation phase also shares an aggregate bound equal to the policy-bound IL MaxTotalWorkUnits across all inputs. Exhaustion withholds all command candidates for that body without revoking admitted body/call facts.
 

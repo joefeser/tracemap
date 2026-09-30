@@ -2,12 +2,12 @@ namespace TraceMap.Core;
 
 /// <summary>Configuration candidates within one independently agreed local
 /// IL region. This does not resolve framework assemblies or execute providers.</summary>
-internal static class IlCommandBindingExtractor
+internal static partial class IlCommandBindingExtractor
 {
     internal const string Schema = "il-command-binding.v1";
     internal const int MaxTrackedReceivers = 128;
     internal const int MaxWorkUnits = 200_000;
-    internal const string Limitation = "Bounded straight-line static command configuration candidate, not SQL execution. Framework APIs are recognized from exact encoded assembly/type/member scope, not loaded or authenticated. Receiver origins are method-local and configuration is discarded at control-flow boundaries or possibly mutating calls. Argument slots require separately evidenced caller substitution. No raw command text, last-write across branches, alias through fields, provider dispatch, parameter values or runtime identity is established.";
+    internal const string Limitation = "Bounded static command configuration candidate, not SQL execution. Framework APIs are recognized from exact encoded assembly/type/member scope, not loaded or authenticated. Normal control-flow joins retain only identical configuration records; exception boundaries and possibly mutating calls discard configuration. Exact modelled parameter-collection operations preserve text/type only, not parameter values or order. Escaped collections invalidate their owning command. Argument slots require separately evidenced caller substitution. No raw command text, branch feasibility, field alias, provider dispatch, parameter values or runtime identity is established.";
     private static readonly IlValueOrigin Unknown = new("unknown", "");
 
     internal static IlCommandBindingResult Extract(IlBodyObservation body, IlBodyEvidenceExtractor.IlWorkBudget? aggregateBudget = null)
@@ -15,27 +15,29 @@ internal static class IlCommandBindingExtractor
         var bindings = new List<IlCommandBindingObservation>();
         var gaps = new SortedSet<string>(StringComparer.Ordinal);
         if (body.ValueFlow is null) return new([], ["IlCommandValueEvidenceUnavailable"]);
+        if (body.ValueFlow.ControlFlow is not null) return ExtractControlFlow(body, aggregateBudget);
         var calls = body.Calls.ToDictionary(call => call.Offset);
         var commands = new Dictionary<IlValueOrigin, Command>();
         var adapters = new Dictionary<IlValueOrigin, Adapter>();
+        var collections = new Dictionary<IlValueOrigin, IlValueOrigin>();
         var escaped = new HashSet<IlValueOrigin>();
         var region = -1;
         var work = 0;
         foreach (var values in body.ValueFlow.Calls)
         {
-            var cost = 1 + commands.Count + adapters.Count;
+            var cost = 1 + commands.Count + adapters.Count + collections.Count;
             work += cost;
-            if (work > MaxWorkUnits || commands.Count + adapters.Count + escaped.Count > MaxTrackedReceivers
+            if (work > MaxWorkUnits || commands.Count + adapters.Count + collections.Count + escaped.Count > MaxTrackedReceivers
                 || aggregateBudget?.TryConsume(cost) == false)
                 return new([], ["IlCommandBindingWorkLimit"]);
             if (values.Region != region)
             {
-                commands.Clear(); adapters.Clear(); escaped.Clear(); region = values.Region;
+                commands.Clear(); adapters.Clear(); collections.Clear(); escaped.Clear(); region = values.Region;
             }
             var call = calls[values.Offset];
             if (values.State != "straight-line-candidate")
             {
-                commands.Clear(); adapters.Clear(); gaps.Add("IlCommandOperandsUnavailable"); continue;
+                commands.Clear(); adapters.Clear(); collections.Clear(); gaps.Add("IlCommandOperandsUnavailable"); continue;
             }
             var api = Classify(call);
             if (api == Api.CommandConstructor && ObjectOrigin(values.Result))
@@ -64,6 +66,10 @@ internal static class IlCommandBindingExtractor
             {
                 adapters[values.Receiver] = new(values.Arguments[0], call.Offset); continue;
             }
+            if (api == Api.Parameters && ObjectOrigin(values.Result) && commands.ContainsKey(values.Receiver))
+            { collections[values.Result] = values.Receiver; continue; }
+            if (api == Api.ParameterMutation && collections.ContainsKey(values.Receiver))
+            { gaps.Add("IlCommandParameterFlowUnavailable"); continue; }
             if (api is Api.Fill or Api.Execute)
             {
                 var commandOrigin = values.Receiver;
@@ -100,6 +106,8 @@ internal static class IlCommandBindingExtractor
         void InvalidateEffects(IlCallValueObservation values)
         {
             var passed = values.Arguments.Append(values.Receiver).ToHashSet();
+            foreach (var pair in collections)
+                if (passed.Contains(pair.Key) || escaped.Contains(pair.Key)) escaped.Add(pair.Value);
             // An adapter exposes its command to the callee/provider too.
             // Invalidating only the adapter would leave stale command state
             // available through a subsequently constructed adapter.
@@ -112,6 +120,9 @@ internal static class IlCommandBindingExtractor
             foreach (var key in adapters.Keys.ToArray())
                 if (key.Kind == "argument-slot" || escaped.Contains(key) || passed.Contains(key))
                 { adapters.Remove(key); escaped.Add(key); gaps.Add("IlCommandUnknownCallEffects"); }
+            foreach (var key in collections.Keys.ToArray())
+                if (passed.Contains(key) || escaped.Contains(key) || escaped.Contains(collections[key]))
+                { collections.Remove(key); escaped.Add(key); }
         }
     }
 
@@ -162,10 +173,36 @@ internal static class IlCommandBindingExtractor
             && IsCommandParameter(identity)) return Api.SelectCommand;
         if (adapter && Method("Fill")) return Api.Fill;
         if (command && (Method("ExecuteReader") || Method("ExecuteNonQuery") || Method("ExecuteScalar"))) return Api.Execute;
+        var scope = owner["memberref|type:".Length..owner.IndexOf(")type(", StringComparison.Ordinal)];
+        var collections = new[] { ("System.Data.Common", "DbParameterCollection"), ("System.Data.SqlClient", "SqlParameterCollection"),
+            ("System.Data.Odbc", "OdbcParameterCollection"), ("System.Data.OleDb", "OleDbParameterCollection") };
+        if (command && Method("get_Parameters") && call.StackShape.ParameterCount == 0
+            && collections.Any(collection => Type(collection.Item1, collection.Item2.Replace("ParameterCollection", "Command", StringComparison.Ordinal))
+                && ParameterSection(identity) == $"()->{scope})type(namespace:{collection.Item1.Length}:{collection.Item1}|names:{collection.Item2.Length}:{collection.Item2})"))
+            return Api.Parameters;
+        if (collections.Any(collection => Type(collection.Item1, collection.Item2)))
+        {
+            var parameters = ParameterSection(identity);
+            if (Method("Add") && call.StackShape.ParameterCount == 1
+                && parameters == "(type(namespace:6:System|names:6:Object))->type(namespace:6:System|names:5:Int32)") return Api.ParameterMutation;
+            if (Method("Clear") && call.StackShape.ParameterCount == 0
+                && parameters == "()->type(namespace:6:System|names:4:Void)") return Api.ParameterMutation;
+            if (Method("RemoveAt") && call.StackShape.ParameterCount == 1
+                && parameters == "(type(namespace:6:System|names:5:Int32))->type(namespace:6:System|names:4:Void)") return Api.ParameterMutation;
+            foreach (var collection in collections)
+            {
+                if (!Type(collection.Item1, collection.Item2) || collection.Item2 == "DbParameterCollection") continue;
+                var name = collection.Item2.Replace("Collection", "", StringComparison.Ordinal);
+                var parameterType = $"{scope})type(namespace:{collection.Item1.Length}:{collection.Item1}|names:{name.Length}:{name})";
+                if (Method("Add") && call.StackShape.ParameterCount == 1 && parameters == $"({parameterType})->{parameterType}") return Api.ParameterMutation;
+                if (Method("AddWithValue") && call.StackShape.ParameterCount == 2
+                    && parameters == $"(type(namespace:6:System|names:6:String),type(namespace:6:System|names:6:Object))->{parameterType}") return Api.ParameterMutation;
+            }
+        }
         return Api.Unknown;
     }
 
-    private enum Api { Unknown, CommandConstructor, CommandText, CommandType, AdapterConstructor, SelectCommand, Fill, Execute }
+    private enum Api { Unknown, CommandConstructor, CommandText, CommandType, AdapterConstructor, SelectCommand, Fill, Execute, Parameters, ParameterMutation }
     private sealed record Command(IlValueOrigin Text, IlValueOrigin Type, long? TextOffset, long? TypeOffset, long? ConstructorOffset);
     private sealed record Adapter(IlValueOrigin Command, long Offset);
 }
