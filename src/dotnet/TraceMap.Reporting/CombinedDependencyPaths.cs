@@ -173,7 +173,19 @@ public sealed record CombinedPathNode(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     string? SurfaceSubtype = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    IReadOnlyList<string>? Limitations = null);
+    IReadOnlyList<string>? Limitations = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    CompiledCommandConfigurationCandidate? CommandBinding = null);
+
+public sealed record CompiledCommandOperandOrigin(string Kind, string Identity);
+public sealed record CompiledCommandConfigurationCandidate(
+    string Schema, string CombinedFactId, string IlBodyFactId, string IlCallFactId,
+    IReadOnlyList<string> ConfigurationCallFactIds,
+    CompiledCommandOperandOrigin CommandReceiverOrigin,
+    CompiledCommandOperandOrigin EndpointReceiverOrigin,
+    CompiledCommandOperandOrigin CommandTextOrigin,
+    CompiledCommandOperandOrigin CommandTypeOrigin,
+    string GeneratorSha256, string BoundedInputSha256);
 
 public sealed record CombinedPathEdge(
     string EdgeId,
@@ -987,6 +999,10 @@ public static partial class CombinedDependencyPathReporter
         var factsById = CombinedFactsById(read.Facts);
         foreach (var fact in IdentityOrderedFacts(read.Facts))
         {
+            // Operand/configuration rows are supporting evidence for exact
+            // IL call sites, not independent symbols or traversal roots.
+            if (fact.FactType is FactTypes.ManagedIlCallValuesObserved or FactTypes.ManagedIlDatabaseCommandCandidate)
+                continue;
             if (fact.FactType is FactTypes.HttpCallDetected or FactTypes.HttpRouteBinding)
             {
                 graph.AddNode(ToEndpointNode(fact));
@@ -6930,7 +6946,9 @@ public static partial class CombinedDependencyPathReporter
         string? ConfigKey,
         string? OperationDirection = null,
         string? SurfaceSubtype = null,
-        IReadOnlyList<string>? Limitations = null)
+        IReadOnlyList<string>? Limitations = null,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        CompiledCommandConfigurationCandidate? CommandBinding = null)
     {
         public CombinedPathNode ToReportNode()
         {
@@ -6964,7 +6982,8 @@ public static partial class CombinedDependencyPathReporter
                 ConfigKey,
                 OperationDirection,
                 SurfaceSubtype,
-                Limitations);
+                Limitations,
+                CommandBinding);
         }
     }
 

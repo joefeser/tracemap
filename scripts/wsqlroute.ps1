@@ -78,7 +78,7 @@ foreach ($row in $rows) {
             $databaseNodes++
             if ($kind -in @('sql-query', 'sql-persistence')) { $sqlNodes++ }
             $evidence = @{}
-            foreach ($field in @('nodeId','surfaceKind','surfaceSubtype','sourceKind','surfaceName','operationName','tableName','columnNames','shapeHash','textHash','textLength','combinedFactId','ruleId','evidenceTier','filePath','startLine','endLine','sourceIndexId','scanId','commitSha','limitations')) { $evidence[$field] = Value $node $field }
+            foreach ($field in @('nodeId','surfaceKind','surfaceSubtype','sourceKind','surfaceName','operationName','tableName','columnNames','shapeHash','textHash','textLength','combinedFactId','ruleId','evidenceTier','filePath','startLine','endLine','sourceIndexId','scanId','commitSha','limitations','commandBinding')) { $evidence[$field] = Value $node $field }
             $endpoints.Add($evidence)
         }
     }
