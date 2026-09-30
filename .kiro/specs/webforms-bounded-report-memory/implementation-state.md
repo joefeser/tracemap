@@ -1,5 +1,22 @@
 # Implementation state
 
+## Historical-only edge and mixed-mode diagnosis (2026-09-30)
+
+Owner comparison confirms 13 historical symbol sequences / 41 variants versus
+10 current / 34, with all ten shared counts equal, three historical-only hints
+and no current-only hints. Photos show interleaved assembly-qualified and source
+labels in those three sequences, but labels alone do not prove edge kind or a
+porting defect. The compiled-only filter remains unchanged.
+
+The file-only comparator now exposes every supplied historical edge-kind/rule/
+tier/from/to sequence for each relevant symbol group, resolves grouped edge
+references fail-closed, and checks the saved sibling mixed Fill report when
+present (or an explicit -Mixed input). Mixed query/source context and its hash
+are bound into the output. Empty edge arrays and absent mixed reports remain
+explicit gaps. Public tests cover mixed overlap, edge evidence and missing edge
+references. Owner edge readback remains required before any graph correction;
+no runtime or route parity claim is made.
+
 ## Saved historical/current route comparison (2026-09-30)
 
 Owner `wprewalk` readback is false for the saved compiled-only 10 / 34 report.
