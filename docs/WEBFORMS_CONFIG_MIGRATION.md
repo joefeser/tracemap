@@ -1,5 +1,31 @@
 # Migrate existing private Web Forms configs
 
+## Compare saved handler routes
+
+```powershell
+.\scripts\wcompare.ps1 -Open
+```
+
+Choose the historical handler JSON from the numbered retained-proof list, or
+enter its full filename. Enter the current `verify-5\handler-requery-compiled-fill`
+folder next. Raw `paths` reports and native grouped handoffs are supported.
+The helper writes `chain-comparison.local.html` beside the current report;
+an existing comparison is preserved (supply a different `-OutputPath` to repeat).
+It performs no scan, build or graph traversal.
+
+The private comparison shows both query settings, coverage, declared source/index
+identities, distinct sequences and variant counts. Exact sequences include node
+kind, source index, scan, commit, symbol-or-node identity and display name.
+Symbol-only matches omit source/scan/commit and are explicitly diagnostic hints;
+they do not establish input equivalence. Source and compiled nodes are not
+collapsed. File SHA-256 values, helper generator SHA-256 and a bounded-input
+SHA-256 identify the comparison inputs. Native receipts are not admitted by this
+helper. Original chain IDs are not assumed comparable across different scans.
+Inputs are capped at 256 MiB each, 10,000 variants, 2,048 nodes per variant and
+500,000 node references per report; output is capped at 32 MiB and displays at
+most 500 differences while counts cover all admitted sequences. Unsupported
+formats or broken node references fail before writing the result.
+
 Local grouped reports now derive compact compiled method/constructor labels
 from the retained exact symbol when the general safe-display field is redacted.
 This restores the earlier private readable-path behavior without weakening
