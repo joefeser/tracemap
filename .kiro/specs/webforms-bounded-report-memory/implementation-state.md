@@ -1,5 +1,26 @@
 # Implementation state
 
+## Owner handler requery readback and chain diagnostic (2026-09-29)
+
+Owner photographs at `74d2e417` show the isolated query completed with 28 chains,
+116 variants, 1,579,018 work units and truncation (cycle/depth gaps). Those counts
+do not establish identity parity with the historical 13/41 baseline. Visible
+employee/vacation/cart branches require connecting-edge inspection before any
+correctness conclusion. Logical payload observations total 7,728,443 rows and
+24,662,128,780 bytes; these are not physical disk I/O counters.
+
+`wchain.ps1 -Chain 7 -Open` renders a separate, explicitly unadmitted private
+diagnostic from the small handler requery grouped handoff. It exposes exact
+retained symbols (when available), source/scan/commit identities and ordered edge
+records for every variant in the selected chain. It neither recovers missing
+symbol identity nor weakens privacy-safe graph display policies. Input is bounded
+to 64 MiB, variants to 4096, references per variant to 256, and body to 8 MiB.
+The file is read once under a write-denying lock; output is create-new. Script
+generator, input file and selector-bound input hashes are embedded. This helper
+does not validate native commitments or assert graph correctness. Public helper
+tests cover escaping, evidence visibility, provenance, immutable input, selection,
+output collision and invalid endpoints. Private transition inspection is pending.
+
 ## Exact handler requery and read observations (2026-09-29)
 
 Branch `codex/webforms-config-migration`. Owner's recovered handler readback was

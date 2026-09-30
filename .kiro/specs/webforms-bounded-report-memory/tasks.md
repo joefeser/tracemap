@@ -79,3 +79,4 @@
 - [x] Pin historical exact-symbol versus source-bound indexed paths and lossless variants with a seven-root shared-budget synthetic regression.
 - [x] Add provenance-bound graph-stage timings and logical fact-payload read counters; avoid full-payload scans for typed reconciliation/gap lookups.
 - [ ] Compare owner-retained handler results to the historical handler-specific baseline without treating aggregate counts as parity.
+- [x] Add a bounded local chain diagnostic showing exact retained identities and ordered connecting rules without rescanning or traversing.

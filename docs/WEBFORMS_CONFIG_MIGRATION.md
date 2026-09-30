@@ -1,5 +1,23 @@
 # Migrate existing private Web Forms configs
 
+## Inspect one handler-requery chain without rerunning it
+
+```powershell
+.\scripts\wchain.ps1 -Chain 7 -Open
+```
+
+Enter the full `verify-5\handler-requery` folder when prompted. This reads only
+`compiled-paths.handoff.local.json`, not the combined index, and writes a new
+`chain-7.diagnostic.local.html`. It shows exact retained symbols where available
+and the ordered connecting edge records for every retained variant in Chain 7.
+No build, scan, combine or graph traversal runs. Existing output is never replaced.
+
+This is an explicitly unadmitted private diagnostic, not native evidence
+validation, graph correctness, runtime execution or parity proof. It preserves
+the original report and includes generator/input SHA-256 provenance. Do not
+publish the output: exact identities and evidence locations are private. Input
+is capped at 64 MiB, variants at 4096 and references per variant at 256.
+
 From the migration branch on Windows:
 
 ```powershell
