@@ -1,5 +1,12 @@
 # Migrate existing private Web Forms configs
 
+Local grouped reports now derive compact compiled method/constructor labels
+from the retained exact symbol when the general safe-display field is redacted.
+This restores the earlier private readable-path behavior without weakening
+shared report redaction, changing graph edges, or changing lossless JSON. Labels
+are display-only; complete identities and evidence remain in expandable details.
+Existing report files are not rewritten by this change.
+
 ## Inspect one handler-requery chain without rerunning it
 
 ```powershell
