@@ -45,5 +45,20 @@ try {
     Save @{ schemaVersion = 'webforms-compiled-grouped-handoff.v1'; header = @{}; nodes = @{}; edges = @{}; variants = @(@{ nodeReferences = @('missing'); edgeReferences = @() }) } $inputFile
     try { & $helper -Report $folder -OutputPath (Join-Path $folder 'bad.html'); throw 'Missing ref accepted' } catch { if ($_.Exception.Message -ne 'WEBFORMS_SQL_ROUTE_REFERENCE_MISSING') { throw } }
     if (Test-Path (Join-Path $folder 'bad.html')) { throw 'Invalid output written' }
+    $selectedRoot = @{ nodeId = 'handler-a'; displayName = 'Synthetic.Selected(Object,EventArgs)'; nodeKind = 'Method' }
+    $otherRoot = @{ nodeId = 'handler-b'; displayName = 'Synthetic.Other(Object,EventArgs)'; nodeKind = 'Method' }
+    $fill.commandBinding.commandTextFromPath = @{ state = 'constant-on-encoded-call-path'; origin = @{ kind = 'constant-string-hash'; identity = ('a' * 64) } }
+    $fill.commandBinding.commandTypeFromPath = @{ state = 'method-local-constant'; origin = @{ kind = 'constant-int32'; identity = '4' } }
+    Save @{ query = @{}; paths = @(@{ nodes = @($selectedRoot,$fill); edges = @($bridge) }, @{ nodes = @($otherRoot,$fill); edges = @($bridge) }) } $inputFile
+    $result = @(& $helper -Report $folder -Handler Selected -OutputPath (Join-Path $folder 'selected.html'))
+    if ($result -notcontains 'sqlRoute.exactGroups=1;variants=1;databaseSurfaceOccurrences=1;sqlSurfaceOccurrences=0' -or
+        $result -notcontains 'sqlRoute.commandBindings=1;constantTextCandidates=1;storedProcedureTypeCandidates=1;unresolvedTextCandidates=0;asSupplied=true') { throw 'Handler command counts incorrect' }
+    try { & $helper -Report $folder -Handler Missing -OutputPath (Join-Path $folder 'missing.html'); throw 'Missing handler accepted' }
+    catch { if ($_.Exception.Message -ne 'WEBFORMS_SQL_ROUTE_HANDLER_MISSING_OR_AMBIGUOUS') { throw } }
+    $duplicateRoot = $selectedRoot.Clone(); $duplicateRoot.nodeId = 'handler-duplicate'
+    Save @{ query = @{}; paths = @(@{ nodes = @($selectedRoot,$fill); edges = @($bridge) }, @{ nodes = @($duplicateRoot,$fill); edges = @($bridge) }) } $inputFile
+    try { & $helper -Report $folder -Handler Selected -OutputPath (Join-Path $folder 'ambiguous.html'); throw 'Ambiguous handler accepted' }
+    catch { if ($_.Exception.Message -ne 'WEBFORMS_SQL_ROUTE_HANDLER_MISSING_OR_AMBIGUOUS') { throw } }
+    if ((Test-Path (Join-Path $folder 'missing.html')) -or (Test-Path (Join-Path $folder 'ambiguous.html'))) { throw 'Rejected selection wrote output' }
     Write-Output 'webFormsSqlRoutePublicTests=passed'
 } finally { [IO.Directory]::Delete($folder, $true) }

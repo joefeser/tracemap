@@ -496,3 +496,58 @@ remains unproven; indexed typed reconciliation/gap lookups remove avoidable
 full-payload passes but are not a demonstrated explanation for that counter.
 
 The excessive I/O seen in full native graph composition has not been root-caused. This recovery bypasses those graph phases rather than claiming that the entire fresh-report performance problem is solved.
+
+## Fresh compiled command-value validation
+
+After pulling the fix, use PowerShell 7 from the repository root:
+
+```powershell
+.\scripts\wcmdverify.ps1 -Open
+```
+
+Supply the copied review folder, retained proof folder, original published
+website folder (parent of `bin`), repository-relative website folder, a **new
+full output path that does not exist**, and the literal handler method name.
+Do not use an old verification folder as the new output. The helper delegates
+retained-proof import and fresh scanning to `wverify.ps1 -Run`, which builds
+TraceMap and copies its verified distribution into the new output's `tool`
+folder. It does not rebuild the website, execute SQL, clean up old evidence,
+resume an old run, or create a new source-to-publish attestation.
+
+All subsequent native operations use that copied `tracemap.dll`; the helper
+checks native generator agreement and compares the copied distribution's full
+file fingerprint before and after diagnostics. A changed tool or non-admitted
+run fails with preserved outputs. Existing retained scans cannot acquire newly
+implemented IL operand facts merely by rebuilding a report: this workflow
+intentionally starts a fresh scan under the imported retained-proof contract.
+
+For a verified completed report, the ledger filters its retained routes to one
+unambiguous handler and prints
+`commandValidation.scope=retained-handler-filter;original-query-scope-preserved`.
+This filter does not independently traverse a compiled-only graph and does not
+change the original report's query scope or truncation.
+
+Only a retained `WEBFORMS_EVIDENCE_NODE_LIMIT` report failure is eligible for
+the alternative branch: a separate recovery bundle followed by a new
+single-handler `DbDataAdapter.Fill` compiled-IL requery. That branch prints
+`commandValidation.scope=new-compiled-il-handler-fill-query;root-attachment-not-il-proof`.
+The original run stays failed, root attachment is not IL proof, and recovery or
+requery failures stop the workflow. Other scan/report failures are not upgraded.
+
+The private HTML ledger and safe numeric output distinguish command bindings,
+hashed constant-text candidates, StoredProcedure enum candidates and unresolved
+text candidates. These are **as-supplied static candidates**, not resolved SQL,
+procedure identity, runtime dispatch, executed parameters, full coverage or
+parity. Exact IL operand/configuration evidence is independently decoded by
+Cecil and SRM, joined to body/call/receiver facts, and propagated only across
+unique encoded IL call paths. Branches/loops use conservative equality joins;
+unknown effects, ambiguous targets, unsupported exception flow, unresolved
+root arguments and source-only bridges retain explicit gaps. Hashes do not
+reveal or infer the command text. Keep the HTML and native artifacts local;
+send only the numeric status/gap lines for initial triage.
+
+The public orchestration regression covers completed and failed/recovery paths,
+existing-output refusal, immutable-tool checks and recovery failure stopping.
+It uses a fake native command and is not private Windows acceptance. Native
+end-to-end tests separately exercise independently decoded synthetic fixtures
+and the checked-in VB .NET Framework wrapper's real compiler output.
