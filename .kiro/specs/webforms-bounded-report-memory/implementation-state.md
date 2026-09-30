@@ -1,5 +1,43 @@
 # Implementation state
 
+## Fresh command validation workflow and final local gates (2026-09-30)
+
+The implementation requirement is complete locally: independently agreed bounded
+IL operands, receiver/configuration joins, exact encoded caller substitution,
+conservative control flow, explicit unresolved gaps and exact generator/input
+provenance are covered by native end-to-end tests. `wcmdverify.ps1` now starts a
+new retained-proof scan through `wverify.ps1 -Run`, then uses only the copied
+distribution. It verifies native generator agreement and the full copied-tool
+fingerprint. Existing output is refused; failures remain preserved.
+
+Completed-run diagnostics filter retained routes without changing query scope.
+Only an admitted evidence-node-limit report failure takes the separately labeled
+recovery plus new compiled-IL handler/Fill requery branch. Public orchestration
+tests cover both branches, failed recovery stopping, changed-tool refusal and
+existing-output refusal. They do not substitute for native evidence admission
+or owner Windows validation. The ledger reports as-supplied command binding,
+hashed text, StoredProcedure-type and unresolved text candidate counts, without
+SQL inference or raw command text. The operational guide gives the exact
+PowerShell entry point and distinguishes both query scopes.
+
+Final local validation against stable .NET binaries: full solution build had
+zero warnings/errors; all 2965 .NET tests passed with zero failures/skips in
+17m01s. SQL-ledger, fresh-command-workflow and tool-copy PowerShell tests passed.
+A direct CLI scan of the public net48 VB wrapper emitted 330 facts, including
+15 command-binding rule records, and passed adapter artifact conformance.
+Source analysis in that explicit smoke remained syntax/reduced, not semantic
+or runtime proof. TypeScript build plus 257 tests, JVM Java 21 tests, Python's
+64 tests and endpoint smoke, seven artifact-validator tests, private-path guard
+and diff check passed. The unchanged JVM extractor emitted a deprecation note;
+the unchanged Python validator test emitted a ResourceWarning; dependency
+installation reported two moderate advisories in the existing TypeScript lock.
+No unrelated dependency update was performed.
+
+Windows-native PDB/ILAsm, private full-site and historical dotnetperf acceptance
+are not run on this macOS host. Original private runs remain untouched; no
+resolved procedure identity, executed SQL, complete coverage or parity is
+claimed. Push and final task bookkeeping remain pending at this checkpoint.
+
 ## Protected-region wrapper and AddRange validated (2026-09-30)
 
 Normal-flow fixed points now include protected blocks when both readers agree
