@@ -1,5 +1,43 @@
 # Implementation state
 
+## Compiled command configuration and path projection in progress (2026-09-30)
+
+The scanner now derives independently decoded straight-line command text/type
+configuration candidates and joins them to the same command Execute or adapter
+Fill receiver. Strings remain exact UTF-16 length/hash; argument slots and
+call-return values remain unresolved. The binder invalidates configuration at
+branch targets, exception boundaries and possibly mutating calls, including
+commands exposed through adapters. It has 128 receiver / 200,000 work limits
+per body and a separate aggregate phase bound matching the policy-bound IL
+MaxTotalWorkUnits. Exhaustion withholds that body's command candidates.
+
+Rule dotnet.compiled.il-command-binding.v1 and IL policy v4 document the
+candidate contract. Facts retain exact body, endpoint and configuration-call
+IDs plus generator/input hashes. Compiled path nodes expose an optional
+CommandBinding only after unique same-source body/call/configuration joins with
+matching raw-file/generator/input hashes. Invalid joins keep the existing API
+path and add a binding gap. The local SQL ledger retains this evidence; it still
+does not turn a command string hash or Fill into a resolved SQL/procedure claim.
+
+Synthetic Cecil-written binaries are independently decoded by raw SRM and
+Cecil. Tests cover adapter/command receiver identity, StoredProcedure enum,
+hashed literals, wrapper argument slots, branch targets, mutation, framework
+lookalikes, work caps, native fact materialization, end-to-end compiled path
+projection and changed-provenance rejection without raw literal retention.
+The stable-binary IL/path/native regression passed all 264 tests. A prior run
+overlapped a rebuild and had one checkpoint failure; all four relocation cases
+and the complete 264-test set passed when rerun against unchanged binaries.
+The PowerShell SQL-ledger regression passed. The final 20 operand/command
+checks passed after the setter signature guard. Supporting operand/configuration
+rows are not independent graph symbols or traversal roots; the final 14
+binding/baseline tests passed after that graph-support separation.
+
+Remaining requirements are substantive: exact-call-path caller substitution,
+configuration joins through relevant loops/parameter construction, broader
+final gates, the fresh immutable-tool Windows workflow, and push. Original
+private runs remain unchanged and no private acceptance is claimed. The overall
+compiled handler-to-SQL task remains unchecked; this is not goal completion.
+
 ## Compiled operand-origin foundation in progress (2026-09-30)
 
 The active goal is the actual compiled-IL command/receiver binding fix, not

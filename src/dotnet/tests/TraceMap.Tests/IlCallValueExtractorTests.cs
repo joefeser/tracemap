@@ -40,6 +40,40 @@ public sealed class IlCallValueExtractorTests
     }
 
     [Fact]
+    public void Branch_target_cannot_inherit_lexically_skipped_configuration()
+    {
+        var flow = IlCallValueExtractor.Extract([
+            "0:0:br.s:br:0x4", "1:1:ldarg.0:-", "2:2:stloc.0:-",
+            "3:3:nop:-", "4:4:ldloc.0:-", "5:5:call:m:consume"
+        ], [Call(5, "call", new(1, false, false, true))], 8, false);
+        Assert.Equal("unknown", Assert.Single(Assert.Single(flow.Calls).Arguments).Kind);
+        Assert.Contains("IlValueControlFlowBoundary", flow.Gaps);
+    }
+
+    [Fact]
+    public void Invalidated_overwritten_argument_is_not_relabelled_as_original_caller_slot()
+    {
+        var flow = IlCallValueExtractor.Extract([
+            "0:0:ldstr:str:3:abcdef", "1:1:starg.s:v:0", "2:2:br.s:br:0x3",
+            "3:3:ldarg.0:-", "4:4:call:m:consume"
+        ], [Call(4, "call", new(1, false, false, true))], 8, false);
+        Assert.Equal("unknown", Assert.Single(Assert.Single(flow.Calls).Arguments).Kind);
+    }
+
+    [Fact]
+    public void Known_exception_boundaries_admit_only_local_straight_line_origins()
+    {
+        var flow = IlCallValueExtractor.Extract([
+            "0:0:ldarg.0:-", "1:1:stloc.0:-", "2:2:ldloc.0:-", "3:3:call:m:consume",
+            "4:4:ldarg.1:-", "5:5:call:m:consume"
+        ], [Call(3, "call", new(1, false, false, true)), Call(5, "call", new(1, false, false, true))],
+            8, true, [2, 4]);
+        Assert.Equal("unknown", Assert.Single(flow.Calls[0].Arguments).Kind);
+        Assert.Equal(new IlValueOrigin("argument-slot", "1"), Assert.Single(flow.Calls[1].Arguments));
+        Assert.NotEqual(flow.Calls[0].Region, flow.Calls[1].Region);
+    }
+
+    [Fact]
     public void Exception_regions_withhold_operand_origins()
     {
         var flow = IlCallValueExtractor.Extract(["0:0:ldstr:str:3:abcdef", "1:1:call:m:set"],

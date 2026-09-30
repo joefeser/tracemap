@@ -1,4 +1,5 @@
 using TraceMap.Core;
+using System.Text.Json;
 
 namespace TraceMap.Reporting;
 
@@ -88,6 +89,9 @@ public static partial class CombinedDependencyPathReporter
             return;
 
         var factsByOriginalId = CombinedFactsByOriginalId(facts);
+        var commandsByCall = FactsOfTypes(facts, FactTypes.ManagedIlDatabaseCommandCandidate)
+            .GroupBy(fact => (fact.SourceIndexId, CallId: fact.Properties.GetValueOrDefault("ilCallFactId")))
+            .ToDictionary(group => group.Key, group => group.ToArray());
         var methods = FactsOfTypes(facts, FactTypes.ManagedMethodDeclared)
             .Where(fact => !string.IsNullOrWhiteSpace(fact.TargetSymbol))
             .ToArray();
@@ -186,7 +190,14 @@ public static partial class CombinedDependencyPathReporter
 
             var targetIdentity = call.Properties.GetValueOrDefault("targetIdentity") ?? string.Empty;
             if (referenceKind == "memberref" && TryFrameworkDatabaseApi(targetIdentity, out var api))
-                AddCompiledDatabaseApiCandidate(graph, call, body, caller, api);
+            {
+                var commandCandidates = commandsByCall.GetValueOrDefault((call.SourceIndexId, call.OriginalFactId));
+                var binding = commandCandidates is { Length: 1 }
+                    ? ReadCompiledCommandBinding(commandCandidates[0], call, body, factsByOriginalId) : null;
+                if (commandCandidates is { Length: > 0 } && binding is null)
+                    AddCompiledIlGap(graph, call, "CompiledIlCommandBindingUnavailable", "command-binding-join-invalid-or-ambiguous", commandCandidates.Length);
+                AddCompiledDatabaseApiCandidate(graph, call, body, caller, api, binding);
+            }
             var matched = referenceKind == "methoddef"
                 ? methodsByIdentity.TryGetValue((call.SourceIndexId, targetIdentity), out var targets)
                 : methodsByMemberReference.TryGetValue(targetIdentity, out targets);
@@ -272,7 +283,7 @@ public static partial class CombinedDependencyPathReporter
     }
 
     private static void AddCompiledDatabaseApiCandidate(EvidenceGraph graph, CombinedFactRow call,
-        CombinedFactRow body, CombinedFactRow caller, string api)
+        CombinedFactRow body, CombinedFactRow caller, string api, CompiledCommandConfigurationCandidate? binding = null)
     {
         var from = graph.GetOrAddSymbolNode(caller.SourceIndexId, caller.SourceLabel, caller.TargetSymbol!,
             caller.FilePath, caller.StartLine, caller.EndLine, caller.RuleId, caller.EvidenceTier);
@@ -306,14 +317,84 @@ public static partial class CombinedDependencyPathReporter
             ConfigKey: null,
             SurfaceSubtype: api == "DbDataAdapter.Fill"
                 ? "compiled-data-adapter-fill-candidate" : "compiled-command-execute-candidate",
-            Limitations: ["Static IL call to a framework database API; no SQL text, database provider dispatch, source line, or runtime execution is established."]);
+            Limitations: binding is null
+                ? ["Static IL call to a framework database API; no SQL text, database provider dispatch, source line, or runtime execution is established."]
+                : ["Static straight-line command configuration candidate; command strings are hashed or unresolved operand origins, not a resolved SQL statement/procedure. No parameter propagation, runtime dispatch or SQL execution is established."],
+            CommandBinding: binding);
         graph.AddNode(terminal);
         graph.AddEdge(new GraphEdge(
             $"compiled-database-api:{call.CombinedFactId}", "compiled-database-api-candidate",
             from.NodeId, terminal.NodeId, "EvidenceEdge", CompiledIlBridgeRuleId,
             EvidenceTiers.Tier3SyntaxOrTextual,
-            [call.CombinedFactId, body.CombinedFactId, caller.CombinedFactId], [],
+            binding is null ? [call.CombinedFactId, body.CombinedFactId, caller.CombinedFactId]
+                : new[] { call.CombinedFactId, body.CombinedFactId, caller.CombinedFactId, binding.CombinedFactId }
+                    .Concat(binding.ConfigurationCallFactIds).Distinct(StringComparer.Ordinal).ToArray(), [],
             SafePath(call.FilePath), call.StartLine, call.EndLine));
+    }
+
+    private static CompiledCommandConfigurationCandidate? ReadCompiledCommandBinding(CombinedFactRow candidate,
+        CombinedFactRow call, CombinedFactRow body,
+        IReadOnlyDictionary<(string SourceIndexId, string OriginalFactId), CombinedFactRow[]> facts)
+    {
+        if (candidate.RuleId != RuleIds.DotNetIlCommandBinding || candidate.EvidenceTier != EvidenceTiers.Tier3SyntaxOrTextual
+            || candidate.Properties.GetValueOrDefault("commandBindingSchema") != "il-command-binding.v1"
+            || candidate.Properties.GetValueOrDefault("ilBodyFactId") != body.OriginalFactId
+            || candidate.Properties.GetValueOrDefault("ilOffset") != call.Properties.GetValueOrDefault("ilOffset")
+            || new[] { "rawFileSha256", "ilGeneratorSha256", "ilBoundedInputSha256" }.Any(key =>
+                candidate.Properties.GetValueOrDefault(key) != body.Properties.GetValueOrDefault(key)
+                || call.Properties.GetValueOrDefault(key) != body.Properties.GetValueOrDefault(key)))
+            return null;
+        try
+        {
+            var encodedSites = candidate.Properties.GetValueOrDefault("configurationCallFactIds");
+            if (encodedSites is null || encodedSites.Length > 4096) return null;
+            var ids = JsonSerializer.Deserialize<string[]>(encodedSites);
+            if (ids is not { Length: > 0 and <= 4 } || ids.Distinct(StringComparer.Ordinal).Count() != ids.Length) return null;
+            var combinedIds = new List<string>();
+            foreach (var id in ids)
+            {
+                if (!TryUniqueFact(facts, call.SourceIndexId, id, out var site)
+                    || site.FactType != FactTypes.ManagedIlCallObserved || site.RuleId != RuleIds.DotNetIlCall
+                    || site.Properties.GetValueOrDefault("ilBodyFactId") != body.OriginalFactId
+                    || new[] { "rawFileSha256", "ilGeneratorSha256", "ilBoundedInputSha256" }.Any(key =>
+                        site.Properties.GetValueOrDefault(key) != body.Properties.GetValueOrDefault(key))) return null;
+                combinedIds.Add(site.CombinedFactId);
+            }
+            CompiledCommandOperandOrigin? Origin(string name)
+            {
+                var encoded = candidate.Properties.GetValueOrDefault(name);
+                if (encoded is null || encoded.Length > 1024) return null;
+                var value = JsonSerializer.Deserialize<CompiledCommandOperandOrigin>(encoded);
+                return value is not null && ValidCompiledCommandOrigin(value) ? value : null;
+            }
+            var receiver = Origin("commandReceiverOrigin"); var endpoint = Origin("endpointReceiverOrigin");
+            var text = Origin("commandTextOrigin"); var type = Origin("commandTypeOrigin");
+            if (receiver?.Kind is not ("allocation-site" or "call-result" or "argument-slot")
+                || endpoint?.Kind is not ("allocation-site" or "call-result" or "argument-slot")
+                || text?.Kind is not ("constant-string-hash" or "argument-slot" or "call-result")
+                || type?.Kind is not ("unknown" or "constant-int32" or "argument-slot" or "call-result")) return null;
+            return new("il-command-binding.v1", candidate.CombinedFactId, body.CombinedFactId, call.CombinedFactId,
+                combinedIds, receiver, endpoint, text, type,
+                candidate.Properties["ilGeneratorSha256"], candidate.Properties["ilBoundedInputSha256"]);
+        }
+        catch (JsonException) { return null; }
+    }
+
+    private static bool ValidCompiledCommandOrigin(CompiledCommandOperandOrigin value)
+    {
+        if (value.Identity is null || value.Identity.Length > 256) return false;
+        if (value.Kind == "unknown") return value.Identity.Length == 0;
+        if (value.Kind is "allocation-site" or "call-result" or "argument-slot" or "constant-int32")
+            return int.TryParse(value.Identity, System.Globalization.NumberStyles.AllowLeadingSign,
+                System.Globalization.CultureInfo.InvariantCulture, out var number)
+                && (value.Kind == "constant-int32" || number >= 0)
+                && number.ToString(System.Globalization.CultureInfo.InvariantCulture) == value.Identity;
+        if (value.Kind != "constant-string-hash") return false;
+        var parts = value.Identity.Split(':');
+        return parts.Length == 3 && parts[0] == "str"
+            && int.TryParse(parts[1], System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var length)
+            && length >= 0 && length.ToString(System.Globalization.CultureInfo.InvariantCulture) == parts[1]
+            && parts[2].Length == 64 && parts[2].All(character => character is >= '0' and <= '9' or >= 'a' and <= 'f');
     }
 
     private static string RetainedSourceIndex(string compiledIndex, IReadOnlyDictionary<string, CompiledAttachmentIndexLink> parents) =>

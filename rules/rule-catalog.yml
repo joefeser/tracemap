@@ -169,9 +169,22 @@ rules:
     limitations:
       - Straight-line origin candidates only, not command binding or SQL evidence. Argument slots are not concrete values and allocation or call-site origins are not runtime objects.
       - Literal strings retain only length and SHA-256 of exact UTF-16 code units, never raw text. No SQL statement or stored procedure is inferred from a method name or string hash.
-      - Control flow, exception regions, unsupported operations, by-reference signatures, stack failures and reader or work-limit disagreement withhold origins or invalidate local state explicitly.
+      - Branch targets and exception-region boundaries invalidate local state; no origin is merged across control flow. Unknown exception boundaries, unsupported operations, by-reference signatures, stack failures and reader or work-limit disagreement withhold origins explicitly.
       - Non-byref calls preserve slot origins only, not object configuration. Consumers must invalidate command state across unknown effects; alias, field, last-write, interprocedural propagation, virtual dispatch and execution are not established by this rule.
       - Body and call evidence can remain admitted while value coverage is partial. Value facts carry the exact IL generator and bounded-input hashes and cannot upgrade source or runtime coverage.
+
+  - id: dotnet.compiled.il-command-binding.v1
+    status: active
+    name: Bounded IL database-command configuration candidate
+    description: Joins a command text/type configuration to an Execute or adapter Fill call through exact method-local receiver origins in an independently agreed straight-line IL region, retaining the contributing body/call fact IDs and exact generator/input hashes.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits: [ManagedIlDatabaseCommandCandidate, AnalysisGap]
+    limitations:
+      - A static configuration candidate is not SQL execution, a resolved SQL statement, procedure identity, provider dispatch, runtime object identity or handler parity. Encoded framework assembly/type/member scopes are recognized without loading or authenticating those assemblies.
+      - Command strings remain exact UTF-16 length and SHA-256 only. Argument slots and call-result origins are unresolved until separately evidenced substitution; raw strings and parameter values are not retained.
+      - Configuration is discarded at branch targets, exception boundaries, unsupported operand flow and potentially mutating calls. Non-escaped allocation-local receivers may survive an unrelated non-byref call; argument-derived or escaped receivers are invalidated. No field alias, callback effects, interprocedural effects or last-write across branches is proven.
+      - The supported command constructors model the standard Text enum default only as an encoded-framework API contract candidate; command-type assignments override it in the same straight-line region. Missing type and parameter propagation remain explicit gaps.
+      - At most 128 receiver states and 200000 work units are admitted per body. The derivation phase also shares an aggregate bound equal to the policy-bound IL MaxTotalWorkUnits across all inputs. Exhaustion withholds all command candidates for that body without revoking admitted body/call facts.
 
   - id: dotnet.compiled.il-gap.v1
     status: active
@@ -3795,14 +3808,17 @@ rules:
       - compiled-source-identity path edge
       - compiled-il-call path edge
       - compiled-il-callvirt-candidate path edge
+      - compiled-database-api-candidate path edge with optional command configuration candidate
       - CompiledIlSourceDisplayUnavailable gap
       - CompiledIlTargetUnavailable gap
       - CompiledIlTargetAmbiguous gap
+      - CompiledIlCommandBindingUnavailable gap
     limitations:
       - Requires a validated bound source-to-metadata reconciliation for source entry, an exact source symbol ID on one uniquely displayed Tier1 call source, admitted dual-reader IL body/call facts, exact fact-ID joins, and one unique MethodDef or assembly-scoped MemberRef target; no binary discovery or guessed source-to-binary identity occurs in this graph layer. A source method without a retained Tier1 call source cannot enter through this first slice.
       - A call/newobj edge records a static encoded target, not execution or branch feasibility. A callvirt operand produces only a Tier3 review candidate because actual virtual dispatch may select an override; it does not prove runtime target, reflection, dependency-injection binding, or a database operation.
       - MemberRef joins require an admitted bound assembly with the complete encoded assembly-reference identity, non-generic type path, member name, and signature, plus exactly one matching declaration across all combined sources. Unadmitted references, generic type specifications, MethodSpec, calli, constrained type, and unresolved targets are not promoted to graph edges. Missing or ambiguous joins never prove absence or complete reachability.
       - The graph overlay does not rewrite source facts, the combined database schema, or existing source-only path evidence.
+      - Optional command configuration is retained only from one il-command-binding.v1 fact with exact same-source body/call/configuration fact joins and matching raw-file, IL generator and bounded-input hashes. It remains Tier3 static configuration, not SQL/procedure identity or execution; malformed, missing, differently bound or competing candidates leave the API path intact and produce a binding gap. Caller argument substitution and parameter propagation are separate requirements.
 
   - id: combined.paths.projectless-pdb-identity.v1
     name: Exact projectless source-to-PDB method path entry

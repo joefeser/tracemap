@@ -11,7 +11,8 @@ internal static class IlCallValueExtractor
     private static readonly IlValueOrigin Unknown = new("unknown", "");
 
     internal static IlValueFlowObservation Extract(IReadOnlyList<string> instructions,
-        IReadOnlyList<IlCallObservation> calls, int maxStack, bool hasExceptionRegions)
+        IReadOnlyList<IlCallObservation> calls, int maxStack, bool hasExceptionRegions,
+        IReadOnlyCollection<long>? exceptionBoundaries = null)
     {
         var events = new List<IlCallValueObservation>();
         var gaps = new SortedSet<string>(StringComparer.Ordinal);
@@ -21,6 +22,28 @@ internal static class IlCallValueExtractor
         var byOffset = calls.Where(call => call.Opcode is "call" or "callvirt" or "newobj")
             .ToDictionary(call => call.Offset);
         var region = 0;
+        var boundaries = new HashSet<long>(exceptionBoundaries ?? []);
+        var modifiedArguments = new HashSet<int>();
+        foreach (var instruction in instructions)
+        {
+            var encoded = instruction.Split(':', 4);
+            if (encoded.Length != 4) throw new ArgumentException("Invalid canonical IL instruction.", nameof(instructions));
+            // Every branch target is a possible merge, including a forward
+            // jump over configuration and a backward edge from a later block.
+            var operand = encoded[3];
+            // Never re-label a potentially overwritten argument as the
+            // original caller slot after local state has been discarded.
+            if (TrySlot(encoded[2], operand, "starg", out var modified)
+                || TrySlot(encoded[2], operand, "ldarga", out modified)) modifiedArguments.Add(modified);
+            if (operand.StartsWith("br:0x", StringComparison.Ordinal))
+                boundaries.Add(long.Parse(operand.AsSpan(5), NumberStyles.HexNumber, CultureInfo.InvariantCulture));
+            else if (operand.StartsWith("sw:", StringComparison.Ordinal))
+            {
+                var opening = operand.IndexOf('[');
+                foreach (var target in operand[(opening + 1)..^1].Split(',', StringSplitOptions.RemoveEmptyEntries))
+                    boundaries.Add(long.Parse(target.AsSpan(2), NumberStyles.HexNumber, CultureInfo.InvariantCulture));
+            }
+        }
         // Exception entry points are not reconstructed by this local lane.
         // Retain unknown call operands rather than pretending handler state is
         // the lexical continuation of the protected block.
@@ -46,7 +69,8 @@ internal static class IlCallValueExtractor
             if (parts.Length != 4 || !long.TryParse(parts[1], NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var offset))
                 throw new ArgumentException("Invalid canonical IL instruction.", nameof(instructions));
             var opcode = parts[2]; var operand = parts[3];
-            if (hasExceptionRegions)
+            if (boundaries.Contains(offset)) Invalidate("IlValueControlFlowBoundary");
+            if (hasExceptionRegions && exceptionBoundaries is null)
             {
                 if (byOffset.TryGetValue(offset, out var blockedCall))
                     events.Add(new(offset, region, "exception-flow-unavailable", Unknown,
@@ -64,7 +88,8 @@ internal static class IlCallValueExtractor
             }
             if (TrySlot(opcode, operand, "ldarg", out var argument))
             {
-                Push(arguments.GetValueOrDefault(argument, new("argument-slot", argument.ToString(CultureInfo.InvariantCulture)))); continue;
+                Push(arguments.GetValueOrDefault(argument, modifiedArguments.Contains(argument)
+                    ? Unknown : new("argument-slot", argument.ToString(CultureInfo.InvariantCulture)))); continue;
             }
             if (TrySlot(opcode, operand, "starg", out argument)) { arguments[argument] = Pop(); continue; }
             if (TrySlot(opcode, operand, "ldloc", out var local)) { Push(locals.GetValueOrDefault(local, Unknown)); continue; }

@@ -6,7 +6,7 @@ function Save($obj, $path) { [IO.File]::WriteAllText($path, (ConvertTo-Json -Inp
 try {
     $inputFile = Join-Path $folder 'compiled-paths.handoff.local.json'
     $root = @{ nodeId = 'root'; displayName = '<script>private()</script>'; nodeKind = 'Method' }
-    $fill = @{ nodeId = 'fill'; displayName = 'Fill'; surfaceKind = 'database-api'; surfaceName = 'DbDataAdapter.Fill'; ruleId = 'test.fill'; evidenceTier = 'Tier3SyntaxOrTextual' }
+    $fill = @{ nodeId = 'fill'; displayName = 'Fill'; surfaceKind = 'database-api'; surfaceName = 'DbDataAdapter.Fill'; ruleId = 'test.fill'; evidenceTier = 'Tier3SyntaxOrTextual'; commandBinding = @{ schema = 'il-command-binding.v1'; commandTextOrigin = @{ kind = 'argument-slot'; identity = '0' }; generatorSha256 = ('a' * 64); boundedInputSha256 = ('b' * 64) } }
     $bridge = @{ edgeKind = 'projectless-vb-receiver-bridge' }
     Save @{ schemaVersion = 'webforms-compiled-grouped-handoff.v1'; header = @{ query = @{}; gaps = @(@{ gapKind = 'ParameterEvidenceUnavailable' }) }; nodes = @{ r = $root; f = $fill }; edges = @{ e = $bridge }; variants = @(@{ nodeReferences = @('r','f'); edgeReferences = @('e') }) } $inputFile
     $before = (Get-FileHash $inputFile).Hash
@@ -14,7 +14,7 @@ try {
     if ($result -notcontains 'sqlRoute.exactGroups=1;variants=1;databaseSurfaceOccurrences=1;sqlSurfaceOccurrences=0') { throw 'Grouped counts incorrect' }
     $output = Join-Path $folder 'handler-sql-evidence.local.html'
     $html = [IO.File]::ReadAllText($output)
-    foreach ($expected in @('No retained SQL query/persistence surface','projectless-vb-receiver-bridge','test.fill','ParameterEvidenceUnavailable','Bounded input SHA-256','&lt;script&gt;private()&lt;/script&gt;')) {
+    foreach ($expected in @('No retained SQL query/persistence surface','projectless-vb-receiver-bridge','test.fill','ParameterEvidenceUnavailable','Bounded input SHA-256','&lt;script&gt;private()&lt;/script&gt;','il-command-binding.v1','commandTextOrigin','argument-slot')) {
         if (!$html.Contains($expected)) { throw "Missing $expected" }
     }
     if ($html.Contains('<script>') -or ($result -join '').Contains('private()')) { throw 'Private text escaping failed' }

@@ -27,7 +27,7 @@ namespace TraceMap.Core;
 internal static class IlBodyEvidenceExtractor
 {
     internal const string SchemaVersion = "il-body-provenance.v1";
-    internal const string PolicyVersion = "explicit-il-body-evidence.v3";
+    internal const string PolicyVersion = "explicit-il-body-evidence.v4";
     internal const string IlLocationKind = "managed-il-v1";
     internal const string BodyLimitation = "IL body evidence proves only that the admitted assembly contains this exact bounded operand-aware instruction stream at this module-local method row; it does not prove execution, dispatch, reachability, behavior, source ownership, semantic equivalence, or rewrite preservation.";
     internal const string CallLimitation = "A call site records the static member reference or calli standalone signature encoded in this module's IL; a calli signature does not identify a target member. No call site proves execution, virtual dispatch resolution, target presence, cross-assembly resolution, call-graph reachability, or rewrite equivalence.";
@@ -230,6 +230,10 @@ internal static class IlBodyEvidenceExtractor
         }
 
         var facts = new List<CodeFact>();
+        // Independent bounded derivation phase over the admitted body/call
+        // observations. Its aggregate bound uses the policy-bound work limit;
+        // it never consumes or upgrades the body-admission receipt.
+        var commandBudget = new IlWorkBudget(provenance.EffectiveLimits.MaxTotalWorkUnits);
         foreach (var input in evaluation.Inputs.OrderBy(item => item.Outcome.SafeLocator, StringComparer.Ordinal))
         {
             var outcome = input.Outcome;
@@ -267,6 +271,7 @@ internal static class IlBodyEvidenceExtractor
                     properties: bodyProperties);
                 facts.Add(bodyFact);
                 var valuesByOffset = body.ValueFlow?.Calls.ToDictionary(value => value.Offset);
+                var callFactsByOffset = new Dictionary<long, CodeFact>();
                 foreach (var call in body.Calls.OrderBy(item => item.Offset, Comparer<long>.Default))
                 {
                     var callIdentity = $"{body.BodyIdentity}|call:{call.Opcode}:{call.Offset.ToString(CultureInfo.InvariantCulture)}:{call.TargetIdentity}";
@@ -290,6 +295,7 @@ internal static class IlBodyEvidenceExtractor
                             ("limitation", CallLimitation)
                         }));
                     facts.Add(callFact);
+                    callFactsByOffset.Add(call.Offset, callFact);
                     var values = valuesByOffset?.GetValueOrDefault(call.Offset);
                     if (values is not null)
                         facts.Add(FactFactory.Create(manifest,
@@ -320,6 +326,44 @@ internal static class IlBodyEvidenceExtractor
                             ("metadataToken", body.MetadataToken), ("ilBodyFactId", bodyFact.FactId),
                             ("gapKind", gap), ("valueSchema", IlCallValueExtractor.Schema),
                             ("limitation", IlCallValueExtractor.Limitation)
+                        })));
+                var commandBindings = IlCommandBindingExtractor.Extract(body, commandBudget);
+                foreach (var binding in commandBindings.Bindings)
+                {
+                    var endpoint = callFactsByOffset[binding.EndpointOffset];
+                    var sites = binding.ConfigurationOffsets
+                        .Concat(binding.AdapterBindingOffset is { } attachment ? [attachment] : [])
+                        .Distinct().Order().Select(offset => callFactsByOffset[offset].FactId).ToArray();
+                    facts.Add(FactFactory.Create(manifest, FactTypes.ManagedIlDatabaseCommandCandidate,
+                        RuleIds.DotNetIlCommandBinding, EvidenceTiers.Tier3SyntaxOrTextual,
+                        IlEvidence(outcome.SafeLocator), targetSymbol: endpoint.TargetSymbol,
+                        contractElement: "il-database-command-candidate",
+                        properties: CopyToSorted(common, new (string Key, string Value)[]
+                        {
+                            ("metadataToken", body.MetadataToken), ("ilBodyFactId", bodyFact.FactId),
+                            ("ilCallFactId", endpoint.FactId), ("ilOffset", binding.EndpointOffset.ToString(CultureInfo.InvariantCulture)),
+                            ("commandBindingSchema", IlCommandBindingExtractor.Schema),
+                            ("commandBindingRegion", binding.Region.ToString(CultureInfo.InvariantCulture)),
+                            ("commandReceiverOrigin", System.Text.Json.JsonSerializer.Serialize(binding.CommandReceiver)),
+                            ("endpointReceiverOrigin", System.Text.Json.JsonSerializer.Serialize(binding.EndpointReceiver)),
+                            ("commandTextOrigin", System.Text.Json.JsonSerializer.Serialize(binding.CommandText)),
+                            ("commandTypeOrigin", System.Text.Json.JsonSerializer.Serialize(binding.CommandType)),
+                            ("configurationCallFactIds", System.Text.Json.JsonSerializer.Serialize(sites)),
+                            ("commandBindingMaxTrackedReceivers", IlCommandBindingExtractor.MaxTrackedReceivers.ToString(CultureInfo.InvariantCulture)),
+                            ("commandBindingMaxBodyWorkUnits", IlCommandBindingExtractor.MaxWorkUnits.ToString(CultureInfo.InvariantCulture)),
+                            ("commandBindingMaxAggregateWorkUnits", provenance.EffectiveLimits.MaxTotalWorkUnits.ToString(CultureInfo.InvariantCulture)),
+                            ("limitation", IlCommandBindingExtractor.Limitation)
+                        })));
+                }
+                foreach (var gap in commandBindings.Gaps)
+                    facts.Add(FactFactory.Create(manifest, FactTypes.AnalysisGap, RuleIds.DotNetIlCommandBinding,
+                        EvidenceTiers.Tier4Unknown, IlEvidence(outcome.SafeLocator),
+                        targetSymbol: body.BodyIdentity, contractElement: gap,
+                        properties: CopyToSorted(common, new (string Key, string Value)[]
+                        {
+                            ("metadataToken", body.MetadataToken), ("ilBodyFactId", bodyFact.FactId),
+                            ("gapKind", gap), ("commandBindingSchema", IlCommandBindingExtractor.Schema),
+                            ("limitation", IlCommandBindingExtractor.Limitation)
                         })));
             }
         }
@@ -506,7 +550,7 @@ internal static class IlBodyEvidenceExtractor
             bodySha256,
             calls,
             retainDiagnosticInstructions ? instructions : null,
-            ExtractCallValues(instructions, calls, body.MaxStackSize, handlers.Length != 0, budget));
+            ExtractCallValues(instructions, calls, body.MaxStackSize, handlers, budget));
     }
 
     // Cecil and Reflection.Emit may use different display names for an opcode.
@@ -954,7 +998,7 @@ internal static class IlBodyEvidenceExtractor
             bodySha256,
             calls,
             retainDiagnosticInstructions ? instructions : null,
-            ExtractCallValues(instructions, calls, body.MaxStack, handlers.Length != 0, budget));
+            ExtractCallValues(instructions, calls, body.MaxStack, handlers, budget));
     }
 
     private static (string Kind, string Token, string Identity) SrmBoundedTarget(string kind, string token, string identity, IlBodyLimits limits)
@@ -1265,11 +1309,24 @@ internal static class IlBodyEvidenceExtractor
     }
 
     private static IlValueFlowObservation ExtractCallValues(IReadOnlyList<string> instructions,
-        IReadOnlyList<IlCallObservation> calls, int maxStack, bool exceptionRegions, IlWorkBudget budget)
+        IReadOnlyList<IlCallObservation> calls, int maxStack, IReadOnlyList<string> handlers, IlWorkBudget budget)
     {
         if (!budget.TryConsume(instructions.Count))
             return new([], ["IlValueWorkLimitExceeded"]);
-        return IlCallValueExtractor.Extract(instructions, calls, maxStack, exceptionRegions);
+        var boundaries = new HashSet<long>();
+        foreach (var handler in handlers)
+        {
+            var parts = handler.Split(':');
+            foreach (var index in new[] { 3, 5 })
+            {
+                var range = parts[index].Split('+');
+                var start = long.Parse(range[0], NumberStyles.HexNumber, CultureInfo.InvariantCulture);
+                boundaries.Add(start);
+                boundaries.Add(start + long.Parse(range[1], NumberStyles.HexNumber, CultureInfo.InvariantCulture));
+            }
+            if (parts[7] != "-1") boundaries.Add(long.Parse(parts[7], NumberStyles.HexNumber, CultureInfo.InvariantCulture));
+        }
+        return IlCallValueExtractor.Extract(instructions, calls, maxStack, handlers.Count != 0, boundaries);
     }
 
     private static IlCallStackShape SrmCallStackShape(MetadataReader reader,

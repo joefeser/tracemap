@@ -580,6 +580,8 @@ public static class MarkdownReportWriter
         lines.Add($"- Bounded input SHA-256: `{il.BoundedInputSha256}`");
         lines.Add($"- Generator SHA-256: `{il.GeneratorSha256}`");
         lines.Add($"- Method bodies: `{ilFacts.Count(fact => fact.FactType == FactTypes.ManagedIlBodyDeclared)}`; direct call sites: `{ilFacts.Count(fact => fact.FactType == FactTypes.ManagedIlCallObserved)}`; gaps: `{ilFacts.Count(fact => fact.FactType == FactTypes.AnalysisGap)}`.");
+        var valueFacts = result.Facts.Where(fact => fact.RuleId is RuleIds.DotNetIlValues or RuleIds.DotNetIlCommandBinding).ToArray();
+        lines.Add($"- Separate partial operand/command lane: `{valueFacts.Count(fact => fact.FactType == FactTypes.ManagedIlCallValuesObserved)}` call operand observations; `{valueFacts.Count(fact => fact.FactType == FactTypes.ManagedIlDatabaseCommandCandidate)}` command configuration candidates; `{valueFacts.Count(fact => fact.FactType == FactTypes.AnalysisGap)}` explicit gaps. Body coverage above does not establish complete value flow, handler-to-command propagation, parameter binding, SQL identity or execution.");
         lines.Add("- Body identities commit every instruction operand (call targets, branch and switch targets, string digests, constants, locals, and exception regions) and are cross-checked between Mono.Cecil and a raw System.Reflection.Metadata IL reader.");
         lines.Add("- IL evidence does not prove execution, dispatch, reachability, behavior, source ownership, semantic equivalence, or rewrite preservation.");
         foreach (var outcome in il.Outcomes.OrderBy(item => item.SafeLocator, StringComparer.Ordinal))
