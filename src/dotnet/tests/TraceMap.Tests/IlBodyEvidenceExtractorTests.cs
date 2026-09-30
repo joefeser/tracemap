@@ -90,6 +90,17 @@ public sealed class IlBodyEvidenceExtractorTests
         });
         Assert.All(result.Facts.Where(fact => fact.FactType == FactTypes.ManagedIlCallObserved), fact =>
             Assert.Equal(FactTypes.ManagedIlBodyDeclared, byId[fact.Properties["ilBodyFactId"]].FactType));
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.ManagedIlCallValuesObserved);
+        Assert.All(result.Facts.Where(fact => fact.FactType == FactTypes.ManagedIlCallValuesObserved), fact =>
+        {
+            Assert.Equal(RuleIds.DotNetIlValues, fact.RuleId);
+            Assert.Equal(EvidenceTiers.Tier3SyntaxOrTextual, fact.EvidenceTier);
+            Assert.Equal(FactTypes.ManagedIlCallObserved, byId[fact.Properties["ilCallFactId"]].FactType);
+            Assert.Equal(FactTypes.ManagedIlBodyDeclared, byId[fact.Properties["ilBodyFactId"]].FactType);
+            Assert.Equal(provenance.GeneratorSha256, fact.Properties["ilGeneratorSha256"]);
+            Assert.Equal(provenance.BoundedInputSha256, fact.Properties["ilBoundedInputSha256"]);
+            Assert.Equal(IlCallValueExtractor.Schema, fact.Properties["valueSchema"]);
+        });
         var serialized = JsonSerializer.Serialize(result);
         Assert.DoesNotContain(Path.GetFullPath(fixture.Source), serialized, StringComparison.Ordinal);
         Assert.DoesNotContain("il-alpha", serialized, StringComparison.Ordinal);
@@ -685,6 +696,22 @@ public sealed class IlBodyEvidenceExtractorTests
         Assert.Equal(new[] { "0x06000003" }, IlBodyEvidenceExtractor.AgreedBodies(twoBodies, disagreements)
             .Select(item => item.MetadataToken));
         Assert.Empty(IlBodyEvidenceExtractor.AgreedBodies(twoBodies, ["assembly"]));
+        var valueBody = body with
+        {
+            Calls = [body.Calls[0] with { StackShape = new(0, false, false, true) }],
+            ValueFlow = new([], [])
+        };
+        var valueDisagreement = valueBody with
+        {
+            Calls = [valueBody.Calls[0] with { StackShape = new(1, false, false, true) }]
+        };
+        // Value interpretation disagreement must not revoke independently
+        // agreed instruction/body evidence, nor leak positive value origins.
+        Assert.Empty(IlBodyEvidenceExtractor.CompareBodies(
+            cecil with { Bodies = [valueBody] }, cecil with { Bodies = [valueDisagreement] }));
+        var withheld = Assert.Single(IlBodyEvidenceExtractor.AgreeValueFlows([valueBody], [valueDisagreement]));
+        Assert.Empty(withheld.ValueFlow!.Calls);
+        Assert.Contains("IlValueReaderDisagreementOrLimit", withheld.ValueFlow.Gaps);
     }
 
     [Fact]

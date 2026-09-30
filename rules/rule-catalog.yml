@@ -160,6 +160,19 @@ rules:
       - The constrained. prefix records its exact cross-checked type identity with reference kind constrainedtype, but no module-local token claim: Mono.Cecil cannot reproduce the raw TypeSpec token for a resolved constrained operand, so the field stays explicitly unclaimed rather than single-sourced.
       - The same target member reached from many sites remains many call facts; this rule emits no call graph, transitive reachability, impact, or rewrite-equivalence conclusion.
 
+  - id: dotnet.compiled.il-values.v1
+    status: active
+    name: Bounded IL call operand origins
+    description: Records method-local receiver and argument origins at independently decoded call sites, joined to the exact admitted IL body and call facts. Both raw SRM and Cecil streams must yield the same bounded observations.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits: [ManagedIlCallValuesObserved, AnalysisGap]
+    limitations:
+      - Straight-line origin candidates only, not command binding or SQL evidence. Argument slots are not concrete values and allocation or call-site origins are not runtime objects.
+      - Literal strings retain only length and SHA-256 of exact UTF-16 code units, never raw text. No SQL statement or stored procedure is inferred from a method name or string hash.
+      - Control flow, exception regions, unsupported operations, by-reference signatures, stack failures and reader or work-limit disagreement withhold origins or invalidate local state explicitly.
+      - Non-byref calls preserve slot origins only, not object configuration. Consumers must invalidate command state across unknown effects; alias, field, last-write, interprocedural propagation, virtual dispatch and execution are not established by this rule.
+      - Body and call evidence can remain admitted while value coverage is partial. Value facts carry the exact IL generator and bounded-input hashes and cannot upgrade source or runtime coverage.
+
   - id: dotnet.compiled.il-gap.v1
     status: active
     name: IL body and call coverage gap

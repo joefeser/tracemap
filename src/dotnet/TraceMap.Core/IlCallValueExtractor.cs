@@ -1,0 +1,113 @@
+using System.Globalization;
+
+namespace TraceMap.Core;
+
+/// <summary>Local, straight-line symbolic operands over a dual-decoded canonical
+/// IL stream. No source text, object field state, runtime dispatch, or SQL parsing.</summary>
+internal static class IlCallValueExtractor
+{
+    internal const string Schema = "il-call-values.v1";
+    internal const string Limitation = "Bounded method-local straight-line operand origins only. Strings are length plus SHA-256 of exact UTF-16 code units, never raw text. Argument slots are not values. Object origins are allocation/call-site identities, not runtime objects. Control-flow/exception boundaries, unsupported instructions and byref operations invalidate operand state. Non-byref calls preserve slot origins, not object configuration; consumers must invalidate configuration across unknown call effects. No alias, field, branch feasibility, last-write, interprocedural binding, SQL execution or runtime dispatch is proven.";
+    private static readonly IlValueOrigin Unknown = new("unknown", "");
+
+    internal static IlValueFlowObservation Extract(IReadOnlyList<string> instructions,
+        IReadOnlyList<IlCallObservation> calls, int maxStack, bool hasExceptionRegions)
+    {
+        var events = new List<IlCallValueObservation>();
+        var gaps = new SortedSet<string>(StringComparer.Ordinal);
+        var stack = new List<IlValueOrigin>();
+        var locals = new Dictionary<int, IlValueOrigin>();
+        var arguments = new Dictionary<int, IlValueOrigin>();
+        var byOffset = calls.Where(call => call.Opcode is "call" or "callvirt" or "newobj")
+            .ToDictionary(call => call.Offset);
+        var region = 0;
+        // Exception entry points are not reconstructed by this local lane.
+        // Retain unknown call operands rather than pretending handler state is
+        // the lexical continuation of the protected block.
+        if (hasExceptionRegions) gaps.Add("IlValueExceptionFlowUnavailable");
+        void Invalidate(string reason)
+        {
+            stack.Clear(); locals.Clear(); arguments.Clear(); region++;
+            gaps.Add(reason);
+        }
+        void Push(IlValueOrigin value)
+        {
+            if (stack.Count >= Math.Min(maxStack, 4096)) { Invalidate("IlValueStackLimit"); return; }
+            stack.Add(value);
+        }
+        IlValueOrigin Pop()
+        {
+            if (stack.Count == 0) { gaps.Add("IlValueStackUnavailable"); return Unknown; }
+            var value = stack[^1]; stack.RemoveAt(stack.Count - 1); return value;
+        }
+        foreach (var instruction in instructions)
+        {
+            var parts = instruction.Split(':', 4);
+            if (parts.Length != 4 || !long.TryParse(parts[1], NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var offset))
+                throw new ArgumentException("Invalid canonical IL instruction.", nameof(instructions));
+            var opcode = parts[2]; var operand = parts[3];
+            if (hasExceptionRegions)
+            {
+                if (byOffset.TryGetValue(offset, out var blockedCall))
+                    events.Add(new(offset, region, "exception-flow-unavailable", Unknown,
+                        Enumerable.Repeat(Unknown, Math.Clamp(blockedCall.StackShape?.ParameterCount ?? 0, 0, 1024)).ToArray(), Unknown));
+                continue;
+            }
+            if (opcode == "nop") continue;
+            if (opcode == "ldstr") { Push(new("constant-string-hash", operand)); continue; }
+            if (opcode == "ldnull") { Push(new("null", "")); continue; }
+            if (opcode.StartsWith("ldc.i4", StringComparison.Ordinal))
+            {
+                var number = opcode == "ldc.i4.m1" ? "-1"
+                    : opcode is "ldc.i4" or "ldc.i4.s" ? operand[2..] : opcode[7..];
+                Push(new("constant-int32", number)); continue;
+            }
+            if (TrySlot(opcode, operand, "ldarg", out var argument))
+            {
+                Push(arguments.GetValueOrDefault(argument, new("argument-slot", argument.ToString(CultureInfo.InvariantCulture)))); continue;
+            }
+            if (TrySlot(opcode, operand, "starg", out argument)) { arguments[argument] = Pop(); continue; }
+            if (TrySlot(opcode, operand, "ldloc", out var local)) { Push(locals.GetValueOrDefault(local, Unknown)); continue; }
+            if (TrySlot(opcode, operand, "stloc", out local)) { locals[local] = Pop(); continue; }
+            if (opcode == "dup") { var value = Pop(); Push(value); Push(value); continue; }
+            if (opcode == "pop") { _ = Pop(); continue; }
+            if (byOffset.TryGetValue(offset, out var call))
+            {
+                if (call.StackShape is not { Supported: true, ParameterCount: >= 0 and <= 1024 } shape)
+                {
+                    events.Add(new(offset, region, "call-shape-unavailable", Unknown, [], Unknown));
+                    Invalidate("IlValueCallShapeUnavailable"); continue;
+                }
+                var underflow = stack.Count < shape.ParameterCount + (shape.HasThis && opcode != "newobj" ? 1 : 0);
+                var values = new IlValueOrigin[shape.ParameterCount];
+                for (var index = values.Length - 1; index >= 0; index--) values[index] = Pop();
+                var receiver = opcode == "newobj" || !shape.HasThis ? Unknown : Pop();
+                var result = opcode == "newobj" ? new IlValueOrigin("allocation-site", offset.ToString(CultureInfo.InvariantCulture))
+                    : shape.ReturnsValue ? new IlValueOrigin("call-result", offset.ToString(CultureInfo.InvariantCulture)) : Unknown;
+                events.Add(new(offset, region, underflow ? "stack-unavailable" : "straight-line-candidate", receiver, values, result));
+                // Non-byref operands preserve local/argument slot origins,
+                // not object state. A downstream command binder must process
+                // every call and invalidate configuration across unknown effects.
+                // Unsupported/byref signatures took the invalidating path above.
+                gaps.Add("IlValueCallEffectsUnmodeled");
+                if (underflow) Invalidate("IlValueStackUnavailable");
+                if (opcode == "newobj" || shape.ReturnsValue) Push(result);
+                continue;
+            }
+            if (opcode == "ret") { Invalidate("IlValueReturnBoundary"); continue; }
+            Invalidate(opcode.StartsWith('b') || opcode is "switch" or "leave" or "leave.s"
+                ? "IlValueControlFlowUnavailable" : "IlValueInstructionUnavailable");
+        }
+        return new(events, gaps.ToArray());
+    }
+
+    private static bool TrySlot(string opcode, string operand, string operation, out int slot)
+    {
+        slot = -1;
+        if (opcode == operation || opcode == operation + ".s")
+            return operand.StartsWith("v:", StringComparison.Ordinal)
+                && int.TryParse(operand.AsSpan(2), NumberStyles.None, CultureInfo.InvariantCulture, out slot);
+        return opcode.StartsWith(operation + ".", StringComparison.Ordinal)
+            && int.TryParse(opcode.AsSpan(operation.Length + 1), NumberStyles.None, CultureInfo.InvariantCulture, out slot);
+    }
+}
