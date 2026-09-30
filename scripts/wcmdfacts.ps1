@@ -19,7 +19,7 @@ $gaps = @('IlCommandBindingWorkLimit','IlCommandValueEvidenceUnavailable','IlCom
     'IlCommandAdapterConstructorUnsupported','IlCommandAdapterBindingUnavailable','IlCommandTextBindingUnavailable',
     'IlCommandUnknownCallEffects','IlCommandTextCallerBindingRequired','IlCommandTextReturnBindingUnavailable',
     'IlCommandTypeBindingUnavailable','IlCommandParameterFlowUnavailable','IlValueControlFlowWorkLimit',
-    'IlValueControlFlowInstructionLimit','IlValueControlFlowSlotLimit','IlValueStackUnavailable',
+    'IlValueControlFlowInstructionLimit','IlValueControlFlowSlotLimit','IlValueWorkLimitExceeded','IlValueControlFlowAggregateWorkLimit','IlValueExposureOriginLimit','IlValueStackUnavailable',
     'IlValueStackMergeUnavailable','IlValueInstructionUnavailable','IlValueCallShapeUnavailable')
 $counts = [long[]]::new($types.Count + $gaps.Count)
 $markers = @($types | ForEach-Object { '"factType":"' + $_ + '"' }) +

@@ -27,7 +27,7 @@ namespace TraceMap.Core;
 internal static class IlBodyEvidenceExtractor
 {
     internal const string SchemaVersion = "il-body-provenance.v1";
-    internal const string PolicyVersion = "explicit-il-body-evidence.v6";
+    internal const string PolicyVersion = "explicit-il-body-evidence.v7";
     internal const string IlLocationKind = "managed-il-v1";
     internal const string BodyLimitation = "IL body evidence proves only that the admitted assembly contains this exact bounded operand-aware instruction stream at this module-local method row; it does not prove execution, dispatch, reachability, behavior, source ownership, semantic equivalence, or rewrite preservation.";
     internal const string CallLimitation = "A call site records the static member reference or calli standalone signature encoded in this module's IL; a calli signature does not identify a target member. No call site proves execution, virtual dispatch resolution, target presence, cross-assembly resolution, call-graph reachability, or rewrite equivalence.";
@@ -321,8 +321,11 @@ internal static class IlBodyEvidenceExtractor
                                 ("callHasThis", call.StackShape?.HasThis == true ? "true" : "false"),
                                 ("callParameterCount", (call.StackShape?.ParameterCount ?? -1).ToString(CultureInfo.InvariantCulture)),
                                 ("callShapeSupported", call.StackShape?.Supported == true ? "true" : "false"),
-                                ("receiverOrigin", System.Text.Json.JsonSerializer.Serialize(values.Receiver)),
-                                ("argumentOrigins", System.Text.Json.JsonSerializer.Serialize(values.Arguments)),
+                                ("callByReferenceParameters", call.StackShape?.ByReferenceParameters ?? ""),
+                                ("receiverOrigin", System.Text.Json.JsonSerializer.Serialize(PublicOperand(values.Receiver))),
+                                ("argumentOrigins", System.Text.Json.JsonSerializer.Serialize(values.Arguments.Select((value, index) =>
+                                    call.StackShape is { } shape && index < shape.ByReferenceParameters.Length && shape.ByReferenceParameters[index] == '1'
+                                        ? new IlValueOrigin("unknown", "") : PublicOperand(value)))),
                                 ("resultOrigin", System.Text.Json.JsonSerializer.Serialize(values.Result)),
                                 ("limitation", IlCallValueExtractor.Limitation)
                             })));
@@ -439,6 +442,10 @@ internal static class IlBodyEvidenceExtractor
             && System.Text.Json.JsonSerializer.Serialize(body.ValueFlow) == System.Text.Json.JsonSerializer.Serialize(other.ValueFlow)
                 ? body : body with { ValueFlow = new([], ["IlValueReaderDisagreementOrLimit"]) }).ToArray();
     }
+
+    // Addresses are used internally for conservative object exposure, never
+    // advertised as values or substituted for a caller's scalar argument.
+    private static IlValueOrigin PublicOperand(IlValueOrigin value) => IlValueAddresses.IsAddress(value) || value.Kind == "address-unavailable" ? new("unknown", "") : value;
 
     // Internal so the rewrite lane can rebuild the same dual-reader contract
     // over its own paired inputs instead of duplicating IL decoding.
@@ -638,7 +645,8 @@ internal static class IlBodyEvidenceExtractor
                     calls.Add(new IlCallObservation(instruction.Offset, opcodeName, target.Kind, target.Token, target.Identity,
                         new(reference.Parameters.Count, reference.HasThis, reference.ReturnType.MetadataType != MetadataType.Void,
                             reference.CallingConvention != MethodCallingConvention.VarArg && !reference.ExplicitThis
-                            && reference.Parameters.All(parameter => !parameter.ParameterType.IsByReference))));
+                            && !reference.ReturnType.IsByReference,
+                            string.Concat(reference.Parameters.Select(parameter => parameter.ParameterType.IsByReference ? '1' : '0')))));
                 }
                 return $"m:{target.Kind}:{target.Token}:{target.Identity}";
             case OperandType.InlineType:
@@ -1369,7 +1377,8 @@ internal static class IlBodyEvidenceExtractor
             signature.ReturnType != "type(namespace:6:System|names:4:Void)",
             signature.Header.CallingConvention != SignatureCallingConvention.VarArgs
             && (signature.Header.RawValue & 0x40) == 0
-            && signature.ParameterTypes.All(type => !type.Contains('&')));
+            && !signature.ReturnType.Contains('&'),
+            string.Concat(signature.ParameterTypes.Select(type => type.EndsWith('&') ? '1' : '0')));
     }
 
     private static Dictionary<int, System.Reflection.Emit.OpCode> SingleByteOpcodes()

@@ -86,7 +86,7 @@ public static partial class CombinedDependencyPathReporter
         // properties or a private source blob. This artifact is local-only.
         var keys = new[] { "rawFileSha256", "ilGeneratorSha256", "ilBoundedInputSha256", "ilBodyFactId", "compiledFactId",
             "ilCallFactId", "ilOffset", "opcode", "referenceKind", "targetIdentity", "signature", "valueSchema", "valueState",
-            "callHasThis", "callParameterCount", "callShapeSupported", "receiverOrigin", "resultOrigin", "argumentOrigins" };
+            "callHasThis", "callParameterCount", "callShapeSupported", "callByReferenceParameters", "receiverOrigin", "resultOrigin", "argumentOrigins" };
         var properties = new SortedDictionary<string, string>(StringComparer.Ordinal);
         foreach (var key in keys)
             if (fact.Properties.TryGetValue(key, out var value)) properties.Add(key, value.Length <= 64 * 1024 ? value
@@ -167,6 +167,10 @@ public static partial class CombinedDependencyPathReporter
                 || arguments.Any(origin => origin is null || !(origin.Kind == "null" && origin.Identity == "" || ValidCompiledCommandOrigin(origin)))
                 || !int.TryParse(value.Properties.GetValueOrDefault("callParameterCount"), NumberStyles.None, CultureInfo.InvariantCulture, out var count)
                 || count != arguments.Length) return false;
+            if (value.Properties.TryGetValue("callByReferenceParameters", out var mask)
+                && (mask.Length != arguments.Length || mask.Any(character => character is not ('0' or '1'))
+                    || arguments.Where((origin, index) => mask[index] == '1').Any(origin => origin.Kind != "unknown")))
+                return false;
             if (call.Properties["opcode"] == "newobj" && (result.Kind != "allocation-site" || result.Identity != call.Properties["ilOffset"])) return false;
             return true;
         }

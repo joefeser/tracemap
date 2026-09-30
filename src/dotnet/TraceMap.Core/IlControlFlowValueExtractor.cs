@@ -18,14 +18,17 @@ internal static class IlControlFlowValueExtractor
         public List<IlValueOrigin> Stack { get; } = [];
         public Dictionary<int, IlValueOrigin> Locals { get; } = [];
         public Dictionary<int, IlValueOrigin> Arguments { get; } = [];
+        public HashSet<int> ExposedLocals { get; } = [];
+        public HashSet<int> ExposedArguments { get; } = [];
         public bool InvalidStack { get; set; }
-        public int Cost => 1 + Stack.Count + Locals.Count + Arguments.Count;
+        public int Cost => 1 + Stack.Count + Locals.Count + Arguments.Count + ExposedLocals.Count + ExposedArguments.Count;
         public State Copy()
         {
             var copy = new State { InvalidStack = InvalidStack };
             copy.Stack.AddRange(Stack);
             foreach (var pair in Locals) copy.Locals.Add(pair.Key, pair.Value);
             foreach (var pair in Arguments) copy.Arguments.Add(pair.Key, pair.Value);
+            copy.ExposedLocals.UnionWith(ExposedLocals); copy.ExposedArguments.UnionWith(ExposedArguments);
             return copy;
         }
     }
@@ -87,6 +90,7 @@ internal static class IlControlFlowValueExtractor
         var inputs = new State?[instructions.Length];
         var events = new Dictionary<long, IlCallValueObservation>();
         var invalidates = new bool[instructions.Length];
+        var exposed = new SortedDictionary<long, HashSet<IlValueOrigin>>();
         var queue = new Queue<int>(); var queued = new HashSet<int>();
         inputs[0] = new State();
         foreach (var instruction in instructions)
@@ -118,7 +122,10 @@ internal static class IlControlFlowValueExtractor
                 return new([], ["IlValueControlFlowWorkLimit"], WorkUnits: MaxWorkUnits);
             var state = input.Copy(); var instruction = instructions[index];
             invalidates[index] = Transfer(instruction, state);
-            if (state.Stack.Count + state.Locals.Count + state.Arguments.Count > MaxSlots)
+            if (work > MaxWorkUnits) return new([], ["IlValueControlFlowWorkLimit"], WorkUnits: MaxWorkUnits);
+            if (exposed.GetValueOrDefault(instruction.Offset)?.Count > MaxSlots)
+                return new([], ["IlValueExposureOriginLimit"], WorkUnits: work);
+            if (state.Cost > MaxSlots + 1)
                 return new([], ["IlValueControlFlowSlotLimit"], WorkUnits: work);
             foreach (var successor in successors[index])
             {
@@ -137,11 +144,31 @@ internal static class IlControlFlowValueExtractor
         return new(events.Values.OrderBy(value => value.Offset).ToArray(), gaps.ToArray(),
             instructions.Select((value, index) => new IlValueControlNode(value.Offset,
                 successors[index].Select(successor => instructions[successor].Offset).ToArray(), invalidates[index] || entries.ContainsKey(index),
-                entries.GetValueOrDefault(index, -1))).ToArray(), work);
+                entries.GetValueOrDefault(index, -1), exposed.GetValueOrDefault(value.Offset)?.OrderBy(origin => origin.Kind, StringComparer.Ordinal)
+                    .ThenBy(origin => origin.Identity, StringComparer.Ordinal).ToArray())).ToArray(), work);
 
         bool Transfer(Instruction instruction, State state)
         {
             var opcode = instruction.Opcode; var operand = instruction.Operand;
+            void Expose(IlValueOrigin value)
+            {
+                if (!exposed.TryGetValue(instruction.Offset, out var origins)) exposed.Add(instruction.Offset, origins = []);
+                if (origins.Add(IlValueAddresses.Target(value))) work++;
+                if (IlValueAddresses.Slot(value, out var slot))
+                {
+                    var local = value.Kind == "local-address";
+                    if (origins.Add(local ? state.Locals.GetValueOrDefault(slot, Unknown) : state.Arguments.GetValueOrDefault(slot, Argument(slot)))) work++;
+                    (local ? state.ExposedLocals : state.ExposedArguments).Add(slot);
+                }
+            }
+            void RewriteAddress(IlValueOrigin address, IlValueOrigin value)
+            {
+                if (IlValueAddresses.Slot(address, out var slot))
+                {
+                    if (address.Kind == "local-address") state.Locals[slot] = value;
+                    else state.Arguments[slot] = value;
+                }
+            }
             void Clear(string reason)
             {
                 state.Stack.Clear(); state.Locals.Clear();
@@ -170,9 +197,13 @@ internal static class IlControlFlowValueExtractor
             }
             if (Slot(opcode, operand, "ldarg", out var slot))
             { Push(state.Arguments.GetValueOrDefault(slot, Argument(slot))); return false; }
-            if (Slot(opcode, operand, "starg", out slot)) { state.Arguments[slot] = Pop(); return false; }
+            if (Slot(opcode, operand, "starg", out slot)) { var value = Pop(); if (state.ExposedArguments.Contains(slot)) Expose(value); state.Arguments[slot] = value; return false; }
             if (Slot(opcode, operand, "ldloc", out slot)) { Push(state.Locals.GetValueOrDefault(slot, Unknown)); return false; }
-            if (Slot(opcode, operand, "stloc", out slot)) { state.Locals[slot] = Pop(); return false; }
+            if (Slot(opcode, operand, "stloc", out slot)) { var value = Pop(); if (state.ExposedLocals.Contains(slot)) Expose(value); state.Locals[slot] = value; return false; }
+            if (Slot(opcode, operand, "ldloca", out slot))
+            { var value = state.Locals.GetValueOrDefault(slot, Unknown); Push(IlValueAddresses.Create("local-address", slot, value)); return false; }
+            if (Slot(opcode, operand, "ldarga", out slot))
+            { var value = state.Arguments.GetValueOrDefault(slot, Argument(slot)); Push(IlValueAddresses.Create("argument-address", slot, value)); state.Arguments[slot] = Unknown; return false; }
             if (opcode == "dup") { var value = Pop(); Push(value); Push(value); return false; }
             if (opcode == "pop") { _ = Pop(); return false; }
             if (byOffset.TryGetValue(instruction.Offset, out var call))
@@ -186,6 +217,10 @@ internal static class IlControlFlowValueExtractor
                 var arguments = new IlValueOrigin[shape.ParameterCount];
                 for (var argument = arguments.Length - 1; argument >= 0; argument--) arguments[argument] = Pop();
                 var receiver = opcode == "newobj" || !shape.HasThis ? Unknown : Pop();
+                // Addresses never become scalar caller values. A callee can
+                // rewrite the referenced slot and mutate its former object.
+                foreach (var address in arguments.Append(receiver).Where(IlValueAddresses.IsAddress))
+                { Expose(address); RewriteAddress(address, Unknown); gaps.Add("IlValueByReferenceEffectsUnavailable"); }
                 var result = opcode == "newobj" ? new IlValueOrigin("allocation-site", instruction.Offset.ToString(CultureInfo.InvariantCulture))
                     : shape.ReturnsValue ? new IlValueOrigin("call-result", instruction.Offset.ToString(CultureInfo.InvariantCulture)) : Unknown;
                 events[instruction.Offset] = new(instruction.Offset, 0, underflow ? "stack-unavailable" : "control-flow-candidate", receiver, arguments, result);
@@ -195,21 +230,42 @@ internal static class IlControlFlowValueExtractor
                 return underflow;
             }
             if (opcode is "br" or "br.s") return false;
-            if (opcode is "leave" or "leave.s") { Clear("IlValueExceptionFlowUnavailable"); return true; }
+            if (opcode is "leave" or "leave.s")
+            {
+                Clear("IlValueExceptionFlowUnavailable");
+                // leave establishes an empty evaluation stack. Locals and
+                // potentially rewritten arguments remain unknown across finally.
+                state.InvalidStack = false; return true;
+            }
             if (opcode == "switch" || opcode.StartsWith("brtrue", StringComparison.Ordinal) || opcode.StartsWith("brfalse", StringComparison.Ordinal))
             { _ = Pop(); return false; }
             if (instruction.Operand.StartsWith("br:0x", StringComparison.Ordinal)) { _ = Pop(); _ = Pop(); return false; }
             if (opcode is "ret" or "throw" or "rethrow" or "endfinally" or "endfilter") return false;
-            // Stack-only numeric/array reads cannot mutate a command. Their
-            // values stay unknown; address-taking and stores are not modelled.
-            if (opcode is "add" or "sub" or "mul" or "div" or "div.un" or "rem" or "rem.un" or "and" or "or" or "xor"
+            // Numeric/array values remain unknown. Heap values are not
+            // reconstructed; stores and addresses report object exposure.
+            if (opcode is "add" or "add.ovf" or "add.ovf.un" or "sub" or "sub.ovf" or "sub.ovf.un" or "mul" or "mul.ovf" or "mul.ovf.un" or "div" or "div.un" or "rem" or "rem.un" or "and" or "or" or "xor"
                 or "shl" or "shr" or "shr.un" or "ceq" or "cgt" or "cgt.un" or "clt" or "clt.un")
             { _ = Pop(); _ = Pop(); Push(Unknown); return false; }
             if (opcode.StartsWith("conv.", StringComparison.Ordinal) || opcode is "neg" or "not" or "ldlen")
             { _ = Pop(); Push(Unknown); return false; }
             if (opcode == "castclass") { var value = Pop(); Push(value); return false; }
-            if (opcode == "ldfld") { _ = Pop(); Push(Unknown); gaps.Add("IlValueFieldOriginUnavailable"); return false; }
+            if (opcode is "box" or "unbox.any") { var value = Pop(); Push(value); return false; }
+            if (opcode == "ldtoken") { Push(Unknown); return false; }
+            if (opcode == "newarr") { _ = Pop(); Push(new("allocation-site", instruction.Offset.ToString(CultureInfo.InvariantCulture))); return false; }
+            if (opcode == "ldfld") { Expose(Pop()); Push(Unknown); gaps.Add("IlValueFieldOriginUnavailable"); return false; }
             if (opcode == "ldsfld") { Push(Unknown); gaps.Add("IlValueFieldOriginUnavailable"); return false; }
+            if (opcode is "ldflda" or "ldsflda")
+            { var owner = opcode == "ldflda" ? Pop() : Unknown; Push(IlValueAddresses.Create("field-address", -1, owner)); gaps.Add("IlValueFieldOriginUnavailable"); return false; }
+            if (opcode is "stfld" or "stsfld")
+            { Expose(Pop()); if (opcode == "stfld") Expose(Pop()); gaps.Add("IlValueHeapStoreUnavailable"); return false; }
+            if (opcode.StartsWith("ldind.", StringComparison.Ordinal) || opcode == "ldobj")
+            { Expose(Pop()); Push(Unknown); gaps.Add("IlValueIndirectOriginUnavailable"); return false; }
+            if (opcode.StartsWith("stind.", StringComparison.Ordinal) || opcode == "stobj")
+            { var value = Pop(); var address = Pop(); Expose(address); Expose(value); RewriteAddress(address, value); gaps.Add("IlValueIndirectStoreUnavailable"); return false; }
+            if (opcode == "initobj")
+            { var address = Pop(); Expose(address); RewriteAddress(address, Unknown); return false; }
+            if (opcode.StartsWith("stelem", StringComparison.Ordinal))
+            { Expose(Pop()); _ = Pop(); Expose(Pop()); gaps.Add("IlValueHeapStoreUnavailable"); return false; }
             if (opcode.StartsWith("ldelem", StringComparison.Ordinal) && opcode != "ldelema")
             { _ = Pop(); _ = Pop(); Push(Unknown); return false; }
             Clear("IlValueInstructionUnavailable"); return true;
@@ -218,6 +274,9 @@ internal static class IlControlFlowValueExtractor
         bool Merge(State target, State incoming)
         {
             var changed = false;
+            var oldExposed = target.ExposedLocals.Count + target.ExposedArguments.Count;
+            target.ExposedLocals.UnionWith(incoming.ExposedLocals); target.ExposedArguments.UnionWith(incoming.ExposedArguments);
+            changed |= oldExposed != target.ExposedLocals.Count + target.ExposedArguments.Count;
             if (target.InvalidStack != (target.InvalidStack || incoming.InvalidStack)) { target.InvalidStack = true; changed = true; }
             if (target.Stack.Count != incoming.Stack.Count)
             {

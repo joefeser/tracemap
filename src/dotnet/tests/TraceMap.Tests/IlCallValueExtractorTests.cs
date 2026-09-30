@@ -5,6 +5,17 @@ namespace TraceMap.Tests;
 public sealed class IlCallValueExtractorTests
 {
     [Fact]
+    public void Address_origin_size_depth_and_malformed_shapes_fail_closed()
+    {
+        var value = new IlValueOrigin("allocation-site", "1");
+        for (var depth = 0; depth < 64; depth++) value = IlValueAddresses.Create("local-address", 0, value);
+        Assert.Equal("address-unavailable", IlValueAddresses.Target(value).Kind);
+        Assert.Equal("address-unavailable", IlValueAddresses.Target(new("local-address", "invalid")).Kind);
+        Assert.Equal("address-unavailable", IlValueAddresses.Create("local-address", 0, new("unknown", new string('x', 1024))).Kind);
+        Assert.Equal(new IlValueOrigin("allocation-site", "1"), IlValueAddresses.Target(IlValueAddresses.Create("local-address", 0, new("allocation-site", "1"))));
+    }
+
+    [Fact]
     public void Constructor_local_receiver_and_hashed_argument_are_preserved()
     {
         var calls = new[]
@@ -27,7 +38,6 @@ public sealed class IlCallValueExtractorTests
     [Theory]
     [InlineData("br.s", "IlValueControlFlowUnavailable")]
     [InlineData("ldfld", "IlValueInstructionUnavailable")]
-    [InlineData("ldloca.s", "IlValueInstructionUnavailable")]
     public void Unsupported_operation_does_not_carry_a_receiver_across_boundary(string opcode, string gap)
     {
         var flow = IlCallValueExtractor.Extract([
@@ -101,7 +111,7 @@ public sealed class IlCallValueExtractorTests
             "0:0:br.s:br:0x1", "1:1:ldarga.s:v:0", "2:2:pop:-", "3:3:ldarg.0:-", "4:4:call:m:use"
         ], [Call(4, "call", new(1, false, false, true))], 8, false);
         Assert.Equal("unknown", Assert.Single(Assert.Single(flow.Calls).Arguments).Kind);
-        Assert.Equal("stack-unavailable", Assert.Single(flow.Calls).State);
+        Assert.Equal("control-flow-candidate", Assert.Single(flow.Calls).State);
     }
 
     [Fact]
@@ -145,7 +155,7 @@ public sealed class IlCallValueExtractorTests
         ], [Call(0, "newobj", new(0, true, false, true)), Call(7, "callvirt", new(0, true, false, true))],
             8, true, [3], [new(3, 0)]);
         Assert.Equal("unknown", flow.Calls.Single(call => call.Offset == 7).Receiver.Kind);
-        Assert.Equal("stack-unavailable", flow.Calls.Single(call => call.Offset == 7).State);
+        Assert.Equal("control-flow-candidate", flow.Calls.Single(call => call.Offset == 7).State);
         Assert.True(flow.ControlFlow!.Single(node => node.Offset == 2).InvalidatesConfiguration);
     }
 
