@@ -18,10 +18,12 @@ try {
     if ($result -notcontains 'compare.historicalChains=2;historicalVariants=3') { throw 'Historical counts wrong' }
     if ($result -notcontains 'compare.currentChains=2;currentVariants=2') { throw 'Current counts wrong' }
     if ($result -notcontains 'compare.sharedExact=1;historicalOnly=1;currentOnly=1;variantCountDifferences=1;symbolSequenceMatches=1') { throw 'Comparison wrong' }
+    if ($result -notcontains 'compare.symbolHistorical=2;symbolCurrent=2;symbolShared=1;symbolHistoricalOnly=1;symbolCurrentOnly=1;symbolVariantCountDifferences=1') { throw 'Symbol comparison wrong' }
     $html = [IO.File]::ReadAllText($output)
     if ($html.Contains('<script>private</script>') -or !$html.Contains('&lt;script&gt;private&lt;/script&gt;')) { throw 'HTML escaping failed' }
     if (!$html.Contains('100000') -or !$html.Contains('2000000') -or !$html.Contains('Bounded input SHA-256')) { throw 'Context missing' }
     if (($result -join "`n").Contains('private')) { throw 'Private symbols printed' }
+    if (!$html.Contains('Historical-only symbol sequences (hints)') -or !$html.Contains('2 historical / 1 current')) { throw 'Symbol details missing' }
     if ((Get-FileHash $old).Hash -ne $oldHash -or (Get-FileHash $current).Hash -ne $currentHash) { throw 'Input changed' }
     try { & $helper -Historical $old -Current $current -OutputPath $output; throw 'Overwrite accepted' }
     catch { if ($_.Exception.Message -ne 'WEBFORMS_COMPARE_OUTPUT_EXISTS') { throw } }
@@ -29,6 +31,16 @@ try {
     Save @{ query = @{}; paths = @(@{ nodes = @((Node 'A()' 'scan-b')) }) } $current
     $result = @(& $helper -Historical $old -Current $current -OutputPath (Join-Path $folder 'scan.html'))
     if ($result -notcontains 'compare.sharedExact=0;historicalOnly=2;currentOnly=1;variantCountDifferences=0;symbolSequenceMatches=1') { throw 'Scan identity collapsed' }
+    if ($result -notcontains 'compare.symbolHistorical=2;symbolCurrent=1;symbolShared=1;symbolHistoricalOnly=1;symbolCurrentOnly=0;symbolVariantCountDifferences=1') { throw 'Cross-scan hints wrong' }
+    # Multiple exact identities for a single symbol sequence count as one hint,
+    # retaining all variants rather than treating provenance as missing routes.
+    Save @{ query = @{}; paths = @(@{ nodes = @($a) }, @{ nodes = @((Node 'A()' 'scan-b')) }) } $current
+    $result = @(& $helper -Historical $old -Current $current)
+    if ($result -notcontains 'compare.symbolHistorical=2;symbolCurrent=1;symbolShared=1;symbolHistoricalOnly=1;symbolCurrentOnly=0;symbolVariantCountDifferences=0') { throw 'Symbol aggregation wrong' }
+    $default = Join-Path $folder 'chain-comparison.local.html'
+    $defaultHash = (Get-FileHash $default).Hash
+    $null = & $helper -Historical $old -Current $current
+    if (!(Test-Path (Join-Path $folder 'chain-comparison-2.local.html')) -or (Get-FileHash $default).Hash -ne $defaultHash) { throw 'Default repeat overwrote comparison' }
     Save @{ query = @{}; paths = @() } $current
     $result = @(& $helper -Historical $old -Current $current -OutputPath (Join-Path $folder 'empty.html'))
     if ($result -notcontains 'compare.currentChains=0;currentVariants=0') { throw 'Empty report rejected' }

@@ -12,10 +12,19 @@ scan provenance. Query, coverage, declared source/index context and file hashes
 are shown in local HTML. No native admission, rescan or graph traversal is claimed.
 The helper binds its generator and ordered input file hashes to the diagnostic.
 
+Owner comparison of the retained Fill-only 13 / 41 report and current 10 / 34
+report found zero shared exact identities and ten shared symbol sequences.
+This does not yet distinguish three distinct missing routes from alternate
+historical provenance representations. The helper now retains symbol-group
+variant counts and displays historical/current-only symbol sequences plus
+shared count differences ahead of exact-identity differences. Default repeated
+comparisons use a free numbered filename; explicit output collisions still fail.
+
 Regression checks passed for raw/grouped comparison, variant-count changes,
 cross-scan identity differences, empty reports, missing references, output
-collision, HTML escaping and input preservation. Actual private route diagnosis
-remains pending the owner's comparison output; no traversal fix is inferred
+collision, symbol aggregation across exact identities, numbered repeat outputs,
+HTML escaping and input preservation. Actual private route diagnosis
+remains pending the owner's symbol-difference details; no traversal fix is inferred
 from arithmetic alone.
 
 ## Independent review: compiled-only depth prewalk leak (2026-09-30)
