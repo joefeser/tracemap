@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param([string]$Historical, [string]$Current, [string]$OutputPath, [switch]$Open)
+param([string]$Historical, [string]$Current, [string]$Mixed, [string]$OutputPath, [switch]$Open)
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 if (!$Historical) {
@@ -16,6 +16,11 @@ if (!$Historical) {
 }
 if (!$Current) { $Current = Read-Host 'Current handler report folder or JSON file (full path)' }
 if (Test-Path -LiteralPath $Current -PathType Container) { $Current = Join-Path $Current 'compiled-paths.handoff.local.json' }
+if (!$Mixed) {
+    $candidate = Join-Path (Split-Path (Split-Path $Current -Parent) -Parent) 'handler-requery-fill/compiled-paths.handoff.local.json'
+    if (Test-Path -LiteralPath $candidate -PathType Leaf) { $Mixed = $candidate }
+}
+if ($Mixed -and (Test-Path -LiteralPath $Mixed -PathType Container)) { $Mixed = Join-Path $Mixed 'compiled-paths.handoff.local.json' }
 if (!$OutputPath) {
     $parent = Split-Path $Current -Parent
     $OutputPath = Join-Path $parent 'chain-comparison.local.html'
@@ -57,7 +62,17 @@ function ReadReport([string]$path) {
                 if (!$nodes.Contains($reference)) { throw 'WEBFORMS_COMPARE_REFERENCE_MISSING' }
                 $sequence.Add($nodes[$reference])
             }
-            $paths.Add(@{ nodes = $sequence.ToArray() })
+            $edgeSequence = [Collections.Generic.List[object]]::new()
+            $edgeReferences = Value $variant 'edgeReferences'
+            if ($null -ne $edgeReferences) {
+                $edgeRecords = Value $document 'edges'
+                if ($edgeReferences.Count -gt 2048 -or $edgeRecords -isnot [Collections.IDictionary]) { throw 'WEBFORMS_COMPARE_EDGE_SHAPE_INVALID' }
+                foreach ($reference in $edgeReferences) {
+                    if (!$edgeRecords.Contains($reference)) { throw 'WEBFORMS_COMPARE_EDGE_REFERENCE_MISSING' }
+                    $edgeSequence.Add($edgeRecords[$reference])
+                }
+            }
+            $paths.Add(@{ nodes = $sequence.ToArray(); edges = $edgeSequence.ToArray() })
         }
     } else {
         $raw = Value $document 'paths'
@@ -67,6 +82,7 @@ function ReadReport([string]$path) {
     $exact = [Collections.Generic.Dictionary[string,object]]::new([StringComparer]::Ordinal)
     $symbols = [Collections.Generic.Dictionary[string,object]]::new([StringComparer]::Ordinal)
     $totalNodes = 0
+    $totalEdges = 0
     foreach ($row in $paths) {
         $nodes = Value $row 'nodes'
         if ($null -eq $nodes -or $nodes.Count -eq 0 -or $nodes.Count -gt 2048) { throw 'WEBFORMS_COMPARE_NODE_LIMIT' }
@@ -89,7 +105,19 @@ function ReadReport([string]$path) {
         }
         $key = HashText (Json $identity.ToArray())
         $symbolKey = HashText (Json $symbolSequence.ToArray())
-        if (!$symbols.ContainsKey($symbolKey)) { $symbols[$symbolKey] = @{ count = 0; labels = $labels.ToArray() } }
+        if (!$symbols.ContainsKey($symbolKey)) { $symbols[$symbolKey] = @{ count = 0; labels = $labels.ToArray(); evidence = [Collections.Generic.List[object]]::new() } }
+        $edges = Value $row 'edges'
+        $projection = [Collections.Generic.List[object]]::new()
+        if ($null -ne $edges) {
+            if ($edges.Count -gt 2048) { throw 'WEBFORMS_COMPARE_EDGE_LIMIT' }
+            $totalEdges += $edges.Count
+            if ($totalEdges -gt 500000) { throw 'WEBFORMS_COMPARE_EDGE_LIMIT' }
+            foreach ($edge in $edges) {
+                if ($edge -isnot [Collections.IDictionary] -or [string]::IsNullOrWhiteSpace([string](Value $edge 'edgeKind'))) { throw 'WEBFORMS_COMPARE_EDGE_SHAPE_INVALID' }
+                $projection.Add(@{ kind = (Value $edge 'edgeKind'); rule = (Value $edge 'ruleId'); tier = (Value $edge 'evidenceTier'); from = (Value $edge 'fromNodeId'); to = (Value $edge 'toNodeId') })
+            }
+        }
+        $symbols[$symbolKey].evidence.Add($projection.ToArray())
         $symbols[$symbolKey].count++
         if (!$exact.ContainsKey($key)) { $exact[$key] = @{ count = 0; labels = $labels.ToArray() } }
         $exact[$key].count++
@@ -98,6 +126,7 @@ function ReadReport([string]$path) {
 }
 $left = ReadReport $Historical
 $right = ReadReport $Current
+$mixedReport = if ($Mixed) { ReadReport $Mixed } else { $null }
 $leftOnly = @($left.exact.Keys | Where-Object { !$right.exact.ContainsKey($_) } | Sort-Object)
 $rightOnly = @($right.exact.Keys | Where-Object { !$left.exact.ContainsKey($_) } | Sort-Object)
 $shared = @($left.exact.Keys | Where-Object { $right.exact.ContainsKey($_) })
@@ -108,7 +137,8 @@ $symbolLeftOnly = @($left.symbols.Keys | Where-Object { !$right.symbols.Contains
 $symbolRightOnly = @($right.symbols.Keys | Where-Object { !$left.symbols.ContainsKey($_) } | Sort-Object)
 $symbolVariantDifferences = @($symbolShared | Where-Object { $left.symbols[$_].count -ne $right.symbols[$_].count })
 $generator = (Get-FileHash -LiteralPath $PSCommandPath -Algorithm SHA256).Hash.ToLowerInvariant()
-$bounded = HashText ("webforms-chain-comparison.v1`n$($left.hash)`n$($right.hash)`n$generator")
+$mixedHash = if ($null -ne $mixedReport) { $mixedReport.hash } else { 'not-supplied' }
+$bounded = HashText ("webforms-chain-comparison.v1`n$($left.hash)`n$($right.hash)`n$mixedHash`n$generator")
 function Convert-ComparisonHtml([string]$text) { return [Net.WebUtility]::HtmlEncode($text) }
 $html = [Text.StringBuilder]::new()
 [void]$html.AppendLine('<!doctype html><html lang="en"><meta charset="utf-8"><title>Local chain comparison</title><style>body{font:16px/1.5 system-ui;margin:2rem;max-width:1200px}pre{white-space:pre-wrap;overflow-wrap:anywhere}td,th{border:1px solid #aaa;padding:.5rem;vertical-align:top}table{border-collapse:collapse}</style><h1>Local chain comparison</h1>')
@@ -120,6 +150,9 @@ foreach ($report in @($left, $right)) {
     [void]$html.AppendLine('<td><pre>' + (Convert-ComparisonHtml (Json @{ query = (Value $report.header 'query'); summary = (Value $report.header 'summary'); coverage = (Value $report.header 'reportCoverage'); sources = (Value $report.header 'sources'); declaredIndexSha256 = $report.indexHash })) + '</pre></td>')
 }
 [void]$html.AppendLine('</tr></table>')
+if ($null -ne $mixedReport) {
+    [void]$html.AppendLine('<h2>Saved mixed-mode context</h2><pre>' + (Convert-ComparisonHtml (Json @{ query = (Value $mixedReport.header 'query'); summary = (Value $mixedReport.header 'summary'); coverage = (Value $mixedReport.header 'reportCoverage'); sources = (Value $mixedReport.header 'sources'); fileSha256 = $mixedHash })) + '</pre>')
+} else { [void]$html.AppendLine('<p>Mixed-mode report not found. Supply -Mixed with its folder or JSON path; no graph query is started.</p>') }
 $shown = 0
 foreach ($side in @(
     @{ title = 'Historical-only symbol sequences (hints)'; keys = $symbolLeftOnly; entries = $left.symbols; left = $left.symbols; right = $right.symbols },
@@ -135,6 +168,10 @@ foreach ($side in @(
         $entry = $side.entries[$key]
         $counts = if ($side.right.ContainsKey($key) -and $side.left.ContainsKey($key)) { "$($side.left[$key].count) historical / $($side.right[$key].count) current" } else { "$($entry.count) variants" }
         [void]$html.AppendLine('<details><summary>' + (Convert-ComparisonHtml "$key — $counts") + '</summary><pre>' + (Convert-ComparisonHtml ($entry.labels -join "`n→ ")) + '</pre></details>')
+        if ($entry.ContainsKey('evidence') -and $side.title -ne 'Current-only symbol sequences (hints)') {
+            $mixedCount = if ($null -eq $mixedReport) { 'not supplied' } elseif ($mixedReport.symbols.ContainsKey($key)) { [string]$mixedReport.symbols[$key].count } else { '0' }
+            [void]$html.AppendLine('<p>Saved mixed-mode variants for this symbol hint: ' + $mixedCount + '. Not parity proof. Empty edge arrays mean no edge evidence supplied; method labels alone do not prove a source bridge.</p><details><summary>Historical edge evidence (all variants)</summary><pre>' + (Convert-ComparisonHtml (Json $entry.evidence.ToArray())) + '</pre></details>')
+        }
     }
 }
 [void]$html.AppendLine("<p>Displayed differences: $shown (limit 500).</p><pre>Generator SHA-256: $generator`nBounded input SHA-256: $bounded`nHistorical file SHA-256: $($left.hash)`nCurrent file SHA-256: $($right.hash)</pre></html>")
@@ -146,5 +183,7 @@ Write-Output "compare.historicalChains=$($left.exact.Count);historicalVariants=$
 Write-Output "compare.currentChains=$($right.exact.Count);currentVariants=$($right.variants)"
 Write-Output "compare.sharedExact=$($shared.Count);historicalOnly=$($leftOnly.Count);currentOnly=$($rightOnly.Count);variantCountDifferences=$($variantDifferences.Count);symbolSequenceMatches=$symbolMatches"
 Write-Output "compare.symbolHistorical=$($left.symbols.Count);symbolCurrent=$($right.symbols.Count);symbolShared=$symbolMatches;symbolHistoricalOnly=$($symbolLeftOnly.Count);symbolCurrentOnly=$($symbolRightOnly.Count);symbolVariantCountDifferences=$($symbolVariantDifferences.Count)"
+$mixedMatches = if ($null -ne $mixedReport) { @($symbolLeftOnly | Where-Object { $mixedReport.symbols.ContainsKey($_) }).Count } else { 0 }
+Write-Output "compare.mixedReportPresent=$($null -ne $mixedReport);historicalOnlySymbolSequencesFoundInMixed=$mixedMatches"
 Write-Output 'compare=local-diagnostic-written;unadmitted-inputs;no-scan;no-traversal'
 if ($Open) { Invoke-Item -LiteralPath $OutputPath }

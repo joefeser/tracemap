@@ -41,6 +41,19 @@ try {
     $defaultHash = (Get-FileHash $default).Hash
     $null = & $helper -Historical $old -Current $current
     if (!(Test-Path (Join-Path $folder 'chain-comparison-2.local.html')) -or (Get-FileHash $default).Hash -ne $defaultHash) { throw 'Default repeat overwrote comparison' }
+    # A saved mixed report can contain a historical-only symbol sequence.
+    $mixed = Join-Path $folder 'mixed.json'
+    Save @{ query = @{ traversalScope = 'mixed' }; paths = @(@{ nodes = @((Node 'B()' 'scan-b')); edges = @(@{ edgeKind = 'calls'; ruleId = 'test.calls'; evidenceTier = 'Tier3SyntaxOrTextual' }) }) } $mixed
+    Save @{ query = @{}; paths = @(@{ nodes = @($a) }, @{ nodes = @($a) }, @{ nodes = @($b); edges = @(@{ edgeKind = 'compiled-source-identity'; ruleId = 'test.bridge'; evidenceTier = 'Tier2Structural' }) }) } $old
+    $mixedOutput = Join-Path $folder 'mixed.html'
+    $result = @(& $helper -Historical $old -Current $current -Mixed $mixed -OutputPath $mixedOutput)
+    if ($result -notcontains 'compare.mixedReportPresent=True;historicalOnlySymbolSequencesFoundInMixed=1') { throw 'Mixed overlap missing' }
+    $html = [IO.File]::ReadAllText($mixedOutput)
+    if (!$html.Contains('compiled-source-identity') -or !$html.Contains('test.bridge') -or !$html.Contains('Saved mixed-mode variants for this symbol hint: 1')) { throw 'Historical edge evidence missing' }
+    if (!$html.Contains((Get-FileHash $mixed).Hash.ToLowerInvariant())) { throw 'Mixed input hash missing' }
+    Save @{ schemaVersion = 'webforms-compiled-grouped-handoff.v1'; header = @{}; nodes = @{ b = $b }; edges = @{ e = @{ edgeKind = 'calls'; ruleId = 'test.calls'; evidenceTier = 'Tier3SyntaxOrTextual' } }; variants = @(@{ nodeReferences = @('b'); edgeReferences = @('e') }) } $mixed
+    $result = @(& $helper -Historical $old -Current $current -Mixed $mixed -OutputPath (Join-Path $folder 'mixed-grouped.html'))
+    if ($result -notcontains 'compare.mixedReportPresent=True;historicalOnlySymbolSequencesFoundInMixed=1') { throw 'Grouped mixed overlap missing' }
     Save @{ query = @{}; paths = @() } $current
     $result = @(& $helper -Historical $old -Current $current -OutputPath (Join-Path $folder 'empty.html'))
     if ($result -notcontains 'compare.currentChains=0;currentVariants=0') { throw 'Empty report rejected' }
@@ -48,5 +61,9 @@ try {
     try { & $helper -Historical $old -Current $current -OutputPath (Join-Path $folder 'bad.html'); throw 'Missing reference accepted' }
     catch { if ($_.Exception.Message -ne 'WEBFORMS_COMPARE_REFERENCE_MISSING') { throw } }
     if (Test-Path (Join-Path $folder 'bad.html')) { throw 'Invalid output written' }
+    Save @{ schemaVersion = 'webforms-compiled-grouped-handoff.v1'; header = @{}; nodes = @{ a = $a }; edges = @{}; variants = @(@{ nodeReferences = @('a'); edgeReferences = @('missing') }) } $current
+    try { & $helper -Historical $old -Current $current -OutputPath (Join-Path $folder 'bad-edge.html'); throw 'Missing edge accepted' }
+    catch { if ($_.Exception.Message -ne 'WEBFORMS_COMPARE_EDGE_REFERENCE_MISSING') { throw } }
+    if (Test-Path (Join-Path $folder 'bad-edge.html')) { throw 'Invalid edge output written' }
     Write-Output 'webFormsChainComparisonPublicTests=passed'
 } finally { [IO.Directory]::Delete($folder, $true) }

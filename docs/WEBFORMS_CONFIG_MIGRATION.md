@@ -15,6 +15,16 @@ then the next free numbered name (up to 1,000). An explicit `-OutputPath` still
 refuses to overwrite an existing file.
 It performs no scan, build or graph traversal.
 
+When present, the sibling `handler-requery-fill/compiled-paths.handoff.local.json`
+is also read to check historical-only symbol hints against the saved mixed-mode
+result. Use `-Mixed <folder-or-json>` for another saved report. Its query context
+and exact file hash are included; absent mixed results are labeled, not queried.
+Historical edge kinds, rules, tiers and endpoint node IDs are shown for each
+historical symbol difference and shared variant-count difference. These are
+as-supplied evidence, not native admission; empty edge arrays are unknown, not
+proof of a pure IL route. Inspect edge kinds before attributing a difference to
+the compiled-only filter. Reading method labels alone is insufficient.
+
 The private comparison shows both query settings, coverage, declared source/index
 identities, distinct sequences and variant counts. Exact sequences include node
 kind, source index, scan, commit, symbol-or-node identity and display name.
@@ -27,7 +37,7 @@ collapsed. File SHA-256 values, helper generator SHA-256 and a bounded-input
 SHA-256 identify the comparison inputs. Native receipts are not admitted by this
 helper. Original chain IDs are not assumed comparable across different scans.
 Inputs are capped at 256 MiB each, 10,000 variants, 2,048 nodes per variant and
-500,000 node references per report; output is capped at 32 MiB and displays at
+500,000 node references and 500,000 edge references per report; output is capped at 32 MiB and displays at
 most 500 differences while counts cover all admitted sequences. Unsupported
 formats or broken node references fail before writing the result.
 
