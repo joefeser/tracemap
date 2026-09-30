@@ -83,3 +83,4 @@
 - [x] Reconcile pre-PR readable-label and receiver fixes with native reporting; restore local compiled labels from exact retained symbols without changing graph or privacy projections.
 - [x] Restore explicit Fill-only terminal query scope for retained handler comparison and bind that scope into the requery receipt.
 - [x] Add an independently traversed compiled-IL baseline with at most one evidenced root attachment, excluding downstream source bridges and binding scope into receipts.
+- [x] Prevent unrestricted depth-recovery witnesses from bypassing compiled-only scope; pin source shortcut exclusion, reachable diagnostics, depth gaps and mixed-query recovery with regression tests.
