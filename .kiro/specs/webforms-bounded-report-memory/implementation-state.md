@@ -1,5 +1,28 @@
 # Implementation state
 
+## Authentic Windows corpus accepted (2026-09-30)
+
+Code head 6dbdf2baf64c3e8ce510ac2c4aa8483eed6f6372 passed CI run 36788401704:
+14 passed, zero failed, zero skipped. Both authentic ASP.NET mapped/mapless
+publish theories passed. The unchanged 32-MiB logical payload guard measured
+19,483,643 bytes mapped and 15,027,147 bytes mapless; receiver/implicit bridge
+stages read 120/74 rows. Native start/resume passed all assertions and retained
+six mixed routes in 391 work units. Downloaded the public artifacts and checked
+TRX counts, wrapper generator/source hashes (explicit Windows CRLF checkout
+bytes), bounded-input digest, source commit, all published DLL/map hashes, map
+inventory digests and separate provider PDB hashes. Publish roots contain no
+PDBs. Execution assembly hashes are retained by the wrapper but binaries were
+not uploaded, so independent execution-binary rehashing is not claimed.
+
+The public corpus checklist is complete. The final full local suite at the same
+code head passed 2,996 tests, zero failures and one explicit Windows-only skip in
+16 minutes 38 seconds; that skipped theory was separately covered by both
+passing authentic Windows cases above. The focused slice passed 231 tests with
+one Windows skip. Privacy and diff guards passed. The owner-retained private
+application fresh-scan gate remains open.
+No physical drive-read, exhaustive private route parity, SQL execution or
+migration-readiness acceptance is inferred from this synthetic Windows run.
+
 ## Authentic Windows corpus follow-up (2026-09-30)
 
 CI run 36787260898 at 4c94db97 built both actual ASP.NET publish modes. It failed

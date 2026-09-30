@@ -1,12 +1,12 @@
 # Web Forms bounded report memory
 
-- [ ] Complete deep projectless multi-DLL regression corpus including Windows publish workflow, branches/cycles/decoys, exact route parity and bounded I/O/runtime.
+- [x] Complete the public deep projectless multi-DLL regression corpus including Windows publish workflow, branches/cycles/decoys, exact expected fixture routes and bounded work/artifact/logical-read guards; physical I/O and private application acceptance remain unclaimed.
   - [x] Build an external net48 harness over projectless website source and test twelve forwarding layers into the separately compiled legacy provider through scan/index/combine/report.
   - [x] Validate mixed/compiled-only, missing-provider and depth-limit cases on the current fixture (four local cases passed).
   - [x] Add ordered compiled-method/procedure-fingerprint assertions, branch/cycle/decoy/unknown-operand cases, repeatability and work/artifact/logical-read guards.
   - [x] Validate native start, retained single-handler compiled query and byte-identical resume on the final fixture.
   - [x] Validate the one-command receipt wrapper and explicit macOS refusal of required Windows acceptance.
-  - [ ] Run authentic mapped/mapless Windows publish tests and inspect returned artifacts; a macOS skip is not acceptance.
+  - [x] Run authentic mapped/mapless Windows publish tests and inspect returned artifacts; exact code head 6dbdf2ba passed 14 tests with no skips in CI run 36788401704, with publish/source/map/PDB and validation receipt hashes checked.
   - [x] Fix the reproduced broad mixed-source traversal exhaustion with evidenced IL-first scheduling and bounded reverse-distance pruning; pin all five handlers and six routes below 1,000 work units. Exhaustive mixed-mode parity remains unclaimed.
 
 - [x] Make evidence-token capacity explicit and backward-compatible; bulk-load lookup indexes and recover node-limit report failures into separately labeled private bundles without rescanning.

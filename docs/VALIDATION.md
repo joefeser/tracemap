@@ -19,6 +19,20 @@ required mapped/mapless publishing on a Windows runner and retains the public
 synthetic result folder even when tests fail. Its result must be inspected at the
 exact tested head; private application validation remains a separate owner gate.
 
+The authentic Windows run at code head `6dbdf2baf64c3e8ce510ac2c4aa8483eed6f6372`
+[passed all 14 cases, with zero failures or skips](https://github.com/joefeser/tracemap/actions/runs/36788401704).
+Both actual ASP.NET publish modes passed the unchanged 32-MiB logical payload
+guard: mapped read 19,483,643 bytes; mapless read 15,027,147 bytes. Retained TRX,
+validation receipt, published DLL/map hashes, source hashes and separate provider
+PDB hashes were inspected. Source/generator checks accounted explicitly for
+Windows CRLF checkout bytes. Execution assembly hashes are retained in the
+receipt, but those binaries were not uploaded for independent rehashing.
+The native mixed query also passed with six routes in 391 work units. This clears
+the public Windows corpus gate, not the owner-retained application gate.
+The full local .NET suite at that same code head passed 2,996 tests with zero
+failures and one explicit Windows-only skip in 16 minutes 38 seconds. Both
+cases of the skipped theory passed in the authentic Windows run above.
+
 The native five-handler mixed query now prioritizes encoded IL transitions and
 uses a bounded reverse terminal-distance pass to prune branches that cannot finish
 inside the configured depth. All pass work is charged to the same global budget;
