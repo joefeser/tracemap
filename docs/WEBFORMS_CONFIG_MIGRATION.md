@@ -1,5 +1,31 @@
 # Migrate existing private Web Forms configs
 
+## Extract saved handler database and SQL evidence
+
+```powershell
+.\scripts\wsqlroute.ps1 -Open
+```
+
+Enter the saved mixed-mode `verify-5\handler-requery-fill` folder, not the
+compiled-only folder. This reads its grouped handoff (or an explicit raw paths
+JSON), resolves references and writes a local HTML ledger. It does not build,
+scan, query SQLite, execute SQL or traverse the graph. Existing ledgers are
+preserved using numbered filenames; explicit output collisions fail.
+
+The ledger displays route labels, retained database API / SQL query / SQL
+persistence surface fields, their rule/tier/location/provenance, non-IL edge
+kinds and saved report gaps. It never derives SQL, procedure identity or
+parameter values from method names or a Fill endpoint. Missing SQL surfaces
+and missing edge evidence are explicit gaps. Native receipts are not admitted;
+the result is private, partial, as-supplied evidence, not execution or parity
+proof. Full node records define ledger groups so different evidence is not
+silently discarded; group counts are not chain-parity counts.
+
+Input is capped at 256 MiB, 10,000 variants, 2,048 nodes/edges per variant and
+500,000 combined references. Output is capped at 32 MiB with at most 500 groups
+displayed. Exact helper and input hashes bind the bounded-input receipt.
+
+
 ## Compare saved handler routes
 
 ```powershell
