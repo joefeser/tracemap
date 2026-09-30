@@ -1,5 +1,30 @@
 # TraceMap Validation Guide
 
+For deep projectless cross-DLL command evidence, run:
+
+```powershell
+.\scripts\validation\Test-DeepProjectlessCorpus.ps1
+```
+
+The synthetic net48 Page fixture crosses twelve forwarding layers into a
+separate legacy VB provider. It checks exact compiled method order, text/type
+fingerprints, branches/cycles/decoys, unknown values, missing-provider/depth/work
+refusal, logical payload/artifact guards, native proof preparation and immutable
+resume. The current macOS slice passes 12 cases and visibly skips the authentic
+Windows publish theory. Require both mapped/mapless ASP.NET outputs on Windows
+with `-RequireWindowsPublish`; an unrun publish is never accepted as a pass.
+See [corpus commands and limitations](../samples/fixture-build/deep-projectless/README.md).
+
+The native five-handler mixed query now prioritizes encoded IL transitions and
+uses a bounded reverse terminal-distance pass to prune branches that cannot finish
+inside the configured depth. All pass work is charged to the same global budget;
+an incomplete reverse pass is discarded. The reproduced query retains six routes
+in 391 work units instead of exhausting 100,000 with no paths. It checks all five
+handlers, both branch literals, the exact deep compiled chain and text/type
+candidate, unknown values and decoy exclusion. Depth/cycle gaps stay partial;
+this is not exhaustive mixed/compiled parity, parameter-value propagation,
+physical drive-read measurement or private migration readiness.
+
 For native one-command start, run the preparation, preflight, execution and
 native-scale suites. Pin explicit receipt/attestation authority, new-root
 reservation, original-config stability across phases, fresh and immutable

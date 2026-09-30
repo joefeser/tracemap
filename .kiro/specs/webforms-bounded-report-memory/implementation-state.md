@@ -1,5 +1,83 @@
 # Implementation state
 
+## Mixed-query traversal repair locally validated (2026-09-30)
+
+The previous corpus-only goal was closed too narrowly; the actual work-machine
+fix remains the acceptance target. A native mixed-report assertion reproduced
+zero deep routes under the 100,000-work limit before the repair. IL-first edge
+priority recovered the handlers but alone still exhausted work. Algorithm 1.3
+adds a bounded reverse terminal-distance pass: at most one quarter of the same
+work budget and at most MaxFrontier state keys, reading indexed predecessor keys
+without whole edge payloads. Only a complete pass can prune a branch; an
+incomplete pass is discarded. Pruning uses an over-approximation of admitted
+edges, does not admit any path, and retains explicit depth gaps. Roots without
+an in-depth reverse witness retain the prior traversal/diagnostic behavior.
+
+The repaired native regression retains six expected routes across all five
+handlers in 391 work units, below a pinned 1,000-work assertion. It checks the
+exact twelve-layer/two-DLL method sequence and command text/type, both branch
+literals, unresolved unknown/computed operands, decoy exclusion, original
+input preservation and byte-identical resume. Depth/cycle gaps remain partial.
+The legacy work/path/frontier guards and compiled-only edge scope are unchanged.
+The focused graph/packet/IL/admission/handoff/native slice passed 231 tests with
+one explicit Windows skip. The final algorithm-1.3 corpus wrapper passed 12
+tests and one Windows skip, retaining a source/executed-assembly-bound receipt.
+The exact final full .NET suite passed 2,996 tests, zero failures and one explicit
+Windows skip in 14 minutes 26 seconds. CLI scan emitted 744 facts with reduced
+syntax coverage and passed artifact validation. Wrapper guards, command-verify
+orchestration, command-fact reader, private-path and diff checks passed; the
+build emitted no warnings. Changes remain on codex/webforms-config-migration.
+The earlier corpus-only patch is superseded by this repair. Authentic Windows
+mapped/mapless and private fresh-scan results remain open; do not close their
+acceptance goal based on this Mac run. No physical drive-read, complete private
+migration or unrun Windows acceptance claim is made.
+
+## Deep projectless cross-DLL corpus started (2026-09-30)
+
+Added projectless synthetic website source and an external net48 build harness.
+The handler forwards through twelve layers into the separately built existing
+legacy provider. The first local native scan/index/combine/compiled-path test
+passed and retained caller-substituted text/type at Fill. All four compiled-only,
+mixed mode, missing-provider and shallow-depth cases passed locally (one second
+test execution after build). Diff whitespace validation passed. This is not yet an
+ASP.NET publish or retained-proof workflow test, nor a full branch/parameter or
+performance acceptance claim. The broader fixture task remains open.
+
+Expanded the corpus with five actual Page handlers, twelve forwarding layers,
+branches, a cycle, same-named decoys and unknown values. Direct query cases pin
+exact method order and UTF-16 IL literal fingerprints. Computed Boolean caller
+operands currently retain an explicit unresolved provenance gap; the fixture
+does not silently infer their text. The native case builds exact committed
+synthetic source in a temporary repository before preparation, avoiding false
+attribution of unrelated prebuilt DLLs to its commit. Generated mapping provenance
+is explicitly not an ASP.NET compiler claim.
+
+The native broad mixed-source report reproduces work exhaustion at 100,000 work
+units with no deep route returned. A separate single-root compiled-only query
+over its retained combined index recovers text/type through the full chain.
+No core scanner or traversal policy was changed, and broad mixed-source parity
+remains open. Both synthetic DLLs are primary because this case compiles both
+from the exact test commit; external private providers cannot inherit that claim.
+
+The Windows publisher now accepts -DeepChain for mapped and mapless outputs,
+and hashes every provider VB build input rather than just one source file.
+Windows tests are visibly skipped on macOS. The retained validation wrapper
+records exact script/input/executed-assembly hashes and refuses existing roots
+or required Windows acceptance on macOS. The first full fixture wrapper passed
+12 local cases with one explicit Windows skip in 10 seconds after build. The
+related IL/admission/grouped-handoff/native slice passed 112 cases with the same
+one skip in 23 seconds. CLI scan emitted 744 facts with syntax/reduced source
+analysis and passed adapter-artifact validation. Wrapper guard tests, publisher
+syntax, private-path and diff checks passed. Source snapshots are now checked
+before/after wrapper execution. The final wrapper rerun passed 12 local cases,
+one explicit Windows skip and no failures in 10 seconds, retaining the TRX and
+generator/input-hashed receipt. The full .NET suite passed 2,995 cases with one
+Windows skip and zero failures in 16 minutes 42 seconds. The build emitted no
+warnings. All new tracked-intent source files passed the private-path guard.
+No scanner/reducer code was changed. Authentic mapped/mapless Windows results
+and broad mixed-query parity remain open; the one-command Windows handoff is
+ready, not executed on this Mac.
+
 ## Legacy VB operand repair after owner zero-candidate validation (2026-09-30)
 
 The owner fresh scan observed call-value facts but zero command candidates.

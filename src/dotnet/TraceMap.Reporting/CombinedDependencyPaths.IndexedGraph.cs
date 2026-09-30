@@ -96,7 +96,7 @@ public static partial class CombinedDependencyPathReporter
                         rank integer not null, file_path text, line integer not null,
                         payload blob not null, ordinal integer not null, payload_bytes integer not null);
                     create index graph_edges_from on graph_edges(from_id, ordinal);
-                    create index graph_edges_to on graph_edges(to_id);
+                    create index graph_edges_to on graph_edges(to_id,ordinal);
                     create table graph_edge_order(global_order integer primary key, from_id text not null,
                         local_order integer not null, edge_id text not null unique);
                     create unique index graph_edge_order_from on graph_edge_order(from_id, local_order);
@@ -251,6 +251,19 @@ public static partial class CombinedDependencyPathReporter
         {
             using var count = Command("select count(*) from graph_edges where from_id=$id;", id);
             return new IndexedOutgoingEdges(this, id, checked((int)Convert.ToInt64(count.ExecuteScalar())));
+        }
+
+        public IEnumerable<string> Predecessors(string id)
+        {
+            using var command = Command("select from_id from graph_edges where to_id=$id order by ordinal;", id);
+            using var reader = command.ExecuteReader();
+            incomingCountQueries++;
+            while (reader.Read())
+            {
+                token.ThrowIfCancellationRequested();
+                incomingReferenceRowsObserved++;
+                yield return reader.GetString(0);
+            }
         }
 
         private IReadOnlyList<GraphEdge> ReadOutgoingPage(string id, int startIndex)
@@ -509,6 +522,19 @@ public static partial class CombinedDependencyPathReporter
             rows.Add(edge);
         }
         public IEnumerable<KeyValuePair<string, List<GraphEdge>>> MemoryEntries => memory;
+    }
+
+    private sealed class GraphIncoming(IndexedGraphStore? store)
+    {
+        private readonly Dictionary<string, List<string>> memory = new(StringComparer.Ordinal);
+        public IEnumerable<string> Predecessors(string id)
+            => store?.Predecessors(id) ?? (memory.TryGetValue(id, out var rows) ? rows : []);
+        public void Add(GraphEdge edge)
+        {
+            if (store is not null) return;
+            if (!memory.TryGetValue(edge.ToNodeId, out var rows)) memory[edge.ToNodeId] = rows = [];
+            rows.Add(edge.FromNodeId);
+        }
     }
 
     private sealed class ReversedGraphEdges(IReadOnlyList<GraphEdge> edges) : IReadOnlyList<GraphEdge>
