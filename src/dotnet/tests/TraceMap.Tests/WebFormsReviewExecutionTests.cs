@@ -1269,6 +1269,20 @@ public sealed class WebFormsReviewExecutionTests
             Assert.NotNull(handlerReceipt.GraphObservation);
             Assert.Equal(handlerReceipt.CombinedIndexSha256, handlerReceipt.GraphObservation.InputSha256);
             Assert.Contains("no-scan;no-combine", requeryOutput.ToString());
+            var fillFolder = Path.Combine(fixture.Root, "handler-fill-query");
+            using var fillOutput = new StringWriter();
+            Assert.Equal(0, await TraceMapCommand.RunAsync(["webforms-review", "requery-handler", "--run", fixture.Run,
+                "--bundle", target, "--handler", "Names_Init", "--out", fillFolder, "--surface-name", "DbDataAdapter.Fill"], fillOutput, error));
+            var fillReceipt = JsonSerializer.Deserialize<WebFormsHandlerRequeryReceipt>(File.ReadAllText(Path.Combine(fillFolder,
+                WebFormsReviewExecutionCommand.HandlerRequeryName)), JsonOptions)!;
+            Assert.Equal("DbDataAdapter.Fill", fillReceipt.Query.SurfaceName);
+            Assert.Equal(WebFormsReviewExecutionCommand.HandlerRequeryHash(fillReceipt), fillReceipt.BoundedInputSha256);
+            Assert.Equal(handlerReceipt.CombinedIndexSha256, fillReceipt.CombinedIndexSha256);
+            Assert.Contains("handlerQuery.terminalScope=DbDataAdapter.Fill", fillOutput.ToString());
+            var badScope = Path.Combine(fixture.Root, "bad-scope");
+            Assert.Equal(1, await TraceMapCommand.RunAsync(["webforms-review", "requery-handler", "--run", fixture.Run,
+                "--bundle", target, "--handler", "Names_Init", "--out", badScope, "--surface-name", "Wrong"], TextWriter.Null, error));
+            Assert.False(Directory.Exists(badScope));
             Assert.Equal(1, await TraceMapCommand.RunAsync(["webforms-review", "requery-handler", "--run", fixture.Run,
                 "--bundle", target, "--handler", "Names_Init", "--out", handlerFolder], TextWriter.Null, error));
             Assert.Equal(1, await TraceMapCommand.RunAsync(["webforms-review", "requery-handler", "--run", fixture.Run,
