@@ -123,6 +123,54 @@ public sealed class IlCallValueExtractorTests
     }
 
     [Fact]
+    public void Exception_handler_entry_does_not_inherit_a_try_local_receiver()
+    {
+        var flow = IlCallValueExtractor.Extract([
+            "0:0:newobj:m:ctor", "1:1:stloc.0:-", "2:2:br.s:br:0x8", "3:3:nop:-",
+            "4:4:pop:-", "5:5:ldloc.0:-", "6:6:callvirt:m:use", "7:7:ret:-", "8:8:ret:-"
+        ], [Call(0, "newobj", new(0, true, false, true)), Call(6, "callvirt", new(0, true, false, true))],
+            8, true, [4], [new(4, 1)]);
+        Assert.Equal("unknown", flow.Calls.Single(call => call.Offset == 6).Receiver.Kind);
+        Assert.Contains("IlValueExceptionFlowUnavailable", flow.Gaps);
+        var entry = Assert.Single(flow.ControlFlow!, node => node.ExceptionEntryStackCount == 1);
+        Assert.True(entry.InvalidatesConfiguration);
+    }
+
+    [Fact]
+    public void Leave_continuation_cannot_inherit_configuration_or_local_origins_past_finally()
+    {
+        var flow = IlCallValueExtractor.Extract([
+            "0:0:newobj:m:ctor", "1:1:stloc.0:-", "2:2:leave.s:br:0x6",
+            "3:3:nop:-", "4:4:endfinally:-", "5:5:nop:-", "6:6:ldloc.0:-", "7:7:callvirt:m:use"
+        ], [Call(0, "newobj", new(0, true, false, true)), Call(7, "callvirt", new(0, true, false, true))],
+            8, true, [3], [new(3, 0)]);
+        Assert.Equal("unknown", flow.Calls.Single(call => call.Offset == 7).Receiver.Kind);
+        Assert.Equal("stack-unavailable", flow.Calls.Single(call => call.Offset == 7).State);
+        Assert.True(flow.ControlFlow!.Single(node => node.Offset == 2).InvalidatesConfiguration);
+    }
+
+    [Fact]
+    public void Read_only_field_load_is_unknown_without_destroying_unrelated_local_origins()
+    {
+        var flow = IlCallValueExtractor.Extract([
+            "0:0:br.s:br:0x1", "1:1:ldarg.0:-", "2:2:stloc.0:-", "3:3:ldarg.1:-",
+            "4:4:ldfld:field", "5:5:call:m:use", "6:6:ldloc.0:-", "7:7:call:m:use"
+        ], [Call(5, "call", new(1, false, false, true)), Call(7, "call", new(1, false, false, true))], 8, false);
+        Assert.Equal("unknown", Assert.Single(flow.Calls[0].Arguments).Kind);
+        Assert.Equal(new IlValueOrigin("argument-slot", "0"), Assert.Single(flow.Calls[1].Arguments));
+        Assert.Contains("IlValueFieldOriginUnavailable", flow.Gaps);
+    }
+
+    [Fact]
+    public void Exception_entry_limit_fails_closed_before_seeding_handler_states()
+    {
+        var flow = IlControlFlowValueExtractor.Extract(["0:0:ret:-"], [], 8,
+            Enumerable.Repeat(new IlValueExceptionEntry(0, 0), IlControlFlowValueExtractor.MaxExceptionEntries + 1).ToArray());
+        Assert.Empty(flow.Calls);
+        Assert.Contains("IlValueExceptionEntryLimit", flow.Gaps);
+    }
+
+    [Fact]
     public void Known_exception_boundaries_admit_only_local_straight_line_origins()
     {
         var flow = IlCallValueExtractor.Extract([

@@ -7,18 +7,19 @@ namespace TraceMap.Core;
 internal static class IlCallValueExtractor
 {
     internal const string Schema = "il-call-values.v1";
-    internal const string Limitation = "Bounded method-local operand origins only. Normal branch/loop flow uses equality-only fixed-point joins; exception flow remains a reduced local lane. Strings are length plus SHA-256 of exact UTF-16 code units, never raw text. Argument slots are not values. Object origins are allocation/call-site identities, not runtime objects. Unsupported instructions, byref operations, stack failures and work limits invalidate or withhold operand state. Non-byref calls preserve slot origins, not object configuration; consumers must invalidate configuration across unknown call effects. No heap alias, field value, branch feasibility, interprocedural binding, SQL execution or runtime dispatch is proven.";
+    internal const string Limitation = "Bounded method-local operand origins only. Normal branch/loop flow uses equality-only fixed-point joins, including protected blocks with known exception entries. Handler/filter roots have unknown pre-exception local state; leave discards state across unmodelled finally effects. Exception dispatch and finally continuations are not reconstructed. Strings are length plus SHA-256 of exact UTF-16 code units, never raw text. Argument slots are not values. Object origins are allocation/call-site identities, not runtime objects. Unsupported instructions, byref operations, stack failures and work limits invalidate or withhold operand state. Non-byref calls preserve slot origins, not object configuration; consumers must invalidate configuration across unknown call effects. No heap alias, field value, branch feasibility, interprocedural binding, SQL execution or runtime dispatch is proven.";
     private static readonly IlValueOrigin Unknown = new("unknown", "");
 
     internal static IlValueFlowObservation Extract(IReadOnlyList<string> instructions,
         IReadOnlyList<IlCallObservation> calls, int maxStack, bool hasExceptionRegions,
-        IReadOnlyCollection<long>? exceptionBoundaries = null)
+        IReadOnlyCollection<long>? exceptionBoundaries = null,
+        IReadOnlyList<IlValueExceptionEntry>? exceptionEntries = null)
     {
         // Exception edges remain in the explicitly reduced local lane. Normal
         // branch/loop flow uses a bounded fixed point with equality-only joins.
-        if (!hasExceptionRegions && instructions.Any(instruction => instruction.Split(':', 4)[3].StartsWith("br:0x", StringComparison.Ordinal)
+        if ((!hasExceptionRegions || exceptionEntries is not null) && instructions.Any(instruction => instruction.Split(':', 4)[3].StartsWith("br:0x", StringComparison.Ordinal)
                 || instruction.Split(':', 4)[3].StartsWith("sw:", StringComparison.Ordinal)))
-            return IlControlFlowValueExtractor.Extract(instructions, calls, maxStack);
+            return IlControlFlowValueExtractor.Extract(instructions, calls, maxStack, exceptionEntries);
         var events = new List<IlCallValueObservation>();
         var gaps = new SortedSet<string>(StringComparer.Ordinal);
         var stack = new List<IlValueOrigin>();

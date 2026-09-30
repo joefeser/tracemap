@@ -12,6 +12,69 @@ public sealed class IlCommandBindingExtractorTests
 {
     private const string PrivateLiteral = "private-fixture-procedure-never-retained";
 
+    [Fact]
+    public async Task Real_VB_net48_wrapper_retains_both_normal_command_endpoints_with_provenance()
+    {
+        var sourcePath = Path.Combine(FindRepoRoot(), "samples", "messy-dotnet-workspace", "vb-publish-crossdll-framework");
+        var configuration = new DirectoryInfo(AppContext.BaseDirectory).Parent!.Name;
+        var assemblyPath = Path.Combine(sourcePath, "bin", configuration, "net48", "PublicProof.Framework.dll");
+        Assert.True(File.Exists(assemblyPath), "The project-reference fixture must be built before this test.");
+        var bytes = File.ReadAllBytes(assemblyPath); var limits = new IlBodyLimits();
+        var cecil = IlBodyEvidenceExtractor.ReadCecilBodies(bytes, limits, new IlBodyEvidenceExtractor.IlWorkBudget(100_000), CancellationToken.None);
+        var srm = IlBodyEvidenceExtractor.ReadSystemReflectionMetadataBodies(bytes, limits, new IlBodyEvidenceExtractor.IlWorkBudget(100_000), CancellationToken.None);
+        Assert.Empty(IlBodyEvidenceExtractor.CompareBodies(cecil, srm));
+        var body = Assert.Single(IlBodyEvidenceExtractor.AgreeValueFlows(cecil.Bodies, srm.Bodies),
+            candidate => IlCommandBindingExtractor.Extract(candidate).Bindings.Count > 0);
+        var bindings = IlCommandBindingExtractor.Extract(body).Bindings;
+        Assert.Equal(2, bindings.Count);
+        Assert.All(bindings, binding => {
+            Assert.Equal(new IlValueOrigin("argument-slot", "1"), binding.CommandText);
+            Assert.Equal(new IlValueOrigin("constant-int32", "4"), binding.CommandType);
+        });
+        Assert.Contains("IlValueExceptionFlowUnavailable", body.ValueFlow!.Gaps);
+        var root = Directory.CreateTempSubdirectory("tracemap-real-vb-command-").FullName;
+        var scan = ScanEngine.Scan(new ScanOptions(sourcePath, Path.Combine(root, "out"), CompiledInputPaths: [assemblyPath], IlBodyEvidence: true));
+        var candidates = scan.Facts.Where(fact => fact.FactType == FactTypes.ManagedIlDatabaseCommandCandidate).ToArray();
+        Assert.Equal(2, candidates.Length);
+        var bodyFact = scan.Facts.Single(fact => fact.FactId == candidates[0].Properties["ilBodyFactId"]);
+        var method = scan.Facts.Single(fact => fact.FactId == bodyFact.Properties["compiledFactId"]);
+        var index = Path.Combine(root, "index.sqlite"); var combined = Path.Combine(root, "combined.sqlite");
+        SqliteIndexWriter.Write(index, scan.Manifest, scan.Facts);
+        var combine = await CombinedIndexBuilder.CombineAsync(new CombineOptions([index], combined, ["public-fixture"]));
+        var source = Assert.Single(combine.Sources);
+        var selector = new CombinedPathSymbolRoot(source.SourceIndexId, source.ScanId, source.CommitSha, method.TargetSymbol!);
+        var report = await CombinedDependencyPathReporter.BuildSelectedSymbolsAsync(
+            new CombinedDependencyPathOptions(combined, root, ToSurface: "database-api", SurfaceName: "DbDataAdapter.Fill", MaxDepth: 10)
+            { CompiledOnly = true, ExactFromSymbol = true, MaxTraversalWork = 10_000 }, [selector], combinedIndex: true);
+        var endpoint = Assert.Single(Assert.Single(report.Paths).Nodes, node => node.SurfaceName == "DbDataAdapter.Fill");
+        var binding = Assert.IsType<CompiledCommandConfigurationCandidate>(endpoint.CommandBinding);
+        Assert.Equal("4", binding.CommandTypeOrigin.Identity);
+        Assert.Equal("unresolved-root-argument", binding.CommandTextFromPath!.State);
+        Assert.Equal(bodyFact.Properties["ilGeneratorSha256"], binding.GeneratorSha256);
+        Assert.Equal(bodyFact.Properties["ilBoundedInputSha256"], binding.BoundedInputSha256);
+    }
+
+    [Theory]
+    [InlineData(false, true, "none", true)]
+    [InlineData(true, true, "none", true)]
+    [InlineData(true, false, "none", true)]
+    [InlineData(true, true, "wrong-signature", false)]
+    public void Using_regions_and_typed_AddRange_preserve_only_encoded_normal_configuration(
+        bool usingRegions, bool addRange, string effect, bool expected)
+    {
+        var (body, _) = Fixture(usingRegions: usingRegions, addRange: addRange,
+            parameterLoop: !addRange, loopEffect: effect);
+        var result = IlCommandBindingExtractor.Extract(body);
+        if (expected)
+        {
+            var binding = Assert.Single(result.Bindings);
+            Assert.Equal("constant-string-hash", binding.CommandText.Kind);
+            Assert.Equal("4", binding.CommandType.Identity);
+        }
+        else Assert.Empty(result.Bindings);
+        if (usingRegions) Assert.Contains("IlValueExceptionFlowUnavailable", body.ValueFlow!.Gaps);
+    }
+
     [Theory]
     [InlineData("none", true, true)]
     [InlineData("none", true, false)]
@@ -156,13 +219,15 @@ public sealed class IlCommandBindingExtractorTests
     }
 
     [Theory]
-    [InlineData(false, false)]
-    [InlineData(true, false)]
-    [InlineData(false, true)]
-    [InlineData(true, true)]
-    public async Task Compiled_handler_path_retains_command_binding_only_with_exact_fact_provenance(bool tamper, bool parameterLoop)
+    [InlineData(false, false, false)]
+    [InlineData(true, false, false)]
+    [InlineData(false, true, false)]
+    [InlineData(true, true, false)]
+    [InlineData(false, false, true)]
+    [InlineData(true, false, true)]
+    public async Task Compiled_handler_path_retains_command_binding_only_with_exact_fact_provenance(bool tamper, bool parameterLoop, bool usingRegions)
     {
-        var (_, bytes) = Fixture(parameterLoop: parameterLoop);
+        var (_, bytes) = Fixture(parameterLoop: parameterLoop, usingRegions: usingRegions, addRange: usingRegions);
         var root = Directory.CreateTempSubdirectory("tracemap-il-command-path-").FullName;
         var assemblyPath = Path.Combine(root, "CommandFixture.dll");
         File.WriteAllBytes(assemblyPath, bytes);
@@ -214,9 +279,11 @@ public sealed class IlCommandBindingExtractorTests
     [InlineData(2, false, "changed")]
     [InlineData(2, false, "ambiguous")]
     [InlineData(2, false, "source-bridge")]
+    [InlineData(2, false, "protected")]
     public async Task Compiled_caller_argument_substitution_is_path_specific_and_provenance_bound(int hops, bool instance, string tamper)
     {
-        var (_, bytes) = Fixture(argumentText: true, wrapperDepth: hops, instanceRun: instance);
+        var (_, bytes) = Fixture(argumentText: true, wrapperDepth: hops, instanceRun: instance,
+            usingRegions: tamper == "protected", parameterLoop: tamper == "protected");
         var root = Directory.CreateTempSubdirectory("tracemap-il-command-caller-").FullName;
         var assemblyPath = Path.Combine(root, "CommandFixture.dll"); File.WriteAllBytes(assemblyPath, bytes);
         var scan = ScanEngine.Scan(new ScanOptions(Path.Combine(FindRepoRoot(), "samples", "vb-modern-sample"),
@@ -260,7 +327,7 @@ public sealed class IlCommandBindingExtractorTests
         Assert.Equal("argument-slot", binding.CommandTextOrigin.Kind);
         Assert.Equal(instance ? "1" : "0", binding.CommandTextOrigin.Identity);
         var mapped = Assert.IsType<CompiledCommandPathValueBinding>(binding.CommandTextFromPath);
-        if (tamper == "none")
+        if (tamper is "none" or "protected")
         {
             Assert.Equal("constant-on-encoded-call-path", mapped.State);
             Assert.Equal("constant-string-hash", mapped.Origin.Kind);
@@ -290,7 +357,8 @@ public sealed class IlCommandBindingExtractorTests
 
     private static (IlBodyObservation Body, byte[] Bytes) Fixture(bool argumentText = false,
         bool branch = false, bool mutation = false, bool lookalike = false, bool wrongTextSetter = false,
-        int wrapperDepth = 0, bool instanceRun = false, bool parameterLoop = false, string loopEffect = "none", bool parameterOnly = false)
+        int wrapperDepth = 0, bool instanceRun = false, bool parameterLoop = false, string loopEffect = "none", bool parameterOnly = false,
+        bool usingRegions = false, bool addRange = false)
     {
         using var assembly = AssemblyDefinition.CreateAssembly(new AssemblyNameDefinition("CommandFixture", new Version(1, 0)), "CommandFixture", ModuleKind.Dll);
         var module = assembly.MainModule;
@@ -314,17 +382,18 @@ public sealed class IlCommandBindingExtractorTests
         module.Types.Add(type);
         var method = new MethodDefinition("Run", MethodAttributes.Public | (instanceRun ? 0 : MethodAttributes.Static), module.TypeSystem.Void);
         if (argumentText) method.Parameters.Add(new ParameterDefinition(module.TypeSystem.String));
+        if (addRange) method.Parameters.Add(new ParameterDefinition(new ArrayType(Type("System.Data.SqlClient", "SqlParameter"))));
         type.Methods.Add(method);
         method.Body.InitLocals = true;
         method.Body.Variables.Add(new VariableDefinition(command));
         method.Body.Variables.Add(new VariableDefinition(adapter));
-        if (parameterLoop || parameterOnly) method.Body.Variables.Add(new VariableDefinition(module.TypeSystem.Int32));
+        if (parameterLoop || parameterOnly || addRange) method.Body.Variables.Add(new VariableDefinition(module.TypeSystem.Int32));
         var il = method.Body.GetILProcessor();
         var endpointLoad = Instruction.Create(OpCodes.Ldloc_1);
         if (branch) il.Emit(OpCodes.Br, endpointLoad);
         il.Emit(OpCodes.Newobj, Method(command, ".ctor", module.TypeSystem.Void));
         il.Emit(OpCodes.Stloc_0);
-        il.Emit(OpCodes.Ldloc_0);
+        var outerStart = Instruction.Create(OpCodes.Ldloc_0); il.Append(outerStart);
         if (argumentText) il.Emit(instanceRun ? OpCodes.Ldarg_1 : OpCodes.Ldarg_0); else il.Emit(OpCodes.Ldstr, PrivateLiteral);
         il.Emit(OpCodes.Callvirt, Method(commandBase, "set_CommandText", module.TypeSystem.Void,
             wrongTextSetter ? module.TypeSystem.Object : module.TypeSystem.String));
@@ -334,14 +403,21 @@ public sealed class IlCommandBindingExtractorTests
         il.Emit(OpCodes.Ldloc_0);
         il.Emit(OpCodes.Newobj, Method(adapter, ".ctor", module.TypeSystem.Void, command));
         il.Emit(OpCodes.Stloc_1);
-        if (parameterLoop || parameterOnly)
+        var innerStart = Instruction.Create(OpCodes.Nop); il.Append(innerStart);
+        if (parameterLoop || parameterOnly || addRange)
         {
             var collection = Type("System.Data.SqlClient", "SqlParameterCollection");
             var parameter = Type("System.Data.SqlClient", "SqlParameter");
             il.Emit(OpCodes.Ldc_I4_0); il.Emit(OpCodes.Stloc_2);
             var loop = Instruction.Create(OpCodes.Ldloc_0); il.Append(loop);
             il.Emit(OpCodes.Callvirt, Method(command, "get_Parameters", collection));
-            if (loopEffect == "collection-escape")
+            if (addRange)
+            {
+                il.Emit(argumentText ? OpCodes.Ldarg_1 : OpCodes.Ldarg_0);
+                il.Emit(OpCodes.Callvirt, Method(collection, "AddRange", module.TypeSystem.Void,
+                    new ArrayType(loopEffect == "wrong-signature" ? command : parameter)));
+            }
+            else if (loopEffect == "collection-escape")
             {
                 var mutateCollection = new MethodReference("MutateCollection", module.TypeSystem.Void, type);
                 mutateCollection.Parameters.Add(new ParameterDefinition(collection)); il.Emit(OpCodes.Call, mutateCollection);
@@ -380,7 +456,26 @@ public sealed class IlCommandBindingExtractorTests
         il.Append(endpointLoad);
         il.Emit(OpCodes.Newobj, Method(dataSet, ".ctor", module.TypeSystem.Void));
         il.Emit(OpCodes.Callvirt, Method(adapterBase, "Fill", module.TypeSystem.Int32, dataSet));
-        il.Emit(OpCodes.Pop); il.Emit(OpCodes.Ret);
+        il.Emit(OpCodes.Pop);
+        if (usingRegions)
+        {
+            var finalReturn = Instruction.Create(OpCodes.Ret);
+            il.Emit(OpCodes.Leave, finalReturn);
+            var disposable = module.ImportReference(typeof(IDisposable));
+            var innerFinally = Instruction.Create(OpCodes.Ldloc_1); il.Append(innerFinally);
+            var innerEnd = Instruction.Create(OpCodes.Endfinally);
+            il.Emit(OpCodes.Brfalse_S, innerEnd); il.Emit(OpCodes.Ldloc_1);
+            il.Emit(OpCodes.Callvirt, Method(disposable, "Dispose", module.TypeSystem.Void)); il.Append(innerEnd);
+            var outerFinally = Instruction.Create(OpCodes.Ldloc_0); il.Append(outerFinally);
+            var outerEnd = Instruction.Create(OpCodes.Endfinally);
+            il.Emit(OpCodes.Brfalse_S, outerEnd); il.Emit(OpCodes.Ldloc_0);
+            il.Emit(OpCodes.Callvirt, Method(disposable, "Dispose", module.TypeSystem.Void)); il.Append(outerEnd); il.Append(finalReturn);
+            method.Body.ExceptionHandlers.Add(new ExceptionHandler(ExceptionHandlerType.Finally)
+            { TryStart = innerStart, TryEnd = innerFinally, HandlerStart = innerFinally, HandlerEnd = outerFinally });
+            method.Body.ExceptionHandlers.Add(new ExceptionHandler(ExceptionHandlerType.Finally)
+            { TryStart = outerStart, TryEnd = outerFinally, HandlerStart = outerFinally, HandlerEnd = finalReturn });
+        }
+        else il.Emit(OpCodes.Ret);
         MethodDefinition? instanceConstructor = null;
         if (instanceRun)
         {

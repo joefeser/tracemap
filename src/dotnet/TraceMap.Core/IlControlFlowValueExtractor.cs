@@ -9,6 +9,7 @@ internal static class IlControlFlowValueExtractor
 {
     internal const int MaxInstructions = 20_000;
     internal const int MaxSlots = 256;
+    internal const int MaxExceptionEntries = 1024;
     internal const int MaxWorkUnits = 200_000;
     private static readonly IlValueOrigin Unknown = new("unknown", "");
     private sealed record Instruction(long Offset, string Opcode, string Operand);
@@ -30,9 +31,10 @@ internal static class IlControlFlowValueExtractor
     }
 
     internal static IlValueFlowObservation Extract(IReadOnlyList<string> encoded,
-        IReadOnlyList<IlCallObservation> calls, int maxStack)
+        IReadOnlyList<IlCallObservation> calls, int maxStack, IReadOnlyList<IlValueExceptionEntry>? exceptionEntries = null)
     {
         if (encoded.Count > MaxInstructions) return new([], ["IlValueControlFlowInstructionLimit"]);
+        if (exceptionEntries?.Count > MaxExceptionEntries) return new([], ["IlValueExceptionEntryLimit"]);
         var instructions = encoded.Select(value =>
         {
             var parts = value.Split(':', 4);
@@ -44,12 +46,21 @@ internal static class IlControlFlowValueExtractor
         var positions = instructions.Select((value, index) => (value.Offset, index)).ToDictionary(value => value.Offset, value => value.index);
         var byOffset = calls.Where(call => call.Opcode is "call" or "callvirt" or "newobj").ToDictionary(call => call.Offset);
         var gaps = new SortedSet<string>(StringComparer.Ordinal);
+        var entries = new Dictionary<int, int>();
+        foreach (var entry in exceptionEntries ?? [])
+        {
+            if (entry.StackCount is not (0 or 1) || !positions.TryGetValue(entry.Offset, out var position)
+                || entries.TryGetValue(position, out var stackCount) && stackCount != entry.StackCount)
+                return new([], ["IlValueExceptionEntryUnavailable"]);
+            entries[position] = entry.StackCount;
+        }
+        if (entries.Count > 0) gaps.Add("IlValueExceptionFlowUnavailable");
         var successors = new int[instructions.Length][];
         for (var index = 0; index < instructions.Length; index++)
         {
             var instruction = instructions[index];
             var next = index + 1 < instructions.Length ? new[] { index + 1 } : [];
-            if (instruction.Opcode is "ret" or "throw" or "rethrow" or "endfinally") successors[index] = [];
+            if (instruction.Opcode is "ret" or "throw" or "rethrow" or "endfinally" or "endfilter") successors[index] = [];
             else if (instruction.Operand.StartsWith("br:0x", StringComparison.Ordinal))
             {
                 if (!long.TryParse(instruction.Operand.AsSpan(5), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var target)
@@ -85,6 +96,20 @@ internal static class IlControlFlowValueExtractor
         if (inputs[0]!.Arguments.Count > MaxSlots) return new([], ["IlValueControlFlowSlotLimit"]);
         queue.Enqueue(0); queued.Add(0);
         var work = 0;
+        foreach (var entry in entries.OrderBy(pair => pair.Key))
+        {
+            if ((work += 1 + inputs[0]!.Arguments.Count + entry.Value) > MaxWorkUnits)
+                return new([], ["IlValueControlFlowWorkLimit"], WorkUnits: MaxWorkUnits);
+            // Handler/filter roots receive no pre-exception local origins.
+            // Potentially rewritten/byref arguments are unknown too. This is
+            // a conservative entry seed, not reconstructed exception dispatch.
+            var seed = new State();
+            foreach (var key in inputs[0]!.Arguments.Keys) seed.Arguments[key] = Unknown;
+            seed.Stack.AddRange(Enumerable.Repeat(Unknown, entry.Value));
+            if (inputs[entry.Key] is null) inputs[entry.Key] = seed;
+            else Merge(inputs[entry.Key]!, seed);
+            if (queued.Add(entry.Key)) queue.Enqueue(entry.Key);
+        }
         while (queue.TryDequeue(out var index))
         {
             queued.Remove(index);
@@ -111,7 +136,8 @@ internal static class IlControlFlowValueExtractor
         }
         return new(events.Values.OrderBy(value => value.Offset).ToArray(), gaps.ToArray(),
             instructions.Select((value, index) => new IlValueControlNode(value.Offset,
-                successors[index].Select(successor => instructions[successor].Offset).ToArray(), invalidates[index])).ToArray(), work);
+                successors[index].Select(successor => instructions[successor].Offset).ToArray(), invalidates[index] || entries.ContainsKey(index),
+                entries.GetValueOrDefault(index, -1))).ToArray(), work);
 
         bool Transfer(Instruction instruction, State state)
         {
@@ -173,7 +199,7 @@ internal static class IlControlFlowValueExtractor
             if (opcode == "switch" || opcode.StartsWith("brtrue", StringComparison.Ordinal) || opcode.StartsWith("brfalse", StringComparison.Ordinal))
             { _ = Pop(); return false; }
             if (instruction.Operand.StartsWith("br:0x", StringComparison.Ordinal)) { _ = Pop(); _ = Pop(); return false; }
-            if (opcode is "ret" or "throw" or "rethrow" or "endfinally") return false;
+            if (opcode is "ret" or "throw" or "rethrow" or "endfinally" or "endfilter") return false;
             // Stack-only numeric/array reads cannot mutate a command. Their
             // values stay unknown; address-taking and stores are not modelled.
             if (opcode is "add" or "sub" or "mul" or "div" or "div.un" or "rem" or "rem.un" or "and" or "or" or "xor"
@@ -182,6 +208,8 @@ internal static class IlControlFlowValueExtractor
             if (opcode.StartsWith("conv.", StringComparison.Ordinal) || opcode is "neg" or "not" or "ldlen")
             { _ = Pop(); Push(Unknown); return false; }
             if (opcode == "castclass") { var value = Pop(); Push(value); return false; }
+            if (opcode == "ldfld") { _ = Pop(); Push(Unknown); gaps.Add("IlValueFieldOriginUnavailable"); return false; }
+            if (opcode == "ldsfld") { Push(Unknown); gaps.Add("IlValueFieldOriginUnavailable"); return false; }
             if (opcode.StartsWith("ldelem", StringComparison.Ordinal) && opcode != "ldelema")
             { _ = Pop(); _ = Pop(); Push(Unknown); return false; }
             Clear("IlValueInstructionUnavailable"); return true;

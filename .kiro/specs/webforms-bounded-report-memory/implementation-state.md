@@ -1,5 +1,39 @@
 # Implementation state
 
+## Protected-region wrapper and AddRange validated (2026-09-30)
+
+Normal-flow fixed points now include protected blocks when both readers agree
+on exception entries. Handler/filter roots receive unknown pre-exception locals
+and potentially modified arguments. Command state starts empty at these roots.
+Leave discards operands/configuration rather than carrying them across unknown
+finally effects. Exception dispatch and finally continuations remain explicit
+gaps, not ordinary fall-through. Handler seeds are work-charged before allocation
+and capped at 1024 declared entries. Policy v6 binds that bound; IL version 0.1.8.
+
+Exact typed provider parameter-array AddRange and framework Array overloads are
+modelled for text/type preservation only. Read-only field loads produce unknown
+values without destroying unrelated stack/local origins; field values remain
+unproven. Incorrect AddRange signatures invalidate the owning command.
+
+The existing public VB net48 PublicSqlDataAccess wrapper builds with zero
+warnings/errors and now has a build-only test project reference (never loaded
+or referenced by net10). Framework negotiation is disabled on that non-reference
+to avoid a proven NU1702 false positive. The native test uses its matching build
+configuration, independently decodes its real compiler output, retains both
+normal ExecuteNonQuery/Fill bindings with argument-slot text and StoredProcedure
+type, and proves exact native/compiled-path generator/input provenance.
+Synthetic tests also cover nested Using regions, parameter loops inside protected
+blocks, caller propagation through those blocks, unknown handler locals, leave
+invalidation, wrong overloads, field reads and entry limits.
+
+The pre-final 225-test IL/path/native regression passed with no build warnings.
+After handler-seed work/entry hardening, all 58 focused tests and the final
+226-test stable-binary IL/path/native regression passed.
+The control-flow/parameter task is complete for the explicitly documented static
+candidate contract, not exception/runtime proof. Broader final gates, the
+immutable-tool Windows workflow and push remain open. Private acceptance is
+still owner validation; no original run has been replaced or upgraded.
+
 ## Normal-flow command/parameter loops in progress (2026-09-30)
 
 Normal branches and loops now use independently decoded equality-only operand
