@@ -9,16 +9,21 @@ than exhausting 100,000 with no routes. Limits and evidence tiers are unchanged;
 depth/cycle gaps remain partial. This is not a physical drive-I/O or private
 application acceptance result.
 
-After pulling and building the repair, first run the small synthetic corpus on
-Windows with PowerShell 7, .NET 10 SDK and the ASP.NET Framework compiler:
+The public Windows gate now passed at code head `6dbdf2ba`: all 14 cases passed,
+including actual ASP.NET mapped/mapless publishing, and retained receipts/DLLs
+were inspected. [Windows validation run](https://github.com/joefeser/tracemap/actions/runs/36788401704).
+To repeat that small synthetic check on your own machine, use PowerShell 7,
+.NET 10 SDK and the ASP.NET Framework compiler:
 
 ```powershell
 .\scripts\validation\Test-DeepProjectlessCorpus.ps1 -RequireWindowsPublish -OutputRoot "$env:USERPROFILE\tracemap-deep-corpus-1"
 ```
 
-Return that output folder for inspection. If it passes, use
+The remaining owner gate is a fresh retained-proof application run. From the
+repository root, run `git pull --ff-only`, then
 `.\scripts\wcmdverify.ps1 -Open` with the retained proof and a new verification
-output folder. Existing runs use immutable older tool snapshots; resuming them
+output folder. This helper builds TraceMap automatically. Existing runs use
+immutable older tool snapshots; resuming them
 does not apply this repair. Do not overwrite or delete old proofs/reports, and
 do not treat successful synthetic publishing as private migration completeness.
 
@@ -518,7 +523,11 @@ SQL execution. The failed run stays failed. The full-run repeated-I/O cause
 remains unproven; indexed typed reconciliation/gap lookups remove avoidable
 full-payload passes but are not a demonstrated explanation for that counter.
 
-The excessive I/O seen in full native graph composition has not been root-caused. This recovery bypasses those graph phases rather than claiming that the entire fresh-report performance problem is solved.
+Recovery bypasses full graph composition. A later public reproduction identified
+and fixed repeated whole-table decodes in VB bridge admission using indexed
+fact-type reads; the authentic Windows corpus stays below the unchanged logical
+read cap. The entire private workload's physical-drive read volume has not been
+measured or accepted as solved.
 
 ## Fresh compiled command-value validation
 
