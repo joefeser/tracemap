@@ -1,7 +1,7 @@
 # Implementation tasks
 
 - [x] Shared bounded path/form selection validation and normalization (10 focused cases; coordinator-level filesystem race/resume tests remain in the full matrix).
-- [ ] Versioned root/project state, atomic persistence, ownership/locking and provenance.
+- [x] Versioned root/project state, per-file atomic persistence, exclusive locking and generator/bounded-input hashes (crash-between-files fails closed; explicit recovery is part of repair below).
 - [ ] Input target classification, web-root selection and toolchain/build validation.
 - [ ] Resumable terminal prompts with --continue, explicit add-project and subset pause.
 - [ ] Publication/DLL inventory and existing native configuration/proof adapter.

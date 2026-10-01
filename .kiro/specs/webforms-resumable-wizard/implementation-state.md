@@ -22,5 +22,25 @@ source/publication provenance or eliminate filesystem races before execution.
 Validation: 10 focused tests passed, no skips, with retained TRX at
 `/tmp/tracemap-wizard-forms-foundation`. Diff and private-path guards passed.
 The dependency branch remains at 4f231dc3. No PR update or duplicate review
-request was made. State, prompts, project classification, repair, execution
-integration and the full acceptance matrix remain pending.
+request was made.
+
+State foundation: WebFormsWizardStore owns a new configuration root, uses an
+exclusive file lease, and stores versioned local-only root/project envelopes
+with the Core assembly generator hash and bounded configuration hash. Resume
+checks envelope structure and project-byte references; changed project files
+stop that project without preventing another valid project's inspection.
+Strict loading rejects duplicate/unknown properties and bounded-size violations.
+Physical path overlap checks keep configuration outside declared inputs.
+Returned root snapshots do not expose mutable internal references.
+
+Persistence is atomic per file, not a multi-file transaction. A crash between
+project and root replacement fails closed with PROJECT_CHANGED. Explicit repair
+is not implemented yet. Hashes detect changes, not authorship; these envelopes
+are not source/build/publication receipts. Saved steps are only cursors and do
+not establish that any source/build or publication is valid. Concurrent external
+filesystem replacement races are not eliminated by the advisory lease.
+
+Validation: 24 focused wizard tests passed, zero skips, retained TRX under
+`/tmp/tracemap-wizard-state-foundation`. Full suite and CLI replay remain pending.
+Next: target classification, terminal coordinator/subset pause, repair and
+native preflight/execution integration. No wizard PR has been opened or pushed.
