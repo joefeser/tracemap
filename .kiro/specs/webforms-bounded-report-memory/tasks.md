@@ -1,13 +1,13 @@
 # Web Forms bounded report memory
 
-- [ ] Consolidate the repaired analysis into a one-command, one-output-root migration handoff and open a PR (owner requested 2026-09-30).
+- [x] Consolidate the repaired analysis into a one-command, one-output-root migration handoff and open a PR (owner requested 2026-09-30; PR #798; private coverage remains separately open below).
   - [x] Provide a normal fresh-run entry point that performs the focused handler query automatically, rather than only filtering the broad report.
   - [x] Retain the exact tool, native run, focused results, receipts, one entry-point document and updated Claude instructions under the explicitly selected output root; preserve historical runs.
   - [x] Make all handoff references explicit and integrity-bound; never select evidence by newest-folder heuristics or silently substitute the broad report for focused results.
   - [x] Keep diagnostics outside checkpoint-owned report directories and preserve failure/partial states without producing a misleading completed handoff.
   - [x] Test the complete handoff workflow with the deep projectless VB cross-DLL fixture, including failure, changed-input and existing-output refusals.
-  - [ ] Validate on Windows where authentic ASP.NET publication is required; distinguish external local compiler harnesses and synthetic maps from Windows publish evidence.
-  - [ ] Open and attach the PR with exact-head validation and explicit static-evidence limitations; do not merge without owner authorization.
+  - [x] Validate on Windows where authentic ASP.NET publication is required; code head 221ca517 passed 14 tests with zero skips, including both authentic publish modes, in run 36808893833.
+  - [x] Open and attach PR #798 against dev with exact-code-head Windows validation and explicit static-evidence limitations; no merge performed.
 
 - [ ] Resolve remaining selected-handler coverage from the saved successful run without an unnecessary rescan.
   - [x] Add a verified completed-run locator and unresolved-binding-only display over retained results; retain complete binding fields and variant counts.
