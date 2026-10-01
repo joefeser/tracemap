@@ -2700,6 +2700,7 @@ rules:
       - Checkpoint generator and input/payload hashes are local integrity commitments, not authenticated signatures; local-only artifacts contain private input fingerprints and must not be shared.
       - Distribution dependency bytes and runtime version participate in execution identity; external SDK/toolchain bytes are not pinned and remain an explicit gap rather than build authenticity or reproducibility proof.
       - Failed or cancelled attempt bytes are retained but not admitted as completed evidence; retry allocates a fresh owned attempt and never rewrites parent scans or old successful artifacts.
+      - Unexpected execution errors expose only a closed phase/category and numeric HRESULT diagnostic hint, not raw exception messages, private paths, SQL, root-cause proof or completion evidence.
       - Configured admission bounds do not establish representative scale or bounded scanner memory; output traversal admits at most 256 filesystem entries and run history at most 256 checkpoints.
   - id: workflow.webforms.compiled-review-status.v1
     name: Private retained native Web Forms operational status

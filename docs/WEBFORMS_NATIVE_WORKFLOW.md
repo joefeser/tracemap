@@ -247,6 +247,14 @@ source/DLL locations remain original evidence, not rewritten identities.
 
 After failure, preserve the folder and inspect its pinned state:
 
+Unexpected execution errors also print a bounded `webFormsFailurePhase`, closed
+error category and numeric HRESULT. These are diagnostic hints, not a root-cause
+or completion claim; messages, customer paths and SQL are not printed. The public
+`wlocal` corpus copies failed synthetic wizard runs into its `wizard/` artifact
+directory, including checkpoints and partial scan logs, for inspection after CI.
+These copies preserve diagnostic bytes, not relocatable resume authority; their
+manifests still name the original test paths.
+
 ```text
 tracemap webforms-review status --run review-monday/run
 tracemap webforms-review resume --run review-monday/run

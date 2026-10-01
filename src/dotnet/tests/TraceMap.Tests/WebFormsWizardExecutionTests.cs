@@ -65,7 +65,34 @@ public sealed class WebFormsWizardExecutionTests
     private static async Task VerifyCompletedRun(bool outputFailsAfterCompletion)
     {
         using var temp = new TempDirectory();
-        using var store = await Ready(temp.Path);
+        try { await VerifyCompletedRun(temp.Path, outputFailsAfterCompletion); }
+        catch
+        {
+            // Keep the original temp-path conditions during execution, then copy
+            // only this public synthetic fixture for postmortem inspection.
+            var retained = Environment.GetEnvironmentVariable("TRACEMAP_DEEP_CORPUS_ROOT");
+            if (retained is not null)
+            {
+                try
+                {
+                    var target = Path.Combine(retained, "wizard", Guid.NewGuid().ToString("N"));
+                    foreach (var source in Directory.EnumerateFiles(temp.Path, "*", SearchOption.AllDirectories))
+                    {
+                        var destination = Path.Combine(target, Path.GetRelativePath(temp.Path, source));
+                        Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
+                        File.Copy(source, destination, overwrite: false);
+                    }
+                }
+                catch (IOException) { /* Preserve the original test failure. */ }
+                catch (UnauthorizedAccessException) { /* Preserve the original test failure. */ }
+            }
+            throw;
+        }
+    }
+
+    private static async Task VerifyCompletedRun(string root, bool outputFailsAfterCompletion)
+    {
+        using var store = await Ready(root);
         using var output = new StringWriter();
         using var error = new StringWriter();
         var commit = store.ReadProject("site").Native!.SourceCommitSha;

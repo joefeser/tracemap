@@ -387,3 +387,29 @@ three report-script checks passed. Receipt:
 /tmp/tracemap-wizard-review2-standard-20261001/validation.local.json. This supersedes
 the invalid alternate-layout attempt for local corpus validation. The repaired
 head still requires Linux case-sensitive collision and Windows/full CI checks.
+
+## Windows failure diagnostic follow-up
+
+Owner explicitly authorized Windows repair, failure diagnostics and continuation
+of the review loop. Head83b39433 Windows run36909987115 failed one real wizard
+pipeline test (127 passed); its temporary run was deleted by test cleanup. The
+generic execution error did not identify the underlying exception. No root cause
+or fix is yet claimed. Add closed phase/category/HRESULT console diagnostics,
+with no raw exception messages, paths or SQL, and retain public synthetic wizard
+runs under the existing corpus artifact root. Seven focused execution/privacy
+tests passed locally. A diagnostic Windows replay is required before choosing a
+root-cause repair; failed checks and three review threads remain open.
+
+The first diagnostic local corpus attempt passed 126 tests (one platform skip)
+and all three PowerShell checks, but its final input-stability receipt correctly
+rejected an overlapping test-retention edit. It is not admitted replay evidence.
+The final retention design copies failed synthetic fixtures after execution,
+preserving original temp-path conditions; copied manifests are diagnostic only,
+not relocated resume authority. Rerun against stable source before publication.
+
+Stable replay completed successfully at
+/tmp/tracemap-wizard-diagnostics-final-20261001/validation.local.json:
+126 passed, one Windows-only skip, all three report checks passed. Final focused
+execution/privacy tests: seven passed. Previous-head Linux CI run36909987091
+also passed 3,125 tests with one platform skip and zero warnings; this does not
+certify the diagnostic patch. Windows diagnosis remains pending.

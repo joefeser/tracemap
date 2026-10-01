@@ -1069,6 +1069,19 @@ public sealed class WebFormsReviewExecutionTests
     }
 
     [Fact]
+    public async Task Unexpected_scan_failure_reports_phase_and_category_without_private_details()
+    {
+        using var fixture = new Fixture();
+        await fixture.Preflight();
+        Assert.Equal(1, await fixture.Execute("run", (_, _, _, _) =>
+            throw new IOException("private-path/private-query/private-value", unchecked((int)0x80070020))));
+        Assert.Contains("webFormsFailurePhase=scan;category=io;hresult=80070020", fixture.Error.ToString());
+        Assert.DoesNotContain("private-", fixture.Error.ToString());
+        Assert.Equal("scan-failed", fixture.LastCheckpoint().State);
+        Assert.Empty(fixture.LastCheckpoint().Artifacts);
+    }
+
+    [Fact]
     public async Task Malformed_produced_index_is_categorical_and_retained_but_not_admitted()
     {
         using var fixture = new Fixture();
