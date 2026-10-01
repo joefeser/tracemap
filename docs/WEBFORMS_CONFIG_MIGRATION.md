@@ -33,6 +33,11 @@ that folder already exists. The original completed checkpoint, combined index,
 compiled report and evidence-index bindings are checked before use. The new
 receipt records `completedReportSha256` and has no recovery-receipt hash; recovery
 runs retain their existing receipt contract.
+This completed-run flow passed 118 native execution/recovery tests locally and
+the [14-case Windows corpus](https://github.com/joefeser/tracemap/actions/runs/36794705978)
+at native code head `f7ad8996`, including mixed/compiled queries and changed-input
+refusal. Those results validate the workflow; private route comparisons remain
+specific to the supplied retained run.
 
 Use `wcompare.ps1` with the new handler report and the historical handler JSON
 to compare actual method sequences. A mixed/compiled scope difference is a

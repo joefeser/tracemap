@@ -10,7 +10,13 @@ headers and pre-filter counts displayed. Filter arguments are included in the
 bounded-input digest. The public comparison regression passed raw/grouped input,
 scope exclusion, zero matches, ambiguous identities, existing sequence identity
 and saved-evidence checks. This supplies a comparison mechanism, not a private
-baseline result. Windows CI for native completed-run requery is still running.
+baseline result. Windows CI run 36794705978 at native code head f7ad8996 passed
+all 14 corpus tests with zero failures/skips, including native completed-run
+mixed/IL requery, changed-input refusals, and both ASP.NET publish modes. The
+downloaded TRX counts, validation bounded-input digest and TRX hash were checked.
+The later scoped-comparison commit changes only PowerShell/docs, with its own
+passing regression. Owner-returned unresolved fields and route comparisons are
+still required to satisfy the active coverage goal.
 
 ## Completed-run handler requery implementation (2026-09-30)
 
