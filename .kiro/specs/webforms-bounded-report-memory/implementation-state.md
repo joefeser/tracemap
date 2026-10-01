@@ -1,5 +1,36 @@
 # Implementation state
 
+## Operator workflow cleanup in progress (2026-10-01)
+
+New owner follow-up after the bounded investigation: replace manual screenshot
+round trips with reproducible local projects and regression gates before PR.
+Keep the existing public two-DLL fixture but exercise source/compiled website
+and separate provider scans through scan, combine, report and paths commands.
+The integration theory covers five layouts: attached provider, independently
+scanned provider, DLL-only provider (VB source excluded), reversed combine order,
+and missing provider. Positive layouts pin exact ordered lazy profile methods,
+dynamic Text, literal audit, Fill-only exclusion, one-path cap/gap, repeated
+paths/gaps and unchanged combined-index bytes. Missing provider yields zero
+invented database paths and explicit gaps. All use public CLI command dispatch
+and on-disk scan/combine/report/paths artifacts, not hand-built graph fixtures.
+
+`scripts/wlocal.ps1` runs the expanded corpus, retains operator reports and TRX,
+refuses existing output, and shares the Windows validation entry point. The
+receipt requires each of the five named layouts and includes CLI/fixture binary
+hashes. Local replay passed 32 tests with one explicit Windows-only skip;
+artifacts at `/tmp/tracemap-operator-cleanup-final` were inspected, including
+three DLL-only terminal routes and zero missing-provider routes with 31 gaps.
+Existing-output refusal was exercised. The final receipt-hardened rerun also
+passed 32 with one Windows-only skip in 34 seconds at
+`/tmp/tracemap-operator-cleanup-verified`; generator/input digests were recomputed.
+Publication is pending. No production scanner/reporting code changed; the
+full historical 3018-test result is not presented as a fresh full-suite run.
+
+Native-app versus CLI operator coverage is being clarified; no UI coverage is
+claimed from CLI tests. The retained native start/package/resume tests remain a
+separate layer. PR #798 remains open; no Git merge is authorized by the requested
+evidence-combination step.
+
 ## Goal completion audit (2026-10-01)
 
 Owner-supplied final ledger photographs establish the previously missing route

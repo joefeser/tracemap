@@ -1,5 +1,12 @@
 # Web Forms bounded report memory
 
+- [ ] Replace manual investigation replay with a public local operator regression workflow (2026-10-01 follow-up).
+  - [x] Exercise source plus compiled website, separately scanned provider DLL, combine and report through public command entry points.
+  - [x] Compare attached-provider, separate-provider, DLL-only and reversed-input routes; retain negative missing-provider, cap, Fill-only, repeatability and scope tests.
+  - [x] Provide a short replay command and durable inspectable artifacts with generator/input provenance.
+  - [x] Wire the expanded regression matrix into validation and document the native/CLI coverage boundary.
+  - [ ] Validate and publish the cleanup to the existing PR; no Git merge implied.
+
 - [x] Build a public projectless VB, two-DLL property/constructor logging regression: outer constructor argument evaluation, lazy getter, nested initializer, authorization/exception logging, call-result command text and a literal control. Verify mixed/compiled routes and Fill-only exclusion without claiming private parity or fixing unsupported return-value propagation.
 
 - [x] Consolidate the repaired analysis into a one-command, one-output-root migration handoff and open a PR (owner requested 2026-09-30; PR #798; private coverage remains separately open below).
