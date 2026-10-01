@@ -121,3 +121,5 @@
 - [x] Restore explicit Fill-only terminal query scope for retained handler comparison and bind that scope into the requery receipt.
 - [x] Add an independently traversed compiled-IL baseline with at most one evidenced root attachment, excluding downstream source bridges and binding scope into receipts.
 - [x] Prevent unrestricted depth-recovery witnesses from bypassing compiled-only scope; pin source shortcut exclusion, reachable diagnostics, depth gaps and mixed-query recovery with regression tests.
+- [x] Isolate property/constructor logging return-value loss with an actual compiled constant-return helper and an identical direct-literal control, separately from runtime string composition.
+- [ ] Retain bounded dual-decoder return operands and resolve exact producer-call returns, preserving legacy missing evidence, runtime composition, dispatch, cycle and work-limit gaps.

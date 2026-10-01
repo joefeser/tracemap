@@ -13,6 +13,14 @@ Namespace PublicLazy.Framework
             ExecuteText("SELECT 1 /* public literal control */")
         End Sub
 
+        Public Sub InsertReturnedLiteral()
+            ExecuteText(LiteralText())
+        End Sub
+
+        Private Shared Function LiteralText() As String
+            Return "SELECT 1 /* public literal control */"
+        End Function
+
         Private Function BuildText(message As String) As String
             ' A returned string is deliberately distinct from caller-slot forwarding.
             Return String.Concat("SELECT LEN('", message.Replace("'", "''"), "')")

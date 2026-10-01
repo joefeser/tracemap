@@ -1,5 +1,29 @@
 # Implementation state
 
+## Return-value boundary isolated (2026-09-30, follow-up)
+
+Added InsertReturnedLiteral through the same property/constructor/provider path.
+Its private static LiteralText helper returns the identical literal used by the
+working direct control. The test checks the actual compiled helper's instruction
+shape and literal equality with Mono.Cecil, without executing SQL. Both mixed and
+compiled-only projections still report call-result/unresolved-operand for this
+constant-return case. This distinguishes a demonstrated return-tracing limitation
+from the original BuildText(message) case, which performs runtime composition.
+The fixture now has six broad paths, five scalar paths and one Fill path; the
+three InsertLog paths are unchanged. Both updated cases passed locally.
+
+Code inspection: IlCallValueExtractor discards the stack at ret, and the
+control-flow extractor stops at ret without exporting its operand. IL body facts
+retain instruction hashes, not reconstructable instruction streams. Consequently
+reporter-only substitution cannot recover a callee return value from these facts.
+Next implementation must retain bounded, independently agreed return operands,
+then join producer calls to exact callee evidence and substitute arguments with
+cycle/work bounds. Runtime composition and unproven virtual dispatch must retain
+explicit gaps. Legacy saved evidence without return observations must remain
+explicitly unavailable, not be interpreted as a constant. No private rescan has
+been requested; no analyzer fix, private resolution, or cap-omission proof is
+claimed by this diagnostic regression.
+
 ## Property-based constructor logging regression (2026-09-30)
 
 Added a separate public synthetic projectless VB source corpus and two external

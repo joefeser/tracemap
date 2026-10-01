@@ -19,6 +19,20 @@ public sealed class LazyConstructorLoggingTests
         var configuration = new DirectoryInfo(AppContext.BaseDirectory).Parent!.Name;
         var bin = Path.Combine(repo, "samples", "fixture-build", "lazy-constructor", "bin", configuration, "net48");
         var assemblies = new[] { "PublicLazy.Website.dll", "PublicLazy.Framework.dll" }.Select(name => Path.Combine(bin, name)).ToArray();
+        using (var provider = Mono.Cecil.AssemblyDefinition.ReadAssembly(assemblies[1]))
+        {
+            var logger = Assert.Single(provider.MainModule.Types, type => type.FullName == "PublicLazy.Framework.PublicLog");
+            var literal = Assert.Single(logger.Methods, method => method.Name == "LiteralText");
+            var direct = Assert.Single(logger.Methods, method => method.Name == "InsertLiteral");
+            var returnedString = Assert.Single(literal.Body.Instructions,
+                instruction => instruction.OpCode.Code == Mono.Cecil.Cil.Code.Ldstr).Operand;
+            Assert.Equal(Assert.Single(direct.Body.Instructions,
+                instruction => instruction.OpCode.Code == Mono.Cecil.Cil.Code.Ldstr).Operand, returnedString);
+            Assert.Contains(literal.Body.Instructions, instruction => instruction.OpCode.Code == Mono.Cecil.Cil.Code.Ret);
+            Assert.All(literal.Body.Instructions, instruction => Assert.Contains(instruction.OpCode.Code,
+                new[] { Mono.Cecil.Cil.Code.Nop, Mono.Cecil.Cil.Code.Ldstr, Mono.Cecil.Cil.Code.Stloc_0,
+                    Mono.Cecil.Cil.Code.Ldloc_0, Mono.Cecil.Cil.Code.Br_S, Mono.Cecil.Cil.Code.Br, Mono.Cecil.Cil.Code.Ret }));
+        }
         using var temp = new TempDirectory();
         var scan = ScanEngine.Scan(new ScanOptions(source, Path.Combine(temp.Path, "scan"),
             CompiledInputPaths: assemblies, IlBodyEvidence: true));
@@ -40,8 +54,8 @@ public sealed class LazyConstructorLoggingTests
 
         var broad = await Query(null);
         var scalar = broad.Paths.Where(path => path.Nodes.Last().SurfaceName == "SqlCommand.ExecuteScalar").ToArray();
-        Assert.Equal(5, broad.Paths.Count);
-        Assert.Equal(4, scalar.Length);
+        Assert.Equal(6, broad.Paths.Count);
+        Assert.Equal(5, scalar.Length);
         bool Type(CombinedPathNode node, string name) => node.SymbolId?.Contains($"names:{name.Length}:{name}|", StringComparison.Ordinal) == true;
         bool Method(CombinedPathNode node, string name) => node.SymbolId?.Contains($"|method:{name.Length}:{name}|", StringComparison.Ordinal) == true;
         bool Constructor(CombinedPathNode node, string name) => Type(node, name)
@@ -83,6 +97,20 @@ public sealed class LazyConstructorLoggingTests
         Assert.Contains(logging, path => !path.Nodes.Any(node => Constructor(node, "SyntheticPreferences")));
         Assert.Contains(scalar, path => path.Nodes.Any(node => Method(node, "InsertLiteral"))
             && path.Nodes.Last().CommandBinding?.CommandTextFromPath?.State == "constant-on-encoded-call-path");
+        // Unlike BuildText(message), this producer returns exactly the same
+        // constant as the direct control. Its unresolved result demonstrates
+        // the return-evidence boundary, not runtime-dependent SQL composition.
+        var returnedLiteral = Assert.Single(scalar, path => path.Nodes.Any(node => Method(node, "InsertReturnedLiteral")));
+        var returnedText = returnedLiteral.Nodes.Last().CommandBinding!.CommandTextFromPath!;
+        Assert.Equal("unresolved-operand", returnedText.State);
+        Assert.Equal("call-result", returnedText.Origin.Kind);
+        var returnedBody = Assert.Single(scan.Facts, fact => fact.FactType == FactTypes.ManagedIlBodyDeclared
+            && $"{origin.SourceIndexId}:{fact.FactId}" == returnedText.OriginBodyFactId);
+        var returnedCall = Assert.Single(scan.Facts, fact => fact.FactType == FactTypes.ManagedIlCallObserved
+            && fact.Properties.GetValueOrDefault("ilBodyFactId") == returnedBody.FactId
+            && fact.Properties.GetValueOrDefault("ilOffset") == returnedText.Origin.Identity);
+        Assert.Contains("|method:11:LiteralText|", returnedCall.Properties["targetIdentity"], StringComparison.Ordinal);
+        Assert.DoesNotContain(returnedLiteral.Nodes, node => Method(node, "LiteralText"));
         var fill = await Query("DbDataAdapter.Fill");
         Assert.Single(fill.Paths);
         Assert.All(fill.Paths, path =>
