@@ -1,5 +1,17 @@
 # Implementation state
 
+## Scoped saved-route comparison (2026-09-30)
+
+wcompare now accepts optional Handler and SurfaceName=DbDataAdapter.Fill filters
+for every supplied report. This enables broad-versus-single-root comparisons
+without counting unrelated handlers or terminals as missing routes. Root identity
+ambiguity is rejected; absent retained rows remain zero, with original query
+headers and pre-filter counts displayed. Filter arguments are included in the
+bounded-input digest. The public comparison regression passed raw/grouped input,
+scope exclusion, zero matches, ambiguous identities, existing sequence identity
+and saved-evidence checks. This supplies a comparison mechanism, not a private
+baseline result. Windows CI for native completed-run requery is still running.
+
 ## Completed-run handler requery implementation (2026-09-30)
 
 Extended the existing native handler requery to completed checkpoints as well as
