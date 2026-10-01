@@ -106,7 +106,7 @@ public sealed class WebFormsWizardStore : IDisposable
         ValidateProject(project);
         ProtectInputs(project);
         var rootPath = Path.Combine(DirectoryPath, "root.config.json");
-        if (Hash(ReadBytes(rootPath)) != rootHash) throw Fail("ROOT_CHANGED");
+        VerifyUnchanged();
         var old = state.Projects.SingleOrDefault(item => item.Id == project.Id);
         if (old is not null) _ = ReadProject(project.Id);
         if (old is null && state.Projects.Length >= 128) throw Fail("PROJECT_LIMIT");
@@ -130,6 +130,12 @@ public sealed class WebFormsWizardStore : IDisposable
         var parent = Path.Combine(DirectoryPath, id);
         RejectLink(parent);
         return Path.Combine(parent, "project.config.json");
+    }
+
+    public void VerifyUnchanged()
+    {
+        ObjectDisposedException.ThrowIf(disposed, this);
+        if (Hash(ReadBytes(Path.Combine(DirectoryPath, "root.config.json"))) != rootHash) throw Fail("ROOT_CHANGED");
     }
 
     private void ProtectInputs(WebFormsWizardProject project)

@@ -44,3 +44,26 @@ Validation: 24 focused wizard tests passed, zero skips, retained TRX under
 `/tmp/tracemap-wizard-state-foundation`. Full suite and CLI replay remain pending.
 Next: target classification, terminal coordinator/subset pause, repair and
 native preflight/execution integration. No wizard PR has been opened or pushed.
+
+Target/selection increment: WebFormsWizardTarget performs bounded static XML and
+solution-entry inspection without MSBuild evaluation. Folder inputs containing
+an immediate C#/VB project require that explicit project; solution inputs require
+a selected local web root matching exactly one entry. Web roots require web.config
+and discoverable forms. URL/foreign-drive/outside-solution entries are not admitted
+by this v1 classifier. Project references are not independently registered.
+Tool families are recommendations only; SDK modern targets are not claimed to
+support Web Forms, and conditional/imported properties remain unevaluated.
+Actual executable/toolchain checks and build-result validation remain pending.
+
+WebFormsWizardSelection creates a deterministic editable forms.txt for missing or
+blank selected-mode input, pauses without advancing the cursor, then validates
+the edited list and advances to build. All-mode advances without an edit file.
+Comments-only input fails rather than becoming all. Resuming later steps checks
+the selected files again. This shared transition has no terminal adapter yet.
+Selection template replacement is per-file atomic, not a transaction with state;
+filesystem replacement races by non-cooperating processes remain a limitation.
+
+Target tests caught and fixed a framework classifier bug that initially mistook
+net10.0 for legacy net10. Focused wizard validation now covers 35 cases; final
+TRX is retained under /tmp/tracemap-wizard-selection-foundation. Full suite, CLI
+integration, Windows replay, repair, publication and execution remain pending.
