@@ -9,7 +9,8 @@ public static class WebFormsWizardCommand
         "Continue reuses saved answers; add-project explicitly registers another website. Exit 2 means setup paused, not a completed review.";
 
     public static async Task<int> RunAsync(string[] args, TextReader input, TextWriter output, TextWriter error,
-        CancellationToken cancellationToken = default, WebFormsWizardProcessRunner? buildRunner = null)
+        CancellationToken cancellationToken = default, WebFormsWizardProcessRunner? buildRunner = null,
+        WebFormsWizardNativeRunner? nativeRunner = null)
     {
         try
         {
@@ -154,6 +155,24 @@ public static class WebFormsWizardCommand
                 await output.WriteLineAsync("Native configuration: " + await WebFormsWizardNative.ConfigureAsync(store, id, cancellationToken));
             }
             if (store.ReadProject(id).Native is not null) _ = await WebFormsWizardNative.ValidateAsync(store, id, cancellationToken);
+            current = store.ReadProject(id);
+            if (current.Step == "ready")
+            {
+                await output.WriteLineAsync("To attest that the selected compiled publication corresponds to this exact source commit and run TraceMap scan/reports, type the full commit below. This is your declaration, not build authenticity proof. Type later to pause:");
+                await output.WriteLineAsync(current.Native!.SourceCommitSha);
+                var answer = await input.ReadLineAsync(cancellationToken);
+                if (answer is null || answer.Trim() == "later") return 2;
+                return await WebFormsWizardExecution.RunAsync(store, id, answer.Trim(), output, error, cancellationToken, nativeRunner);
+            }
+            if (current.Step is "running" or "failed")
+            {
+                await output.WriteLineAsync("A prior attempt is retained; this does not mean a process is still running. Resume its native checkpoints? [resume/later]");
+                var answer = await input.ReadLineAsync(cancellationToken);
+                if (answer is null || answer.Trim() == "later") return 2;
+                if (answer.Trim() != "resume") throw Invalid("CHOICE_INVALID");
+                return await WebFormsWizardExecution.RunAsync(store, id, null, output, error, cancellationToken, nativeRunner);
+            }
+            if (current.Step == "completed") return await WebFormsWizardExecution.RunAsync(store, id, null, output, error, cancellationToken, nativeRunner);
             await output.WriteLineAsync($"Project {id}: saved step '{store.ReadProject(id).Step}'. No scan or customer website was executed.");
             return 2;
 

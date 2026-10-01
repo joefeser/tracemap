@@ -11,8 +11,10 @@
 - [ ] Publication/DLL inventory and existing native configuration/proof adapter.
   - [x] Publication-root/bin validation, explicit managed primary/dependency selection, bounded input snapshots and resume change detection.
   - [x] Native configuration generation, preflight and owned hash-verified staging for external dependencies.
-  - [ ] Explicit source-commit attestation and native preparation/start execution integration.
+  - [x] Explicit source-commit attestation and native preparation/start execution integration.
 - [ ] Explicit repair previews, confirmation and per-project invalidation.
 - [ ] Scan/combine/report execution with immutable output roots and revalidation.
+  - [x] Pinned native start/resume, unique attempts and retained report-status verification; real local fixture execution.
+  - [ ] Complete fresh/repair/multi-project acceptance matrix and compiled-chain fixture report assertions.
 - [ ] Full regression matrix, CLI replay, documentation and rule limitations.
 - [ ] Scoped stacked PR and exact-head validation, without modifying #798.

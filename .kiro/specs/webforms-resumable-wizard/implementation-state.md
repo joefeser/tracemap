@@ -170,3 +170,24 @@ zero failures/skips, no build warnings in the final run; retained TRX at
 unchanged; external DLL staging and modified native config/staged-input rejection
 are covered. Full suite, Windows acceptance, explicit repair and end-to-end
 wizard execution remain pending.
+
+Execution increment: WebFormsWizardExecution calls native start only after an
+exact source-commit attestation and preserves a unique runs/<project>-<guid>
+reference before dispatch. Native start owns preparation/preflight/scan/reports;
+the wizard never launches the website. Nonzero return and interruption retain
+the attempt as failed. Resume requires the pinned native run manifest; an attempt
+that failed before that manifest requires explicit repair, not silent restart.
+Completed continue performs read-only native status verification, not a new scan.
+
+Completion requires native status reports-completed-review-only, verified retained
+artifacts, the attested commit and a workbench locator, followed by fresh wizard
+input checks. A zero process return alone cannot mark complete. The running cursor
+is explicitly not a live-process assertion. Native run locks remain authoritative.
+The terminal separately prompts for full commit attestation or pinned resume.
+
+Validation: all 68 wizard tests passed with zero skips, including the negative
+status case, under /tmp/tracemap-wizard-execution-foundation. The real local
+fixture test ran native preparation, scan and reports, then verified completed
+continue preserved project bytes and one run folder. Existing public compiled
+sample DLLs were used; no customer application was executed. Explicit repairs,
+full terminal fixture replay, broader regression/Windows checks and PR remain.
