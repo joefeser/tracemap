@@ -1,5 +1,48 @@
 # Implementation state
 
+## Goal completion audit (2026-10-01)
+
+Owner-supplied final ledger photographs establish the previously missing route
+association: the single unresolved group traverses a lazy property, employee
+constructor, profile service, email data lookup and text-scalar wrapper before
+ExecuteScalar. The original three candidates and focused six candidates are
+evidence variants of that group. Retained command type is Text (1); command text
+is forwarded through argument slot 1 and stops at a call-result origin. Together
+with the earlier owner-supplied decompilation, this diagnoses dynamic lookup text,
+not the separate literal stored-procedure audit branch. This is a Tier4Unknown
+owner-evidence reconciliation under workflow.webforms.handler-sql-ledger.v1,
+not independent authentication of private artifacts or exact producer IL target.
+The retained missing/ambiguous return target and unproven dispatch gaps remain.
+
+Completion requirements and evidence:
+
+- Unresolved candidates: route identities now connect the saved group to the
+  observed dynamic source pattern. No constant SQL recovery is asserted.
+- Capped-query omissions: the saved comparison identifies one additional
+  dataset/Fill sequence, with all 27 original exact sequences retained. The
+  45-to-116 variant increase is not a count of new routes. Per-variant causal
+  attribution and exhaustive coverage remain outside what this evidence proves.
+- Historical baseline: all 13 historical Fill symbol sequences and their 41
+  variants are represented in the 18-sequence/56-variant focused comparison;
+  differing scan identities prohibit exact-build parity claims.
+- Demonstrated defects: bounded exact return propagation and removal of the
+  implicit Fill-only migration filter are implemented and regression-tested.
+  The public compiled profile fixture separately pins dynamic Text, literal
+  StoredProcedure audit and Fill paths in both traversal modes.
+- Validation: reread the full-suite TRX (3018 passed, zero failed), both profile
+  cases, Windows TRX (29 passed, zero failed) and live successful Windows run
+  36826541709 at 80cd1fdc. Current changes since that head affect only helper
+  scripts and documentation, not .NET code or fixtures. The saved CLI smoke
+  contains all required scan outputs and retains its NotRun/partial limitations.
+  All three saved-report PowerShell suites (cap shortcut, SQL ledger, chain
+  comparison) passed again during this audit, as did the private-path guard
+  and diff whitespace check. No scanner changes required a new full-suite run.
+
+This closes the bounded investigation goal, not complete private migration
+coverage. No further private scan, runtime SQL execution, private producer-offset
+admission or merge is required or claimed. Earlier chronological pending-status
+entries below are superseded by this audit; their historical limitations remain.
+
 ## Saved unresolved-route identity readback (2026-10-01)
 
 The SQL ledger previously displayed only route labels, which can be redacted

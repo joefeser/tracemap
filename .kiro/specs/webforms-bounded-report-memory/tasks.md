@@ -11,9 +11,9 @@
   - [x] Validate on Windows where authentic ASP.NET publication is required; code head 221ca517 passed 14 tests with zero skips, including both authentic publish modes, in run 36808893833.
   - [x] Open and attach PR #798 against dev with exact-code-head Windows validation and explicit static-evidence limitations; no merge performed.
 
-- [ ] Resolve remaining selected-handler coverage from the saved successful run without an unnecessary rescan.
+- [x] Resolve remaining selected-handler coverage questions from the saved successful run without an unnecessary rescan; bounded owner-evidence diagnosis and comparisons are complete, not exhaustive private coverage (see completion audit).
   - [x] Add a verified completed-run locator and unresolved-binding-only display over retained results; retain complete binding fields and variant counts.
-  - [ ] Inspect owner-returned unresolved binding reasons and fix only demonstrated extractor/path defects with local reproductions.
+  - [x] Inspect owner-returned unresolved binding reasons and fix only demonstrated extractor/path defects with local reproductions. Final retained identities associate the one unresolved group with dynamic Text lookup; exact private producer IL target remains unverified.
   - [x] Support a bounded single-handler requery from a successfully completed native run, preserving its admitted index and checkpoint provenance; native execution/recovery tests passed 118/118, including the completed-run deep fixture.
   - [x] Compare retained method sequences against the historical handler baseline: owner-returned focused Fill comparison retains all 13 historical symbol sequences and their 41 variants, plus five sequences/15 variants; exact scan identities differ. This does not establish why each broad-query row was omitted or exhaustive coverage.
 
@@ -104,7 +104,7 @@
 - [x] Add a separate exact single-handler requery over the verified retained combined index, preserving global competitors and original checkpoints.
 - [x] Pin historical exact-symbol versus source-bound indexed paths and lossless variants with a seven-root shared-budget synthetic regression.
 - [x] Add provenance-bound graph-stage timings and logical fact-payload read counters; avoid full-payload scans for typed reconciliation/gap lookups.
-- [ ] Compare owner-retained handler results to the historical handler-specific baseline without treating aggregate counts as parity.
+- [x] Compare owner-retained handler results to the historical handler-specific baseline without treating aggregate counts as parity: all 13 historical symbol sequences retained, five additional sequences; exact source/scan identities differ.
 - [x] Provide a bounded local raw/grouped report comparator with query/source context, exact identity sequences, variant-count differences and labeled symbol-only hints.
 - [x] Provide a bounded saved-file handler database/SQL surface ledger with explicit command/parameter binding gaps; do not infer SQL from API terminal or method names.
 - [x] Retain compiler-resolved VB CommandText and adapter command assignments with receiver identity, hashes and explicit binding limitations.
