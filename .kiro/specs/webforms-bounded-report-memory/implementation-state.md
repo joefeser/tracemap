@@ -1,5 +1,22 @@
 # Implementation state
 
+## Final return-value and all-terminal validation (2026-10-01)
+
+Code head bf0093c8d70d0bf57b292dcb8ceb7718c682f697 passed the final full
+.NET suite: 3016 passed, zero failed, one Windows-only skip, in 17m15s.
+TRX: /tmp/tracemap-migration-all-api-validation/all-api-full.trx.
+Exact-head Windows push run 36817615894 passed 27 tests with zero skips,
+including both authentic ASP.NET publish modes and 11 return-projection cases.
+Downloaded source/test-result hashes, generator hash and bounded-input digest
+were verified; execution assembly hashes are receipt-only because those binaries
+were not uploaded for independent rehashing.
+
+Return-value implementation and all-terminal package regression gates are now
+complete. Private saved-result acceptance is not: rerendering an old ledger does
+not re-extract return summaries or traverse the graph. The private logging text
+producer and original broad-query cap omissions remain unclassified. The overall
+goal remains open; no private parity or expensive rescan is claimed or requested.
+
 ## Full return-value validation and all-terminal packaging (2026-09-30)
 
 Code head cc42259d passed the full .NET suite: 3016 passed, zero failed, one
