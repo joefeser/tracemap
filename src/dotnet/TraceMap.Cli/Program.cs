@@ -38,7 +38,7 @@ public static class TraceMapCommand
                 "version" => VersionHelp(),
                 "validate-index" => "tracemap validate-index --index <path> --commit <sha> --facts <count>",
                 "local-review" => LocalReviewHelp(),
-                "webforms-review" => WebFormsReviewPreflightCommand.Help,
+                "webforms-review" => rest.FirstOrDefault() == "wizard" ? WebFormsWizardCommand.Help : WebFormsReviewPreflightCommand.Help,
                 "report" => ReportHelp(),
                 "database-design-review" => DatabaseDesignReviewHelp(),
                 "webforms-modernization" => WebFormsModernizationHelp(),
@@ -81,7 +81,9 @@ public static class TraceMapCommand
                 "version" => await RunVersionAsync(rest, output, error),
                 "validate-index" => await RunValidateIndexAsync(rest, output, error),
                 "local-review" => await LocalReviewCommand.RunAsync(rest, output, error, RunScanAsync, cancellationToken),
-                "webforms-review" => rest.FirstOrDefault() == "start"
+                "webforms-review" => rest.FirstOrDefault() == "wizard"
+                    ? await WebFormsWizardCommand.RunAsync(rest, Console.In, output, error, cancellationToken)
+                    : rest.FirstOrDefault() == "start"
                     ? await WebFormsReviewStartCommand.RunAsync(rest, output, error, RunNativeReviewScanAsync, cancellationToken)
                     : rest.FirstOrDefault() == "migration-review"
                     ? await WebFormsReviewExecutionCommand.MigrationReviewAsync(rest, output, error, RunNativeReviewScanAsync, cancellationToken)
