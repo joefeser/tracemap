@@ -287,3 +287,22 @@ comments-only input remains an error and is preserved. All 80 wizard tests passe
 without compiler warnings in /tmp/tracemap-wizard-bom-blank-clean. This follow-up
 is local pending the next review-authorized push batch, not part of the 573d7ab0
 Windows evidence.
+
+CI .NET adapter run 36903234570 on published 573d7ab0 passed the full suite:
+3,108 passed, one platform skip, zero failures. ACK's original process completed
+with WAIT_TIMEOUT_CHECKS, with no failures and only Windows package-smoke still
+running. Direct job state confirms forward progress through metadata/PDB/IL tests
+and native Windows PDB fixtures; it is currently validating Web Forms publish
+proof. Continue monitoring run 36903234523, then resume the review gate after its
+terminal result. Do not treat the bounded ACK wait timeout as a stopped CI job.
+
+Windows package-smoke completed successfully; all checks on 573d7ab0 are now
+green. Resumed the normal ACK gate in session 29473 after the prior process's
+terminal timeout. Do not restart the previous completed session 20257.
+
+Selection-bound audit: generated templates previously checked characters while
+resume bounded UTF-8 bytes. Template and parser now share the same character/byte
+validation; resume names the byte limit explicitly. Regression covers a valid
+Unicode page and an oversized multibyte comment below the character ceiling.
+All 81 wizard tests passed without warnings in /tmp/tracemap-wizard-selection-bounds.
+This and the BOM correction remain local for the next consolidated push.

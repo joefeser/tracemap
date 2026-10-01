@@ -25,6 +25,7 @@ rules:
     limitations:
       - Discovery and selected paths do not prove runtime activation or complete analysis coverage.
       - Missing or blank selection files pause for editing; empty effective selections never imply all pages.
+      - Templates and parsed selections share a one-MiB UTF-8 byte limit in addition to the character bound; oversized templates fail closed, and a bounded explicit selection can be supplied in forms.txt.
       - Filesystem races remain possible; downstream inputs must be revalidated before execution.
   - id: workflow.webforms.wizard-target.v1
     name: Static wizard target classification

@@ -7,6 +7,7 @@ public static class WebFormsWizardForms
     public const int MaxEntries = 10_000;
     public const int MaxInventoryEntries = 100_000;
     public const int MaxSelectionChars = 1_048_576;
+    public const int MaxSelectionBytes = 1_048_576;
 
     public static IReadOnlyList<string> Discover(string webRoot)
     {
@@ -41,7 +42,7 @@ public static class WebFormsWizardForms
 
     public static IReadOnlyList<string> Parse(string webRoot, string text)
     {
-        if (text.Length > MaxSelectionChars) throw Fail("SELECTION_LIMIT");
+        ValidateSize(text);
         var root = Root(webRoot);
         var selected = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         using var reader = new StringReader(text.TrimStart('\uFEFF'));
@@ -72,8 +73,14 @@ public static class WebFormsWizardForms
         var text = "# Keep the forms you want, one path per line, relative to the web root.\n" +
             "# Save this file and rerun the wizard with --continue. Empty does not mean all.\n" +
             string.Join('\n', Discover(webRoot)) + "\n";
-        if (text.Length > MaxSelectionChars) throw Fail("SELECTION_LIMIT");
+        ValidateSize(text);
         return text;
+    }
+
+    private static void ValidateSize(string text)
+    {
+        if (text.Length > MaxSelectionChars || System.Text.Encoding.UTF8.GetByteCount(text) > MaxSelectionBytes)
+            throw Fail("SELECTION_LIMIT");
     }
 
     private static string Root(string path)

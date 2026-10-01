@@ -101,7 +101,9 @@ hash checks; only forms.txt is the normal human-editing step.
 
 Limits include 10,000 relevant source files, 100,000 source inventory entries,
 64 MiB per retained input, 2 GiB selected input hashes, and 1 MiB per wizard
-configuration. Builds time out after 30 minutes and bound each output stream to
+configuration. Form-selection templates and files are also bounded to 1 MiB of
+UTF-8 bytes; a BOM-only or whitespace-only file is treated as blank. Builds time
+out after 30 minutes and bound each output stream to
 64 KiB. Hashes detect changes, not authorship; filesystem races are not build
 authenticity proof. Configuration replacement is atomic per file, not a
 multi-file transaction; interrupted state updates fail closed and require repair.
