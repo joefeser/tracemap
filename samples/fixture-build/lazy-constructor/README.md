@@ -27,6 +27,10 @@ The `operator/` output contains these independently replayed layouts:
 
 Each layout retains `site/`, optional `dll/`, `combined.sqlite`, and `report/`.
 Positive layouts also retain `all/`, `fill/`, `capped/`, and `repeat/` path JSON.
+They additionally render `cap-comparison.local.html` and
+`unresolved-command.local.html` through the same diagnostic helpers used by
+operators. The runner asserts one shared/two omitted exact sequences and one
+unresolved command group, and runs all three saved-report helper test suites.
 Assertions inspect actual method order, command type/text state, Fill-only
 exclusion, a one-path cap with its gap, repeated paths/gaps, and unchanged index
 bytes. `tests/deep-corpus.trx` records pass/fail. `validation.local.json` binds

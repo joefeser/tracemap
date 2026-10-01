@@ -7,6 +7,10 @@ on:
       - .github/workflows/deep-projectless-windows-validation.yml
       - scripts/validation/Test-DeepProjectlessCorpus.ps1
       - scripts/wlocal.ps1
+      - scripts/wcompare.ps1
+      - scripts/wsqlroute.ps1
+      - scripts/wcap.ps1
+      - scripts/tests/Test-WebForms*.ps1
       - scripts/validation/Test-PublicWebFormsPublish.ps1
       - samples/fixture-build/deep-projectless/**
       - samples/fixture-build/lazy-constructor/**
@@ -20,6 +24,10 @@ on:
       - .github/workflows/deep-projectless-windows-validation.yml
       - scripts/validation/Test-DeepProjectlessCorpus.ps1
       - scripts/wlocal.ps1
+      - scripts/wcompare.ps1
+      - scripts/wsqlroute.ps1
+      - scripts/wcap.ps1
+      - scripts/tests/Test-WebForms*.ps1
       - scripts/validation/Test-PublicWebFormsPublish.ps1
       - samples/fixture-build/deep-projectless/**
       - samples/fixture-build/lazy-constructor/**
