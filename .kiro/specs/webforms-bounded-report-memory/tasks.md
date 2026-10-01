@@ -126,3 +126,4 @@
   - [x] Capture converged local return operands, require reader agreement, and emit bounded rule-backed return summaries with provenance and unavailable/limit states.
   - [x] Resolve producer returns in the reporting layer with exact joins, argument substitution, bounded cycles/work, and negative legacy/ambiguous/dispatch cases.
   - [ ] Complete full-solution and exact-head Windows validation before publishing the return-value fix; private saved-result acceptance remains separate.
+- [x] Remove the migration package's implicit Fill-only filter and prove native packaging retains both Fill and ExecuteScalar from the same synthetic handler; keep explicit historical Fill comparison available.

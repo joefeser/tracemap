@@ -660,7 +660,8 @@ and the checked-in VB .NET Framework wrapper's real compiler output.
 ## Consolidated migration handoff
 
 The native `webforms-review migration-review` command composes proof import,
-fresh native scanning/reporting, a focused mixed-mode handler-to-Fill query,
+fresh native scanning/reporting, a focused mixed-mode handler-to-database-API query
+without a Fill-only terminal filter,
 retained tool copy and a bounded evidence index into one new output root.
 It does not rebuild the website, execute SQL, overwrite old runs or recover a
 failed run as if it completed. A failure preserves partial output and does not
@@ -690,6 +691,10 @@ requiring manual diagnostic PowerShell steps. External .NET runtime/SDK and
 source/publish inputs are not copied; this is a review package, not runtime or
 resume portability. Private data stays private. Existing diagnostic scripts
 remain available for old runs but are not the new handoff entry point.
+The focused query includes all database API terminal kinds, including logging
+through ExecuteScalar; existing depth/work/path limits still apply. Explicit
+Fill-only requery remains available for historical comparisons, not as a complete
+migration evidence scope.
 
 Rule `workflow.webforms.migration-handoff.v1` commits the exact CLI generator,
 native preflight/checkpoint, original application handoff, focused compiled

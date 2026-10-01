@@ -2737,14 +2737,14 @@ rules:
       - All-page mode remains limited by admitted page packet and receipt membership; complete receipt partitioning and all-pages compiled coverage are explicitly pending. No dependency cleanup, relocation or external publication occurs.
   - id: workflow.webforms.migration-handoff.v1
     name: Consolidated private Web Forms migration review handoff
-    description: Composes admitted proof import or native preparation, fresh native review, an exact-handler mixed-mode Fill requery, pinned tool retention and a bounded evidence index beneath one new owner-selected root.
+    description: Composes admitted proof import or native preparation, fresh native review, an exact-handler mixed-mode database-API requery, pinned tool retention and a bounded evidence index beneath one new owner-selected root.
     evidenceTier: Tier2Structural
     emits:
       - webforms-migration-handoff.v1 local-only receipt
       - START-HERE.md local-only reviewer instructions
     limitations:
       - The receipt binds the exact generator, native run preflight/checkpoint, original application handoff, focused compiled handoff and six entry artifacts. Its bounded-input hash covers the canonical receipt with the digest field empty. Hashes are local integrity commitments, not authentication.
-      - Application evidence retains the original broader scope while compiled evidence is a single handler to DbDataAdapter.Fill. Mixed source bridges remain candidates, not proven IL calls; truncation and reduced coverage are preserved.
+      - Application evidence retains the original broader scope while new compiled evidence selects one handler without filtering database API terminal kinds. Old packages may retain a Fill-only scope; read the actual saved query. Mixed source bridges remain candidates, not proven IL calls; truncation and reduced coverage are preserved. No terminal-kind filter does not prove all reachable calls were retained.
       - The fresh destination must not exist or overlap authoritative inputs or the executing tool. Failure preserves partial output without a completed handoff claim. No automatic recovery, website rebuild, SQL execution, relocation or cleanup occurs.
       - Query-migration verifies the receipt and indexed evidence before and after bounded retrieval, not all raw retained artifacts or external inputs. It uses the bounded-evidence-query response limits and streams the complete index for hash checks.
       - The handoff includes a pinned tool but not the external runtime or complete source/publish inputs; it is a review package, not portable execution or resume proof. Command fingerprints do not establish readable procedure names, complete parameters, runtime behavior or migration parity.

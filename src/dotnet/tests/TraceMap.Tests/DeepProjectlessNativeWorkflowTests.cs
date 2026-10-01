@@ -34,6 +34,16 @@ public sealed class DeepProjectlessNativeWorkflowTests
             foreach (var file in new[] { "PublicLegacyCommandFlow.vb", "PublicSqlDataAccess.vb" })
                 File.Copy(Path.Combine(repo, "samples", "messy-dotnet-workspace", "vb-publish-crossdll-framework", file),
                     Path.Combine(source, "Provider", file));
+            // This native package must retain non-Fill side effects too. Commit
+            // and compile these exact synthetic inputs; no SQL is executed.
+            var providerSource = Path.Combine(source, "Provider", "PublicLegacyCommandFlow.vb");
+            File.WriteAllText(providerSource, File.ReadAllText(providerSource).Replace("adapter.Fill(result)", """
+                adapter.Fill(result)
+                Using auditCommand As New SqlCommand("public.synthetic_audit", connection)
+                    auditCommand.CommandType = CommandType.StoredProcedure
+                    auditCommand.ExecuteScalar()
+                End Using
+                """, StringComparison.Ordinal));
             foreach (var args in new[] { new[] { "init", "-q" }, ["config", "user.name", "Public synthetic corpus"],
                 ["config", "user.email", "public@example.invalid"], ["config", "core.autocrlf", "false"],
                 ["remote", "add", "origin", "https://example.invalid/deep-corpus.git"], ["add", "."], ["commit", "-qm", "Public deep corpus"] })
@@ -94,6 +104,11 @@ public sealed class DeepProjectlessNativeWorkflowTests
                 Path.Combine(package, "migration-handoff.local.json")), JsonOptions)!;
             Assert.Equal(WebFormsReviewExecutionCommand.MigrationHash(migration), migration.BoundedInputSha256);
             Assert.Equal("Lookup_Click", migration.Handler);
+            var packagedPaths = GroupedCompiledPathHandoffBuilder.Restore(JsonSerializer.Deserialize<GroupedCompiledPathHandoff>(
+                File.ReadAllBytes(Path.Combine(package, "handler", "compiled-paths.handoff.local.json")), JsonOptions)!);
+            Assert.Null(packagedPaths.Query.SurfaceName);
+            Assert.Contains(packagedPaths.Paths, path => path.Nodes.Last().SurfaceName == "DbDataAdapter.Fill");
+            Assert.Contains(packagedPaths.Paths, path => path.Nodes.Last().SurfaceName == "SqlCommand.ExecuteScalar");
             Assert.Equal(6, migration.Artifacts.Count);
             foreach (var artifact in migration.Artifacts)
             {
@@ -185,7 +200,7 @@ public sealed class DeepProjectlessNativeWorkflowTests
             var grouped = JsonSerializer.Deserialize<GroupedCompiledPathHandoff>(File.ReadAllBytes(handoff), JsonOptions)!;
             var original = GroupedCompiledPathHandoffBuilder.Restore(grouped);
             Assert.Equal("1.3", original.Query.AlgorithmVersion);
-            Assert.Equal(6, original.Paths.Count);
+            Assert.Equal(12, original.Paths.Count);
             Assert.InRange(original.Summary.TraversalWorkUnits!.Value, 1, 1000);
             Assert.DoesNotContain(original.Gaps, gap => gap.GapKind == "TruncatedByLimit" && gap.Reason == "work");
             Console.WriteLine($"deepMixed.paths={original.Paths.Count};work={original.Summary.TraversalWorkUnits};truncated={original.Summary.Truncated}");
