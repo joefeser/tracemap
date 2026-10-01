@@ -239,3 +239,22 @@ branch was not modified. Integrated wizard/native execution tests: 201 passed,
 zero failed/skipped, TRX /tmp/tracemap-wizard-integrated. Current local source
 has no compiler warnings in this validation. Scoped stacked PR and full final-head
 regression remain pending. No customer site or SQL was executed.
+
+PR #799 is open against dev at 67ac3f81. #798 merged as 83f09c9f during PR
+creation, so a stacked base is no longer needed. Final full local suite remains
+live in session 92830; ACK review process remains live in session 20257.
+
+Windows corpus run 36901217294 exposed four subset/restart failures: MoveFileEx
+cannot replace forms.txt while the prior write-capable destination handle is open.
+All failures trace to the same template-generation path. The local repair uses a
+no-overwrite move for missing selections and File.Replace with read/delete sharing
+for an existing blank selection, while denying in-place writers and rechecking
+blank content before replacement. A new regression keeps a delete-sharing reader
+open and proves the original handle retains its old contents with no staging file
+left behind. Nonblank selections remain untouched. Windows revalidation is still
+required, not inferred from macOS.
+
+Separate artifact outputs avoided altering the live full-suite runtime. Focused
+selection tests: 4 passed. All wizard tests with the repair: 77 passed, zero skips,
+TRX /tmp/tracemap-wizard-windows-fix-all. This repair has not yet been pushed while
+the required review batch settles. The prior Windows run is failed, not admitted.

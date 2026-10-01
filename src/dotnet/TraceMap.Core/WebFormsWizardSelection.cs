@@ -38,20 +38,25 @@ public static class WebFormsWizardSelection
             {
                 var template = WebFormsWizardForms.Template(project.WebRoot);
                 store.VerifyUnchanged();
-                // Never overwrite a nonblank human selection. A concurrently opened editor
-                // conflicts with this lease; recheck bytes before replacing a blank file.
-                using var stream = new FileStream(path, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.Delete);
-                if (stream.Length > WebFormsWizardForms.MaxSelectionChars) throw new InvalidOperationException("WEBFORMS_WIZARD_SELECTION_CHANGED");
-                var prior = new byte[(int)stream.Length];
-                stream.ReadExactly(prior);
-                if (!string.IsNullOrWhiteSpace(new UTF8Encoding(false, true).GetString(prior)))
-                    throw new InvalidOperationException("WEBFORMS_WIZARD_SELECTION_CHANGED");
                 var staging = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
                 try
                 {
                     using (var pending = new FileStream(staging, FileMode.CreateNew, FileAccess.Write, FileShare.None))
                     { pending.Write(Encoding.UTF8.GetBytes(template)); pending.Flush(true); }
-                    File.Move(staging, path, overwrite: true);
+                    if (!File.Exists(path)) File.Move(staging, path, overwrite: false);
+                    else
+                    {
+                        // ReplaceFile on Windows needs read/delete sharing on the destination.
+                        // Deny in-place writers while checking that the human selection is blank;
+                        // use replacement rather than MoveFileEx over an open destination.
+                        using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read | FileShare.Delete);
+                        if (stream.Length > WebFormsWizardForms.MaxSelectionChars) throw new InvalidOperationException("WEBFORMS_WIZARD_SELECTION_CHANGED");
+                        var prior = new byte[(int)stream.Length];
+                        stream.ReadExactly(prior);
+                        if (!string.IsNullOrWhiteSpace(new UTF8Encoding(false, true).GetString(prior)))
+                            throw new InvalidOperationException("WEBFORMS_WIZARD_SELECTION_CHANGED");
+                        File.Replace(staging, path, destinationBackupFileName: null);
+                    }
                 }
                 finally { if (File.Exists(staging)) File.Delete(staging); }
                 return new(project.Id, "forms", path, true);
