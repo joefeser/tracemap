@@ -10,7 +10,8 @@
   - [x] Terminal setup prompt/command adapter and explicit add-project flow (later stages remain below).
 - [ ] Publication/DLL inventory and existing native configuration/proof adapter.
   - [x] Publication-root/bin validation, explicit managed primary/dependency selection, bounded input snapshots and resume change detection.
-  - [ ] Native configuration/proof adapter and owned staging for external dependencies.
+  - [x] Native configuration generation, preflight and owned hash-verified staging for external dependencies.
+  - [ ] Explicit source-commit attestation and native preparation/start execution integration.
 - [ ] Explicit repair previews, confirmation and per-project invalidation.
 - [ ] Scan/combine/report execution with immutable output roots and revalidation.
 - [ ] Full regression matrix, CLI replay, documentation and rule limitations.
