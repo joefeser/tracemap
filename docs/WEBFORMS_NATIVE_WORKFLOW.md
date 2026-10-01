@@ -9,6 +9,109 @@ This is static, potentially partial, review-only evidence—not SQL execution,
 page activation, authenticated compilation, source-line identity, complete
 application coverage or release approval.
 
+## Resumable terminal wizard
+
+Local regression replay: `pwsh -NoProfile -File scripts/wlocal.ps1` runs the
+public source/compiled/separate-DLL corpus plus the wizard's restart, repair,
+build-consent and multi-project tests. It creates a fresh temporary output root
+and a bounded validation receipt. On Windows, add `-RequireWindowsPublish` to
+require the ASP.NET publication cases; a macOS pass does not satisfy that gate.
+
+The wizard configures the native **fresh** workflow without keeping shell
+variables between sessions. Choose a new configuration folder outside all source
+and published folders:
+
+```powershell
+tracemap webforms-review wizard --root C:/reviews/my-website
+tracemap webforms-review wizard --root C:/reviews/my-website --continue
+```
+
+It accepts a website folder, `.sln`, `.csproj`, or `.vbproj`. A solution requires
+an explicit website root matching one local entry; the scan selects that website
+project, not every solution project. A folder containing a C#/VB project requires
+you to name that project. Web roots must contain web.config and discoverable
+`.aspx` files. URL-based solution entries are not supported in this first version.
+
+Choose `all` or `selected` forms. Selected mode creates `forms.txt`, then exits
+with code **2 (paused)**. Trim that file and rerun with `--continue`; setup answers
+are retained. Paths are web-root-relative, with either slash accepted; absolute
+in-root paths also work. Blank/missing files are regenerated and paused again.
+Comments-only selections, duplicates, escapes and missing files are rejected;
+an empty selection never means all. Code 1 is a validation/execution failure;
+code 0 requires verified retained reports.
+
+Project builds require an absolute trusted tool path. The wizard displays the
+version/build arguments and working directory before requiring the word `build`.
+MSBuild tasks may execute code, restore dependencies and modify bin/obj/source
+files; declining executes nothing. Windows legacy targets require Windows
+MSBuild. Projectless ASP.NET compilation remains an external Windows step:
+`ready` declares that you have prepared publication, not that TraceMap proved it.
+TraceMap never launches the website or executes its SQL methods.
+
+Point publication setup at the site root containing `bin`, not `bin` itself.
+Projectless publication also requires PrecompiledApp.config. Select primary
+managed assemblies by displayed numbers (or explicitly `all`), then supply extra
+dependency DLL paths separated by semicolons, or `none`. Dependencies can be
+outside publication; verified copies are staged under the configuration folder.
+Customer source/publication files are not overwritten. Native assembly admission
+and source-binding checks still run later; metadata inspection alone is not proof.
+
+The generated layout is private and may contain paths and copied binaries:
+
+```text
+configuration-root/
+  root.config.json
+  website-id/
+    project.config.json
+    forms.txt
+    native.config.json           # later repairs use native-<id>.config.json
+    publication-<id>/            # hash-verified selected copies
+  project-history/               # explicit repair records and prior project state
+  runs/website-id-<id>/          # native evidence, checkpoints and reports
+```
+
+Before execution, type the displayed full source commit to attest that the
+selected publication corresponds to it. This declaration is not authenticated
+build provenance. Native preparation checks committed source membership and
+receipts; failures remain failures. Sources need a Git commit and origin remote.
+Successful completed continuation verifies retained reports without creating a
+new scan. Failed attempts resume only through their pinned native manifest.
+
+Add another website explicitly:
+
+```powershell
+tracemap webforms-review wizard --root C:/reviews/my-website --continue --add-project
+```
+
+Resume revalidates configs, selected source/publication hashes, inventory, commit
+and staged copies. For an affected project, preview and confirm an isolated
+restart:
+
+```powershell
+tracemap webforms-review wizard --root C:/reviews/my-website --continue --repair-project website-id
+```
+
+Repair requires replacement input/mode and confirmation by project ID. It archives
+the prior project state/form list, clears that project's build/attestation cursor,
+and preserves other projects, old native configs, staged paths and runs. It does
+not repair corrupt root configuration, install tools, fix customer code, infer
+lost provenance or silently accept new hashes. Correct a broken root manually or
+choose a new configuration folder. Generated JSON should not be edited to bypass
+hash checks; only forms.txt is the normal human-editing step.
+
+Limits include 10,000 relevant source files, 100,000 source inventory entries,
+64 MiB per retained input, 2 GiB selected input hashes, and 1 MiB per wizard
+configuration. Builds time out after 30 minutes and bound each output stream to
+64 KiB. Hashes detect changes, not authorship; filesystem races are not build
+authenticity proof. Configuration replacement is atomic per file, not a
+multi-file transaction; interrupted state updates fail closed and require repair.
+All-mode, successful builds and completed reports do not establish full coverage.
+
+Automatic solution-wide registration, automatic ASP.NET publication, shared-DLL
+source/PDB retrieval and microservice/cross-service tracing are deferred. The
+wizard currently selects fresh collection; use explicit native attach below for
+immutable attachment to a retained parent source scan.
+
 ## Choose fresh or attach
 
 | Operation | Source of truth | Result |

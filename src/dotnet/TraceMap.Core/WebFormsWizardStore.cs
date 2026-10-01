@@ -143,14 +143,72 @@ public sealed class WebFormsWizardStore : IDisposable
         if (Hash(ReadBytes(Path.Combine(DirectoryPath, "root.config.json"))) != rootHash) throw Fail("ROOT_CHANGED");
     }
 
-    private void ProtectInputs(WebFormsWizardProject project)
+    public string PreviewRepair(string id)
+    {
+        VerifyUnchanged();
+        Id(id);
+        if (!state.Projects.Any(item => item.Id == id)) throw Fail("PROJECT_UNKNOWN");
+        var path = ProjectPath(id);
+        RejectLink(path);
+        return File.Exists(path) ? Hash(ReadBytes(path)) : "missing";
+    }
+
+    public string? RepairProject(WebFormsWizardProject replacement, string observedHash, bool confirmed)
+    {
+        if (!confirmed) return null;
+        replacement = replacement with { Step = "forms", Forms = [], PublishedRoot = null,
+            PrimaryAssemblies = [], Dependencies = [], Build = null, Inputs = null, Native = null, Run = null };
+        ValidateProject(replacement);
+        ProtectInputs(replacement);
+        if (PreviewRepair(replacement.Id) != observedHash) throw Fail("REPAIR_PREVIEW_CHANGED");
+        var path = ProjectPath(replacement.Id);
+        var forms = Path.Combine(Path.GetDirectoryName(path)!, "forms.txt");
+        RejectLink(forms);
+        var history = Path.Combine(DirectoryPath, "project-history");
+        RejectLink(history);
+        var archive = Path.Combine(history, replacement.Id + "-" + Guid.NewGuid().ToString("N"));
+        var bytes = Encode("webforms-wizard-project.v1", generator, replacement);
+        var next = new WebFormsWizardRoot(checked(state.Revision + 1), state.Projects
+            .Select(item => item.Id == replacement.Id ? new WebFormsWizardProjectReference(item.Id, Hash(bytes)) : item).ToArray());
+        var nextBytes = Encode("webforms-wizard-root.v1", generator, next);
+        var original = observedHash == "missing" ? null : ReadBytes(path);
+        if (original is not null && Hash(original) != observedHash) throw Fail("REPAIR_PREVIEW_CHANGED");
+        var receipt = Encode("webforms-wizard-repair.v1", generator, new
+        {
+            projectId = replacement.Id, observedProjectSha256 = observedHash,
+            priorRegisteredSha256 = state.Projects.Single(item => item.Id == replacement.Id).ConfigSha256,
+            replacementSha256 = Hash(bytes), preservedRuns = true, preservedNativeInputs = true
+        });
+        Directory.CreateDirectory(archive);
+        if (original is not null) Atomic(Path.Combine(archive, "project.config.original.json"), original);
+        Atomic(Path.Combine(archive, "repair.json"), receipt);
+        // Keep native configs, staged publication paths and runs in place: old native
+        // manifests refer to their exact locations. Only editable form selection moves.
+        if (File.Exists(forms)) File.Move(forms, Path.Combine(archive, "forms.txt"), overwrite: false);
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        Atomic(path, bytes);
+        Atomic(Path.Combine(DirectoryPath, "root.config.json"), nextBytes);
+        state = next;
+        rootHash = Hash(nextBytes);
+        return archive;
+    }
+
+    public static void ValidateLocation(string directory, WebFormsWizardProject project)
+    {
+        ValidateProject(project);
+        ProtectInputs(Physical(directory), project);
+    }
+
+    private void ProtectInputs(WebFormsWizardProject project) => ProtectInputs(DirectoryPath, project);
+
+    private static void ProtectInputs(string directory, WebFormsWizardProject project)
     {
         var roots = new[] { Directory.Exists(project.InputPath) ? project.InputPath : Path.GetDirectoryName(project.InputPath)!,
             project.WebRoot, project.PublishedRoot }.Where(path => path is not null);
         foreach (var input in roots)
-            if (Inside(DirectoryPath, Physical(input!)) || Inside(Physical(input!), DirectoryPath)) throw Fail("CONFIG_OVERLAPS_INPUT");
+            if (Inside(directory, Physical(input!)) || Inside(Physical(input!), directory)) throw Fail("CONFIG_OVERLAPS_INPUT");
         foreach (var file in project.PrimaryAssemblies.Concat(project.Dependencies))
-            if (Inside(DirectoryPath, Physical(file))) throw Fail("CONFIG_OVERLAPS_INPUT");
+            if (Inside(directory, Physical(file))) throw Fail("CONFIG_OVERLAPS_INPUT");
     }
 
     private static bool Inside(string root, string candidate)
@@ -204,7 +262,7 @@ public sealed class WebFormsWizardStore : IDisposable
     private static void Id(string? id)
     {
         if (id is null || !Regex.IsMatch(id, "\\A[a-z][a-z0-9-]{0,47}\\z", RegexOptions.CultureInvariant) ||
-            id is "runs" or "con" or "prn" or "aux" or "nul" || Regex.IsMatch(id, "\\A(com|lpt)[0-9]\\z")) throw Fail("PROJECT_ID_INVALID");
+            id is "runs" or "project-history" or "con" or "prn" or "aux" or "nul" || Regex.IsMatch(id, "\\A(com|lpt)[0-9]\\z")) throw Fail("PROJECT_ID_INVALID");
     }
 
     private static byte[] Encode<T>(string schema, string generator, T configuration)

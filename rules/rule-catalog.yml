@@ -3,6 +3,68 @@
 # - deferred: documented future/planned rule that must not appear in emitted facts.
 # Existing rules without an explicit status are treated as active.
 rules:
+  - id: workflow.webforms.wizard-state.v1
+    name: Local resumable Web Forms wizard state
+    description: Persists bounded project cursors and input references in exclusive, versioned, generator-and-input-hashed local configuration envelopes.
+    evidenceTier: Tier4Unknown
+    emits:
+      - webforms-wizard-root.v1
+      - webforms-wizard-project.v1
+      - webforms-wizard-repair.v1
+    limitations:
+      - Saved steps are cursors, not proof of valid current inputs, live processes, build authenticity or completed reports.
+      - Replacement is atomic per file, not transactional across root and project files; interrupted changes fail closed.
+      - Confirmed repair archives affected project state and preserves native inputs and prior run paths; malformed root configuration is not automatically repaired.
+      - Configuration and repair artifacts are private; hashes detect changes, not authorship or authorization outside the explicit operator flow.
+  - id: workflow.webforms.wizard-forms.v1
+    name: Bounded wizard form selection
+    description: Discovers and validates normalized website-relative ASPX selections without running customer code.
+    evidenceTier: Tier2Structural
+    emits:
+      - Local form-selection validation result
+    limitations:
+      - Discovery and selected paths do not prove runtime activation or complete analysis coverage.
+      - Missing or blank selection files pause for editing; empty effective selections never imply all pages.
+      - Filesystem races remain possible; downstream inputs must be revalidated before execution.
+  - id: workflow.webforms.wizard-target.v1
+    name: Static wizard target classification
+    description: Classifies explicitly selected local website folders, solutions and CSharp or Visual Basic projects using bounded text and XML inspection.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - Local target and tool-family candidate
+    limitations:
+      - MSBuild imports and conditions are not evaluated; a tool-family candidate is not a successful build or compatible Web Forms runtime.
+      - Solutions require an explicit local website selection; other projects are not independently registered.
+  - id: workflow.webforms.wizard-build.v1
+    name: Explicitly authorized wizard build observation
+    description: Records successful version and build process observations after exact command preview and operator consent.
+    evidenceTier: Tier4Unknown
+    emits:
+      - Local nested build observation with executable target and output hashes
+    limitations:
+      - A successful exit is not authenticated compiler provenance, complete dependency closure or source-to-binary binding.
+      - Builds may execute project-defined tasks and modify customer files only after explicit confirmation; the website is never launched.
+      - Manual projectless publication produces no invented build observation.
+  - id: workflow.webforms.wizard-publication.v1
+    name: Static wizard publication inventory
+    description: Checks publication layout and managed PE metadata and retains bounded selected publication and website source input hashes.
+    evidenceTier: Tier2Structural
+    emits:
+      - Local publication inventory and nested input snapshots
+    limitations:
+      - Metadata is inspected without assembly loading; input hashes and compilation markers do not establish historical build authenticity.
+      - Source membership is bounded to known website extensions and explicit target input, not arbitrary imported project closure.
+      - Native admission and source-commit validation remain separate gates; unselected binaries are not claimed as reviewed.
+  - id: workflow.webforms.wizard-native-config.v1
+    name: Wizard-generated private native configuration
+    description: Stages hash-verified selected publication inputs and emits native configuration with exact generator and bounded input hashes.
+    evidenceTier: Tier2Structural
+    emits:
+      - Native configuration with WizardProvenance
+    limitations:
+      - Preparation provenance is not reused or invented; source attestation is a separate explicit operator declaration.
+      - External dependency copies retain byte identity but do not establish source or runtime identity.
+      - Fresh collection selects one website project; cross-project discovery and automatic cross-service tracing are deferred.
   - id: workflow.webforms.retained-proof-import.v1
     name: Explicit verified legacy publish proof import
     description: Imports an explicitly selected bounded legacy publish and binding receipt into a new native configuration after current source, repository, commit, inventory digest, DLL hash and binding admission checks.

@@ -191,3 +191,45 @@ fixture test ran native preparation, scan and reports, then verified completed
 continue preserved project bytes and one run folder. Existing public compiled
 sample DLLs were used; no customer application was executed. Explicit repairs,
 full terminal fixture replay, broader regression/Windows checks and PR remain.
+
+Repair increment: --continue --repair-project <id> previews a registered-project
+setup restart, requires explicit replacement input/mode and ID confirmation, and
+checks the observed project hash has not changed before applying it. Corrupt or
+missing project files can be replaced without parsing/trusting their contents;
+root metadata must still validate. Declined/stale previews do not modify state.
+Repair archives original project bytes and form selection under project-history
+with a provenance-wrapped repair record, clears only that project's build/native/
+attestation cursor, and preserves all prior native configs, staged files and run
+paths IN PLACE. Moving those files would invalidate prior native manifests.
+Subsequent native generation therefore uses a versioned native-<id>.config.json
+while preserving the original native.config.json. Other project bytes are pinned
+by regression tests. Repair is per-file atomic, not a transaction across files.
+
+73 focused wizard cases passed before the final added check that actual completed
+native reports remain verifiable after repair. Full .NET test project is running
+in process session 69611 with TRX directory /tmp/tracemap-wizard-full-suite;
+do not restart it while live. A final focused rerun is still needed after the
+latest test assertion. Native workflow documentation and rule catalog now describe
+commands, private artifacts, pause/error codes, repair boundaries and limitations.
+
+Latest validation: the broad .NET run completed with 3,096 passed, one skipped,
+zero failed (TRX /tmp/tracemap-wizard-full-suite). This run preceded the final
+fresh-root ordering fix and acceptance additions. The subsequent focused run
+passed all 76 wizard cases with zero skips (TRX /tmp/tracemap-wizard-latest).
+Fresh terminal setup now validates configuration/source overlap before creating
+the configuration root. Added real consented SDK fixture compilation, complete
+subset/restart/two-project terminal replay, and retained-report verification after
+repair. These are public local static fixtures, not customer runtime acceptance.
+
+The existing scripts/wlocal.ps1 corpus now includes every wizard test and requires
+the three principal real-process/end-to-end cases in its admitted test receipt.
+Its bounded source roster includes wizard implementation and test files. Replay
+is underway at /tmp/tracemap-wizard-local-replay-20261001. Dependency PR #798 is
+still open and advanced from 4f231dc3 to 1653f0de (retained report recovery budget
+fix); fetched and inspected, integration into this branch is still pending.
+
+One-command replay completed: 108 passed, one Windows-only skip; all three
+PowerShell chain/SQL-ledger/cap checks passed. The wrapper guard tests also passed.
+Receipt: /tmp/tracemap-wizard-local-replay-20261001/validation.local.json.
+Windows ASP.NET publication remains explicitly unverified here; use
+scripts/wlocal.ps1 -RequireWindowsPublish on the authorized Windows machine.

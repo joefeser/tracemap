@@ -6,6 +6,44 @@ namespace TraceMap.Tests;
 public sealed class WebFormsWizardCommandTests
 {
     [Fact]
+    public async Task Full_terminal_replay_survives_subset_restart_and_adds_second_project_without_changing_first()
+    {
+        using var temp = new TempDirectory();
+        var (site, published) = WebFormsWizardExecutionTests.Inputs(Path.Combine(temp.Path, "first-input"));
+        var commit = GitMetadataProvider.Detect(site).CommitSha;
+        var root = Path.Combine(temp.Path, "config");
+        var first = await Run(["wizard", "--root", root], $"first\n{site}\nselected\n");
+        Assert.Equal(2, first.Code);
+        File.WriteAllText(Path.Combine(root, "first", "forms.txt"), "Default.aspx\n");
+        var completed = await Run(["wizard", "--root", root, "--continue"], $"ready\n{published}\nall\nnone\nprepare\n{commit}\n");
+        Assert.True(completed.Code == 0, completed.Error + completed.Output);
+        Assert.Contains("Verified retained reports:", completed.Output);
+        var firstConfig = File.ReadAllBytes(Path.Combine(root, "first", "project.config.json"));
+        var (otherSite, otherPublished) = WebFormsWizardExecutionTests.Inputs(Path.Combine(temp.Path, "second-input"));
+        var otherCommit = GitMetadataProvider.Detect(otherSite).CommitSha;
+        var added = await Run(["wizard", "--root", root, "--continue", "--add-project"],
+            $"second\n{otherSite}\nall\nready\n{otherPublished}\nall\nnone\nprepare\n{otherCommit}\n");
+        Assert.True(added.Code == 0, added.Error + added.Output);
+        Assert.Equal(firstConfig, File.ReadAllBytes(Path.Combine(root, "first", "project.config.json")));
+        Assert.Equal(2, Directory.GetDirectories(Path.Combine(root, "runs")).Length);
+        var verified = await Run(["wizard", "--root", root, "--continue"], "first\n");
+        Assert.True(verified.Code == 0, verified.Error + verified.Output);
+        Assert.Equal(firstConfig, File.ReadAllBytes(Path.Combine(root, "first", "project.config.json")));
+    }
+
+    [Fact]
+    public async Task Fresh_config_inside_source_is_rejected_before_creating_any_files()
+    {
+        using var temp = new TempDirectory();
+        var site = Site(temp.Path);
+        var root = Path.Combine(site, "wizard-config");
+        var result = await Run(["wizard", "--root", root], $"site\n{site}\nall\n");
+        Assert.Equal(1, result.Code);
+        Assert.Contains("CONFIG_OVERLAPS_INPUT", result.Error);
+        Assert.False(Directory.Exists(root));
+    }
+
+    [Fact]
     public async Task Terminal_subset_then_continue_does_not_ask_setup_questions_again()
     {
         using var temp = new TempDirectory();
@@ -55,6 +93,28 @@ public sealed class WebFormsWizardCommandTests
         Assert.Contains("INPUT_ENDED_CONTINUE_TO_RESUME", stopped.Error);
         Assert.Equal(before, File.ReadAllBytes(Path.Combine(root, "root.config.json")));
         Assert.Equal(2, (await Run(["wizard", "--root", root], "continue\n")).Code);
+    }
+
+    [Fact]
+    public async Task Terminal_repair_requires_confirmation_and_can_replace_corrupt_project_config()
+    {
+        using var temp = new TempDirectory();
+        var site = Site(temp.Path);
+        var root = Path.Combine(temp.Path, "config");
+        await Run(["wizard", "--root", root], $"site\n{site}\nall\nlater\n");
+        var path = Path.Combine(root, "site", "project.config.json");
+        File.WriteAllText(path, "broken config");
+        var declined = await Run(["wizard", "--root", root, "--continue", "--repair-project", "site"], $"{site}\nall\nno\n");
+        Assert.Equal(2, declined.Code);
+        Assert.Equal("broken config", File.ReadAllText(path));
+        var accepted = await Run(["wizard", "--root", root, "--continue", "--repair-project", "site"], $"{site}\nall\nsite\n");
+        Assert.Equal(2, accepted.Code);
+        Assert.Empty(accepted.Error);
+        Assert.Contains("Repair archived", accepted.Output);
+        var continued = await Run(["wizard", "--root", root, "--continue"], "later\n");
+        Assert.Equal(2, continued.Code);
+        Assert.Empty(continued.Error);
+        Assert.DoesNotContain("Project ID", continued.Output);
     }
 
     [Fact]
