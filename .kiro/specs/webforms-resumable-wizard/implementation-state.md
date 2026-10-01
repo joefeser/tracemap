@@ -441,3 +441,26 @@ passed 128 tests, both authentic publication cases, and all report checks. Thus
 the prior Windows failure is intermittent and remains unexplained; no root-cause
 fix is claimed. New diagnostics and postmortem copies will support the next
 reproduction. Final-head Windows/full validation and finding settlement remain.
+
+## Fourth review batch: admission and downstream count budgets
+
+ACK run1790885828742 released two exact-eb290ea6 P2 findings. Shared invariant:
+wizard-admitted component counts must fit retained validation and native follow-on
+input counts. Native hard cap remains 256; wizard selects that explicit budget
+and rejects combined primary/dependency counts above 252 before persistence,
+reserving configuration, selected project and two generated receipts. Retained
+count derives from existing component maxima (11,155), including an external
+solution input. Independent byte/config serialization/work bounds are unchanged.
+
+Regressions cover 128 primaries, 252 combined distinct-hash assemblies with
+receipt/project headroom, over-limit rejection without state advance, exact
+retained-count boundary and one-over rejection. Initial focused matrix passed
+26 tests. Expanded stable corpus replay passed 138 tests, one Windows-only skip
+and all three report-script checks; receipt:
+`/tmp/tracemap-wizard-budget4-final-20261001/validation.local.json`.
+Project-backed and projectless maximum assembly selections both pass native
+preflight/resume; receipt headroom is asserted, not a full 252-assembly scan claim.
+The first expanded run exposed a noncanonical external-solution path in the test
+fixture; corrected the fixture without weakening inventory identity checks.
+Prior eb290ea6 CI passed Windows 135 and full .NET 3,133 with one platform skip;
+those results do not validate this new patch.

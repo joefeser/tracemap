@@ -9,6 +9,43 @@ namespace TraceMap.Tests;
 public sealed class WebFormsWizardNativeTests
 {
     [Theory]
+    [InlineData(128, 0, false)]
+    [InlineData(124, 128, false)]
+    [InlineData(124, 128, true)]
+    public async Task Accepted_assembly_selection_fits_native_and_follow_on_budgets(int primaryCount, int dependencyCount, bool projectBacked)
+    {
+        using var temp = new TempDirectory();
+        var (site, published) = WebFormsWizardPublicationTests.Fixture(temp.Path);
+        var assembly = File.ReadAllBytes(typeof(FactAttribute).Assembly.Location);
+        var primary = Enumerable.Range(0, primaryCount).Select(i => $"bin/Primary{i}.dll").ToArray();
+        foreach (var primaryPath in primary) File.WriteAllBytes(Path.Combine(published, primaryPath), assembly);
+        var dependencies = Enumerable.Range(0, dependencyCount).Select(i => Path.Combine(temp.Path, $"Dependency{i}.dll")).ToArray();
+        for (var i = 0; i < dependencies.Length; i++)
+        {
+            File.WriteAllBytes(dependencies[i], assembly);
+            File.AppendAllText(dependencies[i], $"fixture-{i}"); // Distinct hashes, still valid managed PE metadata.
+        }
+        var inputPath = projectBacked ? Path.Combine(site, "Site.csproj") : site;
+        if (projectBacked) File.WriteAllText(inputPath, "<Project Sdk=\"Microsoft.NET.Sdk\"><PropertyGroup><TargetFramework>net10.0</TargetFramework></PropertyGroup></Project>");
+        InitGit(site);
+        using var store = WebFormsWizardStore.Open(Path.Combine(temp.Path, "config"), false);
+        Prepare(store, site, published);
+        store.SaveProject(store.ReadProject("site") with { Step = "dependencies", InputPath = WebFormsWizardStore.Physical(inputPath),
+            ProjectMode = projectBacked ? "project" : "projectless" });
+        WebFormsWizardPublication.Configure(store, "site", published, primary, dependencies);
+        WebFormsWizardPublication.ValidateRetained(store.ReadProject("site"));
+        store.SaveProject(store.ReadProject("site") with { Step = "configuration" });
+        var path = await WebFormsWizardNative.ConfigureAsync(store, "site");
+        var plan = await WebFormsReviewPreflightCommand.BuildAsync(path, Path.Combine(temp.Path, "review"), default);
+        Assert.Equal(primaryCount, plan.Configuration.PrimaryAssemblies.Length);
+        Assert.Equal(dependencyCount, plan.Configuration.DependencyAssemblies.Length);
+        var nonPublication = plan.Inputs.Count(input => !WebFormsReviewPreflightCommand.IsPublishInventoryRole(input.Role));
+        Assert.Equal(projectBacked ? 1 : 0, plan.Inputs.Count(item => item.Role == "project"));
+        Assert.True(nonPublication + 2 <= plan.Configuration.Budgets.MaxInputFiles);
+        Assert.Equal(path, await WebFormsWizardNative.ValidateAsync(store, "site"));
+    }
+
+    [Theory]
     [InlineData(127)]
     [InlineData(1023)]
     public async Task Page_maps_use_publish_inventory_budget_not_compiled_input_budget(int maps)
@@ -27,11 +64,11 @@ public sealed class WebFormsWizardNativeTests
         var path = await WebFormsWizardNative.ConfigureAsync(store, "site");
         var plan = await WebFormsReviewPreflightCommand.BuildAsync(path, Path.Combine(temp.Path, "review"), default);
         Assert.Equal(maps, plan.Inputs.Count(input => input.Role == "page-map"));
-        Assert.True(plan.Inputs.Count > plan.Configuration.Budgets.MaxInputFiles);
+        if (maps > 256) Assert.True(plan.Inputs.Count > plan.Configuration.Budgets.MaxInputFiles);
         Assert.True(plan.Inputs.Count(input => !WebFormsReviewPreflightCommand.IsPublishInventoryRole(input.Role))
             <= plan.Configuration.Budgets.MaxInputFiles);
         Assert.Equal("ready", store.ReadProject("site").Step);
-        var legacy = plan.Configuration with { Budgets = plan.Configuration.Budgets with { MaxPublishInputFiles = null } };
+        var legacy = plan.Configuration with { Budgets = plan.Configuration.Budgets with { MaxInputFiles = 128, MaxPublishInputFiles = null } };
         var legacyPath = Path.Combine(temp.Path, "legacy.config.json");
         File.WriteAllText(legacyPath, JsonSerializer.Serialize(legacy, new JsonSerializerOptions(JsonSerializerDefaults.Web)));
         var error = await Record.ExceptionAsync(() => WebFormsReviewPreflightCommand.BuildAsync(legacyPath,

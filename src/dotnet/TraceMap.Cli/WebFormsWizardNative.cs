@@ -55,7 +55,8 @@ public static class WebFormsWizardNative
             git.CommitSha, target.SelectedProject is null ? "projectless" : "projects", null,
             target.SelectedProject is null ? [] : [Relative(project.WebRoot, target.SelectedProject)], ["."], project.FormsMode,
             project.FormsMode == "selected" ? project.Forms : [], stagedRoot, primary.ToArray(), dependencies.ToArray(),
-            [], [], maps.ToArray(), null, new WebFormsReviewBudgets { MaxPublishInputFiles = 20_480 },
+            [], [], maps.ToArray(), null, new WebFormsReviewBudgets {
+                MaxInputFiles = WebFormsWizardPublication.MaxNativeInputFiles, MaxPublishInputFiles = 20_480 },
             PublishSourceRelativePaths: sourcePaths);
         WebFormsReviewPreflightCommand.ValidateConfig(config);
         var generator = await GeneratorHashAsync(typeof(WebFormsWizardNative).Assembly.Location,

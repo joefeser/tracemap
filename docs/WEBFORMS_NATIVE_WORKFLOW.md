@@ -11,6 +11,16 @@ application coverage or release approval.
 
 ## Resumable terminal wizard
 
+Wizard DLL selection allows at most 128 primary and 128 dependency selections,
+with a combined ceiling of 252 before saving. Generated native configurations
+reserve a 256-input non-publication budget: assemblies plus configuration,
+selected project, binding receipt and publication receipt. Publication inventory
+uses its separate budget. Retained inventory count derives from 10,000 source
+files, one explicit external target, 1,024 bin entries, two metadata files and
+128 external dependencies (11,155 maximum). Independent byte, configuration-size,
+metadata-work and report limits still apply; these count bounds do not promise
+complete analysis or admission of every large configuration.
+
 Local regression replay: `pwsh -NoProfile -File scripts/wlocal.ps1` runs the
 public source/compiled/separate-DLL corpus plus the wizard's restart, repair,
 build-consent and multi-project tests. It creates a fresh temporary output root
