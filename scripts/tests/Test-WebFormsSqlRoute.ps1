@@ -5,7 +5,7 @@ $folder = Join-Path ([IO.Path]::GetTempPath()) ('tracemap-sql-route-' + [guid]::
 function Save($obj, $path) { [IO.File]::WriteAllText($path, (ConvertTo-Json -InputObject $obj -Depth 50)) }
 try {
     $inputFile = Join-Path $folder 'compiled-paths.handoff.local.json'
-    $root = @{ nodeId = 'root'; displayName = '<script>private()</script>'; nodeKind = 'Method' }
+    $root = @{ nodeId = 'root'; displayName = '<script>private()</script>'; nodeKind = 'Method'; symbolId = 'Synthetic.<ExactIdentity>'; combinedFactId = 'source:fact-root' }
     $fill = @{ nodeId = 'fill'; displayName = 'Fill'; surfaceKind = 'database-api'; surfaceName = 'DbDataAdapter.Fill'; ruleId = 'test.fill'; evidenceTier = 'Tier3SyntaxOrTextual'; commandBinding = @{ schema = 'il-command-binding.v1'; commandTextOrigin = @{ kind = 'argument-slot'; identity = '0' }; generatorSha256 = ('a' * 64); boundedInputSha256 = ('b' * 64) } }
     $bridge = @{ edgeKind = 'projectless-vb-receiver-bridge' }
     Save @{ schemaVersion = 'webforms-compiled-grouped-handoff.v1'; header = @{ query = @{}; gaps = @(@{ gapKind = 'ParameterEvidenceUnavailable' }) }; nodes = @{ r = $root; f = $fill }; edges = @{ e = $bridge }; variants = @(@{ nodeReferences = @('r','f'); edgeReferences = @('e') }) } $inputFile
@@ -14,6 +14,8 @@ try {
     if ($result -notcontains 'sqlRoute.exactGroups=1;variants=1;databaseSurfaceOccurrences=1;sqlSurfaceOccurrences=0') { throw 'Grouped counts incorrect' }
     $output = Join-Path $folder 'handler-sql-evidence.local.html'
     $html = [IO.File]::ReadAllText($output)
+    if (!$html.Contains('Retained route identities (private, ordered)') -or
+        !$html.Contains('Synthetic.&lt;ExactIdentity&gt;') -or !$html.Contains('source:fact-root')) { throw 'Retained identity missing or unescaped' }
     foreach ($expected in @('No retained SQL query/persistence surface','projectless-vb-receiver-bridge','test.fill','ParameterEvidenceUnavailable','Bounded input SHA-256','&lt;script&gt;private()&lt;/script&gt;','il-command-binding.v1','commandTextOrigin','argument-slot')) {
         if (!$html.Contains($expected)) { throw "Missing $expected" }
     }

@@ -1,5 +1,18 @@
 # Implementation state
 
+## Saved unresolved-route identity readback (2026-10-01)
+
+The SQL ledger previously displayed only route labels, which can be redacted
+even when the saved node still carries an exact symbol. It now renders a bounded,
+HTML-escaped ordered list of supplied node/symbol/fact/source/scan/commit identities
+inside the private local diagnostic. Missing fields remain null; no label-based
+inference, producer resolution or provenance admission is performed. The existing
+generator digest changes with the renderer; original input hashing is preserved.
+`./scripts/wcap.ps1 -Unresolved` uses the reboot-safe selector and opens only
+unresolved routes from the saved all-terminal requery, without scan or traversal.
+Public ledger and shortcut tests cover identity output, escaping and routing.
+This script-only extension does not change scanner/report graph semantics.
+
 ## Owner-supplied saved comparison and bounded diagnosis (2026-10-01)
 
 Evidence source: owner-supplied photographs of the local comparison output and
