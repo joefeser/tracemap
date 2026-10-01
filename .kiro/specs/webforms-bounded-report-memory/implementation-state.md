@@ -7,8 +7,11 @@ Follow-up validation: standalone CLI smoke completed with 777 facts at
 unbound-input and unresolved-framework-reference gaps. This is not an admitted
 publication. Public saved-chain comparison script tests passed. The Windows
 corpus filter and receipt now explicitly require both dynamic-profile cases.
-Full .NET suite is running with TRX destination
-`/tmp/tracemap-profile-validation/profile-full.trx`; completion is not yet claimed.
+Full .NET suite completed: 3018 passed, zero failed, one Windows-only skip,
+3019 total, in 19m17s. TRX:
+`/tmp/tracemap-profile-validation/profile-full.trx`. The run started with the
+fixture edits present and completed after their commit as b0f9a8a1; test source
+and compiled code were unchanged during the run. Both profile cases passed.
 The expanded corpus script passed 27 tests with one Windows-only skip, including
 both required dynamic-profile cases. Receipt generator and bounded-input digests
 were recomputed successfully at `/tmp/tracemap-profile-corpus-validation`.
@@ -40,9 +43,9 @@ remains unresolved rather than being confused with the audit procedure. All 15
 LazyConstructorLoggingTests passed locally; the existing end-to-end
 DeepProjectlessNativeWorkflowTests packaging regression also passed (1/1).
 Tests compile net48 DLLs and scan,
-combine and query evidence without executing SQL or hosting ASP.NET. Full-suite
-and new-head Windows publication validation have not been rerun for this
-fixture-only extension. Exact private report identity matching remains pending.
+combine and query evidence without executing SQL or hosting ASP.NET. New-head
+Windows publication validation remains pending for this fixture-only extension.
+Exact private report identity matching remains pending.
 
 ## Final return-value and all-terminal validation (2026-10-01)
 
