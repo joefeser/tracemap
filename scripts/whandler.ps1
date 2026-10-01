@@ -1,7 +1,21 @@
 [CmdletBinding()]
-param([string]$Bundle, [string]$Handler = 'BidGroupNamesDDL_Init', [switch]$Requery, [switch]$FillOnly, [switch]$CompiledOnly, [switch]$Open)
+param([string]$Bundle, [string]$VerificationRoot, [string]$Handler = 'BidGroupNamesDDL_Init', [switch]$Requery, [switch]$FillOnly, [switch]$CompiledOnly, [switch]$Open)
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+if ($VerificationRoot) {
+    if ($Bundle -or !$Requery) { throw 'WEBFORMS_HANDLER_COMPLETED_REQUERY_ARGUMENT_INVALID' }
+    $VerificationRoot = [IO.Path]::GetFullPath($VerificationRoot)
+    $pinnedCli = Join-Path $VerificationRoot 'tool/tracemap.dll'
+    if (!(Test-Path -LiteralPath $pinnedCli -PathType Leaf)) { throw 'WEBFORMS_HANDLER_PINNED_TOOL_MISSING' }
+    $statusJson = @(& dotnet $pinnedCli webforms-review status --run (Join-Path $VerificationRoot 'review/run') --json)
+    if ($LASTEXITCODE -ne 0) { throw 'WEBFORMS_HANDLER_STATUS_FAILED' }
+    $status = ($statusJson -join "`n") | ConvertFrom-Json -AsHashtable
+    if ($status.schemaVersion -ne 'webforms-review-status.v1' -or !$status.readerMatchesOriginalGenerator -or
+        $status.state -ne 'reports-completed-review-only' -or !$status.retainedArtifactsVerified) {
+        throw 'WEBFORMS_HANDLER_COMPLETED_STATE_NOT_ADMITTED'
+    }
+    $Bundle = [IO.Path]::GetDirectoryName([string]$status.workbenchPath)
+}
 if ([string]::IsNullOrWhiteSpace($Bundle)) {
     $Bundle = Microsoft.PowerShell.Utility\Read-Host 'Recovered report folder (for example verify-5/recovered-reports full path)'
 }
@@ -14,13 +28,13 @@ $repo = Split-Path $PSScriptRoot -Parent
 if ($LASTEXITCODE -ne 0) { throw 'WEBFORMS_HANDLER_BUILD_FAILED' }
 $cli = Join-Path $repo 'src/dotnet/TraceMap.Cli/bin/Debug/net10.0/tracemap.dll'
 if ($Requery) {
-    $verificationRoot = Split-Path $Bundle -Parent
-    $run = Join-Path $verificationRoot 'review/run'
-    $destination = Join-Path $verificationRoot $(if ($CompiledOnly -and $FillOnly) { 'handler-requery-compiled-fill' } elseif ($CompiledOnly) { 'handler-requery-compiled' } elseif ($FillOnly) { 'handler-requery-fill' } else { 'handler-requery' })
+    $selectedVerificationRoot = if ($VerificationRoot) { $VerificationRoot } else { Split-Path $Bundle -Parent }
+    $run = Join-Path $selectedVerificationRoot 'review/run'
+    $destination = Join-Path $selectedVerificationRoot $(if ($CompiledOnly -and $FillOnly) { 'handler-requery-compiled-fill' } elseif ($CompiledOnly) { 'handler-requery-compiled' } elseif ($FillOnly) { 'handler-requery-fill' } else { 'handler-requery' })
     if (Test-Path -LiteralPath $destination) {
         $name = Microsoft.PowerShell.Utility\Read-Host 'Handler report exists and is preserved. Enter a new report folder name'
         if ($name -cnotmatch '^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$') { throw 'WEBFORMS_HANDLER_OUTPUT_NAME_INVALID' }
-        $destination = Join-Path $verificationRoot $name
+        $destination = Join-Path $selectedVerificationRoot $name
     }
     $queryArguments = @($cli, 'webforms-review', 'requery-handler', '--run', $run, '--bundle', $Bundle, '--handler', $Handler, '--out', $destination)
     if ($FillOnly) { $queryArguments += @('--surface-name', 'DbDataAdapter.Fill') }

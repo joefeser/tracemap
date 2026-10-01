@@ -134,6 +134,51 @@ public sealed class DeepProjectlessNativeWorkflowTests
                 Assert.All(retainedPaths, path => Assert.DoesNotContain(path.Nodes, node => node.SymbolId?.Contains("DeepDecoy", StringComparison.Ordinal) == true));
             }
             var selected = Assert.Single(original.Query.SymbolRoots!, item => item.SymbolId.StartsWith("DeepLookup.Lookup_Click(", StringComparison.Ordinal));
+            var beforeRequery = Roster(review);
+            foreach (var compiledOnly in new[] { false, true })
+            {
+                var destination = Path.Combine(root, compiledOnly ? "completed-il" : "completed-mixed");
+                var args = new List<string> { "webforms-review", "requery-handler", "--run", run,
+                    "--bundle", bundle, "--handler", "Lookup_Click", "--out", destination, "--surface-name", "DbDataAdapter.Fill" };
+                if (compiledOnly) args.AddRange(["--traversal-scope", "compiled-il"]);
+                Assert.True(await TraceMapCommand.RunAsync(args.ToArray(), output, error) == 0, error.ToString());
+                var receipt = JsonSerializer.Deserialize<WebFormsHandlerRequeryReceipt>(File.ReadAllBytes(
+                    Path.Combine(destination, "handler-requery.local.json")), JsonOptions)!;
+                Assert.Null(receipt.RecoveryReceiptSha256);
+                Assert.Equal(Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(handoff))), receipt.CompletedReportSha256);
+                Assert.Equal(WebFormsReviewExecutionCommand.HandlerRequeryHash(receipt), receipt.BoundedInputSha256);
+                Assert.Equal(selected, Assert.Single(receipt.Query.SymbolRoots!));
+                var result = GroupedCompiledPathHandoffBuilder.Restore(JsonSerializer.Deserialize<GroupedCompiledPathHandoff>(
+                    File.ReadAllBytes(Path.Combine(destination, "compiled-paths.handoff.local.json")), JsonOptions)!);
+                Assert.Contains(result.Paths, candidate => candidate.Nodes.Last().CommandBinding?.CommandTextFromPath?.State == "constant-on-encoded-call-path");
+                Assert.Equal(1, result.Summary.SelectorCandidateCount);
+                Assert.Equal(beforeRequery, Roster(review));
+                Assert.Equal(1, await TraceMapCommand.RunAsync(args.ToArray(), output, error));
+            }
+            var wrongBundle = Path.Combine(root, "wrong-bundle"); Directory.CreateDirectory(wrongBundle);
+            Assert.Equal(1, await TraceMapCommand.RunAsync(["webforms-review", "requery-handler", "--run", run,
+                "--bundle", wrongBundle, "--handler", "Lookup_Click", "--out", Path.Combine(root, "wrong-query")], output, error));
+            Assert.False(Directory.Exists(Path.Combine(root, "wrong-query")));
+            var handoffBytes = File.ReadAllBytes(handoff);
+            try
+            {
+                File.AppendAllText(handoff, " ");
+                Assert.Equal(1, await TraceMapCommand.RunAsync(["webforms-review", "requery-handler", "--run", run,
+                    "--bundle", bundle, "--handler", "Lookup_Click", "--out", Path.Combine(root, "changed-query")], output, error));
+                Assert.False(Directory.Exists(Path.Combine(root, "changed-query")));
+            }
+            finally { File.WriteAllBytes(handoff, handoffBytes); }
+            var retainedIndex = Path.Combine(bundle, "combined.sqlite");
+            var indexLength = new FileInfo(retainedIndex).Length;
+            try
+            {
+                using (var changedIndex = new FileStream(retainedIndex, FileMode.Append, FileAccess.Write)) changedIndex.WriteByte(0);
+                Assert.Equal(1, await TraceMapCommand.RunAsync(["webforms-review", "requery-handler", "--run", run,
+                    "--bundle", bundle, "--handler", "Lookup_Click", "--out", Path.Combine(root, "changed-index-query")], output, error));
+                Assert.False(Directory.Exists(Path.Combine(root, "changed-index-query")));
+            }
+            finally { using var restoredIndex = new FileStream(retainedIndex, FileMode.Open, FileAccess.Write); restoredIndex.SetLength(indexLength); }
+            Assert.Equal(beforeRequery, Roster(review));
             // Same retained index, deliberately narrower IL-only query: source
             // bridges in the multi-root workbench are not encoded IL transitions.
             var report = await CombinedDependencyPathReporter.BuildSelectedSymbolsAsync(

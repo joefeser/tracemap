@@ -1,5 +1,27 @@
 # Implementation state
 
+## Completed-run handler requery implementation (2026-09-30)
+
+Extended the existing native handler requery to completed checkpoints as well as
+failed-report recovery. Completed mode requires the exact checkpointed bundle,
+hashes its compiled report and combined index, and selects the root through the
+checkpoint-bound evidence query. The original checkpoint/plan/report are checked
+again after traversal. Completed receipts use a nullable recovery hash and an
+optional completedReportSha256; the added property is absent from legacy recovery
+serialization. All existing path/depth/work caps and single-root identity rules
+remain in force. No source scan or combine is invoked.
+
+whandler -VerificationRoot locates the bundle with the original pinned status
+reader, then uses the current built CLI for the separately attributed requery.
+Its orchestration regression passed for both recovery and completed inputs, plus
+unverified-state refusal. The deep native fixture now exercises mixed/IL requery
+of a completed run, command evidence, receipt hashes, original roster stability,
+existing-output rejection, foreign bundle rejection and changed-report refusal.
+Native execution/recovery validation passed 118/118 with no failures/skips in
+4 minutes 4 seconds. The final focused deep-fixture rerun passed in 7 seconds,
+including changed-index refusal. Private unresolved reasons and baseline comparison remain
+pending owner output; neither the new command nor tests resolve those by themselves.
+
 ## Remaining coverage goal started (2026-09-30)
 
 The owner requested a new goal for the three unresolved text occurrences,

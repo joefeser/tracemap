@@ -16,6 +16,29 @@ retained route and non-IL transitions. Counts at the top still cover all variant
 for the selected handler. Repeated variants are not distinct unresolved causes.
 Original query limits and gaps cover the original query's full root set.
 
+To investigate a shared path cap, create a separate single-handler report from
+the completed run's retained combined index:
+
+```powershell
+.\scripts\whandler.ps1 -VerificationRoot "<verification-folder>" -Handler "<exact-handler-method>" -Requery -FillOnly -CompiledOnly -Open
+```
+
+Omit `-CompiledOnly` for the corresponding mixed-source report. These operations
+rebuild the graph from saved facts and traverse one root; they do not scan source
+or DLLs or combine indexes again. Each keeps the original depth/work/path limits,
+and may still report truncation. The wrapper uses the pinned original reader to
+locate the completed bundle, builds the current CLI for the new operation, and
+writes under a new `handler-requery-*` folder. It prompts for a new name when
+that folder already exists. The original completed checkpoint, combined index,
+compiled report and evidence-index bindings are checked before use. The new
+receipt records `completedReportSha256` and has no recovery-receipt hash; recovery
+runs retain their existing receipt contract.
+
+Use `wcompare.ps1` with the new handler report and the historical handler JSON
+to compare actual method sequences. A mixed/compiled scope difference is a
+comparison limitation, not automatically an omitted IL route. A single-handler
+result alone also does not prove why a route was absent from a broad report.
+
 Algorithm 1.3 prioritizes admitted IL calls and prunes depth-infeasible mixed
 branches using a complete, bounded reverse-distance pass. The synthetic native
 regression now retains six routes across five handlers in 391 work units, rather
