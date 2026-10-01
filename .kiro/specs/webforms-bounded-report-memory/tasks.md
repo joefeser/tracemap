@@ -34,6 +34,7 @@
   - [x] Fix the reproduced broad mixed-source traversal exhaustion with evidenced IL-first scheduling and bounded reverse-distance pruning; pin all five handlers and six routes below 1,000 work units. Exhaustive mixed-mode parity remains unclaimed.
 
 - [x] Make evidence-token capacity explicit and backward-compatible; bulk-load lookup indexes and recover node-limit report failures into separately labeled private bundles without rescanning.
+  - [x] Increase recovery capacity above the failed plan's cap, bounded at 50M; refuse exhausted plans before creating a bundle (PR #798 current-head review).
 
 - [x] Materialize new native-plan report admission from declared scan capacity while preserving explicit caps and historical checkpoint policies; regress selected-root admission and refusal.
 

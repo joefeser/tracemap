@@ -34,6 +34,9 @@ public static partial class WebFormsReviewExecutionCommand
             if (history.Checkpoint is not { State: ReportsFailed, Reports: { } context } failed ||
                 !failed.Gaps.Contains("WEBFORMS_EVIDENCE_NODE_LIMIT") || history.ScanCheckpoint is not { } scan)
                 throw Fail("RECOVERY_REQUIRES_RETAINED_NODE_LIMIT_FAILURE");
+            // Re-indexing identical handoffs requires a strictly larger budget. Refuse
+            // exhausted plans before creating a separate (necessarily failing) bundle.
+            var recoveryMaxNodes = RecoveryMaxEvidenceNodes(plan.Configuration.Budgets.Reports?.MaxEvidenceNodes);
             foreach (var input in plan.Inputs)
                 if (Within(destination, input.Path) || Within(input.Path, destination)) throw Fail("RECOVERY_OUTPUT_OVERLAPS_INPUT");
             foreach (var input in new[] { plan.Configuration.SourceRoot, plan.Configuration.PublishedRoot,
@@ -92,9 +95,9 @@ public static partial class WebFormsReviewExecutionCommand
             {
                 WebFormsReviewReportExecution.Render(writer, app, grouped.Variants.Count, grouped.Chains.Count, paths.Summary.TraversalWorkUnits, token, recovered: true);
             }
-            await output.WriteLineAsync("recoveryStage=evidence-index-started;maxNodes=" + WebFormsReviewEvidenceIndex.NewPlanMaxNodes);
+            await output.WriteLineAsync("recoveryStage=evidence-index-started;maxNodes=" + recoveryMaxNodes);
             await WebFormsReviewEvidenceIndex.WriteAsync(destination, plan.RunId, appInput.Sha256, compiledInput.Sha256,
-                budgets.MaxOutputBytes, plan.Configuration.Budgets.MaxRetainedArtifactBytes, token, WebFormsReviewEvidenceIndex.NewPlanMaxNodes);
+                budgets.MaxOutputBytes, plan.Configuration.Budgets.MaxRetainedArtifactBytes, token, recoveryMaxNodes);
             // Original paths and checkpoints remain immutable; partial recovery stays separate on failure.
             if (appInput != await WebFormsReviewPreflightCommand.HashAsync("application", appPath, appInput.Bytes, token) ||
                 compiledInput != await WebFormsReviewPreflightCommand.HashAsync("compiled", compiledPath, compiledInput.Bytes, token) ||
@@ -107,7 +110,7 @@ public static partial class WebFormsReviewExecutionCommand
             var receipt = new WebFormsReportRecoveryReceipt("webforms-report-recovery.v1", RecoveryRule, "local-only",
                 "recovered-static-reports-original-run-not-completed", generator.Sha256, "", plan.RunId,
                 Digest(planBytes), history.Sha256!, index.Sha256, grouped.Chains.Count, grouped.Variants.Count,
-                WebFormsReviewEvidenceIndex.NewPlanMaxNodes, artifacts,
+                recoveryMaxNodes, artifacts,
                 ["Source scan/checkpoint hashes and report internal commitments were verified; failed outputs were not originally checkpoint-admitted.",
                  "No source scan, compiled collection, graph traversal or website build was repeated. Original run remains failed and unchanged.",
                  "This is a separate private recovery bundle, not path parity, current-source, runtime or authenticated-build proof."]);
@@ -135,6 +138,17 @@ public static partial class WebFormsReviewExecutionCommand
 
     internal static string RecoveryHash(WebFormsReportRecoveryReceipt receipt) =>
         WebFormsReviewReportExecution.CanonicalHash(receipt with { BoundedInputSha256 = "" }, 4_194_304, CancellationToken.None);
+
+    internal static int RecoveryMaxEvidenceNodes(int? configuredLimit)
+    {
+        var failedLimit = configuredLimit ?? WebFormsReviewEvidenceIndex.MaxNodes;
+        if (failedLimit is < 2 or > WebFormsReviewEvidenceIndex.MaxSupportedNodes)
+            throw Fail("RECOVERY_NODE_BUDGET_INVALID");
+        if (failedLimit == WebFormsReviewEvidenceIndex.MaxSupportedNodes)
+            throw Fail("RECOVERY_NODE_BUDGET_EXHAUSTED");
+        return (int)Math.Min(WebFormsReviewEvidenceIndex.MaxSupportedNodes,
+            Math.Max(WebFormsReviewEvidenceIndex.NewPlanMaxNodes, 2L * failedLimit));
+    }
 
     public static async Task<int> QueryRecoveryAsync(string[] args, TextWriter output, TextWriter error, CancellationToken token = default)
     {
