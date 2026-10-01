@@ -1,6 +1,6 @@
 # Implementation state
 
-## Operator workflow cleanup in progress (2026-10-01)
+## Reproducible CLI operator workflow (2026-10-01)
 
 New owner follow-up after the bounded investigation: replace manual screenshot
 round trips with reproducible local projects and regression gates before PR.
@@ -23,8 +23,16 @@ three DLL-only terminal routes and zero missing-provider routes with 31 gaps.
 Existing-output refusal was exercised. The final receipt-hardened rerun also
 passed 32 with one Windows-only skip in 34 seconds at
 `/tmp/tracemap-operator-cleanup-verified`; generator/input digests were recomputed.
-Publication is pending. No production scanner/reporting code changed; the
+Initial implementation was pushed as 4507f5f3 to PR #798. No production scanner/reporting code changed; the
 full historical 3018-test result is not presented as a fresh full-suite run.
+
+Follow-up replay at `/tmp/tracemap-operator-cleanup-reports` also passed all 32
+local cases, all three saved-report script suites, and actual comparison/ledger
+generation for four positive layouts. Each capped comparison pins one shared
+and two current-only exact sequences; each unresolved ledger pins one group.
+These HTML artifacts now replay the manual report investigation as part of the
+normal command. Helper changes trigger the Windows workflow too. The final
+expanded Windows CI and PR review remain separate from local test success.
 
 Native-app versus CLI operator coverage is being clarified; no UI coverage is
 claimed from CLI tests. The retained native start/package/resume tests remain a

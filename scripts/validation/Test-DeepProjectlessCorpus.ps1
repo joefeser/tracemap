@@ -30,6 +30,12 @@ try {
         'src/dotnet/tests/TraceMap.Tests/LazyConstructorLoggingTests.cs',
         'src/dotnet/tests/TraceMap.Tests/WebFormsOperatorWorkflowTests.cs',
         'scripts/wlocal.ps1',
+        'scripts/wcompare.ps1',
+        'scripts/wsqlroute.ps1',
+        'scripts/tests/Test-WebFormsChainComparison.ps1',
+        'scripts/tests/Test-WebFormsSqlRoute.ps1',
+        'scripts/tests/Test-WebFormsCapShortcut.ps1',
+        'scripts/wcap.ps1',
         'samples/fixture-build/lazy-constructor/LazyWebsite.vbproj',
         'samples/fixture-build/lazy-constructor/provider/LoggingProvider.vbproj',
         'samples/messy-dotnet-workspace/vb-lazy-constructor/Overview.aspx',
@@ -93,6 +99,24 @@ try {
         }).Count -ne 1) { throw 'DEEP_CORPUS_OPERATOR_LAYOUT_MISSING' }
     }
     if ($RequireWindowsPublish -and $windowsPassed -ne 2) { throw 'DEEP_CORPUS_WINDOWS_ACCEPTANCE_MISSING' }
+    foreach ($test in @('Test-WebFormsChainComparison.ps1', 'Test-WebFormsSqlRoute.ps1', 'Test-WebFormsCapShortcut.ps1')) {
+        & (Join-Path $TraceMapRoot ('scripts/tests/' + $test))
+    }
+    foreach ($layout in @('attached', 'separate', 'separate-dll-only', 'reversed')) {
+        $folder = Join-Path $output ('operator/' + $layout)
+        $current = Join-Path $folder 'all/paths-report.json'
+        $comparison = @(& (Join-Path $TraceMapRoot 'scripts/wcompare.ps1') `
+            -Historical (Join-Path $folder 'capped/paths-report.json') -Current $current -Mixed $current `
+            -Handler Profile_Click -OutputPath (Join-Path $folder 'cap-comparison.local.html'))
+        if ($comparison -notcontains 'compare.sharedExact=1;historicalOnly=0;currentOnly=2;variantCountDifferences=0;symbolSequenceMatches=1') {
+            throw 'DEEP_CORPUS_OPERATOR_COMPARISON_MISMATCH'
+        }
+        $ledger = @(& (Join-Path $TraceMapRoot 'scripts/wsqlroute.ps1') -Report $current -Handler Profile_Click `
+            -UnresolvedOnly -OutputPath (Join-Path $folder 'unresolved-command.local.html'))
+        if ($ledger -notcontains 'sqlRoute.unresolvedOnly=true;unresolvedGroups=1;displayedGroups=1') {
+            throw 'DEEP_CORPUS_OPERATOR_LEDGER_MISMATCH'
+        }
+    }
     $inputLines = @(SourceRoster)
     if (($inputLines -join "`n") -cne ($beforeInputs -join "`n") -or
         $generatorSha -cne (Get-FileHash -LiteralPath $PSCommandPath -Algorithm SHA256).Hash.ToLowerInvariant()) {
@@ -123,6 +147,7 @@ try {
         windowsPublishTestsPassed = $windowsPassed
         profileDynamicLookupTestsPassed = $profilePassed
         operatorWorkflowTestsPassed = $operatorPassed
+        operatorDiagnosticLayoutsPassed = 4
         windowsPublishAcceptance = if ($windowsPassed -eq 2) { 'tested' } else { 'not-run' }
         limitations = @('Synthetic static corpus only; no database methods executed.',
             'Logical graph payload counters and artifact caps are not physical drive-read measurements.',
