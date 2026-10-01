@@ -1,5 +1,47 @@
 # Implementation state
 
+## Owner-supplied saved comparison and bounded diagnosis (2026-10-01)
+
+Evidence source: owner-supplied photographs of the local comparison output and
+decompiled source, not independent admission of private JSON or assemblies.
+No private method names, SQL identifiers, paths or screenshots are published here.
+
+- The original multi-root query retained 256 total variants. Filtering its saved
+  rows to the selected handler gave 27 exact sequences / 45 variants. The focused
+  saved requery gave 28 / 116. The comparison showed 27 shared exact sequences,
+  zero historical-only, one current-only, and 26 shared sequences with changed
+  variant counts. This is one added sequence, not 71 added call chains.
+- The expanded current-only sequence was shown through its terminal: handler,
+  list-model constructor, business lookup, data-access lookup, two dataset
+  wrapper overloads, DbDataAdapter.Fill. It is distinct from the dynamic scalar
+  lookup. Its absence from the capped report is established by the displayed
+  exact-sequence comparison; the comparison alone does not prove the causal
+  reason for every absent evidence variant or complete traversal coverage.
+- The separate historical Fill baseline comparison showed all 13 historical
+  symbol sequences / 41 variants retained among 18 current sequences / 56
+  variants, with five current-only sequences and no changed shared variant
+  counts. Different source/scan identities prevent exact-identity parity for
+  that comparison; symbol sequences are hints, not authenticated build parity.
+- The owner identified the scalar chain in decompiled source: lazy property,
+  object constructor, profile service, email lookup, text-scalar wrapper,
+  ExecuteScalar. The lookup concatenates a runtime identifier into SQL; its
+  locally constructed parameter list is not passed to the text wrapper. This
+  diagnoses the nonconstant Text pattern at source level, separately from
+  literal StoredProcedure logging. The saved ledger's original three unresolved
+  candidates were variants of one group, later six variants in the focused
+  report, not three independently established defects. An exact private
+  producer-fact/offset join remains unverified; do not present this source-level
+  diagnosis as machine-validated command binding or recoverable constant SQL.
+
+Implementation evidence remains the compiled public fixture, conservative
+return-value tracing, all-terminal native packaging, CLI smoke, 3018 passing
+local tests with one Windows-only skip, 29 passing Windows corpus tests at
+80cd1fdc, and the tested saved-report shortcut. No fresh private scan or SQL
+execution was required. The saved cap and historical-sequence comparisons are
+now observed, replacing the earlier pending-comparison status below. Complete
+private coverage, parameter values, runtime execution and private artifact
+admission are not established.
+
 ## Reboot-safe cap comparison shortcut (2026-10-01)
 
 `scripts/wcap.ps1` defaults to the user's verify-8 folder, uses the pinned
@@ -66,9 +108,9 @@ LazyConstructorLoggingTests passed locally; the existing end-to-end
 DeepProjectlessNativeWorkflowTests packaging regression also passed (1/1).
 Tests compile net48 DLLs and scan,
 combine and query evidence without executing SQL or hosting ASP.NET locally.
-Windows validation is complete for the recorded head above. Exact private
-report identity matching and private capped-report sequence comparison remain
-pending; the operator was given a saved-report-only comparison command.
+Windows validation is complete for the recorded head above. The owner has now
+supplied the capped-report sequence comparison, summarized at the top of this
+file. Exact private scalar producer identity admission remains unverified.
 
 ## Final return-value and all-terminal validation (2026-10-01)
 

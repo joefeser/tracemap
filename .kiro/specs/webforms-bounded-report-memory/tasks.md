@@ -129,3 +129,4 @@
 - [x] Remove the migration package's implicit Fill-only filter and prove native packaging retains both Fill and ExecuteScalar from the same synthetic handler; keep explicit historical Fill comparison available.
 - [x] Reproduce property-to-constructor-to-profile dynamic SQL separately from literal audit logging in the local projectless VB site; assert actual compiled concatenation origin and three terminal routes in mixed and compiled-only modes.
 - [x] Provide and test a reboot-safe short command for original-versus-requery saved report comparison, deriving the handler locally and rejecting Fill-only scope.
+- [x] Reconcile owner-supplied saved-report method sequences: 27 exact shared sequences plus one added dataset/Fill sequence; separately preserve the 13-sequence historical Fill baseline at symbol-hint level. Record the source-level dynamic scalar diagnosis and private identity-admission limitations without asserting runtime parity.
