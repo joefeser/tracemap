@@ -61,9 +61,8 @@ public static class WebFormsWizardBuild
         if (result.ExitCode != 0) throw Fail("BUILD_FAILED");
         Recheck(plan);
         store.SaveProject(project with { Step = "publication", Build = new(RuleId, plan.Tool, plan.ToolSha256,
-            plan.InputPath, plan.InputSha256, TextHash(version.StandardOutput, version.StandardError),
-            TextHash(result.StandardOutputSha256 ?? TextHash(result.StandardOutput, ""),
-                result.StandardErrorSha256 ?? TextHash(result.StandardError, "")), result.ExitCode, plan.SelectedProjectPath, plan.SelectedProjectSha256) });
+            plan.InputPath, plan.InputSha256, ProcessHash(version), ProcessHash(result),
+            result.ExitCode, plan.SelectedProjectPath, plan.SelectedProjectSha256) });
         return true;
     }
 
@@ -87,6 +86,9 @@ public static class WebFormsWizardBuild
         if (result.StandardOutput.Length > 65_536 || result.StandardError.Length > 65_536) throw Fail("BUILD_OUTPUT_LIMIT");
     }
     private static string TextHash(string output, string error) => Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(output + "\0" + error)));
+    private static string ProcessHash(WebFormsWizardProcessResult result) => TextHash(
+        result.StandardOutputSha256 ?? Convert.ToHexStringLower(SHA256.HashData(Encoding.Unicode.GetBytes(result.StandardOutput))),
+        result.StandardErrorSha256 ?? Convert.ToHexStringLower(SHA256.HashData(Encoding.Unicode.GetBytes(result.StandardError))));
     private static string HashFile(string path)
     {
         using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
