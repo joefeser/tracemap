@@ -31,6 +31,12 @@ try {
     if ($result -notcontains 'compare.currentChains=2;currentVariants=2') { throw 'Scalar excluded' }
     if (!(Test-Path (Join-Path $root 'handler-requery/chain-comparison.local.html'))) { throw 'Report missing' }
     if ((Get-FileHash $old).Hash -ne $hash) { throw 'Original changed' }
+    $scalar.surfaceKind = 'database-api'
+    $scalar.commandBinding = @{schema='il-command-binding.v1';commandTextFromPath=@{state='unresolved-operand'}}
+    Save @{ query = @{}; paths = @(@{nodes=@($node,$fill)},@{nodes=@($node,$scalar)}) } $new
+    $null = & $helper -VerificationRoot $root -NoOpen -Unresolved
+    $ledger = [IO.File]::ReadAllText((Join-Path $root 'handler-requery/handler-unresolved-command-evidence.local.html'))
+    if (!$ledger.Contains('Retained route identities (private, ordered)') -or !$ledger.Contains('Synthetic.Selected')) { throw 'Unresolved identity shortcut failed' }
     $receipt.query.surfaceName = 'DbDataAdapter.Fill'; Save $receipt $receiptPath
     try { & $helper -VerificationRoot $root -NoOpen; throw 'Fill-only accepted' }
     catch { if ($_.Exception.Message -ne 'WEBFORMS_CAP_ALL_TERMINALS_REQUIRED') { throw } }

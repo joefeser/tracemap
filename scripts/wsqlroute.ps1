@@ -99,6 +99,7 @@ foreach ($row in $rows) {
     if ($references -gt 500000) { throw 'WEBFORMS_SQL_ROUTE_REFERENCE_LIMIT' }
     $identity = [Collections.Generic.List[object]]::new()
     $labels = [Collections.Generic.List[string]]::new()
+    $methodIdentities = [Collections.Generic.List[object]]::new()
     $endpoints = [Collections.Generic.List[object]]::new()
     $hasUnresolved = $false
     foreach ($node in $nodes) {
@@ -107,6 +108,11 @@ foreach ($row in $rows) {
         # when two records happen to carry the same node identity.
         $identity.Add($node)
         $labels.Add([string](Value $node 'displayName'))
+        $methodIdentity = @{}
+        foreach ($field in @('nodeId','symbolId','combinedFactId','sourceIndexId','scanId','commitSha')) {
+            $methodIdentity[$field] = Value $node $field
+        }
+        $methodIdentities.Add($methodIdentity)
         $kind = Value $node 'surfaceKind'
         if ($kind -in @('database-api', 'sql-query', 'sql-persistence')) {
             $databaseNodes++
@@ -127,7 +133,7 @@ foreach ($row in $rows) {
         }
     }
     $key = Hash (Json $identity.ToArray())
-    if (!$groups.ContainsKey($key)) { $groups[$key] = @{ variants = 0; labels = $labels.ToArray(); endpoints = $endpoints.ToArray(); bridges = [Collections.Generic.SortedSet[string]]::new([StringComparer]::Ordinal); edgeEvidenceMissing = $false; unresolved = $hasUnresolved } }
+    if (!$groups.ContainsKey($key)) { $groups[$key] = @{ variants = 0; labels = $labels.ToArray(); methodIdentities = $methodIdentities.ToArray(); endpoints = $endpoints.ToArray(); bridges = [Collections.Generic.SortedSet[string]]::new([StringComparer]::Ordinal); edgeEvidenceMissing = $false; unresolved = $hasUnresolved } }
     $group = $groups[$key]; $group.variants++
     if ($null -eq $edges -or $edges.Count -eq 0) { $group.edgeEvidenceMissing = $true }
     foreach ($edge in @($edges)) {
@@ -160,7 +166,7 @@ foreach ($key in $groups.Keys) {
     if ($shown -ge 500) { break }
     $group = $groups[$key]
     if ($UnresolvedOnly -and !$group.unresolved) { continue }
-    $section = '<details><summary>' + (Html "$key — $($group.variants) variants") + '</summary><h3>Route labels (not SQL)</h3><pre>' + (Html (BoundedText ($group.labels -join "`n→ ") 65536)) + '</pre><h3>Retained database / SQL surface fields</h3><pre>' + (JsonHtml $group.endpoints) + '</pre><h3>Non-IL transitions</h3><pre>' + (JsonHtml @($group.bridges)) + '</pre>'
+    $section = '<details><summary>' + (Html "$key — $($group.variants) variants") + '</summary><h3>Route labels (not SQL)</h3><pre>' + (Html (BoundedText ($group.labels -join "`n→ ") 65536)) + '</pre><h3>Retained route identities (private, ordered)</h3><p>Supplied identities only; null means unavailable. This does not resolve a producer call or admit private provenance.</p><pre>' + (JsonHtml $group.methodIdentities) + '</pre><h3>Retained database / SQL surface fields</h3><pre>' + (JsonHtml $group.endpoints) + '</pre><h3>Non-IL transitions</h3><pre>' + (JsonHtml @($group.bridges)) + '</pre>'
     $sectionBytes = [Text.Encoding]::UTF8.GetByteCount($section)
     if ($routeDisplayBytes + $sectionBytes -gt 8MB) { break }
     $routeDisplayBytes += $sectionBytes; $shown++

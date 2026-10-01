@@ -1,6 +1,6 @@
 #Requires -Version 7.0
 [CmdletBinding()]
-param([string]$VerificationRoot, [switch]$NoOpen)
+param([string]$VerificationRoot, [switch]$NoOpen, [switch]$Unresolved)
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 if (!$VerificationRoot) {
@@ -33,6 +33,10 @@ if ($receipt.schemaVersion -ne 'webforms-handler-requery.v1' -or
 $symbol = [string]$receipt.root.symbolId
 if ($symbol -cnotmatch '\.([A-Za-z_][A-Za-z0-9_]{0,127})\(') { throw 'WEBFORMS_CAP_HANDLER_INVALID' }
 $handler = $Matches[1]
+if ($Unresolved) {
+    & (Join-Path $PSScriptRoot 'wsqlroute.ps1') -Report $current -Handler $handler -UnresolvedOnly -Open:(!$NoOpen)
+    return
+}
 $old = Join-Path ([IO.Path]::GetDirectoryName([string]$status.workbenchPath)) 'compiled/compiled-paths.handoff.local.json'
 Write-Output 'capCompare=original-vs-single-handler;all-database-api;no-scan;no-traversal'
 & (Join-Path $PSScriptRoot 'wcompare.ps1') -Historical $old -Current $current -Mixed $current -Handler $handler -Open:(!$NoOpen)
