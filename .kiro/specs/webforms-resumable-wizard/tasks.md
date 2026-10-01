@@ -4,7 +4,7 @@
 - [x] Versioned root/project state, per-file atomic persistence, exclusive locking and generator/bounded-input hashes (crash-between-files fails closed; explicit recovery is part of repair below).
 - [ ] Input target classification, web-root selection and toolchain/build validation.
   - [x] Bounded static folder/project/solution classification and explicit solution-root membership; tool-family candidates, no build/evaluation proof.
-  - [ ] Toolchain executable validation, consent and build-result handling.
+  - [x] Toolchain executable hash/version validation, explicit consent and build-result handling (real process version probe covered; actual fixture-build/Windows acceptance remains in full matrix).
 - [ ] Resumable terminal prompts with --continue, explicit add-project and subset pause.
   - [x] Shared forms transition generates missing/blank selection, pauses, resumes after restart and revalidates retained selected paths.
   - [x] Terminal setup prompt/command adapter and explicit add-project flow (later stages remain below).

@@ -58,6 +58,50 @@ public sealed class WebFormsWizardCommandTests
     }
 
     [Fact]
+    public async Task Terminal_build_preview_precedes_explicit_consent()
+    {
+        using var temp = new TempDirectory();
+        var site = Site(temp.Path);
+        var project = Path.Combine(site, "Site.csproj");
+        File.WriteAllText(project, "<Project Sdk=\"Microsoft.NET.Sdk\"><PropertyGroup><TargetFramework>net10.0</TargetFramework></PropertyGroup></Project>");
+        var tool = Path.Combine(temp.Path, OperatingSystem.IsWindows() ? "dotnet.exe" : "dotnet");
+        File.WriteAllText(tool, "test double");
+        var root = Path.Combine(temp.Path, "config");
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+        var calls = 0;
+        Task<WebFormsWizardProcessResult> Runner(string exe, string cwd, IReadOnlyList<string> args, CancellationToken token)
+        {
+            Assert.Contains("Type 'build'", output.ToString());
+            calls++;
+            return Task.FromResult(new WebFormsWizardProcessResult(0, "10.0", ""));
+        }
+        using var denied = new StringReader($"site\n{project}\nall\nrun\n{tool}\nno\n");
+        Assert.Equal(2, await WebFormsWizardCommand.RunAsync(["wizard", "--root", root], denied, output, error, buildRunner: Runner));
+        Assert.Equal(0, calls);
+        using var approved = new StringReader($"run\n{tool}\nbuild\n");
+        Assert.Equal(2, await WebFormsWizardCommand.RunAsync(["wizard", "--root", root, "--continue"], approved, output, error, buildRunner: Runner));
+        Assert.Equal(2, calls);
+        Assert.Empty(error.ToString());
+        using var store = WebFormsWizardStore.Open(root, true);
+        Assert.Equal("publication", store.ReadProject("site").Step);
+    }
+
+    [Fact]
+    public async Task Manual_projectless_publication_is_not_claimed_as_build_proof()
+    {
+        using var temp = new TempDirectory();
+        var site = Site(temp.Path);
+        var root = Path.Combine(temp.Path, "config");
+        var result = await Run(["wizard", "--root", root], $"site\n{site}\nall\nready\n");
+        Assert.Equal(2, result.Code);
+        Assert.Contains("not build proof", result.Output);
+        using var store = WebFormsWizardStore.Open(root, true);
+        Assert.Equal("publication", store.ReadProject("site").Step);
+        Assert.Null(store.ReadProject("site").Build);
+    }
+
+    [Fact]
     public async Task Invalid_flags_fail_before_creating_configuration()
     {
         using var temp = new TempDirectory();

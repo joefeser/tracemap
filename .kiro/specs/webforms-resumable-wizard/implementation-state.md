@@ -85,3 +85,29 @@ replay, restart, add-project preservation, existing-root/EOF behavior, invalid
 flags and CLI help dispatch. Next implementation must advance the build cursor:
 explicit toolchain/consent or guided manual projectless publication, followed by
 publication inventory/native config, repair and immutable report execution.
+
+Build increment: shared WebFormsWizardBuild creates a bounded executable/target
+hash preview, requires explicit consent before even probing the executable,
+validates a successful numeric version result, then executes the exact argument
+list. The terminal requires an absolute trusted tool path and the word `build`,
+shows both commands and working directory, and warns about arbitrary MSBuild
+tasks/restoration/source writes. A Windows MSBuild requirement cannot be bypassed
+on non-Windows. The process adapter uses no shell, bounds stdout/stderr to 64 KiB
+each, uses a 30-minute timeout, and kills the process tree on cancellation/failure.
+Private command output is displayed to the operator, not published as a report.
+
+Only successful probe/build plus unchanged tool/target hashes advance to
+publication. Failed/declined builds leave the build cursor; a local-only nested
+build evidence record retains hashes inside the provenance-wrapped project
+config. Resume rechecks those retained tool/target hashes. These are command
+observations, NOT complete source/dependency snapshots or binary/source binding.
+Existing native publication/provenance admission remains mandatory later.
+Projectless `ready` declares external compilation and advances without inventing
+build evidence; EOF/later safely pauses. Publication validation is next.
+
+Focused tests: 49 passed, no skips, at /tmp/tracemap-wizard-build-foundation,
+including actual installed dotnet --version execution, injected build success/
+probe failure/build failure/declined consent/input mutation, terminal consent
+ordering and manual-publication distinction. No customer project was built.
+Full fixture builds, publication integration, explicit repair and report execution
+remain outstanding. No wizard PR or push yet.

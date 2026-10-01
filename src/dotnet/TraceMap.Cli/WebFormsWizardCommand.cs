@@ -9,7 +9,7 @@ public static class WebFormsWizardCommand
         "Continue reuses saved answers; add-project explicitly registers another website. Exit 2 means setup paused, not a completed review.";
 
     public static async Task<int> RunAsync(string[] args, TextReader input, TextWriter output, TextWriter error,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default, WebFormsWizardProcessRunner? buildRunner = null)
     {
         try
         {
@@ -74,8 +74,54 @@ public static class WebFormsWizardCommand
                 await output.WriteLineAsync($"Edit {selection.EditFile}; keep only the forms you want. Then run the same wizard with --continue.");
                 return 2;
             }
-            await output.WriteLineAsync($"Project {id}: saved step '{selection.Step}'. Setup is incomplete; no build, scan or customer application was executed.");
+            var current = store.ReadProject(id);
+            WebFormsWizardBuild.ValidateRetained(current);
+            await output.WriteLineAsync($"Project {id}: saved step '{selection.Step}'. Setup is incomplete.");
+            if (current.Step == "build")
+            {
+                var target = WebFormsWizardTarget.Inspect(current.InputPath, current.WebRoot);
+                if (target.ProjectMode == "projectless")
+                {
+                    await output.WriteLineAsync("Compile this website externally with the appropriate Windows ASP.NET compiler. TraceMap will not launch it. Have you prepared a separate compiled publication? [ready/later]");
+                    var answer = await input.ReadLineAsync(cancellationToken);
+                    if (answer is null || answer.Trim() == "later") return 2;
+                    if (answer.Trim() != "ready") throw Invalid("CHOICE_INVALID");
+                    store.SaveProject(current with { Step = "publication" });
+                    await output.WriteLineAsync("Manual publication declared; its contents and source binding still require validation. This is not build proof.");
+                }
+                else
+                {
+                    await output.WriteLineAsync("Run a build after reviewing the exact tool and command, or stop here? [run/later]");
+                    var answer = await input.ReadLineAsync(cancellationToken);
+                    if (answer is null || answer.Trim() == "later") return 2;
+                    if (answer.Trim() != "run") throw Invalid("CHOICE_INVALID");
+                    var tool = await Ask("Absolute path to the trusted dotnet or MSBuild executable:");
+                    if (!Path.IsPathFullyQualified(tool)) throw Invalid("TOOL_PATH_ABSOLUTE_REQUIRED");
+                    var plan = WebFormsWizardBuild.Plan(current, tool);
+                    await output.WriteLineAsync("Executable: " + plan.Tool);
+                    await output.WriteLineAsync("Working directory: " + plan.WorkingDirectory);
+                    await output.WriteLineAsync("Version arguments: " + System.Text.Json.JsonSerializer.Serialize(plan.VersionArguments));
+                    await output.WriteLineAsync("Build arguments: " + System.Text.Json.JsonSerializer.Serialize(plan.BuildArguments));
+                    await output.WriteLineAsync("Building can execute project-defined tasks, restore dependencies, and modify source/bin/obj files. No website is launched. Type 'build' to authorize these commands; any other answer pauses:");
+                    var consent = await input.ReadLineAsync(cancellationToken);
+                    if (!await WebFormsWizardBuild.ExecuteAsync(store, id, plan, consent?.Trim() == "build",
+                            RunBuildProcess, cancellationToken)) return 2;
+                    await output.WriteLineAsync("Build command succeeded. This does not establish source-to-binary provenance; publication validation is next.");
+                }
+            }
+            await output.WriteLineAsync($"Project {id}: saved step '{store.ReadProject(id).Step}'. No scan or customer website was executed.");
             return 2;
+
+            async Task<WebFormsWizardProcessResult> RunBuildProcess(string tool, string directory,
+                IReadOnlyList<string> arguments, CancellationToken token)
+            {
+                var result = await (buildRunner ?? WebFormsWizardProcess.RunAsync)(tool, directory, arguments, token);
+                await output.WriteLineAsync("Private build output (not a shareable report):");
+                await output.WriteLineAsync(result.StandardOutput);
+                if (!string.IsNullOrEmpty(result.StandardError)) await output.WriteLineAsync(result.StandardError);
+                await output.WriteLineAsync($"Build/tool process exit code: {result.ExitCode}");
+                return result;
+            }
 
             async Task<string> Ask(string prompt)
             {
@@ -90,7 +136,7 @@ public static class WebFormsWizardCommand
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
         catch (Exception exception) when (exception is InvalidOperationException or IOException or UnauthorizedAccessException
-            or ArgumentException or System.Xml.XmlException or System.Text.Json.JsonException)
+            or ArgumentException or System.Xml.XmlException or System.Text.Json.JsonException or System.ComponentModel.Win32Exception)
         {
             var code = exception is InvalidOperationException && exception.Message.StartsWith("WEBFORMS_WIZARD_", StringComparison.Ordinal)
                 ? exception.Message : "WEBFORMS_WIZARD_INPUT_OR_CONFIGURATION_INVALID";
