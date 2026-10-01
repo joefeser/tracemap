@@ -2,6 +2,15 @@
 
 ## Property-driven dynamic lookup regression (2026-10-01)
 
+Windows push run 36826541709 succeeded at exact head
+80cd1fdcaca92224b004aea733a9112d4c6cb9d5: 29 passed, zero skips, including
+both new profile cases and both authentic mapped/mapless ASP.NET publication
+cases. Downloaded receipt generator and bounded-input digests were verified,
+along with 22 source/test-result input hashes (accounting for checkout line
+endings). Execution assembly hashes remain receipt-only, not independently
+rehashed. Artifacts: `/tmp/tracemap-windows-80cd1fdc`. The workflow reported an
+existing action-runtime Node 20 deprecation notice, not a compiler/test warning.
+
 Follow-up validation: standalone CLI smoke completed with 777 facts at
 `/tmp/tracemap-profile-cli-smoke`, Level3SyntaxAnalysis/NotRun with explicit
 unbound-input and unresolved-framework-reference gaps. This is not an admitted
@@ -43,9 +52,10 @@ remains unresolved rather than being confused with the audit procedure. All 15
 LazyConstructorLoggingTests passed locally; the existing end-to-end
 DeepProjectlessNativeWorkflowTests packaging regression also passed (1/1).
 Tests compile net48 DLLs and scan,
-combine and query evidence without executing SQL or hosting ASP.NET. New-head
-Windows publication validation remains pending for this fixture-only extension.
-Exact private report identity matching remains pending.
+combine and query evidence without executing SQL or hosting ASP.NET locally.
+Windows validation is complete for the recorded head above. Exact private
+report identity matching and private capped-report sequence comparison remain
+pending; the operator was given a saved-report-only comparison command.
 
 ## Final return-value and all-terminal validation (2026-10-01)
 
