@@ -67,7 +67,8 @@ public sealed record WebFormsReviewConfig(
     string? ReceiptRoot = null,
     string[]? PublishSourceRelativePaths = null,
     WebFormsReviewConfigProvenance? PreparationProvenance = null,
-    string? PublishSourceRelativeBase = null);
+    string? PublishSourceRelativeBase = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] WebFormsReviewConfigProvenance? WizardProvenance = null);
 
 public sealed record WebFormsReviewConfigProvenance(string RuleId, string GeneratorSha256, string BoundedInputSha256);
 
@@ -343,6 +344,8 @@ public static partial class WebFormsReviewPreflightCommand
 
     internal static void ValidateConfig(WebFormsReviewConfig config)
     {
+        if (config.WizardProvenance is { } wizard && (wizard.RuleId != "workflow.webforms.wizard-native-config.v1"
+            || !IsHex(wizard.GeneratorSha256, 64) || !IsHex(wizard.BoundedInputSha256, 64))) throw Fail("CONFIG_INVALID");
         if (config.SchemaVersion != ConfigSchema || config.Operation is not ("fresh" or "attach") ||
             !IsHex(config.SourceCommitSha, 40) || string.IsNullOrWhiteSpace(config.SourceRoot) || string.IsNullOrWhiteSpace(config.PublishedRoot) ||
             config.Budgets is null || config.ProjectRelativePaths is null || config.SourceFolders is null || config.PageRelativePaths is null ||

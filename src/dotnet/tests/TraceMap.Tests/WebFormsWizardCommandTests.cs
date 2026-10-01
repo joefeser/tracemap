@@ -58,6 +58,22 @@ public sealed class WebFormsWizardCommandTests
     }
 
     [Fact]
+    public async Task Terminal_prepares_native_configuration_without_attestation_or_execution()
+    {
+        using var temp = new TempDirectory();
+        var (site, published) = WebFormsWizardPublicationTests.Fixture(temp.Path);
+        WebFormsWizardNativeTests.InitGit(site);
+        var root = Path.Combine(temp.Path, "config");
+        var result = await Run(["wizard", "--root", root], $"site\n{site}\nall\nready\n{published}\nall\nnone\nprepare\n");
+        Assert.Equal(2, result.Code);
+        Assert.Empty(result.Error);
+        Assert.Contains("Native configuration:", result.Output);
+        Assert.False(Directory.Exists(Path.Combine(root, "runs")));
+        using var store = WebFormsWizardStore.Open(root, true);
+        Assert.Equal("ready", store.ReadProject("site").Step);
+    }
+
+    [Fact]
     public async Task Publication_selection_is_retained_across_dependency_pause()
     {
         using var temp = new TempDirectory();

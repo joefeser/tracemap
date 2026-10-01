@@ -140,6 +140,20 @@ public static class WebFormsWizardCommand
                 WebFormsWizardPublication.Configure(store, id, current.PublishedRoot!, current.PrimaryAssemblies, dependencies);
                 store.SaveProject(store.ReadProject(id) with { Step = "configuration" });
             }
+            current = store.ReadProject(id);
+            if (current.Step == "configuration")
+            {
+                await output.WriteLineAsync("Create native configuration and verified copies of selected publication inputs under this configuration root? Source and publication originals will not be modified. [prepare/later]");
+                var answer = await input.ReadLineAsync(cancellationToken);
+                if (answer is null || answer.Trim() == "later")
+                {
+                    await output.WriteLineAsync($"Project {id}: saved step 'configuration'.");
+                    return 2;
+                }
+                if (answer.Trim() != "prepare") throw Invalid("CHOICE_INVALID");
+                await output.WriteLineAsync("Native configuration: " + await WebFormsWizardNative.ConfigureAsync(store, id, cancellationToken));
+            }
+            if (store.ReadProject(id).Native is not null) _ = await WebFormsWizardNative.ValidateAsync(store, id, cancellationToken);
             await output.WriteLineAsync($"Project {id}: saved step '{store.ReadProject(id).Step}'. No scan or customer website was executed.");
             return 2;
 
@@ -166,6 +180,8 @@ public static class WebFormsWizardCommand
             }
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+        catch (WebFormsReviewPreflightCommand.PreflightException exception)
+        { await error.WriteLineAsync("error: " + exception.Code + ". Generated attempts are retained for explicit repair."); return 1; }
         catch (Exception exception) when (exception is InvalidOperationException or IOException or UnauthorizedAccessException
             or ArgumentException or System.Xml.XmlException or System.Text.Json.JsonException or System.ComponentModel.Win32Exception or BadImageFormatException)
         {

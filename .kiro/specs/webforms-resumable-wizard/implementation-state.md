@@ -138,3 +138,35 @@ compilation marker, external dependencies, duplicates, changed DLL/source/config
 new source/map detection and terminal dependency pause/resume. Fixtures copy local
 test assemblies; no private customer binaries were used. Full suite/Windows
 acceptance, native adapter, explicit repair and execution remain outstanding.
+
+Native adapter increment: WebFormsWizardNative stages selected publication files
+under a unique project-owned publication folder, streaming and verifying original
+hashes. External dependencies get hash-scoped paths under dependencies, preserving
+native input containment. It creates native.config.json without overwriting an
+existing file, validates native preflight, then records its hash and staged-input
+hashes in project state. Resume rechecks original inputs, staged inputs, native
+config bytes and current Git commit. Failed/interrupted attempts remain for
+explicit repair; no implicit cleanup or reset is performed.
+
+Native configuration gains an optional WizardProvenance field (omitted when null)
+with exact CLI generator and bounded config/input hashes. PreparationProvenance
+is not repurposed; binding receipts stay empty until separate explicit attestation.
+The wizard requires a source commit and remote but does not invent a commit or
+attest on the operator's behalf. Existing preparation still validates committed
+source membership and assembly/source-binding gates before execution.
+
+Solution input builds still use the selected solution target, but generated scan
+configuration explicitly selects only the website project with web-root-relative
+source paths. Other solution projects are not silently registered. This keeps
+published page-map paths relative to the actual web root. The original solution
+target remains part of the wizard snapshot even if outside that web root.
+
+Terminal `prepare` at configuration creates this native config; EOF/later pauses.
+The ready cursor means configuration/preflight ready, not completed analysis.
+No source attestation, native preparation or scan/report execution is wired yet.
+Expanded wizard plus existing preflight/preparation regression: 168 passed,
+zero failures/skips, no build warnings in the final run; retained TRX at
+/tmp/tracemap-wizard-native-foundation. Source/publication fixtures stayed
+unchanged; external DLL staging and modified native config/staged-input rejection
+are covered. Full suite, Windows acceptance, explicit repair and end-to-end
+wizard execution remain pending.

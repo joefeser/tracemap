@@ -8,7 +8,9 @@ namespace TraceMap.Core;
 public sealed record WebFormsWizardProject(string Id, string InputPath, string WebRoot,
     string ProjectMode, string FormsMode, string[] Forms, string? PublishedRoot,
     string[] PrimaryAssemblies, string[] Dependencies, string Step, WebFormsWizardBuildEvidence? Build = null,
-    WebFormsWizardInputSnapshot[]? Inputs = null);
+    WebFormsWizardInputSnapshot[]? Inputs = null, WebFormsWizardNativeReference? Native = null);
+public sealed record WebFormsWizardNativeReference(string RelativePath, string Sha256, string SourceCommitSha,
+    WebFormsWizardInputSnapshot[] Inputs);
 public sealed record WebFormsWizardProjectReference(string Id, string ConfigSha256);
 public sealed record WebFormsWizardRoot(long Revision, WebFormsWizardProjectReference[] Projects);
 public sealed record WebFormsWizardDocument<T>(string SchemaVersion, string RuleId, string Visibility,
