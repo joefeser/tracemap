@@ -7,7 +7,8 @@ namespace TraceMap.Core;
 
 public sealed record WebFormsWizardProject(string Id, string InputPath, string WebRoot,
     string ProjectMode, string FormsMode, string[] Forms, string? PublishedRoot,
-    string[] PrimaryAssemblies, string[] Dependencies, string Step, WebFormsWizardBuildEvidence? Build = null);
+    string[] PrimaryAssemblies, string[] Dependencies, string Step, WebFormsWizardBuildEvidence? Build = null,
+    WebFormsWizardInputSnapshot[]? Inputs = null);
 public sealed record WebFormsWizardProjectReference(string Id, string ConfigSha256);
 public sealed record WebFormsWizardRoot(long Revision, WebFormsWizardProjectReference[] Projects);
 public sealed record WebFormsWizardDocument<T>(string SchemaVersion, string RuleId, string Visibility,
@@ -184,7 +185,7 @@ public sealed class WebFormsWizardStore : IDisposable
         Id(project.Id);
         if (project.ProjectMode is not ("projectless" or "solution" or "project" or "dll") ||
             project.FormsMode is not ("all" or "selected") ||
-            project.Step is not ("forms" or "build" or "publication" or "dependencies" or "ready" or "completed") ||
+            project.Step is not ("forms" or "build" or "publication" or "dependencies" or "configuration" or "ready" or "completed") ||
             project.Forms is null || project.PrimaryAssemblies is null || project.Dependencies is null ||
             project.Forms.Length > WebFormsWizardForms.MaxEntries || project.PrimaryAssemblies.Length > 128 || project.Dependencies.Length > 128 ||
             project.Forms.Any(item => string.IsNullOrWhiteSpace(item)) ||

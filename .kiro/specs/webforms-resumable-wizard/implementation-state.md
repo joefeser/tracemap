@@ -111,3 +111,30 @@ probe failure/build failure/declined consent/input mutation, terminal consent
 ordering and manual-publication distinction. No customer project was built.
 Full fixture builds, publication integration, explicit repair and report execution
 remain outstanding. No wizard PR or push yet.
+
+Publication increment: WebFormsWizardPublication validates site-root/bin shape,
+web.config XML, and projectless PrecompiledApp.config. PE metadata is inspected
+without loading/executing assemblies. Primary assemblies must be in publication
+bin; explicit external managed dependencies are accepted. Duplicate selections
+fail. This is structural evidence, not native build/source-binding admission.
+
+Local input snapshots retain selected DLLs, publication metadata/maps and bounded
+website source/config files, excluding bin/obj/.git. Resume detects content and
+relevant inventory changes. Limits are 64 MiB/file, 2 GiB selected hash input,
+10,000 source files, 100,000 traversed source entries, plus the existing 1 MiB
+configuration envelope limit. Source membership uses explicit relevant extensions,
+not every arbitrary file and not imported projects outside the website root.
+
+Terminal publication selection checkpoints before dependencies. Completing the
+dependency prompt advances to configuration, not ready/completed. Native config
+is next: external DLLs need owned staging because native preflight requires
+publication-root-relative inputs. Do not weaken native containment or write into
+customer publication folders. Preserve hashes and native receipts/attestation
+requirements. Filesystem races remain outside build-authenticity claims.
+
+Validation: 59 focused cases passed, zero skips, retained TRX under
+/tmp/tracemap-wizard-publication-foundation. Cases cover root-vs-bin, missing
+compilation marker, external dependencies, duplicates, changed DLL/source/config,
+new source/map detection and terminal dependency pause/resume. Fixtures copy local
+test assemblies; no private customer binaries were used. Full suite/Windows
+acceptance, native adapter, explicit repair and execution remain outstanding.

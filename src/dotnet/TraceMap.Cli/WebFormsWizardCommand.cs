@@ -76,6 +76,7 @@ public static class WebFormsWizardCommand
             }
             var current = store.ReadProject(id);
             WebFormsWizardBuild.ValidateRetained(current);
+            WebFormsWizardPublication.ValidateRetained(current);
             await output.WriteLineAsync($"Project {id}: saved step '{selection.Step}'. Setup is incomplete.");
             if (current.Step == "build")
             {
@@ -109,6 +110,36 @@ public static class WebFormsWizardCommand
                     await output.WriteLineAsync("Build command succeeded. This does not establish source-to-binary provenance; publication validation is next.");
                 }
             }
+            current = store.ReadProject(id);
+            if (current.Step == "publication")
+            {
+                await output.WriteLineAsync("Where is the compiled/published website root (the folder containing bin, not bin itself)? Enter later to pause:");
+                var folder = await input.ReadLineAsync(cancellationToken);
+                if (folder is null || folder.Trim() == "later") return 2;
+                var publication = WebFormsWizardPublication.Inspect(folder.Trim(), current.ProjectMode == "projectless");
+                await output.WriteLineAsync("Managed DLL candidates (metadata inspected; not loaded):");
+                for (var index = 0; index < publication.ManagedAssemblies.Length; index++)
+                    await output.WriteLineAsync($"{index + 1}: {Path.GetRelativePath(publication.Root, publication.ManagedAssemblies[index])}");
+                if (publication.NativeAssemblies.Length > 0) await output.WriteLineAsync($"{publication.NativeAssemblies.Length} native DLLs are excluded from managed scanning.");
+                var answer = await Ask("Select primary website assemblies by comma-separated numbers, or type all:");
+                var primary = answer == "all" ? publication.ManagedAssemblies : answer.Split(',').Select(value =>
+                {
+                    if (!int.TryParse(value.Trim(), out var number) || number < 1 || number > publication.ManagedAssemblies.Length) throw Invalid("ASSEMBLY_SELECTION_INVALID");
+                    return publication.ManagedAssemblies[number - 1];
+                }).ToArray();
+                WebFormsWizardPublication.Configure(store, id, publication.Root, primary, []);
+            }
+            current = store.ReadProject(id);
+            if (current.Step == "dependencies")
+            {
+                await output.WriteLineAsync("Additional managed dependency DLL paths, separated by semicolons (relative to publication root or absolute); type none or later:");
+                var answer = await input.ReadLineAsync(cancellationToken);
+                if (answer is null || answer.Trim() == "later") return 2;
+                var dependencies = answer.Trim() == "none" ? [] : answer.Split(';', StringSplitOptions.TrimEntries);
+                if (dependencies.Any(string.IsNullOrWhiteSpace)) throw Invalid("ASSEMBLY_SELECTION_INVALID");
+                WebFormsWizardPublication.Configure(store, id, current.PublishedRoot!, current.PrimaryAssemblies, dependencies);
+                store.SaveProject(store.ReadProject(id) with { Step = "configuration" });
+            }
             await output.WriteLineAsync($"Project {id}: saved step '{store.ReadProject(id).Step}'. No scan or customer website was executed.");
             return 2;
 
@@ -136,7 +167,7 @@ public static class WebFormsWizardCommand
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
         catch (Exception exception) when (exception is InvalidOperationException or IOException or UnauthorizedAccessException
-            or ArgumentException or System.Xml.XmlException or System.Text.Json.JsonException or System.ComponentModel.Win32Exception)
+            or ArgumentException or System.Xml.XmlException or System.Text.Json.JsonException or System.ComponentModel.Win32Exception or BadImageFormatException)
         {
             var code = exception is InvalidOperationException && exception.Message.StartsWith("WEBFORMS_WIZARD_", StringComparison.Ordinal)
                 ? exception.Message : "WEBFORMS_WIZARD_INPUT_OR_CONFIGURATION_INVALID";
