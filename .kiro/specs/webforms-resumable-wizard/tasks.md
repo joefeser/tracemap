@@ -7,7 +7,7 @@
   - [ ] Toolchain executable validation, consent and build-result handling.
 - [ ] Resumable terminal prompts with --continue, explicit add-project and subset pause.
   - [x] Shared forms transition generates missing/blank selection, pauses, resumes after restart and revalidates retained selected paths.
-  - [ ] Terminal prompt/command adapter and explicit add-project flow.
+  - [x] Terminal setup prompt/command adapter and explicit add-project flow (later stages remain below).
 - [ ] Publication/DLL inventory and existing native configuration/proof adapter.
 - [ ] Explicit repair previews, confirmation and per-project invalidation.
 - [ ] Scan/combine/report execution with immutable output roots and revalidation.
