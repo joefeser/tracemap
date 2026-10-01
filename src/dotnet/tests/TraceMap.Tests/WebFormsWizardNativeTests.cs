@@ -36,6 +36,28 @@ public sealed class WebFormsWizardNativeTests
     }
 
     [Fact]
+    public async Task Reconfiguration_after_repair_keeps_prior_native_config_and_staged_paths()
+    {
+        using var temp = new TempDirectory();
+        var (site, published) = WebFormsWizardPublicationTests.Fixture(temp.Path);
+        InitGit(site);
+        using var store = WebFormsWizardStore.Open(Path.Combine(temp.Path, "config"), false);
+        Prepare(store, site, published);
+        var oldPath = await WebFormsWizardNative.ConfigureAsync(store, "site");
+        var oldBytes = File.ReadAllBytes(oldPath);
+        var prior = store.ReadProject("site");
+        store.RepairProject(prior, store.PreviewRepair("site"), true);
+        store.SaveProject(store.ReadProject("site") with { Step = "publication", Forms = ["Default.aspx"] });
+        WebFormsWizardPublication.Configure(store, "site", published, ["bin/Site.dll"], []);
+        store.SaveProject(store.ReadProject("site") with { Step = "configuration" });
+        var nextPath = await WebFormsWizardNative.ConfigureAsync(store, "site");
+        Assert.NotEqual(oldPath, nextPath);
+        Assert.Equal(oldBytes, File.ReadAllBytes(oldPath));
+        Assert.All(prior.Native!.Inputs, input => Assert.Equal(input.Sha256, Hash(input.Path)));
+        Assert.Equal(nextPath, await WebFormsWizardNative.ValidateAsync(store, "site"));
+    }
+
+    [Fact]
     public async Task External_dependency_is_staged_inside_native_publication_root()
     {
         using var temp = new TempDirectory();

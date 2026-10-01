@@ -18,6 +18,24 @@ public sealed class WebFormsWizardBuildTests
     }
 
     [Fact]
+    public async Task Consented_sdk_fixture_build_uses_real_process_adapter()
+    {
+        using var temp = new TempDirectory();
+        var (project, _) = Fixture(temp.Path);
+        File.WriteAllText(Path.Combine(project.WebRoot, "Fixture.cs"), "public class Fixture { public int Value => 42; }");
+        var runtime = Path.GetDirectoryName(typeof(object).Assembly.Location)!;
+        var host = Environment.GetEnvironmentVariable("DOTNET_HOST_PATH") ?? Path.Combine(
+            Directory.GetParent(runtime)!.Parent!.Parent!.FullName, OperatingSystem.IsWindows() ? "dotnet.exe" : "dotnet");
+        using var store = WebFormsWizardStore.Open(Path.Combine(temp.Path, "config"), false);
+        store.SaveProject(project);
+        Assert.True(await WebFormsWizardBuild.ExecuteAsync(store, "site", WebFormsWizardBuild.Plan(project, host), true,
+            TraceMap.Cli.WebFormsWizardProcess.RunAsync));
+        Assert.True(File.Exists(Path.Combine(project.WebRoot, "bin", "Debug", "net10.0", "Site.dll")));
+        Assert.Equal("publication", store.ReadProject("site").Step);
+        Assert.NotNull(store.ReadProject("site").Build);
+    }
+
+    [Fact]
     public async Task Declined_build_never_invokes_runner_or_advances()
     {
         using var temp = new TempDirectory();

@@ -73,9 +73,28 @@ public sealed class WebFormsWizardExecutionTests
         Assert.Equal(0, await WebFormsWizardExecution.RunAsync(store, "site", null, output, error));
         Assert.Equal(before, File.ReadAllBytes(store.ProjectPath("site")));
         Assert.Single(Directory.GetDirectories(Path.Combine(store.DirectoryPath, "runs")));
+        var nativeRun = Path.Combine(store.DirectoryPath, completed.Run!.RelativeRoot, "run");
+        store.RepairProject(completed, store.PreviewRepair("site"), true);
+        using var status = new StringWriter();
+        Assert.Equal(0, await TraceMapCommand.RunAsync(["webforms-review", "status", "--run", nativeRun, "--json"], status, error));
+        using var document = System.Text.Json.JsonDocument.Parse(status.ToString());
+        Assert.Equal("reports-completed-review-only", document.RootElement.GetProperty("state").GetString());
+        Assert.True(document.RootElement.GetProperty("retainedArtifactsVerified").GetBoolean());
     }
 
     private static async Task<WebFormsWizardStore> Ready(string root)
+    {
+        var (site, published) = Inputs(root);
+        var store = WebFormsWizardStore.Open(Path.Combine(root, "config"), false);
+        site = WebFormsWizardStore.Physical(site);
+        store.SaveProject(new("site", site, site, "projectless", "all", ["Default.aspx"], null, [], [], "publication"));
+        WebFormsWizardPublication.Configure(store, "site", published, ["bin/CompiledEvidence.CSharp.dll"], []);
+        store.SaveProject(store.ReadProject("site") with { Step = "configuration" });
+        await WebFormsWizardNative.ConfigureAsync(store, "site");
+        return store;
+    }
+
+    internal static (string Site, string Published) Inputs(string root)
     {
         var (site, published) = WebFormsWizardPublicationTests.Fixture(root);
         var directory = new DirectoryInfo(AppContext.BaseDirectory);
@@ -89,12 +108,6 @@ public sealed class WebFormsWizardExecutionTests
         File.WriteAllText(Path.Combine(site, "Default.aspx"), "<%@ Page Language=\"VB\" CodeFile=\"Default.aspx.vb\" Inherits=\"Public.Page\" %>");
         File.WriteAllText(Path.Combine(site, "Default.aspx.vb"), "Public Class Page\n Public Sub Load()\n End Sub\nEnd Class\n");
         WebFormsWizardNativeTests.InitGit(site);
-        var store = WebFormsWizardStore.Open(Path.Combine(root, "config"), false);
-        site = WebFormsWizardStore.Physical(site);
-        store.SaveProject(new("site", site, site, "projectless", "all", ["Default.aspx"], null, [], [], "publication"));
-        WebFormsWizardPublication.Configure(store, "site", published, ["bin/CompiledEvidence.CSharp.dll"], []);
-        store.SaveProject(store.ReadProject("site") with { Step = "configuration" });
-        await WebFormsWizardNative.ConfigureAsync(store, "site");
-        return store;
+        return (site, published);
     }
 }

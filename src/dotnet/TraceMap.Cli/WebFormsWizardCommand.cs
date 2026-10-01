@@ -5,7 +5,7 @@ namespace TraceMap.Cli;
 /// <summary>Terminal adapter over shared wizard state. No customer execution in setup.</summary>
 public static class WebFormsWizardCommand
 {
-    public const string Help = "tracemap webforms-review wizard [--root <configuration-folder>] [--continue] [--add-project]\n" +
+    public const string Help = "tracemap webforms-review wizard [--root <configuration-folder>] [--continue] [--add-project | --repair-project <id>]\n" +
         "Continue reuses saved answers; add-project explicitly registers another website. Exit 2 means setup paused, not a completed review.";
 
     public static async Task<int> RunAsync(string[] args, TextReader input, TextWriter output, TextWriter error,
@@ -16,6 +16,7 @@ public static class WebFormsWizardCommand
         {
             if (args.FirstOrDefault() != "wizard") throw Invalid("ARGUMENT_INVALID");
             string? root = null;
+            string? repair = null;
             var resume = false;
             var add = false;
             var seen = new HashSet<string>(StringComparer.Ordinal);
@@ -27,10 +28,12 @@ public static class WebFormsWizardCommand
                     case "--root" when i + 1 < args.Length && !args[i + 1].StartsWith("--", StringComparison.Ordinal): root = args[++i]; break;
                     case "--continue": resume = true; break;
                     case "--add-project": add = true; break;
+                    case "--repair-project" when i + 1 < args.Length && !args[i + 1].StartsWith("--", StringComparison.Ordinal): repair = args[++i]; break;
                     default: throw Invalid("ARGUMENT_INVALID");
                 }
             }
             if (add && !resume) throw Invalid("ADD_REQUIRES_CONTINUE");
+            if (repair is not null && (!resume || add)) throw Invalid("REPAIR_REQUIRES_CONTINUE_WITHOUT_ADD");
             root ??= await Ask("Where would you like the root of your TraceMap configuration to be?");
             if (!resume && Directory.Exists(root))
             {
@@ -39,22 +42,37 @@ public static class WebFormsWizardCommand
                 else if (choice == "new") root = await Ask("New configuration folder (must not exist):");
                 else throw Invalid("CHOICE_INVALID");
             }
-            using var store = WebFormsWizardStore.Open(root, resume);
-            string id;
-            if (!resume || add || store.State.Projects.Length == 0)
+            WebFormsWizardProject? freshProject = null;
+            if (!resume)
             {
-                id = await Ask("Project ID (lowercase letters, numbers and hyphens; start with a letter):");
-                if (store.State.Projects.Any(project => project.Id == id)) throw Invalid("PROJECT_ALREADY_REGISTERED");
-                var path = await Ask("Point me to your website folder, .sln, .csproj or .vbproj:");
+                freshProject = await GatherProject();
+                WebFormsWizardStore.ValidateLocation(root, freshProject);
+            }
+            using var store = WebFormsWizardStore.Open(root, resume);
+            if (repair is not null)
+            {
+                var observed = store.PreviewRepair(repair);
+                await output.WriteLineAsync($"Supported repair: restart setup for '{repair}' only. Archive its current config and form selection; preserve all existing native configs, staged inputs and run paths. Build evidence and attestation will not be reused. Other projects stay unchanged.");
+                var path = await Ask("Replacement website folder, .sln, .csproj or .vbproj:");
                 var webRoot = Path.GetExtension(path).Equals(".sln", StringComparison.OrdinalIgnoreCase)
-                    ? await Ask("Which local website root in this solution should be configured?") : null;
+                    ? await Ask("Local website root in this solution:") : null;
                 var target = WebFormsWizardTarget.Inspect(path, webRoot);
-                await output.WriteLineAsync($"Detected {target.ProjectMode}; build tool candidate: {target.BuildTool}. This is not build validation.");
-                foreach (var limitation in target.Limitations) await output.WriteLineAsync(limitation);
                 var mode = await Ask("Use all forms or select a subset? [all/selected]");
                 if (mode is not ("all" or "selected")) throw Invalid("CHOICE_INVALID");
-                store.SaveProject(new(id, target.InputPath, target.WebRoot, target.ProjectMode, mode,
-                    [], null, [], [], "forms"));
+                await output.WriteLineAsync($"Type '{repair}' to confirm this repair; any other answer leaves it unchanged:");
+                var confirmation = await input.ReadLineAsync(cancellationToken);
+                var archive = store.RepairProject(new(repair, target.InputPath, target.WebRoot, target.ProjectMode,
+                    mode, [], null, [], [], "forms"), observed, confirmation?.Trim() == repair);
+                await output.WriteLineAsync(archive is null ? "Repair declined; nothing changed." : "Repair archived at " + archive + ". Continue with --continue to configure this project again.");
+                return 2;
+            }
+            string id;
+            if (freshProject is not null || add || store.State.Projects.Length == 0)
+            {
+                var setup = freshProject ?? await GatherProject();
+                id = setup.Id;
+                if (store.State.Projects.Any(project => project.Id == id)) throw Invalid("PROJECT_ALREADY_REGISTERED");
+                store.SaveProject(setup);
             }
             else
             {
@@ -176,6 +194,20 @@ public static class WebFormsWizardCommand
             await output.WriteLineAsync($"Project {id}: saved step '{store.ReadProject(id).Step}'. No scan or customer website was executed.");
             return 2;
 
+            async Task<WebFormsWizardProject> GatherProject()
+            {
+                var projectId = await Ask("Project ID (lowercase letters, numbers and hyphens; start with a letter):");
+                var path = await Ask("Point me to your website folder, .sln, .csproj or .vbproj:");
+                var webRoot = Path.GetExtension(path).Equals(".sln", StringComparison.OrdinalIgnoreCase)
+                    ? await Ask("Which local website root in this solution should be configured?") : null;
+                var target = WebFormsWizardTarget.Inspect(path, webRoot);
+                await output.WriteLineAsync($"Detected {target.ProjectMode}; build tool candidate: {target.BuildTool}. This is not build validation.");
+                foreach (var limitation in target.Limitations) await output.WriteLineAsync(limitation);
+                var mode = await Ask("Use all forms or select a subset? [all/selected]");
+                if (mode is not ("all" or "selected")) throw Invalid("CHOICE_INVALID");
+                return new(projectId, target.InputPath, target.WebRoot, target.ProjectMode, mode, [], null, [], [], "forms");
+            }
+
             async Task<WebFormsWizardProcessResult> RunBuildProcess(string tool, string directory,
                 IReadOnlyList<string> arguments, CancellationToken token)
             {
@@ -200,13 +232,17 @@ public static class WebFormsWizardCommand
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
         catch (WebFormsReviewPreflightCommand.PreflightException exception)
-        { await error.WriteLineAsync("error: " + exception.Code + ". Generated attempts are retained for explicit repair."); return 1; }
+        {
+            await error.WriteLineAsync("error: " + exception.Code + ". Generated attempts are retained; use --continue --repair-project <id> to preview an isolated restart.");
+            return 1;
+        }
         catch (Exception exception) when (exception is InvalidOperationException or IOException or UnauthorizedAccessException
             or ArgumentException or System.Xml.XmlException or System.Text.Json.JsonException or System.ComponentModel.Win32Exception or BadImageFormatException)
         {
             var code = exception is InvalidOperationException && exception.Message.StartsWith("WEBFORMS_WIZARD_", StringComparison.Ordinal)
                 ? exception.Message : "WEBFORMS_WIZARD_INPUT_OR_CONFIGURATION_INVALID";
             await error.WriteLineAsync("error: " + code + ". Existing saved projects and runs were not reset.");
+            await error.WriteLineAsync("If the root config is valid, use --continue --repair-project <id> for a previewed, confirmed per-project restart. Invalid root configs require manual correction or a new config folder; they are not auto-repaired.");
             return 1;
         }
     }

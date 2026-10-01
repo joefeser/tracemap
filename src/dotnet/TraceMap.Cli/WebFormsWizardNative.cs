@@ -24,7 +24,7 @@ public static class WebFormsWizardNative
             throw Fail("COMMITTED_SOURCE_WITH_REMOTE_REQUIRED");
         var projectFolder = Path.GetDirectoryName(store.ProjectPath(id))!;
         var configPath = Path.Combine(projectFolder, "native.config.json");
-        if (File.Exists(configPath) || Directory.Exists(configPath)) throw Fail("NATIVE_CONFIG_EXISTS_REPAIR_REQUIRED");
+        if (File.Exists(configPath) || Directory.Exists(configPath)) configPath = Path.Combine(projectFolder, "native-" + Guid.NewGuid().ToString("N") + ".config.json");
         var stagedRoot = Path.Combine(projectFolder, "publication-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(stagedRoot);
         var stagedInputs = new List<WebFormsWizardInputSnapshot>();
@@ -67,7 +67,7 @@ public static class WebFormsWizardNative
         File.Move(pending, configPath, overwrite: false);
         _ = await WebFormsReviewPreflightCommand.BuildAsync(configPath,
             Path.Combine(store.DirectoryPath, "runs", id + "-validation-" + Guid.NewGuid().ToString("N")), cancellationToken);
-        var reference = new WebFormsWizardNativeReference("native.config.json", Hash(bytes), git.CommitSha, stagedInputs.ToArray());
+        var reference = new WebFormsWizardNativeReference(Path.GetFileName(configPath), Hash(bytes), git.CommitSha, stagedInputs.ToArray());
         store.SaveProject(project with { Native = reference, Step = "ready" });
         return configPath;
     }
@@ -76,7 +76,7 @@ public static class WebFormsWizardNative
     {
         var project = store.ReadProject(id);
         var reference = project.Native ?? throw Fail("NATIVE_CONFIG_MISSING");
-        if (reference.RelativePath != "native.config.json") throw Fail("NATIVE_CONFIG_PATH_INVALID");
+        if (!System.Text.RegularExpressions.Regex.IsMatch(reference.RelativePath, @"\Anative(?:-[0-9a-f]{32})?\.config\.json\z")) throw Fail("NATIVE_CONFIG_PATH_INVALID");
         WebFormsWizardPublication.ValidateRetained(project);
         WebFormsWizardBuild.ValidateRetained(project);
         var git = GitMetadataProvider.Detect(project.WebRoot);
