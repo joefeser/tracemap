@@ -68,7 +68,7 @@ public static partial class WebFormsReviewExecutionCommand
             var focused = Path.Combine(root, "handler");
             stage = "handler-requery";
             if (await RequeryHandlerAsync(["requery-handler", "--run", run, "--bundle", bundle,
-                    "--handler", handler, "--out", focused, "--surface-name", "DbDataAdapter.Fill"], output, error, token) != 0) return 1;
+                    "--handler", handler, "--out", focused], output, error, token) != 0) return 1;
             var budget = retained.Plan.Configuration.Budgets;
             stage = "evidence-index";
             var appPath = Path.Combine(bundle, WebFormsReviewReportExecution.HandoffName);
@@ -99,7 +99,7 @@ public static partial class WebFormsReviewExecutionCommand
             var receipt = new WebFormsMigrationHandoff("webforms-migration-handoff.v1", MigrationRule, "local-only",
                 "partial-static-migration-review-not-parity", generator.Sha256, "", retained.Plan.RunId,
                 retained.PreflightSha256, retained.History.Sha256!, handler, app.Sha256, compiled.Sha256, artifacts,
-                ["Application evidence retains the original page/query scope. Compiled evidence is one exact handler to DbDataAdapter.Fill in mixed mode.",
+                ["Application evidence retains the original page/query scope. Compiled evidence is one exact handler to all database API terminal kinds in mixed mode, subject to retained traversal limits.",
                  "Depth, cycle, work and path limits remain in the evidence. Matching historical method sequences is not runtime parity.",
                  "Command-text hashes and command-type candidates are not readable procedure names, complete SQL parameters or execution proof.",
                  "The folder includes review evidence and the pinned tool, not the external .NET runtime, application source or published website.",
@@ -199,7 +199,9 @@ public static partial class WebFormsReviewExecutionCommand
         transition evidence. Source bridges remain candidates, not proven IL calls.
 
         Application pages/events retain broad original scope; compiled paths are a
-        focused mixed source/IL handler-to-Fill query. Do not silently merge scopes.
+        focused mixed source/IL query for one handler and all database API terminal
+        kinds, including Fill and Execute calls. Traversal limits still apply; this
+        is not proof of all reachable database calls. Do not silently merge scopes.
         Report migration-relevant behavior, evidence pointers, rule IDs/tiers,
         unresolved questions and specific additional source evidence needed.
         Distinguish command fingerprints/type candidates from readable procedure names,

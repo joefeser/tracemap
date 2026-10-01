@@ -1,5 +1,30 @@
 # Implementation state
 
+## Full return-value validation and all-terminal packaging (2026-09-30)
+
+Code head cc42259d passed the full .NET suite: 3016 passed, zero failed, one
+Windows-only skip, in 16m35s. TRX is retained locally under
+/tmp/tracemap-return-value-validation/return-value-full.trx. A CLI smoke with the
+two synthetic DLLs emitted 59 return summaries and no missing-input gaps; its
+projectless source coverage remains Level3SyntaxAnalysis/NotRun, not a clean
+semantic build. The first smoke used incorrectly source-relative input paths;
+that partial output is preserved separately from the corrected absolute-path run.
+
+Found and removed the migration package's hard-coded Fill-only requery filter.
+The selected handler now targets all database API terminal kinds within the same
+existing traversal bounds. Explicit Fill-only diagnostics are unchanged. The
+native regression adds a synthetic scalar audit call to its copied, committed,
+actually compiled provider before analysis, and checks that the packaged focused
+report retains both Fill and ExecuteScalar with no terminal-name filter. It
+passed: 12 broad native paths, 406 work units, with existing partial labels.
+Reviewer instructions inspect actual saved query scope and recognize older
+Fill-only packages; they do not infer completeness from the absent filter.
+
+Full-solution validation of this additional packaging change and the exact-head
+Windows corpus still remain before publishing. Private unresolved producer
+classification and the original 256-path-cap omissions are not proved by these
+synthetic tests, and the goal must remain open.
+
 ## Producer-return resolution integrated (2026-09-30)
 
 The reporter now follows a call-result producer through its exact admitted call
