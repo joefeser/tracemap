@@ -67,3 +67,21 @@ Target tests caught and fixed a framework classifier bug that initially mistook
 net10.0 for legacy net10. Focused wizard validation now covers 35 cases; final
 TRX is retained under /tmp/tracemap-wizard-selection-foundation. Full suite, CLI
 integration, Windows replay, repair, publication and execution remain pending.
+
+Terminal setup adapter: `webforms-review wizard [--root <folder>] [--continue]
+[--add-project]` now routes through WebFormsWizardCommand. TextReader injection
+allows complete local prompt replay without changing Console.In. An existing
+folder requires an explicit continue/new choice; duplicate flags, implicit add,
+unknown projects and malformed config fail without resetting prior state.
+Multiple saved projects require explicit selection; only --add-project creates
+another roster entry. Subset continuation consumes saved answers and doesn't
+repeat ID/path/mode prompts. EOF is a typed error; any already-saved project is
+retained. Setup currently pauses at build with exit 2, explicitly stating that
+no build/scan/application was executed. It is not a completed wizard yet.
+
+Validation: 40 focused wizard cases passed with zero skips, retained TRX under
+/tmp/tracemap-wizard-terminal-foundation. Five terminal tests exercise prompt
+replay, restart, add-project preservation, existing-root/EOF behavior, invalid
+flags and CLI help dispatch. Next implementation must advance the build cursor:
+explicit toolchain/consent or guided manual projectless publication, followed by
+publication inventory/native config, repair and immutable report execution.

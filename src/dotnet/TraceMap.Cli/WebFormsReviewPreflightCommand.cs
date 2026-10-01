@@ -98,6 +98,7 @@ public static partial class WebFormsReviewPreflightCommand
     private static readonly StringComparison PathComparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
 
     public const string Help = """
+        tracemap webforms-review wizard [--root <configuration-folder>] [--continue] [--add-project]
         tracemap webforms-review start --config <private-json> --out <new-review-root> [--attest-exact-source-commit <commit>]
         tracemap webforms-review migrate-config --review-root <legacy-root> --out <new-config-folder>
         tracemap webforms-review migrate-config --config <legacy-json-or-jsonc> --out <new-config-folder>
