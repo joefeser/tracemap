@@ -1,5 +1,11 @@
 # Web Forms bounded report memory
 
+- [ ] Resolve remaining selected-handler coverage from the saved successful run without an unnecessary rescan.
+  - [x] Add a verified completed-run locator and unresolved-binding-only display over retained results; retain complete binding fields and variant counts.
+  - [ ] Inspect owner-returned unresolved binding reasons and fix only demonstrated extractor/path defects with local reproductions.
+  - [ ] Support a bounded single-handler requery from a successfully completed native run, preserving its admitted index and checkpoint provenance; the existing command only admits failed-report recovery bundles.
+  - [ ] Compare retained method sequences against the historical handler baseline and distinguish path-cap omissions from scope/identity changes.
+
 - [x] Complete the public deep projectless multi-DLL regression corpus including Windows publish workflow, branches/cycles/decoys, exact expected fixture routes and bounded work/artifact/logical-read guards; physical I/O and private application acceptance remain unclaimed.
   - [x] Build an external net48 harness over projectless website source and test twelve forwarding layers into the separately compiled legacy provider through scan/index/combine/report.
   - [x] Validate mixed/compiled-only, missing-provider and depth-limit cases on the current fixture (four local cases passed).

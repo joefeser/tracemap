@@ -1,5 +1,29 @@
 # Implementation state
 
+## Remaining coverage goal started (2026-09-30)
+
+The owner requested a new goal for the three unresolved text occurrences,
+256-path truncation and historical route comparison. These are distinct from
+the repaired zero-binding failure. The broad query shares its path cap across
+seven roots; aggregate counts cannot identify omitted routes for one handler.
+
+Added wsqlroute -VerificationRoot to locate the checkpointed completed report
+through its pinned native status reader, requiring matching generator, verified
+artifacts and completed state. -UnresolvedOnly displays only route groups with
+an explicitly retained unresolved command binding, preserving their binding
+fields/reasons and variant counts. Summary counts still describe the entire
+selected handler; saved gaps/query limits remain the original broad query.
+No scan or graph traversal occurs. Tests cover repeated unresolved variants,
+constant exclusion, completed-root resolution and unverified-state refusal.
+
+Code inspection also found RequeryHandlerAsync requires ReportsFailed plus a
+recovery receipt. Thus the existing wrapper cannot requery a successful fresh
+run. The next implementation step is completed-run single-handler admission,
+with immutable combined-index/checkpoint verification and local native tests.
+Do not direct the owner to the recovery-only wrapper for this successful run.
+Private unresolved binding fields and historical/current route artifacts are
+still on the owner's machine; screenshots only supply their aggregate counts.
+
 ## Owner fresh-run result and ledger wording (2026-09-30)
 
 Owner-supplied screenshots show a fresh run at f32c6ee9 completed native reports.

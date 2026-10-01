@@ -63,6 +63,36 @@ try {
     $null = & $helper -Report $folder -Handler Selected -OutputPath (Join-Path $folder 'unbound.html')
     $html = [IO.File]::ReadAllText((Join-Path $folder 'unbound.html'))
     if (!$html.Contains('No retained command-binding candidates') -or !$html.Contains('Binding occurrences: 0; constant command-text fingerprints: 0')) { throw 'Missing unbound gap' }
+    $unknownFill = $fill.Clone(); $unknownFill.nodeId = 'unknown-fill'
+    $unknownFill.commandBinding = $fill.commandBinding.Clone()
+    $unknownFill.commandBinding.commandTextFromPath = @{ state = 'unresolved'; reason = 'synthetic-caller-operand-unavailable' }
+    Save @{ query = @{}; paths = @(@{ nodes = @($selectedRoot,$fill); edges = @($bridge) }, @{ nodes = @($selectedRoot,$unknownFill); edges = @($bridge) }, @{ nodes = @($selectedRoot,$unknownFill); edges = @($bridge) }) } $inputFile
+    $result = @(& $helper -Report $folder -Handler Selected -UnresolvedOnly)
+    if ($result -notcontains 'sqlRoute.unresolvedOnly=true;unresolvedGroups=1;displayedGroups=1' -or
+        $result -notcontains 'sqlRoute.commandBindings=3;constantTextCandidates=1;storedProcedureTypeCandidates=3;unresolvedTextCandidates=2;asSupplied=true') { throw 'Unresolved variant/group counts incorrect' }
+    $html = [IO.File]::ReadAllText((Join-Path $folder 'handler-unresolved-command-evidence.local.html'))
+    if (!$html.Contains('synthetic-caller-operand-unavailable') -or !$html.Contains('Counts above include all selected-handler variants') -or $html.Contains('constant-on-encoded-call-path')) { throw 'Unresolved filter incorrect' }
+    # The pinned native reader selects and verifies a completed report without a scan.
+    $verification = Join-Path $folder 'verification'
+    $bundle = Join-Path $verification 'review/run/reports/synthetic'
+    [void][IO.Directory]::CreateDirectory((Join-Path $bundle 'compiled'))
+    [void][IO.Directory]::CreateDirectory((Join-Path $verification 'tool'))
+    [IO.File]::WriteAllText((Join-Path $verification 'tool/tracemap.dll'), 'synthetic-placeholder')
+    Copy-Item -LiteralPath $inputFile -Destination (Join-Path $bundle 'compiled/compiled-paths.handoff.local.json')
+    $ledgerTestStatus = @{ schemaVersion = 'webforms-review-status.v1'; readerMatchesOriginalGenerator = $true; state = 'reports-completed-review-only'; retainedArtifactsVerified = $true; workbenchPath = (Join-Path $bundle 'index.html') }
+    Set-Item Function:dotnet -Value {
+        if ($args[1] -ne 'webforms-review' -or $args[2] -ne 'status' -or $args[3] -ne '--run' -or $args[5] -ne '--json') { throw 'Unexpected native operation' }
+        $global:LASTEXITCODE = 0
+        $ledgerTestStatus | ConvertTo-Json -Compress
+    }.GetNewClosure()
+    try {
+        $result = @(& $helper -VerificationRoot $verification -Handler Selected -UnresolvedOnly)
+        if ($result -notcontains 'sqlRoute.unresolvedOnly=true;unresolvedGroups=1;displayedGroups=1') { throw 'Verification root resolution failed' }
+        $ledgerTestStatus.retainedArtifactsVerified = $false
+        try { & $helper -VerificationRoot $verification -OutputPath (Join-Path $folder 'unverified.html'); throw 'Unverified report accepted' }
+        catch { if ($_.Exception.Message -ne 'WEBFORMS_SQL_ROUTE_RETAINED_STATE_NOT_ADMITTED') { throw } }
+        if (Test-Path (Join-Path $folder 'unverified.html')) { throw 'Unverified output written' }
+    } finally { Remove-Item Function:dotnet }
     try { & $helper -Report $folder -Handler Missing -OutputPath (Join-Path $folder 'missing.html'); throw 'Missing handler accepted' }
     catch { if ($_.Exception.Message -ne 'WEBFORMS_SQL_ROUTE_HANDLER_MISSING_OR_AMBIGUOUS') { throw } }
     $duplicateRoot = $selectedRoot.Clone(); $duplicateRoot.nodeId = 'handler-duplicate'
