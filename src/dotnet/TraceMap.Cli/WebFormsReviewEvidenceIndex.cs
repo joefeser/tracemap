@@ -12,6 +12,8 @@ internal static class WebFormsReviewEvidenceIndex
     internal const string Schema = "webforms-review-evidence-index.v1";
     internal const string Rule = "workflow.webforms.bounded-evidence-query.v1";
     internal const int MaxNodes = 2_000_000;
+    internal const int NewPlanMaxNodes = 20_000_000;
+    internal const int MaxSupportedNodes = 50_000_000;
     internal const int MaxTokenBytes = 1_048_576;
     private static readonly JsonSerializerOptions Json = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
     internal sealed record Context(string SchemaVersion, string RuleId, string Visibility, string ClaimLevel,
@@ -20,33 +22,32 @@ internal static class WebFormsReviewEvidenceIndex
         int MaxNodes, int MaxTokenBytes, long MaxInputBytes, long MaxIndexBytes);
 
     internal static async Task<WebFormsReviewArtifact> WriteAsync(string directory, string runId,
-        string applicationSha, string compiledSha, long maxInputBytes, long maxIndexBytes, CancellationToken token)
+        string applicationSha, string compiledSha, long maxInputBytes, long maxIndexBytes, CancellationToken token,
+        int maxNodes = MaxNodes, string? applicationPath = null, string? compiledPath = null)
     {
+        if (maxNodes is < 2 or > MaxSupportedNodes) throw Invalid("NODE_BUDGET_INVALID");
         var path = Path.Combine(directory, Name);
         if (File.Exists(path) || Directory.Exists(path)) throw Invalid("OUTPUT_EXISTS");
-        var application = Path.Combine(directory, WebFormsReviewReportExecution.HandoffName);
-        var compiled = Path.Combine(directory, "compiled", "compiled-paths.handoff.local.json");
+        var application = applicationPath ?? Path.Combine(directory, WebFormsReviewReportExecution.HandoffName);
+        var compiled = compiledPath ?? Path.Combine(directory, "compiled", "compiled-paths.handoff.local.json");
         var appHash = await WebFormsReviewPreflightCommand.HashAsync("application", application, maxInputBytes, token);
         var compiledHash = await WebFormsReviewPreflightCommand.HashAsync("compiled", compiled, maxInputBytes, token);
         if (appHash.Sha256 != applicationSha || compiledHash.Sha256 != compiledSha ||
             appHash.Bytes > maxInputBytes - compiledHash.Bytes) throw Invalid("INPUT_CHANGED_OR_LIMIT");
         var generator = await WebFormsReviewPreflightCommand.HashAsync("generator", typeof(WebFormsReviewEvidenceIndex).Assembly.Location, 67_108_864, token);
         var context = new Context(Schema, Rule, "local-only", "review-only-static-not-runtime", generator.Sha256, "", runId,
-            applicationSha, compiledSha, 0, MaxNodes, MaxTokenBytes, maxInputBytes, maxIndexBytes);
+            applicationSha, compiledSha, 0, maxNodes, MaxTokenBytes, maxInputBytes, maxIndexBytes);
         using (var connection = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = path, Mode = SqliteOpenMode.ReadWriteCreate, Pooling = false }.ToString()))
         {
             await connection.OpenAsync(token);
             using var setup = connection.CreateCommand();
             var pages = Math.Clamp(maxIndexBytes / 4096, 1, int.MaxValue);
-            setup.CommandText = $"PRAGMA page_size=4096; PRAGMA journal_mode=DELETE; PRAGMA synchronous=FULL; PRAGMA cache_size=-2048; PRAGMA max_page_count={pages.ToString(CultureInfo.InvariantCulture)}; " +
+            setup.CommandText = $"PRAGMA page_size=4096; PRAGMA journal_mode=DELETE; PRAGMA synchronous=FULL; PRAGMA temp_store=FILE; PRAGMA cache_size=-2048; PRAGMA max_page_count={pages.ToString(CultureInfo.InvariantCulture)}; " +
                 "CREATE TABLE metadata(id INTEGER PRIMARY KEY CHECK(id=1), context_json TEXT NOT NULL); " +
-                "CREATE TABLE json_nodes(id INTEGER PRIMARY KEY, document TEXT NOT NULL, parent_id INTEGER, ordinal INTEGER NOT NULL, name TEXT, kind TEXT NOT NULL, scalar_json BLOB, child_count INTEGER NOT NULL DEFAULT 0); " +
-                "CREATE UNIQUE INDEX json_child_order ON json_nodes(document,parent_id,ordinal); " +
-                "CREATE UNIQUE INDEX json_child_name ON json_nodes(document,parent_id,name) WHERE name IS NOT NULL; " +
-                "CREATE UNIQUE INDEX json_document_root ON json_nodes(document) WHERE parent_id IS NULL;";
+                "CREATE TABLE json_nodes(id INTEGER PRIMARY KEY, document TEXT NOT NULL, parent_id INTEGER, ordinal INTEGER NOT NULL, name TEXT, kind TEXT NOT NULL, scalar_json BLOB, child_count INTEGER NOT NULL DEFAULT 0);";
             setup.ExecuteNonQuery();
             using var transaction = connection.BeginTransaction();
-            using var writer = new TokenWriter(connection, transaction, token);
+            using var writer = new TokenWriter(connection, transaction, token, maxNodes);
             writer.Read("application", application);
             writer.Read("compiled", compiled);
             context = context with { NodeCount = writer.Count };
@@ -54,7 +55,14 @@ internal static class WebFormsReviewEvidenceIndex
             using var meta = connection.CreateCommand(); meta.Transaction = transaction;
             meta.CommandText = "INSERT INTO metadata(id,context_json) VALUES(1,$json)";
             meta.Parameters.AddWithValue("$json", JsonSerializer.Serialize(context, Json));
-            meta.ExecuteNonQuery(); transaction.Commit();
+            meta.ExecuteNonQuery();
+            // Bulk-load the token tree before constructing secondary indexes.
+            // Unique index creation still rejects duplicate object properties.
+            using var indexes = connection.CreateCommand(); indexes.Transaction = transaction;
+            indexes.CommandText = "CREATE UNIQUE INDEX json_child_order ON json_nodes(document,parent_id,ordinal); " +
+                "CREATE UNIQUE INDEX json_child_name ON json_nodes(document,parent_id,name) WHERE name IS NOT NULL; " +
+                "CREATE UNIQUE INDEX json_document_root ON json_nodes(document) WHERE parent_id IS NULL;";
+            indexes.ExecuteNonQuery(); transaction.Commit();
         }
         var afterApp = await WebFormsReviewPreflightCommand.HashAsync("application", application, maxInputBytes, token);
         var afterCompiled = await WebFormsReviewPreflightCommand.HashAsync("compiled", compiled, maxInputBytes, token);
@@ -74,7 +82,8 @@ internal static class WebFormsReviewEvidenceIndex
         if (context.SchemaVersion != Schema || context.RuleId != Rule || context.Visibility != "local-only" ||
             context.ClaimLevel != "review-only-static-not-runtime" || context.RunId != runId ||
             context.ApplicationHandoffSha256 != applicationSha || context.CompiledHandoffSha256 != compiledSha ||
-            !HashShape(context.GeneratorSha256) || context.NodeCount is < 2 or > MaxNodes || context.MaxNodes != MaxNodes ||
+            !HashShape(context.GeneratorSha256) || context.MaxNodes is < 2 or > MaxSupportedNodes ||
+            context.NodeCount < 2 || context.NodeCount > context.MaxNodes ||
             context.MaxTokenBytes != MaxTokenBytes || context.MaxInputBytes <= 0 || context.MaxIndexBytes <= 0 ||
             context.BoundedInputSha256 != ContextHash(context)) throw Invalid("CONTEXT_INVALID");
         return context;
@@ -96,11 +105,13 @@ internal static class WebFormsReviewEvidenceIndex
         private readonly SqliteCommand insert;
         private readonly SqliteCommand finish;
         private readonly CancellationToken token;
+        private readonly int maxNodes;
         private readonly Stack<Frame> stack = new();
         public int Count { get; private set; }
-        public TokenWriter(SqliteConnection connection, SqliteTransaction transaction, CancellationToken token)
+        public TokenWriter(SqliteConnection connection, SqliteTransaction transaction, CancellationToken token, int maxNodes)
         {
             this.token = token;
+            this.maxNodes = maxNodes;
             insert = connection.CreateCommand(); insert.Transaction = transaction;
             insert.CommandText = "INSERT INTO json_nodes(id,document,parent_id,ordinal,name,kind,scalar_json) VALUES($id,$document,$parent,$ordinal,$name,$kind,$value)";
             foreach (var parameter in new[] { "$id", "$document", "$parent", "$ordinal", "$name", "$kind", "$value" }) insert.Parameters.Add(new SqliteParameter(parameter, DBNull.Value));
@@ -139,7 +150,7 @@ internal static class WebFormsReviewEvidenceIndex
                         finish.Parameters["$count"].Value = frame.Children; finish.Parameters["$id"].Value = frame.Id;
                         finish.ExecuteNonQuery(); continue;
                     }
-                    if (++Count > MaxNodes) throw Invalid("NODE_LIMIT");
+                    if (++Count > maxNodes) throw Invalid("NODE_LIMIT");
                     Frame? parent = stack.TryPeek(out var current) ? current : null;
                     if (parent is null && ++roots != 1 || parent is { IsObject: true, Name: null }) throw Invalid("JSON_SHAPE");
                     var container = reader.TokenType is JsonTokenType.StartObject or JsonTokenType.StartArray;

@@ -3,6 +3,33 @@
 # - deferred: documented future/planned rule that must not appear in emitted facts.
 # Existing rules without an explicit status are treated as active.
 rules:
+  - id: workflow.webforms.retained-proof-import.v1
+    name: Explicit verified legacy publish proof import
+    description: Imports an explicitly selected bounded legacy publish and binding receipt into a new native configuration after current source, repository, commit, inventory digest, DLL hash and binding admission checks.
+    evidenceTier: Tier2Structural
+    emits:
+      - webforms-retained-proof-import.v1 local-only verification receipt
+      - review-config.local.json local-only configuration bound by exact generator and bounded input hashes
+    limitations:
+      - Retained owner attestation is carried unchanged, not newly issued or authenticated compiler provenance.
+      - Only webforms-publish-binding.v1 with an explicit legacy assemblyInventory and matching compiled-input-binding-set.v1 is accepted; missing or mismatched records stop import.
+      - Selected page scope comes from the baseline receipt; original source and project scopes and budgets are preserved and broader page coverage is not inferred.
+      - A website-relative receipt requires an explicit repository-relative source base. The base is hash-bound in the import and execution scope; original receipt bytes and virtual routes are unchanged and discovery never selects a base.
+      - An exact historical proof-copy locator may be projected into a separate local binding receipt only after the copied and published bytes, original locator, assembly identity, repository and commit are verified. Original receipts are unchanged; this is not a new source-to-binary or compiler attestation. Arbitrary locator or identity mismatches remain gaps.
+      - Dependency context stays unbound and input verification is not completed scanning, report parity, a two-repository merge or runtime proof.
+      - Originals remain external and unchanged; output overlaps, existing destinations, unsafe paths and changed inputs are refused. Failed staging remains unadmitted.
+  - id: workflow.webforms.config-migration.v1
+    name: Local legacy Web Forms config migration draft
+    description: Maps bounded known legacy JSON or JSONC scan settings into a separate native draft with exact generator and input hashes.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - webforms-config-migration.v1 local-only receipt
+      - review.draft.json local-only native config bytes bound by the migration receipt
+    limitations:
+      - Migration is local-only syntactic mapping, not preflight, collection, binding, compilation or runtime evidence.
+      - Exact commit, published inventory, receipts and source-to-DLL authority are never inferred; drafts remain not ready to run.
+      - Discover selection and virtual page routes require explicit owner resolution; separate repositories are not merged.
+      - Original configs and retained artifacts stay unchanged; existing destinations and ambiguous or unsupported schemas are refused.
   - id: dotnet.compiled.input.v1
     name: Explicit bounded managed input
     description: Records an explicitly declared managed assembly or dependency admitted under the deterministic compiled-input policy with local-only byte and provenance digests.
@@ -132,6 +159,50 @@ rules:
       - Unresolved or unsupported operand encodings on a call-family opcode fail closed to a gap for that input; no partial call list is emitted.
       - The constrained. prefix records its exact cross-checked type identity with reference kind constrainedtype, but no module-local token claim: Mono.Cecil cannot reproduce the raw TypeSpec token for a resolved constrained operand, so the field stays explicitly unclaimed rather than single-sourced.
       - The same target member reached from many sites remains many call facts; this rule emits no call graph, transitive reachability, impact, or rewrite-equivalence conclusion.
+
+  - id: dotnet.compiled.il-values.v1
+    status: active
+    name: Bounded IL call and return operand origins
+    description: Records method-local receiver and argument origins at independently decoded call sites and bounded return-site operands, joined to exact admitted IL evidence. Both raw SRM and Cecil streams must yield the same bounded observations.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits: [ManagedIlCallValuesObserved, ManagedIlReturnValuesObserved, AnalysisGap]
+    limitations:
+      - Bounded method-local origin candidates only, not command binding or SQL evidence. Argument slots are not concrete values and allocation or call-site origins are not runtime objects.
+      - Literal strings retain only length and SHA-256 of exact UTF-16 code units, never raw text. No SQL statement or stored procedure is inferred from a method name or string hash.
+      - Normal branches and loops use a bounded fixed point retaining an origin only when all reached predecessor states agree, including protected blocks with known exception entries. Handler/filter roots start with unknown pre-exception locals; potentially modified arguments are unknown too. Leave discards state across unmodelled finally effects. Exception dispatch, finally continuations and branch feasibility are not established. Without known entries, exception bodies remain in the reduced local lane.
+      - Normal-flow analysis admits at most 20000 instructions, 256 tracked slots (including exposed-slot markers), 256 exposure origins per instruction, 1024 declared exception entries and 200000 work units per body. Handler seeding, origin retention and successor cloning/merging are work-charged. Actual fixed-point work is charged to a separate aggregate value-derivation budget per reader equal to policy MaxTotalWorkUnits, not the raw body/call admission budget. Unsupported operations, byref returns, stack failures and reader or work-limit disagreement withhold origins explicitly.
+      - Field/array/indirect operations, checked arithmetic, boxing and address-taking retain bounded stack shape without proving heap values. Stores, indirect reads/writes and address calls expose affected origins; exposed slots remain exposure-capable on later writes. Internal address identities are bounded to 1024 characters and 64 nested steps, with unavailable addresses invalidating configuration. Known byref call shapes preserve non-byref scalar operands, but byref arguments and addresses are exported as unknown. Consumers must invalidate command state across unknown effects; heap contents, field values, interprocedural effects, virtual dispatch and execution are not established by this rule.
+      - Body and call evidence can remain admitted while value coverage is partial. Value facts carry the exact IL generator and bounded-input hashes and cannot upgrade source or runtime coverage.
+      - Return summaries retain at most 256 reached return sites per body. Missing flow, reader disagreement and limits emit unavailable summaries, never empty success. A single valid stack operand is a candidate only; consumers must verify non-byref return signatures, exact callee identity and all relevant return sites. Void or invalid stacks have unavailable operands. Internal addresses are projected to unknown. Legacy facts without return summaries do not establish return values.
+
+  - id: dotnet.compiled.il-command-binding.v1
+    status: active
+    name: Bounded IL database-command configuration candidate
+    description: Joins a command text/type configuration to an Execute or adapter Fill call through exact method-local receiver origins and conservative normal-flow configuration joins, retaining independently agreed body/call fact IDs and exact generator/input hashes.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits: [ManagedIlDatabaseCommandCandidate, AnalysisGap]
+    limitations:
+      - A static configuration candidate is not SQL execution, a resolved SQL statement, procedure identity, provider dispatch, runtime object identity or handler parity. Encoded framework assembly/type/member scopes are recognized without loading or authenticating those assemblies.
+      - Command strings remain exact UTF-16 length and SHA-256 only. Argument slots and call-result origins are unresolved until separately evidenced substitution; raw strings and parameter values are not retained.
+      - Normal-flow joins retain only identical command configuration and adapter attachment records from all reached predecessors, including protected blocks. Handler/filter entries, leave, unsupported operand flow and potentially mutating calls discard configuration. Exception dispatch and finally continuations are unmodelled. Non-escaped allocation-local receivers may survive an unrelated non-byref call; argument-derived or escaped receivers are invalidated. No field alias, callback effects, interprocedural effects or branch feasibility is proven.
+      - Exact encoded get_Parameters and supported parameter-collection Add, AddRange, AddWithValue, Clear and RemoveAt contracts preserve command text/type only. Typed AddRange requires the exact encoded provider parameter-array signature. No parameter values, parameter ordering or provider behavior is proven. Unknown calls receiving a collection invalidate its owning command. Unsupported collection signatures are not assumed harmless.
+      - Exact encoded CommandTimeout/Transaction setters and TableMappings getter/typed Add preserve text/type only, without proving timeout, transaction or mapping values. Wrong scope/signature and byref variants are unknown effects. Mapping-collection escapes invalidate the owning adapter and command. Heap/field/address exposure invalidates affected receivers, including aliases assigned after taking an address; unknown unrelated operands cannot name an unexposed allocation-local receiver. Call-result and argument-derived receivers remain conservatively aliased. Exposure processing is charged against the same bounded command-derivation budget.
+      - The supported command constructors model the standard Text enum default only as an encoded-framework API contract candidate; command-type assignments override it in the same straight-line region. Missing type and parameter propagation remain explicit gaps.
+      - At most 128 receiver states and 200000 work units are admitted per body. The derivation phase also shares an aggregate bound equal to the policy-bound IL MaxTotalWorkUnits across all inputs. Exhaustion withholds all command candidates for that body without revoking admitted body/call facts.
+
+  - id: combined.paths.compiled-command-value.v1
+    status: active
+    name: Encoded IL call-path command argument candidate
+    description: Substitutes retained command text or type argument slots through exact ordered compiled call edges and follows separately retained producer-return evidence using unique provenance-matched operands, bodies and signatures.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits: [compiled-command-path-value.v1]
+    limitations:
+      - This local-only derived candidate is not SQL execution, procedure identity, provider dispatch, runtime object identity or handler parity. It does not upgrade the underlying command configuration or path coverage.
+      - Only encoded compiled IL calls are followed. Source-only and projectless candidate bridges stop substitution explicitly. Encoded callvirt targets retain an explicit virtual-dispatch gap even when a constant origin is recovered.
+      - Static and instance argument slots are mapped separately; missing, malformed, ambiguous, changed-provenance and unavailable slots stop substitution. Root arguments remain unresolved. Producer returns require an exact nonvirtual encoded call, one callee body, one provenance-matched return summary and a String or Int32 return signature. All retained return sites must agree after bounded substitution. No string composition, heap values, external method execution or virtual return target is evaluated.
+      - ReturnSteps carry producer-call, callee-body and return-summary identities separately from caller steps; a producer is not inserted as a call-stack parent. Legacy facts without return summaries stay unresolved. The existing constant-on-encoded-call-path state may include these explicitly retained return steps and is still a static candidate, not runtime proof.
+      - Strings retain only exact UTF-16 length and hash. A shared 64-unit bound charges caller substitutions, producer visits and return sites; recursion cycles stop explicitly. At most 256 outgoing producer edges, 256 return sites, 128 arguments per call and two competing fact records per indexed lookup are admitted. Existing query path and output bounds remain in force.
+      - Each derived value retains the exact reporting assembly SHA-256 and SHA-256 of its bounded consumed projection, including rejected operand candidates, inspected edge identities and exact native fact provenance. Oversized selected properties are represented by length and digest. The artifact is local-only, not a shareable privacy projection.
 
   - id: dotnet.compiled.il-gap.v1
     status: active
@@ -2664,6 +2735,19 @@ rules:
       - Existing public packet semantics are preserved; parity with every legacy PowerShell presentation feature and a real private Windows compiled site remains a separate gate.
       - Configurable graph admission, root, traversal, projection and aggregate rendered-output bounds fail closed. Bounded combined admitted facts and nodes/edges use an indexed temporary graph; type-specific semantic ambiguity indexes and selected output remain managed. Representative eight-times time, total disk and peak-memory acceptance is unverified.
       - All-page mode remains limited by admitted page packet and receipt membership; complete receipt partitioning and all-pages compiled coverage are explicitly pending. No dependency cleanup, relocation or external publication occurs.
+  - id: workflow.webforms.migration-handoff.v1
+    name: Consolidated private Web Forms migration review handoff
+    description: Composes admitted proof import or native preparation, fresh native review, an exact-handler mixed-mode database-API requery, pinned tool retention and a bounded evidence index beneath one new owner-selected root.
+    evidenceTier: Tier2Structural
+    emits:
+      - webforms-migration-handoff.v1 local-only receipt
+      - START-HERE.md local-only reviewer instructions
+    limitations:
+      - The receipt binds the exact generator, native run preflight/checkpoint, original application handoff, focused compiled handoff and six entry artifacts. Its bounded-input hash covers the canonical receipt with the digest field empty. Hashes are local integrity commitments, not authentication.
+      - Application evidence retains the original broader scope while new compiled evidence selects one handler without filtering database API terminal kinds. Old packages may retain a Fill-only scope; read the actual saved query. Mixed source bridges remain candidates, not proven IL calls; truncation and reduced coverage are preserved. No terminal-kind filter does not prove all reachable calls were retained.
+      - The fresh destination must not exist or overlap authoritative inputs or the executing tool. Failure preserves partial output without a completed handoff claim. No automatic recovery, website rebuild, SQL execution, relocation or cleanup occurs.
+      - Query-migration verifies the receipt and indexed evidence before and after bounded retrieval, not all raw retained artifacts or external inputs. It uses the bounded-evidence-query response limits and streams the complete index for hash checks.
+      - The handoff includes a pinned tool but not the external runtime or complete source/publish inputs; it is a review package, not portable execution or resume proof. Command fingerprints do not establish readable procedure names, complete parameters, runtime behavior or migration parity.
   - id: workflow.webforms.bounded-evidence-query.v1
     name: Private indexed native Web Forms evidence retrieval
     description: Losslessly indexes both retained handoff JSON documents as ordered tokens and retrieves exact bounded JSON Pointer slices from a completed hash-pinned run without loading whole documents, scanning source or invoking an AI model.
@@ -2805,6 +2889,7 @@ rules:
       - AnalysisGap
     limitations:
       - Published files default to the receipt directory. An explicit caller-supplied absolute root may locate the same declared bytes elsewhere; its path hash participates in the bounded input digest and never proves source ownership, authentic compilation or a complete publish inventory.
+      - An explicit repository-relative receipt source base maps unchanged website-relative receipt paths to repository-relative evidence. It participates in the bounded input and scan-scope hashes; virtual routes and receipt source digests retain their original coordinate system. Unsafe paths, missing inputs and hash mismatches withhold evidence; no base is discovered.
       - The receipt is operator-declared. Matching hashes and a .compiled map establish static page-to-assembly correspondence for the declared build inputs; they do not independently prove the compiler ran, source-method identity, PDB lines, deployment, page activation, or runtime execution.
       - A virtual application-root prefix may differ from the source-relative page path only when the local preparer finds one unique suffix match and records the distinct sourcePath explicitly. The exact .compiled bytes remain unchanged; multiple candidates or a mismatched declared source path are gaps, not guessed joins.
       - Input count, file size, path, duplicate, content, commit, XML, and mapping failures withhold the entire receipt behind Tier4 gaps. No ambient publish output is discovered, and a gap never means the page or assembly is absent.
@@ -3754,14 +3839,17 @@ rules:
       - compiled-source-identity path edge
       - compiled-il-call path edge
       - compiled-il-callvirt-candidate path edge
+      - compiled-database-api-candidate path edge with optional command configuration candidate
       - CompiledIlSourceDisplayUnavailable gap
       - CompiledIlTargetUnavailable gap
       - CompiledIlTargetAmbiguous gap
+      - CompiledIlCommandBindingUnavailable gap
     limitations:
       - Requires a validated bound source-to-metadata reconciliation for source entry, an exact source symbol ID on one uniquely displayed Tier1 call source, admitted dual-reader IL body/call facts, exact fact-ID joins, and one unique MethodDef or assembly-scoped MemberRef target; no binary discovery or guessed source-to-binary identity occurs in this graph layer. A source method without a retained Tier1 call source cannot enter through this first slice.
       - A call/newobj edge records a static encoded target, not execution or branch feasibility. A callvirt operand produces only a Tier3 review candidate because actual virtual dispatch may select an override; it does not prove runtime target, reflection, dependency-injection binding, or a database operation.
       - MemberRef joins require an admitted bound assembly with the complete encoded assembly-reference identity, non-generic type path, member name, and signature, plus exactly one matching declaration across all combined sources. Unadmitted references, generic type specifications, MethodSpec, calli, constrained type, and unresolved targets are not promoted to graph edges. Missing or ambiguous joins never prove absence or complete reachability.
       - The graph overlay does not rewrite source facts, the combined database schema, or existing source-only path evidence.
+      - Optional command configuration is retained only from one il-command-binding.v1 fact with exact same-source body/call/configuration fact joins and matching raw-file, IL generator and bounded-input hashes. It remains Tier3 static configuration, not SQL/procedure identity or execution; malformed, missing, differently bound or competing candidates leave the API path intact and produce a binding gap. Caller argument substitution and parameter propagation are separate requirements.
 
   - id: combined.paths.projectless-pdb-identity.v1
     name: Exact projectless source-to-PDB method path entry
@@ -5057,6 +5145,8 @@ rules:
       - SqlTextUsed
       - AnalysisGap
     limitations:
+      - Compiler-resolved Visual Basic CommandText assignments retain constant hashes and receiver identities; dynamic values have no text hash. Adapter command assignments retain direct symbol candidates, not executed command bindings.
+      - Command/adapter assignment facts do not prove alias flow, branch feasibility, last-write dominance, cross-method propagation, or parameter values. Framework lookalike properties are not accepted as semantic ADO.NET evidence.
       - SQL text evidence stores hashes and lengths only; table and column guesses belong on database.sql.shape.v1 QueryPatternDetected facts.
       - C# syntax fallback may classify any complete SQL-like string literal whose first token is a supported SQL verb, even outside a recognized framework call shape.
       - Dynamic SQL construction emits reduced-coverage boundary evidence instead of complete SQL text.

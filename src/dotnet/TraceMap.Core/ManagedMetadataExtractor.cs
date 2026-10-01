@@ -763,8 +763,8 @@ public static class ManagedMetadataExtractor
     internal static InputDescriptor CreateDescriptor(string repoPath, string path, string role, CompiledInputLimits limits)
     {
         var fullPath = ResolvePath(repoPath, path);
-        var relative = Path.GetRelativePath(repoPath, fullPath);
-        var withinRepo = relative != ".." && !relative.StartsWith("../", StringComparison.Ordinal) && !Path.IsPathRooted(relative);
+        var relative = FileInventory.NormalizeRelativePath(Path.GetRelativePath(repoPath, fullPath));
+        var withinRepo = IsRepositoryRelativeLocator(relative);
         string safeLocator;
         if (withinRepo)
         {
@@ -782,6 +782,16 @@ public static class ManagedMetadataExtractor
             role,
             !withinRepo,
             textLimitExceeded);
+    }
+
+    internal static bool IsRepositoryRelativeLocator(string relative)
+    {
+        // Windows returns backslashes. Classify containment before emitting a locator,
+        // using the same separators on every platform; external paths must not leak roots.
+        var normalized = relative.Replace('\\', '/');
+        return normalized != ".." && !normalized.StartsWith("../", StringComparison.Ordinal)
+            && !normalized.StartsWith("/", StringComparison.Ordinal) && !Path.IsPathRooted(relative)
+            && !(normalized.Length >= 2 && normalized[1] == ':');
     }
 
     internal static InputDescriptor FinalizeSafeLocator(InputDescriptor descriptor, string rawSha256, CompiledInputLimits limits)

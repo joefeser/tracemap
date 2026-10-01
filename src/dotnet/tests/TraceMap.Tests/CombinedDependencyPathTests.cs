@@ -12,6 +12,52 @@ namespace TraceMap.Tests;
 public sealed class CombinedDependencyPathTests
 {
     [Fact]
+    public async Task Incomplete_reverse_distance_pass_is_discarded_without_hiding_the_selected_path()
+    {
+        using var temp = new TempDirectory();
+        var manifest = Manifest("server", "reverse-distance-fallback") with { CommitSha = new string('a', 40) };
+        var index = Path.Combine(temp.Path, "index.sqlite");
+        var combined = Path.Combine(temp.Path, "combined.sqlite");
+        var facts = new List<CodeFact>
+        {
+            CallFact(manifest, "Selected.Root()", "Shared.Query()", "Graph.cs", 1),
+            QueryPatternFact(manifest, "Shared.Query()", "Graph.cs", 2)
+        };
+        facts.AddRange(Enumerable.Range(0, 40).Select(n =>
+            CallFact(manifest, $"Unrelated.R{n}()", "Shared.Query()", "Noise.cs", n + 10)));
+        SqliteIndexWriter.Write(index, manifest, facts);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([index], combined, ["server"]));
+        var report = await CombinedDependencyPathReporter.BuildReportAsync(new(combined, temp.Path,
+            FromSymbol: "Selected.Root()", ToSurface: "sql-query", IncludeLegacyRoots: true,
+            MaxDepth: 4, MaxFrontier: 8) { ExactFromSymbol = true, MaxTraversalWork = 1024 });
+        Assert.Single(report.Paths);
+        Assert.Contains(report.Paths[0].Nodes, node => node.SymbolId == "Shared.Query()");
+        Assert.DoesNotContain(report.Gaps, gap => gap.GapKind == "TruncatedByLimit" && gap.Reason == "work");
+        Assert.InRange(report.Summary.TraversalWorkUnits!.Value, 1, 1024);
+    }
+
+    [Theory]
+    [InlineData("compiled-il-call", true, true)]
+    [InlineData("compiled-il-callvirt-candidate", true, true)]
+    [InlineData("compiled-database-api-candidate", true, true)]
+    [InlineData("legacy-root-selection", false, true)]
+    [InlineData("legacy-root-selection", true, false)]
+    [InlineData("compiled-source-identity", false, true)]
+    [InlineData("compiled-source-identity", true, false)]
+    [InlineData("projectless-source-pdb-identity", false, true)]
+    [InlineData("projectless-source-pdb-identity", true, false)]
+    [InlineData("projectless-publish-member-candidate", false, true)]
+    [InlineData("projectless-publish-member-candidate", true, false)]
+    [InlineData("projectless-publish-method-candidate", false, true)]
+    [InlineData("projectless-pdb-compiled-to-source", true, false)]
+    [InlineData("projectless-vb-receiver-bridge", false, false)]
+    [InlineData("projectless-vb-constructor-bridge", false, false)]
+    [InlineData("symbol-reconciliation", true, false)]
+    [InlineData("calls", false, false)]
+    public void Compiled_baseline_allows_one_root_attachment_then_only_il_edges(string kind, bool entered, bool expected)
+        => Assert.Equal(expected, CombinedDependencyPathReporter.CompiledBaselineAllowsEdge(kind, entered));
+
+    [Fact]
     public void Historical_path_summary_keeps_unrecorded_work_unknown_and_new_measurement_round_trips()
     {
         var historical = new CombinedPathSummary(1, 3, 2, 1, 0, 1, false);
@@ -49,7 +95,79 @@ public sealed class CombinedDependencyPathTests
             options with { MaxTraversalWork = 100, MaxPaths = 1 }, roots, combinedIndex: true);
         Assert.Single(pathBounded.Paths);
         Assert.Contains(pathBounded.Gaps, gap => gap.Reason == "path");
+        var compiled = await CombinedDependencyPathReporter.BuildSelectedSymbolsAsync(
+            options with { MaxTraversalWork = 100, CompiledOnly = true }, roots, combinedIndex: true);
+        Assert.Empty(compiled.Paths); // Source calls must not masquerade as compiled calls.
+        Assert.Contains(compiled.Gaps, gap => gap.GapKind == "CompiledBaselineNoPath"
+            && gap.RuleId == "combined.paths.query-gap.v1" && gap.EvidenceTier == EvidenceTiers.Tier4Unknown);
+        Assert.Equal("compiled-il-with-root-attachment", compiled.Query.TraversalScope);
+        Assert.Equal(2, compiled.Summary.SelectorCandidateCount);
+        // The old exact-symbol invocation and a single source-bound native root
+        // must retain the same evidence, while the shared query can omit it.
+        foreach (var root in roots)
+        {
+            var isolatedOptions = options with { MaxTraversalWork = 100, MaxPaths = 1, ExactFromSymbol = true };
+            var stages = new List<string>();
+            CombinedPathGraphObservation? observation = null;
+            var isolated = await CombinedDependencyPathReporter.BuildSelectedSymbolsAsync(isolatedOptions, [root], true,
+                new() { GraphStageObserver = stages.Add, GraphObservationObserver = usage => observation = usage });
+            var old = await CombinedDependencyPathReporter.BuildReportAsync(isolatedOptions with
+                { FromSymbol = root.SymbolId, FromSource = "server" });
+            Assert.Equal(JsonSerializer.Serialize(old.Paths), JsonSerializer.Serialize(isolated.Paths));
+            Assert.Single(isolated.Paths);
+            Assert.False(isolated.Summary.Truncated);
+            Assert.Equal(1, isolated.Summary.SelectorCandidateCount);
+            Assert.Contains("report-traversal", stages);
+            Assert.NotNull(observation);
+            Assert.True(observation.FactPayloadRowsRead > 0);
+            Assert.Equal(observation.FactPayloadRowsRead, observation.FactPayloadRowsByStage!.Values.Sum());
+        }
     }
+
+    [Fact]
+    public async Task Seven_root_shared_cap_is_not_single_handler_parity_and_isolated_query_preserves_variants()
+    {
+        using var temp = new TempDirectory();
+        var manifest = Manifest("server", "synthetic-handler-budget") with { CommitSha = new string('a', 40) };
+        var index = Path.Combine(temp.Path, "index.sqlite");
+        var combined = Path.Combine(temp.Path, "combined.sqlite");
+        var facts = new List<CodeFact>();
+        for (var root = 0; root < 7; root++)
+            for (var branch = 0; branch < 13; branch++)
+            {
+                var caller = $"Synthetic.Page{root}.Lookup_Init()";
+                var callee = $"Synthetic.Store{root}.Read{branch}()";
+                // Thirteen method chains with 41 distinct retained call-site variants.
+                for (var variant = 0; variant < (branch == 0 ? 5 : 3); variant++)
+                    facts.Add(CallFact(manifest, caller, callee, $"Page{root}.cs", 10 + branch * 10 + variant));
+                facts.Add(QueryPatternFact(manifest, callee, $"Store{root}.cs", branch + 1));
+            }
+        SqliteIndexWriter.Write(index, manifest, facts);
+        var result = await CombinedIndexBuilder.CombineAsync(new CombineOptions([index], combined, ["server"]));
+        var source = Assert.Single(result.Sources);
+        var roots = Enumerable.Range(0, 7).Select(root => new CombinedPathSymbolRoot(source.SourceIndexId,
+            source.ScanId, source.CommitSha, $"Synthetic.Page{root}.Lookup_Init()")).ToArray();
+        var options = new CombinedDependencyPathOptions(combined, temp.Path, ToSurface: "sql-query",
+            IncludeLegacyRoots: true, MaxDepth: 20, MaxPaths: 256) { MaxTraversalWork = 2_000_000 };
+        var shared = await CombinedDependencyPathReporter.BuildSelectedSymbolsAsync(options, roots, true);
+        Assert.Equal(256, shared.Paths.Count);
+        Assert.True(shared.Summary.Truncated);
+        Assert.Contains(shared.Gaps, gap => gap.Reason == "path");
+        var selectedRoot = roots.First(root => shared.Paths.Count(path => path.Nodes[0].SymbolId == root.SymbolId) < 41);
+        var isolated = await CombinedDependencyPathReporter.BuildSelectedSymbolsAsync(options with { ExactFromSymbol = true }, [selectedRoot], true);
+        var historical = await CombinedDependencyPathReporter.BuildReportAsync(options with
+            { ExactFromSymbol = true, FromSymbol = selectedRoot.SymbolId, FromSource = "server" });
+        Assert.Equal(JsonSerializer.Serialize(historical.Paths), JsonSerializer.Serialize(isolated.Paths));
+        var grouped = GroupedCompiledPathHandoffBuilder.Create(isolated, HashFileForHandlerFixture(combined));
+        Assert.Equal(13, grouped.Chains.Count);
+        Assert.Equal(41, grouped.Variants.Count);
+        Assert.False(isolated.Summary.Truncated);
+        Assert.Equal(shared.Summary.GraphNodeCount, isolated.Summary.GraphNodeCount);
+        Assert.Equal(shared.Summary.GraphEdgeCount, isolated.Summary.GraphEdgeCount);
+    }
+
+    private static string HashFileForHandlerFixture(string path) =>
+        Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(path)));
 
     [Theory]
     [InlineData(0, 0, 0, 0, "bound-method-name-unavailable")]

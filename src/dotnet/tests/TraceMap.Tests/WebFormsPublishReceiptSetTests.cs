@@ -9,6 +9,24 @@ namespace TraceMap.Tests;
 public sealed class WebFormsPublishReceiptSetTests
 {
     [Fact]
+    public void Explicit_website_base_applies_to_all_partitions_and_emits_repo_relative_paths()
+    {
+        using var f = new Fixture();
+        var website = Path.Combine(f.Source, "Website"); Directory.CreateDirectory(website);
+        Directory.Move(Path.Combine(f.Source, "Pages"), Path.Combine(website, "Pages"));
+        var before = f.Hashes();
+        var result = WebFormsPublishMapExtractor.Evaluate(f.Source, new string('a', 40),
+            new(f.Source, "unused", WebFormsPublishReceiptPath: f.SetPath, WebFormsPublishedRootPath: f.Published,
+                WebFormsPublishSourceRelativeBase: "Website"), CancellationToken.None);
+        Assert.Equal("bound", result.Provenance!.Status);
+        Assert.Equal("Website", result.Provenance.SourceRelativeBase);
+        Assert.Equal(67, result.Pages.Count);
+        Assert.All(result.SourcePaths, path => Assert.StartsWith("Website/Pages/", path, StringComparison.Ordinal));
+        Assert.All(result.Pages, page => Assert.StartsWith("Website/Pages/", page.SourcePath, StringComparison.Ordinal));
+        Assert.Equal(before.OrderBy(pair => pair.Key), f.Hashes().OrderBy(pair => pair.Key));
+    }
+
+    [Fact]
     public void Partition_set_admits_67_pages_and_preserves_global_unique_membership_and_input_bytes()
     {
         using var fixture = new Fixture();

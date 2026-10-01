@@ -2711,6 +2711,25 @@ public sealed class MessyWorkspaceRegressionTests
         var selected = await CombinedDependencyPathReporter.BuildSelectedSymbolsAsync(selectedOptions, [exactRoot], combinedIndex: true);
         Assert.Equal(AttachmentChainKeys(report), AttachmentChainKeys(selected));
         Assert.Equal(exactRoot, Assert.Single(selected.Query.SymbolRoots!));
+        var compiledBaseline = await CombinedDependencyPathReporter.BuildSelectedSymbolsAsync(selectedOptions with
+            { CompiledOnly = true, ToSurface = "database-api", ExactFromSymbol = true }, [exactRoot], combinedIndex: true);
+        Assert.NotNull(compiledBaseline.RootTraversal);
+        Assert.Contains(kind, compiledBaseline.RootTraversal.TraversedEdgeKinds);
+        Assert.Contains("compiled-il-call", compiledBaseline.RootTraversal.TraversedEdgeKinds);
+        Assert.All(compiledBaseline.RootTraversal.TraversedEdgeKinds, edgeKind =>
+            Assert.True(CombinedDependencyPathReporter.CompiledBaselineAllowsEdge(edgeKind, false), edgeKind));
+        Assert.DoesNotContain("projectless-pdb-compiled-to-source", compiledBaseline.RootTraversal.TraversedEdgeKinds);
+        Assert.All(compiledBaseline.Paths, path => Assert.All(path.Edges.Skip(1), edge =>
+            Assert.True(CombinedDependencyPathReporter.CompiledBaselineAllowsEdge(edge.EdgeKind, true), edge.EdgeKind)));
+        var historicalExact = await CombinedDependencyPathReporter.BuildReportAsync(selectedOptions with
+            { FromSymbol = exactRoot.SymbolId, FromSource = "retained", ExactFromSymbol = true });
+        var indexedExact = await CombinedDependencyPathReporter.BuildSelectedSymbolsAsync(selectedOptions with
+            { ExactFromSymbol = true }, [exactRoot], combinedIndex: true);
+        Assert.Equal(AttachmentChainKeys(historicalExact), AttachmentChainKeys(indexedExact));
+        var historicalGrouped = GroupedCompiledPathHandoffBuilder.Create(historicalExact, AttachmentFileHash(combined));
+        var indexedGrouped = GroupedCompiledPathHandoffBuilder.Create(indexedExact, AttachmentFileHash(combined));
+        Assert.Equal(historicalGrouped.Chains.Count, indexedGrouped.Chains.Count);
+        Assert.Equal(historicalGrouped.Variants.Count, indexedGrouped.Variants.Count);
         Assert.Empty((await CombinedDependencyPathReporter.BuildSelectedSymbolsAsync(selectedOptions, [], combinedIndex: true)).Paths);
         Assert.Empty((await CombinedDependencyPathReporter.BuildSelectedSymbolsAsync(selectedOptions,
             [exactRoot with { SourceIndexId = "wrong-source" }], combinedIndex: true)).Paths);

@@ -67,7 +67,7 @@ internal static class WebFormsReviewReportExecution
         };
         if (Directory.Exists(reportPath) || File.Exists(reportPath)) throw Invalid("OUTPUT_EXISTS");
         Directory.CreateDirectory(reportPath);
-        var combined = await CombinedIndexBuilder.CombineAsync(options, cancellationToken);
+        var combined = await StageAsync("COMBINE", () => CombinedIndexBuilder.CombineAsync(options, cancellationToken));
         string? selectionPath = null;
         long selectionBytes = 0;
         if (config.PageMode == "selected")
@@ -80,30 +80,32 @@ internal static class WebFormsReviewReportExecution
             await using var stream = new FileStream(selectionPath, FileMode.CreateNew, FileAccess.Write, FileShare.None);
             await stream.WriteAsync(selection, cancellationToken);
         }
-        var packet = await WebFormsModernizationPacketReporter.BuildAsync(new(indexPath, reportPath,
+        var packet = await StageAsync("PACKET", () => WebFormsModernizationPacketReporter.BuildAsync(new(indexPath, reportPath,
             MaxSurfaces: budget.MaxSurfaces, MaxEventChains: budget.MaxEventChains, MaxGaps: budget.MaxGaps,
             MaxDepth: config.Budgets.GraphMaxDepth, MaxPaths: config.Budgets.GraphMaxPaths,
             MaxInputFacts: budget.MaxInputFacts, MaxInputEdges: budget.MaxInputEdges,
             MaxInputTextBytes: budget.MaxInputTextBytes, SurfaceListPath: selectionPath,
             MaxTraversalWork: checked((int)config.Budgets.GraphMaxWork), MaxFrontier: budget.MaxFrontier)
-            { MaxGraphStorageBytes = budget.MaxGraphStorageBytes, LiteralSurfaceListPaths = true }, cancellationToken);
+            { MaxGraphStorageBytes = budget.MaxGraphStorageBytes, LiteralSurfaceListPaths = true }, cancellationToken));
         var source = combined.Sources.Single(item => item.Label == "retained");
         var allRoots = packet.EventChains.Where(chain => !string.IsNullOrWhiteSpace(chain.HandlerSymbol))
             .Select(chain => new CombinedPathSymbolRoot(source.SourceIndexId, source.ScanId, source.CommitSha, chain.HandlerSymbol!))
             .Distinct().OrderBy(root => root.SymbolId, StringComparer.Ordinal).ToArray();
         var roots = allRoots.Take(budget.MaxCompiledRoots).ToArray();
-        var paths = await CombinedDependencyPathReporter.BuildSelectedSymbolsAsync(new(indexPath, reportPath,
+        var paths = await StageAsync("PATHS", () => CombinedDependencyPathReporter.BuildSelectedSymbolsAsync(new(indexPath, reportPath,
             ToSurface: "database-api", IncludeLegacyRoots: true, MaxDepth: config.Budgets.GraphMaxDepth,
             MaxPaths: config.Budgets.GraphMaxPaths, MaxFrontier: budget.MaxFrontier)
             { MaxTraversalWork = checked((int)config.Budgets.GraphMaxWork) }, roots, combinedIndex: true,
             new(budget.MaxInputFacts, budget.MaxInputEdges, budget.MaxInputTextBytes)
-            { MaxGraphStorageBytes = budget.MaxGraphStorageBytes }, cancellationToken);
-        var index = await WebFormsReviewPreflightCommand.HashAsync("combined-index", indexPath, config.Budgets.MaxRetainedArtifactBytes, cancellationToken);
+            { MaxGraphStorageBytes = budget.MaxGraphStorageBytes }, cancellationToken));
+        var index = await StageAsync("INDEX_HASH", () => WebFormsReviewPreflightCommand.HashAsync("combined-index", indexPath,
+            config.Budgets.MaxRetainedArtifactBytes, cancellationToken));
         var projectionLimits = new GroupedCompiledPathLimits(budget.MaxProjectionInputBytes, budget.MaxOutputBytes - selectionBytes,
             Math.Max(1, config.Budgets.GraphMaxPaths), budget.MaxProjectionRecords, budget.MaxProjectionReferences);
-        var grouped = GroupedCompiledPathHandoffBuilder.Create(paths, index.Sha256, projectionLimits, cancellationToken);
-        var compiled = await GroupedCompiledPathReportWriter.WriteAsync(grouped, Path.Combine(reportPath, "compiled"),
-            projectionLimits, cancellationToken);
+        var grouped = Stage("GROUPED_PROJECTION", () => GroupedCompiledPathHandoffBuilder.Create(paths, index.Sha256,
+            projectionLimits, cancellationToken));
+        var compiled = await StageAsync("COMPILED_WRITER", () => GroupedCompiledPathReportWriter.WriteAsync(grouped,
+            Path.Combine(reportPath, "compiled"), projectionLimits, cancellationToken));
         var gaps = new List<string>();
         if (packet.Summary.Truncated) gaps.Add("PagePacketTruncated");
         if (paths.Summary.Truncated) gaps.Add("CompiledPathsTruncated");
@@ -171,12 +173,38 @@ internal static class WebFormsReviewReportExecution
         if (selectionPath is not null) generated.Add(new("selected-pages.local.txt", selectionBytes,
             Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(string.Join('\n', config.PageRelativePaths) + "\n")))));
         generated.Add(await WebFormsReviewEvidenceIndex.WriteAsync(reportPath, plan.RunId, handoffHash, compiled.HandoffSha256,
-            budget.MaxOutputBytes, config.Budgets.MaxRetainedArtifactBytes, cancellationToken));
+            budget.MaxOutputBytes, config.Budgets.MaxRetainedArtifactBytes, cancellationToken,
+            budget.MaxEvidenceNodes ?? WebFormsReviewEvidenceIndex.MaxNodes));
         return new(handoff.Coverage, packet.Surfaces.Count, paths.Paths.Count, handoff.Gaps, inputHash,
             generated.OrderBy(item => item.RelativePath, StringComparer.Ordinal).ToArray());
     }
 
-    private static void Render(TextWriter writer, NativeWebFormsReviewHandoff handoff, int paths, int chains, int? compiledWork, CancellationToken token)
+    private static async Task<T> StageAsync<T>(string stage, Func<Task<T>> action)
+    {
+        try { return await action(); }
+        catch (Exception exception) when (exception is not OperationCanceledException and not OutOfMemoryException)
+        { throw StageFailure(stage, exception); }
+    }
+
+    private static T Stage<T>(string stage, Func<T> action)
+    {
+        try { return action(); }
+        catch (Exception exception) when (exception is not OperationCanceledException and not OutOfMemoryException)
+        { throw StageFailure(stage, exception); }
+    }
+
+    private static Exception StageFailure(string stage, Exception exception)
+    {
+        if (exception is InvalidDataException invalid && invalid.Message.Length <= 128 &&
+            invalid.Message.StartsWith("WEBFORMS_", StringComparison.Ordinal) &&
+            invalid.Message.All(character => character is >= 'A' and <= 'Z' or '_')) return exception;
+        // A fixed stage label is safe to publish; exception messages and private
+        // paths remain inside the local exception chain and are never printed.
+        return new InvalidDataException("WEBFORMS_NATIVE_REPORT_" + stage + "_FAILED", exception);
+    }
+
+    internal static void Render(TextWriter writer, NativeWebFormsReviewHandoff handoff, int paths, int chains, int? compiledWork, CancellationToken token,
+        bool recovered = false)
     {
         void W(string value) { token.ThrowIfCancellationRequested(); writer.WriteLine(value); }
         W("<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><link rel=\"icon\" href=\"data:,\"><title>Native Web Forms review workbench</title><style>body{font:16px/1.5 system-ui,sans-serif;margin:2rem auto;padding:0 1rem;max-width:1100px;color:#17212b;overflow-wrap:anywhere}section{margin:1rem 0;border:1px solid #ccd8e3;padding:1rem}.notice{border-left:4px solid #a34024;background:#fff4e9;padding:1rem}td,th{border:1px solid #ccd8e3;padding:.5rem;text-align:left;vertical-align:top;overflow-wrap:anywhere}table{border-collapse:collapse;width:100%;table-layout:fixed}code,pre{white-space:pre-wrap;overflow-wrap:anywhere}a{color:#12599b}summary{cursor:pointer}@media(max-width:650px){thead{display:none}table,tbody,tr,td{display:block;width:auto}tr{margin:.5rem 0}td:before{content:attr(data-label);display:block;font-weight:bold}td+td{border-top:0}}</style></head><body>");
@@ -184,7 +212,9 @@ internal static class WebFormsReviewReportExecution
         W($"<p>Run {H(handoff.RunId)} · coverage {H(handoff.Coverage)} · page mode {H(handoff.Configuration.PageMode)} · {handoff.Packet.Surfaces.Count} retained surfaces. <a href=\"{HandoffName}\">Native handoff JSON</a></p>");
         W($"<p><a href=\"compiled/{GroupedCompiledPathReportWriter.HtmlName}\">Compiled method paths</a>: {chains} exact chains, {paths} evidence variants. Requested roots {handoff.RequestedCompiledRoots}; omitted roots {handoff.OmittedCompiledRoots}. <a href=\"compiled/{GroupedCompiledPathReportWriter.HandoffName}\">Lossless compiled handoff</a></p>");
         W($"<p>Measured traversal work units: page query {handoff.Packet.Summary.TraversalWorkUnits?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "unknown"}; compiled query {compiledWork?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "unknown"}. Each query shares its {handoff.Configuration.Budgets.GraphMaxWork} work-unit and {handoff.Configuration.Budgets.GraphMaxPaths} path limits across all selected roots. These are search counters, not runtime calls, graph-admission work, elapsed time or memory.</p>");
-        W("<p>For bounded machine review, use <code>tracemap webforms-review query --run &lt;this durable run root&gt;</code>. The checkpoint owns the read-only evidence index; do not load the entire handoff to inspect one page or chain.</p>");
+        if (recovered)
+            W("<p>Recovered local report bundle: original run remains failed. This is not parity or runtime proof. <a href=\"report-recovery.local.json\">Recovery provenance</a></p><p>For bounded machine review, use <code>tracemap webforms-review query-recovery --bundle &lt;this recovery bundle&gt;</code>. Do not load the entire handoff to inspect one page or chain.</p>");
+        else W("<p>For bounded machine review, use <code>tracemap webforms-review query --run &lt;this durable run root&gt;</code>. The checkpoint owns the read-only evidence index; do not load the entire handoff to inspect one page or chain.</p>");
         W("<p>Call accounting: P = retained chain-associated call projections; F = distinct retained fact/scan/commit identities; S = retained normalized site identities. Missing site IDs are reported separately, not guessed.</p><table><thead><tr><th>Page / controls</th><th>Calls P / F / S</th><th>Retained page-chain verdicts</th></tr></thead><tbody>");
         foreach (var surface in handoff.Packet.Surfaces)
         {

@@ -177,7 +177,8 @@ public sealed record ScanOptions(
     bool ExactSourceScope = false,
     int ExactSourceMaxFiles = 256,
     long ExactSourceMaxBytes = 67_108_864,
-    string? WebFormsPublishedRootPath = null);
+    string? WebFormsPublishedRootPath = null,
+    string? WebFormsPublishSourceRelativeBase = null);
 
 public sealed record FileInventoryItem(
     string RelativePath,
@@ -439,6 +440,9 @@ public static class FactTypes
     public const string PdbSourceDocumentReconciled = nameof(PdbSourceDocumentReconciled);
     public const string ManagedIlBodyDeclared = nameof(ManagedIlBodyDeclared);
     public const string ManagedIlCallObserved = nameof(ManagedIlCallObserved);
+    public const string ManagedIlCallValuesObserved = nameof(ManagedIlCallValuesObserved);
+    public const string ManagedIlReturnValuesObserved = nameof(ManagedIlReturnValuesObserved);
+    public const string ManagedIlDatabaseCommandCandidate = nameof(ManagedIlDatabaseCommandCandidate);
     public const string ManagedIlRewriteObserved = nameof(ManagedIlRewriteObserved);
     public const string ManagedIlCallRetargetObserved = nameof(ManagedIlCallRetargetObserved);
     public const string ManagedIlRewritePdbObserved = nameof(ManagedIlRewritePdbObserved);
@@ -665,6 +669,8 @@ public static class RuleIds
     public const string DotNetPdbGap = "dotnet.compiled.pdb-gap.v1";
     public const string DotNetIlBody = "dotnet.compiled.il-body.v1";
     public const string DotNetIlCall = "dotnet.compiled.il-call.v1";
+    public const string DotNetIlValues = "dotnet.compiled.il-values.v1";
+    public const string DotNetIlCommandBinding = "dotnet.compiled.il-command-binding.v1";
     public const string DotNetIlGap = "dotnet.compiled.il-gap.v1";
     public const string DotNetIlRewrite = "dotnet.compiled.il-rewrite.v1";
     public const string DotNetIlRewriteGap = "dotnet.compiled.il-rewrite-gap.v1";
@@ -685,7 +691,7 @@ public static class ScannerVersions
     public const string CSharpAspNetSyntaxRouteExtractor = "csharp-aspnet-syntax-route/0.1.0";
     public const string CSharpIntegrationSyntaxExtractor = "csharp-integration-syntax/0.3.0";
     public const string CSharpSemanticExtractor = "csharp-semantic/0.21.1";
-    public const string VisualBasicSemanticExtractor = "vb-semantic/0.8.4";
+    public const string VisualBasicSemanticExtractor = "vb-semantic/0.8.5";
     public const string VisualBasicSyntaxExtractor = "vb-syntax/0.3.22";
     public const string CSharpPropertyMappingExtractor = "csharp-property-mapping/0.1.0";
     public const string FrameworkMigrationEvidenceExtractor = "framework-migration/0.1.0";
@@ -693,7 +699,7 @@ public static class ScannerVersions
     public const string ManagedMetadataExtractor = "managed-metadata/0.1.0+cecil-0.11.6";
     public const string SourceMetadataReconciliationExtractor = "source-metadata-reconciliation/0.1.0";
     public const string PortablePdbExtractor = "portable-pdb/0.1.0+srm-10.0.0+cecil-0.11.6";
-    public const string IlBodyEvidenceExtractor = "il-body-evidence/0.1.3+srm-10.0.0+cecil-0.11.6";
+    public const string IlBodyEvidenceExtractor = "il-body-evidence/0.1.10+srm-10.0.0+cecil-0.11.6";
     public const string IlRewriteEvidenceExtractor = "il-rewrite-evidence/0.1.1+srm-10.0.0+cecil-0.11.6";
     public const string IlRewritePdbEvidenceExtractor = "il-rewrite-pdb-evidence/0.1.0+srm-10.0.0+cecil-0.11.6";
     public const string ConfigExtractor = "config/0.1.0";

@@ -84,17 +84,21 @@ public static partial class CombinedDependencyPathReporter
                     create table graph_metadata(key text primary key, value text not null);
                     create table graph_facts(ordinal integer primary key, id text not null unique,
                         source_id text not null, original_id text not null, source_key text not null,
-                        fact_type text not null, payload blob not null);
+                        fact_type text not null, payload blob not null, il_call_reference text, command_reference text);
+                    create index graph_facts_command_reference on graph_facts(fact_type,source_id,command_reference,ordinal)
+                        where command_reference is not null;
                     create unique index graph_facts_original on graph_facts(source_id,original_id);
                     create index graph_facts_identity_order on graph_facts(id collate graph_ordinal);
                     create index graph_facts_type_order on graph_facts(fact_type,ordinal);
                     create index graph_facts_source_key on graph_facts(source_key,id collate graph_ordinal);
+                    create index graph_facts_il_call_reference on graph_facts(fact_type,source_id,il_call_reference,ordinal)
+                        where il_call_reference is not null;
                     create table graph_nodes(id text primary key, display_name text not null, payload blob not null, ordinal integer not null);
                     create table graph_edges(id text primary key, from_id text not null, to_id text not null,
                         rank integer not null, file_path text, line integer not null,
                         payload blob not null, ordinal integer not null, payload_bytes integer not null);
                     create index graph_edges_from on graph_edges(from_id, ordinal);
-                    create index graph_edges_to on graph_edges(to_id);
+                    create index graph_edges_to on graph_edges(to_id,ordinal);
                     create table graph_edge_order(global_order integer primary key, from_id text not null,
                         local_order integer not null, edge_id text not null unique);
                     create unique index graph_edge_order_from on graph_edge_order(from_id, local_order);
@@ -110,7 +114,7 @@ public static partial class CombinedDependencyPathReporter
                 }
                 using var command = connection.CreateCommand();
                 command.CommandText = """
-                    insert into graph_metadata values ('schema', 'private.transient-path-graph.v2'),
+                    insert into graph_metadata values ('schema', 'private.transient-path-graph.v3'),
                         ('payloadEncoding', 'length-framed-json-v1'),
                         ('generatorSha256', $generator), ('boundedInputSha256', $input),
                         ('maxStorageBytes', $maximum);
@@ -251,6 +255,19 @@ public static partial class CombinedDependencyPathReporter
             return new IndexedOutgoingEdges(this, id, checked((int)Convert.ToInt64(count.ExecuteScalar())));
         }
 
+        public IEnumerable<string> Predecessors(string id)
+        {
+            using var command = Command("select from_id from graph_edges where to_id=$id order by ordinal;", id);
+            using var reader = command.ExecuteReader();
+            incomingCountQueries++;
+            while (reader.Read())
+            {
+                token.ThrowIfCancellationRequested();
+                incomingReferenceRowsObserved++;
+                yield return reader.GetString(0);
+            }
+        }
+
         private IReadOnlyList<GraphEdge> ReadOutgoingPage(string id, int startIndex)
         {
             using var command = Command(sorted ? """
@@ -368,7 +385,8 @@ public static partial class CombinedDependencyPathReporter
                     StoragePhase = storagePhase, ObjectStorageBytes = ReadObjectStorageBytes(),
                     GlobalEdgePayloadRowsRead = globalEdgePayloadRowsRead,
                     IncomingCountQueries = incomingCountQueries, IncomingReferenceRowsObserved = incomingReferenceRowsObserved,
-                    StageElapsedMilliseconds = ObserveStageMilliseconds() };
+                    StageElapsedMilliseconds = ObserveStageMilliseconds(), FactPayloadRowsRead = factPayloadRowsRead,
+                    FactPayloadBytesRead = factPayloadBytesRead, FactPayloadRowsByStage = new Dictionary<string, long>(factRowsByStage) };
         }
 
         public IndexedGraphUsage ObserveRefused() => new("sqlite-temporary", generatorSha256, inputSha256,
@@ -381,7 +399,8 @@ public static partial class CombinedDependencyPathReporter
                 AllocationSnapshotSuccessfulWrites = snapshotWrites, SuccessfulWritesBeforeRefusal = successfulWrites,
                 GlobalEdgePayloadRowsRead = globalEdgePayloadRowsRead,
                 IncomingCountQueries = incomingCountQueries, IncomingReferenceRowsObserved = incomingReferenceRowsObserved,
-                StageElapsedMilliseconds = ObserveStageMilliseconds() };
+                StageElapsedMilliseconds = ObserveStageMilliseconds(), FactPayloadRowsRead = factPayloadRowsRead,
+                FactPayloadBytesRead = factPayloadBytesRead, FactPayloadRowsByStage = new Dictionary<string, long>(factRowsByStage) };
 
         private IReadOnlyDictionary<string, long>? ReadObjectStorageBytes()
         {
@@ -507,6 +526,19 @@ public static partial class CombinedDependencyPathReporter
         public IEnumerable<KeyValuePair<string, List<GraphEdge>>> MemoryEntries => memory;
     }
 
+    private sealed class GraphIncoming(IndexedGraphStore? store)
+    {
+        private readonly Dictionary<string, List<string>> memory = new(StringComparer.Ordinal);
+        public IEnumerable<string> Predecessors(string id)
+            => store?.Predecessors(id) ?? (memory.TryGetValue(id, out var rows) ? rows : []);
+        public void Add(GraphEdge edge)
+        {
+            if (store is not null) return;
+            if (!memory.TryGetValue(edge.ToNodeId, out var rows)) memory[edge.ToNodeId] = rows = [];
+            rows.Add(edge.FromNodeId);
+        }
+    }
+
     private sealed class ReversedGraphEdges(IReadOnlyList<GraphEdge> edges) : IReadOnlyList<GraphEdge>
     {
         public int Count => edges.Count;
@@ -554,6 +586,9 @@ public static partial class CombinedDependencyPathReporter
         public long? GlobalEdgePayloadRowsRead { get; init; }
         public long? IncomingCountQueries { get; init; }
         public long? IncomingReferenceRowsObserved { get; init; }
+        public long FactPayloadRowsRead { get; init; }
+        public long FactPayloadBytesRead { get; init; }
+        public IReadOnlyDictionary<string, long>? FactPayloadRowsByStage { get; init; }
     }
 
     private static async Task<IndexedGraphStore> CreateIndexedGraphStoreAsync(string inputPath, long maxStorageBytes, CancellationToken token,

@@ -15,7 +15,8 @@ public sealed record WebFormsPublishProvenance(
     int SourceFileCount,
     int PublishedFileCount,
     int PageCount,
-    string? PublishedRootPathHash = null);
+    string? PublishedRootPathHash = null,
+    string? SourceRelativeBase = null);
 
 /// <summary>Read-only receipt inspection through the scanner's authoritative policy. Not build or runtime proof.</summary>
 public static class WebFormsPublishInputInspector
@@ -71,6 +72,8 @@ internal static partial class WebFormsPublishMapExtractor
         var explicitPublishedRoot = options.WebFormsPublishedRootPath;
         var publishedRootHash = explicitPublishedRoot is null ? null : Sha256(Encoding.UTF8.GetBytes(explicitPublishedRoot));
         var gaps = new List<string>();
+        var sourceBase = options.WebFormsPublishSourceRelativeBase;
+        if (sourceBase == ".") sourceBase = null;
         var pages = new List<WebFormsPublishPage>();
         var candidates = new List<WebFormsPublishPageCandidate>();
         var sourcePaths = new List<string>();
@@ -82,6 +85,7 @@ internal static partial class WebFormsPublishMapExtractor
         try
         {
             cancellationToken.ThrowIfCancellationRequested();
+            if (sourceBase is not null) _ = ResolveChild(repoPath, SourceName(null, sourceBase));
             if (explicitPublishedRoot is not null)
             {
                 if (!Path.IsPathFullyQualified(explicitPublishedRoot) || !Directory.Exists(explicitPublishedRoot)
@@ -91,7 +95,7 @@ internal static partial class WebFormsPublishMapExtractor
                 publishedRootHash = Sha256(Encoding.UTF8.GetBytes(publishRoot));
             }
             var bytes = ReadBounded(receiptPath, MaxReceiptBytes);
-            boundedInputSha256 = InputDigest(Sha256(bytes), publishedRootHash);
+            boundedInputSha256 = InputDigest(Sha256(bytes), publishedRootHash, sourceBase);
             using (var document = JsonDocument.Parse(bytes, new JsonDocumentOptions { MaxDepth = 16 }))
                 if (document.RootElement.ValueKind == JsonValueKind.Object
                     && document.RootElement.TryGetProperty("schemaVersion", out var schema)
@@ -128,11 +132,12 @@ internal static partial class WebFormsPublishMapExtractor
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 if (!IsSha256(item.Sha256)) throw new PublishException("WebFormsPublishReceiptInvalid");
-                var path = ResolveChild(repoPath, item.Path);
+                var sourceName = SourceName(sourceBase, item.Path);
+                var path = ResolveChild(repoPath, sourceName);
                 if (Sha256(ReadBounded(path, MaxArtifactBytes)) != item.Sha256)
                     throw new PublishException("WebFormsPublishSourceMismatch");
                 inputLines.Add($"{item.Path}:{item.Sha256}");
-                sourcePaths.Add(item.Path!);
+                sourcePaths.Add(sourceName);
             }
             var sourceDigest = Sha256(Encoding.UTF8.GetBytes(string.Join("\n", inputLines) + "\n"));
             if (sourceDigest != receipt.BoundedInputSha256)
@@ -161,7 +166,7 @@ internal static partial class WebFormsPublishMapExtractor
                         || !item.VirtualPath.EndsWith("/" + item.SourcePath, StringComparison.OrdinalIgnoreCase)
                         || item.Assembly is not null || item.GeneratedType is not null || item.MapPath is not null)
                         throw new PublishException("WebFormsPublishReceiptInvalid");
-                    _ = ResolveChild(repoPath, item.SourcePath);
+                    _ = ResolveChild(repoPath, SourceName(sourceBase, item.SourcePath));
                     if (!receipt.SourceFiles.Any(source => source.Path == item.SourcePath))
                         throw new PublishException("WebFormsPublishSourceUnavailable");
                     if (!assemblies.Any(assembly => Path.GetFileName(assembly.Path).StartsWith("App_Web_", StringComparison.OrdinalIgnoreCase)))
@@ -185,7 +190,7 @@ internal static partial class WebFormsPublishMapExtractor
                             || virtualPath.EndsWith("/" + item.SourcePath, StringComparison.OrdinalIgnoreCase))
                             throw new PublishException("WebFormsPublishMapMismatch");
                     }
-                    candidates.Add(new WebFormsPublishPageCandidate(item.SourcePath));
+                    candidates.Add(new WebFormsPublishPageCandidate(SourceName(sourceBase, item.SourcePath)));
                     continue;
                 }
                 if (item.BindingKind is not null)
@@ -197,7 +202,7 @@ internal static partial class WebFormsPublishMapExtractor
                 if (item.SourcePath is not null
                     && !item.VirtualPath.EndsWith("/" + sourcePath, StringComparison.OrdinalIgnoreCase))
                     throw new PublishException("WebFormsPublishReceiptInvalid");
-                _ = ResolveChild(repoPath, sourcePath);
+                _ = ResolveChild(repoPath, SourceName(sourceBase, sourcePath));
                 if (!receipt.SourceFiles.Any(source => source.Path == sourcePath))
                     throw new PublishException("WebFormsPublishSourceUnavailable");
                 if (!published.TryGetValue(item.MapPath!, out var map) || map.Kind != "compiled-map")
@@ -214,14 +219,14 @@ internal static partial class WebFormsPublishMapExtractor
                     || root.Attribute("assembly")?.Value != item.Assembly
                     || root.Attribute("type")?.Value != item.GeneratedType)
                     throw new PublishException("WebFormsPublishMapMismatch");
-                pages.Add(new WebFormsPublishPage(sourcePath, item.Assembly,
+                pages.Add(new WebFormsPublishPage(SourceName(sourceBase, sourcePath), item.Assembly,
                     assembly.Sha256!, item.GeneratedType, map.Sha256!));
             }
         }
         catch (OperationCanceledException) { throw; }
         catch (PublishException exception)
         {
-            boundedInputSha256 = InputDigest(SafeReceiptDigest(receiptPath), publishedRootHash);
+            boundedInputSha256 = InputDigest(SafeReceiptDigest(receiptPath), publishedRootHash, sourceBase);
             gaps.Add(exception.GapKind);
             pages.Clear();
             candidates.Clear();
@@ -231,7 +236,7 @@ internal static partial class WebFormsPublishMapExtractor
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException
             or JsonException or XmlException or ArgumentException or OverflowException)
         {
-            boundedInputSha256 = InputDigest(SafeReceiptDigest(receiptPath), publishedRootHash);
+            boundedInputSha256 = InputDigest(SafeReceiptDigest(receiptPath), publishedRootHash, sourceBase);
             gaps.Add("WebFormsPublishReceiptUnreadable");
             pages.Clear();
             candidates.Clear();
@@ -240,7 +245,7 @@ internal static partial class WebFormsPublishMapExtractor
         }
         var provenance = new WebFormsPublishProvenance("webforms-publish-provenance.v1",
             generatorSha256, boundedInputSha256, gaps.Count == 0 ? "bound" : "gap",
-            gaps, sourceCount, publishedCount, pageCount, publishedRootHash);
+            gaps, sourceCount, publishedCount, pageCount, publishedRootHash, sourceBase);
         return new WebFormsPublishEvaluation(provenance, pages, sourcePaths, assemblies, candidates);
     }
 
@@ -360,8 +365,21 @@ internal static partial class WebFormsPublishMapExtractor
         catch { return Sha256(Encoding.UTF8.GetBytes("receipt-unavailable")); }
     }
 
-    private static string InputDigest(string receiptSha256, string? rootHash) => rootHash is null
-        ? receiptSha256 : Sha256(Encoding.UTF8.GetBytes($"webforms-explicit-published-root.v1\nreceipt:{receiptSha256}\nroot:{rootHash}\n"));
+    private static string InputDigest(string receiptSha256, string? rootHash, string? sourceBase = null)
+    {
+        var digest = rootHash is null ? receiptSha256 : Sha256(Encoding.UTF8.GetBytes(
+            $"webforms-explicit-published-root.v1\nreceipt:{receiptSha256}\nroot:{rootHash}\n"));
+        return sourceBase is null ? digest : Sha256(Encoding.UTF8.GetBytes(
+            $"webforms-explicit-source-base.v1\ninput:{digest}\nsource-base:{sourceBase}\n"));
+    }
+    private static string SourceName(string? sourceBase, string? path)
+    {
+        // Validate the original path independently; prefixing must never sanitize unsafe receipt content.
+        if (string.IsNullOrWhiteSpace(path) || path.Contains('\\') || path.Contains(':')
+            || path.StartsWith('/') || path.Split('/').Any(segment => segment is "" or "." or ".."))
+            throw new PublishException("WebFormsPublishUnsafePath");
+        return sourceBase is null or "." ? path : sourceBase + "/" + path;
+    }
 
     private static bool IsSha256(string? value) => value is { Length: 64 }
         && value.All(character => character is (>= '0' and <= '9') or (>= 'a' and <= 'f'));

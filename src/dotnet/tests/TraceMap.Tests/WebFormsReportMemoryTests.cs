@@ -6,6 +6,7 @@ using TraceMap.Core;
 using TraceMap.Combine;
 using TraceMap.Reporting;
 using TraceMap.Storage;
+using TraceMap.Cli;
 using Xunit.Abstractions;
 
 namespace TraceMap.Tests;
@@ -16,6 +17,32 @@ public sealed class WebFormsAllocationCollection { }
 [Collection("WebForms isolated allocation")]
 public sealed class WebFormsReportMemoryTests(ITestOutputHelper output)
 {
+    [Fact]
+    public async Task Native_scan_capacity_admits_selected_roots_but_explicit_small_fact_cap_still_refuses()
+    {
+        using var temp = new TempDirectory();
+        var index = Path.Combine(temp.Path, "combined.sqlite");
+        var combined = await CombinedIndexBuilder.CombineAsync(new CombineOptions([Write(temp.Path,
+            Enumerable.Range(0, 32).SelectMany(value => Fixture($"{value:D4}")))], index, ["retained"]));
+        var before = Hash(index);
+        var source = Assert.Single(combined.Sources);
+        var roots = new[] { new CombinedPathSymbolRoot(source.SourceIndexId, source.ScanId,
+            source.CommitSha, "Sample.Page0000.Load()") };
+        var options = new CombinedDependencyPathOptions(index, temp.Path, ToSurface: "sql-query", IncludeLegacyRoots: true);
+        var declared = new WebFormsReviewBudgets(MaxParentFacts: 10_000, MaxRetainedArtifactBytes: 8L * 1024 * 1024);
+        async Task<CombinedDependencyPathReport> Report(WebFormsReviewReportBudgets caps) =>
+            await CombinedDependencyPathReporter.BuildSelectedSymbolsAsync(options, roots, true,
+                new(caps.MaxInputFacts, caps.MaxInputEdges, caps.MaxInputTextBytes) { MaxGraphStorageBytes = caps.MaxGraphStorageBytes });
+        var refused = await Report(WebFormsReviewPreflightCommand.ResolveNewReportBudgets(declared with
+            { Reports = new(MaxInputFacts: 1) }));
+        Assert.Contains(refused.Gaps, gap => gap.GapKind == "GraphInputLimitReached" && gap.Reason == "graph-facts");
+        Assert.Empty(refused.Paths);
+        var admitted = await Report(WebFormsReviewPreflightCommand.ResolveNewReportBudgets(declared));
+        Assert.DoesNotContain(admitted.Gaps, gap => gap.GapKind == "GraphInputLimitReached");
+        Assert.NotEmpty(admitted.Paths);
+        Assert.Equal(before, Hash(index));
+    }
+
     [Fact]
     public async Task Indexed_fact_storage_retains_identical_original_ids_in_distinct_source_namespaces()
     {

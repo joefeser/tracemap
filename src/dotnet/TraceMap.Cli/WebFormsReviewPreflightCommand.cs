@@ -32,12 +32,14 @@ public sealed record WebFormsReviewBudgets(
 }
 
 public sealed record WebFormsReviewReportBudgets(
-    int MaxInputFacts = 250_000, int MaxInputEdges = 250_000, int MaxInputTextBytes = 128 * 1024 * 1024,
+    int MaxInputFacts = 250_000, int MaxInputEdges = 250_000, long MaxInputTextBytes = 128 * 1024 * 1024,
     int MaxSurfaces = 1_000, int MaxEventChains = 1_000, int MaxGaps = 10_000,
     int MaxCompiledRoots = 1_000, int MaxFrontier = 10_000,
     long MaxProjectionInputBytes = 256L * 1024 * 1024, long MaxOutputBytes = 512L * 1024 * 1024,
     int MaxProjectionRecords = 500_000, int MaxProjectionReferences = 2_000_000)
 {
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? MaxEvidenceNodes { get; init; }
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public long? MaxGraphStorageBytes { get; init; }
 }
@@ -64,7 +66,8 @@ public sealed record WebFormsReviewConfig(
     string? PublishReceiptRelativePath = null,
     string? ReceiptRoot = null,
     string[]? PublishSourceRelativePaths = null,
-    WebFormsReviewConfigProvenance? PreparationProvenance = null);
+    WebFormsReviewConfigProvenance? PreparationProvenance = null,
+    string? PublishSourceRelativeBase = null);
 
 public sealed record WebFormsReviewConfigProvenance(string RuleId, string GeneratorSha256, string BoundedInputSha256);
 
@@ -96,6 +99,9 @@ public static partial class WebFormsReviewPreflightCommand
 
     public const string Help = """
         tracemap webforms-review start --config <private-json> --out <new-review-root> [--attest-exact-source-commit <commit>]
+        tracemap webforms-review migrate-config --review-root <legacy-root> --out <new-config-folder>
+        tracemap webforms-review migrate-config --config <legacy-json-or-jsonc> --out <new-config-folder>
+        tracemap webforms-review import-proof --config <draft-json> --proof-root <explicit-retained-proof> --published-root <original-publish> --out <new-config-folder> [--source-base <repo-relative-website-folder>] [--diagnose]
         tracemap webforms-review preflight --config <private-json> --out <new-durable-run-root>
         tracemap webforms-review run --run <durable-run-root>
         tracemap webforms-review resume --run <durable-run-root>
@@ -107,6 +113,15 @@ public static partial class WebFormsReviewPreflightCommand
         tracemap webforms-review retain-tool --run <completed-run-root> --out <new-tool-root>
 
         Preflight validates the fresh/attach contract and explicit compiled inventory.
+        recover-reports --run <failed-run> --out <new-bundle> recovers retained
+        node-limit report outputs without scanning or changing the original run.
+        query-recovery --bundle <bundle> accepts the same bounded query options.
+        query-recovery --bundle <bundle> --handler <method-name> counts retained handler paths only.
+        requery-handler --run <retained-run> --bundle <completed-report-or-recovery-bundle> --handler <method-name> --out <new-folder> [--surface-name DbDataAdapter.Fill] [--traversal-scope compiled-il]
+          builds a separate single-root report from the verified retained combined index; no scan or combine.
+        migration-review --config <native-config> --handler <method-name> --out <new-handoff-root> [--attest-exact-source-commit <sha>]
+        migration-review --config <migration-draft> --handler <method-name> --out <new-handoff-root> --proof-root <retained-proof> --published-root <original-publish> --source-base <repo-relative-website-folder>
+        query-migration --root <handoff-root> [--document application|compiled] [--pointer <json-pointer>] [--offset <n>] [--limit <n>] [--depth <n>]
         It writes local-only run-manifest.json and README.md without scanning,
         binding admission, report rendering or execution. Preflight success alone
         is not a completed workflow. No command builds/publishes the site, mutates
@@ -184,6 +199,9 @@ public static partial class WebFormsReviewPreflightCommand
         var config = JsonSerializer.Deserialize<WebFormsReviewConfig>(configBytes, JsonOptions) ?? throw Fail("CONFIG_INVALID");
         if (Digest(configBytes) != configInput.Sha256) throw Fail("INPUT_CHANGED");
         ValidateConfig(config);
+        // Materialize new-plan defaults, never reinterpret a retained plan's
+        // null Reports policy. Explicit report caps remain caller authority.
+        config = config with { Budgets = config.Budgets with { Reports = ResolveNewReportBudgets(config.Budgets) } };
         config = config with { SourceRoot = PhysicalPath(config.SourceRoot), PublishedRoot = PhysicalPath(config.PublishedRoot),
             ParentScanRoot = config.ParentScanRoot is null ? null : PhysicalPath(config.ParentScanRoot),
             ReceiptRoot = config.ReceiptRoot is null ? null : PhysicalPath(config.ReceiptRoot) };
@@ -322,7 +340,7 @@ public static partial class WebFormsReviewPreflightCommand
              "This preflight alone performs no execution. Native run/resume consumes this pinned contract; only completed runs support explicit verified copies and protect-only retention planning. Full-site acceptance and authorized cleanup remain pending."]);
     }
 
-    private static void ValidateConfig(WebFormsReviewConfig config)
+    internal static void ValidateConfig(WebFormsReviewConfig config)
     {
         if (config.SchemaVersion != ConfigSchema || config.Operation is not ("fresh" or "attach") ||
             !IsHex(config.SourceCommitSha, 40) || string.IsNullOrWhiteSpace(config.SourceRoot) || string.IsNullOrWhiteSpace(config.PublishedRoot) ||
@@ -330,6 +348,12 @@ public static partial class WebFormsReviewPreflightCommand
             config.PrimaryAssemblies is null || config.DependencyAssemblies is null || config.BindingReceipts is null || config.PdbInputs is null || config.PageMaps is null)
             throw Fail("CONFIG_INVALID");
         ValidateReportBudgets(config.Budgets.Reports ?? new());
+        if (config.PublishSourceRelativeBase is not null)
+        {
+            _ = Child(config.SourceRoot, config.PublishSourceRelativeBase);
+            if (config.PublishSourceRelativeBase.Contains('\\') || config.PublishReceiptRelativePath is null)
+                throw Fail("PUBLISH_SOURCE_BASE_INVALID");
+        }
         if (config.Budgets.MaxPublishInputFiles is < 1 or > 20_480) throw Fail("BUDGET_INVALID");
         if (!Path.IsPathFullyQualified(config.SourceRoot) || !Path.IsPathFullyQualified(config.PublishedRoot) ||
             (config.ParentScanRoot is not null && !Path.IsPathFullyQualified(config.ParentScanRoot)) ||
@@ -361,6 +385,7 @@ public static partial class WebFormsReviewPreflightCommand
 
     internal static void ValidateReportBudgets(WebFormsReviewReportBudgets budget)
     {
+        if (budget.MaxEvidenceNodes is < 2 or > WebFormsReviewEvidenceIndex.MaxSupportedNodes) throw Fail("REPORT_BUDGET_INVALID");
         if (budget.MaxInputFacts <= 0 || budget.MaxInputEdges <= 0 || budget.MaxInputTextBytes <= 0 ||
             budget.MaxSurfaces <= 0 || budget.MaxEventChains <= 0 || budget.MaxGaps <= 0 ||
             budget.MaxCompiledRoots is <= 0 or > 10_000 || budget.MaxFrontier <= 0 ||
@@ -369,6 +394,20 @@ public static partial class WebFormsReviewPreflightCommand
             throw Fail("REPORT_BUDGET_INVALID");
         if (budget.MaxGraphStorageBytes is { } storage && (storage < 64 * 1024 || storage > 16L * 1024 * 1024 * 1024))
             throw Fail("REPORT_BUDGET_INVALID");
+    }
+
+    internal static WebFormsReviewReportBudgets ResolveNewReportBudgets(WebFormsReviewBudgets budgets)
+    {
+        if (budgets.Reports is { } explicitBudgets) return explicitBudgets;
+        // A selected page still needs global overload/dispatch competitors.
+        // Its admission pool must not silently shrink below the declared scan
+        // capacity. Search, frontier and output limits remain independent.
+        const long maximumStorage = 16L * 1024 * 1024 * 1024;
+        return new(MaxInputFacts: checked((int)budgets.MaxParentFacts),
+            MaxInputEdges: checked((int)budgets.MaxParentFacts),
+            MaxInputTextBytes: Math.Min(budgets.MaxRetainedArtifactBytes, maximumStorage))
+        { MaxGraphStorageBytes = Math.Clamp(budgets.MaxRetainedArtifactBytes, 64 * 1024, maximumStorage),
+          MaxEvidenceNodes = WebFormsReviewEvidenceIndex.NewPlanMaxNodes };
     }
     private static void ValidateOutput(string output, WebFormsReviewConfig config)
     {
@@ -386,6 +425,8 @@ public static partial class WebFormsReviewPreflightCommand
         if (!Contains(root, child) || PathComparer.Equals(root, child)) throw Fail("INPUT_ESCAPES_ROOT");
         return child;
     }
+    internal static string ReceiptSourcePath(WebFormsReviewConfig config, string path) =>
+        config.PublishSourceRelativeBase is null ? path : config.PublishSourceRelativeBase + "/" + path;
     internal static string PhysicalPath(string path)
     {
         var full = Path.GetFullPath(path);

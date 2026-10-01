@@ -196,7 +196,7 @@ public static partial class WebFormsReviewPreparationCommand
         catch (Exception) { await error.WriteLineAsync("error: WEBFORMS_PREPARATION_INPUT_OR_OUTPUT_INVALID"); return 1; }
     }
 
-    private static async Task<IReadOnlyList<WebFormsReviewSourceMembership>> ValidateCommittedSourceAsync(WebFormsReviewConfig config, string[] sources, CancellationToken token)
+    internal static async Task<IReadOnlyList<WebFormsReviewSourceMembership>> ValidateCommittedSourceAsync(WebFormsReviewConfig config, string[] sources, CancellationToken token)
     {
         var tree = (await GitAsync(config.SourceRoot, ["ls-tree", "-r", "-z", "HEAD", "--", "."], token)).Split('\0', StringSplitOptions.RemoveEmptyEntries);
         var tracked = new Dictionary<string, (string Path, string ObjectId)>(Paths);
@@ -328,7 +328,7 @@ public static partial class WebFormsReviewPreparationCommand
     private static string Normalize(string path) => path.Replace('\\', '/');
     private static string Digest(byte[] bytes) => Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
     private static PreparationException Fail(string suffix) => new("WEBFORMS_PREPARATION_" + suffix);
-    private sealed class PreparationException(string code) : Exception(code);
+    internal sealed class PreparationException(string code) : Exception(code);
     private sealed record SourceFile(string Path, string Sha256);
     private sealed record PublishedFile(string Path, string Sha256, string Kind);
     private sealed record Map(string Path, string VirtualPath, string? Assembly, string? GeneratedType);
