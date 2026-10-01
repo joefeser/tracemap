@@ -34,7 +34,7 @@ public static class WebFormsWizardSelection
                 if (stream.ReadByte() != -1) throw new InvalidOperationException("WEBFORMS_WIZARD_SELECTION_CHANGED");
                 text = new UTF8Encoding(false, true).GetString(bytes);
             }
-            if (string.IsNullOrWhiteSpace(text))
+            if (IsBlank(text))
             {
                 var template = WebFormsWizardForms.Template(project.WebRoot);
                 store.VerifyUnchanged();
@@ -53,7 +53,7 @@ public static class WebFormsWizardSelection
                         if (stream.Length > WebFormsWizardForms.MaxSelectionChars) throw new InvalidOperationException("WEBFORMS_WIZARD_SELECTION_CHANGED");
                         var prior = new byte[(int)stream.Length];
                         stream.ReadExactly(prior);
-                        if (!string.IsNullOrWhiteSpace(new UTF8Encoding(false, true).GetString(prior)))
+                        if (!IsBlank(new UTF8Encoding(false, true).GetString(prior)))
                             throw new InvalidOperationException("WEBFORMS_WIZARD_SELECTION_CHANGED");
                         File.Replace(staging, path, destinationBackupFileName: null);
                     }
@@ -66,4 +66,7 @@ public static class WebFormsWizardSelection
         store.SaveProject(project with { Forms = forms, Step = "build" });
         return new(project.Id, "build", null, false);
     }
+
+    private static bool IsBlank([System.Diagnostics.CodeAnalysis.NotNullWhen(false)] string? text) =>
+        text is null || string.IsNullOrWhiteSpace(text.TrimStart('\uFEFF'));
 }
