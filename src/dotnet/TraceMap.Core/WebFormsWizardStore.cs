@@ -150,7 +150,7 @@ public sealed class WebFormsWizardStore : IDisposable
         if (!state.Projects.Any(item => item.Id == id)) throw Fail("PROJECT_UNKNOWN");
         var path = ProjectPath(id);
         RejectLink(path);
-        return File.Exists(path) ? Hash(ReadBytes(path)) : "missing";
+        return File.Exists(path) ? Hash(ReadBytes(path, allowEmpty: true)) : "missing";
     }
 
     public string? RepairProject(WebFormsWizardProject replacement, string observedHash, bool confirmed)
@@ -171,7 +171,7 @@ public sealed class WebFormsWizardStore : IDisposable
         var next = new WebFormsWizardRoot(checked(state.Revision + 1), state.Projects
             .Select(item => item.Id == replacement.Id ? new WebFormsWizardProjectReference(item.Id, Hash(bytes)) : item).ToArray());
         var nextBytes = Encode("webforms-wizard-root.v1", generator, next);
-        var original = observedHash == "missing" ? null : ReadBytes(path);
+        var original = observedHash == "missing" ? null : ReadBytes(path, allowEmpty: true);
         if (original is not null && Hash(original) != observedHash) throw Fail("REPAIR_PREVIEW_CHANGED");
         var receipt = Encode("webforms-wizard-repair.v1", generator, new
         {
@@ -298,11 +298,11 @@ public sealed class WebFormsWizardStore : IDisposable
         else if (element.ValueKind == JsonValueKind.Array) foreach (var item in element.EnumerateArray()) Duplicates(item);
     }
 
-    private static byte[] ReadBytes(string path)
+    private static byte[] ReadBytes(string path, bool allowEmpty = false)
     {
         RejectLink(path);
         using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
-        if (stream.Length is <= 0 or > MaxBytes) throw Fail("CONFIG_LIMIT");
+        if (stream.Length > MaxBytes || (!allowEmpty && stream.Length == 0)) throw Fail("CONFIG_LIMIT");
         var bytes = new byte[(int)stream.Length];
         stream.ReadExactly(bytes);
         if (stream.ReadByte() != -1) throw Fail("CONFIG_CHANGED");
