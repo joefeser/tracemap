@@ -1,14 +1,28 @@
 [CmdletBinding()]
-param([string]$Report, [string]$OutputPath, [string]$Handler, [switch]$Open)
+param([string]$Report, [string]$VerificationRoot, [string]$OutputPath, [string]$Handler, [switch]$UnresolvedOnly, [switch]$Open)
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 if ($Handler -and $Handler -cnotmatch '^[A-Za-z0-9_]{1,128}$') { throw 'WEBFORMS_SQL_ROUTE_HANDLER_INVALID' }
+if ($VerificationRoot) {
+    if ($Report) { throw 'WEBFORMS_SQL_ROUTE_INPUT_CONFLICT' }
+    $cli = Join-Path $VerificationRoot 'tool/tracemap.dll'
+    if (!(Test-Path -LiteralPath $cli -PathType Leaf)) { throw 'WEBFORMS_SQL_ROUTE_PINNED_TOOL_MISSING' }
+    $statusJson = @(& dotnet $cli webforms-review status --run (Join-Path $VerificationRoot 'review/run') --json)
+    if ($LASTEXITCODE -ne 0) { throw 'WEBFORMS_SQL_ROUTE_STATUS_FAILED' }
+    $status = ($statusJson -join "`n") | ConvertFrom-Json -AsHashtable
+    if ($status.schemaVersion -ne 'webforms-review-status.v1' -or !$status.readerMatchesOriginalGenerator -or
+        $status.state -ne 'reports-completed-review-only' -or !$status.retainedArtifactsVerified) {
+        throw 'WEBFORMS_SQL_ROUTE_RETAINED_STATE_NOT_ADMITTED'
+    }
+    $Report = Join-Path ([IO.Path]::GetDirectoryName([string]$status.workbenchPath)) 'compiled/compiled-paths.handoff.local.json'
+}
 if (!$Report) { $Report = Read-Host 'Saved mixed-mode handler report folder (full path)' }
 if (Test-Path -LiteralPath $Report -PathType Container) { $Report = Join-Path $Report 'compiled-paths.handoff.local.json' }
 if (!$OutputPath) {
     $parent = Split-Path $Report -Parent
-    $OutputPath = Join-Path $parent 'handler-sql-evidence.local.html'
-    for ($n = 2; (Test-Path -LiteralPath $OutputPath) -and $n -le 1000; $n++) { $OutputPath = Join-Path $parent "handler-sql-evidence-$n.local.html" }
+    $stem = if ($UnresolvedOnly) { 'handler-unresolved-command-evidence' } else { 'handler-sql-evidence' }
+    $OutputPath = Join-Path $parent "$stem.local.html"
+    for ($n = 2; (Test-Path -LiteralPath $OutputPath) -and $n -le 1000; $n++) { $OutputPath = Join-Path $parent "$stem-$n.local.html" }
 }
 if (Test-Path -LiteralPath $OutputPath) { throw 'WEBFORMS_SQL_ROUTE_OUTPUT_EXISTS' }
 function Value($obj, [string]$name) {
@@ -85,6 +99,7 @@ foreach ($row in $rows) {
     $identity = [Collections.Generic.List[object]]::new()
     $labels = [Collections.Generic.List[string]]::new()
     $endpoints = [Collections.Generic.List[object]]::new()
+    $hasUnresolved = $false
     foreach ($node in $nodes) {
         if ($node -isnot [Collections.IDictionary] -or [string]::IsNullOrWhiteSpace([string](Value $node 'nodeId'))) { throw 'WEBFORMS_SQL_ROUTE_NODE_INVALID' }
         # Keep differing evidence fields separate rather than discarding them
@@ -103,7 +118,7 @@ foreach ($row in $rows) {
                 $commandBindings++
                 $text = Value $binding 'commandTextFromPath'; $type = Value $binding 'commandTypeFromPath'
                 if ((Value $text 'state') -in @('method-local-constant','constant-on-encoded-call-path') -and
-                    (Value (Value $text 'origin') 'kind') -eq 'constant-string-hash') { $constantTexts++ } else { $unresolvedTexts++ }
+                    (Value (Value $text 'origin') 'kind') -eq 'constant-string-hash') { $constantTexts++ } else { $unresolvedTexts++; $hasUnresolved = $true }
                 if ((Value $type 'state') -in @('method-local-constant','constant-on-encoded-call-path') -and
                     (Value (Value $type 'origin') 'kind') -eq 'constant-int32' -and
                     (Value (Value $type 'origin') 'identity') -eq '4') { $procedureTypes++ }
@@ -111,7 +126,7 @@ foreach ($row in $rows) {
         }
     }
     $key = Hash (Json $identity.ToArray())
-    if (!$groups.ContainsKey($key)) { $groups[$key] = @{ variants = 0; labels = $labels.ToArray(); endpoints = $endpoints.ToArray(); bridges = [Collections.Generic.SortedSet[string]]::new([StringComparer]::Ordinal); edgeEvidenceMissing = $false } }
+    if (!$groups.ContainsKey($key)) { $groups[$key] = @{ variants = 0; labels = $labels.ToArray(); endpoints = $endpoints.ToArray(); bridges = [Collections.Generic.SortedSet[string]]::new([StringComparer]::Ordinal); edgeEvidenceMissing = $false; unresolved = $hasUnresolved } }
     $group = $groups[$key]; $group.variants++
     if ($null -eq $edges -or $edges.Count -eq 0) { $group.edgeEvidenceMissing = $true }
     foreach ($edge in @($edges)) {
@@ -122,7 +137,7 @@ foreach ($row in $rows) {
     }
 }
 $generator = (Get-FileHash -LiteralPath $PSCommandPath -Algorithm SHA256).Hash.ToLowerInvariant()
-$bounded = Hash ("webforms-handler-sql-ledger.v1`n$inputHash`n$generator`nhandler:$Handler")
+$bounded = Hash ("webforms-handler-sql-ledger.v1`n$inputHash`n$generator`nhandler:$Handler`nunresolvedOnly:$([bool]$UnresolvedOnly)")
 $html = [Text.StringBuilder]::new()
 [void]$html.AppendLine('<!doctype html><html lang="en"><meta charset="utf-8"><title>Handler SQL evidence ledger</title><style>body{font:16px/1.5 system-ui;margin:2rem;max-width:1100px}pre{white-space:pre-wrap;overflow-wrap:anywhere}</style><h1>Handler SQL evidence ledger</h1><p>PRIVATE, partial, as-supplied static evidence. Rule workflow.webforms.handler-sql-ledger.v1; Tier4Unknown. Native input admission is not performed. No scan, graph walk, SQL execution, runtime dispatch or parity proof. Database API reachability does not identify command text or a stored procedure. No SQL is inferred from method names. Source bridges remain candidates, not IL calls.</p>')
 [void]$html.AppendLine('<h2>Saved query and coverage</h2><pre>' + (JsonHtml @{ query = (Value $header 'query'); coverage = (Value $header 'reportCoverage'); summary = (Value $header 'summary'); sources = (Value $header 'sources') }) + '</pre>')
@@ -138,9 +153,12 @@ if ($commandBindings -gt 0) {
 if ($sqlNodes -eq 0) { [void]$html.AppendLine('<p>GAP: No retained SQL query/persistence surface in these paths. Database API nodes may still carry command-binding candidates counted above. Readable procedure names, SQL statement bodies and SQL parameter values are not established by this summary.</p>') }
 $shown = 0
 $routeDisplayBytes = 0
+$unresolvedGroups = @($groups.Values | Where-Object { $_.unresolved }).Count
+if ($UnresolvedOnly) { [void]$html.AppendLine("<p>Display filter: unresolved command bindings only; matching route groups: $unresolvedGroups. Counts above include all selected-handler variants. Saved query limits and gap counts describe the original query, including its other roots. This filter performs no new traversal and cannot recover omitted routes.</p>") }
 foreach ($key in $groups.Keys) {
     if ($shown -ge 500) { break }
     $group = $groups[$key]
+    if ($UnresolvedOnly -and !$group.unresolved) { continue }
     $section = '<details><summary>' + (Html "$key — $($group.variants) variants") + '</summary><h3>Route labels (not SQL)</h3><pre>' + (Html (BoundedText ($group.labels -join "`n→ ") 65536)) + '</pre><h3>Retained database / SQL surface fields</h3><pre>' + (JsonHtml $group.endpoints) + '</pre><h3>Non-IL transitions</h3><pre>' + (JsonHtml @($group.bridges)) + '</pre>'
     $sectionBytes = [Text.Encoding]::UTF8.GetByteCount($section)
     if ($routeDisplayBytes + $sectionBytes -gt 8MB) { break }
@@ -184,5 +202,6 @@ try { $output.Write($bytes) } finally { $output.Dispose() }
 Write-Output "sqlRoute.exactGroups=$($groups.Count);variants=$($rows.Count);databaseSurfaceOccurrences=$databaseNodes;sqlSurfaceOccurrences=$sqlNodes"
 Write-Output "sqlRoute.retainedGaps=$gapCount;gapCategories=$($gapGroups.Count);displayedGapCategories=$gapShown;overflowCategoryGaps=$ungroupedGaps;displayedRouteGroups=$shown"
 Write-Output "sqlRoute.commandBindings=$commandBindings;constantTextCandidates=$constantTexts;storedProcedureTypeCandidates=$procedureTypes;unresolvedTextCandidates=$unresolvedTexts;asSupplied=true"
+if ($UnresolvedOnly) { Write-Output "sqlRoute.unresolvedOnly=true;unresolvedGroups=$unresolvedGroups;displayedGroups=$shown" }
 Write-Output 'sqlRoute=local-ledger-written;partial;unadmitted-input;no-scan;no-traversal;no-sql-executed'
 if ($Open) { Invoke-Item -LiteralPath $OutputPath }

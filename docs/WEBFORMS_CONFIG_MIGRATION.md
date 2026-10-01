@@ -2,6 +2,20 @@
 
 ## Mixed-query traversal repair: work-machine validation
 
+For a successful saved verification run, inspect unresolved command bindings
+without scanning or traversing again:
+
+```powershell
+.\scripts\wsqlroute.ps1 -VerificationRoot "<verification-folder>" -Handler "<exact-handler-method>" -UnresolvedOnly -Open
+```
+
+The pinned native status reader verifies the completed report before selecting
+its handoff. The new HTML contains only groups with unresolved command-text
+bindings; expand them to inspect `commandTextFromPath`, its origin/reason, the
+retained route and non-IL transitions. Counts at the top still cover all variants
+for the selected handler. Repeated variants are not distinct unresolved causes.
+Original query limits and gaps cover the original query's full root set.
+
 Algorithm 1.3 prioritizes admitted IL calls and prunes depth-infeasible mixed
 branches using a complete, bounded reverse-distance pass. The synthetic native
 regression now retains six routes across five handlers in 391 work units, rather
