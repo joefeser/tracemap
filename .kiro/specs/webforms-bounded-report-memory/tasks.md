@@ -3,7 +3,7 @@
 - [ ] Resolve remaining selected-handler coverage from the saved successful run without an unnecessary rescan.
   - [x] Add a verified completed-run locator and unresolved-binding-only display over retained results; retain complete binding fields and variant counts.
   - [ ] Inspect owner-returned unresolved binding reasons and fix only demonstrated extractor/path defects with local reproductions.
-  - [ ] Support a bounded single-handler requery from a successfully completed native run, preserving its admitted index and checkpoint provenance; the existing command only admits failed-report recovery bundles.
+  - [x] Support a bounded single-handler requery from a successfully completed native run, preserving its admitted index and checkpoint provenance; native execution/recovery tests passed 118/118, including the completed-run deep fixture.
   - [ ] Compare retained method sequences against the historical handler baseline and distinguish path-cap omissions from scope/identity changes.
 
 - [x] Complete the public deep projectless multi-DLL regression corpus including Windows publish workflow, branches/cycles/decoys, exact expected fixture routes and bounded work/artifact/logical-read guards; physical I/O and private application acceptance remain unclaimed.

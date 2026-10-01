@@ -5,12 +5,14 @@ namespace TraceMap.Cli;
 
 public sealed record WebFormsHandlerRequeryReceipt(string SchemaVersion, string RuleId, string Visibility,
     string ClaimLevel, string GeneratorSha256, string BoundedInputSha256, string ReportingGeneratorSha256,
-    string RunId, string SourcePreflightSha256, string SourceCheckpointSha256, string RecoveryReceiptSha256,
+    string RunId, string SourcePreflightSha256, string SourceCheckpointSha256, string? RecoveryReceiptSha256,
     string CombinedIndexSha256, CombinedPathSymbolRoot Root, CombinedPathQuery Query,
     int ExactChains, int EvidenceVariants, bool Truncated, int? TraversalWorkUnits,
     IReadOnlyList<WebFormsReviewArtifact> Artifacts, IReadOnlyList<string> Limitations)
 {
     public CombinedPathGraphObservation? GraphObservation { get; init; }
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public string? CompletedReportSha256 { get; init; }
 }
 
 public static partial class WebFormsReviewExecutionCommand
@@ -50,25 +52,54 @@ public static partial class WebFormsReviewExecutionCommand
             WebFormsReviewPreflightCommand.RejectDuplicateProperties(firstBytes);
             var first = JsonSerializer.Deserialize<WebFormsReviewCheckpoint>(firstBytes, JsonOptions) ?? throw Fail("CHECKPOINT_INVALID");
             var history = await ReadHistoryAsync(run, plan, Digest(planBytes), first.RuntimeInputsSha256, token);
-            if (history.Checkpoint is not { State: ReportsFailed, Reports: { } context }) throw Fail("HANDLER_REQUERY_FAILED_REPORT_REQUIRED");
+            if (history.Checkpoint is not { Reports: { } context } checkpoint ||
+                checkpoint.State is not (ReportsFailed or WebFormsReviewReportExecution.Completed))
+                throw Fail("HANDLER_REQUERY_FAILED_OR_COMPLETED_REPORT_REQUIRED");
+            var completed = checkpoint.State == WebFormsReviewReportExecution.Completed;
             foreach (var input in plan.Inputs.Select(item => item.Path).Concat(new[] { plan.Configuration.SourceRoot,
                          plan.Configuration.PublishedRoot, plan.Configuration.ReceiptRoot, plan.Configuration.ParentScanRoot }.OfType<string>()))
                 if (Within(destination, input) || Within(input, destination)) throw Fail("HANDLER_REQUERY_OUTPUT_OVERLAPS_INPUT");
 
-            var receiptPath = OwnedPath(bundle, RecoveryName);
-            failureStage = "recovery-context";
+            var receiptPath = completed
+                ? OwnedPath(run, $"checkpoints/{history.Sequence:D4}.json")
+                : OwnedPath(bundle, RecoveryName);
+            failureStage = completed ? "completed-context" : "recovery-context";
             using var receiptLock = new FileStream(receiptPath, FileMode.Open, FileAccess.Read, FileShare.Read);
             var receiptBytes = await WebFormsReviewPreflightCommand.ReadSmallAsync(receiptPath, 4_194_304, token);
             WebFormsReviewPreflightCommand.RejectDuplicateProperties(receiptBytes);
-            var recovery = JsonSerializer.Deserialize<WebFormsReportRecoveryReceipt>(receiptBytes, JsonOptions) ?? throw Fail("RECOVERY_RECEIPT_INVALID");
-            if (recovery.RunId != plan.RunId || recovery.SourcePreflightSha256 != Digest(planBytes) ||
-                recovery.SourceCheckpointSha256 != history.Sha256 || recovery.BoundedInputSha256 != RecoveryHash(recovery))
-                throw Fail("HANDLER_REQUERY_RECOVERY_CONTEXT_INVALID");
-            // Reuse the full recovery-index verification and bounded query response.
+            string sourceIndexSha;
+            string? completedReportSha = null;
+            if (completed)
+            {
+                if (!string.Equals(bundle, OwnedPath(run, context.ReportAttempt),
+                    OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal) ||
+                    Digest(receiptBytes) != history.Sha256) throw Fail("HANDLER_REQUERY_COMPLETED_CONTEXT_INVALID");
+                var compiledArtifact = checkpoint.Artifacts.Single(item => item.RelativePath == context.ReportAttempt + "/compiled/compiled-paths.handoff.local.json");
+                var compiledArtifactPath = OwnedPath(run, compiledArtifact.RelativePath);
+                var actualCompiled = await WebFormsReviewPreflightCommand.HashAsync("compiled-report", compiledArtifactPath,
+                    plan.Configuration.Budgets.MaxRetainedArtifactBytes, token);
+                if (actualCompiled.Sha256 != compiledArtifact.Sha256 || actualCompiled.Bytes != compiledArtifact.Bytes)
+                    throw Fail("HANDLER_REQUERY_COMPLETED_REPORT_CHANGED");
+                completedReportSha = compiledArtifact.Sha256;
+                sourceIndexSha = checkpoint.Artifacts.Single(item => item.RelativePath == context.ReportAttempt + "/combined.sqlite").Sha256;
+            }
+            else
+            {
+                var recovery = JsonSerializer.Deserialize<WebFormsReportRecoveryReceipt>(receiptBytes, JsonOptions) ?? throw Fail("RECOVERY_RECEIPT_INVALID");
+                if (recovery.RunId != plan.RunId || recovery.SourcePreflightSha256 != Digest(planBytes) ||
+                    recovery.SourceCheckpointSha256 != history.Sha256 || recovery.BoundedInputSha256 != RecoveryHash(recovery))
+                    throw Fail("HANDLER_REQUERY_RECOVERY_CONTEXT_INVALID");
+                sourceIndexSha = recovery.SourceIndexSha256;
+            }
+            // Both readers verify their checkpoint/receipt-bound evidence index.
             using var rootsOutput = new StringWriter(); using var rootsError = new StringWriter();
             failureStage = "root-query";
-            if (await QueryRecoveryAsync(["query-recovery", "--bundle", bundle, "--document", "compiled", "--pointer",
-                    "/header/query/symbolRoots", "--limit", "50", "--depth", "2"], rootsOutput, rootsError, token) != 0)
+            var rootQueryResult = completed
+                ? await QueryAsync(["query", "--run", run, "--document", "compiled", "--pointer",
+                    "/header/query/symbolRoots", "--limit", "50", "--depth", "2"], rootsOutput, rootsError, token)
+                : await QueryRecoveryAsync(["query-recovery", "--bundle", bundle, "--document", "compiled", "--pointer",
+                    "/header/query/symbolRoots", "--limit", "50", "--depth", "2"], rootsOutput, rootsError, token);
+            if (rootQueryResult != 0)
                 throw Fail("HANDLER_REQUERY_ROOT_QUERY_FAILED");
             var response = JsonSerializer.Deserialize<WebFormsEvidenceResponse>(rootsOutput.ToString(), QueryJson) ?? throw Fail("HANDLER_REQUERY_ROOT_QUERY_INVALID");
             if (response.Truncated || response.Result.OmittedChildren != 0) throw Fail("HANDLER_REQUERY_ROOT_QUERY_LIMIT");
@@ -84,7 +115,7 @@ public static partial class WebFormsReviewExecutionCommand
             RejectQuerySidecars(indexPath);
             using var indexLock = new FileStream(indexPath, FileMode.Open, FileAccess.Read, FileShare.Read);
             var index = await WebFormsReviewPreflightCommand.HashAsync("combined-index", indexPath, plan.Configuration.Budgets.MaxRetainedArtifactBytes, token);
-            if (index.Sha256 != recovery.SourceIndexSha256) throw Fail("HANDLER_REQUERY_INDEX_CHANGED");
+            if (index.Sha256 != sourceIndexSha) throw Fail("HANDLER_REQUERY_INDEX_CHANGED");
             var config = plan.Configuration;
             var budget = config.Budgets.Reports ?? new();
             WebFormsReviewPreflightCommand.ValidateReportBudgets(budget);
@@ -118,6 +149,10 @@ public static partial class WebFormsReviewExecutionCommand
                 Digest(planBytes) != Digest(await WebFormsReviewPreflightCommand.ReadSmallAsync(OwnedPath(run, "run-manifest.json"), 4_194_304, token)) ||
                 history.Sha256 != (await ReadHistoryAsync(run, plan, Digest(planBytes), first.RuntimeInputsSha256, token)).Sha256)
                 throw Fail("HANDLER_REQUERY_CONTEXT_CHANGED");
+            if (completed && completedReportSha != (await WebFormsReviewPreflightCommand.HashAsync("compiled-report",
+                OwnedPath(run, context.ReportAttempt + "/compiled/compiled-paths.handoff.local.json"),
+                plan.Configuration.Budgets.MaxRetainedArtifactBytes, token)).Sha256)
+                throw Fail("HANDLER_REQUERY_COMPLETED_REPORT_CHANGED");
             var generator = await WebFormsReviewPreflightCommand.HashAsync("generator", typeof(WebFormsReviewExecutionCommand).Assembly.Location, 67_108_864, token);
             var artifacts = new List<WebFormsReviewArtifact>();
             foreach (var name in new[] { GroupedCompiledPathReportWriter.HtmlName, GroupedCompiledPathReportWriter.HandoffName })
@@ -127,14 +162,15 @@ public static partial class WebFormsReviewExecutionCommand
             }
             var receipt = new WebFormsHandlerRequeryReceipt("webforms-handler-requery.v1", HandlerRequeryRule, "local-only",
                 "single-handler-retained-static-review-not-parity", generator.Sha256, "", grouped.GeneratorSha256,
-                plan.RunId, Digest(planBytes), history.Sha256!, Digest(receiptBytes), index.Sha256, roots[0], paths.Query,
+                plan.RunId, Digest(planBytes), history.Sha256!, completed ? null : Digest(receiptBytes), index.Sha256, roots[0], paths.Query,
                 grouped.Chains.Count, grouped.Variants.Count, paths.Summary.Truncated, paths.Summary.TraversalWorkUnits, artifacts,
-                ["One exact source/scan/commit/symbol root was selected from the verified recovered report index.",
+                [completed ? "One exact source/scan/commit/symbol root was selected from the checkpointed completed report index."
+                    : "One exact source/scan/commit/symbol root was selected from the verified recovered report index.",
                  "All admitted global competitors remain present; this requery repeats graph construction and traversal, not source scanning or combining.",
                  "Independent single-handler path/work bounds are not complete coverage, historical parity, runtime SQL or authenticated-build proof.",
-                 "Original failed checkpoints and recovery bundle remain unchanged. All identities and paths are private.",
+                 "Original checkpoints and report bundle remain unchanged. All identities and paths are private.",
                  "Graph observations count logical scratch fact payload reads and stage wall time, not physical disk I/O or runtime calls."])
-                { GraphObservation = observation };
+                { GraphObservation = observation, CompletedReportSha256 = completedReportSha };
             receipt = receipt with { BoundedInputSha256 = HandlerRequeryHash(receipt) };
             failureStage = "receipt";
             await File.WriteAllTextAsync(Path.Combine(destination, HandlerRequeryName), JsonSerializer.Serialize(receipt, JsonOptions), token);
