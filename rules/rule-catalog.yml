@@ -15,6 +15,7 @@ rules:
       - Saved steps are cursors, not proof of valid current inputs, live processes, build authenticity or completed reports.
       - Replacement is atomic per file, not transactional across root and project files; interrupted changes fail closed.
       - Confirmed repair archives affected project state and preserves native inputs and prior run paths; malformed root configuration is not automatically repaired.
+      - Explicit project repair admits empty originals for bounded preview and archival; normal config reads remain nonempty-only, and changed previews or oversized originals fail closed.
       - Configuration and repair artifacts are private; hashes detect changes, not authorship or authorization outside the explicit operator flow.
   - id: workflow.webforms.wizard-forms.v1
     name: Bounded wizard form selection
@@ -70,6 +71,7 @@ rules:
       - External dependency copies retain byte identity but do not establish source or runtime identity.
       - Byte-identical dependencies share a single staged native input, including dependencies identical to a selected primary; all original selections remain hash-revalidated.
       - Fresh collection selects one website project; cross-project discovery and automatic cross-service tracing are deferred.
+      - Generator provenance hashes a fixed-role JSON commitment to both CLI and Core assembly SHA-256 values; installation paths are excluded, and hashes do not authenticate the distribution.
   - id: workflow.webforms.retained-proof-import.v1
     name: Explicit verified legacy publish proof import
     description: Imports an explicitly selected bounded legacy publish and binding receipt into a new native configuration after current source, repository, commit, inventory digest, DLL hash and binding admission checks.

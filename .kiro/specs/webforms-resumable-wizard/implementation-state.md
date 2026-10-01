@@ -413,3 +413,31 @@ Stable replay completed successfully at
 execution/privacy tests: seven passed. Previous-head Linux CI run36909987091
 also passed 3,125 tests with one platform skip and zero warnings; this does not
 certify the diagnostic patch. Windows diagnosis remains pending.
+
+## Third settled review batch
+
+ACK run1790881834560 authorizes three thread dispositions on diagnostic head018f56ad.
+The findings are independent: native page-map accounting, native generator
+identity, and truncated project repair. Exact reviewed-head inspection shows
+`IsPublishInventoryRole` already includes `page-map`; no budget expansion is
+needed. Added 127-map and 1,023-map real wizard/preflight regressions, also checking
+legacy unsplit budgets still reject excess inputs. The initial large-case test
+expected the count gate, but the stricter legacy list-size gate correctly rejects
+first; that expected diagnostic was corrected without weakening production bounds.
+
+Native generator identity now commits to both implementing CLI and Core hashes;
+tests vary each implementation independently and verify path-independent identity.
+Repair-only bounded reads accept empty originals for preview/archive, while
+ordinary resume remains fail-closed. Regression matrix covers empty/nonempty
+corruption, declined confirmation, changed preview, isolated preservation and
+the terminal repair/resume flow. Validation and settlement pending.
+
+Focused third-batch validation passed 17 tests; stable wlocal replay passed 133
+tests, one Windows-only skip, and all three report-script checks. Receipt:
+/tmp/tracemap-wizard-review3-20261001/validation.local.json. The named real native
+pipeline acceptance test now runs three independent fresh attempts, failing on
+the first failure (no retry-to-green). Diagnostic head018f56ad Windows run36912333153
+passed 128 tests, both authentic publication cases, and all report checks. Thus
+the prior Windows failure is intermittent and remains unexplained; no root-cause
+fix is claimed. New diagnostics and postmortem copies will support the next
+reproduction. Final-head Windows/full validation and finding settlement remain.

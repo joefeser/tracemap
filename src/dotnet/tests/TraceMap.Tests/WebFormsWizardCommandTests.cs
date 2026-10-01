@@ -95,18 +95,20 @@ public sealed class WebFormsWizardCommandTests
         Assert.Equal(2, (await Run(["wizard", "--root", root], "continue\n")).Code);
     }
 
-    [Fact]
-    public async Task Terminal_repair_requires_confirmation_and_can_replace_corrupt_project_config()
+    [Theory]
+    [InlineData("broken config")]
+    [InlineData("")]
+    public async Task Terminal_repair_requires_confirmation_and_can_replace_corrupt_project_config(string corrupt)
     {
         using var temp = new TempDirectory();
         var site = Site(temp.Path);
         var root = Path.Combine(temp.Path, "config");
         await Run(["wizard", "--root", root], $"site\n{site}\nall\nlater\n");
         var path = Path.Combine(root, "site", "project.config.json");
-        File.WriteAllText(path, "broken config");
+        File.WriteAllText(path, corrupt);
         var declined = await Run(["wizard", "--root", root, "--continue", "--repair-project", "site"], $"{site}\nall\nno\n");
         Assert.Equal(2, declined.Code);
-        Assert.Equal("broken config", File.ReadAllText(path));
+        Assert.Equal(corrupt, File.ReadAllText(path));
         var accepted = await Run(["wizard", "--root", root, "--continue", "--repair-project", "site"], $"{site}\nall\nsite\n");
         Assert.Equal(2, accepted.Code);
         Assert.Empty(accepted.Error);

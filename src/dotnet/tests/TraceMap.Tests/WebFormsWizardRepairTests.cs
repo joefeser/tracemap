@@ -4,8 +4,10 @@ namespace TraceMap.Tests;
 
 public sealed class WebFormsWizardRepairTests
 {
-    [Fact]
-    public void Confirmed_repair_archives_corrupt_config_and_preserves_other_projects_and_native_paths()
+    [Theory]
+    [InlineData("broken json")]
+    [InlineData("")]
+    public void Confirmed_repair_archives_corrupt_config_and_preserves_other_projects_and_native_paths(string corrupt)
     {
         using var temp = new TempDirectory();
         var site = Directory.CreateDirectory(Path.Combine(temp.Path, "site")).FullName;
@@ -19,10 +21,11 @@ public sealed class WebFormsWizardRepairTests
         File.WriteAllText(Path.Combine(staged, "keep.dll"), "old pinned bytes");
         File.WriteAllText(Path.Combine(folder, "native.config.json"), "old native config");
         File.WriteAllText(Path.Combine(folder, "forms.txt"), "Old.aspx\n");
-        File.WriteAllText(store.ProjectPath("site"), "broken json");
+        File.WriteAllText(store.ProjectPath("site"), corrupt);
+        Assert.Throws<InvalidOperationException>(() => store.ReadProject("site"));
         var preview = store.PreviewRepair("site");
         var archive = store.RepairProject(replacement, preview, true)!;
-        Assert.Equal("broken json", File.ReadAllText(Path.Combine(archive, "project.config.original.json")));
+        Assert.Equal(corrupt, File.ReadAllText(Path.Combine(archive, "project.config.original.json")));
         Assert.Equal("Old.aspx\n", File.ReadAllText(Path.Combine(archive, "forms.txt")));
         Assert.Equal("old pinned bytes", File.ReadAllText(Path.Combine(staged, "keep.dll")));
         Assert.Equal("old native config", File.ReadAllText(Path.Combine(folder, "native.config.json")));
@@ -32,13 +35,16 @@ public sealed class WebFormsWizardRepairTests
         Assert.True(File.Exists(Path.Combine(archive, "repair.json")));
     }
 
-    [Fact]
-    public void Declined_or_stale_preview_repair_does_not_change_files()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Declined_or_stale_preview_repair_does_not_change_files(bool truncate)
     {
         using var temp = new TempDirectory();
         var site = Directory.CreateDirectory(Path.Combine(temp.Path, "site")).FullName;
         using var store = WebFormsWizardStore.Open(Path.Combine(temp.Path, "config"), false);
         store.SaveProject(Project(site));
+        if (truncate) File.WriteAllBytes(store.ProjectPath("site"), []);
         var preview = store.PreviewRepair("site");
         var before = File.ReadAllBytes(store.ProjectPath("site"));
         Assert.Null(store.RepairProject(Project(site), preview, false));

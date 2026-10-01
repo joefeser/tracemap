@@ -8,6 +8,56 @@ namespace TraceMap.Tests;
 
 public sealed class WebFormsWizardNativeTests
 {
+    [Theory]
+    [InlineData(127)]
+    [InlineData(1023)]
+    public async Task Page_maps_use_publish_inventory_budget_not_compiled_input_budget(int maps)
+    {
+        using var temp = new TempDirectory();
+        var (site, published) = WebFormsWizardPublicationTests.Fixture(temp.Path);
+        for (var i = 0; i < maps; i++)
+        {
+            File.WriteAllText(Path.Combine(site, $"Page{i}.aspx"), "<%@ Page Language=\"VB\" %>");
+            File.WriteAllText(Path.Combine(published, "bin", $"Page{i}.compiled"),
+                $"<preserve virtualPath=\"/Page{i}.aspx\" assembly=\"Site\" type=\"Public.Page{i}\" />");
+        }
+        InitGit(site);
+        using var store = WebFormsWizardStore.Open(Path.Combine(temp.Path, "config"), false);
+        Prepare(store, site, published);
+        var path = await WebFormsWizardNative.ConfigureAsync(store, "site");
+        var plan = await WebFormsReviewPreflightCommand.BuildAsync(path, Path.Combine(temp.Path, "review"), default);
+        Assert.Equal(maps, plan.Inputs.Count(input => input.Role == "page-map"));
+        Assert.True(plan.Inputs.Count > plan.Configuration.Budgets.MaxInputFiles);
+        Assert.True(plan.Inputs.Count(input => !WebFormsReviewPreflightCommand.IsPublishInventoryRole(input.Role))
+            <= plan.Configuration.Budgets.MaxInputFiles);
+        Assert.Equal("ready", store.ReadProject("site").Step);
+        var legacy = plan.Configuration with { Budgets = plan.Configuration.Budgets with { MaxPublishInputFiles = null } };
+        var legacyPath = Path.Combine(temp.Path, "legacy.config.json");
+        File.WriteAllText(legacyPath, JsonSerializer.Serialize(legacy, new JsonSerializerOptions(JsonSerializerDefaults.Web)));
+        var error = await Record.ExceptionAsync(() => WebFormsReviewPreflightCommand.BuildAsync(legacyPath,
+            Path.Combine(temp.Path, "legacy-review"), default));
+        Assert.NotNull(error);
+        Assert.Equal(maps > 256 ? "WEBFORMS_PREFLIGHT_CONFIG_INVALID" : "WEBFORMS_PREFLIGHT_INPUT_COUNT_LIMIT", error.Message);
+    }
+
+    [Theory]
+    [InlineData("cli")]
+    [InlineData("core")]
+    public async Task Generator_identity_commits_both_implementations_without_installation_paths(string changed)
+    {
+        using var temp = new TempDirectory();
+        var cli = Path.Combine(temp.Path, "cli.dll");
+        var core = Path.Combine(temp.Path, "core.dll");
+        File.WriteAllText(cli, "CLI implementation");
+        File.WriteAllText(core, "Core implementation");
+        var first = await WebFormsWizardNative.GeneratorHashAsync(cli, core);
+        var copy = Path.Combine(temp.Path, "copy.dll");
+        File.Copy(core, copy);
+        Assert.Equal(first, await WebFormsWizardNative.GeneratorHashAsync(cli, copy));
+        File.AppendAllText(changed == "cli" ? cli : core, " changed");
+        Assert.NotEqual(first, await WebFormsWizardNative.GeneratorHashAsync(cli, core));
+    }
+
     [Fact]
     public async Task Generates_native_config_and_stages_without_modifying_source_or_publication()
     {
@@ -21,6 +71,8 @@ public sealed class WebFormsWizardNativeTests
         var path = await WebFormsWizardNative.ConfigureAsync(store, "site");
         var configuration = JsonSerializer.Deserialize<WebFormsReviewConfig>(File.ReadAllText(path), new JsonSerializerOptions(JsonSerializerDefaults.Web))!;
         Assert.Equal(WebFormsWizardNative.RuleId, configuration.WizardProvenance!.RuleId);
+        Assert.Equal(await WebFormsWizardNative.GeneratorHashAsync(typeof(WebFormsWizardNative).Assembly.Location,
+            typeof(WebFormsWizardStore).Assembly.Location), configuration.WizardProvenance.GeneratorSha256);
         Assert.Equal("projectless", configuration.ProjectMode);
         Assert.Empty(configuration.BindingReceipts);
         Assert.Null(configuration.PreparationProvenance);

@@ -101,6 +101,9 @@ tracemap webforms-review wizard --root C:/reviews/my-website --continue --repair
 Repair requires replacement input/mode and confirmation by project ID. It archives
 the prior project state/form list, clears that project's build/attestation cursor,
 and preserves other projects, old native configs, staged paths and runs. It does
+accept an empty/truncated project config for explicit repair while normal resume
+still rejects it; the original zero-byte file is archived. Repair previews retain
+the same one-MiB limit and changed-preview refusal. It does
 not repair corrupt root configuration, install tools, fix customer code, infer
 lost provenance or silently accept new hashes. Correct a broken root manually or
 choose a new configuration folder. Generated JSON should not be edited to bypass
@@ -116,6 +119,9 @@ verbose output does not abort a build, and the exit code still controls success.
 Hashes detect changes, not authorship; filesystem races are not build
 authenticity proof. Configuration replacement is atomic per file, not a
 multi-file transaction; interrupted state updates fail closed and require repair.
+Native wizard generator provenance commits to both CLI and Core assembly hashes,
+using fixed-role JSON without installation paths. Page maps count against the
+explicit publication inventory budget, not the separate compiled-input budget.
 All-mode, successful builds and completed reports do not establish full coverage.
 
 Automatic solution-wide registration, automatic ASP.NET publication, shared-DLL

@@ -57,7 +57,12 @@ public sealed class WebFormsWizardExecutionTests
     }
 
     [Fact]
-    public Task Real_native_pipeline_completes_and_completed_continue_only_verifies_retained_reports() => VerifyCompletedRun(false);
+    public async Task Real_native_pipeline_completes_and_completed_continue_only_verifies_retained_reports()
+    {
+        // Exercise independent cold runs while the corpus is active; a passing
+        // retry must never hide a prior failed attempt.
+        for (var attempt = 0; attempt < 3; attempt++) await VerifyCompletedRun(false);
+    }
 
     [Fact]
     public Task Output_failure_after_verified_completion_preserves_completed_cursor() => VerifyCompletedRun(true);

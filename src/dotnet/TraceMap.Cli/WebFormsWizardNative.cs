@@ -58,7 +58,8 @@ public static class WebFormsWizardNative
             [], [], maps.ToArray(), null, new WebFormsReviewBudgets { MaxPublishInputFiles = 20_480 },
             PublishSourceRelativePaths: sourcePaths);
         WebFormsReviewPreflightCommand.ValidateConfig(config);
-        var generator = Convert.ToHexStringLower(SHA256.HashData(await File.ReadAllBytesAsync(typeof(WebFormsWizardNative).Assembly.Location, cancellationToken)));
+        var generator = await GeneratorHashAsync(typeof(WebFormsWizardNative).Assembly.Location,
+            typeof(WebFormsWizardStore).Assembly.Location, cancellationToken);
         var bounded = Hash(JsonSerializer.SerializeToUtf8Bytes(new { project, stagedInputs, configuration = config }, Json));
         config = config with { WizardProvenance = new(RuleId, generator, bounded) };
         var bytes = JsonSerializer.SerializeToUtf8Bytes(config, Json);
@@ -118,6 +119,15 @@ public static class WebFormsWizardNative
         }
         if (copied != source.Bytes || Convert.ToHexStringLower(digest.GetHashAndReset()) != source.Sha256) throw Fail("INPUT_CHANGED");
         output.Flush(true);
+    }
+
+    internal static async Task<string> GeneratorHashAsync(string cliPath, string corePath, CancellationToken token = default)
+    {
+        var cli = await WebFormsReviewPreflightCommand.HashAsync("wizard-cli", cliPath, 67_108_864, token);
+        var core = await WebFormsReviewPreflightCommand.HashAsync("wizard-core", corePath, 67_108_864, token);
+        // Fixed roles/order, no installation paths. Both implementing assemblies
+        // participate even when a Core-only change leaves CLI bytes unchanged.
+        return Hash(JsonSerializer.SerializeToUtf8Bytes(new { cliSha256 = cli.Sha256, coreSha256 = core.Sha256 }, Json));
     }
     private static string Relative(string root, string path)
     {
