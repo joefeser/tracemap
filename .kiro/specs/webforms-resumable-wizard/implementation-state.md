@@ -268,3 +268,22 @@ LOCAL_FIX_BATCH_READY_TO_PUSH. Qodo returned findings, but the normal gate still
 reports CHECKS_PENDING (Windows package smoke pending; public-corpus failed),
 not patch-review authority. Publish the validated CI repair, then rerun the gate;
 review findings still require their authorized brief and disposition.
+
+Repair published at 573d7ab0. Windows public-corpus run 36903234553 completed
+successfully on that exact head: 111 passed, zero skipped/failed, including both
+ASP.NET publication cases. Chain comparison, SQL ledger and cap shortcut checks
+also passed. This supersedes the failed pre-repair Windows result, but establishes
+only public synthetic static acceptance, not private/customer runtime coverage.
+Local repaired wlocal replay: 109 passed, one platform skip; all three report
+script checks passed, receipt /tmp/tracemap-wizard-repaired-replay-20261001.
+The built CLI wizard --help entrypoint also exited zero with the expected options.
+Full final-head CI/review disposition and final completion audit remain pending.
+
+Final selection audit found that a UTF-8 BOM-only blank file was not recognized
+as blank before parsing. Both initial classification and the under-lease recheck
+now ignore a leading BOM consistently with the existing forms parser. Empty,
+whitespace, BOM-only and BOM-plus-whitespace cases are pinned by a theory;
+comments-only input remains an error and is preserved. All 80 wizard tests passed
+without compiler warnings in /tmp/tracemap-wizard-bom-blank-clean. This follow-up
+is local pending the next review-authorized push batch, not part of the 573d7ab0
+Windows evidence.

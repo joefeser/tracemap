@@ -30,15 +30,19 @@ public sealed class WebFormsWizardSelectionTests
         Assert.Throws<InvalidOperationException>(() => WebFormsWizardSelection.Advance(resumed, "site"));
     }
 
-    [Fact]
-    public void Blank_regenerates_but_comments_only_does_not_silently_select_all()
+    [Theory]
+    [InlineData("")]
+    [InlineData(" \n")]
+    [InlineData("\uFEFF")]
+    [InlineData("\uFEFF \r\n")]
+    public void Blank_regenerates_but_comments_only_does_not_silently_select_all(string blank)
     {
         using var temp = new TempDirectory();
         var site = Site(temp.Path);
         using var store = WebFormsWizardStore.Open(Path.Combine(temp.Path, "config"), false);
         store.SaveProject(Project(site));
         var path = WebFormsWizardSelection.Advance(store, "site").EditFile!;
-        File.WriteAllText(path, " \n");
+        File.WriteAllText(path, blank);
         Assert.True(WebFormsWizardSelection.Advance(store, "site").Paused);
         File.WriteAllText(path, "# deliberately no selection\n");
         Assert.Throws<InvalidOperationException>(() => WebFormsWizardSelection.Advance(store, "site"));
