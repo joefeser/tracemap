@@ -5,6 +5,48 @@ namespace TraceMap.Tests;
 public sealed class IlCallValueExtractorTests
 {
     [Fact]
+    public void Return_operand_retains_constant_argument_and_call_result_without_execution()
+    {
+        var constant = IlCallValueExtractor.Extract(["0:0:ldstr:str:3:aaa", "1:1:ret:"], [], 8, false);
+        Assert.Equal(new IlValueOrigin("constant-string-hash", "str:3:aaa"), Assert.Single(constant.Returns!).Origin);
+        var argument = IlCallValueExtractor.Extract(["0:0:ldarg.1:", "1:1:ret:"], [], 8, false);
+        Assert.Equal(new IlValueOrigin("argument-slot", "1"), Assert.Single(argument.Returns!).Origin);
+        var returnedCall = IlCallValueExtractor.Extract(["0:0:call:m:producer", "1:1:ret:"],
+            [Call(0, "call", new(0, false, true, true))], 8, false);
+        Assert.Equal(new IlValueOrigin("call-result", "0"), Assert.Single(returnedCall.Returns!).Origin);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void Return_operand_uses_converged_branch_join(bool equal)
+    {
+        var flow = IlCallValueExtractor.Extract([
+            "0:0:ldarg.0:", "1:1:brfalse.s:br:0x4", "2:2:ldstr:str:3:aaa", "3:3:br.s:br:0x5",
+            $"4:4:ldstr:str:3:{(equal ? "aaa" : "bbb")}", "5:5:ret:"
+        ], [], 8, false);
+        Assert.Equal(equal ? "constant-string-hash" : "unknown", Assert.Single(flow.Returns!).Origin.Kind);
+    }
+
+    [Fact]
+    public void Return_operands_keep_distinct_sites_and_do_not_turn_void_or_invalid_stack_into_values()
+    {
+        var flow = IlCallValueExtractor.Extract([
+            "0:0:ldarg.0:", "1:1:brfalse.s:br:0x4", "2:2:ldstr:str:3:aaa", "3:3:ret:",
+            "4:4:ldstr:str:3:bbb", "5:5:ret:"
+        ], [], 8, false);
+        Assert.Equal(2, flow.Returns!.Count);
+        Assert.NotEqual(flow.Returns[0].Origin, flow.Returns[1].Origin);
+        var empty = IlCallValueExtractor.Extract(["0:0:ret:"], [], 8, false);
+        Assert.Equal("return-operand-unavailable", Assert.Single(empty.Returns!).State);
+        var tooMany = IlCallValueExtractor.Extract(["0:0:ldarg.0:", "1:1:ldarg.1:", "2:2:ret:"], [], 8, false);
+        Assert.Equal("return-operand-unavailable", Assert.Single(tooMany.Returns!).State);
+        var limited = IlControlFlowValueExtractor.Extract(Enumerable.Repeat("0:0:nop:",
+            IlControlFlowValueExtractor.MaxInstructions + 1).ToArray(), [], 8);
+        Assert.Null(limited.Returns);
+    }
+
+    [Fact]
     public void Address_origin_size_depth_and_malformed_shapes_fail_closed()
     {
         var value = new IlValueOrigin("allocation-site", "1");

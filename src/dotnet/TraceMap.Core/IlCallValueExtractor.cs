@@ -7,6 +7,7 @@ namespace TraceMap.Core;
 internal static class IlCallValueExtractor
 {
     internal const string Schema = "il-call-values.v1";
+    internal const int MaxRetainedReturnSites = 256;
     internal const string Limitation = "Bounded method-local operand origins only. Normal branch/loop flow uses equality-only fixed-point joins, including protected blocks with known exception entries. Handler/filter roots have unknown pre-exception local state; leave discards locals and potentially rewritten arguments across unmodelled finally effects, re-establishing only an empty operand stack. Exception dispatch and finally continuations are not reconstructed. Strings are length plus SHA-256 of exact UTF-16 code units, never raw text. Argument slots are not values. Object origins are allocation/call-site identities, not runtime objects. Ordinary field/array/indirect operations preserve stack shape but their loaded values remain unknown. Stores and address exposure conservatively invalidate affected configuration; exposed slots remain exposure-capable on later writes. Known byref call shapes retain non-byref scalar operands only; addresses and byref arguments are exported as unknown, never dereferenced caller values. Unsupported instructions, byref returns, stack failures and work limits invalidate or withhold operand state. Consumers must invalidate configuration across unknown call effects. No heap contents, field value, branch feasibility, SQL execution or runtime dispatch is proven.";
     private static readonly IlValueOrigin Unknown = new("unknown", "");
 
@@ -23,6 +24,8 @@ internal static class IlCallValueExtractor
                 || RequiresControlFlow(instruction.Split(':', 4)[2]))))
             return IlControlFlowValueExtractor.Extract(instructions, calls, maxStack, exceptionEntries);
         var events = new List<IlCallValueObservation>();
+        var returns = new List<IlReturnValueObservation>();
+        var afterReturn = false;
         var gaps = new SortedSet<string>(StringComparer.Ordinal);
         var stack = new List<IlValueOrigin>();
         var locals = new Dictionary<int, IlValueOrigin>();
@@ -127,11 +130,18 @@ internal static class IlCallValueExtractor
                 if (opcode == "newobj" || shape.ReturnsValue) Push(result);
                 continue;
             }
-            if (opcode == "ret") { Invalidate("IlValueReturnBoundary"); continue; }
+            if (opcode == "ret")
+            {
+                var available = !afterReturn && !hasExceptionRegions && stack.Count == 1;
+                returns.Add(new(offset, available ? "return-operand-candidate" : "return-operand-unavailable",
+                    available ? stack[0] : Unknown));
+                afterReturn = true;
+                Invalidate("IlValueReturnBoundary"); continue;
+            }
             Invalidate(opcode.StartsWith('b') || opcode is "switch" or "leave" or "leave.s"
                 ? "IlValueControlFlowUnavailable" : "IlValueInstructionUnavailable");
         }
-        return new(events, gaps.ToArray());
+        return new(events, gaps.ToArray(), Returns: returns);
     }
 
     private static bool RequiresControlFlow(string opcode) => opcode is "stfld" or "stsfld" or "ldflda" or "ldsflda" or "ldsfld"

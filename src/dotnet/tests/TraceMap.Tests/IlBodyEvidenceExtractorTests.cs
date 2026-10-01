@@ -102,6 +102,17 @@ public sealed class IlBodyEvidenceExtractorTests
             Assert.Equal(IlCallValueExtractor.Schema, fact.Properties["valueSchema"]);
         });
         var serialized = JsonSerializer.Serialize(result);
+        Assert.Equal(result.Facts.Count(fact => fact.FactType == FactTypes.ManagedIlBodyDeclared),
+            result.Facts.Count(fact => fact.FactType == FactTypes.ManagedIlReturnValuesObserved));
+        Assert.All(result.Facts.Where(fact => fact.FactType == FactTypes.ManagedIlReturnValuesObserved), fact =>
+        {
+            Assert.Equal(RuleIds.DotNetIlValues, fact.RuleId);
+            Assert.Equal(EvidenceTiers.Tier3SyntaxOrTextual, fact.EvidenceTier);
+            Assert.Equal(FactTypes.ManagedIlBodyDeclared, byId[fact.Properties["ilBodyFactId"]].FactType);
+            Assert.Equal(provenance.GeneratorSha256, fact.Properties["ilGeneratorSha256"]);
+            Assert.Equal(provenance.BoundedInputSha256, fact.Properties["ilBoundedInputSha256"]);
+            Assert.Equal("il-return-values.v1", fact.Properties["valueSchema"]);
+        });
         Assert.DoesNotContain(Path.GetFullPath(fixture.Source), serialized, StringComparison.Ordinal);
         Assert.DoesNotContain("il-alpha", serialized, StringComparison.Ordinal);
         Assert.DoesNotContain("il-beta", serialized, StringComparison.Ordinal);
@@ -712,6 +723,13 @@ public sealed class IlBodyEvidenceExtractorTests
         var withheld = Assert.Single(IlBodyEvidenceExtractor.AgreeValueFlows([valueBody], [valueDisagreement]));
         Assert.Empty(withheld.ValueFlow!.Calls);
         Assert.Contains("IlValueReaderDisagreementOrLimit", withheld.ValueFlow.Gaps);
+        var returnBody = valueBody with { ValueFlow = new([], [], Returns:
+            [new(1, "return-operand-candidate", new("constant-int32", "1"))]) };
+        var returnDisagreement = returnBody with { ValueFlow = returnBody.ValueFlow! with { Returns =
+            [new(1, "return-operand-candidate", new("constant-int32", "2"))] } };
+        var returnWithheld = Assert.Single(IlBodyEvidenceExtractor.AgreeValueFlows([returnBody], [returnDisagreement]));
+        Assert.Null(returnWithheld.ValueFlow!.Returns);
+        Assert.Contains("IlValueReaderDisagreementOrLimit", returnWithheld.ValueFlow.Gaps);
     }
 
     [Fact]
@@ -738,6 +756,33 @@ public sealed class IlBodyEvidenceExtractorTests
         var body = Assert.Single(facts, fact => fact.FactType == FactTypes.ManagedIlBodyDeclared);
         Assert.Equal("partial", body.Properties.GetValueOrDefault("ilInputOutcome"));
         Assert.Equal(agreed.MetadataToken, body.Properties.GetValueOrDefault("metadataToken"));
+    }
+
+    [Theory]
+    [InlineData(-1)]
+    [InlineData(256)]
+    [InlineData(257)]
+    public void Return_fact_emission_bounds_sites_and_projects_addresses_to_unknown(int count)
+    {
+        var fixture = Fixture("csharp", "CompiledEvidence.CSharp");
+        var result = Scan(new ScanOptions(fixture.Source, TempOutput(),
+            CompiledInputPaths: [fixture.Assembly], IlBodyEvidence: true));
+        var provenance = Assert.IsType<IlBodyProvenance>(result.Manifest.IlBodyProvenance);
+        var outcome = Assert.Single(provenance.Outcomes);
+        var reader = IlBodyEvidenceExtractor.ReadCecilBodies(File.ReadAllBytes(fixture.Assembly),
+            new IlBodyLimits(), new IlBodyEvidenceExtractor.IlWorkBudget(2_000_000), CancellationToken.None);
+        var body = reader.Bodies[0] with { ValueFlow = new([], [], Returns: count < 0 ? null
+            : Enumerable.Range(0, count).Select(offset => new IlReturnValueObservation(offset,
+                "return-operand-candidate", IlValueAddresses.Create("local-address", 0,
+                    new("constant-int32", "1")))).ToArray()) };
+        var evaluation = new IlBodyEvaluation(provenance, [new EvaluatedIlInput(outcome, [body])], [], []);
+        var facts = IlBodyEvidenceExtractor.MaterializeFacts(result.Manifest, evaluation, result.Facts);
+        var returned = Assert.Single(facts, fact => fact.FactType == FactTypes.ManagedIlReturnValuesObserved);
+        Assert.Equal(count == 256 ? "return-operands-candidate" : "return-operands-unavailable", returned.Properties["valueState"]);
+        var values = JsonSerializer.Deserialize<IlReturnValueObservation[]>(returned.Properties["returnOrigins"])!;
+        Assert.Equal(count == 256 ? 256 : 0, values.Length);
+        Assert.All(values, value => Assert.Equal("unknown", value.Origin.Kind));
+        Assert.Equal(count > 256, facts.Any(fact => fact.Properties.GetValueOrDefault("gapKind") == "IlValueReturnSiteLimit"));
     }
 
     [Fact]

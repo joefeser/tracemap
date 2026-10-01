@@ -97,6 +97,18 @@ public sealed class LazyConstructorLoggingTests
         Assert.Contains(logging, path => !path.Nodes.Any(node => Constructor(node, "SyntheticPreferences")));
         Assert.Contains(scalar, path => path.Nodes.Any(node => Method(node, "InsertLiteral"))
             && path.Nodes.Last().CommandBinding?.CommandTextFromPath?.State == "constant-on-encoded-call-path");
+        var literalMethod = Assert.Single(scan.Facts, fact => fact.FactType == FactTypes.ManagedMethodDeclared
+            && fact.TargetSymbol!.Contains("|method:11:LiteralText|", StringComparison.Ordinal));
+        var literalBody = Assert.Single(scan.Facts, fact => fact.FactType == FactTypes.ManagedIlBodyDeclared
+            && fact.Properties.GetValueOrDefault("compiledFactId") == literalMethod.FactId);
+        var literalReturns = Assert.Single(scan.Facts, fact => fact.FactType == FactTypes.ManagedIlReturnValuesObserved
+            && fact.Properties.GetValueOrDefault("ilBodyFactId") == literalBody.FactId);
+        Assert.Equal("return-operands-candidate", literalReturns.Properties["valueState"]);
+        var retainedReturn = Assert.Single(JsonSerializer.Deserialize<IlReturnValueObservation[]>(literalReturns.Properties["returnOrigins"])!);
+        var directText = Assert.Single(scalar, path => path.Nodes.Any(node => Method(node, "InsertLiteral")))
+            .Nodes.Last().CommandBinding!.CommandTextFromPath!.Origin;
+        Assert.Equal(directText.Kind, retainedReturn.Origin.Kind);
+        Assert.Equal(directText.Identity, retainedReturn.Origin.Identity);
         // Unlike BuildText(message), this producer returns exactly the same
         // constant as the direct control. Its unresolved result demonstrates
         // the return-evidence boundary, not runtime-dependent SQL composition.

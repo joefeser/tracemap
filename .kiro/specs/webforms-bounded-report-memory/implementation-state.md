@@ -1,5 +1,35 @@
 # Implementation state
 
+## Return operand extraction implemented; reporting pending (2026-09-30)
+
+Scanner version il-body-evidence/0.1.10 retains ManagedIlReturnValuesObserved
+under dotnet.compiled.il-values.v1. Straight-line returns retain one valid stack
+operand; control-flow returns use the final converged input state at each reached
+ret. Both independent readers must agree on the complete value observations.
+Each body emits a summary capped at 256 sites, with exact generator/input hashes,
+body reference, return count, flow gaps and candidate/unavailable state. The cap
+is included in the bounded-input digest. Limit overflow withholds all return
+origins and emits IlValueReturnSiteLimit. Addresses project to unknown.
+
+The actual compiled VB LiteralText helper now emits the same string fingerprint
+as the direct-literal control. Reporting deliberately still asserts unresolved:
+the producer-return consumer has not been implemented. Existing private saved
+facts lack this new evidence and must not be silently upgraded.
+
+Validation: IL body/value/command and property corpus slice passed 137 tests with
+one Windows-only skip before the final cap checks. The final rebuilt slice of
+return-cap, operand and property tests passed 28 with zero skips. Diff checks
+passed. Full solution and Windows gates remain deferred until the reporting fix
+is integrated; no PR push or private rescan is claimed for this change.
+
+Next: add indexed body/return and exact call-offset lookup rather than scanning
+all retained facts per endpoint. Join the call-result producer to the exact
+callee body and return summary, verify call shape/signature/hash provenance,
+substitute returned argument slots back into the producer call, and follow
+nested return origins with a shared bound and cycle detection. Keep returned
+string composition unknown, record return evidence separately from call-stack
+steps, and test old/missing/ambiguous/tampered summaries and virtual targets.
+
 ## Return-value boundary isolated (2026-09-30, follow-up)
 
 Added InsertReturnedLiteral through the same property/constructor/provider path.

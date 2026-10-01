@@ -145,7 +145,12 @@ internal static class IlControlFlowValueExtractor
             instructions.Select((value, index) => new IlValueControlNode(value.Offset,
                 successors[index].Select(successor => instructions[successor].Offset).ToArray(), invalidates[index] || entries.ContainsKey(index),
                 entries.GetValueOrDefault(index, -1), exposed.GetValueOrDefault(value.Offset)?.OrderBy(origin => origin.Kind, StringComparer.Ordinal)
-                    .ThenBy(origin => origin.Identity, StringComparer.Ordinal).ToArray())).ToArray(), work);
+                    .ThenBy(origin => origin.Identity, StringComparer.Ordinal).ToArray())).ToArray(), work,
+            instructions.Select((instruction, index) => (instruction, input: inputs[index]))
+                .Where(item => item.instruction.Opcode == "ret" && item.input is not null)
+                .Select(item => new IlReturnValueObservation(item.instruction.Offset,
+                    !item.input!.InvalidStack && item.input.Stack.Count == 1 ? "return-operand-candidate" : "return-operand-unavailable",
+                    !item.input.InvalidStack && item.input.Stack.Count == 1 ? item.input.Stack[0] : Unknown)).ToArray());
 
         bool Transfer(Instruction instruction, State state)
         {

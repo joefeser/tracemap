@@ -123,3 +123,5 @@
 - [x] Prevent unrestricted depth-recovery witnesses from bypassing compiled-only scope; pin source shortcut exclusion, reachable diagnostics, depth gaps and mixed-query recovery with regression tests.
 - [x] Isolate property/constructor logging return-value loss with an actual compiled constant-return helper and an identical direct-literal control, separately from runtime string composition.
 - [ ] Retain bounded dual-decoder return operands and resolve exact producer-call returns, preserving legacy missing evidence, runtime composition, dispatch, cycle and work-limit gaps.
+  - [x] Capture converged local return operands, require reader agreement, and emit bounded rule-backed return summaries with provenance and unavailable/limit states.
+  - [ ] Resolve producer returns in the reporting layer with exact joins, argument substitution, bounded cycles/work, and negative legacy/ambiguous/dispatch cases.
