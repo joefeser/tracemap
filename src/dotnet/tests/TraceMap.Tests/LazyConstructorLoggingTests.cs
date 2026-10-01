@@ -110,18 +110,18 @@ public sealed class LazyConstructorLoggingTests
         Assert.Equal(directText.Kind, retainedReturn.Origin.Kind);
         Assert.Equal(directText.Identity, retainedReturn.Origin.Identity);
         // Unlike BuildText(message), this producer returns exactly the same
-        // constant as the direct control. Its unresolved result demonstrates
-        // the return-evidence boundary, not runtime-dependent SQL composition.
+        // constant as the direct control. Its return evidence is separate
+        // from call-stack edges and does not prove virtual endpoint dispatch.
         var returnedLiteral = Assert.Single(scalar, path => path.Nodes.Any(node => Method(node, "InsertReturnedLiteral")));
         var returnedText = returnedLiteral.Nodes.Last().CommandBinding!.CommandTextFromPath!;
-        Assert.Equal("unresolved-operand", returnedText.State);
-        Assert.Equal("call-result", returnedText.Origin.Kind);
-        var returnedBody = Assert.Single(scan.Facts, fact => fact.FactType == FactTypes.ManagedIlBodyDeclared
-            && $"{origin.SourceIndexId}:{fact.FactId}" == returnedText.OriginBodyFactId);
-        var returnedCall = Assert.Single(scan.Facts, fact => fact.FactType == FactTypes.ManagedIlCallObserved
-            && fact.Properties.GetValueOrDefault("ilBodyFactId") == returnedBody.FactId
-            && fact.Properties.GetValueOrDefault("ilOffset") == returnedText.Origin.Identity);
+        Assert.Equal("constant-on-encoded-call-path", returnedText.State);
+        Assert.Equal(directText, returnedText.Origin);
+        var returnStep = Assert.Single(returnedText.ReturnSteps!);
+        Assert.Equal($"{origin.SourceIndexId}:{literalReturns.FactId}", returnStep.ReturnFactId);
+        Assert.Equal($"{origin.SourceIndexId}:{literalBody.FactId}", returnedText.OriginBodyFactId);
+        var returnedCall = Assert.Single(scan.Facts, fact => $"{origin.SourceIndexId}:{fact.FactId}" == returnStep.ProducerCallFactId);
         Assert.Contains("|method:11:LiteralText|", returnedCall.Properties["targetIdentity"], StringComparison.Ordinal);
+        Assert.Contains("IlCommandVirtualDispatchUnproven", returnedText.Gaps);
         Assert.DoesNotContain(returnedLiteral.Nodes, node => Method(node, "LiteralText"));
         var fill = await Query("DbDataAdapter.Fill");
         Assert.Single(fill.Paths);
@@ -134,6 +134,88 @@ public sealed class LazyConstructorLoggingTests
         Assert.DoesNotContain("SELECT LEN('", JsonSerializer.Serialize(broad), StringComparison.Ordinal);
         Assert.DoesNotContain(broad.Gaps, gap => gap.GapKind == "TruncatedByLimit" && gap.Reason is "path" or "work");
         Assert.InRange(broad.Summary.TraversalWorkUnits!.Value, 1, 100_000);
+    }
+
+    [Theory]
+    [InlineData("InsertReturnedLiteral", "none", null)]
+    [InlineData("InsertForwardedLiteral", "none", null)]
+    [InlineData("InsertRecursiveText", "none", "IlCommandReturnCycle")]
+    [InlineData("InsertVirtualText", "none", "IlCommandReturnVirtualDispatchUnproven")]
+    [InlineData("InsertReturnedLiteral", "missing", "IlCommandReturnEvidenceMissingOrAmbiguous")]
+    [InlineData("InsertReturnedLiteral", "ambiguous", "IlCommandReturnEvidenceMissingOrAmbiguous")]
+    [InlineData("InsertReturnedLiteral", "changed", "IlCommandReturnProvenanceUnavailable")]
+    [InlineData("InsertReturnedLiteral", "malformed", "IlCommandReturnEvidenceMalformed")]
+    [InlineData("InsertReturnedLiteral", "count", "IlCommandReturnEvidenceUnavailable")]
+    [InlineData("InsertReturnedLiteral", "conflict", "IlCommandReturnValuesDisagree")]
+    [InlineData("InsertReturnedLiteral", "work", "IlCommandReturnWorkLimit")]
+    public async Task Deep_projectless_return_value_projection_requires_exact_bounded_evidence(string entryName, string mutation, string? gap)
+    {
+        var repo = FindRepo();
+        var configuration = new DirectoryInfo(AppContext.BaseDirectory).Parent!.Name;
+        var bin = Path.Combine(repo, "samples", "fixture-build", "lazy-constructor", "bin", configuration, "net48");
+        using var temp = new TempDirectory();
+        var scan = ScanEngine.Scan(new ScanOptions(Path.Combine(repo, "samples", "messy-dotnet-workspace", "vb-lazy-constructor"),
+            Path.Combine(temp.Path, "scan"), CompiledInputPaths: [Path.Combine(bin, "PublicLazy.Framework.dll")], IlBodyEvidence: true));
+        var entry = Assert.Single(scan.Facts, fact => fact.FactType == FactTypes.ManagedMethodDeclared
+            && fact.Properties.GetValueOrDefault("metadataName") == entryName);
+        var literal = Assert.Single(scan.Facts, fact => fact.FactType == FactTypes.ManagedMethodDeclared
+            && fact.Properties.GetValueOrDefault("metadataName") == "LiteralText");
+        var body = Assert.Single(scan.Facts, fact => fact.FactType == FactTypes.ManagedIlBodyDeclared
+            && fact.Properties.GetValueOrDefault("compiledFactId") == literal.FactId);
+        var summary = Assert.Single(scan.Facts, fact => fact.FactType == FactTypes.ManagedIlReturnValuesObserved
+            && fact.Properties.GetValueOrDefault("ilBodyFactId") == body.FactId);
+        var facts = scan.Facts.ToList();
+        if (mutation == "missing") facts.RemoveAll(fact => fact.FactType == FactTypes.ManagedIlReturnValuesObserved);
+        else if (mutation == "ambiguous") facts.Add(summary with { FactId = summary.FactId + "-competitor" });
+        else if (mutation != "none")
+        {
+            var properties = new Dictionary<string, string>(summary.Properties);
+            if (mutation == "changed") properties["ilBoundedInputSha256"] = new string('f', 64);
+            if (mutation == "malformed") properties["returnOrigins"] = "[";
+            if (mutation == "count") properties["returnCount"] = "257";
+            if (mutation == "conflict")
+            {
+                var value = Assert.Single(JsonSerializer.Deserialize<IlReturnValueObservation[]>(properties["returnOrigins"])!);
+                properties["returnOrigins"] = JsonSerializer.Serialize(new[] { value, value with { Offset = value.Offset + 1,
+                    Origin = new("constant-string-hash", "str:1:" + new string('a', 64)) } });
+                properties["returnCount"] = "2";
+            }
+            if (mutation == "work")
+            {
+                var value = Assert.Single(JsonSerializer.Deserialize<IlReturnValueObservation[]>(properties["returnOrigins"])!);
+                properties["returnOrigins"] = JsonSerializer.Serialize(Enumerable.Range(0, 64)
+                    .Select(offset => value with { Offset = offset }).ToArray());
+                properties["returnCount"] = "64";
+            }
+            facts[facts.IndexOf(summary)] = summary with { Properties = properties };
+        }
+        var index = Path.Combine(temp.Path, "index.sqlite");
+        var combined = Path.Combine(temp.Path, "combined.sqlite");
+        SqliteIndexWriter.Write(index, scan.Manifest, facts);
+        var composition = await CombinedIndexBuilder.CombineAsync(new CombineOptions([index], combined, ["return-fixture"]));
+        var source = Assert.Single(composition.Sources);
+        var report = await CombinedDependencyPathReporter.BuildSelectedSymbolsAsync(
+            new CombinedDependencyPathOptions(combined, temp.Path, ToSurface: "database-api", SurfaceName: "SqlCommand.ExecuteScalar", MaxDepth: 20)
+            { CompiledOnly = true, ExactFromSymbol = true, MaxTraversalWork = 10_000 },
+            [new(source.SourceIndexId, source.ScanId, source.CommitSha, entry.TargetSymbol!)], combinedIndex: true);
+        var text = Assert.Single(report.Paths).Nodes.Last().CommandBinding!.CommandTextFromPath!;
+        var memoryReport = await CombinedDependencyPathReporter.BuildReportAsync(
+            new CombinedDependencyPathOptions(combined, temp.Path, FromSymbol: entry.TargetSymbol,
+                ToSurface: "database-api", SurfaceName: "SqlCommand.ExecuteScalar", MaxDepth: 20)
+            { CompiledOnly = true, ExactFromSymbol = true, MaxTraversalWork = 10_000 });
+        var memoryText = Assert.Single(memoryReport.Paths).Nodes.Last().CommandBinding!.CommandTextFromPath!;
+        Assert.Equal(JsonSerializer.Serialize(text), JsonSerializer.Serialize(memoryText));
+        if (gap is null)
+        {
+            Assert.Equal("constant-on-encoded-call-path", text.State);
+            Assert.Equal("constant-string-hash", text.Origin.Kind);
+            Assert.Equal(entryName == "InsertForwardedLiteral" ? 2 : 1, text.ReturnSteps!.Count);
+        }
+        else
+        {
+            Assert.Equal("unresolved-operand", text.State);
+            Assert.Contains(gap, text.Gaps);
+        }
     }
 
     private static string FindRepo()

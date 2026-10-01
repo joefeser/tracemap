@@ -69,7 +69,10 @@ try {
     $propertyPassed = @($rows | Where-Object {
         $_.testName -like '*Deep_projectless_property_constructor_logging*' -and $_.outcome -ceq 'Passed'
     }).Count
-    if ($passed -lt 14 -or $nativePassed -ne 1 -or $propertyPassed -ne 2 -or @($rows | Where-Object { $_.outcome -notin @('Passed', 'NotExecuted') }).Count -ne 0) {
+    $returnPassed = @($rows | Where-Object {
+        $_.testName -like '*Deep_projectless_return_value_projection*' -and $_.outcome -ceq 'Passed'
+    }).Count
+    if ($passed -lt 25 -or $nativePassed -ne 1 -or $propertyPassed -ne 2 -or $returnPassed -ne 11 -or @($rows | Where-Object { $_.outcome -notin @('Passed', 'NotExecuted') }).Count -ne 0) {
         throw 'DEEP_CORPUS_TEST_RECEIPT_NOT_ADMITTED'
     }
     if ($RequireWindowsPublish -and $windowsPassed -ne 2) { throw 'DEEP_CORPUS_WINDOWS_ACCEPTANCE_MISSING' }

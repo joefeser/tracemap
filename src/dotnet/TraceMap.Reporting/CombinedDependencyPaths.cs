@@ -201,7 +201,14 @@ public sealed record CompiledCommandValueStep(string CallFactId, string OperandF
 public sealed record CompiledCommandPathValueBinding(string Schema, string RuleId, string EvidenceTier,
     string State, CompiledCommandOperandOrigin Origin, string OriginBodyFactId,
     IReadOnlyList<CompiledCommandValueStep> Steps, IReadOnlyList<string> Gaps,
-    string GeneratorSha256, string BoundedInputSha256, string ArtifactVisibility = "local-only");
+    string GeneratorSha256, string BoundedInputSha256, string ArtifactVisibility = "local-only")
+{
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<CompiledCommandReturnStep>? ReturnSteps { get; init; }
+}
+
+public sealed record CompiledCommandReturnStep(string ProducerCallFactId, string CalleeBodyFactId,
+    string ReturnFactId, string GeneratorSha256, string BoundedInputSha256);
 
 public sealed record CombinedPathEdge(
     string EdgeId,
@@ -6702,6 +6709,17 @@ public static partial class CombinedDependencyPathReporter
         public IReadOnlyDictionary<(string SourceIndexId, string OriginalFactId), CombinedFactRow[]> CommandFactsByOriginalId
             => commandFactsByOriginalId ??= CombinedFactsByOriginalId(CommandFacts);
         private Dictionary<(string SourceIndexId, string CallFactId), CombinedFactRow[]>? commandOperandFacts;
+        private Dictionary<(string Source, string Type, string Reference), CombinedFactRow[]>? commandRelatedFacts;
+        public IReadOnlyList<CombinedFactRow> CommandRelatedFacts(string source, string type, string reference)
+        {
+            if (CommandFacts is IIndexedCombinedFacts indexed) return indexed.CommandRelatedFacts(source, type, reference);
+            commandRelatedFacts ??= FactsOfTypes(CommandFacts, FactTypes.ManagedIlBodyDeclared,
+                    FactTypes.ManagedIlCallObserved, FactTypes.ManagedIlReturnValuesObserved)
+                .Where(fact => CommandFactReference(fact) is not null)
+                .GroupBy(fact => (fact.SourceIndexId, fact.FactType, CommandFactReference(fact)!))
+                .ToDictionary(group => group.Key, group => group.Take(2).ToArray());
+            return commandRelatedFacts.GetValueOrDefault((source, type, reference)) ?? [];
+        }
         public IReadOnlyList<CombinedFactRow> CommandOperandFacts(string sourceIndexId, string callFactId)
         {
             commandOperandFacts ??= FactsOfTypes(CommandFacts, FactTypes.ManagedIlCallValuesObserved)

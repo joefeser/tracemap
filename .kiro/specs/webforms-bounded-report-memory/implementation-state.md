@@ -1,5 +1,32 @@
 # Implementation state
 
+## Producer-return resolution integrated (2026-09-30)
+
+The reporter now follows a call-result producer through its exact admitted call
+edge, unique callee body and return summary. Body/operand/summary provenance and
+String/Int32 return signatures are checked. Nested returns and returned argument
+slots are substituted with a shared 64-unit bound, 256-edge/site admission caps,
+and recursion detection. Every retained return site must agree. Virtual producer
+targets, external/runtime composition and legacy missing return evidence remain
+explicit gaps. Existing callvirt endpoint gaps are not removed by a constant.
+
+ReturnSteps retain exact producer, callee-body and return-fact IDs separately
+from call-stack steps. Existing constant-on-encoded-call-path remains a static
+candidate state and can include this separate return evidence. Indexed body,
+return and producer-offset lookups read at most two competitors; the memory
+reader retains the same semantics. Bounded-input hashes include new limits and
+all inspected return evidence, rejected competitors and lookup counts.
+
+Validation: the broader deep/path/command slice passed 162 with one Windows-only
+skip. Final return/property cases passed 13 with zero skips, including exact JSON
+equality between memory and indexed readers. Positive literal and nested
+forwarding, runtime composition, legacy missing summaries, ambiguous/changed/
+malformed summaries, count mismatch, conflicting returns, mutual recursion,
+virtual targets and work exhaustion are covered. Deep Windows selection now
+requires all 11 return-projection cases in addition to the two property cases.
+Full solution and exact-head Windows results are still pending. No private
+verify-8 upgrade, all-route completeness, or work-machine rerun is claimed.
+
 ## Return operand extraction implemented; reporting pending (2026-09-30)
 
 Scanner version il-body-evidence/0.1.10 retains ManagedIlReturnValuesObserved

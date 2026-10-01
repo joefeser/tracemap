@@ -21,6 +21,34 @@ Namespace PublicLazy.Framework
             Return "SELECT 1 /* public literal control */"
         End Function
 
+        Public Sub InsertForwardedLiteral()
+            ExecuteText(ForwardText(LiteralText()))
+        End Sub
+
+        Private Shared Function ForwardText(value As String) As String
+            Return value
+        End Function
+
+        Public Sub InsertRecursiveText()
+            ExecuteText(RecursiveText())
+        End Sub
+
+        Private Shared Function RecursiveText() As String
+            Return RecursiveOther()
+        End Function
+
+        Private Shared Function RecursiveOther() As String
+            Return RecursiveText()
+        End Function
+
+        Public Sub InsertVirtualText()
+            ExecuteText(VirtualText())
+        End Sub
+
+        Public Overridable Function VirtualText() As String
+            Return "SELECT 1 /* virtual target not proven */"
+        End Function
+
         Private Function BuildText(message As String) As String
             ' A returned string is deliberately distinct from caller-slot forwarding.
             Return String.Concat("SELECT LEN('", message.Replace("'", "''"), "')")
