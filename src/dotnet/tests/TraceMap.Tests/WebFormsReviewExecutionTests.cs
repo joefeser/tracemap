@@ -1174,6 +1174,42 @@ public sealed class WebFormsReviewExecutionTests
     }
 
     [Theory]
+    [InlineData(null, 20_000_000)]
+    [InlineData(7, 20_000_000)]
+    [InlineData(20_000_000, 40_000_000)]
+    [InlineData(30_000_000, 50_000_000)]
+    [InlineData(49_999_999, 50_000_000)]
+    public void Report_recovery_node_budget_strictly_increases_within_supported_ceiling(int? failedLimit, int expected)
+    {
+        var actual = WebFormsReviewExecutionCommand.RecoveryMaxEvidenceNodes(failedLimit);
+        Assert.Equal(expected, actual);
+        Assert.True(actual > (failedLimit ?? WebFormsReviewEvidenceIndex.MaxNodes));
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(50_000_001)]
+    public void Report_recovery_refuses_invalid_node_budgets(int failedLimit) =>
+        Assert.ThrowsAny<Exception>(() => WebFormsReviewExecutionCommand.RecoveryMaxEvidenceNodes(failedLimit));
+
+    [Fact]
+    public async Task Report_recovery_at_supported_ceiling_refuses_before_creating_bundle()
+    {
+        using var fixture = new Fixture();
+        fixture.Config = fixture.Config with { Budgets = fixture.Config.Budgets with { Reports = new() { MaxEvidenceNodes = WebFormsReviewEvidenceIndex.MaxSupportedNodes } } };
+        await fixture.Preflight();
+        Assert.Equal(0, await fixture.Execute("run", Scan));
+        Assert.Equal(1, await fixture.ExecuteReports("resume", (_, _, _, _) => throw WebFormsReviewEvidenceIndex.Invalid("NODE_LIMIT")));
+        var target = Path.Combine(fixture.Root, "ceiling-recovery");
+        var before = Directory.GetFiles(fixture.Run, "*", SearchOption.AllDirectories).ToDictionary(path => path, Hash);
+        using var output = new StringWriter(); using var error = new StringWriter();
+        Assert.Equal(1, await TraceMapCommand.RunAsync(["webforms-review", "recover-reports", "--run", fixture.Run, "--out", target], output, error));
+        Assert.Contains("WEBFORMS_EXECUTION_RECOVERY_NODE_BUDGET_EXHAUSTED", error.ToString());
+        Assert.False(Directory.Exists(target));
+        Assert.Equal(before, Directory.GetFiles(fixture.Run, "*", SearchOption.AllDirectories).ToDictionary(path => path, Hash));
+    }
+
+    [Theory]
     [InlineData("unchanged")]
     [InlineData("changed")]
     [InlineData("missing")]
@@ -1248,6 +1284,7 @@ public sealed class WebFormsReviewExecutionTests
                 WebFormsReviewExecutionCommand.RecoveryName)), JsonOptions)!;
             Assert.Equal("recovered-static-reports-original-run-not-completed", receipt.ClaimLevel);
             Assert.Equal(WebFormsReviewExecutionCommand.RecoveryHash(receipt), receipt.BoundedInputSha256);
+            Assert.Equal(WebFormsReviewEvidenceIndex.NewPlanMaxNodes, receipt.MaxEvidenceNodes);
             Assert.Equal("reports-failed", fixture.LastCheckpoint().State);
             using var query = new StringWriter();
             Assert.Equal(0, await TraceMapCommand.RunAsync(["webforms-review", "query-recovery", "--bundle", target,
