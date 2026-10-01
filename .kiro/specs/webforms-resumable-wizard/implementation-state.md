@@ -233,3 +233,9 @@ PowerShell chain/SQL-ledger/cap checks passed. The wrapper guard tests also pass
 Receipt: /tmp/tracemap-wizard-local-replay-20261001/validation.local.json.
 Windows ASP.NET publication remains explicitly unverified here; use
 scripts/wlocal.ps1 -RequireWindowsPublish on the authorized Windows machine.
+
+Integrated dependency 1653f0de into this branch through merge 39878a09; #798's
+branch was not modified. Integrated wizard/native execution tests: 201 passed,
+zero failed/skipped, TRX /tmp/tracemap-wizard-integrated. Current local source
+has no compiler warnings in this validation. Scoped stacked PR and full final-head
+regression remain pending. No customer site or SQL was executed.
