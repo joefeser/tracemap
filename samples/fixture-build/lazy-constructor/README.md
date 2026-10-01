@@ -23,6 +23,16 @@ the producer's return-value dataflow. This is the distinction under test.
 
 ## Assertions
 
+The separate `Profile_Click` handler models a dynamic email lookup:
+`EmployeeInfo getter -> ProfileEmployee constructor -> GetProfile -> GetEmail
+-> ExecuteSql -> ExecuteScalar`. `GetEmail` concatenates a runtime argument
+between two SQL literals. It creates a parameter collection but never supplies
+it to the command. Its exception branch calls a distinct literal stored-procedure
+audit endpoint. Tests pin the actual compiled `String.Concat` producer identity,
+unresolved Text command, resolved StoredProcedure audit, and independent Fill
+route in both mixed and compiled-only queries. This is synthetic static evidence,
+not a claim about production execution or an exploitable trust boundary.
+
 - Mixed and compiled-only queries retain property-getter and constructor routes
   across the DLL boundary, including nested field initialization and logging.
 - Same-name unrelated declarations are not joined.

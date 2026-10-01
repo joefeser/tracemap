@@ -1,5 +1,49 @@
 # Implementation state
 
+## Property-driven dynamic lookup regression (2026-10-01)
+
+Follow-up validation: standalone CLI smoke completed with 777 facts at
+`/tmp/tracemap-profile-cli-smoke`, Level3SyntaxAnalysis/NotRun with explicit
+unbound-input and unresolved-framework-reference gaps. This is not an admitted
+publication. Public saved-chain comparison script tests passed. The Windows
+corpus filter and receipt now explicitly require both dynamic-profile cases.
+Full .NET suite is running with TRX destination
+`/tmp/tracemap-profile-validation/profile-full.trx`; completion is not yet claimed.
+The expanded corpus script passed 27 tests with one Windows-only skip, including
+both required dynamic-profile cases. Receipt generator and bounded-input digests
+were recomputed successfully at `/tmp/tracemap-profile-corpus-validation`.
+The private-path guard also passed. Windows publication remains not-run locally.
+
+Saved-report cap smoke: querying that same synthetic index and exact compiled
+Profile_Click root with maxPaths=1 retained only the Fill sequence and emitted
+a path-limit gap. maxPaths=256 retained three sequences. `wcompare.ps1` found
+one shared exact sequence, zero historical-only, and two current-only sequences:
+the constructor/profile audit branch and constructor/profile dynamic-email
+branch. Outputs are `/tmp/tracemap-profile-paths-capped`,
+`/tmp/tracemap-profile-paths-full`, and
+`/tmp/tracemap-profile-comparison.local.html`. This proves the local diagnostic
+can identify omitted method sequences; it does not identify the private
+verify-8 omissions or substitute for its historical baseline comparison.
+
+On `codex/webforms-config-migration`, owner-supplied decompilation distinguished
+the dynamic lookup branch from literal stored-procedure logging. The public
+synthetic projectless VB sample now has a separate Profile handler, lazy getter,
+employee constructor, profile service, and separate-DLL data provider. The data
+provider concatenates a runtime identifier into SQL and creates an unused
+parameter collection; the exception audit uses a literal stored procedure.
+No private identifiers or source were copied into the fixture.
+
+Both mixed and compiled-only regressions retain exactly three database paths:
+dynamic Text scalar, literal StoredProcedure scalar, and independent Fill.
+The dynamic text origin joins to the actual compiled String.Concat call; it
+remains unresolved rather than being confused with the audit procedure. All 15
+LazyConstructorLoggingTests passed locally; the existing end-to-end
+DeepProjectlessNativeWorkflowTests packaging regression also passed (1/1).
+Tests compile net48 DLLs and scan,
+combine and query evidence without executing SQL or hosting ASP.NET. Full-suite
+and new-head Windows publication validation have not been rerun for this
+fixture-only extension. Exact private report identity matching remains pending.
+
 ## Final return-value and all-terminal validation (2026-10-01)
 
 Code head bf0093c8d70d0bf57b292dcb8ceb7718c682f697 passed the final full
