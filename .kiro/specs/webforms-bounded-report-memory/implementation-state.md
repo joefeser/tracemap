@@ -17,8 +17,15 @@ missing-handler failure preservation and unchanged original run. The complete
 deep test passed in 28 seconds. Added receipt-tamper, excessive query-limit and
 changed-proof admission refusals to the broader validation run. The SQL-route
 PowerShell regression, scoped comparison regression and private-path guard pass.
-Full .NET validation and exact-head Windows execution are pending; no final PR
-or private migration-completeness claim yet.
+Exact code head 221ca517 passed all 14 Windows corpus tests with zero skips in
+run 36808893833 (also passed the PR-triggered run 36808947245). Both authentic
+ASP.NET publish modes and the consolidated native test passed. Downloaded TRX
+counts and hash, plus the validation receipt bounded-input digest, were verified.
+PR #798 is open against dev and attached to the task; not merged. Full local
+.NET validation passed 2,996 tests, zero failures, one Windows-only skip in
+13m18s. That build preceded only the sanitized stage diagnostic and help-text
+placement edits; exact-code-head Windows validation covered those final edits.
+No private migration-completeness claim.
 
 Owner-returned saved comparison shows 13 historical symbol sequences/41 variants
 and 18 current/56: all 13 symbol sequences are shared, shared variant counts do
