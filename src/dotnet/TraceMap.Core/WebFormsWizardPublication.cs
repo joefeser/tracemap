@@ -14,6 +14,15 @@ public sealed record WebFormsWizardPublicationInfo(string Root, string[] Managed
 public static class WebFormsWizardPublication
 {
     public const string RuleId = "workflow.webforms.wizard-publication.v1";
+    public const int MaxNativeInputFiles = 256;
+    // Configuration, selected project, binding receipt and publication receipt.
+    public const int MaxCombinedAssemblies = MaxNativeInputFiles - 4;
+    private const int MaxAssemblySelections = 128;
+    private const int MaxPublicationFiles = 1024;
+    private const int MaxSourceFiles = 10_000;
+    // Primary assemblies share the bin inventory with maps; dependencies may be external.
+    // Source input may additionally name a solution outside the website root.
+    internal const int MaxRetainedInputs = MaxSourceFiles + 1 + MaxPublicationFiles + 2 + MaxAssemblySelections;
     private const long MaxFileBytes = 67_108_864;
     private const long MaxTotalBytes = 2_147_483_648;
 
@@ -34,8 +43,8 @@ public static class WebFormsWizardPublication
             ReadXml(precompiled, "precompiledApp");
             metadata.Add(precompiled);
         }
-        var files = Directory.EnumerateFiles(bin).Take(1025).Order(StringComparer.Ordinal).ToArray();
-        if (files.Length > 1024) throw Fail("PUBLICATION_INVENTORY_LIMIT");
+        var files = Directory.EnumerateFiles(bin).Take(MaxPublicationFiles + 1).Order(StringComparer.Ordinal).ToArray();
+        if (files.Length > MaxPublicationFiles) throw Fail("PUBLICATION_INVENTORY_LIMIT");
         var managed = new List<string>();
         var native = new List<string>();
         var maps = new List<string>();
@@ -62,7 +71,8 @@ public static class WebFormsWizardPublication
         var project = store.ReadProject(id);
         if (project.Step is not ("publication" or "dependencies")) throw Fail("PUBLICATION_STEP_REQUIRED");
         var inventory = Inspect(folder, project.ProjectMode == "projectless");
-        if (primary.Count is 0 or > 128 || dependencies.Count > 128) throw Fail("ASSEMBLY_SELECTION_LIMIT");
+        if (primary.Count is 0 or > MaxAssemblySelections || dependencies.Count > MaxAssemblySelections
+            || primary.Count + dependencies.Count > MaxCombinedAssemblies) throw Fail("ASSEMBLY_SELECTION_LIMIT");
         var selected = primary.Select(path => Resolve(inventory.Root, path)).ToArray();
         var deps = dependencies.Select(path => Resolve(inventory.Root, path)).ToArray();
         var unique = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -87,6 +97,7 @@ public static class WebFormsWizardPublication
 
         void Add(string role, string path)
         {
+            if (inputs.Count >= MaxRetainedInputs) throw Fail("INPUT_TOTAL_LIMIT");
             if (new FileInfo(path).Length > MaxTotalBytes - total) throw Fail("INPUT_TOTAL_LIMIT");
             var value = Snapshot(role, path);
             total += value.Bytes;
@@ -101,7 +112,7 @@ public static class WebFormsWizardPublication
         var inventory = Inspect(project.PublishedRoot, project.ProjectMode == "projectless");
         if (inventory.Root != project.PublishedRoot) throw Fail("PUBLICATION_ROOT_CHANGED");
         if (project.Inputs is not { Length: > 0 }) throw Fail("INPUT_SNAPSHOT_MISSING");
-        if (project.Inputs.Length > 11_000 || project.Inputs.Any(item => item is null || item.Bytes < 0 || item.Bytes > MaxFileBytes)
+        if (project.Inputs.Length > MaxRetainedInputs || project.Inputs.Any(item => item is null || item.Bytes < 0 || item.Bytes > MaxFileBytes)
             || project.Inputs.Sum(item => item.Bytes) > MaxTotalBytes) throw Fail("INPUT_TOTAL_LIMIT");
         foreach (var input in project.Inputs)
         {
@@ -134,7 +145,7 @@ public static class WebFormsWizardPublication
                 }
                 else if (Path.GetExtension(path).ToLowerInvariant() is ".cs" or ".vb" or ".config" or ".aspx" or ".ascx" or ".master"
                     or ".ashx" or ".asmx" or ".asax" or ".resx" or ".csproj" or ".vbproj") paths.Add(path);
-                if (paths.Count > 10_000) throw Fail("SOURCE_INVENTORY_LIMIT");
+                if (paths.Count > MaxSourceFiles) throw Fail("SOURCE_INVENTORY_LIMIT");
             }
         }
         if (File.Exists(project.InputPath)) paths.Add(project.InputPath);

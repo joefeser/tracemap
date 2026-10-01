@@ -5,6 +5,51 @@ namespace TraceMap.Tests;
 public sealed class WebFormsWizardPublicationTests
 {
     [Fact]
+    public void Combined_assembly_overflow_is_rejected_before_state_advance()
+    {
+        using var temp = new TempDirectory();
+        var (site, published) = Fixture(temp.Path);
+        using var store = WebFormsWizardStore.Open(Path.Combine(temp.Path, "config"), false);
+        store.SaveProject(Project(site));
+        Assert.Equal("WEBFORMS_WIZARD_ASSEMBLY_SELECTION_LIMIT", Assert.Throws<InvalidOperationException>(() =>
+            WebFormsWizardPublication.Configure(store, "site", published,
+                Enumerable.Range(0, 128).Select(i => $"Primary{i}.dll").ToArray(),
+                Enumerable.Range(0, 125).Select(i => $"Dependency{i}.dll").ToArray())).Message);
+        Assert.Equal("publication", store.ReadProject("site").Step);
+        Assert.Null(store.ReadProject("site").Inputs);
+    }
+
+    [Fact]
+    public void Retained_count_bound_covers_source_maps_metadata_and_external_dependencies()
+    {
+        using var temp = new TempDirectory();
+        var (site, published) = Fixture(temp.Path);
+        for (var i = 2; i < 10_000; i++) File.WriteAllText(Path.Combine(site, $"s{i}.cs"), "");
+        for (var i = 0; i < 1023; i++) File.WriteAllText(Path.Combine(published, "bin", $"p{i}.compiled"), "<preserve />");
+        var solution = Path.Combine(temp.Path, "Site.sln");
+        File.WriteAllText(solution, "fixture input");
+        var dependencies = Enumerable.Range(0, 128).Select(i => Path.Combine(temp.Path, $"d{i}.dll")).ToArray();
+        foreach (var dependency in dependencies) File.Copy(typeof(FactAttribute).Assembly.Location, dependency);
+        var inputs = Directory.GetFiles(site).Select(path => Snapshot("source-input", path))
+            .Append(Snapshot("source-input", solution))
+            .Concat(dependencies.Select(path => Snapshot("dependency-assembly", path)))
+            .Concat(Directory.GetFiles(Path.Combine(published, "bin"), "*.compiled").Select(path => Snapshot("publication-metadata", path)))
+            .Concat(new[] { Snapshot("publication-metadata", Path.Combine(published, "web.config")),
+                Snapshot("publication-metadata", Path.Combine(published, "PrecompiledApp.config")),
+                Snapshot("primary-assembly", Path.Combine(published, "bin", "Site.dll")) }).ToArray();
+        Assert.Equal(WebFormsWizardPublication.MaxRetainedInputs, inputs.Length);
+        var project = Project(site) with { InputPath = WebFormsWizardStore.Physical(solution),
+            PublishedRoot = WebFormsWizardStore.Physical(published), Inputs = inputs };
+        WebFormsWizardPublication.ValidateRetained(project);
+        var oversized = Enumerable.Repeat(inputs[0], WebFormsWizardPublication.MaxRetainedInputs + 1).ToArray();
+        Assert.Equal("WEBFORMS_WIZARD_INPUT_TOTAL_LIMIT", Assert.Throws<InvalidOperationException>(() =>
+            WebFormsWizardPublication.ValidateRetained(project with { Inputs = oversized })).Message);
+
+        static WebFormsWizardInputSnapshot Snapshot(string role, string path) => new(role, WebFormsWizardStore.Physical(path),
+            new FileInfo(path).Length, Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(path))));
+    }
+
+    [Fact]
     public void Selects_metadata_without_loading_and_retains_external_dependency()
     {
         using var temp = new TempDirectory();
