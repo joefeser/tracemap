@@ -58,6 +58,24 @@ public sealed class WebFormsWizardCommandTests
     }
 
     [Fact]
+    public async Task Publication_selection_is_retained_across_dependency_pause()
+    {
+        using var temp = new TempDirectory();
+        var (site, published) = WebFormsWizardPublicationTests.Fixture(temp.Path);
+        var root = Path.Combine(temp.Path, "config");
+        var first = await Run(["wizard", "--root", root], $"site\n{site}\nall\nready\n{published}\n1\nlater\n");
+        Assert.Equal(2, first.Code);
+        Assert.Empty(first.Error);
+        var next = await Run(["wizard", "--root", root, "--continue"], "none\n");
+        Assert.Equal(2, next.Code);
+        Assert.Empty(next.Error);
+        Assert.DoesNotContain("Where is the compiled", next.Output);
+        Assert.Contains("saved step 'configuration'", next.Output);
+        using var store = WebFormsWizardStore.Open(root, true);
+        Assert.Single(store.ReadProject("site").PrimaryAssemblies);
+    }
+
+    [Fact]
     public async Task Terminal_build_preview_precedes_explicit_consent()
     {
         using var temp = new TempDirectory();
