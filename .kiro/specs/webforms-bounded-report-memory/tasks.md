@@ -127,3 +127,4 @@
   - [x] Resolve producer returns in the reporting layer with exact joins, argument substitution, bounded cycles/work, and negative legacy/ambiguous/dispatch cases.
   - [x] Complete full-solution and exact-head Windows validation: code head bf0093c8 passed 3016 local tests with one Windows-only skip; Windows push run 36817615894 passed 27 with zero skips. Private saved-result acceptance remains separate.
 - [x] Remove the migration package's implicit Fill-only filter and prove native packaging retains both Fill and ExecuteScalar from the same synthetic handler; keep explicit historical Fill comparison available.
+- [x] Reproduce property-to-constructor-to-profile dynamic SQL separately from literal audit logging in the local projectless VB site; assert actual compiled concatenation origin and three terminal routes in mixed and compiled-only modes.

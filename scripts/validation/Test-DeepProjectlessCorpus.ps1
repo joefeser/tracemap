@@ -51,7 +51,7 @@ try {
     $beforeInputs = @(SourceRoster)
     $generatorSha = (Get-FileHash -LiteralPath $PSCommandPath -Algorithm SHA256).Hash.ToLowerInvariant()
     $project = Join-Path $TraceMapRoot 'src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj'
-    & dotnet test $project --filter 'FullyQualifiedName~Deep_projectless' --verbosity minimal `
+    & dotnet test $project --filter 'FullyQualifiedName~Deep_projectless|FullyQualifiedName~Property_profile_dynamic_lookup' --verbosity minimal `
         --logger 'trx;LogFileName=deep-corpus.trx' --results-directory (Join-Path $output 'tests')
     if ($LASTEXITCODE -ne 0) { throw 'DEEP_CORPUS_TEST_FAILED;outputs-preserved' }
     $trx = Join-Path $output 'tests/deep-corpus.trx'
@@ -72,7 +72,10 @@ try {
     $returnPassed = @($rows | Where-Object {
         $_.testName -like '*Deep_projectless_return_value_projection*' -and $_.outcome -ceq 'Passed'
     }).Count
-    if ($passed -lt 25 -or $nativePassed -ne 1 -or $propertyPassed -ne 2 -or $returnPassed -ne 11 -or @($rows | Where-Object { $_.outcome -notin @('Passed', 'NotExecuted') }).Count -ne 0) {
+    $profilePassed = @($rows | Where-Object {
+        $_.testName -like '*Property_profile_dynamic_lookup*' -and $_.outcome -ceq 'Passed'
+    }).Count
+    if ($passed -lt 27 -or $nativePassed -ne 1 -or $propertyPassed -ne 2 -or $returnPassed -ne 11 -or $profilePassed -ne 2 -or @($rows | Where-Object { $_.outcome -notin @('Passed', 'NotExecuted') }).Count -ne 0) {
         throw 'DEEP_CORPUS_TEST_RECEIPT_NOT_ADMITTED'
     }
     if ($RequireWindowsPublish -and $windowsPassed -ne 2) { throw 'DEEP_CORPUS_WINDOWS_ACCEPTANCE_MISSING' }
@@ -100,6 +103,7 @@ try {
         passedTests = $passed
         skippedTests = $skipped
         windowsPublishTestsPassed = $windowsPassed
+        profileDynamicLookupTestsPassed = $profilePassed
         windowsPublishAcceptance = if ($windowsPassed -eq 2) { 'tested' } else { 'not-run' }
         limitations = @('Synthetic static corpus only; no database methods executed.',
             'Logical graph payload counters and artifact caps are not physical drive-read measurements.',
@@ -107,7 +111,7 @@ try {
     }
     [IO.File]::WriteAllText((Join-Path $output 'validation.local.json'),
         (($receipt | ConvertTo-Json -Depth 6) + "`n"), [Text.UTF8Encoding]::new($false))
-    Write-Output "deepCorpus.passed=$passed;skipped=$skipped;windowsPublishPassed=$windowsPassed"
+    Write-Output "deepCorpus.passed=$passed;skipped=$skipped;windowsPublishPassed=$windowsPassed;profileDynamicLookupPassed=$profilePassed"
     Write-Output "deepCorpus.output=$output"
     Write-Output 'deepCorpus=synthetic-static-validation;no-sql-executed;not-private-acceptance'
 } finally {

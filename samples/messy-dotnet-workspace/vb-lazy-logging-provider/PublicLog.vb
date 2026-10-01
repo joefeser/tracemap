@@ -2,6 +2,28 @@ Imports System.Data
 Imports System.Data.SqlClient
 
 Namespace PublicLazy.Framework
+    Public Class ProfileData
+        Public Function GetEmail(user As String) As String
+            ' Deliberately unused: creating parameters does not bind them to SQL.
+            Dim parameters As New System.Collections.ArrayList()
+            parameters.Add(New SqlParameter("@user", user))
+            Return CStr(ExecuteSql("SELECT Email FROM public_people WHERE UserId = '" & user & "'"))
+        End Function
+
+        Public Function ExecuteSql(text As String) As Object
+            Dim command As New SqlCommand(text)
+            command.CommandType = CommandType.Text
+            Return command.ExecuteScalar()
+        End Function
+
+        Public Sub WriteAudit(message As String)
+            Dim command As New SqlCommand("public.synthetic_audit")
+            command.CommandType = CommandType.StoredProcedure
+            command.Parameters.AddWithValue("@message", message)
+            command.ExecuteScalar()
+        End Sub
+    End Class
+
     ' Synthetic analysis-only provider, compiled into a separate assembly.
     Public Class PublicLog
         Public Sub InsertLog(message As String)

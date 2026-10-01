@@ -11,6 +11,60 @@ public sealed class LazyConstructorLoggingTests
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
+    public async Task Property_profile_dynamic_lookup_is_distinct_from_literal_audit(bool compiledOnly)
+    {
+        var repo = FindRepo();
+        var configuration = new DirectoryInfo(AppContext.BaseDirectory).Parent!.Name;
+        var bin = Path.Combine(repo, "samples", "fixture-build", "lazy-constructor", "bin", configuration, "net48");
+        using var temp = new TempDirectory();
+        var scan = ScanEngine.Scan(new ScanOptions(Path.Combine(repo, "samples", "messy-dotnet-workspace", "vb-lazy-constructor"),
+            Path.Combine(temp.Path, "scan"), CompiledInputPaths: [Path.Combine(bin, "PublicLazy.Website.dll"),
+                Path.Combine(bin, "PublicLazy.Framework.dll")], IlBodyEvidence: true));
+        var entry = Assert.Single(scan.Facts, fact => fact.FactType == FactTypes.ManagedMethodDeclared
+            && fact.Properties.GetValueOrDefault("metadataName") == "Profile_Click");
+        var index = Path.Combine(temp.Path, "index.sqlite");
+        var combined = Path.Combine(temp.Path, "combined.sqlite");
+        SqliteIndexWriter.Write(index, scan.Manifest, scan.Facts);
+        var composition = await CombinedIndexBuilder.CombineAsync(new CombineOptions([index], combined, ["synthetic-profile"]));
+        var source = Assert.Single(composition.Sources);
+        var report = await CombinedDependencyPathReporter.BuildSelectedSymbolsAsync(
+            new CombinedDependencyPathOptions(combined, temp.Path, ToSurface: "database-api", MaxDepth: 20, MaxPaths: 256)
+            { CompiledOnly = compiledOnly, ExactFromSymbol = true, MaxTraversalWork = 100_000 },
+            [new(source.SourceIndexId, source.ScanId, source.CommitSha, entry.TargetSymbol!)], combinedIndex: true);
+        bool Method(CombinedPathNode node, string name) => node.SymbolId?.Contains($"|method:{name.Length}:{name}|", StringComparison.Ordinal) == true;
+        Assert.Equal(3, report.Paths.Count);
+        var lookup = Assert.Single(report.Paths, path => path.Nodes.Any(node => Method(node, "GetEmail")));
+        Assert.Equal("SqlCommand.ExecuteScalar", lookup.Nodes.Last().SurfaceName);
+        var route = lookup.Nodes.ToList();
+        var getter = route.FindIndex(node => Method(node, "get_EmployeeInfo"));
+        var constructor = route.FindIndex(node => node.SymbolId?.Contains("names:15:ProfileEmployee|", StringComparison.Ordinal) == true
+            && node.SymbolId.Contains("|constructor:5:.ctor|", StringComparison.Ordinal));
+        Assert.True(getter >= 0 && constructor > getter);
+        Assert.True(route.FindIndex(node => Method(node, "GetProfile")) > constructor);
+        Assert.True(route.FindIndex(node => Method(node, "GetEmail")) > route.FindIndex(node => Method(node, "GetProfile")));
+        var binding = lookup.Nodes.Last().CommandBinding!;
+        Assert.Equal("1", binding.CommandTypeFromPath!.Origin.Identity);
+        var text = binding.CommandTextFromPath!;
+        Assert.Equal("unresolved-operand", text.State);
+        Assert.Equal("call-result", text.Origin.Kind);
+        var producerBody = Assert.Single(scan.Facts, fact => $"{source.SourceIndexId}:{fact.FactId}" == text.OriginBodyFactId);
+        var producer = Assert.Single(scan.Facts, fact => fact.FactType == FactTypes.ManagedIlCallObserved
+            && fact.Properties.GetValueOrDefault("ilBodyFactId") == producerBody.FactId
+            && fact.Properties.GetValueOrDefault("ilOffset") == text.Origin.Identity);
+        Assert.Contains("Concat", producer.Properties["targetIdentity"], StringComparison.Ordinal);
+        Assert.Contains("IlCommandOperandValueUnresolved", text.Gaps);
+        var audit = Assert.Single(report.Paths, path => path.Nodes.Any(node => Method(node, "WriteAudit")));
+        Assert.Equal("4", audit.Nodes.Last().CommandBinding!.CommandTypeFromPath!.Origin.Identity);
+        Assert.Equal("method-local-constant", audit.Nodes.Last().CommandBinding!.CommandTextFromPath!.State);
+        Assert.DoesNotContain(lookup.Nodes, node => Method(node, "WriteAudit"));
+        Assert.Single(report.Paths, path => path.Nodes.Last().SurfaceName == "DbDataAdapter.Fill");
+        Assert.DoesNotContain(report.Gaps, gap => gap.GapKind == "TruncatedByLimit");
+        Assert.DoesNotContain("SELECT Email", JsonSerializer.Serialize(report), StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
     public async Task Deep_projectless_property_constructor_logging_retains_routes_and_return_value_gap(bool compiledOnly)
     {
         var repo = FindRepo();
