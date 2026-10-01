@@ -1,5 +1,24 @@
 # Implementation state
 
+## Isolated PR #798 recovery-cap correction (2026-10-01)
+
+Based on reviewed head 4f231dc3, branch codex/pr798-recovery-cap. The current-head
+Codex finding was a same-cap retry: new default plans already used 20M nodes,
+but recovery also selected 20M. Recovery now chooses max(20M, twice the failed
+plan limit), capped at 50M; absent historical settings still mean 2M. Invalid
+limits and an exhausted 50M plan fail before destination creation. The selected
+cap is used consistently in progress, index construction and recovery receipt.
+This increases capacity, not a guarantee that recovery fits or completes.
+
+Validation: 13 focused Report_recovery cases pass, including budget boundaries,
+actual small-cap recovery/query/tamper checks and an injected typed 50M failure
+that confirms no destination and byte-identical original files. TRX retained
+under /tmp/tracemap-pr798-cap-tests. No 40M/50M-sized corpus was materialized;
+full suite and Windows replay were not run for this isolated local correction.
+The wizard checkout and PR branch were not changed; integration/push remains
+with the parent workflow. Three older unresolved Qodo threads were not in this
+single-finding repair scope.
+
 ## Reproducible CLI operator workflow (2026-10-01)
 
 New owner follow-up after the bounded investigation: replace manual screenshot
