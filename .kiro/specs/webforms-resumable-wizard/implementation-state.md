@@ -306,3 +306,47 @@ validation; resume names the byte limit explicitly. Regression covers a valid
 Unicode page and an oversized multibyte comment below the character ceiling.
 All 81 wizard tests passed without warnings in /tmp/tracemap-wizard-selection-bounds.
 This and the BOM correction remain local for the next consolidated push.
+
+## Settled review batch, 2026-10-01
+
+ACK session 29473 completed with PATCH_AUTHORIZED on 573d7ab0: six threads,
+five Qodo and one current-head Codex. No duplicate reviewer request was posted.
+The findings are mixed, not one shared defect. The repair audit covers selected
+build scope/input identity, bounded process output, source startup inventory,
+duplicate dependency byte identity, and persisted completion versus output I/O.
+
+- Include Global.asax in the bounded source roster; edit/add/delete regressions.
+- Build the selected website project rather than the entire solution, retaining
+  and rechecking both solution and selected-project hashes; project-defined
+  references/tasks may still build dependencies. Use minimal build verbosity.
+- Drain/hash complete decoded output streams with bounded 65,536-character tails;
+  verbose output no longer kills the build. Real long-output success/failure
+  commands pin exit-code handling. Hash encoding is UTF-16LE code units.
+- Deduplicate byte-identical dependencies for native admission while retaining
+  every original selection for source-path/hash revalidation.
+- Update the local completed cursor only after its successful persisted save,
+  so later output failures cannot overwrite it with failed.
+- The page-map finding is non-actionable for the wizard path: its attested start
+  calls native preparation, writes publication receipts and uses prepared config
+  before scanning. Real fresh execution now asserts bound publish provenance,
+  one consumed page and a publish-receipt input. No admission bypass was added.
+
+Initial repair runs exposed test-fixture errors (missing solution header, config
+overlap, macOS canonical path comparison), corrected without weakening guards.
+The first full replay passed 122 tests with one platform skip, then its wrapper
+correctly rejected a renamed acceptance-test identity. The original named Fact
+is restored and output-failure coverage is a separate Fact sharing the helper.
+The complete wrapper replay is being rerun; final-head CI/review remain pending.
+
+Consolidated replay completed successfully: 122 passed, one Windows-only skip,
+zero failures; all three PowerShell chain/SQL/cap report checks passed. Receipt:
+/tmp/tracemap-wizard-consolidated-final-20261001/validation.local.json.
+Private-path guard and diff whitespace checks passed; no compiler warnings were
+emitted. This is local public synthetic evidence, not Windows final-head proof.
+
+Acceptance audit: contracts 1-7 have shared-service and terminal/native tests;
+contract 8 has the fresh/restart/repair/two-project and real native replay plus
+bounded-build regressions; contract 9 has workflow/rule/backlog documentation and
+PR799 against dev after dependency merge. Remaining delivery gates are the full
+suite, Windows final-head corpus and review dispositions/readiness on the repaired
+head. Do not mark those gates complete using previous-head CI.

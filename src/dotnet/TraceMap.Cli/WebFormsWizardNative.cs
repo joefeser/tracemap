@@ -31,9 +31,14 @@ public static class WebFormsWizardNative
         var primary = new List<string>();
         var dependencies = new List<string>();
         var maps = new List<string>();
+        var assemblyHashes = retainedInputs.Where(item => item.Role == "primary-assembly")
+            .Select(item => item.Sha256).ToHashSet(StringComparer.Ordinal);
         foreach (var source in retainedInputs.Where(item => item.Role is "primary-assembly" or "dependency-assembly" or "publication-metadata"))
         {
             cancellationToken.ThrowIfCancellationRequested();
+            // Original selections remain in project.Inputs for resume validation. Native preparation
+            // admits each binary hash once, so identical dependency copies share that one input.
+            if (source.Role == "dependency-assembly" && !assemblyHashes.Add(source.Sha256)) continue;
             var relative = source.Role == "dependency-assembly" ? "dependencies/" + source.Sha256 + "/" + Path.GetFileName(source.Path)
                 : Relative(project.PublishedRoot!, source.Path);
             var destination = WebFormsReviewPreflightCommand.Child(stagedRoot, relative);

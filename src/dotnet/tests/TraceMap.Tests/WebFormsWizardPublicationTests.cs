@@ -29,10 +29,14 @@ public sealed class WebFormsWizardPublicationTests
     [InlineData("publication-config")]
     [InlineData("new-form")]
     [InlineData("new-codebehind")]
+    [InlineData("startup-edit")]
+    [InlineData("startup-added")]
+    [InlineData("startup-deleted")]
     public void Resume_detects_changed_retained_inputs(string kind)
     {
         using var temp = new TempDirectory();
         var (site, published) = Fixture(temp.Path);
+        if (kind is "startup-edit" or "startup-deleted") File.WriteAllText(Path.Combine(site, "Global.asax"), "startup");
         using var store = WebFormsWizardStore.Open(Path.Combine(temp.Path, "config"), false);
         store.SaveProject(Project(site));
         WebFormsWizardPublication.Configure(store, "site", published, ["bin/Site.dll"], []);
@@ -44,8 +48,12 @@ public sealed class WebFormsWizardPublicationTests
             case "publication-config": File.AppendAllText(Path.Combine(published, "web.config"), " "); break;
             case "new-form": File.WriteAllText(Path.Combine(site, "New.aspx"), "new page"); break;
             case "new-codebehind": File.WriteAllText(Path.Combine(site, "Default.aspx.cs"), "class PageCode {}"); break;
+            case "startup-edit": File.AppendAllText(Path.Combine(site, "Global.asax"), "changed"); break;
+            case "startup-added": File.WriteAllText(Path.Combine(site, "Global.asax"), "startup"); break;
+            case "startup-deleted": File.Delete(Path.Combine(site, "Global.asax")); break;
         }
-        Assert.Throws<InvalidOperationException>(() => WebFormsWizardPublication.ValidateRetained(saved));
+        if (kind == "startup-deleted") Assert.Throws<FileNotFoundException>(() => WebFormsWizardPublication.ValidateRetained(saved));
+        else Assert.Throws<InvalidOperationException>(() => WebFormsWizardPublication.ValidateRetained(saved));
     }
 
     [Fact]

@@ -46,6 +46,8 @@ rules:
       - A successful exit is not authenticated compiler provenance, complete dependency closure or source-to-binary binding.
       - Builds may execute project-defined tasks and modify customer files only after explicit confirmation; the website is never launched.
       - Manual projectless publication produces no invented build observation.
+      - Solution input builds target the explicitly selected website project; project-defined references and tasks may still execute. Both declared input and selected project hashes are rechecked.
+      - Build output retains bounded tails and hashes full decoded UTF-16LE streams, not original output bytes; truncation of the retained tail does not terminate the build.
   - id: workflow.webforms.wizard-publication.v1
     name: Static wizard publication inventory
     description: Checks publication layout and managed PE metadata and retains bounded selected publication and website source input hashes.
@@ -65,6 +67,7 @@ rules:
     limitations:
       - Preparation provenance is not reused or invented; source attestation is a separate explicit operator declaration.
       - External dependency copies retain byte identity but do not establish source or runtime identity.
+      - Byte-identical dependencies share a single staged native input, including dependencies identical to a selected primary; all original selections remain hash-revalidated.
       - Fresh collection selects one website project; cross-project discovery and automatic cross-service tracing are deferred.
   - id: workflow.webforms.retained-proof-import.v1
     name: Explicit verified legacy publish proof import

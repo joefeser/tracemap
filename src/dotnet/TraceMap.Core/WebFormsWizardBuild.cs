@@ -4,10 +4,13 @@ using System.Text;
 namespace TraceMap.Core;
 
 public sealed record WebFormsWizardBuildPlan(string Tool, string ToolSha256, string WorkingDirectory,
-    string InputPath, string InputSha256, string[] VersionArguments, string[] BuildArguments);
-public sealed record WebFormsWizardProcessResult(int ExitCode, string StandardOutput, string StandardError);
+    string InputPath, string InputSha256, string[] VersionArguments, string[] BuildArguments,
+    string? SelectedProjectPath = null, string? SelectedProjectSha256 = null);
+public sealed record WebFormsWizardProcessResult(int ExitCode, string StandardOutput, string StandardError,
+    string? StandardOutputSha256 = null, string? StandardErrorSha256 = null);
 public sealed record WebFormsWizardBuildEvidence(string RuleId, string Tool, string ToolSha256,
-    string InputPath, string InputSha256, string VersionSha256, string OutputSha256, int ExitCode);
+    string InputPath, string InputSha256, string VersionSha256, string OutputSha256, int ExitCode,
+    string? SelectedProjectPath = null, string? SelectedProjectSha256 = null);
 public delegate Task<WebFormsWizardProcessResult> WebFormsWizardProcessRunner(string tool, string directory,
     IReadOnlyList<string> arguments, CancellationToken cancellationToken);
 
@@ -27,9 +30,11 @@ public static class WebFormsWizardBuild
         if (!name.Equals(target.BuildTool == "dotnet" ? "dotnet" : "MSBuild", StringComparison.OrdinalIgnoreCase)) throw Fail("TOOLCHAIN_MISMATCH");
         var toolHash = HashFile(tool);
         var input = target.InputPath;
-        return new(tool, toolHash, Path.GetDirectoryName(input)!, input, HashFile(input),
+        var selected = target.SelectedProject ?? throw Fail("BUILD_PROJECT_REQUIRED");
+        return new(tool, toolHash, Path.GetDirectoryName(selected)!, input, HashFile(input),
             target.BuildTool == "dotnet" ? ["--version"] : ["-version", "-nologo"],
-            target.BuildTool == "dotnet" ? ["build", input, "--nologo"] : [input, "/nologo", "/t:Build"]);
+            target.BuildTool == "dotnet" ? ["build", selected, "--nologo", "-v:minimal"] : [selected, "/nologo", "/t:Build", "/verbosity:minimal"],
+            selected, HashFile(selected));
     }
 
     public static async Task<bool> ExecuteAsync(WebFormsWizardStore store, string id, WebFormsWizardBuildPlan preview,
@@ -42,6 +47,7 @@ public static class WebFormsWizardBuild
         var plan = Plan(project, preview.Tool);
         if (plan.ToolSha256 != preview.ToolSha256 || plan.InputSha256 != preview.InputSha256 ||
             plan.InputPath != preview.InputPath || plan.WorkingDirectory != preview.WorkingDirectory ||
+            plan.SelectedProjectPath != preview.SelectedProjectPath || plan.SelectedProjectSha256 != preview.SelectedProjectSha256 ||
             !plan.VersionArguments.SequenceEqual(preview.VersionArguments) || !plan.BuildArguments.SequenceEqual(preview.BuildArguments)) throw Fail("BUILD_PLAN_CHANGED");
         cancellationToken.ThrowIfCancellationRequested();
         var version = await runner(plan.Tool, plan.WorkingDirectory, plan.VersionArguments, cancellationToken);
@@ -56,7 +62,8 @@ public static class WebFormsWizardBuild
         Recheck(plan);
         store.SaveProject(project with { Step = "publication", Build = new(RuleId, plan.Tool, plan.ToolSha256,
             plan.InputPath, plan.InputSha256, TextHash(version.StandardOutput, version.StandardError),
-            TextHash(result.StandardOutput, result.StandardError), result.ExitCode) });
+            TextHash(result.StandardOutputSha256 ?? TextHash(result.StandardOutput, ""),
+                result.StandardErrorSha256 ?? TextHash(result.StandardError, "")), result.ExitCode, plan.SelectedProjectPath, plan.SelectedProjectSha256) });
         return true;
     }
 
@@ -66,11 +73,14 @@ public static class WebFormsWizardBuild
         if (build.RuleId != RuleId || build.ExitCode != 0 || !Path.IsPathFullyQualified(build.InputPath) ||
             !Path.IsPathFullyQualified(build.Tool) || build.InputSha256 != HashFile(build.InputPath) ||
             build.ToolSha256 != HashFile(build.Tool)) throw Fail("BUILD_EVIDENCE_CHANGED");
+        if (build.SelectedProjectPath is { } selected && (!Path.IsPathFullyQualified(selected) ||
+            build.SelectedProjectSha256 != HashFile(selected))) throw Fail("BUILD_EVIDENCE_CHANGED");
     }
 
     private static void Recheck(WebFormsWizardBuildPlan plan)
     {
         if (HashFile(plan.Tool) != plan.ToolSha256 || HashFile(plan.InputPath) != plan.InputSha256) throw Fail("BUILD_INPUT_CHANGED");
+        if (plan.SelectedProjectPath is { } selected && HashFile(selected) != plan.SelectedProjectSha256) throw Fail("BUILD_INPUT_CHANGED");
     }
     private static void CheckResult(WebFormsWizardProcessResult result)
     {

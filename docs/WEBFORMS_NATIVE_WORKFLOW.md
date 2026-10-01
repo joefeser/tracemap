@@ -42,6 +42,9 @@ code 0 requires verified retained reports.
 
 Project builds require an absolute trusted tool path. The wizard displays the
 version/build arguments and working directory before requiring the word `build`.
+For a solution input, the build targets only the selected website project, not
+all solution projects; project-defined references/tasks may still build dependencies.
+Both the solution input and selected project are hashed and rechecked.
 MSBuild tasks may execute code, restore dependencies and modify bin/obj/source
 files; declining executes nothing. Windows legacy targets require Windows
 MSBuild. Projectless ASP.NET compilation remains an external Windows step:
@@ -53,6 +56,8 @@ Projectless publication also requires PrecompiledApp.config. Select primary
 managed assemblies by displayed numbers (or explicitly `all`), then supply extra
 dependency DLL paths separated by semicolons, or `none`. Dependencies can be
 outside publication; verified copies are staged under the configuration folder.
+Byte-identical dependency selections share one native binary input; every original
+selected path is still revalidated on resume.
 Customer source/publication files are not overwritten. Native assembly admission
 and source-binding checks still run later; metadata inspection alone is not proof.
 
@@ -103,8 +108,10 @@ Limits include 10,000 relevant source files, 100,000 source inventory entries,
 64 MiB per retained input, 2 GiB selected input hashes, and 1 MiB per wizard
 configuration. Form-selection templates and files are also bounded to 1 MiB of
 UTF-8 bytes; a BOM-only or whitespace-only file is treated as blank. Builds time
-out after 30 minutes and bound each output stream to
-64 KiB. Hashes detect changes, not authorship; filesystem races are not build
+out after 30 minutes. Each decoded output stream is drained and hashed in full
+(SHA-256 over UTF-16LE code units), retaining only its last 65,536 characters;
+verbose output does not abort a build, and the exit code still controls success.
+Hashes detect changes, not authorship; filesystem races are not build
 authenticity proof. Configuration replacement is atomic per file, not a
 multi-file transaction; interrupted state updates fail closed and require repair.
 All-mode, successful builds and completed reports do not establish full coverage.

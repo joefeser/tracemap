@@ -57,8 +57,10 @@ public sealed class WebFormsWizardNativeTests
         Assert.Equal(nextPath, await WebFormsWizardNative.ValidateAsync(store, "site"));
     }
 
-    [Fact]
-    public async Task External_dependency_is_staged_inside_native_publication_root()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task External_dependency_is_staged_inside_native_publication_root(bool identicalCopies)
     {
         using var temp = new TempDirectory();
         var (site, published) = WebFormsWizardPublicationTests.Fixture(temp.Path);
@@ -67,14 +69,26 @@ public sealed class WebFormsWizardNativeTests
         Prepare(store, site, published);
         store.SaveProject(store.ReadProject("site") with { Step = "dependencies" });
         var external = typeof(TraceMapCommand).Assembly.Location;
-        WebFormsWizardPublication.Configure(store, "site", published, ["bin/Site.dll"], [external]);
+        var copy = Path.Combine(Directory.CreateDirectory(Path.Combine(temp.Path, "other")).FullName, Path.GetFileName(external));
+        File.Copy(external, copy);
+        WebFormsWizardPublication.Configure(store, "site", published, ["bin/Site.dll"], identicalCopies ? [external, copy] : [external]);
         store.SaveProject(store.ReadProject("site") with { Step = "configuration" });
         var path = await WebFormsWizardNative.ConfigureAsync(store, "site");
         var config = JsonSerializer.Deserialize<WebFormsReviewConfig>(File.ReadAllText(path), new JsonSerializerOptions(JsonSerializerDefaults.Web))!;
-        var dependency = Assert.Single(config.DependencyAssemblies);
-        Assert.StartsWith("dependencies/", dependency);
-        Assert.Equal(Hash(external), Hash(Path.Combine(config.PublishedRoot, dependency)));
+        Assert.Single(config.DependencyAssemblies);
+        Assert.Equal(config.DependencyAssemblies.Length, config.DependencyAssemblies.Distinct().Count());
+        foreach (var dependency in config.DependencyAssemblies)
+        {
+            Assert.StartsWith("dependencies/", dependency);
+            Assert.Equal(Hash(external), Hash(Path.Combine(config.PublishedRoot, dependency)));
+        }
         Assert.Equal(path, await WebFormsWizardNative.ValidateAsync(store, "site"));
+        if (identicalCopies)
+        {
+            File.AppendAllText(copy, "changed");
+            Assert.Equal("WEBFORMS_WIZARD_INPUT_CHANGED", (await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                WebFormsWizardNative.ValidateAsync(store, "site"))).Message);
+        }
     }
 
     [Fact]
