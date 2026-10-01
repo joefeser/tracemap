@@ -44,6 +44,7 @@ Public Class SyntheticEmployee
                 logger.InsertLog("authorization denied")
             End If
             logger.InsertLiteral()
+            logger.InsertReturnedLiteral()
         Catch failure As Exception
             logger.InsertLog(failure.Message)
             Throw
