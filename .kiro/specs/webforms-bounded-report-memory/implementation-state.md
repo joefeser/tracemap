@@ -1,5 +1,18 @@
 # Implementation state
 
+## Reboot-safe cap comparison shortcut (2026-10-01)
+
+`scripts/wcap.ps1` defaults to the user's verify-8 folder, uses the pinned
+status reader to locate the original report, and reads the selected handler
+from the small saved requery receipt. It rejects Fill-only scope and delegates
+to the existing comparison without scanning or traversing. No shell variables
+from a previous session are required. Run `./scripts/wcap.ps1`; use
+`-VerificationRoot` for another folder and `-NoOpen` for automated checks.
+The receipt is selector data, not independently admitted evidence; output
+retains wcompare's unadmitted diagnostic limitations and provenance.
+Shortcut and comparison PowerShell tests passed. This is script-only; the
+previous full .NET and Windows validation remains the code validation baseline.
+
 ## Property-driven dynamic lookup regression (2026-10-01)
 
 Windows push run 36826541709 succeeded at exact head
