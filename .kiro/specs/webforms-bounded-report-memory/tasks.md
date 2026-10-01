@@ -122,8 +122,8 @@
 - [x] Add an independently traversed compiled-IL baseline with at most one evidenced root attachment, excluding downstream source bridges and binding scope into receipts.
 - [x] Prevent unrestricted depth-recovery witnesses from bypassing compiled-only scope; pin source shortcut exclusion, reachable diagnostics, depth gaps and mixed-query recovery with regression tests.
 - [x] Isolate property/constructor logging return-value loss with an actual compiled constant-return helper and an identical direct-literal control, separately from runtime string composition.
-- [ ] Retain bounded dual-decoder return operands and resolve exact producer-call returns, preserving legacy missing evidence, runtime composition, dispatch, cycle and work-limit gaps.
+- [x] Retain bounded dual-decoder return operands and resolve exact producer-call returns, preserving legacy missing evidence, runtime composition, dispatch, cycle and work-limit gaps.
   - [x] Capture converged local return operands, require reader agreement, and emit bounded rule-backed return summaries with provenance and unavailable/limit states.
   - [x] Resolve producer returns in the reporting layer with exact joins, argument substitution, bounded cycles/work, and negative legacy/ambiguous/dispatch cases.
-  - [ ] Complete full-solution and exact-head Windows validation before publishing the return-value fix; private saved-result acceptance remains separate.
+  - [x] Complete full-solution and exact-head Windows validation: code head bf0093c8 passed 3016 local tests with one Windows-only skip; Windows push run 36817615894 passed 27 with zero skips. Private saved-result acceptance remains separate.
 - [x] Remove the migration package's implicit Fill-only filter and prove native packaging retains both Fill and ExecuteScalar from the same synthetic handler; keep explicit historical Fill comparison available.
