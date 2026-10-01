@@ -162,10 +162,10 @@ rules:
 
   - id: dotnet.compiled.il-values.v1
     status: active
-    name: Bounded IL call operand origins
-    description: Records method-local receiver and argument origins at independently decoded call sites, joined to the exact admitted IL body and call facts. Both raw SRM and Cecil streams must yield the same bounded observations.
+    name: Bounded IL call and return operand origins
+    description: Records method-local receiver and argument origins at independently decoded call sites and bounded return-site operands, joined to exact admitted IL evidence. Both raw SRM and Cecil streams must yield the same bounded observations.
     evidenceTier: Tier3SyntaxOrTextual
-    emits: [ManagedIlCallValuesObserved, AnalysisGap]
+    emits: [ManagedIlCallValuesObserved, ManagedIlReturnValuesObserved, AnalysisGap]
     limitations:
       - Bounded method-local origin candidates only, not command binding or SQL evidence. Argument slots are not concrete values and allocation or call-site origins are not runtime objects.
       - Literal strings retain only length and SHA-256 of exact UTF-16 code units, never raw text. No SQL statement or stored procedure is inferred from a method name or string hash.
@@ -173,6 +173,7 @@ rules:
       - Normal-flow analysis admits at most 20000 instructions, 256 tracked slots (including exposed-slot markers), 256 exposure origins per instruction, 1024 declared exception entries and 200000 work units per body. Handler seeding, origin retention and successor cloning/merging are work-charged. Actual fixed-point work is charged to a separate aggregate value-derivation budget per reader equal to policy MaxTotalWorkUnits, not the raw body/call admission budget. Unsupported operations, byref returns, stack failures and reader or work-limit disagreement withhold origins explicitly.
       - Field/array/indirect operations, checked arithmetic, boxing and address-taking retain bounded stack shape without proving heap values. Stores, indirect reads/writes and address calls expose affected origins; exposed slots remain exposure-capable on later writes. Internal address identities are bounded to 1024 characters and 64 nested steps, with unavailable addresses invalidating configuration. Known byref call shapes preserve non-byref scalar operands, but byref arguments and addresses are exported as unknown. Consumers must invalidate command state across unknown effects; heap contents, field values, interprocedural effects, virtual dispatch and execution are not established by this rule.
       - Body and call evidence can remain admitted while value coverage is partial. Value facts carry the exact IL generator and bounded-input hashes and cannot upgrade source or runtime coverage.
+      - Return summaries retain at most 256 reached return sites per body. Missing flow, reader disagreement and limits emit unavailable summaries, never empty success. A single valid stack operand is a candidate only; consumers must verify non-byref return signatures, exact callee identity and all relevant return sites. Void or invalid stacks have unavailable operands. Internal addresses are projected to unknown. Legacy facts without return summaries do not establish return values.
 
   - id: dotnet.compiled.il-command-binding.v1
     status: active

@@ -80,11 +80,13 @@ internal static class IlValueAddresses
 }
 internal sealed record IlCallValueObservation(long Offset, int Region, string State,
     IlValueOrigin Receiver, IReadOnlyList<IlValueOrigin> Arguments, IlValueOrigin Result);
+internal sealed record IlReturnValueObservation(long Offset, string State, IlValueOrigin Origin);
 internal sealed record IlValueExceptionEntry(long Offset, int StackCount);
 internal sealed record IlValueControlNode(long Offset, IReadOnlyList<long> Successors, bool InvalidatesConfiguration,
     int ExceptionEntryStackCount = -1, IReadOnlyList<IlValueOrigin>? ExposedOrigins = null);
 internal sealed record IlValueFlowObservation(IReadOnlyList<IlCallValueObservation> Calls, IReadOnlyList<string> Gaps,
-    IReadOnlyList<IlValueControlNode>? ControlFlow = null, int WorkUnits = 0);
+    IReadOnlyList<IlValueControlNode>? ControlFlow = null, int WorkUnits = 0,
+    IReadOnlyList<IlReturnValueObservation>? Returns = null);
 
 internal sealed record IlBodyObservation(
     string MetadataToken,

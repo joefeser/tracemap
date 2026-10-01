@@ -170,6 +170,7 @@ internal static class IlBodyEvidenceExtractor
             controlFlowValueLimits = new { IlControlFlowValueExtractor.MaxInstructions, IlControlFlowValueExtractor.MaxSlots,
                 IlControlFlowValueExtractor.MaxWorkUnits, IlControlFlowValueExtractor.MaxExceptionEntries },
             valueDerivationAggregateWorkPerReader = limits.MaxTotalWorkUnits,
+            maxRetainedReturnSites = IlCallValueExtractor.MaxRetainedReturnSites,
             outcomes = outcomes.Select(item => new
             {
                 item.SafeLocator,
@@ -277,6 +278,25 @@ internal static class IlBodyEvidenceExtractor
                     contractElement: "il-method-body",
                     properties: bodyProperties);
                 facts.Add(bodyFact);
+                // One bounded summary per body. Null means unavailable (reader
+                // disagreement or a work limit), never an empty/constant return.
+                var returns = body.ValueFlow?.Returns;
+                var returnsAvailable = returns is not null && returns.Count <= IlCallValueExtractor.MaxRetainedReturnSites;
+                facts.Add(FactFactory.Create(manifest,
+                    FactTypes.ManagedIlReturnValuesObserved, RuleIds.DotNetIlValues,
+                    EvidenceTiers.Tier3SyntaxOrTextual, IlEvidence(outcome.SafeLocator),
+                    targetSymbol: body.BodyIdentity, contractElement: "il-return-operand-origins",
+                    properties: CopyToSorted(common, new (string Key, string Value)[]
+                    {
+                        ("ilBodyFactId", bodyFact.FactId),
+                        ("valueSchema", "il-return-values.v1"),
+                        ("valueState", returnsAvailable ? "return-operands-candidate" : "return-operands-unavailable"),
+                        ("returnCount", (returns?.Count ?? -1).ToString(CultureInfo.InvariantCulture)),
+                        ("returnFlowGaps", System.Text.Json.JsonSerializer.Serialize(body.ValueFlow?.Gaps ?? [])),
+                        ("returnOrigins", System.Text.Json.JsonSerializer.Serialize(returnsAvailable
+                            ? returns!.Select(value => value with { Origin = PublicOperand(value.Origin) }).ToArray() : [])),
+                        ("limitation", "At most 256 reached return-site operands from independently agreed local value flow. Return operands are candidates, not executed return values. Consumers must verify the callee signature and exact producer call, join all return sites conservatively, and preserve unsupported flow, virtual dispatch and runtime-dependent values. " + IlCallValueExtractor.Limitation)
+                    })));
                 var valuesByOffset = body.ValueFlow?.Calls.ToDictionary(value => value.Offset);
                 var callFactsByOffset = new Dictionary<long, CodeFact>();
                 foreach (var call in body.Calls.OrderBy(item => item.Offset, Comparer<long>.Default))
@@ -330,7 +350,8 @@ internal static class IlBodyEvidenceExtractor
                                 ("limitation", IlCallValueExtractor.Limitation)
                             })));
                 }
-                foreach (var gap in body.ValueFlow?.Gaps ?? [])
+                foreach (var gap in (body.ValueFlow?.Gaps ?? []).Concat(
+                    returns?.Count > IlCallValueExtractor.MaxRetainedReturnSites ? ["IlValueReturnSiteLimit"] : []))
                     facts.Add(FactFactory.Create(manifest, FactTypes.AnalysisGap, RuleIds.DotNetIlValues,
                         EvidenceTiers.Tier4Unknown, IlEvidence(outcome.SafeLocator),
                         targetSymbol: body.BodyIdentity, contractElement: gap,
