@@ -119,6 +119,9 @@ public static partial class WebFormsReviewPreflightCommand
         query-recovery --bundle <bundle> --handler <method-name> counts retained handler paths only.
         requery-handler --run <retained-run> --bundle <completed-report-or-recovery-bundle> --handler <method-name> --out <new-folder> [--surface-name DbDataAdapter.Fill] [--traversal-scope compiled-il]
           builds a separate single-root report from the verified retained combined index; no scan or combine.
+        migration-review --config <native-config> --handler <method-name> --out <new-handoff-root> [--attest-exact-source-commit <sha>]
+        migration-review --config <migration-draft> --handler <method-name> --out <new-handoff-root> --proof-root <retained-proof> --published-root <original-publish> --source-base <repo-relative-website-folder>
+        query-migration --root <handoff-root> [--document application|compiled] [--pointer <json-pointer>] [--offset <n>] [--limit <n>] [--depth <n>]
         It writes local-only run-manifest.json and README.md without scanning,
         binding admission, report rendering or execution. Preflight success alone
         is not a completed workflow. No command builds/publishes the site, mutates

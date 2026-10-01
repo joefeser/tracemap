@@ -19,7 +19,8 @@ if ($VerificationRoot) {
 if (!$Report) { $Report = Read-Host 'Saved mixed-mode handler report folder (full path)' }
 if (Test-Path -LiteralPath $Report -PathType Container) { $Report = Join-Path $Report 'compiled-paths.handoff.local.json' }
 if (!$OutputPath) {
-    $parent = Split-Path $Report -Parent
+    # Never add diagnostics to a checkpoint-owned native report tree.
+    $parent = if ($VerificationRoot) { $VerificationRoot } else { Split-Path $Report -Parent }
     $stem = if ($UnresolvedOnly) { 'handler-unresolved-command-evidence' } else { 'handler-sql-evidence' }
     $OutputPath = Join-Path $parent "$stem.local.html"
     for ($n = 2; (Test-Path -LiteralPath $OutputPath) -and $n -le 1000; $n++) { $OutputPath = Join-Path $parent "$stem-$n.local.html" }

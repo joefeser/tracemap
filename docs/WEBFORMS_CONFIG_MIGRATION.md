@@ -1,5 +1,9 @@
 # Migrate existing private Web Forms configs
 
+For a new migration-review handoff, use the [consolidated native workflow](#consolidated-migration-handoff)
+below. It creates one output folder for the reviewer. The diagnostic commands in
+the intervening sections remain available for investigating historical runs.
+
 ## Mixed-query traversal repair: work-machine validation
 
 For a successful saved verification run, inspect unresolved command bindings
@@ -652,3 +656,47 @@ existing-output refusal, immutable-tool checks and recovery failure stopping.
 It uses a fake native command and is not private Windows acceptance. Native
 end-to-end tests separately exercise independently decoded synthetic fixtures
 and the checked-in VB .NET Framework wrapper's real compiler output.
+
+## Consolidated migration handoff
+
+The native `webforms-review migration-review` command composes proof import,
+fresh native scanning/reporting, a focused mixed-mode handler-to-Fill query,
+retained tool copy and a bounded evidence index into one new output root.
+It does not rebuild the website, execute SQL, overwrite old runs or recover a
+failed run as if it completed. A failure preserves partial output and does not
+write a completed migration handoff receipt.
+
+For existing retained proof, after building TraceMap:
+
+```powershell
+dotnet .\src\dotnet\TraceMap.Cli\bin\Debug\net10.0\tracemap.dll webforms-review migration-review `
+  --config <copied-review>\native-config\review.draft.json `
+  --handler <exact-method-name> --out <new-output-folder> `
+  --proof-root <retained-proof-folder> --published-root <published-website> `
+  --source-base <website-relative-to-repository>
+```
+
+A ready native config instead needs only `--config`, `--handler` and `--out`.
+An explicit new source/publish attestation remains a separate option; never add
+it just to bypass missing proof. The original input source/publish/proof folders
+remain inputs, not additional folders the reviewer must assemble.
+
+Give the authorized local Claude reviewer the entire new output folder and
+`START-HERE.md`. The root includes `tool/`, `review/run/`, `handler/`,
+`review-evidence.sqlite`, and `migration-handoff.local.json`. Use its bounded
+`query-migration` command; do not read the full JSON or SQLite into a prompt.
+Subfolders distinguish original broad evidence from focused evidence without
+requiring manual diagnostic PowerShell steps. External .NET runtime/SDK and
+source/publish inputs are not copied; this is a review package, not runtime or
+resume portability. Private data stays private. Existing diagnostic scripts
+remain available for old runs but are not the new handoff entry point.
+
+Rule `workflow.webforms.migration-handoff.v1` commits the exact CLI generator,
+native preflight/checkpoint, original application handoff, focused compiled
+handoff and six indexed entry artifacts. Its bounded-input SHA-256 is the
+canonical receipt with the digest field empty. `query-migration` verifies the
+receipt and selected evidence index before and after a bounded read; it does
+not revalidate every retained raw artifact or the external source/publish inputs.
+Hashes establish local integrity, not authenticity. The query remains subject
+to the native 2,048-node/128-KiB response bounds. SQL parameter values and runtime
+behavior remain unverified unless supported by separately identified evidence.

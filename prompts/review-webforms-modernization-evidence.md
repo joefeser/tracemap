@@ -7,6 +7,27 @@ external systems, or infer private identities.
 
 ## Read in this order
 
+### Consolidated migration handoff
+
+If the supplied folder contains `migration-handoff.local.json` and
+`START-HERE.md`, follow that entry point using the owner-approved tool under
+`tool/`. Use `webforms-review query-migration --root <that-folder>` for bounded
+evidence retrieval. Its application document is the original native page report;
+its compiled document is the independently bounded single-handler mixed-mode
+query to `DbDataAdapter.Fill`. Preserve those different scopes. Do not substitute
+the broad native compiled document, another verification folder, or an artifact
+chosen by timestamp. The package does not include the external .NET runtime.
+
+Inspect the retained command bindings, including commandTextFromPath and
+commandTypeFromPath, before claiming they are absent. Fingerprints/type candidates
+are not readable procedure names, SQL parameter values, or execution evidence.
+An unverified parameter flow is not a demonstrated missing parameter assignment.
+Depth/cycle gaps identify traversal stops, not proof of additional database calls.
+Matching method sequences across runs is not exact provenance or runtime parity.
+Stop on receipt/index validation failure; do not scan, requery the graph or repair.
+
+Otherwise:
+
 Choose exactly one workflow. Do not mix a native run with a legacy PowerShell
 receipt, or choose directories by timestamps.
 

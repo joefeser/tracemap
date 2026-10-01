@@ -1,5 +1,39 @@
 # Implementation state
 
+## Consolidated migration handoff in progress (2026-09-30)
+
+Owner requested a normal one-command fresh workflow and a single evidence folder
+for Claude, followed by a PR. Added native migration-review orchestration over
+existing proof import/start, completed-run single-handler mixed Fill requery,
+verified tool retention and a separate bounded evidence index. query-migration
+reads the package's original application evidence plus focused compiled evidence,
+without source/SQL/graph execution. START-HERE.md carries the packaged Claude
+instructions; the canonical review prompt now recognizes this package.
+
+The successful local deep-fixture execution tests the fresh explicit-attestation
+route, ready-native-config reuse, historical receipt-format import, focused root,
+manifest hashes, bounded query, changed-index refusal, existing-output refusal,
+missing-handler failure preservation and unchanged original run. The complete
+deep test passed in 28 seconds. Added receipt-tamper, excessive query-limit and
+changed-proof admission refusals to the broader validation run. The SQL-route
+PowerShell regression, scoped comparison regression and private-path guard pass.
+Full .NET validation and exact-head Windows execution are pending; no final PR
+or private migration-completeness claim yet.
+
+Owner-returned saved comparison shows 13 historical symbol sequences/41 variants
+and 18 current/56: all 13 symbol sequences are shared, shared variant counts do
+not differ, five sequences are current-only, and none are historical-only.
+Exact identities differ across scans. The focused Fill query reports zero
+unresolved command-text candidates out of 56 binding occurrences, with depth
+and cycle stops but no path-cap stop. These screenshots are diagnostic evidence,
+not admitted private artifacts or proof of exhaustive coverage. The three
+unresolved candidates from the earlier broader query have not been individually
+classified merely because this focused query has none.
+
+Also corrected wsqlroute's VerificationRoot default output to the verification
+root, outside checkpoint-owned report folders. Previously adding its HTML under
+the native report tree could invalidate the complete artifact roster.
+
 ## Scoped saved-route comparison (2026-09-30)
 
 wcompare now accepts optional Handler and SurfaceName=DbDataAdapter.Fill filters
