@@ -350,3 +350,40 @@ bounded-build regressions; contract 9 has workflow/rule/backlog documentation an
 PR799 against dev after dependency merge. Remaining delivery gates are the full
 suite, Windows final-head corpus and review dispositions/readiness on the repaired
 head. Do not mark those gates complete using previous-head CI.
+
+Second settled batch: ACK session 14046 terminated PATCH_AUTHORIZED on fdc27ecd
+with two current-head Codex findings (4159126233 and 4159126240). Windows corpus
+run36907795758 passed on that head: 124 passed, zero skips/failures, both authentic
+publication cases and all three report scripts. Local full-suite session53652
+remains live; its runtime has not been rebuilt under the running tests.
+
+Repairs are independent: subset parsing now calls the bounded inventory validator
+so an unselected case-colliding sibling cannot evade publication identity checks;
+version and build process observations use the same full-stream hash composition.
+Regression matrix includes file and directory case collisions and independent
+discarded stdout/stderr version-prefix differences. Case-insensitive hosts assert
+their representable single-file behavior; Linux CI must exercise actual collision
+rejection. Separate artifact-path validation passed 27 focused forms/build tests
+without compiler warnings at /tmp/tracemap-wizard-review2-results/review2.trx.
+Full updated replay, push, individual settlement and final-head gates remain open.
+
+The separate artifacts layout is valid for focused wizard tests but not the legacy
+corpus: those tests derive build configuration from the runtime parent directory
+and looked for bin/TraceMap.Tests instead of bin/Debug. That attempted replay is
+not acceptance evidence (95 passed, 31 failed, one platform skip). All three
+independent PowerShell report checks passed. Do not weaken fixture checks to admit
+the alternate layout.
+
+Local pre-fix full-suite session53652 was explicitly canceled as superseded, with
+both owned process IDs verified exited, to release the standard runtime for the
+updated replay. It has no passing local full-suite claim. Separately, authoritative
+CI run36907795847 on fdc27ecd completed successfully: 3,121 passed, one platform
+skip, zero failures, zero build warnings. These results do not cover the two new
+local fixes. Standard wlocal replay is running in session99124 with output under
+/tmp/tracemap-wizard-review2-standard-20261001.
+
+Standard replay succeeded: 126 passed, one Windows-only skip, zero failures, all
+three report-script checks passed. Receipt:
+/tmp/tracemap-wizard-review2-standard-20261001/validation.local.json. This supersedes
+the invalid alternate-layout attempt for local corpus validation. The repaired
+head still requires Linux case-sensitive collision and Windows/full CI checks.

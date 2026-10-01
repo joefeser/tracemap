@@ -37,6 +37,8 @@ with code **2 (paused)**. Trim that file and rerun with `--continue`; setup answ
 are retained. Paths are web-root-relative, with either slash accepted; absolute
 in-root paths also work. Blank/missing files are regenerated and paused again.
 Comments-only selections, duplicates, escapes and missing files are rejected;
+the surrounding bounded form inventory is also checked for case-colliding paths,
+even when the subset names only one spelling.
 an empty selection never means all. Code 1 is a validation/execution failure;
 code 0 requires verified retained reports.
 

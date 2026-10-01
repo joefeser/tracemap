@@ -65,6 +65,9 @@ public static class WebFormsWizardForms
             if (!selected.Add(relative)) throw Fail("DUPLICATE_FORM");
         }
         if (selected.Count == 0) throw Fail("SELECTION_EMPTY");
+        // Publication matching is case-insensitive. Validate the surrounding inventory
+        // even when only one spelling was submitted, including during saved selection reuse.
+        _ = Discover(root);
         return selected.Order(StringComparer.Ordinal).ToArray();
     }
 

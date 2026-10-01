@@ -144,6 +144,33 @@ public sealed class WebFormsWizardBuildTests
             WebFormsWizardBuild.ExecuteAsync(store, project.Id, plan, true, (_, _, _, _) => throw new Exception("must not run")))).Message);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Version_evidence_commits_full_stream_hashes_not_equal_retained_tails(bool changeError)
+    {
+        using var temp = new TempDirectory();
+        var (project, tool) = Fixture(temp.Path);
+        var observations = new List<WebFormsWizardBuildEvidence>();
+        foreach (var prefix in new[] { "a", "b" })
+        {
+            using var store = WebFormsWizardStore.Open(Path.Combine(temp.Path, "config-" + prefix), false);
+            store.SaveProject(project);
+            var calls = 0;
+            var fullOutput = (changeError ? "unchanged" : prefix) + new string('x', 70_000) + "\n10.0\n";
+            var fullError = (changeError ? prefix : "unchanged") + new string('y', 70_000);
+            var stdoutHash = Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.Unicode.GetBytes(fullOutput)));
+            var stderrHash = Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.Unicode.GetBytes(fullError)));
+            Assert.True(await WebFormsWizardBuild.ExecuteAsync(store, "site", WebFormsWizardBuild.Plan(project, tool), true,
+                (_, _, _, _) => Task.FromResult(++calls == 1
+                    ? new WebFormsWizardProcessResult(0, fullOutput[^65_536..], fullError[^65_536..], stdoutHash, stderrHash)
+                    : new WebFormsWizardProcessResult(0, "built", ""))));
+            observations.Add(store.ReadProject("site").Build!);
+        }
+        Assert.NotEqual(observations[0].VersionSha256, observations[1].VersionSha256);
+        Assert.Equal(observations[0].OutputSha256, observations[1].OutputSha256);
+    }
+
     [Fact]
     public async Task Changed_input_during_build_does_not_advance()
     {

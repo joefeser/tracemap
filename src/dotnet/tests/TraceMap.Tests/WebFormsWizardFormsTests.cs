@@ -44,6 +44,32 @@ public sealed class WebFormsWizardFormsTests
         Assert.Equal("WEBFORMS_WIZARD_OUTSIDE_ROOT", Assert.Throws<InvalidOperationException>(() => WebFormsWizardForms.Parse(web, page)).Message);
     }
 
+    [Theory]
+    [InlineData("A.aspx", "a.aspx")]
+    [InlineData("Pages/A.aspx", "pages/A.aspx")]
+    public void Subset_revalidates_case_identity_against_surrounding_inventory(string first, string sibling)
+    {
+        using var temp = new TempDirectory();
+        var firstPath = Path.Combine(temp.Path, first);
+        var siblingPath = Path.Combine(temp.Path, sibling);
+        Directory.CreateDirectory(Path.GetDirectoryName(firstPath)!);
+        File.WriteAllText(firstPath, "first");
+        Assert.Single(WebFormsWizardForms.Parse(temp.Path, first));
+        Directory.CreateDirectory(Path.GetDirectoryName(siblingPath)!);
+        File.WriteAllText(siblingPath, "second");
+        if (Directory.GetFiles(temp.Path, "*.aspx", SearchOption.AllDirectories).Length == 1)
+        {
+            // Case-insensitive hosts cannot represent the collision; Linux CI exercises rejection.
+            Assert.Single(WebFormsWizardForms.Parse(temp.Path, first));
+            return;
+        }
+        foreach (var selection in new[] { first, sibling, firstPath })
+            Assert.Equal("WEBFORMS_WIZARD_CASE_AMBIGUOUS", Assert.Throws<InvalidOperationException>(() =>
+                WebFormsWizardForms.Parse(temp.Path, selection)).Message);
+        Assert.Equal("WEBFORMS_WIZARD_CASE_AMBIGUOUS", Assert.Throws<InvalidOperationException>(() =>
+            WebFormsWizardForms.Discover(temp.Path)).Message);
+    }
+
     [Fact]
     public void Unicode_selection_uses_the_same_utf8_byte_bound_as_resume()
     {
