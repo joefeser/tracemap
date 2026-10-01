@@ -11,6 +11,7 @@ public static partial class CombinedDependencyPathReporter
         void Add(CombinedFactRow fact);
         IEnumerable<CombinedFactRow> OfTypes(IReadOnlyList<string> types);
         IReadOnlyList<CombinedFactRow> CallOperandFacts(string sourceIndexId, string originalCallFactId);
+        IReadOnlyList<CombinedFactRow> CommandRelatedFacts(string sourceIndexId, string type, string reference);
         IEnumerable<CombinedFactRow> IdentityOrdered { get; }
         IReadOnlyDictionary<string, CombinedFactRow> ByCombinedId { get; }
         IReadOnlyDictionary<string, CombinedFactRow> BySourceKey { get; }
@@ -29,7 +30,8 @@ public static partial class CombinedDependencyPathReporter
         {
             storagePhase = "facts";
             if (sorted) throw new InvalidOperationException("COMBINED_GRAPH_STORAGE_FROZEN");
-            using var command = Command("insert into graph_facts values($ordinal,$id,$source,$original,$key,$type,$payload,$call);", fact.CombinedFactId);
+            using var command = Command("insert into graph_facts values($ordinal,$id,$source,$original,$key,$type,$payload,$call,$reference);", fact.CombinedFactId);
+            command.Parameters.AddWithValue("$reference", (object?)CommandFactReference(fact) ?? DBNull.Value);
             command.Parameters.AddWithValue("$ordinal", storedFactCount + 1);
             command.Parameters.AddWithValue("$source", fact.SourceIndexId);
             command.Parameters.AddWithValue("$original", fact.OriginalFactId);
@@ -123,6 +125,19 @@ public static partial class CombinedDependencyPathReporter
             return rows;
         }
 
+        private IReadOnlyList<CombinedFactRow> ReadCommandRelatedFacts(string source, string type, string reference)
+        {
+            using var command = Command("select payload from graph_facts where fact_type=$type and source_id=$source "
+                + "and command_reference=$reference order by ordinal limit 2;");
+            command.Parameters.AddWithValue("$type", type);
+            command.Parameters.AddWithValue("$source", source);
+            command.Parameters.AddWithValue("$reference", reference);
+            using var reader = command.ExecuteReader();
+            var rows = new List<CombinedFactRow>();
+            while (reader.Read()) rows.Add(DecodeFact((byte[])reader.GetValue(0)));
+            return rows;
+        }
+
         private sealed class IndexedFactRows(IndexedGraphStore store) : IIndexedCombinedFacts
         {
             public int Count => store.storedFactCount;
@@ -131,6 +146,8 @@ public static partial class CombinedDependencyPathReporter
             public IEnumerable<CombinedFactRow> OfTypes(IReadOnlyList<string> types) => store.ReadFacts(types: types);
             public IReadOnlyList<CombinedFactRow> CallOperandFacts(string sourceIndexId, string originalCallFactId)
                 => store.ReadCallOperandFacts(sourceIndexId, originalCallFactId);
+            public IReadOnlyList<CombinedFactRow> CommandRelatedFacts(string sourceIndexId, string type, string reference)
+                => store.ReadCommandRelatedFacts(sourceIndexId, type, reference);
             public IEnumerable<CombinedFactRow> IdentityOrdered => store.ReadFacts(identityOrder: true);
             public IReadOnlyDictionary<string, CombinedFactRow> ByCombinedId { get; } = new IndexedFactsById(store);
             public IReadOnlyDictionary<string, CombinedFactRow> BySourceKey { get; } = new IndexedFactsById(store, sourceKey: true);

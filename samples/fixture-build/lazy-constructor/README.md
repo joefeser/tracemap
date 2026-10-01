@@ -29,10 +29,13 @@ the producer's return-value dataflow. This is the distinction under test.
 - The logging endpoint retains command type Text (`1`), one caller substitution,
   a `call-result` origin, `unresolved-operand`, and explicit operand/virtual
   dispatch gaps. A literal supplied to the same ExecuteText method resolves.
-- The identical literal returned by `LiteralText` currently remains unresolved.
+- The identical literal returned by `LiteralText` resolves through separately
+  retained producer-return evidence, including a returned-argument wrapper.
   The regression checks its actual compiled instruction shape and literal
-  equality, isolating missing return-value tracing from `BuildText`'s runtime
-  string composition. This is a known limitation, not a successful resolution.
+  equality, distinguishing constant return-value tracing from `BuildText`'s
+  runtime string composition, which remains unresolved. Missing, ambiguous,
+  malformed or changed return facts, conflicting values, recursive producers
+  and virtual return targets must remain explicit gaps.
 - An independent business lookup reaches Fill with method-local constant text.
   Filtering to Fill excludes the ExecuteScalar routes; a zero unresolved count
   in that subset is not resolution of the logging command text.

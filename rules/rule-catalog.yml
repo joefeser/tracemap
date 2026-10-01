@@ -193,14 +193,15 @@ rules:
   - id: combined.paths.compiled-command-value.v1
     status: active
     name: Encoded IL call-path command argument candidate
-    description: Substitutes a retained command text or type argument slot through the exact ordered compiled call edges of one retained path, using unique provenance-matched call operand facts and encoded method signatures.
+    description: Substitutes retained command text or type argument slots through exact ordered compiled call edges and follows separately retained producer-return evidence using unique provenance-matched operands, bodies and signatures.
     evidenceTier: Tier3SyntaxOrTextual
     emits: [compiled-command-path-value.v1]
     limitations:
       - This local-only derived candidate is not SQL execution, procedure identity, provider dispatch, runtime object identity or handler parity. It does not upgrade the underlying command configuration or path coverage.
       - Only encoded compiled IL calls are followed. Source-only and projectless candidate bridges stop substitution explicitly. Encoded callvirt targets retain an explicit virtual-dispatch gap even when a constant origin is recovered.
-      - Static and instance argument slots are mapped separately; missing, malformed, ambiguous, changed-provenance and unavailable slots stop substitution. Root arguments and call-return values remain unresolved.
-      - Strings retain only exact UTF-16 length and hash. At most 64 caller hops, 128 arguments per call and two competing operand records are inspected per value; existing query path and output bounds remain in force.
+      - Static and instance argument slots are mapped separately; missing, malformed, ambiguous, changed-provenance and unavailable slots stop substitution. Root arguments remain unresolved. Producer returns require an exact nonvirtual encoded call, one callee body, one provenance-matched return summary and a String or Int32 return signature. All retained return sites must agree after bounded substitution. No string composition, heap values, external method execution or virtual return target is evaluated.
+      - ReturnSteps carry producer-call, callee-body and return-summary identities separately from caller steps; a producer is not inserted as a call-stack parent. Legacy facts without return summaries stay unresolved. The existing constant-on-encoded-call-path state may include these explicitly retained return steps and is still a static candidate, not runtime proof.
+      - Strings retain only exact UTF-16 length and hash. A shared 64-unit bound charges caller substitutions, producer visits and return sites; recursion cycles stop explicitly. At most 256 outgoing producer edges, 256 return sites, 128 arguments per call and two competing fact records per indexed lookup are admitted. Existing query path and output bounds remain in force.
       - Each derived value retains the exact reporting assembly SHA-256 and SHA-256 of its bounded consumed projection, including rejected operand candidates, inspected edge identities and exact native fact provenance. Oversized selected properties are represented by length and digest. The artifact is local-only, not a shareable privacy projection.
 
   - id: dotnet.compiled.il-gap.v1

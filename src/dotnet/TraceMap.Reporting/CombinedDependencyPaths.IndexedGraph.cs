@@ -84,7 +84,9 @@ public static partial class CombinedDependencyPathReporter
                     create table graph_metadata(key text primary key, value text not null);
                     create table graph_facts(ordinal integer primary key, id text not null unique,
                         source_id text not null, original_id text not null, source_key text not null,
-                        fact_type text not null, payload blob not null, il_call_reference text);
+                        fact_type text not null, payload blob not null, il_call_reference text, command_reference text);
+                    create index graph_facts_command_reference on graph_facts(fact_type,source_id,command_reference,ordinal)
+                        where command_reference is not null;
                     create unique index graph_facts_original on graph_facts(source_id,original_id);
                     create index graph_facts_identity_order on graph_facts(id collate graph_ordinal);
                     create index graph_facts_type_order on graph_facts(fact_type,ordinal);

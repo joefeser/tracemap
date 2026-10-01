@@ -33,12 +33,20 @@ public static partial class CombinedDependencyPathReporter
                 var steps = new List<CompiledCommandValueStep>();
                 var gaps = new SortedSet<string>(StringComparer.Ordinal);
                 var materials = new List<object>();
+                var returnSteps = new List<CompiledCommandReturnStep>();
+                var returns = new CommandReturnResolver(graph, materials, gaps, returnSteps, constantKind);
                 var state = "unresolved-operand";
                 var incoming = index - 2;
-                while (current.Kind == "argument-slot")
+                while (current.Kind is "argument-slot" or "call-result")
                 {
-                    if (steps.Count >= MaxCompiledCommandValueHops)
+                    if (++returns.Work > MaxCompiledCommandValueHops)
                     { gaps.Add("IlCommandCallerHopLimit"); state = "limit"; break; }
+                    if (current.Kind == "call-result")
+                    {
+                        if (!returns.Resolve(current, scope, methodId, out var returned, out var returnScope, out var returnMethod)) break;
+                        current = returned; scope = returnScope; methodId = returnMethod;
+                        continue;
+                    }
                     if (incoming < 0 || methodId is null)
                     { gaps.Add("IlCommandRootArgumentUnresolved"); state = "unresolved-root-argument"; break; }
                     var edge = edges[incoming--];
@@ -64,7 +72,7 @@ public static partial class CombinedDependencyPathReporter
                         value.Properties["ilGeneratorSha256"], value.Properties["ilBoundedInputSha256"]));
                     if (edge.EdgeKind == "compiled-il-callvirt-candidate") gaps.Add("IlCommandVirtualDispatchUnproven");
                 }
-                if (current.Kind == constantKind) state = steps.Count == 0 ? "method-local-constant" : "constant-on-encoded-call-path";
+                if (current.Kind == constantKind) state = steps.Count == 0 && returnSteps.Count == 0 ? "method-local-constant" : "constant-on-encoded-call-path";
                 else if (current.Kind != "argument-slot") gaps.Add("IlCommandOperandValueUnresolved");
                 var input = JsonSerializer.SerializeToUtf8Bytes(new
                 {
@@ -72,10 +80,12 @@ public static partial class CombinedDependencyPathReporter
                     binding.ContainingMethodFactId, binding.GeneratorSha256, binding.BoundedInputSha256,
                     MaxHops = MaxCompiledCommandValueHops, MaxArguments = MaxCompiledCommandCallArguments,
                     MaxOperandCompetitors = 2,
+                    MaxReturnSites = 256, MaxProducerEdges = MaxCommandProducerEdges,
                     ExpectedConstantKind = constantKind, Inputs = materials
                 });
                 return new("compiled-command-path-value.v1", CompiledCommandValueRuleId, EvidenceTiers.Tier3SyntaxOrTextual,
-                    state, current, scope, steps, gaps.ToArray(), generator, Convert.ToHexStringLower(SHA256.HashData(input)));
+                    state, current, scope, steps, gaps.ToArray(), generator, Convert.ToHexStringLower(SHA256.HashData(input)))
+                    { ReturnSteps = returnSteps.Count == 0 ? null : returnSteps };
             }
         }
     }
@@ -86,7 +96,8 @@ public static partial class CombinedDependencyPathReporter
         // properties or a private source blob. This artifact is local-only.
         var keys = new[] { "rawFileSha256", "ilGeneratorSha256", "ilBoundedInputSha256", "ilBodyFactId", "compiledFactId",
             "ilCallFactId", "ilOffset", "opcode", "referenceKind", "targetIdentity", "signature", "valueSchema", "valueState",
-            "callHasThis", "callParameterCount", "callShapeSupported", "callByReferenceParameters", "receiverOrigin", "resultOrigin", "argumentOrigins" };
+            "callHasThis", "callParameterCount", "callShapeSupported", "callByReferenceParameters", "receiverOrigin", "resultOrigin", "argumentOrigins",
+            "returnOrigins", "returnCount", "returnFlowGaps" };
         var properties = new SortedDictionary<string, string>(StringComparer.Ordinal);
         foreach (var key in keys)
             if (fact.Properties.TryGetValue(key, out var value)) properties.Add(key, value.Length <= 64 * 1024 ? value
