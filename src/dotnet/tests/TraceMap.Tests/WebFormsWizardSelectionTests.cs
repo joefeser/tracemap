@@ -47,6 +47,25 @@ public sealed class WebFormsWizardSelectionTests
     }
 
     [Fact]
+    public void Blank_replacement_is_atomic_with_a_delete_sharing_reader_and_leaves_no_staging_files()
+    {
+        using var temp = new TempDirectory();
+        var site = Site(temp.Path);
+        using var store = WebFormsWizardStore.Open(Path.Combine(temp.Path, "config"), false);
+        store.SaveProject(Project(site));
+        var path = Path.Combine(Path.GetDirectoryName(store.ProjectPath("site"))!, "forms.txt");
+        File.WriteAllText(path, " \n");
+        using (var reader = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read | FileShare.Delete))
+        {
+            Assert.True(WebFormsWizardSelection.Advance(store, "site").Paused);
+            Assert.Equal(2, reader.Length);
+        }
+        Assert.Contains("Default.aspx", File.ReadAllText(path));
+        Assert.Empty(Directory.GetFiles(Path.GetDirectoryName(path)!, "*.tmp"));
+        Assert.Equal("forms", store.ReadProject("site").Step);
+    }
+
+    [Fact]
     public void All_advances_without_selection_file_and_resume_rechecks_target()
     {
         using var temp = new TempDirectory();
