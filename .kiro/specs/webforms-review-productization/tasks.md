@@ -1,5 +1,13 @@
 # Tasks
 
+- [x] Add explicit retained legacy publish-proof import and a short verification
+  launcher, carrying original receipts, primary/context distinctions and bounded
+  selected-page scope. Verify current bytes, clean committed membership, receipt
+  commitments and primary metadata admission without issuing new attestation.
+  Private Windows report parity and two-source merge replacement remain open.
+- [x] Add local legacy-config migration into separate native drafts, preserving
+  originals and recording hashes, missing owner inputs and unsupported scope.
+
 ## Public and work — highest priority
 
 - [x] Add a language-neutral public quickstart.
@@ -231,6 +239,16 @@
 
 ## Release checks
 
+- [x] Classify external managed DLL paths portably on Windows and project only
+  exact, hash- and identity-verified legacy proof-copy locators into a separate
+  local receipt without rewriting owner attestation; preserve refusal cases.
+- [x] Add a read-only retained-binding diagnostic with closed state/gap codes
+  and counts only, preserving original and failed-output bytes without scans,
+  locator rebinding or new attestations; test the real helper and refusal cases.
+- [x] Preserve repository-root configuration when importing website-relative
+  retained receipts using an explicit hash-bound source base across preflight,
+  fresh execution and compiled attachment; retain original receipts and test
+  the nested website helper/scan flow plus unsafe and foreign-repository refusal.
 - [x] Run focused PowerShell tests for each script slice.
 - [x] Run the relevant .NET tests and pinned validation workflow.
 - [x] Confirm every new machine-readable artifact records generator/input hashes.

@@ -7,6 +7,34 @@ namespace TraceMap.Tests;
 public sealed class VisualBasicDataBoundaryTests
 {
     [Fact]
+    public void Command_text_and_adapter_assignments_retain_receiver_bound_hashes_not_sql_or_runtime_binding()
+    {
+        using var temp = new TempDirectory();
+        var repo = CreateAdoRepository(temp.Path, includeLateBoundCall: false);
+        var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out")));
+        var assignments = result.Facts.Where(fact => fact.FactType == FactTypes.SqlCommandDetected
+            && fact.SourceSymbol?.Contains("Configure", StringComparison.Ordinal) == true).ToArray();
+        var constant = Assert.Single(assignments, fact => fact.ContractElement == "CommandText"
+            && fact.Properties["commandTextClassification"] == "compile-time-constant-hashed");
+        var dynamicText = Assert.Single(assignments, fact => fact.ContractElement == "CommandText"
+            && fact.Properties["commandTextClassification"] == "dynamic-or-nonconstant");
+        var adapter = Assert.Single(assignments, fact => fact.ContractElement == "SelectCommand");
+        Assert.Equal(EvidenceTiers.Tier1Semantic, constant.EvidenceTier);
+        Assert.Equal(FactFactory.Hash("private_procedure_name", 64), constant.Properties["commandTextHash"]);
+        Assert.False(dynamicText.Properties.ContainsKey("commandTextHash"));
+        Assert.Equal(constant.Properties["commandReceiverSymbolId"], dynamicText.Properties["commandReceiverSymbolId"]);
+        Assert.Equal(constant.Properties["commandReceiverSymbolId"], adapter.Properties["commandReceiverSymbolId"]);
+        Assert.Equal("direct-symbol-assignment", adapter.Properties["commandBindingClassification"]);
+        var fill = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.DatabaseOperationCandidate
+            && fact.SourceSymbol?.Contains("Configure", StringComparison.Ordinal) == true);
+        Assert.Equal(fill.Properties["receiverSymbolId"], adapter.Properties["adapterReceiverSymbolId"]);
+        Assert.Contains("last-write dominance", constant.Properties["limitations"]);
+        Assert.DoesNotContain("private_procedure_name", JsonSerializer.Serialize(assignments));
+        Assert.DoesNotContain(result.Facts, fact => fact.FactType == FactTypes.SqlCommandDetected
+            && fact.SourceSymbol?.Contains("ConfigureFake", StringComparison.Ordinal) == true);
+    }
+
+    [Fact]
     public void Compiler_resolved_vb_ado_net_shapes_emit_shared_safe_evidence()
     {
         using var temp = new TempDirectory();
@@ -177,6 +205,17 @@ public sealed class VisualBasicDataBoundaryTests
             End Class
 
             Public Module DataAccess
+                Public Sub Configure(command As SqliteCommand, adapter As TestAdapter, dynamicText As String)
+                    command.CommandText = "private_procedure_name"
+                    command.CommandText = dynamicText
+                    adapter.SelectCommand = command
+                    adapter.Fill(New DataSet())
+                End Sub
+
+                Public Sub ConfigureFake(fake As FakeCommand)
+                    fake.CommandText = "private_fake_name"
+                End Sub
+
                 Public Sub Run(connection As SqliteConnection)
                     Dim command = New SqliteCommand("select private_secret from private_table", connection)
                     command.CommandType = CommandType.StoredProcedure
@@ -205,6 +244,10 @@ public sealed class VisualBasicDataBoundaryTests
 
             {{lateBound}}
             End Module
+
+            Public Class FakeCommand
+                Public Property CommandText As String
+            End Class
             """);
         File.WriteAllText(Path.Combine(repo, "Data.aspx"), "<%@ Page Language=\"VB\" CodeBehind=\"Data.aspx.vb\" Inherits=\"DataPage\" %><asp:Button ID=\"Fill\" runat=\"server\" OnClick=\"Fill_Click\" />");
         File.WriteAllText(Path.Combine(repo, "Data.aspx.vb"), """

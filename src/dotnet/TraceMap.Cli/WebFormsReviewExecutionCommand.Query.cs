@@ -6,7 +6,11 @@ using Microsoft.Data.Sqlite;
 
 namespace TraceMap.Cli;
 
-internal sealed record WebFormsEvidenceQuery(string Document, string Pointer, int Offset = 0, int Limit = 16, int Depth = 1);
+internal sealed record WebFormsEvidenceQuery(string Document, string Pointer, int Offset = 0, int Limit = 16, int Depth = 1)
+{
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Handler { get; init; }
+}
 public sealed record WebFormsEvidenceItem(string Pointer, string Kind, JsonElement? Value,
     int ChildCount, int Offset, int ReturnedChildren, int OmittedChildren, IReadOnlyList<WebFormsEvidenceItem> Children)
 {
@@ -123,7 +127,7 @@ public static partial class WebFormsReviewExecutionCommand
         int Number(string key, int defaultValue, int maximum) => !options.TryGetValue(key, out var value) ? defaultValue :
             int.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out var number) && number <= maximum ? number : throw WebFormsReviewEvidenceIndex.Invalid("QUERY_ARGUMENT_INVALID");
         var query = new WebFormsEvidenceQuery(options.GetValueOrDefault("--document", "application"), options.GetValueOrDefault("--pointer", ""),
-            Number("--offset", 0, WebFormsReviewEvidenceIndex.MaxNodes), Number("--limit", 16, 50), Number("--depth", 1, 8));
+            Number("--offset", 0, WebFormsReviewEvidenceIndex.MaxSupportedNodes), Number("--limit", 16, 50), Number("--depth", 1, 8));
         if (query.Document is not ("application" or "compiled") || query.Limit == 0) throw WebFormsReviewEvidenceIndex.Invalid("QUERY_ARGUMENT_INVALID");
         _ = Segments(query.Pointer);
         return query;

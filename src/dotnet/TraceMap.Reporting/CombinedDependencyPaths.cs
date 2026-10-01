@@ -31,6 +31,7 @@ public sealed record CombinedDependencyPathOptions(
     internal int StartingNodeLimit { get; init; } = 250;
     internal IReadOnlySet<string>? StartingFactIds { get; init; }
     public bool ExactFromSymbol { get; init; }
+    public bool CompiledOnly { get; init; }
     internal IReadOnlyList<CombinedPathSymbolRoot>? SymbolRoots { get; init; }
     // Deterministic work bound, including nonterminal/cyclic exploration.
     public int MaxTraversalWork { get; init; } = 100_000;
@@ -107,6 +108,8 @@ public sealed record CombinedPathQuery(
 {
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public IReadOnlyList<CombinedPathSymbolRoot>? SymbolRoots { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? TraversalScope { get; init; }
 }
 
 public sealed record CombinedPathSummary(
@@ -170,7 +173,42 @@ public sealed record CombinedPathNode(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     string? SurfaceSubtype = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    IReadOnlyList<string>? Limitations = null);
+    IReadOnlyList<string>? Limitations = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    CompiledCommandConfigurationCandidate? CommandBinding = null);
+
+public sealed record CompiledCommandOperandOrigin(string Kind, string Identity);
+public sealed record CompiledCommandConfigurationCandidate(
+    string Schema, string CombinedFactId, string IlBodyFactId, string IlCallFactId,
+    IReadOnlyList<string> ConfigurationCallFactIds,
+    CompiledCommandOperandOrigin CommandReceiverOrigin,
+    CompiledCommandOperandOrigin EndpointReceiverOrigin,
+    CompiledCommandOperandOrigin CommandTextOrigin,
+    CompiledCommandOperandOrigin CommandTypeOrigin,
+    string GeneratorSha256, string BoundedInputSha256)
+{
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? ContainingMethodFactId { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public CompiledCommandPathValueBinding? CommandTextFromPath { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public CompiledCommandPathValueBinding? CommandTypeFromPath { get; init; }
+}
+
+public sealed record CompiledCommandValueStep(string CallFactId, string OperandFactId,
+    string CallerBodyFactId, string CallerMethodFactId, string TargetMethodFactId,
+    int TargetArgumentSlot, string Opcode, string GeneratorSha256, string BoundedInputSha256);
+public sealed record CompiledCommandPathValueBinding(string Schema, string RuleId, string EvidenceTier,
+    string State, CompiledCommandOperandOrigin Origin, string OriginBodyFactId,
+    IReadOnlyList<CompiledCommandValueStep> Steps, IReadOnlyList<string> Gaps,
+    string GeneratorSha256, string BoundedInputSha256, string ArtifactVisibility = "local-only")
+{
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<CompiledCommandReturnStep>? ReturnSteps { get; init; }
+}
+
+public sealed record CompiledCommandReturnStep(string ProducerCallFactId, string CalleeBodyFactId,
+    string ReturnFactId, string GeneratorSha256, string BoundedInputSha256);
 
 public sealed record CombinedPathEdge(
     string EdgeId,
@@ -302,7 +340,7 @@ public static partial class CombinedDependencyPathReporter
     private const int MaxTraversalDiagnosticShapes = 32;
     private const string Version = "1.0";
     private const string Algorithm = "bounded-bfs";
-    private const string AlgorithmVersion = "1.2";
+    private const string AlgorithmVersion = "1.3";
     private const int MarkdownPathLimit = 100;
     private const int MarkdownInventoryLimit = 200;
     private const string EndpointMatchRuleId = "combined.paths.endpoint-match.v1";
@@ -400,7 +438,7 @@ public static partial class CombinedDependencyPathReporter
             return (report, starts.Select(node => node.NodeId).ToHashSet(StringComparer.Ordinal));
         }
 
-        return (report, Search(graph, starts, terminalNodes, options.MaxDepth, options.MaxPaths, options.MaxFrontier, options.IncludeLegacyRoots || IsLegacyView(options.View), options.MaxTraversalWork, options.InventoryDistinctTerminals).ReachedNodeIds);
+        return (report, Search(graph, starts, terminalNodes, options.MaxDepth, options.MaxPaths, options.MaxFrontier, options.IncludeLegacyRoots || IsLegacyView(options.View), options.MaxTraversalWork, options.InventoryDistinctTerminals, options.CompiledOnly).ReachedNodeIds);
     }
 
     internal static async Task<CombinedPathGraphInventory> BuildGraphInventoryAsync(
@@ -519,6 +557,8 @@ public static partial class CombinedDependencyPathReporter
             throw new ArgumentException("--max-traversal-work must be a positive integer.");
         }
         if (options.StartingNodeLimit <= 0) throw new ArgumentOutOfRangeException(nameof(options));
+        if (options.CompiledOnly && options.InventoryDistinctTerminals)
+            throw new ArgumentException("Compiled-only traversal does not support terminal inventory traversal.");
 
         if (!string.IsNullOrWhiteSpace(options.ToSurface))
         {
@@ -595,7 +635,7 @@ public static partial class CombinedDependencyPathReporter
             // Preserve bounded outgoing-graph observations even when the index
             // contains no supported terminal surface. The public path result
             // remains SelectorNoMatch and makes no terminal claim.
-            search = Search(graph, startNodes, terminalNodes, options.MaxDepth, options.MaxPaths, options.MaxFrontier, legacyMode, options.MaxTraversalWork, options.InventoryDistinctTerminals);
+            search = Search(graph, startNodes, terminalNodes, options.MaxDepth, options.MaxPaths, options.MaxFrontier, legacyMode, options.MaxTraversalWork, options.InventoryDistinctTerminals, options.CompiledOnly);
             gaps.AddRange(search.Gaps);
             truncated = truncated || search.Truncated;
             gaps.Add(new CombinedPathGap(
@@ -615,15 +655,24 @@ public static partial class CombinedDependencyPathReporter
         }
         else
         {
-            search = Search(graph, startNodes, terminalNodes, options.MaxDepth, options.MaxPaths, options.MaxFrontier, legacyMode, options.MaxTraversalWork, options.InventoryDistinctTerminals);
+            search = Search(graph, startNodes, terminalNodes, options.MaxDepth, options.MaxPaths, options.MaxFrontier, legacyMode, options.MaxTraversalWork, options.InventoryDistinctTerminals, options.CompiledOnly);
             paths.AddRange(search.Paths);
             gaps.AddRange(search.Gaps);
             truncated = truncated || search.Truncated;
 
             if (paths.Count == 0)
             {
-                var gap = CreateNoPathGap(read, graph, startNodes, options.MaxDepth, options.MaxFrontier, legacyMode);
-                if (legacyMode && gap.Classification == CombinedDependencyPathClassifications.NoBackendEvidence)
+                var gap = options.CompiledOnly
+                    ? new CombinedPathGap("gap:compiled-baseline:no-path", "CompiledBaselineNoPath",
+                        CombinedDependencyPathClassifications.AnalysisGap,
+                        "No terminal path was retained under the compiled-only edge scope. Source bridges were excluded; this does not prove absence of backend behavior.",
+                        null, sourceFilter, startNodes[0].NodeId, null, QueryGapRuleId, EvidenceTiers.Tier4Unknown, null, null, "compiled-scope")
+                    : CreateNoPathGap(read, graph, startNodes, options.MaxDepth, options.MaxFrontier, legacyMode);
+                if (options.CompiledOnly)
+                {
+                    gaps.Add(gap);
+                }
+                else if (legacyMode && gap.Classification == CombinedDependencyPathClassifications.NoBackendEvidence)
                 {
                     paths.AddRange(startNodes
                         .Take(options.MaxPaths)
@@ -742,7 +791,7 @@ public static partial class CombinedDependencyPathReporter
                 AlgorithmVersion,
                 CombinedReportHelpers.NormalizeMessageDirection(options.MessageDirection, "paths"),
                 options.MaxTraversalWork,
-                options.ExactFromSymbol) { SymbolRoots = options.SymbolRoots },
+                options.ExactFromSymbol) { SymbolRoots = options.SymbolRoots, TraversalScope = options.CompiledOnly ? "compiled-il-with-root-attachment" : null },
             read.Sources.Select(source => legacyMode ? SanitizeSource(source) : source).OrderBy(source => source.Label, StringComparer.Ordinal).ThenBy(source => source.SourceIndexId, StringComparer.Ordinal).ToArray(),
             new CombinedPathSummary(
                 read.Sources.Count,
@@ -763,6 +812,8 @@ public static partial class CombinedDependencyPathReporter
                 participatingNodes,
                 participatingEdges),
             ReportLimitations(legacyMode, participatingNodes, sortedGaps)
+                .Concat(options.CompiledOnly ? new[]
+                { "Compiled-IL scope permits at most one evidenced root attachment, then only retained compiled calls and compiled database API candidates. Source bridges are excluded; root attachment is not IL, runtime dispatch, build authenticity or historical parity proof." } : [])
                 .Concat(read.CompiledAttachmentLinks.Count == 0 ? [] : new[]
                 { "Compiled attachment joins use an explicitly validated local parent/index link and preserve original fact namespaces. They remain static review evidence, not runtime execution, source-line identity, build authenticity or full-site coverage." }).ToArray())
         {
@@ -967,10 +1018,15 @@ public static partial class CombinedDependencyPathReporter
         IndexedGraphStore? graphStorage = null)
     {
         var graph = new EvidenceGraph(read.Sources, budget, graphStorage);
+        graph.CommandFacts = read.Facts;
         graphStorage?.MarkObservationStage("initial-nodes");
         var factsById = CombinedFactsById(read.Facts);
         foreach (var fact in IdentityOrderedFacts(read.Facts))
         {
+            // Operand/configuration rows are supporting evidence for exact
+            // IL call sites, not independent symbols or traversal roots.
+            if (fact.FactType is FactTypes.ManagedIlCallValuesObserved or FactTypes.ManagedIlDatabaseCommandCandidate)
+                continue;
             if (fact.FactType is FactTypes.HttpCallDetected or FactTypes.HttpRouteBinding)
             {
                 graph.AddNode(ToEndpointNode(fact));
@@ -2652,13 +2708,13 @@ public static partial class CombinedDependencyPathReporter
             return;
         }
 
-        var creations = facts
+        var creations = FactsOfTypes(facts, FactTypes.CallEdge)
             .Where(fact => fact.FactType == FactTypes.CallEdge
                 && IsSupportedVisualBasicReceiverCreation(fact)
                 && !string.IsNullOrWhiteSpace(CombinedDependencyReporter.FirstValue(fact.Properties, "assignedTo"))
                 && !string.IsNullOrWhiteSpace(CombinedDependencyReporter.FirstValue(fact.Properties, "calleeContainingType", "calleeName")))
             .ToArray();
-        var declarations = facts
+        var declarations = FactsOfTypes(facts, FactTypes.MethodDeclared)
             .Where(fact => fact.FactType == FactTypes.MethodDeclared
                 && fact.RuleId == RuleIds.VisualBasicSemanticDeclarations
                 && fact.EvidenceTier == EvidenceTiers.Tier1Semantic
@@ -2666,26 +2722,26 @@ public static partial class CombinedDependencyPathReporter
                 && !string.IsNullOrWhiteSpace(CombinedDependencyReporter.FirstValue(fact.Properties, "containingType"))
                 && !string.IsNullOrWhiteSpace(CombinedDependencyReporter.FirstValue(fact.Properties, "methodName")))
             .ToArray();
-        var syntaxDeclarations = facts
+        var syntaxDeclarations = FactsOfTypes(facts, FactTypes.MethodDeclared)
             .Where(fact => fact.FactType == FactTypes.MethodDeclared
                 && fact.RuleId == RuleIds.VisualBasicSyntaxDeclarations
                 && fact.EvidenceTier == EvidenceTiers.Tier3SyntaxOrTextual
                 && !string.IsNullOrWhiteSpace(CombinedDependencyReporter.FirstValue(fact.Properties, "containingType"))
                 && !string.IsNullOrWhiteSpace(CombinedDependencyReporter.FirstValue(fact.Properties, "methodName", "name")))
             .ToArray();
-        var fieldDeclarations = facts
+        var fieldDeclarations = FactsOfTypes(facts, FactTypes.FieldDeclared)
             .Where(fact => fact.FactType == FactTypes.FieldDeclared
                 && fact.RuleId == RuleIds.VisualBasicSyntaxDeclarations
                 && !string.IsNullOrWhiteSpace(CombinedDependencyReporter.FirstValue(fact.Properties, "containingType"))
                 && !string.IsNullOrWhiteSpace(CombinedDependencyReporter.FirstValue(fact.Properties, "fieldName")))
             .ToArray();
-        var syntaxTypeDeclarations = facts
+        var syntaxTypeDeclarations = FactsOfTypes(facts, FactTypes.TypeDeclared)
             .Where(fact => fact.FactType == FactTypes.TypeDeclared
                 && fact.RuleId == RuleIds.VisualBasicSyntaxDeclarations
                 && fact.EvidenceTier == EvidenceTiers.Tier3SyntaxOrTextual
                 && !string.IsNullOrWhiteSpace(CombinedDependencyReporter.FirstValue(fact.Properties, "name", "qualifiedName")))
             .ToArray();
-        var receiverBodyFacts = facts
+        var receiverBodyFacts = FactsOfTypes(facts, FactTypes.CallEdge, FactTypes.MethodInvoked, FactTypes.ObjectCreated)
             .Where(fact => IsVisualBasicReceiverBodyFact(fact)
                 && VisualBasicQualifiedMemberKey(fact.SourceSymbol) is not null)
             .Select(fact => new { Fact = fact, Member = VisualBasicQualifiedMemberKey(fact.SourceSymbol)!.Value })
@@ -3033,13 +3089,13 @@ public static partial class CombinedDependencyPathReporter
             .Where(fact => fact.RuleId == RuleIds.VisualBasicSyntaxDeclarations
                 && fact.EvidenceTier == EvidenceTiers.Tier3SyntaxOrTextual)
             .ToArray();
-        var bodyFacts = facts
+        var bodyFacts = FactsOfTypes(facts, FactTypes.CallEdge, FactTypes.MethodInvoked, FactTypes.ObjectCreated)
             .Where(fact => IsVisualBasicReceiverBodyFact(fact)
                 && !string.IsNullOrWhiteSpace(fact.SourceSymbol))
             .GroupBy(fact => fact.SourceSymbol!.Trim(), StringComparer.OrdinalIgnoreCase)
             .ToDictionary(group => group.Key, group => group.OrderBy(fact => fact.CombinedFactId, StringComparer.Ordinal).ToArray(), StringComparer.OrdinalIgnoreCase);
 
-        foreach (var call in facts
+        foreach (var call in FactsOfTypes(facts, FactTypes.CallEdge)
             .Where(fact => fact.FactType == FactTypes.CallEdge
                 && fact.RuleId == RuleIds.VisualBasicSyntaxCallGraph
                 && string.Equals(CombinedDependencyReporter.FirstValue(fact.Properties, "callKind"), "SyntaxInvocation", StringComparison.Ordinal)
@@ -3137,7 +3193,7 @@ public static partial class CombinedDependencyPathReporter
                 + CombinedDependencyReporter.FirstValue(fact.Properties, "parameterCount"), StringComparer.OrdinalIgnoreCase)
             .ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.OrdinalIgnoreCase);
 
-        var bodyFacts = facts
+        var bodyFacts = FactsOfTypes(facts, FactTypes.CallEdge, FactTypes.MethodInvoked, FactTypes.ObjectCreated)
             .Where(fact => IsVisualBasicReceiverBodyFact(fact)
                 && !string.IsNullOrWhiteSpace(fact.SourceSymbol))
             .GroupBy(fact => $"{fact.SourceIndexId}\0{fact.SourceSymbol}", StringComparer.OrdinalIgnoreCase)
@@ -3145,7 +3201,7 @@ public static partial class CombinedDependencyPathReporter
                 group => group.OrderBy(fact => fact.CombinedFactId, StringComparer.Ordinal).ToArray(),
                 StringComparer.OrdinalIgnoreCase);
 
-        foreach (var creation in facts
+        foreach (var creation in FactsOfTypes(facts, FactTypes.ObjectCreated)
             .Where(fact => fact.FactType == FactTypes.ObjectCreated
                 && fact.RuleId == RuleIds.VisualBasicSyntaxObjectCreation
                 && fact.EvidenceTier == EvidenceTiers.Tier3SyntaxOrTextual
@@ -4091,7 +4147,42 @@ public static partial class CombinedDependencyPathReporter
         return cleaned.Length == 0 ? null : cleaned.ToLowerInvariant();
     }
 
-    private static SearchResult Search(EvidenceGraph graph, IReadOnlyList<GraphNode> starts, IReadOnlySet<string> terminalNodeIds, int maxDepth, int maxPaths, int maxFrontier, bool depthFirst = false, int maxTraversalWork = 100_000, bool inventoryDistinctTerminals = false)
+    internal static bool CompiledBaselineAllowsEdge(string kind, bool enteredCompiled)
+        => kind is "compiled-il-call" or "compiled-il-callvirt-candidate" or "compiled-database-api-candidate"
+            || (!enteredCompiled && kind is "legacy-root-selection" or "compiled-source-identity"
+                or "projectless-source-pdb-identity" or "projectless-publish-member-candidate"
+                or "projectless-publish-method-candidate");
+
+    private static (Dictionary<string, int>? Distances, int Work) FindTerminalDistances(
+        EvidenceGraph graph, IReadOnlySet<string> terminals, int maxDepth, int maxStates, int maxWork)
+    {
+        if (terminals.Count > maxStates) return (null, 0);
+        var distances = terminals.Order(StringComparer.Ordinal).ToDictionary(id => id, _ => 0, StringComparer.Ordinal);
+        var pending = new Queue<string>(distances.Keys);
+        var work = 0;
+        while (pending.TryDequeue(out var node))
+        {
+            if (work >= maxWork) return (null, work);
+            work++;
+            var depth = distances[node];
+            if (depth >= maxDepth) continue;
+            using var predecessors = graph.Incoming.Predecessors(node).GetEnumerator();
+            while (true)
+            {
+                if (work >= maxWork) return (null, work);
+                if (!predecessors.MoveNext()) break;
+                work++;
+                var predecessor = predecessors.Current;
+                if (distances.ContainsKey(predecessor)) continue;
+                if (distances.Count >= maxStates) return (null, work);
+                distances.Add(predecessor, depth + 1);
+                pending.Enqueue(predecessor);
+            }
+        }
+        return (distances, work);
+    }
+
+    private static SearchResult Search(EvidenceGraph graph, IReadOnlyList<GraphNode> starts, IReadOnlySet<string> terminalNodeIds, int maxDepth, int maxPaths, int maxFrontier, bool depthFirst = false, int maxTraversalWork = 100_000, bool inventoryDistinctTerminals = false, bool compiledOnly = false)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxTraversalWork);
         // Legacy reports enumerate bounded evidence paths, not shortest paths.
@@ -4143,6 +4234,18 @@ public static partial class CombinedDependencyPathReporter
         var sequence = 0;
         var work = 0;
         var workExhausted = false;
+        Dictionary<string, int>? terminalDistances = null;
+        if (depthFirst && !compiledOnly && !inventoryDistinctTerminals
+            && terminalNodeIds.Count > 0 && maxTraversalWork >= 1024)
+        {
+            // A reverse over-approximation can only rule out a depth-bounded
+            // completion; it cannot admit a path or prove runtime reachability.
+            // Charge every visited key/reference to the same global work budget.
+            // If the bounded pass is incomplete, discard it and enumerate as
+            // before. Never prune using a partial reverse index.
+            (terminalDistances, work) = FindTerminalDistances(graph, terminalNodeIds,
+                maxDepth, maxFrontier, maxTraversalWork / 4);
+        }
         if (inventoryDistinctTerminals)
         {
             var inventory = FindDistinctTerminalWitnesses(
@@ -4337,6 +4440,23 @@ public static partial class CombinedDependencyPathReporter
                 }
                 CountWork(state.RootNodeId);
                 var edge = orderedOutgoing[edgeIndex];
+                // Root attachment preserves its evidence tier; it is not an IL call.
+                // Once attached, source reconciliation/receiver/constructor edges
+                // cannot be used to leave and re-enter the compiled call tree.
+                if (compiledOnly && !CompiledBaselineAllowsEdge(edge.EdgeKind, state.CompiledBaselineEntered)) continue;
+                if (terminalDistances is not null && terminalDistances.ContainsKey(state.RootNodeId)
+                    && (!terminalDistances.TryGetValue(edge.ToNodeId, out var remainingDepth)
+                    || remainingDepth > maxDepth - state.EdgeIds.Count - 1))
+                {
+                    // The over-approximate graph cannot finish this branch inside
+                    // the depth cap. Retain an explicit depth gap; do not turn
+                    // pruning into a NoBackendEvidence or completeness claim.
+                    truncated = true;
+                    traversal[state.RootNodeId].MarkTruncated("depth");
+                    RecordNodeShape(traversal[state.RootNodeId], edge.ToNodeId, frontier: true);
+                    gaps.Add(TruncatedGap("depth", edge.ToNodeId, graph));
+                    continue;
+                }
                 if (IsDispatchCandidateCrossHop(graph, state, edge))
                 {
                     edgeFilteredByDispatchCrossHop = true;
@@ -4369,7 +4489,8 @@ public static partial class CombinedDependencyPathReporter
                     observation.TraversedEdgeKinds.Add(edge.EdgeKind);
                     observation.TraversedRuleIds.Add(edge.RuleId);
                 }
-                var next = new PathState(state.RootNodeId, [.. state.NodeIds, edge.ToNodeId], [.. state.EdgeIds, edge.EdgeId]);
+                var next = new PathState(state.RootNodeId, [.. state.NodeIds, edge.ToNodeId], [.. state.EdgeIds, edge.EdgeId])
+                { CompiledBaselineEntered = state.CompiledBaselineEntered || edge.EdgeKind != "legacy-root-selection" };
                 if (depthFirst) EnqueueFirst(next);
                 else EnqueueLast(next);
                 reachedNodeIds.Add(edge.ToNodeId);
@@ -4400,7 +4521,10 @@ public static partial class CombinedDependencyPathReporter
         // reached the depth frontier without a terminal, perform one bounded,
         // cycle-safe reachability prewalk and retain a deterministic shortest
         // terminal witness. Other truncated branches remain explicitly partial.
-        if (!inventoryDistinctTerminals && !workExhausted && paths.Count < maxPaths && terminalNodeIds.Count > 0)
+        // The prewalk has no compiled root-attachment state or edge scope.
+        // Compiled-only queries must retain the depth gap instead of admitting
+        // an unrestricted witness (and inflating their reachable-node diagnostics).
+        if (!compiledOnly && !inventoryDistinctTerminals && !workExhausted && paths.Count < maxPaths && terminalNodeIds.Count > 0)
         {
             foreach (var start in starts
                 .OrderBy(node => node.SourceLabel, StringComparer.Ordinal)
@@ -4805,6 +4929,7 @@ public static partial class CombinedDependencyPathReporter
     {
         var nodes = state.NodeIds.Select(nodeId => graph.Nodes[nodeId].ToReportNode()).ToArray();
         var edges = state.EdgeIds.Select(edgeId => graph.EdgesById[edgeId].ToReportEdge()).ToArray();
+        ProjectCompiledCommandValues(graph, nodes, edges);
         var classification = Classify(edges);
         return new CombinedPath(
             pathId,
@@ -6375,6 +6500,15 @@ public static partial class CombinedDependencyPathReporter
     {
         return edgeKind switch
         {
+            // Encoded calls and their evidenced root attachments must be walked
+            // before source alias/receiver detours. Otherwise a deep mixed graph
+            // can enumerate exponentially many bridge variants without ever
+            // reaching its already-admitted IL terminal. This changes scheduling,
+            // not admission, evidence tiers, or the global work/path limits.
+            "compiled-il-call" or "compiled-il-callvirt-candidate"
+                or "compiled-database-api-candidate" or "compiled-source-identity"
+                or "projectless-source-pdb-identity" or "projectless-publish-member-candidate"
+                or "projectless-publish-method-candidate" => 0,
             "endpoint-match" => 0,
             "calls" => 1,
             "creates" => 2,
@@ -6560,11 +6694,40 @@ public static partial class CombinedDependencyPathReporter
         public GraphEdges Edges { get; } = new(store);
         public GraphEdgeIds EdgesById { get; } = new(store);
         public GraphOutgoing Outgoing { get; } = new(store);
+        public GraphIncoming Incoming { get; } = new(store);
         public HashSet<string> CallFactSourceNodeIds { get; } = new(StringComparer.Ordinal);
         public HashSet<string> MethodInvocationSourceNodeIds { get; } = new(StringComparer.Ordinal);
         public HashSet<string> SourceBodyEvidenceNodeIds { get; } = new(StringComparer.Ordinal);
         public HashSet<string> ExactMethodDeclarationNodeIds { get; } = new(StringComparer.Ordinal);
         public List<CombinedPathGap> Gaps { get; } = [];
+        public IReadOnlyList<CombinedFactRow> CommandFacts { get; set; } = [];
+        public string? CommandProjectionGeneratorSha256 { get; set; }
+        private IReadOnlyDictionary<string, CombinedFactRow>? commandFactsByCombinedId;
+        private IReadOnlyDictionary<(string SourceIndexId, string OriginalFactId), CombinedFactRow[]>? commandFactsByOriginalId;
+        public IReadOnlyDictionary<string, CombinedFactRow> CommandFactsByCombinedId
+            => commandFactsByCombinedId ??= CombinedFactsById(CommandFacts, uniqueOnly: true);
+        public IReadOnlyDictionary<(string SourceIndexId, string OriginalFactId), CombinedFactRow[]> CommandFactsByOriginalId
+            => commandFactsByOriginalId ??= CombinedFactsByOriginalId(CommandFacts);
+        private Dictionary<(string SourceIndexId, string CallFactId), CombinedFactRow[]>? commandOperandFacts;
+        private Dictionary<(string Source, string Type, string Reference), CombinedFactRow[]>? commandRelatedFacts;
+        public IReadOnlyList<CombinedFactRow> CommandRelatedFacts(string source, string type, string reference)
+        {
+            if (CommandFacts is IIndexedCombinedFacts indexed) return indexed.CommandRelatedFacts(source, type, reference);
+            commandRelatedFacts ??= FactsOfTypes(CommandFacts, FactTypes.ManagedIlBodyDeclared,
+                    FactTypes.ManagedIlCallObserved, FactTypes.ManagedIlReturnValuesObserved)
+                .Where(fact => CommandFactReference(fact) is not null)
+                .GroupBy(fact => (fact.SourceIndexId, fact.FactType, CommandFactReference(fact)!))
+                .ToDictionary(group => group.Key, group => group.Take(2).ToArray());
+            return commandRelatedFacts.GetValueOrDefault((source, type, reference)) ?? [];
+        }
+        public IReadOnlyList<CombinedFactRow> CommandOperandFacts(string sourceIndexId, string callFactId)
+        {
+            commandOperandFacts ??= FactsOfTypes(CommandFacts, FactTypes.ManagedIlCallValuesObserved)
+                .Where(fact => !string.IsNullOrWhiteSpace(fact.Properties.GetValueOrDefault("ilCallFactId")))
+                .GroupBy(fact => (fact.SourceIndexId, CallFactId: fact.Properties["ilCallFactId"]))
+                .ToDictionary(group => group.Key, group => group.Take(2).ToArray());
+            return commandOperandFacts.GetValueOrDefault((sourceIndexId, callFactId)) ?? [];
+        }
         private readonly Dictionary<string, CombinedReportSource> sourcesById = sources.ToDictionary(source => source.SourceIndexId, StringComparer.Ordinal);
 
         public IEnumerable<IReadOnlyList<(GraphNode Node, SymbolAlias Alias)>> SymbolReconciliationGroups()
@@ -6670,6 +6833,7 @@ public static partial class CombinedDependencyPathReporter
                 throw new ReportInputLimitException("graph-edges");
 
             Edges.Add(edge);
+            Incoming.Add(edge);
             if (store is not null) return;
             EdgesById[edge.EdgeId] = edge;
             Outgoing.Add(edge);
@@ -6764,7 +6928,10 @@ public static partial class CombinedDependencyPathReporter
         IReadOnlyList<string> NodeIds,
         IReadOnlyList<string> EdgeIds,
         int NextOutgoingIndex = 0,
-        bool TraversedOutgoing = false);
+        bool TraversedOutgoing = false)
+    {
+        public bool CompiledBaselineEntered { get; init; }
+    }
 
     private enum DispatchTraversalMode
     {
@@ -6897,7 +7064,9 @@ public static partial class CombinedDependencyPathReporter
         string? ConfigKey,
         string? OperationDirection = null,
         string? SurfaceSubtype = null,
-        IReadOnlyList<string>? Limitations = null)
+        IReadOnlyList<string>? Limitations = null,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        CompiledCommandConfigurationCandidate? CommandBinding = null)
     {
         public CombinedPathNode ToReportNode()
         {
@@ -6931,7 +7100,8 @@ public static partial class CombinedDependencyPathReporter
                 ConfigKey,
                 OperationDirection,
                 SurfaceSubtype,
-                Limitations);
+                Limitations,
+                CommandBinding);
         }
     }
 

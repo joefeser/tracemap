@@ -83,10 +83,24 @@ public static class TraceMapCommand
                 "local-review" => await LocalReviewCommand.RunAsync(rest, output, error, RunScanAsync, cancellationToken),
                 "webforms-review" => rest.FirstOrDefault() == "start"
                     ? await WebFormsReviewStartCommand.RunAsync(rest, output, error, RunNativeReviewScanAsync, cancellationToken)
+                    : rest.FirstOrDefault() == "migration-review"
+                    ? await WebFormsReviewExecutionCommand.MigrationReviewAsync(rest, output, error, RunNativeReviewScanAsync, cancellationToken)
+                    : rest.FirstOrDefault() == "query-migration"
+                    ? await WebFormsReviewExecutionCommand.QueryMigrationAsync(rest, output, error, cancellationToken)
+                    : rest.FirstOrDefault() == "migrate-config"
+                    ? await WebFormsConfigMigrationCommand.RunAsync(rest, output, error, cancellationToken)
+                    : rest.FirstOrDefault() == "import-proof"
+                    ? await WebFormsProofImportCommand.RunAsync(rest, output, error, cancellationToken)
                     : rest.FirstOrDefault() is "run" or "resume"
                     ? await WebFormsReviewExecutionCommand.RunAsync(rest, output, error, RunNativeReviewScanAsync, cancellationToken)
                     : rest.FirstOrDefault() == "query"
                     ? await WebFormsReviewExecutionCommand.QueryAsync(rest, output, error, cancellationToken)
+                    : rest.FirstOrDefault() == "recover-reports"
+                    ? await WebFormsReviewExecutionCommand.RecoverReportsAsync(rest, output, error, cancellationToken)
+                    : rest.FirstOrDefault() == "query-recovery"
+                    ? await WebFormsReviewExecutionCommand.QueryRecoveryAsync(rest, output, error, cancellationToken)
+                    : rest.FirstOrDefault() == "requery-handler"
+                    ? await WebFormsReviewExecutionCommand.RequeryHandlerAsync(rest, output, error, cancellationToken)
                     : rest.FirstOrDefault() == "status"
                     ? await WebFormsReviewExecutionCommand.StatusAsync(rest, output, error, cancellationToken)
                     : rest.FirstOrDefault() == "retain-tool"
@@ -295,11 +309,11 @@ public static class TraceMapCommand
         }
 
         var rewriteBefore = values.GetMany("--il-rewrite-before");
-        if (values.TryGetValue("--webforms-published-root", out var declaredPublishedRoot)
-            && !string.IsNullOrWhiteSpace(declaredPublishedRoot)
+        if ((values.TryGetValue("--webforms-published-root", out var declaredPublishedRoot)
+            && !string.IsNullOrWhiteSpace(declaredPublishedRoot) || values.TryGetValue("--webforms-publish-source-base", out _))
             && (!values.TryGetValue("--webforms-publish-receipt", out var declaredPublishReceipt) || string.IsNullOrWhiteSpace(declaredPublishReceipt)))
         {
-            await error.WriteLineAsync("error: --webforms-published-root requires --webforms-publish-receipt.");
+            await error.WriteLineAsync("error: --webforms-published-root requires --webforms-publish-receipt; --webforms-publish-source-base also requires that receipt.");
             return 1;
         }
         var rewriteAfter = values.GetMany("--il-rewrite-after");
@@ -415,7 +429,8 @@ public static class TraceMapCommand
             ExactSourceScope: values.HasFlag("--exact-source-scope"),
             ExactSourceMaxFiles: ParsePositiveInt(values, "--exact-source-max-files", 256),
             ExactSourceMaxBytes: ParsePositiveLong(values, "--exact-source-max-bytes", 67_108_864),
-            WebFormsPublishedRootPath: values.GetValueOrDefault("--webforms-published-root"));
+            WebFormsPublishedRootPath: values.GetValueOrDefault("--webforms-published-root"),
+            WebFormsPublishSourceRelativeBase: values.GetValueOrDefault("--webforms-publish-source-base"));
         var receiptRecorder = new ScanReceiptRecorder(
             scanOptions,
             sqlValidationSummaryPaths.Append(sqlValidationAsOf?.ToString("O") ?? string.Empty));
@@ -2906,6 +2921,8 @@ public static class TraceMapCommand
                                        Explicit local-only webforms-publish-binding.v1 receipt. Never discovered.
               --webforms-published-root <absolute-path>
                                        Optional explicit published-file root, independent of receipt location. Hash checked, never written.
+              --webforms-publish-source-base <repo-relative-folder>
+                                       Explicit receipt source-path base inside the repository; receipts remain unchanged.
               --pdb-input <path>       Explicit portable PDB, assembly with embedded portable PDB, or Windows PDB input. Repeatable; never discovered.
               --compiled-max-artifacts <count>
               --compiled-max-file-bytes <count>

@@ -44,7 +44,49 @@ internal sealed record IlCallObservation(
     string Opcode,
     string ReferenceKind,
     string ReferenceToken,
-    string TargetIdentity);
+    string TargetIdentity,
+    IlCallStackShape? StackShape = null);
+
+internal sealed record IlCallStackShape(int ParameterCount, bool HasThis, bool ReturnsValue, bool Supported,
+    string ByReferenceParameters = "");
+internal sealed record IlValueOrigin(string Kind, string Identity);
+internal static class IlValueAddresses
+{
+    internal static bool IsAddress(IlValueOrigin value) => value.Kind is "local-address" or "argument-address" or "field-address";
+    internal static IlValueOrigin Create(string kind, int slot, IlValueOrigin value)
+    {
+        if (value.Identity.Length > 1024) return new("address-unavailable", "");
+        var identity = $"{slot.ToString(System.Globalization.CultureInfo.InvariantCulture)}:{value.Kind}:{value.Identity}";
+        return identity.Length > 1024 ? new("address-unavailable", "") : new(kind, identity);
+    }
+    internal static IlValueOrigin Target(IlValueOrigin value)
+    {
+        for (var depth = 0; depth < 64; depth++)
+        {
+            if (!IsAddress(value)) return value;
+            var parts = value.Identity.Split(':', 3);
+            if (parts.Length != 3) return new("address-unavailable", "");
+            value = new(parts[1], parts[2]);
+        }
+        return new("address-unavailable", "");
+    }
+    internal static bool Slot(IlValueOrigin value, out int slot)
+    {
+        slot = -1;
+        return value.Kind is "local-address" or "argument-address"
+            && int.TryParse(value.Identity.Split(':', 2)[0], System.Globalization.NumberStyles.None,
+                System.Globalization.CultureInfo.InvariantCulture, out slot);
+    }
+}
+internal sealed record IlCallValueObservation(long Offset, int Region, string State,
+    IlValueOrigin Receiver, IReadOnlyList<IlValueOrigin> Arguments, IlValueOrigin Result);
+internal sealed record IlReturnValueObservation(long Offset, string State, IlValueOrigin Origin);
+internal sealed record IlValueExceptionEntry(long Offset, int StackCount);
+internal sealed record IlValueControlNode(long Offset, IReadOnlyList<long> Successors, bool InvalidatesConfiguration,
+    int ExceptionEntryStackCount = -1, IReadOnlyList<IlValueOrigin>? ExposedOrigins = null);
+internal sealed record IlValueFlowObservation(IReadOnlyList<IlCallValueObservation> Calls, IReadOnlyList<string> Gaps,
+    IReadOnlyList<IlValueControlNode>? ControlFlow = null, int WorkUnits = 0,
+    IReadOnlyList<IlReturnValueObservation>? Returns = null);
 
 internal sealed record IlBodyObservation(
     string MetadataToken,
@@ -65,7 +107,8 @@ internal sealed record IlBodyObservation(
     string BodyIdentity,
     string BodySha256,
     IReadOnlyList<IlCallObservation> Calls,
-    IReadOnlyList<string>? DiagnosticInstructions = null);
+    IReadOnlyList<string>? DiagnosticInstructions = null,
+    IlValueFlowObservation? ValueFlow = null);
 
 internal sealed record EvaluatedIlInput(
     IlInputOutcome Outcome,

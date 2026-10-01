@@ -1667,6 +1667,45 @@ not recorded here.
 
 ## Remaining follow-up
 
+### Local config migration branch (2026-09-29)
+
+- Branch `codex/webforms-config-migration` starts from merged dev `8cae5664`.
+  No private user configs are available here or committed. The local .NET
+  `migrate-config` command converts the known pipeline JSON/JSONC schema into a
+  separate native draft and hash-bound local receipt; `wmigrate.ps1` is only a
+  short build/launch/prompt helper for one or two explicitly named review roots.
+- Existing source/folder/project/page settings are preserved. Missing commit,
+  publish inventory/membership and binding/attestation are never inferred.
+  Drafts remain not ready; discover and virtual-route cases require owner input.
+  Original config/scans remain immutable; two-repository merge replacement is
+  not implemented or claimed by this config migration.
+- Validation results are recorded with the final commit handoff; user-machine
+  acceptance remains separate. No cleanup, scans or publishing are performed.
+
+### Retained baseline proof import (2026-09-29)
+
+- The user confirmed unchanged source/solution and existing aspnet_compiler
+  output and authorized building/pushing the verification helper. The actual
+  private input files remain on the user's Windows machine, not in this repo.
+- Native `import-proof` accepts an exact draft, retained proof root and original
+  publish root, verifies legacy source/assembly/map and binding commitments,
+  exact source commit/remote, clean committed source membership, raw retained
+  source/DLL bytes, and primary metadata binding admission. It never issues a
+  new attestation, edits source, infers ownership from DLL names or substitutes
+  another commit/root when inputs do not match.
+- Legacy selected DLLs remain primary; artifact context stays unbound dependency
+  context. Baseline selected pages are explicit in the output and receipt;
+  migration draft source/project scopes and budgets stay unchanged. Retained
+  source/publish/binding receipts remain external and byte-identical.
+- `wverify.ps1` is a prompt/build/launch helper. TEMP candidates require explicit
+  owner selection, not newest discovery. Default is input verification only;
+  `-Run` invokes existing native start into a separate output for new document
+  generation. Existing output and overlaps are refused; no cleanup or original
+  solution rebuild is performed. Private parity is not claimed, and backend
+  source scopes/two-repository merging remain separate existing-workflow gates.
+- Public direct/import/helper validation and final-head build/full-suite results
+  are recorded in the handoff. No private config, path or input was committed.
+
 ### PR #797 round-one review repair (2026-09-29)
 
 - Owner authorized up to four review/fix rounds, no merge. Initial settled ACK
@@ -1709,3 +1748,92 @@ not recorded here.
 Consolidate the long manual compatibility reference only after its diagnostic
 and recovery entry points have equivalent behavioral tests. Ticket automation
 and licensing remain deliberately separate private follow-up work.
+
+### Retained-proof import diagnostic repair (2026-09-29)
+
+- Private Windows verification stopped with the generic input/output-invalid
+  code before any scan. Its exact cause is not established by the screenshot.
+- Import now reports a closed stage and safe failure category; missing required
+  receipt fields expose only schema field names, never private paths or raw
+  JSON/IO exception text. Preparation failures are handled by the direct import
+  entry point, not only the outer CLI dispatcher.
+- Added direct-entry negative regressions for missing draft/receipts/source/DLL,
+  missing receipt fields/rosters, malformed JSON and dirty source scope. No root
+  rebasing, receipt rewriting, new attestation or verification bypass was added.
+- Private acceptance still requires a rerun and actual document comparison.
+- Repair validation: solution build passed with zero warnings/errors; 92 focused
+  migration/import/preparation tests passed with zero failures/skips; private
+  path guard and diff whitespace checks passed. The prior 2,840-test full-suite
+  pass belongs to the parent head, not this diagnostic repair.
+
+### Explicit retained receipt source base (2026-09-29)
+
+- Owner confirmed the configured root is the unchanged repository root, while
+  the website is a child folder and old receipts use website-relative paths.
+  The importer previously interpreted these paths at the repository root.
+- Added explicit import/helper source-base selection and an additive native
+  config field. Repository/source/project scopes and receipt bytes are preserved;
+  selected page and emitted evidence paths use the repository-relative prefix.
+- The base is bound into import, publish provenance and scan authorization
+  fingerprints and propagated through preflight, fresh execution and attachment.
+  No base discovery, root mutation, receipt rewriting or new attestation.
+- Public regressions cover root and nested website layouts, unsafe bases,
+  changed bytes, virtual-route preservation and the real helper/native pipeline.
+  Private document parity remains owner verification, not a synthetic-test claim.
+- Validation: clean solution build (zero warnings/errors), 651 broader Web Forms/
+  scan-receipt/attachment tests and 156 final focused import/migration/preparation/
+  publish/receipt tests passed, zero failures/skips. The focused run includes the
+  final added partition-base and nested-repository regressions. Private-path and
+  whitespace guards passed; the whole-repository suite was not rerun for this slice.
+
+### Read-only retained binding admission diagnostic (2026-09-29)
+
+- Private rerun passed source-base, byte/commit/receipt checks but stopped at
+  retained compiled binding admission. The cause is not established by that
+  screenshot. Inspection found a possible historical Windows relative-locator
+  issue; no receipt rebind, metadata-policy bypass or attestation was inferred.
+- Added explicit helper/native diagnostic mode with counts and closed gap/state
+  codes only, no artifacts or scan. Existing failed outputs and original proof
+  inputs are retained unchanged. Normal failures also report admission counts.
+- Public tests pin locator/identity rejection summaries, original/staging/output
+  byte preservation and real helper diagnostics for root/nested layouts.
+- Validation: clean solution build, 104 focused import/migration/preparation
+  tests plus all three final locator/identity/traversal diagnostic cases passed;
+  zero warnings, failures or skips. Private-path and whitespace guards passed.
+  No private acceptance or whole-repository-suite rerun is claimed.
+
+### Retained locator projection (2026-09-29)
+
+- Owner's read-only private diagnostic established 2 expected/observed primary
+  DLLs, 0 locator matches, and 2 retained `../` locators. Admission was
+  unbound; metadata-reader disagreement and unresolved reference gaps remain.
+- Fixed Windows external-path classification so machine-root-relative paths
+  cannot be treated as repository children. The importer projects only exact
+  original proof-copy coordinates, checks both copied and published bytes and
+  assembly identity, and emits a separate generator/input-hashed local binding
+  receipt. Original owner receipts and source/build claims are unchanged.
+- The helper preserves prior failed output and asks for a new short run-folder
+  name. Private native rerun and baseline document comparison remain required;
+  synthetic tests cannot establish private report parity.
+- Validation: whole solution builds with zero warnings/errors; 657 targeted Web
+  Forms, managed metadata and scan-execution-receipt tests passed with zero
+  failures/skips. The final tampered proof-copy refusal test was rerun after its
+  last edit and passed. Private rerun and whole-repository tests remain unrun.
+
+### Pinned run failure triage helper (2026-09-29)
+
+- The owner's next private attempt imported and projected both primary bindings,
+  preflighted 106 inputs, then failed after a roughly ten-minute native run with
+  a generic checkpoint/input/output category. No report completion or private
+  parity is established by that screenshot.
+- Added a read-only, bounded `wstatus.ps1` selector for retained runs. It emits
+  only recent checkpoint sequence/state/gap codes and does not build, resume,
+  scan, mutate inputs or claim authoritative checkpoint validation. A public
+  PowerShell test covers direct path, numeric selection, privacy redaction and
+  byte preservation.
+- The owner's checkpoint summary then showed scan completion at sequence 2 and
+  a failed report attempt at sequence 4, with only the generic report/artifact
+  validation gap. Extended the helper to accept the unique folder name and
+  report fixed partial-output presence/byte counts, without reading their
+  contents or repeating the retained scan. The exact private report failure
+  remains unestablished pending that read-only footprint.

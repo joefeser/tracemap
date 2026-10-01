@@ -72,7 +72,9 @@ public static partial class WebFormsReviewPreflightCommand
             foreach (var source in sources.EnumerateArray())
             {
                 token.ThrowIfCancellationRequested();
-                var name = source.GetProperty("path").GetString() ?? throw Fail("PUBLISH_RECEIPT_INVALID");
+                var receiptName = source.GetProperty("path").GetString() ?? throw Fail("PUBLISH_RECEIPT_INVALID");
+                _ = Child(config.SourceRoot, receiptName); // Validate independently; a prefix must not hide traversal.
+                var name = ReceiptSourcePath(config, receiptName);
                 var sha = source.GetProperty("sha256").GetString();
                 if (!sourceNames.Add(name) || !IsHex(sha, 64)) throw Fail("PUBLISH_RECEIPT_INVALID");
                 if (globalSources.TryGetValue(name, out var prior) && prior != (name, sha!)) throw Fail("PUBLISH_RECEIPT_INVALID");
@@ -98,6 +100,7 @@ public static partial class WebFormsReviewPreflightCommand
             {
                 var sourcePath = page.TryGetProperty("sourcePath", out var source) && source.ValueKind == JsonValueKind.String
                     ? source.GetString() : page.GetProperty("virtualPath").GetString()?.TrimStart('/');
+                if (sourcePath is not null) sourcePath = ReceiptSourcePath(config, sourcePath);
                 if (sourcePath is null || !pageNames.Add(sourcePath) || !sourceNames.Contains(sourcePath)) throw Fail("PUBLISH_PAGE_INVALID");
             }
         }

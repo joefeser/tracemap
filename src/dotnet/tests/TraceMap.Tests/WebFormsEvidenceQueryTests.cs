@@ -9,6 +9,39 @@ namespace TraceMap.Tests;
 public sealed class WebFormsEvidenceQueryTests
 {
     [Fact]
+    public async Task Explicit_large_node_budget_indexes_more_than_historical_two_million_nodes()
+    {
+        using var fixture = new Fixture();
+        fixture.Inputs(new { }, new { });
+        File.WriteAllText(fixture.AppPath, "{\"items\":[" + string.Join(',', Enumerable.Repeat("0", 2_000_001)) + "]}");
+        var before = fixture.AppSha;
+        await WebFormsReviewEvidenceIndex.WriteAsync(fixture.Root, fixture.RunId, fixture.AppSha, fixture.CompiledSha,
+            8_388_608, 1_073_741_824, CancellationToken.None, WebFormsReviewEvidenceIndex.NewPlanMaxNodes);
+        using var connection = fixture.Open();
+        var context = WebFormsReviewEvidenceIndex.ReadContext(connection, fixture.RunId, fixture.AppSha, fixture.CompiledSha);
+        Assert.True(context.NodeCount > WebFormsReviewEvidenceIndex.MaxNodes);
+        Assert.Equal(WebFormsReviewEvidenceIndex.NewPlanMaxNodes, context.MaxNodes);
+        var (result, truncated) = WebFormsReviewExecutionCommand.ReadQuery(connection,
+            new("application", "/items", Offset: 2_000_000, Limit: 1, Depth: 1), CancellationToken.None);
+        Assert.Equal(0, Assert.Single(result.Children).Value!.Value.GetInt32());
+        Assert.True(truncated);
+        Assert.Equal(before, fixture.AppSha);
+    }
+
+    [Fact]
+    public async Task Explicit_small_node_limit_still_refuses_and_historical_context_remains_readable()
+    {
+        using var limited = new Fixture(); limited.Inputs(new { values = Enumerable.Range(0, 20).ToArray() }, new { });
+        var error = await Assert.ThrowsAsync<InvalidDataException>(() => WebFormsReviewEvidenceIndex.WriteAsync(limited.Root,
+            limited.RunId, limited.AppSha, limited.CompiledSha, 8_388_608, 67_108_864, CancellationToken.None, 10));
+        Assert.Equal("WEBFORMS_EVIDENCE_NODE_LIMIT", error.Message);
+        using var historical = new Fixture(); historical.Inputs(new { value = 1 }, new { }); await historical.Write();
+        using var connection = historical.Open();
+        Assert.Equal(2_000_000, WebFormsReviewEvidenceIndex.ReadContext(connection, historical.RunId,
+            historical.AppSha, historical.CompiledSha).MaxNodes);
+    }
+
+    [Fact]
     public async Task Status_truncation_aggregation_distinguishes_cycle_from_work_and_never_retains_free_form_reasons()
     {
         using var fixture = new Fixture();

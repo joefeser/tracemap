@@ -2,14 +2,18 @@ param(
     [string]$TraceMapRoot = (Split-Path (Split-Path $PSScriptRoot -Parent) -Parent),
     [string]$OutputRoot,
     [switch]$Updatable,
-    [switch]$CrossAssembly
+    [switch]$CrossAssembly,
+    [switch]$DeepChain
 )
 
 $ErrorActionPreference = 'Stop'
 $TraceMapRoot = [System.IO.Path]::GetFullPath($TraceMapRoot)
-$fixture = if ($CrossAssembly) { 'vb-publish-crossdll' }
+if ($DeepChain) { $CrossAssembly = $true }
+$fixture = if ($DeepChain) { 'vb-deep-projectless' }
+    elseif ($CrossAssembly) { 'vb-publish-crossdll' }
     elseif ($Updatable) { 'vb-publish-mapless' } else { 'vb-publish-projectless' }
 $site = [System.IO.Path]::GetFullPath((Join-Path $TraceMapRoot "samples/messy-dotnet-workspace/$fixture"))
+$pageSourcePath = if ($DeepChain) { 'Lookup.aspx' } else { 'Pages/Lookup.aspx' }
 $compiler = Join-Path $env:WINDIR 'Microsoft.NET/Framework/v4.0.30319/aspnet_compiler.exe'
 if (-not (Test-Path -LiteralPath $compiler -PathType Leaf)) {
     throw 'ASP.NET_FRAMEWORK_COMPILER_UNAVAILABLE'
@@ -17,7 +21,7 @@ if (-not (Test-Path -LiteralPath $compiler -PathType Leaf)) {
 if (-not (Test-Path -LiteralPath $site -PathType Container)) {
     throw 'PUBLIC_WEBFORMS_FIXTURE_UNAVAILABLE'
 }
-if ($CrossAssembly -and !$Updatable) { throw 'PUBLIC_WEBFORMS_CROSS_ASSEMBLY_REQUIRES_UPDATABLE' }
+if ($CrossAssembly -and !$Updatable -and !$DeepChain) { throw 'PUBLIC_WEBFORMS_CROSS_ASSEMBLY_REQUIRES_UPDATABLE' }
 
 # A fresh public-only publish. -Updatable reproduces a page without a
 # .compiled map while retaining the code-behind in App_Web_*.dll.
@@ -46,7 +50,11 @@ if ($CrossAssembly) {
         throw 'PUBLIC_WEBFORMS_FRAMEWORK_COMPILER_INPUT_UNAVAILABLE'
     }
     $frameworkCompilerSha256 = (Get-FileHash -LiteralPath $sdkCompiler -Algorithm SHA256).Hash.ToLowerInvariant()
-    $frameworkLines = @(@($frameworkSource, $frameworkProject) | ForEach-Object {
+    # Every compiled provider source is part of the bounded build input, including
+    # the legacy ref-array/control-flow fixture used by -DeepChain.
+    $frameworkInputs = @($frameworkProject) + @(Get-ChildItem -LiteralPath $frameworkRoot -File -Filter '*.vb' |
+        Sort-Object Name | ForEach-Object { $_.FullName })
+    $frameworkLines = @($frameworkInputs | ForEach-Object {
         (Split-Path $_ -Leaf) + ':' + (Get-FileHash -LiteralPath $_ -Algorithm SHA256).Hash.ToLowerInvariant()
     })
     $frameworkBoundedInputSha256 = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData(
@@ -117,7 +125,7 @@ $maps = @(Get-ChildItem -LiteralPath $output -Recurse -File -Filter '*.compiled'
 $pageMaps = @($maps | Where-Object {
     try {
         [xml]$xml = Get-Content -LiteralPath $_.FullName -Raw
-        $xml.preserve.virtualPath -match '(^|/)Pages/Lookup\.aspx$'
+        ([string]$xml.preserve.virtualPath).EndsWith('/' + $pageSourcePath, [StringComparison]::OrdinalIgnoreCase)
     } catch {
         $false
     }
@@ -177,8 +185,8 @@ $receipt = [ordered]@{
     publishedMapCount = $maps.Count
     mapInventorySha256 = $mapInventorySha256
     pages = @([ordered]@{
-        virtualPath = if ($Updatable) { '/UBid/Pages/Lookup.aspx' } else { [string]$pageMap.preserve.virtualPath }
-        sourcePath = 'Pages/Lookup.aspx'
+        virtualPath = if ($Updatable) { '/UBid/' + $pageSourcePath } else { [string]$pageMap.preserve.virtualPath }
+        sourcePath = $pageSourcePath
         assembly = if ($Updatable) { $null } else { $assemblyName }
         generatedType = if ($Updatable) { $null } else { [string]$pageMap.preserve.type }
         mapPath = if ($Updatable) { $null } else { [System.IO.Path]::GetRelativePath($output, $pageMaps[0].FullName).Replace('\', '/') }

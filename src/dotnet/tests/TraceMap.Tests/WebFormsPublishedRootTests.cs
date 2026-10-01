@@ -31,6 +31,46 @@ public sealed class WebFormsPublishedRootTests
         Assert.NotEqual(Scope(options with { WebFormsPublishedRootPath = "public-publish-a" }),
             Scope(options with { WebFormsPublishedRootPath = "public-publish-b" }));
         Assert.Equal(Scope(options), Scope(options with { WebFormsPublishedRootPath = null }));
+        Assert.NotEqual(Scope(options), Scope(options with { WebFormsPublishSourceRelativeBase = "UBid" }));
+        Assert.NotEqual(Scope(options with { WebFormsPublishSourceRelativeBase = "UBid" }),
+            Scope(options with { WebFormsPublishSourceRelativeBase = "another" }));
+        Assert.Equal(Scope(options), Scope(options with { WebFormsPublishSourceRelativeBase = "." }));
+    }
+
+    [Fact]
+    public void Website_receipt_paths_are_mapped_to_repo_paths_without_rewriting_virtual_routes_or_receipts()
+    {
+        using var f = new Fixture();
+        var website = Path.Combine(f.Source, "UBid"); Directory.CreateDirectory(website);
+        Directory.Move(Path.Combine(f.Source, "Pages"), Path.Combine(website, "Pages"));
+        var before = f.Hashes();
+        var options = new ScanOptions(f.Source, "unused", WebFormsPublishReceiptPath: f.Receipt,
+            WebFormsPublishedRootPath: f.Published, WebFormsPublishSourceRelativeBase: "UBid");
+        var result = WebFormsPublishMapExtractor.Evaluate(f.Source, new string('a', 40), options, CancellationToken.None);
+        Assert.Equal("bound", result.Provenance!.Status);
+        Assert.Equal("UBid", result.Provenance.SourceRelativeBase);
+        Assert.Equal(new[] { "UBid/Pages/Lookup.aspx" }, result.SourcePaths);
+        Assert.Equal("UBid/Pages/Lookup.aspx", Assert.Single(result.Pages).SourcePath);
+        var websiteOptions = options with { RepoPath = website, WebFormsPublishSourceRelativeBase = null };
+        Assert.NotEqual(result.Provenance.BoundedInputSha256,
+            WebFormsPublishInputInspector.Inspect(websiteOptions, new string('a', 40))!.BoundedInputSha256);
+        Assert.Equal(before.OrderBy(pair => pair.Key), f.Hashes().OrderBy(pair => pair.Key));
+    }
+
+    [Theory]
+    [InlineData("../outside")]
+    [InlineData("/absolute")]
+    [InlineData("UBid/../Pages")]
+    [InlineData("C:private")]
+    public void Unsafe_receipt_source_bases_withhold_all_publish_evidence(string sourceBase)
+    {
+        using var f = new Fixture();
+        var result = WebFormsPublishMapExtractor.Evaluate(f.Source, new string('a', 40),
+            new(f.Source, "unused", WebFormsPublishReceiptPath: f.Receipt, WebFormsPublishedRootPath: f.Published,
+                WebFormsPublishSourceRelativeBase: sourceBase), CancellationToken.None);
+        Assert.Equal("gap", result.Provenance!.Status);
+        Assert.Contains("WebFormsPublishUnsafePath", result.Provenance.GapKinds);
+        Assert.Empty(result.Pages); Assert.Empty(result.SourcePaths); Assert.Empty(result.Assemblies);
     }
     [Fact]
     public void Explicit_root_reads_original_published_files_without_colocating_or_copying_them()

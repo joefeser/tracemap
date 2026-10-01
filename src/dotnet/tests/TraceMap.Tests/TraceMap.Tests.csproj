@@ -28,6 +28,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="../../../../samples/fixture-build/deep-projectless/DeepWebsite.vbproj" ReferenceOutputAssembly="false" SkipGetTargetFrameworkProperties="true" />
+    <ProjectReference Include="../../../../samples/fixture-build/lazy-constructor/LazyWebsite.vbproj" ReferenceOutputAssembly="false" SkipGetTargetFrameworkProperties="true" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\..\TraceMap.Core\TraceMap.Core.csproj" />
     <ProjectReference Include="..\..\TraceMap.Storage\TraceMap.Storage.csproj" />
     <ProjectReference Include="..\..\TraceMap.Reporting\TraceMap.Reporting.csproj" />
@@ -49,6 +54,9 @@
     <ProjectReference Include="..\..\..\..\samples\messy-dotnet-workspace\root-beta\BetaSite.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="..\..\..\..\samples\messy-dotnet-workspace\root-generated\GeneratedSite.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="..\..\..\..\samples\messy-dotnet-workspace\vb-pdb-build\CompiledProjectless.VB.vbproj" ReferenceOutputAssembly="false" />
+    <!-- IL-only net48 fixture: build it, but never reference/load it in net10.
+         Skip framework negotiation for this non-reference to avoid NU1702. -->
+    <ProjectReference Include="..\..\..\..\samples\messy-dotnet-workspace\vb-publish-crossdll-framework\PublicProof.Framework.vbproj" ReferenceOutputAssembly="false" SkipGetTargetFrameworkProperties="true" />
     <ProjectReference Include="..\..\..\..\samples\messy-dotnet-workspace\root-crosslanguage\csharp\CrossLanguageEntry.csproj" ReferenceOutputAssembly="false" />
   </ItemGroup>
 

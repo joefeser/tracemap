@@ -27,7 +27,7 @@ namespace TraceMap.Core;
 internal static class IlBodyEvidenceExtractor
 {
     internal const string SchemaVersion = "il-body-provenance.v1";
-    internal const string PolicyVersion = "explicit-il-body-evidence.v3";
+    internal const string PolicyVersion = "explicit-il-body-evidence.v7";
     internal const string IlLocationKind = "managed-il-v1";
     internal const string BodyLimitation = "IL body evidence proves only that the admitted assembly contains this exact bounded operand-aware instruction stream at this module-local method row; it does not prove execution, dispatch, reachability, behavior, source ownership, semantic equivalence, or rewrite preservation.";
     internal const string CallLimitation = "A call site records the static member reference or calli standalone signature encoded in this module's IL; a calli signature does not identify a target member. No call site proves execution, virtual dispatch resolution, target presence, cross-assembly resolution, call-graph reachability, or rewrite equivalence.";
@@ -74,6 +74,10 @@ internal static class IlBodyEvidenceExtractor
                 null,
                 globalGapKinds.ToArray()), []));
         var workBudget = new IlWorkBudget(limits.MaxTotalWorkUnits);
+        // Value derivation may fail independently; it must not spend the raw
+        // body/call admission budget or retire independently decoded bodies.
+        var srmValueBudget = new IlWorkBudget(limits.MaxTotalWorkUnits);
+        var cecilValueBudget = new IlWorkBudget(limits.MaxTotalWorkUnits);
         foreach (var artifact in admitted)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -94,9 +98,10 @@ internal static class IlBodyEvidenceExtractor
                 // The raw reader runs first so every bound (opcode table,
                 // operand extent, switch table, string limit) is validated
                 // before Mono.Cecil materializes the same operand.
-                var srm = ReadSystemReflectionMetadataBodies(bytes, limits, workBudget, cancellationToken);
-                var cecil = ReadCecilBodies(bytes, limits, workBudget, cancellationToken);
+                var srm = ReadSystemReflectionMetadataBodies(bytes, limits, workBudget, cancellationToken, valueBudget: srmValueBudget);
+                var cecil = ReadCecilBodies(bytes, limits, workBudget, cancellationToken, valueBudget: cecilValueBudget);
                 var disagreements = CompareBodies(cecil, srm);
+                cecil = cecil with { Bodies = AgreeValueFlows(cecil.Bodies, srm.Bodies) };
                 if (disagreements.Count > 0)
                 {
                     // Agreement is method-local once the assembly/module identity
@@ -162,6 +167,10 @@ internal static class IlBodyEvidenceExtractor
             extractorIdentities = new[] { ScannerVersions.IlBodyEvidenceExtractor, "system-reflection-metadata/10.0.0", "mono-cecil/0.11.6" },
             expectedInputs = expected,
             effectiveLimits = limits,
+            controlFlowValueLimits = new { IlControlFlowValueExtractor.MaxInstructions, IlControlFlowValueExtractor.MaxSlots,
+                IlControlFlowValueExtractor.MaxWorkUnits, IlControlFlowValueExtractor.MaxExceptionEntries },
+            valueDerivationAggregateWorkPerReader = limits.MaxTotalWorkUnits,
+            maxRetainedReturnSites = IlCallValueExtractor.MaxRetainedReturnSites,
             outcomes = outcomes.Select(item => new
             {
                 item.SafeLocator,
@@ -229,6 +238,10 @@ internal static class IlBodyEvidenceExtractor
         }
 
         var facts = new List<CodeFact>();
+        // Independent bounded derivation phase over the admitted body/call
+        // observations. Its aggregate bound uses the policy-bound work limit;
+        // it never consumes or upgrades the body-admission receipt.
+        var commandBudget = new IlWorkBudget(provenance.EffectiveLimits.MaxTotalWorkUnits);
         foreach (var input in evaluation.Inputs.OrderBy(item => item.Outcome.SafeLocator, StringComparer.Ordinal))
         {
             var outcome = input.Outcome;
@@ -265,11 +278,31 @@ internal static class IlBodyEvidenceExtractor
                     contractElement: "il-method-body",
                     properties: bodyProperties);
                 facts.Add(bodyFact);
-
+                // One bounded summary per body. Null means unavailable (reader
+                // disagreement or a work limit), never an empty/constant return.
+                var returns = body.ValueFlow?.Returns;
+                var returnsAvailable = returns is not null && returns.Count <= IlCallValueExtractor.MaxRetainedReturnSites;
+                facts.Add(FactFactory.Create(manifest,
+                    FactTypes.ManagedIlReturnValuesObserved, RuleIds.DotNetIlValues,
+                    EvidenceTiers.Tier3SyntaxOrTextual, IlEvidence(outcome.SafeLocator),
+                    targetSymbol: body.BodyIdentity, contractElement: "il-return-operand-origins",
+                    properties: CopyToSorted(common, new (string Key, string Value)[]
+                    {
+                        ("ilBodyFactId", bodyFact.FactId),
+                        ("valueSchema", "il-return-values.v1"),
+                        ("valueState", returnsAvailable ? "return-operands-candidate" : "return-operands-unavailable"),
+                        ("returnCount", (returns?.Count ?? -1).ToString(CultureInfo.InvariantCulture)),
+                        ("returnFlowGaps", System.Text.Json.JsonSerializer.Serialize(body.ValueFlow?.Gaps ?? [])),
+                        ("returnOrigins", System.Text.Json.JsonSerializer.Serialize(returnsAvailable
+                            ? returns!.Select(value => value with { Origin = PublicOperand(value.Origin) }).ToArray() : [])),
+                        ("limitation", "At most 256 reached return-site operands from independently agreed local value flow. Return operands are candidates, not executed return values. Consumers must verify the callee signature and exact producer call, join all return sites conservatively, and preserve unsupported flow, virtual dispatch and runtime-dependent values. " + IlCallValueExtractor.Limitation)
+                    })));
+                var valuesByOffset = body.ValueFlow?.Calls.ToDictionary(value => value.Offset);
+                var callFactsByOffset = new Dictionary<long, CodeFact>();
                 foreach (var call in body.Calls.OrderBy(item => item.Offset, Comparer<long>.Default))
                 {
                     var callIdentity = $"{body.BodyIdentity}|call:{call.Opcode}:{call.Offset.ToString(CultureInfo.InvariantCulture)}:{call.TargetIdentity}";
-                    facts.Add(FactFactory.Create(
+                    var callFact = FactFactory.Create(
                         manifest,
                         FactTypes.ManagedIlCallObserved,
                         RuleIds.DotNetIlCall,
@@ -287,8 +320,85 @@ internal static class IlBodyEvidenceExtractor
                             ("targetIdentity", call.TargetIdentity),
                             ("ilBodyFactId", bodyFact.FactId),
                             ("limitation", CallLimitation)
+                        }));
+                    facts.Add(callFact);
+                    callFactsByOffset.Add(call.Offset, callFact);
+                    var values = valuesByOffset?.GetValueOrDefault(call.Offset);
+                    if (values is not null)
+                        facts.Add(FactFactory.Create(manifest,
+                            FactTypes.ManagedIlCallValuesObserved, RuleIds.DotNetIlValues,
+                            EvidenceTiers.Tier3SyntaxOrTextual, IlEvidence(outcome.SafeLocator),
+                            targetSymbol: callIdentity, contractElement: "il-call-operand-origins",
+                            properties: CopyToSorted(common, new (string Key, string Value)[]
+                            {
+                                ("metadataToken", body.MetadataToken),
+                                ("ilOffset", call.Offset.ToString(CultureInfo.InvariantCulture)),
+                                ("ilBodyFactId", bodyFact.FactId),
+                                ("ilCallFactId", callFact.FactId),
+                                ("valueSchema", IlCallValueExtractor.Schema),
+                                ("valueState", values.State),
+                                ("valueRegion", values.Region.ToString(CultureInfo.InvariantCulture)),
+                                ("callHasThis", call.StackShape?.HasThis == true ? "true" : "false"),
+                                ("callParameterCount", (call.StackShape?.ParameterCount ?? -1).ToString(CultureInfo.InvariantCulture)),
+                                ("callShapeSupported", call.StackShape?.Supported == true ? "true" : "false"),
+                                ("callByReferenceParameters", call.StackShape?.ByReferenceParameters ?? ""),
+                                ("receiverOrigin", System.Text.Json.JsonSerializer.Serialize(PublicOperand(values.Receiver))),
+                                ("argumentOrigins", System.Text.Json.JsonSerializer.Serialize(values.Arguments.Select((value, index) =>
+                                    call.StackShape is { } shape && index < shape.ByReferenceParameters.Length && shape.ByReferenceParameters[index] == '1'
+                                        ? new IlValueOrigin("unknown", "") : PublicOperand(value)))),
+                                ("resultOrigin", System.Text.Json.JsonSerializer.Serialize(values.Result)),
+                                ("limitation", IlCallValueExtractor.Limitation)
+                            })));
+                }
+                foreach (var gap in (body.ValueFlow?.Gaps ?? []).Concat(
+                    returns?.Count > IlCallValueExtractor.MaxRetainedReturnSites ? ["IlValueReturnSiteLimit"] : []))
+                    facts.Add(FactFactory.Create(manifest, FactTypes.AnalysisGap, RuleIds.DotNetIlValues,
+                        EvidenceTiers.Tier4Unknown, IlEvidence(outcome.SafeLocator),
+                        targetSymbol: body.BodyIdentity, contractElement: gap,
+                        properties: CopyToSorted(common, new (string Key, string Value)[]
+                        {
+                            ("metadataToken", body.MetadataToken), ("ilBodyFactId", bodyFact.FactId),
+                            ("gapKind", gap), ("valueSchema", IlCallValueExtractor.Schema),
+                            ("limitation", IlCallValueExtractor.Limitation)
+                        })));
+                var commandBindings = IlCommandBindingExtractor.Extract(body, commandBudget);
+                foreach (var binding in commandBindings.Bindings)
+                {
+                    var endpoint = callFactsByOffset[binding.EndpointOffset];
+                    var sites = binding.ConfigurationOffsets
+                        .Concat(binding.AdapterBindingOffset is { } attachment ? [attachment] : [])
+                        .Distinct().Order().Select(offset => callFactsByOffset[offset].FactId).ToArray();
+                    facts.Add(FactFactory.Create(manifest, FactTypes.ManagedIlDatabaseCommandCandidate,
+                        RuleIds.DotNetIlCommandBinding, EvidenceTiers.Tier3SyntaxOrTextual,
+                        IlEvidence(outcome.SafeLocator), targetSymbol: endpoint.TargetSymbol,
+                        contractElement: "il-database-command-candidate",
+                        properties: CopyToSorted(common, new (string Key, string Value)[]
+                        {
+                            ("metadataToken", body.MetadataToken), ("ilBodyFactId", bodyFact.FactId),
+                            ("ilCallFactId", endpoint.FactId), ("ilOffset", binding.EndpointOffset.ToString(CultureInfo.InvariantCulture)),
+                            ("commandBindingSchema", IlCommandBindingExtractor.Schema),
+                            ("commandBindingRegion", binding.Region.ToString(CultureInfo.InvariantCulture)),
+                            ("commandReceiverOrigin", System.Text.Json.JsonSerializer.Serialize(binding.CommandReceiver)),
+                            ("endpointReceiverOrigin", System.Text.Json.JsonSerializer.Serialize(binding.EndpointReceiver)),
+                            ("commandTextOrigin", System.Text.Json.JsonSerializer.Serialize(binding.CommandText)),
+                            ("commandTypeOrigin", System.Text.Json.JsonSerializer.Serialize(binding.CommandType)),
+                            ("configurationCallFactIds", System.Text.Json.JsonSerializer.Serialize(sites)),
+                            ("commandBindingMaxTrackedReceivers", IlCommandBindingExtractor.MaxTrackedReceivers.ToString(CultureInfo.InvariantCulture)),
+                            ("commandBindingMaxBodyWorkUnits", IlCommandBindingExtractor.MaxWorkUnits.ToString(CultureInfo.InvariantCulture)),
+                            ("commandBindingMaxAggregateWorkUnits", provenance.EffectiveLimits.MaxTotalWorkUnits.ToString(CultureInfo.InvariantCulture)),
+                            ("limitation", IlCommandBindingExtractor.Limitation)
                         })));
                 }
+                foreach (var gap in commandBindings.Gaps)
+                    facts.Add(FactFactory.Create(manifest, FactTypes.AnalysisGap, RuleIds.DotNetIlCommandBinding,
+                        EvidenceTiers.Tier4Unknown, IlEvidence(outcome.SafeLocator),
+                        targetSymbol: body.BodyIdentity, contractElement: gap,
+                        properties: CopyToSorted(common, new (string Key, string Value)[]
+                        {
+                            ("metadataToken", body.MetadataToken), ("ilBodyFactId", bodyFact.FactId),
+                            ("gapKind", gap), ("commandBindingSchema", IlCommandBindingExtractor.Schema),
+                            ("limitation", IlCommandBindingExtractor.Limitation)
+                        })));
             }
         }
 
@@ -343,6 +453,21 @@ internal static class IlBodyEvidenceExtractor
         return cecil.Bodies.Where(body => !disputed.Contains(body.MetadataToken)).ToArray();
     }
 
+    internal static IReadOnlyList<IlBodyObservation> AgreeValueFlows(IReadOnlyList<IlBodyObservation> cecil,
+        IReadOnlyList<IlBodyObservation> srm)
+    {
+        var byToken = srm.ToDictionary(body => body.MetadataToken, StringComparer.Ordinal);
+        return cecil.Select(body => byToken.TryGetValue(body.MetadataToken, out var other)
+            && body.Calls.Count == other.Calls.Count
+            && body.Calls.Zip(other.Calls, (left, right) => left.StackShape == right.StackShape).All(equal => equal)
+            && System.Text.Json.JsonSerializer.Serialize(body.ValueFlow) == System.Text.Json.JsonSerializer.Serialize(other.ValueFlow)
+                ? body : body with { ValueFlow = new([], ["IlValueReaderDisagreementOrLimit"]) }).ToArray();
+    }
+
+    // Addresses are used internally for conservative object exposure, never
+    // advertised as values or substituted for a caller's scalar argument.
+    private static IlValueOrigin PublicOperand(IlValueOrigin value) => IlValueAddresses.IsAddress(value) || value.Kind == "address-unavailable" ? new("unknown", "") : value;
+
     // Internal so the rewrite lane can rebuild the same dual-reader contract
     // over its own paired inputs instead of duplicating IL decoding.
     internal static IlReaderResult ReadCecilBodies(
@@ -350,8 +475,10 @@ internal static class IlBodyEvidenceExtractor
         IlBodyLimits limits,
         IlWorkBudget budget,
         CancellationToken cancellationToken,
-        bool retainDiagnosticInstructions = false)
+        bool retainDiagnosticInstructions = false,
+        IlWorkBudget? valueBudget = null)
     {
+        valueBudget ??= new IlWorkBudget(limits.MaxTotalWorkUnits);
         using var stream = new MemoryStream(bytes, writable: false);
         using var resolver = new ManagedMetadataExtractor.RejectingAssemblyResolver();
         using var module = CecilModuleDefinition.ReadModule(stream, new ReaderParameters
@@ -385,7 +512,7 @@ internal static class IlBodyEvidenceExtractor
                     MetadataTokens.MethodDefinitionHandle(checked((int)method.MetadataToken.RID)));
                 var rawIl = rawPe.GetMethodBody(rawMethod.RelativeVirtualAddress).GetILBytes()
                     ?? throw new IlEvidenceException("MalformedIlBody");
-                bodies.Add(ReadCecilBody(method, rawIl, assemblyIdentity, limits, budget, retainDiagnosticInstructions));
+                bodies.Add(ReadCecilBody(method, rawIl, assemblyIdentity, limits, budget, retainDiagnosticInstructions, valueBudget));
             }
         }
         return new IlReaderResult(assemblyIdentity, module.Name, module.Mvid.ToString("D", CultureInfo.InvariantCulture), bodies);
@@ -397,7 +524,8 @@ internal static class IlBodyEvidenceExtractor
         string assemblyIdentity,
         IlBodyLimits limits,
         IlWorkBudget budget,
-        bool retainDiagnosticInstructions)
+        bool retainDiagnosticInstructions,
+        IlWorkBudget valueBudget)
     {
         var body = method.Body;
         var memberKind = method.IsConstructor ? "constructor" : "method";
@@ -462,7 +590,8 @@ internal static class IlBodyEvidenceExtractor
             bodyIdentity,
             bodySha256,
             calls,
-            retainDiagnosticInstructions ? instructions : null);
+            retainDiagnosticInstructions ? instructions : null,
+            ExtractCallValues(instructions, calls, body.MaxStackSize, handlers, valueBudget));
     }
 
     // Cecil and Reflection.Emit may use different display names for an opcode.
@@ -532,7 +661,14 @@ internal static class IlBodyEvidenceExtractor
                     throw new IlEvidenceException("IlTotalWorkLimitExceeded");
                 var target = CecilMethodTarget((MethodReference)instruction.Operand!, selfAssemblyIdentity, limits);
                 if (IsCallObservationOpcode(opcodeName))
-                    calls.Add(new IlCallObservation(instruction.Offset, opcodeName, target.Kind, target.Token, target.Identity));
+                {
+                    var reference = (MethodReference)instruction.Operand!;
+                    calls.Add(new IlCallObservation(instruction.Offset, opcodeName, target.Kind, target.Token, target.Identity,
+                        new(reference.Parameters.Count, reference.HasThis, reference.ReturnType.MetadataType != MetadataType.Void,
+                            reference.CallingConvention != MethodCallingConvention.VarArg && !reference.ExplicitThis
+                            && !reference.ReturnType.IsByReference,
+                            string.Concat(reference.Parameters.Select(parameter => parameter.ParameterType.IsByReference ? '1' : '0')))));
+                }
                 return $"m:{target.Kind}:{target.Token}:{target.Identity}";
             case OperandType.InlineType:
                 var typeIdentity = CecilTypeOperandIdentity((Mono.Cecil.TypeReference)instruction.Operand!);
@@ -751,8 +887,10 @@ internal static class IlBodyEvidenceExtractor
         IlBodyLimits limits,
         IlWorkBudget budget,
         CancellationToken cancellationToken,
-        bool retainDiagnosticInstructions = false)
+        bool retainDiagnosticInstructions = false,
+        IlWorkBudget? valueBudget = null)
     {
+        valueBudget ??= new IlWorkBudget(limits.MaxTotalWorkUnits);
         using var stream = new MemoryStream(bytes, writable: false);
         using var pe = new PEReader(stream, PEStreamOptions.LeaveOpen);
         var reader = pe.GetMetadataReader();
@@ -784,7 +922,7 @@ internal static class IlBodyEvidenceExtractor
             if (!budget.TryConsume(1))
                 throw new IlEvidenceException("IlTotalWorkLimitExceeded");
             bodies.Add(ReadSrmBody(pe, reader, provider, handle, method, assemblyIdentity, limits, budget,
-                retainDiagnosticInstructions));
+                retainDiagnosticInstructions, valueBudget));
         }
         return new IlReaderResult(assemblyIdentity, moduleName, reader.GetGuid(moduleDefinition.Mvid).ToString("D", CultureInfo.InvariantCulture), bodies);
     }
@@ -798,7 +936,8 @@ internal static class IlBodyEvidenceExtractor
         string assemblyIdentity,
         IlBodyLimits limits,
         IlWorkBudget budget,
-        bool retainDiagnosticInstructions)
+        bool retainDiagnosticInstructions,
+        IlWorkBudget valueBudget)
     {
         var body = pe.GetMethodBody(method.RelativeVirtualAddress);
         var il = body.GetILBytes() ?? throw new IlEvidenceException("MalformedIlBody");
@@ -903,7 +1042,8 @@ internal static class IlBodyEvidenceExtractor
             bodyIdentity,
             bodySha256,
             calls,
-            retainDiagnosticInstructions ? instructions : null);
+            retainDiagnosticInstructions ? instructions : null,
+            ExtractCallValues(instructions, calls, body.MaxStack, handlers, valueBudget));
     }
 
     private static (string Kind, string Token, string Identity) SrmBoundedTarget(string kind, string token, string identity, IlBodyLimits limits)
@@ -993,7 +1133,8 @@ internal static class IlBodyEvidenceExtractor
                 var methodToken = ReadInt32(il, ref position);
                 var methodTarget = SrmMethodTarget(reader, provider, methodToken, assemblyIdentity, limits);
                 if (IsCallObservationOpcode(opcode.Name!.ToString()))
-                    calls.Add(new IlCallObservation(offset, opcode.Name.ToString(), methodTarget.Kind, methodTarget.Token, methodTarget.Identity));
+                    calls.Add(new IlCallObservation(offset, opcode.Name.ToString(), methodTarget.Kind, methodTarget.Token, methodTarget.Identity,
+                        SrmCallStackShape(reader, provider, methodToken)));
                 return $"m:{methodTarget.Kind}:{methodTarget.Token}:{methodTarget.Identity}";
             case System.Reflection.Emit.OperandType.InlineType:
                 var typeToken = ReadInt32(il, ref position);
@@ -1210,6 +1351,55 @@ internal static class IlBodyEvidenceExtractor
             default:
                 throw new IlEvidenceException("IlCallTargetIdentityUnavailable");
         }
+    }
+
+    private static IlValueFlowObservation ExtractCallValues(IReadOnlyList<string> instructions,
+        IReadOnlyList<IlCallObservation> calls, int maxStack, IReadOnlyList<string> handlers, IlWorkBudget budget)
+    {
+        if (!budget.TryConsume(instructions.Count))
+            return new([], ["IlValueWorkLimitExceeded"]);
+        var boundaries = new HashSet<long>();
+        var entries = new List<IlValueExceptionEntry>();
+        foreach (var handler in handlers)
+        {
+            var parts = handler.Split(':');
+            var handlerStart = long.Parse(parts[5].Split('+')[0], NumberStyles.HexNumber, CultureInfo.InvariantCulture);
+            entries.Add(new(handlerStart, parts[1] is "catch" or "filter" ? 1 : 0));
+            foreach (var index in new[] { 3, 5 })
+            {
+                var range = parts[index].Split('+');
+                var start = long.Parse(range[0], NumberStyles.HexNumber, CultureInfo.InvariantCulture);
+                boundaries.Add(start);
+                boundaries.Add(start + long.Parse(range[1], NumberStyles.HexNumber, CultureInfo.InvariantCulture));
+            }
+            if (parts[7] != "-1")
+            {
+                var filterStart = long.Parse(parts[7], NumberStyles.HexNumber, CultureInfo.InvariantCulture);
+                boundaries.Add(filterStart); entries.Add(new(filterStart, 1));
+            }
+        }
+        var flow = IlCallValueExtractor.Extract(instructions, calls, maxStack, handlers.Count != 0, boundaries, entries);
+        return budget.TryConsume(flow.WorkUnits) ? flow : new([], ["IlValueControlFlowAggregateWorkLimit"]);
+    }
+
+    private static IlCallStackShape SrmCallStackShape(MetadataReader reader,
+        ManagedMetadataExtractor.MetadataTypeProvider provider, int token)
+    {
+        var handle = MetadataTokens.EntityHandle(token);
+        if (handle.Kind == HandleKind.MethodSpecification)
+            handle = reader.GetMethodSpecification((MethodSpecificationHandle)handle).Method;
+        var signature = handle.Kind switch
+        {
+            HandleKind.MethodDefinition => reader.GetMethodDefinition((MethodDefinitionHandle)handle).DecodeSignature(provider, null),
+            HandleKind.MemberReference => reader.GetMemberReference((MemberReferenceHandle)handle).DecodeMethodSignature(provider, null),
+            _ => throw new IlEvidenceException("IlCallTargetIdentityUnavailable")
+        };
+        return new(signature.ParameterTypes.Length, signature.Header.IsInstance,
+            signature.ReturnType != "type(namespace:6:System|names:4:Void)",
+            signature.Header.CallingConvention != SignatureCallingConvention.VarArgs
+            && (signature.Header.RawValue & 0x40) == 0
+            && !signature.ReturnType.Contains('&'),
+            string.Concat(signature.ParameterTypes.Select(type => type.EndsWith('&') ? '1' : '0')));
     }
 
     private static Dictionary<int, System.Reflection.Emit.OpCode> SingleByteOpcodes()

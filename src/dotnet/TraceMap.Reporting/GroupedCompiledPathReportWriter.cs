@@ -55,7 +55,7 @@ public static class GroupedCompiledPathReportWriter
             {
                 var group = handoff.Chains[index];
                 var path = report.Paths[group.VariantIndexes[0]];
-                W($"<li><a href=\"#chain-{index + 1}\">Chain {index + 1}: {H(Compact(path.Nodes.FirstOrDefault()?.DisplayName ?? path.StartNodeId))}</a> — {group.VariantIndexes.Count} variants</li>");
+                W($"<li><a href=\"#chain-{index + 1}\">Chain {index + 1}: {H(path.Nodes.FirstOrDefault() is { } first ? Compact(first) : path.StartNodeId)}</a> — {group.VariantIndexes.Count} variants</li>");
             }
             W("</ul></nav>");
             for (var index = 0; index < handoff.Chains.Count; index++)
@@ -63,7 +63,7 @@ public static class GroupedCompiledPathReportWriter
                 var group = handoff.Chains[index];
                 var path = report.Paths[group.VariantIndexes[0]];
                 W($"<section id=\"chain-{index + 1}\"><h2>Chain {index + 1} <small>({group.VariantIndexes.Count} variants)</small></h2>");
-                W($"<p>{H(string.Join(" → ", path.Nodes.Select(node => Compact(node.DisplayName))))}</p>");
+                W($"<p>{H(string.Join(" → ", path.Nodes.Select(Compact)))}</p>");
                 W("<details><summary>Exact method and source identities</summary><div class=\"identities\">");
                 foreach (var reference in group.VariantIndexes.SelectMany(variant => handoff.Variants[variant].NodeReferences).Distinct(StringComparer.Ordinal))
                 {
@@ -107,6 +107,19 @@ public static class GroupedCompiledPathReportWriter
     private static string H(string? value) => WebUtility.HtmlEncode(value ?? "unavailable");
     private static string Location(string? file, int? start, int? end) => file is null ? "unavailable" :
         start is > 0 ? $"{file}:{start}-{end}" : $"{file} (no source-line claim)";
+    private static string Compact(CombinedPathNode node)
+    {
+        // This writer admits local-only handoffs and already exposes exact symbols
+        // in the identity detail. Canonical compiled symbols contain publicKeyToken,
+        // so the general safe-display filter can hash their entire display name.
+        // Recover only a method label here, never alter global privacy projection,
+        // graph matching, grouping, identities or the lossless JSON records.
+        if (node.DisplayName.StartsWith("redacted-hash:", StringComparison.Ordinal)
+            && node.SymbolId is { Length: > 0 } symbol
+            && Regex.IsMatch(symbol, @"\|(?:method|constructor):[0-9]+:[^|]+", RegexOptions.NonBacktracking))
+            return Compact(symbol);
+        return Compact(node.DisplayName);
+    }
     private static string Compact(string identity)
     {
         // Display only. Never use this lossy label for grouping or matching overloads.
