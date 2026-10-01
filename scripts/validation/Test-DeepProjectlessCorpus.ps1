@@ -25,6 +25,12 @@ try {
         'samples/fixture-build/deep-projectless/DeepWebsite.vbproj',
         'src/dotnet/tests/TraceMap.Tests/IlCommandBindingExtractorTests.cs',
         'src/dotnet/tests/TraceMap.Tests/DeepProjectlessNativeWorkflowTests.cs',
+        'src/dotnet/tests/TraceMap.Tests/LazyConstructorLoggingTests.cs',
+        'samples/fixture-build/lazy-constructor/LazyWebsite.vbproj',
+        'samples/fixture-build/lazy-constructor/provider/LoggingProvider.vbproj',
+        'samples/messy-dotnet-workspace/vb-lazy-constructor/Overview.aspx',
+        'samples/messy-dotnet-workspace/vb-lazy-constructor/Overview.aspx.vb',
+        'samples/messy-dotnet-workspace/vb-lazy-logging-provider/PublicLog.vb',
         'src/dotnet/tests/TraceMap.Tests/WindowsDeepCorpusTheoryAttribute.cs',
         'src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj',
         'src/dotnet/tests/TraceMap.Tests/CombinedDependencyPathTests.cs',
@@ -60,7 +66,10 @@ try {
     $nativePassed = @($rows | Where-Object {
         $_.testName -like '*Deep_projectless_native_start*' -and $_.outcome -ceq 'Passed'
     }).Count
-    if ($passed -lt 12 -or $nativePassed -ne 1 -or @($rows | Where-Object { $_.outcome -notin @('Passed', 'NotExecuted') }).Count -ne 0) {
+    $propertyPassed = @($rows | Where-Object {
+        $_.testName -like '*Deep_projectless_property_constructor_logging*' -and $_.outcome -ceq 'Passed'
+    }).Count
+    if ($passed -lt 14 -or $nativePassed -ne 1 -or $propertyPassed -ne 2 -or @($rows | Where-Object { $_.outcome -notin @('Passed', 'NotExecuted') }).Count -ne 0) {
         throw 'DEEP_CORPUS_TEST_RECEIPT_NOT_ADMITTED'
     }
     if ($RequireWindowsPublish -and $windowsPassed -ne 2) { throw 'DEEP_CORPUS_WINDOWS_ACCEPTANCE_MISSING' }

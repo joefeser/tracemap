@@ -1,5 +1,32 @@
 # Implementation state
 
+## Property-based constructor logging regression (2026-09-30)
+
+Added a separate public synthetic projectless VB source corpus and two external
+net48 build harnesses (website and logging provider). It models a handler that
+constructs a choices object; argument evaluation reads a lazy property, whose
+backing-field miss constructs an employee object. Nested field initialization,
+an authorization branch and an exception branch reach InsertLog in the second
+DLL. InsertLog passes a helper's returned string to an overridable ExecuteText
+wrapper ending at ExecuteScalar. A literal-input control uses the same wrapper,
+and an independent business lookup uses Fill. No session dependency is required.
+
+Both local mixed and compiled-only regressions passed: five paths, four scalar
+paths, three InsertLog paths and one Fill path; 69 compiled / 105 mixed work
+units. The text origin resolves to the exact BuildText producer call by body and
+IL offset, then remains call-result/unresolved-operand with a virtual-dispatch
+gap. Literal text resolves. Fill-only excludes the scalar routes, rather than
+resolving them. These synthetic counts are not private report variant counts.
+
+The corpus is included in the deep Windows validation selection and input roster.
+This change pins the documented current limitation, not a production fix or
+return-value evaluator. It does not execute fixture SQL, prove warm/cold cache
+behavior or exception feasibility, or classify private path-cap omissions.
+Validation: both final property cases passed; the deep set passed 14 with one
+Windows-only skip; command-binding and messy-workspace regressions passed 126
+with one Windows-only skip. Corpus guard, private-path guard and diff checks
+passed. No new Windows execution result is claimed for this fixture yet.
+
 ## Consolidated migration handoff in progress (2026-09-30)
 
 Owner requested a normal one-command fresh workflow and a single evidence folder

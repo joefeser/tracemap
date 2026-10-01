@@ -29,6 +29,7 @@
 
   <ItemGroup>
     <ProjectReference Include="../../../../samples/fixture-build/deep-projectless/DeepWebsite.vbproj" ReferenceOutputAssembly="false" SkipGetTargetFrameworkProperties="true" />
+    <ProjectReference Include="../../../../samples/fixture-build/lazy-constructor/LazyWebsite.vbproj" ReferenceOutputAssembly="false" SkipGetTargetFrameworkProperties="true" />
   </ItemGroup>
 
   <ItemGroup>

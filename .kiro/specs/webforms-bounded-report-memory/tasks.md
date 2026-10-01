@@ -1,5 +1,7 @@
 # Web Forms bounded report memory
 
+- [x] Build a public projectless VB, two-DLL property/constructor logging regression: outer constructor argument evaluation, lazy getter, nested initializer, authorization/exception logging, call-result command text and a literal control. Verify mixed/compiled routes and Fill-only exclusion without claiming private parity or fixing unsupported return-value propagation.
+
 - [x] Consolidate the repaired analysis into a one-command, one-output-root migration handoff and open a PR (owner requested 2026-09-30; PR #798; private coverage remains separately open below).
   - [x] Provide a normal fresh-run entry point that performs the focused handler query automatically, rather than only filtering the broad report.
   - [x] Retain the exact tool, native run, focused results, receipts, one entry-point document and updated Claude instructions under the explicitly selected output root; preserve historical runs.

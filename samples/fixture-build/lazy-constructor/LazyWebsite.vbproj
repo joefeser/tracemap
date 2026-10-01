@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net48</TargetFramework>
+    <RootNamespace></RootNamespace>
+    <AssemblyName>PublicLazy.Website</AssemblyName>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../../messy-dotnet-workspace/vb-lazy-constructor/Overview.aspx.vb" />
+    <ProjectReference Include="provider/LoggingProvider.vbproj" />
+    <Reference Include="System.Web" />
+    <Reference Include="System.Configuration" />
+  </ItemGroup>
+</Project>
