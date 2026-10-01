@@ -88,6 +88,8 @@ try {
     try {
         $result = @(& $helper -VerificationRoot $verification -Handler Selected -UnresolvedOnly)
         if ($result -notcontains 'sqlRoute.unresolvedOnly=true;unresolvedGroups=1;displayedGroups=1') { throw 'Verification root resolution failed' }
+        if (!(Test-Path (Join-Path $verification 'handler-unresolved-command-evidence.local.html')) -or
+            @(Get-ChildItem -LiteralPath $bundle -Filter '*.html' -Recurse).Count -ne 0) { throw 'Diagnostic changed checkpoint-owned report tree' }
         $ledgerTestStatus.retainedArtifactsVerified = $false
         try { & $helper -VerificationRoot $verification -OutputPath (Join-Path $folder 'unverified.html'); throw 'Unverified report accepted' }
         catch { if ($_.Exception.Message -ne 'WEBFORMS_SQL_ROUTE_RETAINED_STATE_NOT_ADMITTED') { throw } }

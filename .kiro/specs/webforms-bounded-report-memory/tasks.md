@@ -1,10 +1,19 @@
 # Web Forms bounded report memory
 
+- [ ] Consolidate the repaired analysis into a one-command, one-output-root migration handoff and open a PR (owner requested 2026-09-30).
+  - [x] Provide a normal fresh-run entry point that performs the focused handler query automatically, rather than only filtering the broad report.
+  - [x] Retain the exact tool, native run, focused results, receipts, one entry-point document and updated Claude instructions under the explicitly selected output root; preserve historical runs.
+  - [x] Make all handoff references explicit and integrity-bound; never select evidence by newest-folder heuristics or silently substitute the broad report for focused results.
+  - [x] Keep diagnostics outside checkpoint-owned report directories and preserve failure/partial states without producing a misleading completed handoff.
+  - [x] Test the complete handoff workflow with the deep projectless VB cross-DLL fixture, including failure, changed-input and existing-output refusals.
+  - [ ] Validate on Windows where authentic ASP.NET publication is required; distinguish external local compiler harnesses and synthetic maps from Windows publish evidence.
+  - [ ] Open and attach the PR with exact-head validation and explicit static-evidence limitations; do not merge without owner authorization.
+
 - [ ] Resolve remaining selected-handler coverage from the saved successful run without an unnecessary rescan.
   - [x] Add a verified completed-run locator and unresolved-binding-only display over retained results; retain complete binding fields and variant counts.
   - [ ] Inspect owner-returned unresolved binding reasons and fix only demonstrated extractor/path defects with local reproductions.
   - [x] Support a bounded single-handler requery from a successfully completed native run, preserving its admitted index and checkpoint provenance; native execution/recovery tests passed 118/118, including the completed-run deep fixture.
-  - [ ] Compare retained method sequences against the historical handler baseline and distinguish path-cap omissions from scope/identity changes.
+  - [x] Compare retained method sequences against the historical handler baseline: owner-returned focused Fill comparison retains all 13 historical symbol sequences and their 41 variants, plus five sequences/15 variants; exact scan identities differ. This does not establish why each broad-query row was omitted or exhaustive coverage.
 
 - [x] Complete the public deep projectless multi-DLL regression corpus including Windows publish workflow, branches/cycles/decoys, exact expected fixture routes and bounded work/artifact/logical-read guards; physical I/O and private application acceptance remain unclaimed.
   - [x] Build an external net48 harness over projectless website source and test twelve forwarding layers into the separately compiled legacy provider through scan/index/combine/report.

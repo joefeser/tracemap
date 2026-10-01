@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using TraceMap.Cli;
 using TraceMap.Core;
 using TraceMap.Reporting;
@@ -83,10 +84,98 @@ public sealed class DeepProjectlessNativeWorkflowTests
                 PublishSourceRelativePaths: ["Pages/Lookup.aspx", "Pages/Lookup.aspx.vb", "Provider/PublicLegacyCommandFlow.vb", "Provider/PublicSqlDataAccess.vb"]);
             var configPath = Path.Combine(root, "config.json");
             File.WriteAllText(configPath, JsonSerializer.Serialize(config, JsonOptions));
-            var review = Path.Combine(root, "review");
+            var package = Path.Combine(root, "migration");
+            var review = Path.Combine(package, "review");
             using var output = new StringWriter(); using var error = new StringWriter();
-            Assert.True(await TraceMapCommand.RunAsync(["webforms-review", "start", "--config", configPath, "--out", review,
+            Assert.True(await TraceMapCommand.RunAsync(["webforms-review", "migration-review", "--config", configPath,
+                "--handler", "Lookup_Click", "--out", package,
                 "--attest-exact-source-commit", commit], output, error) == 0, error.ToString());
+            var migration = JsonSerializer.Deserialize<WebFormsMigrationHandoff>(File.ReadAllBytes(
+                Path.Combine(package, "migration-handoff.local.json")), JsonOptions)!;
+            Assert.Equal(WebFormsReviewExecutionCommand.MigrationHash(migration), migration.BoundedInputSha256);
+            Assert.Equal("Lookup_Click", migration.Handler);
+            Assert.Equal(6, migration.Artifacts.Count);
+            foreach (var artifact in migration.Artifacts)
+            {
+                var bytes = File.ReadAllBytes(Path.Combine(package, artifact.RelativePath));
+                Assert.Equal(artifact.Bytes, bytes.LongLength);
+                Assert.Equal(artifact.Sha256, Convert.ToHexStringLower(SHA256.HashData(bytes)));
+            }
+            Assert.Contains("Claude review instructions", File.ReadAllText(Path.Combine(package, "START-HERE.md")));
+            Assert.True(File.Exists(Path.Combine(package, "tool", "tracemap.dll")));
+            using var queryOutput = new StringWriter();
+            Assert.Equal(0, await TraceMapCommand.RunAsync(["webforms-review", "query-migration", "--root", package,
+                "--document", "compiled", "--pointer", "/header/query/symbolRoots", "--limit", "5", "--depth", "2"], queryOutput, error));
+            Assert.Contains("Lookup_Click", queryOutput.ToString());
+            Assert.DoesNotContain("Branch_Click", queryOutput.ToString());
+            var beforeRepeat = Roster(package);
+            Assert.Equal(1, await TraceMapCommand.RunAsync(["webforms-review", "migration-review", "--config", configPath,
+                "--handler", "Lookup_Click", "--out", package, "--attest-exact-source-commit", commit], output, error));
+            Assert.Equal(beforeRepeat, Roster(package));
+            var migrationIndex = Path.Combine(package, "review-evidence.sqlite");
+            var originalIndex = File.ReadAllBytes(migrationIndex);
+            try
+            {
+                using (var changed = new FileStream(migrationIndex, FileMode.Append)) changed.WriteByte(1);
+                using var refused = new StringWriter();
+                Assert.Equal(1, await TraceMapCommand.RunAsync(["webforms-review", "query-migration", "--root", package], refused, error));
+                Assert.Equal("", refused.ToString());
+            }
+            finally { File.WriteAllBytes(migrationIndex, originalIndex); }
+            var receiptPath = Path.Combine(package, "migration-handoff.local.json");
+            var originalReceipt = File.ReadAllBytes(receiptPath);
+            try
+            {
+                File.WriteAllText(receiptPath, JsonSerializer.Serialize(migration with { Handler = "Changed_Click" }, JsonOptions));
+                using var refused = new StringWriter();
+                Assert.Equal(1, await TraceMapCommand.RunAsync(["webforms-review", "query-migration", "--root", package], refused, error));
+                Assert.Equal("", refused.ToString());
+            }
+            finally { File.WriteAllBytes(receiptPath, originalReceipt); }
+            using (var refused = new StringWriter())
+            {
+                Assert.Equal(1, await TraceMapCommand.RunAsync(["webforms-review", "query-migration", "--root", package,
+                    "--limit", "1000000"], refused, error));
+                Assert.Equal("", refused.ToString());
+            }
+            // Reuse a valid native configuration without asserting a new binding.
+            // Legacy proof import has a different receipt contract and separate tests.
+            var readyConfig = Path.Combine(review, "evidence", "review-config.local.json");
+            var importedPackage = Path.Combine(root, "imported-migration");
+            using var importError = new StringWriter();
+            Assert.True(await TraceMapCommand.RunAsync(["webforms-review", "migration-review", "--config", readyConfig,
+                "--handler", "Lookup_Click", "--out", importedPackage], output, importError) == 0, importError.ToString());
+            Assert.True(File.Exists(Path.Combine(importedPackage, "migration-handoff.local.json")));
+            var legacyProof = CreateSyntheticLegacyProof(root, Path.Combine(review, "evidence"), commit);
+            var draftPath = Path.Combine(Directory.CreateDirectory(Path.Combine(root, "input-config")).FullName, "draft.json");
+            File.WriteAllText(draftPath, JsonSerializer.Serialize(config with { PrimaryAssemblies = [], DependencyAssemblies = [],
+                PageMaps = [], PdbInputs = [], PublishSourceRelativePaths = null }, JsonOptions));
+            var legacyPackage = Path.Combine(root, "legacy-import-migration");
+            using var legacyError = new StringWriter();
+            Assert.True(await TraceMapCommand.RunAsync(["webforms-review", "migration-review", "--config", draftPath,
+                "--handler", "Lookup_Click", "--out", legacyPackage, "--proof-root", legacyProof,
+                "--published-root", published, "--source-base", "."], output, legacyError) == 0, legacyError.ToString());
+            Assert.True(File.Exists(Path.Combine(legacyPackage, "configuration", "proof-import.local.json")));
+            Assert.True(File.Exists(Path.Combine(legacyPackage, "migration-handoff.local.json")));
+            var changedProofPackage = Path.Combine(root, "changed-proof-migration");
+            var legacyReceiptPath = Path.Combine(legacyProof, "publish-receipt.local.json");
+            var legacyReceipt = File.ReadAllBytes(legacyReceiptPath);
+            try
+            {
+                File.WriteAllText(legacyReceiptPath, "{}");
+                Assert.Equal(1, await TraceMapCommand.RunAsync(["webforms-review", "migration-review", "--config", draftPath,
+                    "--handler", "Lookup_Click", "--out", changedProofPackage, "--proof-root", legacyProof,
+                    "--published-root", published, "--source-base", "."], output, legacyError));
+                Assert.False(Directory.Exists(changedProofPackage));
+            }
+            finally { File.WriteAllBytes(legacyReceiptPath, legacyReceipt); }
+            var refusedPackage = Path.Combine(root, "bad-handler-migration");
+            using var failureError = new StringWriter();
+            Assert.Equal(1, await TraceMapCommand.RunAsync(["webforms-review", "migration-review", "--config", readyConfig,
+                "--handler", "NoSuchHandler", "--out", refusedPackage], output, failureError));
+            Assert.True(File.Exists(Path.Combine(refusedPackage, "review", "run", "run-manifest.json")));
+            Assert.False(File.Exists(Path.Combine(refusedPackage, "migration-handoff.local.json")));
+            Assert.False(File.Exists(Path.Combine(refusedPackage, "START-HERE.md")));
             var run = Path.Combine(review, "run");
             var checkpoint = JsonSerializer.Deserialize<WebFormsReviewCheckpoint>(File.ReadAllText(
                 Path.Combine(run, "checkpoints", "0004.json")), JsonOptions)!;
@@ -228,6 +317,43 @@ public sealed class DeepProjectlessNativeWorkflowTests
     private static string[] Roster(string root) => Directory.GetFiles(root, "*", SearchOption.AllDirectories)
         .Order(StringComparer.Ordinal).Select(file => Path.GetRelativePath(root, file) + ":" +
             Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(file)))).ToArray();
+
+    // Generate the historical wrapper receipt format over this exact public
+    // compiler-produced corpus. Not an authentic ASP.NET publication receipt.
+    private static string CreateSyntheticLegacyProof(string root, string nativeProof, string commit)
+    {
+        static string Hash(string text) => Convert.ToHexStringLower(SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(text)));
+        static string Field(JsonNode node, string name) => node[name]!.GetValue<string>();
+        var publish = JsonNode.Parse(File.ReadAllText(Path.Combine(nativeProof, "publish-receipt.local.json")))!.AsObject();
+        var binding = JsonNode.Parse(File.ReadAllText(Path.Combine(nativeProof, "compiled-binding.local.json")))!.AsObject();
+        var sourceRows = publish["sourceFiles"]!.AsArray().Select(item => item!).ToArray();
+        var publishedRows = publish["publishedFiles"]!.AsArray().Select(item => item!).ToArray();
+        var assemblies = publishedRows.Where(item => Field(item, "kind") == "assembly").ToArray();
+        var maps = publishedRows.Where(item => Field(item, "kind") == "compiled-map").ToArray();
+        var sourceHash = Hash(string.Join('\n', sourceRows.Select(item => $"{Field(item, "path")}:{Field(item, "sha256")}")) + "\n");
+        var inventoryHash = Hash(string.Join('\n', assemblies.Select(item => $"{Field(item, "path")}:{Field(item, "sha256")}:selected")) + "\n");
+        var mapHash = Hash(string.Join('\n', maps.Select(item => $"{Field(item, "path")}:{Field(item, "sha256")}").Order(StringComparer.Ordinal)) + "\n");
+        var repositoryHash = Hash("https://example.invalid/deep-corpus.git");
+        var generator = Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(typeof(DeepProjectlessNativeWorkflowTests).Assembly.Location)));
+        publish["receiptGeneratorSha256"] = generator;
+        publish["compilerProvenance"] = "unavailable-existing-output";
+        publish["assemblyInventory"] = new JsonArray(assemblies.Select(item => (JsonNode)new JsonObject
+            { ["path"] = Field(item, "path"), ["sha256"] = Field(item, "sha256"), ["disposition"] = "selected" }).ToArray());
+        publish["boundedInputSha256"] = sourceHash;
+        publish["assemblyInventorySha256"] = inventoryHash;
+        publish["mapInventorySha256"] = mapHash;
+        publish["publishedMapCount"] = maps.Length;
+        publish["receiptInputSha256"] = Hash($"source:{repositoryHash}\ncommit:{commit}\nsource:{sourceHash}\nassemblies:{inventoryHash}\nmaps:{mapHash}\n");
+        var bindingRows = binding["bindings"]!.AsArray().Select(item => item!).OrderBy(item => Field(item, "safeLocator"), StringComparer.Ordinal);
+        binding["generatorSha256"] = generator;
+        binding["boundedInputSha256"] = Hash(string.Join('\n', bindingRows.Select(item =>
+            $"{Field(item, "safeLocator")}:{Field(item, "artifactSha256")}:{Field(item, "assemblyIdentity")}:{commit}")) +
+            $"\nsource:{sourceHash}\nsource-repository:{repositoryHash}\nassembly-inventory:{inventoryHash}\nmap-inventory:{mapHash}\n");
+        var proof = Directory.CreateDirectory(Path.Combine(root, "synthetic-legacy-proof")).FullName;
+        File.WriteAllText(Path.Combine(proof, "publish-receipt.local.json"), publish.ToJsonString(JsonOptions));
+        File.WriteAllText(Path.Combine(proof, "compiled-binding.local.json"), binding.ToJsonString(JsonOptions));
+        return proof;
+    }
 
     private static async Task ProcessAsync(string executable, string cwd, string[] args, TimeSpan limit)
     {

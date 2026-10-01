@@ -23,13 +23,13 @@ internal static class WebFormsReviewEvidenceIndex
 
     internal static async Task<WebFormsReviewArtifact> WriteAsync(string directory, string runId,
         string applicationSha, string compiledSha, long maxInputBytes, long maxIndexBytes, CancellationToken token,
-        int maxNodes = MaxNodes)
+        int maxNodes = MaxNodes, string? applicationPath = null, string? compiledPath = null)
     {
         if (maxNodes is < 2 or > MaxSupportedNodes) throw Invalid("NODE_BUDGET_INVALID");
         var path = Path.Combine(directory, Name);
         if (File.Exists(path) || Directory.Exists(path)) throw Invalid("OUTPUT_EXISTS");
-        var application = Path.Combine(directory, WebFormsReviewReportExecution.HandoffName);
-        var compiled = Path.Combine(directory, "compiled", "compiled-paths.handoff.local.json");
+        var application = applicationPath ?? Path.Combine(directory, WebFormsReviewReportExecution.HandoffName);
+        var compiled = compiledPath ?? Path.Combine(directory, "compiled", "compiled-paths.handoff.local.json");
         var appHash = await WebFormsReviewPreflightCommand.HashAsync("application", application, maxInputBytes, token);
         var compiledHash = await WebFormsReviewPreflightCommand.HashAsync("compiled", compiled, maxInputBytes, token);
         if (appHash.Sha256 != applicationSha || compiledHash.Sha256 != compiledSha ||
