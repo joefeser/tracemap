@@ -2,6 +2,15 @@
 
 Operator examples use generic site, page, and handler names. Historical receipts remain bound to their recorded input bytes; genericized examples do not establish a fresh platform validation result.
 
+For the reproducible source + compiled website + separate DLL operator workflow,
+run `./scripts/wlocal.ps1` in PowerShell 7. It builds public fixture projects,
+scans and combines independent inputs, generates reports, and asserts attached,
+separate and missing-provider behavior plus cap/Fill/repeatability boundaries.
+See the [local replay and artifact map](../samples/fixture-build/lazy-constructor/README.md).
+The current gate requires at least 32 local passes, including five operator
+layouts, and separately requires authentic Windows publishing when requested.
+Historical validation counts below describe their named older heads.
+
 For deep projectless cross-DLL command evidence, run:
 
 ```powershell

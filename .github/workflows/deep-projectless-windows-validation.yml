@@ -6,6 +6,7 @@ on:
     paths:
       - .github/workflows/deep-projectless-windows-validation.yml
       - scripts/validation/Test-DeepProjectlessCorpus.ps1
+      - scripts/wlocal.ps1
       - scripts/validation/Test-PublicWebFormsPublish.ps1
       - samples/fixture-build/deep-projectless/**
       - samples/fixture-build/lazy-constructor/**
@@ -18,6 +19,7 @@ on:
     paths:
       - .github/workflows/deep-projectless-windows-validation.yml
       - scripts/validation/Test-DeepProjectlessCorpus.ps1
+      - scripts/wlocal.ps1
       - scripts/validation/Test-PublicWebFormsPublish.ps1
       - samples/fixture-build/deep-projectless/**
       - samples/fixture-build/lazy-constructor/**

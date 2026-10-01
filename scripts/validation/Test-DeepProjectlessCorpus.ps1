@@ -15,8 +15,10 @@ $output = if ($OutputRoot) { [IO.Path]::GetFullPath($OutputRoot) } else {
 if (Test-Path -LiteralPath $output) { throw 'DEEP_CORPUS_OUTPUT_NOT_FRESH' }
 [void][IO.Directory]::CreateDirectory($output)
 $previous = $env:TRACEMAP_DEEP_CORPUS_ROOT
+$previousOperator = $env:TRACEMAP_OPERATOR_ROOT
 try {
     $env:TRACEMAP_DEEP_CORPUS_ROOT = $output
+    $env:TRACEMAP_OPERATOR_ROOT = Join-Path $output 'operator'
     $sourceInputs = @(
         'samples/messy-dotnet-workspace/vb-deep-projectless/Lookup.aspx',
         'samples/messy-dotnet-workspace/vb-deep-projectless/Lookup.aspx.vb',
@@ -26,6 +28,8 @@ try {
         'src/dotnet/tests/TraceMap.Tests/IlCommandBindingExtractorTests.cs',
         'src/dotnet/tests/TraceMap.Tests/DeepProjectlessNativeWorkflowTests.cs',
         'src/dotnet/tests/TraceMap.Tests/LazyConstructorLoggingTests.cs',
+        'src/dotnet/tests/TraceMap.Tests/WebFormsOperatorWorkflowTests.cs',
+        'scripts/wlocal.ps1',
         'samples/fixture-build/lazy-constructor/LazyWebsite.vbproj',
         'samples/fixture-build/lazy-constructor/provider/LoggingProvider.vbproj',
         'samples/messy-dotnet-workspace/vb-lazy-constructor/Overview.aspx',
@@ -51,7 +55,7 @@ try {
     $beforeInputs = @(SourceRoster)
     $generatorSha = (Get-FileHash -LiteralPath $PSCommandPath -Algorithm SHA256).Hash.ToLowerInvariant()
     $project = Join-Path $TraceMapRoot 'src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj'
-    & dotnet test $project --filter 'FullyQualifiedName~Deep_projectless|FullyQualifiedName~Property_profile_dynamic_lookup' --verbosity minimal `
+    & dotnet test $project --filter 'FullyQualifiedName~Deep_projectless|FullyQualifiedName~Property_profile_dynamic_lookup|FullyQualifiedName~WebFormsOperatorWorkflowTests' --verbosity minimal `
         --logger 'trx;LogFileName=deep-corpus.trx' --results-directory (Join-Path $output 'tests')
     if ($LASTEXITCODE -ne 0) { throw 'DEEP_CORPUS_TEST_FAILED;outputs-preserved' }
     $trx = Join-Path $output 'tests/deep-corpus.trx'
@@ -75,8 +79,18 @@ try {
     $profilePassed = @($rows | Where-Object {
         $_.testName -like '*Property_profile_dynamic_lookup*' -and $_.outcome -ceq 'Passed'
     }).Count
-    if ($passed -lt 27 -or $nativePassed -ne 1 -or $propertyPassed -ne 2 -or $returnPassed -ne 11 -or $profilePassed -ne 2 -or @($rows | Where-Object { $_.outcome -notin @('Passed', 'NotExecuted') }).Count -ne 0) {
+    $operatorPassed = @($rows | Where-Object {
+        $_.testName -like '*WebForms_operator_source_compiled_and_separate_dll_reports*' -and $_.outcome -ceq 'Passed'
+    }).Count
+    if ($passed -lt 32 -or $nativePassed -ne 1 -or $propertyPassed -ne 2 -or $returnPassed -ne 11 -or $profilePassed -ne 2 -or $operatorPassed -ne 5 -or @($rows | Where-Object { $_.outcome -notin @('Passed', 'NotExecuted') }).Count -ne 0) {
         throw 'DEEP_CORPUS_TEST_RECEIPT_NOT_ADMITTED'
+    }
+    foreach ($layout in @('attached', 'separate', 'separate-dll-only', 'reversed', 'missing')) {
+        $suffix = '(layout: "' + $layout + '")'
+        if (@($rows | Where-Object {
+            $_.testName -like '*WebForms_operator_source_compiled_and_separate_dll_reports*' -and
+            $_.testName.EndsWith($suffix, [StringComparison]::Ordinal) -and $_.outcome -ceq 'Passed'
+        }).Count -ne 1) { throw 'DEEP_CORPUS_OPERATOR_LAYOUT_MISSING' }
     }
     if ($RequireWindowsPublish -and $windowsPassed -ne 2) { throw 'DEEP_CORPUS_WINDOWS_ACCEPTANCE_MISSING' }
     $inputLines = @(SourceRoster)
@@ -85,10 +99,14 @@ try {
         throw 'DEEP_CORPUS_INPUT_CHANGED;outputs-preserved-not-admitted'
     }
     $execution = Join-Path $TraceMapRoot 'src/dotnet/tests/TraceMap.Tests/bin/Debug/net10.0'
-    $executionPaths = @('TraceMap.Tests.dll', 'TraceMap.Core.dll', 'TraceMap.Reporting.dll', 'TraceMap.Combine.dll', 'TraceMap.Storage.dll')
+    $executionPaths = @('TraceMap.Tests.dll', 'tracemap.dll', 'TraceMap.Core.dll', 'TraceMap.Reporting.dll', 'TraceMap.Combine.dll', 'TraceMap.Storage.dll')
     $inputLines += @($executionPaths | ForEach-Object {
         'execution/' + $_ + ':' + (Get-FileHash -LiteralPath (Join-Path $execution $_) -Algorithm SHA256).Hash.ToLowerInvariant()
     })
+    foreach ($fixture in @('PublicLazy.Website.dll', 'PublicLazy.Framework.dll')) {
+        $path = Join-Path $TraceMapRoot ('samples/fixture-build/lazy-constructor/bin/Debug/net48/' + $fixture)
+        $inputLines += 'fixture/' + $fixture + ':' + (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant()
+    }
     $inputLines += 'test-result:' + (Get-FileHash -LiteralPath $trx -Algorithm SHA256).Hash.ToLowerInvariant()
     $inputSha = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData(
         [Text.Encoding]::UTF8.GetBytes(($inputLines -join "`n") + "`n"))).ToLowerInvariant()
@@ -104,6 +122,7 @@ try {
         skippedTests = $skipped
         windowsPublishTestsPassed = $windowsPassed
         profileDynamicLookupTestsPassed = $profilePassed
+        operatorWorkflowTestsPassed = $operatorPassed
         windowsPublishAcceptance = if ($windowsPassed -eq 2) { 'tested' } else { 'not-run' }
         limitations = @('Synthetic static corpus only; no database methods executed.',
             'Logical graph payload counters and artifact caps are not physical drive-read measurements.',
@@ -111,9 +130,10 @@ try {
     }
     [IO.File]::WriteAllText((Join-Path $output 'validation.local.json'),
         (($receipt | ConvertTo-Json -Depth 6) + "`n"), [Text.UTF8Encoding]::new($false))
-    Write-Output "deepCorpus.passed=$passed;skipped=$skipped;windowsPublishPassed=$windowsPassed;profileDynamicLookupPassed=$profilePassed"
+    Write-Output "deepCorpus.passed=$passed;skipped=$skipped;windowsPublishPassed=$windowsPassed;profileDynamicLookupPassed=$profilePassed;operatorWorkflowPassed=$operatorPassed"
     Write-Output "deepCorpus.output=$output"
     Write-Output 'deepCorpus=synthetic-static-validation;no-sql-executed;not-private-acceptance'
 } finally {
     $env:TRACEMAP_DEEP_CORPUS_ROOT = $previous
+    $env:TRACEMAP_OPERATOR_ROOT = $previousOperator
 }

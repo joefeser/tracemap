@@ -1,5 +1,52 @@
 # Property-based constructor logging corpus
 
+## Repeat the operator workflow locally
+
+From the repository root, in PowerShell 7:
+
+```powershell
+.\scripts\wlocal.ps1
+```
+
+No private configuration, saved shell variables, screenshots, SQL Server or
+previous output is required. The command builds the real net48 website/provider
+projects and runs the public regression corpus. It prints a fresh output folder;
+use `-OutputRoot <new-folder>` to select one. Existing folders are refused, and
+failed runs are retained. `-RequireWindowsPublish` additionally requires real
+ASP.NET mapped and mapless publication on Windows; it refuses other platforms.
+
+The `operator/` output contains these independently replayed layouts:
+
+| Layout | Inputs | Expected selected-handler evidence |
+| --- | --- | --- |
+| `attached` | Website source plus website and provider DLLs | Dynamic Text scalar, literal StoredProcedure scalar, Fill |
+| `separate` | Website source/website DLL scan, separate provider source/DLL scan, then combine | Same ordered getter/constructor/profile/lookup chain and three terminals |
+| `separate-dll-only` | Same website, separate provider scan excluding VB source | The DLL evidence alone retains the three terminal routes |
+| `reversed` | Separate inputs combined in provider-first order | Same ordered route and command assertions regardless of input order |
+| `missing` | Website source/website DLL without provider | No invented database route; explicit gaps |
+
+Each layout retains `site/`, optional `dll/`, `combined.sqlite`, and `report/`.
+Positive layouts also retain `all/`, `fill/`, `capped/`, and `repeat/` path JSON.
+Assertions inspect actual method order, command type/text state, Fill-only
+exclusion, a one-path cap with its gap, repeated paths/gaps, and unchanged index
+bytes. `tests/deep-corpus.trx` records pass/fail. `validation.local.json` binds
+the runner and bounded inputs and is written only after the required cases pass.
+
+This exercises the public `scan -> combine -> report -> paths` command entry
+points against actual on-disk indexes. It does not simulate native UI clicks.
+The same corpus includes native start/package/resume tests and separate
+mixed/compiled-only path tests; those are distinct coverage layers. No fixture
+database method is executed. A green run is synthetic static regression proof,
+not complete private application coverage or PR merge approval.
+
+For a quick operator-only development run (without retained artifacts):
+
+```sh
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter FullyQualifiedName~WebFormsOperatorWorkflowTests
+```
+
+## Fixture structure
+
 Public synthetic VB .NET Framework 4.8 source, compiled as two real DLLs. The
 website and provider source directories contain no project files. These external
 build harnesses are not an ASP.NET publication, and no database calls are run.
