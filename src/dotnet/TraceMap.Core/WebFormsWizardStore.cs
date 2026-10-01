@@ -8,7 +8,9 @@ namespace TraceMap.Core;
 public sealed record WebFormsWizardProject(string Id, string InputPath, string WebRoot,
     string ProjectMode, string FormsMode, string[] Forms, string? PublishedRoot,
     string[] PrimaryAssemblies, string[] Dependencies, string Step, WebFormsWizardBuildEvidence? Build = null,
-    WebFormsWizardInputSnapshot[]? Inputs = null, WebFormsWizardNativeReference? Native = null);
+    WebFormsWizardInputSnapshot[]? Inputs = null, WebFormsWizardNativeReference? Native = null,
+    WebFormsWizardRunReference? Run = null);
+public sealed record WebFormsWizardRunReference(string RelativeRoot, string AttestedCommitSha, string NativeConfigSha256);
 public sealed record WebFormsWizardNativeReference(string RelativePath, string Sha256, string SourceCommitSha,
     WebFormsWizardInputSnapshot[] Inputs);
 public sealed record WebFormsWizardProjectReference(string Id, string ConfigSha256);
@@ -187,7 +189,7 @@ public sealed class WebFormsWizardStore : IDisposable
         Id(project.Id);
         if (project.ProjectMode is not ("projectless" or "solution" or "project" or "dll") ||
             project.FormsMode is not ("all" or "selected") ||
-            project.Step is not ("forms" or "build" or "publication" or "dependencies" or "configuration" or "ready" or "completed") ||
+            project.Step is not ("forms" or "build" or "publication" or "dependencies" or "configuration" or "ready" or "running" or "failed" or "completed") ||
             project.Forms is null || project.PrimaryAssemblies is null || project.Dependencies is null ||
             project.Forms.Length > WebFormsWizardForms.MaxEntries || project.PrimaryAssemblies.Length > 128 || project.Dependencies.Length > 128 ||
             project.Forms.Any(item => string.IsNullOrWhiteSpace(item)) ||
