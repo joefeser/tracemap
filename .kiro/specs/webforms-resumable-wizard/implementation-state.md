@@ -258,3 +258,13 @@ Separate artifact outputs avoided altering the live full-suite runtime. Focused
 selection tests: 4 passed. All wizard tests with the repair: 77 passed, zero skips,
 TRX /tmp/tracemap-wizard-windows-fix-all. This repair has not yet been pushed while
 the required review batch settles. The prior Windows run is failed, not admitted.
+
+Full-suite session 92830 completed for pre-repair head 67ac3f81: 3,107 passed,
+one Windows-only skip, zero failures, TRX /tmp/tracemap-wizard-final-full.
+Do not attribute that full result to the later Windows repair. The repair has
+77 passing wizard tests with isolated artifacts. ACK status with the unchanged
+repo batching policy and explicit local validation evidence now returns
+LOCAL_FIX_BATCH_READY_TO_PUSH. Qodo returned findings, but the normal gate still
+reports CHECKS_PENDING (Windows package smoke pending; public-corpus failed),
+not patch-review authority. Publish the validated CI repair, then rerun the gate;
+review findings still require their authorized brief and disposition.
