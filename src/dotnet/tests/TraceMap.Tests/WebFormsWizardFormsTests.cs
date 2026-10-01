@@ -45,6 +45,18 @@ public sealed class WebFormsWizardFormsTests
     }
 
     [Fact]
+    public void Unicode_selection_uses_the_same_utf8_byte_bound_as_resume()
+    {
+        using var temp = new TempDirectory();
+        File.WriteAllText(Path.Combine(temp.Path, "界.aspx"), "page");
+        Assert.Equal(new[] { "界.aspx" }, WebFormsWizardForms.Parse(temp.Path, WebFormsWizardForms.Template(temp.Path)));
+        var oversized = "#" + new string('界', WebFormsWizardForms.MaxSelectionBytes / 3 + 1);
+        Assert.True(oversized.Length < WebFormsWizardForms.MaxSelectionChars);
+        Assert.Equal("WEBFORMS_WIZARD_SELECTION_LIMIT", Assert.Throws<InvalidOperationException>(() =>
+            WebFormsWizardForms.Parse(temp.Path, oversized)).Message);
+    }
+
+    [Fact]
     public void Inventory_excludes_build_outputs_and_bounds_selection_text()
     {
         using var temp = new TempDirectory();

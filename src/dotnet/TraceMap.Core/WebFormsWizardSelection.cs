@@ -28,7 +28,7 @@ public static class WebFormsWizardSelection
             if (File.Exists(path))
             {
                 using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
-                if (stream.Length > WebFormsWizardForms.MaxSelectionChars) throw new InvalidOperationException("WEBFORMS_WIZARD_SELECTION_LIMIT");
+                if (stream.Length > WebFormsWizardForms.MaxSelectionBytes) throw new InvalidOperationException("WEBFORMS_WIZARD_SELECTION_LIMIT");
                 var bytes = new byte[(int)stream.Length];
                 stream.ReadExactly(bytes);
                 if (stream.ReadByte() != -1) throw new InvalidOperationException("WEBFORMS_WIZARD_SELECTION_CHANGED");
@@ -50,7 +50,7 @@ public static class WebFormsWizardSelection
                         // Deny in-place writers while checking that the human selection is blank;
                         // use replacement rather than MoveFileEx over an open destination.
                         using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read | FileShare.Delete);
-                        if (stream.Length > WebFormsWizardForms.MaxSelectionChars) throw new InvalidOperationException("WEBFORMS_WIZARD_SELECTION_CHANGED");
+                        if (stream.Length > WebFormsWizardForms.MaxSelectionBytes) throw new InvalidOperationException("WEBFORMS_WIZARD_SELECTION_CHANGED");
                         var prior = new byte[(int)stream.Length];
                         stream.ReadExactly(prior);
                         if (!IsBlank(new UTF8Encoding(false, true).GetString(prior)))
