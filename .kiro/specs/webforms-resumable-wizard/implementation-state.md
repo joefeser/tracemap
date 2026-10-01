@@ -1,5 +1,21 @@
 # Implementation state
 
+## Completion audit — 2026-10-01
+
+Implementation #799 is owner-merged into dev as `98ce227f`; its complete tree is
+identical to tested head `2f6975f5`. Final CI: .NET 3,138 passed/one platform skip,
+zero build warnings; Windows corpus 140 passed/zero skips, both ASP.NET publish
+cases and three report checks. All distribution/mutation/adapter checks passed.
+Both final budget findings were settled; ACK's fallback-attempt ceiling was not
+merge approval. The owner subsequently merged the PR.
+
+`acceptance-audit.md` maps all nine requirements to inspected implementation and
+test assertions, records limits and the unresolved historical Windows failure,
+and separates v1 completion from recommended customer/operator follow-up.
+Closeout branch: `codex/webforms-wizard-acceptance-audit`, docs only, based on the
+merged dev revision. Earlier entries below are historical and superseded where
+they say final-head validation/delivery is pending.
+
 Branch: codex/webforms-resumable-wizard, based on #798 head
 4f231dc31e075dc3ad35ee84808893242a7c68ca. The dependency branch is unchanged.
 Owner has requested Codex review on that head; do not duplicate the request.
