@@ -50,7 +50,10 @@ try {
     )
     function SourceRoster {
         $provider = Join-Path $TraceMapRoot 'samples/messy-dotnet-workspace/vb-publish-crossdll-framework'
-        $inputs = @($sourceInputs) + @(Get-ChildItem -LiteralPath $provider -File -Filter '*.vb' |
+        $wizardInputs = @('src/dotnet/TraceMap.Core', 'src/dotnet/TraceMap.Cli', 'src/dotnet/tests/TraceMap.Tests') |
+            ForEach-Object { Get-ChildItem -LiteralPath (Join-Path $TraceMapRoot $_) -File -Filter 'WebFormsWizard*.cs' } |
+            ForEach-Object { [IO.Path]::GetRelativePath($TraceMapRoot, $_.FullName).Replace('\', '/') }
+        $inputs = @($sourceInputs) + @($wizardInputs) + @(Get-ChildItem -LiteralPath $provider -File -Filter '*.vb' |
             ForEach-Object { [IO.Path]::GetRelativePath($TraceMapRoot, $_.FullName).Replace('\', '/') })
         @($inputs | Sort-Object | ForEach-Object {
             $path = Join-Path $TraceMapRoot $_
@@ -61,7 +64,7 @@ try {
     $beforeInputs = @(SourceRoster)
     $generatorSha = (Get-FileHash -LiteralPath $PSCommandPath -Algorithm SHA256).Hash.ToLowerInvariant()
     $project = Join-Path $TraceMapRoot 'src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj'
-    & dotnet test $project --filter 'FullyQualifiedName~Deep_projectless|FullyQualifiedName~Property_profile_dynamic_lookup|FullyQualifiedName~WebFormsOperatorWorkflowTests' --verbosity minimal `
+    & dotnet test $project --filter 'FullyQualifiedName~Deep_projectless|FullyQualifiedName~Property_profile_dynamic_lookup|FullyQualifiedName~WebFormsOperatorWorkflowTests|FullyQualifiedName~WebFormsWizard' --verbosity minimal `
         --logger 'trx;LogFileName=deep-corpus.trx' --results-directory (Join-Path $output 'tests')
     if ($LASTEXITCODE -ne 0) { throw 'DEEP_CORPUS_TEST_FAILED;outputs-preserved' }
     $trx = Join-Path $output 'tests/deep-corpus.trx'
@@ -99,6 +102,14 @@ try {
         }).Count -ne 1) { throw 'DEEP_CORPUS_OPERATOR_LAYOUT_MISSING' }
     }
     if ($RequireWindowsPublish -and $windowsPassed -ne 2) { throw 'DEEP_CORPUS_WINDOWS_ACCEPTANCE_MISSING' }
+    foreach ($requiredWizardTest in @(
+        'Full_terminal_replay_survives_subset_restart_and_adds_second_project_without_changing_first',
+        'Consented_sdk_fixture_build_uses_real_process_adapter',
+        'Real_native_pipeline_completes_and_completed_continue_only_verifies_retained_reports')) {
+        if (@($rows | Where-Object {
+            $_.testName.EndsWith('.' + $requiredWizardTest, [StringComparison]::Ordinal) -and $_.outcome -ceq 'Passed'
+        }).Count -ne 1) { throw 'DEEP_CORPUS_WIZARD_ACCEPTANCE_MISSING' }
+    }
     foreach ($test in @('Test-WebFormsChainComparison.ps1', 'Test-WebFormsSqlRoute.ps1', 'Test-WebFormsCapShortcut.ps1')) {
         & (Join-Path $TraceMapRoot ('scripts/tests/' + $test))
     }
