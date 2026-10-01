@@ -54,7 +54,12 @@ public static class WebFormsWizardExecution
             if (status is null || status.State != "reports-completed-review-only" || !status.RetainedArtifactsVerified
                 || status.SourceCommitSha != run.AttestedCommitSha || string.IsNullOrWhiteSpace(status.WorkbenchPath)) throw Fail("REPORTS_NOT_VERIFIED_COMPLETE");
             _ = await WebFormsWizardNative.ValidateAsync(store, id, token);
-            if (project.Step != "completed") store.SaveProject(project with { Step = "completed" });
+            if (project.Step != "completed")
+            {
+                var completed = project with { Step = "completed" };
+                store.SaveProject(completed);
+                project = completed;
+            }
             await output.WriteLineAsync("Verified retained reports: " + status.WorkbenchPath);
             await output.WriteLineAsync("Coverage: " + status.Coverage + "; static review only, not customer runtime or complete coverage proof.");
             return 0;

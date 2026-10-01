@@ -133,7 +133,7 @@ public static class WebFormsWizardPublication
                     if (Path.GetFileName(path).ToLowerInvariant() is not ("bin" or "obj" or ".git")) pending.Push(path);
                 }
                 else if (Path.GetExtension(path).ToLowerInvariant() is ".cs" or ".vb" or ".config" or ".aspx" or ".ascx" or ".master"
-                    or ".ashx" or ".asmx" or ".resx" or ".csproj" or ".vbproj") paths.Add(path);
+                    or ".ashx" or ".asmx" or ".asax" or ".resx" or ".csproj" or ".vbproj") paths.Add(path);
                 if (paths.Count > 10_000) throw Fail("SOURCE_INVENTORY_LIMIT");
             }
         }

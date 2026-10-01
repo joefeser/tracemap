@@ -35,6 +35,58 @@ public sealed class WebFormsWizardBuildTests
         Assert.NotNull(store.ReadProject("site").Build);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Solution_build_selects_only_website_and_rechecks_both_inputs(bool changeSolution)
+    {
+        using var temp = new TempDirectory();
+        var (project, tool) = Fixture(temp.Path);
+        var solution = Path.Combine(temp.Path, "Site.sln");
+        File.WriteAllText(solution, "Microsoft Visual Studio Solution File, Format Version 12.00\n" +
+            "Project(\"{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}\") = \"Site\", \"source\\Site.csproj\", \"{11111111-1111-1111-1111-111111111111}\"\nEndProject\n" +
+            "Project(\"{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}\") = \"Other\", \"Other.csproj\", \"{22222222-2222-2222-2222-222222222222}\"\nEndProject\n");
+        File.WriteAllText(Path.Combine(temp.Path, "Other.csproj"), "<Project />");
+        var selected = project.InputPath;
+        project = project with { InputPath = solution };
+        using var configRoot = new TempDirectory();
+        using var store = WebFormsWizardStore.Open(Path.Combine(configRoot.Path, "config"), false);
+        store.SaveProject(project);
+        var plan = WebFormsWizardBuild.Plan(project, tool);
+        Assert.Contains(WebFormsWizardStore.Physical(selected), plan.BuildArguments);
+        Assert.DoesNotContain(WebFormsWizardStore.Physical(solution), plan.BuildArguments);
+        Assert.Contains("-v:minimal", plan.BuildArguments);
+        var calls = 0;
+        Assert.Equal("WEBFORMS_WIZARD_BUILD_INPUT_CHANGED", (await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            WebFormsWizardBuild.ExecuteAsync(store, "site", plan, true, (_, _, _, _) =>
+            {
+                if (++calls == 2) File.AppendAllText(changeSolution ? solution : selected, " ");
+                return Task.FromResult(new WebFormsWizardProcessResult(0, "10.0", ""));
+            }))).Message);
+        Assert.Equal("build", store.ReadProject("site").Step);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Long_real_build_output_is_drained_hashed_and_does_not_hide_exit_code(bool fail)
+    {
+        using var temp = new TempDirectory();
+        var project = Path.Combine(temp.Path, "Long.proj");
+        File.WriteAllText(project, "<Project><Target Name=\"Build\"><Message Importance=\"high\" Text=\"" +
+            new string('x', 100_000) + "\"/>" + (fail ? "<Error Text=\"intentional failure\"/>" : "") + "</Target></Project>");
+        var runtime = Path.GetDirectoryName(typeof(object).Assembly.Location)!;
+        var host = Environment.GetEnvironmentVariable("DOTNET_HOST_PATH") ?? Path.Combine(
+            Directory.GetParent(runtime)!.Parent!.Parent!.FullName, OperatingSystem.IsWindows() ? "dotnet.exe" : "dotnet");
+        var result = await TraceMap.Cli.WebFormsWizardProcess.RunAsync(host, temp.Path,
+            ["msbuild", project, "-nologo", "-t:Build", "-v:minimal"], CancellationToken.None);
+        Assert.Equal(fail ? 1 : 0, result.ExitCode);
+        Assert.Equal(65_536, result.StandardOutput.Length);
+        Assert.Matches("^[0-9a-f]{64}$", result.StandardOutputSha256!);
+        Assert.NotEqual(Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(
+            System.Text.Encoding.Unicode.GetBytes(result.StandardOutput))), result.StandardOutputSha256);
+    }
+
     [Fact]
     public async Task Declined_build_never_invokes_runner_or_advances()
     {

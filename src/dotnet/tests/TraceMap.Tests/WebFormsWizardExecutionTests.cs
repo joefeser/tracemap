@@ -57,23 +57,48 @@ public sealed class WebFormsWizardExecutionTests
     }
 
     [Fact]
-    public async Task Real_native_pipeline_completes_and_completed_continue_only_verifies_retained_reports()
+    public Task Real_native_pipeline_completes_and_completed_continue_only_verifies_retained_reports() => VerifyCompletedRun(false);
+
+    [Fact]
+    public Task Output_failure_after_verified_completion_preserves_completed_cursor() => VerifyCompletedRun(true);
+
+    private static async Task VerifyCompletedRun(bool outputFailsAfterCompletion)
     {
         using var temp = new TempDirectory();
         using var store = await Ready(temp.Path);
         using var output = new StringWriter();
         using var error = new StringWriter();
         var commit = store.ReadProject("site").Native!.SourceCommitSha;
-        var code = await WebFormsWizardExecution.RunAsync(store, "site", commit, output, error);
-        Assert.True(code == 0, error.ToString() + output);
+        if (outputFailsAfterCompletion)
+        {
+            using var failing = new CompletionFailingWriter();
+            await Assert.ThrowsAsync<IOException>(() => WebFormsWizardExecution.RunAsync(store, "site", commit, failing, error));
+        }
+        else
+        {
+            var code = await WebFormsWizardExecution.RunAsync(store, "site", commit, output, error);
+            Assert.True(code == 0, error.ToString() + output);
+            Assert.Contains("Verified retained reports:", output.ToString());
+        }
         var completed = store.ReadProject("site");
         Assert.Equal("completed", completed.Step);
-        Assert.Contains("Verified retained reports:", output.ToString());
         var before = File.ReadAllBytes(store.ProjectPath("site"));
         Assert.Equal(0, await WebFormsWizardExecution.RunAsync(store, "site", null, output, error));
         Assert.Equal(before, File.ReadAllBytes(store.ProjectPath("site")));
         Assert.Single(Directory.GetDirectories(Path.Combine(store.DirectoryPath, "runs")));
         var nativeRun = Path.Combine(store.DirectoryPath, completed.Run!.RelativeRoot, "run");
+        var manifestPath = Assert.Single(Directory.GetFiles(Path.Combine(nativeRun, "attempts"), "scan-manifest.json", SearchOption.AllDirectories));
+        using (var scan = System.Text.Json.JsonDocument.Parse(File.ReadAllText(manifestPath)))
+        {
+            var publish = scan.RootElement.GetProperty("webFormsPublishProvenance");
+            Assert.Equal("bound", publish.GetProperty("status").GetString());
+            Assert.Equal(1, publish.GetProperty("pageCount").GetInt32());
+        }
+        using (var manifest = System.Text.Json.JsonDocument.Parse(File.ReadAllText(Path.Combine(nativeRun, "run-manifest.json"))))
+        {
+            Assert.Contains(manifest.RootElement.GetProperty("inputs").EnumerateArray(), input =>
+                input.GetProperty("role").GetString() == "publish-receipt");
+        }
         store.RepairProject(completed, store.PreviewRepair("site"), true);
         using var status = new StringWriter();
         Assert.Equal(0, await TraceMapCommand.RunAsync(["webforms-review", "status", "--run", nativeRun, "--json"], status, error));
@@ -92,6 +117,12 @@ public sealed class WebFormsWizardExecutionTests
         store.SaveProject(store.ReadProject("site") with { Step = "configuration" });
         await WebFormsWizardNative.ConfigureAsync(store, "site");
         return store;
+    }
+
+    private sealed class CompletionFailingWriter : StringWriter
+    {
+        public override Task WriteLineAsync(string? value) => value?.StartsWith("Verified retained reports:", StringComparison.Ordinal) == true
+            ? Task.FromException(new IOException("output unavailable")) : base.WriteLineAsync(value);
     }
 
     internal static (string Site, string Published) Inputs(string root)
