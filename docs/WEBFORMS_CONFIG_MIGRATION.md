@@ -38,6 +38,12 @@ Use `wcompare.ps1` with the new handler report and the historical handler JSON
 to compare actual method sequences. A mixed/compiled scope difference is a
 comparison limitation, not automatically an omitted IL route. A single-handler
 result alone also does not prove why a route was absent from a broad report.
+When either saved input covers multiple handlers or database terminals, pass
+`-Handler "<exact-handler-method>" -SurfaceName DbDataAdapter.Fill` to apply the
+same retained-row filter to both sides and optional mixed context. An ambiguous
+handler identity is rejected; zero retained matching rows remain a zero result.
+The HTML retains original query settings and reports the pre-filter variant
+counts, so the narrowed comparison cannot be mistaken for a new traversal.
 
 Algorithm 1.3 prioritizes admitted IL calls and prunes depth-infeasible mixed
 branches using a complete, bounded reverse-distance pass. The synthetic native

@@ -1,7 +1,9 @@
 [CmdletBinding()]
-param([string]$Historical, [string]$Current, [string]$Mixed, [string]$OutputPath, [switch]$Open)
+param([string]$Historical, [string]$Current, [string]$Mixed, [string]$OutputPath, [string]$Handler,
+    [ValidateSet('DbDataAdapter.Fill')][string]$SurfaceName, [switch]$Open)
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+if ($Handler -and $Handler -cnotmatch '^[A-Za-z0-9_]{1,128}$') { throw 'WEBFORMS_COMPARE_HANDLER_INVALID' }
 if (!$Historical) {
     $candidates = @(Get-ChildItem -LiteralPath ([IO.Path]::GetTempPath()) -Directory -Filter 'tracemap-existing-publish-*' |
         ForEach-Object { Get-ChildItem -LiteralPath $_.FullName -File -Filter 'handler-database-api*.json' } |
@@ -79,6 +81,29 @@ function ReadReport([string]$path) {
         if ($null -eq $raw -or $null -eq (Value $document 'query') -or $raw.Count -gt 10000) { throw 'WEBFORMS_COMPARE_SHAPE_INVALID' }
         foreach ($row in $raw) { $paths.Add($row) }
     }
+    $originalVariants = $paths.Count
+    if ($Handler -or $SurfaceName) {
+        $filtered = [Collections.Generic.List[object]]::new()
+        $roots = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+        $inspectedNodes = 0
+        foreach ($row in $paths) {
+            $nodes = Value $row 'nodes'
+            if ($null -eq $nodes -or $nodes.Count -eq 0 -or $nodes.Count -gt 2048) { throw 'WEBFORMS_COMPARE_NODE_LIMIT' }
+            $inspectedNodes += $nodes.Count
+            if ($inspectedNodes -gt 500000) { throw 'WEBFORMS_COMPARE_NODE_LIMIT' }
+            if ($Handler) {
+                $label = [string](Value $nodes[0] 'displayName'); $symbol = [string](Value $nodes[0] 'symbolId')
+                if (!$label.Split('(', 2)[0].EndsWith('.' + $Handler, [StringComparison]::Ordinal) -and
+                    !$symbol.Contains("|method:$($Handler.Length):$Handler|", [StringComparison]::Ordinal)) { continue }
+                [void]$roots.Add((Json @((Value $nodes[0] 'sourceIndexId'), (Value $nodes[0] 'scanId'),
+                    (Value $nodes[0] 'commitSha'), (Value $nodes[0] 'nodeId'), $symbol)))
+            }
+            if ($SurfaceName -and (Value $nodes[-1] 'surfaceName') -cne $SurfaceName) { continue }
+            $filtered.Add($row)
+        }
+        if ($roots.Count -gt 1) { throw 'WEBFORMS_COMPARE_HANDLER_AMBIGUOUS' }
+        $paths = $filtered
+    }
     $exact = [Collections.Generic.Dictionary[string,object]]::new([StringComparer]::Ordinal)
     $symbols = [Collections.Generic.Dictionary[string,object]]::new([StringComparer]::Ordinal)
     $totalNodes = 0
@@ -122,7 +147,7 @@ function ReadReport([string]$path) {
         if (!$exact.ContainsKey($key)) { $exact[$key] = @{ count = 0; labels = $labels.ToArray() } }
         $exact[$key].count++
     }
-    return @{ hash = $hash; header = $header; indexHash = (Value $document 'inputIndexSha256'); exact = $exact; symbols = $symbols; variants = $paths.Count }
+    return @{ hash = $hash; header = $header; indexHash = (Value $document 'inputIndexSha256'); exact = $exact; symbols = $symbols; variants = $paths.Count; originalVariants = $originalVariants }
 }
 $left = ReadReport $Historical
 $right = ReadReport $Current
@@ -138,11 +163,14 @@ $symbolRightOnly = @($right.symbols.Keys | Where-Object { !$left.symbols.Contain
 $symbolVariantDifferences = @($symbolShared | Where-Object { $left.symbols[$_].count -ne $right.symbols[$_].count })
 $generator = (Get-FileHash -LiteralPath $PSCommandPath -Algorithm SHA256).Hash.ToLowerInvariant()
 $mixedHash = if ($null -ne $mixedReport) { $mixedReport.hash } else { 'not-supplied' }
-$bounded = HashText ("webforms-chain-comparison.v1`n$($left.hash)`n$($right.hash)`n$mixedHash`n$generator")
+$bounded = HashText ("webforms-chain-comparison.v1`n$($left.hash)`n$($right.hash)`n$mixedHash`n$generator`nhandler:$Handler`nsurface:$SurfaceName")
 function Convert-ComparisonHtml([string]$text) { return [Net.WebUtility]::HtmlEncode($text) }
 $html = [Text.StringBuilder]::new()
 [void]$html.AppendLine('<!doctype html><html lang="en"><meta charset="utf-8"><title>Local chain comparison</title><style>body{font:16px/1.5 system-ui;margin:2rem;max-width:1200px}pre{white-space:pre-wrap;overflow-wrap:anywhere}td,th{border:1px solid #aaa;padding:.5rem;vertical-align:top}table{border-collapse:collapse}</style><h1>Local chain comparison</h1>')
 [void]$html.AppendLine('<p>PRIVATE diagnostic. Input JSON is read as supplied; native receipts and hashes are not admitted by this helper. Rule workflow.webforms.chain-comparison.v1; Tier4Unknown. Exact sequence equality includes source, scan and commit identity. Symbol-only matches omit those identities and are comparison hints. No parity or runtime conclusion.</p>')
+if ($Handler -or $SurfaceName) {
+    [void]$html.AppendLine('<p>Retained-row filter: handler ' + (Convert-ComparisonHtml $Handler) + '; terminal ' + (Convert-ComparisonHtml $SurfaceName) + '. Query headers and gap counts below still describe each original query. Original variants: ' + $left.originalVariants + ' historical / ' + $right.originalVariants + ' current. Filtered counts do not identify why a route was absent and cannot recover omitted paths.</p>')
+}
 [void]$html.AppendLine("<p>Historical: $($left.exact.Count) exact sequences / $($left.variants) variants. Current: $($right.exact.Count) / $($right.variants). Shared exact sequences: $($shared.Count). Historical only: $($leftOnly.Count). Current only: $($rightOnly.Count). Shared sequences with variant-count differences: $($variantDifferences.Count). Symbol-only sequence matches: $symbolMatches.</p>")
 [void]$html.AppendLine("<p>Symbol-only hints: $($left.symbols.Count) historical / $($right.symbols.Count) current unique sequences; $symbolMatches shared; $($symbolLeftOnly.Count) historical only; $($symbolRightOnly.Count) current only; $($symbolVariantDifferences.Count) shared sequences with variant-count differences. These omit provenance identity and are not exact route parity.</p>")
 [void]$html.AppendLine('<h2>Query settings and coverage</h2><table><tr><th>Historical</th><th>Current</th></tr><tr>')

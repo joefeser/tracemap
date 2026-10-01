@@ -65,5 +65,23 @@ try {
     try { & $helper -Historical $old -Current $current -OutputPath (Join-Path $folder 'bad-edge.html'); throw 'Missing edge accepted' }
     catch { if ($_.Exception.Message -ne 'WEBFORMS_COMPARE_EDGE_REFERENCE_MISSING') { throw } }
     if (Test-Path (Join-Path $folder 'bad-edge.html')) { throw 'Invalid edge output written' }
+    $selected = Node 'Synthetic.Selected(Object,EventArgs)'; $other = Node 'Synthetic.Other(Object,EventArgs)'
+    $fill = Node 'compiled:DbDataAdapter.Fill'; $fill.surfaceName = 'DbDataAdapter.Fill'
+    $execute = Node 'compiled:ExecuteNonQuery'; $execute.surfaceName = 'ExecuteNonQuery'
+    Save @{ query = @{ maxPaths = 256 }; paths = @(@{ nodes = @($selected,$fill) }, @{ nodes = @($other,$fill) }, @{ nodes = @($selected,$execute) }) } $old
+    Save @{ schemaVersion = 'webforms-compiled-grouped-handoff.v1'; header = @{ query = @{ maxPaths = 256 } }; nodes = @{ a = $selected; f = $fill }; variants = @(@{ nodeReferences = @('a','f') }) } $current
+    Save @{ query = @{}; paths = @() } $mixed
+    $result = @(& $helper -Historical $old -Current $current -Mixed $mixed -Handler Selected -SurfaceName DbDataAdapter.Fill -OutputPath (Join-Path $folder 'filtered.html'))
+    if ($result -notcontains 'compare.historicalChains=1;historicalVariants=1' -or $result -notcontains 'compare.currentChains=1;currentVariants=1' -or
+        $result -notcontains 'compare.sharedExact=1;historicalOnly=0;currentOnly=0;variantCountDifferences=0;symbolSequenceMatches=1') { throw 'Scoped comparison included other roots/terminals' }
+    $html = [IO.File]::ReadAllText((Join-Path $folder 'filtered.html'))
+    if (!$html.Contains('Original variants: 3 historical / 1 current') -or !$html.Contains('still describe each original query')) { throw 'Filter scope missing' }
+    $result = @(& $helper -Historical $old -Current $current -Mixed $mixed -Handler Absent -OutputPath (Join-Path $folder 'absent.html'))
+    if ($result -notcontains 'compare.historicalChains=0;historicalVariants=0') { throw 'Empty filtered report rejected' }
+    $ambiguous = Node 'Synthetic.Selected(Object,EventArgs)' 'scan-other'
+    Save @{ query = @{}; paths = @(@{ nodes = @($selected,$fill) }, @{ nodes = @($ambiguous,$fill) }) } $old
+    try { & $helper -Historical $old -Current $current -Handler Selected -OutputPath (Join-Path $folder 'ambiguous.html'); throw 'Ambiguous handler accepted' }
+    catch { if ($_.Exception.Message -ne 'WEBFORMS_COMPARE_HANDLER_AMBIGUOUS') { throw } }
+    if (Test-Path (Join-Path $folder 'ambiguous.html')) { throw 'Ambiguous output written' }
     Write-Output 'webFormsChainComparisonPublicTests=passed'
 } finally { [IO.Directory]::Delete($folder, $true) }
