@@ -55,6 +55,7 @@ public static partial class WebFormsReviewExecutionCommand
         LocalReviewScanRunner scanRunner, WebFormsReviewAttachmentRunner attachmentRunner,
         WebFormsReviewReportRunner? reportRunner, CancellationToken cancellationToken = default)
     {
+        var phase = "preflight";
         try
         {
             if (args.Length != 3 || args[0] is not ("run" or "resume") || args[1] != "--run") throw Fail("ARGUMENT_INVALID");
@@ -85,9 +86,11 @@ public static partial class WebFormsReviewExecutionCommand
             // A retained empty lock file is harmless after a crash; FileShare.None
             // protects concurrent executors without timestamp/stale-lock guesses.
             using var runLock = new FileStream(lockPath, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
+            phase = "runtime-inventory";
             var preflightSha = Digest(bytes);
             var runtimeSha = await RuntimeDigestAsync(runtimeRoot, cancellationToken);
             var history = await ReadHistoryAsync(root, plan, preflightSha, runtimeSha, cancellationToken);
+            phase = "input-validation";
             var toolDistribution = history.Sequence == 0 ? DescribeTool(runtimeRoot, runtimeSha) : history.Checkpoint?.ToolDistribution;
             if (args[0] == "run" && history.Checkpoint is not null) throw Fail("RUN_ALREADY_STARTED_USE_RESUME");
             var validated = await WebFormsReviewInputValidation.ValidateAsync(plan, cancellationToken);
@@ -102,8 +105,11 @@ public static partial class WebFormsReviewExecutionCommand
                     await WebFormsReviewAttachmentExecution.ValidateDerivedAsync(plan, validated, retained, cancellationToken);
                 }
                 if (reportRunner is not null)
+                {
+                    phase = "reports-resume";
                     return await ExecuteReportsAsync(root, plan, preflightSha, runtimeRoot, runtimeSha, history,
                         reportRunner, output, cancellationToken);
+                }
                 await output.WriteLineAsync($"webFormsExecution={Completed};retainedSnapshot=true;sourceRescanned=false");
                 await output.WriteLineAsync($"webFormsScan={OwnedPath(root, history.ScanCheckpoint.Attempt + "/scan")}");
                 return 0;
@@ -114,12 +120,14 @@ public static partial class WebFormsReviewExecutionCommand
             Directory.CreateDirectory(OwnedPath(root, attempt));
             var policyDigest = PolicyDigest(plan, scanPath);
             var started = Checkpoint("scan-started", [], null, null, 0, validationGaps);
+            phase = "scan-checkpoint";
             history = await PublishAsync(root, started, cancellationToken);
             using var scanOutput = new StringWriter(CultureInfo.InvariantCulture);
             using var scanError = new StringWriter(CultureInfo.InvariantCulture);
             using var observation = new WebFormsReviewPhaseObservation("scan");
             try
             {
+                phase = "scan";
                 if (attach)
                     await attachmentRunner(plan, validated.ParentManifest ?? throw Fail("PARENT_UNAVAILABLE"), scanPath, cancellationToken);
                 else
@@ -127,9 +135,11 @@ public static partial class WebFormsReviewExecutionCommand
                     var result = await scanRunner(ScanArguments(plan, scanPath), scanOutput, scanError, cancellationToken);
                     if (result != 0) throw Fail("SCAN_FAILED");
                 }
+                phase = "scan-input-recheck";
                 await WebFormsReviewInputValidation.RecheckAsync(plan, cancellationToken);
                 var git = GitMetadataProvider.Detect(plan.Configuration.SourceRoot);
                 if (git.CommitSha != plan.Configuration.SourceCommitSha) throw Fail("SOURCE_IDENTITY_CHANGED");
+                phase = "scan-artifact-validation";
                 var artifacts = await CollectArtifactsAsync(root, attempt, plan.Configuration.Budgets, cancellationToken);
                 foreach (var required in Required(plan))
                     if (!artifacts.Any(artifact => artifact.RelativePath == attempt + "/scan/" + required)) throw Fail("SCAN_ARTIFACT_MISSING");
@@ -155,13 +165,18 @@ public static partial class WebFormsReviewExecutionCommand
                 var gitAfter = GitMetadataProvider.Detect(plan.Configuration.SourceRoot);
                 if (gitAfter.CommitSha != git.CommitSha || gitAfter.GitRootPath != git.GitRootPath ||
                     gitAfter.RemoteUrl != git.RemoteUrl || gitAfter.ScanRootRelativePath != git.ScanRootRelativePath) throw Fail("SOURCE_IDENTITY_CHANGED");
+                phase = "runtime-recheck";
                 if (runtimeSha != await RuntimeDigestAsync(runtimeRoot, cancellationToken)) throw Fail("RUNTIME_CHANGED");
                 completed = Checkpoint(Completed, artifacts, checkedScan.Manifest.ScanId,
                     checkedScan.Manifest.SourceSnapshotDigest, checkedScan.Facts, completedGaps, observation.Finish());
+                phase = "completion-checkpoint";
                 history = await PublishAsync(root, completed, cancellationToken);
                 if (reportRunner is not null)
+                {
+                    phase = "reports";
                     return await ExecuteReportsAsync(root, plan, preflightSha, runtimeRoot, runtimeSha, history,
                         reportRunner, output, cancellationToken);
+                }
                 await output.WriteLineAsync($"webFormsExecution={Completed};facts={checkedScan.Facts};reviewOnly=true");
                 await output.WriteLineAsync($"webFormsScan={scanPath}");
                 return 0;
@@ -200,8 +215,21 @@ public static partial class WebFormsReviewExecutionCommand
             || exception.Message.StartsWith("WEBFORMS_ATTACHMENT_", StringComparison.Ordinal)
             || exception.Message.StartsWith("WEBFORMS_REVIEW_", StringComparison.Ordinal))
         { await error.WriteLineAsync("error: " + exception.Message); return 1; }
-        catch (Exception)
-        { await error.WriteLineAsync("error: WEBFORMS_EXECUTION_INPUT_OUTPUT_OR_CHECKPOINT_INVALID"); return 1; }
+        catch (Exception exception)
+        {
+            await error.WriteLineAsync("error: WEBFORMS_EXECUTION_INPUT_OUTPUT_OR_CHECKPOINT_INVALID");
+            // Only closed categories and numeric HRESULTs: exception messages, paths,
+            // SQL and arbitrary type names must not escape through diagnostics.
+            var category = exception switch
+            {
+                IOException => "io", UnauthorizedAccessException => "access",
+                Microsoft.Data.Sqlite.SqliteException => "sqlite",
+                JsonException => "json", InvalidOperationException => "invalid-operation",
+                ArgumentException => "argument", _ => "other"
+            };
+            await error.WriteLineAsync($"webFormsFailurePhase={phase};category={category};hresult={exception.HResult.ToString("X8", CultureInfo.InvariantCulture)}");
+            return 1;
+        }
     }
 
     internal static string[] ScanArguments(WebFormsReviewPreflightManifest plan, string output)
