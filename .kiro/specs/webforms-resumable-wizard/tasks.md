@@ -16,7 +16,7 @@
 - [x] Scan/combine/report execution with immutable output roots and revalidation.
   - [x] Pinned native start/resume, unique attempts and retained report-status verification; real local fixture execution.
   - [x] Local fresh/repair/multi-project acceptance matrix and existing compiled-chain fixture report assertions (108 passed in wlocal; Windows publication explicitly not run on macOS).
-- [ ] Full regression matrix, CLI replay, documentation and rule limitations.
-- [ ] Scoped PR and exact-head validation, without modifying #798.
+- [x] Full v1 regression matrix, CLI replay, documentation and rule limitations (bounded evidence/exclusions in `acceptance-audit.md`, not exhaustive customer compatibility).
+- [x] Scoped PR and exact-head validation, without modifying #798.
   - [x] PR #799 opened against dev after dependency #798 merged; dependency head/review request unchanged.
-  - [ ] Final-head full-suite and Windows corpus validation, required review disposition and completion audit.
+  - [x] Final-head full-suite and Windows corpus validation, required finding dispositions and completion audit. #799 was owner-merged; ACK's exhausted fallback gate was not represented as merge approval. See `acceptance-audit.md`.
