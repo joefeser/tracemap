@@ -15,7 +15,10 @@ reporter, workbench, query, or review authority.
 ## Requirements
 
 1. The site SHALL expose `/webforms/review-workbench/` as a static-first guided
-   review of one existing public synthetic Web Forms handler.
+   review of one existing public synthetic Web Forms handler. Route exposure is
+   unconditional: when the #806 proof dependency is unavailable, the route
+   SHALL still publish concept-level guidance under Requirement 2 rather than
+   being deferred.
 2. The walkthrough SHALL consume or link to the public-safe proof asset and
    route produced by #806. It SHALL NOT copy, regenerate, reinterpret, or
    silently strengthen #806 evidence. Until the #806 asset is present on the
