@@ -1,10 +1,10 @@
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
-import { dirname, resolve } from "node:path";
+import { basename, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { fileExists, normalizeRenderedText, readSitemapLocSet } from "./validate-utils.mjs";
-import { stableStringify } from "./generate-webforms-source-compiled-proof.mjs";
+import { createWebFormsSourceCompiledProof, stableStringify } from "./generate-webforms-source-compiled-proof.mjs";
 
 export const route = "/webforms/source-plus-compiled-proof/";
 export const assetRoute = "/assets/webforms-source-compiled-proof.json";
@@ -52,6 +52,8 @@ const forbiddenMaterial = [
   /\bpublic\.synthetic_[A-Za-z0-9_]+\b/i
 ];
 const protectedKeys = /(?:sqlText|rawSql|sourceSnippet|literalHash|parameterValue|connectionString|credential|secret|absolutePath|privateIdentity|analyzerOutput|rawIndex)/i;
+const forbiddenStringValue = /(?:\/Users\/|\/home\/|\/private\/|[A-Z]:\\Users\\|file:\/\/|Server\s*=|Password\s*=|User Id\s*=|ConnectionString|\bSELECT\b[\s\S]{0,500}\bFROM\b|\bINSERT\s+INTO\b|\bUPDATE\s+\S+\s+SET\b|\bDELETE\s+FROM\b|\b(?:CREATE|ALTER|DROP)\s+TABLE\b)/i;
+const publicEvidencePath = /^(?:samples\/|site\/src\/_data\/webforms-source-compiled-proof-input\.json$)/;
 
 export async function validateWebFormsSourceCompiledProofDist({ baseUrl = "https://tracemap.tools", dist, errors, root = moduleRoot }) {
   const pagePath = resolve(dist, "webforms", "source-plus-compiled-proof", "index.html");
@@ -76,10 +78,12 @@ export async function validateWebFormsSourceCompiledProofDist({ baseUrl = "https
   try { packet = JSON.parse(assetText); } catch (error) { errors.push(`Web Forms proof asset is not valid JSON: ${error.message}`); return; }
   validatePacket(packet, errors);
   await validateHashes({ packet, root, errors });
+  validatePageMatchesPacket({ packet, text, errors });
 
   const combined = `${html}\n${assetText}`;
   for (const pattern of forbiddenMaterial) if (pattern.test(combined)) errors.push(`Web Forms proof contains forbidden public material: ${pattern}`);
   validateProtectedKeys(packet, "$", errors);
+  validatePublicValues(packet, "$", errors);
 
   const discovery = JSON.parse(await readFile(resolve(root, "src", "_site", "discovery.json"), "utf8"));
   const entry = discovery.find((item) => item.path === route);
@@ -107,6 +111,7 @@ function validatePacket(packet, errors) {
   if (!/^[0-9a-f]{64}$/.test(packet.provenance?.generatorSha256 ?? "") || !/^[0-9a-f]{64}$/.test(packet.provenance?.boundedInputSha256 ?? "")) errors.push("Web Forms proof asset requires valid generator and bounded-input SHA-256 values.");
   if (!packet.provenance?.inputProjection?.includes("privacy projection")) errors.push("Web Forms proof asset must identify its bounded input as a privacy projection.");
   if (packet.coverage?.maxDepth !== 20 || packet.coverage?.maxPaths !== 256 || packet.coverage?.maxTraversalWork !== 100000 || packet.coverage?.truncatedByPathOrWorkLimit !== false) errors.push("Web Forms proof asset does not preserve the pinned traversal bounds and truncation state.");
+  if (packet.coverage?.resultStatus !== "partial") errors.push("Web Forms proof asset must machine-label its bounded result status as partial.");
   const examples = packet.bridgeTierExamples ?? [];
   for (const tier of ["Tier1Semantic", "Tier2Structural", "Tier3SyntaxOrTextual"]) {
     if (!examples.some((row) => row.ruleId === "combined.paths.compiled-il-bridge.v1" && row.evidenceTier === tier)) errors.push(`Web Forms proof asset must preserve compiled bridge emission at ${tier}.`);
@@ -119,21 +124,69 @@ function validatePacket(packet, errors) {
     for (const hop of outcome.orderedHops ?? []) {
       if (!requiredRules.includes(hop.ruleId) && hop.ruleId !== "vb.syntax.callgraph.v1") errors.push(`Web Forms proof hop has an unapproved rule ID: ${hop.ruleId}`);
       if (!tiers.includes(hop.evidenceTier) || !/^samples\//.test(hop.filePath ?? "") || !Number.isInteger(hop.startLine) || !Number.isInteger(hop.endLine) || hop.startLine < 1 || hop.endLine < hop.startLine || !hop.supportingEvidenceIds?.length) errors.push(`Web Forms proof hop has incomplete tier, span, or support provenance: ${hop.id}`);
+      if (hop.ruleId === "combined.paths.compiled-il-bridge.v1" && hop.evidenceTier !== "Tier3SyntaxOrTextual") errors.push(`Web Forms selected DLL-only reproduction must keep unbound compiled bridge hop at Tier3SyntaxOrTextual: ${hop.id}`);
     }
   }
   if (outcomes.find((row) => row.id === "dynamic-email")?.commandTextState !== "unresolved-operand") errors.push("Dynamic email outcome must remain unresolved.");
-  if (outcomes.find((row) => row.id === "literal-audit")?.commandTextState !== "constant-on-encoded-call-path") errors.push("Literal audit outcome must preserve its categorical encoded-path state.");
+  if (outcomes.find((row) => row.id === "literal-audit")?.commandTextState !== "method-local-constant") errors.push("Literal audit outcome must preserve its checked-in method-local constant state.");
   if (outcomes.find((row) => row.id === "fill")?.terminal !== "Fill") errors.push("Fill outcome must remain independently terminal-scoped.");
+  validateEvidenceRegistry(packet, errors);
 }
 
 async function validateHashes({ packet, root, errors }) {
   const generatorPath = resolve(root, "scripts", "generate-webforms-source-compiled-proof.mjs");
   const inputPath = resolve(root, "src", "_data", "webforms-source-compiled-proof-input.json");
-  const generatorHash = sha256(await readFile(generatorPath));
-  const input = JSON.parse(await readFile(inputPath, "utf8"));
-  const inputHash = sha256(stableStringify(input));
-  if (packet.provenance.generatorSha256 !== generatorHash) errors.push("Web Forms proof asset generator SHA-256 does not match the exact generator bytes.");
-  if (packet.provenance.boundedInputSha256 !== inputHash) errors.push("Web Forms proof asset bounded-input SHA-256 does not match the canonical privacy-projected input.");
+  try {
+    const generatorHash = sha256(await readFile(generatorPath));
+    const input = JSON.parse(await readFile(inputPath, "utf8"));
+    const inputHash = sha256(stableStringify(input));
+    if (packet.provenance?.generatorSha256 !== generatorHash) errors.push("Web Forms proof asset generator SHA-256 does not match the exact generator bytes.");
+    if (packet.provenance?.boundedInputSha256 !== inputHash) errors.push("Web Forms proof asset bounded-input SHA-256 does not match the canonical privacy-projected input.");
+    const expected = createWebFormsSourceCompiledProof(input, generatorHash);
+    if (stableStringify(packet) !== stableStringify(expected)) errors.push("Web Forms proof asset does not match a fresh canonical projection of its checked-in bounded input.");
+  } catch (error) {
+    errors.push(`Web Forms proof provenance could not be verified: ${error.message}`);
+  }
+}
+
+function validateEvidenceRegistry(packet, errors) {
+  const registry = new Map();
+  for (const record of packet.evidence ?? []) {
+    if (!record.id || registry.has(record.id)) errors.push(`Web Forms proof evidence registry has a missing or duplicate ID: ${record.id ?? "<missing>"}`);
+    if (!requiredRules.includes(record.ruleId) && record.ruleId !== "vb.syntax.callgraph.v1") errors.push(`Web Forms proof evidence record has an unapproved rule ID: ${record.id}`);
+    if (!tiers.includes(record.evidenceTier) || !publicEvidencePath.test(record.filePath ?? "") || !Number.isInteger(record.startLine) || !Number.isInteger(record.endLine) || record.startLine < 1 || record.endLine < record.startLine) errors.push(`Web Forms proof evidence record has incomplete tier or span provenance: ${record.id}`);
+    registry.set(record.id, record);
+  }
+  if (!registry.size) errors.push("Web Forms proof asset requires a supporting-evidence registry.");
+  const checkReferences = (item, label) => {
+    for (const id of item.supportingEvidenceIds ?? []) {
+      const record = registry.get(id);
+      if (!record) {
+        errors.push(`Web Forms proof references an unresolved supporting evidence ID: ${id}`);
+        continue;
+      }
+      for (const field of ["ruleId", "evidenceTier", "filePath", "startLine", "endLine"]) {
+        if (record[field] !== item[field]) errors.push(`Web Forms proof supporting evidence ID ${id} does not match ${label} ${field}.`);
+      }
+    }
+  };
+  for (const outcome of packet.outcomes ?? []) for (const hop of outcome.orderedHops ?? []) checkReferences(hop, `hop ${hop.id}`);
+  for (const gap of packet.gaps ?? []) {
+    if (!tiers.includes(gap.evidenceTier) || !publicEvidencePath.test(gap.filePath ?? "") || !Number.isInteger(gap.startLine) || !Number.isInteger(gap.endLine) || gap.startLine < 1 || gap.endLine < gap.startLine || !gap.supportingEvidenceIds?.length) errors.push(`Web Forms proof gap has incomplete tier, span, or support provenance: ${gap.classification}`);
+    checkReferences(gap, `gap ${gap.classification}`);
+  }
+}
+
+function validatePageMatchesPacket({ packet, text, errors }) {
+  for (const digest of [packet.provenance?.generatorSha256, packet.provenance?.boundedInputSha256]) {
+    if (digest && !text.includes(digest)) errors.push(`Web Forms proof page is stale relative to asset digest: ${digest}`);
+  }
+  for (const version of Object.values(packet.extractorVersions ?? {})) if (!text.includes(String(version))) errors.push(`Web Forms proof page is stale relative to extractor version: ${version}`);
+  for (const outcome of packet.outcomes ?? []) for (const hop of outcome.orderedHops ?? []) {
+    const span = `${basename(hop.filePath ?? "")}:${hop.startLine}-${hop.endLine}`;
+    const renderedHop = `${hop.ruleId} · ${hop.evidenceTier} · ${span}`;
+    if (!text.includes(renderedHop)) errors.push(`Web Forms proof page is stale relative to hop ${hop.id}: ${renderedHop}`);
+  }
 }
 
 function validateProtectedKeys(value, path, errors) {
@@ -143,6 +196,16 @@ function validateProtectedKeys(value, path, errors) {
     if (protectedKeys.test(key)) errors.push(`Web Forms proof asset contains protected key at ${path}.${key}`);
     validateProtectedKeys(child, `${path}.${key}`, errors);
   }
+}
+
+function validatePublicValues(value, path, errors) {
+  if (Array.isArray(value)) return value.forEach((item, index) => validatePublicValues(item, `${path}[${index}]`, errors));
+  if (typeof value === "string") {
+    if (forbiddenStringValue.test(value)) errors.push(`Web Forms proof asset contains forbidden public value at ${path}`);
+    return;
+  }
+  if (!value || typeof value !== "object") return;
+  for (const [key, child] of Object.entries(value)) validatePublicValues(child, `${path}.${key}`, errors);
 }
 
 function sha256(value) { return createHash("sha256").update(value).digest("hex"); }

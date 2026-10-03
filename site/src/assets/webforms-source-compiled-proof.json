@@ -5,9 +5,9 @@
   "commitSha": "5ffd4a54176c002e4c6d41ce0133eab5963ad79b",
   "provenance": {
     "generator": "site/scripts/generate-webforms-source-compiled-proof.mjs",
-    "generatorSha256": "5b5b6774013d3037132b64ab8eb744c448b66f44b2e9230a1c6bc93b1c0aaa46",
+    "generatorSha256": "fdf948229e9d3b60078c9c2989329da35d5fca5e7c26dd296776491c947b8ff2",
     "boundedInput": "site/src/_data/webforms-source-compiled-proof-input.json",
-    "boundedInputSha256": "9a504327efec58b3af7e0f4acef68332be42760413582a01e2d2a15092dbcfb9",
+    "boundedInputSha256": "412a6ee0aae8c3d473cb9ab3facf5dc2c066e628101e73a875af84f8e8dea1d6",
     "inputProjection": "canonical allowlisted privacy projection of checked-in public synthetic fixtures"
   },
   "proofBoundary": "checked-in-public-synthetic-fixtures",
@@ -25,12 +25,258 @@
   },
   "coverage": {
     "label": "bounded-static-evidence",
+    "resultStatus": "partial",
     "maxDepth": 20,
     "maxPaths": 256,
     "maxTraversalWork": 100000,
     "truncatedByPathOrWorkLimit": false,
     "hostBoundary": "The public regression is cross-platform; real ASP.NET mapped or mapless publication remains Windows-only."
   },
+  "evidence": [
+    {
+      "id": "compiled-audit-body",
+      "ruleId": "dotnet.compiled.member.v1",
+      "evidenceTier": "Tier2Structural",
+      "filePath": "samples/messy-dotnet-workspace/vb-lazy-logging-provider/PublicLog.vb",
+      "startLine": 19,
+      "endLine": 24,
+      "meaning": "Public synthetic support for WriteAudit in provider DLL."
+    },
+    {
+      "id": "compiled-audit-command-state",
+      "ruleId": "combined.paths.compiled-command-value.v1",
+      "evidenceTier": "Tier3SyntaxOrTextual",
+      "filePath": "samples/messy-dotnet-workspace/vb-lazy-logging-provider/PublicLog.vb",
+      "startLine": 19,
+      "endLine": 24,
+      "meaning": "Public synthetic support for Retained categorical command state."
+    },
+    {
+      "id": "compiled-audit-member",
+      "ruleId": "dotnet.compiled.member.v1",
+      "evidenceTier": "Tier2Structural",
+      "filePath": "samples/messy-dotnet-workspace/vb-lazy-logging-provider/PublicLog.vb",
+      "startLine": 19,
+      "endLine": 24,
+      "meaning": "Public synthetic support for WriteAudit in provider DLL."
+    },
+    {
+      "id": "compiled-audit-terminal",
+      "ruleId": "combined.paths.compiled-il-bridge.v1",
+      "evidenceTier": "Tier3SyntaxOrTextual",
+      "filePath": "samples/messy-dotnet-workspace/vb-lazy-logging-provider/PublicLog.vb",
+      "startLine": 19,
+      "endLine": 24,
+      "meaning": "Public synthetic support for ExecuteScalar API terminal."
+    },
+    {
+      "id": "compiled-choices-constructor",
+      "ruleId": "combined.paths.compiled-il-bridge.v1",
+      "evidenceTier": "Tier3SyntaxOrTextual",
+      "filePath": "samples/messy-dotnet-workspace/vb-lazy-constructor/Overview.aspx.vb",
+      "startLine": 51,
+      "endLine": 54,
+      "meaning": "Public synthetic support for SyntheticChoices constructor."
+    },
+    {
+      "id": "compiled-command-binding",
+      "ruleId": "combined.paths.compiled-il-bridge.v1",
+      "evidenceTier": "Tier3SyntaxOrTextual",
+      "filePath": "samples/messy-dotnet-workspace/vb-lazy-logging-provider/PublicLog.vb",
+      "startLine": 13,
+      "endLine": 17,
+      "meaning": "Public synthetic support for ExecuteScalar API terminal."
+    },
+    {
+      "id": "compiled-cross-assembly-call",
+      "ruleId": "combined.paths.compiled-il-bridge.v1",
+      "evidenceTier": "Tier3SyntaxOrTextual",
+      "filePath": "samples/messy-dotnet-workspace/vb-lazy-logging-provider/PublicLog.vb",
+      "startLine": 6,
+      "endLine": 11,
+      "meaning": "Public synthetic support for GetEmail in provider DLL."
+    },
+    {
+      "id": "compiled-database-api-candidate",
+      "ruleId": "combined.paths.compiled-il-bridge.v1",
+      "evidenceTier": "Tier3SyntaxOrTextual",
+      "filePath": "samples/messy-dotnet-workspace/vb-lazy-logging-provider/PublicLog.vb",
+      "startLine": 13,
+      "endLine": 17,
+      "meaning": "Public synthetic support for ExecuteScalar API terminal."
+    },
+    {
+      "id": "compiled-employee-constructor",
+      "ruleId": "combined.paths.compiled-il-bridge.v1",
+      "evidenceTier": "Tier3SyntaxOrTextual",
+      "filePath": "samples/messy-dotnet-workspace/vb-lazy-constructor/Overview.aspx.vb",
+      "startLine": 70,
+      "endLine": 88,
+      "meaning": "Public synthetic support for SyntheticEmployee constructor and field initialization."
+    },
+    {
+      "id": "compiled-field-initializer",
+      "ruleId": "combined.paths.compiled-il-bridge.v1",
+      "evidenceTier": "Tier3SyntaxOrTextual",
+      "filePath": "samples/messy-dotnet-workspace/vb-lazy-constructor/Overview.aspx.vb",
+      "startLine": 70,
+      "endLine": 88,
+      "meaning": "Public synthetic support for SyntheticEmployee constructor and field initialization."
+    },
+    {
+      "id": "compiled-fill-command-state",
+      "ruleId": "combined.paths.compiled-il-bridge.v1",
+      "evidenceTier": "Tier3SyntaxOrTextual",
+      "filePath": "samples/messy-dotnet-workspace/vb-lazy-logging-provider/PublicLog.vb",
+      "startLine": 92,
+      "endLine": 98,
+      "meaning": "Public synthetic support for Fill API terminal."
+    },
+    {
+      "id": "compiled-fill-terminal",
+      "ruleId": "combined.paths.compiled-il-bridge.v1",
+      "evidenceTier": "Tier3SyntaxOrTextual",
+      "filePath": "samples/messy-dotnet-workspace/vb-lazy-logging-provider/PublicLog.vb",
+      "startLine": 92,
+      "endLine": 98,
+      "meaning": "Public synthetic support for Fill API terminal."
+    },
+    {
+      "id": "compiled-get-profile-call",
+      "ruleId": "combined.paths.compiled-il-bridge.v1",
+      "evidenceTier": "Tier3SyntaxOrTextual",
+      "filePath": "samples/messy-dotnet-workspace/vb-lazy-constructor/Overview.aspx.vb",
+      "startLine": 39,
+      "endLine": 47,
+      "meaning": "Public synthetic support for GetProfile."
+    },
+    {
+      "id": "compiled-lazy-getter",
+      "ruleId": "combined.paths.compiled-il-bridge.v1",
+      "evidenceTier": "Tier3SyntaxOrTextual",
+      "filePath": "samples/messy-dotnet-workspace/vb-lazy-constructor/Overview.aspx.vb",
+      "startLine": 60,
+      "endLine": 67,
+      "meaning": "Public synthetic support for EmployeeInfo getter."
+    },
+    {
+      "id": "compiled-lookup-body",
+      "ruleId": "dotnet.compiled.member.v1",
+      "evidenceTier": "Tier2Structural",
+      "filePath": "samples/messy-dotnet-workspace/vb-lazy-logging-provider/PublicLog.vb",
+      "startLine": 92,
+      "endLine": 98,
+      "meaning": "Public synthetic support for Lookup in provider DLL."
+    },
+    {
+      "id": "compiled-lookup-member",
+      "ruleId": "dotnet.compiled.member.v1",
+      "evidenceTier": "Tier2Structural",
+      "filePath": "samples/messy-dotnet-workspace/vb-lazy-logging-provider/PublicLog.vb",
+      "startLine": 92,
+      "endLine": 98,
+      "meaning": "Public synthetic support for Lookup in provider DLL."
+    },
+    {
+      "id": "compiled-profile-constructor-call",
+      "ruleId": "combined.paths.compiled-il-bridge.v1",
+      "evidenceTier": "Tier3SyntaxOrTextual",
+      "filePath": "samples/messy-dotnet-workspace/vb-lazy-constructor/Overview.aspx.vb",
+      "startLine": 31,
+      "endLine": 35,
+      "meaning": "Public synthetic support for ProfileEmployee constructor."
+    },
+    {
+      "id": "compiled-profile-getter",
+      "ruleId": "dotnet.compiled.member.v1",
+      "evidenceTier": "Tier2Structural",
+      "filePath": "samples/messy-dotnet-workspace/vb-lazy-constructor/Overview.aspx.vb",
+      "startLine": 20,
+      "endLine": 25,
+      "meaning": "Public synthetic support for EmployeeInfo getter."
+    },
+    {
+      "id": "compiled-provider-member",
+      "ruleId": "combined.paths.compiled-il-bridge.v1",
+      "evidenceTier": "Tier3SyntaxOrTextual",
+      "filePath": "samples/messy-dotnet-workspace/vb-lazy-logging-provider/PublicLog.vb",
+      "startLine": 6,
+      "endLine": 11,
+      "meaning": "Public synthetic support for GetEmail in provider DLL."
+    },
+    {
+      "id": "fixture-audit-call-shape",
+      "ruleId": "vb.syntax.callgraph.v1",
+      "evidenceTier": "Tier3SyntaxOrTextual",
+      "filePath": "samples/messy-dotnet-workspace/vb-lazy-constructor/Overview.aspx.vb",
+      "startLine": 39,
+      "endLine": 47,
+      "meaning": "Public synthetic support for GetProfile exception branch."
+    },
+    {
+      "id": "fixture-load-handler",
+      "ruleId": "vb.syntax.declarations.v1",
+      "evidenceTier": "Tier3SyntaxOrTextual",
+      "filePath": "samples/messy-dotnet-workspace/vb-lazy-constructor/Overview.aspx.vb",
+      "startLine": 9,
+      "endLine": 11,
+      "meaning": "Public synthetic support for Load_Click handler."
+    },
+    {
+      "id": "fixture-profile-getter",
+      "ruleId": "dotnet.compiled.member.v1",
+      "evidenceTier": "Tier2Structural",
+      "filePath": "samples/messy-dotnet-workspace/vb-lazy-constructor/Overview.aspx.vb",
+      "startLine": 20,
+      "endLine": 25,
+      "meaning": "Public synthetic support for EmployeeInfo getter."
+    },
+    {
+      "id": "fixture-profile-handler",
+      "ruleId": "vb.syntax.declarations.v1",
+      "evidenceTier": "Tier3SyntaxOrTextual",
+      "filePath": "samples/messy-dotnet-workspace/vb-lazy-constructor/Overview.aspx.vb",
+      "startLine": 13,
+      "endLine": 15,
+      "meaning": "Public synthetic support for Profile_Click handler."
+    },
+    {
+      "id": "gap-bounded-traversal",
+      "ruleId": "combined.paths.compiled-il-bridge.v1",
+      "evidenceTier": "Tier4Unknown",
+      "filePath": "site/src/_data/webforms-source-compiled-proof-input.json",
+      "startLine": 19,
+      "endLine": 25,
+      "meaning": "Public synthetic support for BoundedTraversal."
+    },
+    {
+      "id": "gap-projectless-source-publish",
+      "ruleId": "combined.paths.projectless-publish-candidate.v1",
+      "evidenceTier": "Tier3SyntaxOrTextual",
+      "filePath": "samples/messy-dotnet-workspace/vb-lazy-constructor/Overview.aspx.vb",
+      "startLine": 13,
+      "endLine": 15,
+      "meaning": "Public synthetic support for ProjectlessSourceToPublishCandidate."
+    },
+    {
+      "id": "gap-unresolved-command-operand",
+      "ruleId": "combined.paths.compiled-command-value.v1",
+      "evidenceTier": "Tier4Unknown",
+      "filePath": "samples/messy-dotnet-workspace/vb-lazy-logging-provider/PublicLog.vb",
+      "startLine": 13,
+      "endLine": 17,
+      "meaning": "Public synthetic support for IlCommandOperandValueUnresolved."
+    },
+    {
+      "id": "gap-virtual-dispatch",
+      "ruleId": "combined.paths.compiled-command-value.v1",
+      "evidenceTier": "Tier4Unknown",
+      "filePath": "samples/messy-dotnet-workspace/vb-lazy-logging-provider/PublicLog.vb",
+      "startLine": 13,
+      "endLine": 17,
+      "meaning": "Public synthetic support for IlCommandVirtualDispatchUnproven."
+    }
+  ],
   "bridgeTierExamples": [
     {
       "id": "source-metadata-identity",
@@ -101,7 +347,7 @@
           "label": "ProfileEmployee constructor",
           "kind": "constructor",
           "ruleId": "combined.paths.compiled-il-bridge.v1",
-          "evidenceTier": "Tier2Structural",
+          "evidenceTier": "Tier3SyntaxOrTextual",
           "filePath": "samples/messy-dotnet-workspace/vb-lazy-constructor/Overview.aspx.vb",
           "startLine": 31,
           "endLine": 35,
@@ -114,7 +360,7 @@
           "label": "GetProfile",
           "kind": "method",
           "ruleId": "combined.paths.compiled-il-bridge.v1",
-          "evidenceTier": "Tier2Structural",
+          "evidenceTier": "Tier3SyntaxOrTextual",
           "filePath": "samples/messy-dotnet-workspace/vb-lazy-constructor/Overview.aspx.vb",
           "startLine": 39,
           "endLine": 47,
@@ -127,7 +373,7 @@
           "label": "GetEmail in provider DLL",
           "kind": "provider-boundary",
           "ruleId": "combined.paths.compiled-il-bridge.v1",
-          "evidenceTier": "Tier2Structural",
+          "evidenceTier": "Tier3SyntaxOrTextual",
           "filePath": "samples/messy-dotnet-workspace/vb-lazy-logging-provider/PublicLog.vb",
           "startLine": 6,
           "endLine": 11,
@@ -163,7 +409,7 @@
       "title": "Literal audit call",
       "terminal": "ExecuteScalar",
       "commandTypeState": "method-local-constant",
-      "commandTextState": "constant-on-encoded-call-path",
+      "commandTextState": "method-local-constant",
       "coverageLabel": "bounded-static-evidence-with-review-tier-value",
       "orderedHops": [
         {
@@ -253,7 +499,7 @@
           "label": "SyntheticChoices constructor",
           "kind": "constructor",
           "ruleId": "combined.paths.compiled-il-bridge.v1",
-          "evidenceTier": "Tier2Structural",
+          "evidenceTier": "Tier3SyntaxOrTextual",
           "filePath": "samples/messy-dotnet-workspace/vb-lazy-constructor/Overview.aspx.vb",
           "startLine": 51,
           "endLine": 54,
@@ -266,7 +512,7 @@
           "label": "EmployeeInfo getter",
           "kind": "property-getter",
           "ruleId": "combined.paths.compiled-il-bridge.v1",
-          "evidenceTier": "Tier2Structural",
+          "evidenceTier": "Tier3SyntaxOrTextual",
           "filePath": "samples/messy-dotnet-workspace/vb-lazy-constructor/Overview.aspx.vb",
           "startLine": 60,
           "endLine": 67,
@@ -279,7 +525,7 @@
           "label": "SyntheticEmployee constructor and field initialization",
           "kind": "constructor-work",
           "ruleId": "combined.paths.compiled-il-bridge.v1",
-          "evidenceTier": "Tier2Structural",
+          "evidenceTier": "Tier3SyntaxOrTextual",
           "filePath": "samples/messy-dotnet-workspace/vb-lazy-constructor/Overview.aspx.vb",
           "startLine": 70,
           "endLine": 88,
@@ -331,6 +577,12 @@
       "ruleId": "combined.paths.projectless-publish-candidate.v1",
       "evidenceTier": "Tier3SyntaxOrTextual",
       "coverageLabel": "review-candidate",
+      "filePath": "samples/messy-dotnet-workspace/vb-lazy-constructor/Overview.aspx.vb",
+      "startLine": 13,
+      "endLine": 15,
+      "supportingEvidenceIds": [
+        "gap-projectless-source-publish"
+      ],
       "limitation": "Without exact source-method mapping, a projectless publish bridge remains a candidate."
     },
     {
@@ -338,6 +590,12 @@
       "ruleId": "combined.paths.compiled-command-value.v1",
       "evidenceTier": "Tier4Unknown",
       "coverageLabel": "reduced",
+      "filePath": "samples/messy-dotnet-workspace/vb-lazy-logging-provider/PublicLog.vb",
+      "startLine": 13,
+      "endLine": 17,
+      "supportingEvidenceIds": [
+        "gap-unresolved-command-operand"
+      ],
       "limitation": "Runtime-composed command material stays unresolved and is omitted from the public projection."
     },
     {
@@ -345,6 +603,12 @@
       "ruleId": "combined.paths.compiled-command-value.v1",
       "evidenceTier": "Tier4Unknown",
       "coverageLabel": "reduced",
+      "filePath": "samples/messy-dotnet-workspace/vb-lazy-logging-provider/PublicLog.vb",
+      "startLine": 13,
+      "endLine": 17,
+      "supportingEvidenceIds": [
+        "gap-virtual-dispatch"
+      ],
       "limitation": "Encoded callvirt evidence does not select a runtime override or provider implementation."
     },
     {
@@ -352,6 +616,12 @@
       "ruleId": "combined.paths.compiled-il-bridge.v1",
       "evidenceTier": "Tier4Unknown",
       "coverageLabel": "bounded",
+      "filePath": "site/src/_data/webforms-source-compiled-proof-input.json",
+      "startLine": 19,
+      "endLine": 25,
+      "supportingEvidenceIds": [
+        "gap-bounded-traversal"
+      ],
       "limitation": "Depth, path, and traversal-work limits constrain the result; absence beyond a bound is not proven."
     }
   ],

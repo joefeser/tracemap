@@ -47,6 +47,7 @@
           <div><strong>Exact revision</strong><span><code>5ffd4a54176c002e4c6d41ce0133eab5963ad79b</code> on <code>main</code>; later <code>dev</code> repairs are not silently included.</span></div>
           <div><strong>Public fixtures</strong><span><code>lazy-constructor</code>, <code>vb-lazy-constructor</code>, and <code>vb-lazy-logging-provider</code> only.</span></div>
           <div><strong>Projection</strong><span>Allowlisted labels, categorical states, rule IDs, emitted tiers, repository-relative spans, versions, limits, and safe supporting IDs.</span></div>
+          <div><strong>Result status</strong><span><code>partial</code>; explicit gaps and bounded traversal prevent a complete-coverage claim.</span></div>
           <div><strong>Omitted</strong><span>No source snippets, command bodies, SQL text, literal hashes, parameter values, configuration, connection material, raw indexes, analyzer output, local paths, or private identities.</span></div>
         </div>
       </section>
@@ -73,16 +74,16 @@
           <ol class="evidence-chain" aria-label="Dynamic email static evidence chain">
             <li data-evidence-tier="Tier3SyntaxOrTextual"><strong>Profile_Click handler</strong><span><code>vb.syntax.declarations.v1</code> · Tier3SyntaxOrTextual · <code>Overview.aspx.vb:13-15</code></span></li>
             <li data-evidence-tier="Tier2Structural"><strong>EmployeeInfo getter</strong><span><code>dotnet.compiled.member.v1</code> · Tier2Structural · <code>Overview.aspx.vb:20-25</code></span></li>
-            <li data-evidence-tier="Tier2Structural"><strong>ProfileEmployee constructor</strong><span><code>combined.paths.compiled-il-bridge.v1</code> · Tier2Structural · <code>Overview.aspx.vb:31-35</code></span></li>
-            <li data-evidence-tier="Tier2Structural"><strong>GetProfile</strong><span><code>combined.paths.compiled-il-bridge.v1</code> · Tier2Structural · <code>Overview.aspx.vb:39-47</code></span></li>
-            <li data-evidence-tier="Tier2Structural"><strong>GetEmail · provider DLL boundary</strong><span><code>combined.paths.compiled-il-bridge.v1</code> · Tier2Structural · <code>PublicLog.vb:6-11</code></span></li>
+            <li data-evidence-tier="Tier3SyntaxOrTextual"><strong>ProfileEmployee constructor</strong><span><code>combined.paths.compiled-il-bridge.v1</code> · Tier3SyntaxOrTextual · <code>Overview.aspx.vb:31-35</code></span></li>
+            <li data-evidence-tier="Tier3SyntaxOrTextual"><strong>GetProfile</strong><span><code>combined.paths.compiled-il-bridge.v1</code> · Tier3SyntaxOrTextual · <code>Overview.aspx.vb:39-47</code></span></li>
+            <li data-evidence-tier="Tier3SyntaxOrTextual"><strong>GetEmail · provider DLL boundary</strong><span><code>combined.paths.compiled-il-bridge.v1</code> · Tier3SyntaxOrTextual · <code>PublicLog.vb:6-11</code></span></li>
             <li data-evidence-tier="Tier3SyntaxOrTextual"><strong>ExecuteScalar · database API candidate</strong><span><code>combined.paths.compiled-il-bridge.v1</code> · Tier3SyntaxOrTextual · <code>PublicLog.vb:13-17</code></span></li>
           </ol>
           <p class="claim-ledger-note"><strong>Owner question:</strong> Which runtime input, branch, provider, and database context must be validated separately?</p>
         </article>
 
         <article class="proof-story" data-proof-outcome="literal-audit">
-          <div class="split-section"><div><p class="eyebrow">Outcome 2 · retained categorical state</p><h3>Literal audit call → ExecuteScalar</h3><p>The static exception-branch call retains a literal command category and command type without publishing the command body.</p></div><div class="detail-list"><div><strong>Coverage</strong><span><code>bounded-static-evidence-with-review-tier-value</code></span></div><div><strong>Value state</strong><span><code>constant-on-encoded-call-path</code> at Tier3SyntaxOrTextual.</span></div><div><strong>Stop</strong><span>Static branch presence is not branch feasibility, execution, success, or database identity.</span></div></div></div>
+          <div class="split-section"><div><p class="eyebrow">Outcome 2 · retained categorical state</p><h3>Literal audit call → ExecuteScalar</h3><p>The static exception-branch call retains a literal command category and command type without publishing the command body.</p></div><div class="detail-list"><div><strong>Coverage</strong><span><code>bounded-static-evidence-with-review-tier-value</code></span></div><div><strong>Value state</strong><span><code>method-local-constant</code> at Tier3SyntaxOrTextual.</span></div><div><strong>Stop</strong><span>Static branch presence is not branch feasibility, execution, success, or database identity.</span></div></div></div>
           <ol class="evidence-chain" aria-label="Literal audit static evidence chain">
             <li data-evidence-tier="Tier3SyntaxOrTextual"><strong>GetProfile exception branch</strong><span><code>vb.syntax.callgraph.v1</code> · Tier3SyntaxOrTextual · <code>Overview.aspx.vb:39-47</code></span></li>
             <li data-evidence-tier="Tier2Structural"><strong>WriteAudit · provider DLL boundary</strong><span><code>dotnet.compiled.member.v1</code> · Tier2Structural · <code>PublicLog.vb:19-24</code></span></li>
@@ -96,9 +97,9 @@
           <div class="split-section"><div><p class="eyebrow">Outcome 3 · independent Fill terminal</p><h3>Constructor and property work → Fill</h3><p>The independent path keeps the property getter, nested constructor work, provider boundary, and final Fill candidate in order.</p></div><div class="detail-list"><div><strong>Coverage</strong><span><code>bounded-static-evidence-with-terminal-candidate</code></span></div><div><strong>Filter boundary</strong><span>A Fill-only result does not resolve the other outcome’s command values.</span></div><div><strong>Gaps</strong><span>Warm/cold property state and provider dispatch remain unproven.</span></div></div></div>
           <ol class="evidence-chain" aria-label="Fill static evidence chain">
             <li data-evidence-tier="Tier3SyntaxOrTextual"><strong>Load_Click handler</strong><span><code>vb.syntax.declarations.v1</code> · Tier3SyntaxOrTextual · <code>Overview.aspx.vb:9-11</code></span></li>
-            <li data-evidence-tier="Tier2Structural"><strong>SyntheticChoices constructor</strong><span><code>combined.paths.compiled-il-bridge.v1</code> · Tier2Structural · <code>Overview.aspx.vb:51-54</code></span></li>
-            <li data-evidence-tier="Tier2Structural"><strong>EmployeeInfo getter</strong><span><code>combined.paths.compiled-il-bridge.v1</code> · Tier2Structural · <code>Overview.aspx.vb:60-67</code></span></li>
-            <li data-evidence-tier="Tier2Structural"><strong>SyntheticEmployee constructor + field initialization</strong><span><code>combined.paths.compiled-il-bridge.v1</code> · Tier2Structural · <code>Overview.aspx.vb:70-88</code></span></li>
+            <li data-evidence-tier="Tier3SyntaxOrTextual"><strong>SyntheticChoices constructor</strong><span><code>combined.paths.compiled-il-bridge.v1</code> · Tier3SyntaxOrTextual · <code>Overview.aspx.vb:51-54</code></span></li>
+            <li data-evidence-tier="Tier3SyntaxOrTextual"><strong>EmployeeInfo getter</strong><span><code>combined.paths.compiled-il-bridge.v1</code> · Tier3SyntaxOrTextual · <code>Overview.aspx.vb:60-67</code></span></li>
+            <li data-evidence-tier="Tier3SyntaxOrTextual"><strong>SyntheticEmployee constructor + field initialization</strong><span><code>combined.paths.compiled-il-bridge.v1</code> · Tier3SyntaxOrTextual · <code>Overview.aspx.vb:70-88</code></span></li>
             <li data-evidence-tier="Tier2Structural"><strong>Lookup · provider DLL boundary</strong><span><code>dotnet.compiled.member.v1</code> · Tier2Structural · <code>PublicLog.vb:92-98</code></span></li>
             <li data-evidence-tier="Tier3SyntaxOrTextual"><strong>Fill · database API candidate</strong><span><code>combined.paths.compiled-il-bridge.v1</code> · Tier3SyntaxOrTextual · <code>PublicLog.vb:92-98</code></span></li>
           </ol>
@@ -120,8 +121,8 @@
       <section class="section" id="provenance">
         <div class="section-header"><p class="section-kicker">Provenance and versions</p><h2>The projection can be reproduced and compared byte-for-byte.</h2></div>
         <div class="claim-ledger-wrap"><table class="claim-ledger-table"><caption>Public-safe provenance for the checked-in projection.</caption><thead><tr><th scope="col">Field</th><th scope="col">Recorded value</th><th scope="col">Meaning</th></tr></thead><tbody>
-          <tr><td>Generator SHA-256</td><td><code>5b5b6774013d3037132b64ab8eb744c448b66f44b2e9230a1c6bc93b1c0aaa46</code></td><td>Digest of the exact site-owned generator bytes.</td></tr>
-          <tr><td>Bounded input SHA-256</td><td><code>9a504327efec58b3af7e0f4acef68332be42760413582a01e2d2a15092dbcfb9</code></td><td>Digest of the canonical allowlisted privacy projection—not a private scan, source tree, or binary.</td></tr>
+          <tr><td>Generator SHA-256</td><td><code>fdf948229e9d3b60078c9c2989329da35d5fca5e7c26dd296776491c947b8ff2</code></td><td>Digest of the exact site-owned generator bytes.</td></tr>
+          <tr><td>Bounded input SHA-256</td><td><code>412a6ee0aae8c3d473cb9ab3facf5dc2c066e628101e73a875af84f8e8dea1d6</code></td><td>Digest of the canonical allowlisted privacy projection—not a private scan, source tree, or binary.</td></tr>
           <tr><td>Source extractors</td><td><code>vb-semantic/0.8.7</code><br><code>vb-syntax/0.3.23</code></td><td>Compiler-backed and projectless fallback evidence remain separate.</td></tr>
           <tr><td>Compiled extractors</td><td><code>managed-metadata/0.1.2+cecil-0.11.6</code><br><code>il-body-evidence/0.1.11+srm-10.0.0+cecil-0.11.6</code></td><td>Metadata and dual-reader IL evidence versions on the selected revision.</td></tr>
           <tr><td>Path reporter</td><td><code>algorithm 1.3</code></td><td>Bounded deterministic traversal and explicit gaps.</td></tr>

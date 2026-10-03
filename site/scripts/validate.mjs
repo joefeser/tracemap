@@ -260,7 +260,8 @@ export async function validateDist({
     await validateSiteClaimGuardrailsDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateStaticTriageDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateStaticVsRuntimeDist({ baseUrl: normalizedBaseUrl, dist, errors });
-    if (await fileExists(resolve(root, "scripts", "generate-webforms-source-compiled-proof.mjs"))) {
+    if (await fileExists(resolve(root, "src", "webforms", "source-plus-compiled-proof", "index.html")) ||
+        await fileExists(resolve(root, "src", "assets", "webforms-source-compiled-proof.json"))) {
       await validateWebFormsSourceCompiledProofDist({ baseUrl: normalizedBaseUrl, dist, errors, root });
     }
     await validateSqlOperatorHandoffDist({ baseUrl: normalizedBaseUrl, dist, errors });
