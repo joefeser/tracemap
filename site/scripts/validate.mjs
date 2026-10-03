@@ -7,6 +7,7 @@ import { buildSite, topNavigationLinks } from "./build.mjs";
 import { validateAdoptionPlaybookDist } from "./adoption-playbook.mjs";
 import { validateAccessSafeEvidenceAcquisitionDist } from "./access-safe-evidence-acquisition.mjs";
 import { validateWebformsModernizationArticleDist } from "./webforms-modernization-article.mjs";
+import { validateWebFormsSourceCompiledProofDist } from "./webforms-source-compiled-proof.mjs";
 import { validateReducedCoverageArticleDist } from "./reduced-coverage-article.mjs";
 import { validateGapLineNumberArticleDist } from "./gap-line-number-article.mjs";
 import { validateButtonIdentityArticleDist } from "./button-identity-article.mjs";
@@ -259,6 +260,10 @@ export async function validateDist({
     await validateSiteClaimGuardrailsDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateStaticTriageDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateStaticVsRuntimeDist({ baseUrl: normalizedBaseUrl, dist, errors });
+    if (await fileExists(resolve(root, "src", "webforms", "source-plus-compiled-proof", "index.html")) ||
+        await fileExists(resolve(root, "src", "assets", "webforms-source-compiled-proof.json"))) {
+      await validateWebFormsSourceCompiledProofDist({ baseUrl: normalizedBaseUrl, dist, errors, root });
+    }
     await validateSqlOperatorHandoffDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateSqlProjectRefactorIntentStoryDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateSqlRunbookProofPacketDist({ baseUrl: normalizedBaseUrl, dist, errors });

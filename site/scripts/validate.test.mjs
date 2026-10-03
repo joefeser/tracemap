@@ -323,7 +323,8 @@ async function createDistFixture({
       swiftRealWorldSmokeRoute,
       ...swiftStoryPageRoutes,
       stakeholderObjectionGuideRoute,
-      stakeholderQuestionIndexRoute
+      stakeholderQuestionIndexRoute,
+      "/webforms/source-plus-compiled-proof/"
     ])
   ].map((route) => `https://tracemap.tools${route}`)
 } = {}) {
@@ -408,6 +409,7 @@ async function createDistFixture({
     ...swiftStoryPageRoutes,
     stakeholderObjectionGuideRoute,
     stakeholderQuestionIndexRoute,
+    "/webforms/source-plus-compiled-proof/",
     "/use-cases/",
     "/outputs/",
     "/use-cases/incident-review/",
