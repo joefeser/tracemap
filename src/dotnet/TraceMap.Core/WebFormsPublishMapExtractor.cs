@@ -117,7 +117,9 @@ internal static partial class WebFormsPublishMapExtractor
                 || !IsSha256(receipt.ReceiptGeneratorSha256)
                 || !IsSha256(receipt.CompilerSha256)
                 || !IsSha256(receipt.BoundedInputSha256)
-                || receipt.SourceFiles is null || receipt.PublishedFiles is null || receipt.Pages is null)
+                || receipt.SourceFiles is null || receipt.PublishedFiles is null || receipt.Pages is null
+                || receipt.SourceFiles.Any(item => item is null) || receipt.PublishedFiles.Any(item => item is null)
+                || receipt.Pages.Any(item => item is null))
                 throw new PublishException("WebFormsPublishReceiptInvalid");
             sourceCount = receipt.SourceFiles.Count;
             publishedCount = receipt.PublishedFiles.Count;
