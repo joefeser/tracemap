@@ -1,25 +1,26 @@
 # Implementation State
 
-Status: specification complete; site implementation not started
+Status: site implementation validated; commit, PR, and ACK pending
 
-Branch: `codex/site-webforms-source-compiled-proof-spec`
+Branch: `codex/site-webforms-source-compiled-proof`
 
 Base: `origin/main` at
-`d76358f663ce40532fe0954ca9888612d51a4121`
+`5ffd4a54176c002e4c6d41ce0133eab5963ad79b`
 
 Issue: #806
 
 ## Scope decision
 
-This branch defines only the public-site contract for the source-plus-compiled
-Web Forms proof story. It intentionally changes no `site/src` files, scanner or
-reporter code, fixtures, rules, tests, generated site output, or public claims.
+This branch implements only the public-site source-plus-compiled Web Forms proof
+story. It changes site source, a site-owned projection generator/input, focused
+site validators, inbound links, and this spec state. It changes no scanner,
+reporter, fixture, rule, or generated `site/dist` / `site/output` source.
 
-The planned route is `/webforms/source-plus-compiled-proof/`. Its preferred
-claim level is `demo`, contingent on implementation producing a checked-in,
-allowlisted, privacy-projected proof artifact that is bound to the exact public
-fixture revision. If that condition cannot be met, implementation must keep the
-route at `concept`; the spec does not pre-approve a demo claim.
+The route is `/webforms/source-plus-compiled-proof/`. Its claim level is `demo`
+because implementation produced a checked-in, allowlisted, deterministic
+privacy projection bound to the exact public fixture revision. The generator
+hash identifies the exact generator bytes; the bounded-input hash covers the
+canonical public privacy projection, never a private scan, binary, or tree.
 
 ## Exact-main evidence inspected
 
@@ -51,7 +52,7 @@ route at `concept`; the spec does not pre-approve a demo claim.
 ## Branch boundary
 
 PR #803 merged into `dev` as `af05c289a799c896862983fd9f4f73a28d882d0c`
-but is not an ancestor of the selected `main` baseline. Among other hardening,
+and remains outside the selected `main` baseline. Among other hardening,
 it adds explicit lazy-corpus scan-identity assertions and related Web Forms
 safety/diagnostic repairs. The eventual story may describe those changes only
 as `dev`-only until a later promotion is verified. It must not use #803 to
@@ -69,7 +70,7 @@ strengthen an exact-main proof claim.
 - Existing concept and handoff pages remain authoritative for their broader
   topics; this story promotes only the exact synthetic proof it can show.
 
-## Planned public claim
+## Public claim
 
 Allowed: on the exact selected public fixture revision, TraceMap's deterministic
 static evidence retains the displayed ordered source/compiled candidates and
@@ -81,7 +82,43 @@ values, provider selection, source/build authenticity, deployed identity,
 customer compatibility, migration parity, complete tracing, release approval,
 or safety.
 
-## Spec validation
+## Implementation evidence
+
+- Added the ordered three-outcome route and public JSON projection.
+- Added generator/input digest verification, recursive protected-field checks,
+  forbidden public-material checks, per-hop tier/span/rule validation,
+  discovery/sitemap checks, and inbound/outbound link checks.
+- Added a conditional landing-page regression: when `/webforms/` lands under
+  #805, it must link to this proof. The route is not created in this #806 PR,
+  preserving one story per PR.
+- Promoted only the exact synthetic proof row to `demo` in the legacy .NET and
+  modernization maps; broader Web Forms event/route/navigation rows remain
+  hidden.
+
+## Validation
+
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter FullyQualifiedName~LazyConstructorLoggingTests --no-restore` — passed.
+- `cd site && node --test scripts/webforms-source-compiled-proof.test.mjs` — 4 passed.
+- `cd site && npm run build` — passed; generated output remained ignored.
+- `cd site && npm run validate` — passed; 117 HTML files, 3,883 internal
+  references, and 116 sitemap URLs validated.
+- `cd site && npm test` — passed; 1,194 tests passed with no failures, skips,
+  cancellations, or todos.
+- `./scripts/check-private-paths.sh` — passed.
+- `git diff --check` — passed.
+- Desktop browser QA at 1,440 by 1,000 on the proof route — one H1, no
+  horizontal overflow, and no console errors.
+- Mobile browser QA at 390 by 844 on the proof route — one H1, all three
+  evidence chains visible, no horizontal overflow, and no console errors.
+- Mobile browser QA on the current inbound Web Forms article — the proof link
+  is present, no horizontal overflow, and no console errors.
+- `/webforms/` is intentionally absent until #805 implements that separately;
+  this branch's focused validator requires it to link here whenever that route
+  exists. This is a dependency boundary, not proof that the future landing
+  layout has been checked.
+- Commit, ready PR, and ACK remain pending at this checkpoint.
+
+## Earlier spec validation
 
 - `git diff --check` — passed.
 - `./scripts/check-private-paths.sh` — passed.

@@ -1,0 +1,370 @@
+{
+  "schemaVersion": "tracemap.webforms-source-compiled-proof.v1",
+  "publicClaimLevel": "demo",
+  "repository": "joefeser/tracemap",
+  "commitSha": "5ffd4a54176c002e4c6d41ce0133eab5963ad79b",
+  "provenance": {
+    "generator": "site/scripts/generate-webforms-source-compiled-proof.mjs",
+    "generatorSha256": "5b5b6774013d3037132b64ab8eb744c448b66f44b2e9230a1c6bc93b1c0aaa46",
+    "boundedInput": "site/src/_data/webforms-source-compiled-proof-input.json",
+    "boundedInputSha256": "9a504327efec58b3af7e0f4acef68332be42760413582a01e2d2a15092dbcfb9",
+    "inputProjection": "canonical allowlisted privacy projection of checked-in public synthetic fixtures"
+  },
+  "proofBoundary": "checked-in-public-synthetic-fixtures",
+  "fixtureRoots": [
+    "samples/fixture-build/lazy-constructor/",
+    "samples/messy-dotnet-workspace/vb-lazy-constructor/",
+    "samples/messy-dotnet-workspace/vb-lazy-logging-provider/"
+  ],
+  "extractorVersions": {
+    "visualBasicSemantic": "vb-semantic/0.8.7",
+    "visualBasicSyntax": "vb-syntax/0.3.23",
+    "managedMetadata": "managed-metadata/0.1.2+cecil-0.11.6",
+    "ilBodyEvidence": "il-body-evidence/0.1.11+srm-10.0.0+cecil-0.11.6",
+    "pathReporterAlgorithm": "1.3"
+  },
+  "coverage": {
+    "label": "bounded-static-evidence",
+    "maxDepth": 20,
+    "maxPaths": 256,
+    "maxTraversalWork": 100000,
+    "truncatedByPathOrWorkLimit": false,
+    "hostBoundary": "The public regression is cross-platform; real ASP.NET mapped or mapless publication remains Windows-only."
+  },
+  "bridgeTierExamples": [
+    {
+      "id": "source-metadata-identity",
+      "label": "Bound source and metadata identity",
+      "ruleId": "combined.paths.compiled-il-bridge.v1",
+      "evidenceTier": "Tier1Semantic",
+      "coverageLabel": "bound-source-identity",
+      "meaning": "An exact admitted source-to-metadata identity can enter the compiled graph.",
+      "limitation": "Identity reconciliation does not prove execution, reachability, source freshness, or deployment."
+    },
+    {
+      "id": "encoded-nonvirtual-call",
+      "label": "Uniquely resolved encoded IL call",
+      "ruleId": "combined.paths.compiled-il-bridge.v1",
+      "evidenceTier": "Tier2Structural",
+      "coverageLabel": "compiled-il",
+      "meaning": "One admitted nonvirtual call target is uniquely resolved from encoded IL evidence.",
+      "limitation": "The encoded target is structural evidence, not proof that the call executes."
+    },
+    {
+      "id": "virtual-or-terminal-candidate",
+      "label": "Virtual, unbound, or database-terminal candidate",
+      "ruleId": "combined.paths.compiled-il-bridge.v1",
+      "evidenceTier": "Tier3SyntaxOrTextual",
+      "coverageLabel": "review-candidate",
+      "meaning": "A bounded review candidate preserves uncertainty at a virtual, unbound, or database API boundary.",
+      "limitation": "This candidate is not a proven IL destination, provider selection, runtime dispatch, or database operation."
+    }
+  ],
+  "outcomes": [
+    {
+      "id": "dynamic-email",
+      "title": "Dynamic email lookup",
+      "terminal": "ExecuteScalar",
+      "commandTypeState": "method-local-constant",
+      "commandTextState": "unresolved-operand",
+      "coverageLabel": "bounded-static-evidence-with-explicit-gaps",
+      "orderedHops": [
+        {
+          "id": "dynamic-handler",
+          "label": "Profile_Click handler",
+          "kind": "page-handler",
+          "ruleId": "vb.syntax.declarations.v1",
+          "evidenceTier": "Tier3SyntaxOrTextual",
+          "filePath": "samples/messy-dotnet-workspace/vb-lazy-constructor/Overview.aspx.vb",
+          "startLine": 13,
+          "endLine": 15,
+          "supportingEvidenceIds": [
+            "fixture-profile-handler"
+          ]
+        },
+        {
+          "id": "dynamic-getter",
+          "label": "EmployeeInfo getter",
+          "kind": "property-getter",
+          "ruleId": "dotnet.compiled.member.v1",
+          "evidenceTier": "Tier2Structural",
+          "filePath": "samples/messy-dotnet-workspace/vb-lazy-constructor/Overview.aspx.vb",
+          "startLine": 20,
+          "endLine": 25,
+          "supportingEvidenceIds": [
+            "fixture-profile-getter",
+            "compiled-profile-getter"
+          ]
+        },
+        {
+          "id": "dynamic-constructor",
+          "label": "ProfileEmployee constructor",
+          "kind": "constructor",
+          "ruleId": "combined.paths.compiled-il-bridge.v1",
+          "evidenceTier": "Tier2Structural",
+          "filePath": "samples/messy-dotnet-workspace/vb-lazy-constructor/Overview.aspx.vb",
+          "startLine": 31,
+          "endLine": 35,
+          "supportingEvidenceIds": [
+            "compiled-profile-constructor-call"
+          ]
+        },
+        {
+          "id": "dynamic-profile",
+          "label": "GetProfile",
+          "kind": "method",
+          "ruleId": "combined.paths.compiled-il-bridge.v1",
+          "evidenceTier": "Tier2Structural",
+          "filePath": "samples/messy-dotnet-workspace/vb-lazy-constructor/Overview.aspx.vb",
+          "startLine": 39,
+          "endLine": 47,
+          "supportingEvidenceIds": [
+            "compiled-get-profile-call"
+          ]
+        },
+        {
+          "id": "dynamic-provider",
+          "label": "GetEmail in provider DLL",
+          "kind": "provider-boundary",
+          "ruleId": "combined.paths.compiled-il-bridge.v1",
+          "evidenceTier": "Tier2Structural",
+          "filePath": "samples/messy-dotnet-workspace/vb-lazy-logging-provider/PublicLog.vb",
+          "startLine": 6,
+          "endLine": 11,
+          "supportingEvidenceIds": [
+            "compiled-provider-member",
+            "compiled-cross-assembly-call"
+          ]
+        },
+        {
+          "id": "dynamic-terminal",
+          "label": "ExecuteScalar API terminal",
+          "kind": "database-api-terminal",
+          "ruleId": "combined.paths.compiled-il-bridge.v1",
+          "evidenceTier": "Tier3SyntaxOrTextual",
+          "filePath": "samples/messy-dotnet-workspace/vb-lazy-logging-provider/PublicLog.vb",
+          "startLine": 13,
+          "endLine": 17,
+          "supportingEvidenceIds": [
+            "compiled-database-api-candidate",
+            "compiled-command-binding"
+          ]
+        }
+      ],
+      "gaps": [
+        "IlCommandOperandValueUnresolved",
+        "IlCommandVirtualDispatchUnproven"
+      ],
+      "reviewQuestion": "Which runtime input, branch, provider, and database context would an owner need to validate separately?",
+      "limitation": "The static path reaches an encoded API candidate while the command value remains unresolved; no SQL text, execution, parameter binding, or returned value is claimed."
+    },
+    {
+      "id": "literal-audit",
+      "title": "Literal audit call",
+      "terminal": "ExecuteScalar",
+      "commandTypeState": "method-local-constant",
+      "commandTextState": "constant-on-encoded-call-path",
+      "coverageLabel": "bounded-static-evidence-with-review-tier-value",
+      "orderedHops": [
+        {
+          "id": "audit-profile",
+          "label": "GetProfile exception branch",
+          "kind": "source-branch",
+          "ruleId": "vb.syntax.callgraph.v1",
+          "evidenceTier": "Tier3SyntaxOrTextual",
+          "filePath": "samples/messy-dotnet-workspace/vb-lazy-constructor/Overview.aspx.vb",
+          "startLine": 39,
+          "endLine": 47,
+          "supportingEvidenceIds": [
+            "fixture-audit-call-shape"
+          ]
+        },
+        {
+          "id": "audit-provider",
+          "label": "WriteAudit in provider DLL",
+          "kind": "provider-boundary",
+          "ruleId": "dotnet.compiled.member.v1",
+          "evidenceTier": "Tier2Structural",
+          "filePath": "samples/messy-dotnet-workspace/vb-lazy-logging-provider/PublicLog.vb",
+          "startLine": 19,
+          "endLine": 24,
+          "supportingEvidenceIds": [
+            "compiled-audit-member",
+            "compiled-audit-body"
+          ]
+        },
+        {
+          "id": "audit-value",
+          "label": "Retained categorical command state",
+          "kind": "encoded-value-candidate",
+          "ruleId": "combined.paths.compiled-command-value.v1",
+          "evidenceTier": "Tier3SyntaxOrTextual",
+          "filePath": "samples/messy-dotnet-workspace/vb-lazy-logging-provider/PublicLog.vb",
+          "startLine": 19,
+          "endLine": 24,
+          "supportingEvidenceIds": [
+            "compiled-audit-command-state"
+          ]
+        },
+        {
+          "id": "audit-terminal",
+          "label": "ExecuteScalar API terminal",
+          "kind": "database-api-terminal",
+          "ruleId": "combined.paths.compiled-il-bridge.v1",
+          "evidenceTier": "Tier3SyntaxOrTextual",
+          "filePath": "samples/messy-dotnet-workspace/vb-lazy-logging-provider/PublicLog.vb",
+          "startLine": 19,
+          "endLine": 24,
+          "supportingEvidenceIds": [
+            "compiled-audit-terminal"
+          ]
+        }
+      ],
+      "gaps": [
+        "StaticBranchFeasibilityUnproven",
+        "DatabaseExecutionUnobserved"
+      ],
+      "reviewQuestion": "Does runtime evidence show that this exception branch is feasible and that an operator-approved command actually ran?",
+      "limitation": "A retained literal category and command type are static candidates; the asset omits the literal and does not claim branch selection, execution, success, or database identity."
+    },
+    {
+      "id": "fill",
+      "title": "Independent Fill terminal",
+      "terminal": "Fill",
+      "commandTypeState": "method-local-constant",
+      "commandTextState": "method-local-constant",
+      "coverageLabel": "bounded-static-evidence-with-terminal-candidate",
+      "orderedHops": [
+        {
+          "id": "fill-handler",
+          "label": "Load_Click handler",
+          "kind": "page-handler",
+          "ruleId": "vb.syntax.declarations.v1",
+          "evidenceTier": "Tier3SyntaxOrTextual",
+          "filePath": "samples/messy-dotnet-workspace/vb-lazy-constructor/Overview.aspx.vb",
+          "startLine": 9,
+          "endLine": 11,
+          "supportingEvidenceIds": [
+            "fixture-load-handler"
+          ]
+        },
+        {
+          "id": "fill-constructor",
+          "label": "SyntheticChoices constructor",
+          "kind": "constructor",
+          "ruleId": "combined.paths.compiled-il-bridge.v1",
+          "evidenceTier": "Tier2Structural",
+          "filePath": "samples/messy-dotnet-workspace/vb-lazy-constructor/Overview.aspx.vb",
+          "startLine": 51,
+          "endLine": 54,
+          "supportingEvidenceIds": [
+            "compiled-choices-constructor"
+          ]
+        },
+        {
+          "id": "fill-getter",
+          "label": "EmployeeInfo getter",
+          "kind": "property-getter",
+          "ruleId": "combined.paths.compiled-il-bridge.v1",
+          "evidenceTier": "Tier2Structural",
+          "filePath": "samples/messy-dotnet-workspace/vb-lazy-constructor/Overview.aspx.vb",
+          "startLine": 60,
+          "endLine": 67,
+          "supportingEvidenceIds": [
+            "compiled-lazy-getter"
+          ]
+        },
+        {
+          "id": "fill-constructor-work",
+          "label": "SyntheticEmployee constructor and field initialization",
+          "kind": "constructor-work",
+          "ruleId": "combined.paths.compiled-il-bridge.v1",
+          "evidenceTier": "Tier2Structural",
+          "filePath": "samples/messy-dotnet-workspace/vb-lazy-constructor/Overview.aspx.vb",
+          "startLine": 70,
+          "endLine": 88,
+          "supportingEvidenceIds": [
+            "compiled-employee-constructor",
+            "compiled-field-initializer"
+          ]
+        },
+        {
+          "id": "fill-provider",
+          "label": "Lookup in provider DLL",
+          "kind": "provider-boundary",
+          "ruleId": "dotnet.compiled.member.v1",
+          "evidenceTier": "Tier2Structural",
+          "filePath": "samples/messy-dotnet-workspace/vb-lazy-logging-provider/PublicLog.vb",
+          "startLine": 92,
+          "endLine": 98,
+          "supportingEvidenceIds": [
+            "compiled-lookup-member",
+            "compiled-lookup-body"
+          ]
+        },
+        {
+          "id": "fill-terminal",
+          "label": "Fill API terminal",
+          "kind": "database-api-terminal",
+          "ruleId": "combined.paths.compiled-il-bridge.v1",
+          "evidenceTier": "Tier3SyntaxOrTextual",
+          "filePath": "samples/messy-dotnet-workspace/vb-lazy-logging-provider/PublicLog.vb",
+          "startLine": 92,
+          "endLine": 98,
+          "supportingEvidenceIds": [
+            "compiled-fill-terminal",
+            "compiled-fill-command-state"
+          ]
+        }
+      ],
+      "gaps": [
+        "WarmColdPropertyStateUnproven",
+        "ProviderDispatchUnproven"
+      ],
+      "reviewQuestion": "Which property state, runtime provider, database target, and returned rows must the application and database owners validate?",
+      "limitation": "Filtering to Fill isolates one static terminal path; it does not resolve the other command values or prove property state, provider dispatch, execution, success, or returned rows."
+    }
+  ],
+  "gaps": [
+    {
+      "classification": "ProjectlessSourceToPublishCandidate",
+      "ruleId": "combined.paths.projectless-publish-candidate.v1",
+      "evidenceTier": "Tier3SyntaxOrTextual",
+      "coverageLabel": "review-candidate",
+      "limitation": "Without exact source-method mapping, a projectless publish bridge remains a candidate."
+    },
+    {
+      "classification": "IlCommandOperandValueUnresolved",
+      "ruleId": "combined.paths.compiled-command-value.v1",
+      "evidenceTier": "Tier4Unknown",
+      "coverageLabel": "reduced",
+      "limitation": "Runtime-composed command material stays unresolved and is omitted from the public projection."
+    },
+    {
+      "classification": "IlCommandVirtualDispatchUnproven",
+      "ruleId": "combined.paths.compiled-command-value.v1",
+      "evidenceTier": "Tier4Unknown",
+      "coverageLabel": "reduced",
+      "limitation": "Encoded callvirt evidence does not select a runtime override or provider implementation."
+    },
+    {
+      "classification": "BoundedTraversal",
+      "ruleId": "combined.paths.compiled-il-bridge.v1",
+      "evidenceTier": "Tier4Unknown",
+      "coverageLabel": "bounded",
+      "limitation": "Depth, path, and traversal-work limits constrain the result; absence beyond a bound is not proven."
+    }
+  ],
+  "limitations": [
+    "No runtime execution, browser or page reachability, event firing, branch selection, warm or cold property behavior, provider dispatch, database identity, database success, returned rows, or production behavior is observed.",
+    "No SQL text, stored-procedure name, parameter value, source snippet, literal hash, connection material, raw index, analyzer output, local path, private identity, or customer artifact is published.",
+    "The public regression builds synthetic assemblies; it does not establish source-to-build authenticity, deployed-binary identity, customer compatibility, migration parity, complete route coverage, release approval, or operational safety.",
+    "Real ASP.NET mapped and mapless publication validation is Windows-only; projectless source-to-publish evidence remains review-tier unless its exact admitted identity requirements are met."
+  ],
+  "reproduction": {
+    "workingDirectory": "repository-root",
+    "fixtureCommand": "dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter FullyQualifiedName~LazyConstructorLoggingTests",
+    "operatorCommand": "pwsh -File scripts/wlocal.ps1",
+    "safety": "The commands use checked-in public fixtures and do not execute fixture database methods. The Windows-only publication option is separate and not required for this projection."
+  }
+}
