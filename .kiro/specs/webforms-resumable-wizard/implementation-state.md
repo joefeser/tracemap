@@ -649,3 +649,10 @@ IDisposable: remove the link non-recursively before deleting the fixture tree.
 A separate regression verifies unlinking preserves the target and is idempotent.
 The boundary step moves earlier in the same matrix for faster failure feedback.
 This follow-up changes only tests, CI ordering, and this validation record.
+
+At `e7ae1113`, Windows accepted junction unlinking, both preflight escape cases,
+and all pipe tests (23 passes). Two relocation fixtures then exposed a second
+cleanup issue: read-only loose Git objects in their temporary repositories.
+The fixture now clears ReadOnly only under its owned `.git`, skipping reparse
+points, before deleting its root. A dedicated read-only-object cleanup test is
+selected in the Windows boundary lane. Production scanner code is unchanged.

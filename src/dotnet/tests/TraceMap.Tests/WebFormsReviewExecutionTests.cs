@@ -1360,6 +1360,16 @@ public sealed class WebFormsReviewExecutionTests
         foreach (var (path, hash) in before) Assert.Equal(hash, Hash(path));
     }
 
+    [Fact]
+    public void Fixture_cleanup_clears_readonly_git_objects()
+    {
+        using var fixture = new Fixture();
+        var gitFile = Directory.EnumerateFiles(Path.Combine(fixture.Source, ".git", "objects"), "*", SearchOption.AllDirectories).First();
+        File.SetAttributes(gitFile, File.GetAttributes(gitFile) | FileAttributes.ReadOnly);
+        fixture.Dispose();
+        Assert.False(Directory.Exists(fixture.Root));
+    }
+
     private sealed class Fixture : IDisposable
     {
         public string Root { get; }
@@ -1485,6 +1495,18 @@ public sealed class WebFormsReviewExecutionTests
                 if (File.Exists(Path.Combine(directory.FullName, "AGENTS.md")) && Directory.Exists(Path.Combine(directory.FullName, "samples"))) return directory.FullName;
             throw new InvalidOperationException("Public fixture unavailable");
         }
-        public void Dispose() { Output.Dispose(); Error.Dispose(); if (Directory.Exists(Root)) Directory.Delete(Root, recursive: true); }
+        public void Dispose()
+        {
+            Output.Dispose(); Error.Dispose();
+            if (!Directory.Exists(Root)) return;
+            // Git creates read-only loose objects on Windows. These belong only
+            // to this test's temporary repository; do not follow reparse points.
+            var git = Path.Combine(Source, ".git");
+            if (Directory.Exists(git))
+                foreach (var file in Directory.EnumerateFiles(git, "*", new EnumerationOptions
+                { RecurseSubdirectories = true, AttributesToSkip = FileAttributes.ReparsePoint, IgnoreInaccessible = false }))
+                    File.SetAttributes(file, File.GetAttributes(file) & ~FileAttributes.ReadOnly);
+            Directory.Delete(Root, recursive: true);
+        }
     }
 }
