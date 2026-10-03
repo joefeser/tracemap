@@ -15,28 +15,30 @@
 
 ## Site implementation
 
-- [ ] Add `/webforms/source-plus-compiled-proof/` using the existing static page
+- [x] Add `/webforms/source-plus-compiled-proof/` using the existing static page
       layout and the actual conditional `concept` or `demo` claim language.
-- [ ] Produce a deterministic public-safe proof projection, or downgrade the
+- [x] Produce a deterministic public-safe proof projection, or downgrade the
       route to `concept` and record why a compliant projection was not possible.
-- [ ] Render the ordered getter/constructor/provider path with per-hop rules,
+- [x] Render the ordered getter/constructor/provider path with per-hop rules,
       emitted tiers, spans, coverage, provenance, versions, limitations, and
       gaps without assigning multi-tier rule families one fixed tier.
-- [ ] Contrast the dynamic email, literal audit, and `Fill` outcomes without
+- [x] Contrast the dynamic email, literal audit, and `Fill` outcomes without
       publishing raw SQL, source, configuration, or private/local material.
-- [ ] Add reproducible public-fixture generation guidance and verify the
+- [x] Add reproducible public-fixture generation guidance and verify the
       generator/input SHA-256 contract for any machine-readable projection.
-- [ ] Register route, discovery, navigation/sitemap inputs, and roadmap
+- [x] Register route, discovery, navigation/sitemap inputs, and roadmap
       claim-ledger metadata.
-- [ ] Add focused inbound/outbound links from the Web Forms landing page,
+- [x] Add focused inbound/outbound links from the planned Web Forms landing page when present,
       legacy .NET evidence lane, manager packet, proof paths, limitations, and
       relevant modernization pages.
-- [ ] Add focused route, projection, discovery, claim, link, hash, and
+- [x] Add focused route, projection, discovery, claim, link, hash, and
       public-safety validators with regressions.
-- [ ] Run full site build/test/validation, private-path guard, and whitespace
+- [x] Run full site build/test/validation, private-path guard, and whitespace
       validation.
-- [ ] Complete desktop and mobile browser QA for the landing and proof routes.
-- [ ] Record exact implementation revision, validation, browser results, public
+- [x] Complete desktop and mobile browser QA for the proof route and its current
+      inbound article; record that #805 still owns the not-yet-present landing
+      route and pin its future inbound link with a regression.
+- [x] Record exact implementation revision, validation, browser results, public
       claim level, known limitations, PR, and ACK state in
       `implementation-state.md`.
 
