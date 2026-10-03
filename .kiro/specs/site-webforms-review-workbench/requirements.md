@@ -49,11 +49,15 @@ reporter, workbench, query, or review authority.
 8. Where the walkthrough discusses Web Forms client/server behavior inventory,
    it SHALL state that the packet independently retains at most 10,000 client
    behavior rows and at most 10,000 server behavior rows in deterministic
-   order. Overflow SHALL name
+   order. Overflow SHALL mark packet truncation. When the configured packet gap
+   budget can retain the inventory-specific gap, it SHALL name
    `WebFormsModernizationClientBehaviorLimitReached` or
-   `WebFormsModernizationServerBehaviorLimitReached`, mark packet truncation,
-   and SHALL NOT be described as a compiled-path, page, total-fact, or general
-   workbench limit.
+   `WebFormsModernizationServerBehaviorLimitReached`; when that gap budget is
+   already saturated, the later specific gap may instead be represented by
+   `WebFormsModernizationGapLimitReached`. Public copy and validators SHALL NOT
+   promise that an inventory-specific gap always survives gap-budget
+   saturation, and SHALL NOT describe these bounds as compiled-path, page,
+   total-fact, or general workbench limits.
 9. Generated public screenshots or projections, if added, SHALL be derived only
    from checked-in public synthetic evidence. Every new derived
    machine-readable artifact SHALL record the exact generator SHA-256 and a
@@ -76,7 +80,8 @@ reporter, workbench, query, or review authority.
     dependency, limitations, preferred proof path, and explicit non-claims.
 13. Focused validation SHALL cover route structure, fixed step order, evidence
     detail fields, provenance identity, unresolved/gap language, independent
-    inventory bounds, #806 dependency, #744 scope boundary, discovery,
+    inventory bounds and gap-budget fallback, #806 dependency, #744 scope
+    boundary, discovery,
     claim-ledger and sitemap records, required links, and forbidden public
     material and claims.
 14. Implementation SHALL run the complete site build, tests, validation,

@@ -98,11 +98,15 @@ and server behavior inventories as two independent bounds:
 - server behavior inventory: deterministic first 10,000 rows, then
   `WebFormsModernizationServerBehaviorLimitReached`.
 
-Either overflow marks the packet truncated. These are inventory bounds, not a
-10,000-handler, page, compiled-route, graph-node, or overall workbench promise.
-If the #806 fixture projection contains neither behavior inventory nor overflow,
-the page may explain the bound in a limitations panel but must not invent an
-observed limit event.
+Either overflow marks the packet truncated. The inventory-specific gap is
+retained only when the configured packet gap budget has room for it. If that
+budget is already saturated, `WebFormsModernizationGapLimitReached` can replace
+the later client/server overflow classification, so the page and validators
+must not require a specific overflow gap independently of gap-budget state.
+These are inventory bounds, not a 10,000-handler, page, compiled-route,
+graph-node, or overall workbench promise. If the #806 fixture projection
+contains neither behavior inventory nor overflow, the page may explain the
+bound in a limitations panel but must not invent an observed limit event.
 
 ## Public asset strategy
 
@@ -153,8 +157,9 @@ shared validation coverage for:
 - public-safe provenance, rule, tier, span, version, coverage, limitation, gap,
   owner-question, and stop-condition fields;
 - unresolved command copy that contains no raw value;
-- independent client/server 10,000-row bounds and exact gap labels only in the
-  packet-inventory context;
+- independent client/server 10,000-row bounds, packet truncation, and the
+  gap-budget-dependent specific/generic gap labels only in the packet-inventory
+  context;
 - explicit #744 and #803 boundaries;
 - pages/discovery/roadmap/sitemap records and required inbound/outbound links;
 - recursive rejection of raw/private workbench material and sensitive fields;
