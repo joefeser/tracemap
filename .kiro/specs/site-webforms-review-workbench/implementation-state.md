@@ -9,6 +9,8 @@ Base: `origin/main` at
 
 Issue: #808
 
+Specification PR: https://github.com/joefeser/tracemap/pull/813
+
 ## Scope decision
 
 This branch defines only the public-site contract for a Web Forms
