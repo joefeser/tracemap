@@ -79,7 +79,8 @@ export async function validateWebformsGuidedSetupDist({
   errors,
   root,
   repositoryRoot = resolve(root, ".."),
-  implementationStatePath = resolve(repositoryRoot, ".kiro/specs/site-webforms-guided-setup/implementation-state.md")
+  implementationStatePath = resolve(repositoryRoot, ".kiro/specs/site-webforms-guided-setup/implementation-state.md"),
+  checkoutHeadParents = gitHeadParents(repositoryRoot)
 }) {
   const pagePath = resolve(dist, "webforms/index.html");
   const articlePath = resolve(dist, "blog/modernizing-web-forms-without-running-it/index.html");
@@ -104,7 +105,7 @@ export async function validateWebformsGuidedSetupDist({
   const activeArticleLinks = activeAnchorHrefs(article);
   requireIncludes(page, '<link rel="canonical" href="https://tracemap.tools/webforms/">', errors, "canonical metadata");
   requireIncludes(page, '<meta property="og:url" content="https://tracemap.tools/webforms/">', errors, "Open Graph URL");
-  validateImplementationBoundary({ page, implementationState, repositoryRoot, errors });
+  validateImplementationBoundary({ page, implementationState, repositoryRoot, checkoutHeadParents, errors });
   requireIncludes(page, "Public claim level:", errors, "public claim label");
   requireIncludes(page, "<strong>shipped</strong>", errors, "shipped workflow label");
   requireIncludes(page, "<strong>demo</strong>", errors, "demo proof label");
@@ -154,26 +155,38 @@ export async function validateWebformsGuidedSetupDist({
   }
 }
 
-function validateImplementationBoundary({ page, implementationState, repositoryRoot, errors }) {
+function validateImplementationBoundary({ page, implementationState, repositoryRoot, checkoutHeadParents, errors }) {
   const pageMatch = page.match(/\bdata-main-boundary=["']([0-9a-f]{40})["']/i);
   const repairStateMatch = page.match(/\bdata-repairs-803=["'](shipped|not-shipped)["']/i);
   const stateMatch = implementationState.match(/^Exact base:\s*`([0-9a-f]{40})`\s*$/im);
+  const recordedRepairStateMatch = implementationState.match(/^PR #803 ancestry at exact base:\s*`(shipped|not-shipped)`\s*$/im);
   if (!pageMatch) errors.push("Web Forms guided setup is missing exact implementation base");
   if (!repairStateMatch) errors.push("Web Forms guided setup is missing the #803 ancestry claim state");
   if (!stateMatch) errors.push("Web Forms implementation state is missing its independently recorded exact base");
-  if (!pageMatch || !repairStateMatch || !stateMatch) return;
+  if (!recordedRepairStateMatch) errors.push("Web Forms implementation state is missing its independently recorded #803 ancestry state");
+  if (!pageMatch || !repairStateMatch || !stateMatch || !recordedRepairStateMatch) return;
 
   const boundary = pageMatch[1].toLowerCase();
   if (boundary !== stateMatch[1].toLowerCase()) {
     errors.push("Web Forms page boundary does not match the independently recorded implementation base");
     return;
   }
-  if (!gitCommitExists(repositoryRoot, boundary) || !gitIsAncestor(repositoryRoot, boundary, "HEAD")) {
+  const fullHistoryAvailable = gitCommitExists(repositoryRoot, boundary);
+  const boundaryVerified = fullHistoryAvailable
+    ? gitIsAncestor(repositoryRoot, boundary, "HEAD")
+    : checkoutHeadParents.includes(boundary);
+  if (!boundaryVerified) {
     errors.push("Web Forms implementation base is not a verified ancestor of the validation checkout");
     return;
   }
-  const repairsShipped = gitIsAncestor(repositoryRoot, repair803Sha, boundary);
-  const expectedState = repairsShipped ? "shipped" : "not-shipped";
+  const recordedRepairState = recordedRepairStateMatch[1].toLowerCase();
+  let expectedState = recordedRepairState;
+  if (fullHistoryAvailable && gitCommitExists(repositoryRoot, repair803Sha)) {
+    expectedState = gitIsAncestor(repositoryRoot, repair803Sha, boundary) ? "shipped" : "not-shipped";
+    if (recordedRepairState !== expectedState) {
+      errors.push(`Web Forms independently recorded #803 ancestry must be ${expectedState} for the recorded implementation base`);
+    }
+  }
   if (repairStateMatch[1].toLowerCase() !== expectedState) {
     errors.push(`Web Forms #803 ancestry claim must be ${expectedState} for the recorded implementation base`);
   }
@@ -185,6 +198,11 @@ function gitCommitExists(repositoryRoot, sha) {
 
 function gitIsAncestor(repositoryRoot, ancestor, descendant) {
   return spawnSync("git", ["merge-base", "--is-ancestor", ancestor, descendant], { cwd: repositoryRoot, stdio: "ignore" }).status === 0;
+}
+
+function gitHeadParents(repositoryRoot) {
+  const result = spawnSync("git", ["show", "-s", "--format=%P", "HEAD"], { cwd: repositoryRoot, encoding: "utf8" });
+  return result.status === 0 ? result.stdout.trim().toLowerCase().split(/\s+/).filter(Boolean) : [];
 }
 
 function stripHtmlComments(value) {

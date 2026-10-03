@@ -97,7 +97,11 @@ test("Web Forms guided setup scans decoded published attribute values", async (t
 test("Web Forms guided setup binds the page boundary to the independent implementation record", async (t) => {
   const root = await fixture(t);
   const statePath = join(root, "implementation-state.md");
-  await writeFile(statePath, "Exact base: `5ffd4a54176c002e4c6d41ce0133eab5963ad79b`\n");
+  await writeFile(statePath, [
+    "Exact base: `5ffd4a54176c002e4c6d41ce0133eab5963ad79b`",
+    "PR #803 ancestry at exact base: `not-shipped`",
+    ""
+  ].join("\n"));
   await buildSite({ root, log: () => {} });
   const errors = [];
   await validateFixture(root, errors, { implementationStatePath: statePath });
@@ -113,6 +117,18 @@ test("Web Forms guided setup rejects ancestry claim drift", async (t) => {
   const errors = [];
   await validateFixture(root, errors);
   assert.ok(errors.some((error) => String(error).includes("#803 ancestry claim must be not-shipped")));
+});
+
+test("Web Forms guided setup accepts its recorded base as a shallow synthetic-merge parent", async (t) => {
+  const root = await fixture(t);
+  await buildSite({ root, log: () => {} });
+  const errors = [];
+  await validateFixture(root, errors, {
+    repositoryRoot: join(root, "missing-shallow-history"),
+    implementationStatePath: resolve(repositoryRoot, ".kiro/specs/site-webforms-guided-setup/implementation-state.md"),
+    checkoutHeadParents: ["684acb3457d1942fb7fde43db77c5cb27e5d1648", "10aeb8b688eb64bd0709b3f103b6970933cc980a"]
+  });
+  assert.deepEqual(errors, []);
 });
 
 async function fixture(t) {
