@@ -35,7 +35,7 @@ test("Web Forms guided setup rejects overclaims and private material", async (t)
   const root = await fixture(t);
   const pagePath = join(root, "src/webforms/index.html");
   const page = await readFile(pagePath, "utf8");
-  await writeFile(pagePath, page.replace("</main>", "<p>Publication was verified.</p><p>/Users/example/private</p></main>"));
+  await writeFile(pagePath, page.replace("</main>", "<p>Publication was verified.</p><p>/Us<span>ers</span>/example/private</p></main>"));
   await buildSite({ root, log: () => {} });
   const errors = [];
   await validateWebformsGuidedSetupDist({ baseUrl: "https://tracemap.tools", dist: join(root, "dist"), errors, root });
