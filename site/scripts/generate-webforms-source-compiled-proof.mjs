@@ -15,12 +15,12 @@ const safeKeys = new Set([
   "truncatedByPathOrWorkLimit", "hostBoundary", "resultStatus", "bridgeTierExamples", "id", "ruleId", "evidenceTier",
   "coverageLabel", "meaning", "limitation", "outcomes", "title", "terminal", "commandTypeState",
   "commandTextState", "orderedHops", "kind", "filePath", "startLine", "endLine",
-  "supportingEvidenceIds", "gaps", "reviewQuestion", "classification", "limitations", "reproduction",
+  "gaps", "reviewQuestion", "classification", "limitations", "reproduction",
   "workingDirectory", "fixtureCommand", "operatorCommand", "safety"
 ]);
 
 const forbiddenKey = /(?:sql|query|commandBody|connection|credential|secret|sourceSnippet|raw|absolute|privateIdentity|literalHash)/i;
-const forbiddenValue = /(?:\/Users\/|\/home\/|\/private\/|[A-Z]:\\Users\\|file:\/\/|Server\s*=|Password\s*=|User Id\s*=|ConnectionString|\bSELECT\b[\s\S]{0,500}\bFROM\b|\bINSERT\s+INTO\b|\bUPDATE\s+\S+\s+SET\b|\bDELETE\s+FROM\b|\b(?:CREATE|ALTER|DROP)\s+TABLE\b)/i;
+const forbiddenValue = /(?:\/Users\/|\/home\/|\/private\/|[A-Z]:\\Users\\|file:\/\/|Server\s*=|Password\s*=|User Id\s*=|ConnectionString|\bSELECT\b[\s\S]*\bFROM\b|\bINSERT\s+INTO\b|\bUPDATE\s+\S+\s+SET\b|\bDELETE\s+FROM\b|\b(?:CREATE|ALTER|DROP)\s+TABLE\b)/i;
 
 export function stableStringify(value) {
   if (Array.isArray(value)) return `[${value.map(stableStringify).join(",")}]`;
@@ -51,7 +51,7 @@ function validateProjectedInput(value, path = "$") {
 
 export function createWebFormsSourceCompiledProof(input, generatorSha256) {
   validateProjectedInput(input);
-  if (input.publicClaimLevel !== "demo") throw new Error("Projection input must explicitly request demo claim level.");
+  if (input.publicClaimLevel !== "concept") throw new Error("Projection input must fail closed to concept without independent extractor evidence.");
   if (!/^[0-9a-f]{40}$/.test(input.commitSha)) throw new Error("Projection input requires one exact commit SHA.");
 
   const boundedInputSha256 = sha256(stableStringify(input));
@@ -71,36 +71,24 @@ export function createWebFormsSourceCompiledProof(input, generatorSha256) {
     fixtureRoots: input.fixtureRoots,
     extractorVersions: input.extractorVersions,
     coverage: input.coverage,
-    evidence: buildEvidenceRegistry(input),
     bridgeTierExamples: input.bridgeTierExamples,
-    outcomes: input.outcomes,
-    gaps: input.gaps,
+    outcomes: input.outcomes.map(projectConceptOutcome),
+    gaps: input.gaps.map(projectConceptItem),
     limitations: input.limitations,
     reproduction: input.reproduction
   };
 }
 
-function buildEvidenceRegistry(input) {
-  const records = new Map();
-  const add = (item) => {
-    for (const id of item.supportingEvidenceIds ?? []) {
-      const record = {
-        id,
-        ruleId: item.ruleId,
-        evidenceTier: item.evidenceTier,
-        filePath: item.filePath,
-        startLine: item.startLine,
-        endLine: item.endLine,
-        meaning: `Public synthetic support for ${item.label ?? item.classification}.`
-      };
-      const prior = records.get(id);
-      if (prior && stableStringify(prior) !== stableStringify(record)) throw new Error(`Conflicting supporting evidence ID: ${id}`);
-      records.set(id, record);
-    }
+function projectConceptItem(item) {
+  const { supportingEvidenceIds: _unverifiedAliases, ...projected } = item;
+  return projected;
+}
+
+function projectConceptOutcome(outcome) {
+  return {
+    ...outcome,
+    orderedHops: outcome.orderedHops.map(projectConceptItem)
   };
-  for (const outcome of input.outcomes ?? []) for (const hop of outcome.orderedHops ?? []) add(hop);
-  for (const gap of input.gaps ?? []) add(gap);
-  return [...records.values()].sort((left, right) => left.id.localeCompare(right.id));
 }
 
 export async function generateWebFormsSourceCompiledProof({ inputPath = defaultInput, outputPath = defaultOutput } = {}) {

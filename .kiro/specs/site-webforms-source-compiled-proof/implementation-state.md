@@ -1,6 +1,6 @@
 # Implementation State
 
-Status: current-head ACK repairs validated; push and fresh ACK rerun pending
+Status: current-head P1 repairs in progress; concept downgrade selected because independent extractor output is not checked in
 
 Branch: `codex/site-webforms-source-compiled-proof`
 
@@ -18,11 +18,13 @@ story. It changes site source, a site-owned projection generator/input, focused
 site validators, inbound links, and this spec state. It changes no scanner,
 reporter, fixture, rule, or generated `site/dist` / `site/output` source.
 
-The route is `/webforms/source-plus-compiled-proof/`. Its claim level is `demo`
-because implementation produced a checked-in, allowlisted, deterministic
-privacy projection bound to the exact public fixture revision. The generator
-hash identifies the exact generator bytes; the bounded-input hash covers the
-canonical public privacy projection, never a private scan, binary, or tree.
+The route is `/webforms/source-plus-compiled-proof/`. Its claim level is
+`concept`: the checked-in allowlisted projection is deterministic and bound to
+the exact public fixture revision, but it is not independently derived from
+checked-in extractor output. The generator hash identifies the exact generator
+bytes; the bounded-input hash covers the canonical public privacy projection,
+never a private scan, binary, or tree. Those hashes prove projection integrity,
+not extractor truth.
 
 ## Exact-main evidence inspected
 
@@ -74,9 +76,10 @@ strengthen an exact-main proof claim.
 
 ## Public claim
 
-Allowed: on the exact selected public fixture revision, TraceMap's deterministic
-static evidence retains the displayed ordered source/compiled candidates and
-the three displayed database API terminal outcomes, with explicit gaps.
+Allowed: the exact selected public fixture revision, rule catalog, and focused
+regression contract support a concept showing how ordered source/compiled
+candidates and three database API terminal outcomes would be reviewed with
+explicit gaps.
 
 Not allowed: runtime reachability or execution, selected branches, warm/cold
 property state, SQL text or parameter recovery, database success, returned
@@ -189,3 +192,30 @@ sitemap URLs), the focused .NET regression, private-path guard, and
 `git diff --check`. Desktop 1,440 by 1,000 and mobile 390 by 844 browser checks
 each found one H1, all three outcomes, the partial-status disclosure, no
 horizontal overflow, and no console errors.
+
+## Exact-head P1 fail-closed correction
+
+Codex reviewed `83e3d2cd6c7c241263cf1628ff8ece29478ddb91` and identified two
+P1 trust-boundary failures:
+
+- the SQL detector's 500-character window allowed a long multiline statement
+  to pass; and
+- the supporting-evidence registry was synthesized from the same hop assertions
+  it claimed to support.
+
+The repair removes the SQL length cutoff in both generation and validation and
+adds a regression with more than 4,000 characters between the verb and source
+clause. Because this site-only branch has no independently projected extractor
+output, it takes the specification's fail-closed path: public claim level is
+`concept`, self-derived evidence records and aliases are omitted from the
+generated asset, the page/discovery/claim-ledger rows disclose the missing
+independent evidence, and validators reject any reintroduced evidence registry
+or supporting IDs. Moving back to `demo` now requires a separate bounded
+extractor-owned public projection rather than another site-authored mapping.
+
+Post-P1 validation passed: 10 focused proof tests, all 1,200 site tests, site
+build, full site validation (117 HTML files, 3,883 internal references, 116
+sitemap URLs), the focused `LazyConstructorLoggingTests` lane, private-path
+guard, and `git diff --check`. Desktop 1,440 by 1,000 and mobile 390 by 844
+browser checks each found one H1, all three concept outcomes, the missing
+independent-evidence disclosure, no horizontal overflow, and no console errors.

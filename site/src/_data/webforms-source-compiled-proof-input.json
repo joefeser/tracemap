@@ -1,6 +1,6 @@
 {
   "schemaVersion": "tracemap.webforms-source-compiled-proof.input.v1",
-  "publicClaimLevel": "demo",
+  "publicClaimLevel": "concept",
   "repository": "joefeser/tracemap",
   "commitSha": "5ffd4a54176c002e4c6d41ce0133eab5963ad79b",
   "proofBoundary": "checked-in-public-synthetic-fixtures",
@@ -71,8 +71,7 @@
           "evidenceTier": "Tier3SyntaxOrTextual",
           "filePath": "samples/messy-dotnet-workspace/vb-lazy-constructor/Overview.aspx.vb",
           "startLine": 13,
-          "endLine": 15,
-          "supportingEvidenceIds": ["fixture-profile-handler"]
+          "endLine": 15
         },
         {
           "id": "dynamic-getter",
@@ -82,8 +81,7 @@
           "evidenceTier": "Tier2Structural",
           "filePath": "samples/messy-dotnet-workspace/vb-lazy-constructor/Overview.aspx.vb",
           "startLine": 20,
-          "endLine": 25,
-          "supportingEvidenceIds": ["fixture-profile-getter", "compiled-profile-getter"]
+          "endLine": 25
         },
         {
           "id": "dynamic-constructor",
@@ -93,8 +91,7 @@
           "evidenceTier": "Tier3SyntaxOrTextual",
           "filePath": "samples/messy-dotnet-workspace/vb-lazy-constructor/Overview.aspx.vb",
           "startLine": 31,
-          "endLine": 35,
-          "supportingEvidenceIds": ["compiled-profile-constructor-call"]
+          "endLine": 35
         },
         {
           "id": "dynamic-profile",
@@ -104,8 +101,7 @@
           "evidenceTier": "Tier3SyntaxOrTextual",
           "filePath": "samples/messy-dotnet-workspace/vb-lazy-constructor/Overview.aspx.vb",
           "startLine": 39,
-          "endLine": 47,
-          "supportingEvidenceIds": ["compiled-get-profile-call"]
+          "endLine": 47
         },
         {
           "id": "dynamic-provider",
@@ -115,8 +111,7 @@
           "evidenceTier": "Tier3SyntaxOrTextual",
           "filePath": "samples/messy-dotnet-workspace/vb-lazy-logging-provider/PublicLog.vb",
           "startLine": 6,
-          "endLine": 11,
-          "supportingEvidenceIds": ["compiled-provider-member", "compiled-cross-assembly-call"]
+          "endLine": 11
         },
         {
           "id": "dynamic-terminal",
@@ -126,8 +121,7 @@
           "evidenceTier": "Tier3SyntaxOrTextual",
           "filePath": "samples/messy-dotnet-workspace/vb-lazy-logging-provider/PublicLog.vb",
           "startLine": 13,
-          "endLine": 17,
-          "supportingEvidenceIds": ["compiled-database-api-candidate", "compiled-command-binding"]
+          "endLine": 17
         }
       ],
       "gaps": ["IlCommandOperandValueUnresolved", "IlCommandVirtualDispatchUnproven"],
@@ -150,8 +144,7 @@
           "evidenceTier": "Tier3SyntaxOrTextual",
           "filePath": "samples/messy-dotnet-workspace/vb-lazy-constructor/Overview.aspx.vb",
           "startLine": 39,
-          "endLine": 47,
-          "supportingEvidenceIds": ["fixture-audit-call-shape"]
+          "endLine": 47
         },
         {
           "id": "audit-provider",
@@ -161,8 +154,7 @@
           "evidenceTier": "Tier2Structural",
           "filePath": "samples/messy-dotnet-workspace/vb-lazy-logging-provider/PublicLog.vb",
           "startLine": 19,
-          "endLine": 24,
-          "supportingEvidenceIds": ["compiled-audit-member", "compiled-audit-body"]
+          "endLine": 24
         },
         {
           "id": "audit-value",
@@ -172,8 +164,7 @@
           "evidenceTier": "Tier3SyntaxOrTextual",
           "filePath": "samples/messy-dotnet-workspace/vb-lazy-logging-provider/PublicLog.vb",
           "startLine": 19,
-          "endLine": 24,
-          "supportingEvidenceIds": ["compiled-audit-command-state"]
+          "endLine": 24
         },
         {
           "id": "audit-terminal",
@@ -183,8 +174,7 @@
           "evidenceTier": "Tier3SyntaxOrTextual",
           "filePath": "samples/messy-dotnet-workspace/vb-lazy-logging-provider/PublicLog.vb",
           "startLine": 19,
-          "endLine": 24,
-          "supportingEvidenceIds": ["compiled-audit-terminal"]
+          "endLine": 24
         }
       ],
       "gaps": ["StaticBranchFeasibilityUnproven", "DatabaseExecutionUnobserved"],
@@ -207,8 +197,7 @@
           "evidenceTier": "Tier3SyntaxOrTextual",
           "filePath": "samples/messy-dotnet-workspace/vb-lazy-constructor/Overview.aspx.vb",
           "startLine": 9,
-          "endLine": 11,
-          "supportingEvidenceIds": ["fixture-load-handler"]
+          "endLine": 11
         },
         {
           "id": "fill-constructor",
@@ -218,8 +207,7 @@
           "evidenceTier": "Tier3SyntaxOrTextual",
           "filePath": "samples/messy-dotnet-workspace/vb-lazy-constructor/Overview.aspx.vb",
           "startLine": 51,
-          "endLine": 54,
-          "supportingEvidenceIds": ["compiled-choices-constructor"]
+          "endLine": 54
         },
         {
           "id": "fill-getter",
@@ -229,8 +217,7 @@
           "evidenceTier": "Tier3SyntaxOrTextual",
           "filePath": "samples/messy-dotnet-workspace/vb-lazy-constructor/Overview.aspx.vb",
           "startLine": 60,
-          "endLine": 67,
-          "supportingEvidenceIds": ["compiled-lazy-getter"]
+          "endLine": 67
         },
         {
           "id": "fill-constructor-work",
@@ -240,8 +227,7 @@
           "evidenceTier": "Tier3SyntaxOrTextual",
           "filePath": "samples/messy-dotnet-workspace/vb-lazy-constructor/Overview.aspx.vb",
           "startLine": 70,
-          "endLine": 88,
-          "supportingEvidenceIds": ["compiled-employee-constructor", "compiled-field-initializer"]
+          "endLine": 88
         },
         {
           "id": "fill-provider",
@@ -251,8 +237,7 @@
           "evidenceTier": "Tier2Structural",
           "filePath": "samples/messy-dotnet-workspace/vb-lazy-logging-provider/PublicLog.vb",
           "startLine": 92,
-          "endLine": 98,
-          "supportingEvidenceIds": ["compiled-lookup-member", "compiled-lookup-body"]
+          "endLine": 98
         },
         {
           "id": "fill-terminal",
@@ -262,8 +247,7 @@
           "evidenceTier": "Tier3SyntaxOrTextual",
           "filePath": "samples/messy-dotnet-workspace/vb-lazy-logging-provider/PublicLog.vb",
           "startLine": 92,
-          "endLine": 98,
-          "supportingEvidenceIds": ["compiled-fill-terminal", "compiled-fill-command-state"]
+          "endLine": 98
         }
       ],
       "gaps": ["WarmColdPropertyStateUnproven", "ProviderDispatchUnproven"],
@@ -280,7 +264,6 @@
       "filePath": "samples/messy-dotnet-workspace/vb-lazy-constructor/Overview.aspx.vb",
       "startLine": 13,
       "endLine": 15,
-      "supportingEvidenceIds": ["gap-projectless-source-publish"],
       "limitation": "Without exact source-method mapping, a projectless publish bridge remains a candidate."
     },
     {
@@ -291,7 +274,6 @@
       "filePath": "samples/messy-dotnet-workspace/vb-lazy-logging-provider/PublicLog.vb",
       "startLine": 13,
       "endLine": 17,
-      "supportingEvidenceIds": ["gap-unresolved-command-operand"],
       "limitation": "Runtime-composed command material stays unresolved and is omitted from the public projection."
     },
     {
@@ -302,7 +284,6 @@
       "filePath": "samples/messy-dotnet-workspace/vb-lazy-logging-provider/PublicLog.vb",
       "startLine": 13,
       "endLine": 17,
-      "supportingEvidenceIds": ["gap-virtual-dispatch"],
       "limitation": "Encoded callvirt evidence does not select a runtime override or provider implementation."
     },
     {
@@ -313,11 +294,11 @@
       "filePath": "site/src/_data/webforms-source-compiled-proof-input.json",
       "startLine": 19,
       "endLine": 25,
-      "supportingEvidenceIds": ["gap-bounded-traversal"],
       "limitation": "Depth, path, and traversal-work limits constrain the result; absence beyond a bound is not proven."
     }
   ],
   "limitations": [
+    "No independent extractor output is checked in for these supporting aliases, so this projection is concept-level and does not claim that its illustrative hop IDs, tiers, or spans are extractor-verified evidence.",
     "No runtime execution, browser or page reachability, event firing, branch selection, warm or cold property behavior, provider dispatch, database identity, database success, returned rows, or production behavior is observed.",
     "No SQL text, stored-procedure name, parameter value, source snippet, literal hash, connection material, raw index, analyzer output, local path, private identity, or customer artifact is published.",
     "The public regression builds synthetic assemblies; it does not establish source-to-build authenticity, deployed-binary identity, customer compatibility, migration parity, complete route coverage, release approval, or operational safety.",
