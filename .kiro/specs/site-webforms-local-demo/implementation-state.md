@@ -40,9 +40,13 @@ only after these four routes exist.
 - Durable Actions run 37125942534 passed on the PR #801 head. Its local-only
   receipt records 148 passed, zero skipped, two authentic Windows publication
   cases, five operator layouts, four diagnostic layouts,
-  `validation.deep-projectless-corpus.v1`, `Tier2Structural`, and bounded
-  generator/input hashes. This is synthetic exact-tree validation, not
-  permission to publish the run's raw artifacts or proof of a private site.
+  `validation.deep-projectless-corpus.v1`, `Tier2Structural`, and the source
+  receipt's generator/bounded-input hashes. The receipt input includes the
+  admitted source roster plus execution/fixture assembly and raw test-receipt
+  hashes; it is not the future public projection's bounded input. The issue
+  #806 projection must carry its own generator and privacy-projected-input
+  hashes. This is synthetic exact-tree validation, not permission to publish
+  the run's raw artifacts or proof of a private site.
 
 These values must be freshly reverified during implementation. A later count
 or changed tree supersedes them; an older successful count must not be relabeled

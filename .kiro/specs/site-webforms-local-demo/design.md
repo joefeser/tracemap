@@ -55,7 +55,7 @@ The public map describes artifact *roles*, not artifact contents:
 
 | Artifact class | Review question | Public treatment |
 | --- | --- | --- |
-| Validation receipt | Which bounded generator/input and test result were admitted? | Project only allowlisted hashes, counts, platform, mode, rule, tier, limitations, and durable result URL. |
+| Validation receipt | Which bounded source-corpus generator/input and test result were admitted? | Project only separately labeled source-receipt hashes, counts, platform, mode, rule, tier, limitations, and durable result URL. Never relabel a receipt hash as the public projection's input hash. |
 | Test receipt | Did the named synthetic suite pass, fail, or skip? | Summarize exact counts; do not publish raw TRX. |
 | Scan/report family | What source or compiled scope was indexed? | Link to the #806 projection; do not publish raw facts, SQLite, logs, or report bodies. |
 | Combined artifact | Which independent scopes were available to the reporter? | Describe labels and source/compiled roles only; do not publish SQLite. |
@@ -81,9 +81,9 @@ re-verifies these bindings at implementation time:
 - two Windows publication cases, two profile dynamic-lookup cases, five
   operator layouts, and four diagnostic layouts admitted by the receipt;
 - `validation.deep-projectless-corpus.v1`, `Tier2Structural`;
-- generator SHA-256
+- source-receipt generator SHA-256
   `529f399c5492f89d12785beb091eda70b7ea6191be60c8fd53a81e818027ec39`;
-- bounded-input SHA-256
+- source-receipt bounded-input SHA-256
   `90120a5650f5da8472f7ffc734b05a74e9b4ef2075d123fafc35f07addc96a12`;
   and
 - Windows Server 2025 with required mapped/mapless publication.
@@ -91,7 +91,11 @@ re-verifies these bindings at implementation time:
 These values are specification evidence, not permission to copy the run's raw
 artifacts into `site/src`. If any binding changes or cannot be reverified, the
 implementation must omit the count or label it historical rather than silently
-claim current-head proof.
+claim current-head proof. The source-receipt bounded-input digest covers the
+source roster plus execution/fixture assembly hashes and the test-receipt hash;
+it is not the bounded-input digest for issue #806's future public projection.
+That projection must retain its own generator SHA-256 and its own bounded
+privacy-projected-input SHA-256.
 
 ## Failure and clean-clone contract
 
@@ -157,8 +161,9 @@ A focused validator and mutation tests should require:
 - inbound links from guided setup and source-plus-compiled proof;
 - the required docs and adjacent-site links;
 - all five layouts, all four query views, missing-provider and cap gaps;
-- exact-result URL/head/tree/platform/count/hash fields when a validation row
-  is present;
+- exact-result URL/head/tree/platform/count fields and distinctly labeled
+  source-receipt versus public-projection hash fields when those rows are
+  present;
 - separate local and Windows publication wording;
 - public claim levels and explicit non-claims;
 - absence of raw SQL/command text, source, raw SQLite/facts/log/TRX content,
