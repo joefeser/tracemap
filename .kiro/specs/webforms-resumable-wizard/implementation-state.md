@@ -637,3 +637,15 @@ final dedicated metadata rerun passed all 33 tests. Exact-head CI/review
 readback remains pending at commit preparation.
 No reviewer retag, local reviewer spend, risk acceptance or merge is authorized.
 Windows pipe/junction execution and fresh promotion review remain merge gates.
+
+Exact-head follow-up at `346143f5`: full local .NET rerun passed 3215 tests
+with one Windows-only skip. CI passed the .NET adapter, all other adapters,
+deep Windows ASP.NET corpus, three-OS metadata/mutation matrices, and Unix
+package validation. The newly enabled Windows boundary step passed 20 tests,
+including inherited-pipe drain, but four junction scenarios failed during
+recursive fixture disposal (Windows IOException after the target was removed).
+Do not count that lane as accepted. Junction ownership is now explicit via
+IDisposable: remove the link non-recursively before deleting the fixture tree.
+A separate regression verifies unlinking preserves the target and is idempotent.
+The boundary step moves earlier in the same matrix for faster failure feedback.
+This follow-up changes only tests, CI ordering, and this validation record.

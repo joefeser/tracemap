@@ -212,7 +212,7 @@ public sealed class WebFormsReviewPreflightTests
         using var fixture = new Fixture();
         var evidence = Path.Combine(fixture.Root, "evidence");
         if (mutation != "missing") Directory.CreateDirectory(evidence);
-        if (mutation == "escape") DirectoryLinkFixture.Create(Path.Combine(evidence, "escape"), fixture.Published);
+        using var link = mutation == "escape" ? DirectoryLinkFixture.Create(Path.Combine(evidence, "escape"), fixture.Published) : null;
         fixture.Config = fixture.Config with { ReceiptRoot = mutation == "relative" ? "relative" : evidence,
             BindingReceipts = mutation == "escape" ? ["escape/binding.json"] : [] };
         var exception = await Assert.ThrowsAnyAsync<Exception>(() => fixture.Build());
@@ -345,7 +345,7 @@ public sealed class WebFormsReviewPreflightTests
     public async Task Linked_input_escape_is_rejected()
     {
         using var fixture = new Fixture();
-        DirectoryLinkFixture.Create(Path.Combine(fixture.Published, "escape"), fixture.Source);
+        using var link = DirectoryLinkFixture.Create(Path.Combine(fixture.Published, "escape"), fixture.Source);
         fixture.Config = fixture.Config with { PrimaryAssemblies = ["escape/Pages/Lookup.aspx"] };
         var exception = await Assert.ThrowsAnyAsync<Exception>(() => fixture.Build());
         Assert.Equal("WEBFORMS_PREFLIGHT_INPUT_ESCAPES_ROOT", exception.Message);
