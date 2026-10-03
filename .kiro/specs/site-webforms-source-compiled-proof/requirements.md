@@ -16,11 +16,14 @@ runtime behavior.
 
 1. The site SHALL expose `/webforms/source-plus-compiled-proof/` as a readable
    ordered evidence story over only the checked-in public fixtures under
-   `samples/fixture-build/lazy-constructor/` and
-   `samples/messy-dotnet-workspace/vb-lazy-constructor/`.
-2. The page SHALL identify its public claim level as `demo` and SHALL bind its
-   proof to the exact `main` revision selected during implementation. It SHALL
-   not silently inherit later `dev` behavior.
+   `samples/fixture-build/lazy-constructor/`,
+   `samples/messy-dotnet-workspace/vb-lazy-constructor/`, and
+   `samples/messy-dotnet-workspace/vb-lazy-logging-provider/`.
+2. The page SHALL identify its public claim level as `demo` only when
+   implementation produces the compliant public proof projection required by
+   this spec; otherwise it SHALL remain `concept` and record the projection
+   blocker. Either claim level SHALL bind to the exact `main` revision selected
+   during implementation and SHALL NOT silently inherit later `dev` behavior.
 3. The story SHALL distinguish these evidence layers on every applicable hop:
    compiler-resolved source evidence (`Tier1Semantic`), metadata/IL structural
    evidence (`Tier2Structural`), review-only source-to-publish and encoded-value
@@ -62,8 +65,8 @@ runtime behavior.
     review-handoff pages without duplicating their authority.
 11. The route SHALL be registered in `site/src/_site/pages.json`, discovery
     metadata, generated navigation/sitemap inputs, and the roadmap claim ledger.
-    Discovery metadata SHALL name the `demo` boundary, explicit limitations,
-    preferred proof path, and non-claims.
+    Discovery metadata SHALL name the actual `concept` or `demo` boundary,
+    explicit limitations, preferred proof path, and non-claims.
 12. Focused validators SHALL cover route structure, evidence-layer labels,
     ordered-chain shape, required inbound/outbound links, discovery and claim
     ledger entries, exact-main proof identity, projection schema/allowlists,

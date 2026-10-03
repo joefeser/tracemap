@@ -16,7 +16,7 @@
 ## Site implementation
 
 - [ ] Add `/webforms/source-plus-compiled-proof/` using the existing static page
-      layout and explicit `demo` claim language.
+      layout and the actual conditional `concept` or `demo` claim language.
 - [ ] Produce a deterministic public-safe proof projection, or downgrade the
       route to `concept` and record why a compliant projection was not possible.
 - [ ] Render the ordered getter/constructor/provider path with per-hop rules,

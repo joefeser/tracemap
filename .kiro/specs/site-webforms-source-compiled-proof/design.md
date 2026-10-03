@@ -51,7 +51,8 @@ be versioned independently of private/local TraceMap artifacts.
 
 Required top-level fields:
 
-- `schemaVersion` and `publicClaimLevel` (`demo`);
+- `schemaVersion` and `publicClaimLevel` (`demo` for a compliant published
+  projection; otherwise the asset is omitted and the page remains `concept`);
 - repository identity and exact public commit SHA;
 - generator identity plus `generatorSha256`;
 - a description of the bounded privacy projection plus
@@ -84,7 +85,8 @@ proof.
 
 Reuse existing page primitives:
 
-- a hero with an explicit `demo` note and exact proof revision;
+- a hero with the actual conditional `concept` or `demo` note and exact proof
+  revision;
 - an evidence-layer legend;
 - an ordered chain/timeline with keyboard-readable text fallback;
 - three outcome cards for dynamic email, literal audit, and `Fill`;
@@ -127,7 +129,7 @@ A focused `site/scripts/webforms-source-compiled-proof.test.mjs` regression and
 the shared validators should assert:
 
 - canonical/social metadata and one `h1`;
-- `demo` claim level and exact-main provenance;
+- the conditional `concept`/`demo` claim gate and exact-main provenance;
 - all four evidence-layer labels and the three required outcomes;
 - no bridge is labelled as a proven IL call;
 - gaps, limits, non-claims, versions, rule IDs, tiers, and spans remain visible;
