@@ -516,3 +516,18 @@ The legacy test passed in isolation, then the entire unchanged-binary suite
 passed. Windows-specific identity and output-link checks are wired into the
 three-platform distribution jobs; repaired-head CI and fresh review remain
 required. No customer application or SQL was executed.
+
+### Repaired-head Windows corpus follow-up
+
+Repair commit `01d81776d84c656892a6643b8bd84aedfb5cf355` passed the local full
+suite but Windows public-corpus run37084804113 failed one mixed-mode Branch_Click
+case with `COMPILED_SELECTED_SYMBOL_ROOTS_INVALID` (142 passed, one failed;
+both authentic publish cases passed). The deleted per-query temporary inputs
+prevent proving which root field was invalid. Git-probe contention is a
+hypothesis, not an established production defect. The exact-identity fixture
+now joins the existing nonparallel Git-sensitive collection, and asserts the
+scan/combined commit identity before exact-root admission with explicit failure
+diagnostics. No production gate, timeout, retry or expected route was relaxed.
+The changed IL command-binding test class passed 68 tests with one Windows-only
+skip locally. Fresh Windows CI must validate this test-only follow-up; the
+earlier full-suite count does not include it.
