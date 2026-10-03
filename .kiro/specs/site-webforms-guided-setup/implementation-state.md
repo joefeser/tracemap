@@ -8,6 +8,7 @@ Last updated: 2026-10-03
 Implementation branch: `codex/site-webforms-guided-setup`
 Target base: `main`
 Exact base: `684acb3457d1942fb7fde43db77c5cb27e5d1648`
+PR #803 ancestry at exact base: `not-shipped`
 Implementation revision: `bf5b96808631d8196cfef3c7ba051185481d47a1`
 Issue: #805
 
@@ -65,10 +66,15 @@ for private material, and the page's main boundary is compared with this
 independent implementation record and verified through Git ancestry. The merged
 source-plus-compiled route is linked only as a `concept`.
 
+Full-history checkouts verify both ancestry relationships directly. A shallow
+GitHub synthetic-merge checkout may not contain the base or #803 commit object;
+there the validator requires the recorded base to be a direct merge parent and
+requires the page's #803 state to match this independent spec record.
+
 ## Validation
 
-- `cd site && node --test scripts/webforms-guided-setup.test.mjs`: 8 passed.
-- `cd site && npm test`: 1,208 passed; no failures, skips, cancellations, or todos.
+- `cd site && node --test scripts/webforms-guided-setup.test.mjs`: 9 passed.
+- `cd site && npm test`: 1,209 passed; no failures, skips, cancellations, or todos.
 - `cd site && npm run build`: passed.
 - `cd site && npm run validate`: passed; 118 HTML files, 3,918 internal
   references, and 117 sitemap URLs validated.
