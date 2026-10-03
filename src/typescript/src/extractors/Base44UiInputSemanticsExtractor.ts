@@ -775,13 +775,18 @@ function reason(sourceSpan: SourceSpan, kind: ReasonEvidence["kind"], detail: st
 }
 
 function span(node: ts.Node, source: ts.SourceFile, filePath: string): SourceSpan {
+  // Parser-recovered missing nodes (`{ price: }`) are zero-width; cite the nearest
+  // enclosing node with real source text so one incomplete file cannot invalidate the packet.
+  let target = node;
+  while (target.parent && target.getStart(source) >= target.getEnd()) target = target.parent;
+  const start = target.getStart(source);
   return {
     filePath,
-    startLine: source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1,
-    endLine: source.getLineAndCharacterOfPosition(node.getEnd()).line + 1,
-    startOffset: node.getStart(source),
-    endOffset: node.getEnd(),
-    snippetSha256: hash(node.getText(source), 64)
+    startLine: source.getLineAndCharacterOfPosition(start).line + 1,
+    endLine: source.getLineAndCharacterOfPosition(target.getEnd()).line + 1,
+    startOffset: start,
+    endOffset: target.getEnd(),
+    snippetSha256: hash(target.getText(source), 64)
   };
 }
 
