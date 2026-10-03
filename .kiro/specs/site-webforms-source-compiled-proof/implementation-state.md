@@ -28,8 +28,10 @@ route at `concept`; the spec does not pre-approve a demo claim.
 - `samples/fixture-build/lazy-constructor/` provides the external net48 website
   and provider build harness plus a public operator-workflow description.
 - `samples/messy-dotnet-workspace/vb-lazy-constructor/` and the separate public
-  provider fixture model the page handler, lazy property/constructor work, a
-  dynamic lookup, a literal audit path, and an independent `Fill` terminal.
+  `samples/messy-dotnet-workspace/vb-lazy-logging-provider/` fixture model the
+  page handler, lazy property/constructor work, provider source used by the
+  separate DLL layouts, a dynamic lookup, a literal audit path, and an
+  independent `Fill` terminal.
 - `LazyConstructorLoggingTests` pins mixed and compiled-only route ordering,
   separates the dynamic and literal outcomes, retains unresolved operand and
   virtual-dispatch gaps, excludes same-name decoys, and checks bounded
@@ -80,6 +82,9 @@ or safety.
 
 - `git diff --check` — passed.
 - `./scripts/check-private-paths.sh` — passed.
+- `node scripts/kiro-review.mjs --phase site-webforms-source-compiled-proof
+  --kind spec --model auto --dry-run` — prompt generation passed; no external
+  review was run.
 - Focused scope inspection — only the four files under this spec directory are
   intended to change.
 
@@ -98,3 +103,16 @@ Specification review PR: https://github.com/joefeser/tracemap/pull/810
 The specification PR plans #806 and deliberately does not close it. ACK review
 and owner merge remain separate gates; the planning PR grants no implementation
 or merge authority.
+
+## ACK review corrections
+
+The current-head ACK batch authorized two independent P2 specification fixes:
+
+- the public claim is now conditionally `demo` only when a compliant public
+  projection exists, with `concept` as the fail-closed fallback; and
+- the bounded public input allowlist now includes the separate
+  `vb-lazy-logging-provider` fixture used by the provider project and workflow
+  tests.
+
+Both corrections were validated together and do not expand this branch beyond
+the four spec files.
