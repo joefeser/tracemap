@@ -136,6 +136,24 @@
     ]
   },
   {
+    "path": "/webforms/local-demo/",
+    "title": "Reproducible Web Forms Local Demo",
+    "summary": "Demo-level orientation to the exact-tree public synthetic wlocal replay, five operator layouts, four bounded query views, retained artifact roles, authentic Windows publication gate, fail-closed outcomes, and separate concept-level proof projection.",
+    "publicClaimLevel": "demo",
+    "sourceType": "site-page",
+    "hintCategory": "evidence",
+    "preferredProofPath": "/webforms/source-plus-compiled-proof/",
+    "limitations": [
+      "The 148-pass Windows result belongs only to tested head afe6152ccb58ad11b61ef4782ba82afdfe7651b7 and tree-equivalent main merge d76358f663ce40532fe0954ca9888612d51a4121; it is historical with respect to later main revisions and is not current-head proof.",
+      "The #806 public projection remains concept-level because independent extractor output is not checked in for its illustrative hop IDs, tiers, and spans; raw validation artifacts remain local-only.",
+      "Mapped and mapless ASP.NET publication evidence is Windows-only. A non-Windows refusal, skipped theory, ordinary SDK build, or external fixture harness is not an authentic publication pass."
+    ],
+    "nonClaims": [
+      "No runtime page or database execution, branch feasibility, runtime dispatch, provider selection, parameter value, returned rows, customer compatibility, private application coverage, migration parity, complete cross-service tracing, physical drive-I/O measurement, release approval, or safety claim.",
+      "No raw SQLite, facts, logs, TRX, binaries, source snippet, raw SQL, command body, configuration, credential, connection material, local path, customer artifact, private identity, unpublished validation detail, LLM analysis, embedding, vector database, or prompt classification."
+    ]
+  },
+  {
     "path": "/blog/what-tracemap-learned-from-graphify/",
     "title": "What TraceMap Learned from Graphify—Without Becoming Graphify",
     "summary": "A concept-level research story distinguishing external persistent-graph lessons from independently implemented TraceMap evidence, fixtures, boundaries, and deliberate non-adoption decisions.",
