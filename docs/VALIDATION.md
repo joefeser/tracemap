@@ -1319,6 +1319,35 @@ sqlite3 <out>/index.sqlite "select target_symbol, properties_json from facts whe
 
 ## VB.NET Adapter
 
+PR #801 promotion-repair examples additionally exercise compiled With and
+conditional members, parenthesis-free generic/default-property expressions,
+negative late-bound expressions, linked-document rollback, and explicit project
+scope typos. Run `PromotionReview` and `VisualBasicDocumentRollback` filters in
+addition to the adapter suites below. `ManagedMetadataExtractorTests` contains
+isolated CLI scans of cyclic TypeSpec, TypeRef and NestedClass metadata; these
+must finish with partial-gap artifacts rather than crash the test process.
+`WebFormsWizardBuildTests` launches the checked-in public `PipeHolder` fixture
+to verify environment controls and independently bounded inherited-pipe drain.
+The local-distribution matrix runs that suite and real directory-junction
+preflight/relocation checks on Windows. A Unix pass is not Windows acceptance.
+
+The wizard returns `WEBFORMS_WIZARD_BUILD_OUTPUT_UNTERMINATED` when a process
+exits without closing its inherited output pipes. It disposes its readers and
+does not accept a partial output hash as build success. Portable process-tree
+cleanup remains best effort: already-orphaned grandchildren cannot reliably be
+discovered after the parent exits; no containment guarantee is made. Builds
+still require explicit consent and never launch a customer website.
+
+Web Forms client brace detection recognizes common regex-literal expression
+positions, division, quoted/template strings and JavaScript/HTML comments. It
+is a bounded textual heuristic, not a complete JavaScript parser; regex literals
+after ambiguous statement contexts and template interpolation are not fully
+parsed. Unterminated recognized literals do not produce a guessed closing brace.
+Inline expression escaping follows the page's explicit Language directive,
+falling back to the linked source extension only if no language is declared.
+Packet path evidence lacking a paired scan/commit identity is omitted with a
+provenance gap instead of borrowing the primary snapshot commit.
+
 The VB.NET adapter follows the same matrix: local modern/legacy/Web Forms
 fixtures, a reducer-compatible shared index, the pinned OSS smoke, and the
 private-path guard. Adapter scope, extractor identities, fact families,

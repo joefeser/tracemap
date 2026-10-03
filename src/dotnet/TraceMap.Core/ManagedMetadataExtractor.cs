@@ -156,20 +156,8 @@ public static class ManagedMetadataExtractor
             MetadataReadResult srm;
             try
             {
-                cecil = ReadWithCecil(bytes, admittedDescriptor.SafeLocator, limits);
-            }
-            catch (ManagedInputException exception)
-            {
-                evaluated.Add(EvaluatedInput.Gap(admittedDescriptor, exception.Outcome, exception.GapKind, rawSha256));
-                continue;
-            }
-            catch (Exception exception) when (IsRecoverableMetadataException(exception))
-            {
-                evaluated.Add(EvaluatedInput.Gap(admittedDescriptor, "unreadable", "CecilManagedMetadataReaderFailure", rawSha256));
-                continue;
-            }
-            try
-            {
+                // Validate signatures with the guarded reader before Cecil resolves
+                // lazy TypeSpec references, where a cycle can overflow the process.
                 srm = ReadWithSystemReflectionMetadata(bytes, admittedDescriptor.SafeLocator, limits);
             }
             catch (ManagedInputException exception)
@@ -180,6 +168,20 @@ public static class ManagedMetadataExtractor
             catch (Exception exception) when (IsRecoverableMetadataException(exception))
             {
                 evaluated.Add(EvaluatedInput.Gap(admittedDescriptor, "unreadable", "SystemReflectionMetadataReaderFailure", rawSha256));
+                continue;
+            }
+            try
+            {
+                cecil = ReadWithCecil(bytes, admittedDescriptor.SafeLocator, limits);
+            }
+            catch (ManagedInputException exception)
+            {
+                evaluated.Add(EvaluatedInput.Gap(admittedDescriptor, exception.Outcome, exception.GapKind, rawSha256));
+                continue;
+            }
+            catch (Exception exception) when (IsRecoverableMetadataException(exception))
+            {
+                evaluated.Add(EvaluatedInput.Gap(admittedDescriptor, "unreadable", "CecilManagedMetadataReaderFailure", rawSha256));
                 continue;
             }
 
@@ -943,7 +945,8 @@ public static class ManagedMetadataExtractor
             // The rewrite-only forwarder scan is charged before traversing
             // ExportedType rows, including non-forwarder rows.
             var exportedTypeCount = rejectTypeForwarders ? reader.ExportedTypes.Count : 0;
-            var workUnits = checked(2L * (1L + typeCount + memberCount + reader.AssemblyReferences.Count + exportedTypeCount));
+            var workUnits = checked(2L * (1L + typeCount + memberCount + reader.AssemblyReferences.Count + exportedTypeCount
+                + reader.GetTableRowCount(TableIndex.TypeSpec)));
             if (workUnits > limits.MaxTotalWorkUnits)
                 throw new ManagedInputException("limit-exhausted", "ManagedInputTotalWorkLimitExceeded");
             // ECMA-335 II.23.1.15 ExportedType.TypeAttributes Forwarder bit.
@@ -997,6 +1000,10 @@ public static class ManagedMetadataExtractor
         assemblyIdentity = AssemblyArtifactIdentity(assemblyReferenceIdentity, moduleName, targetFramework);
 
         var provider = new MetadataTypeProvider(reader);
+        // Include unused specifications and base-type specifications: Cecil may
+        // resolve these while materializing types, before member enumeration.
+        for (var row = 1; row <= reader.GetTableRowCount(TableIndex.TypeSpec); row++)
+            provider.GetTypeFromEntityHandle(MetadataTokens.TypeSpecificationHandle(row));
         var observations = new List<MetadataObservation>
         {
             Observation("assembly", 0x20000001, FactTypes.ManagedAssemblyDeclared, RuleIds.DotNetCompiledAssembly, assemblyIdentity, "assembly",
@@ -1093,14 +1100,15 @@ public static class ManagedMetadataExtractor
     {
         var names = new Stack<string>();
         CecilTypeReference? current = type;
+        CecilTypeReference outer = type;
         while (current is not null)
         {
+            // Declaring-type chains can be cyclic in malformed metadata.
+            if (names.Count >= MaximumDeclaringTypeDepth) throw new BadImageFormatException("Cyclic or unbounded declaring-type metadata.");
             names.Push(current.Name);
+            outer = current;
             current = current.DeclaringType;
         }
-        var outer = type;
-        while (outer.DeclaringType is not null)
-            outer = outer.DeclaringType;
         return (outer.Namespace ?? string.Empty, names.ToArray());
     }
 
@@ -1110,8 +1118,11 @@ public static class ManagedMetadataExtractor
         var current = handle;
         string ns = string.Empty;
         var arity = reader.GetTypeDefinition(handle).GetGenericParameters().Count;
+        var remaining = reader.TypeDefinitions.Count + 1;
         while (!current.IsNil)
         {
+            // NestedClass rows can be cyclic in malformed metadata.
+            if (--remaining < 0) throw new BadImageFormatException("Cyclic NestedClass metadata.");
             var definition = reader.GetTypeDefinition(current);
             names.Push(reader.GetString(definition.Name));
             if (definition.GetDeclaringType().IsNil)
@@ -1327,12 +1338,17 @@ public static class ManagedMetadataExtractor
         provider.HasCustomAttributes && provider.CustomAttributes.Any(attribute =>
             attribute.AttributeType.FullName == "System.Runtime.CompilerServices.CompilerGeneratedAttribute");
 
+    private const int MaximumDeclaringTypeDepth = 1_024;
+
     internal static IEnumerable<CecilTypeDefinition> FlattenTypes(IEnumerable<CecilTypeDefinition> roots)
     {
         var stack = new Stack<CecilTypeDefinition>(roots.Reverse());
+        var visited = new HashSet<CecilTypeDefinition>(ReferenceEqualityComparer.Instance);
         while (stack.Count > 0)
         {
             var type = stack.Pop();
+            // A cyclic nested-type map would otherwise enumerate forever.
+            if (!visited.Add(type)) throw new BadImageFormatException("Cyclic nested type metadata.");
             yield return type;
             for (var index = type.NestedTypes.Count - 1; index >= 0; index--)
                 stack.Push(type.NestedTypes[index]);
@@ -1684,14 +1700,27 @@ public static class ManagedMetadataExtractor
         public string GetSZArrayType(string elementType) => elementType + "[]";
         public string GetTypeFromDefinition(MetadataReader metadataReader, TypeDefinitionHandle handle, byte rawTypeKind) => TypeName(metadataReader, handle);
         public string GetTypeFromReference(MetadataReader metadataReader, TypeReferenceHandle handle, byte rawTypeKind) => TypeName(metadataReader, handle);
-        public string GetTypeFromSpecification(MetadataReader metadataReader, object? genericContext, TypeSpecificationHandle handle, byte rawTypeKind) => metadataReader.GetTypeSpecification(handle).DecodeSignature(this, genericContext);
+        public string GetTypeFromSpecification(MetadataReader metadataReader, object? genericContext, TypeSpecificationHandle handle, byte rawTypeKind) => DecodeSpecification(metadataReader, handle, genericContext);
         public string GetTypeFromEntityHandle(EntityHandle handle) => handle.Kind switch
         {
             HandleKind.TypeDefinition => TypeName(reader, (TypeDefinitionHandle)handle),
             HandleKind.TypeReference => TypeName(reader, (TypeReferenceHandle)handle),
-            HandleKind.TypeSpecification => reader.GetTypeSpecification((TypeSpecificationHandle)handle).DecodeSignature(this, null),
-            _ => "<unsupported-type>"
+            HandleKind.TypeSpecification => DecodeSpecification(reader, (TypeSpecificationHandle)handle, null),
+            // A token from any other table is malformed type metadata, never a placeholder identity.
+            _ => throw new BadImageFormatException("Type token does not name a TypeDef, TypeRef, or TypeSpec row.")
         };
+        // A TypeSpec blob may embed another TypeSpec (e.g. through a custom modifier).
+        // Self-referential or deeply chained specs would otherwise recurse until the
+        // process stack overflows, which no caller can convert into a typed gap.
+        private readonly HashSet<TypeSpecificationHandle> _activeSpecifications = [];
+        private const int MaximumSpecificationChain = 64;
+        private string DecodeSpecification(MetadataReader metadataReader, TypeSpecificationHandle handle, object? genericContext)
+        {
+            if (_activeSpecifications.Count >= MaximumSpecificationChain || !_activeSpecifications.Add(handle))
+                throw new ManagedInputException("limit-exhausted", "ManagedInputSignatureNestingLimitExceeded");
+            try { return metadataReader.GetTypeSpecification(handle).DecodeSignature(this, genericContext); }
+            finally { _activeSpecifications.Remove(handle); }
+        }
         private string TypeName(MetadataReader metadataReader, TypeDefinitionHandle handle)
         {
             var (ns, names, _) = MetadataTypeName(metadataReader, handle);
@@ -1704,8 +1733,11 @@ public static class ManagedMetadataExtractor
             var current = handle;
             string ns = string.Empty;
             EntityHandle resolutionScope = default;
+            var remaining = metadataReader.TypeReferences.Count + 1;
             while (!current.IsNil)
             {
+                // TypeRef ResolutionScope chains can be cyclic in malformed metadata.
+                if (--remaining < 0) throw new BadImageFormatException("Cyclic TypeRef resolution scope metadata.");
                 var reference = metadataReader.GetTypeReference(current);
                 names.Push(metadataReader.GetString(reference.Name));
                 ns = reference.Namespace.IsNil ? ns : metadataReader.GetString(reference.Namespace);

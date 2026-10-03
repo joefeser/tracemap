@@ -1218,8 +1218,8 @@ public static class VisualBasicSyntaxExtractor
             targetSymbol: invocationName,
             new SortedDictionary<string, string>(StringComparer.Ordinal)
             {
-                ["expressionHash"] = FactFactory.Hash(invocation.Expression.ToString(), 32),
-                ["expressionKind"] = invocation.Expression.Kind().ToString(),
+                ["expressionHash"] = FactFactory.Hash(invocation.Expression?.ToString() ?? invocation.ToString(), 32),
+                ["expressionKind"] = invocation.Expression?.Kind().ToString() ?? "ConditionalAccessExpression",
                 ["invocationName"] = invocationName,
                 ["receiverName"] = GetInvocationReceiverName(invocation.Expression) ?? string.Empty
             },
@@ -1450,17 +1450,19 @@ public static class VisualBasicSyntaxExtractor
         return parameters ?? [];
     }
 
-    private static string GetInvocationName(ExpressionSyntax expression)
+    private static string GetInvocationName(ExpressionSyntax? expression)
     {
         return expression switch
         {
+            // Null-conditional invocation (`list?(0)`) has no Expression node.
+            null => "conditional-access",
             MemberAccessExpressionSyntax memberAccess => memberAccess.Name.Identifier.ValueText,
             IdentifierNameSyntax identifier => identifier.Identifier.ValueText,
             _ => $"unsupported-{expression.Kind()}-{FactFactory.Hash(expression.ToString(), 16)}"
         };
     }
 
-    private static string? GetInvocationReceiverName(ExpressionSyntax expression)
+    private static string? GetInvocationReceiverName(ExpressionSyntax? expression)
     {
         return expression switch
         {

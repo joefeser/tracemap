@@ -4,6 +4,22 @@ namespace TraceMap.Tests;
 
 public sealed class WebFormsWizardFormsTests
 {
+    [Theory]
+    [InlineData("Bin")]
+    [InlineData("OBJ")]
+    [InlineData(".Git")]
+    public void Discovery_and_resume_skip_case_variant_build_directories(string name)
+    {
+        using var temp = new TempDirectory();
+        var ignored = Directory.CreateDirectory(Path.Combine(temp.Path, name)).FullName;
+        File.WriteAllText(Path.Combine(ignored, "Generated.aspx"), "ignored");
+        File.WriteAllText(Path.Combine(temp.Path, "A.aspx"), "page");
+        if (!OperatingSystem.IsWindows())
+            File.CreateSymbolicLink(Path.Combine(ignored, "linked.aspx"), Path.Combine(temp.Path, "A.aspx"));
+        Assert.Equal(new[] { "A.aspx" }, WebFormsWizardForms.Discover(temp.Path));
+        Assert.Equal(new[] { "A.aspx" }, WebFormsWizardForms.Parse(temp.Path, "A.aspx"));
+    }
+
     [Fact]
     public void Selection_normalizes_separators_absolute_paths_comments_and_order()
     {

@@ -8,6 +8,7 @@ public static class WebFormsWizardForms
     public const int MaxInventoryEntries = 100_000;
     public const int MaxSelectionChars = 1_048_576;
     public const int MaxSelectionBytes = 1_048_576;
+    private static readonly HashSet<string> ExcludedDirectories = new(StringComparer.OrdinalIgnoreCase) { ".git", "bin", "obj" };
 
     public static IReadOnlyList<string> Discover(string webRoot)
     {
@@ -25,7 +26,7 @@ public static class WebFormsWizardForms
                 if ((attributes & FileAttributes.ReparsePoint) != 0) throw Fail("LINKED_ENTRY");
                 if ((attributes & FileAttributes.Directory) != 0)
                 {
-                    if (Path.GetFileName(item) is not (".git" or "bin" or "obj")) pending.Push(item);
+                    if (!ExcludedDirectories.Contains(Path.GetFileName(item))) pending.Push(item);
                 }
                 else if (item.EndsWith(".aspx", StringComparison.OrdinalIgnoreCase))
                 {

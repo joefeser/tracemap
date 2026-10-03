@@ -1907,7 +1907,7 @@ public static partial class LegacyWebFormsExtractor
                 var selectorInfo = ClassifyClientSelector(selector, page.Controls);
                 var absoluteStart = body.Index + binding.Index;
                 var openBrace = body.Index + binding.Index + binding.Length - 1;
-                var closeBrace = FindJavascriptBlockEnd(markup, openBrace);
+                var closeBrace = FindJavascriptBlockEnd(markup, openBrace, body.Index + body.Length);
                 var absoluteEnd = closeBrace >= openBrace ? closeBrace : absoluteStart + binding.Length - 1;
                 var line = LineAt(source, absoluteStart);
                 var endLine = LineAt(source, absoluteEnd);
@@ -2185,7 +2185,7 @@ public static partial class LegacyWebFormsExtractor
         {
             var absoluteStart = body.Index + ajax.Index;
             var openBrace = body.Index + ajax.Index + ajax.Length - 1;
-            var closeBrace = FindJavascriptBlockEnd(markup, openBrace);
+            var closeBrace = FindJavascriptBlockEnd(markup, openBrace, body.Index + body.Length);
             if (closeBrace < openBrace)
             {
                 continue;
@@ -2201,11 +2201,15 @@ public static partial class LegacyWebFormsExtractor
             var endpointPath = url.Split(['?', '#'], 2)[0].Replace('\\', '/').Trim();
             var normalizedEndpointPath = endpointPath.TrimStart('/');
             var endpointName = Path.GetFileName(endpointPath);
-            var candidates = handlerFiles
+            // A scheme or network-path URL names another origin; a same-named local
+            // .ashx file is not evidence for that request's handler.
+            var externalEndpoint = endpointPath.StartsWith("//", StringComparison.Ordinal)
+                || Regex.IsMatch(endpointPath, "\\A[A-Za-z][A-Za-z0-9+.-]*:", RegexOptions.CultureInvariant);
+            var candidates = externalEndpoint ? [] : handlerFiles
                 .Where(path => normalizedEndpointPath.Equals(path, StringComparison.OrdinalIgnoreCase)
                     || path.EndsWith("/" + normalizedEndpointPath, StringComparison.OrdinalIgnoreCase))
                 .ToArray();
-            if (candidates.Length == 0 && !string.IsNullOrWhiteSpace(endpointName))
+            if (!externalEndpoint && candidates.Length == 0 && !string.IsNullOrWhiteSpace(endpointName))
             {
                 var fileNameMatches = handlerFiles.Where(path => Path.GetFileName(path).Equals(endpointName, StringComparison.OrdinalIgnoreCase)).ToArray();
                 if (fileNameMatches.Length == 1)
@@ -2213,7 +2217,9 @@ public static partial class LegacyWebFormsExtractor
                     candidates = fileNameMatches;
                 }
             }
-            var targetResolution = candidates.Length == 1
+            var targetResolution = externalEndpoint
+                ? "external-absolute-url-not-resolved"
+                : candidates.Length == 1
                 ? "unique-repository-handler-file"
                 : candidates.Length > 1
                     ? "ambiguous-repository-handler-file"
@@ -2535,7 +2541,7 @@ public static partial class LegacyWebFormsExtractor
         }
     }
 
-    private static string? VisualBasicInvocationName(VBSyntax.ExpressionSyntax expression) => expression switch
+    private static string? VisualBasicInvocationName(VBSyntax.ExpressionSyntax? expression) => expression switch
     {
         VBSyntax.IdentifierNameSyntax identifier => identifier.Identifier.ValueText,
         VBSyntax.GenericNameSyntax generic => generic.Identifier.ValueText,
@@ -2633,12 +2639,17 @@ public static partial class LegacyWebFormsExtractor
         }
 
         var source = SourceText.From(markup);
-        var caseInsensitive = page.LinkedCodePath?.EndsWith(".vb", StringComparison.OrdinalIgnoreCase) == true;
+        var directive = DirectiveRegex().Match(MaskServerComments(markup));
+        var language = directive.Success ? ParseAttributes(directive.Groups["attrs"].Value).GetValueOrDefault("Language") : null;
+        var caseInsensitive = language is not null
+            ? language.Equals("VB", StringComparison.OrdinalIgnoreCase) || language.Equals("VisualBasic", StringComparison.OrdinalIgnoreCase)
+            : page.LinkedCodePath?.EndsWith(".vb", StringComparison.OrdinalIgnoreCase) == true;
         var comparison = caseInsensitive ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
         foreach (Match expression in InlineServerExpressionRegex().Matches(MaskServerComments(markup)))
         {
             var expressionBody = expression.Groups["body"];
-            foreach (Match reference in QualifiedIdentifierReferenceRegex().Matches(expressionBody.Value))
+            // `Eval("Customer.Name")` names a data-item property path, not a type reference.
+            foreach (Match reference in QualifiedIdentifierReferenceRegex().Matches(MaskExpressionStringLiterals(expressionBody.Value, caseInsensitive)))
             {
                 var matching = declarationFacts
                     .Where(item => reference.Value.Equals(item.QualifiedName, comparison)
@@ -2724,24 +2735,101 @@ public static partial class LegacyWebFormsExtractor
             : qualifiedName;
     }
 
-    private static int FindJavascriptBlockEnd(string text, int openBrace)
+    // Scans only the enclosing inline script body: a callback must not borrow braces,
+    // requests, or mutations from later scripts. Comments are skipped so apostrophes
+    // in `// don't ...` do not flip string state.
+    // Length-preserving: string/char literal contents become spaces so match offsets stay valid.
+    private static string MaskExpressionStringLiterals(string text, bool visualBasic)
+    {
+        var chars = text.ToCharArray();
+        for (var index = 0; index < chars.Length; index++)
+        {
+            var quote = chars[index];
+            if (quote != '"' && (visualBasic || quote != '\''))
+            {
+                continue;
+            }
+            var end = index + 1;
+            while (end < chars.Length)
+            {
+                if (!visualBasic && chars[end] == '\\' && end + 1 < chars.Length) { end += 2; continue; }
+                if (chars[end] == quote)
+                {
+                    if (visualBasic && end + 1 < chars.Length && chars[end + 1] == quote) { end += 2; continue; }
+                    break;
+                }
+                end++;
+            }
+            var stop = Math.Min(end, chars.Length - 1);
+            for (var masked = index; masked <= stop; masked++) chars[masked] = ' ';
+            index = stop;
+        }
+        return new string(chars);
+    }
+
+    internal static int FindJavascriptBlockEnd(string text, int openBrace, int limit)
     {
         var depth = 0;
         var quote = '\0';
         var escaped = false;
-        for (var index = openBrace; index < text.Length; index++)
+        var expressionStart = true;
+        limit = Math.Min(limit, text.Length);
+        for (var index = openBrace; index < limit; index++)
         {
             var current = text[index];
             if (quote != '\0')
             {
                 if (escaped) { escaped = false; continue; }
                 if (current == '\\') { escaped = true; continue; }
-                if (current == quote) quote = '\0';
+                if (current == quote) { quote = '\0'; expressionStart = false; }
+                continue;
+            }
+            if ((current == '/' && index + 1 < limit && text[index + 1] == '/')
+                || (current == '<' && index + 4 <= limit && text.AsSpan(index, 4).SequenceEqual("<!--")))
+            {
+                var newline = text.IndexOf('\n', index + 2, limit - index - 2);
+                if (newline < 0) return -1;
+                index = newline;
+                continue;
+            }
+            if (current == '/' && index + 1 < limit && text[index + 1] == '*')
+            {
+                var close = text.IndexOf("*/", index + 2, limit - index - 2, StringComparison.Ordinal);
+                if (close < 0) return -1;
+                index = close + 1;
                 continue;
             }
             if (current is '\'' or '"' or '`') { quote = current; continue; }
-            if (current == '{') depth++;
-            else if (current == '}' && --depth == 0) return index;
+            if (current == '/' && expressionStart)
+            {
+                var inClass = false;
+                var closed = false;
+                for (++index; index < limit; index++)
+                {
+                    current = text[index];
+                    if (current is '\r' or '\n') return -1;
+                    if (current == '\\') { index++; continue; }
+                    if (current == '[') inClass = true;
+                    else if (current == ']') inClass = false;
+                    else if (current == '/' && !inClass) { closed = true; break; }
+                }
+                if (!closed) return -1;
+                expressionStart = false;
+                continue;
+            }
+            if (char.IsLetter(current) || current is '_' or '$')
+            {
+                var start = index;
+                while (index + 1 < limit && (char.IsLetterOrDigit(text[index + 1]) || text[index + 1] is '_' or '$')) index++;
+                expressionStart = text[start..(index + 1)] is "return" or "throw" or "case" or "typeof" or "void" or "delete" or "yield";
+                continue;
+            }
+            if (char.IsWhiteSpace(current)) continue;
+            // A slash after a postfix increment/decrement is division.
+            if (current is '+' or '-' && index + 1 < limit && text[index + 1] == current) { index++; continue; }
+            if (current == '{') { depth++; expressionStart = true; }
+            else if (current == '}') { if (--depth == 0) return index; expressionStart = false; }
+            else expressionStart = current is '=' or '(' or '[' or ',' or ':' or ';' or '!' or '?' or '&' or '|' or '+' or '-' or '*' or '/' or '%' or '>' or '<';
         }
         return -1;
     }

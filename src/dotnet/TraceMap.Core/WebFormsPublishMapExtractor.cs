@@ -50,13 +50,16 @@ internal static partial class WebFormsPublishMapExtractor
     private const int MaxPublishedFiles = 64;
     private const int MaxPages = 32;
     private const long MaxArtifactBytes = 67_108_864;
+    private static readonly StringComparer PathComparer = OperatingSystem.IsWindows()
+        ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
 
     public static WebFormsPublishEvaluation Evaluate(string repoPath, string commitSha,
-        ScanOptions options, CancellationToken cancellationToken)
-        => EvaluateReceipt(repoPath, commitSha, options, cancellationToken, allowPartitionSet: true, allowInventoryPartition: false);
+        ScanOptions options, CancellationToken cancellationToken, Action? artifactsCaptured = null)
+        => EvaluateReceipt(repoPath, commitSha, options, cancellationToken, allowPartitionSet: true, allowInventoryPartition: false, artifactsCaptured);
 
     private static WebFormsPublishEvaluation EvaluateReceipt(string repoPath, string commitSha,
-        ScanOptions options, CancellationToken cancellationToken, bool allowPartitionSet, bool allowInventoryPartition)
+        ScanOptions options, CancellationToken cancellationToken, bool allowPartitionSet, bool allowInventoryPartition,
+        Action? artifactsCaptured = null)
     {
         if (string.IsNullOrWhiteSpace(options.WebFormsPublishReceiptPath))
             return new WebFormsPublishEvaluation(null, [], [], []);
@@ -114,7 +117,9 @@ internal static partial class WebFormsPublishMapExtractor
                 || !IsSha256(receipt.ReceiptGeneratorSha256)
                 || !IsSha256(receipt.CompilerSha256)
                 || !IsSha256(receipt.BoundedInputSha256)
-                || receipt.SourceFiles is null || receipt.PublishedFiles is null || receipt.Pages is null)
+                || receipt.SourceFiles is null || receipt.PublishedFiles is null || receipt.Pages is null
+                || receipt.SourceFiles.Any(item => item is null) || receipt.PublishedFiles.Any(item => item is null)
+                || receipt.Pages.Any(item => item is null))
                 throw new PublishException("WebFormsPublishReceiptInvalid");
             sourceCount = receipt.SourceFiles.Count;
             publishedCount = receipt.PublishedFiles.Count;
@@ -143,7 +148,8 @@ internal static partial class WebFormsPublishMapExtractor
             if (sourceDigest != receipt.BoundedInputSha256)
                 throw new PublishException("WebFormsPublishSourceMismatch");
 
-            var published = new Dictionary<string, PublishedFile>(StringComparer.Ordinal);
+            var published = new Dictionary<string, PublishedFile>(PathComparer);
+            var mapBytes = new Dictionary<string, byte[]>(PathComparer);
             foreach (var item in receipt.PublishedFiles)
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -151,11 +157,14 @@ internal static partial class WebFormsPublishMapExtractor
                     throw new PublishException("WebFormsPublishReceiptInvalid");
                 var path = ResolveChild(publishRoot, item.Path);
                 var limit = item.Kind == "compiled-map" ? MaxMapBytes : MaxArtifactBytes;
-                if (Sha256(ReadBounded(path, limit)) != item.Sha256)
+                var artifactBytes = ReadBounded(path, limit);
+                if (Sha256(artifactBytes) != item.Sha256)
                     throw new PublishException("WebFormsPublishArtifactMismatch");
                 published.Add(item.Path!, item);
+                if (item.Kind == "compiled-map") mapBytes.Add(item.Path!, artifactBytes);
                 if (item.Kind == "assembly") assemblies.Add(new WebFormsPublishAssembly(item.Path!, item.Sha256!));
             }
+            artifactsCaptured?.Invoke();
             foreach (var item in receipt.Pages)
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -180,7 +189,7 @@ internal static partial class WebFormsPublishMapExtractor
                         throw new PublishException("WebFormsPublishReceiptInvalid");
                     foreach (var mapRow in mapRows)
                     {
-                        using var mapStream = File.OpenRead(ResolveChild(publishRoot, mapRow.Path));
+                        using var mapStream = new MemoryStream(mapBytes[mapRow.Path!], writable: false);
                         using var mapReader = XmlReader.Create(mapStream,
                             new XmlReaderSettings { DtdProcessing = DtdProcessing.Prohibit, XmlResolver = null });
                         var virtualPath = XDocument.Load(mapReader).Root?.Attribute("virtualPath")?.Value;
@@ -210,7 +219,7 @@ internal static partial class WebFormsPublishMapExtractor
                 var assemblyPath = "bin/" + item.Assembly + ".dll";
                 if (!published.TryGetValue(assemblyPath, out var assembly) || assembly.Kind != "assembly")
                     throw new PublishException("WebFormsPublishAssemblyUnavailable");
-                using var stream = File.OpenRead(ResolveChild(publishRoot, item.MapPath));
+                using var stream = new MemoryStream(mapBytes[item.MapPath!], writable: false);
                 using var reader = XmlReader.Create(stream,
                     new XmlReaderSettings { DtdProcessing = DtdProcessing.Prohibit, XmlResolver = null });
                 var root = XDocument.Load(reader).Root;
@@ -325,7 +334,7 @@ internal static partial class WebFormsPublishMapExtractor
 
     private static bool HasDuplicatePaths(IEnumerable<string?> paths) =>
         paths.Any(path => string.IsNullOrWhiteSpace(path))
-        || paths.Distinct(StringComparer.Ordinal).Count() != paths.Count();
+        || paths.Distinct(PathComparer).Count() != paths.Count();
 
     private static string ResolveChild(string root, string? relativePath)
     {
@@ -354,8 +363,13 @@ internal static partial class WebFormsPublishMapExtractor
         using var stream = File.OpenRead(path);
         if (stream.Length > maxBytes) throw new PublishException("WebFormsPublishInputLimitExceeded");
         using var output = new MemoryStream();
-        stream.CopyTo(output);
-        if (output.Length > maxBytes) throw new PublishException("WebFormsPublishInputLimitExceeded");
+        var buffer = new byte[8192];
+        int count;
+        while ((count = stream.Read(buffer, 0, (int)Math.Min(buffer.Length, maxBytes - output.Length + 1))) > 0)
+        {
+            if (output.Length + count > maxBytes) throw new PublishException("WebFormsPublishInputLimitExceeded");
+            output.Write(buffer, 0, count);
+        }
         return output.ToArray();
     }
 

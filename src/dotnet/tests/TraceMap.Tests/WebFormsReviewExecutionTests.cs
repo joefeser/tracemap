@@ -482,7 +482,6 @@ public sealed class WebFormsReviewExecutionTests
     [InlineData("reports")]
     public async Task Relocated_history_never_uses_original_policy_locators_to_bypass_current_owned_links(string phase)
     {
-        if (OperatingSystem.IsWindows()) return; // Native Windows junction acceptance remains required.
         using var fixture = new Fixture(); await fixture.Preflight();
         Assert.Equal(0, await fixture.Execute("run", Scan));
         Assert.Equal(0, await fixture.ExecuteReports("resume", WebFormsReviewReportExecution.WriteAsync));
@@ -491,7 +490,8 @@ public sealed class WebFormsReviewExecutionTests
         var checkpoint = fixture.LastCheckpoint();
         var directory = Path.Combine(destination, phase == "scan" ? checkpoint.Attempt + "/scan" : checkpoint.Reports!.ReportAttempt);
         var preserved = Path.Combine(fixture.Root, "unowned-" + phase);
-        Directory.Move(directory, preserved); Directory.CreateSymbolicLink(directory, preserved);
+        Directory.Move(directory, preserved);
+        using var link = DirectoryLinkFixture.Create(directory, preserved);
         using var output = new StringWriter();
         Assert.Equal(1, await TraceMapCommand.RunAsync(["webforms-review", "query", "--run", destination], output, fixture.Error));
         Assert.Empty(output.ToString()); Assert.Contains("OUTPUT_LINK_INVALID", fixture.Error.ToString(), StringComparison.Ordinal);
@@ -1360,6 +1360,16 @@ public sealed class WebFormsReviewExecutionTests
         foreach (var (path, hash) in before) Assert.Equal(hash, Hash(path));
     }
 
+    [Fact]
+    public void Fixture_cleanup_clears_readonly_git_objects()
+    {
+        using var fixture = new Fixture();
+        var gitFile = Directory.EnumerateFiles(Path.Combine(fixture.Source, ".git", "objects"), "*", SearchOption.AllDirectories).First();
+        File.SetAttributes(gitFile, File.GetAttributes(gitFile) | FileAttributes.ReadOnly);
+        fixture.Dispose();
+        Assert.False(Directory.Exists(fixture.Root));
+    }
+
     private sealed class Fixture : IDisposable
     {
         public string Root { get; }
@@ -1485,6 +1495,18 @@ public sealed class WebFormsReviewExecutionTests
                 if (File.Exists(Path.Combine(directory.FullName, "AGENTS.md")) && Directory.Exists(Path.Combine(directory.FullName, "samples"))) return directory.FullName;
             throw new InvalidOperationException("Public fixture unavailable");
         }
-        public void Dispose() { Output.Dispose(); Error.Dispose(); if (Directory.Exists(Root)) Directory.Delete(Root, recursive: true); }
+        public void Dispose()
+        {
+            Output.Dispose(); Error.Dispose();
+            if (!Directory.Exists(Root)) return;
+            // Git creates read-only loose objects on Windows. These belong only
+            // to this test's temporary repository; do not follow reparse points.
+            var git = Path.Combine(Source, ".git");
+            if (Directory.Exists(git))
+                foreach (var file in Directory.EnumerateFiles(git, "*", new EnumerationOptions
+                { RecurseSubdirectories = true, AttributesToSkip = FileAttributes.ReparsePoint, IgnoreInaccessible = false }))
+                    File.SetAttributes(file, File.GetAttributes(file) & ~FileAttributes.ReadOnly);
+            Directory.Delete(Root, recursive: true);
+        }
     }
 }

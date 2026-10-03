@@ -480,3 +480,179 @@ The first expanded run exposed a noncanonical external-solution path in the test
 fixture; corrected the fixture without weakening inventory identity checks.
 Prior eb290ea6 CI passed Windows 135 and full .NET 3,133 with one platform skip;
 those results do not validate this new patch.
+
+## Main promotion PR #801: settled head findings (2026-10-02)
+
+Repair branch: `codex/promote-dev-to-main-f0aaf582f778`, based on reviewed head
+`f0aaf582f7787d62e8f3dc655c53363c9c05b0c2`. ACK run1790987754602
+authorized the six settled findings. This repair does not update dev or merge
+main; reconcile its fixing commit into dev separately after promotion review.
+
+Single-receipt publish admission now shares a host path comparer for duplicate
+checks and artifact lookup, and parses only captured bounded hash-verified map
+bytes. Extractor version advances to 0.1.2. Focused pipeline page-list writes
+reject linked targets/ancestors and replace the leaf atomically (including a
+pre-existing hardlink); the root must remain operator-controlled against
+concurrent ancestor replacement. A trailing IL opcode prefix emits the typed
+malformed-body gap. Wizard discovery excludes build/control directory names
+case-insensitively. Independent VB restore retains the explicit request even
+when C# projects are present; shared solution restore may run redundantly.
+
+Validation: final isolated full .NET suite passed 3,150 tests, with one
+Windows-only skip and zero failures; TRX is
+`/tmp/tracemap-pr801-final-tests/pr801-final.trx`. Focused follow-up passed 80
+tests. Both focused pipeline PowerShell contract and output-safety checks passed.
+The final build had zero warnings/errors. The VB sample scan produced 222 facts
+with semantic coverage. Pinned Community.VisualBasic smoke at
+`20d2a51dfc9f342848ad134952ceaa8d79302559` produced the expected 110,726 facts
+with reduced semantic coverage and FailedOrPartial build status; this is not
+a clean customer build claim. Smoke artifacts are under
+`/tmp/tracemap-pr801-oss-smoke/community-visual-basic`.
+
+An earlier full-suite attempt overlapped a smoke rebuild: runtime-hash replay
+correctly rejected changed binaries, and a legacy-data assertion also failed
+(its cause is not established). That run was cancelled, not counted as passing.
+The legacy test passed in isolation, then the entire unchanged-binary suite
+passed. Windows-specific identity and output-link checks are wired into the
+three-platform distribution jobs; repaired-head CI and fresh review remain
+required. No customer application or SQL was executed.
+
+### Repaired-head Windows corpus follow-up
+
+Repair commit `01d81776d84c656892a6643b8bd84aedfb5cf355` passed the local full
+suite but Windows public-corpus run37084804113 failed one mixed-mode Branch_Click
+case with `COMPILED_SELECTED_SYMBOL_ROOTS_INVALID` (142 passed, one failed;
+both authentic publish cases passed). The deleted per-query temporary inputs
+prevent proving which root field was invalid. Git-probe contention is a
+hypothesis, not an established production defect. The exact-identity fixture
+now joins the existing nonparallel Git-sensitive collection, and asserts the
+scan/combined commit identity before exact-root admission with explicit failure
+diagnostics. No production gate, timeout, retry or expected route was relaxed.
+The changed IL command-binding test class passed 68 tests with one Windows-only
+skip locally. Fresh Windows CI must validate this test-only follow-up; the
+earlier full-suite count does not include it.
+
+## Main promotion PR #801: exact-head review round 2 (2026-10-03)
+
+Repair branch: `codex/promote-dev-to-main-f0aaf582f778`, reviewed head
+`f780db4fe9ed4e667f787a8cc70a4fa6a563c3b1`. Fixes stay on the promotion branch;
+reconcile into dev separately after promotion review.
+
+P1 fixes: VB paren-free statement calls (`conn.Open`, `Call M`) and
+null-conditional invocations no longer throw and drop the rest of the project
+(per-document isolation now emits `VisualBasicDocumentExtractionFailed`);
+Windows Task 11 CI step propagates its guard script exit code; Web Forms
+preparation binds root and nested same-name pages under one application prefix;
+scheme/network-path AJAX URLs no longer resolve to same-named local `.ashx`
+files; inline JS callback scanning stays inside its script and skips comments.
+
+P2 fixes: VB paren-free expression calls (`Dim n = cmd.ExecuteScalar`) emit call
+and ADO.NET operation evidence; explicit `--project` scope excluding a language
+emits a producer-local scope gap; null receipt entries are typed gaps; inline
+server expression string literals are masked; gap-only docs export loads
+framework-migration facts; packet edge commit matches its scan node; behavior
+inventories truncate at the explorer row bound with gaps; raw audit hashing
+streams; wizard builds disable node reuse and bound post-exit pipe drain; wizard
+root/project registration survives interruption; TypeSpec/nesting/scope cycles
+and wrong-table InlineType tokens become typed compiled-input gaps; Base44
+reason spans stay non-empty for parser-recovered nodes. Extractor versions:
+legacy-webforms 0.13.5, vb-semantic 0.8.6, vb-syntax 0.3.23, csharp-semantic
+0.21.2, il-body-evidence 0.1.11, managed-metadata 0.1.1, webforms-publish-map
+0.1.3.
+
+Deferred (design or follow-up, not patched): interrupted wizard start still
+requires explicit repair (pinned by test); scan vs. post-scan source hash budget
+can fail closed after a long scan; VB/C# language-prefixed symbol IDs do not
+join across languages; VB designer/AssemblyInfo files are skipped without a gap;
+unbounded SZARRAY nesting inside one signature blob is not pre-validated.
+
+Validation (Linux sandbox, .NET SDK 10.0.401, root user): full .NET suite 3,158
+passed, 1 skipped, 3 failed; the same 3 fail on unchanged `f780db4f` in this
+environment (root bypasses inaccessible-directory permissions; `/usr/bin/time`
+absent). TypeScript: 258/258 with .NET 10 on PATH. PowerShell and Windows checks
+were not run here (no pwsh); CI remains required.
+# Promotion repair: user-supplied Kiro findings (2026-10-03)
+
+Authorized by Joe: reproduce and fix the supplied F1–F9 findings, adding as many
+examples as needed. Starting head `b5149dde4c1526a56ac45473983b4ad25d49052d`,
+PR #801, branch `codex/promote-dev-to-main-f0aaf582f778`. No merge or reviewer
+retag authority. Pasted review is advisory evidence, not an admitted receipt.
+
+- F1: real vbproj With/conditional-access regression failed before repair;
+  null receiver guards now preserve exact call/property/ADO.NET counts. Focused
+  test passed after repair; event/parameter helper guards also audited.
+- F2: unmatched explicit project scope now fails before semantic analysis;
+  five typo/non-project/outside-root examples and valid mixed-language control
+  pass, including slash/backslash/dot-segment normalization and broader scope suites.
+- F3: guarded SRM now runs before Cecil and decodes every TypeSpec; work
+  accounting includes those rows. Isolated CLI fixtures cover required/optional
+  modifier and generic TypeSpec cycles (unused, field and base), TypeRef and NestedClass cycles;
+  direct Cecil declaring-type cycle test added. Original stack overflow on
+  pinned Cecil has not been independently reproduced; bounded rejection is
+  tested rather than claiming a crash reproduction.
+- F4: independent WaitAsync drain bound, reader disposal and observed deferred
+  faults added. Public PipeHolder fixture verifies inherited pipes and server
+  environment flags on macOS; timeout/cancellation examples added. Windows CI
+  execution is required. Orphan containment after parent exit is NOT guaranteed;
+  portable cleanup is best effort and documented. No customer site is launched.
+- F5: membership-aware rollback tested with first-failure and prior-success
+  cases across facts/gaps/metadata. Extractor failures now advise correction,
+  not dependency restoration. Cancellation is not reclassified.
+- F6: generic and default-property producer calls tested with exact counts and
+  AddressOf negative control; unresolved/late-bound expressions receive gaps,
+  not invented calls. One shared operation pass has a 100000-query bound.
+- F7: VB/VisualBasic/C# inline directives tested without codebehind; common
+  regex/division/string/template/comment brace cases and malformed literals
+  tested. This remains a documented bounded heuristic, not a JS parser.
+- F8: gap-only export, foreign/missing path provenance, 9999/10000/10001-row behavior
+  inventories, streamed hash equality and non-vacuous TypeScript assertions
+  added. Path provenance no longer borrows the primary snapshot commit.
+- F9: removed three Windows early returns; tests create real native junctions
+  and are explicitly selected by local-distribution Windows CI. Local Unix
+  passes do not certify Windows behavior.
+
+Local validation (macOS, .NET SDK 10.0.302/runtime 10.0.10):
+
+- Broader affected .NET suites: 428 passed. Full solution run: 3206 passed,
+  one Windows-only skip, two failures from stale Web Forms version assertions.
+  Those assertions were corrected, then the final targeted rebuild/run passed
+  175 tests, including all latest production changes and six row-limit cases.
+- Deep projectless corpus: 146 passed, one Windows ASP.NET publish skip;
+  chain-comparison, SQL-route and cap-shortcut PowerShell suites passed.
+  Five source/compiled/separate-DLL operator layouts passed. This is public
+  synthetic static evidence, not customer runtime or SQL execution acceptance.
+- Base44 UI input semantics: 2/2 passed. Locked dependency restore passed.
+- Modern VB sample: 222 facts, Level1SemanticAnalysis/Succeeded, byte-identical
+  repeated facts. Legacy: 186 facts; Web Forms: 209 facts; both explicitly
+  Level1SemanticAnalysisReduced/FailedOrPartial. All three pass artifact conformance.
+- Pinned Community.VisualBasic smoke at 20d2a51dfc9f342848ad134952ceaa8d79302559:
+  114658 facts, 79193 analysis gaps, Level1SemanticAnalysisReduced/FailedOrPartial;
+  artifact conformance passed. More bounded unresolved-expression gaps are not
+  a claim of complete semantic coverage or a successful customer build.
+- Private-path guard and diff whitespace checks passed.
+
+The final generic TypeSpec examples are rejected categorically by SRM before
+the nesting guard, while modifier cycles exercise the explicit guard. The
+final dedicated metadata rerun passed all 33 tests. Exact-head CI/review
+readback remains pending at commit preparation.
+No reviewer retag, local reviewer spend, risk acceptance or merge is authorized.
+Windows pipe/junction execution and fresh promotion review remain merge gates.
+
+Exact-head follow-up at `346143f5`: full local .NET rerun passed 3215 tests
+with one Windows-only skip. CI passed the .NET adapter, all other adapters,
+deep Windows ASP.NET corpus, three-OS metadata/mutation matrices, and Unix
+package validation. The newly enabled Windows boundary step passed 20 tests,
+including inherited-pipe drain, but four junction scenarios failed during
+recursive fixture disposal (Windows IOException after the target was removed).
+Do not count that lane as accepted. Junction ownership is now explicit via
+IDisposable: remove the link non-recursively before deleting the fixture tree.
+A separate regression verifies unlinking preserves the target and is idempotent.
+The boundary step moves earlier in the same matrix for faster failure feedback.
+This follow-up changes only tests, CI ordering, and this validation record.
+
+At `e7ae1113`, Windows accepted junction unlinking, both preflight escape cases,
+and all pipe tests (23 passes). Two relocation fixtures then exposed a second
+cleanup issue: read-only loose Git objects in their temporary repositories.
+The fixture now clears ReadOnly only under its owned `.git`, skipping reparse
+points, before deleting its root. A dedicated read-only-object cleanup test is
+selected in the Windows boundary lane. Production scanner code is unchanged.

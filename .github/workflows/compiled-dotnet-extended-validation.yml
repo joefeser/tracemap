@@ -37,6 +37,7 @@ jobs:
         shell: pwsh
         run: |
           pwsh -NoProfile -File scripts/validation/Test-Task11Windows.ps1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $head = (git rev-parse HEAD).Trim()
           pwsh -NoProfile -File scripts/validation/Invoke-Task11Windows.ps1 `
             -Lane PublicSmoke -TraceMapRoot (Get-Location).Path `

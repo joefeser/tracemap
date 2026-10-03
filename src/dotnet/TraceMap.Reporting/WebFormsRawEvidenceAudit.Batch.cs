@@ -192,9 +192,9 @@ public static partial class WebFormsRawEvidenceAudit
                 schemaVersion = "webforms-batch-inspection.v1",
                 ruleId = RuleIds.DiagnosticWebFormsRawExactCallEvidence,
                 privacy = "LOCAL ONLY: private paths and symbols; do not share this file or photographs of its contents.",
-                generatorSha256 = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(typeof(WebFormsRawEvidenceAudit).Assembly.Location))).ToLowerInvariant(),
-                sourceReportSha256 = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(reportPath))).ToLowerInvariant(),
-                sourceIndexSha256 = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(indexPath))).ToLowerInvariant(),
+                generatorSha256 = StreamedFileSha256(typeof(WebFormsRawEvidenceAudit).Assembly.Location),
+                sourceReportSha256 = StreamedFileSha256(reportPath),
+                sourceIndexSha256 = StreamedFileSha256(indexPath),
                 scanId = scan,
                 commitSha = commit,
                 sourceReport = Path.GetFullPath(reportPath),
@@ -262,5 +262,12 @@ public static partial class WebFormsRawEvidenceAudit
         foreach (var item in cases)
             output.Add($"case={item.caseId}|bounded={item.bounded.ToString().ToLowerInvariant()}|symbols={item.visitedSymbolCount}|directCallSites={callsByCaller[item.handler].Select(w => (w.Callee, w.FilePath, w.StartLine, w.EndLine)).Distinct().Count()}|stoppingSymbols={item.stoppingSymbols.Length}|uiControlEndpoints={item.uiControlEndpoints.Length}|unresolvedOtherLeaves={item.unresolvedOtherLeaves.Length}|terminalEvidence={item.terminalEvidence.Length}|terminalFamilies={string.Join(",", item.terminalEvidenceFamilies)}|terminalConclusion={item.terminalEvidenceConclusion}|evidence={item.evidenceConclusion}|review=unreviewed");
         if (cases.Length > 0) output.Add("batchReview=read-private-markdown;share-only-case-ids-and-result-categories");
+    }
+
+    // Indexes and reports can be multi-gigabyte; hash them as streams, never as one array.
+    private static string StreamedFileSha256(string path)
+    {
+        using var stream = File.OpenRead(path);
+        return Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(stream)).ToLowerInvariant();
     }
 }
