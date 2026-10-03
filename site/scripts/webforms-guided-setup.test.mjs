@@ -119,16 +119,51 @@ test("Web Forms guided setup rejects ancestry claim drift", async (t) => {
   assert.ok(errors.some((error) => String(error).includes("#803 ancestry claim must be not-shipped")));
 });
 
-test("Web Forms guided setup accepts exact page/spec parity in a recognized shallow checkout", async (t) => {
+test("Web Forms guided setup accepts exact page/spec parity backed by trusted shallow checkout metadata", async (t) => {
   const root = await fixture(t);
+  await buildSite({ root, log: () => {} });
+  const page = await readFile(join(root, "src/webforms/index.html"), "utf8");
+  const boundary = page.match(/data-main-boundary="([0-9a-f]{40})"/i)?.[1];
+  const errors = [];
+  await validateFixture(root, errors, {
+    repositoryRoot: join(root, "missing-shallow-history"),
+    implementationStatePath: resolve(repositoryRoot, ".kiro/specs/site-webforms-guided-setup/implementation-state.md"),
+    shallowRepository: true,
+    shallowBaseSha: boundary
+  });
+  assert.deepEqual(errors, []);
+});
+
+test("Web Forms guided setup rejects unverified boundaries and affirmative repair claims in shallow checkouts", async (t) => {
+  const root = await fixture(t);
+  const pagePath = join(root, "src/webforms/index.html");
+  const page = await readFile(pagePath, "utf8");
+  await writeFile(pagePath, page.replace('data-repairs-803="not-shipped"', 'data-repairs-803="shipped"'));
   await buildSite({ root, log: () => {} });
   const errors = [];
   await validateFixture(root, errors, {
     repositoryRoot: join(root, "missing-shallow-history"),
     implementationStatePath: resolve(repositoryRoot, ".kiro/specs/site-webforms-guided-setup/implementation-state.md"),
-    shallowRepository: true
+    shallowRepository: true,
+    shallowBaseSha: "0000000000000000000000000000000000000000"
   });
-  assert.deepEqual(errors, []);
+  assert.ok(errors.some((error) => String(error).includes("not a verified ancestor")));
+
+  const boundary = page.match(/data-main-boundary="([0-9a-f]{40})"/i)?.[1];
+  const statePath = join(root, "implementation-state.md");
+  await writeFile(statePath, [
+    `Exact base: \`${boundary}\``,
+    "PR #803 ancestry at exact base: `shipped`",
+    ""
+  ].join("\n"));
+  const claimErrors = [];
+  await validateFixture(root, claimErrors, {
+    repositoryRoot: join(root, "missing-shallow-history"),
+    implementationStatePath: statePath,
+    shallowRepository: true,
+    shallowBaseSha: boundary
+  });
+  assert.ok(claimErrors.some((error) => String(error).includes("cannot verify an affirmative #803 shipped claim")));
 });
 
 async function fixture(t) {

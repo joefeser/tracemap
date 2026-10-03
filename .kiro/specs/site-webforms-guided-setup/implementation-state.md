@@ -66,15 +66,17 @@ for private material, and the page's main boundary is compared with this
 independent implementation record and verified through Git ancestry. The merged
 source-plus-compiled route is linked only as a `concept`.
 
-Full-history checkouts verify both ancestry relationships directly. A recognized
-shallow GitHub checkout may not contain the base or #803 commit object; there
-the validator fails closed to exact page/spec parity for both the base and the
-recorded #803 state. It does not describe missing Git objects as verified.
+Full-history checkouts verify both ancestry relationships directly. A shallow
+GitHub checkout may not contain the base or #803 commit object; there the
+validator requires the page/spec base to match the pull request base SHA from
+GitHub's event metadata and rejects an affirmative #803 shipped claim that it
+cannot independently verify. It does not describe missing Git objects as
+verified.
 
 ## Validation
 
-- `cd site && node --test scripts/webforms-guided-setup.test.mjs`: 9 passed.
-- `cd site && npm test`: 1,209 passed; no failures, skips, cancellations, or todos.
+- `cd site && node --test scripts/webforms-guided-setup.test.mjs`: 10 passed.
+- `cd site && npm test`: 1,210 passed; no failures, skips, cancellations, or todos.
 - `cd site && npm run build`: passed.
 - `cd site && npm run validate`: passed; 118 HTML files, 3,918 internal
   references, and 117 sitemap URLs validated.
