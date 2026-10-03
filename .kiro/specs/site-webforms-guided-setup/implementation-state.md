@@ -66,10 +66,10 @@ for private material, and the page's main boundary is compared with this
 independent implementation record and verified through Git ancestry. The merged
 source-plus-compiled route is linked only as a `concept`.
 
-Full-history checkouts verify both ancestry relationships directly. A shallow
-GitHub synthetic-merge checkout may not contain the base or #803 commit object;
-there the validator requires the recorded base to be a direct merge parent and
-requires the page's #803 state to match this independent spec record.
+Full-history checkouts verify both ancestry relationships directly. A recognized
+shallow GitHub checkout may not contain the base or #803 commit object; there
+the validator fails closed to exact page/spec parity for both the base and the
+recorded #803 state. It does not describe missing Git objects as verified.
 
 ## Validation
 
