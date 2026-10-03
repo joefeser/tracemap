@@ -490,7 +490,8 @@ public sealed class WebFormsReviewExecutionTests
         var checkpoint = fixture.LastCheckpoint();
         var directory = Path.Combine(destination, phase == "scan" ? checkpoint.Attempt + "/scan" : checkpoint.Reports!.ReportAttempt);
         var preserved = Path.Combine(fixture.Root, "unowned-" + phase);
-        Directory.Move(directory, preserved); DirectoryLinkFixture.Create(directory, preserved);
+        Directory.Move(directory, preserved);
+        using var link = DirectoryLinkFixture.Create(directory, preserved);
         using var output = new StringWriter();
         Assert.Equal(1, await TraceMapCommand.RunAsync(["webforms-review", "query", "--run", destination], output, fixture.Error));
         Assert.Empty(output.ToString()); Assert.Contains("OUTPUT_LINK_INVALID", fixture.Error.ToString(), StringComparison.Ordinal);
