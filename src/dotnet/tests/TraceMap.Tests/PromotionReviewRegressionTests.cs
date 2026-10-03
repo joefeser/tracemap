@@ -172,3 +172,58 @@ public sealed class PromotionReviewInlineServerExpressionTests
         Assert.Equal("render-expression", reference.Properties.GetValueOrDefault("expressionKind"));
     }
 }
+
+public sealed class PromotionReviewVisualBasicExpressionCallTests
+{
+    [Fact]
+    public void Visual_basic_parenthesis_free_expression_calls_emit_call_and_database_evidence()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(repo);
+        var sqliteAssembly = typeof(Microsoft.Data.Sqlite.SqliteCommand).Assembly.Location;
+        File.WriteAllText(Path.Combine(repo, "Data.vbproj"), $"""
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <TargetFramework>net10.0</TargetFramework>
+                <OptionStrict>On</OptionStrict>
+              </PropertyGroup>
+              <ItemGroup>
+                <Reference Include="Microsoft.Data.Sqlite">
+                  <HintPath>{System.Security.SecurityElement.Escape(sqliteAssembly)}</HintPath>
+                </Reference>
+              </ItemGroup>
+            </Project>
+            """);
+        File.WriteAllText(Path.Combine(repo, "Data.vb"), """
+            Imports Microsoft.Data.Sqlite
+
+            Public Class Repository
+                Public Function GetValue() As Integer
+                    Return 1
+                End Function
+
+                Public Function Load(cmd As SqliteCommand) As Integer
+                    Dim value = GetValue
+                    Dim scalar = cmd.ExecuteScalar
+                    Dim reader = cmd.ExecuteReader
+                    Return value
+                End Function
+            End Class
+            """);
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out")));
+
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.CallEdge
+            && fact.RuleId == RuleIds.VisualBasicSemanticCallGraph
+            && fact.SourceSymbol?.Contains("Load", StringComparison.Ordinal) == true
+            && fact.TargetSymbol?.Contains("GetValue", StringComparison.Ordinal) == true);
+        var operations = result.Facts.Where(fact => fact.FactType == FactTypes.DatabaseOperationCandidate
+                && fact.SourceSymbol?.Contains("Load", StringComparison.Ordinal) == true)
+            .Select(fact => fact.Properties["methodName"]).Order(StringComparer.Ordinal).ToArray();
+        Assert.Equal(["ExecuteReader", "ExecuteScalar"], operations);
+        Assert.DoesNotContain(result.Facts, fact => fact.FactType == FactTypes.CallEdge
+            && fact.TargetSymbol?.Contains("GetValue", StringComparison.Ordinal) == true
+            && fact.SourceSymbol?.Contains("GetValue", StringComparison.Ordinal) == true);
+    }
+}
