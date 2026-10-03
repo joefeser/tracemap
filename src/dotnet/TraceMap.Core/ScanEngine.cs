@@ -139,7 +139,7 @@ public static class ScanEngine
                     semanticToolchainReducedCoverage ? "partial" : "succeeded",
                     semanticStageCoverage,
                     "semantic-input-snapshot-verified",
-                    retryability: semanticToolchainReducedCoverage ? "retry-after-dependency-restoration" : "not-required",
+                    retryability: SemanticRetryability(semanticToolchainReducedCoverage, semanticResult.GapFacts),
                     nextAction: semanticToolchainReducedCoverage ? "review-analysis-gaps" : "continue");
             }
         }
@@ -386,7 +386,7 @@ public static class ScanEngine
                     manifest.BuildStatus == "FailedOrPartial" ? "partial" : "succeeded",
                     manifest.AnalysisLevel,
                     "facts-created",
-                    retryability: manifest.BuildStatus == "FailedOrPartial" ? "retry-after-dependency-restoration" : "not-required",
+                    retryability: SemanticRetryability(manifest.BuildStatus == "FailedOrPartial", semanticResult.GapFacts),
                     nextAction: manifest.BuildStatus == "FailedOrPartial" ? "review-analysis-gaps" : "continue",
                     supportingFactIds: facts.Select(fact => fact.FactId),
                     supportingGapIds: facts.Where(fact => fact.FactType == FactTypes.AnalysisGap).Select(fact => fact.FactId));
@@ -1321,6 +1321,10 @@ public static class ScanEngine
             throw new InvalidOperationException("ExactSourceScopeLimitExceeded");
     }
 
+    internal static string SemanticRetryability(bool reduced, IReadOnlyList<SemanticFactCandidate> gaps) =>
+        !reduced ? "not-required" : gaps.Any(gap => gap.Properties?.GetValueOrDefault("gapKind") == "VisualBasicDocumentExtractionFailed")
+            ? "retry-after-correction" : "retry-after-dependency-restoration";
+
     private static IReadOnlyList<FileInventoryItem> ApplyScope(
         IReadOnlyList<FileInventoryItem> inventory,
         string repoPath,
@@ -1331,6 +1335,11 @@ public static class ScanEngine
         var includeGlobs = (options.IncludeGlobs ?? []).Where(value => !string.IsNullOrWhiteSpace(value)).ToArray();
         var excludeGlobs = (options.ExcludeGlobs ?? []).Where(value => !string.IsNullOrWhiteSpace(value)).ToArray();
         var sourcePathComparer = CSharpSemanticExtractor.CreateSourcePathComparer(repoPath);
+        var inventoriedProjects = inventory
+            .Where(item => item.Kind is "Project" or "SqlProject" or "VisualBasicProject" or "NonCSharpProject")
+            .Select(item => item.RelativePath).ToHashSet(sourcePathComparer);
+        if (projectPaths.Any(path => !inventoriedProjects.Contains(path)))
+            throw new ArgumentException("ProjectScopeUnmatched: every requested project must match an inventoried project.", nameof(options));
         var projectDirectories = projectPaths
             .Select(path => FileInventory.NormalizeRelativePath(Path.GetDirectoryName(path) ?? "."))
             .ToArray();
@@ -1339,7 +1348,7 @@ public static class ScanEngine
             .Where(item => includeGlobs.Length == 0 || includeGlobs.Any(glob => GlobMatches(item.RelativePath, glob, sourcePathComparer)))
             .Where(item => excludeGlobs.Length == 0 || !excludeGlobs.Any(glob => GlobMatches(item.RelativePath, glob, sourcePathComparer)))
             .Where(item => solutionPaths.Count == 0 || item.Kind != "Solution" || solutionPaths.Contains(item.RelativePath))
-            .Where(item => projectPaths.Count == 0 || item.Kind is not ("Project" or "SqlProject" or "VisualBasicProject") || projectPaths.Contains(item.RelativePath))
+            .Where(item => projectPaths.Count == 0 || item.Kind is not ("Project" or "SqlProject" or "VisualBasicProject" or "NonCSharpProject") || projectPaths.Contains(item.RelativePath))
             .Where(item => projectDirectories.Length == 0
                 || includeGlobs.Length > 0
                 || item.Kind is "Solution"
@@ -1380,9 +1389,8 @@ public static class ScanEngine
                 continue;
             }
 
-            var normalized = Path.IsPathRooted(path)
-                ? Path.GetRelativePath(repoPath, Path.GetFullPath(path))
-                : path;
+            var nativePath = path.Replace('\\', Path.DirectorySeparatorChar).Replace('/', Path.DirectorySeparatorChar);
+            var normalized = Path.GetRelativePath(repoPath, Path.GetFullPath(nativePath, repoPath));
             result.Add(FileInventory.NormalizeRelativePath(normalized));
         }
 

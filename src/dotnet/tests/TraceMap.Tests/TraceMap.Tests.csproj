@@ -43,6 +43,7 @@
     <ProjectReference Include="..\..\TraceMap.Access.Cli\TraceMap.Access.Cli.csproj" />
     <ProjectReference Include="..\..\TraceMap.SqlValidation\TraceMap.SqlValidation.csproj" />
     <ProjectReference Include="..\..\TraceMap.SqlValidation.Cli\TraceMap.SqlValidation.Cli.csproj" />
+    <ProjectReference Include="..\..\..\..\samples\fixture-build\process-pipe-holder\PipeHolder.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="..\..\..\..\samples\vb-modern-sample\VbModernSample.vbproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="..\..\..\..\samples\compiled-dotnet-evidence\csharp\CompiledEvidence.CSharp.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="..\..\..\..\samples\compiled-dotnet-evidence\csharp\CompiledEvidence.CSharp.ControlFlow.csproj" ReferenceOutputAssembly="false" />

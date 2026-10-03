@@ -7,11 +7,15 @@ namespace TraceMap.Cli;
 
 public static class WebFormsWizardProcess
 {
-    public static async Task<WebFormsWizardProcessResult> RunAsync(string executable, string directory,
-        IReadOnlyList<string> arguments, CancellationToken cancellationToken)
+    public static Task<WebFormsWizardProcessResult> RunAsync(string executable, string directory,
+        IReadOnlyList<string> arguments, CancellationToken cancellationToken) =>
+        RunAsync(executable, directory, arguments, cancellationToken, TimeSpan.FromMinutes(30), TimeSpan.FromSeconds(30));
+
+    internal static async Task<WebFormsWizardProcessResult> RunAsync(string executable, string directory,
+        IReadOnlyList<string> arguments, CancellationToken cancellationToken, TimeSpan buildTimeout, TimeSpan drainTimeout)
     {
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        timeout.CancelAfter(TimeSpan.FromMinutes(30));
+        timeout.CancelAfter(buildTimeout);
         using var process = new Process { StartInfo = new(executable)
         { WorkingDirectory = directory, UseShellExecute = false, RedirectStandardOutput = true, RedirectStandardError = true, CreateNoWindow = true } };
         foreach (var argument in arguments) process.StartInfo.ArgumentList.Add(argument);
@@ -22,15 +26,16 @@ public static class WebFormsWizardProcess
         process.StartInfo.Environment["UseSharedCompilation"] = "false";
         using var reads = CancellationTokenSource.CreateLinkedTokenSource(timeout.Token);
         if (!process.Start()) throw new InvalidOperationException("WEBFORMS_WIZARD_BUILD_START_FAILED");
+        var stdout = Read(process.StandardOutput);
+        var stderr = Read(process.StandardError);
+        var output = Task.WhenAll(stdout, stderr);
         try
         {
-            var stdout = Read(process.StandardOutput);
-            var stderr = Read(process.StandardError);
             await process.WaitForExitAsync(timeout.Token);
-            // Bound the post-exit drain; an inherited pipe must not become a false timeout.
-            reads.CancelAfter(TimeSpan.FromSeconds(30));
-            try { await Task.WhenAll(stdout, stderr); }
-            catch (OperationCanceledException exception) when (!timeout.IsCancellationRequested)
+            // WaitAsync bounds the wait independently of whether the OS pipe honors
+            // cancellation of an outstanding read (Windows synchronous pipes do not).
+            try { await output.WaitAsync(drainTimeout, timeout.Token); }
+            catch (TimeoutException exception)
             { throw new InvalidOperationException("WEBFORMS_WIZARD_BUILD_OUTPUT_UNTERMINATED", exception); }
             var outResult = await stdout;
             var errResult = await stderr;
@@ -39,10 +44,20 @@ public static class WebFormsWizardProcess
         catch (Exception exception)
         {
             if (!process.HasExited) process.Kill(entireProcessTree: true);
-            await process.WaitForExitAsync(CancellationToken.None);
+            await process.WaitForExitAsync(CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(5));
             if (exception is OperationCanceledException && !cancellationToken.IsCancellationRequested)
                 throw new InvalidOperationException("WEBFORMS_WIZARD_BUILD_TIMEOUT", exception);
             throw;
+        }
+        finally
+        {
+            reads.Cancel();
+            process.StandardOutput.Dispose();
+            process.StandardError.Dispose();
+            // A disposed pipe may fault an outstanding read after the bounded caller
+            // has returned. Observe it without waiting indefinitely for the writer.
+            _ = output.ContinueWith(task => { _ = task.Exception; }, CancellationToken.None,
+                TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
         }
 
         async Task<(string Tail, string Hash)> Read(StreamReader reader)

@@ -5,6 +5,82 @@ namespace TraceMap.Tests;
 public sealed class WebFormsWizardBuildTests
 {
     [Fact]
+    public async Task Process_adapter_bounds_inherited_pipe_drain_independently_of_read_cancellation()
+    {
+        using var temp = new TempDirectory();
+        var pidFile = Path.Combine(temp.Path, "child.pid");
+        var (host, fixture) = PipeFixture();
+        var elapsed = System.Diagnostics.Stopwatch.StartNew();
+        try
+        {
+            var failure = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                TraceMap.Cli.WebFormsWizardProcess.RunAsync(host, temp.Path, [fixture, "spawn", pidFile],
+                    CancellationToken.None, TimeSpan.FromSeconds(15), TimeSpan.FromMilliseconds(200)));
+            Assert.Equal("WEBFORMS_WIZARD_BUILD_OUTPUT_UNTERMINATED", failure.Message);
+            Assert.True(elapsed.Elapsed < TimeSpan.FromSeconds(8), "Drain must not wait for the ten-second pipe holder.");
+        }
+        finally
+        {
+            // Once the parent exits, portable Process.Kill cannot discover its former
+            // children. Fixture cleanup is explicit, never a claim of orphan containment.
+            if (File.Exists(pidFile))
+            {
+                try
+                {
+                    using var child = System.Diagnostics.Process.GetProcessById(int.Parse(File.ReadAllText(pidFile)));
+                    child.Kill(entireProcessTree: true);
+                }
+                catch (ArgumentException) { }
+            }
+        }
+    }
+
+    [Fact]
+    public async Task Process_adapter_disables_reused_build_servers()
+    {
+        using var temp = new TempDirectory();
+        var (host, fixture) = PipeFixture();
+        var result = await TraceMap.Cli.WebFormsWizardProcess.RunAsync(host, temp.Path,
+            [fixture, "environment"], CancellationToken.None);
+        Assert.Equal(0, result.ExitCode);
+        Assert.Equal(new[] { "MSBUILDDISABLENODEREUSE=1", "DOTNET_CLI_USE_MSBUILD_SERVER=0", "UseSharedCompilation=false" },
+            result.StandardOutput.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries));
+        Assert.Equal(Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.Unicode.GetBytes(result.StandardOutput))),
+            result.StandardOutputSha256);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Process_adapter_bounds_timeout_and_preserves_owner_cancellation(bool ownerCancellation)
+    {
+        using var temp = new TempDirectory();
+        var (host, fixture) = PipeFixture();
+        using var cancellation = new CancellationTokenSource();
+        if (ownerCancellation) cancellation.CancelAfter(TimeSpan.FromSeconds(1));
+        var elapsed = System.Diagnostics.Stopwatch.StartNew();
+        var run = TraceMap.Cli.WebFormsWizardProcess.RunAsync(host, temp.Path, [fixture, "hold"], cancellation.Token,
+            ownerCancellation ? TimeSpan.FromSeconds(15) : TimeSpan.FromSeconds(1), TimeSpan.FromMilliseconds(200));
+        if (ownerCancellation) await Assert.ThrowsAnyAsync<OperationCanceledException>(() => run);
+        else Assert.Equal("WEBFORMS_WIZARD_BUILD_TIMEOUT", (await Assert.ThrowsAsync<InvalidOperationException>(() => run)).Message);
+        Assert.True(elapsed.Elapsed < TimeSpan.FromSeconds(8));
+    }
+
+    private static (string Host, string Fixture) PipeFixture()
+    {
+        var root = new DirectoryInfo(AppContext.BaseDirectory);
+        while (root is not null && !File.Exists(Path.Combine(root.FullName, "AGENTS.md"))) root = root.Parent;
+        Assert.NotNull(root);
+        var configuration = new DirectoryInfo(AppContext.BaseDirectory).Parent!.Name;
+        var fixture = Path.Combine(root.FullName, "samples", "fixture-build", "process-pipe-holder", "bin", configuration, "net10.0", "PipeHolder.dll");
+        Assert.True(File.Exists(fixture));
+        var runtime = Path.GetDirectoryName(typeof(object).Assembly.Location)!;
+        var host = Environment.GetEnvironmentVariable("DOTNET_HOST_PATH") ?? Path.Combine(
+            Directory.GetParent(runtime)!.Parent!.Parent!.FullName, OperatingSystem.IsWindows() ? "dotnet.exe" : "dotnet");
+        return (host, fixture);
+    }
+
+    [Fact]
     public async Task Process_adapter_runs_installed_dotnet_version_without_shell()
     {
         var runtime = Path.GetDirectoryName(typeof(object).Assembly.Location)!;

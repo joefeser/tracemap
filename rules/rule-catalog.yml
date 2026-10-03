@@ -138,6 +138,7 @@ rules:
     evidenceTier: Tier4Unknown
     emits: [AnalysisGap]
     limitations:
+      - Guarded SRM signature decoding precedes Cecil materialization and checks TypeSpec rows including unused specifications. Modifier cycles reach the bounded nesting guard; invalid generic TypeSpec positions, malformed TypeRef and declaring-type cycles remain categorical reader failures. This is not a complete malicious-PE sandbox.
       - The gap reduces only the explicitly bounded compiled-input coverage; it does not prove absence and does not alter, erase, or upgrade source-derived evidence.
       - File timestamps are not freshness evidence, and source association requires a validated binding receipt.
 
@@ -3195,6 +3196,7 @@ rules:
       - webforms-modernization-packet.v1
       - AnalysisGap
     limitations:
+      - Path evidence requires a paired upstream scan and commit identity; missing node or edge provenance is omitted with a gap, never filled with a different primary snapshot commit.
       - A combined index may contain one or more provenance-recorded sources; a single-source combine is not multi-repository coverage. Zero source rows and missing or ambiguous primary Web Forms source identity remain errors.
       - Combined graph fact, edge, node, or text admission limits retain bounded inventory and source provenance but emit a Tier4 input-limit gap with reduced coverage and truncation; no paths or downstream boundaries are classified from the incomplete graph.
       - Packet rows preserve upstream evidence and deterministic structural connectivity; they do not add extractor conclusions or prove runtime reachability, event firing, postback behavior, validation, authorization, persistence, production usage, or complete workflow coverage.
@@ -4761,6 +4763,7 @@ rules:
       - MethodInvoked
       - AnalysisGap
     limitations:
+      - With-block and conditional-access member binding does not provide an explicit receiver identity; resolved calls are retained without inventing receiver symbols. Parenthesis-free operation queries are shared across call and database extraction and bounded to 100000 candidate expressions per document. Unresolved executable expressions are labeled without assuming method-call semantics, with at most 50 detailed gaps plus a budget gap.
       - Requires Roslyn semantic binding; late binding, overload resolution failures, and error-typed receivers produce no Tier1 fact rather than a guessed target.
       - An invocation proves a compiler-resolved call site in source; it does not prove the callee executes, is reachable, or completes at runtime.
       - Unresolved invocation sites retain bounded Tier3 call-site facts and a `CallSiteSemanticResolutionUnavailable` Tier4 gap; they never become compiler-resolved targets. Compiler-recognized late-bound calls are producer-local uncertainty and do not imply that MSBuild or compilation failed; other unresolved call-site gaps remain workspace coverage reductions.

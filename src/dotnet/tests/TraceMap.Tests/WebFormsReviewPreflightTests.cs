@@ -209,11 +209,10 @@ public sealed class WebFormsReviewPreflightTests
     [InlineData("escape", "INPUT_ESCAPES_ROOT")]
     public async Task Separate_receipt_root_rejects_invalid_or_escaped_inputs(string mutation, string suffix)
     {
-        if (mutation == "escape" && OperatingSystem.IsWindows()) return; // Native junction lane remains required.
         using var fixture = new Fixture();
         var evidence = Path.Combine(fixture.Root, "evidence");
         if (mutation != "missing") Directory.CreateDirectory(evidence);
-        if (mutation == "escape") Directory.CreateSymbolicLink(Path.Combine(evidence, "escape"), fixture.Published);
+        if (mutation == "escape") DirectoryLinkFixture.Create(Path.Combine(evidence, "escape"), fixture.Published);
         fixture.Config = fixture.Config with { ReceiptRoot = mutation == "relative" ? "relative" : evidence,
             BindingReceipts = mutation == "escape" ? ["escape/binding.json"] : [] };
         var exception = await Assert.ThrowsAnyAsync<Exception>(() => fixture.Build());
@@ -345,9 +344,8 @@ public sealed class WebFormsReviewPreflightTests
     [Fact]
     public async Task Linked_input_escape_is_rejected()
     {
-        if (OperatingSystem.IsWindows()) return; // Windows junction acceptance needs the native lane.
         using var fixture = new Fixture();
-        Directory.CreateSymbolicLink(Path.Combine(fixture.Published, "escape"), fixture.Source);
+        DirectoryLinkFixture.Create(Path.Combine(fixture.Published, "escape"), fixture.Source);
         fixture.Config = fixture.Config with { PrimaryAssemblies = ["escape/Pages/Lookup.aspx"] };
         var exception = await Assert.ThrowsAnyAsync<Exception>(() => fixture.Build());
         Assert.Equal("WEBFORMS_PREFLIGHT_INPUT_ESCAPES_ROOT", exception.Message);

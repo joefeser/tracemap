@@ -482,7 +482,6 @@ public sealed class WebFormsReviewExecutionTests
     [InlineData("reports")]
     public async Task Relocated_history_never_uses_original_policy_locators_to_bypass_current_owned_links(string phase)
     {
-        if (OperatingSystem.IsWindows()) return; // Native Windows junction acceptance remains required.
         using var fixture = new Fixture(); await fixture.Preflight();
         Assert.Equal(0, await fixture.Execute("run", Scan));
         Assert.Equal(0, await fixture.ExecuteReports("resume", WebFormsReviewReportExecution.WriteAsync));
@@ -491,7 +490,7 @@ public sealed class WebFormsReviewExecutionTests
         var checkpoint = fixture.LastCheckpoint();
         var directory = Path.Combine(destination, phase == "scan" ? checkpoint.Attempt + "/scan" : checkpoint.Reports!.ReportAttempt);
         var preserved = Path.Combine(fixture.Root, "unowned-" + phase);
-        Directory.Move(directory, preserved); Directory.CreateSymbolicLink(directory, preserved);
+        Directory.Move(directory, preserved); DirectoryLinkFixture.Create(directory, preserved);
         using var output = new StringWriter();
         Assert.Equal(1, await TraceMapCommand.RunAsync(["webforms-review", "query", "--run", destination], output, fixture.Error));
         Assert.Empty(output.ToString()); Assert.Contains("OUTPUT_LINK_INVALID", fixture.Error.ToString(), StringComparison.Ordinal);

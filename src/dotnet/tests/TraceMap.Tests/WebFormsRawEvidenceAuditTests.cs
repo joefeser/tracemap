@@ -36,6 +36,8 @@ public sealed class WebFormsRawEvidenceAuditTests
                 }
             }));
             var path = Path.Combine(Path.GetDirectoryName(report)!, "page-graph.json");
+            // Valid trailing whitespace forces the report hash across stream buffers.
+            File.AppendAllText(report, new string(' ', 131_073));
 
             var lines = WebFormsRawEvidenceAudit.Run(db, report, inspectionPath: path,
                 inspectAllHandlers: true, includeEveryResolvedHandler: true);
@@ -47,6 +49,10 @@ public sealed class WebFormsRawEvidenceAuditTests
             Assert.Equal(64, root.GetProperty("generatorSha256").GetString()!.Length);
             Assert.Equal(64, root.GetProperty("sourceReportSha256").GetString()!.Length);
             Assert.Equal(64, root.GetProperty("sourceIndexSha256").GetString()!.Length);
+            Assert.Equal(Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(report))),
+                root.GetProperty("sourceReportSha256").GetString());
+            Assert.Equal(Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(db))),
+                root.GetProperty("sourceIndexSha256").GetString());
             Assert.Equal(2, root.GetProperty("cases").GetArrayLength());
             Assert.Contains(root.GetProperty("cases").EnumerateArray(), item =>
                 item.GetProperty("handler").GetString() == "Private.TerminalHandler()");

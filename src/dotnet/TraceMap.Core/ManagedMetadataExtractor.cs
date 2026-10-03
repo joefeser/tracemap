@@ -156,20 +156,8 @@ public static class ManagedMetadataExtractor
             MetadataReadResult srm;
             try
             {
-                cecil = ReadWithCecil(bytes, admittedDescriptor.SafeLocator, limits);
-            }
-            catch (ManagedInputException exception)
-            {
-                evaluated.Add(EvaluatedInput.Gap(admittedDescriptor, exception.Outcome, exception.GapKind, rawSha256));
-                continue;
-            }
-            catch (Exception exception) when (IsRecoverableMetadataException(exception))
-            {
-                evaluated.Add(EvaluatedInput.Gap(admittedDescriptor, "unreadable", "CecilManagedMetadataReaderFailure", rawSha256));
-                continue;
-            }
-            try
-            {
+                // Validate signatures with the guarded reader before Cecil resolves
+                // lazy TypeSpec references, where a cycle can overflow the process.
                 srm = ReadWithSystemReflectionMetadata(bytes, admittedDescriptor.SafeLocator, limits);
             }
             catch (ManagedInputException exception)
@@ -180,6 +168,20 @@ public static class ManagedMetadataExtractor
             catch (Exception exception) when (IsRecoverableMetadataException(exception))
             {
                 evaluated.Add(EvaluatedInput.Gap(admittedDescriptor, "unreadable", "SystemReflectionMetadataReaderFailure", rawSha256));
+                continue;
+            }
+            try
+            {
+                cecil = ReadWithCecil(bytes, admittedDescriptor.SafeLocator, limits);
+            }
+            catch (ManagedInputException exception)
+            {
+                evaluated.Add(EvaluatedInput.Gap(admittedDescriptor, exception.Outcome, exception.GapKind, rawSha256));
+                continue;
+            }
+            catch (Exception exception) when (IsRecoverableMetadataException(exception))
+            {
+                evaluated.Add(EvaluatedInput.Gap(admittedDescriptor, "unreadable", "CecilManagedMetadataReaderFailure", rawSha256));
                 continue;
             }
 
@@ -943,7 +945,8 @@ public static class ManagedMetadataExtractor
             // The rewrite-only forwarder scan is charged before traversing
             // ExportedType rows, including non-forwarder rows.
             var exportedTypeCount = rejectTypeForwarders ? reader.ExportedTypes.Count : 0;
-            var workUnits = checked(2L * (1L + typeCount + memberCount + reader.AssemblyReferences.Count + exportedTypeCount));
+            var workUnits = checked(2L * (1L + typeCount + memberCount + reader.AssemblyReferences.Count + exportedTypeCount
+                + reader.GetTableRowCount(TableIndex.TypeSpec)));
             if (workUnits > limits.MaxTotalWorkUnits)
                 throw new ManagedInputException("limit-exhausted", "ManagedInputTotalWorkLimitExceeded");
             // ECMA-335 II.23.1.15 ExportedType.TypeAttributes Forwarder bit.
@@ -997,6 +1000,10 @@ public static class ManagedMetadataExtractor
         assemblyIdentity = AssemblyArtifactIdentity(assemblyReferenceIdentity, moduleName, targetFramework);
 
         var provider = new MetadataTypeProvider(reader);
+        // Include unused specifications and base-type specifications: Cecil may
+        // resolve these while materializing types, before member enumeration.
+        for (var row = 1; row <= reader.GetTableRowCount(TableIndex.TypeSpec); row++)
+            provider.GetTypeFromEntityHandle(MetadataTokens.TypeSpecificationHandle(row));
         var observations = new List<MetadataObservation>
         {
             Observation("assembly", 0x20000001, FactTypes.ManagedAssemblyDeclared, RuleIds.DotNetCompiledAssembly, assemblyIdentity, "assembly",
