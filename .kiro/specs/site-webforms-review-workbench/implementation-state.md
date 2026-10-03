@@ -37,8 +37,10 @@ claim. Without that dependency, the route remains `concept` or is deferred.
   truncation, and bounded query omissions separate. Its evidence queries are
   read-only and source-free, with explicit output/depth/child bounds.
 - Exact-main packet code and tests retain client and server behavior inventories
-  independently at 10,000 rows, mark overflow with their separate gap kinds,
-  and set packet truncation. This evidence does not establish any broader
+  independently at 10,000 rows and set packet truncation on overflow. Their
+  separate gap kinds are retained only while the configured packet gap budget
+  has room; after saturation, `WebFormsModernizationGapLimitReached` can replace
+  a later inventory-specific gap. This evidence does not establish any broader
   10,000-row workbench limit or complete inventory.
 - The lazy-constructor public fixture and focused tests provide the synthetic
   ordered route, unresolved command candidate, literal/Fill contrast, and gaps
@@ -61,9 +63,10 @@ selected `main` baseline. Its safety, diagnostics, scan-identity assertions,
 and documentation/regression hardening remain dev-only until promoted. The
 future page must not cite those repairs as shipped on main.
 
-The independent 10,000-row behavior inventory caps are present in the selected
-main implementation itself. They may be described from exact-main code/tests,
-while #803-only explanatory repairs remain outside the claim.
+The independent 10,000-row behavior inventory caps and their gap-budget
+fallback are present in the selected main implementation itself. They may be
+described from exact-main code/tests, while #803-only explanatory repairs
+remain outside the claim.
 
 ## Dependencies and overlap
 
@@ -101,6 +104,15 @@ Passed on 2026-10-03:
 
 Site build/test/browser validation is deferred to the later implementation PR
 because this branch changes no site source.
+
+## ACK review correction
+
+The current-head ACK batch authorized one P2 specification repair. The packet
+inventory requirements now preserve truncation while making the specific
+client/server overflow classification conditional on remaining packet gap
+budget. They also admit `WebFormsModernizationGapLimitReached` when saturation
+replaces a later inventory-specific gap. This matches exact-main packet code
+and the bounded-gap regression without changing implementation scope.
 
 ## Handoff
 

@@ -31,7 +31,8 @@
 - [ ] Explain partial, truncated, query-omitted, path/work-limited,
       candidate-only, and missing-input review states without absence claims.
 - [ ] Document the separate 10,000-row client/server packet inventory bounds
-      without applying them to unrelated surfaces.
+      and gap-budget fallback without applying them to unrelated surfaces or
+      promising that a specific overflow gap always survives saturation.
 - [ ] Reuse #806 proof assets; if any new derived asset is required, implement
       and validate its generator and bounded privacy-input SHA-256 contract.
 - [ ] Add the required manager, proof, docs/output, review-room,
