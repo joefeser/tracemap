@@ -571,3 +571,69 @@ passed, 1 skipped, 3 failed; the same 3 fail on unchanged `f780db4f` in this
 environment (root bypasses inaccessible-directory permissions; `/usr/bin/time`
 absent). TypeScript: 258/258 with .NET 10 on PATH. PowerShell and Windows checks
 were not run here (no pwsh); CI remains required.
+# Promotion repair: user-supplied Kiro findings (2026-10-03)
+
+Authorized by Joe: reproduce and fix the supplied F1–F9 findings, adding as many
+examples as needed. Starting head `b5149dde4c1526a56ac45473983b4ad25d49052d`,
+PR #801, branch `codex/promote-dev-to-main-f0aaf582f778`. No merge or reviewer
+retag authority. Pasted review is advisory evidence, not an admitted receipt.
+
+- F1: real vbproj With/conditional-access regression failed before repair;
+  null receiver guards now preserve exact call/property/ADO.NET counts. Focused
+  test passed after repair; event/parameter helper guards also audited.
+- F2: unmatched explicit project scope now fails before semantic analysis;
+  five typo/non-project/outside-root examples and valid mixed-language control
+  pass, including slash/backslash/dot-segment normalization and broader scope suites.
+- F3: guarded SRM now runs before Cecil and decodes every TypeSpec; work
+  accounting includes those rows. Isolated CLI fixtures cover required/optional
+  modifier and generic TypeSpec cycles (unused, field and base), TypeRef and NestedClass cycles;
+  direct Cecil declaring-type cycle test added. Original stack overflow on
+  pinned Cecil has not been independently reproduced; bounded rejection is
+  tested rather than claiming a crash reproduction.
+- F4: independent WaitAsync drain bound, reader disposal and observed deferred
+  faults added. Public PipeHolder fixture verifies inherited pipes and server
+  environment flags on macOS; timeout/cancellation examples added. Windows CI
+  execution is required. Orphan containment after parent exit is NOT guaranteed;
+  portable cleanup is best effort and documented. No customer site is launched.
+- F5: membership-aware rollback tested with first-failure and prior-success
+  cases across facts/gaps/metadata. Extractor failures now advise correction,
+  not dependency restoration. Cancellation is not reclassified.
+- F6: generic and default-property producer calls tested with exact counts and
+  AddressOf negative control; unresolved/late-bound expressions receive gaps,
+  not invented calls. One shared operation pass has a 100000-query bound.
+- F7: VB/VisualBasic/C# inline directives tested without codebehind; common
+  regex/division/string/template/comment brace cases and malformed literals
+  tested. This remains a documented bounded heuristic, not a JS parser.
+- F8: gap-only export, foreign/missing path provenance, 9999/10000/10001-row behavior
+  inventories, streamed hash equality and non-vacuous TypeScript assertions
+  added. Path provenance no longer borrows the primary snapshot commit.
+- F9: removed three Windows early returns; tests create real native junctions
+  and are explicitly selected by local-distribution Windows CI. Local Unix
+  passes do not certify Windows behavior.
+
+Local validation (macOS, .NET SDK 10.0.302/runtime 10.0.10):
+
+- Broader affected .NET suites: 428 passed. Full solution run: 3206 passed,
+  one Windows-only skip, two failures from stale Web Forms version assertions.
+  Those assertions were corrected, then the final targeted rebuild/run passed
+  175 tests, including all latest production changes and six row-limit cases.
+- Deep projectless corpus: 146 passed, one Windows ASP.NET publish skip;
+  chain-comparison, SQL-route and cap-shortcut PowerShell suites passed.
+  Five source/compiled/separate-DLL operator layouts passed. This is public
+  synthetic static evidence, not customer runtime or SQL execution acceptance.
+- Base44 UI input semantics: 2/2 passed. Locked dependency restore passed.
+- Modern VB sample: 222 facts, Level1SemanticAnalysis/Succeeded, byte-identical
+  repeated facts. Legacy: 186 facts; Web Forms: 209 facts; both explicitly
+  Level1SemanticAnalysisReduced/FailedOrPartial. All three pass artifact conformance.
+- Pinned Community.VisualBasic smoke at 20d2a51dfc9f342848ad134952ceaa8d79302559:
+  114658 facts, 79193 analysis gaps, Level1SemanticAnalysisReduced/FailedOrPartial;
+  artifact conformance passed. More bounded unresolved-expression gaps are not
+  a claim of complete semantic coverage or a successful customer build.
+- Private-path guard and diff whitespace checks passed.
+
+The final generic TypeSpec examples are rejected categorically by SRM before
+the nesting guard, while modifier cycles exercise the explicit guard. The
+final dedicated metadata rerun passed all 33 tests. Exact-head CI/review
+readback remains pending at commit preparation.
+No reviewer retag, local reviewer spend, risk acceptance or merge is authorized.
+Windows pipe/junction execution and fresh promotion review remain merge gates.

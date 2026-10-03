@@ -2639,7 +2639,11 @@ public static partial class LegacyWebFormsExtractor
         }
 
         var source = SourceText.From(markup);
-        var caseInsensitive = page.LinkedCodePath?.EndsWith(".vb", StringComparison.OrdinalIgnoreCase) == true;
+        var directive = DirectiveRegex().Match(MaskServerComments(markup));
+        var language = directive.Success ? ParseAttributes(directive.Groups["attrs"].Value).GetValueOrDefault("Language") : null;
+        var caseInsensitive = language is not null
+            ? language.Equals("VB", StringComparison.OrdinalIgnoreCase) || language.Equals("VisualBasic", StringComparison.OrdinalIgnoreCase)
+            : page.LinkedCodePath?.EndsWith(".vb", StringComparison.OrdinalIgnoreCase) == true;
         var comparison = caseInsensitive ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
         foreach (Match expression in InlineServerExpressionRegex().Matches(MaskServerComments(markup)))
         {
@@ -2763,11 +2767,12 @@ public static partial class LegacyWebFormsExtractor
         return new string(chars);
     }
 
-    private static int FindJavascriptBlockEnd(string text, int openBrace, int limit)
+    internal static int FindJavascriptBlockEnd(string text, int openBrace, int limit)
     {
         var depth = 0;
         var quote = '\0';
         var escaped = false;
+        var expressionStart = true;
         limit = Math.Min(limit, text.Length);
         for (var index = openBrace; index < limit; index++)
         {
@@ -2776,10 +2781,11 @@ public static partial class LegacyWebFormsExtractor
             {
                 if (escaped) { escaped = false; continue; }
                 if (current == '\\') { escaped = true; continue; }
-                if (current == quote) quote = '\0';
+                if (current == quote) { quote = '\0'; expressionStart = false; }
                 continue;
             }
-            if (current == '/' && index + 1 < limit && text[index + 1] == '/')
+            if ((current == '/' && index + 1 < limit && text[index + 1] == '/')
+                || (current == '<' && index + 4 <= limit && text.AsSpan(index, 4).SequenceEqual("<!--")))
             {
                 var newline = text.IndexOf('\n', index + 2, limit - index - 2);
                 if (newline < 0) return -1;
@@ -2794,8 +2800,36 @@ public static partial class LegacyWebFormsExtractor
                 continue;
             }
             if (current is '\'' or '"' or '`') { quote = current; continue; }
-            if (current == '{') depth++;
-            else if (current == '}' && --depth == 0) return index;
+            if (current == '/' && expressionStart)
+            {
+                var inClass = false;
+                var closed = false;
+                for (++index; index < limit; index++)
+                {
+                    current = text[index];
+                    if (current is '\r' or '\n') return -1;
+                    if (current == '\\') { index++; continue; }
+                    if (current == '[') inClass = true;
+                    else if (current == ']') inClass = false;
+                    else if (current == '/' && !inClass) { closed = true; break; }
+                }
+                if (!closed) return -1;
+                expressionStart = false;
+                continue;
+            }
+            if (char.IsLetter(current) || current is '_' or '$')
+            {
+                var start = index;
+                while (index + 1 < limit && (char.IsLetterOrDigit(text[index + 1]) || text[index + 1] is '_' or '$')) index++;
+                expressionStart = text[start..(index + 1)] is "return" or "throw" or "case" or "typeof" or "void" or "delete" or "yield";
+                continue;
+            }
+            if (char.IsWhiteSpace(current)) continue;
+            // A slash after a postfix increment/decrement is division.
+            if (current is '+' or '-' && index + 1 < limit && text[index + 1] == current) { index++; continue; }
+            if (current == '{') { depth++; expressionStart = true; }
+            else if (current == '}') { if (--depth == 0) return index; expressionStart = false; }
+            else expressionStart = current is '=' or '(' or '[' or ',' or ':' or ';' or '!' or '?' or '&' or '|' or '+' or '-' or '*' or '/' or '%' or '>' or '<';
         }
         return -1;
     }

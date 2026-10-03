@@ -9,6 +9,29 @@ namespace TraceMap.Tests;
 public sealed class EvidenceDocsExportTests
 {
     [Theory]
+    [InlineData("database.framework-migration.declaration.v1")]
+    [InlineData("database.framework-migration.operation.v1")]
+    public async Task Gap_only_export_retains_framework_consumer_gaps_from_non_gap_facts(string rule)
+    {
+        using var temp = new TempDirectory();
+        var index = CreateSingleIndex(temp.Path);
+        await using (var connection = new SqliteConnection($"Data Source={index}"))
+        {
+            await connection.OpenAsync();
+            await using var command = connection.CreateCommand();
+            command.CommandText = "update facts set rule_id = $rule;";
+            command.Parameters.AddWithValue("$rule", rule);
+            await command.ExecuteNonQueryAsync();
+        }
+        var narrow = await EvidenceDocsExporter.ExportAsync(new(index, Path.Combine(temp.Path, "narrow"), Families: "gap"));
+        var broad = await EvidenceDocsExporter.ExportAsync(new(index, Path.Combine(temp.Path, "broad")));
+        var narrowGaps = narrow.Chunks.SelectMany(chunk => chunk.Gaps)
+            .Where(gap => gap.Reason == "framework-migration-consumer-unsupported").ToArray();
+        Assert.NotEmpty(narrowGaps);
+        Assert.Equal(broad.Chunks.SelectMany(chunk => chunk.Gaps).Count(gap => gap.Reason == "framework-migration-consumer-unsupported"), narrowGaps.Length);
+    }
+
+    [Theory]
     [InlineData("webforms-modernization,limitation", "None")]
     [InlineData("webforms-modernization,gap,limitation", "GapsOnly")]
     [InlineData("webforms-modernization,data-surface", "All")]

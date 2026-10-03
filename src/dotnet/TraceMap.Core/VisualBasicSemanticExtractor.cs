@@ -533,13 +533,21 @@ public static class VisualBasicSemanticExtractor
         }
 
         var model = compilation.GetSemanticModel(tree, ignoreAccessibility: true);
+        ExtractDocumentAtomically(filePath, projectPath, facts, gaps, sourceMetadataCandidates, analyzedFiles,
+            () => ExtractDocumentFacts(repoPath, projectPath, filePath, root, model, facts, gaps, sourceMetadataCandidates));
+    }
+
+    internal static void ExtractDocumentAtomically(string filePath, string? projectPath,
+        List<SemanticFactCandidate> facts, List<SemanticFactCandidate> gaps,
+        List<SourceMetadataIdentityCandidate>? sourceMetadataCandidates, ISet<string> analyzedFiles, Action extract)
+    {
         var factCount = facts.Count;
         var gapCount = gaps.Count;
         var metadataCount = sourceMetadataCandidates?.Count ?? 0;
-        analyzedFiles.Add(filePath);
+        var newlyAnalyzed = analyzedFiles.Add(filePath);
         try
         {
-            ExtractDocumentFacts(repoPath, projectPath, filePath, root, model, facts, gaps, sourceMetadataCandidates);
+            extract();
         }
         catch (Exception ex) when (IsWorkspaceFailure(ex))
         {
@@ -549,9 +557,9 @@ public static class VisualBasicSemanticExtractor
             facts.RemoveRange(factCount, facts.Count - factCount);
             gaps.RemoveRange(gapCount, gaps.Count - gapCount);
             sourceMetadataCandidates?.RemoveRange(metadataCount, sourceMetadataCandidates.Count - metadataCount);
-            analyzedFiles.Remove(filePath);
+            if (newlyAnalyzed) analyzedFiles.Remove(filePath);
             gaps.Add(CreateGap(filePath,
-                $"Visual Basic semantic extraction failed for this document ({ex.GetType().Name}); syntax fallback evidence only.",
+                $"Visual Basic semantic extraction failed for this project/document attempt ({ex.GetType().Name}); its partial evidence was discarded. Syntax fallback applies only when no other project analyzed the file.",
                 "VisualBasicDocumentExtractionFailed", projectPath));
         }
     }
@@ -576,9 +584,25 @@ public static class VisualBasicSemanticExtractor
         AddTypeSymbolRelationshipFacts(projectPath, filePath, root, model, facts);
         AddMemberSymbolRelationshipFacts(projectPath, filePath, root, model, facts);
         AddPropertyAccessFacts(projectPath, filePath, root, model, facts);
-        AddMethodInvocationFacts(repoPath, projectPath, filePath, root, model, facts, gaps);
+        var unresolvedExpressions = 0;
+        var parenthesisFreeCalls = ParenthesisFreeExpressionCalls(root, model, site =>
+        {
+            if (++unresolvedExpressions > 50) return;
+            var lines = site.GetLocation().GetLineSpan();
+            gaps.Add(CreateGap(filePath,
+                "An executable Visual Basic expression has an unresolved or late-bound member; no method call is inferred.",
+                "ExpressionSemanticResolutionUnavailable", projectPath,
+                lines.StartLinePosition.Line + 1, lines.EndLinePosition.Line + 1,
+                siteHash: FactFactory.Hash(site.ToString(), 32), ruleId: RuleIds.VisualBasicSemanticMethodInvocation));
+        }, () => gaps.Add(CreateGap(filePath,
+            "Parenthesis-free expression analysis reached its deterministic per-document operation-query budget.",
+            "ExpressionOperationBudgetExhausted", projectPath))).ToArray();
+        if (unresolvedExpressions > 50)
+            gaps.Add(CreateGap(filePath, "Unresolved expression diagnostics reached the per-document gap budget.",
+                "ExpressionDiagnosticBudgetExhausted", projectPath));
+        AddMethodInvocationFacts(repoPath, projectPath, filePath, root, model, facts, gaps, parenthesisFreeCalls);
         AddObjectCreationFacts(repoPath, projectPath, filePath, root, model, facts, gaps);
-        AddAdoNetBoundaryFacts(projectPath, filePath, root, model, facts, gaps);
+        AddAdoNetBoundaryFacts(projectPath, filePath, root, model, facts, gaps, parenthesisFreeCalls);
         AddExternalBoundaryFacts(projectPath, filePath, root, model, facts, gaps);
         AddLegacyServiceDeclarationFacts(projectPath, filePath, root, model, facts);
         if (sourceMetadataCandidates is not null)
@@ -1159,7 +1183,7 @@ public static class VisualBasicSemanticExtractor
             }
 
             var receiver = statement.EventExpression is MemberAccessExpressionSyntax memberAccess
-                ? model.GetSymbolInfo(memberAccess.Expression).Symbol
+                ? GetMemberReceiverSymbol(memberAccess, model)
                 : null;
             facts.Add(CreateEventBindingFact(
                 projectPath,
@@ -1291,7 +1315,7 @@ public static class VisualBasicSemanticExtractor
             return null;
         }
 
-        var receiverType = model.GetTypeInfo(member.Expression).Type;
+        var receiverType = member.Expression is { } receiver ? model.GetTypeInfo(receiver).Type : null;
         return receiverType?.GetMembers(member.Name.Identifier.ValueText).OfType<IEventSymbol>().SingleOrDefault();
     }
 
@@ -1629,7 +1653,7 @@ public static class VisualBasicSemanticExtractor
 
         if (node is MemberAccessExpressionSyntax access)
         {
-            var receiver = model.GetSymbolInfo(access.Expression).Symbol;
+            var receiver = GetMemberReceiverSymbol(access, model);
             properties["receiverSymbol"] = receiver?.ToDisplayString(SymbolFormat) ?? string.Empty;
             AddSymbolProperties(properties, "receiver", receiver);
         }
@@ -1663,7 +1687,8 @@ public static class VisualBasicSemanticExtractor
         SyntaxNode root,
         SemanticModel model,
         List<SemanticFactCandidate> facts,
-        List<SemanticFactCandidate> gaps)
+        List<SemanticFactCandidate> gaps,
+        IReadOnlyList<(ExpressionSyntax Site, IMethodSymbol Method)> parenthesisFreeCalls)
     {
         var fallbackFactCount = 0;
         var fallbackTruncationReported = false;
@@ -1715,27 +1740,44 @@ public static class VisualBasicSemanticExtractor
         // VB allows omitting parentheses on parameterless calls in expression context
         // (`Dim n = cmd.ExecuteScalar`, `While reader.Read`). Those bind to an
         // IInvocationOperation without any InvocationExpressionSyntax.
-        foreach (var (site, method) in ParenthesisFreeExpressionCalls(root, model))
+        foreach (var (site, method) in parenthesisFreeCalls)
             AddResolvedCallFacts(repoPath, projectPath, filePath, model, facts, site, site, default, method);
     }
 
-    internal static IEnumerable<(ExpressionSyntax Site, IMethodSymbol Method)> ParenthesisFreeExpressionCalls(SyntaxNode root, SemanticModel model)
+    internal static IEnumerable<(ExpressionSyntax Site, IMethodSymbol Method)> ParenthesisFreeExpressionCalls(
+        SyntaxNode root, SemanticModel model, Action<ExpressionSyntax>? unresolved = null, Action? budgetExhausted = null)
     {
+        var queries = 0;
         foreach (var node in root.DescendantNodes())
         {
-            if (node is not (MemberAccessExpressionSyntax or IdentifierNameSyntax)
-                || node.Parent is InvocationExpressionSyntax { Expression: var callee } && callee == node
+            if (node is not (MemberAccessExpressionSyntax or IdentifierNameSyntax or GenericNameSyntax)
                 || node.Parent is MemberAccessExpressionSyntax { Name: var name } && name == node)
             {
                 continue;
             }
-            if (model.GetOperation(node) is IInvocationOperation { TargetMethod: { } method } operation
+            if (++queries > 100_000) { budgetExhausted?.Invoke(); yield break; }
+            var bound = model.GetOperation(node);
+            if (bound is IInvocationOperation { TargetMethod: { } method } operation
                 && operation.Syntax == node
                 && method.ContainingType?.TypeKind != TypeKind.Error)
             {
                 yield return ((ExpressionSyntax)node, method);
             }
+            else if (bound is IDynamicMemberReferenceOperation or IInvalidOperation
+                && node.Parent is not InvocationExpressionSyntax
+                && model.GetEnclosingSymbol(node.SpanStart) is IMethodSymbol)
+            {
+                unresolved?.Invoke((ExpressionSyntax)node);
+            }
         }
+    }
+
+    private static ISymbol? GetMemberReceiverSymbol(MemberAccessExpressionSyntax access, SemanticModel model)
+    {
+        // With-block and conditional-access members have no receiver syntax. The
+        // compiler can still resolve the member; do not fabricate receiver identity
+        // (especially for nested With blocks) or discard the document's evidence.
+        return access.Expression is { } receiver ? model.GetSymbolInfo(receiver).Symbol : null;
     }
 
     private static void AddResolvedCallFacts(
@@ -1768,9 +1810,12 @@ public static class VisualBasicSemanticExtractor
             method.ContainingAssembly);
         if (expression is MemberAccessExpressionSyntax memberAccess)
         {
-            var receiver = model.GetSymbolInfo(memberAccess.Expression).Symbol;
+            var receiver = GetMemberReceiverSymbol(memberAccess, model);
             methodProperties["receiverSymbol"] = receiver?.ToDisplayString(SymbolFormat) ?? string.Empty;
-            methodProperties["receiverType"] = model.GetTypeInfo(memberAccess.Expression).Type?.ToDisplayString(SymbolFormat) ?? string.Empty;
+            methodProperties["receiverType"] = memberAccess.Expression is { } receiverExpression
+                ? model.GetTypeInfo(receiverExpression).Type?.ToDisplayString(SymbolFormat) ?? string.Empty
+                : string.Empty;
+            methodProperties["receiverIdentityStatus"] = receiver is null ? "unknown" : "compiler-resolved";
             AddSymbolProperties(methodProperties, "receiver", receiver);
         }
 
@@ -2064,7 +2109,8 @@ public static class VisualBasicSemanticExtractor
         SyntaxNode root,
         SemanticModel model,
         List<SemanticFactCandidate> facts,
-        List<SemanticFactCandidate> gaps)
+        List<SemanticFactCandidate> gaps,
+        IReadOnlyList<(ExpressionSyntax Site, IMethodSymbol Method)> parenthesisFreeCalls)
     {
         var boundaryGapCount = 0;
         var boundaryGapBudgetReported = false;
@@ -2181,7 +2227,7 @@ public static class VisualBasicSemanticExtractor
             if (!commandText && !adapterCommand) continue;
 
             var enclosing = model.GetEnclosingSymbol(assignment.SpanStart);
-            var receiver = model.GetSymbolInfo(access.Expression).Symbol;
+            var receiver = GetMemberReceiverSymbol(access, model);
             var assigned = model.GetSymbolInfo(assignment.Right).Symbol;
             var properties = new SortedDictionary<string, string>(StringComparer.Ordinal)
             {
@@ -2229,7 +2275,7 @@ public static class VisualBasicSemanticExtractor
                 continue;
             }
 
-            var receiver = model.GetSymbolInfo(memberAccess.Expression).Symbol;
+            var receiver = GetMemberReceiverSymbol(memberAccess, model);
             var assigned = model.GetSymbolInfo(assignment.Right).Symbol;
             var commandType = assigned is IFieldSymbol { ContainingType: { } enumType } field
                 && GetMetadataName(enumType) == "System.Data.CommandType"
@@ -2318,7 +2364,7 @@ public static class VisualBasicSemanticExtractor
             }
         }
 
-        foreach (var (site, method) in ParenthesisFreeExpressionCalls(root, model))
+        foreach (var (site, method) in parenthesisFreeCalls)
         {
             if (TryClassifyAdoNetOperation(method, out var operationKind, out var resultKind))
                 AddAdoNetOperationFact(projectPath, filePath, model, facts, site, site, method, operationKind, resultKind);
@@ -2349,7 +2395,7 @@ public static class VisualBasicSemanticExtractor
     {
         var enclosing = model.GetEnclosingSymbol(site.SpanStart);
         var receiver = expression is MemberAccessExpressionSyntax access
-            ? model.GetSymbolInfo(access.Expression).Symbol
+            ? GetMemberReceiverSymbol(access, model)
             : null;
         var properties = AddAssemblyProperties(
             AddSymbolProperties(
@@ -3021,7 +3067,7 @@ public static class VisualBasicSemanticExtractor
             && property.Name.Equals("Parameters", StringComparison.OrdinalIgnoreCase)
             && IsAdoNetType(property.ContainingType, "System.Data.Common.DbCommand"))
         {
-            return model.GetSymbolInfo(parametersAccess.Expression).Symbol;
+            return GetMemberReceiverSymbol(parametersAccess, model);
         }
 
         return null;

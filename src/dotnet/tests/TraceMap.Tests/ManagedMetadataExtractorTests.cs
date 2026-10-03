@@ -14,6 +14,82 @@ namespace TraceMap.Tests;
 public sealed class ManagedMetadataExtractorTests
 {
     [Fact]
+    public void Cecil_declaring_type_cycle_has_a_bounded_failure()
+    {
+        using var module = ModuleDefinition.CreateModule("cycle", ModuleKind.Dll);
+        var type = new TypeReference("Fixture", "Cycle", module, module);
+        type.DeclaringType = type;
+        Assert.Throws<BadImageFormatException>(() => ManagedMetadataExtractor.CecilTypeName(type));
+    }
+
+    [Theory]
+    [InlineData(0x1f, "unused")]
+    [InlineData(0x20, "unused")]
+    [InlineData(0x1f, "field")]
+    [InlineData(0x20, "base")]
+    [InlineData(0x15, "unused")]
+    [InlineData(0x15, "field")]
+    [InlineData(0x15, "base")]
+    [InlineData(-1, "nested-type")]
+    [InlineData(-2, "type-reference")]
+    public async Task Cyclic_metadata_is_rejected_before_cecil_in_an_isolated_scan(int modifier, string placement)
+    {
+        using var temp = new TempDirectory();
+        var metadata = new MetadataBuilder();
+        metadata.AddModule(0, metadata.GetOrAddString("Cycle.dll"), metadata.GetOrAddGuid(Guid.Parse("11111111-1111-1111-1111-111111111111")), default, default);
+        metadata.AddAssembly(metadata.GetOrAddString("Cycle"), new Version(1, 0), default, default,
+            (System.Reflection.AssemblyFlags)0, System.Reflection.AssemblyHashAlgorithm.Sha256);
+        metadata.AddTypeDefinition(System.Reflection.TypeAttributes.NotPublic, default, metadata.GetOrAddString("<Module>"),
+            default, MetadataTokens.FieldDefinitionHandle(1), MetadataTokens.MethodDefinitionHandle(1));
+        // TypeDefOrRef coded index 6 = TypeSpec row 1. Even an unused TypeSpec
+        // must be checked before the second reader materializes lazy references.
+        if (modifier > 0)
+            metadata.AddTypeSpecification(metadata.GetOrAddBlob(modifier == 0x15
+                ? new byte[] { 0x15, 0x12, 6, 1, 8 } // GENERICINST CLASS TypeSpec#1<Int32>
+                : new byte[] { (byte)modifier, 6, 8 }));
+        if (placement != "unused")
+        {
+            var type = metadata.AddTypeDefinition(System.Reflection.TypeAttributes.Public, metadata.GetOrAddString("Fixture"),
+                metadata.GetOrAddString("Cycle"), placement == "base" ? MetadataTokens.TypeSpecificationHandle(1) : default,
+                MetadataTokens.FieldDefinitionHandle(1), MetadataTokens.MethodDefinitionHandle(1));
+            if (placement == "nested-type") metadata.AddNestedType(type, type);
+            if (placement == "type-reference")
+                metadata.AddTypeReference(MetadataTokens.TypeReferenceHandle(1), default, metadata.GetOrAddString("Cycle"));
+            if (placement is "field" or "type-reference")
+                metadata.AddFieldDefinition(System.Reflection.FieldAttributes.Public, metadata.GetOrAddString("Value"),
+                    metadata.GetOrAddBlob(new byte[] { 6, 0x12, placement == "field" ? (byte)6 : (byte)5 }));
+        }
+        var pe = new ManagedPEBuilder(new PEHeaderBuilder(imageCharacteristics: Characteristics.ExecutableImage | Characteristics.Dll),
+            new MetadataRootBuilder(metadata), new System.Reflection.Metadata.BlobBuilder(), flags: CorFlags.ILOnly);
+        var blob = new System.Reflection.Metadata.BlobBuilder();
+        pe.Serialize(blob);
+        var dll = Path.Combine(temp.Path, "Cycle.dll");
+        File.WriteAllBytes(dll, blob.ToArray());
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(repo);
+        var output = Path.Combine(temp.Path, "out");
+        var runtime = Path.GetDirectoryName(typeof(object).Assembly.Location)!;
+        var host = Environment.GetEnvironmentVariable("DOTNET_HOST_PATH") ?? Path.Combine(
+            Directory.GetParent(runtime)!.Parent!.Parent!.FullName, OperatingSystem.IsWindows() ? "dotnet.exe" : "dotnet");
+        var configuration = new DirectoryInfo(AppContext.BaseDirectory).Parent!.Name;
+        var cli = Path.Combine(FindRepoRoot(), "src", "dotnet", "TraceMap.Cli", "bin", configuration, "net10.0", "tracemap.dll");
+        using var process = new Process { StartInfo = new(host) { UseShellExecute = false, RedirectStandardOutput = true, RedirectStandardError = true } };
+        foreach (var arg in new[] { cli, "scan", "--repo", repo, "--out", output, "--compiled-input", dll }) process.StartInfo.ArgumentList.Add(arg);
+        process.Start();
+        var stdout = process.StandardOutput.ReadToEndAsync();
+        var stderr = process.StandardError.ReadToEndAsync();
+        try { await process.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(30)); }
+        finally { if (!process.HasExited) process.Kill(entireProcessTree: true); }
+        var diagnostic = await stdout + await stderr;
+        Assert.True(File.Exists(Path.Combine(output, "scan-manifest.json")), diagnostic);
+        // SRM rejects a TypeSpec in the generic-type position before invoking
+        // the cycle provider; modifier cycles reach the explicit nesting guard.
+        Assert.Contains(modifier is 0x1f or 0x20 ? "ManagedInputSignatureNestingLimitExceeded" : "SystemReflectionMetadataReaderFailure",
+            File.ReadAllText(Path.Combine(output, "facts.ndjson")));
+        Assert.DoesNotContain("Stack overflow", diagnostic, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public void Metadata_aggregate_reservations_account_for_admitted_and_refused_inputs_without_changing_fact_identity()
     {
         using var temporary = new TempDirectory(); var repo = FindRepoRoot(); var commit = Git(repo, "rev-parse", "HEAD");

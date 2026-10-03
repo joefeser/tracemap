@@ -11,6 +11,60 @@ namespace TraceMap.Tests;
 
 public sealed class WebFormsModernizationPacketTests
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Path_evidence_never_borrows_primary_commit_for_a_foreign_scan(bool missingCommit)
+    {
+        var primary = new string('a', 40);
+        var foreign = new string('b', 40);
+        var node = new CombinedPathNode("node", "symbol", "Worker.Run", "foreign-source", "foreign", "foreign-scan",
+            missingCommit ? null : foreign, "Worker.Run", null, "fixture.v1", EvidenceTiers.Tier1Semantic,
+            "Worker.cs", 1, 1, null, null, null, null, null, null, null, null, null, null, null, null, null);
+        var edge = new CombinedPathEdge("edge", "call", "node", "node", "static", "fixture.v1",
+            EvidenceTiers.Tier1Semantic, [], [], "Worker.cs", 1, 1);
+        var path = new CombinedPath("path", "static", "bounded", 1, "node", "node", [node], [edge], [], [], []);
+        var snapshot = new WebFormsModernizationPacketReporter.Snapshot("primary", "primary-scan", primary, "Level1SemanticAnalysis", "Succeeded", []);
+        var gaps = new List<WebFormsModernizationGap>();
+        var evidence = WebFormsModernizationPacketReporter.PathEvidence(path, snapshot, gaps, 100);
+        if (missingCommit)
+        {
+            Assert.Empty(evidence);
+            Assert.Equal(2, gaps.Count(gap => gap.Classification == "LegacyPathEvidenceProvenanceUnavailable"));
+        }
+        else
+        {
+            Assert.Equal(2, evidence.Count);
+            Assert.All(evidence, item => { Assert.Equal("foreign-scan", item.ScanId); Assert.Equal(foreign, item.CommitSha); });
+        }
+    }
+
+    [Theory]
+    [InlineData(false, 9_999)]
+    [InlineData(false, 10_000)]
+    [InlineData(false, 10_001)]
+    [InlineData(true, 9_999)]
+    [InlineData(true, 10_000)]
+    [InlineData(true, 10_001)]
+    public async Task Behavior_inventory_row_boundary_is_bounded_and_labeled(bool server, int rows)
+    {
+        using var temp = new TempDirectory();
+        var manifest = Manifest("Succeeded");
+        var facts = new List<CodeFact> { Page("surface:public", "Public/Lookup.aspx", manifest) };
+        for (var index = 0; index < rows; index++)
+            facts.Add(Fact(manifest, server ? FactTypes.WebFormsServerNavigationCandidate : FactTypes.WebFormsClientUiMutationCandidate,
+                "legacy.webforms.fixture.v1", "Public/Lookup.aspx", index + 2, "surface:public", null, null,
+                ("surfaceIdentity", "surface:public"), ("behaviorKind", server ? "navigation" : "hide"),
+                ("coverageLabel", "bounded-static-fixture")));
+        var database = Path.Combine(temp.Path, "index.sqlite");
+        SqliteIndexWriter.Write(database, manifest, facts);
+        var packet = await WebFormsModernizationPacketReporter.BuildAsync(new(database, Path.Combine(temp.Path, "out")));
+        Assert.Equal(Math.Min(10_000, rows), server ? packet.ServerBehaviorInventory.Count : packet.ClientBehaviorInventory.Count);
+        if (rows > 10_000) Assert.True(packet.Summary.Truncated);
+        Assert.Equal(rows > 10_000, packet.Gaps.Any(gap => gap.Classification == (server
+            ? "WebFormsModernizationServerBehaviorLimitReached" : "WebFormsModernizationClientBehaviorLimitReached")));
+    }
+
     [Fact]
     public async Task Packet_accepts_single_source_combined_index_and_preserves_exact_source_identity()
     {

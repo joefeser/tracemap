@@ -1324,7 +1324,7 @@ public static class WebFormsModernizationPacketReporter
         };
     }
 
-    private static IReadOnlyList<WebFormsModernizationPathEvidence> PathEvidence(
+    internal static IReadOnlyList<WebFormsModernizationPathEvidence> PathEvidence(
         CombinedPath? path,
         Snapshot snapshot,
         List<WebFormsModernizationGap> gaps,
@@ -1337,7 +1337,8 @@ public static class WebFormsModernizationPacketReporter
         foreach (var node in path.Nodes.Where(node => node.RuleId is not null && node.EvidenceTier is not null))
         {
             var safePath = node.FilePath is null ? null : SafeFilePath(node.FilePath);
-            if (safePath is null or "path-unavailable" || node.StartLine is null or <= 0 || node.EndLine is null || node.EndLine < node.StartLine)
+            if (safePath is null or "path-unavailable" || node.StartLine is null or <= 0 || node.EndLine is null || node.EndLine < node.StartLine
+                || string.IsNullOrWhiteSpace(node.ScanId) || string.IsNullOrWhiteSpace(node.CommitSha))
             {
                 AddGeneratedGap(gaps, maxGaps, snapshot, "LegacyPathEvidenceProvenanceUnavailable", "path-node", node.NodeId, node.CombinedFactId is null ? [] : [node.CombinedFactId]);
                 continue;
@@ -1348,7 +1349,7 @@ public static class WebFormsModernizationPacketReporter
                 node.RuleId!,
                 node.EvidenceTier!,
                 UnknownCoverage,
-                node.CommitSha ?? snapshot.CommitSha,
+                node.CommitSha,
                 safePath,
                 node.StartLine,
                 node.EndLine,
@@ -1373,13 +1374,18 @@ public static class WebFormsModernizationPacketReporter
             var edgeNode = path.Nodes.FirstOrDefault(node => node.NodeId == edge.FromNodeId && node.ScanId is not null)
                 ?? path.Nodes.FirstOrDefault(node => node.NodeId == edge.ToNodeId && node.ScanId is not null);
             var edgeScanId = edgeNode?.ScanId ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(edgeScanId) || string.IsNullOrWhiteSpace(edgeNode?.CommitSha))
+            {
+                AddGeneratedGap(gaps, maxGaps, snapshot, "LegacyPathEvidenceProvenanceUnavailable", "path-edge", edge.EdgeId, edge.SupportingFactIds);
+                continue;
+            }
             items.Add(new WebFormsModernizationPathEvidence(
             edge.EdgeId,
             "path-edge",
             edge.RuleId,
             edge.EvidenceTier,
             UnknownCoverage,
-            edgeNode?.CommitSha ?? snapshot.CommitSha,
+            edgeNode.CommitSha,
             safePath,
             edge.StartLine,
             edge.EndLine,
@@ -1549,7 +1555,7 @@ public static class WebFormsModernizationPacketReporter
             null,
             null,
             "WebFormsModernizationPacketReporter",
-            "webforms-modernization-packet/1.2.0",
+            "webforms-modernization-packet/1.2.1",
             supporting,
             ["The packet failed closed because required evidence was unavailable or bounded by a deterministic limit."]);
     }

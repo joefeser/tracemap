@@ -84,6 +84,12 @@ jobs:
           ./scripts/tests/Test-FocusedWebFormsOutputSafety.ps1
           dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter FullyQualifiedName~WebFormsPublishedRootTests
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      # Process pipes and directory junctions execute on Windows as well as Unix.
+      - name: Validate promotion process and junction boundaries
+        shell: pwsh
+        run: |
+          dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter "FullyQualifiedName~WebFormsWizardBuildTests|FullyQualifiedName~Linked_input_escape_is_rejected|FullyQualifiedName~Separate_receipt_root_rejects_invalid_or_escaped_inputs|FullyQualifiedName~Relocated_history_never_uses_original_policy_locators_to_bypass_current_owned_links"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Retain sanitized receipt
         uses: actions/upload-artifact@v4
         with:

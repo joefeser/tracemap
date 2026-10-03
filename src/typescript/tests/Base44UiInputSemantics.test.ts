@@ -22,8 +22,12 @@ export async function save() {
     execFileSync("git", ["-c", "user.name=TraceMap Test", "-c", "user.email=tracemap@example.invalid", "commit", "-qm", "fixture"], { cwd: repo });
     const out = await fs.mkdtemp(path.join(os.tmpdir(), "tracemap-ui-semantics-incomplete-out-"));
     const { packet } = await buildBase44Evidence(options(repo, out));
-    for (const fact of packet.facts.filter((item) => item.factType === FactTypes.Base44UiInputSemantics)) {
-      for (const reason of JSON.parse(fact.properties.uiSemanticsJson).reasons) {
+    const facts = packet.facts.filter((item) => item.factType === FactTypes.Base44UiInputSemantics);
+    expect(facts.length).toBeGreaterThan(0);
+    for (const fact of facts) {
+      const reasons = JSON.parse(fact.properties.uiSemanticsJson).reasons;
+      expect(reasons.length).toBeGreaterThan(0);
+      for (const reason of reasons) {
         expect(reason.endOffset).toBeGreaterThan(reason.startOffset);
         expect(reason.endLine).toBeGreaterThanOrEqual(reason.startLine);
       }
