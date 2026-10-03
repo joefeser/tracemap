@@ -40,6 +40,6 @@
   `git diff --check`.
 - [x] Perform desktop and mobile browser checks for `/webforms/local-demo/`
   and its guided-setup/source-proof link path.
-- [ ] Record the implementation branch, exact base/head, validation, browser
+- [x] Record the implementation branch, exact base/head, validation, browser
   results, public claim levels, limitations, PR, and ACK state in
   `implementation-state.md`.

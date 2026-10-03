@@ -1,12 +1,14 @@
 # Site Web Forms Local Demo Implementation State
 
-- Status: implementation in progress
+- Status: implementation complete; ready PR under review
 - Issue: #807
 - Branch: `codex/site-webforms-local-demo`
 - Base: `origin/main`
 Exact base: `79ac39cf4459e913944786d755566568d02eccab`
 PR #803 ancestry at exact base: `not-shipped`
 - Route: `/webforms/local-demo/`
+- Validated implementation commit: `3843558a`
+- Pull request: `https://github.com/joefeser/tracemap/pull/816`
 - Public claim level: `demo` for the exact-tree synthetic validation receipt;
   `concept` for the #806 illustrative path projection; `hidden` for retained raw
   artifacts and unavailable evidence
@@ -98,7 +100,8 @@ customer artifacts, and unpublished validation output remain hidden.
 - Desktop at 1440 by 1000 and mobile at 390 by 844: one H1, no horizontal
   overflow, responsive artifact-map treatment present, linked guided-setup and
   source-proof routes resolved, and no browser-console errors or warnings.
-- Commit, ready PR, and ACK state remain pending.
+- Ready PR #816 targets `main`. ACK review state is recorded in the final
+  implementation handoff after the current-head loop completes.
 
 ## Remaining work
 
