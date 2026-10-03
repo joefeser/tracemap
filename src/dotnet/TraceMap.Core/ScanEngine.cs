@@ -361,6 +361,7 @@ public static class ScanEngine
                     inventory,
                     targetFrameworkInfos,
                     ProjectFileReader.ReadPackageReferences(repoPath, inventory),
+                    ProjectFileReader.ReadCentralPackageVersions(repoPath, inventory),
                     nugetLockfiles,
                     knownGaps,
                     repoPath,
@@ -724,6 +725,7 @@ public static class ScanEngine
         IReadOnlyList<FileInventoryItem> inventory,
         IReadOnlyList<TargetFrameworkInfo> targetFrameworks,
         IReadOnlyList<PackageReferenceInfo> packageReferences,
+        IReadOnlyList<CentralPackageVersionInfo> centralPackageVersions,
         NuGetLockfileReadResult nugetLockfiles,
         IReadOnlyList<string> knownGaps,
         string repoPath,
@@ -906,6 +908,13 @@ public static class ScanEngine
                 ["targetFramework"] = item.TargetFramework ?? string.Empty
             };
             AddSafeVersionProperties(packageProperties, item.Version);
+            if (!string.IsNullOrWhiteSpace(item.VersionOverride))
+            {
+                // Central package management: an explicit per-project override pin. Kept SEPARATE from
+                // `version` — the effective version (override > central > project) is a consumer-side
+                // derivation, never asserted here (rule limitation, rule-catalog project.file.v1).
+                AddSafeVersionProperties(packageProperties, item.VersionOverride, "versionOverride", "unsafe-version-override");
+            }
             facts.Add(FactFactory.Create(
                 manifest,
                 FactTypes.PackageReferenced,
@@ -918,6 +927,33 @@ public static class ScanEngine
                     : null,
                 targetSymbol: item.PackageName,
                 properties: packageProperties));
+        }
+
+        foreach (var pin in centralPackageVersions)
+        {
+            var pinProperties = new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["dependencyGroup"] = "PackageVersion",
+                ["ecosystem"] = "nuget",
+                ["manifestKind"] = Path.GetFileName(pin.PropsPath).Equals("Directory.Packages.props", StringComparison.OrdinalIgnoreCase)
+                    ? "Directory.Packages.props"
+                    : "props",
+                ["package"] = pin.PackageName,
+                ["packageManager"] = "nuget",
+                ["packageName"] = pin.PackageName,
+                ["sourceKind"] = "build-file",
+                ["surfaceKind"] = "package-config",
+                ["targetFramework"] = string.Empty // props pins are TFM-agnostic
+            };
+            AddSafeVersionProperties(pinProperties, pin.Version);
+            facts.Add(FactFactory.Create(
+                manifest,
+                FactTypes.CentralPackageVersionDeclared,
+                RuleIds.ProjectFile,
+                EvidenceTiers.Tier2Structural,
+                new EvidenceSpan(pin.PropsPath, pin.Line, pin.Line, null, "ProjectFileExtractor", ScannerVersions.ProjectFileExtractor),
+                targetSymbol: pin.PackageName,
+                properties: pinProperties));
         }
 
         foreach (var entry in nugetLockfiles.Entries)
@@ -1247,23 +1283,26 @@ public static class ScanEngine
         return "MSBuildWorkspace project load or Roslyn compilation reported gaps; syntax fallback still ran.";
     }
 
-    private static void AddSafeVersionProperties(SortedDictionary<string, string> properties, string? version)
+    private static void AddSafeVersionProperties(SortedDictionary<string, string> properties, string? version, string key = "version", string? redactionReason = "unsafe-package-version")
     {
         if (string.IsNullOrWhiteSpace(version))
         {
-            properties["version"] = string.Empty;
+            properties[key] = string.Empty;
             return;
         }
 
         var trimmed = version.Trim();
         if (IsUnsafePackageVersion(trimmed))
         {
-            properties["versionHash"] = FactFactory.Hash(trimmed, 32);
-            properties["redactionReason"] = "unsafe-package-version";
+            properties[key + "Hash"] = FactFactory.Hash(trimmed, 32);
+            if (redactionReason is not null)
+            {
+                properties[key == "version" ? "redactionReason" : key + "RedactionReason"] = redactionReason;
+            }
             return;
         }
 
-        properties["version"] = trimmed;
+        properties[key] = trimmed;
     }
 
     private static bool IsUnsafePackageVersion(string value)
