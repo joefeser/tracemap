@@ -1,10 +1,10 @@
 # Implementation State
 
-Status: site implementation validated; commit, PR, and ACK pending
+Status: current-head ACK repairs validated; push and fresh ACK rerun pending
 
 Branch: `codex/site-webforms-source-compiled-proof`
 
-Implementation revision: `94f4873c60f1ad4dc937b172ae21bb43ed00b0f4`
+Initial implementation revision: `94f4873c60f1ad4dc937b172ae21bb43ed00b0f4`
 
 Base: `origin/main` at
 `5ffd4a54176c002e4c6d41ce0133eab5963ad79b`
@@ -163,3 +163,29 @@ A later exact-head Codex review identified one additional P2 tier-preservation
 issue. The evidence model now treats `combined.paths.compiled-il-bridge.v1` as
 a multi-tier rule family and requires every projection and validator to retain
 the tier emitted for each individual edge.
+
+## Current-head implementation review repairs
+
+ACK authorized one consolidated repair batch on PR #814 head
+`ea8533309d0a3a111cf8fee380b020f6a45fe485`. The batch:
+
+- adds a generated supporting-evidence registry and requires every hop and
+  top-level gap reference to resolve to matching rule, tier, and public span;
+- machine-labels the bounded result as `partial`;
+- keeps the generic bridge-tier examples while downgrading every selected
+  DLL-only reproduction bridge to `Tier3SyntaxOrTextual` because this public
+  projection has no source/assembly binding receipt;
+- aligns the literal-audit state with the checked-in
+  `method-local-constant` regression;
+- rejects multiline raw SQL inside parsed allowlisted values;
+- compares the checked-in asset with a fresh canonical in-memory projection,
+  checks rendered hop/version/digest values against the asset, aggregates
+  missing or malformed provenance errors, and invokes validation based on the
+  public route/asset rather than generator presence.
+
+Post-repair validation passed: 8 focused proof tests, full `npm test`, site
+build, full site validation (117 HTML files, 3,883 internal references, 116
+sitemap URLs), the focused .NET regression, private-path guard, and
+`git diff --check`. Desktop 1,440 by 1,000 and mobile 390 by 844 browser checks
+each found one H1, all three outcomes, the partial-status disclosure, no
+horizontal overflow, and no console errors.

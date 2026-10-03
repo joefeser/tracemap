@@ -12,7 +12,7 @@ const safeKeys = new Set([
   "schemaVersion", "publicClaimLevel", "repository", "commitSha", "proofBoundary", "fixtureRoots",
   "extractorVersions", "visualBasicSemantic", "visualBasicSyntax", "managedMetadata", "ilBodyEvidence",
   "pathReporterAlgorithm", "coverage", "label", "maxDepth", "maxPaths", "maxTraversalWork",
-  "truncatedByPathOrWorkLimit", "hostBoundary", "bridgeTierExamples", "id", "ruleId", "evidenceTier",
+  "truncatedByPathOrWorkLimit", "hostBoundary", "resultStatus", "bridgeTierExamples", "id", "ruleId", "evidenceTier",
   "coverageLabel", "meaning", "limitation", "outcomes", "title", "terminal", "commandTypeState",
   "commandTextState", "orderedHops", "kind", "filePath", "startLine", "endLine",
   "supportingEvidenceIds", "gaps", "reviewQuestion", "classification", "limitations", "reproduction",
@@ -20,7 +20,7 @@ const safeKeys = new Set([
 ]);
 
 const forbiddenKey = /(?:sql|query|commandBody|connection|credential|secret|sourceSnippet|raw|absolute|privateIdentity|literalHash)/i;
-const forbiddenValue = /(?:\/Users\/|\/home\/|\/private\/|[A-Z]:\\Users\\|file:\/\/|Server\s*=|Password\s*=|User Id\s*=|ConnectionString)/i;
+const forbiddenValue = /(?:\/Users\/|\/home\/|\/private\/|[A-Z]:\\Users\\|file:\/\/|Server\s*=|Password\s*=|User Id\s*=|ConnectionString|\bSELECT\b[\s\S]{0,500}\bFROM\b|\bINSERT\s+INTO\b|\bUPDATE\s+\S+\s+SET\b|\bDELETE\s+FROM\b|\b(?:CREATE|ALTER|DROP)\s+TABLE\b)/i;
 
 export function stableStringify(value) {
   if (Array.isArray(value)) return `[${value.map(stableStringify).join(",")}]`;
@@ -49,15 +49,13 @@ function validateProjectedInput(value, path = "$") {
   }
 }
 
-export async function generateWebFormsSourceCompiledProof({ inputPath = defaultInput, outputPath = defaultOutput } = {}) {
-  const input = JSON.parse(await readFile(inputPath, "utf8"));
+export function createWebFormsSourceCompiledProof(input, generatorSha256) {
   validateProjectedInput(input);
   if (input.publicClaimLevel !== "demo") throw new Error("Projection input must explicitly request demo claim level.");
   if (!/^[0-9a-f]{40}$/.test(input.commitSha)) throw new Error("Projection input requires one exact commit SHA.");
 
-  const generatorSha256 = sha256(await readFile(scriptPath));
   const boundedInputSha256 = sha256(stableStringify(input));
-  const output = {
+  return {
     schemaVersion: "tracemap.webforms-source-compiled-proof.v1",
     publicClaimLevel: input.publicClaimLevel,
     repository: input.repository,
@@ -73,12 +71,41 @@ export async function generateWebFormsSourceCompiledProof({ inputPath = defaultI
     fixtureRoots: input.fixtureRoots,
     extractorVersions: input.extractorVersions,
     coverage: input.coverage,
+    evidence: buildEvidenceRegistry(input),
     bridgeTierExamples: input.bridgeTierExamples,
     outcomes: input.outcomes,
     gaps: input.gaps,
     limitations: input.limitations,
     reproduction: input.reproduction
   };
+}
+
+function buildEvidenceRegistry(input) {
+  const records = new Map();
+  const add = (item) => {
+    for (const id of item.supportingEvidenceIds ?? []) {
+      const record = {
+        id,
+        ruleId: item.ruleId,
+        evidenceTier: item.evidenceTier,
+        filePath: item.filePath,
+        startLine: item.startLine,
+        endLine: item.endLine,
+        meaning: `Public synthetic support for ${item.label ?? item.classification}.`
+      };
+      const prior = records.get(id);
+      if (prior && stableStringify(prior) !== stableStringify(record)) throw new Error(`Conflicting supporting evidence ID: ${id}`);
+      records.set(id, record);
+    }
+  };
+  for (const outcome of input.outcomes ?? []) for (const hop of outcome.orderedHops ?? []) add(hop);
+  for (const gap of input.gaps ?? []) add(gap);
+  return [...records.values()].sort((left, right) => left.id.localeCompare(right.id));
+}
+
+export async function generateWebFormsSourceCompiledProof({ inputPath = defaultInput, outputPath = defaultOutput } = {}) {
+  const input = JSON.parse(await readFile(inputPath, "utf8"));
+  const output = createWebFormsSourceCompiledProof(input, sha256(await readFile(scriptPath)));
   await writeFile(outputPath, `${JSON.stringify(output, null, 2)}\n`, "utf8");
   return output;
 }

@@ -57,6 +57,57 @@ test("Web Forms proof rejects stale generator and bounded-input hashes", async (
   assert.match(errors.join("\n"), /bounded-input SHA-256 does not match/);
 });
 
+test("Web Forms proof generator rejects multiline raw SQL in an allowlisted string", async (t) => {
+  const root = await fixture(t);
+  const inputPath = join(root, "src", "_data", "webforms-source-compiled-proof-input.json");
+  const input = JSON.parse(await readFile(inputPath, "utf8"));
+  input.limitations.push("SELECT\nprivate_value FROM private_table");
+  await writeFile(inputPath, `${JSON.stringify(input, null, 2)}\n`);
+  await assert.rejects(
+    generateWebFormsSourceCompiledProof({ inputPath, outputPath: join(root, "generated.json") }),
+    /Forbidden value/
+  );
+});
+
+test("Web Forms proof rejects canonical projection, evidence registry, partial-status, and selected bridge drift", async (t) => {
+  const root = await fixture(t);
+  const assetPath = join(root, "src", "assets", "webforms-source-compiled-proof.json");
+  const packet = JSON.parse(await readFile(assetPath, "utf8"));
+  packet.coverage.resultStatus = "complete";
+  packet.limitations[0] = `${packet.limitations[0]} Altered.`;
+  packet.evidence = packet.evidence.filter((record) => record.id !== "compiled-profile-constructor-call");
+  packet.outcomes[0].orderedHops.find((hop) => hop.id === "dynamic-constructor").evidenceTier = "Tier2Structural";
+  await writeFile(assetPath, `${JSON.stringify(packet, null, 2)}\n`);
+  await buildSite({ root, log() {} });
+  const errors = [];
+  await validateWebFormsSourceCompiledProofDist({ dist: join(root, "dist"), errors, root });
+  const joined = errors.join("\n");
+  assert.match(joined, /result status as partial/);
+  assert.match(joined, /unbound compiled bridge hop at Tier3SyntaxOrTextual/);
+  assert.match(joined, /unresolved supporting evidence ID/);
+  assert.match(joined, /does not match a fresh canonical projection/);
+});
+
+test("Web Forms proof reports missing provenance inputs without throwing", async (t) => {
+  const root = await fixture(t);
+  await buildSite({ root, log() {} });
+  await rm(join(root, "scripts", "generate-webforms-source-compiled-proof.mjs"));
+  const errors = [];
+  await validateWebFormsSourceCompiledProofDist({ dist: join(root, "dist"), errors, root });
+  assert.match(errors.join("\n"), /provenance could not be verified/);
+});
+
+test("Web Forms proof rejects rendered page drift from the checked-in asset", async (t) => {
+  const root = await fixture(t);
+  const pagePath = join(root, "src", "webforms", "source-plus-compiled-proof", "index.html");
+  const page = await readFile(pagePath, "utf8");
+  await writeFile(pagePath, page.replace("fdf948229e9d3b60078c9c2989329da35d5fca5e7c26dd296776491c947b8ff2", "0".repeat(64)));
+  await buildSite({ root, log() {} });
+  const errors = [];
+  await validateWebFormsSourceCompiledProofDist({ dist: join(root, "dist"), errors, root });
+  assert.match(errors.join("\n"), /page is stale relative to asset digest/);
+});
+
 async function fixture(t) {
   const root = await mkdtemp(join(tmpdir(), "tracemap-webforms-proof-"));
   t.after(async () => rm(root, { recursive: true, force: true }));

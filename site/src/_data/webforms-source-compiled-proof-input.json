@@ -18,6 +18,7 @@
   },
   "coverage": {
     "label": "bounded-static-evidence",
+    "resultStatus": "partial",
     "maxDepth": 20,
     "maxPaths": 256,
     "maxTraversalWork": 100000,
@@ -89,7 +90,7 @@
           "label": "ProfileEmployee constructor",
           "kind": "constructor",
           "ruleId": "combined.paths.compiled-il-bridge.v1",
-          "evidenceTier": "Tier2Structural",
+          "evidenceTier": "Tier3SyntaxOrTextual",
           "filePath": "samples/messy-dotnet-workspace/vb-lazy-constructor/Overview.aspx.vb",
           "startLine": 31,
           "endLine": 35,
@@ -100,7 +101,7 @@
           "label": "GetProfile",
           "kind": "method",
           "ruleId": "combined.paths.compiled-il-bridge.v1",
-          "evidenceTier": "Tier2Structural",
+          "evidenceTier": "Tier3SyntaxOrTextual",
           "filePath": "samples/messy-dotnet-workspace/vb-lazy-constructor/Overview.aspx.vb",
           "startLine": 39,
           "endLine": 47,
@@ -111,7 +112,7 @@
           "label": "GetEmail in provider DLL",
           "kind": "provider-boundary",
           "ruleId": "combined.paths.compiled-il-bridge.v1",
-          "evidenceTier": "Tier2Structural",
+          "evidenceTier": "Tier3SyntaxOrTextual",
           "filePath": "samples/messy-dotnet-workspace/vb-lazy-logging-provider/PublicLog.vb",
           "startLine": 6,
           "endLine": 11,
@@ -138,7 +139,7 @@
       "title": "Literal audit call",
       "terminal": "ExecuteScalar",
       "commandTypeState": "method-local-constant",
-      "commandTextState": "constant-on-encoded-call-path",
+      "commandTextState": "method-local-constant",
       "coverageLabel": "bounded-static-evidence-with-review-tier-value",
       "orderedHops": [
         {
@@ -214,7 +215,7 @@
           "label": "SyntheticChoices constructor",
           "kind": "constructor",
           "ruleId": "combined.paths.compiled-il-bridge.v1",
-          "evidenceTier": "Tier2Structural",
+          "evidenceTier": "Tier3SyntaxOrTextual",
           "filePath": "samples/messy-dotnet-workspace/vb-lazy-constructor/Overview.aspx.vb",
           "startLine": 51,
           "endLine": 54,
@@ -225,7 +226,7 @@
           "label": "EmployeeInfo getter",
           "kind": "property-getter",
           "ruleId": "combined.paths.compiled-il-bridge.v1",
-          "evidenceTier": "Tier2Structural",
+          "evidenceTier": "Tier3SyntaxOrTextual",
           "filePath": "samples/messy-dotnet-workspace/vb-lazy-constructor/Overview.aspx.vb",
           "startLine": 60,
           "endLine": 67,
@@ -236,7 +237,7 @@
           "label": "SyntheticEmployee constructor and field initialization",
           "kind": "constructor-work",
           "ruleId": "combined.paths.compiled-il-bridge.v1",
-          "evidenceTier": "Tier2Structural",
+          "evidenceTier": "Tier3SyntaxOrTextual",
           "filePath": "samples/messy-dotnet-workspace/vb-lazy-constructor/Overview.aspx.vb",
           "startLine": 70,
           "endLine": 88,
@@ -276,6 +277,10 @@
       "ruleId": "combined.paths.projectless-publish-candidate.v1",
       "evidenceTier": "Tier3SyntaxOrTextual",
       "coverageLabel": "review-candidate",
+      "filePath": "samples/messy-dotnet-workspace/vb-lazy-constructor/Overview.aspx.vb",
+      "startLine": 13,
+      "endLine": 15,
+      "supportingEvidenceIds": ["gap-projectless-source-publish"],
       "limitation": "Without exact source-method mapping, a projectless publish bridge remains a candidate."
     },
     {
@@ -283,6 +288,10 @@
       "ruleId": "combined.paths.compiled-command-value.v1",
       "evidenceTier": "Tier4Unknown",
       "coverageLabel": "reduced",
+      "filePath": "samples/messy-dotnet-workspace/vb-lazy-logging-provider/PublicLog.vb",
+      "startLine": 13,
+      "endLine": 17,
+      "supportingEvidenceIds": ["gap-unresolved-command-operand"],
       "limitation": "Runtime-composed command material stays unresolved and is omitted from the public projection."
     },
     {
@@ -290,6 +299,10 @@
       "ruleId": "combined.paths.compiled-command-value.v1",
       "evidenceTier": "Tier4Unknown",
       "coverageLabel": "reduced",
+      "filePath": "samples/messy-dotnet-workspace/vb-lazy-logging-provider/PublicLog.vb",
+      "startLine": 13,
+      "endLine": 17,
+      "supportingEvidenceIds": ["gap-virtual-dispatch"],
       "limitation": "Encoded callvirt evidence does not select a runtime override or provider implementation."
     },
     {
@@ -297,6 +310,10 @@
       "ruleId": "combined.paths.compiled-il-bridge.v1",
       "evidenceTier": "Tier4Unknown",
       "coverageLabel": "bounded",
+      "filePath": "site/src/_data/webforms-source-compiled-proof-input.json",
+      "startLine": 19,
+      "endLine": 25,
+      "supportingEvidenceIds": ["gap-bounded-traversal"],
       "limitation": "Depth, path, and traversal-work limits constrain the result; absence beyond a bound is not proven."
     }
   ],
