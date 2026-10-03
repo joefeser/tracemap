@@ -195,6 +195,23 @@ public sealed class WebFormsPublishReceiptSetTests
     }
 
     [Theory]
+    [InlineData("sourceFiles")]
+    [InlineData("publishedFiles")]
+    [InlineData("pages")]
+    public void Standalone_receipt_with_null_entry_is_a_typed_gap_not_a_scan_crash(string collection)
+    {
+        using var fixture = new Fixture();
+        var part = JsonNode.Parse(File.ReadAllText(fixture.PartPath(2)))!.AsObject();
+        part[collection]!.AsArray().Add(null);
+        File.WriteAllText(fixture.PartPath(3), part.ToJsonString());
+        var standalone = WebFormsPublishMapExtractor.Evaluate(fixture.Source, new string('a', 40),
+            new(fixture.Source, "unused", WebFormsPublishReceiptPath: fixture.PartPath(3), WebFormsPublishedRootPath: fixture.Published), CancellationToken.None);
+        Assert.Equal("gap", standalone.Provenance!.Status);
+        Assert.Contains("WebFormsPublishReceiptInvalid", standalone.Provenance.GapKinds);
+        Assert.Empty(standalone.Pages);
+    }
+
+    [Theory]
     [InlineData(false)]
     [InlineData(true)]
     public void Inventory_partitions_never_substitute_for_declared_page_bindings(bool retainsPages)

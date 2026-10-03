@@ -188,6 +188,19 @@ public static class CSharpSemanticExtractor
             .Where(value => !string.IsNullOrWhiteSpace(value))
             .ToArray();
 
+        // An explicit --project scope that selects only other-language projects puts
+        // the repository's C# projects out of scope; that is not a missing project.
+        var csharpProjectsScopedOut = options.ProjectPaths is { Count: > 0 }
+            && (fullInventory ?? inventory).Any(item => item.Kind == "Project");
+        if (projects.Length == 0 && csharpFiles.Length > 0 && csharpProjectsScopedOut)
+        {
+            gaps.Add(CreateGap(
+                ".",
+                "The explicit project scope selected no C# project; inventoried C# files outside that scope received no semantic analysis.",
+                "CSharpProjectsOutsideProjectScope"));
+            return new SemanticExtractionResult(facts, gaps, Attempted: false, ReducedCoverage: false, AnalyzedFiles: analyzedFiles);
+        }
+
         if (projects.Length == 0 && csharpFiles.Length > 0)
         {
             gaps.Add(CreateGap(

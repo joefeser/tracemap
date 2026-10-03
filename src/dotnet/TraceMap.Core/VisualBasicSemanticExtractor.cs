@@ -84,8 +84,28 @@ public static class VisualBasicSemanticExtractor
             .Where(value => !string.IsNullOrWhiteSpace(value))
             .ToArray();
 
+        // An explicit --project scope that selects only other-language projects puts
+        // the repository's VB projects out of scope; that is not a missing project.
+        var visualBasicProjectsScopedOut = options.ProjectPaths is { Count: > 0 }
+            && (fullInventory ?? inventory).Any(item => item.Kind == "VisualBasicProject");
         if (projects.Length == 0)
         {
+            if (vbFiles.Length > 0 && visualBasicProjectsScopedOut)
+            {
+                gaps.Add(CreateGap(
+                    ".",
+                    "The explicit project scope selected no Visual Basic project; inventoried Visual Basic files outside that scope received no semantic analysis.",
+                    "VisualBasicProjectsOutsideProjectScope"));
+                return new SemanticExtractionResult(
+                    facts,
+                    gaps,
+                    Attempted: false,
+                    ReducedCoverage: false,
+                    AnalyzedFiles: analyzedFiles,
+                    CompilationInputFiles: compilationInputFiles,
+                    ProtectedSourceSpans: []);
+            }
+
             if (vbFiles.Length > 0)
             {
                 gaps.Add(CreateGap(
@@ -513,7 +533,39 @@ public static class VisualBasicSemanticExtractor
         }
 
         var model = compilation.GetSemanticModel(tree, ignoreAccessibility: true);
+        var factCount = facts.Count;
+        var gapCount = gaps.Count;
+        var metadataCount = sourceMetadataCandidates?.Count ?? 0;
         analyzedFiles.Add(filePath);
+        try
+        {
+            ExtractDocumentFacts(repoPath, projectPath, filePath, root, model, facts, gaps, sourceMetadataCandidates);
+        }
+        catch (Exception ex) when (IsWorkspaceFailure(ex))
+        {
+            // Isolate one document's unexpected extractor failure: discard its partial
+            // semantic evidence, hand the file back to syntax fallback, and label the
+            // reduction instead of failing every later document in the project.
+            facts.RemoveRange(factCount, facts.Count - factCount);
+            gaps.RemoveRange(gapCount, gaps.Count - gapCount);
+            sourceMetadataCandidates?.RemoveRange(metadataCount, sourceMetadataCandidates.Count - metadataCount);
+            analyzedFiles.Remove(filePath);
+            gaps.Add(CreateGap(filePath,
+                $"Visual Basic semantic extraction failed for this document ({ex.GetType().Name}); syntax fallback evidence only.",
+                "VisualBasicDocumentExtractionFailed", projectPath));
+        }
+    }
+
+    private static void ExtractDocumentFacts(
+        string repoPath,
+        string? projectPath,
+        string filePath,
+        SyntaxNode root,
+        SemanticModel model,
+        List<SemanticFactCandidate> facts,
+        List<SemanticFactCandidate> gaps,
+        List<SourceMetadataIdentityCandidate>? sourceMetadataCandidates)
+    {
         AddTypeDeclarationFacts(projectPath, filePath, root, model, facts);
         AddMethodDeclarationFacts(projectPath, filePath, root, model, facts);
         AddPropertyDeclarationFacts(projectPath, filePath, root, model, facts);
@@ -1641,7 +1693,7 @@ public static class VisualBasicSemanticExtractor
                         projectPath,
                         lineSpan.StartLinePosition.Line + 1,
                         lineSpan.EndLinePosition.Line + 1,
-                        siteHash: FactFactory.Hash(invocation.Expression.ToString(), 32),
+                        siteHash: FactFactory.Hash(InvocationExpressionText(invocation), 32),
                         ruleId: operation is IDynamicInvocationOperation ? RuleIds.VisualBasicSemanticMethodInvocation : null));
                     fallbackFactCount += 2;
                 }
@@ -1727,7 +1779,7 @@ public static class VisualBasicSemanticExtractor
                 filePath,
                 model,
                 facts,
-                invocation.ArgumentList.Arguments,
+                (invocation.ArgumentList?.Arguments ?? default),
                 method,
                 invocation,
                 enclosing,
@@ -1749,8 +1801,8 @@ public static class VisualBasicSemanticExtractor
         var callerName = enclosing?.ToDisplayString(SymbolFormat);
         var properties = new SortedDictionary<string, string>(StringComparer.Ordinal)
         {
-            ["expressionHash"] = FactFactory.Hash(invocation.Expression.ToString(), 32),
-            ["expressionKind"] = invocation.Expression.Kind().ToString(),
+            ["expressionHash"] = FactFactory.Hash(InvocationExpressionText(invocation), 32),
+            ["expressionKind"] = InvocationExpressionKind(invocation),
             ["invocationName"] = invocationName,
             ["resolution"] = "unresolved"
         };
@@ -2527,7 +2579,7 @@ public static class VisualBasicSemanticExtractor
 
     private static bool TryGetHttpUriArgument(InvocationExpressionSyntax invocation, SemanticModel model, out string value)
     {
-        foreach (var argument in invocation.ArgumentList.Arguments.OfType<SimpleArgumentSyntax>())
+        foreach (var argument in (invocation.ArgumentList?.Arguments ?? default).OfType<SimpleArgumentSyntax>())
         {
             var parameter = (model.GetOperation(argument) as IArgumentOperation)?.Parameter;
             if (parameter?.Name is not ("requestUri" or "requestUriString" or "address"))
@@ -2559,7 +2611,7 @@ public static class VisualBasicSemanticExtractor
 
     private static bool TryGetConstantStringArgument(InvocationExpressionSyntax invocation, SemanticModel model, out string value)
     {
-        foreach (var argument in invocation.ArgumentList.Arguments.OfType<SimpleArgumentSyntax>())
+        foreach (var argument in (invocation.ArgumentList?.Arguments ?? default).OfType<SimpleArgumentSyntax>())
         {
             var constant = model.GetConstantValue(argument.Expression);
             if (constant.HasValue && constant.Value is string text)
@@ -3374,12 +3426,23 @@ public static class VisualBasicSemanticExtractor
             node.Span.Length);
     }
 
-    private static string GetSafeInvocationName(ExpressionSyntax expression) => expression switch
+    // VB null-conditional invocation (`list?(0)`, `callback?(1)`) parses as an
+    // InvocationExpressionSyntax whose Expression is null; parenthesis-free calls
+    // (`conn.Open`, `Call Ping`) have a null ArgumentList. Both are common legacy
+    // shapes and must not abort extraction for the rest of the project.
+    private static string GetSafeInvocationName(ExpressionSyntax? expression) => expression switch
     {
+        null => "conditional-access",
         MemberAccessExpressionSyntax memberAccess => memberAccess.Name.Identifier.ValueText,
         IdentifierNameSyntax identifier => identifier.Identifier.ValueText,
         _ => $"unsupported-{expression.Kind()}-{FactFactory.Hash(expression.ToString(), 16)}"
     };
+
+    private static string InvocationExpressionText(InvocationExpressionSyntax invocation) =>
+        invocation.Expression?.ToString() ?? invocation.ToString();
+
+    private static string InvocationExpressionKind(InvocationExpressionSyntax invocation) =>
+        invocation.Expression?.Kind().ToString() ?? "ConditionalAccessExpression";
 
     private static EvidenceSpan ToEvidenceSpan(string filePath, SyntaxNode node, bool includeSnippetHash = false)
     {

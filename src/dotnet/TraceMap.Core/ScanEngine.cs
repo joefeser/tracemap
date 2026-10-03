@@ -1206,6 +1206,13 @@ public static class ScanEngine
             return true;
         }
 
+        // An explicit project scope that excludes one language is an operator scope
+        // decision, not a toolchain failure; the gap stays visible but local.
+        if (gap.Properties?.GetValueOrDefault("gapKind") is "VisualBasicProjectsOutsideProjectScope" or "CSharpProjectsOutsideProjectScope")
+        {
+            return true;
+        }
+
         return gap.RuleId == RuleIds.DatabaseOperationCallPattern
             && gap.Properties?.GetValueOrDefault("gapKind") == "VisualBasicAdoNetTargetUnavailable";
     }
