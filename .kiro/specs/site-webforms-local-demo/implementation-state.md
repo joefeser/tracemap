@@ -7,7 +7,8 @@
 Exact base: `79ac39cf4459e913944786d755566568d02eccab`
 PR #803 ancestry at exact base: `not-shipped`
 - Route: `/webforms/local-demo/`
-- Validated implementation commit: `3843558a`
+- Initial validated implementation commit: `3843558a`
+- Pre-review handoff head: `289a2906b98c6ff8cd67c301ab1a284deabccc72`
 - Pull request: `https://github.com/joefeser/tracemap/pull/816`
 - Public claim level: `demo` for the exact-tree synthetic validation receipt;
   `concept` for the #806 illustrative path projection; `hidden` for retained raw
@@ -85,8 +86,8 @@ customer artifacts, and unpublished validation output remain hidden.
 
 ## Validation
 
-- Focused route regressions: 6 passed, 0 failed.
-- Full site tests: 1,216 passed, 0 failed, skipped, cancelled, or todo.
+- Focused route regressions: 9 passed, 0 failed.
+- Full site tests: 1,219 passed, 0 failed, skipped, cancelled, or todo.
 - `npm run build`: passed.
 - `npm run validate`: passed across 119 HTML files, 3,959 internal
   references, and 118 sitemap URLs.
@@ -100,8 +101,11 @@ customer artifacts, and unpublished validation output remain hidden.
 - Desktop at 1440 by 1000 and mobile at 390 by 844: one H1, no horizontal
   overflow, responsive artifact-map treatment present, linked guided-setup and
   source-proof routes resolved, and no browser-console errors or warnings.
-- Ready PR #816 targets `main`. ACK review state is recorded in the final
-  implementation handoff after the current-head loop completes.
+- Ready PR #816 targets `main`. The first ACK pass authorized six current-head
+  review-thread repairs covering copy accuracy, visible-only evidence checks,
+  broader local-path rejection, graceful missing-file handling, and shallow
+  history. The consolidated patch and regression matrix are awaiting the next
+  exact-head ACK pass.
 
 ## Remaining work
 

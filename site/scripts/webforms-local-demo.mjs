@@ -73,7 +73,7 @@ const requiredPhrases = [
 ];
 
 const forbiddenMaterial = [
-  /(?:\/Users\/|\/home\/|\/private\/|[A-Z]:\\Users\\|file:\/\/)/i,
+  /(?:~\/|\/(?:Users|home|private|tmp)\/|\/var\/folders\/|[A-Z]:\\(?:Users|Temp)\\|file:\/\/)/i,
   /\b(?:Server|Password|User Id)\s*=/i,
   /\b(?:ConnectionString|api[_-]?key|secret\s*=|sk-[A-Za-z0-9_-]{12,})\b/i,
   /\b(?:SELECT\s+.+?\s+FROM|INSERT\s+INTO|UPDATE\s+\w+\s+SET|DELETE\s+FROM|CREATE\s+TABLE|ALTER\s+TABLE|DROP\s+TABLE)\b/i
@@ -101,27 +101,39 @@ export async function validateWebFormsLocalDemoDist({
     return;
   }
 
+  const requiredFiles = [
+    [resolve(dist, "assets", "webforms-source-compiled-proof.json"), "proof asset"],
+    [resolve(root, "src", "_site", "discovery.json"), "discovery metadata"],
+    [resolve(root, "src", "_site", "pages.json"), "page registry"],
+    [implementationStatePath, "implementation state"]
+  ];
+  let missingRequiredFile = false;
+  for (const [path, label] of requiredFiles) {
+    if (!(await fileExists(path))) {
+      errors.push(`Web Forms local demo is missing required ${label}.`);
+      missingRequiredFile = true;
+    }
+  }
+  if (missingRequiredFile) return;
+
   const [html, assetText, discoveryText, pagesText, implementationState] = await Promise.all([
     readFile(pagePath, "utf8"),
-    readFile(resolve(dist, "assets", "webforms-source-compiled-proof.json"), "utf8"),
-    readFile(resolve(root, "src", "_site", "discovery.json"), "utf8"),
-    readFile(resolve(root, "src", "_site", "pages.json"), "utf8"),
-    readFile(implementationStatePath, "utf8")
+    ...requiredFiles.map(([path]) => readFile(path, "utf8"))
   ]);
-  const text = normalizeRenderedText(html);
   const activeHtml = stripHtmlComments(html);
+  const text = normalizeRenderedText(activeHtml);
   const publishedSurface = `${text} ${normalizeAttributeValues(activeHtml)}`;
   const hrefs = activeAnchorHrefs(activeHtml);
 
-  if (!html.includes(`<link rel="canonical" href="${baseUrl}${route}">`)) errors.push("Web Forms local demo canonical URL is missing or incorrect.");
-  if (!html.includes(`<meta property="og:url" content="${baseUrl}${route}">`)) errors.push("Web Forms local demo Open Graph URL is missing or incorrect.");
-  if ((html.match(/<h1\b/gi) ?? []).length !== 1) errors.push("Web Forms local demo must contain exactly one h1.");
-  if (!html.includes('data-responsive-artifact-map="table-scroll"')) errors.push("Web Forms local demo is missing its responsive artifact-map contract.");
+  if (!activeHtml.includes(`<link rel="canonical" href="${baseUrl}${route}">`)) errors.push("Web Forms local demo canonical URL is missing or incorrect.");
+  if (!activeHtml.includes(`<meta property="og:url" content="${baseUrl}${route}">`)) errors.push("Web Forms local demo Open Graph URL is missing or incorrect.");
+  if ((activeHtml.match(/<h1\b/gi) ?? []).length !== 1) errors.push("Web Forms local demo must contain exactly one h1.");
+  if (!activeHtml.includes('data-responsive-artifact-map="table-scroll"')) errors.push("Web Forms local demo is missing its responsive artifact-map contract.");
   for (const phrase of requiredPhrases) if (!text.includes(phrase)) errors.push(`Web Forms local demo is missing required bounded text: ${phrase}`);
   for (const link of requiredLinks) if (!hrefs.has(link)) errors.push(`Web Forms local demo is missing active required link: ${link}`);
 
-  validateBoundary({ html, implementationState, repositoryRoot, errors });
-  validateProvenance({ html, text, assetText, errors });
+  validateBoundary({ html: activeHtml, implementationState, repositoryRoot, errors });
+  validateProvenance({ html: activeHtml, text, assetText, errors });
 
   const discovery = safeJson(discoveryText, "Web Forms local demo discovery metadata", errors);
   const pages = safeJson(pagesText, "Web Forms local demo page registry", errors);
@@ -163,7 +175,7 @@ function validateBoundary({ html, implementationState, repositoryRoot, errors })
     return;
   }
   if (pageBase !== recordedBase) errors.push("Web Forms local demo page boundary does not match the implementation record.");
-  if (!gitCommitExists(repositoryRoot, pageBase) || !gitIsAncestor(repositoryRoot, pageBase, "HEAD")) errors.push("Web Forms local demo implementation base is not a verified ancestor of the validation checkout.");
+  if (gitCommitExists(repositoryRoot, pageBase) && !gitIsAncestor(repositoryRoot, pageBase, "HEAD")) errors.push("Web Forms local demo implementation base exists locally but is not an ancestor of the validation checkout.");
   if (!gitCommitExists(repositoryRoot, repair803Sha)) {
     if (recordedRepairState !== "not-shipped" || pageRepairState !== "not-shipped") errors.push("Web Forms local demo cannot verify an affirmative #803 shipped claim without the repair commit.");
     return;

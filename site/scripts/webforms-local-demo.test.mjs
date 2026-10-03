@@ -47,6 +47,20 @@ test("Web Forms local demo requires all layouts, query views, and fail-closed ou
   assert.match(errors.join("\n"), /TruncatedByLimit/);
 });
 
+test("Web Forms local demo ignores required evidence hidden in HTML comments", async (t) => {
+  const root = await fixture(t);
+  const pagePath = join(root, "src", "webforms", "local-demo", "index.html");
+  const page = await readFile(pagePath, "utf8");
+  await writeFile(pagePath, page.replaceAll("separate-dll-only", "provider-layout").replace(
+    "<div><strong><code>all</code></strong>",
+    "<!-- separate-dll-only --><div><strong><code>all</code></strong>"
+  ));
+  await buildSite({ root, log() {} });
+  const errors = [];
+  await validateFixture(root, errors);
+  assert.match(errors.join("\n"), /separate-dll-only/);
+});
+
 test("Web Forms local demo rejects durable-result and projection provenance drift", async (t) => {
   const root = await fixture(t);
   const pagePath = join(root, "src", "webforms", "local-demo", "index.html");
@@ -79,15 +93,33 @@ test("Web Forms local demo requires active inbound and outbound links", async (t
   assert.match(errors.join("\n"), /missing inbound link from: \/webforms\//);
 });
 
+test("Web Forms local demo reports a missing proof asset instead of throwing", async (t) => {
+  const root = await fixture(t);
+  await buildSite({ root, log() {} });
+  await rm(join(root, "dist", "assets", "webforms-source-compiled-proof.json"));
+  const errors = [];
+  await validateFixture(root, errors);
+  assert.match(errors.join("\n"), /missing required proof asset/);
+});
+
 test("Web Forms local demo rejects public private material and affirmative runtime claims", async (t) => {
   const root = await fixture(t);
   const pagePath = join(root, "src", "webforms", "local-demo", "index.html");
   const page = await readFile(pagePath, "utf8");
-  await writeFile(pagePath, page.replace("</main>", "<p>/Us<span>ers</span>/private/work</p><p>TraceMap ran the Web Forms database.</p></main>"));
+  await writeFile(pagePath, page.replace("</main>", "<p>/Us<span>ers</span>/private/work</p><p>/tmp/report</p><p>/var/folders/private-run</p><p>~/private-run</p><p>TraceMap ran the Web Forms database.</p></main>"));
   await buildSite({ root, log() {} });
   const errors = [];
   await validateFixture(root, errors);
   assert.ok(errors.filter((error) => String(error).includes("forbidden public material or claim")).length >= 2);
+});
+
+test("Web Forms local demo treats unavailable shallow history as unverifiable, not disproven", async (t) => {
+  const root = await fixture(t);
+  await buildSite({ root, log() {} });
+  const errors = [];
+  await validateFixture(root, errors, { repositoryRoot: root });
+  assert.doesNotMatch(errors.join("\n"), /implementation base .*not an ancestor/);
+  assert.deepEqual(errors, []);
 });
 
 test("Web Forms local demo rejects discovery and branch-boundary drift", async (t) => {
