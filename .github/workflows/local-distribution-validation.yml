@@ -7,6 +7,9 @@ on:
       - "scripts/smoke-local-distribution.ps1"
       - "scripts/Invoke-ExistingWebFormsPublishProof.ps1"
       - "scripts/tests/Test-ExistingWebFormsPublishProof.ps1"
+      - "scripts/tests/Test-FocusedWebFormsOutputSafety.ps1"
+      - "scripts/Invoke-FocusedWebFormsPipeline.ps1"
+      - "scripts/webforms-review/FocusedWebFormsPipelineConfig.ps1"
       - "src/dotnet/**"
       - "samples/compiled-dotnet-evidence/**"
       - "rules/rule-catalog.yml"
@@ -75,6 +78,12 @@ jobs:
       - name: Run local distribution smoke
         shell: pwsh
         run: ./scripts/smoke-local-distribution.ps1 -OutputDirectory "${{ runner.temp }}/tracemap-local-distribution"
+      - name: Validate focused output link safety and publish receipt identities
+        shell: pwsh
+        run: |
+          ./scripts/tests/Test-FocusedWebFormsOutputSafety.ps1
+          dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter FullyQualifiedName~WebFormsPublishedRootTests
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Retain sanitized receipt
         uses: actions/upload-artifact@v4
         with:

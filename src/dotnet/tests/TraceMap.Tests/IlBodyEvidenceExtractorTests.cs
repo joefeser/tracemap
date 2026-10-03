@@ -1066,6 +1066,40 @@ public sealed class IlBodyEvidenceExtractorTests
         assembly.Write(path);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Srm_decoder_reports_trailing_two_byte_prefix_as_malformed(bool precedingNop)
+    {
+        using var temp = new TempDirectory();
+        var path = Path.Combine(temp.Path, "TruncatedPrefix.dll");
+        using (var assembly = Mono.Cecil.AssemblyDefinition.CreateAssembly(
+            new Mono.Cecil.AssemblyNameDefinition("TruncatedPrefix", new Version(1, 0)), "TruncatedPrefix", Mono.Cecil.ModuleKind.Dll))
+        {
+            var module = assembly.MainModule;
+            var type = new Mono.Cecil.TypeDefinition("Public", "Fixture", Mono.Cecil.TypeAttributes.Public, module.TypeSystem.Object);
+            module.Types.Add(type);
+            var method = new CecilMethodDefinition("Run", Mono.Cecil.MethodAttributes.Public | Mono.Cecil.MethodAttributes.Static, module.TypeSystem.Void);
+            type.Methods.Add(method);
+            if (precedingNop) method.Body.Instructions.Add(Mono.Cecil.Cil.Instruction.Create(Mono.Cecil.Cil.OpCodes.Nop));
+            method.Body.Instructions.Add(Mono.Cecil.Cil.Instruction.Create(Mono.Cecil.Cil.OpCodes.Ret));
+            assembly.Write(path);
+        }
+        var bytes = File.ReadAllBytes(path);
+        using (var pe = new PEReader(new MemoryStream(bytes)))
+        {
+            var reader = pe.GetMetadataReader();
+            var method = reader.GetMethodDefinition(reader.MethodDefinitions.Single());
+            var offset = FileOffset(pe, method.RelativeVirtualAddress);
+            Assert.Equal(2, bytes[offset] & 3); // Tiny body header.
+            bytes[offset + 1 + (precedingNop ? 1 : 0)] = 0xfe;
+        }
+        var error = Assert.Throws<IlBodyEvidenceExtractor.IlEvidenceException>(() =>
+            IlBodyEvidenceExtractor.ReadSystemReflectionMetadataBodies(bytes, new IlBodyLimits(),
+                new IlBodyEvidenceExtractor.IlWorkBudget(2_000_000), CancellationToken.None));
+        Assert.Equal("MalformedIlBody", error.GapKind);
+    }
+
     private static void RewriteShortBranchDelta(byte[] bytes, string methodName, byte delta)
     {
         using var stream = new MemoryStream(bytes, writable: false);

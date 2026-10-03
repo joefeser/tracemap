@@ -1,3 +1,35 @@
+function Assert-FocusedWebFormsUnlinkedPath {
+    param([Parameter(Mandatory = $true)][string]$Path)
+    $current = [IO.Path]::GetFullPath($Path)
+    while ($current) {
+        $entry = $null
+        try { $entry = Get-Item -LiteralPath $current -Force -ErrorAction Stop }
+        catch [System.Management.Automation.ItemNotFoundException] { }
+        if ($null -ne $entry -and ($entry.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+            throw 'WEBFORMS_PIPELINE_LINKED_OUTPUT'
+        }
+        $current = [IO.Path]::GetDirectoryName($current)
+    }
+}
+
+function Write-FocusedWebFormsPageList {
+    param([string]$Path, [string[]]$Forms)
+    Assert-FocusedWebFormsUnlinkedPath $Path
+    $temporary = "$Path.tmp-$([Guid]::NewGuid().ToString('N'))"
+    try {
+        $stream = [IO.FileStream]::new($temporary, [IO.FileMode]::CreateNew, [IO.FileAccess]::Write, [IO.FileShare]::None)
+        try {
+            $writer = [IO.StreamWriter]::new($stream, [Text.UTF8Encoding]::new($false))
+            try { foreach ($form in $Forms) { $writer.WriteLine($form) } }
+            finally { $writer.Dispose() }
+        }
+        finally { $stream.Dispose() }
+        Assert-FocusedWebFormsUnlinkedPath $Path
+        [IO.File]::Move($temporary, $Path, $true)
+    }
+    finally { if ([IO.File]::Exists($temporary)) { [IO.File]::Delete($temporary) } }
+}
+
 function Remove-FocusedWebFormsJsonComments {
     [CmdletBinding()]
     param([Parameter(Mandatory = $true)][string]$Text)

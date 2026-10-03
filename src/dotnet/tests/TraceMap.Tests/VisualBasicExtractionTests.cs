@@ -8,6 +8,32 @@ namespace TraceMap.Tests;
 // Every assertion below claims only what the emitted evidence honestly shows.
 public sealed class VisualBasicExtractionTests
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Mixed_standalone_projects_preserve_explicit_restore_for_both_languages(bool restore)
+    {
+        using var temp = new TempDirectory();
+        var repo = Directory.CreateDirectory(Path.Combine(temp.Path, "source")).FullName;
+        foreach (var language in new[] { "cs", "vb" })
+        {
+            var folder = Directory.CreateDirectory(Path.Combine(repo, language)).FullName;
+            File.WriteAllText(Path.Combine(folder, "Sample." + language + "proj"),
+                "<Project Sdk=\"Microsoft.NET.Sdk\"><PropertyGroup><TargetFramework>net10.0</TargetFramework></PropertyGroup></Project>");
+            File.WriteAllText(Path.Combine(folder, "Sample." + language), language == "cs"
+                ? "public class CSharpFixture {}" : "Public Class VisualBasicFixture\nEnd Class");
+        }
+        var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out"), Restore: restore));
+        foreach (var language in new[] { "cs", "vb" })
+            Assert.Equal(restore, File.Exists(Path.Combine(repo, language, "obj/project.assets.json")));
+        if (restore)
+        {
+            Assert.DoesNotContain(result.Facts, f => f.Properties.GetValueOrDefault("gapKind") == "RestoreFailed");
+            Assert.Contains(result.Facts, f => f.FactType == FactTypes.TypeDeclared
+                && f.RuleId == RuleIds.VisualBasicSemanticDeclarations && f.EvidenceTier == EvidenceTiers.Tier1Semantic);
+        }
+    }
+
     // ---------- Task 5: compiler-backed semantic facts ----------
 
     [Fact]

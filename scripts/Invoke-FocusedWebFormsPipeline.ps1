@@ -72,6 +72,8 @@ $root = [IO.Path]::GetFullPath($ReviewRoot).TrimEnd('\', '/')
 $traceRoot = [IO.Path]::GetFullPath($TraceMapRoot).TrimEnd('\', '/')
 $receiptPath = Join-Path $root 'run-receipt.json'
 if (!(Test-Path -LiteralPath $root -PathType Container)) { throw 'WEBFORMS_PIPELINE_REVIEW_ROOT_UNAVAILABLE' }
+Assert-FocusedWebFormsUnlinkedPath $root
+Assert-FocusedWebFormsUnlinkedPath (Join-Path $root 'config/selected-pages.txt')
 try {
     $configPath = Resolve-FocusedWebFormsPipelineConfigPath -ReviewRoot $root
     $config = Read-FocusedWebFormsPipelineConfig -ConfigPath $configPath
@@ -306,7 +308,7 @@ try {
             '--max-gaps', '20000', '--max-identity-state', '10000', '--max-batch-data-movement', '10000', '--max-traversal-work', '1000000')
         if ($config.PageMode -eq 'selected') {
             $pageListPath = Join-Path $root 'config/selected-pages.txt'
-            [IO.File]::WriteAllLines($pageListPath, $config.Forms, [Text.UTF8Encoding]::new($false))
+            Write-FocusedWebFormsPageList -Path $pageListPath -Forms $config.Forms
             $packetArguments += @('--surface-list', $pageListPath)
         }
         dotnet @packetArguments

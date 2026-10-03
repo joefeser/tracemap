@@ -24,6 +24,7 @@ rules:
     emits:
       - Local form-selection validation result
     limitations:
+      - Discovery excludes .git, bin and obj directories case-insensitively; linked inventory entries outside those excluded directory contents remain errors.
       - Discovery and selected paths do not prove runtime activation or complete analysis coverage.
       - Missing or blank selection files pause for editing; empty effective selections never imply all pages.
       - Subset acceptance rechecks the bounded surrounding form inventory; a case-colliding sibling is ambiguous even when only one spelling was selected.
@@ -2960,6 +2961,7 @@ rules:
       - WebFormsPublishAssemblyBound
       - AnalysisGap
     limitations:
+      - Map parsing uses only the bounded snapshot whose bytes matched the receipt hash. This is snapshot integrity, not a lock on future filesystem changes. Single-receipt duplicate detection and artifact lookup use host path comparison (case-insensitive on Windows); partition sets additionally reject case aliases across partitions.
       - Published files default to the receipt directory. An explicit caller-supplied absolute root may locate the same declared bytes elsewhere; its path hash participates in the bounded input digest and never proves source ownership, authentic compilation or a complete publish inventory.
       - An explicit repository-relative receipt source base maps unchanged website-relative receipt paths to repository-relative evidence. It participates in the bounded input and scan-scope hashes; virtual routes and receipt source digests retain their original coordinate system. Unsafe paths, missing inputs and hash mismatches withhold evidence; no base is discovered.
       - The receipt is operator-declared. Matching hashes and a .compiled map establish static page-to-assembly correspondence for the declared build inputs; they do not independently prove the compiler ran, source-method identity, PDB lines, deployment, page activation, or runtime execution.
