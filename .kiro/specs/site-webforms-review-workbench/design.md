@@ -10,8 +10,8 @@ upload surface, generated report, or private artifact viewer.
 The preferred claim posture is `demo` only after the #806 public-safe proof
 projection is available on the implementation base and the page consumes that
 exact validated projection. If the dependency is absent, incomplete, or unsafe
-to reuse, publish only concept-level guidance or defer the route; do not create
-substitute evidence.
+to reuse, publish the route only as concept-level guidance; do not defer the
+required route and do not create substitute evidence.
 
 ## Walkthrough model
 

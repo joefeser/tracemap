@@ -21,7 +21,8 @@ or generated site output.
 The planned route is `/webforms/review-workbench/`. Its preferred `demo` level
 is conditional on the #806 public-safe proof route and projection being present
 and validated on the implementation base. The spec does not pre-approve a demo
-claim. Without that dependency, the route remains `concept` or is deferred.
+claim. Without that dependency, the required route is published as `concept`;
+publication is not deferred and no substitute evidence is created.
 
 ## Exact-main evidence inspected
 
@@ -114,9 +115,16 @@ budget. They also admit `WebFormsModernizationGapLimitReached` when saturation
 replaces a later inventory-specific gap. This matches exact-main packet code
 and the bounded-gap regression without changing implementation scope.
 
+A later exact-head Codex review authorized one additional P2 consistency fix.
+The route is now unconditionally published, while its `demo` upgrade remains
+conditional on the #806 proof dependency; without that dependency it stays
+`concept` rather than being deferred.
+
 ## Handoff
 
 Implementation begins only after owner approval and should start from a freshly
-fetched target branch containing the approved proof dependency. Keep it
-site-only, update task checkboxes and this note as work completes, and never edit
-generated `site/dist` or `site/output` content.
+fetched target branch. If that base contains the approved #806 proof dependency,
+the route may satisfy its `demo` gate; otherwise implementation publishes the
+required concept route. Keep it site-only, update task checkboxes and this note
+as work completes, and never edit generated `site/dist` or `site/output`
+content.
