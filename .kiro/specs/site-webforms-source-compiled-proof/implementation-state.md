@@ -43,7 +43,10 @@ route at `concept`; the spec does not pre-approve a demo claim.
   `combined.paths.compiled-command-value.v1`,
   `combined.paths.compiled-il-bridge.v1`, and
   `combined.paths.projectless-publish-candidate.v1`, each with explicit
-  limitations.
+  limitations. `combined.paths.compiled-il-bridge.v1` spans emitted Tier 1
+  source/metadata identity edges, Tier 2 uniquely resolved bound nonvirtual IL
+  calls, and Tier 3 virtual, unbound, or database-terminal candidates; the rule
+  ID alone does not determine a hop's tier.
 
 ## Branch boundary
 
@@ -116,3 +119,8 @@ The current-head ACK batch authorized two independent P2 specification fixes:
 
 Both corrections were validated together and do not expand this branch beyond
 the four spec files.
+
+A later exact-head Codex review identified one additional P2 tier-preservation
+issue. The evidence model now treats `combined.paths.compiled-il-bridge.v1` as
+a multi-tier rule family and requires every projection and validator to retain
+the tier emitted for each individual edge.

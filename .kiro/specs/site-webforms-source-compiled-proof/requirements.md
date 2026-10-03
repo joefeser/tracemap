@@ -28,8 +28,10 @@ runtime behavior.
    compiler-resolved source evidence (`Tier1Semantic`), metadata/IL structural
    evidence (`Tier2Structural`), review-only source-to-publish and encoded-value
    candidates (`Tier3SyntaxOrTextual`), and unresolved or unavailable evidence
-   (`Tier4Unknown`). A candidate bridge SHALL never be presented as a proven IL
-   call or exact source-method identity.
+   (`Tier4Unknown`). The projection SHALL preserve the evidence tier emitted for
+   each hop; a rule family that emits more than one tier SHALL NOT be assigned a
+   single route-wide tier. A candidate bridge SHALL never be presented as a
+   proven IL call or exact source-method identity.
 4. The primary walkthrough SHALL render a bounded, readable chain rather than
    serialized canonical identities. It SHALL preserve enough safe identity and
    provenance to review the page handler, property getter, constructor,

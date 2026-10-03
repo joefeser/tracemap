@@ -30,9 +30,9 @@ The visual model uses four labeled layers:
 
 | Layer | Intended public meaning | Representative rule families | Required caution |
 | --- | --- | --- | --- |
-| Compiler-backed source | A compiler resolved a source declaration or call shape in an admitted project context. | `database.operation.call-pattern.v1` and applicable VB semantic rules | Does not prove execution, branch selection, SQL, or runtime dispatch. |
-| Compiled metadata and IL | Admitted managed bytes contain exact metadata, body, and encoded call evidence. | `dotnet.compiled.member.v1`, `dotnet.compiled.il-body.v1`, `dotnet.compiled.il-call.v1` | Does not prove freshness, source ownership, deployment, reachability, or execution. |
-| Review-tier bridge/value | A bounded deterministic candidate connects otherwise separate evidence layers or substitutes an encoded value candidate. | `combined.paths.compiled-il-bridge.v1`, `combined.paths.projectless-publish-candidate.v1`, `combined.paths.compiled-command-value.v1`, `dotnet.compiled.il-command-binding.v1` | Candidate evidence is not an exact source-to-IL call, runtime value, or provider selection. |
+| Compiler-backed source | A compiler resolved a source declaration or call shape in an admitted project context, or the bridge retained a bound source/metadata identity edge. | `database.operation.call-pattern.v1`, applicable VB semantic rules, and `combined.paths.compiled-il-bridge.v1` when it emits `Tier1Semantic` | Does not prove execution, branch selection, SQL, or runtime dispatch. |
+| Compiled metadata and IL | Admitted managed bytes contain exact metadata, body, and encoded call evidence, including a uniquely resolved bound nonvirtual IL call. | `dotnet.compiled.member.v1`, `dotnet.compiled.il-body.v1`, `dotnet.compiled.il-call.v1`, and `combined.paths.compiled-il-bridge.v1` when it emits `Tier2Structural` | Does not prove freshness, source ownership, deployment, reachability, or execution. |
+| Review-tier bridge/value | A bounded deterministic virtual, unbound, database-terminal, source-to-publish, or encoded-value candidate connects otherwise separate evidence layers. | `combined.paths.compiled-il-bridge.v1` when it emits `Tier3SyntaxOrTextual`, `combined.paths.projectless-publish-candidate.v1`, `combined.paths.compiled-command-value.v1`, `dotnet.compiled.il-command-binding.v1` | Candidate evidence is not an exact source-to-IL call, runtime value, or provider selection. |
 | Explicit gap | Required evidence is missing, ambiguous, unresolved, changed, or beyond a configured bound. | `dotnet.compiled.gap.v1`, `dotnet.compiled.il-gap.v1`, `AnalysisGap` facts from the bridge rules | A gap means reduced observation coverage, never absence. |
 
 The projectless fixture can contain multiple layers in one route. The page must
@@ -40,7 +40,10 @@ not flatten the route to its strongest tier; every hop keeps its own tier and
 limitations. Compiler-resolved source and projectless source-to-publish
 candidate evidence must also remain separate in the explanation. A layer may
 appear as a comparison or gap rather than a positive hop when the selected
-fixture projection has no supporting fact for it.
+fixture projection has no supporting fact for it. In particular,
+`combined.paths.compiled-il-bridge.v1` is not itself a tier: the projection and
+validators must retain the `Tier1Semantic`, `Tier2Structural`, or
+`Tier3SyntaxOrTextual` value emitted for the individual edge.
 
 ## Public proof projection
 
@@ -131,7 +134,9 @@ the shared validators should assert:
 - canonical/social metadata and one `h1`;
 - the conditional `concept`/`demo` claim gate and exact-main provenance;
 - all four evidence-layer labels and the three required outcomes;
-- no bridge is labelled as a proven IL call;
+- emitted per-hop tiers for every multi-tier bridge rule, including Tier 1,
+  Tier 2, and Tier 3 `combined.paths.compiled-il-bridge.v1` cases;
+- no Tier 3 candidate bridge is labelled as a proven IL call;
 - gaps, limits, non-claims, versions, rule IDs, tiers, and spans remain visible;
 - projection fields and SHA-256 values are present and correctly shaped when an
   asset is published;
