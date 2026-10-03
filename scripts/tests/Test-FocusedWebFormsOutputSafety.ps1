@@ -2,9 +2,10 @@ $ErrorActionPreference = 'Stop'
 $scripts = Split-Path -Parent $PSScriptRoot
 . (Join-Path $scripts 'webforms-review/FocusedWebFormsPipelineConfig.ps1')
 $temp = Join-Path ([IO.Path]::GetTempPath()) ('tracemap-output-safety-' + [Guid]::NewGuid().ToString('N'))
-# Resolve the OS temporary-directory alias before testing operator-created links.
-if ($IsMacOS -and $temp.StartsWith('/var/')) { $temp = '/private' + $temp }
-if ($IsMacOS -and $temp.StartsWith('/tmp/')) { $temp = '/private' + $temp }
+if ($IsMacOS) {
+    Assert-FocusedWebFormsUnlinkedPath '/tmp/tracemap-new-review/config/selected-pages.txt'
+    Assert-FocusedWebFormsUnlinkedPath '/var/folders/tracemap-new-review/config/selected-pages.txt'
+}
 try {
     $root = Join-Path $temp 'review'
     $config = Join-Path $root 'config'

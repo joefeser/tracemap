@@ -116,6 +116,38 @@ public sealed class PromotionReviewRegressionTests
 public sealed class PromotionReviewProjectScopeTests
 {
     [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Relative_repository_with_explicit_scope_has_the_same_scan_identity(bool solution)
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(repo);
+        File.WriteAllText(Path.Combine(repo, "App.csproj"), "<Project />");
+        File.WriteAllText(Path.Combine(repo, "App.cs"), "class App {}");
+        File.WriteAllText(Path.Combine(repo, "App.sln"), "");
+        var options = new ScanOptions(repo, Path.Combine(temp.Path, "out"),
+            ProjectPaths: solution ? null : ["App.csproj"], SolutionPaths: solution ? ["App.sln"] : null);
+        var absolute = ScanEngine.Scan(options);
+        var relative = ScanEngine.Scan(options with { RepoPath = Path.GetRelativePath(Environment.CurrentDirectory, repo) });
+        Assert.Equal(absolute.Manifest.ScanId, relative.Manifest.ScanId);
+    }
+
+    [Theory]
+    [InlineData("CSharpProjectsOutsideProjectScope", "ProjectScopeExcludedLanguage", "informational", "ReviewScanScope")]
+    [InlineData("VisualBasicProjectsOutsideProjectScope", "ProjectScopeExcludedLanguage", "informational", "ReviewScanScope")]
+    [InlineData("VisualBasicDocumentExtractionFailed", "DocumentExtractionFailed", "reduces-semantic-coverage", "ReportExtractorDefect")]
+    public void Diagnostic_categories_preserve_scope_and_extractor_failure_semantics(string kind, string code, string coverage, string guidance)
+    {
+        var diagnostic = BuildEnvironmentDiagnosticExtractor.SanitizeWorkspaceGap(kind, "private-secret-path");
+        Assert.Equal(code, diagnostic.DiagnosticCode);
+        Assert.Equal(coverage, diagnostic.CoverageEffect);
+        Assert.Equal(guidance, diagnostic.GuidanceCode);
+        Assert.DoesNotContain("private-secret-path", diagnostic.Message);
+        Assert.DoesNotContain("UncategorizedWorkspaceFailure", diagnostic.Message);
+    }
+
+    [Theory]
     [InlineData("app/Ap.csproj", false)]
     [InlineData("app/Ap.csproj", true)]
     [InlineData("lib/Li.vbproj", true)]
@@ -169,8 +201,12 @@ public sealed class PromotionReviewProjectScopeTests
 
         Assert.DoesNotContain(result.Facts, fact => fact.FactType == FactTypes.AnalysisGap
             && fact.Properties.GetValueOrDefault("gapKind") == "NoVisualBasicProjectOrSolution");
-        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.AnalysisGap
+        var excluded = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.AnalysisGap
             && fact.Properties.GetValueOrDefault("gapKind") == "VisualBasicProjectsOutsideProjectScope");
+        Assert.Equal("ProjectScopeExcludedLanguage", excluded.Properties.GetValueOrDefault("diagnosticCode"));
+        Assert.Equal("scan-scope", excluded.Properties.GetValueOrDefault("diagnosticKind"));
+        Assert.Equal("informational", excluded.Properties.GetValueOrDefault("coverageEffect"));
+        Assert.Equal("ReviewScanScope", excluded.Properties.GetValueOrDefault("guidanceCode"));
         Assert.Equal("Succeeded", result.Manifest.BuildStatus);
     }
 }
@@ -182,6 +218,8 @@ public sealed class PromotionReviewWebFormsClientTests
     [InlineData("const r = /https?:\\/\\//; next();")]
     [InlineData("const r = /[}'/]/g; next();")]
     [InlineData("return /}/.test(value);")]
+    [InlineData("await /}/.test(value); next();")]
+    [InlineData("await /[}'/]/g.test(value); next();")]
     [InlineData("const n = count / 2; next();")]
     [InlineData("const n = count++ / 2; next();")]
     [InlineData("const s = 'https://example.invalid/}'; next();")]
@@ -212,7 +250,7 @@ public sealed class PromotionReviewWebFormsClientTests
             <%@ Page Language="VB" CodeFile="Edit.aspx.vb" Inherits="Edit" %>
             <script>
             $('#Save').click(function () { // don't double-submit
-              $(this).prop('disabled', true);
+              const work = async () => { await /}/.test(value); }; $(this).prop('disabled', true);
               $.ajax({ type: 'POST', url: 'https://partner.example.com/svc/Upload.ashx' });
             });
             </script>
@@ -261,6 +299,11 @@ public sealed class PromotionReviewInlineServerExpressionTests
     [InlineData("VB", "Replace(p, \"\\\", \"/\") & Customer.DefaultName")]
     [InlineData("VisualBasic", "Replace(p, \"\\\", \"/\") & Customer.DefaultName")]
     [InlineData("C#", "p.Replace(\"\\\\\", \"/\") + Customer.DefaultName")]
+    [InlineData("C#", "$\"{Customer.DefaultName}\"")]
+    [InlineData("C#", "$@\"literal {{Customer.Decoy}} {Customer.DefaultName}\"")]
+    [InlineData("C#", "@$\"literal {Customer.DefaultName}\"")]
+    [InlineData("C#", "$\"{Customer.DefaultName + \"Other.Decoy\"}\"")]
+    [InlineData("C#", "$\"{Customer.DefaultName:Other.Decoy}\"")]
     public void Inline_directive_language_controls_literal_masking_without_codebehind(string language, string expression)
     {
         using var temp = new TempDirectory();
