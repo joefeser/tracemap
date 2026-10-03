@@ -37,6 +37,7 @@ public static class FileInventory
         ".config",
         ".json",
         ".cs",
+        ".vb",
         ".cshtml",
         ".sql",
         ".aspx",
@@ -96,7 +97,8 @@ public static class FileInventory
         string? outputPath,
         IReadOnlyList<string>? excludeGlobs,
         StringComparer? pathComparer,
-        IReadOnlyList<string>? includeGlobs)
+        IReadOnlyList<string>? includeGlobs,
+        int? maxEnumerationEntries = null)
     {
         var root = Path.GetFullPath(repoPath);
         var outputFullPath = string.IsNullOrWhiteSpace(outputPath)
@@ -119,7 +121,8 @@ public static class FileInventory
                 outputFullPath,
                 excludeGlobs ?? [],
                 pathComparer ?? StringComparer.Ordinal,
-                includeGlobs ?? []).ToArray();
+                includeGlobs ?? [],
+                maxEnumerationEntries).ToArray();
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -151,15 +154,19 @@ public static class FileInventory
         string? outputFullPath,
         IReadOnlyList<string> excludeGlobs,
         StringComparer pathComparer,
-        IReadOnlyList<string> includeGlobs)
+        IReadOnlyList<string> includeGlobs,
+        int? maxEnumerationEntries)
     {
         var pending = new Stack<string>();
+        var enumeratedEntries = 0;
         pending.Push(root);
         while (pending.Count > 0)
         {
             var directory = pending.Pop();
             foreach (var childDirectory in Directory.EnumerateDirectories(directory, "*", options))
             {
+                if (maxEnumerationEntries is int directoryLimit && ++enumeratedEntries > directoryLimit)
+                    throw new InvalidOperationException("ExactSourceScopeEnumerationLimitExceeded");
                 if (ShouldExclude(root, childDirectory, outputFullPath)
                     || IsExplicitlyExcludedDirectory(root, childDirectory, excludeGlobs, pathComparer))
                 {
@@ -179,6 +186,8 @@ public static class FileInventory
 
             foreach (var file in Directory.EnumerateFiles(directory, "*", options))
             {
+                if (maxEnumerationEntries is int fileLimit && ++enumeratedEntries > fileLimit)
+                    throw new InvalidOperationException("ExactSourceScopeEnumerationLimitExceeded");
                 if (!ShouldExclude(root, file, outputFullPath)
                     && !IsExplicitlyExcludedFile(root, file, excludeGlobs, pathComparer))
                 {
@@ -418,7 +427,7 @@ public static class FileInventory
             ".csproj" => "Project",
             ".sqlproj" => "SqlProject",
             ".refactorlog" => "SqlProjectRefactorLog",
-            ".vbproj" => "NonCSharpProject",
+            ".vbproj" => "VisualBasicProject",
             ".fsproj" => "NonCSharpProject",
             ".props" => "MSBuildProps",
             ".targets" => "MSBuildTargets",
@@ -429,6 +438,11 @@ public static class FileInventory
             ".cs" when IsWebFormsCodeBehindFile(fileName) => "WebFormsCodeBehind",
             ".cs" when IsWinFormsDesignerFile(path, fileName) => "WinFormsDesigner",
             ".cs" => "CSharp",
+            ".vb" when IsVisualBasicDesignerFile(fileName) => "VisualBasicDesigner",
+            ".vb" when IsVisualBasicCodeBehindFile(fileName) => "VisualBasicCodeBehind",
+            ".vb" when IsVisualBasicGeneratedFile(fileName) => "VisualBasicGenerated",
+            ".vb" when IsVisualBasicAssemblyInfoFile(fileName) => "VisualBasicAssemblyInfo",
+            ".vb" => "VisualBasic",
             ".cshtml" => "Razor",
             ".sql" => "Sql",
             ".aspx" => "WebFormsMarkup",
@@ -497,6 +511,46 @@ public static class FileInventory
             || kind.Equals("WebFormsCodeBehind", StringComparison.Ordinal)
             || kind.Equals("WebFormsDesigner", StringComparison.Ordinal)
             || kind.Equals("WinFormsDesigner", StringComparison.Ordinal);
+    }
+
+    public static bool IsVisualBasicKind(string kind)
+    {
+        return kind.Equals("VisualBasic", StringComparison.Ordinal)
+            || kind.Equals("VisualBasicCodeBehind", StringComparison.Ordinal)
+            || kind.Equals("VisualBasicDesigner", StringComparison.Ordinal)
+            || kind.Equals("VisualBasicGenerated", StringComparison.Ordinal)
+            || kind.Equals("VisualBasicAssemblyInfo", StringComparison.Ordinal);
+    }
+
+    public static bool IsVisualBasicSourceKind(string kind)
+    {
+        return IsVisualBasicKind(kind);
+    }
+
+    private static bool IsVisualBasicCodeBehindFile(string fileName)
+    {
+        return fileName.EndsWith(".aspx.vb", StringComparison.OrdinalIgnoreCase)
+            || fileName.EndsWith(".ascx.vb", StringComparison.OrdinalIgnoreCase)
+            || fileName.EndsWith(".master.vb", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsVisualBasicDesignerFile(string fileName)
+    {
+        return fileName.EndsWith(".aspx.designer.vb", StringComparison.OrdinalIgnoreCase)
+            || fileName.EndsWith(".ascx.designer.vb", StringComparison.OrdinalIgnoreCase)
+            || fileName.EndsWith(".master.designer.vb", StringComparison.OrdinalIgnoreCase)
+            || fileName.EndsWith(".designer.vb", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsVisualBasicGeneratedFile(string fileName)
+    {
+        return fileName.EndsWith(".generated.vb", StringComparison.OrdinalIgnoreCase)
+            || fileName.EndsWith(".g.vb", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsVisualBasicAssemblyInfoFile(string fileName)
+    {
+        return fileName.Equals("AssemblyInfo.vb", StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool IsWebFormsCodeBehindFile(string fileName)

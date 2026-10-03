@@ -21,8 +21,21 @@ public sealed record ScanManifest(
     string? ScanRootRelativePath = null,
     string? ScanRootPathHash = null,
     string? GitRootHash = null,
-    string? SourceSnapshotDigest = null) : IJsonOnDeserialized
+    string? SourceSnapshotDigest = null,
+    CompiledInputProvenance? CompiledInputProvenance = null,
+    SourceMetadataReconciliationSummary? SourceMetadataReconciliation = null,
+    PdbInputProvenance? PdbInputProvenance = null,
+    PdbEvidenceSummary? PdbEvidenceSummary = null,
+    IlBodyProvenance? IlBodyProvenance = null,
+    IlRewriteProvenance? IlRewriteProvenance = null,
+    IlRewritePdbProvenance? IlRewritePdbProvenance = null,
+    WebFormsPublishProvenance? WebFormsPublishProvenance = null) : IJsonOnDeserialized
 {
+    // Additive context for a compiled-only derived scan. Ordinary scans keep
+    // their existing serialized shape, and parent source facts are not copied.
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public CompiledAttachmentContext? CompiledAttachment { get; init; }
+
     public string? SourceSnapshotDigest { get; init; } = ValidateSourceSnapshotDigest(SourceSnapshotDigest);
 
     void IJsonOnDeserialized.OnDeserialized()
@@ -71,7 +84,14 @@ public sealed record ScanManifest(
             ScanRootRelativePath,
             ScanRootPathHash,
             GitRootHash,
-            SourceSnapshotDigest: null)
+            SourceSnapshotDigest: null,
+            CompiledInputProvenance: null,
+            SourceMetadataReconciliation: null,
+            PdbInputProvenance: null,
+            PdbEvidenceSummary: null,
+            IlBodyProvenance: null,
+            IlRewriteProvenance: null,
+            IlRewritePdbProvenance: null)
     {
     }
 }
@@ -136,7 +156,29 @@ public sealed record ScanOptions(
     string? TargetFramework = null,
     bool Restore = false,
     IReadOnlyList<string>? BinlogPaths = null,
-    string? BinlogCommitSha = null);
+    string? BinlogCommitSha = null,
+    IReadOnlyList<string>? CompiledInputPaths = null,
+    IReadOnlyList<string>? CompiledDependencyPaths = null,
+    IReadOnlyList<string>? CompiledBindingReceiptPaths = null,
+    CompiledInputLimits? CompiledInputLimits = null,
+    IReadOnlyList<string>? PdbInputPaths = null,
+    PdbInputLimits? PdbInputLimits = null,
+    bool IlBodyEvidence = false,
+    IlBodyLimits? IlBodyLimits = null,
+    bool IlRewriteEvidence = false,
+    IReadOnlyList<string>? IlRewriteBeforePaths = null,
+    IReadOnlyList<string>? IlRewriteAfterPaths = null,
+    IlRewriteLimits? IlRewriteLimits = null,
+    bool IlRewritePdbEvidence = false,
+    IReadOnlyList<string>? IlRewriteBeforePdbPaths = null,
+    IReadOnlyList<string>? IlRewriteAfterPdbPaths = null,
+    IlRewritePdbLimits? IlRewritePdbLimits = null,
+    string? WebFormsPublishReceiptPath = null,
+    bool ExactSourceScope = false,
+    int ExactSourceMaxFiles = 256,
+    long ExactSourceMaxBytes = 67_108_864,
+    string? WebFormsPublishedRootPath = null,
+    string? WebFormsPublishSourceRelativeBase = null);
 
 public sealed record FileInventoryItem(
     string RelativePath,
@@ -155,7 +197,13 @@ public sealed record GitMetadata(
 public sealed record ScanResult(
     ScanManifest Manifest,
     IReadOnlyList<CodeFact> Facts,
-    IReadOnlyList<FileInventoryItem> Inventory);
+    IReadOnlyList<FileInventoryItem> Inventory)
+{
+    // Includes semantic metadata that may not have FileInventoried facts.
+    // This execution-only value is not a new implicit serialized artifact.
+    [JsonIgnore]
+    public IReadOnlyList<FileInventoryItem>? SourceSnapshotInventory { get; init; }
+}
 
 public static class EvidenceTiers
 {
@@ -217,6 +265,9 @@ public static class FactTypes
     public const string DatabaseColumnMapping = nameof(DatabaseColumnMapping);
     public const string ConfigBinding = nameof(ConfigBinding);
     public const string EnumDeclared = nameof(EnumDeclared);
+    public const string EventDeclared = nameof(EventDeclared);
+    public const string VisualBasicEventBindingDeclared = nameof(VisualBasicEventBindingDeclared);
+    public const string VisualBasicEventRaised = nameof(VisualBasicEventRaised);
     public const string AttributeUsed = nameof(AttributeUsed);
     public const string MemberAccessName = nameof(MemberAccessName);
     public const string InvocationName = nameof(InvocationName);
@@ -244,6 +295,7 @@ public static class FactTypes
     public const string MsBuildProjectObserved = nameof(MsBuildProjectObserved);
     public const string MsBuildProjectReferenceObserved = nameof(MsBuildProjectReferenceObserved);
     public const string MsBuildDiagnosticObserved = nameof(MsBuildDiagnosticObserved);
+    public const string VisualBasicProjectObserved = nameof(VisualBasicProjectObserved);
     public const string ObjectShapeInferred = nameof(ObjectShapeInferred);
     public const string PropertyAccessed = nameof(PropertyAccessed);
     public const string MethodInvoked = nameof(MethodInvoked);
@@ -289,6 +341,10 @@ public static class FactTypes
     public const string RemotingConfigClientDeclared = nameof(RemotingConfigClientDeclared);
     public const string RemotingConfigProviderDeclared = nameof(RemotingConfigProviderDeclared);
     public const string WebFormsPageDeclared = nameof(WebFormsPageDeclared);
+    public const string WebFormsPublishPageMapped = nameof(WebFormsPublishPageMapped);
+    public const string WebFormsPublishPageCandidate = nameof(WebFormsPublishPageCandidate);
+    public const string WebFormsPublishSourceBound = nameof(WebFormsPublishSourceBound);
+    public const string WebFormsPublishAssemblyBound = nameof(WebFormsPublishAssemblyBound);
     public const string WebFormsControlDeclared = nameof(WebFormsControlDeclared);
     public const string WebFormsUserControlRegistered = nameof(WebFormsUserControlRegistered);
     public const string WebFormsCompositionDeclared = nameof(WebFormsCompositionDeclared);
@@ -299,6 +355,15 @@ public static class FactTypes
     public const string WebFormsLogicSignalDetected = nameof(WebFormsLogicSignalDetected);
     public const string WebFormsLifecycleBranchCandidate = nameof(WebFormsLifecycleBranchCandidate);
     public const string WebFormsClientScriptRegistrationCandidate = nameof(WebFormsClientScriptRegistrationCandidate);
+    public const string WebFormsClientEventBindingCandidate = nameof(WebFormsClientEventBindingCandidate);
+    public const string WebFormsClientUiMutationCandidate = nameof(WebFormsClientUiMutationCandidate);
+    public const string WebFormsClientValidationConstraintCandidate = nameof(WebFormsClientValidationConstraintCandidate);
+    public const string WebFormsClientHttpRequestCandidate = nameof(WebFormsClientHttpRequestCandidate);
+    public const string WebFormsClientHttpHandlerDeclared = nameof(WebFormsClientHttpHandlerDeclared);
+    public const string WebFormsServerNavigationCandidate = nameof(WebFormsServerNavigationCandidate);
+    public const string WebFormsRequestLifecycleCandidate = nameof(WebFormsRequestLifecycleCandidate);
+    public const string WebFormsServerControlStateMutationCandidate = nameof(WebFormsServerControlStateMutationCandidate);
+    public const string WebFormsInlineServerExpressionReferenceCandidate = nameof(WebFormsInlineServerExpressionReferenceCandidate);
     public const string WebFormsPostBackTargetCandidate = nameof(WebFormsPostBackTargetCandidate);
     public const string WebFormsDataBindingCandidate = nameof(WebFormsDataBindingCandidate);
     public const string WinFormsSurfaceDeclared = nameof(WinFormsSurfaceDeclared);
@@ -357,6 +422,30 @@ public static class FactTypes
     public const string MessagePublisherSurface = nameof(MessagePublisherSurface);
     public const string MessageConsumerSurface = nameof(MessageConsumerSurface);
     public const string MessageBindingDeclared = nameof(MessageBindingDeclared);
+    public const string ManagedAssemblyDeclared = nameof(ManagedAssemblyDeclared);
+    public const string ManagedInputAdmitted = nameof(ManagedInputAdmitted);
+    public const string ManagedModuleDeclared = nameof(ManagedModuleDeclared);
+    public const string ManagedTypeDeclared = nameof(ManagedTypeDeclared);
+    public const string ManagedMethodDeclared = nameof(ManagedMethodDeclared);
+    public const string ManagedFieldDeclared = nameof(ManagedFieldDeclared);
+    public const string ManagedPropertyDeclared = nameof(ManagedPropertyDeclared);
+    public const string ManagedEventDeclared = nameof(ManagedEventDeclared);
+    public const string SourceMetadataIdentityObserved = nameof(SourceMetadataIdentityObserved);
+    public const string SourceMetadataIdentityReconciled = nameof(SourceMetadataIdentityReconciled);
+    public const string PdbInputAdmitted = nameof(PdbInputAdmitted);
+    public const string PdbDocumentDeclared = nameof(PdbDocumentDeclared);
+    public const string PdbMethodDeclared = nameof(PdbMethodDeclared);
+    public const string PdbSequencePointDeclared = nameof(PdbSequencePointDeclared);
+    public const string MetadataPdbMethodReconciled = nameof(MetadataPdbMethodReconciled);
+    public const string PdbSourceDocumentReconciled = nameof(PdbSourceDocumentReconciled);
+    public const string ManagedIlBodyDeclared = nameof(ManagedIlBodyDeclared);
+    public const string ManagedIlCallObserved = nameof(ManagedIlCallObserved);
+    public const string ManagedIlCallValuesObserved = nameof(ManagedIlCallValuesObserved);
+    public const string ManagedIlReturnValuesObserved = nameof(ManagedIlReturnValuesObserved);
+    public const string ManagedIlDatabaseCommandCandidate = nameof(ManagedIlDatabaseCommandCandidate);
+    public const string ManagedIlRewriteObserved = nameof(ManagedIlRewriteObserved);
+    public const string ManagedIlCallRetargetObserved = nameof(ManagedIlCallRetargetObserved);
+    public const string ManagedIlRewritePdbObserved = nameof(ManagedIlRewritePdbObserved);
 }
 
 public static class RuleIds
@@ -389,6 +478,25 @@ public static class RuleIds
     public const string CSharpSemanticFlowBoundary = "csharp.semantic.flowboundary.v1";
     public const string CSharpSemanticRuntimeEvidence = "csharp.semantic.runtimeevidence.v1";
     public const string CSharpSemanticWorkspace = "csharp.semantic.workspace.v1";
+    public const string VisualBasicSemanticCompilation = "vb.semantic.compilation.v1";
+    public const string VisualBasicSemanticWorkspace = "vb.semantic.workspace.v1";
+    public const string VisualBasicSemanticDeclarations = "vb.semantic.declarations.v1";
+    public const string VisualBasicSemanticPropertyAccess = "vb.semantic.propertyaccess.v1";
+    public const string VisualBasicSemanticMethodInvocation = "vb.semantic.methodinvocation.v1";
+    public const string VisualBasicSemanticCallGraph = "vb.semantic.callgraph.v1";
+    public const string VisualBasicSemanticObjectCreation = "vb.semantic.objectcreation.v1";
+    public const string VisualBasicSemanticValueFlow = "vb.semantic.valueflow.v1";
+    public const string VisualBasicSemanticSymbolRelationship = "vb.semantic.symbolrelationship.v1";
+    public const string VisualBasicSemanticEventWiring = "vb.semantic.event-wiring.v1";
+    public const string VisualBasicSemanticConfigBinding = "vb.semantic.config-binding.v1";
+    public const string VisualBasicSemanticExternalBoundary = "vb.semantic.external-boundary.v1";
+    public const string VisualBasicSyntaxDeclarations = "vb.syntax.declarations.v1";
+    public const string VisualBasicSyntaxMemberAccess = "vb.syntax.memberaccess.v1";
+    public const string VisualBasicSyntaxInvocation = "vb.syntax.invocation.v1";
+    public const string VisualBasicSyntaxCallGraph = "vb.syntax.callgraph.v1";
+    public const string VisualBasicSyntaxObjectCreation = "vb.syntax.objectcreation.v1";
+    public const string VisualBasicSyntaxEventWiring = "vb.syntax.event-wiring.v1";
+    public const string VisualBasicSyntaxDatabaseOperation = "vb.syntax.database-operation.v1";
     public const string CSharpRazorSemanticModelBinding = "csharp.razor.semantic-model-binding.v1";
     public const string CSharpRazorSemanticModelBindingGap = "csharp.razor.semantic-model-binding-gap.v1";
     public const string CSharpSemanticPropertyMapping = "csharp.semantic.propertymapping.v1";
@@ -459,6 +567,7 @@ public static class RuleIds
     public const string LegacyRemotingRegistration = "legacy.remoting.registration.v1";
     public const string LegacyRemotingConfig = "legacy.remoting.config.v1";
     public const string LegacyWebFormsInventory = "legacy.webforms.inventory.v1";
+    public const string LegacyWebFormsPublishMap = "legacy.webforms.publish-map.v1";
     public const string LegacyWebFormsComposition = "legacy.webforms.composition.v1";
     public const string LegacyWebFormsEventBinding = "legacy.webforms.event-binding.v1";
     public const string LegacyWebFormsHandlerResolution = "legacy.webforms.handler-resolution.v1";
@@ -467,6 +576,11 @@ public static class RuleIds
     public const string LegacyWebFormsLogicSignal = "legacy.webforms.logic-signal.v1";
     public const string LegacyWebFormsLifecycleContext = "legacy.webforms.lifecycle-context.v1";
     public const string LegacyWebFormsClientScript = "legacy.webforms.client-script.v1";
+    public const string LegacyWebFormsInlineClientBehavior = "legacy.webforms.inline-client-behavior.v1";
+    public const string LegacyWebFormsInlineClientHttpRequest = "legacy.webforms.inline-client-http-request.v1";
+    public const string LegacyWebFormsClientHttpHandlerResolution = "legacy.webforms.client-http-handler-resolution.v1";
+    public const string LegacyWebFormsServerBehavior = "legacy.webforms.server-behavior.v1";
+    public const string LegacyWebFormsInlineServerExpression = "legacy.webforms.inline-server-expression.v1";
     public const string LegacyWebFormsPostBackTarget = "legacy.webforms.postback-target.v1";
     public const string LegacyWebFormsDataBinding = "legacy.webforms.data-binding.v1";
     public const string LegacyWebFormsModernizationPacket = "legacy.webforms.modernization-packet.v1";
@@ -544,6 +658,24 @@ public static class RuleIds
     public const string MessageFlowGap = "message.flow.gap.v1";
     public const string ReverseImpactTraversal = "impact.reverse.traversal.v1";
     public const string ReverseImpactGap = "impact.reverse.gap.v1";
+    public const string DotNetCompiledInput = "dotnet.compiled.input.v1";
+    public const string DotNetCompiledAssembly = "dotnet.compiled.assembly.v1";
+    public const string DotNetCompiledMember = "dotnet.compiled.member.v1";
+    public const string DotNetCompiledGap = "dotnet.compiled.gap.v1";
+    public const string DotNetCompiledSourceIdentity = "dotnet.compiled.source-identity.v1";
+    public const string DotNetPdbInput = "dotnet.compiled.pdb-input.v1";
+    public const string DotNetPdbIdentity = "dotnet.compiled.pdb-identity.v1";
+    public const string DotNetPdbSequencePoint = "dotnet.compiled.sequence-point.v1";
+    public const string DotNetPdbGap = "dotnet.compiled.pdb-gap.v1";
+    public const string DotNetIlBody = "dotnet.compiled.il-body.v1";
+    public const string DotNetIlCall = "dotnet.compiled.il-call.v1";
+    public const string DotNetIlValues = "dotnet.compiled.il-values.v1";
+    public const string DotNetIlCommandBinding = "dotnet.compiled.il-command-binding.v1";
+    public const string DotNetIlGap = "dotnet.compiled.il-gap.v1";
+    public const string DotNetIlRewrite = "dotnet.compiled.il-rewrite.v1";
+    public const string DotNetIlRewriteGap = "dotnet.compiled.il-rewrite-gap.v1";
+    public const string DotNetIlRewritePdb = "dotnet.compiled.il-rewrite-pdb.v1";
+    public const string DotNetIlRewritePdbGap = "dotnet.compiled.il-rewrite-pdb-gap.v1";
 }
 
 public static class ScannerVersions
@@ -555,13 +687,21 @@ public static class ScannerVersions
     public const string NuGetLockfileExtractor = "nuget-lockfile/0.1.0";
     public const string BuildEnvironmentExtractor = "build-environment/0.6.0";
     public const string AnalyzerCapabilityExtractor = "analyzer-capability/0.1.0";
-    public const string CSharpSyntaxExtractor = "csharp-syntax/0.5.0";
+    public const string CSharpSyntaxExtractor = "csharp-syntax/0.5.1";
     public const string CSharpAspNetSyntaxRouteExtractor = "csharp-aspnet-syntax-route/0.1.0";
     public const string CSharpIntegrationSyntaxExtractor = "csharp-integration-syntax/0.3.0";
-    public const string CSharpSemanticExtractor = "csharp-semantic/0.21.0";
+    public const string CSharpSemanticExtractor = "csharp-semantic/0.21.2";
+    public const string VisualBasicSemanticExtractor = "vb-semantic/0.8.7";
+    public const string VisualBasicSyntaxExtractor = "vb-syntax/0.3.23";
     public const string CSharpPropertyMappingExtractor = "csharp-property-mapping/0.1.0";
     public const string FrameworkMigrationEvidenceExtractor = "framework-migration/0.1.0";
     public const string FrameworkMigrationSyntaxFallbackExtractor = "framework-migration-syntax-fallback/0.1.0";
+    public const string ManagedMetadataExtractor = "managed-metadata/0.1.2+cecil-0.11.6";
+    public const string SourceMetadataReconciliationExtractor = "source-metadata-reconciliation/0.1.0";
+    public const string PortablePdbExtractor = "portable-pdb/0.1.0+srm-10.0.0+cecil-0.11.6";
+    public const string IlBodyEvidenceExtractor = "il-body-evidence/0.1.11+srm-10.0.0+cecil-0.11.6";
+    public const string IlRewriteEvidenceExtractor = "il-rewrite-evidence/0.1.1+srm-10.0.0+cecil-0.11.6";
+    public const string IlRewritePdbEvidenceExtractor = "il-rewrite-pdb-evidence/0.1.0+srm-10.0.0+cecil-0.11.6";
     public const string ConfigExtractor = "config/0.1.0";
     public const string SqlTextExtractor = "sql-text/0.1.0";
     public const string SqlShapeExtractor = "sql-shape/0.1.0";
@@ -572,13 +712,14 @@ public static class ScannerVersions
     public const string PostgresSchemaMigrationExtractor = "postgres-schema-migration/0.5.0";
     public const string SqlProjectRefactorExtractor = "sql-project-refactor/0.1.0";
     public const string MsBuildBinlogExtractor = "msbuild-binlog/0.1.0";
-    public const string LegacyWcfExtractor = "legacy-wcf/0.2.0";
-    public const string LegacyAsmxExtractor = "legacy-asmx/0.1.0";
+    public const string LegacyWcfExtractor = "legacy-wcf/0.3.1";
+    public const string LegacyAsmxExtractor = "legacy-asmx/0.2.0";
     public const string LegacyRemotingExtractor = "legacy-remoting/0.1.0";
-    public const string LegacyWebFormsExtractor = "legacy-webforms/0.7.1";
+    public const string LegacyWebFormsExtractor = "legacy-webforms/0.13.6";
+    public const string WebFormsPublishMapExtractor = "webforms-publish-map/0.1.3";
     public const string LegacyWinFormsExtractor = "legacy-winforms/0.1.0";
     public const string LegacyAspNetExtractor = "legacy-aspnet/0.2.0";
-    public const string LegacyBatchDataMovementExtractor = "legacy-batch-data-movement/0.1.0";
+    public const string LegacyBatchDataMovementExtractor = "legacy-batch-data-movement/0.2.0";
     public const string LegacyDataExtractor = "legacy-data/0.1.0";
     public const string LegacyDataSymbolComposition = "legacy-data-composition/0.1.0";
     public const string AccessExtractor = "legacy-access/0.3.2";

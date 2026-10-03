@@ -3,6 +3,343 @@
 # - deferred: documented future/planned rule that must not appear in emitted facts.
 # Existing rules without an explicit status are treated as active.
 rules:
+  - id: workflow.webforms.wizard-state.v1
+    name: Local resumable Web Forms wizard state
+    description: Persists bounded project cursors and input references in exclusive, versioned, generator-and-input-hashed local configuration envelopes.
+    evidenceTier: Tier4Unknown
+    emits:
+      - webforms-wizard-root.v1
+      - webforms-wizard-project.v1
+      - webforms-wizard-repair.v1
+    limitations:
+      - Saved steps are cursors, not proof of valid current inputs, live processes, build authenticity or completed reports.
+      - Replacement is atomic per file, not transactional across root and project files; interrupted changes fail closed.
+      - Confirmed repair archives affected project state and preserves native inputs and prior run paths; malformed root configuration is not automatically repaired.
+      - Explicit project repair admits empty originals for bounded preview and archival; normal config reads remain nonempty-only, and changed previews or oversized originals fail closed.
+      - Configuration and repair artifacts are private; hashes detect changes, not authorship or authorization outside the explicit operator flow.
+  - id: workflow.webforms.wizard-forms.v1
+    name: Bounded wizard form selection
+    description: Discovers and validates normalized website-relative ASPX selections without running customer code.
+    evidenceTier: Tier2Structural
+    emits:
+      - Local form-selection validation result
+    limitations:
+      - Discovery excludes .git, bin and obj directories case-insensitively; linked inventory entries outside those excluded directory contents remain errors.
+      - Discovery and selected paths do not prove runtime activation or complete analysis coverage.
+      - Missing or blank selection files pause for editing; empty effective selections never imply all pages.
+      - Subset acceptance rechecks the bounded surrounding form inventory; a case-colliding sibling is ambiguous even when only one spelling was selected.
+      - Templates and parsed selections share a one-MiB UTF-8 byte limit in addition to the character bound; oversized templates fail closed, and a bounded explicit selection can be supplied in forms.txt.
+      - Filesystem races remain possible; downstream inputs must be revalidated before execution.
+  - id: workflow.webforms.wizard-target.v1
+    name: Static wizard target classification
+    description: Classifies explicitly selected local website folders, solutions and CSharp or Visual Basic projects using bounded text and XML inspection.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - Local target and tool-family candidate
+    limitations:
+      - MSBuild imports and conditions are not evaluated; a tool-family candidate is not a successful build or compatible Web Forms runtime.
+      - Solutions require an explicit local website selection; other projects are not independently registered.
+  - id: workflow.webforms.wizard-build.v1
+    name: Explicitly authorized wizard build observation
+    description: Records successful version and build process observations after exact command preview and operator consent.
+    evidenceTier: Tier4Unknown
+    emits:
+      - Local nested build observation with executable target and output hashes
+    limitations:
+      - A successful exit is not authenticated compiler provenance, complete dependency closure or source-to-binary binding.
+      - Builds may execute project-defined tasks and modify customer files only after explicit confirmation; the website is never launched.
+      - Manual projectless publication produces no invented build observation.
+      - Solution input builds target the explicitly selected website project; project-defined references and tasks may still execute. Both declared input and selected project hashes are rechecked.
+      - Build output retains bounded tails and hashes full decoded UTF-16LE streams, not original output bytes; truncation of the retained tail does not terminate the build.
+  - id: workflow.webforms.wizard-publication.v1
+    name: Static wizard publication inventory
+    description: Checks publication layout and managed PE metadata and retains bounded selected publication and website source input hashes.
+    evidenceTier: Tier2Structural
+    emits:
+      - Local publication inventory and nested input snapshots
+    limitations:
+      - Metadata is inspected without assembly loading; input hashes and compilation markers do not establish historical build authenticity.
+      - Source membership is bounded to known website extensions and explicit target input, not arbitrary imported project closure.
+      - Native admission and source-commit validation remain separate gates; unselected binaries are not claimed as reviewed.
+      - Assembly selections are capped at 128 per category and 252 combined before persistence; retained count derives from source, explicit target, bin, metadata and dependency limits. Independent byte and serialized configuration limits still apply.
+  - id: workflow.webforms.wizard-native-config.v1
+    name: Wizard-generated private native configuration
+    description: Stages hash-verified selected publication inputs and emits native configuration with exact generator and bounded input hashes.
+    evidenceTier: Tier2Structural
+    emits:
+      - Native configuration with WizardProvenance
+    limitations:
+      - Preparation provenance is not reused or invented; source attestation is a separate explicit operator declaration.
+      - External dependency copies retain byte identity but do not establish source or runtime identity.
+      - Byte-identical dependencies share a single staged native input, including dependencies identical to a selected primary; all original selections remain hash-revalidated.
+      - Fresh collection selects one website project; cross-project discovery and automatic cross-service tracing are deferred.
+      - Generator provenance hashes a fixed-role JSON commitment to both CLI and Core assembly SHA-256 values; installation paths are excluded, and hashes do not authenticate the distribution.
+      - Wizard configurations reserve 256 non-publication inputs including selected project and generated receipts; publication counts use a separate budget, and metadata or graph work can still be partial.
+  - id: workflow.webforms.retained-proof-import.v1
+    name: Explicit verified legacy publish proof import
+    description: Imports an explicitly selected bounded legacy publish and binding receipt into a new native configuration after current source, repository, commit, inventory digest, DLL hash and binding admission checks.
+    evidenceTier: Tier2Structural
+    emits:
+      - webforms-retained-proof-import.v1 local-only verification receipt
+      - review-config.local.json local-only configuration bound by exact generator and bounded input hashes
+    limitations:
+      - Retained owner attestation is carried unchanged, not newly issued or authenticated compiler provenance.
+      - Only webforms-publish-binding.v1 with an explicit legacy assemblyInventory and matching compiled-input-binding-set.v1 is accepted; missing or mismatched records stop import.
+      - Selected page scope comes from the baseline receipt; original source and project scopes and budgets are preserved and broader page coverage is not inferred.
+      - A website-relative receipt requires an explicit repository-relative source base. The base is hash-bound in the import and execution scope; original receipt bytes and virtual routes are unchanged and discovery never selects a base.
+      - An exact historical proof-copy locator may be projected into a separate local binding receipt only after the copied and published bytes, original locator, assembly identity, repository and commit are verified. Original receipts are unchanged; this is not a new source-to-binary or compiler attestation. Arbitrary locator or identity mismatches remain gaps.
+      - Dependency context stays unbound and input verification is not completed scanning, report parity, a two-repository merge or runtime proof.
+      - Originals remain external and unchanged; output overlaps, existing destinations, unsafe paths and changed inputs are refused. Failed staging remains unadmitted.
+  - id: workflow.webforms.config-migration.v1
+    name: Local legacy Web Forms config migration draft
+    description: Maps bounded known legacy JSON or JSONC scan settings into a separate native draft with exact generator and input hashes.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - webforms-config-migration.v1 local-only receipt
+      - review.draft.json local-only native config bytes bound by the migration receipt
+    limitations:
+      - Migration is local-only syntactic mapping, not preflight, collection, binding, compilation or runtime evidence.
+      - Exact commit, published inventory, receipts and source-to-DLL authority are never inferred; drafts remain not ready to run.
+      - Discover selection and virtual page routes require explicit owner resolution; separate repositories are not merged.
+      - Original configs and retained artifacts stay unchanged; existing destinations and ambiguous or unsupported schemas are refused.
+  - id: dotnet.compiled.input.v1
+    name: Explicit bounded managed input
+    description: Records an explicitly declared managed assembly or dependency admitted under the deterministic compiled-input policy with local-only byte and provenance digests.
+    evidenceTier: Tier2Structural
+    emits: [ManagedInputAdmitted, AnalysisGap]
+    limitations:
+      - Admission proves only that the explicitly supplied bounded bytes were inspected; it does not prove freshness, source ownership, authenticity, runtime load, or completeness.
+      - Missing, unreadable, native, mixed-mode, ambiguous, unbound, stale, mismatched, and over-budget inputs remain Tier4Unknown gaps and never become absence conclusions.
+      - Ordinary compiled facts and indexes containing repository, commit, safe locator, receipt, or binary identities are local-only in this slice; no shareable CodeFact projection is defined.
+      - Dependency resolution considers only explicitly declared admitted dependency inputs and never probes the host GAC, runtime, SDK, package caches, working directory, or ambient Mono.Cecil resolver.
+
+  - id: dotnet.compiled.assembly.v1
+    name: Managed assembly and module metadata identity
+    description: Records Cecil-derived assembly and module identities independently cross-checked with System.Reflection.Metadata.
+    evidenceTier: Tier2Structural
+    emits: [ManagedAssemblyDeclared, ManagedModuleDeclared, AnalysisGap]
+    limitations:
+      - Assembly name, version, culture, public-key token, module name, MVID, target framework, metadata token, and path do not prove authenticity, source equivalence, freshness, runtime loading, or execution.
+      - Reader disagreement withholds the disputed fact and emits a deterministic Tier4Unknown gap; there is no display-string fallback or majority vote.
+
+  - id: dotnet.compiled.member.v1
+    name: Managed type and member metadata identity
+    description: Records exact metadata identities for types, methods, constructors, fields, properties, and events with full signatures and module-local token locations.
+    evidenceTier: Tier2Structural
+    emits: [ManagedTypeDeclared, ManagedMethodDeclared, ManagedFieldDeclared, ManagedPropertyDeclared, ManagedEventDeclared, AnalysisGap]
+    limitations:
+      - A metadata declaration does not prove source ownership, runtime execution, dispatch, reachability, behavior, build freshness, or impact.
+      - Metadata tokens are module-local locations and are never stable cross-build identities by themselves.
+      - Compiler-generated labels report metadata attributes or shapes only and do not establish a relationship to a source construct.
+
+  - id: dotnet.compiled.gap.v1
+    name: Compiled metadata coverage gap
+    description: Records categorical unavailable, malformed, stale, ambiguous, unbound, mismatched, unsupported, unresolved, reader-disagreed, or bounded compiled-input coverage.
+    evidenceTier: Tier4Unknown
+    emits: [AnalysisGap]
+    limitations:
+      - Guarded SRM signature decoding precedes Cecil materialization and checks TypeSpec rows including unused specifications. Modifier cycles reach the bounded nesting guard; invalid generic TypeSpec positions, malformed TypeRef and declaring-type cycles remain categorical reader failures. This is not a complete malicious-PE sandbox.
+      - The gap reduces only the explicitly bounded compiled-input coverage; it does not prove absence and does not alter, erase, or upgrade source-derived evidence.
+      - File timestamps are not freshness evidence, and source association requires a validated binding receipt.
+
+  - id: dotnet.compiled.source-identity.v1
+    status: active
+    name: Source to compiled metadata identity reconciliation
+    description: Records a deterministic edge only when one compiler-resolved source declaration and exactly one admitted metadata declaration share the complete normalized assembly, module, type, member, and signature identity under a validated bound receipt; otherwise records an explicit bounded gap.
+    evidenceTier: Tier1Semantic
+    emits: [SourceMetadataIdentityObserved, SourceMetadataIdentityReconciled, AnalysisGap]
+    limitations:
+      - Display strings, simple names, same arity, path proximity, timestamps, and metadata tokens alone cannot establish a source-to-metadata identity edge.
+      - Zero or multiple exact candidates, incomplete source identities, unsupported source adapters, and unbound, stale, mismatched, ambiguous, disputed, unsupported, or incomplete compiled evidence emit Tier4Unknown gaps and no edge.
+      - Compiler-generated members remain separate unless the compiler supplies a specific associated property or event accessor relationship; no state-machine, lambda, backing-field, or generated-type relationship is inferred.
+      - An exact edge proves identity reconciliation only for this scan; it does not prove PDB correspondence, IL ownership, rewrite equivalence, runtime loading, execution, dispatch, reachability, behavior, or impact.
+      - Reconciliation coverage is independent of source analysis level and never erases, upgrades, or otherwise changes source-derived facts.
+
+  - id: dotnet.compiled.pdb-input.v1
+    status: active
+    name: Explicit bounded PDB input
+    description: Records an explicitly declared standalone Portable PDB or assembly-carried embedded Portable PDB admitted under deterministic byte, format, metadata, source-reconciliation work, and artifact limits and bound to exactly one admitted managed assembly through its exact CodeView and PDB content identity.
+    evidenceTier: Tier2Structural
+    emits: [PdbInputAdmitted, AnalysisGap]
+    limitations:
+      - Admission proves only that the explicitly supplied bounded bytes were inspected; it does not prove source ownership, build freshness, authenticity, runtime behavior, or completeness.
+      - Input provenance coverage and its digest describe only admitted PDB/assembly inputs; final source and method reconciliation coverage is recorded separately in the source-bound PDB evidence summary.
+      - File name, path proximity, timestamp, and metadata token alone never bind a PDB to an assembly.
+      - Binding requires exactly one matching CodeView directory entry in exactly one admitted assembly; duplicate identical entries remain ambiguous.
+      - An embedded Portable PDB requires the declared carrier assembly bytes to match the admitted assembly exactly, exactly one embedded debug entry, and a bounded decompressed payload; a missing entry or mismatch emits a gap rather than a positive identity.
+      - Missing, malformed, over-budget, unsupported, unbound, mismatched, or ambiguously matched inputs emit Tier4Unknown gaps and no positive identity edge.
+      - Native Windows PDB classification requires the complete MSF 7.00 signature; arbitrary non-portable bytes remain malformed input.
+
+  - id: dotnet.compiled.pdb-identity.v1
+    status: active
+    name: Metadata to PDB identity reconciliation
+    description: Records PDB document and method identities and links a PDB method to exactly one admitted metadata method only when the PDB content identity, PE CodeView entry, module-local method row, and acceptable compiled provenance all agree.
+    evidenceTier: Tier2Structural
+    emits: [PdbDocumentDeclared, PdbMethodDeclared, MetadataPdbMethodReconciled, PdbSourceDocumentReconciled, AnalysisGap]
+    limitations:
+      - PDB method rows and metadata tokens are module-local locations and cannot establish identity without the exact PDB-to-assembly binding.
+      - Document names are not emitted by default; source correspondence requires one exact checksum candidate and never uses basename or path proximity to select a file.
+      - Checksum candidates include already-inventoried C# and VB source kinds, including code-behind, designer, generated, and assembly-info files; this does not add legacy-framework source analysis.
+      - Exact source checksum correspondence is Tier2Structural evidence, not compiler-resolved Tier1 semantic evidence.
+      - Metadata-to-PDB reconciliation does not prove execution, reachability, behavioral equivalence, IL ownership beyond the bound method location, or rewrite preservation.
+
+  - id: dotnet.compiled.sequence-point.v1
+    status: active
+    name: Portable PDB sequence-point evidence
+    description: Records exact ordered PDB sequence points with method identity, IL offset, document identity, hidden state, and source range under a bound PDB input.
+    evidenceTier: Tier2Structural
+    emits: [PdbSequencePointDeclared, AnalysisGap]
+    limitations:
+      - A sequence point is compiler-produced debug metadata; it does not prove statement execution, control flow, branch behavior, call relationships, or source semantics.
+      - A positive sequence point requires exactly one supporting metadata-to-PDB method reconciliation; zero or multiple candidates emit a gap and no sequence-point fact.
+      - Hidden points and repeated or non-monotonic source ranges remain explicit data and are not rewritten into convenient source claims.
+      - Independent reader shape comparison is duplicate-sensitive and consumes bounded PDB work units; exceeding the limit emits a gap rather than a partial positive sequence-point set.
+
+  - id: dotnet.compiled.pdb-gap.v1
+    status: active
+    name: PDB coverage gap
+    description: Records bounded missing, malformed, mismatched, ambiguous, unsupported, reader-disagreed, source-unmatched, changed or unreadable bound-assembly, or limit-exhausted PDB coverage.
+    evidenceTier: Tier4Unknown
+    emits: [AnalysisGap]
+    limitations:
+      - The gap reduces only the explicitly requested PDB lane; it does not prove source, metadata, document, method, or sequence-point absence and never alters source analysis level.
+
+  - id: dotnet.compiled.il-body.v1
+    status: active
+    name: Bounded operand-aware IL method-body identity
+    description: Records an exact IL method-body identity for an admitted managed assembly where the canonical body digest commits every instruction opcode together with its operand: resolved direct call targets, branch and switch target offsets, string digests, numeric constant bit patterns, variable indexes, full field/type/member token identities, and calli standalone signatures.
+    evidenceTier: Tier2Structural
+    emits: [ManagedIlBodyDeclared, AnalysisGap]
+    limitations:
+      - An IL body identity proves only that the admitted assembly contains this exact bounded instruction stream at this module-local method row; it does not prove execution, dispatch, reachability, behavior, source ownership, semantic equivalence with any source construct, or preservation under rewriting.
+      - The canonical digest is byte-layout sensitive by design. Equal opcode sequences with different member, string, constant, branch, or switch operands therefore produce different identities, and this rule makes no claim that differently laid out bodies are semantically different or equivalent; rewrite equivalence is a separate deferred contract.
+      - Mono.Cecil is not the sole oracle. Mono.Cecil and an independent System.Reflection.Metadata raw-IL reader must agree on the complete canonical body encoding, including call-target identities, locals, exception-region boundaries, and max stack, or the input's positive IL facts are withheld.
+      - Field and general token operands commit both their raw module-local token and full decoded type/member identity; calli commits its standalone calling-convention signature. The containing module is the only resolution scope. None of these operands proves target presence, execution, or cross-assembly resolution.
+      - IL user-string literals are committed by length and SHA-256 digest of exact little-endian UTF-16 code units, preserving unpaired surrogates without replacement fallback; literals are never retained verbatim, because literal text is unbounded and may contain secrets.
+      - Abstract, external, PInvoke, runtime-implemented, and bodyless methods emit no body fact; this is a structural observation about the method row, not a claim that no code exists.
+      - Paired before/after identities and retargets use the separate dotnet.compiled.il-rewrite.v1 rule. Netmodules, multi-module manifests, and type forwarders are explicitly unsupported by the current assembly-scoped admission contract; duplicate identities require exact one-candidate joins. ILAsm/ILDAsm parity is proven only for the public fixture matrix by the pinned Windows extended-lane gate (Microsoft .NET Framework 4.8 ILAsm with Windows SDK NETFX ILDAsm); no parity claim extends beyond those fixtures or that pinned toolchain.
+
+  - id: dotnet.compiled.il-call.v1
+    status: active
+    name: Direct IL call-site evidence
+    description: Records one evidence row per direct call-related instruction operand (call, callvirt, newobj, ldftn, ldvirtftn, calli standalone signature, and the constrained. prefix target) with the exact containing body identity, IL offset, opcode, module-local reference token, and complete member-reference or standalone-signature identity as encoded in the containing module.
+    evidenceTier: Tier2Structural
+    emits: [ManagedIlCallObserved, AnalysisGap]
+    limitations:
+      - A call site records the static member reference encoded in this module's IL. It does not prove the target is ever executed, that a virtual dispatch resolves to that member, that the referenced external assembly is present, or that the target body exists.
+      - A calli site records the complete static StandAloneSig calling convention, this flags, required-parameter boundary, return type, and parameter types; that signature is not a target-member identity and does not prove the function pointer is valid or invoked.
+      - Member-reference identities are resolved only against metadata encoded inside the containing module (MethodDef rows, MemberRef rows with assembly-reference scope, and MethodSpec instantiations). No cross-assembly resolution, host probing, or ambient Mono.Cecil resolution is performed.
+      - Unresolved or unsupported operand encodings on a call-family opcode fail closed to a gap for that input; no partial call list is emitted.
+      - The constrained. prefix records its exact cross-checked type identity with reference kind constrainedtype, but no module-local token claim: Mono.Cecil cannot reproduce the raw TypeSpec token for a resolved constrained operand, so the field stays explicitly unclaimed rather than single-sourced.
+      - The same target member reached from many sites remains many call facts; this rule emits no call graph, transitive reachability, impact, or rewrite-equivalence conclusion.
+
+  - id: dotnet.compiled.il-values.v1
+    status: active
+    name: Bounded IL call and return operand origins
+    description: Records method-local receiver and argument origins at independently decoded call sites and bounded return-site operands, joined to exact admitted IL evidence. Both raw SRM and Cecil streams must yield the same bounded observations.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits: [ManagedIlCallValuesObserved, ManagedIlReturnValuesObserved, AnalysisGap]
+    limitations:
+      - Bounded method-local origin candidates only, not command binding or SQL evidence. Argument slots are not concrete values and allocation or call-site origins are not runtime objects.
+      - Literal strings retain only length and SHA-256 of exact UTF-16 code units, never raw text. No SQL statement or stored procedure is inferred from a method name or string hash.
+      - Normal branches and loops use a bounded fixed point retaining an origin only when all reached predecessor states agree, including protected blocks with known exception entries. Handler/filter roots start with unknown pre-exception locals; potentially modified arguments are unknown too. Leave discards state across unmodelled finally effects. Exception dispatch, finally continuations and branch feasibility are not established. Without known entries, exception bodies remain in the reduced local lane.
+      - Normal-flow analysis admits at most 20000 instructions, 256 tracked slots (including exposed-slot markers), 256 exposure origins per instruction, 1024 declared exception entries and 200000 work units per body. Handler seeding, origin retention and successor cloning/merging are work-charged. Actual fixed-point work is charged to a separate aggregate value-derivation budget per reader equal to policy MaxTotalWorkUnits, not the raw body/call admission budget. Unsupported operations, byref returns, stack failures and reader or work-limit disagreement withhold origins explicitly.
+      - Field/array/indirect operations, checked arithmetic, boxing and address-taking retain bounded stack shape without proving heap values. Stores, indirect reads/writes and address calls expose affected origins; exposed slots remain exposure-capable on later writes. Internal address identities are bounded to 1024 characters and 64 nested steps, with unavailable addresses invalidating configuration. Known byref call shapes preserve non-byref scalar operands, but byref arguments and addresses are exported as unknown. Consumers must invalidate command state across unknown effects; heap contents, field values, interprocedural effects, virtual dispatch and execution are not established by this rule.
+      - Body and call evidence can remain admitted while value coverage is partial. Value facts carry the exact IL generator and bounded-input hashes and cannot upgrade source or runtime coverage.
+      - Return summaries retain at most 256 reached return sites per body. Missing flow, reader disagreement and limits emit unavailable summaries, never empty success. A single valid stack operand is a candidate only; consumers must verify non-byref return signatures, exact callee identity and all relevant return sites. Void or invalid stacks have unavailable operands. Internal addresses are projected to unknown. Legacy facts without return summaries do not establish return values.
+
+  - id: dotnet.compiled.il-command-binding.v1
+    status: active
+    name: Bounded IL database-command configuration candidate
+    description: Joins a command text/type configuration to an Execute or adapter Fill call through exact method-local receiver origins and conservative normal-flow configuration joins, retaining independently agreed body/call fact IDs and exact generator/input hashes.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits: [ManagedIlDatabaseCommandCandidate, AnalysisGap]
+    limitations:
+      - A static configuration candidate is not SQL execution, a resolved SQL statement, procedure identity, provider dispatch, runtime object identity or handler parity. Encoded framework assembly/type/member scopes are recognized without loading or authenticating those assemblies.
+      - Command strings remain exact UTF-16 length and SHA-256 only. Argument slots and call-result origins are unresolved until separately evidenced substitution; raw strings and parameter values are not retained.
+      - Normal-flow joins retain only identical command configuration and adapter attachment records from all reached predecessors, including protected blocks. Handler/filter entries, leave, unsupported operand flow and potentially mutating calls discard configuration. Exception dispatch and finally continuations are unmodelled. Non-escaped allocation-local receivers may survive an unrelated non-byref call; argument-derived or escaped receivers are invalidated. No field alias, callback effects, interprocedural effects or branch feasibility is proven.
+      - Exact encoded get_Parameters and supported parameter-collection Add, AddRange, AddWithValue, Clear and RemoveAt contracts preserve command text/type only. Typed AddRange requires the exact encoded provider parameter-array signature. No parameter values, parameter ordering or provider behavior is proven. Unknown calls receiving a collection invalidate its owning command. Unsupported collection signatures are not assumed harmless.
+      - Exact encoded CommandTimeout/Transaction setters and TableMappings getter/typed Add preserve text/type only, without proving timeout, transaction or mapping values. Wrong scope/signature and byref variants are unknown effects. Mapping-collection escapes invalidate the owning adapter and command. Heap/field/address exposure invalidates affected receivers, including aliases assigned after taking an address; unknown unrelated operands cannot name an unexposed allocation-local receiver. Call-result and argument-derived receivers remain conservatively aliased. Exposure processing is charged against the same bounded command-derivation budget.
+      - The supported command constructors model the standard Text enum default only as an encoded-framework API contract candidate; command-type assignments override it in the same straight-line region. Missing type and parameter propagation remain explicit gaps.
+      - At most 128 receiver states and 200000 work units are admitted per body. The derivation phase also shares an aggregate bound equal to the policy-bound IL MaxTotalWorkUnits across all inputs. Exhaustion withholds all command candidates for that body without revoking admitted body/call facts.
+
+  - id: combined.paths.compiled-command-value.v1
+    status: active
+    name: Encoded IL call-path command argument candidate
+    description: Substitutes retained command text or type argument slots through exact ordered compiled call edges and follows separately retained producer-return evidence using unique provenance-matched operands, bodies and signatures.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits: [compiled-command-path-value.v1]
+    limitations:
+      - This local-only derived candidate is not SQL execution, procedure identity, provider dispatch, runtime object identity or handler parity. It does not upgrade the underlying command configuration or path coverage.
+      - Only encoded compiled IL calls are followed. Source-only and projectless candidate bridges stop substitution explicitly. Encoded callvirt targets retain an explicit virtual-dispatch gap even when a constant origin is recovered.
+      - Static and instance argument slots are mapped separately; missing, malformed, ambiguous, changed-provenance and unavailable slots stop substitution. Root arguments remain unresolved. Producer returns require an exact nonvirtual encoded call, one callee body, one provenance-matched return summary and a String or Int32 return signature. All retained return sites must agree after bounded substitution. No string composition, heap values, external method execution or virtual return target is evaluated.
+      - ReturnSteps carry producer-call, callee-body and return-summary identities separately from caller steps; a producer is not inserted as a call-stack parent. Legacy facts without return summaries stay unresolved. The existing constant-on-encoded-call-path state may include these explicitly retained return steps and is still a static candidate, not runtime proof.
+      - Strings retain only exact UTF-16 length and hash. A shared 64-unit bound charges caller substitutions, producer visits and return sites; recursion cycles stop explicitly. At most 256 outgoing producer edges, 256 return sites, 128 arguments per call and two competing fact records per indexed lookup are admitted. Existing query path and output bounds remain in force.
+      - Each derived value retains the exact reporting assembly SHA-256 and SHA-256 of its bounded consumed projection, including rejected operand candidates, inspected edge identities and exact native fact provenance. Oversized selected properties are represented by length and digest. The artifact is local-only, not a shareable privacy projection.
+
+  - id: dotnet.compiled.il-gap.v1
+    status: active
+    name: IL body and call coverage gap
+    description: Records bounded missing, changed, unreadable, malformed, unsupported, ambiguous, reader-disagreed, or limit-exhausted IL body and call evidence coverage.
+    evidenceTier: Tier4Unknown
+    emits: [AnalysisGap]
+    limitations:
+      - The gap reduces only the explicitly requested IL body/call lane; it does not prove body or call absence, does not alter source-derived or metadata evidence, and never upgrades itself to a clean absence conclusion.
+      - An IL input gap never retires or rewrites existing source, compiled-metadata, or PDB facts from the same scan.
+
+  - id: dotnet.compiled.il-rewrite.v1
+    status: active
+    name: Bounded before/after IL rewrite identity edge
+    description: Records an exact edge between the original and rewritten form of one metadata method identity across an explicitly declared before/after assembly pair, where both sides are independently proven under the dual-reader IL body contract and the complete assembly-scoped method identity occurs exactly once on each side; the edge carries both assembly, member, body, and module-local token identities plus a relationship kind (unchanged, operand-only-change, body-structure-change, operand-and-body-structure-change, or instruction-stream-change) and ordinal-aligned call-site retargets.
+    evidenceTier: Tier2Structural
+    emits: [ManagedIlRewriteObserved, ManagedIlCallRetargetObserved]
+    limitations:
+      - An edge proves only that the same complete method identity exists once on each admitted side and that its canonical operand-aware body identity and module-local token are exactly as recorded. It does not prove semantic equivalence, behavior preservation, compilation provenance, source ownership, safe applicability, or that any other member of the pair survived rewriting.
+      - The scanner never performs or attributes the rewrite. Before and after assemblies are explicit operator-declared inputs; the edge makes no claim about what tool produced the change or why.
+      - Joins use complete exact assembly-scoped method identity text only. One-side-only membership emits an explicit bounded before-only or after-only relationship fact; it is never an ambiguous join or clean absence. More than one candidate on either side, differing assembly/module identities, disagreement, malformed shapes, and budget exhaustion emit Tier4 gaps and never guessed joins. Membership does not prove rewrite authorship or why a method changed.
+      - Per-call retarget detail requires equal instruction counts and identical opcode sequences on both sides; otherwise the edge records instruction-stream-change with no per-instruction claim. Call retargets record module-local tokens, which are locations within their own module, never stable cross-build identities.
+      - Relationship kinds are exact classifications, not equivalence claims. operand-only-change additionally requires every non-instruction body component (locals, exception regions, max stack, and init-locals) to match; a change limited to those components is body-structure-change, and a change to both instruction operands and those components is operand-and-body-structure-change. No kind proves semantic equivalence or behavior preservation.
+      - Both sides must independently satisfy the dotnet.compiled.il-body.v1 dual-reader agreement before any edge is emitted; a disputed or withheld side withholds the whole pair.
+      - Before body decoding, shared compiled-input preflight rejects native/mixed-mode assemblies, netmodules, and multi-module manifests and enforces metadata type/member row bounds and a metadata work budget shared across all declared pairs. The rewrite lane additionally charges every exported-type row before traversal and rejects forwarders. The separate rewrite-pair limit bounds the number of pairs; this lane does not infer or load secondary modules or forwarded targets.
+      - Rewritten PDB offsets and sequence-point validity are covered by dotnet.compiled.il-rewrite-pdb.v1. Public compiler/Cecil fixtures exercise control flow, member and type tokens, MethodSpec and TypeSpec, calli standalone-signature calling conventions, vararg MemberRef calls with a MethodDef parent and required-parameter boundary, custom modifiers, accessor bodies, and one-sided membership. InlineField, InlineTok, and InlineSig tokens require independent System.Reflection.Metadata row/signature admission before the Cecil body can agree. Netmodules, multi-module manifests, and type forwarders fail closed as unsupported; duplicate complete member identities within one pair fail as ambiguous, while explicit pair ordinals isolate duplicate assembly identities across pairs. ILAsm/ILDAsm parity is proven only for the public fixture matrix by the pinned Windows extended-lane gate (Microsoft .NET Framework 4.8 ILAsm with Windows SDK NETFX ILDAsm as the independent oracle); no parity claim extends beyond those fixtures, and Mono.Cecil is never the parity oracle.
+      - Field and general token operands bind the full decoded type/member identity as well as their module-local row number. Equal raw tokens with differing field signatures do not produce equal body identities. Both readers must agree on this canonical operand identity before a rewrite edge is emitted.
+
+  - id: dotnet.compiled.il-rewrite-gap.v1
+    status: active
+    name: IL rewrite coverage gap
+    description: Records bounded missing, mismatched, unreadable, malformed, unsupported, ambiguous, one-side-only, reader-disagreed, or limit-exhausted before/after rewrite evidence coverage.
+    evidenceTier: Tier4Unknown
+    emits: [AnalysisGap]
+    limitations:
+      - The gap reduces only the explicitly requested rewrite lane; it does not prove rewrite absence or membership absence, does not alter source, compiled-metadata, PDB, or IL body/call evidence, and never upgrades itself to a clean absence conclusion.
+      - A one-side-only method identity is a bounded before-only or after-only relationship, with its full stable assembly/module and signature identity retained. It does not prove rewrite authorship, runtime effect, or clean absence outside the admitted pair.
+
+  - id: dotnet.compiled.il-rewrite-pdb.v1
+    status: active
+    name: Bounded before/after Portable PDB method and sequence-point identity edge
+    description: Records the original and rewritten Portable PDB method identities of one exact joined method across an operator-declared before/after assembly-and-PDB pair, where each PDB binds its own paired assembly through the exact portable content GUID/stamp and PE CodeView entry, each side's complete method/sequence-point shape is independently read by System.Reflection.Metadata and Mono.Cecil, and every sequence-point IL offset is validated against the proven body extent; the edge carries both PDB content identities, both module-local method tokens, both proven IL body digests, both per-side sequence-point digests, and an exact offset classification (sequence-point-offsets-unchanged or sequence-point-offsets-changed).
+    evidenceTier: Tier2Structural
+    emits: [ManagedIlRewritePdbObserved]
+    limitations:
+      - An edge proves only that the two declared PDB artifacts contain these exact method/sequence-point identities for one method already joined by the dotnet.compiled.il-rewrite.v1 contract, and that each PDB binds its own paired assembly by exact portable content identity. It does not prove behavioral equivalence, source ownership, debugging-behavior preservation, or that any other method's debug information survived the rewrite.
+      - The classification compares IL offset vectors only. sequence-point-offsets-unchanged means the ordered sequence-point IL offsets are equal on both sides; source lines, columns, documents, and hidden flags are committed by per-side digests but never participate in the classification, and equal offsets do not imply preserved or correct debug information.
+      - Matching names, tokens, content identities, or equal offsets never infer compilation provenance, a rewrite operation, or who produced either artifact; the scanner never performs or attributes the rewrite.
+      - A PDB binds only the assembly declared on its own side of the same ordinal pair, by exact portable content GUID/stamp against the PE CodeView entries of the verified assembly bytes; duplicate matching entries, cross-side matches, changed or unreadable matched assemblies, and row-level PDB-to-assembly inconsistencies fail closed and emit no edge for that pair.
+      - Both PDB sides must independently satisfy the dual-reader shape agreement required by dotnet.compiled.pdb-identity.v1 and every sequence-point offset must fall inside the dual-reader-proven body extent; a disputed, malformed, native-Windows, oversized, or over-limit side withholds the whole pair's PDB evidence.
+      - Windows-native PDBs are explicitly unsupported (WindowsPdbRequiresWindows outside Windows; WindowsPdbIndependentReaderUnavailable on Windows). An embedded portable PDB can be admitted only when the declared PDB artifact is the same exact assembly bytes as its paired, re-verified assembly, has exactly one bounded embedded debug entry, and passes the same independent portable shape readers; a missing or mismatched entry withholds the PDB relationship. Its declared safe locator also obeys the rewrite-PDB text limit independently of the compiled-input limit.
+      - Methods joined by the parent lane whose debug information exists on exactly one side emit a bounded Tier4 method-debug-information gap with retained identity prefix and omitted-identity digest commitment, never a guessed preservation or removal claim; methods with no debug information on either side emit nothing, mirroring the bodyless-method structural observation.
+      - ILAsm/ILDAsm parity and safe runtime corroboration are separate validation lanes; neither is inferred from Mono.Cecil or from an embedded PDB identity edge. The public parity lane proves IL agreement only for the public fixture matrix on the pinned Microsoft .NET Framework 4.8 ILAsm and Windows SDK NETFX ILDAsm toolchain. Independent sequence-point parity remains deferred as IldasmPortablePdbLineOracleUnavailable because that toolchain emits no portable-PDB .line observations; hidden sequence points and debug behavior remain outside the intended future comparison.
+
+  - id: dotnet.compiled.il-rewrite-pdb-gap.v1
+    status: active
+    name: IL rewrite PDB coverage gap
+    description: Records bounded missing, mismatched, unreadable, malformed, unsupported, ambiguous, row-inconsistent, reader-disagreed, or limit-exhausted before/after Portable PDB evidence coverage.
+    evidenceTier: Tier4Unknown
+    emits: [AnalysisGap]
+    limitations:
+      - The gap reduces only the explicitly requested rewrite PDB lane; it does not prove PDB or debug-information absence, does not alter source, compiled-metadata, PDB, IL body/call, or IL rewrite evidence, and never upgrades itself to a clean absence conclusion.
+      - A one-side-only method debug-information record is a bounded unsupported shape in this slice, not a proven debug-information insertion or removal relationship.
+
   - id: adapter.scan-truth.conformance.v1
     name: Cross-adapter scan truth conformance
     description: Validates bounded synthetic adapter outputs against the shared v1 repository authority, analyzed-byte identity, determinism, artifact, coverage, exclusion, gap, path, and persistence contract.
@@ -94,6 +431,19 @@ rules:
       - Static query shape does not prove runtime reachability, returned rows, ordering, projection, authorization, tenant isolation, or backend compatibility.
       - Dynamic filter, sort, and select constructions remain Tier4Unknown and missing fields are not clean absence outside complete per-callsite coverage.
       - Filter bindings share the payload rule limitations for lexical shadowing, aliases, helper calls, method calls, and inherited conditional spread presence.
+
+  - id: base44.ui-input-semantics.v1
+    name: Base44 React UI input semantics
+    description: Records executable JSX/TSX native and wrapped control value classes, validation hints, representative select values, parse/cast evidence, and conservative links to proven Base44 mutation payload fields.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits: [Base44UiInputSemantics]
+    limitations:
+      - UI declarations are widening and smoke-vector evidence only; they never authorize database NOT NULL, enum, uniqueness, foreign-key, precision, scale, date/timestamp, tenant, or RLS constraints.
+      - Requiredness, ranges, patterns, and option values are test-validation evidence only. Select values are representative and do not prove an exhaustive enum or unknown-value rejection.
+      - Correlation is bounded to exact source-visible value paths within a component scope and already proven Base44 create, update, or bulk-create operations. Cross-module handlers, dynamic props, computed fields, mutable roots, and ambiguous targets remain explicitly unresolved.
+      - Cost, price, rate, and similar names are medium-confidence widening clues only. They do not prove a runtime value, database type, precision, or scale.
+      - Static UI syntax does not prove rendering, handler execution, request success, server validation, persistence, or runtime acceptance.
+      - JSON, JSONC, documentation, comments, test, fixture, story, spec, and mock paths do not establish this evidence.
 
   - id: base44.environment.access.v1
     name: Base44 function environment access
@@ -794,6 +1144,30 @@ rules:
     limitations:
       - Diagnostics identify category and output-relative location only; they do not echo the unsafe value.
 
+  - id: docs-export.redaction.unsafe-property.v1
+    name: Docs export unsafe fact-property redaction
+    description: Omits raw SQL, config, connection-string, token, and credential values found in fact properties while retaining the safe property key, supporting fact ID, redaction category, and an explicit evidence gap.
+    evidenceTier: Tier4Unknown
+    emits:
+      - unsafe-property-redacted gap
+      - category-only redaction record
+    limitations:
+      - Redaction preserves no source value, SQL text, configuration value, credential, token, host, or connection detail.
+      - The retained property key and supporting fact identify where authorized local review may be needed; they do not prove the redacted value's semantics or runtime use.
+      - Unsafe values outside structured fact properties remain subject to the existing hard-fail output safety gate.
+
+  - id: docs-export.redaction.unsafe-limitation.v1
+    name: Docs export unsafe limitation redaction
+    description: Omits unsafe free-form limitation text while retaining its category, supporting evidence IDs, and an explicit redaction record.
+    evidenceTier: Tier4Unknown
+    emits:
+      - category-only redaction record
+      - value-free limitation marker
+    limitations:
+      - Redaction preserves no stack trace, source value, path, URL, SQL, configuration value, credential, token, host, or connection detail.
+      - The retained category and supporting IDs identify where authorized local review may be needed; they do not prove the omitted text's semantics or runtime relevance.
+      - Unsafe values in substantive packet or evidence fields remain subject to the existing hard-fail output safety gate.
+
   - id: docs-export.validation.prohibited-claim-wording.v1
     name: Docs export prohibited claim wording validation
     description: Rejects generated wording that claims unsupported runtime execution, production traffic, release approval, vulnerability, ownership, deployment, reachability, or business impact.
@@ -1468,8 +1842,8 @@ rules:
 
   - id: legacy.wcf.contract.v1
     name: Legacy WCF service contract and generated client evidence
-    description: Extracts service contract, operation contract, and generated service-client declarations from C# syntax and generated-code patterns.
-    evidenceTier: Tier2Structural, Tier3SyntaxOrTextual, or Tier4Unknown
+    description: Extracts service contract, operation contract, and generated service-client declarations from C# syntax/generated-code patterns and compiler-resolved Visual Basic framework identities.
+    evidenceTier: Tier1Semantic, Tier2Structural, Tier3SyntaxOrTextual, or Tier4Unknown
     emits:
       - WcfServiceContractDeclared
       - WcfOperationContractDeclared
@@ -1479,6 +1853,7 @@ rules:
       - Syntax-only contract evidence does not prove WSDL compatibility, generated proxy freshness, service deployment, or runtime invocation.
       - Generated-client detection requires WCF ClientBase-style inheritance and can miss custom proxies or nonstandard generated clients.
       - Missing generated files or unsupported service-reference shapes are analysis gaps, not proof that no service dependency exists.
+      - Visual Basic Tier1 rows require the recognized WCF assembly name and strong-name public-key token. The token is an identity discriminator, not proof of assembly authenticity. Client operations require compiler-proven implementation of the ClientBase contract interface; name-only methods and unsigned lookalikes remain gaps.
 
   - id: legacy.wcf.host.v1
     name: Legacy WCF service host evidence
@@ -1533,6 +1908,7 @@ rules:
       - Metadata-backed normalized mappings require generated client contract, normalized operation name, connected WSDL operation metadata, and service contract evidence; a random repository-level WSDL operation name is not sufficient.
       - Without aligned config endpoint evidence, metadata-backed mappings are capped at Tier3SyntaxOrTextual even when supporting metadata is Tier2Structural.
       - Multiple matching endpoints, hosts, contracts, metadata identities, or distinct logical operations are ambiguity gaps/review-tier evidence; TraceMap does not choose an arbitrary winner.
+      - Compiler-resolved Visual Basic inputs may establish exact client/contract operation identity, but the composed mapping remains Tier3 without aligned endpoint configuration and never proves invocation.
 
   - id: legacy.asmx.host.v1
     name: Legacy ASMX host directive evidence
@@ -1560,7 +1936,7 @@ rules:
 
   - id: legacy.asmx.operation.v1
     name: Legacy ASMX and SOAP operation evidence
-    description: Extracts C# WebMethod declarations and SOAP operation-shape attributes such as SoapDocumentMethod and SoapRpcMethod while keeping public operation and SOAP binding evidence distinct.
+    description: Extracts C# and compiler-resolved Visual Basic WebMethod declarations and SOAP operation-shape attributes such as SoapDocumentMethod and SoapRpcMethod while keeping public operation and SOAP binding evidence distinct.
     evidenceTier: Tier1Semantic, Tier3SyntaxOrTextual, or Tier4Unknown
     emits:
       - AsmxOperationDeclared
@@ -1570,6 +1946,7 @@ rules:
       - Operation rows are static declarations only and do not prove a SOAP request was sent, a method is reachable, a binding is compatible, auth succeeds, endpoint configuration is selected, deployment exists, or runtime impact occurred.
       - SOAP action, namespace, binding, endpoint, config, credential, token, local path, and source-snippet values are hashed or omitted; credential-like values are omitted rather than hashed.
       - Syntax-only rows remain review-tier when compiler symbols cannot disambiguate framework attributes from aliases or project-defined lookalikes.
+      - Visual Basic Tier1 rows require the recognized System.Web.Services strong-name identity; the token is an identity discriminator, not proof of assembly authenticity, and raw SOAP action arguments are not retained.
 
   - id: legacy.asmx.client.v1
     name: Legacy ASMX generated SOAP client evidence
@@ -1583,6 +1960,7 @@ rules:
       - Generated client evidence is static proxy-shape evidence only and does not prove runtime endpoint selection, generated proxy freshness, service reachability, deployment, authentication, authorization, or impact.
       - Dynamic proxy factories, runtime URL assignment, custom base classes, unsupported generated formats, and missing checked-in metadata are gaps or review-tier evidence.
       - Raw endpoint addresses, SOAP actions, config values, namespaces, local paths, source snippets, credentials, and tokens are omitted or hashed according to ASMX redaction rules.
+      - Visual Basic Tier1 client operations require recognized SoapHttpClientProtocol framework identity plus a compiler-resolved SOAP method attribute; name-only wrappers and unsigned lookalikes remain gaps.
 
   - id: legacy.asmx.metadata.v1
     name: Legacy ASMX checked-in SOAP metadata evidence
@@ -1619,6 +1997,7 @@ rules:
       - Mappings are probable static evidence only and do not prove SOAP request execution, endpoint selection, deployment, reachability, authorization, generated proxy freshness, or backend impact.
       - Name-only or metadata-backed mappings without stronger semantic/config evidence remain review-tier and are capped by the weakest required evidence leg.
       - Duplicate operation candidates, missing metadata, dynamic proxy factories, and ambiguous service-reference ownership emit gaps rather than choosing an arbitrary backend.
+      - Compiler-resolved Visual Basic operation identity can supply the client and service declaration legs, but operation-name composition remains Tier3 probable static evidence.
 
   - id: legacy.remoting.api.v1
     name: Legacy .NET Remoting API evidence
@@ -2225,6 +2604,330 @@ rules:
       - Application-database observations remain structural static evidence. The handoff never contains credentials, connection strings, configuration values, raw application SQL, or database execution instructions.
       - The handoff does not infer business intent, generate a BRD, select a target architecture, call an LLM, or generate modernization or migration code.
 
+  - id: diagnostic.webforms.application-handoff.v1
+    name: Web Forms application workbench handoff
+    description: Projects one existing modernization packet into deterministic private navigation metadata for every selected surface, including stable evidence references and closed read-only retrieval recipes.
+    evidenceTier: Tier2Structural
+    emits:
+      - webforms-application-handoff.v1 private application handoff
+    limitations:
+      - This is navigation metadata over retained packet evidence; it does not add scanner facts, infer business intent, generate a BRD, or prove runtime behavior or migration correctness.
+      - The optional evidence-docs corpus is referenced read-only and is not copied, modified, truncated, or deleted.
+      - Supplemental compiled paths require exactly one packet source matching both the retained repository ID and commit; same-commit fork evidence cannot be attached by commit alone.
+
+  - id: diagnostic.webforms.application-page-handoff.v1
+    name: Web Forms application page handoff
+    description: Projects one selected Web Forms surface and its retained chains, boundaries, gaps, and citations into a bounded private page-level handoff.
+    evidenceTier: Tier2Structural
+    emits:
+      - webforms-application-page-handoff.v1 private page handoff
+    limitations:
+      - Surface association is limited to identities retained in the source modernization packet; project-level data-movement rows are stored once in the application handoff because project association does not prove association to each page.
+      - Retained call paths and boundaries are static evidence and do not prove runtime order, branch feasibility, successful binding, or complete transitive closure.
+
+  - id: diagnostic.webforms.compiled-path-handoff.v1
+    name: Private compiled Web Forms path handoff
+    description: Projects one bounded existing-publish path report, its scan manifest, and its publish receipt into ordered local-only HTML and JSON for human review.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - webforms-compiled-path-handoff.v1 private handoff
+      - private compiled-handler HTML review
+    limitations:
+      - This projection does not add scanner facts or turn derived graph edges into extracted facts; facts.ndjson and index.sqlite remain authoritative for retained observations.
+      - A mapless source-to-binary join, source member join, virtual call candidate, or database API candidate remains review-only even when an ordered static path reaches SQL evidence.
+      - Source and DLL hashes identify declared local inputs, not a verified historical build, deployment, event firing, dispatch, branch feasibility, or SQL execution.
+      - HTML and JSON contain private source identities and local provenance and must not be shared as anonymous artifacts.
+      - The local projection accepts at most 256 MiB of path JSON and 250000 gap rows; it retains at most 256 detailed gaps and 128 exact kind/rule count groups, records omissions, and hashes the complete bounded path input.
+      - A zero SQL-query path may have a separate exact-handler database-api candidate path; these are different terminal claims and remain in separate local HTML and JSON outputs.
+      - Saved API report reuse requires both exact input and report-byte hashes; older receipts require an explicit bounded graph recheck, not a new source scan.
+      - Gap details retain available source, span, extractor and evidence identifiers; missing rules or invalid tiers reject the projection.
+  - id: diagnostic.webforms.synthetic-corpus.v1
+    name: Public synthetic Web Forms scale corpus receipt
+    description: Records the exact generator, bounded source roster and generated PE/IL artifact hashes for a public deterministic native workflow test corpus.
+    evidenceTier: Tier4Unknown
+    emits: [diagnostic.webforms.synthetic-corpus.v1 local-only receipt]
+    limitations:
+      - Generated PE/IL is never executed and does not prove authentic ASP.NET compilation, source equivalence, runtime dispatch or SQL execution.
+      - Source padding and declared pages are controlled dimensions, not predictors of arbitrary graph fan-out or customer corpus performance.
+      - Sparse compiled-method count is an explicit generator input and participates in the bounded input commitment alongside the exact source roster and page count; identical source bytes do not imply identical generated PE inventory.
+  - id: diagnostic.webforms.graph-storage.v1
+    name: Local explicit indexed graph storage diagnostic
+    description: Replays one explicit retained index read-only with bounded graph admission and records private scratch object allocations and refused partial inventory observations under exact generator and input commitments.
+    evidenceTier: Tier4Unknown
+    emits: [diagnostic.webforms.graph-storage.v1 local-only receipt]
+    limitations:
+      - A refused store's retained fact/node/edge counters are partial admission observations, not classified graph or path counts; all classified paths remain empty after refusal.
+      - Physical table and index allocation is unknown when SQLite dbstat is unavailable. Logical storage excludes temporary sorter disk and is not OS memory consumption.
+      - Refused allocation samples precede the failed write and are not final file sizes. With journaling disabled a full scratch store can be unreadable; diagnostics use only prior samples and managed successful-write counters, never recover or classify that damaged graph.
+      - The receipt pins its test generator, the Reporting generator, full input index hash, actual query options and admission budgets. It is local-only and contains no method identities or source text.
+      - Fixed graph-stage timings are wall-clock boundary intervals including waits and GC, not CPU time, complete CLI phase durations, OS peak memory or transient sorter disk. Refused timings describe the incomplete attempt, never successful graph acceptance.
+      - The diagnostic stage trace has at most 32 fixed-name entries and 64 KiB, with exact test/Reporting generator and bounded input commitments on every entry. Stage entry does not prove stage completion or admission; the completed receipt hashes the trace, and no private method or path labels are emitted.
+      - Replaying a retained index does not prove fresh scan, build authenticity, complete site coverage, runtime dispatch or SQL execution; existing output directories are never overwritten.
+  - id: diagnostic.webforms.native-scale.v1
+    name: Public native Web Forms subprocess scale diagnostic
+    description: Records pinned generator and bounded corpus input hashes with elapsed time, OS peak resident usage, retained disk and review-only retained coverage from separate native CLI processes.
+    evidenceTier: Tier4Unknown
+    emits: [diagnostic.webforms.native-scale.v1 local-only receipt]
+    limitations:
+      - OS peak covers each CLI process, not fixture generation or a simultaneous aggregate working set; no sampled working-set or allocated-byte metric substitutes for peak resident usage.
+      - Retained disk excludes transient graph and OS sorter disk peaks. Explicit benchmark output must be new and remains retained, including failure artifacts.
+      - The ordinary 1/8-page smoke and opt-in 32/256-page eight-times-source corpus do not establish private Windows, authentic compiled-site or arbitrary graph acceptance.
+      - The graph opt-in adds 24000/192000 distinct unreachable compiled methods with explicit diagnostic metadata/report-input caps, 250000 IL bodies, 1 GiB input text and 4 GiB scratch storage. Production defaults remain unchanged, including the 50000 IL-body and 512 MiB scratch defaults. Strict acceptance requires IL outcomes admitted and all four terminal branches per page. A categorical graph-input refusal must retain zero classified paths and is not successful stress-graph admission.
+      - Generated static database-API paths remain review-only; coverage, truncation and provenance gaps are retained rather than promoted to runtime conclusions.
+  - id: workflow.webforms.compiled-review-preflight.v1
+    name: Private native compiled Web Forms run preflight
+    description: Validates an explicit fresh or immutable-attachment configuration and records bounded streamed input hashes, managed PE header names, phase plans and deferred-validation gaps in a new local-only run manifest.
+    evidenceTier: Tier2Structural
+    emits:
+      - webforms-compiled-review-run.v1 local-only preflight manifest
+    limitations:
+      - No scan, build, publish, runtime assembly load, binding admission, graph traversal, report generation, resume or cleanup occurs in this phase.
+      - Receipt artifact-hash candidates do not establish assembly identity, source ownership, repository binding, build freshness or source-line identity; authoritative scanner binding validation remains pending.
+      - Source snapshot, dirty-worktree state, parent repository and index identity, PDB identity and page-map identity remain deferred and are explicit gaps.
+      - Inputs are explicit and bounded under declared roots; scattered external DLL discovery is not implemented. Verified relocation copies and protect-only retention planning are separate completed-run commands, not preflight or cleanup.
+      - An explicit receiptRoot can locate existing binding and publish receipts outside the published site; its bytes and output separation are checked, but this does not generate receipts, attest ownership or validate a historical compiler.
+      - File hashing limits are separate from recorded future IL and graph budgets; streamed hashing does not establish large-corpus runtime or memory acceptance.
+      - Graph path retention defaults to 256 and accepts an explicit 1 through 4096 value; increasing it does not increase depth, work, admission or output caps and never proves complete traversal.
+      - Optional report maxGraphStorageBytes declares 64 KiB through 16 GiB of logical scratch SQLite storage for both graph queries; absence preserves 512 MiB and historical configuration serialization. The value is hash-bound and visible in status, but does not establish available disk, bound sorter scratch or OS memory, or raise other report limits.
+      - Optional ilMaxBodies declares 1 through 1000000 bodies and is hash-bound, enforced by native scan and visible in status. Omission preserves 50000 and historical JSON shape. Metadata admission does not imply IL admission; raising graph limits does not repair missing body evidence.
+      - The manifest contains private paths, source commit and input fingerprints and is not shareable; parent scans and existing output folders are never rewritten.
+  - id: workflow.webforms.compiled-review-execution.v1
+    name: Private native fresh and attachment Web Forms scan checkpoints
+    description: Executes a fresh source-plus-compiled scan or a separately owned compiled-only attachment after immutable parent/source validation, verifies scan manifest/index/facts consistency, and records append-only hash-pinned checkpoints for safe retained-evidence resume.
+    evidenceTier: Tier2Structural
+    emits:
+      - webforms-compiled-review-checkpoint.v1 local-only execution checkpoint
+    limitations:
+      - Native start is only composition of preparation, preflight and execution in a newly reserved explicit root with evidence/run children. Receipt generation requires an explicit exact-commit attestation; otherwise existing explicit receipts are required. It never invents authority, searches TEMP, rewrites prior roots, changes budgets or cleans failed attempts. Resume names the pinned run child and does not repeat preparation.
+      - The scan checkpoint remains scan-completed-reports-pending; operator run/resume then executes separately checkpointed native reports. Reports-completed-review-only means admitted artifact generation, not complete-site, runtime or representative-scale acceptance. Receipt preparation is a separate explicit operator-declaration command.
+      - The CLI does not build or publish the site, load assemblies at runtime, infer bindings or attest source ownership; existing receipt policy and reduced metadata/IL/PDB coverage remain authoritative.
+      - Resume verifies retained inputs and outputs without a new source scan; a retained snapshot does not validate current unpinned source bytes, clean Git state, runtime behavior or SQL execution.
+      - Attachment and completed attachment resume recompute current bytes over the retained inventory with exact scanner framing. Missing semantic roster members or mismatched bytes refuse admission; equality covers only retained inventory scope, not all current files or historical build/source-line identity. Parent facts are not copied or relabeled; reporting joins require the explicit admitted combine contract.
+      - Checkpoint generator and input/payload hashes are local integrity commitments, not authenticated signatures; local-only artifacts contain private input fingerprints and must not be shared.
+      - Distribution dependency bytes and runtime version participate in execution identity; external SDK/toolchain bytes are not pinned and remain an explicit gap rather than build authenticity or reproducibility proof.
+      - Failed or cancelled attempt bytes are retained but not admitted as completed evidence; retry allocates a fresh owned attempt and never rewrites parent scans or old successful artifacts.
+      - Unexpected execution errors expose only a closed phase/category and numeric HRESULT diagnostic hint, not raw exception messages, private paths, SQL, root-cause proof or completion evidence.
+      - Configured admission bounds do not establish representative scale or bounded scanner memory; output traversal admits at most 256 filesystem entries and run history at most 256 checkpoints.
+  - id: workflow.webforms.compiled-review-status.v1
+    name: Private retained native Web Forms operational status
+    description: Reads an explicitly selected retained run, verifies admitted artifacts and bounded indexed summaries, and reports phase states, observed counts, configured limits, locator presence, categorical coverage gaps and resumable next actions without execution or repair.
+    evidenceTier: Tier2Structural
+    emits:
+      - webforms-review-status.v1 local-only operational JSON
+      - concise private operator status text
+    limitations:
+      - Point-in-time retained evidence only; no fresh-source, binding, build, original runtime, SQL execution or complete-site acceptance. Input presence is not byte or source-roster equality.
+      - Unknown work, exact phase peak and transient-disk consumption remains null or an explicit usage gap. Optional checkpointed ResourceUsage retains scan/report-attempt elapsed time and sampled parent-process working-set lower bounds, not an exact peak, quota or child-process measurement. Native graph queries share their path/work limit across all selected roots. Retained page/compiled traversal counters measure those independently bounded queries; their sum can reach twice the per-query cap and is not graph admission or total report-phase work. Historical absent counters remain unknown. Artifact bytes are not rendered-output consumption.
+      - Completed admitted artifacts are hash-checked. Bounded summaries are read from the pinned immutable evidence index; whole handoffs, private source and unadmitted attempts are not loaded or repaired.
+      - JSON is capped at 128 KiB; compiled gap kinds retain at most 50 entries and checkpoint gaps at most 64 with explicit omitted counts. Original artifacts remain lossless.
+      - Indexed truncation reasons are counted independently using fixed categories; unrecognized reasons are aggregated as other-retained-reason, not copied as private free-form messages or assumed work exhaustion.
+      - Busy, changed or unavailable owned evidence is refused without a completion response. Original-tool resume admission is separate; no TEMP discovery, cleanup or publication occurs.
+      - Private paths and hashes are local integrity commitments, not authenticated signatures or shareable projected evidence.
+  - id: workflow.webforms.phase-observation.v1
+    name: Private native Web Forms attempt resource observation
+    description: Retains monotonic elapsed time and constant-space sampled parent-process working-set observations in terminal scan/report checkpoints and exposes the exact retained observations through native status.
+    evidenceTier: Tier4Unknown
+    emits:
+      - webforms-review-phase-usage.v1 nested in a generator/input/payload-bound local-only checkpoint
+    limitations:
+      - Start/end and requested one-second samples produce only a maximum-observed lower bound, not an exact OS or phase peak, memory quota, available capacity or forecast. Child and adapter subprocesses are excluded; scheduling and unavailable readings can miss spikes.
+      - Elapsed time covers the owned scan/report attempt and final artifact/input/runtime validation, excluding prior preflight/admission and checkpoint publication. Successful, failed and cancelled attempt states stay distinct; resource observations do not admit failed artifacts.
+      - Metadata/IL budget work, graph admission work, CPU usage and transient disk peak are not collected here. Retained artifact bytes and independently bounded graph traversal work remain separate counters.
+      - Missing or nonpositive memory readings remain unknown, not invented zero. Historical checkpoints omit the additive field; readers do not rewrite, rescan or manufacture old measurements.
+      - Collector generator and bounded input commitments are inherited from the containing checkpoint; status separately binds the reader and retained checkpoint. Local integrity hashes are not authenticated OS profiling or build/runtime/SQL evidence.
+  - id: dotnet.compiled.admission-work-usage.v1
+    name: Private compiled collector logical admission usage
+    description: Retains exact successful aggregate budget reservations and denied aggregate-request counts for the independent metadata and IL body collectors, with exact Core generator, source-input and bounded measurement commitments; native status projects the verified retained records.
+    evidenceTier: Tier2Structural
+    emits:
+      - compiled-admission-work-usage.v1 nested in local-only compiled metadata or IL provenance
+      - bounded native status admissionWork projection
+    limitations:
+      - Logical policy credits, not CPU instructions, elapsed time, allocation, runtime calls, total extraction or total scan work. Metadata receipt/dual-reader and IL dual-reader scopes remain independent.
+      - Reservations can be consumed before an input later fails admission. Denied aggregate-request counts exclude per-input caps, preflight exceptions, unreadable and skipped inputs; outcome gaps retain those causes separately.
+      - Zero admitted credits or denied requests does not prove no work, clean coverage, available capacity or permission to increase limits. Failed native artifacts are not admitted merely because a collector observed usage.
+      - Historical missing fields remain unknown and omitted; new measurement output does not change existing metadata/IL bounded-input frames or materialized fact identities.
+      - Exact generator and source-input hashes plus bounded measurement scope/counters are private integrity commitments, not authenticated profiling, source/binary ownership or build/runtime/SQL proof.
+  - id: workflow.webforms.compiled-review-location.v1
+    name: Explicit private completed-run location copy
+    description: Copies a selected hash-verified completed native run into a new separate durable root while retaining original checkpoint and artifact bytes and recording exact generator, bounded file roster, original policy locator and destination commitments.
+    evidenceTier: Tier2Structural
+    emits:
+      - webforms-review-location.v1 local-only location record
+    limitations:
+      - Only completed native reports qualify. Legacy proof folders, failed attempts and unknown files are not migrated; the original run is never deleted.
+      - Owned reads resolve under the current root; the original policy root is a lexical digest input only. No external source, published DLL, receipt, parent scan, original runtime or SDK dependency is copied or freshly validated.
+      - Query may read a compatible retained index with a newer reader; completed resume still requires the original generator/runtime and external-input gates. Relocation is not a tool migration or source-line identity change.
+      - Every copied artifact and checkpoint is bounded and rehashed; integrity commitments are private and unauthenticated. This is not build, runtime, complete-site or hostile-filesystem backup proof.
+      - Failed copy staging is retained for inspection. Same-filesystem directory publication does not authorize cleanup or replace explicit private Windows parity acceptance.
+  - id: workflow.webforms.compiled-review-retention.v1
+    name: Private completed-run protect-only retention plan
+    description: Verifies a selected completed native run and emits a generator/input-bound local dependency inventory with an empty deletion list and explicit protection of retained artifacts, declared external inputs and prior proof locations.
+    evidenceTier: Tier2Structural
+    emits:
+      - webforms-review-retention-plan.v1 local-only dependency plan
+    limitations:
+      - Dry-run-protect-only; no files are changed or deleted and no deletion is approved. Unknown files, abandoned attempts, other runs and original proof locations remain protected.
+      - Retained artifact hashes are checked; external paths are declared dependencies, not freshly validated bytes. New checkpointed original distribution/runtime locators are protected declarations; historical absence remains unknown. External SDK bytes are not pinned and must be preserved separately.
+      - This bounded explicit-run inventory is not machine-wide reference discovery or proof that any other folder is unused. Private paths and fingerprints are not shareable.
+      - Output is capped at 16 MiB and refused in full if exceeded; declared dependency membership is never silently truncated into deletion safety.
+  - id: workflow.webforms.original-tool-location.v1
+    name: Private original native Web Forms tool locator
+    description: Retains the original collector distribution and external .NET runtime locators alongside the already pinned distribution digest and runtime version, without inventing historical locations.
+    evidenceTier: Tier2Structural
+    emits:
+      - webforms-review-tool-distribution.v1 nested in a generator/input/payload-bound local-only checkpoint
+    limitations:
+      - Locators are original collector declarations, not current availability, authenticated publisher provenance, source authority or permission to delete another installation.
+      - RuntimeInputsSha256 pins only the bounded DLL/executable/native/deps/runtimeconfig selection and .NET runtime version. External runtime, SDK and adaptor bytes are not pinned.
+      - Historical checkpoints omit the additive field; resume and status do not manufacture original locations or rewrite old proof. Local paths and integrity hashes are private.
+  - id: workflow.webforms.retained-tool-copy.v1
+    name: Explicit verified native Web Forms tool distribution copy
+    description: Locks a selected completed native run, verifies its original pinned distribution, copies the bounded file selection into a new explicit root and retains generator/input/run/checkpoint/file commitments without modifying the run or executing copied code.
+    evidenceTier: Tier2Structural
+    emits:
+      - webforms-review-tool-copy.v1 local-only tool-copy manifest
+    limitations:
+      - Original distribution and .NET runtime version must be available and match the checkpoint. Missing historical locations, changed bytes, existing outputs and input/run/tool/runtime overlap are refused.
+      - Copies at most 512 selected files of at most 256 MiB each and 2 GiB total, with at most 4096 filesystem entries and no symlink traversal; the local manifest is capped at 1 MiB.
+      - Does not execute copied code or package source, compiled websites, receipts, parent scans, external .NET runtime, SDK or adapters. Not self-contained, portable, authenticated publisher or reproducible-build evidence.
+      - Resume from copied bytes still performs original generator/runtime and authoritative external-input gates. The original run and distribution are preserved; failed staging remains inspectable and no cleanup is authorized.
+      - Exact generator and bounded original/run/file commitments plus payload SHA-256 are local integrity evidence; private paths and hashes must not be published.
+  - id: workflow.webforms.native-report-execution.v1
+    name: Private native checkpointed Web Forms workbench
+    description: Explicitly combines admitted scan inputs, preserves the complete existing page packet and its verdicts, selects bounded full-identity handler roots and writes one private workbench with lossless grouped compiled handoff and exact generator/input commitments.
+    evidenceTier: Tier2Structural
+    emits:
+      - webforms-native-review-handoff.v1 local-only JSON
+      - private native Web Forms review HTML
+    limitations:
+      - Reports are separate append-only owned attempts anchored to the completed scan byte checkpoint. Failure or cancellation retains unadmitted output; resume never rescans or overwrites old report attempts. Completed reuse verifies every admitted artifact hash.
+      - Native selected-page membership is read as literal path lines, preserving commas, quotes and hash characters. Legacy standalone surface-list CSV/header/comment interpretation remains the default outside the native workflow.
+      - Exact full symbol, source index, scan and commit identities select handler roots. No short-name, label or shared-commit join establishes source authority. Empty or missing roots produce no fallback query; omitted roots and graph limits remain explicit gaps.
+      - The full retained page packet and original verdicts remain authoritative for page chains. Compiled paths are a separate review-only supplement, not runtime SQL execution, page activation or source-line identity.
+      - Actual CLI and Reporting generator hashes, exact combined-index bytes, canonical packet/manifests and grouped handoff hashes bind the root JSON. These are private local integrity commitments, not signed build authenticity or shareable fingerprints.
+      - Existing public packet semantics are preserved; parity with every legacy PowerShell presentation feature and a real private Windows compiled site remains a separate gate.
+      - Configurable graph admission, root, traversal, projection and aggregate rendered-output bounds fail closed. Bounded combined admitted facts and nodes/edges use an indexed temporary graph; type-specific semantic ambiguity indexes and selected output remain managed. Representative eight-times time, total disk and peak-memory acceptance is unverified.
+      - All-page mode remains limited by admitted page packet and receipt membership; complete receipt partitioning and all-pages compiled coverage are explicitly pending. No dependency cleanup, relocation or external publication occurs.
+  - id: workflow.webforms.migration-handoff.v1
+    name: Consolidated private Web Forms migration review handoff
+    description: Composes admitted proof import or native preparation, fresh native review, an exact-handler mixed-mode database-API requery, pinned tool retention and a bounded evidence index beneath one new owner-selected root.
+    evidenceTier: Tier2Structural
+    emits:
+      - webforms-migration-handoff.v1 local-only receipt
+      - START-HERE.md local-only reviewer instructions
+    limitations:
+      - The receipt binds the exact generator, native run preflight/checkpoint, original application handoff, focused compiled handoff and six entry artifacts. Its bounded-input hash covers the canonical receipt with the digest field empty. Hashes are local integrity commitments, not authentication.
+      - Application evidence retains the original broader scope while new compiled evidence selects one handler without filtering database API terminal kinds. Old packages may retain a Fill-only scope; read the actual saved query. Mixed source bridges remain candidates, not proven IL calls; truncation and reduced coverage are preserved. No terminal-kind filter does not prove all reachable calls were retained.
+      - The fresh destination must not exist or overlap authoritative inputs or the executing tool. Failure preserves partial output without a completed handoff claim. No automatic recovery, website rebuild, SQL execution, relocation or cleanup occurs.
+      - Query-migration verifies the receipt and indexed evidence before and after bounded retrieval, not all raw retained artifacts or external inputs. It uses the bounded-evidence-query response limits and streams the complete index for hash checks.
+      - The handoff includes a pinned tool but not the external runtime or complete source/publish inputs; it is a review package, not portable execution or resume proof. Command fingerprints do not establish readable procedure names, complete parameters, runtime behavior or migration parity.
+  - id: workflow.webforms.bounded-evidence-query.v1
+    name: Private indexed native Web Forms evidence retrieval
+    description: Losslessly indexes both retained handoff JSON documents as ordered tokens and retrieves exact bounded JSON Pointer slices from a completed hash-pinned run without loading whole documents, scanning source or invoking an AI model.
+    evidenceTier: Tier2Structural
+    emits:
+      - webforms-review-evidence-index.v1 local-only SQLite metadata
+      - webforms-review-evidence-slice.v1 local-only stdout JSON
+    limitations:
+      - Actual CLI generator, exact handoff input hashes, node count and parser/storage bounds bind the index metadata; the completed checkpoint pins the actual database bytes. These are local integrity commitments, not signed provenance or build authenticity.
+      - Token indexing preserves original array/object order and complete scalar values, not source snippets. It admits at most 2000000 nodes, 64 JSON levels, 4096-character property names and a 1 MiB pending token buffer under aggregate report-input and retained-index byte caps. Failed indexing leaves an unadmitted report attempt.
+      - Queries consume only a completed owned journal and its checkpointed index. They reject changed bytes, sidecars, invalid pointers and unbounded selectors; no arbitrary SQL, source path, repair, report regeneration or fallback discovery is accepted.
+      - Concurrent queries share a read lock and exclude native writers. Lock-open I/O can report WEBFORMS_EVIDENCE_QUERY_RUN_BUSY_OR_LOCK_UNAVAILABLE; this is not evidence of index corruption. Other native operations retain their existing exclusive-lock policies.
+      - The query does not revalidate external source, published DLLs, parent scans or every other report output. Success proves retained index integrity only, not current-source validity, runtime SQL, full-site coverage or source-line identity.
+      - Response bounds are 128 KiB, 2048 nodes, depth 0-8 and 1-50 children per container. Omitted children and retrieval truncation are explicit and independent of packet/graph coverage. Oversized scalar values or recursive slices fail closed without partial stdout; refine the exact pointer rather than truncating evidence text.
+      - Exact current query generator, index/run/checkpoint/context hashes and selected response digest participate in each slice bounded-input commitment. All paths, symbols, values and input fingerprints remain private; no shareable projection is supplied.
+      - Whole-index hash verification streams complete retained index bytes before and after each query. Bounded memory is not constant-time retrieval, representative eight-times acceptance or a performance benchmark.
+      - The updated Claude guidance uses read-only deterministic retrieval only. Existing PowerShell launch and session wrappers remain legacy-only; native agent launching, permissions and real work-machine acceptance are separate gates.
+  - id: workflow.compiled-source-attachment.v1
+    name: Compiled-only attachment context and limitations
+    description: Records exact Core generator, bounded input, parent manifest/index hashes and verified retained source snapshot for a new compiled-only scan using existing metadata, IL, portable PDB and publish receipt policies.
+    evidenceTier: Tier2Structural
+    emits:
+      - compiled-source-attachment.v1 local-only manifest context
+      - AnalysisGap
+    limitations:
+      - Parent manifest and index hashes must be independently validated by the calling workflow; the Core producer validates context shape and current retained source bytes, not parent index contents or authenticity.
+      - Context validation recomputes its canonical local integrity digest; it is not an authenticated signature or independent parent-artifact validation.
+      - Source analysis, builds and semantic source reconciliation are not rerun; parent facts are not copied or relabeled. Cross-index source joins require independently validated parent context and are not supplied by this producer.
+      - Every attachment remains reduced, local-only and review-only. Missing bindings, metadata/IL/PDB disagreement and publish gaps retain their original policy. No runtime SQL, source-line identity, clean working tree, authentic compilation or complete-site claim is made.
+      - Source verification is an ordered bounded stream before and after extraction; no new source discovery occurs. Existing extractors retain their own work/memory limits, and overall eight-times scale remains unverified.
+
+  - id: workflow.compiled-attachment-index-link.v1
+    name: Explicit private compiled attachment index link
+    description: Admits an explicit parent and compiled-only index pair by actual manifest/index bytes and recorded attachment context, preserving original source namespaces and recording exact Combine generator and bounded-input hashes.
+    evidenceTier: Tier2Structural
+    emits:
+      - compiled-attachment-index-link.v1 local-only combined-index relationship
+    limitations:
+      - Links require explicit index and manifest paths; labels, shared commit names and adjacent manifest files never establish attachment authority. Ordinary combine does not infer this relationship.
+      - External and embedded manifest identity, parent content hashes, retained snapshot and repository identity are checked; full fact/NDJSON consistency and current retained-source admission belong to the native parent gate.
+      - Inputs are streamed within explicit hash budgets, sidecars and symbolic paths are rejected, and immutable SQLite URI reads do not rewrite the source indexes. This does not establish bounded graph/scanner memory or representative scale acceptance.
+      - Generator and bounded-input hashes are local integrity commitments, not authenticated signatures. Paths and fingerprints remain private and review-only; no runtime, build authenticity, source-line or all-site claim is made.
+      - Reporting validates stored link and embedded-manifest bytes before using its parent source namespace for existing VB PDB/publish candidate rules. Earlier draft rows without embedded-manifest hashes require explicit recombination; no label/commit inference or silent upgrade occurs.
+      - Cross-index edges retain a link digest and local path JSON retains the link records. Native report orchestration, new semantic source reconciliation, complete compiled-site parity and the unified workbench remain separate required gates.
+  - id: workflow.webforms.compiled-grouped-handoff.v1
+    name: Private lossless grouped compiled method-path projection
+    description: Groups ordered full method/source identities while indexing exact node and edge records and retaining every original path variant, inventory occurrence, coverage gap and provenance field.
+    evidenceTier: Tier2Structural
+    emits:
+      - webforms-compiled-grouped-handoff.v1 local-only indexed JSON
+      - private grouped compiled method-path HTML
+    limitations:
+      - Full symbol signatures, source index, scan and commit identities determine grouping. Compact HTML labels are display-only and never merge overloads or source identities; grouping is not runtime route deduplication.
+      - Exact record hashes distinguish differing node or edge evidence even when their IDs match. Original path and inventory ordering and all report fields reconstruct losslessly; missing, extra, changed or misgrouped references fail validation rather than discard evidence.
+      - Exact Reporting assembly and bounded canonical report/index/policy hashes are local integrity commitments, not authenticated signatures. The calling workflow must independently admit the actual index bytes; this projection does not establish index or source authenticity.
+      - All paths, symbols, hashes, commits and locations remain private. No shareable projection is supplied, and these private-input fingerprints must not be used in a future shareable artifact.
+      - Explicit byte, path, record and reference bounds apply to an already admitted report, not upstream graph materialization or representative eight-times scanner memory. The writer bounds aggregate JSON and HTML bytes and leaves failed partial output unadmitted.
+      - New fixed-name files never overwrite existing outputs. The caller owns output isolation, input admission and final artifact checkpointing; native report execution and unified workbench navigation remain separate gates.
+      - Page verdicts and original classifications, tiers, gaps, DLL and attachment-link provenance remain unchanged. No runtime SQL, page activation, source-line identity or full-site claim is made.
+  - id: workflow.source-snapshot-retention.v1
+    name: Complete private source snapshot roster retention
+    description: Explicitly retains the scanner's authoritative ordered snapshot inventory, including extra semantic metadata, in a streamed local NDJSON roster and a generator/input/scan/roster hash-bound manifest for later immutable source-byte validation.
+    evidenceTier: Tier2Structural
+    emits:
+      - source-snapshot-retention.v1 local-only manifest
+      - source-snapshot-roster.v1 local-only complete snapshot NDJSON roster
+    limitations:
+      - Records relative paths, kinds and byte sizes without source snippets. Private paths and source/input fingerprints must not be shared.
+      - The roster has its own generator/input header: its bounded input SHA-256 is the scanner's exact framed raw-source snapshot digest, while the companion manifest binds the original scan and complete roster bytes. The reader checks header identity before yielding membership.
+      - Exact CLI and Core generator hashes plus original scan-manifest, raw snapshot and roster hashes are local integrity commitments, not authenticated signatures, clean-commit or historical build provenance.
+      - Source bytes must reproduce the existing scanner snapshot before and after retention; this neither discovers new files nor reruns source analysis or proves runtime dispatch, SQL execution or source-line identity.
+      - Normal scan output remains unchanged unless --retain-source-snapshot is explicitly requested; native fresh execution requests it and pins both artifacts in completed checkpoints.
+      - Native parent validation requires exact paired artifact/scan/roster identity and actual count/byte equality. Legacy parents without the pair may use only existing inventory facts and must fail on an incomplete or mismatched snapshot; missing pair members never trigger an implicit downgrade.
+      - Explicit file, raw-source-byte, roster-byte and 32768-character line bounds apply. These are retention/admission limits, not global scanner-memory or representative eight-times scale acceptance.
+      - SourceSnapshotInventory is an execution-only additive ScanResult property and is excluded from implicit JSON serialization. Required five scan artifacts, fact/scan identity and normal schemas remain unchanged.
+  - id: workflow.webforms.compiled-review-preparation.v1
+    name: Private native operator-declared Web Forms receipt preparation
+    description: Inspects explicit committed source and managed publish membership, records an exact-commit operator declaration for primary DLLs, validates generated receipts through Core policy and writes pinned private receipts/config in a new evidence root without source scanning or binary copying.
+    evidenceTier: Tier2Structural
+    emits:
+      - webforms-compiled-review-preparation.v1 local-only preparation manifest
+      - compiled-input-binding-set.v1 local-only primary binding receipt
+      - webforms-publish-binding.v1 local-only publish membership receipt
+      - webforms-publish-binding-set.v1 and bounded page/inventory-only partitions when needed
+      - webforms-compiled-review-config.v1 with preparationProvenance
+    limitations:
+      - Requires explicit --attest-exact-source-commit matching the configured commit; bindings record the operator declaration, not authentic build/source ownership, freshness, runtime load, dispatch or SQL execution proof.
+      - Source membership must be explicitly declared, committed and scoped-clean. Historical compiler/build closure remains unknown; dependencies remain unbound artifact context.
+      - Declared source bytes must match committed Git blobs exactly or through explicitly recorded supported built-in CRLF normalization. Assume-unchanged edits are rejected; custom clean filters and working-tree encodings are not used to manufacture a commit match. Raw source SHA-256 and normalization-policy hashes remain explicit.
+      - Maps are explicit inputs, not a discovered physical publish inventory. Zero matching declared maps can produce only the established mapless source-type candidate; multiple matching maps fail.
+      - All mode covers only declared receipt pages and retains a completeness gap. Larger declared inventories are partitioned into at most 64 chunks retaining 256-source, 64-published and 32-page limits, with zero-page inventory-only context when needed. Core independently admits all chunks or none and verifies global unique counts; representative scale and compiled-site acceptance remain unverified.
+      - The additive maxPublishInputFiles budget is explicit and role-scoped (1-20480). Omitted configurations retain the prior maxInputFiles budget; compiled assembly, PDB, project and binding-receipt admission is not raised. Follow-on preflight input admission must also fit before publication.
+      - Compiler SHA is a documented unavailable-marker digest, not a compiler binary attribution. Generator/input/artifact hashes are local integrity commitments, not authenticated signatures or portability proof.
+      - Git checks have a 15-second timeout and 4194304-character per-stream cap with optional index writes disabled. JSON publication has independent bounded byte limits.
+      - Failed preparation can retain an unadmitted owned staging directory; no cleanup, implicit reuse, existing-folder overwrite, source scan, binary copy or private Windows parity occurs here.
+  - id: diagnostic.webforms.saved-proof-packet.v1
+    name: Focused saved Web Forms proof packet receipt
+    description: Records exact generator, CLI, index, handoff, and artifact hashes for a new bounded modernization packet composed from an existing focused publish-proof index.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - webforms-saved-proof-packet-receipt.v1 local receipt
+    limitations:
+      - This is a local reporting projection, not a scan, build provenance proof for the published DLLs, or replacement for full-site reports.
+      - The saved combined index must match the compiled handoff hash before and after reporting; repository ID and source commit must match exactly one packet source, and JSON and Markdown artifacts are hashed independently.
+      - Default packet input and traversal bounds may reduce coverage; packet truncation and gaps remain authoritative.
+      - It does not prove source-line identity, runtime execution, branch feasibility, event firing, or SQL execution, and is not a shareable artifact.
   - id: diagnostic.webforms.raw-exact-call-evidence.v1
     name: Private Web Forms raw exact-call evidence audit
     description: Audits a bounded set of selected handlers against retained exact semantic call evidence for local diagnostic review.
@@ -2247,6 +2950,28 @@ rules:
       - Structural aliases preserve graph shape and evidence categories but omit source text, paths, symbols, fact IDs, SQL, configuration, URLs, and commit identity.
       - Anonymous output does not prove runtime execution, reachability, ordering, successful binding, behavior, correctness, or absence of unsupported calls.
       - Rare graph shapes and counts may still reveal architectural characteristics and require owner review before sharing.
+
+  - id: legacy.webforms.publish-map.v1
+    name: Explicit Web Forms publish-map binding
+    description: Re-verifies a bounded local-only publish receipt against exact current source bytes, emitted DLL/map bytes, the source commit, and each declared .compiled page mapping before emitting page-to-assembly evidence.
+    evidenceTier: Tier2Structural, Tier3SyntaxOrTextual or Tier4Unknown
+    emits:
+      - WebFormsPublishPageMapped
+      - WebFormsPublishPageCandidate
+      - WebFormsPublishSourceBound
+      - WebFormsPublishAssemblyBound
+      - AnalysisGap
+    limitations:
+      - Map parsing uses only the bounded snapshot whose bytes matched the receipt hash. This is snapshot integrity, not a lock on future filesystem changes. Single-receipt duplicate detection and artifact lookup use host path comparison (case-insensitive on Windows); partition sets additionally reject case aliases across partitions.
+      - Published files default to the receipt directory. An explicit caller-supplied absolute root may locate the same declared bytes elsewhere; its path hash participates in the bounded input digest and never proves source ownership, authentic compilation or a complete publish inventory.
+      - An explicit repository-relative receipt source base maps unchanged website-relative receipt paths to repository-relative evidence. It participates in the bounded input and scan-scope hashes; virtual routes and receipt source digests retain their original coordinate system. Unsafe paths, missing inputs and hash mismatches withhold evidence; no base is discovered.
+      - The receipt is operator-declared. Matching hashes and a .compiled map establish static page-to-assembly correspondence for the declared build inputs; they do not independently prove the compiler ran, source-method identity, PDB lines, deployment, page activation, or runtime execution.
+      - A virtual application-root prefix may differ from the source-relative page path only when the local preparer finds one unique suffix match and records the distinct sourcePath explicitly. The exact .compiled bytes remain unchanged; multiple candidates or a mismatched declared source path are gaps, not guessed joins.
+      - Input count, file size, path, duplicate, content, commit, XML, and mapping failures withhold the entire receipt behind Tier4 gaps. No ambient publish output is discovered, and a gap never means the page or assembly is absent.
+      - A local-only webforms-publish-binding-set.v1 container may declare at most 64 exact-hash non-nested receipts, each retaining 1 MiB, 256 source, 64 published and 32 page bounds. Its exact generator and bounded input digest commit to the source commit and ordered path/hash partition roster; conservative repeated artifact read/hash admission is capped at 8 GiB and retained map virtual paths at 4096 characters. This is integrity, not authentication or complete-site proof.
+      - Partition sets admit all partitions or none. Exact repeated membership is coalesced, conflicting hashes/kinds or case aliases are rejected, pages cannot repeat, and mapped/mapless correspondence is checked against the entire declared map union before any binding facts are emitted. Native preparation/preflight pins each partition; full compiled-site coverage and Windows acceptance remain separate gates.
+      - Explicit webforms-publish-inventory-partition.v1 members have zero page bindings and the same nonempty source/published inventory and byte/count bounds; they are valid only inside a set that also has normal page-bearing receipts. They add declared inventory context, never fake pages or build/runtime proof.
+      - Raw local receipt and source/artifact hashes remain local-only. Shareable projections must not expose private paths, symbols, or commitments to raw private source artifacts.
 
   - id: legacy.webforms.inventory.v1
     name: Legacy WebForms file and page inventory
@@ -2282,7 +3007,7 @@ rules:
 
   - id: legacy.webforms.event-binding.v1
     name: Legacy WebForms static event binding evidence
-    description: Extracts supported static WebForms server-control event attributes, bounded Tier3 event-like OnX candidates, and bounded code-behind control subscriptions such as OnClick, OnCommand, OnLoad, OnInit, and Button.Click += Handler with surface-qualified control identities, handler identities, and line spans.
+    description: Extracts supported static WebForms server-control event attributes, bounded Tier3 event-like OnX candidates, and bounded C# or Visual Basic code-behind control/lifecycle subscriptions with surface-qualified control identities, handler identities, and line spans.
     evidenceTier: Tier2Structural, Tier3SyntaxOrTextual, or Tier4Unknown
     emits:
       - WebFormsEventBindingDeclared
@@ -2292,20 +3017,22 @@ rules:
       - Safe OnX attributes outside the representative event allowlist are Tier3 event-like candidates, not proof that the target control exposes that server event; client-side, malformed, dynamic, generated, and unsafe shapes remain gaps rather than guessed handlers.
       - OnClient-prefixed attributes emit ClientWebFormsEventAttribute gaps and never server bindings. Bounded event names with non-identifier values emit NonIdentifierWebFormsEventValue gaps without assuming JavaScript or C# execution; other malformed names retain UnsupportedWebFormsEventAttribute. Raw attribute values are not retained.
       - Duplicate controls or duplicate bindings are preserved as separate evidence rows with deterministic IDs; TraceMap does not collapse them into a single runtime control.
-      - Explicit control subscriptions are limited to statically named receivers, representative events, and named handlers on the linked markup surface; lambdas, delegate expressions, unknown receivers, ambiguous controls, and dynamic wiring remain explicit gaps.
+      - Explicit control subscriptions are limited to statically named receivers, representative events, and named handlers on the linked markup surface. Supported VB shapes include Handles, AddHandler with an explicit AddressOf handler, and page-qualified Me/MyClass control or handler members; RemoveHandler remains language-level detach evidence and never becomes a positive Web Forms binding. When compiler receiver-type evidence is available, it must agree with the linked designer/control type. Bare delegate variables, arbitrarily qualified handlers, locals or parameters shadowing a markup control or Page receiver, mismatched same-named receiver fields, lambdas, composite delegates, unknown receivers, ambiguous controls, late binding, and dynamic wiring remain explicit gaps.
+      - VB handler, containing/page type, control receiver, designer-field, supported event, UI-property, and DataBind identifiers are matched with ordinal case-insensitive comparison. C# joins remain ordinal case-sensitive.
 
   - id: legacy.webforms.handler-resolution.v1
     name: Legacy WebForms code-behind handler resolution
     description: Resolves markup event handlers to linked code-behind partial methods by semantic source-symbol evidence when available, otherwise by scoped structural or syntax fallback.
     evidenceTier: Tier1Semantic or Tier2Structural or Tier3SyntaxOrTextual or Tier4Unknown
     emits:
+      - WebFormsClientHttpHandlerDeclared
       - WebFormsHandlerResolved
       - AnalysisGap
     limitations:
       - Handler resolution is static evidence and does not prove runtime event execution, page lifecycle order, postback behavior, authorization, deployment, or production usage.
       - Syntax and structural fallback depend on directive/linkage and partial class names; missing builds, generated code, stale files, partial classes, overloads, and event subscriptions can reduce confidence.
       - Ambiguous methods or partial classes are emitted as gaps and TraceMap does not choose an arbitrary winner.
-      - Auto-event-wireup MVP evidence is limited to Page_Load and Page_Init and requires explicit enabled evidence; false, unknown, or contradictory evidence remains Tier4Unknown.
+      - Auto-event-wireup MVP evidence is limited to Page_Load and Page_Init and requires explicit enabled evidence; explicit VB Handles/AddHandler lifecycle wiring does not require AutoEventWireup. False, unknown, or contradictory evidence remains Tier4Unknown.
       - Cross-file partial handler resolution requires semantic type and method evidence at the exact method span; syntax-only cross-file matches remain explicit gaps.
 
   - id: legacy.webforms.designer-control.v1
@@ -2353,8 +3080,8 @@ rules:
       - WebFormsLifecycleBranchCandidate
       - AnalysisGap
     limitations:
-      - Bare IsPostBack and this.IsPostBack conditions emit IsPostBackBranch with is-postback-syntax context; their logical negations retain NotIsPostBackBranch with not-is-postback-syntax context. One layer of parentheses is accepted at each existing expression boundary. These are syntax candidates, not proof of Page symbol identity, a branch running, lifecycle ordering, state initialization, runtime reachability, or correctness.
-      - Local or parameter shadowing, boolean comparisons, compound conditions, arbitrary receivers, helper-based conditions, and other expressions outside the documented shape remain explicit gaps. Positive branch support does not widen client-script inside-not-is-postback-syntax attribution or claim anything about else-branch execution.
+      - Bare IsPostBack and explicit C# this.IsPostBack or VB Me.IsPostBack/MyBase.IsPostBack conditions emit IsPostBackBranch with is-postback-syntax context; their logical negations retain NotIsPostBackBranch with not-is-postback-syntax context. One layer of parentheses is accepted at each existing expression boundary. These are syntax candidates, not proof of Page symbol identity, a branch running, lifecycle ordering, state initialization, runtime reachability, or correctness.
+      - Local, parameter, or containing-type member shadowing prevents an unqualified IsPostBack condition from becoming lifecycle evidence. Boolean comparisons, compound conditions, arbitrary receivers, helper-based conditions, and other expressions outside the documented shape remain explicit gaps. Positive branch support does not widen client-script inside-not-is-postback-syntax attribution or claim anything about else-branch execution.
 
   - id: legacy.webforms.client-script.v1
     name: Legacy WebForms client-script registration candidates
@@ -2367,6 +3094,76 @@ rules:
       - Supported receiver names are rejected when aliased or redeclared by a file-local custom type; semantic framework identity is not inferred under reduced compilation.
       - Registration-call syntax does not prove successful registration, rendered output, script execution, browser behavior, branch execution, or runtime reachability.
       - Dynamic payloads, ambiguous, shadowed, or custom same-named receivers, unsupported positional or named argument shapes, wrapper methods, reflection, generated scripts, and unsupported registration APIs remain gaps; raw script bodies are not retained.
+
+  - id: legacy.webforms.inline-client-behavior.v1
+    name: Legacy WebForms inline jQuery behavior candidates
+    description: Emits bounded textual candidates for supported inline jQuery event bindings, UI mutations, numeric maximum-length constraints, generated ASP.NET client-ID dependencies, exact same-surface server-control correlation, and a unique retained server event/handler correlation when one supported static binding is present.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - WebFormsClientEventBindingCandidate
+      - WebFormsClientUiMutationCandidate
+      - WebFormsClientValidationConstraintCandidate
+    limitations:
+      - Supported input is limited to inline script blocks and literal jQuery selectors using exact IDs, ID suffixes, ID contains selectors, or CSS classes, with click, keyup, change, input, or submit callback shapes. External files, delegated events, aliases, computed selectors, plugins, minified syntax, and arbitrary JavaScript remain outside coverage.
+      - Mutation candidates cover only show, hide, class addition/removal, disabled property changes, value attributes, and text setters. Argument expressions are not evaluated and a retained candidate does not prove DOM selection, browser execution, event firing, validation enforcement, postback, or server-handler execution.
+      - Same-surface server correlation requires one literal selector target matching one inventoried server-control ID. A server handler is retained only when a supported client event maps to exactly one retained binding and handler, including markup, VB Handles, or AddHandler evidence. ASP.NET-generated client-ID suffix or contains matching is a structural candidate and does not prove the rendered client ID, postback, or handler execution.
+      - Numeric maximum-length declarations are retained only inside the callback or within 4096 characters before it in the same inline script when the callback references that exact variable name; this bounded textual association does not prove data flow or enforcement.
+      - Raw script bodies and mutation argument values are not retained; evidence uses paths, exact line spans, bounded safe selector targets, and snippet hashes.
+
+  - id: legacy.webforms.inline-client-http-request.v1
+    name: Legacy Web Forms inline jQuery HTTP request candidates
+    description: Emits bounded textual candidates for inline literal `$.ajax` request objects and resolves literal `.ashx` routes to one repository handler file when a unique suffix or filename match exists.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - WebFormsClientHttpRequestCandidate
+    limitations:
+      - Admission requires an inline script `$.ajax` call with a literal URL. Computed URLs, aliases, wrapper libraries, fetch, XMLHttpRequest, external scripts, and malformed or unbalanced objects remain outside coverage.
+      - The HTTP method defaults to GET only when the request object omits literal type/method syntax, matching the bounded jQuery shape; callback names, literal content/data types, and verification-token presence are syntax observations, not proof of request or callback execution.
+      - Repository handler resolution uses a unique normalized `.ashx` path suffix, falling back to a unique handler filename. It does not prove deployment virtual-directory mapping, routing, handler registration, authentication, authorization, successful responses, or runtime reachability.
+      - Raw URLs, request data, headers, callback bodies, token values, and response values are not retained. Evidence stores safe endpoint/file metadata, route and snippet hashes, and exact source spans.
+
+  - id: legacy.webforms.client-http-handler-resolution.v1
+    name: Legacy Web Forms client HTTP handler resolution
+    description: Joins a uniquely resolved inline jQuery `.ashx` request through its WebHandler Class directive to one retained external or single-file inline `ProcessRequest` declaration for bounded downstream traversal.
+    evidenceTier: Tier1Semantic or Tier2Structural or Tier3SyntaxOrTextual or Tier4Unknown
+    emits:
+      - WebFormsClientHttpHandlerDeclared
+      - WebFormsHandlerResolved
+      - CallEdge
+      - AnalysisGap
+    limitations:
+      - Resolution requires one literal request target, one repository `.ashx` file, a supported WebHandler Class directive, and one matching `ProcessRequest` declaration from inline VB/C# source, an explicit CodeFile/CodeBehind path, or a uniquely matching retained type declaration.
+      - Semantic method evidence produces Tier1; an exact directive/type/source/method structural join produces Tier2. Neither proves virtual-directory mapping, handler registration, request dispatch, authentication, authorization, handler construction, or runtime execution.
+      - Calls inside a single-file inline `ProcessRequest` are bounded to 256 syntax invocations and emit Tier3 call edges. They do not prove overload resolution, receiver type, dynamic dispatch, branch feasibility, runtime request handling, or callee execution.
+      - Missing and ambiguous handler source or `ProcessRequest` declarations are emitted as Tier4 gaps. They are not proof that a runtime handler is absent.
+      - Downstream paths remain bounded by retained call-edge and terminal evidence and inherit the legacy-flow traversal limitations.
+
+  - id: legacy.webforms.server-behavior.v1
+    name: Legacy Web Forms projectless Visual Basic server behavior candidates
+    description: Emits bounded syntax candidates for Response.Redirect calls, CompleteRequest lifecycle calls, and supported same-surface server-control property assignments inside retained Visual Basic Web Forms handlers.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - WebFormsServerNavigationCandidate
+      - WebFormsRequestLifecycleCandidate
+      - WebFormsServerControlStateMutationCandidate
+    limitations:
+      - Admission requires a retained Visual Basic handler uniquely associated with a Web Forms surface. Compiler identity is not inferred for projectless Web Site code.
+      - Navigation candidates require a syntactic Response.Redirect receiver. Static string targets are represented only by a digest and length; dynamic or unsupported targets remain classified without preserving raw expressions. The optional endResponse Boolean is retained only for literal True or False.
+      - CompleteRequest admission requires a member-access receiver ending in ApplicationInstance. It is a request-lifecycle syntax candidate and does not prove framework receiver identity, pipeline behavior, request termination, method return, redirect completion, or runtime ordering.
+      - Server-control state mutation candidates cover a bounded property allowlist and correlate only a unique same-surface markup control ID. Assignments retain the property name, exact span, value-expression digest, and nearest supported If, ElseIf, Else, or single-line If context; they do not prove branch feasibility, rendered state, event execution, or business intent.
+      - Multiple controls may legitimately bind to one handler. Trigger bindings remain separate while identical handler behavior is emitted once with all retained handler-resolution facts as support.
+
+  - id: legacy.webforms.inline-server-expression.v1
+    name: Legacy Web Forms inline server-expression reference candidates
+    description: Emits bounded syntax candidates when a qualified identifier inside an inline render or data-binding expression has one exact longest-prefix repository type declaration, including projectless App_Code declarations.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - WebFormsInlineServerExpressionReferenceCandidate
+    limitations:
+      - Supported expressions are limited to `<%=` render expressions and `<%#` data-binding expressions containing a qualified identifier chain. Code blocks, directives, helper indirection, imports, aliases, generics, indexers, invocations with complex syntax, and dynamic expressions remain outside this bounded join.
+      - Resolution requires exactly one repository declaration site for the longest qualified type-name prefix. Visual Basic-linked pages compare identifiers case-insensitively; unresolved or ambiguous references do not emit a positive candidate.
+      - A retained candidate proves only the markup span and unique repository declaration. It does not prove ASP.NET dynamic compilation, member binding, expression execution, rendered output, or runtime reachability.
+      - Raw expression text and member names after the matched type are not retained; only bounded safe type/path metadata, segment counts, hashes, and exact evidence spans are emitted.
 
   - id: legacy.webforms.postback-target.v1
     name: Legacy WebForms postback target candidates
@@ -2399,7 +3196,11 @@ rules:
       - webforms-modernization-packet.v1
       - AnalysisGap
     limitations:
+      - Path evidence requires a paired upstream scan and commit identity; missing node or edge provenance is omitted with a gap, never filled with a different primary snapshot commit.
+      - A combined index may contain one or more provenance-recorded sources; a single-source combine is not multi-repository coverage. Zero source rows and missing or ambiguous primary Web Forms source identity remain errors.
+      - Combined graph fact, edge, node, or text admission limits retain bounded inventory and source provenance but emit a Tier4 input-limit gap with reduced coverage and truncation; no paths or downstream boundaries are classified from the incomplete graph.
       - Packet rows preserve upstream evidence and deterministic structural connectivity; they do not add extractor conclusions or prove runtime reachability, event firing, postback behavior, validation, authorization, persistence, production usage, or complete workflow coverage.
+      - Handler-call rows are limited to call-edge fact IDs already cited by a retained event-flow fact. They preserve only safe callee identity, call kind, provenance, and limitations; they do not retain arguments or prove receiver type, overload resolution, branch execution, or runtime dispatch.
       - Downstream-boundary rows inventory only supported terminal evidence already composed by the bounded legacy-flow path reader; they do not prove successful service, message, configuration, database, or other external interaction.
       - General file-operation extraction is unavailable in this packet version and remains an explicit capability gap; absence of a file boundary is not evidence that a handler does not access files.
       - Structural slice candidates do not infer business capabilities, parity, migration scope, effort, cloud readiness, target architecture, test completeness, security approval, release approval, or safety to change; owner naming and confirmation remain required.
@@ -2407,6 +3208,8 @@ rules:
       - The local-only packet omits snippets, raw SQL, configuration values, URLs, connection strings, credentials, source values, repository remotes, and absolute local paths.
       - Web Forms packet input admission bounds retained fact and edge rows, UTF-8 text bytes, per-row size, and graph nodes/edges; these are deterministic admission limits, not a hard OS working-set guarantee. On admission failure, WebFormsModernizationInputLimitReached preserves admitted inventory but no downstream paths or absence classifications are derived from the incomplete graph.
       - A closed audited set of graph-inert syntax facts may be compacted to symbol witnesses; unknown types, declared dependency surfaces, legacy rules, supporting evidence IDs, and repository-wide symbol competitors are preserved. This is not root-specific lazy graph loading.
+      - Bounded combined readers retain every fact row and global source namespace while projecting only the audited graph-consumed properties in SQLite before managed allocation. Source-symbol IDs, VB member/body spans and namespace/import context required by compiled bridges remain explicit. Full facts stay unchanged in the retained index. Admitted projected facts, exact-ID lookups, nodes/edges and paged outgoing adjacency use private indexed scratch storage; raw admission ceilings and type-specific semantic-index allocations remain.
+      - Property projection requires a bounded flat string/null object without duplicate keys. Duplicate, nested, numeric, non-object or malformed JSON stays on the applicable full parser path, preserving last-key values, the combined reader's empty malformed-properties result and the single reader's malformed-properties hash instead of coercing values into identity evidence.
 
   - id: legacy.webforms.batch-data-movement.v1
     name: Legacy Web Forms batch and data-movement evidence
@@ -2418,6 +3221,7 @@ rules:
     limitations:
       - Rows are static candidates only and do not prove that a job is scheduled, runs, succeeds, moves complete data, retries effectively, is idempotent, checkpoints effectively, commits or rolls back successfully, is monitored, or is used in production.
       - Compiler-resolved System.IO, FileSystemWatcher, and SqlBulkCopy calls are preferred; syntax fallback is restricted to explicitly qualified framework calls, declared SqlBulkCopy variables, known scheduled-entry shapes, and CommandType.StoredProcedure execution shapes.
+      - Compiler-resolved System.IO consumption accepts the canonical C# `global::System.IO.*` and Visual Basic `Global.System.IO.*` symbol display forms; this is a language display normalization, not a name-only join.
       - Retry, error-handling, transaction, checkpoint, and telemetry fields record only deterministic declaration shapes in the same member; they do not prove runtime behavior or effectiveness.
       - Related database, message, service, and configuration facts are composed only when source file and member identity prove the association; missing or ambiguous project owners, config references, reduced semantic coverage, and deterministic limits remain explicit gaps.
       - Raw schedules, paths, destinations, SQL, connection material, configuration values, source values, snippets, credentials, local absolute paths, and remotes are omitted or represented only by bounded hashes and categories.
@@ -2648,7 +3452,8 @@ rules:
       - Composed paths are static evidence, not runtime execution proof, reachability proof, production traffic, service deployment, branch feasibility, user behavior, or permission proof.
       - Call edges may miss reflection, dynamic dispatch, delegates, runtime DI, partial methods, generated code, serializer behavior, event bubbling, collection contents, and branch-dependent behavior.
       - WCF operation nodes are terminals in v1; traversal does not continue through service-side implementation or downstream service-side evidence.
-      - Traversal is bounded by depth, path, and frontier limits; truncated output is partial.
+      - Terminal inventory retains one shortest deterministic witness per distinct supported terminal; separately bounded path-detail enumeration can retain additional routes to the same terminal without increasing the distinct-terminal count.
+      - Traversal is bounded by depth, path, frontier, and work limits; a complete terminal inventory does not imply complete route detail, and truncated path output is partial.
 
   - id: legacy.flow.parameter-forward-unavailable.v1
     name: Legacy flow parameter-forwarding availability gap
@@ -2668,8 +3473,9 @@ rules:
       - legacy flow classification
     limitations:
       - Syntax-only, name-only, ambiguous, generated-code-uncertain, high fan-out, or partial-terminal evidence cannot produce StrongStaticPath.
+      - Interface and override candidate hops cap legacy flow and Web Forms boundary classifications at NeedsReviewStaticPath; a complete static terminal inventory does not resolve the runtime receiver.
       - Reduced coverage and missing extractors produce ReducedCoverage or AnalysisGap rather than clean absence.
-      - The v1 high fan-out threshold is five or more inbound candidate paths from distinct roots to one terminal identity, or generic ambiguous terminal keys such as status, id, name, value, result, or response. This conservative placeholder requires calibration against redacted legacy validation data, including false-positive and false-negative metrics by terminal kind.
+      - The implemented v1 high fan-out threshold counts five or more retained incoming graph edges to one exact terminal identity, or generic ambiguous terminal keys such as status, id, name, value, result, or response. It does not count distinct roots or runtime callers. Indexed classification reads at most five global incoming index references and preserves the same threshold without per-path whole-edge payload decoding. This conservative placeholder requires calibration against redacted legacy validation data, including false-positive and false-negative metrics by terminal kind.
 
   - id: legacy.flow.gap-propagation.v1
     name: Legacy flow gap propagation
@@ -3098,7 +3904,102 @@ rules:
       - Reconciliation is source-local and must not join symbols across combined indexes or languages.
       - Short-name reconciliation is review evidence only and cannot produce a strong static path.
       - Ambiguous same-name candidates must remain gaps or review evidence rather than arbitrary strong links.
+      - Reconciliation retains the full namespace and nested declaring-type path; equal final type segments in different namespaces do not authorize an edge.
       - Reconciliation does not prove runtime dispatch, dependency injection binding, reflection targets, branch feasibility, serializer behavior, or SQL execution.
+
+  - id: combined.paths.compiled-il-bridge.v1
+    name: Bound compiled IL path bridge
+    description: Adds in-memory path edges between an exact source-to-metadata reconciliation and its admitted method, and between admitted IL method bodies and uniquely matched MethodDef or assembly-scoped MemberRef call targets.
+    evidenceTier: Tier1Semantic, Tier2Structural, or Tier3SyntaxOrTextual
+    emits:
+      - compiled-source-identity path edge
+      - compiled-il-call path edge
+      - compiled-il-callvirt-candidate path edge
+      - compiled-database-api-candidate path edge with optional command configuration candidate
+      - CompiledIlSourceDisplayUnavailable gap
+      - CompiledIlTargetUnavailable gap
+      - CompiledIlTargetAmbiguous gap
+      - CompiledIlCommandBindingUnavailable gap
+    limitations:
+      - Requires a validated bound source-to-metadata reconciliation for source entry, an exact source symbol ID on one uniquely displayed Tier1 call source, admitted dual-reader IL body/call facts, exact fact-ID joins, and one unique MethodDef or assembly-scoped MemberRef target; no binary discovery or guessed source-to-binary identity occurs in this graph layer. A source method without a retained Tier1 call source cannot enter through this first slice.
+      - A call/newobj edge records a static encoded target, not execution or branch feasibility. A callvirt operand produces only a Tier3 review candidate because actual virtual dispatch may select an override; it does not prove runtime target, reflection, dependency-injection binding, or a database operation.
+      - MemberRef joins require an admitted bound assembly with the complete encoded assembly-reference identity, non-generic type path, member name, and signature, plus exactly one matching declaration across all combined sources. Unadmitted references, generic type specifications, MethodSpec, calli, constrained type, and unresolved targets are not promoted to graph edges. Missing or ambiguous joins never prove absence or complete reachability.
+      - The graph overlay does not rewrite source facts, the combined database schema, or existing source-only path evidence.
+      - Optional command configuration is retained only from one il-command-binding.v1 fact with exact same-source body/call/configuration fact joins and matching raw-file, IL generator and bounded-input hashes. It remains Tier3 static configuration, not SQL/procedure identity or execution; malformed, missing, differently bound or competing candidates leave the API path intact and produce a binding gap. Caller argument substitution and parameter propagation are separate requirements.
+
+  - id: combined.paths.projectless-pdb-identity.v1
+    name: Exact projectless source-to-PDB method path entry
+    description: Adds an in-memory path entry from one projectless VB method declaration to one bound metadata method when a checksum-matched portable PDB document has visible sequence points uniquely owned by that source method block.
+    evidenceTier: Tier2Structural
+    emits:
+      - projectless-source-pdb-identity path edge
+      - ProjectlessPdbMethodAmbiguous gap
+      - ProjectlessPdbMetadataAmbiguous gap
+    limitations:
+      - Requires an explicitly admitted and bound assembly and portable PDB, exact document checksum match to retained source bytes, exact PDB method-row to metadata-method reconciliation, complete visible sequence-point containment in one source method block, matching emitted method name, and one unique source declaration. It never guesses from a pretty name, imports, or an unbound binary.
+      - Source line containment and name establish only a static compiler-location association. They do not prove execution, runtime page compilation, method dispatch, or that the input binary was deployed. Methods without visible PDB points, mismatched documents, ambiguous ownership, native Windows PDBs, and unadmitted inputs receive no path edge.
+      - The rule does not convert projectless syntax evidence into Tier1 Roslyn semantic evidence or change the source scan's coverage label.
+      - A compiled-only attachment may use declarations in a different index only through an explicitly admitted and report-validated compiled-attachment-index-link.v1 relationship. Supporting facts retain their original namespaces and the edge records the link digest; matching labels or commits alone are insufficient.
+
+  - id: combined.paths.projectless-publish-candidate.v1
+    name: Projectless Web Forms publish method candidate
+    description: Adds a review-only path entry from one qualified projectless VB handler to one admitted published metadata method when a verified publish receipt maps the page to the exact assembly bytes.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - projectless-publish-method-candidate path edge
+      - projectless-publish-member-candidate path edge
+      - ProjectlessPublishPageUnavailable gap
+      - ProjectlessPublishGeneratedTypeUnavailable gap
+      - ProjectlessPublishSourceAmbiguous gap
+      - ProjectlessPublishMetadataAmbiguous gap
+      - ProjectlessPublishMemberAmbiguous gap
+      - ProjectlessPublishAssemblyAmbiguous gap
+      - ProjectlessPublishMemberWorkLimit gap
+    limitations:
+      - Requires an explicitly declared and scanner-rechecked local-only publish receipt, one exact page-to-assembly map, a linked code-behind file bound by the same receipt digest, the mapped generated type in the admitted assembly, one linked source handler declaration with the full qualified containing type, and one bound metadata method in the exact mapped assembly bytes with the full encoded type path and method name. Ambiguous or missing candidates fail closed.
+      - Without PDB sequence points or a compiler source-method map, this is a Tier3 candidate, not exact source-to-metadata method identity. It does not prove source-line identity, execution, runtime page activation, branch feasibility, or SQL effects.
+      - The graph overlay does not promote source syntax to Roslyn semantic evidence or rewrite source facts.
+      - Other source methods named by the verified receipt may join a uniquely admitted method with the complete qualified type path and compatible parameter shapes. VB page, handler, containing-type, method, and parameter spelling is matched case-insensitively; intrinsic aliases, including unsigned integers and SByte, use their defined System type, while unqualified non-intrinsic names must match a retained lexical namespace or explicit non-aliased Imports scope. Unscoped names, case-equivalent ambiguous overloads, and ambiguous assembly identities fail closed. Both directions are candidate edges so a compiled IL walk can re-enter retained source evidence, not an exact method-location claim.
+      - The member-candidate pass preflights its bounded source/member comparison work before emitting any of its edges; work-limit exhaustion withholds the pass and emits a Tier4 gap.
+      - The unchanged 100000 comparison cap counts safely length-framed qualified-type candidates and every opaque name-matched fallback, not unrelated declaring types. Global admitted source/name and receipt-bound assembly counts remain available for gap reasons; same-type overloads, duplicate rows and assembly competitors are never deduplicated. Generic, nested, malformed or delimiter-bearing identities keep the historical name-wide fallback and may still exhaust the cap.
+      - Published-page joins build complete typed source/file inventories once instead of re-decoding every admitted fact per map and handler. Mapless generated-type uniqueness retains unbound competitors, and duplicate pages, receipt bindings, handler declarations and bound metadata methods remain ambiguous. Qualified method selection retains opaque fallback rows and the original final receipt/hash/type/name/span predicates. Type-specific managed allocation and representative resource acceptance remain separate limits.
+      - A compiled-only attachment may use retained pages, handlers and method declarations from its explicitly validated parent index. Publish/metadata/IL facts remain in the attachment namespace, supporting fact IDs are unchanged, and cross-index edges record the admitted link digest. This does not create Tier1 source identity or upgrade page verdicts.
+
+  - id: combined.paths.projectless-vb-receiver-bridge.v1
+    name: Projectless Visual Basic receiver-provenance bridge
+    description: Derives an in-memory review-tier path edge from a syntax-only VB invocation to a unique retained VB method declaration when receiver provenance is established by a preceding local creation, an exact inline New expression, a containing-type typed field, or a typed field reached through one unique retained base-type chain, and the retained method identity is compatible.
+    evidenceTier: Tier2Structural
+    emits:
+      - projectless-vb-receiver-bridge path edge
+      - ProjectlessVisualBasicReceiverCreationAmbiguous gap
+      - ProjectlessVisualBasicReceiverTargetUnavailable gap
+      - ProjectlessVisualBasicReceiverTargetAmbiguous gap
+    limitations:
+      - The receiver creation and invocation must be source-index-local; the unique semantic declaration may come from that source or another explicitly combined TraceMap index.
+      - Local creation takes precedence. Field provenance requires one typed declaration on the containing type or one typed field reached through a unique retained syntax-only base-type chain; ambiguous field or inheritance evidence fails closed.
+      - An inline New expression qualifies only when it is the invocation's direct receiver in retained syntax; property returns, factories, and arbitrary nested expression types are not inferred.
+      - A syntax call marked as an inline-New receiver is never also bridged as an implicit Me or MyClass call merely because its receiverName is empty.
+      - The bridge does not perform compiler binding for the projectless caller and does not infer properties, factories, dependency-injection, late-bound, reflection, or reassigned receiver targets.
+      - Type matching uses a case-insensitive canonical declaring-type identity, method name, arity, and any available ordered argument/parameter types; zero or multiple compatible declarations remain explicit gaps.
+      - Bounded single-index packet input follows newly discovered syntax calls through method bodies only while fact, text, frontier, and traversal-work limits permit. Interrupted closure is an explicit Tier4 graph-input limit, not a complete zero-terminal inventory.
+      - A bridge is static review evidence only and does not prove runtime dispatch, branch feasibility, database execution, or successful binding.
+
+  - id: combined.paths.projectless-vb-constructor-bridge.v1
+    name: Projectless Visual Basic constructor-body bridge
+    description: Connects a retained syntax-only VB object creation to a uniquely identified explicit constructor body, including an inline New expression with no assigned variable.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - projectless-vb-constructor-bridge path edge
+      - ProjectlessVisualBasicConstructorTargetAmbiguous gap
+      - ProjectlessVisualBasicConstructorTargetUnavailable gap
+      - ProjectlessVisualBasicConstructorBodyUnavailable gap
+    limitations:
+      - Only projectless syntax-extractor object creations can bridge; compiler-rejected semantic constructor fallbacks cannot be rescued by another source root.
+      - A bounded single-index packet admits matching constructor declarations and constructor-owned body facts through the same fact, frontier, and work limits as syntax call closure; interrupted admission is partial evidence, not a clean absent constructor.
+      - The created type must match exactly one retained VB syntax constructor declaration by qualified type identity and argument count across the combined sources. An unqualified type may be qualified only by its retained lexical namespace or a non-aliased explicit Imports namespace; absent or competing identities fail closed rather than guessing a namespace.
+      - An exact arity-bearing constructor body with retained call or creation evidence is required. Missing or unretained bodies remain a Tier4 gap, not a clean absence conclusion.
+      - Argument types, implicit constructors, property getter semantics, collection contents, branch feasibility, and runtime object lifetime are not inferred.
+      - The edge proves only a possible static constructor side-effect path in the retained graph; it does not prove that a property is populated, a database call executes, or a Web Forms control binds successfully.
 
   - id: combined.paths.query-gap.v1
     name: Combined dependency path query gap
@@ -3119,9 +4020,14 @@ rules:
       - TruncatedByLimit path gap
       - GraphInputLimitReached path gap
     limitations:
+      - New path summaries retain the deterministic traversal work counter, including terminal inventory and witness search, shared across all roots in one search query. It is not graph-admission work, elapsed time, memory, runtime calls or per-root capacity. Historical summaries may omit this optional counter; absence is unknown, not zero. Selector misses may correctly record zero traversal without asserting a complete graph.
       - Truncation means the returned path set is intentionally partial and must not be treated as complete dependency coverage.
       - The triggering evidence span is best-effort and may point to the nearest traversed node rather than the omitted dependency.
       - Web Forms graph-input admission gaps have no source span and discard the incomplete graph before classification; they do not imply missing runtime dependencies or a clean graph.
+      - Bounded combined input checks projected fact and dependency-edge text bytes before copying row strings into managed memory. Per-row or aggregate refusal discards the graph; noncanonical combined fact namespaces are malformed input, not a guessed identity or clean result.
+      - Indexed bounded combined graph storage pins the Reporting generator and exact input-index hashes and rechecks input bytes before returning a report. Its default 512 MiB logical SQLite database ceiling includes admitted projected facts and the edge-order roster; native reports may explicitly declare 64 KiB through 16 GiB, bound in their configuration and status. The ceiling excludes sorter scratch files and is not an OS memory bound. Storage refusal emits graph-storage-bytes and discards all partial paths; the private temporary store is never a reusable run checkpoint.
+      - Private v2 scratch rows use lossless length-framed raw UTF-8 JSON with exact declared-size validation. Outgoing cache budgets count JSON bytes excluding framing headers. All global competitors and published evidence identities remain unchanged; representative admission must be measured separately. Experimental Brotli compression was rejected after slowdown and continued large-graph refusal.
+      - Bounded per-source combined projection rejects fact rows without retained source-index metadata instead of silently omitting an unknown global competitor. Null or noncanonical fact namespaces remain malformed input, not a clean result.
 
   - id: combined.route-flow.selector.v1
     name: Route-flow selector handling
@@ -3790,6 +4696,252 @@ rules:
       - TraceMap does not replace a project-defined CustomAfterMicrosoftCommonTargets hook. In that case it emits `ComReferenceResolutionFallbackUnavailable` and leaves ordinary MSBuildWorkspace behavior intact.
       - Exclusion comparison follows detected host path case semantics and macOS Unicode-equivalence semantics without rewriting persisted evidence paths. Unicode-distinct names remain distinct on hosts whose filesystems treat them as distinct.
 
+  - id: vb.semantic.compilation.v1
+    name: Visual Basic semantic compilation observation
+    description: Records MSBuildWorkspace loading of Visual Basic projects and creation of a Roslyn Visual Basic compilation over the project's declared documents.
+    evidenceTier: Tier2Structural
+    emits:
+      - VisualBasicProjectObserved
+    limitations:
+      - The observation proves only that the project loaded into MSBuildWorkspace and Roslyn produced a compilation; it does not prove the project builds, that every document binds cleanly, or that any code runs.
+      - Compiler diagnostic error counts are aggregate counts only; per-diagnostic evidence is carried by `vb.semantic.workspace.v1` gap rows.
+      - The .NET SDK emits design-time compiler arguments without `_MyType="Empty"`, so MSBuildWorkspace loads inject the classic My template whose types do not bind on .NET Core. Errors caused by that injected template point at no source location, are excluded from coverage gaps, and remain visible as `injectedTemplateErrorCount` on the observation fact; a reduced coverage label is never inferred from them alone.
+      - Document counts are safe aggregate counts over project-declared compilation inputs; generated and designer documents are counted without treating filename conventions as semantic proof.
+      - Declaration, reference, call, construction, argument, and symbol-relationship evidence is emitted separately by the `vb.semantic.*` rules; this rule claims only the load/compilation observation.
+
+  - id: vb.semantic.workspace.v1
+    name: Visual Basic semantic workspace gaps
+    description: Records MSBuild registration, project load, compilation, compiler diagnostic, per-file semantic-unavailability, and explicit scan-scope gaps encountered while loading Visual Basic projects semantically.
+    evidenceTier: Tier4Unknown
+    emits:
+      - AnalysisGap
+    limitations:
+      - Workspace and compiler diagnostics can be environment-specific because they depend on installed SDKs, reference assemblies, and available project references.
+      - Native workspace messages are sanitized to stable categories before shareable artifacts are written; raw local paths, remotes, package sources, config values, credentials, and source-like snippets are omitted.
+      - Compiler-diagnostic gaps carry a bounded Visual Basic diagnostic id (`BCxxxxx`) alongside the category; the id is a safe categorical code and never retains the raw diagnostic message.
+      - A Visual Basic workspace or compilation gap reduces the aggregate scan coverage label; the scan is never reported as clean or complete while such a gap is present.
+      - Compiler diagnostics that point at no source location and reference the classic My template surface are excluded as SDK design-time injection noise; this exclusion is bounded to that template surface and does not suppress source-referencing compiler errors.
+      - Per-file `SemanticAnalysisUnavailable` gaps are emitted by the bounded syntax fallback for Visual Basic files that received no compiler-resolved coverage; they do not claim why semantic evidence is unavailable, and syntax facts that accompany them are governed by the `vb.syntax.*` rules.
+      - `CallSiteSemanticResolutionUnavailable` gaps mark individual invocation or constructor sites where compiler binding was unavailable but bounded Tier3 call-site evidence was retained; these gaps reduce coverage and never assert a target.
+      - Exclusion comparison follows detected host path case semantics and macOS Unicode-equivalence semantics without rewriting persisted evidence paths.
+
+  - id: vb.semantic.declarations.v1
+    name: Visual Basic semantic declarations
+    description: Records compiler-resolved Visual Basic type, module, interface, structure, enum, delegate, method, constructor, property, field, parameter, and event declarations using Roslyn semantic symbols.
+    evidenceTier: Tier1Semantic
+    emits:
+      - TypeDeclared
+      - MethodDeclared
+      - PropertyDeclared
+      - FieldDeclared
+      - ParameterDeclared
+      - EventDeclared
+    limitations:
+      - Requires project load and enough references to create a Roslyn Visual Basic compilation; when binding is reduced, absence of these facts is not absence of declarations in source.
+      - Designer and generated documents (filename convention) are not analyzed for semantic facts; checked-in designer content may support bounded Web Forms composition but is not proof of a current generated runtime control.
+      - Event declarations and WithEvents field/property shapes are declarations only. Compiler-resolved Handles/AddHandler/RemoveHandler/RaiseEvent evidence is governed separately by `vb.semantic.event-wiring.v1`.
+      - Operator and Declare (P/Invoke) statements are not emitted as method declarations in this slice.
+      - Symbols resolved by a Visual Basic scan carry `visualbasic`-tagged symbol identities; cross-language joins between C#-declared and Visual Basic-declared symbols by identity are not established in this slice.
+      - A declaration proves source structure only; it does not prove compilation success, runtime reachability, or execution.
+
+  - id: vb.semantic.propertyaccess.v1
+    name: Visual Basic semantic property access
+    description: Records compiler-resolved Visual Basic property accesses, including unambiguous default-member indexing such as catalog(0).
+    evidenceTier: Tier1Semantic
+    emits:
+      - PropertyAccessed
+    limitations:
+      - Requires Roslyn semantic binding; unresolved receivers, error-typed receivers, and late-bound accesses produce no fact rather than a guessed target.
+      - Default-member indexing is retained at Tier1Semantic only when Roslyn resolves exactly one default property; ambiguous or unresolved default members are omitted.
+      - A property access proves a reference in source; it does not prove the accessor executes, that the getter or setter is reachable, or that any value flows at runtime.
+
+  - id: vb.semantic.methodinvocation.v1
+    name: Visual Basic semantic method invocation
+    description: Records compiler-resolved Visual Basic sub and function invocations with resolved containing types and receiver symbols.
+    evidenceTier: Tier1Semantic
+    emits:
+      - MethodInvoked
+      - AnalysisGap
+    limitations:
+      - With-block and conditional-access member binding does not provide an explicit receiver identity; resolved calls are retained without inventing receiver symbols. Parenthesis-free operation queries are shared across call and database extraction and bounded to 100000 candidate expressions per document. Unresolved executable expressions are labeled without assuming method-call semantics, with at most 50 detailed gaps plus a budget gap.
+      - Requires Roslyn semantic binding; late binding, overload resolution failures, and error-typed receivers produce no Tier1 fact rather than a guessed target.
+      - An invocation proves a compiler-resolved call site in source; it does not prove the callee executes, is reachable, or completes at runtime.
+      - Unresolved invocation sites retain bounded Tier3 call-site facts and a `CallSiteSemanticResolutionUnavailable` Tier4 gap; they never become compiler-resolved targets. Compiler-recognized late-bound calls are producer-local uncertainty and do not imply that MSBuild or compilation failed; other unresolved call-site gaps remain workspace coverage reductions.
+
+  - id: vb.semantic.callgraph.v1
+    name: Visual Basic semantic call graph
+    description: Records compiler-resolved Visual Basic call edges from the containing caller symbol to resolved callee methods and constructors, including object-creation constructor edges.
+    evidenceTier: Tier1Semantic
+    emits:
+      - CallEdge
+    limitations:
+      - Edges are compiler-resolved call sites, not proven execution: dynamic dispatch to overrides, delegates, and interface dispatch beyond the resolved target are not expanded. Event composition is retained separately and is not represented as an executed CallEdge.
+      - Late-bound invocations and unresolved callees produce no Tier1 edge; bounded Tier3 syntax edges and Tier4 call-site gaps may accompany them.
+      - The caller is the lexically containing symbol at the call site; runtime call paths, recursion depth, and branch feasibility are not proven.
+
+  - id: vb.semantic.objectcreation.v1
+    name: Visual Basic semantic object creation
+    description: Records compiler-resolved Visual Basic object creations with created type, resolved constructor, assignment target, and argument count.
+    evidenceTier: Tier1Semantic
+    emits:
+      - ObjectCreated
+    limitations:
+      - Requires Roslyn semantic binding of the created type; error-typed creations produce no fact, while a known type with an unresolved constructor retains bounded Tier3 call-site evidence and a Tier4 gap.
+      - An object creation proves a constructor call site in source; it does not prove the constructor executes or the object survives to runtime.
+      - Constructor call edges are carried separately by `vb.semantic.callgraph.v1`; argument flow is carried by `vb.semantic.valueflow.v1`.
+
+  - id: vb.semantic.valueflow.v1
+    name: Visual Basic semantic value flow
+    description: Records compiler-resolved Visual Basic argument-to-parameter relationships at resolved method invocations and object creations, including named, omitted-optional-bound, and params-expanded arguments.
+    evidenceTier: Tier1Semantic
+    emits:
+      - ArgumentPassed
+    limitations:
+      - Parameter binding is compiler-resolved at the call site; it does not prove the callee executes or that values are consumed.
+      - Raw argument expressions are not stored; expression hashes, kinds, resolved argument symbols, and line spans are emitted.
+      - ByRef aliasing, late-bound arguments, and omitted optional arguments that the compiler fills implicitly are bounded by the resolved operation model and may not enumerate every runtime value path.
+
+  - id: vb.semantic.symbolrelationship.v1
+    name: Visual Basic semantic symbol relationships
+    description: Records compiler-resolved Visual Basic direct symbol relationships: inheritance, interface implementation, interface member implementation, and member overrides.
+    evidenceTier: Tier1Semantic
+    emits:
+      - SymbolRelationship
+    limitations:
+      - Relationships are limited to compiler-resolved direct symbols; conditional compilation, partial binding, and error-typed bases produce no relationship rather than a guessed target.
+      - Event wiring is retained separately by `vb.semantic.event-wiring.v1`; it is not a type/member override or interface relationship.
+      - A relationship proves a declaration shape; it does not prove instantiation, dispatch outcome, or runtime behavior.
+
+  - id: vb.semantic.event-wiring.v1
+    name: Visual Basic semantic event composition
+    description: Records compiler-resolved Handles, AddHandler, RemoveHandler, and RaiseEvent sites with canonical Visual Basic handler/event symbol identities and WithEvents receiver evidence when available.
+    evidenceTier: Tier1Semantic or Tier4Unknown
+    emits:
+      - VisualBasicEventBindingDeclared
+      - VisualBasicEventRaised
+      - AnalysisGap
+    limitations:
+      - Event bindings and raises are compiler-resolved static source evidence; invalid Handles clauses and invalid or composite delegate conversions remain producer-local Tier4 gaps and do not imply compiler/build failure. Static evidence does not prove object lifetime, attachment time, event firing, ordering, branch feasibility, postback behavior, delegate invocation, or runtime reachability.
+      - RemoveHandler is retained with `isAttach=False` and is never interpreted as a positive binding. Event composition is not emitted as CallEdge evidence.
+      - Late-bound or error-typed receivers, ambiguous event members or handler overloads, lambdas and unsupported delegate expressions, unavailable partial classes, and missing framework metadata remain explicit Tier4 gaps rather than guessed targets.
+      - A Handles clause whose containing method symbol is unavailable remains a scoped Tier4 gap; it is not silently discarded or upgraded from syntax alone.
+      - WithEvents may be represented by the VB compiler as a property; TraceMap preserves the declared source shape and canonical symbol kind without claiming storage or lifetime semantics.
+
+  - id: vb.syntax.event-wiring.v1
+    name: Visual Basic syntax event composition fallback
+    description: Records bounded syntax-only Handles, AddHandler, RemoveHandler, and RaiseEvent shapes in Visual Basic files without semantic coverage.
+    evidenceTier: Tier3SyntaxOrTextual or Tier4Unknown
+    emits:
+      - VisualBasicEventBindingDeclared
+      - VisualBasicEventRaised
+      - AnalysisGap
+    limitations:
+      - Names are local syntax text only and never compiler-resolved event or handler identities. Receivers may be late-bound, stale designer members, or unrelated same-named members.
+      - Lambda, bare delegate-variable, arbitrarily qualified receiver, malformed, and unsupported shapes emit category-only gaps. AddHandler/RemoveHandler method names require an explicit AddressOf operand; unqualified and Me/MyClass-qualified local member shapes may be retained without gaining symbol identity. Raw delegate/event expressions are hashed or omitted.
+      - The shared per-file 2,000-fact budget applies; missing evidence beyond that limit is not evidence of absence.
+      - Syntax event evidence does not prove compilation, attachment, removal, firing, ordering, postback behavior, reachability, or execution.
+
+  - id: vb.semantic.config-binding.v1
+    name: Visual Basic semantic configuration binding
+    description: Records compiler-resolved ConfigurationManager section/indexer access and My.Settings member access using the shared ConfigBinding contract.
+    evidenceTier: Tier1Semantic
+    emits:
+      - ConfigBinding
+    limitations:
+      - Configuration keys and member names are retained only as hashes; values, connection material, provider precedence, reload behavior, availability, and runtime use are not reconstructed.
+      - My.Settings recognition requires the explicit VB My.Settings member shape and a compiler-resolved property. Custom wrappers, aliases, reflection, default-member indirection, and dynamically selected keys remain outside this rule.
+      - ConfigurationManager GetSection, AppSettings, and ConnectionStrings evidence accepts the package-era System.Configuration.ConfigurationManager assembly and classic System.Configuration assembly while requiring the expected strong-name public-key token, exact compiler-resolved framework type, and a compile-time constant key; unresolved, unsigned lookalike, or dynamic-key shapes produce no positive config binding.
+
+  - id: vb.semantic.external-boundary.v1
+    name: Visual Basic semantic external-boundary gaps
+    description: Records bounded producer-local gaps for unresolved, late-bound, or dynamically identified Visual Basic HTTP, configuration, and service boundary shapes.
+    evidenceTier: Tier4Unknown
+    emits:
+      - AnalysisGap
+    limitations:
+      - Name-only candidates do not establish an HTTP, configuration, WCF, ASMX, file, or other external boundary and never become positive boundary facts.
+      - Positive WCF mappings require recognized framework identity plus one unambiguous compiler-proven interface implementation; renamed methods and inherited interfaces are supported. Positive ASMX mappings require a recognized WebService service context, recognized client inheritance, and supported framework attributes. Missing identities, attributes, endpoints, metadata, or unambiguous operation alignment remain gaps rather than guessed mappings.
+      - Gaps are capped at 50 sites plus one budget marker per document. Missing facts beyond that budget are not evidence of absence.
+      - These feature-local gaps do not replace compiler/workspace diagnostics and do not independently claim build failure.
+
+  - id: vb.syntax.declarations.v1
+    name: Visual Basic syntax declarations
+    description: Bounded syntax-only declarations over readable Visual Basic files that received no compiler-resolved coverage, plus per-file parse, read, and budget gaps for that fallback.
+    evidenceTier: Tier3SyntaxOrTextual or Tier4Unknown
+    emits:
+      - TypeDeclared
+      - MethodDeclared
+      - PropertyDeclared
+      - EnumDeclared
+      - FieldDeclared
+      - ParameterDeclared
+      - EventDeclared
+      - AnalysisGap
+    limitations:
+      - Syntax-only names are text evidence; they are never compiler-resolved targets and never join to semantic symbols by identity.
+      - A parser or bounded extraction-phase failure is retained as a category-only Tier4 gap at line 1 for the affected file. Other files and phases continue, but missing phase evidence is not evidence of absence and the gap does not establish root cause.
+      - Designer, generated, and auto-generated-header files are skipped; unreadable files and parse errors emit bounded Tier4 gap rows with diagnostic codes and message hashes only, never raw message text.
+      - Emission is bounded by a deterministic per-file fact budget; when the budget is exhausted the remainder is reported by a `SyntaxFallbackBudgetExhausted` gap, and absence of a fact beyond the budget is not absence in source.
+      - Syntax fallback does not claim the file compiles, binds, or runs; partial analysis remains labeled reduced through `vb.semantic.workspace.v1` gaps.
+
+  - id: vb.syntax.memberaccess.v1
+    name: Visual Basic syntax member access
+    description: Bounded syntax-only member access names over Visual Basic files that received no compiler-resolved coverage.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - MemberAccessName
+    limitations:
+      - Member names are raw syntax text; receivers may be unresolved, late-bound, or error-typed, and no compiler resolution is claimed.
+      - Raw expressions are not stored; expression hashes, kinds, and line spans are emitted.
+
+  - id: vb.syntax.invocation.v1
+    name: Visual Basic syntax invocation
+    description: Bounded syntax-only invocation names and receiver text from full-file fallback or unresolved call sites within otherwise semantically analyzed Visual Basic files.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - InvocationName
+    limitations:
+      - Invocation names are raw syntax text and are never represented as compiler-resolved targets; array indexing, late binding, and indexers are indistinguishable at this tier.
+      - Raw expressions are not stored; expression hashes, kinds, and line spans are emitted.
+      - In an otherwise semantically analyzed file, this rule is used only for an individual unresolved invocation and is accompanied by a `CallSiteSemanticResolutionUnavailable` Tier4 gap.
+
+  - id: vb.syntax.callgraph.v1
+    name: Visual Basic syntax call graph
+    description: Bounded syntax-only call edges with caller text and callee text from full-file fallback or unresolved call sites within otherwise semantically analyzed Visual Basic files.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - CallEdge
+    limitations:
+      - Callees are invocation or creation text, never compiler-resolved targets; edges prove only that call-like syntax exists at a location.
+      - The caller is the lexically containing member derived from syntax; no runtime reachability, dispatch, or execution is claimed.
+      - Object-creation edges use `SyntaxObjectCreation` call kinds and are bounded by the same deterministic per-file budget as other fallback facts.
+      - A direct inline `New Type().Method()` invocation retains the textual created receiver type with `inline-object-creation-syntax` provenance; this is not compiler type binding or proof that construction succeeds.
+      - In an otherwise semantically analyzed file, this rule is used only for an individual unresolved invocation or known-type constructor and is accompanied by a `CallSiteSemanticResolutionUnavailable` Tier4 gap.
+
+  - id: vb.syntax.objectcreation.v1
+    name: Visual Basic syntax object creation
+    description: Bounded syntax-only object creation candidates from full-file fallback or unresolved known-type constructor sites within otherwise semantically analyzed Visual Basic files.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - ObjectCreated
+    limitations:
+      - Created types are raw `New ...` syntax text and are never compiler-resolved targets; the type may not resolve or exist.
+      - Full-file projectless syntax facts retain the creation site's lexical namespace and non-aliased explicit Imports namespaces as text-only context; aliases, root namespaces, compiler binding, and assembly identity are not inferred.
+      - Creation candidates prove syntax presence only; constructor identity, executed constructor, and runtime allocation are not claimed.
+      - In an otherwise semantically analyzed file, this rule is used only when the created type is known but its constructor is unresolved, and a `CallSiteSemanticResolutionUnavailable` Tier4 gap accompanies it.
+
+  - id: vb.syntax.database-operation.v1
+    name: Visual Basic syntax database operation
+    description: Bounded syntax-only database-operation candidates where a Visual Basic `Fill`, `ExecuteScalar[Async]`, `ExecuteReader[Async]`, or `ExecuteNonQuery[Async]` invocation has a receiver declared with an explicit supported ADO.NET adapter or command type.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - DatabaseOperationCandidate
+    limitations:
+      - The receiver type is explicit source syntax, not a compiler-resolved type; aliases, provider identity, and successful binding are not established. Lexical parameters and preceding locals shadow fields; inherited fields require one bounded, unique syntax-only base-type chain.
+      - Adapter recognition is limited to `DbDataAdapter`, `SqlDataAdapter`, `OleDbDataAdapter`, and `OdbcDataAdapter`. Command recognition is limited to the allowlisted `DbCommand`/`IDbCommand` and common SQL, OLE DB, ODBC, Oracle, SQLite, DB2, PostgreSQL, and MySQL command type names; name-only calls and custom receiver types are not classified.
+      - The fact does not retain or infer SQL text, connection identity, table identity, runtime reachability, branch feasibility, or successful execution.
+      - Emission is bounded by the Visual Basic syntax fallback per-file fact budget and remains reduced syntax coverage.
+
   - id: build.environment.target-framework.v1
     name: Build environment target framework diagnostics
     description: Records static target framework declarations that may explain required reference assemblies or SDK families for semantic analysis.
@@ -3977,6 +5129,8 @@ rules:
       - Tier1 requires Roslyn symbol binding to known HTTP APIs.
       - Syntax fallback matches common method names and may include unrelated methods with the same name.
       - URL may not be fully resolvable if built dynamically or loaded from runtime configuration.
+      - Visual Basic Tier1 support is bounded to compiler-resolved HttpClient request methods, WebRequest GetResponse methods, and WebClient download/upload/open methods. Static destinations retain normalized paths and hashes, never hosts, query values, request bodies, credentials, headers, or responses.
+      - A resolved API call with a dynamic destination retains the call shape plus a producer-local gap; an unresolved name-only call retains only a gap.
 
   - id: database.ef.v1
     name: Entity Framework style database surface
@@ -4010,6 +5164,8 @@ rules:
       - Dapper and command targets use the existing bounded constant SQL-shape projection. One- or two-part unquoted table identities are retained; unsafe, quoted, or multipart identities remain gaps rather than being matched after qualifier loss.
       - Raw SQL, command text, parameter values, and connection material are not retained on operation facts.
       - ADO.NET and Npgsql v0 table projection is limited to inline constant command construction; command variables, helper-returned commands, stored-procedure indirection, repository abstractions, DI dispatch, reflection, and branch feasibility remain reduced coverage.
+      - Visual Basic compiler-backed evidence recognizes DbCommand ExecuteReader/ExecuteScalar/ExecuteNonQuery families and DbDataAdapter Fill only when the matching base type resolves from the expected strong-named System.Data.Common or classic System.Data assembly. Boundary-only candidates do not identify tables, returned rows, command text, or runtime effects.
+      - Visual Basic late-bound or unresolved Fill/Execute-like calls emit bounded gaps and never become database-operation candidates.
       - Save and transaction boundaries do not identify the tracked changes, affected tables, isolation, scope, commit, rollback, or atomicity.
       - Recognizable calls without semantic binding and candidates without one bounded target emit explicit Tier4 gaps rather than guessed operations.
       - When a C# file has no semantic model, name-only syntax fallback emits Tier4 gaps and does not claim framework or target identity.
@@ -4060,16 +5216,20 @@ rules:
   - id: database.sql.text.v1
     name: SQL text detection
     description: Finds ADO.NET SqlCommand construction, SQL-like files, and SQL-like string literals.
-    evidenceTier: Tier2Structural or Tier3SyntaxOrTextual
+    evidenceTier: Tier1Semantic, Tier2Structural, or Tier3SyntaxOrTextual
     emits:
       - SqlCommandDetected
       - SqlTextUsed
       - AnalysisGap
     limitations:
+      - Compiler-resolved Visual Basic CommandText assignments retain constant hashes and receiver identities; dynamic values have no text hash. Adapter command assignments retain direct symbol candidates, not executed command bindings.
+      - Command/adapter assignment facts do not prove alias flow, branch feasibility, last-write dominance, cross-method propagation, or parameter values. Framework lookalike properties are not accepted as semantic ADO.NET evidence.
       - SQL text evidence stores hashes and lengths only; table and column guesses belong on database.sql.shape.v1 QueryPatternDetected facts.
       - C# syntax fallback may classify any complete SQL-like string literal whose first token is a supported SQL verb, even outside a recognized framework call shape.
       - Dynamic SQL construction emits reduced-coverage boundary evidence instead of complete SQL text.
       - Raw SQL text is not stored by default; hashes and spans are emitted instead.
+      - Visual Basic Tier1 command evidence recognizes compiler-resolved DbCommand construction, CommandType assignment, and parameter-collection mutation. Constant command strings retain only hashes and lengths; procedure names, SQL, parameter names and values, and connection material are omitted.
+      - Separate construction/configuration facts do not prove their runtime ordering, branch feasibility, final command state, execution, or success.
 
   - id: database.sql.shape.v1
     name: Shared SQL shape detection

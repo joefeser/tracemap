@@ -50,6 +50,23 @@ try {
     Assert-True (-not $content.Contains('private-controls')) "private controls folder leaked"
     Assert-True (-not $content.Contains($testRoot)) "local root leaked"
 
+    $singleFolderFacts = @(
+        @{ factType = 'FileInventoried'; ruleId = 'file.inventory.v1'; evidenceTier = 'Tier2Structural'; evidence = @{ filePath = 'Default.aspx.vb' }; properties = @{} },
+        @{ factType = 'FileInventoried'; ruleId = 'file.inventory.v1'; evidenceTier = 'Tier2Structural'; evidence = @{ filePath = 'Default.aspx.designer.vb' }; properties = @{} },
+        @{ factType = 'FileInventoried'; ruleId = 'file.inventory.v1'; evidenceTier = 'Tier2Structural'; evidence = @{ filePath = 'Legacy.vbproj' }; properties = @{} }
+    )
+    [IO.File]::WriteAllLines((Join-Path $scan 'facts.ndjson'), @($singleFolderFacts | ForEach-Object { $_ | ConvertTo-Json -Compress -Depth 10 }), [Text.UTF8Encoding]::new($false))
+    $singleFolderOutput = Join-Path $testRoot 'single-folder-summary'
+    $singleFolderResult = @(& $script -ReviewOutputPath $review -WebFormsFolder '.' -BackendFolder '.' -ControlsFolder '.' -OutputDirectory $singleFolderOutput)
+    Assert-True ($singleFolderResult[0] -eq 'focused-webforms-accuracy-summary-file=created') 'single-folder accuracy summary creation was not reported'
+    $singleFolderFile = @(Get-ChildItem $singleFolderOutput -File -Filter 'focused-webforms-accuracy-*.txt')
+    $singleFolderContent = [IO.File]::ReadAllText($singleFolderFile[0].FullName)
+    Assert-True ($singleFolderContent.Contains('scope-application=facts:3|tier1:0|tier2:3|tier3:0|tier4:0|gaps:0')) 'single-folder application scope count incorrect'
+    Assert-True ($singleFolderContent.Contains('artifact1=aspx-codebehind-vb|inventory=1|facts=1')) 'VB code-behind artifact kind missing'
+    Assert-True ($singleFolderContent.Contains('designer-vb')) 'VB designer artifact kind missing'
+    Assert-True ($singleFolderContent.Contains('vbproj')) 'VB project artifact kind missing'
+    Assert-True (-not $singleFolderContent.Contains('Default.aspx')) 'single-folder source path leaked'
+
     $cases = @(
         @{ Codes = @('LegacyTargetFramework', 'NonSdkStyleProject', 'WebApplicationProjectTargets'); Rule = 'build.environment.project-format.v1'; Effect = 'caps-to-structural'; Expected = 'inspect-highest-count-accuracy-gap' },
         @{ Codes = @('LegacyTargetFramework', 'NonSdkStyleProject', 'WebApplicationProjectTargets'); Rule = 'build.environment.workspace-diagnostic.v1'; Effect = 'caps-to-structural'; Expected = 'inspect-highest-count-accuracy-gap' },

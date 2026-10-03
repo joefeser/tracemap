@@ -125,6 +125,31 @@ public sealed class AnalyzerCapabilityDiagnosticTests
     }
 
     [Fact]
+    public void Mixed_language_vb_reduction_does_not_downgrade_csharp_semantic_capability()
+    {
+        var manifest = Manifest("Level1SemanticAnalysisReduced", "FailedOrPartial");
+        var inventory = new[]
+        {
+            new FileInventoryItem("src/Mixed/CSharp.csproj", "Project", 1),
+            new FileInventoryItem("src/Mixed/VisualBasic.vbproj", "VisualBasicProject", 1),
+            new FileInventoryItem("src/Mixed/CSharp.cs", "CSharp", 1),
+            new FileInventoryItem("src/Mixed/VisualBasic.vb", "VisualBasic", 1)
+        };
+        var mergedSemantic = new SemanticExtractionResult([], [], Attempted: true, ReducedCoverage: true);
+        var csharpSemantic = new SemanticExtractionResult([], [], Attempted: true, ReducedCoverage: false);
+
+        var capabilities = AnalyzerCapabilityDiagnosticExtractor.Extract(
+            manifest,
+            inventory,
+            mergedSemantic,
+            [],
+            new ScanOptions("repo", "out"),
+            csharpSemantic);
+
+        AssertCapability(capabilities, AnalyzerCapabilityDiagnosticExtractor.Codes.CSharpSemanticCompilation, "available", "full-semantic");
+    }
+
+    [Fact]
     public void Reference_assembly_resolution_gap_is_unavailable_and_tier4()
     {
         var manifest = Manifest("Level1SemanticAnalysisReduced", "FailedOrPartial");

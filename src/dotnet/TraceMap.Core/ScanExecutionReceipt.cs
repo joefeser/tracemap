@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text;
@@ -47,7 +48,13 @@ public sealed record ScanExecutionReceipt(
     IReadOnlyList<ScanStageReceipt> Stages,
     IReadOnlyList<string> SupportingFactIds,
     IReadOnlyList<string> SupportingGapIds,
-    IReadOnlyList<string> Limitations);
+    IReadOnlyList<string> Limitations,
+    SourceMetadataReconciliationSummary? SourceMetadataReconciliation = null,
+    PdbInputProvenance? PdbInputProvenance = null,
+    PdbEvidenceSummary? PdbEvidenceSummary = null,
+    IlBodyProvenance? IlBodyProvenance = null,
+    IlRewriteProvenance? IlRewriteProvenance = null,
+    IlRewritePdbProvenance? IlRewritePdbProvenance = null);
 
 /// <summary>
 /// Collects bounded, sanitized operational observations. Receipts describe the
@@ -101,6 +108,12 @@ public sealed class ScanReceiptRecorder
     private string coverage = "unknown";
     private string outcome = "failed";
     private IReadOnlyList<string> extractorVersions = [ScannerVersions.TraceMap];
+    private SourceMetadataReconciliationSummary? sourceMetadataReconciliation;
+    private PdbInputProvenance? pdbInputProvenance;
+    private PdbEvidenceSummary? pdbEvidenceSummary;
+    private IlBodyProvenance? ilBodyProvenance;
+    private IlRewriteProvenance? ilRewriteProvenance;
+    private IlRewritePdbProvenance? ilRewritePdbProvenance;
 
     public ScanReceiptRecorder(ScanOptions options, IEnumerable<string>? additionalAuthorizedInputs = null)
     {
@@ -113,6 +126,27 @@ public sealed class ScanReceiptRecorder
             options.Restore ? "restore" : "no-restore",
             Normalize(options.BinlogPaths),
             options.BinlogCommitSha?.Trim() ?? string.Empty,
+            Normalize(options.CompiledInputPaths),
+            Normalize(options.CompiledDependencyPaths),
+            Normalize(options.CompiledBindingReceiptPaths),
+            (options.WebFormsPublishReceiptPath?.Trim() ?? string.Empty)
+                + (options.WebFormsPublishedRootPath is null ? string.Empty
+                    : "\nexplicit-published-root:" + FactFactory.Hash(options.WebFormsPublishedRootPath.Trim(), 64))
+                + (options.WebFormsPublishSourceRelativeBase is null or "." ? string.Empty
+                    : "\nexplicit-publish-source-base:" + FactFactory.Hash(options.WebFormsPublishSourceRelativeBase, 64)),
+            options.CompiledInputLimits?.ToString() ?? string.Empty,
+            Normalize(options.PdbInputPaths),
+            options.PdbInputLimits?.ToString() ?? string.Empty,
+            options.IlBodyEvidence ? "il-body-evidence" : "no-il-body-evidence",
+            options.IlBodyLimits?.ToString() ?? string.Empty,
+            options.IlRewriteEvidence ? "il-rewrite-evidence" : "no-il-rewrite-evidence",
+            NormalizeOrdered(options.IlRewriteBeforePaths),
+            NormalizeOrdered(options.IlRewriteAfterPaths),
+            options.IlRewriteLimits?.ToString() ?? string.Empty,
+            options.IlRewritePdbEvidence ? "il-rewrite-pdb-evidence" : "no-il-rewrite-pdb-evidence",
+            NormalizeOrdered(options.IlRewriteBeforePdbPaths),
+            NormalizeOrdered(options.IlRewriteAfterPdbPaths),
+            options.IlRewritePdbLimits?.ToString() ?? string.Empty,
             Normalize(additionalAuthorizedInputs)));
     }
 
@@ -131,6 +165,14 @@ public sealed class ScanReceiptRecorder
     public void Bind(ScanResult result)
     {
         Bind(result.Manifest);
+        sourceMetadataReconciliation = result.Manifest.SourceMetadataReconciliation is null
+            ? null
+            : SourceMetadataReconciler.BuildSummary(result.Manifest, result.Facts, ScanReceiptSchema.MaxSupportingIds);
+        pdbInputProvenance = result.Manifest.PdbInputProvenance;
+        pdbEvidenceSummary = PortablePdbExtractor.BuildSummary(result.Manifest, result.Facts, ScanReceiptSchema.MaxSupportingIds);
+        ilBodyProvenance = result.Manifest.IlBodyProvenance;
+        ilRewriteProvenance = result.Manifest.IlRewriteProvenance;
+        ilRewritePdbProvenance = result.Manifest.IlRewritePdbProvenance;
         extractorVersions = result.Facts
             .Select(fact => fact.Evidence?.ExtractorVersion)
             .Where(value => !string.IsNullOrWhiteSpace(value))
@@ -225,7 +267,13 @@ public sealed class ScanReceiptRecorder
             ordered,
             finalFactIds,
             finalGapIds,
-            ReceiptLimitations);
+            ReceiptLimitations,
+            sourceMetadataReconciliation,
+            pdbInputProvenance,
+            pdbEvidenceSummary,
+            ilBodyProvenance,
+            ilRewriteProvenance,
+            ilRewritePdbProvenance);
     }
 
     internal void Record(
@@ -345,6 +393,11 @@ public sealed class ScanReceiptRecorder
             return true;
         return value.Length == 24 && value.All(character => character is (>= '0' and <= '9') or (>= 'a' and <= 'f'));
     }
+
+    // Rewrite declarations are ordinal slots, including blanks in rejected
+    // requests. JSON frames each slot so embedded newlines cannot alias lists.
+    private static string NormalizeOrdered(IEnumerable<string>? values) =>
+        JsonSerializer.Serialize((values ?? []).Select(value => value?.Trim()).ToArray());
 
     private static string Normalize(IEnumerable<string>? values) => string.Join('\n',
         (values ?? []).Where(value => !string.IsNullOrWhiteSpace(value)).Select(value => value.Trim().Replace('\\', '/')).OrderBy(value => value, StringComparer.Ordinal));

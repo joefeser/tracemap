@@ -1,0 +1,22 @@
+# Implementation tasks
+
+- [x] Shared bounded path/form selection validation and normalization (10 focused cases; coordinator-level filesystem race/resume tests remain in the full matrix).
+- [x] Versioned root/project state, per-file atomic persistence, exclusive locking and generator/bounded-input hashes (crash-between-files fails closed; explicit recovery is part of repair below).
+- [x] Input target classification, web-root selection and toolchain/build validation.
+  - [x] Bounded static folder/project/solution classification and explicit solution-root membership; tool-family candidates, no build/evaluation proof.
+  - [x] Toolchain executable hash/version validation, explicit consent and build-result handling (real process version probe and consented SDK fixture build covered; Windows corpus gate tracked below).
+- [x] Resumable terminal prompts with --continue, explicit add-project and subset pause.
+  - [x] Shared forms transition generates missing/blank selection, pauses, resumes after restart and revalidates retained selected paths.
+  - [x] Terminal setup prompt/command adapter and explicit add-project flow (later stages remain below).
+- [x] Publication/DLL inventory and existing native configuration/proof adapter.
+  - [x] Publication-root/bin validation, explicit managed primary/dependency selection, bounded input snapshots and resume change detection.
+  - [x] Native configuration generation, preflight and owned hash-verified staging for external dependencies.
+  - [x] Explicit source-commit attestation and native preparation/start execution integration.
+- [x] Explicit repair previews, confirmation and per-project invalidation (supported isolated setup restart; root corruption remains manual/new-root).
+- [x] Scan/combine/report execution with immutable output roots and revalidation.
+  - [x] Pinned native start/resume, unique attempts and retained report-status verification; real local fixture execution.
+  - [x] Local fresh/repair/multi-project acceptance matrix and existing compiled-chain fixture report assertions (108 passed in wlocal; Windows publication explicitly not run on macOS).
+- [x] Full v1 regression matrix, CLI replay, documentation and rule limitations (bounded evidence/exclusions in `acceptance-audit.md`, not exhaustive customer compatibility).
+- [x] Scoped PR and exact-head validation, without modifying #798.
+  - [x] PR #799 opened against dev after dependency #798 merged; dependency head/review request unchanged.
+  - [x] Final-head full-suite and Windows corpus validation, required finding dispositions and completion audit. #799 was owner-merged; ACK's exhausted fallback gate was not represented as merge approval. See `acceptance-audit.md`.

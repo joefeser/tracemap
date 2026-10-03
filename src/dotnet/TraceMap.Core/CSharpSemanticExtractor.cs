@@ -31,7 +31,8 @@ public sealed record SemanticExtractionResult(
     IReadOnlySet<string>? AnalyzedFiles = null,
     bool ScopeReduced = false,
     IReadOnlySet<string>? CompilationInputFiles = null,
-    IReadOnlyList<ProtectedSourceSpan>? ProtectedSourceSpans = null);
+    IReadOnlyList<ProtectedSourceSpan>? ProtectedSourceSpans = null,
+    IReadOnlyList<SourceMetadataIdentityCandidate>? SourceMetadataCandidates = null);
 
 public static class CSharpSemanticExtractor
 {
@@ -155,6 +156,11 @@ public static class CSharpSemanticExtractor
         var analyzedFiles = new HashSet<string>(StringComparer.Ordinal);
         var compilationInputFiles = new HashSet<string>(StringComparer.Ordinal);
         var protectedSourceSpans = new List<ProtectedSourceSpan>();
+        List<SourceMetadataIdentityCandidate>? sourceMetadataCandidates = options.CompiledInputPaths is { Count: > 0 }
+            || options.CompiledDependencyPaths is { Count: > 0 }
+            || options.CompiledBindingReceiptPaths is { Count: > 0 }
+                ? []
+                : null;
         var projects = inventory.Where(item => item.Kind == "Project").OrderBy(item => item.RelativePath, StringComparer.Ordinal).ToArray();
         var solutions = inventory.Where(item => item.Kind == "Solution").OrderBy(item => item.RelativePath, StringComparer.Ordinal).ToArray();
         var useFullSourceInventory = options.ProjectPaths is { Count: > 0 }
@@ -181,6 +187,19 @@ public static class CSharpSemanticExtractor
         var excludeGlobs = (options.ExcludeGlobs ?? [])
             .Where(value => !string.IsNullOrWhiteSpace(value))
             .ToArray();
+
+        // An explicit --project scope that selects only other-language projects puts
+        // the repository's C# projects out of scope; that is not a missing project.
+        var csharpProjectsScopedOut = options.ProjectPaths is { Count: > 0 }
+            && (fullInventory ?? inventory).Any(item => item.Kind == "Project");
+        if (projects.Length == 0 && csharpFiles.Length > 0 && csharpProjectsScopedOut)
+        {
+            gaps.Add(CreateGap(
+                ".",
+                "The explicit project scope selected no C# project; inventoried C# files outside that scope received no semantic analysis.",
+                "CSharpProjectsOutsideProjectScope"));
+            return new SemanticExtractionResult(facts, gaps, Attempted: false, ReducedCoverage: false, AnalyzedFiles: analyzedFiles);
+        }
 
         if (projects.Length == 0 && csharpFiles.Length > 0)
         {
@@ -279,6 +298,7 @@ public static class CSharpSemanticExtractor
                         analyzedFiles,
                         compilationInputFiles,
                         protectedSourceSpans,
+                        sourceMetadataCandidates,
                         options.ProjectPaths is { Count: > 0 } ? selectedProjectPaths : null,
                         cancellationToken,
                         progress);
@@ -346,6 +366,7 @@ public static class CSharpSemanticExtractor
                     analyzedFiles,
                     compilationInputFiles,
                     protectedSourceSpans,
+                    sourceMetadataCandidates,
                     projectOrdinal,
                     cancellationToken,
                     progress);
@@ -389,7 +410,8 @@ public static class CSharpSemanticExtractor
             AnalyzedFiles: analyzedFiles,
             ScopeReduced: explicitlyExcludedSourcePaths.Count > 0,
             CompilationInputFiles: compilationInputFiles,
-            ProtectedSourceSpans: protectedSourceSpans);
+            ProtectedSourceSpans: protectedSourceSpans,
+            SourceMetadataCandidates: sourceMetadataCandidates ?? []);
     }
 
     public static IReadOnlyList<CodeFact> MaterializeFacts(ScanManifest manifest, IEnumerable<SemanticFactCandidate> candidates)
@@ -448,7 +470,7 @@ public static class CSharpSemanticExtractor
             : projects.Select(item => item.RelativePath);
         foreach (var target in targets.OrderBy(path => path, StringComparer.Ordinal))
         {
-            var exitCode = RunDotnetRestore(repoPath, target, out var message);
+            var (exitCode, message) = RunDotnetRestore(repoPath, target);
             if (exitCode != 0)
             {
                 gaps.Add(CreateGap(
@@ -460,7 +482,7 @@ public static class CSharpSemanticExtractor
         }
     }
 
-    private static int RunDotnetRestore(string repoPath, string relativeTargetPath, out string message)
+    internal static (int ExitCode, string Message) RunDotnetRestore(string repoPath, string relativeTargetPath)
     {
         using var process = new Process();
         process.StartInfo = new ProcessStartInfo
@@ -477,8 +499,7 @@ public static class CSharpSemanticExtractor
 
         if (!process.Start())
         {
-            message = "dotnet restore process failed to start.";
-            return -1;
+            return (-1, "dotnet restore process failed to start.");
         }
 
         var outputTask = process.StandardOutput.ReadToEndAsync();
@@ -494,16 +515,15 @@ public static class CSharpSemanticExtractor
                 // Best-effort cleanup only.
             }
 
-            message = "dotnet restore timed out after 10 minutes.";
-            return -1;
+            return (-1, "dotnet restore timed out after 10 minutes.");
         }
 
         Task.WaitAll([outputTask, errorTask], TimeSpan.FromSeconds(1));
         var output = outputTask.IsCompletedSuccessfully ? outputTask.Result : string.Empty;
         var error = errorTask.IsCompletedSuccessfully ? errorTask.Result : string.Empty;
-        message = string.Join(" ", new[] { LastNonEmptyLine(output), LastNonEmptyLine(error) }
+        var message = string.Join(" ", new[] { LastNonEmptyLine(output), LastNonEmptyLine(error) }
             .Where(line => !string.IsNullOrWhiteSpace(line)));
-        return process.ExitCode;
+        return (process.ExitCode, message);
     }
 
     private static string LastNonEmptyLine(string value)
@@ -526,6 +546,7 @@ public static class CSharpSemanticExtractor
         HashSet<string> analyzedFiles,
         HashSet<string> compilationInputFiles,
         List<ProtectedSourceSpan> protectedSourceSpans,
+        List<SourceMetadataIdentityCandidate>? sourceMetadataCandidates,
         IReadOnlySet<string>? selectedProjectPaths,
         CancellationToken cancellationToken,
         ScanProgressReporter? progress)
@@ -537,6 +558,7 @@ public static class CSharpSemanticExtractor
             out var excludedPaths);
         explicitlyExcludedSourcePaths.UnionWith(excludedPaths);
         var selectedProjects = solution.Projects
+            .Where(project => string.Equals(project.Language, LanguageNames.CSharp, StringComparison.Ordinal))
             .OrderBy(project => ToRelativePath(repoPath, project.FilePath), StringComparer.Ordinal)
             .Where(project => selectedProjectPaths is null
                 || selectedProjectPaths.Contains(ToRelativePath(repoPath, project.FilePath)))
@@ -556,6 +578,7 @@ public static class CSharpSemanticExtractor
                 analyzedFiles,
                 compilationInputFiles,
                 protectedSourceSpans,
+                sourceMetadataCandidates,
                 projectOrdinal: projectIndex + 1,
                 cancellationToken,
                 progress);
@@ -576,6 +599,7 @@ public static class CSharpSemanticExtractor
         HashSet<string> analyzedFiles,
         HashSet<string> compilationInputFiles,
         List<ProtectedSourceSpan> protectedSourceSpans,
+        List<SourceMetadataIdentityCandidate>? sourceMetadataCandidates,
         int? projectOrdinal,
         CancellationToken cancellationToken,
         ScanProgressReporter? progress)
@@ -665,6 +689,7 @@ public static class CSharpSemanticExtractor
                 gaps,
                 analyzedFiles,
                 protectedSourceSpans,
+                sourceMetadataCandidates,
                 canonicalEvidencePath,
                 cancellationToken);
         }
@@ -679,7 +704,7 @@ public static class CSharpSemanticExtractor
         }
     }
 
-    private static Solution RemoveExplicitlyExcludedSourceDocuments(
+    internal static Solution RemoveExplicitlyExcludedSourceDocuments(
         string repoPath,
         Solution solution,
         IReadOnlyList<string> excludeGlobs,
@@ -755,6 +780,7 @@ public static class CSharpSemanticExtractor
         List<SemanticFactCandidate> gaps,
         HashSet<string> analyzedFiles,
         List<ProtectedSourceSpan> protectedSourceSpans,
+        List<SourceMetadataIdentityCandidate>? sourceMetadataCandidates,
         string? canonicalEvidencePath,
         CancellationToken cancellationToken)
     {
@@ -816,6 +842,8 @@ public static class CSharpSemanticExtractor
         AddContractMappingFacts(projectPath, filePath, root, model, facts);
         AddIntegrationFacts(projectPath, filePath, root, model, facts, gaps);
         RemoveProtectedSemanticFacts(facts, protectedFactStart, filePath, protectedSourceSpans);
+        if (sourceMetadataCandidates is not null)
+            SourceMetadataIdentityCollector.Collect(root, model, projectPath, filePath, LanguageNames.CSharp, sourceMetadataCandidates);
     }
 
     private static void AddTypeDeclarationFacts(
@@ -1486,7 +1514,8 @@ public static class CSharpSemanticExtractor
                     ["calleeSymbol"] = method.ToDisplayString(SymbolFormat),
                     ["calleeName"] = method.Name,
                     ["calleeContainingType"] = method.ContainingType?.ToDisplayString(SymbolFormat) ?? string.Empty,
-                    ["callKind"] = "SemanticMethodInvocation"
+                    ["callKind"] = "SemanticMethodInvocation",
+                    ["coverageLabel"] = "bounded-semantic-callgraph"
                 },
                 enclosing?.ContainingAssembly,
                 method.ContainingAssembly);
@@ -1583,7 +1612,8 @@ public static class CSharpSemanticExtractor
                     ["calleeName"] = type.Name,
                     ["calleeContainingType"] = createdType,
                     ["callKind"] = "SemanticObjectCreation",
-                    ["assignedTo"] = assignedTo ?? string.Empty
+                    ["assignedTo"] = assignedTo ?? string.Empty,
+                    ["coverageLabel"] = "bounded-semantic-callgraph"
                 },
                 enclosing?.ContainingAssembly,
                 type.ContainingAssembly);
@@ -5309,7 +5339,7 @@ public static class CSharpSemanticExtractor
     internal static string ToRelativePath(string repoPath, string? path) =>
         ToRelativePathProjection(repoPath, path).Path;
 
-    private static RelativePathProjection ToRelativePathProjection(string repoPath, string? path)
+    internal static RelativePathProjection ToRelativePathProjection(string repoPath, string? path)
     {
         if (string.IsNullOrWhiteSpace(path))
         {
@@ -5355,7 +5385,7 @@ public static class CSharpSemanticExtractor
         return new(CreateSyntheticExternalSourcePath(path), true);
     }
 
-    private readonly record struct RelativePathProjection(string Path, bool IsExternal);
+    internal readonly record struct RelativePathProjection(string Path, bool IsExternal);
 
     private static string CreateSyntheticExternalSourcePath(string path)
     {

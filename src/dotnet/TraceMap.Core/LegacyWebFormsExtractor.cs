@@ -5,6 +5,8 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Text;
+using VB = Microsoft.CodeAnalysis.VisualBasic;
+using VBSyntax = Microsoft.CodeAnalysis.VisualBasic.Syntax;
 
 namespace TraceMap.Core;
 
@@ -20,7 +22,9 @@ public static partial class LegacyWebFormsExtractor
         "OnRowCommand",
         "OnItemCommand",
         "OnLoad",
-        "OnInit"
+        "OnInit",
+        "OnPreRender",
+        "OnUnload"
     };
 
     private static readonly HashSet<string> UiMemberNames = new(StringComparer.Ordinal)
@@ -31,6 +35,20 @@ public static partial class LegacyWebFormsExtractor
         "CssClass",
         "Style",
         "DataSource"
+    };
+
+    private static readonly HashSet<string> ServerControlStateMemberNames = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "Checked",
+        "CssClass",
+        "DataSource",
+        "Enabled",
+        "ReadOnly",
+        "Selected",
+        "SelectedIndex",
+        "Text",
+        "Value",
+        "Visible"
     };
 
     private static readonly HashSet<string> ClientScriptRegistrationMethods = new(StringComparer.Ordinal)
@@ -57,7 +75,7 @@ public static partial class LegacyWebFormsExtractor
         {
             var fact = CreateDesignerFact(manifest, designer);
             facts.Add(fact);
-            designerFactsByPageAndField[SurfaceFieldKey(designer.MarkupFilePath, designer.FieldName)] = fact;
+            designerFactsByPageAndField[SurfaceFieldKey(designer.MarkupFilePath, designer.FieldName, IsVisualBasicPath(designer.FilePath))] = fact;
         }
 
         foreach (var page in context.Pages)
@@ -74,7 +92,7 @@ public static partial class LegacyWebFormsExtractor
             var controlFacts = new List<CodeFact>();
             foreach (var control in page.Controls)
             {
-                var designerFact = designerFactsByPageAndField.GetValueOrDefault(SurfaceFieldKey(page.FilePath, control.ControlId));
+                var designerFact = designerFactsByPageAndField.GetValueOrDefault(SurfaceFieldKey(page.FilePath, control.ControlId, IsVisualBasicPage(page)));
                 var controlFact = CreateControlFact(manifest, page, control, designerFact);
                 facts.Add(controlFact);
                 controlFacts.Add(controlFact);
@@ -85,44 +103,52 @@ public static partial class LegacyWebFormsExtractor
 
             foreach (var binding in page.Bindings)
             {
-                var designerFact = designerFactsByPageAndField.GetValueOrDefault(SurfaceFieldKey(page.FilePath, binding.ControlId));
+                var designerFact = designerFactsByPageAndField.GetValueOrDefault(SurfaceFieldKey(page.FilePath, binding.ControlId, IsVisualBasicPage(page)));
                 var handlerIdentity = binding.BindingKind == WebFormsBindingKind.MarkupEventCandidate
                     ? StructuralHandlerIdentity(page, binding.HandlerName)
                     : ResolveHandlerIdentity(page, binding, context, evidenceIndex);
                 var bindingFact = CreateEventBindingFact(manifest, page, binding, designerFact, handlerIdentity);
                 facts.Add(bindingFact);
-                if (binding.BindingKind != WebFormsBindingKind.MarkupEventCandidate)
-                {
-                    AddHandlerResolutionFacts(manifest, page, binding, bindingFact, context, evidenceIndex, facts);
-                }
+                AddHandlerResolutionFacts(manifest, page, binding, bindingFact, context, evidenceIndex, facts);
             }
 
             AddExplicitControlSubscriptionFacts(manifest, page, context, evidenceIndex, facts);
 
+            AddInlineClientBehaviorFacts(repoPath, manifest, inventory, page, pageFact, controlFacts, facts);
+            AddInlineServerExpressionFacts(repoPath, manifest, page, pageFact, existingFacts, facts);
+
             foreach (var gap in page.Gaps)
             {
-                facts.Add(CreateGap(manifest, gap.FilePath ?? page.FilePath, gap.Line, gap.GapKind, gap.Message));
+                facts.Add(CreateGap(manifest, gap.FilePath ?? page.FilePath, gap.Line, gap.GapKind, gap.Message, metadata: gap.Metadata));
             }
 
             AddAutoWireupFacts(manifest, page, context, evidenceIndex, facts);
         }
 
+        AddClientHttpHandlerResolutionFacts(repoPath, manifest, inventory, context, existingFacts, facts);
+
         var allFacts = existingFacts.Concat(facts).ToArray();
-        var wcfMappings = allFacts
-            .Where(fact => fact.FactType == FactTypes.WcfServiceReferenceMapping)
+        var serviceMappings = allFacts
+            .Where(fact => fact.FactType is FactTypes.WcfServiceReferenceMapping or FactTypes.AsmxServiceReferenceMapping)
             .ToArray();
         var candidateDirectFacts = allFacts
             .Where(fact => fact.FactType is not (FactTypes.WebFormsHandlerResolved or FactTypes.WebFormsEventBindingDeclared))
             .ToArray();
         var directEvidenceIndex = WebFormsDirectEvidenceIndex.Create(candidateDirectFacts);
-        foreach (var resolution in facts.Where(fact => fact.FactType == FactTypes.WebFormsHandlerResolved).ToArray())
+        var resolutions = facts.Where(fact => fact.FactType == FactTypes.WebFormsHandlerResolved).ToArray();
+        foreach (var resolution in resolutions)
         {
-            facts.Add(CreateFlowFact(manifest, resolution, directEvidenceIndex, wcfMappings));
-            var logicSignal = CreateLogicSignalFact(manifest, resolution, context, directEvidenceIndex, wcfMappings);
+            facts.Add(CreateFlowFact(manifest, resolution, directEvidenceIndex, serviceMappings));
+            var logicSignal = CreateLogicSignalFact(manifest, resolution, context, directEvidenceIndex, serviceMappings);
             if (logicSignal is not null)
             {
                 facts.Add(logicSignal);
             }
+        }
+        foreach (var resolutionGroup in resolutions
+            .GroupBy(resolution => string.Join("|", resolution.Properties.GetValueOrDefault("surfaceIdentity"), resolution.Evidence.FilePath, resolution.Evidence.StartLine, resolution.Evidence.EndLine, resolution.Properties.GetValueOrDefault("handlerName")), StringComparer.Ordinal))
+        {
+            facts.AddRange(CreateServerBehaviorFacts(manifest, resolutionGroup.ToArray(), context));
         }
 
         return facts
@@ -148,15 +174,21 @@ public static partial class LegacyWebFormsExtractor
             .OrderBy(item => item.RelativePath, StringComparer.Ordinal)
             .Select(item => ParseMarkupFile(repoPath, item, inventory, inventoryPathIndex, assemblyRegistrationResolver))
             .ToArray();
+        var linkedVisualBasicPaths = pages
+            .SelectMany(page => new[] { page.LinkedCodePath, page.CodeBehindPath, page.CodeFilePath })
+            .Where(path => path?.EndsWith(".vb", StringComparison.OrdinalIgnoreCase) == true)
+            .Select(path => path!)
+            .ToHashSet(CSharpSemanticExtractor.CreateSourcePathComparer(repoPath));
         var codeFiles = inventory
-            .Where(item => item.Kind is "WebFormsCodeBehind" or "CSharp")
+            .Where(item => item.Kind is "WebFormsCodeBehind" or "CSharp" or "VisualBasicCodeBehind"
+                || (item.Kind == "VisualBasic" && linkedVisualBasicPaths.Contains(item.RelativePath)))
             .OrderBy(item => item.RelativePath, StringComparer.Ordinal)
             .Select(item => ParseCodeFile(repoPath, item.RelativePath))
             .Where(file => file is not null)
             .Select(file => file!)
             .ToArray();
         var allDesigners = inventory
-            .Where(item => item.Kind == "WebFormsDesigner")
+            .Where(item => item.Kind is "WebFormsDesigner" or "VisualBasicDesigner")
             .OrderBy(item => item.RelativePath, StringComparer.Ordinal)
             .SelectMany(item => ParseDesignerFile(
                 repoPath,
@@ -165,7 +197,7 @@ public static partial class LegacyWebFormsExtractor
                     ?? MarkupPathForDesigner(item.RelativePath)))
             .ToArray();
         var designers = allDesigners
-            .Where(field => pages.Any(page => PageTypeMatches(page.PageTypeName, field.PageTypeName)))
+            .Where(field => pages.Any(page => PageTypeMatches(page.PageTypeName, field.PageTypeName, IsVisualBasicPath(field.FilePath))))
             .OrderBy(field => field.FilePath, StringComparer.Ordinal)
             .ThenBy(field => field.Line)
             .ThenBy(field => field.FieldName, StringComparer.Ordinal)
@@ -392,7 +424,19 @@ public static partial class LegacyWebFormsExtractor
                         assemblyRegistrationPresent
                             ? "A namespace/assembly registration could not be matched to one scoped syntax-visible type and project assembly; the categorical gap identifies the failed evidence boundary."
                             : "A prefixed server control has no supported static Register directive in this markup file.",
-                        line));
+                        line,
+                        Metadata: new SortedDictionary<string, string>(StringComparer.Ordinal)
+                        {
+                            ["controlPrefix"] = controlPrefix,
+                            ["controlType"] = controlType,
+                            ["registrationAssembly"] = assemblyRegistrations.Select(item => item.AssemblyName).Where(value => value is not null).Distinct(StringComparer.Ordinal).Count() == 1
+                                ? assemblyRegistrations.Select(item => item.AssemblyName).First(value => value is not null)!
+                                : string.Empty,
+                            ["registrationNamespace"] = assemblyRegistrations.Select(item => item.NamespaceName).Where(value => value is not null).Distinct(StringComparer.Ordinal).Count() == 1
+                                ? assemblyRegistrations.Select(item => item.NamespaceName).First(value => value is not null)!
+                                : string.Empty,
+                            ["registrationState"] = assemblyRegistrationPresent ? assemblyGapKind : "register-directive-unavailable"
+                        }));
                 }
                 foreach (var (name, value) in attrs.OrderBy(pair => pair.Key, StringComparer.Ordinal))
                 {
@@ -438,6 +482,11 @@ public static partial class LegacyWebFormsExtractor
 
     private static WebFormsCodeFile? ParseCodeFile(string repoPath, string relativePath)
     {
+        if (Path.GetExtension(relativePath).Equals(".vb", StringComparison.OrdinalIgnoreCase))
+        {
+            return ParseVisualBasicCodeFile(repoPath, relativePath);
+        }
+
         try
         {
             var text = File.ReadAllText(Path.Combine(repoPath, relativePath));
@@ -467,8 +516,133 @@ public static partial class LegacyWebFormsExtractor
         }
     }
 
+    private static WebFormsCodeFile? ParseVisualBasicCodeFile(string repoPath, string relativePath)
+    {
+        try
+        {
+            var text = File.ReadAllText(Path.Combine(repoPath, relativePath));
+            var tree = VB.VisualBasicSyntaxTree.ParseText(SourceText.From(text), path: relativePath);
+            var root = (VBSyntax.CompilationUnitSyntax)tree.GetRoot();
+            var methods = root.DescendantNodes()
+                .OfType<VBSyntax.MethodBlockBaseSyntax>()
+                .Select(block => ToVisualBasicMethodInfo(tree, block))
+                .Where(method => method is not null)
+                .Select(method => method!)
+                .OrderBy(method => method.Line)
+                .ThenBy(method => method.MethodName, StringComparer.Ordinal)
+                .ToArray();
+            var subscriptions = new List<WebFormsEventSubscription>();
+            foreach (var method in root.DescendantNodes().OfType<VBSyntax.MethodBlockBaseSyntax>())
+            {
+                if (method.BlockStatement is not VBSyntax.MethodStatementSyntax statement || statement.HandlesClause is null)
+                {
+                    continue;
+                }
+
+                foreach (var item in statement.HandlesClause.Events)
+                {
+                    var span = tree.GetLineSpan(item.Span);
+                    subscriptions.Add(new WebFormsEventSubscription(
+                        relativePath,
+                        VisualBasicQualifiedTypeName(method),
+                        VisualBasicReceiverName(item.EventContainer),
+                        item.EventMember.Identifier.ValueText,
+                        statement.Identifier.ValueText,
+                        span.StartLinePosition.Line + 1,
+                        FactFactory.Hash(item.ToString(), 32),
+                        item.SpanStart,
+                        "Handles",
+                        true,
+                        false));
+                }
+            }
+
+            foreach (var statement in root.DescendantNodes().OfType<VBSyntax.AddRemoveHandlerStatementSyntax>())
+            {
+                var span = tree.GetLineSpan(statement.Span);
+                var (receiver, eventName) = VisualBasicEventName(statement.EventExpression);
+                subscriptions.Add(new WebFormsEventSubscription(
+                    relativePath,
+                    VisualBasicQualifiedTypeName(statement),
+                    receiver,
+                    eventName,
+                    VisualBasicHandlerName(statement.DelegateExpression),
+                    span.StartLinePosition.Line + 1,
+                    FactFactory.Hash(statement.ToString(), 32),
+                    statement.SpanStart,
+                    statement.IsKind(VB.SyntaxKind.AddHandlerStatement) ? "AddHandler" : "RemoveHandler",
+                    statement.IsKind(VB.SyntaxKind.AddHandlerStatement),
+                    VisualBasicReceiverIsShadowed(statement, receiver)));
+            }
+
+            return new WebFormsCodeFile(
+                relativePath,
+                methods,
+                subscriptions.OrderBy(subscription => subscription.Line).ThenBy(subscription => subscription.SyntaxSpanStart).ToArray());
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
+    }
+
+    private static bool VisualBasicReceiverIsShadowed(
+        VBSyntax.AddRemoveHandlerStatementSyntax statement,
+        string? receiverName)
+    {
+        if (string.IsNullOrWhiteSpace(receiverName))
+        {
+            return false;
+        }
+
+        var method = statement.Ancestors().OfType<VBSyntax.MethodBlockBaseSyntax>().FirstOrDefault();
+        if (method?.BlockStatement is not VBSyntax.MethodStatementSyntax methodStatement)
+        {
+            return false;
+        }
+
+        var pageQualified = statement.EventExpression is VBSyntax.MemberAccessExpressionSyntax eventMember
+            && eventMember.Expression is VBSyntax.MemberAccessExpressionSyntax pageMember
+            && (pageMember.Expression.ToString().Equals("Me", StringComparison.OrdinalIgnoreCase)
+                || pageMember.Expression.ToString().Equals("MyClass", StringComparison.OrdinalIgnoreCase));
+        if (pageQualified && !receiverName.Equals("Page", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        if (methodStatement.ParameterList?.Parameters.Any(parameter =>
+                   parameter.Identifier.Identifier.ValueText.Equals(receiverName, StringComparison.OrdinalIgnoreCase)) == true
+            || method.DescendantNodes().OfType<VBSyntax.VariableDeclaratorSyntax>()
+                .SelectMany(declaration => declaration.Names)
+                .Any(name => name.Identifier.ValueText.Equals(receiverName, StringComparison.OrdinalIgnoreCase)))
+        {
+            return true;
+        }
+
+        if (!receiverName.Equals("Page", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var containingType = method.Ancestors().OfType<VBSyntax.TypeBlockSyntax>().FirstOrDefault();
+        return containingType is not null && containingType.DescendantNodes()
+            .Where(node => node.Ancestors().OfType<VBSyntax.TypeBlockSyntax>().FirstOrDefault() == containingType)
+            .Any(node => node switch
+            {
+                VBSyntax.FieldDeclarationSyntax field => field.Declarators.SelectMany(declaration => declaration.Names)
+                    .Any(name => name.Identifier.ValueText.Equals(receiverName, StringComparison.OrdinalIgnoreCase)),
+                VBSyntax.PropertyStatementSyntax property => property.Identifier.ValueText.Equals(receiverName, StringComparison.OrdinalIgnoreCase),
+                _ => false
+            });
+    }
+
     private static IReadOnlyList<WebFormsDesignerField> ParseDesignerFile(string repoPath, string relativePath, string markupFilePath)
     {
+        if (Path.GetExtension(relativePath).Equals(".vb", StringComparison.OrdinalIgnoreCase))
+        {
+            return ParseVisualBasicDesignerFile(repoPath, relativePath, markupFilePath);
+        }
+
         try
         {
             var text = File.ReadAllText(Path.Combine(repoPath, relativePath));
@@ -504,6 +678,45 @@ public static partial class LegacyWebFormsExtractor
                 .ThenBy(field => field.Line)
                 .ThenBy(field => field.FieldName, StringComparer.Ordinal)
                 .ToArray();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return [];
+        }
+    }
+
+    private static IReadOnlyList<WebFormsDesignerField> ParseVisualBasicDesignerFile(string repoPath, string relativePath, string markupFilePath)
+    {
+        try
+        {
+            var text = File.ReadAllText(Path.Combine(repoPath, relativePath));
+            var tree = VB.VisualBasicSyntaxTree.ParseText(SourceText.From(text), path: relativePath);
+            var root = (VBSyntax.CompilationUnitSyntax)tree.GetRoot();
+            var fields = new List<WebFormsDesignerField>();
+            foreach (var field in root.DescendantNodes().OfType<VBSyntax.FieldDeclarationSyntax>())
+            {
+                var containingType = VisualBasicQualifiedTypeName(field);
+                foreach (var declarator in field.Declarators)
+                {
+                    var controlType = declarator.AsClause is VBSyntax.SimpleAsClauseSyntax simpleAs
+                        ? simpleAs.Type.ToString()
+                        : string.Empty;
+                    foreach (var name in declarator.Names)
+                    {
+                        var span = tree.GetLineSpan(name.Span);
+                        fields.Add(new WebFormsDesignerField(
+                            relativePath,
+                            markupFilePath,
+                            containingType,
+                            name.Identifier.ValueText,
+                            controlType,
+                            span.StartLinePosition.Line + 1,
+                            Math.Max(span.StartLinePosition.Line + 1, span.EndLinePosition.Line + 1)));
+                    }
+                }
+            }
+
+            return fields.OrderBy(field => field.Line).ThenBy(field => field.FieldName, StringComparer.Ordinal).ToArray();
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -556,7 +769,104 @@ public static partial class LegacyWebFormsExtractor
             handlerName,
             span.StartLinePosition.Line + 1,
             FactFactory.Hash(assignment.ToString(), 32),
-            assignment.SpanStart);
+            assignment.SpanStart,
+            "CSharpAddAssignment",
+            true);
+    }
+
+    private static WebFormsMethod? ToVisualBasicMethodInfo(SyntaxTree tree, VBSyntax.MethodBlockBaseSyntax block)
+    {
+        if (block.BlockStatement is not VBSyntax.MethodStatementSyntax statement)
+        {
+            return null;
+        }
+
+        var span = tree.GetLineSpan(block.Span);
+        var parameters = statement.ParameterList?.Parameters ?? default;
+        var hasCommonEventSignature = parameters.Count == 2
+            && IsVisualBasicParameterType(parameters[0], "Object")
+            && IsVisualBasicParameterType(parameters[1], "EventArgs");
+        return new WebFormsMethod(
+            tree.FilePath,
+            VisualBasicQualifiedTypeName(block),
+            statement.Identifier.ValueText,
+            span.StartLinePosition.Line + 1,
+            Math.Max(span.StartLinePosition.Line + 1, span.EndLinePosition.Line + 1),
+            hasCommonEventSignature,
+            block);
+    }
+
+    private static bool IsVisualBasicParameterType(VBSyntax.ParameterSyntax parameter, string expectedType)
+    {
+        if (parameter.AsClause is not VBSyntax.SimpleAsClauseSyntax simple)
+        {
+            return false;
+        }
+
+        var typeName = string.Concat(simple.Type.ToString().Where(character => !char.IsWhiteSpace(character)));
+        if (typeName.StartsWith("Global.", StringComparison.OrdinalIgnoreCase))
+        {
+            typeName = typeName["Global.".Length..];
+        }
+        if (typeName.StartsWith("System.", StringComparison.OrdinalIgnoreCase))
+        {
+            typeName = typeName["System.".Length..];
+        }
+        return typeName.Equals(expectedType, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string VisualBasicQualifiedTypeName(SyntaxNode node)
+    {
+        var typeNames = node.AncestorsAndSelf().OfType<VBSyntax.TypeBlockSyntax>()
+            .Select(type => type.BlockStatement.Identifier.ValueText)
+            .Reverse();
+        var namespaces = node.AncestorsAndSelf().OfType<VBSyntax.NamespaceBlockSyntax>()
+            .Select(ns => ns.NamespaceStatement.Name.ToString())
+            .Reverse();
+        return string.Join(".", namespaces.Concat(typeNames));
+    }
+
+    private static string VisualBasicReceiverName(VBSyntax.ExpressionSyntax? expression)
+    {
+        if (expression is null)
+        {
+            return "unsupported-receiver";
+        }
+        var text = expression.ToString();
+        if (text.Equals("Me", StringComparison.OrdinalIgnoreCase) || text.Equals("MyClass", StringComparison.OrdinalIgnoreCase)) return "this";
+        if (text.Equals("MyBase", StringComparison.OrdinalIgnoreCase)) return "base";
+        if (expression is VBSyntax.MemberAccessExpressionSyntax { Name: not null } member
+            && (member.Expression?.ToString().Equals("Me", StringComparison.OrdinalIgnoreCase) == true
+                || member.Expression?.ToString().Equals("MyClass", StringComparison.OrdinalIgnoreCase) == true))
+        {
+            return member.Name.Identifier.ValueText;
+        }
+        return SafeIdentifier(text) ?? "unsupported-receiver";
+    }
+
+    private static (string? Receiver, string EventName) VisualBasicEventName(VBSyntax.ExpressionSyntax? expression) => expression switch
+    {
+        VBSyntax.MemberAccessExpressionSyntax member => (VisualBasicReceiverName(member.Expression), member.Name?.Identifier.ValueText ?? string.Empty),
+        VBSyntax.IdentifierNameSyntax identifier => (null, identifier.Identifier.ValueText),
+        _ => ("unsupported-receiver", string.Empty)
+    };
+
+    private static string? VisualBasicHandlerName(VBSyntax.ExpressionSyntax? expression)
+    {
+        if (expression is not VBSyntax.UnaryExpressionSyntax unary || !unary.IsKind(VB.SyntaxKind.AddressOfExpression))
+        {
+            return null;
+        }
+        expression = unary.Operand;
+
+        return expression switch
+        {
+            VBSyntax.IdentifierNameSyntax identifier => identifier.Identifier.ValueText,
+            VBSyntax.MemberAccessExpressionSyntax { Name: not null } member
+                when member.Expression?.ToString().Equals("Me", StringComparison.OrdinalIgnoreCase) == true
+                    || member.Expression?.ToString().Equals("MyClass", StringComparison.OrdinalIgnoreCase) == true => member.Name.Identifier.ValueText,
+            _ => null
+        };
     }
 
     private static string? StaticSubscriptionReceiver(ExpressionSyntax expression)
@@ -587,8 +897,8 @@ public static partial class LegacyWebFormsExtractor
             var unprovenCrossFile = context.CodeFiles
                 .Where(file => page.LinkedCodePath is null || !file.FilePath.Equals(page.LinkedCodePath, StringComparison.Ordinal))
                 .SelectMany(file => file.Methods)
-                .Any(method => method.MethodName.Equals(binding.HandlerName, StringComparison.Ordinal)
-                    && PageTypeMatches(page.PageTypeName, method.PageTypeName));
+                .Any(method => IdentifierEquals(method.MethodName, binding.HandlerName, IsVisualBasicMethod(method))
+                    && PageTypeMatches(page.PageTypeName, method.PageTypeName, IsVisualBasicMethod(method)));
             facts.Add(CreateGap(
                 manifest,
                 binding.FilePath,
@@ -596,13 +906,14 @@ public static partial class LegacyWebFormsExtractor
                 unprovenCrossFile ? "UnprovenCrossFileWebFormsHandler" : "MissingWebFormsHandler",
                 unprovenCrossFile
                     ? $"A cross-file partial method named `{binding.HandlerName}` is visible, but semantic type and method identity could not be proven."
-                    : $"No linked code-behind method matched handler `{binding.HandlerName}`."));
+                    : $"No linked code-behind method matched handler `{binding.HandlerName}`.",
+                [bindingFact.FactId]));
             return;
         }
 
         if (candidates.Length > 1)
         {
-            facts.Add(CreateGap(manifest, binding.FilePath, binding.Line, "AmbiguousWebFormsHandler", $"Multiple linked code-behind methods matched handler `{binding.HandlerName}`; TraceMap did not choose one."));
+            facts.Add(CreateGap(manifest, binding.FilePath, binding.Line, "AmbiguousWebFormsHandler", $"Multiple linked code-behind methods matched handler `{binding.HandlerName}`; TraceMap did not choose one.", [bindingFact.FactId]));
             return;
         }
 
@@ -673,8 +984,8 @@ public static partial class LegacyWebFormsExtractor
         var linked = context.CodeFiles
             .Where(file => file.FilePath.Equals(linkedCodePath, StringComparison.Ordinal))
             .SelectMany(file => file.Methods)
-            .Where(method => method.MethodName.Equals(handlerName, StringComparison.Ordinal))
-            .Where(method => PageTypeMatches(page.PageTypeName, method.PageTypeName))
+            .Where(method => IdentifierEquals(method.MethodName, handlerName, IsVisualBasicMethod(method)))
+            .Where(method => PageTypeMatches(page.PageTypeName, method.PageTypeName, IsVisualBasicMethod(method)))
             .OrderBy(method => method.FilePath, StringComparer.Ordinal)
             .ThenBy(method => method.Line)
             .ToArray();
@@ -688,10 +999,10 @@ public static partial class LegacyWebFormsExtractor
         return context.CodeFiles
             .Where(file => !file.FilePath.Equals(linkedCodePath, StringComparison.Ordinal))
             .SelectMany(file => file.Methods)
-            .Where(method => method.MethodName.Equals(handlerName, StringComparison.Ordinal))
-            .Where(method => PageTypeMatches(page.PageTypeName, method.PageTypeName))
+            .Where(method => IdentifierEquals(method.MethodName, handlerName, IsVisualBasicMethod(method)))
+            .Where(method => PageTypeMatches(page.PageTypeName, method.PageTypeName, IsVisualBasicMethod(method)))
             .Where(method => FindSemanticHandlerEvidence(method, evidenceIndex.FactsForFile(method.FilePath), linkedProjectPaths) is { } semantic
-                && SemanticHandlerTypeMatches(page.PageTypeName, semantic.SourceSymbol, method.MethodName))
+                && SemanticHandlerTypeMatches(page.PageTypeName, SemanticHandlerSymbol(semantic), method.MethodName, IsVisualBasicMethod(method)))
             .OrderBy(method => method.FilePath, StringComparer.Ordinal)
             .ThenBy(method => method.Line)
             .ToArray();
@@ -712,13 +1023,26 @@ public static partial class LegacyWebFormsExtractor
         var subscriptions = context.CodeFiles
             .Where(file => file.FilePath.Equals(page.LinkedCodePath, StringComparison.Ordinal))
             .SelectMany(file => file.Subscriptions)
-            .Where(subscription => PageTypeMatches(page.PageTypeName, subscription.ContainingTypeName))
+            .Where(subscription => PageTypeMatches(page.PageTypeName, subscription.ContainingTypeName, IsVisualBasicPath(subscription.FilePath)))
             .ToArray();
         foreach (var subscription in subscriptions)
         {
-            var lifecycleReceiver = subscription.ReceiverName is null or "this" or "base" or "Page";
+            if (!subscription.IsAttach)
+            {
+                continue;
+            }
+
+            var isVisualBasic = IsVisualBasicPath(subscription.FilePath);
+            if (isVisualBasic && HasRejectingVisualBasicEventGap(subscription, evidenceIndex))
+            {
+                continue;
+            }
+            var lifecycleReceiver = subscription.ReceiverName is null
+                || IdentifierEquals(subscription.ReceiverName, "this", isVisualBasic)
+                || IdentifierEquals(subscription.ReceiverName, "base", isVisualBasic)
+                || IdentifierEquals(subscription.ReceiverName, "Page", isVisualBasic);
             var eventAttributeName = "On" + subscription.EventName;
-            if (!SupportedEvents.Contains(eventAttributeName))
+            if (!TryCanonicalSupportedEvent(eventAttributeName, isVisualBasic, out eventAttributeName))
             {
                 var hasPlausibleEventHandler = subscription.HandlerName is not null
                     && CandidateMethods(page, subscription.HandlerName, context, evidenceIndex)
@@ -737,6 +1061,12 @@ public static partial class LegacyWebFormsExtractor
                 continue;
             }
 
+            if (isVisualBasic && subscription.ReceiverMayBeShadowed)
+            {
+                facts.Add(CreateGap(manifest, subscription.FilePath, subscription.Line, "AmbiguousVisualBasicWebFormsEventSubscriptionReceiver", "A local or parameter shadows the linked page or control receiver; TraceMap did not project a name-only Web Forms binding."));
+                continue;
+            }
+
             if (lifecycleReceiver)
             {
                 var lifecycleBinding = new WebFormsBinding(
@@ -749,7 +1079,8 @@ public static partial class LegacyWebFormsExtractor
                     null,
                     subscription.SnippetHash,
                     WebFormsBindingKind.ExplicitLifecycleSubscription,
-                    subscription.SyntaxSpanStart);
+                    subscription.SyntaxSpanStart,
+                    subscription.WiringKind);
                 var lifecycleBindingFact = CreateEventBindingFact(
                     manifest,
                     page,
@@ -762,7 +1093,7 @@ public static partial class LegacyWebFormsExtractor
             }
 
             var controls = page.Controls
-                .Where(control => control.ControlId.Equals(subscription.ReceiverName, StringComparison.Ordinal))
+                .Where(control => IdentifierEquals(control.ControlId, subscription.ReceiverName, IsVisualBasicPath(subscription.FilePath)))
                 .OrderBy(control => control.Line)
                 .ToArray();
             if (controls.Length == 0)
@@ -778,6 +1109,11 @@ public static partial class LegacyWebFormsExtractor
             }
 
             var control = controls[0];
+            if (isVisualBasic && !VisualBasicReceiverMatchesControl(subscription, control, page, context, evidenceIndex))
+            {
+                facts.Add(CreateGap(manifest, subscription.FilePath, subscription.Line, "MismatchedVisualBasicWebFormsEventSubscriptionReceiver", "The compiler-resolved Visual Basic event receiver type does not match the linked markup control; TraceMap did not project a name-only Web Forms binding."));
+                continue;
+            }
             var binding = new WebFormsBinding(
                 control.ControlType,
                 control.ControlId,
@@ -788,7 +1124,8 @@ public static partial class LegacyWebFormsExtractor
                 control.Line,
                 subscription.SnippetHash,
                 WebFormsBindingKind.ExplicitControlSubscription,
-                subscription.SyntaxSpanStart);
+                subscription.SyntaxSpanStart,
+                subscription.WiringKind);
             var bindingFact = CreateEventBindingFact(manifest, page, binding, null, ResolveHandlerIdentity(page, binding, context, evidenceIndex));
             facts.Add(bindingFact);
             AddHandlerResolutionFacts(manifest, page, binding, bindingFact, context, evidenceIndex, facts);
@@ -1138,7 +1475,7 @@ public static partial class LegacyWebFormsExtractor
         var methods = context.CodeFiles
             .Where(file => file.FilePath.Equals(page.LinkedCodePath, StringComparison.Ordinal))
             .SelectMany(file => file.Methods)
-            .Where(method => PageTypeMatches(page.PageTypeName, method.PageTypeName))
+            .Where(method => PageTypeMatches(page.PageTypeName, method.PageTypeName, IsVisualBasicMethod(method)))
             .OrderBy(method => method.Line)
             .ThenBy(method => method.MethodName, StringComparer.Ordinal)
             .ToArray();
@@ -1156,12 +1493,21 @@ public static partial class LegacyWebFormsExtractor
         CodeFact pageFact,
         List<CodeFact> facts)
     {
-        if (method.MethodName is not ("Page_Init" or "Page_Load" or "Page_PreRender"))
+        var isVisualBasic = IsVisualBasicMethod(method);
+        if (!(IdentifierEquals(method.MethodName, "Page_Init", isVisualBasic)
+              || IdentifierEquals(method.MethodName, "Page_Load", isVisualBasic)
+              || IdentifierEquals(method.MethodName, "Page_PreRender", isVisualBasic)))
         {
             return;
         }
 
-        foreach (var statement in method.Declaration.DescendantNodes().OfType<IfStatementSyntax>())
+        if (method.Declaration is not MethodDeclarationSyntax csharpMethod)
+        {
+            AddVisualBasicLifecycleContextFacts(manifest, page, method, pageFact, facts);
+            return;
+        }
+
+        foreach (var statement in csharpMethod.DescendantNodes().OfType<IfStatementSyntax>())
         {
             if (!ContainsIsPostBack(statement.Condition))
             {
@@ -1169,7 +1515,7 @@ public static partial class LegacyWebFormsExtractor
             }
 
             var line = statement.SyntaxTree.GetLineSpan(statement.Condition.Span).StartLinePosition.Line + 1;
-            if (HasLocalIsPostBackShadow(method.Declaration))
+            if (HasLocalIsPostBackShadow(csharpMethod))
             {
                 facts.Add(CreateGap(manifest, method.FilePath, line, "AmbiguousWebFormsIsPostBackReceiver", "A local or parameter shadows IsPostBack in this method; TraceMap did not treat the condition as Page lifecycle evidence."));
                 continue;
@@ -1209,6 +1555,130 @@ public static partial class LegacyWebFormsExtractor
         }
     }
 
+    private static void AddVisualBasicLifecycleContextFacts(
+        ScanManifest manifest,
+        WebFormsPage page,
+        WebFormsMethod method,
+        CodeFact pageFact,
+        List<CodeFact> facts)
+    {
+        foreach (var condition in method.Declaration.DescendantNodes()
+            .Select(node => node switch
+            {
+                VBSyntax.MultiLineIfBlockSyntax block => block.IfStatement.Condition,
+                VBSyntax.SingleLineIfStatementSyntax single => single.Condition,
+                _ => null
+            })
+            .Where(condition => condition is not null)
+            .Select(condition => condition!))
+        {
+            if (!TryClassifyVisualBasicPostBackCondition(condition, out var isNegative, out var isUnqualified))
+            {
+                if (condition.ToString().Contains("IsPostBack", StringComparison.OrdinalIgnoreCase))
+                {
+                    var line = condition.SyntaxTree.GetLineSpan(condition.Span).StartLinePosition.Line + 1;
+                    facts.Add(CreateGap(manifest, method.FilePath, line, "UnsupportedWebFormsIsPostBackCondition", "A VB IsPostBack condition is visible but outside the bounded positive or negated shape."));
+                }
+                continue;
+            }
+
+            var span = condition.SyntaxTree.GetLineSpan(condition.Span);
+            var lineNumber = span.StartLinePosition.Line + 1;
+            if (isUnqualified && HasVisualBasicIsPostBackShadow(method.Declaration))
+            {
+                facts.Add(CreateGap(manifest, method.FilePath, lineNumber, "AmbiguousWebFormsIsPostBackReceiver", "A VB local, parameter, or containing-type member shadows unqualified IsPostBack; TraceMap did not treat the condition as Page lifecycle evidence."));
+                continue;
+            }
+            var sourceIdentity = StructuralHandlerIdentity(page, method.MethodName, method.FilePath, method.Line);
+            var branchKind = isNegative ? "not-is-postback" : "is-postback";
+            facts.Add(CreateStaticCompositionFact(
+                manifest,
+                FactTypes.WebFormsLifecycleBranchCandidate,
+                RuleIds.LegacyWebFormsLifecycleContext,
+                EvidenceTiers.Tier3SyntaxOrTextual,
+                method.FilePath,
+                lineNumber,
+                FactFactory.Hash(condition.ToString(), 32),
+                sourceIdentity,
+                $"webforms-lifecycle-branch:{FactFactory.Hash($"{sourceIdentity}|{branchKind}|{lineNumber}", 24)}",
+                isNegative ? "NotIsPostBackBranch" : "IsPostBackBranch",
+                "bounded-static-webforms-lifecycle-context",
+                "VB syntax establishes only a bounded IsPostBack branch candidate; it does not prove lifecycle execution, ordering, or runtime state.",
+                [pageFact.FactId],
+                new SortedDictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["branchContext"] = $"{branchKind}-syntax",
+                    ["lifecycleMethod"] = method.MethodName,
+                    ["language"] = "Visual Basic"
+                },
+                Math.Max(lineNumber, span.EndLinePosition.Line + 1)));
+        }
+    }
+
+    private static bool TryClassifyVisualBasicPostBackCondition(
+        VBSyntax.ExpressionSyntax expression,
+        out bool isNegative,
+        out bool isUnqualified)
+    {
+        isNegative = false;
+        isUnqualified = false;
+        expression = expression is VBSyntax.ParenthesizedExpressionSyntax parenthesized
+            ? parenthesized.Expression
+            : expression;
+        if (expression is VBSyntax.UnaryExpressionSyntax unary && unary.IsKind(VB.SyntaxKind.NotExpression))
+        {
+            isNegative = true;
+            expression = unary.Operand is VBSyntax.ParenthesizedExpressionSyntax operandParenthesized
+                ? operandParenthesized.Expression
+                : unary.Operand;
+        }
+
+        if (expression is VBSyntax.IdentifierNameSyntax identifier
+            && identifier.Identifier.ValueText.Equals("IsPostBack", StringComparison.OrdinalIgnoreCase))
+        {
+            isUnqualified = true;
+            return true;
+        }
+
+        return expression is VBSyntax.MemberAccessExpressionSyntax
+        {
+            Expression: VBSyntax.MeExpressionSyntax or VBSyntax.MyBaseExpressionSyntax,
+            Name: VBSyntax.IdentifierNameSyntax member
+        } && member.Identifier.ValueText.Equals("IsPostBack", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool HasVisualBasicIsPostBackShadow(SyntaxNode methodDeclaration)
+    {
+        static bool IsPostBack(string name) => name.Equals("IsPostBack", StringComparison.OrdinalIgnoreCase);
+
+        if (methodDeclaration is VBSyntax.MethodBlockBaseSyntax method
+            && method.BlockStatement is VBSyntax.MethodStatementSyntax statement
+            && (statement.ParameterList?.Parameters.Any(parameter => IsPostBack(parameter.Identifier.Identifier.ValueText)) ?? false))
+        {
+            return true;
+        }
+
+        if (methodDeclaration.DescendantNodes().OfType<VBSyntax.LocalDeclarationStatementSyntax>()
+            .SelectMany(local => local.Declarators)
+            .SelectMany(declarator => declarator.Names)
+            .Any(name => IsPostBack(name.Identifier.ValueText)))
+        {
+            return true;
+        }
+
+        var containingType = methodDeclaration.Ancestors().OfType<VBSyntax.TypeBlockSyntax>().FirstOrDefault();
+        return containingType is not null && containingType.Members.Any(member => member switch
+        {
+            VBSyntax.FieldDeclarationSyntax field => field.Declarators.SelectMany(declarator => declarator.Names).Any(name => IsPostBack(name.Identifier.ValueText)),
+            VBSyntax.PropertyStatementSyntax property => IsPostBack(property.Identifier.ValueText),
+            VBSyntax.PropertyBlockSyntax property => IsPostBack(property.PropertyStatement.Identifier.ValueText),
+            VBSyntax.MethodStatementSyntax candidate => IsPostBack(candidate.Identifier.ValueText),
+            VBSyntax.MethodBlockBaseSyntax candidate when candidate.BlockStatement is VBSyntax.MethodStatementSyntax candidateStatement => IsPostBack(candidateStatement.Identifier.ValueText),
+            VBSyntax.EventStatementSyntax eventStatement => IsPostBack(eventStatement.Identifier.ValueText),
+            _ => false
+        });
+    }
+
     private static void AddClientScriptFacts(
         ScanManifest manifest,
         WebFormsPage page,
@@ -1218,6 +1688,11 @@ public static partial class LegacyWebFormsExtractor
         IReadOnlyDictionary<string, WebFormsControl[]> controlsById,
         List<CodeFact> facts)
     {
+        if (method.Declaration is not MethodDeclarationSyntax csharpMethod)
+        {
+            return;
+        }
+
         foreach (var invocation in method.Declaration.DescendantNodes().OfType<InvocationExpressionSyntax>())
         {
             var methodName = InvocationName(invocation);
@@ -1227,7 +1702,7 @@ public static partial class LegacyWebFormsExtractor
             }
 
             var line = invocation.SyntaxTree.GetLineSpan(invocation.Span).StartLinePosition.Line + 1;
-            if (!HasSupportedClientScriptReceiver(invocation, method.Declaration))
+            if (!HasSupportedClientScriptReceiver(invocation, csharpMethod))
             {
                 facts.Add(CreateGap(manifest, method.FilePath, line, "AmbiguousWebFormsClientScriptRegistrationReceiver", "A client-script-like method name has no supported Page, ClientScript, or ScriptManager receiver; TraceMap did not classify it as a registration."));
                 continue;
@@ -1392,6 +1867,986 @@ public static partial class LegacyWebFormsExtractor
             contractElement: contractElement,
             properties: properties);
     }
+
+    private static void AddInlineClientBehaviorFacts(
+        string repoPath,
+        ScanManifest manifest,
+        IReadOnlyList<FileInventoryItem> inventory,
+        WebFormsPage page,
+        CodeFact pageFact,
+        IReadOnlyList<CodeFact> controlFacts,
+        List<CodeFact> facts)
+    {
+        string markup;
+        try
+        {
+            markup = File.ReadAllText(Path.Combine(repoPath, page.FilePath));
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            return;
+        }
+
+        var source = SourceText.From(markup);
+        foreach (Match script in InlineScriptBlockRegex().Matches(MaskServerComments(markup)))
+        {
+            var attributes = ParseAttributes(script.Groups["attrs"].Value);
+            if (attributes.ContainsKey("src"))
+            {
+                continue;
+            }
+
+            var body = script.Groups["body"];
+            var clientEvents = new List<ClientEventContext>();
+            foreach (Match binding in JQueryClientEventBindingRegex().Matches(body.Value))
+            {
+                var selector = binding.Groups["selector"].Value.Trim();
+                var eventName = (binding.Groups["onEvent"].Success
+                    ? binding.Groups["onEvent"].Value
+                    : binding.Groups["shortcutEvent"].Value).ToLowerInvariant();
+                var selectorInfo = ClassifyClientSelector(selector, page.Controls);
+                var absoluteStart = body.Index + binding.Index;
+                var openBrace = body.Index + binding.Index + binding.Length - 1;
+                var closeBrace = FindJavascriptBlockEnd(markup, openBrace, body.Index + body.Length);
+                var absoluteEnd = closeBrace >= openBrace ? closeBrace : absoluteStart + binding.Length - 1;
+                var line = LineAt(source, absoluteStart);
+                var endLine = LineAt(source, absoluteEnd);
+                var identity = $"webforms-client-event:{FactFactory.Hash($"{SurfaceIdentity(page.FilePath)}|{selector}|{eventName}|{line}", 24)}";
+                var matchingControlFacts = selectorInfo.ControlId is null
+                    ? []
+                    : controlFacts
+                        .Where(fact => string.Equals(
+                            fact.Properties.GetValueOrDefault("controlId"),
+                            selectorInfo.ControlId,
+                            StringComparison.OrdinalIgnoreCase))
+                        .OrderBy(fact => fact.FactId, StringComparer.Ordinal)
+                        .ToArray();
+                var matchingControlFact = matchingControlFacts.Length == 1 ? matchingControlFacts[0] : null;
+                var expectedServerEvents = ExpectedServerEvents(eventName, selectorInfo.ControlId, page.Controls);
+                var matchingServerBindings = selectorInfo.ControlId is null
+                    ? []
+                    : facts.Where(fact =>
+                            fact.FactType == FactTypes.WebFormsEventBindingDeclared
+                            && fact.Properties.GetValueOrDefault("surfaceIdentity") == SurfaceIdentity(page.FilePath)
+                            && fact.Properties.GetValueOrDefault("controlId")?.Equals(selectorInfo.ControlId, StringComparison.OrdinalIgnoreCase) == true
+                            && expectedServerEvents.Contains(fact.Properties.GetValueOrDefault("eventName") ?? string.Empty, StringComparer.OrdinalIgnoreCase))
+                        .OrderBy(fact => fact.FactId, StringComparer.Ordinal)
+                        .ToArray();
+                var matchingServerBinding = matchingServerBindings.Length == 1 ? matchingServerBindings[0] : null;
+                var matchingHandler = matchingServerBinding is null
+                    ? null
+                    : facts.SingleOrDefault(fact => fact.FactType == FactTypes.WebFormsHandlerResolved
+                        && fact.Properties.GetValueOrDefault("bindingFactId") == matchingServerBinding.FactId);
+                var supportingFactIds = new List<string?> { pageFact.FactId, matchingControlFact?.FactId };
+                if (matchingServerBinding is not null)
+                {
+                    supportingFactIds.Add(matchingServerBinding.FactId);
+                    supportingFactIds.Add(matchingHandler?.FactId);
+                }
+
+                var bindingProperties = new SortedDictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["behaviorKind"] = "client-event-binding",
+                    ["clientEventName"] = eventName,
+                    ["selectorHash"] = FactFactory.Hash(selector, 32),
+                    ["selectorKind"] = selectorInfo.Kind,
+                    ["selectorTarget"] = selectorInfo.Target ?? "unavailable",
+                    ["targetResolution"] = selectorInfo.Resolution,
+                    ["staticTargetCount"] = selectorInfo.StaticTargetCount.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                    ["serverBindingResolution"] = matchingServerBindings.Length == 0 ? "unavailable" : matchingServerBindings.Length == 1 ? "unique-static-binding" : "ambiguous-static-binding",
+                    ["generatedClientIdDependency"] = selectorInfo.GeneratedClientIdDependency.ToString().ToLowerInvariant(),
+                    ["surfaceIdentity"] = SurfaceIdentity(page.FilePath)
+                };
+                AddOptional(bindingProperties, "controlId", selectorInfo.ControlId);
+                AddOptional(bindingProperties, "serverEventName", matchingServerBinding?.Properties.GetValueOrDefault("eventName"));
+                AddOptional(bindingProperties, "serverHandlerName", matchingHandler?.Properties.GetValueOrDefault("handlerName") ?? matchingServerBinding?.Properties.GetValueOrDefault("handlerName"));
+                var bindingFact = CreateStaticCompositionFact(
+                    manifest,
+                    FactTypes.WebFormsClientEventBindingCandidate,
+                    RuleIds.LegacyWebFormsInlineClientBehavior,
+                    EvidenceTiers.Tier3SyntaxOrTextual,
+                    page.FilePath,
+                    line,
+                    FactFactory.Hash(binding.Value, 32),
+                    SurfaceIdentity(page.FilePath),
+                    identity,
+                    eventName,
+                    "bounded-static-webforms-inline-client-behavior",
+                    "A supported inline jQuery event-binding shape is textual evidence only; it does not prove DOM selection, browser execution, event firing, postback, or server-handler execution.",
+                    supportingFactIds,
+                    bindingProperties,
+                    endLine);
+                facts.Add(bindingFact);
+                clientEvents.Add(new ClientEventContext(identity, bindingFact.FactId, selectorInfo, eventName, openBrace, absoluteEnd));
+
+                var callbackStart = openBrace + 1;
+                var callbackLength = Math.Max(0, absoluteEnd - callbackStart);
+                if (callbackLength == 0)
+                {
+                    continue;
+                }
+                var callback = markup.Substring(callbackStart, callbackLength);
+                foreach (Match statement in JQueryStatementRegex().Matches(callback))
+                {
+                    var methods = JQueryMutationMethodRegex().Matches(statement.Value)
+                        .Select(match => ClassifyClientMutation(match.Groups["method"].Value, statement.Value))
+                        .Where(value => value is not null)
+                        .Select(value => value!)
+                        .Distinct(StringComparer.Ordinal)
+                        .OrderBy(value => value, StringComparer.Ordinal)
+                        .ToArray();
+                    if (methods.Length == 0)
+                    {
+                        continue;
+                    }
+                    var mutationSelector = statement.Groups["this"].Success ? "this" : statement.Groups["selector"].Value.Trim();
+                    var mutationInfo = mutationSelector == "this"
+                        ? new ClientSelector("event-source", "this", selectorInfo.ControlId, false, selectorInfo.ControlId is null ? "dynamic-selector-unresolved" : "event-source-control", selectorInfo.ControlId is null ? 0 : 1)
+                        : ClassifyClientSelector(mutationSelector, page.Controls);
+                    var mutationStart = callbackStart + statement.Index;
+                    var mutationLine = LineAt(source, mutationStart);
+                    var mutationEndLine = LineAt(source, mutationStart + statement.Length - 1);
+                    var mutationIdentity = $"webforms-client-mutation:{FactFactory.Hash($"{identity}|{mutationSelector}|{string.Join(',', methods)}|{mutationLine}", 24)}";
+                    var properties = new SortedDictionary<string, string>(StringComparer.Ordinal)
+                    {
+                        ["behaviorKind"] = "ui-mutation",
+                        ["clientEventId"] = identity,
+                        ["mutationKinds"] = string.Join(",", methods),
+                        ["selectorHash"] = FactFactory.Hash(mutationSelector, 32),
+                        ["selectorKind"] = mutationInfo.Kind,
+                        ["selectorTarget"] = mutationInfo.Target ?? "unavailable",
+                        ["targetResolution"] = mutationInfo.Resolution,
+                        ["surfaceIdentity"] = SurfaceIdentity(page.FilePath)
+                    };
+                    AddOptional(properties, "controlId", mutationInfo.ControlId);
+                    facts.Add(CreateStaticCompositionFact(
+                        manifest,
+                        FactTypes.WebFormsClientUiMutationCandidate,
+                        RuleIds.LegacyWebFormsInlineClientBehavior,
+                        EvidenceTiers.Tier3SyntaxOrTextual,
+                        page.FilePath,
+                        mutationLine,
+                        FactFactory.Hash(statement.Value, 32),
+                        identity,
+                        mutationIdentity,
+                        string.Join(",", methods),
+                        "bounded-static-webforms-inline-client-behavior",
+                        "A supported jQuery mutation call is textual evidence only; argument expressions are not evaluated and runtime DOM effects are not proven.",
+                        [pageFact.FactId, matchingControlFact?.FactId],
+                        properties,
+                        mutationEndLine));
+                }
+
+                foreach (Match constraint in ClientMaximumLengthRegex().Matches(body.Value))
+                {
+                    var constraintStart = body.Index + constraint.Index;
+                    var constraintName = constraint.Groups["name"].Value;
+                    var insideCallback = constraintStart >= callbackStart && constraintStart < absoluteEnd;
+                    var boundedPrecedingDeclaration = constraint.Index < binding.Index
+                        && binding.Index - (constraint.Index + constraint.Length) <= 4096
+                        && Regex.IsMatch(callback, $@"\b{Regex.Escape(constraintName)}\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(250));
+                    if (!insideCallback && !boundedPrecedingDeclaration)
+                    {
+                        continue;
+                    }
+                    var constraintLine = LineAt(source, constraintStart);
+                    var constraintIdentity = $"webforms-client-constraint:{FactFactory.Hash($"{identity}|maximum-length|{constraint.Groups["value"].Value}|{constraintLine}", 24)}";
+                    facts.Add(CreateStaticCompositionFact(
+                        manifest,
+                        FactTypes.WebFormsClientValidationConstraintCandidate,
+                        RuleIds.LegacyWebFormsInlineClientBehavior,
+                        EvidenceTiers.Tier3SyntaxOrTextual,
+                        page.FilePath,
+                        constraintLine,
+                        FactFactory.Hash(constraint.Value, 32),
+                        identity,
+                        constraintIdentity,
+                        "maximum-length",
+                        "bounded-static-webforms-inline-client-behavior",
+                        "A numeric maximum-length variable declared inside a supported callback or in a bounded preceding script scope and referenced by that callback is a validation/display candidate only; enforcement, user visibility, and business intent are not proven.",
+                        [pageFact.FactId, matchingControlFact?.FactId],
+                        new SortedDictionary<string, string>(StringComparer.Ordinal)
+                        {
+                            ["behaviorKind"] = "validation-constraint",
+                            ["clientEventId"] = identity,
+                            ["constraintKind"] = "maximum-length",
+                            ["constraintValue"] = constraint.Groups["value"].Value,
+                            ["controlId"] = selectorInfo.ControlId ?? "unresolved",
+                            ["selectorKind"] = selectorInfo.Kind,
+                            ["selectorTarget"] = selectorInfo.Target ?? "unavailable",
+                            ["targetResolution"] = selectorInfo.Resolution,
+                            ["surfaceIdentity"] = SurfaceIdentity(page.FilePath)
+                        }));
+                }
+            }
+
+            AddInlineClientHttpRequestFacts(manifest, inventory, page, pageFact, markup, source, body, clientEvents, facts);
+        }
+    }
+
+    private static ClientSelector ClassifyClientSelector(string selector, IReadOnlyList<WebFormsControl> controls)
+    {
+        string kind;
+        string? target;
+        if (selector.StartsWith('#') && ClientSelectorTokenRegex().IsMatch(selector[1..]))
+        {
+            kind = "exact-id";
+            target = selector[1..];
+        }
+        else
+        {
+            var generatedId = ClientGeneratedIdSelectorRegex().Match(selector);
+            if (generatedId.Success)
+            {
+                kind = generatedId.Groups["operator"].Value == "$" ? "id-suffix" : "id-contains";
+                target = generatedId.Groups["target"].Value;
+            }
+            else if (selector.StartsWith('.') && ClientSelectorTokenRegex().IsMatch(selector[1..]))
+            {
+                kind = "css-class";
+                target = selector[1..];
+            }
+            else
+            {
+                return new ClientSelector("unsupported", null, null, false, "dynamic-selector-unresolved", 0);
+            }
+        }
+
+        var matches = controls.Where(control => kind != "css-class" &&
+                (target.Equals(control.ControlId, StringComparison.OrdinalIgnoreCase)
+                || kind == "exact-id" && target.EndsWith("_" + control.ControlId, StringComparison.OrdinalIgnoreCase)))
+            .Select(control => control.ControlId)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        var controlId = matches.Length == 1 ? matches[0] : null;
+        var generatedIdShape = kind is "id-suffix" or "id-contains"
+            || kind == "exact-id" && (controlId is not null && !target.Equals(controlId, StringComparison.OrdinalIgnoreCase)
+                || GeneratedWebFormsClientIdRegex().IsMatch(target));
+        var resolution = matches.Length == 1
+            ? "unique-static-target"
+            : matches.Length > 1
+                ? "multiple-templated-targets"
+                : kind == "css-class"
+                    ? "client-dom-selector"
+                    : kind == "exact-id"
+                        ? "no-static-target-declared"
+                        : "dynamic-selector-unresolved";
+        return new ClientSelector(kind, target, controlId, generatedIdShape, resolution, matches.Length);
+    }
+
+    private static IReadOnlyList<string> ExpectedServerEvents(
+        string clientEventName,
+        string? controlId,
+        IReadOnlyList<WebFormsControl> controls)
+    {
+        if (clientEventName.Equals("click", StringComparison.OrdinalIgnoreCase))
+        {
+            return ["OnClick"];
+        }
+        if (!clientEventName.Equals("change", StringComparison.OrdinalIgnoreCase) || controlId is null)
+        {
+            return [];
+        }
+        var controlType = controls.SingleOrDefault(control => control.ControlId.Equals(controlId, StringComparison.OrdinalIgnoreCase))?.ControlType ?? string.Empty;
+        if (controlType.Contains("RadioButton", StringComparison.OrdinalIgnoreCase)
+            || controlType.Contains("CheckBox", StringComparison.OrdinalIgnoreCase))
+        {
+            return ["OnCheckedChanged"];
+        }
+        if (controlType.Contains("List", StringComparison.OrdinalIgnoreCase))
+        {
+            return ["OnSelectedIndexChanged"];
+        }
+        if (controlType.Contains("TextBox", StringComparison.OrdinalIgnoreCase))
+        {
+            return ["OnTextChanged"];
+        }
+        return [];
+    }
+
+    private static void AddInlineClientHttpRequestFacts(
+        ScanManifest manifest,
+        IReadOnlyList<FileInventoryItem> inventory,
+        WebFormsPage page,
+        CodeFact pageFact,
+        string markup,
+        SourceText source,
+        Group body,
+        IReadOnlyList<ClientEventContext> clientEvents,
+        List<CodeFact> facts)
+    {
+        var handlerFiles = inventory
+            .Select(item => FileInventory.NormalizeRelativePath(item.RelativePath))
+            .Where(path => path.EndsWith(".ashx", StringComparison.OrdinalIgnoreCase))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(path => path, StringComparer.Ordinal)
+            .ToArray();
+        foreach (Match ajax in JQueryAjaxStartRegex().Matches(body.Value))
+        {
+            var absoluteStart = body.Index + ajax.Index;
+            var openBrace = body.Index + ajax.Index + ajax.Length - 1;
+            var closeBrace = FindJavascriptBlockEnd(markup, openBrace, body.Index + body.Length);
+            if (closeBrace < openBrace)
+            {
+                continue;
+            }
+            var requestText = markup.Substring(openBrace, closeBrace - openBrace + 1);
+            var url = JavascriptLiteralProperty(requestText, "url");
+            if (string.IsNullOrWhiteSpace(url))
+            {
+                continue;
+            }
+            var methodValue = JavascriptLiteralProperty(requestText, "type") ?? JavascriptLiteralProperty(requestText, "method");
+            var httpMethod = methodValue?.ToUpperInvariant() ?? "GET";
+            var endpointPath = url.Split(['?', '#'], 2)[0].Replace('\\', '/').Trim();
+            var normalizedEndpointPath = endpointPath.TrimStart('/');
+            var endpointName = Path.GetFileName(endpointPath);
+            // A scheme or network-path URL names another origin; a same-named local
+            // .ashx file is not evidence for that request's handler.
+            var externalEndpoint = endpointPath.StartsWith("//", StringComparison.Ordinal)
+                || Regex.IsMatch(endpointPath, "\\A[A-Za-z][A-Za-z0-9+.-]*:", RegexOptions.CultureInvariant);
+            var candidates = externalEndpoint ? [] : handlerFiles
+                .Where(path => normalizedEndpointPath.Equals(path, StringComparison.OrdinalIgnoreCase)
+                    || path.EndsWith("/" + normalizedEndpointPath, StringComparison.OrdinalIgnoreCase))
+                .ToArray();
+            if (!externalEndpoint && candidates.Length == 0 && !string.IsNullOrWhiteSpace(endpointName))
+            {
+                var fileNameMatches = handlerFiles.Where(path => Path.GetFileName(path).Equals(endpointName, StringComparison.OrdinalIgnoreCase)).ToArray();
+                if (fileNameMatches.Length == 1)
+                {
+                    candidates = fileNameMatches;
+                }
+            }
+            var targetResolution = externalEndpoint
+                ? "external-absolute-url-not-resolved"
+                : candidates.Length == 1
+                ? "unique-repository-handler-file"
+                : candidates.Length > 1
+                    ? "ambiguous-repository-handler-file"
+                    : "no-static-handler-file-declared";
+            var enclosingEvent = clientEvents
+                .Where(item => absoluteStart > item.OpenBrace && closeBrace <= item.CloseBrace)
+                .OrderBy(item => item.CloseBrace - item.OpenBrace)
+                .FirstOrDefault();
+            var callbacks = JavascriptCallbackPropertyRegex().Matches(requestText)
+                .Select(match => match.Groups["kind"].Value.ToLowerInvariant())
+                .Distinct(StringComparer.Ordinal)
+                .OrderBy(value => value, StringComparer.Ordinal)
+                .ToArray();
+            var contentType = JavascriptLiteralProperty(requestText, "contentType") ?? string.Empty;
+            var dataType = JavascriptLiteralProperty(requestText, "dataType") ?? string.Empty;
+            var line = LineAt(source, absoluteStart);
+            var endLine = LineAt(source, closeBrace);
+            var identity = $"webforms-client-http:{FactFactory.Hash($"{SurfaceIdentity(page.FilePath)}|{url}|{httpMethod}|{line}", 24)}";
+            var properties = new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["behaviorKind"] = "client-http-request",
+                ["callbackKinds"] = callbacks.Length == 0 ? "none-observed" : string.Join(",", callbacks),
+                ["coverageLabel"] = "bounded-static-webforms-inline-client-http",
+                ["endpointKind"] = endpointName.EndsWith(".ashx", StringComparison.OrdinalIgnoreCase) ? "ashx" : "literal-url",
+                ["endpointName"] = endpointName.Length is > 0 and <= 128 ? endpointName : "unavailable",
+                ["endpointPathHash"] = FactFactory.Hash(endpointPath, 32),
+                ["httpMethod"] = httpMethod,
+                ["eventName"] = $"HTTP {httpMethod}",
+                ["eventSourceIdentity"] = identity,
+                ["handlerName"] = "ProcessRequest",
+                ["requestVerificationTokenCandidate"] = requestText.Contains("__RequestVerificationToken", StringComparison.Ordinal) ? "true" : "false",
+                ["surfaceIdentity"] = SurfaceIdentity(page.FilePath),
+                ["targetResolution"] = targetResolution
+            };
+            AddOptional(properties, "contentTypeKind", ClassifyClientContentType(contentType));
+            AddOptional(properties, "dataType", SafeClientLiteral(dataType));
+            AddOptional(properties, "endpointDeclarationFile", candidates.Length == 1 ? candidates[0] : null);
+            AddOptional(properties, "clientEventId", enclosingEvent?.Identity);
+            AddOptional(properties, "clientEventName", enclosingEvent?.EventName);
+            AddOptional(properties, "selectorKind", enclosingEvent?.Selector.Kind);
+            AddOptional(properties, "selectorTarget", enclosingEvent?.Selector.Target);
+            AddOptional(properties, "selectorResolution", enclosingEvent?.Selector.Resolution);
+            AddOptional(properties, "controlId", enclosingEvent?.Selector.ControlId);
+            facts.Add(CreateStaticCompositionFact(
+                manifest,
+                FactTypes.WebFormsClientHttpRequestCandidate,
+                RuleIds.LegacyWebFormsInlineClientHttpRequest,
+                EvidenceTiers.Tier3SyntaxOrTextual,
+                page.FilePath,
+                line,
+                FactFactory.Hash(requestText, 32),
+                enclosingEvent?.Identity ?? SurfaceIdentity(page.FilePath),
+                identity,
+                endpointName.Length is > 0 and <= 128 ? endpointName : "client-http-request",
+                "bounded-static-webforms-inline-client-http",
+                "A literal inline jQuery AJAX request is static textual evidence only; it does not prove DOM event association, request execution, routing, handler execution, authentication, authorization, response success, callback execution, or runtime reachability.",
+                [pageFact.FactId, enclosingEvent?.FactId],
+                properties,
+                endLine));
+        }
+    }
+
+    private static void AddClientHttpHandlerResolutionFacts(
+        string repoPath,
+        ScanManifest manifest,
+        IReadOnlyList<FileInventoryItem> inventory,
+        WebFormsContext context,
+        IReadOnlyList<CodeFact> existingFacts,
+        List<CodeFact> facts)
+    {
+        var inventoryPaths = inventory.Select(item => FileInventory.NormalizeRelativePath(item.RelativePath))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        foreach (var request in facts.Where(fact => fact.FactType == FactTypes.WebFormsClientHttpRequestCandidate)
+                     .Where(fact => fact.Properties.GetValueOrDefault("targetResolution") == "unique-repository-handler-file")
+                     .OrderBy(fact => fact.FactId, StringComparer.Ordinal).ToArray())
+        {
+            var handlerFile = request.Properties.GetValueOrDefault("endpointDeclarationFile");
+            if (string.IsNullOrWhiteSpace(handlerFile))
+            {
+                continue;
+            }
+
+            string text;
+            try
+            {
+                text = File.ReadAllText(Path.Combine(repoPath, handlerFile));
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            {
+                facts.Add(CreateClientHttpHandlerGap(manifest, request, handlerFile, 1,
+                    "UnreadableClientHttpHandlerFile", "The uniquely matched .ashx handler file could not be read."));
+                continue;
+            }
+
+            var directive = WebHandlerDirectiveRegex().Match(text);
+            var line = directive.Success ? LineAt(SourceText.From(text), directive.Index) : 1;
+            var attributes = directive.Success
+                ? ParseAttributes(directive.Groups["attrs"].Value)
+                : new SortedDictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            var handlerType = SafeIdentifier(attributes.GetValueOrDefault("Class"));
+            if (!directive.Success || handlerType is null)
+            {
+                facts.Add(CreateClientHttpHandlerGap(manifest, request, handlerFile, line,
+                    "ClientHttpHandlerDirectiveUnavailable", "The matched .ashx file has no supported WebHandler Class declaration."));
+                continue;
+            }
+
+            var directiveProperties = new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["coverageLabel"] = "bounded-structural-webforms-client-http-handler",
+                ["handlerSurfaceFile"] = handlerFile,
+                ["handlerTypeName"] = handlerType,
+                ["ruleLimitations"] = "The WebHandler directive is static declaration evidence only and does not prove deployment mapping, request dispatch, handler construction, or execution.",
+                ["supportingFactIds"] = request.FactId,
+                ["surfaceIdentity"] = request.Properties.GetValueOrDefault("surfaceIdentity") ?? request.SourceSymbol ?? string.Empty
+            };
+            var directiveFact = FactFactory.Create(
+                manifest,
+                FactTypes.WebFormsClientHttpHandlerDeclared,
+                RuleIds.LegacyWebFormsClientHttpHandlerResolution,
+                EvidenceTiers.Tier2Structural,
+                new EvidenceSpan(handlerFile, line, line, FactFactory.Hash(directive.Value, 32), "LegacyWebFormsExtractor", ScannerVersions.LegacyWebFormsExtractor),
+                sourceSymbol: request.TargetSymbol,
+                targetSymbol: handlerType,
+                contractElement: Path.GetFileName(handlerFile),
+                properties: directiveProperties);
+            facts.Add(directiveFact);
+
+            var sourcePaths = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
+            var webRoot = FindWebApplicationRoot(handlerFile, inventory);
+            foreach (var attributeName in new[] { "CodeBehind", "CodeFile" })
+            {
+                var resolved = ResolveMarkupReferencePath(handlerFile, webRoot, attributes.GetValueOrDefault(attributeName));
+                if (resolved is not null && inventoryPaths.Contains(resolved))
+                {
+                    sourcePaths.Add(resolved);
+                }
+            }
+            foreach (var declaration in existingFacts.Where(fact => fact.FactType == FactTypes.TypeDeclared)
+                         .Where(fact => PageTypeMatches(handlerType, WebFormsDeclarationQualifiedName(fact),
+                             attributes.GetValueOrDefault("Language")?.Equals("VB", StringComparison.OrdinalIgnoreCase) == true)))
+            {
+                if (inventoryPaths.Contains(declaration.Evidence.FilePath))
+                {
+                    sourcePaths.Add(declaration.Evidence.FilePath);
+                }
+            }
+
+            var codeFiles = sourcePaths
+                .Select(path => context.CodeFiles.FirstOrDefault(file => file.FilePath.Equals(path, StringComparison.OrdinalIgnoreCase))
+                    ?? ParseCodeFile(repoPath, path))
+                .Where(file => file is not null)
+                .Select(file => file!)
+                .ToList();
+            var inlineHandlerCode = ParseInlineWebHandlerCodeFile(handlerFile, text, attributes.GetValueOrDefault("Language"), directive);
+            if (inlineHandlerCode is not null)
+            {
+                codeFiles.Add(inlineHandlerCode);
+            }
+            var methods = codeFiles
+                .SelectMany(file => file.Methods)
+                .Where(method => IdentifierEquals(method.MethodName, "ProcessRequest", IsVisualBasicMethod(method))
+                    && PageTypeMatches(handlerType, method.PageTypeName, IsVisualBasicMethod(method)))
+                .GroupBy(method => $"{method.FilePath}|{method.Line}|{method.EndLine}", StringComparer.OrdinalIgnoreCase)
+                .Select(group => group.First())
+                .OrderBy(method => method.FilePath, StringComparer.Ordinal)
+                .ThenBy(method => method.Line)
+                .ToArray();
+            if (methods.Length != 1)
+            {
+                facts.Add(CreateClientHttpHandlerGap(manifest, request, handlerFile, line,
+                    methods.Length == 0 ? "ClientHttpProcessRequestUnavailable" : "AmbiguousClientHttpProcessRequest",
+                    methods.Length == 0
+                        ? "No unique source declaration for the .ashx ProcessRequest entry point was retained."
+                        : "Multiple ProcessRequest declarations matched the .ashx handler type."));
+                continue;
+            }
+
+            var method = methods[0];
+            var semantic = FindSemanticHandlerEvidence(method, existingFacts);
+            var tier = semantic is null ? EvidenceTiers.Tier2Structural : EvidenceTiers.Tier1Semantic;
+            var handlerSymbol = SemanticHandlerSymbol(semantic) ?? StructuralHandlerCallSymbol(method);
+            var handlerSymbolId = SemanticHandlerSymbolId(semantic)
+                ?? $"webforms-http-handler:{FactFactory.Hash($"{handlerFile}|{method.FilePath}|{method.Line}|{handlerSymbol}", 24)}";
+            var properties = new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["bindingFactId"] = request.FactId,
+                ["clientHttpRequestFactId"] = request.FactId,
+                ["controlId"] = request.Properties.GetValueOrDefault("endpointName") ?? "ashx-handler",
+                ["coverageLabel"] = semantic is null ? "bounded-structural-webforms-client-http-handler" : "bounded-semantic-webforms-client-http-handler",
+                ["eventName"] = request.Properties.GetValueOrDefault("eventName") ?? "HTTP",
+                ["eventSourceIdentity"] = request.Properties.GetValueOrDefault("eventSourceIdentity") ?? request.TargetSymbol ?? request.FactId,
+                ["handlerName"] = "ProcessRequest",
+                ["handlerSurfaceFile"] = handlerFile,
+                ["handlerSymbol"] = handlerSymbol,
+                ["handlerSymbolId"] = handlerSymbolId,
+                ["linkedCodePath"] = method.FilePath,
+                ["markupFile"] = request.Evidence.FilePath,
+                ["pageTypeName"] = handlerType,
+                ["resolutionKind"] = semantic is null ? "StructuralWebHandlerProcessRequest" : "SemanticWebHandlerProcessRequest",
+                ["ruleLimitations"] = "A literal AJAX route, WebHandler directive, and unique ProcessRequest source declaration form a static join only; deployment mapping, runtime request dispatch, authentication, authorization, handler execution, and downstream execution are not proven.",
+                ["sourceSymbolId"] = handlerSymbolId,
+                ["supportingFactIds"] = string.Join(",", new[] { request.FactId, directiveFact.FactId }.OrderBy(value => value, StringComparer.Ordinal)),
+                ["surfaceIdentity"] = request.Properties.GetValueOrDefault("surfaceIdentity") ?? request.SourceSymbol ?? string.Empty
+            };
+            var resolutionFact = FactFactory.Create(
+                manifest,
+                FactTypes.WebFormsHandlerResolved,
+                RuleIds.LegacyWebFormsClientHttpHandlerResolution,
+                tier,
+                new EvidenceSpan(method.FilePath, method.Line, method.EndLine, null, "LegacyWebFormsExtractor", ScannerVersions.LegacyWebFormsExtractor),
+                sourceSymbol: properties["eventSourceIdentity"],
+                targetSymbol: handlerSymbolId,
+                contractElement: "ProcessRequest",
+                properties: properties);
+            facts.Add(resolutionFact);
+            if (method.FilePath.Equals(handlerFile, StringComparison.OrdinalIgnoreCase))
+            {
+                AddInlineWebHandlerCallFacts(manifest, method, handlerSymbol, resolutionFact, facts);
+            }
+        }
+    }
+
+    private static WebFormsCodeFile? ParseInlineWebHandlerCodeFile(
+        string handlerFile,
+        string text,
+        string? language,
+        Match directive)
+    {
+        var chars = text.ToCharArray();
+        for (var index = directive.Index; index < directive.Index + directive.Length; index++)
+        {
+            if (chars[index] is not ('\r' or '\n')) chars[index] = ' ';
+        }
+        var source = SourceText.From(new string(chars));
+        if (language?.Equals("VB", StringComparison.OrdinalIgnoreCase) == true
+            || language?.Equals("VisualBasic", StringComparison.OrdinalIgnoreCase) == true)
+        {
+            var tree = VB.VisualBasicSyntaxTree.ParseText(source, path: handlerFile);
+            var root = (VBSyntax.CompilationUnitSyntax)tree.GetRoot();
+            var methods = root.DescendantNodes().OfType<VBSyntax.MethodBlockBaseSyntax>()
+                .Select(block => ToVisualBasicMethodInfo(tree, block))
+                .Where(method => method is not null)
+                .Select(method => method!)
+                .OrderBy(method => method.Line)
+                .ThenBy(method => method.MethodName, StringComparer.Ordinal)
+                .ToArray();
+            return methods.Length == 0 ? null : new WebFormsCodeFile(handlerFile, methods, []);
+        }
+
+        if (language?.Equals("C#", StringComparison.OrdinalIgnoreCase) == true
+            || language?.Equals("CSharp", StringComparison.OrdinalIgnoreCase) == true)
+        {
+            var tree = CSharpSyntaxTree.ParseText(source, path: handlerFile);
+            var root = tree.GetCompilationUnitRoot();
+            var methods = root.DescendantNodes().OfType<MethodDeclarationSyntax>()
+                .Select(method => ToMethodInfo(tree, method))
+                .OrderBy(method => method.Line)
+                .ThenBy(method => method.MethodName, StringComparer.Ordinal)
+                .ToArray();
+            return methods.Length == 0 ? null : new WebFormsCodeFile(handlerFile, methods, []);
+        }
+
+        return null;
+    }
+
+    private static void AddInlineWebHandlerCallFacts(
+        ScanManifest manifest,
+        WebFormsMethod method,
+        string handlerSymbol,
+        CodeFact resolution,
+        List<CodeFact> facts)
+    {
+        const int maxCalls = 256;
+        var visualBasicCalls = method.Declaration.DescendantNodes()
+            .OfType<VBSyntax.InvocationExpressionSyntax>()
+            .Select(invocation => (Node: (SyntaxNode)invocation, Name: VisualBasicInvocationName(invocation.Expression)));
+        var csharpCalls = method.Declaration.DescendantNodes()
+            .OfType<InvocationExpressionSyntax>()
+            .Select(invocation => (Node: (SyntaxNode)invocation, Name: (string?)InvocationName(invocation)));
+        var calls = visualBasicCalls
+            .Concat(csharpCalls)
+            .Where(item => !string.IsNullOrWhiteSpace(item.Name))
+            .OrderBy(item => item.Node.SpanStart)
+            .ThenBy(item => item.Name, StringComparer.Ordinal)
+            .ToArray();
+        foreach (var call in calls.Take(maxCalls))
+        {
+            var span = call.Node.SyntaxTree.GetLineSpan(call.Node.Span);
+            facts.Add(FactFactory.Create(
+                manifest,
+                FactTypes.CallEdge,
+                RuleIds.LegacyWebFormsClientHttpHandlerResolution,
+                EvidenceTiers.Tier3SyntaxOrTextual,
+                new EvidenceSpan(
+                    method.FilePath,
+                    span.StartLinePosition.Line + 1,
+                    Math.Max(span.StartLinePosition.Line + 1, span.EndLinePosition.Line + 1),
+                    FactFactory.Hash(call.Node.ToString(), 32),
+                    "LegacyWebFormsExtractor",
+                    ScannerVersions.LegacyWebFormsExtractor),
+                sourceSymbol: handlerSymbol,
+                targetSymbol: call.Name,
+                contractElement: call.Name,
+                properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["callKind"] = "InlineWebHandlerSyntaxInvocation",
+                    ["calleeName"] = call.Name!,
+                    ["callerName"] = handlerSymbol,
+                    ["coverageLabel"] = "reduced-static-webforms-client-http-handler-call",
+                    ["ruleLimitations"] = "Inline .ashx call evidence is syntax-only and does not prove overload resolution, receiver type, dynamic dispatch, branch feasibility, runtime request handling, or callee execution.",
+                    ["supportingFactIds"] = resolution.FactId
+                }));
+        }
+        if (calls.Length > maxCalls)
+        {
+            facts.Add(CreateClientHttpHandlerGap(manifest, resolution, method.FilePath, method.Line,
+                "ClientHttpInlineHandlerCallLimitReached", "Inline .ashx ProcessRequest call extraction reached its bounded per-handler limit."));
+        }
+    }
+
+    private static string? VisualBasicInvocationName(VBSyntax.ExpressionSyntax? expression) => expression switch
+    {
+        VBSyntax.IdentifierNameSyntax identifier => identifier.Identifier.ValueText,
+        VBSyntax.GenericNameSyntax generic => generic.Identifier.ValueText,
+        VBSyntax.MemberAccessExpressionSyntax member => member.Name.Identifier.ValueText,
+        _ => null
+    };
+
+    private static CodeFact CreateClientHttpHandlerGap(
+        ScanManifest manifest,
+        CodeFact request,
+        string handlerFile,
+        int line,
+        string gapKind,
+        string message) =>
+        FactFactory.Create(
+            manifest,
+            FactTypes.AnalysisGap,
+            RuleIds.LegacyWebFormsClientHttpHandlerResolution,
+            EvidenceTiers.Tier4Unknown,
+            new EvidenceSpan(handlerFile, line, line, null, "LegacyWebFormsExtractor", ScannerVersions.LegacyWebFormsExtractor),
+            sourceSymbol: request.TargetSymbol,
+            targetSymbol: request.FactId,
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["coverageLabel"] = "reduced-static-webforms-client-http-handler",
+                ["gapKind"] = gapKind,
+                ["message"] = message,
+                ["ruleLimitations"] = "Missing or ambiguous static handler evidence is an analysis gap and is not proof that the request has no runtime handler.",
+                ["supportingFactIds"] = request.FactId,
+                ["surfaceIdentity"] = request.Properties.GetValueOrDefault("surfaceIdentity") ?? request.SourceSymbol ?? string.Empty
+            });
+
+    private static string StructuralHandlerCallSymbol(WebFormsMethod method)
+    {
+        if (method.Declaration is VBSyntax.MethodBlockBaseSyntax
+            {
+                BlockStatement: VBSyntax.MethodStatementSyntax statement
+            })
+        {
+            var parameterTypes = statement.ParameterList?.Parameters.Select(parameter =>
+                parameter.AsClause is VBSyntax.SimpleAsClauseSyntax simple
+                    ? simple.Type.ToString().Trim()
+                    : "unavailable") ?? [];
+            return $"{method.PageTypeName}.{method.MethodName}({string.Join(",", parameterTypes)})";
+        }
+
+        // The C# syntax fallback identifies the containing caller by member name.
+        return method.MethodName;
+    }
+
+    private static string? ClassifyClientContentType(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return null;
+        if (value.Contains("application/json", StringComparison.OrdinalIgnoreCase)) return "json";
+        if (value.Contains("application/x-www-form-urlencoded", StringComparison.OrdinalIgnoreCase)) return "form-urlencoded";
+        return "other-literal";
+    }
+
+    private static string? SafeClientLiteral(string value) =>
+        value.Length is > 0 and <= 32 && value.All(character => char.IsLetterOrDigit(character) || character is '-' or '_')
+            ? value.ToLowerInvariant()
+            : null;
+
+    private static string? JavascriptLiteralProperty(string text, string propertyName) =>
+        JavascriptLiteralPropertyRegex().Matches(text)
+            .FirstOrDefault(match => match.Groups["name"].Value.Equals(propertyName, StringComparison.OrdinalIgnoreCase))?
+            .Groups["value"].Value;
+
+    private static void AddInlineServerExpressionFacts(
+        string repoPath,
+        ScanManifest manifest,
+        WebFormsPage page,
+        CodeFact pageFact,
+        IReadOnlyList<CodeFact> existingFacts,
+        List<CodeFact> facts)
+    {
+        string markup;
+        try
+        {
+            markup = File.ReadAllText(Path.Combine(repoPath, page.FilePath));
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            return;
+        }
+
+        var declarationFacts = existingFacts
+            .Where(fact => fact.FactType == FactTypes.TypeDeclared)
+            .Select(fact => (Fact: fact, QualifiedName: WebFormsDeclarationQualifiedName(fact)))
+            .Where(item => !string.IsNullOrWhiteSpace(item.QualifiedName))
+            .ToArray();
+        if (declarationFacts.Length == 0)
+        {
+            return;
+        }
+
+        var source = SourceText.From(markup);
+        var directive = DirectiveRegex().Match(MaskServerComments(markup));
+        var language = directive.Success ? ParseAttributes(directive.Groups["attrs"].Value).GetValueOrDefault("Language") : null;
+        var caseInsensitive = language is not null
+            ? language.Equals("VB", StringComparison.OrdinalIgnoreCase) || language.Equals("VisualBasic", StringComparison.OrdinalIgnoreCase)
+            : page.LinkedCodePath?.EndsWith(".vb", StringComparison.OrdinalIgnoreCase) == true;
+        var comparison = caseInsensitive ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+        foreach (Match expression in InlineServerExpressionRegex().Matches(MaskServerComments(markup)))
+        {
+            var expressionBody = expression.Groups["body"];
+            // `Eval("Customer.Name")` names a data-item property path, not a type reference.
+            foreach (Match reference in QualifiedIdentifierReferenceRegex().Matches(MaskExpressionStringLiterals(expressionBody.Value, caseInsensitive)))
+            {
+                var matching = declarationFacts
+                    .Where(item => reference.Value.Equals(item.QualifiedName, comparison)
+                        || reference.Value.StartsWith(item.QualifiedName + ".", comparison))
+                    .OrderByDescending(item => item.QualifiedName!.Length)
+                    .ThenBy(item => item.Fact.FactId, StringComparer.Ordinal)
+                    .ToArray();
+                if (matching.Length == 0)
+                {
+                    continue;
+                }
+                var longestName = matching[0].QualifiedName!;
+                var longest = matching.Where(item => item.QualifiedName!.Equals(longestName, comparison)).ToArray();
+                var declarationSites = longest
+                    .GroupBy(item => $"{item.Fact.Evidence.FilePath}|{item.Fact.Evidence.StartLine}|{item.QualifiedName}", caseInsensitive ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal)
+                    .ToArray();
+                if (declarationSites.Length != 1)
+                {
+                    continue;
+                }
+                var declaration = declarationSites[0]
+                    .OrderBy(item => item.Fact.EvidenceTier == EvidenceTiers.Tier1Semantic ? 0 : 1)
+                    .ThenBy(item => item.Fact.FactId, StringComparer.Ordinal)
+                    .First().Fact;
+                var absoluteStart = expressionBody.Index + reference.Index;
+                var line = LineAt(source, absoluteStart);
+                var endLine = LineAt(source, absoluteStart + reference.Length - 1);
+                var memberSuffix = reference.Value.Length > longestName.Length ? reference.Value[(longestName.Length + 1)..] : string.Empty;
+                var declarationPath = FileInventory.NormalizeRelativePath(declaration.Evidence.FilePath);
+                var pathKind = declarationPath.StartsWith("App_Code/", StringComparison.OrdinalIgnoreCase)
+                    || declarationPath.Contains("/App_Code/", StringComparison.OrdinalIgnoreCase)
+                        ? "app-code"
+                        : "repository-source";
+                var properties = new SortedDictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["behaviorKind"] = "inline-server-reference",
+                    ["coverageLabel"] = "reduced-static-webforms-inline-server-expression",
+                    ["declarationFile"] = declarationPath,
+                    ["declarationPathKind"] = pathKind,
+                    ["expressionKind"] = expression.Groups["marker"].Value == "#" ? "data-binding-expression" : "render-expression",
+                    ["memberPathHash"] = FactFactory.Hash(memberSuffix, 32),
+                    ["memberPathSegmentCount"] = string.IsNullOrEmpty(memberSuffix) ? "0" : memberSuffix.Split('.').Length.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                    ["referencedTypeName"] = longestName,
+                    ["referenceHash"] = FactFactory.Hash(reference.Value, 32),
+                    ["surfaceIdentity"] = SurfaceIdentity(page.FilePath),
+                    ["targetResolution"] = "unique-repository-declaration"
+                };
+                facts.Add(CreateStaticCompositionFact(
+                    manifest,
+                    FactTypes.WebFormsInlineServerExpressionReferenceCandidate,
+                    RuleIds.LegacyWebFormsInlineServerExpression,
+                    EvidenceTiers.Tier3SyntaxOrTextual,
+                    page.FilePath,
+                    line,
+                    FactFactory.Hash(expression.Value, 32),
+                    SurfaceIdentity(page.FilePath),
+                    declaration.TargetSymbol ?? longestName,
+                    longestName,
+                    "reduced-static-webforms-inline-server-expression",
+                    "A bounded inline server-expression reference joined to one repository declaration is syntax evidence only; it does not prove ASP.NET dynamic compilation, member binding, expression execution, rendered output, or runtime reachability.",
+                    [pageFact.FactId, declaration.FactId],
+                    properties,
+                    endLine));
+            }
+        }
+    }
+
+    private static string? WebFormsDeclarationQualifiedName(CodeFact fact)
+    {
+        var qualifiedName = fact.Properties.GetValueOrDefault("qualifiedName") ?? fact.TargetSymbol;
+        var name = fact.Properties.GetValueOrDefault("name");
+        if (string.IsNullOrWhiteSpace(qualifiedName) || string.IsNullOrWhiteSpace(name))
+        {
+            return qualifiedName;
+        }
+
+        // The projectless VB syntax declaration shape can repeat the declared type
+        // because its enclosing TypeBlock also reports the same statement. Normalize
+        // only that exact terminal duplication for bounded markup-reference matching.
+        var duplicatedSuffix = $".{name}.{name}";
+        return qualifiedName.EndsWith(duplicatedSuffix, StringComparison.OrdinalIgnoreCase)
+            ? qualifiedName[..^(name.Length + 1)]
+            : qualifiedName;
+    }
+
+    // Scans only the enclosing inline script body: a callback must not borrow braces,
+    // requests, or mutations from later scripts. Comments are skipped so apostrophes
+    // in `// don't ...` do not flip string state.
+    // Length-preserving: string/char literal contents become spaces so match offsets stay valid.
+    private static string MaskExpressionStringLiterals(string text, bool visualBasic)
+    {
+        var chars = text.ToCharArray();
+        for (var index = 0; index < chars.Length; index++)
+        {
+            var quote = chars[index];
+            if (quote != '"' && (visualBasic || quote != '\''))
+            {
+                continue;
+            }
+            var end = index + 1;
+            while (end < chars.Length)
+            {
+                if (!visualBasic && chars[end] == '\\' && end + 1 < chars.Length) { end += 2; continue; }
+                if (chars[end] == quote)
+                {
+                    if (visualBasic && end + 1 < chars.Length && chars[end + 1] == quote) { end += 2; continue; }
+                    break;
+                }
+                end++;
+            }
+            var stop = Math.Min(end, chars.Length - 1);
+            for (var masked = index; masked <= stop; masked++) chars[masked] = ' ';
+            index = stop;
+        }
+        return new string(chars);
+    }
+
+    internal static int FindJavascriptBlockEnd(string text, int openBrace, int limit)
+    {
+        var depth = 0;
+        var quote = '\0';
+        var escaped = false;
+        var expressionStart = true;
+        limit = Math.Min(limit, text.Length);
+        for (var index = openBrace; index < limit; index++)
+        {
+            var current = text[index];
+            if (quote != '\0')
+            {
+                if (escaped) { escaped = false; continue; }
+                if (current == '\\') { escaped = true; continue; }
+                if (current == quote) { quote = '\0'; expressionStart = false; }
+                continue;
+            }
+            if ((current == '/' && index + 1 < limit && text[index + 1] == '/')
+                || (current == '<' && index + 4 <= limit && text.AsSpan(index, 4).SequenceEqual("<!--")))
+            {
+                var newline = text.IndexOf('\n', index + 2, limit - index - 2);
+                if (newline < 0) return -1;
+                index = newline;
+                continue;
+            }
+            if (current == '/' && index + 1 < limit && text[index + 1] == '*')
+            {
+                var close = text.IndexOf("*/", index + 2, limit - index - 2, StringComparison.Ordinal);
+                if (close < 0) return -1;
+                index = close + 1;
+                continue;
+            }
+            if (current is '\'' or '"' or '`') { quote = current; continue; }
+            if (current == '/' && expressionStart)
+            {
+                var inClass = false;
+                var closed = false;
+                for (++index; index < limit; index++)
+                {
+                    current = text[index];
+                    if (current is '\r' or '\n') return -1;
+                    if (current == '\\') { index++; continue; }
+                    if (current == '[') inClass = true;
+                    else if (current == ']') inClass = false;
+                    else if (current == '/' && !inClass) { closed = true; break; }
+                }
+                if (!closed) return -1;
+                expressionStart = false;
+                continue;
+            }
+            if (char.IsLetter(current) || current is '_' or '$')
+            {
+                var start = index;
+                while (index + 1 < limit && (char.IsLetterOrDigit(text[index + 1]) || text[index + 1] is '_' or '$')) index++;
+                expressionStart = text[start..(index + 1)] is "return" or "throw" or "case" or "typeof" or "void" or "delete" or "yield";
+                continue;
+            }
+            if (char.IsWhiteSpace(current)) continue;
+            // A slash after a postfix increment/decrement is division.
+            if (current is '+' or '-' && index + 1 < limit && text[index + 1] == current) { index++; continue; }
+            if (current == '{') { depth++; expressionStart = true; }
+            else if (current == '}') { if (--depth == 0) return index; expressionStart = false; }
+            else expressionStart = current is '=' or '(' or '[' or ',' or ':' or ';' or '!' or '?' or '&' or '|' or '+' or '-' or '*' or '/' or '%' or '>' or '<';
+        }
+        return -1;
+    }
+
+    private static string? ClassifyClientMutation(string method, string statement) => method.ToLowerInvariant() switch
+    {
+        "show" => "show",
+        "hide" => "hide",
+        "addclass" => "class-add",
+        "removeclass" => "class-remove",
+        "text" => "text-set",
+        "attr" when Regex.IsMatch(statement, "\\.attr\\s*\\(\\s*['\"]value['\"]", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant) => "value-set",
+        "attr" when Regex.IsMatch(statement, "\\.attr\\s*\\(\\s*['\"]disabled['\"]", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant) => "disabled-attribute-set",
+        "prop" when Regex.IsMatch(statement, "\\.prop\\s*\\(\\s*['\"]disabled['\"]\\s*,\\s*true", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant) => "disable",
+        "prop" when Regex.IsMatch(statement, "\\.prop\\s*\\(\\s*['\"]disabled['\"]\\s*,\\s*false", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant) => "enable",
+        _ => null
+    };
 
     private static ExpressionSyntax? ClientScriptPayloadExpression(InvocationExpressionSyntax invocation, string methodName)
     {
@@ -1588,7 +3043,7 @@ public static partial class LegacyWebFormsExtractor
         }
 
         var method = candidates[0];
-        return FindSemanticHandlerEvidence(method, evidenceIndex.FactsForFile(method.FilePath), FindLinkedProjectPaths(page, evidenceIndex))?.Properties.GetValueOrDefault("sourceSymbolId")
+        return SemanticHandlerSymbolId(FindSemanticHandlerEvidence(method, evidenceIndex.FactsForFile(method.FilePath), FindLinkedProjectPaths(page, evidenceIndex)))
             ?? StructuralHandlerIdentity(page, method.MethodName, method.FilePath, method.Line);
     }
 
@@ -1601,7 +3056,7 @@ public static partial class LegacyWebFormsExtractor
     {
         var surfaceIdentity = SurfaceIdentity(page.FilePath);
         var control = page.Controls.FirstOrDefault(candidate =>
-            candidate.ControlId.Equals(binding.ControlId, StringComparison.Ordinal)
+            IdentifierEquals(candidate.ControlId, binding.ControlId, IsVisualBasicPath(binding.FilePath))
             && candidate.ControlType.Equals(binding.ControlType, StringComparison.Ordinal)
             && candidate.Line == binding.ControlLine);
         var sourceIdentity = control is null
@@ -1631,6 +3086,10 @@ public static partial class LegacyWebFormsExtractor
         if (binding.SyntaxSpanStart is not null)
         {
             properties["syntaxSpanStart"] = binding.SyntaxSpanStart.Value.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        }
+        if (!string.IsNullOrWhiteSpace(binding.WiringKind))
+        {
+            properties["wiringKind"] = binding.WiringKind;
         }
 
         return FactFactory.Create(
@@ -1682,17 +3141,22 @@ public static partial class LegacyWebFormsExtractor
             FindLinkedProjectPaths(page, evidenceIndex));
         var tier = semanticEvidence is not null
             ? EvidenceTiers.Tier1Semantic
-            : method.HasCommonEventSignature && PageTypeMatches(page.PageTypeName, method.PageTypeName)
+            : method.HasCommonEventSignature && PageTypeMatches(page.PageTypeName, method.PageTypeName, IsVisualBasicMethod(method))
                 ? EvidenceTiers.Tier2Structural
                 : EvidenceTiers.Tier3SyntaxOrTextual;
-        var handlerSymbol = semanticEvidence?.SourceSymbol ?? $"{method.PageTypeName}.{method.MethodName}";
-        var handlerSymbolId = semanticEvidence?.Properties.GetValueOrDefault("sourceSymbolId")
+        var handlerSymbol = SemanticHandlerSymbol(semanticEvidence)
+            ?? (IsVisualBasicMethod(method)
+                ? StructuralHandlerCallSymbol(method)
+                : $"{method.PageTypeName}.{method.MethodName}");
+        var handlerSymbolId = SemanticHandlerSymbolId(semanticEvidence)
             ?? StructuralHandlerIdentity(page, method.MethodName, method.FilePath, method.Line);
         var eventSourceIdentity = bindingFact.SourceSymbol ?? SurfaceIdentity(page.FilePath);
         var properties = new SortedDictionary<string, string>(StringComparer.Ordinal)
         {
             ["bindingFactId"] = bindingFact.FactId,
-            ["coverageLabel"] = tier == EvidenceTiers.Tier1Semantic ? "bounded-static-webforms-handler" : "reduced-static-webforms-handler",
+            ["coverageLabel"] = binding.BindingKind == WebFormsBindingKind.MarkupEventCandidate
+                ? "reduced-static-webforms-event-candidate-handler"
+                : tier == EvidenceTiers.Tier1Semantic ? "bounded-static-webforms-handler" : "reduced-static-webforms-handler",
             ["controlId"] = binding.ControlId,
             ["eventName"] = binding.EventName,
             ["eventSourceIdentity"] = eventSourceIdentity,
@@ -1703,7 +3167,9 @@ public static partial class LegacyWebFormsExtractor
             ["markupFile"] = page.FilePath,
             ["pageTypeName"] = page.PageTypeName,
             ["resolutionKind"] = semanticEvidence is not null ? "SemanticSourceSymbol" : tier == EvidenceTiers.Tier2Structural ? "StructuralLinkedPartialMethod" : "SyntaxLinkedMethod",
-            ["ruleLimitations"] = "Handler resolution is static evidence and does not prove runtime event execution.",
+            ["ruleLimitations"] = binding.BindingKind == WebFormsBindingKind.MarkupEventCandidate
+                ? "The linked method is statically resolved, but the unfamiliar On-prefixed server attribute remains an event candidate; this does not prove framework event semantics, binding, or runtime execution."
+                : "Handler resolution is static evidence and does not prove runtime event execution.",
             ["sourceSymbolId"] = handlerSymbolId,
             ["supportingFactIds"] = bindingFact.FactId,
             ["surfaceIdentity"] = SurfaceIdentity(page.FilePath)
@@ -1735,7 +3201,7 @@ public static partial class LegacyWebFormsExtractor
         ScanManifest manifest,
         CodeFact resolution,
         WebFormsDirectEvidenceIndex directEvidenceIndex,
-        IReadOnlyList<CodeFact> wcfMappings)
+        IReadOnlyList<CodeFact> serviceMappings)
     {
         var handlerName = resolution.Properties.GetValueOrDefault("handlerName") ?? resolution.ContractElement ?? string.Empty;
         var handlerSymbol = resolution.Properties.GetValueOrDefault("handlerSymbol") ?? resolution.TargetSymbol ?? handlerName;
@@ -1745,7 +3211,7 @@ public static partial class LegacyWebFormsExtractor
             .ToArray();
         var terminals = directFacts
             .Where(IsTerminalSurfaceFact)
-            .Concat(WcfMappingsForCalls(wcfMappings, directFacts))
+            .Concat(ServiceMappingsForCalls(serviceMappings, directFacts))
             .DistinctBy(fact => fact.FactId)
             .OrderBy(fact => fact.FactId, StringComparer.Ordinal)
             .ToArray();
@@ -1802,11 +3268,11 @@ public static partial class LegacyWebFormsExtractor
         CodeFact resolution,
         WebFormsContext context,
         WebFormsDirectEvidenceIndex directEvidenceIndex,
-        IReadOnlyList<CodeFact> wcfMappings)
+        IReadOnlyList<CodeFact> serviceMappings)
     {
         var handlerName = resolution.Properties.GetValueOrDefault("handlerName") ?? resolution.ContractElement ?? string.Empty;
         var methodPath = resolution.Evidence.FilePath;
-        var method = context.CodeFiles.FirstOrDefault(file => file.FilePath.Equals(methodPath, StringComparison.Ordinal))?.Methods.FirstOrDefault(method => method.MethodName.Equals(handlerName, StringComparison.Ordinal)
+        var method = context.CodeFiles.FirstOrDefault(file => file.FilePath.Equals(methodPath, StringComparison.Ordinal))?.Methods.FirstOrDefault(method => IdentifierEquals(method.MethodName, handlerName, IsVisualBasicMethod(method))
             && method.Line == resolution.Evidence.StartLine && method.EndLine == resolution.Evidence.EndLine);
         if (method is null)
         {
@@ -1816,13 +3282,27 @@ public static partial class LegacyWebFormsExtractor
         var directFacts = directEvidenceIndex.Candidates(resolution.Evidence.FilePath, handlerName, resolution.TargetSymbol ?? handlerName)
             .Where(fact => IsDirectHandlerEvidence(fact, resolution))
             .ToArray();
-        var hasBackend = directFacts.Any(IsTerminalSurfaceFact) || WcfMappingsForCalls(wcfMappings, directFacts).Any();
-        var hasLogic = hasBackend
-            || method.Declaration.DescendantNodes().Any(node => node is IfStatementSyntax or SwitchStatementSyntax or ConditionalExpressionSyntax)
-            || method.Declaration.DescendantNodes().OfType<BinaryExpressionSyntax>().Any(binary => binary.IsKind(SyntaxKind.MultiplyExpression) || binary.IsKind(SyntaxKind.DivideExpression) || binary.IsKind(SyntaxKind.ModuloExpression))
-            || method.Declaration.DescendantNodes().OfType<ObjectCreationExpressionSyntax>().Any(creation => !LooksLikeUiType(creation.Type.ToString()));
-        var hasUiOnly = method.Declaration.DescendantNodes().OfType<AssignmentExpressionSyntax>().Any(IsUiAssignment)
-            || method.Declaration.DescendantNodes().OfType<InvocationExpressionSyntax>().Any(invocation => InvocationName(invocation).Equals("DataBind", StringComparison.Ordinal));
+        var hasBackend = directFacts.Any(IsTerminalSurfaceFact) || ServiceMappingsForCalls(serviceMappings, directFacts).Any();
+        var hasLogic = hasBackend;
+        var hasUiOnly = false;
+        if (method.Declaration is MethodDeclarationSyntax csharpMethod)
+        {
+            hasLogic = hasLogic
+                || csharpMethod.DescendantNodes().Any(node => node is IfStatementSyntax or SwitchStatementSyntax or ConditionalExpressionSyntax)
+                || csharpMethod.DescendantNodes().OfType<BinaryExpressionSyntax>().Any(binary => binary.IsKind(SyntaxKind.MultiplyExpression) || binary.IsKind(SyntaxKind.DivideExpression) || binary.IsKind(SyntaxKind.ModuloExpression))
+                || csharpMethod.DescendantNodes().OfType<ObjectCreationExpressionSyntax>().Any(creation => !LooksLikeUiType(creation.Type.ToString()));
+            hasUiOnly = csharpMethod.DescendantNodes().OfType<AssignmentExpressionSyntax>().Any(IsUiAssignment)
+                || csharpMethod.DescendantNodes().OfType<InvocationExpressionSyntax>().Any(invocation => InvocationName(invocation).Equals("DataBind", StringComparison.Ordinal));
+        }
+        else
+        {
+            hasLogic = hasLogic || method.Declaration.DescendantNodes().Any(node => node is VBSyntax.IfStatementSyntax or VBSyntax.SelectBlockSyntax);
+            hasUiOnly = method.Declaration.DescendantNodes().OfType<VBSyntax.AssignmentStatementSyntax>().Any(assignment =>
+                    assignment.Left is VBSyntax.MemberAccessExpressionSyntax member && UiMemberNames.Any(name => name.Equals(member.Name.Identifier.ValueText, StringComparison.OrdinalIgnoreCase)))
+                || method.Declaration.DescendantNodes().OfType<VBSyntax.InvocationExpressionSyntax>().Any(invocation =>
+                    invocation.Expression is VBSyntax.IdentifierNameSyntax identifier && identifier.Identifier.ValueText.Equals("DataBind", StringComparison.OrdinalIgnoreCase)
+                    || invocation.Expression is VBSyntax.MemberAccessExpressionSyntax member && member.Name.Identifier.ValueText.Equals("DataBind", StringComparison.OrdinalIgnoreCase));
+        }
         if (!hasLogic && !hasUiOnly)
         {
             return null;
@@ -1850,6 +3330,162 @@ public static partial class LegacyWebFormsExtractor
             });
     }
 
+    private static IReadOnlyList<CodeFact> CreateServerBehaviorFacts(
+        ScanManifest manifest,
+        IReadOnlyList<CodeFact> resolutions,
+        WebFormsContext context)
+    {
+        var resolution = resolutions.OrderBy(fact => fact.FactId, StringComparer.Ordinal).First();
+        var handlerName = resolution.Properties.GetValueOrDefault("handlerName") ?? resolution.ContractElement ?? string.Empty;
+        var markupFile = resolution.Properties.GetValueOrDefault("markupFile") ?? string.Empty;
+        var page = context.Pages.FirstOrDefault(candidate => candidate.FilePath.Equals(markupFile, StringComparison.Ordinal));
+        var method = context.CodeFiles.FirstOrDefault(file => file.FilePath.Equals(resolution.Evidence.FilePath, StringComparison.Ordinal))?.Methods
+            .FirstOrDefault(candidate => IdentifierEquals(candidate.MethodName, handlerName, IsVisualBasicMethod(candidate))
+                && candidate.Line == resolution.Evidence.StartLine && candidate.EndLine == resolution.Evidence.EndLine);
+        if (page is null || method?.Declaration is not VBSyntax.MethodBlockBaseSyntax visualBasicMethod)
+        {
+            return [];
+        }
+
+        var facts = new List<CodeFact>();
+        var surfaceIdentity = SurfaceIdentity(page.FilePath);
+        var supportingFactIds = string.Join(",", resolutions.Select(fact => fact.FactId).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal));
+        foreach (var invocation in visualBasicMethod.DescendantNodes().OfType<VBSyntax.InvocationExpressionSyntax>())
+        {
+            var invocationName = invocation.Expression switch
+            {
+                VBSyntax.IdentifierNameSyntax identifier => identifier.Identifier.ValueText,
+                VBSyntax.MemberAccessExpressionSyntax member => member.Name.Identifier.ValueText,
+                _ => string.Empty
+            };
+            if (invocationName.Equals("Redirect", StringComparison.OrdinalIgnoreCase)
+                && invocation.Expression is VBSyntax.MemberAccessExpressionSyntax redirectMember
+                && redirectMember.Expression.ToString().EndsWith("Response", StringComparison.OrdinalIgnoreCase))
+            {
+                var arguments = invocation.ArgumentList?.Arguments.OfType<VBSyntax.SimpleArgumentSyntax>().ToArray() ?? [];
+                var targetExpression = arguments.FirstOrDefault()?.Expression;
+                var literalTarget = targetExpression is VBSyntax.LiteralExpressionSyntax literal && literal.IsKind(VB.SyntaxKind.StringLiteralExpression)
+                    ? literal.Token.ValueText
+                    : null;
+                var properties = ServerBehaviorProperties(surfaceIdentity, page, handlerName, supportingFactIds, "navigation");
+                properties["navigationKind"] = "response-redirect";
+                properties["targetResolution"] = literalTarget is null ? "dynamic-or-unsupported" : "static-string-literal";
+                if (targetExpression is not null)
+                {
+                    properties["targetExpressionHash"] = FactFactory.Hash(targetExpression.ToString(), 32);
+                }
+                if (literalTarget is not null)
+                {
+                    properties["targetValueHash"] = FactFactory.Hash(literalTarget, 32);
+                    properties["targetValueLength"] = literalTarget.Length.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                }
+                properties["endResponse"] = arguments.Length > 1 && arguments[1].Expression.IsKind(VB.SyntaxKind.FalseLiteralExpression)
+                    ? "false"
+                    : arguments.Length > 1 && arguments[1].Expression.IsKind(VB.SyntaxKind.TrueLiteralExpression) ? "true" : "unknown";
+                facts.Add(CreateServerBehaviorFact(manifest, FactTypes.WebFormsServerNavigationCandidate, invocation, method.FilePath, surfaceIdentity, handlerName, properties));
+            }
+            else if (invocationName.Equals("CompleteRequest", StringComparison.OrdinalIgnoreCase)
+                && invocation.Expression is VBSyntax.MemberAccessExpressionSyntax completeRequestMember
+                && completeRequestMember.Expression.ToString().EndsWith("ApplicationInstance", StringComparison.OrdinalIgnoreCase))
+            {
+                var properties = ServerBehaviorProperties(surfaceIdentity, page, handlerName, supportingFactIds, "request-lifecycle");
+                properties["lifecycleOperation"] = "complete-request";
+                facts.Add(CreateServerBehaviorFact(manifest, FactTypes.WebFormsRequestLifecycleCandidate, invocation, method.FilePath, surfaceIdentity, handlerName, properties));
+            }
+        }
+
+        foreach (var assignment in visualBasicMethod.DescendantNodes().OfType<VBSyntax.AssignmentStatementSyntax>())
+        {
+            if (assignment.Left is not VBSyntax.MemberAccessExpressionSyntax member
+                || !ServerControlStateMemberNames.Contains(member.Name.Identifier.ValueText))
+            {
+                continue;
+            }
+            var receiver = VisualBasicReceiverName(member.Expression);
+            var controls = page.Controls.Where(control => control.ControlId.Equals(receiver, StringComparison.OrdinalIgnoreCase)).ToArray();
+            var targetResolution = controls.Length == 1 ? "same-surface-control" : controls.Length == 0 ? "unresolved" : "ambiguous";
+            var targetIdentity = controls.Length == 1 ? ControlIdentity(surfaceIdentity, controls[0]) : null;
+            var properties = ServerBehaviorProperties(surfaceIdentity, page, handlerName, supportingFactIds, "control-state-mutation");
+            properties["controlId"] = SafeIdentifier(receiver) ?? "unresolved";
+            properties["stateMember"] = member.Name.Identifier.ValueText.ToLowerInvariant();
+            properties["targetResolution"] = targetResolution;
+            properties["valueExpressionHash"] = FactFactory.Hash(assignment.Right.ToString(), 32);
+            AddVisualBasicBranchContext(properties, assignment);
+            facts.Add(CreateServerBehaviorFact(manifest, FactTypes.WebFormsServerControlStateMutationCandidate, assignment, method.FilePath, surfaceIdentity, targetIdentity ?? handlerName, properties));
+        }
+        return facts;
+    }
+
+    private static SortedDictionary<string, string> ServerBehaviorProperties(
+        string surfaceIdentity,
+        WebFormsPage page,
+        string handlerName,
+        string supportingFactIds,
+        string behaviorKind) => new(StringComparer.Ordinal)
+    {
+        ["behaviorKind"] = behaviorKind,
+        ["coverageLabel"] = "reduced-static-webforms-server-behavior",
+        ["handlerName"] = handlerName,
+        ["markupFile"] = page.FilePath,
+        ["pageTypeName"] = page.PageTypeName,
+        ["ruleLimitations"] = "Projectless VB server behavior is syntax evidence only and does not prove framework receiver identity, branch feasibility, event execution, navigation, request termination, rendered control state, or runtime ordering.",
+        ["supportingFactIds"] = supportingFactIds,
+        ["surfaceIdentity"] = surfaceIdentity
+    };
+
+    private static CodeFact CreateServerBehaviorFact(
+        ScanManifest manifest,
+        string factType,
+        SyntaxNode node,
+        string filePath,
+        string sourceSymbol,
+        string targetSymbol,
+        SortedDictionary<string, string> properties)
+    {
+        var span = node.SyntaxTree.GetLineSpan(node.Span);
+        return FactFactory.Create(
+            manifest,
+            factType,
+            RuleIds.LegacyWebFormsServerBehavior,
+            EvidenceTiers.Tier3SyntaxOrTextual,
+            new EvidenceSpan(filePath, span.StartLinePosition.Line + 1, Math.Max(span.StartLinePosition.Line + 1, span.EndLinePosition.Line + 1), FactFactory.Hash(node.ToString(), 32), "LegacyWebFormsExtractor", ScannerVersions.LegacyWebFormsExtractor),
+            sourceSymbol: sourceSymbol,
+            targetSymbol: targetSymbol,
+            contractElement: properties.GetValueOrDefault("stateMember") ?? properties.GetValueOrDefault("navigationKind") ?? properties.GetValueOrDefault("lifecycleOperation"),
+            properties: properties);
+    }
+
+    private static void AddVisualBasicBranchContext(SortedDictionary<string, string> properties, SyntaxNode node)
+    {
+        var elseIf = node.Ancestors().OfType<VBSyntax.ElseIfBlockSyntax>().FirstOrDefault();
+        if (elseIf is not null)
+        {
+            properties["branchContext"] = "else-if";
+            properties["conditionHash"] = FactFactory.Hash(elseIf.ElseIfStatement.Condition.ToString(), 32);
+            return;
+        }
+        if (node.Ancestors().OfType<VBSyntax.ElseBlockSyntax>().Any())
+        {
+            properties["branchContext"] = "else";
+            return;
+        }
+        var multiLineIf = node.Ancestors().OfType<VBSyntax.MultiLineIfBlockSyntax>().FirstOrDefault();
+        if (multiLineIf is not null)
+        {
+            properties["branchContext"] = "if";
+            properties["conditionHash"] = FactFactory.Hash(multiLineIf.IfStatement.Condition.ToString(), 32);
+            return;
+        }
+        var singleLineIf = node.Ancestors().OfType<VBSyntax.SingleLineIfStatementSyntax>().FirstOrDefault();
+        if (singleLineIf is not null)
+        {
+            properties["branchContext"] = "single-line-if";
+            properties["conditionHash"] = FactFactory.Hash(singleLineIf.Condition.ToString(), 32);
+            return;
+        }
+        properties["branchContext"] = "unconditional";
+    }
+
     private static bool IsDirectHandlerEvidence(CodeFact fact, CodeFact resolution)
     {
         if (fact.FactType is FactTypes.WebFormsHandlerResolved or FactTypes.WebFormsEventBindingDeclared)
@@ -1860,6 +3496,7 @@ public static partial class LegacyWebFormsExtractor
         // A member name is only an index hint, never proof of handler ownership.
         var handlerName = resolution.Properties.GetValueOrDefault("handlerName") ?? resolution.ContractElement ?? string.Empty;
         var handlerSymbol = resolution.Properties.GetValueOrDefault("handlerSymbol") ?? string.Empty;
+        var comparison = IdentifierComparison(IsVisualBasicPath(resolution.Evidence.FilePath));
         var sameFile = fact.Evidence.FilePath.Equals(resolution.Evidence.FilePath, StringComparison.Ordinal);
         if (!sameFile || fact.Evidence.StartLine < resolution.Evidence.StartLine
             || fact.Evidence.EndLine > resolution.Evidence.EndLine)
@@ -1877,27 +3514,72 @@ public static partial class LegacyWebFormsExtractor
 
         if (!string.IsNullOrWhiteSpace(fact.SourceSymbol))
         {
-            if (fact.SourceSymbol.Equals(handlerSymbol, StringComparison.Ordinal)
-                || fact.SourceSymbol.Equals(handlerName, StringComparison.Ordinal))
+            if (fact.SourceSymbol.Equals(handlerSymbol, comparison)
+                || fact.SourceSymbol.Equals(handlerName, comparison)
+                || IsVisualBasicPath(resolution.Evidence.FilePath)
+                    && VisualBasicSyntaxHandlerIdentityEquals(fact.SourceSymbol, handlerSymbol, handlerName))
             {
                 return true;
             }
         }
 
-        if (fact.Properties.GetValueOrDefault("callerSymbol")?.Equals(handlerSymbol, StringComparison.Ordinal) ?? false)
+        if (fact.Properties.GetValueOrDefault("callerSymbol")?.Equals(handlerSymbol, comparison) ?? false)
         {
             return true;
         }
 
+        var callerName = fact.Properties.GetValueOrDefault("callerName");
         return sameFile
-            && ((fact.Properties.GetValueOrDefault("callerName")?.Equals(handlerName, StringComparison.Ordinal) ?? false)
-                || (fact.Properties.GetValueOrDefault("containingMember")?.Equals(handlerName, StringComparison.Ordinal) ?? false)
-                || (fact.Properties.GetValueOrDefault("containingMethod")?.Equals(handlerName, StringComparison.Ordinal) ?? false));
+            && ((callerName?.Equals(handlerName, comparison) ?? false)
+                || IsVisualBasicPath(resolution.Evidence.FilePath)
+                    && VisualBasicSyntaxHandlerIdentityEquals(callerName, handlerSymbol, handlerName)
+                || (fact.Properties.GetValueOrDefault("containingMember")?.Equals(handlerName, comparison) ?? false)
+                || (fact.Properties.GetValueOrDefault("containingMethod")?.Equals(handlerName, comparison) ?? false));
+    }
+
+    private static bool VisualBasicSyntaxHandlerIdentityEquals(string? candidate, string handlerSymbol, string handlerName)
+    {
+        if (string.IsNullOrWhiteSpace(candidate))
+        {
+            return false;
+        }
+
+        if (candidate.Equals(handlerSymbol, StringComparison.OrdinalIgnoreCase)
+            || candidate.Equals(handlerName, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        var normalized = RemoveVisualBasicParameterCountSuffix(candidate);
+        var handlerHasSignature = handlerSymbol.IndexOf('(', StringComparison.Ordinal) > 0;
+        return !handlerHasSignature
+            && VisualBasicMemberIdentityHead(normalized).Equals(
+                VisualBasicMemberIdentityHead(handlerSymbol),
+                StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string VisualBasicMemberIdentityHead(string value)
+    {
+        var normalized = RemoveVisualBasicParameterCountSuffix(value);
+        var signatureStart = normalized.IndexOf('(', StringComparison.Ordinal);
+        return signatureStart > 0 ? normalized[..signatureStart] : normalized;
+    }
+
+    private static string RemoveVisualBasicParameterCountSuffix(string value)
+    {
+        var separator = value.LastIndexOf('/');
+        return separator > 0
+            && separator + 1 < value.Length
+            && value.AsSpan(separator + 1).IndexOfAnyExceptInRange('0', '9') < 0
+                ? value[..separator]
+                : value;
     }
 
     private static bool IsTerminalSurfaceFact(CodeFact fact)
     {
         return fact.FactType is FactTypes.WcfServiceReferenceMapping
+            or FactTypes.AsmxServiceReferenceMapping
+            or FactTypes.DatabaseOperationCandidate
             or FactTypes.SqlTextUsed
             or FactTypes.QueryPatternDetected
             or FactTypes.SqlCommandDetected
@@ -1919,25 +3601,95 @@ public static partial class LegacyWebFormsExtractor
         return context.CodeFiles
             .Where(file => page.LinkedCodePath is null || file.FilePath.Equals(page.LinkedCodePath, StringComparison.Ordinal))
             .SelectMany(file => file.Subscriptions)
-            .Where(subscription => PageTypeMatches(page.PageTypeName, subscription.ContainingTypeName))
+            .Where(subscription => PageTypeMatches(page.PageTypeName, subscription.ContainingTypeName, IsVisualBasicPath(subscription.FilePath)))
             .Any(subscription => EventSubscriptionMatches(subscription, eventMemberName, handlerName));
     }
 
     private static bool EventSubscriptionMatches(WebFormsEventSubscription subscription, string eventMemberName, string handlerName)
     {
-        var left = subscription.EventName;
-        var right = subscription.HandlerName;
-        if (right is null || subscription.ReceiverName is not (null or "this" or "base" or "Page"))
+        if (!subscription.IsAttach || subscription.ReceiverMayBeShadowed)
         {
             return false;
         }
-        return (left.Equals(eventMemberName, StringComparison.Ordinal)
-                || left.EndsWith("." + eventMemberName, StringComparison.Ordinal))
-            && (right.Equals(handlerName, StringComparison.Ordinal)
-                || right.EndsWith("." + handlerName, StringComparison.Ordinal));
+
+        var left = subscription.EventName;
+        var right = subscription.HandlerName;
+        var isVisualBasic = IsVisualBasicPath(subscription.FilePath);
+        if (right is null || subscription.ReceiverName is not null
+            && !IdentifierEquals(subscription.ReceiverName, "this", isVisualBasic)
+            && !IdentifierEquals(subscription.ReceiverName, "base", isVisualBasic)
+            && !IdentifierEquals(subscription.ReceiverName, "Page", isVisualBasic))
+        {
+            return false;
+        }
+        var comparison = IdentifierComparison(isVisualBasic);
+        return (left.Equals(eventMemberName, comparison)
+                || left.EndsWith("." + eventMemberName, comparison))
+            && (right.Equals(handlerName, comparison)
+                || right.EndsWith("." + handlerName, comparison));
     }
 
-    private static IEnumerable<CodeFact> WcfMappingsForCalls(IReadOnlyList<CodeFact> wcfMappings, IReadOnlyList<CodeFact> directFacts)
+    private static bool HasRejectingVisualBasicEventGap(
+        WebFormsEventSubscription subscription,
+        WebFormsEvidenceIndex evidenceIndex)
+    {
+        return evidenceIndex.FactsForFile(subscription.FilePath).Any(fact =>
+            fact.FactType == FactTypes.AnalysisGap
+            && fact.RuleId == RuleIds.VisualBasicSemanticEventWiring
+            && fact.Evidence.StartLine == subscription.Line
+            && fact.Properties.GetValueOrDefault("siteHash")?.Equals(subscription.SnippetHash, StringComparison.Ordinal) == true
+            && fact.Properties.GetValueOrDefault("gapKind") is "UnsupportedVisualBasicEventHandlerDelegate" or "InvalidVisualBasicHandlesBinding");
+    }
+
+    private static bool VisualBasicReceiverMatchesControl(
+        WebFormsEventSubscription subscription,
+        WebFormsControl control,
+        WebFormsPage page,
+        WebFormsContext context,
+        WebFormsEvidenceIndex evidenceIndex)
+    {
+        var semanticBinding = evidenceIndex.FactsForFile(subscription.FilePath).FirstOrDefault(fact =>
+            fact.FactType == FactTypes.VisualBasicEventBindingDeclared
+            && fact.RuleId == RuleIds.VisualBasicSemanticEventWiring
+            && fact.Evidence.StartLine == subscription.Line
+            && fact.Evidence.SnippetHash?.Equals(subscription.SnippetHash, StringComparison.Ordinal) == true);
+        var receiverTypeName = semanticBinding?.Properties.GetValueOrDefault("receiverTypeName");
+        if (string.IsNullOrWhiteSpace(receiverTypeName))
+        {
+            return true;
+        }
+
+        var designerTypes = context.Designers
+            .Where(field => field.MarkupFilePath.Equals(page.FilePath, StringComparison.Ordinal)
+                && IdentifierEquals(field.FieldName, control.ControlId, true))
+            .Select(field => field.ControlType)
+            .Where(type => !string.IsNullOrWhiteSpace(type))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        if (designerTypes.Length == 1)
+        {
+            var receiverTypeDisplayName = semanticBinding!.Properties.GetValueOrDefault("receiverTypeDisplayName") ?? receiverTypeName;
+            return VisualBasicTypeNameMatches(receiverTypeDisplayName, designerTypes[0]);
+        }
+
+        return IdentifierEquals(receiverTypeName, control.ControlType, true);
+    }
+
+    private static bool VisualBasicTypeNameMatches(string left, string right)
+    {
+        static string Normalize(string value) => value.StartsWith("Global.", StringComparison.OrdinalIgnoreCase)
+            ? value["Global.".Length..]
+            : value;
+        left = Normalize(left);
+        right = Normalize(right);
+        return left.Equals(right, StringComparison.OrdinalIgnoreCase)
+            || (!left.Contains('.', StringComparison.Ordinal)
+                && left.Equals(right[(right.LastIndexOf('.') + 1)..], StringComparison.OrdinalIgnoreCase))
+            || (!right.Contains('.', StringComparison.Ordinal)
+                && right.Equals(left[(left.LastIndexOf('.') + 1)..], StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static IEnumerable<CodeFact> ServiceMappingsForCalls(IReadOnlyList<CodeFact> serviceMappings, IReadOnlyList<CodeFact> directFacts)
     {
         var clientSymbols = directFacts
             .Where(fact => fact.FactType == FactTypes.CallEdge)
@@ -1951,7 +3703,7 @@ public static partial class LegacyWebFormsExtractor
             .Select(value => value!)
             .ToHashSet(StringComparer.Ordinal);
 
-        return wcfMappings.Where(fact => !string.IsNullOrWhiteSpace(fact.SourceSymbol)
+        return serviceMappings.Where(fact => !string.IsNullOrWhiteSpace(fact.SourceSymbol)
             && clientSymbols.Contains(fact.SourceSymbol));
     }
 
@@ -1960,6 +3712,7 @@ public static partial class LegacyWebFormsExtractor
         IReadOnlyList<CodeFact> existingFacts,
         IReadOnlySet<string>? allowedProjectPaths = null)
     {
+        var comparison = IdentifierComparison(IsVisualBasicMethod(method));
         return existingFacts
             .Where(fact => fact.EvidenceTier == EvidenceTiers.Tier1Semantic
                 && fact.Evidence.FilePath.Equals(method.FilePath, StringComparison.Ordinal)
@@ -1967,13 +3720,23 @@ public static partial class LegacyWebFormsExtractor
                     || (!string.IsNullOrWhiteSpace(fact.ProjectPath) && allowedProjectPaths.Contains(fact.ProjectPath)))
                 && fact.Evidence.StartLine >= method.Line
                 && fact.Evidence.StartLine <= method.EndLine
-                && !string.IsNullOrWhiteSpace(fact.SourceSymbol)
-                && !string.IsNullOrWhiteSpace(fact.Properties.GetValueOrDefault("sourceSymbolId"))
-                && (fact.SourceSymbol.EndsWith("." + method.MethodName, StringComparison.Ordinal)
-                    || fact.SourceSymbol.Contains("." + method.MethodName + "(", StringComparison.Ordinal)))
+                && !string.IsNullOrWhiteSpace(SemanticHandlerSymbol(fact))
+                && !string.IsNullOrWhiteSpace(SemanticHandlerSymbolId(fact))
+                && (SemanticHandlerSymbol(fact)!.EndsWith("." + method.MethodName, comparison)
+                    || SemanticHandlerSymbol(fact)!.Contains("." + method.MethodName + "(", comparison)))
             .OrderBy(fact => fact.FactId, StringComparer.Ordinal)
             .FirstOrDefault();
     }
+
+    private static string? SemanticHandlerSymbol(CodeFact? fact) => fact is null
+        ? null
+        : fact.FactType == FactTypes.MethodDeclared ? fact.TargetSymbol : fact.SourceSymbol;
+
+    private static string? SemanticHandlerSymbolId(CodeFact? fact) => fact is null
+        ? null
+        : fact.FactType == FactTypes.MethodDeclared
+            ? fact.Properties.GetValueOrDefault("targetSymbolId")
+            : fact.Properties.GetValueOrDefault("sourceSymbolId");
 
     private static IReadOnlySet<string> FindLinkedProjectPaths(
         WebFormsPage page,
@@ -1987,21 +3750,36 @@ public static partial class LegacyWebFormsExtractor
         return evidenceIndex.ProjectPathsForFile(page.LinkedCodePath);
     }
 
-    private static CodeFact CreateGap(ScanManifest manifest, string filePath, int line, string gapKind, string message)
+    private static CodeFact CreateGap(
+        ScanManifest manifest,
+        string filePath,
+        int line,
+        string gapKind,
+        string message,
+        IReadOnlyList<string>? supportingFactIds = null,
+        IReadOnlyDictionary<string, string>? metadata = null)
     {
+        var properties = new SortedDictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["coverageLabel"] = "reduced-static-webforms-evidence",
+            ["gapKind"] = gapKind,
+            ["message"] = message,
+            ["ruleLimitations"] = "WebForms gaps preserve reduced static evidence and are not proof of absence."
+        };
+        if (supportingFactIds is { Count: > 0 })
+            properties["supportingFactIds"] = string.Join(",", supportingFactIds.Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal));
+        foreach (var item in metadata ?? new Dictionary<string, string>())
+        {
+            if (!string.IsNullOrWhiteSpace(item.Value)) properties[item.Key] = item.Value;
+        }
+
         return FactFactory.Create(
             manifest,
             FactTypes.AnalysisGap,
             RuleIdForGapKind(gapKind),
             EvidenceTiers.Tier4Unknown,
             new EvidenceSpan(filePath, line, line, null, "LegacyWebFormsExtractor", ScannerVersions.LegacyWebFormsExtractor),
-            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
-            {
-                ["coverageLabel"] = "reduced-static-webforms-evidence",
-                ["gapKind"] = gapKind,
-                ["message"] = message,
-                ["ruleLimitations"] = "WebForms gaps preserve reduced static evidence and are not proof of absence."
-            });
+            properties: properties);
     }
 
     private static string RuleIdForGapKind(string gapKind)
@@ -2018,7 +3796,8 @@ public static partial class LegacyWebFormsExtractor
                 or "WebFormsAssemblyTypeUnavailable" or "WebFormsAssemblyProjectUnavailable" => RuleIds.LegacyWebFormsComposition,
             "UnsupportedWebFormsEventAttribute" or "ClientWebFormsEventAttribute" or "NonIdentifierWebFormsEventValue" or "DynamicWebFormsEventSubscription"
                 or "UnsupportedWebFormsEventSubscription" or "UnknownWebFormsEventSubscriptionReceiver"
-                or "AmbiguousWebFormsEventSubscriptionReceiver" => RuleIds.LegacyWebFormsEventBinding,
+                or "AmbiguousWebFormsEventSubscriptionReceiver"
+                or "AmbiguousVisualBasicWebFormsEventSubscriptionReceiver" => RuleIds.LegacyWebFormsEventBinding,
             "UnsupportedWebFormsIsPostBackCondition" or "AmbiguousWebFormsIsPostBackReceiver" => RuleIds.LegacyWebFormsLifecycleContext,
             "DynamicWebFormsClientScriptRegistration" or "AmbiguousWebFormsClientScriptRegistrationReceiver" => RuleIds.LegacyWebFormsClientScript,
             "UnresolvedWebFormsPostBackTarget" or "AmbiguousWebFormsPostBackTarget"
@@ -2135,7 +3914,8 @@ public static partial class LegacyWebFormsExtractor
 
     private static bool IsInsideNotPostBackTrueBranch(SyntaxNode node, WebFormsMethod method)
     {
-        if (HasLocalIsPostBackShadow(method.Declaration))
+        if (method.Declaration is not MethodDeclarationSyntax csharpMethod
+            || HasLocalIsPostBackShadow(csharpMethod))
         {
             return false;
         }
@@ -2279,7 +4059,7 @@ public static partial class LegacyWebFormsExtractor
         return source.Lines.GetLineFromPosition(position).LineNumber + 1;
     }
 
-    private static bool PageTypeMatches(string pageTypeName, string? methodTypeName)
+    private static bool PageTypeMatches(string pageTypeName, string? methodTypeName, bool visualBasic = false)
     {
         if (string.IsNullOrWhiteSpace(methodTypeName))
         {
@@ -2288,13 +4068,19 @@ public static partial class LegacyWebFormsExtractor
 
         pageTypeName = pageTypeName.StartsWith("global::", StringComparison.Ordinal) ? pageTypeName[8..] : pageTypeName;
         methodTypeName = methodTypeName.StartsWith("global::", StringComparison.Ordinal) ? methodTypeName[8..] : methodTypeName;
+        if (visualBasic)
+        {
+            pageTypeName = pageTypeName.StartsWith("Global.", StringComparison.OrdinalIgnoreCase) ? pageTypeName[7..] : pageTypeName;
+            methodTypeName = methodTypeName.StartsWith("Global.", StringComparison.OrdinalIgnoreCase) ? methodTypeName[7..] : methodTypeName;
+        }
 
-        return methodTypeName.Equals(pageTypeName, StringComparison.Ordinal)
-            || methodTypeName.EndsWith("." + pageTypeName, StringComparison.Ordinal)
-            || pageTypeName.EndsWith("." + methodTypeName, StringComparison.Ordinal);
+        var comparison = IdentifierComparison(visualBasic);
+        return methodTypeName.Equals(pageTypeName, comparison)
+            || methodTypeName.EndsWith("." + pageTypeName, comparison)
+            || pageTypeName.EndsWith("." + methodTypeName, comparison);
     }
 
-    private static bool SemanticHandlerTypeMatches(string pageTypeName, string? sourceSymbol, string methodName)
+    private static bool SemanticHandlerTypeMatches(string pageTypeName, string? sourceSymbol, string methodName, bool visualBasic = false)
     {
         if (string.IsNullOrWhiteSpace(sourceSymbol))
         {
@@ -2302,8 +4088,30 @@ public static partial class LegacyWebFormsExtractor
         }
 
         var marker = "." + methodName + "(";
-        var markerIndex = sourceSymbol.LastIndexOf(marker, StringComparison.Ordinal);
-        return markerIndex > 0 && PageTypeMatches(pageTypeName, sourceSymbol[..markerIndex]);
+        var markerIndex = sourceSymbol.LastIndexOf(marker, IdentifierComparison(visualBasic));
+        return markerIndex > 0 && PageTypeMatches(pageTypeName, sourceSymbol[..markerIndex], visualBasic);
+    }
+
+    private static bool IsVisualBasicMethod(WebFormsMethod method) => method.Declaration is VBSyntax.MethodBlockBaseSyntax;
+
+    private static bool IsVisualBasicPath(string path) => Path.GetExtension(path).Equals(".vb", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsVisualBasicPage(WebFormsPage page) =>
+        new[] { page.LinkedCodePath, page.CodeBehindPath, page.CodeFilePath }
+            .Any(path => path is not null && IsVisualBasicPath(path));
+
+    private static StringComparison IdentifierComparison(bool visualBasic) =>
+        visualBasic ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+
+    private static bool IdentifierEquals(string? left, string? right, bool visualBasic) =>
+        left is not null && right is not null && left.Equals(right, IdentifierComparison(visualBasic));
+
+    private static bool TryCanonicalSupportedEvent(string candidate, bool visualBasic, out string canonical)
+    {
+        canonical = visualBasic
+            ? SupportedEvents.SingleOrDefault(item => item.Equals(candidate, StringComparison.OrdinalIgnoreCase)) ?? string.Empty
+            : SupportedEvents.Contains(candidate) ? candidate : string.Empty;
+        return canonical.Length > 0;
     }
 
     private static string QualifiedClassName(ClassDeclarationSyntax? classDeclaration)
@@ -2334,9 +4142,9 @@ public static partial class LegacyWebFormsExtractor
         return string.Join(".", names);
     }
 
-    private static string SurfaceFieldKey(string markupFilePath, string fieldName)
+    private static string SurfaceFieldKey(string markupFilePath, string fieldName, bool visualBasic = false)
     {
-        return $"{SurfaceIdentity(markupFilePath)}|{fieldName}";
+        return $"{SurfaceIdentity(markupFilePath)}|{(visualBasic ? fieldName.ToUpperInvariant() : fieldName)}";
     }
 
     private static string SurfaceIdentity(string markupFilePath)
@@ -2367,10 +4175,10 @@ public static partial class LegacyWebFormsExtractor
 
     private static string MarkupPathForDesigner(string designerPath)
     {
-        const string suffix = ".designer.cs";
-        return designerPath.EndsWith(suffix, StringComparison.OrdinalIgnoreCase)
-            ? designerPath[..^suffix.Length]
-            : designerPath;
+        var suffix = designerPath.EndsWith(".designer.vb", StringComparison.OrdinalIgnoreCase)
+            ? ".designer.vb"
+            : ".designer.cs";
+        return designerPath.EndsWith(suffix, StringComparison.OrdinalIgnoreCase) ? designerPath[..^suffix.Length] : designerPath;
     }
 
     private static IReadOnlyList<WebFormsUserControlRegistration> ParseUserControlRegistrations(
@@ -2706,9 +4514,14 @@ public static partial class LegacyWebFormsExtractor
 
     private static string TerminalSurfaceKind(CodeFact fact)
     {
+        var operationKind = fact.Properties.GetValueOrDefault("operationKind");
         return fact.FactType switch
         {
             FactTypes.WcfServiceReferenceMapping => "wcf-operation",
+            FactTypes.AsmxServiceReferenceMapping => "asmx-client",
+            FactTypes.DatabaseOperationCandidate when operationKind is "data-adapter-fill" or "select-candidate" or "scalar-candidate" => "sql-query",
+            FactTypes.DatabaseOperationCandidate when operationKind is "insert-candidate" or "update-candidate" or "delete-candidate"
+                or "execute-candidate" or "save-boundary" or "transaction-begin" or "transaction-commit" or "transaction-rollback" => "sql-persistence",
             FactTypes.SqlTextUsed or FactTypes.QueryPatternDetected or FactTypes.SqlCommandDetected or FactTypes.DapperCallDetected => "sql-query",
             FactTypes.HttpCallDetected => "http-client",
             _ => "dependency-surface"
@@ -2772,6 +4585,9 @@ public static partial class LegacyWebFormsExtractor
     [GeneratedRegex(@"<%@\s*(?<kind>Page|Control|Master)\b(?<attrs>.*?)%>", RegexOptions.IgnoreCase | RegexOptions.Singleline)]
     private static partial Regex DirectiveRegex();
 
+    [GeneratedRegex(@"<%@\s*WebHandler\b(?<attrs>.*?)%>", RegexOptions.IgnoreCase | RegexOptions.Singleline)]
+    private static partial Regex WebHandlerDirectiveRegex();
+
     [GeneratedRegex(@"<%@\s*Register\b(?<attrs>.*?)%>", RegexOptions.IgnoreCase | RegexOptions.Singleline)]
     private static partial Regex RegisterDirectiveRegex();
 
@@ -2801,6 +4617,45 @@ public static partial class LegacyWebFormsExtractor
 
     [GeneratedRegex(@"(?<![A-Za-z0-9_$.])__doPostBack\s*\(", RegexOptions.IgnoreCase | RegexOptions.Singleline)]
     private static partial Regex PostBackInvocationRegex();
+
+    [GeneratedRegex("""<script\b(?<attrs>[^>]*)>(?<body>.*?)</script\s*>""", RegexOptions.IgnoreCase | RegexOptions.Singleline)]
+    private static partial Regex InlineScriptBlockRegex();
+
+    [GeneratedRegex("""\$\(\s*(?<quote>["'])(?<selector>[^"'\r\n]{1,256})\k<quote>\s*\)\s*\.(?:(?:on)\s*\(\s*(?<eventQuote>["'])(?<onEvent>click|keyup|change|input|submit)\k<eventQuote>\s*,|(?<shortcutEvent>click|keyup|change|input|submit)\s*\()\s*function\s*\(\s*(?:[A-Za-z_$][A-Za-z0-9_$]*)?\s*\)\s*\{""", RegexOptions.IgnoreCase | RegexOptions.Singleline)]
+    private static partial Regex JQueryClientEventBindingRegex();
+
+    [GeneratedRegex("""\$\(\s*(?:(?<this>this)|(?<quote>["'])(?<selector>[^"'\r\n]{1,256})\k<quote>)\s*\)(?<calls>[^;\r\n]{0,1024});""", RegexOptions.IgnoreCase)]
+    private static partial Regex JQueryStatementRegex();
+
+    [GeneratedRegex(@"\.(?<method>show|hide|addClass|removeClass|prop|attr|text)\s*\(", RegexOptions.IgnoreCase)]
+    private static partial Regex JQueryMutationMethodRegex();
+
+    [GeneratedRegex(@"\b(?:var|let|const)\s+(?<name>max(?:imum)?length)\s*=\s*(?<value>[1-9][0-9]{0,5})\s*;", RegexOptions.IgnoreCase)]
+    private static partial Regex ClientMaximumLengthRegex();
+
+    [GeneratedRegex(@"^[A-Za-z_][A-Za-z0-9_:\-]{0,127}$")]
+    private static partial Regex ClientSelectorTokenRegex();
+
+    [GeneratedRegex(@"<%(?<marker>=|#)\s*(?<body>.*?)%>", RegexOptions.Singleline)]
+    private static partial Regex InlineServerExpressionRegex();
+
+    [GeneratedRegex(@"\b[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)+\b")]
+    private static partial Regex QualifiedIdentifierReferenceRegex();
+
+    [GeneratedRegex(@"\$\s*\.\s*ajax\s*\(\s*\{", RegexOptions.IgnoreCase)]
+    private static partial Regex JQueryAjaxStartRegex();
+
+    [GeneratedRegex("""(?<name>type|method|url|contentType|dataType)\s*:\s*(?<quote>["'])(?<value>[^"'\r\n]{0,512})\k<quote>""", RegexOptions.IgnoreCase)]
+    private static partial Regex JavascriptLiteralPropertyRegex();
+
+    [GeneratedRegex(@"\b(?<kind>success|error|fail|complete)\s*:\s*function\b", RegexOptions.IgnoreCase)]
+    private static partial Regex JavascriptCallbackPropertyRegex();
+
+    [GeneratedRegex(@"^(?:ctl[0-9]+_)+|ContentPlaceHolder", RegexOptions.IgnoreCase)]
+    private static partial Regex GeneratedWebFormsClientIdRegex();
+
+    [GeneratedRegex("""^\[\s*id\s*(?<operator>[*$])=\s*(?:["'])?(?<target>[A-Za-z_][A-Za-z0-9_:\-]{0,127})(?:["'])?\s*\]$""", RegexOptions.IgnoreCase)]
+    private static partial Regex ClientGeneratedIdSelectorRegex();
 
     private sealed class WebFormsEvidenceIndex(
         IReadOnlyDictionary<string, IReadOnlyList<CodeFact>> factsByFile,
@@ -2868,8 +4723,17 @@ public static partial class LegacyWebFormsExtractor
                 return null;
             }
 
+            sourceSymbol = RemoveVisualBasicParameterCountSuffix(sourceSymbol);
             var signatureStart = sourceSymbol.IndexOf('(', StringComparison.Ordinal);
             var memberEnd = signatureStart >= 0 ? signatureStart : sourceSymbol.Length;
+            if (memberEnd == 0)
+            {
+                // Symbol text that begins with its own signature (for example a
+                // Visual Basic anonymous-method display of "()") has no derivable
+                // member name; it joins only by its full symbol text.
+                return null;
+            }
+
             var separator = sourceSymbol.LastIndexOf('.', memberEnd - 1, memberEnd);
             return separator >= 0 && separator + 1 < memberEnd
                 ? sourceSymbol[(separator + 1)..memberEnd]
@@ -3187,7 +5051,8 @@ public static partial class LegacyWebFormsExtractor
         int? ControlLine,
         string? SnippetHash,
         WebFormsBindingKind BindingKind,
-        int? SyntaxSpanStart = null);
+        int? SyntaxSpanStart = null,
+        string? WiringKind = null);
 
     private enum WebFormsBindingKind
     {
@@ -3198,7 +5063,12 @@ public static partial class LegacyWebFormsExtractor
         ExplicitControlSubscription
     }
 
-    private sealed record WebFormsGap(string GapKind, string Message, int Line, string? FilePath = null);
+    private sealed record WebFormsGap(
+        string GapKind,
+        string Message,
+        int Line,
+        string? FilePath = null,
+        IReadOnlyDictionary<string, string>? Metadata = null);
 
     private sealed record WebFormsCodeFile(
         string FilePath,
@@ -3213,7 +5083,10 @@ public static partial class LegacyWebFormsExtractor
         string? HandlerName,
         int Line,
         string SnippetHash,
-        int SyntaxSpanStart);
+        int SyntaxSpanStart,
+        string WiringKind,
+        bool IsAttach,
+        bool ReceiverMayBeShadowed = false);
 
     private sealed record WebFormsMethod(
         string FilePath,
@@ -3222,7 +5095,23 @@ public static partial class LegacyWebFormsExtractor
         int Line,
         int EndLine,
         bool HasCommonEventSignature,
-        MethodDeclarationSyntax Declaration);
+        SyntaxNode Declaration);
+
+    private sealed record ClientSelector(
+        string Kind,
+        string? Target,
+        string? ControlId,
+        bool GeneratedClientIdDependency,
+        string Resolution,
+        int StaticTargetCount);
+
+    private sealed record ClientEventContext(
+        string Identity,
+        string FactId,
+        ClientSelector Selector,
+        string EventName,
+        int OpenBrace,
+        int CloseBrace);
 
     private sealed record WebFormsDesignerField(
         string FilePath,

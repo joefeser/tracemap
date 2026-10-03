@@ -38,9 +38,28 @@ try {
     catch { $disabled = $_.Exception.Message -like '*disabled*' }
     if (-not $disabled) { throw 'Depth 12 was not disabled.' }
     $disabled = $false
+    try { & (Join-Path $scripts 'Invoke-FocusedWebFormsPageListReport.ps1') -IndexPath $reports[0] -PageListPath $reports[1] -OutputDirectory (Join-Path $temp 'out') -MaxDepth 10 }
+    catch { $disabled = $_.Exception.Message -like '*bounded targeted depth-10 diagnostic*' }
+    if (-not $disabled) { throw 'Depth 10 was not restricted to targeted diagnostic mode.' }
+    $threePageList = Join-Path $temp 'three-pages.txt'
+    [IO.File]::WriteAllLines($threePageList, @('one.aspx','two.aspx','three.aspx'), [Text.UTF8Encoding]::new($false))
+    $disabled = $false
+    try { & (Join-Path $scripts 'Invoke-FocusedWebFormsPageListReport.ps1') -IndexPath $reports[0] -PageListPath $threePageList -OutputDirectory (Join-Path $temp 'out') -MaxDepth 10 -TargetedDepthDiagnostic }
+    catch { $disabled = $_.Exception.Message -like '*one or two selected pages*' }
+    if (-not $disabled) { throw 'Targeted depth 10 accepted more than two pages.' }
+    $disabled = $false
     try { & (Join-Path $scripts 'Compare-FocusedWebFormsDepth.ps1') }
     catch { $disabled = $_.Exception.Message -like '*disabled*' }
     if (-not $disabled) { throw 'Automatic comparison was not disabled.' }
+
+    $targetedDiagnosticScript = [IO.File]::ReadAllText((Join-Path $scripts 'Invoke-FocusedWebFormsTargetedDepthDiagnostic.ps1'))
+    $diagnosticOutputMarker = '-OutputDirectory $outputDirectory'
+    $baselineOutputMarker = '-OutputDirectory $baselineOutputDirectory'
+    $diagnosticOutputIndex = $targetedDiagnosticScript.IndexOf($diagnosticOutputMarker, [StringComparison]::Ordinal)
+    $baselineOutputIndex = $targetedDiagnosticScript.IndexOf($baselineOutputMarker, [StringComparison]::Ordinal)
+    if ($diagnosticOutputIndex -lt 0 -or $baselineOutputIndex -lt 0 -or $diagnosticOutputIndex -gt $baselineOutputIndex) {
+        throw 'Depth-10 output must be generated before its depth-8 child output.'
+    }
     Write-Host 'PASS summaries and unsafe-depth launch rejection'
 }
 finally {

@@ -80,9 +80,10 @@ public static class WebFormsAgentEvidenceHandoff
     public const string RuleId = "diagnostic.webforms.agent-evidence-handoff.v1";
     private const int MaximumCaseHandoffBytes = 4 * 1024 * 1024;
     private const long MaximumIndexBytes = 16L * 1024 * 1024 * 1024;
-    private const long MaximumCorpusJsonLinesBytes = 256L * 1024 * 1024;
+    internal const long MaximumCorpusManifestBytes = 64L * 1024 * 1024;
+    internal const long MaximumCorpusJsonLinesBytes = 2L * 1024 * 1024 * 1024;
     private const int MaximumCorpusLines = 100_000;
-    private const int MaximumCorpusLineCharacters = 4 * 1024 * 1024;
+    internal const int MaximumCorpusLineCharacters = 128 * 1024 * 1024;
     private const int MaximumHintsPerCase = 128;
     private const int MaximumRecommendedChunksPerCase = 32;
     private static readonly StringComparison PathComparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
@@ -374,6 +375,21 @@ public static class WebFormsAgentEvidenceHandoff
         return Convert.ToHexString(SHA256.HashData(stream)).ToLowerInvariant();
     }
 
+    public static void ValidateEvidenceCorpus(string corpusRoot, string scanId, string commitSha, string packetId)
+    {
+        _ = ReadCorpus(corpusRoot, Path.GetFullPath(corpusRoot), scanId, commitSha, []);
+        var manifestPath = BoundedCorpusFile(Path.TrimEndingDirectorySeparator(Path.GetFullPath(corpusRoot)), "manifest.json", MaximumCorpusManifestBytes);
+        var manifestText = File.ReadAllText(manifestPath);
+        var manifest = JsonSerializer.Deserialize<EvidenceDocsManifest>(manifestText, JsonOptions)
+            ?? throw new InvalidDataException("AgentHandoffCorpusSchemaMismatch");
+        var packetHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(packetId))).ToLowerInvariant()[..24];
+        if (!manifest.Inputs.Any(input => input.Kind == "webforms-modernization-packet"
+                && input.Identity == $"packet:{packetHash}"
+                && input.SchemaVersion == WebFormsModernizationPacketReporter.SchemaVersion
+                && input.Compatibility == "compatible"))
+            throw new InvalidDataException("AgentHandoffCorpusProvenanceMismatch");
+    }
+
     private static IReadOnlyList<WebFormsHandoffEvidenceReference> ReadEvidence(JsonElement selectedCase)
     {
         var values = new List<WebFormsHandoffEvidenceReference>();
@@ -570,7 +586,7 @@ public static class WebFormsAgentEvidenceHandoff
                 "Supply -EvidenceDocsRoot to resolve corpus selectors to exact generated chunk IDs."), empty);
         var root = Path.TrimEndingDirectorySeparator(Path.GetFullPath(corpusRoot));
         if (!Directory.Exists(root)) throw new InvalidDataException("AgentHandoffCorpusUnavailable");
-        var manifestPath = BoundedCorpusFile(root, "manifest.json", 16L * 1024 * 1024);
+        var manifestPath = BoundedCorpusFile(root, "manifest.json", MaximumCorpusManifestBytes);
         var recipesPath = BoundedCorpusFile(root, "query-recipes.json", 4L * 1024 * 1024);
         var chunksPath = BoundedCorpusFile(root, "chunks.jsonl", MaximumCorpusJsonLinesBytes);
         var manifestText = File.ReadAllText(manifestPath);
@@ -648,7 +664,6 @@ public static class WebFormsAgentEvidenceHandoff
             }
             if (!SafeChunkTokenPattern.IsMatch(chunk.ChunkId) || !SafeChunkTokenPattern.IsMatch(chunk.ChunkFamily) || !SafeChunkTokenPattern.IsMatch(chunk.ChunkType))
                 throw new InvalidDataException("AgentHandoffCorpusSchemaMismatch");
-            if (chunk.SupportingIds.Count > 2048) throw new InvalidDataException("AgentHandoffCorpusLimit");
             var chunkSupports = chunk.SupportingIds.ToHashSet(StringComparer.Ordinal);
             var chunkHints = chunk.RetrievalHints.Select(HintIdentity).ToHashSet(StringComparer.Ordinal);
             var belongsToSnapshot = chunk.SourceRefs.Any(source => string.Equals(source.ScanId, scanId, StringComparison.Ordinal)
@@ -738,7 +753,8 @@ public static class WebFormsAgentEvidenceHandoff
         var path = Path.GetFullPath(Path.Combine(root, name));
         if (!string.Equals(Path.GetDirectoryName(path), root, PathComparison)) throw new InvalidDataException("AgentHandoffCorpusUnavailable");
         var info = new FileInfo(path);
-        if (!info.Exists || info.Length is < 1 || info.Length > maximumBytes) throw new InvalidDataException("AgentHandoffCorpusUnavailable");
+        if (!info.Exists || info.Length < 1) throw new InvalidDataException("AgentHandoffCorpusUnavailable");
+        if (info.Length > maximumBytes) throw new InvalidDataException("AgentHandoffCorpusLimit");
         return path;
     }
 

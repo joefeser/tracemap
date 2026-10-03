@@ -5,7 +5,17 @@ on:
     paths:
       - ".github/workflows/local-distribution-validation.yml"
       - "scripts/smoke-local-distribution.ps1"
+      - "scripts/Invoke-ExistingWebFormsPublishProof.ps1"
+      - "scripts/tests/Test-ExistingWebFormsPublishProof.ps1"
+      - "scripts/tests/Test-FocusedWebFormsOutputSafety.ps1"
+      - "scripts/Invoke-FocusedWebFormsPipeline.ps1"
+      - "scripts/webforms-review/FocusedWebFormsPipelineConfig.ps1"
       - "src/dotnet/**"
+      - "samples/compiled-dotnet-evidence/**"
+      - "rules/rule-catalog.yml"
+      - ".kiro/specs/compiled-dotnet-evidence-foundation/**"
+      - "docs/DOTNET_COMPLETENESS_STATUS.md"
+      - "docs/VALIDATION.md"
       - "docs/LOCAL_DISTRIBUTION.md"
       - "docs/LOCAL_REVIEW_WORKFLOW.md"
       - "docs/contracts/local-review-result.v1.schema.json"
@@ -32,9 +42,54 @@ jobs:
           dotnet-version: 10.0.x
       - name: Restore locked dependencies
         run: dotnet restore src/dotnet/TraceMap.sln --locked-mode
+      - name: Run portable compiled metadata fixture matrix
+        run: dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter FullyQualifiedName~ManagedMetadataExtractorTests
+      # Fail early on OS pipe/junction regressions, before longer metadata lanes.
+      - name: Validate promotion process and junction boundaries
+        shell: pwsh
+        run: |
+          dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter "FullyQualifiedName~WebFormsWizardBuildTests|FullyQualifiedName~DirectoryLinkFixtureTests|FullyQualifiedName~Fixture_cleanup_clears_readonly_git_objects|FullyQualifiedName~Linked_input_escape_is_rejected|FullyQualifiedName~Separate_receipt_root_rejects_invalid_or_escaped_inputs|FullyQualifiedName~Relocated_history_never_uses_original_policy_locators_to_bypass_current_owned_links"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Run portable PDB fixture matrix
+        run: dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter FullyQualifiedName~PortablePdbExtractorTests
+      - name: Run IL body evidence fixture matrix
+        run: dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter FullyQualifiedName~IlBodyEvidenceExtractorTests
+      - name: Run IL rewrite member and signature fixture matrix
+        run: dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter FullyQualifiedName~IlRewriteMemberShapeEvidenceExtractorTests
+      - name: Run bounded public ECMA-335 topology and debug-evidence matrix
+        run: dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter "FullyQualifiedName~IlRewriteAssemblyTopologyTests|FullyQualifiedName~IlRewriteEmbeddedPdbTests|FullyQualifiedName~IlRewritePublicIntegrationTests"
+      - name: Build native Windows PDB fixtures
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $installation = & $vswhere -latest -products * -requires Microsoft.Component.MSBuild -property installationPath
+          $roslyn = Join-Path $installation "MSBuild\Current\Bin\Roslyn"
+          $root = "${{ runner.temp }}/tracemap-windows-pdb"
+          New-Item -ItemType Directory -Force -Path "$root/csharp", "$root/vb" | Out-Null
+          & "$roslyn/csc.exe" /nologo /target:library /debug:full "/out:$root/csharp/CompiledEvidence.CSharp.dll" "/pdb:$root/csharp/CompiledEvidence.CSharp.pdb" samples/compiled-dotnet-evidence/windows-pdb/NativePdbFixture.cs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & "$roslyn/vbc.exe" /nologo /target:library /debug:full "/out:$root/vb/CompiledEvidence.VisualBasic.dll" "/pdb:$root/vb/CompiledEvidence.VisualBasic.pdb" samples/compiled-dotnet-evidence/windows-pdb/NativePdbFixture.vb
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Validate native Windows PDB fail-closed lane
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          TRACEMAP_WINDOWS_PDB_ROOT: ${{ runner.temp }}/tracemap-windows-pdb
+        run: dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter FullyQualifiedName~Windows_produced_native_pdb_lane
+      - name: Validate existing Web Forms publish proof on public fixture
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./scripts/tests/Test-ExistingWebFormsPublishProof.ps1
       - name: Run local distribution smoke
         shell: pwsh
         run: ./scripts/smoke-local-distribution.ps1 -OutputDirectory "${{ runner.temp }}/tracemap-local-distribution"
+      - name: Validate focused output link safety and publish receipt identities
+        shell: pwsh
+        run: |
+          ./scripts/tests/Test-FocusedWebFormsOutputSafety.ps1
+          dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter FullyQualifiedName~WebFormsPublishedRootTests
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Retain sanitized receipt
         uses: actions/upload-artifact@v4
         with:

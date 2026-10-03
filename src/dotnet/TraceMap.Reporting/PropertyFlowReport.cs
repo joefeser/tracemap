@@ -2146,7 +2146,7 @@ public static class PropertyFlowReporter
         return surfaceKind.Trim() switch
         {
             "http-client" or "http-route" => null,
-            "sql-query" or "sql-persistence" => "data-surface terminal context",
+            "database-api" or "sql-query" or "sql-persistence" => "data-surface terminal context",
             "legacy-data" => "legacy-data terminal context",
             "package-config" => "package/config terminal context",
             { } value when value.StartsWith("message-", StringComparison.Ordinal) => "message-surface terminal context",

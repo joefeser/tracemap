@@ -7,7 +7,7 @@ namespace TraceMap.Core;
 public static class BuildEnvironmentDiagnosticExtractor
 {
     private static readonly Regex SafeDiagnosticIdRegex = new(
-        @"\b(?:CS|MSB)[0-9]{4}\b",
+        @"\b(?:CS|MSB)[0-9]{4}\b|\bBC[0-9]{5}\b",
         RegexOptions.Compiled | RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
 
     public const string DiagnosticKindTargetFramework = "target-framework";
@@ -64,7 +64,7 @@ public static class BuildEnvironmentDiagnosticExtractor
         SemanticExtractionResult semanticResult)
     {
         var diagnostics = new List<BuildEnvironmentDiagnosticCandidate>();
-        foreach (var project in inventory.Where(item => item.Kind is "Project" or "NonCSharpProject"))
+        foreach (var project in inventory.Where(item => item.Kind is "Project" or "NonCSharpProject" or "VisualBasicProject"))
         {
             diagnostics.AddRange(ReadProjectDiagnostics(repoPath, project));
         }
@@ -215,18 +215,19 @@ public static class BuildEnvironmentDiagnosticExtractor
         var root = document.Root;
         var isSdkStyle = IsSdkStyleProject(root);
         var projectStyle = ProjectStyle(project, isSdkStyle);
-        if (!isSdkStyle || project.Kind == "NonCSharpProject")
+        var isUnknownFormat = project.Kind == "NonCSharpProject";
+        if (!isSdkStyle || isUnknownFormat)
         {
             diagnostics.Add(Candidate(
-                project.Kind == "NonCSharpProject" ? "UnknownLegacyProjectFormat" : "NonSdkStyleProject",
+                isUnknownFormat ? "UnknownLegacyProjectFormat" : "NonSdkStyleProject",
                 DiagnosticKindProjectFormat,
                 RuleIds.BuildEnvironmentProjectFormat,
-                project.Kind == "NonCSharpProject" ? EvidenceTiers.Tier4Unknown : EvidenceTiers.Tier2Structural,
+                isUnknownFormat ? EvidenceTiers.Tier4Unknown : EvidenceTiers.Tier2Structural,
                 project.RelativePath,
                 1,
                 project.RelativePath,
                 projectStyle,
-                guidanceCode: GuidanceFor(project.Kind == "NonCSharpProject" ? "UnknownLegacyProjectFormat" : "NonSdkStyleProject"),
+                guidanceCode: GuidanceFor(isUnknownFormat ? "UnknownLegacyProjectFormat" : "NonSdkStyleProject"),
                 coverageEffect: "caps-to-structural",
                 sanitization: "none"));
         }
@@ -464,7 +465,7 @@ public static class BuildEnvironmentDiagnosticExtractor
     {
         var byPath = inventory.Select(item => item.RelativePath).ToHashSet(StringComparer.OrdinalIgnoreCase);
         var projectDirectories = inventory
-            .Where(item => item.Kind == "Project")
+            .Where(item => item.Kind is "Project" or "VisualBasicProject")
             .Select(item => NormalizeDirectory(Path.GetDirectoryName(item.RelativePath)))
             .ToArray();
         var diagnostics = new List<BuildEnvironmentDiagnosticCandidate>();
@@ -488,8 +489,8 @@ public static class BuildEnvironmentDiagnosticExtractor
                 continue;
             }
 
-            var allExpected = ExpectedGeneratedFiles(item).ToArray();
-            var expected = allExpected.Where(path => !byPath.Contains(path)).ToArray();
+            var allExpected = ExpectedGeneratedFileAlternatives(item).ToArray();
+            var expected = allExpected.Where(alternatives => !alternatives.Any(byPath.Contains)).ToArray();
             foreach (var missing in expected)
             {
                 diagnostics.Add(Candidate(
@@ -501,7 +502,7 @@ public static class BuildEnvironmentDiagnosticExtractor
                     1,
                     null,
                     null,
-                    safeObservedValue: Path.GetFileName(missing),
+                    safeObservedValue: string.Join("|", missing.Select(Path.GetFileName)),
                     guidanceCode: GuidanceFor("GeneratedFileMissing"),
                     coverageEffect: "caps-to-syntax",
                     sanitization: "none"));
@@ -550,7 +551,7 @@ public static class BuildEnvironmentDiagnosticExtractor
             : FileInventory.NormalizeRelativePath(directory);
     }
 
-    private static IEnumerable<string> ExpectedGeneratedFiles(FileInventoryItem item)
+    private static IEnumerable<IReadOnlyList<string>> ExpectedGeneratedFileAlternatives(FileInventoryItem item)
     {
         var directory = Path.GetDirectoryName(item.RelativePath)?.Replace('\\', '/') ?? string.Empty;
         var fileName = Path.GetFileName(item.RelativePath);
@@ -559,20 +560,20 @@ public static class BuildEnvironmentDiagnosticExtractor
         var prefix = string.IsNullOrWhiteSpace(directory) ? string.Empty : directory + "/";
         if (item.Kind == "WebFormsMarkup")
         {
-            yield return $"{prefix}{fileName}.cs";
-            yield return $"{prefix}{fileName}.designer.cs";
+            yield return [$"{prefix}{fileName}.cs", $"{prefix}{fileName}.vb"];
+            yield return [$"{prefix}{fileName}.designer.cs", $"{prefix}{fileName}.designer.vb"];
         }
         else if (item.Kind == "ServiceReferenceMetadata" && extension.Equals(".svcmap", StringComparison.OrdinalIgnoreCase))
         {
-            yield return $"{prefix}Reference.cs";
+            yield return [$"{prefix}Reference.cs", $"{prefix}Reference.vb"];
         }
         else if (item.Kind == "Resource")
         {
-            yield return $"{prefix}{baseName}.Designer.cs";
+            yield return [$"{prefix}{baseName}.Designer.cs", $"{prefix}{baseName}.Designer.vb"];
         }
         else if (item.Kind == "Settings")
         {
-            yield return $"{prefix}{baseName}.Designer.cs";
+            yield return [$"{prefix}{baseName}.Designer.cs", $"{prefix}{baseName}.Designer.vb"];
         }
     }
 
