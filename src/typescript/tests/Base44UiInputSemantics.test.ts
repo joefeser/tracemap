@@ -7,6 +7,29 @@ import { buildBase44Evidence, diffBase44Evidence } from "../src/base44/Base44Evi
 import { FactTypes } from "../src/facts/Models";
 
 describe("Base44 React UI input semantics", () => {
+  it("keeps reason evidence spans valid for incomplete source instead of rejecting the packet", async () => {
+    const repo = await fs.mkdtemp(path.join(os.tmpdir(), "tracemap-ui-semantics-incomplete-"));
+    await fs.mkdir(path.join(repo, "src"), { recursive: true });
+    await writeFrontendSdkAuthority(repo);
+    await fs.writeFile(path.join(repo, "src", "Draft.tsx"), `import { base44 } from "@base44/sdk";
+export async function save() {
+  await base44.entities.Product.create({ price: });
+  await base44.entities.Product.create({ total:    });
+}
+`);
+    execFileSync("git", ["init", "-q"], { cwd: repo });
+    execFileSync("git", ["add", "."], { cwd: repo });
+    execFileSync("git", ["-c", "user.name=TraceMap Test", "-c", "user.email=tracemap@example.invalid", "commit", "-qm", "fixture"], { cwd: repo });
+    const out = await fs.mkdtemp(path.join(os.tmpdir(), "tracemap-ui-semantics-incomplete-out-"));
+    const { packet } = await buildBase44Evidence(options(repo, out));
+    for (const fact of packet.facts.filter((item) => item.factType === FactTypes.Base44UiInputSemantics)) {
+      for (const reason of JSON.parse(fact.properties.uiSemanticsJson).reasons) {
+        expect(reason.endOffset).toBeGreaterThan(reason.startOffset);
+        expect(reason.endLine).toBeGreaterThanOrEqual(reason.startLine);
+      }
+    }
+  });
+
   it("emits widening-only value classes and proven payload correlation from executable JSX", async () => {
     const repo = await fixtureRepo();
     const out = await fs.mkdtemp(path.join(os.tmpdir(), "tracemap-ui-semantics-out-"));

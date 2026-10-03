@@ -354,6 +354,8 @@ public static class WebFormsModernizationPacketReporter
     public const string PacketRuleId = RuleIds.LegacyWebFormsModernizationPacket;
     private const string ClaimLevel = "local-only";
     private const string UnknownCoverage = "unknown";
+    // Matches StaticHtmlEvidenceExplorer's per-collection Web Forms packet admission bound.
+    private const int MaxBehaviorRowsPerInventory = 10_000;
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -1086,6 +1088,15 @@ public static class WebFormsModernizationPacketReporter
             .ThenBy(item => item.BehaviorKind, StringComparer.Ordinal)
             .ThenBy(item => item.ClientBehaviorId, StringComparer.Ordinal)
             .ToArray();
+        if (clientBehavior.Length > MaxBehaviorRowsPerInventory)
+        {
+            // Consumers reject collections above their row bound; keep a deterministic
+            // prefix and label the omission instead of producing an unreadable packet.
+            truncated = true;
+            AddGeneratedGap(gaps, options.MaxGaps, snapshot, "WebFormsModernizationClientBehaviorLimitReached", "packet", null,
+                clientBehavior.Skip(MaxBehaviorRowsPerInventory).Select(item => item.Evidence.FactId).Take(256));
+            clientBehavior = clientBehavior.Take(MaxBehaviorRowsPerInventory).ToArray();
+        }
         var serverBehavior = facts
             .Where(fact => fact.FactType is FactTypes.WebFormsServerNavigationCandidate
                 or FactTypes.WebFormsRequestLifecycleCandidate
@@ -1122,6 +1133,13 @@ public static class WebFormsModernizationPacketReporter
             .ThenBy(item => item.BehaviorKind, StringComparer.Ordinal)
             .ThenBy(item => item.ServerBehaviorId, StringComparer.Ordinal)
             .ToArray();
+        if (serverBehavior.Length > MaxBehaviorRowsPerInventory)
+        {
+            truncated = true;
+            AddGeneratedGap(gaps, options.MaxGaps, snapshot, "WebFormsModernizationServerBehaviorLimitReached", "packet", null,
+                serverBehavior.Skip(MaxBehaviorRowsPerInventory).Select(item => item.Evidence.FactId).Take(256));
+            serverBehavior = serverBehavior.Take(MaxBehaviorRowsPerInventory).ToArray();
+        }
         if (gaps.Any(gap => gap.Classification == "WebFormsModernizationGapLimitReached")) truncated = true;
         if (inputLimited)
         {
@@ -1350,16 +1368,18 @@ public static class WebFormsModernizationPacketReporter
                 AddGeneratedGap(gaps, maxGaps, snapshot, "LegacyPathEvidenceProvenanceUnavailable", "path-edge", edge.EdgeId, edge.SupportingFactIds);
                 continue;
             }
-            var edgeScanId = path.Nodes.FirstOrDefault(node => node.NodeId == edge.FromNodeId)?.ScanId
-                ?? path.Nodes.FirstOrDefault(node => node.NodeId == edge.ToNodeId)?.ScanId
-                ?? string.Empty;
+            // Scan and commit provenance must come from the same node: in combined
+            // indexes an edge can belong to a different source than the packet's primary.
+            var edgeNode = path.Nodes.FirstOrDefault(node => node.NodeId == edge.FromNodeId && node.ScanId is not null)
+                ?? path.Nodes.FirstOrDefault(node => node.NodeId == edge.ToNodeId && node.ScanId is not null);
+            var edgeScanId = edgeNode?.ScanId ?? string.Empty;
             items.Add(new WebFormsModernizationPathEvidence(
             edge.EdgeId,
             "path-edge",
             edge.RuleId,
             edge.EvidenceTier,
             UnknownCoverage,
-            snapshot.CommitSha,
+            edgeNode?.CommitSha ?? snapshot.CommitSha,
             safePath,
             edge.StartLine,
             edge.EndLine,

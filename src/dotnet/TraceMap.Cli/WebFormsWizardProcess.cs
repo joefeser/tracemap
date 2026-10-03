@@ -15,12 +15,23 @@ public static class WebFormsWizardProcess
         using var process = new Process { StartInfo = new(executable)
         { WorkingDirectory = directory, UseShellExecute = false, RedirectStandardOutput = true, RedirectStandardError = true, CreateNoWindow = true } };
         foreach (var argument in arguments) process.StartInfo.ArgumentList.Add(argument);
+        // Reused MSBuild nodes and the shared compiler server outlive the build and inherit
+        // the redirected pipes, so end-of-stream would never arrive after a successful exit.
+        process.StartInfo.Environment["MSBUILDDISABLENODEREUSE"] = "1";
+        process.StartInfo.Environment["DOTNET_CLI_USE_MSBUILD_SERVER"] = "0";
+        process.StartInfo.Environment["UseSharedCompilation"] = "false";
+        using var reads = CancellationTokenSource.CreateLinkedTokenSource(timeout.Token);
         if (!process.Start()) throw new InvalidOperationException("WEBFORMS_WIZARD_BUILD_START_FAILED");
         try
         {
             var stdout = Read(process.StandardOutput);
             var stderr = Read(process.StandardError);
-            await Task.WhenAll(stdout, stderr, process.WaitForExitAsync(timeout.Token));
+            await process.WaitForExitAsync(timeout.Token);
+            // Bound the post-exit drain; an inherited pipe must not become a false timeout.
+            reads.CancelAfter(TimeSpan.FromSeconds(30));
+            try { await Task.WhenAll(stdout, stderr); }
+            catch (OperationCanceledException exception) when (!timeout.IsCancellationRequested)
+            { throw new InvalidOperationException("WEBFORMS_WIZARD_BUILD_OUTPUT_UNTERMINATED", exception); }
             var outResult = await stdout;
             var errResult = await stderr;
             return new(process.ExitCode, outResult.Tail, errResult.Tail, outResult.Hash, errResult.Hash);
@@ -41,7 +52,7 @@ public static class WebFormsWizardProcess
             var bytes = new byte[8192];
             using var digest = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
             int count;
-            while ((count = await reader.ReadAsync(buffer.AsMemory(), timeout.Token)) != 0)
+            while ((count = await reader.ReadAsync(buffer.AsMemory(), reads.Token)) != 0)
             {
                 // Hash every decoded UTF-16 code unit in little-endian order, including split surrogates.
                 for (var i = 0; i < count; i++)
