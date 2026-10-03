@@ -59,3 +59,16 @@ Public claim level: shipped workflow with demo-bounded synthetic proof
 - [x] Update this checklist and `implementation-state.md` with exact routes,
       claim levels, commit evidence, validation results, browser results, and
       remaining limitations before opening the implementation PR.
+
+## PR #815 review correction
+
+- [x] Merge current `origin/main` after #814 without rebasing or force-pushing,
+      preserve both focused validators, and recheck #803 ancestry.
+- [x] Correct solution/projectless selection, selection-file pause, build
+      consent, and stop-condition wording against the shipped implementation.
+- [x] Require active comment-free anchors and scan decoded published attribute
+      values plus route metadata for private material.
+- [x] Bind the page boundary to this independent implementation record and
+      verify the recorded base and #803 status through Git ancestry.
+- [x] Add focused regressions and rerun focused/full site tests, build,
+      validation, private-path and diff checks, plus desktop/mobile browsers.

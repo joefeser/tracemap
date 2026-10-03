@@ -1,13 +1,13 @@
 # Site Web Forms Guided Setup Implementation State
 
-Status: implementation validated; commit, PR, and ACK pending
-Readiness: ready for implementation commit and review
+Status: current main integrated; review corrections validated locally
+Readiness: correction commit, push, and exact-head ACK pending
 Public claim level: `shipped` workflow with `demo`-bounded synthetic proof
 
 Last updated: 2026-10-03
 Implementation branch: `codex/site-webforms-guided-setup`
 Target base: `main`
-Exact base: `5ffd4a54176c002e4c6d41ce0133eab5963ad79b`
+Exact base: `684acb3457d1942fb7fde43db77c5cb27e5d1648`
 Implementation revision: `bf5b96808631d8196cfef3c7ba051185481d47a1`
 Issue: #805
 
@@ -30,7 +30,7 @@ Windows-only and stop on non-Windows hosts.
 - PRs #797-#801, `docs/WEBFORMS_NATIVE_WORKFLOW.md`, the wizard acceptance
   audit, persisted wizard/state implementation, tests, rule catalog, and
   checked-in synthetic fixtures support the shipped workflow claim.
-- PR #803 merge `af05c289a799c896862983fd9f4f73a28d882d0c` is not an
+- PR #803 merge `af05c289a799c896862983fd9f4f73a28d882d0c` remains not an
   ancestor of the exact implementation base (`git merge-base --is-ancestor`
   exited 1), so its repairs are not presented as shipped.
 - The interface is a terminal wizard over shared persisted state, not a GUI,
@@ -46,23 +46,38 @@ Windows-only and stop on non-Windows hosts.
   concept article, and the conservative legacy .NET/modernization matrices.
 - Preserved broad Web Forms event/route/navigation rows as hidden; only the
   bounded terminal setup workflow is labeled shipped.
-- The separate #806 route is not present on this exact base, so this branch
-  does not publish a broken link or copy its unreviewed asset. Add the reciprocal
-  proof link after #806 is merged into the selected base.
+- The separate #806 route is present on this exact base through merged PR #814.
+  This page links to it while preserving its corrected `concept` claim level;
+  it does not treat the illustrative chain as extractor-observed proof.
+
+## Review correction — 2026-10-03
+
+After PR #814 merged, this branch merged exact `origin/main`
+`684acb3457d1942fb7fde43db77c5cb27e5d1648` with a normal merge commit. The
+only textual conflict was the central validator import; both focused validators
+were retained.
+
+The review repair now describes projectless solution entries, blank/missing
+selection template pauses, and post-consent version probing exactly as the
+shipped terminal implementation does. Active anchors are checked after removing
+HTML comments, decoded published attribute values and page metadata are scanned
+for private material, and the page's main boundary is compared with this
+independent implementation record and verified through Git ancestry. The merged
+source-plus-compiled route is linked only as a `concept`.
 
 ## Validation
 
-- `cd site && node --test scripts/webforms-guided-setup.test.mjs`: 4 passed.
-- `cd site && npm test`: 1,194 passed; no failures, skips, cancellations, or todos.
+- `cd site && node --test scripts/webforms-guided-setup.test.mjs`: 8 passed.
+- `cd site && npm test`: 1,208 passed; no failures, skips, cancellations, or todos.
 - `cd site && npm run build`: passed.
-- `cd site && npm run validate`: passed; 117 HTML files, 3,881 internal
-  references, and 116 sitemap URLs validated.
+- `cd site && npm run validate`: passed; 118 HTML files, 3,918 internal
+  references, and 117 sitemap URLs validated.
 - `./scripts/check-private-paths.sh`: passed.
 - `git diff --check`: passed.
 - Desktop browser at 1,440 by 1,000: one H1, no horizontal overflow, required
-  stop block present, and zero console errors.
-- Mobile browser at 390 by 844: one H1, no horizontal overflow, stacked actions,
-  keyboard focus visible with a 3px solid outline, and zero console errors.
+  stop block and concept link present, and zero console errors.
+- Mobile browser at 390 by 844: one H1, no horizontal overflow, concept link
+  present, and zero console errors.
 - Desktop and mobile screenshots were inspected locally for wrapping and layout;
   they are validation artifacts, not committed public evidence.
 
