@@ -23,7 +23,8 @@
 - [ ] Verify the #806 public route and proof projection exist on the chosen
       implementation base and pass their focused validators.
 - [ ] Add `/webforms/review-workbench/` at `demo` only when the dependency proof
-      gate is satisfied; otherwise keep it `concept` or defer publication.
+      gate is satisfied; otherwise publish it as `concept` without substitute
+      evidence.
 - [ ] Render the seven-step synthetic handler walkthrough with readable
       source/compiled routing and per-hop evidence classifications.
 - [ ] Add public-safe evidence detail, unresolved command, coverage-gap,
