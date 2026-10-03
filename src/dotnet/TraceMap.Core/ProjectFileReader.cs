@@ -16,7 +16,9 @@ public sealed record PackageReferenceInfo(
     string ManifestKind,
     string DependencyGroup,
     string DependencyScope,
-    string? TargetFramework);
+    string? TargetFramework,
+    string? VersionOverride = null,
+    int? EndLine = null); // span end when the value rides a child element on a later line
 
 public sealed record NuGetLockfileEntry(
     string LockfilePath,
@@ -35,6 +37,17 @@ public sealed record NuGetLockfileGap(string LockfilePath, string Category, stri
 public sealed record NuGetLockfileReadResult(
     IReadOnlyList<NuGetLockfileEntry> Entries,
     IReadOnlyList<NuGetLockfileGap> Gaps);
+
+/// A central NuGet version pin declared in an MSBuild props file (central package management):
+/// a PackageVersion item in Directory.Packages.props (or equivalent props file). The pin is a
+/// declaration in ITS OWN file; effective-version resolution (override > central > project) is a
+/// consumer-side derivation and is never asserted here.
+public sealed record CentralPackageVersionInfo(
+    string PropsPath,
+    string PackageName,
+    string Version,
+    int Line,
+    int EndLine); // span covers the item opening through the value element when they differ
 
 public static class ProjectFileReader
 {
@@ -84,6 +97,57 @@ public static class ProjectFileReader
             .ToArray();
     }
 
+    /// Reads central package management version pins (PackageVersion items) from MSBuild props files.
+    /// Only pins with a safe package identity are returned; unsafe versions are returned verbatim —
+    /// safety projection happens at fact emission, identical to project-file versions.
+    public static IReadOnlyList<CentralPackageVersionInfo> ReadCentralPackageVersions(string repoPath, IEnumerable<FileInventoryItem> inventory)
+    {
+        var results = new List<CentralPackageVersionInfo>();
+        foreach (var props in inventory.Where(item => item.Kind == "MSBuildProps"))
+        {
+            var fullPath = Path.Combine(repoPath, props.RelativePath);
+            if (!TryLoadXml(fullPath, out var document))
+            {
+                continue;
+            }
+
+            foreach (var element in document.Descendants().Where(element => element.Name.LocalName == "PackageVersion"))
+            {
+                // MSBuild item identities are semicolon-separable: one pin per id, each safety-checked.
+                var idList = AttributeValue(element, "Include") ?? AttributeValue(element, "Update");
+                var versionElement = element.Elements().FirstOrDefault(child => child.Name.LocalName == "Version");
+                var version = AttributeValue(element, "Version") ?? versionElement?.Value.Trim();
+                if (string.IsNullOrWhiteSpace(version))
+                {
+                    continue; // a pin without a version is not version evidence (e.g. property interpolation)
+                }
+
+                // PR-804: when the version rides a child element on a later line, the evidence span
+                // must cover BOTH endpoints — start at the item's identity line, end at the value's.
+                var endLine = versionElement is not null ? Math.Max(GetLine(element), GetLine(versionElement)) : GetLine(element);
+                if (idList is null)
+                {
+                    continue;
+                }
+                foreach (var id in idList.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                {
+                    if (!IsSafeNuGetPackageId(id))
+                    {
+                        continue;
+                    }
+
+                    results.Add(new CentralPackageVersionInfo(props.RelativePath, id, version.Trim(), GetLine(element), endLine));
+                }
+            }
+        }
+
+        return results
+            .OrderBy(item => item.PropsPath, StringComparer.Ordinal)
+            .ThenBy(item => item.PackageName, StringComparer.Ordinal)
+            .ThenBy(item => item.Version, StringComparer.Ordinal)
+            .ToArray();
+    }
+
     private static IEnumerable<(string Value, int Line)> ReadProjectValues(string fullPath, params string[] elementNames)
     {
         if (!TryLoadXml(fullPath, out var document))
@@ -120,6 +184,9 @@ public static class ProjectFileReader
 
             var version = AttributeValue(element, "Version")
                 ?? element.Elements().FirstOrDefault(child => child.Name.LocalName == "Version")?.Value.Trim();
+            var overrideElement = element.Elements().FirstOrDefault(child => child.Name.LocalName == "VersionOverride");
+            var versionOverride = AttributeValue(element, "VersionOverride") ?? overrideElement?.Value.Trim();
+            var endLine = overrideElement is not null ? Math.Max(GetLine(element), GetLine(overrideElement)) : (int?)null;
             yield return new PackageReferenceInfo(
                 relativePath,
                 packageName,
@@ -128,7 +195,9 @@ public static class ProjectFileReader
                 manifestKind,
                 "PackageReference",
                 "runtime",
-                null);
+                null,
+                versionOverride,
+                endLine);
         }
     }
 
