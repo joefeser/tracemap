@@ -7,6 +7,7 @@ import { buildSite, topNavigationLinks } from "./build.mjs";
 import { validateAdoptionPlaybookDist } from "./adoption-playbook.mjs";
 import { validateAccessSafeEvidenceAcquisitionDist } from "./access-safe-evidence-acquisition.mjs";
 import { validateWebformsModernizationArticleDist } from "./webforms-modernization-article.mjs";
+import { validateWebformsGuidedSetupDist } from "./webforms-guided-setup.mjs";
 import { validateReducedCoverageArticleDist } from "./reduced-coverage-article.mjs";
 import { validateGapLineNumberArticleDist } from "./gap-line-number-article.mjs";
 import { validateButtonIdentityArticleDist } from "./button-identity-article.mjs";
@@ -103,7 +104,7 @@ export async function validateSite(options = {}) {
   const legacyDotnetEvidenceLaneResult = await validateLegacyDotnetEvidenceLane({ root });
   const legacyModernizationResult = await validateLegacyModernizationEvidenceMap({ root });
   const legacyDataSurfaceResult = await validateLegacyDataSurface({ root });
-  const result = await validateDist({ root });
+  const result = await validateDist({ root, requireWebformsGuidedSetup: true });
 
   log(
     `Validated ${result.htmlFileCount} HTML files, ${result.internalReferenceCount} internal references, ${result.sitemapUrlCount} sitemap URLs, ${legacyStoryResult.scannedFileCount} legacy story safety targets, ${legacyDotnetEvidenceLaneResult.rowCount} legacy .NET evidence-lane rows, ${legacyModernizationResult.rowCount} legacy modernization evidence-map rows, and ${legacyDataSurfaceResult.rowCount} legacy data surface rows.`
@@ -117,6 +118,7 @@ export async function validateDist({
   requireMsbuildBinlogEvidence = true,
   requireAccessSafeEvidenceAcquisition = true,
   requireWebformsModernizationArticle = true,
+  requireWebformsGuidedSetup = false,
   requireReducedCoverageArticle = true,
   requireGapLineNumberArticle = true,
   requireButtonIdentityArticle = true,
@@ -167,6 +169,9 @@ export async function validateDist({
     }
   if (requireWebformsModernizationArticle) {
     await validateWebformsModernizationArticleDist({ baseUrl: normalizedBaseUrl, dist, errors });
+  }
+  if (requireWebformsGuidedSetup) {
+    await validateWebformsGuidedSetupDist({ baseUrl: normalizedBaseUrl, dist, errors, root });
   }
   if (requireReducedCoverageArticle) {
     await validateReducedCoverageArticleDist({ baseUrl: normalizedBaseUrl, dist, errors });
