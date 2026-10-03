@@ -716,7 +716,7 @@ public static class ScannerVersions
     public const string LegacyAsmxExtractor = "legacy-asmx/0.2.0";
     public const string LegacyRemotingExtractor = "legacy-remoting/0.1.0";
     public const string LegacyWebFormsExtractor = "legacy-webforms/0.13.4";
-    public const string WebFormsPublishMapExtractor = "webforms-publish-map/0.1.1";
+    public const string WebFormsPublishMapExtractor = "webforms-publish-map/0.1.2";
     public const string LegacyWinFormsExtractor = "legacy-winforms/0.1.0";
     public const string LegacyAspNetExtractor = "legacy-aspnet/0.2.0";
     public const string LegacyBatchDataMovementExtractor = "legacy-batch-data-movement/0.2.0";

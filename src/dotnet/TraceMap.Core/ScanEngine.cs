@@ -115,14 +115,13 @@ public static class ScanEngine
                     cancellationToken,
                     progress);
                 semanticResult = csharpSemanticResult;
-                var visualBasicOptions = options.Restore
-                    && inventory.Any(item => item.Kind == "Project")
-                    ? options with { Restore = false }
-                    : options;
+                // A C# restore does not establish coverage of independent VB targets.
+                // Preserve the explicit restore request; repeated solution restores are
+                // preferable to silently omitting an unproven target.
                 var visualBasicSemanticResult = VisualBasicSemanticExtractor.Extract(
                     repoPath,
                     inventory,
-                    visualBasicOptions,
+                    options,
                     fullInventory,
                     cancellationToken,
                     progress);

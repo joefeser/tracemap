@@ -480,3 +480,39 @@ The first expanded run exposed a noncanonical external-solution path in the test
 fixture; corrected the fixture without weakening inventory identity checks.
 Prior eb290ea6 CI passed Windows 135 and full .NET 3,133 with one platform skip;
 those results do not validate this new patch.
+
+## Main promotion PR #801: settled head findings (2026-10-02)
+
+Repair branch: `codex/promote-dev-to-main-f0aaf582f778`, based on reviewed head
+`f0aaf582f7787d62e8f3dc655c53363c9c05b0c2`. ACK run1790987754602
+authorized the six settled findings. This repair does not update dev or merge
+main; reconcile its fixing commit into dev separately after promotion review.
+
+Single-receipt publish admission now shares a host path comparer for duplicate
+checks and artifact lookup, and parses only captured bounded hash-verified map
+bytes. Extractor version advances to 0.1.2. Focused pipeline page-list writes
+reject linked targets/ancestors and replace the leaf atomically (including a
+pre-existing hardlink); the root must remain operator-controlled against
+concurrent ancestor replacement. A trailing IL opcode prefix emits the typed
+malformed-body gap. Wizard discovery excludes build/control directory names
+case-insensitively. Independent VB restore retains the explicit request even
+when C# projects are present; shared solution restore may run redundantly.
+
+Validation: final isolated full .NET suite passed 3,150 tests, with one
+Windows-only skip and zero failures; TRX is
+`/tmp/tracemap-pr801-final-tests/pr801-final.trx`. Focused follow-up passed 80
+tests. Both focused pipeline PowerShell contract and output-safety checks passed.
+The final build had zero warnings/errors. The VB sample scan produced 222 facts
+with semantic coverage. Pinned Community.VisualBasic smoke at
+`20d2a51dfc9f342848ad134952ceaa8d79302559` produced the expected 110,726 facts
+with reduced semantic coverage and FailedOrPartial build status; this is not
+a clean customer build claim. Smoke artifacts are under
+`/tmp/tracemap-pr801-oss-smoke/community-visual-basic`.
+
+An earlier full-suite attempt overlapped a smoke rebuild: runtime-hash replay
+correctly rejected changed binaries, and a legacy-data assertion also failed
+(its cause is not established). That run was cancelled, not counted as passing.
+The legacy test passed in isolation, then the entire unchanged-binary suite
+passed. Windows-specific identity and output-link checks are wired into the
+three-platform distribution jobs; repaired-head CI and fresh review remain
+required. No customer application or SQL was executed.

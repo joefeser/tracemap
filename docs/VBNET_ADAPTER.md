@@ -1,5 +1,10 @@
 # VB.NET Adapter
 
+An explicit scan `--restore` request is preserved for the VB extractor even in
+mixed C#/VB repositories. The presence of a C# project is not evidence that an
+independent VB project was restored. A shared solution may consequently be
+restored by both extractors; this does not prove build success or runtime behavior.
+
 Status: foundation, bounded event/Web Forms composition, compiler-backed
 ADO.NET plus HTTP/config/file boundary slices, and focused review/export parity (issues
 [#736](https://github.com/joefeser/tracemap/issues/736) and

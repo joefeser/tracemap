@@ -974,6 +974,7 @@ internal static class IlBodyEvidenceExtractor
             var offset = position;
             instructionOffsets.Add(offset);
             var first = il[position++];
+            if (first == 0xfe) EnsureAvailable(il, position, 1);
             if (first == 0xfe ? !multi.ContainsKey(il[position]) : !single.ContainsKey(first))
                 throw new IlEvidenceException("MalformedIlBody");
             var opcode = first == 0xfe ? multi[il[position++]] : single[first];
