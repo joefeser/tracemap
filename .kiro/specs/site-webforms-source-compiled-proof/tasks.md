@@ -20,7 +20,8 @@
 - [ ] Produce a deterministic public-safe proof projection, or downgrade the
       route to `concept` and record why a compliant projection was not possible.
 - [ ] Render the ordered getter/constructor/provider path with per-hop rules,
-      tiers, spans, coverage, provenance, versions, limitations, and gaps.
+      emitted tiers, spans, coverage, provenance, versions, limitations, and
+      gaps without assigning multi-tier rule families one fixed tier.
 - [ ] Contrast the dynamic email, literal audit, and `Fill` outcomes without
       publishing raw SQL, source, configuration, or private/local material.
 - [ ] Add reproducible public-fixture generation guidance and verify the
