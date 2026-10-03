@@ -92,7 +92,7 @@ pwsh -File scripts/wlocal.ps1 -OutputRoot &lt;fresh-output-root&gt;</code></pre>
       <section class="section split-section" id="query-views">
         <div><p class="section-kicker">Four query views</p><h2>Bounds and filters stay attached to the result.</h2></div>
         <div class="detail-list">
-          <div><strong><code>all</code></strong><span>Retains all three admitted static terminal candidates plus explicit gaps for the selected synthetic handler.</span></div>
+          <div><strong><code>all</code></strong><span>For the four positive layouts, retains all three admitted static terminal candidates plus explicit gaps for the selected synthetic handler. The <code>missing</code> layout retains gaps and zero paths.</span></div>
           <div><strong><code>fill</code></strong><span>Filters to the independent Fill terminal. A zero-unresolved subset does not resolve command values excluded by the filter.</span></div>
           <div><strong><code>capped</code></strong><span>Retains one path and a <code>TruncatedByLimit</code> Tier4Unknown gap. The cap is a coverage boundary, not a severity or completeness judgment.</span></div>
           <div><strong><code>repeat</code></strong><span>Checks admitted paths, gaps, and index bytes for deterministic equality. Repeat success does not prove that a prior intermittent failure was fixed.</span></div>
@@ -115,7 +115,7 @@ pwsh -File scripts/wlocal.ps1 -OutputRoot &lt;fresh-output-root&gt;</code></pre>
           <tr><td>Tested PR head</td><td><code>afe6152ccb58ad11b61ef4782ba82afdfe7651b7</code></td><td>Exact commit exercised by the durable result.</td></tr>
           <tr><td>Tree-equivalent main merge</td><td><code>d76358f663ce40532fe0954ca9888612d51a4121</code></td><td>Shares tree <code>1163de1ea0bc4f57cd762ebc3a85ee014bc6fff2</code> with the tested head.</td></tr>
           <tr><td>Durable result</td><td><a href="https://github.com/joefeser/tracemap/actions/runs/37125942534">GitHub Actions run 37125942534</a></td><td>Windows Server 2025; required mapped and mapless ASP.NET publication.</td></tr>
-          <tr><td>Counts</td><td>148 passed · 0 failed · 0 skipped</td><td>Includes 2 Windows publication cases, 2 profile dynamic-lookup cases, 5 operator layouts, and 4 diagnostic layouts.</td></tr>
+          <tr><td>Counts</td><td>148 passed · 0 failed · 0 skipped</td><td>The test count includes 2 Windows publication cases, 2 profile dynamic-lookup cases, and 5 operator layouts. Four additional diagnostic-layout admission checks are recorded separately in the receipt.</td></tr>
           <tr><td>Receipt class</td><td><code>validation.deep-projectless-corpus.v1</code> · <code>Tier2Structural</code></td><td>Synthetic static validation with explicit limitations.</td></tr>
           <tr><td>Source-receipt generator SHA-256</td><td><code>529f399c5492f89d12785beb091eda70b7ea6191be60c8fd53a81e818027ec39</code></td><td>Digest of the exact local validation wrapper used by that result.</td></tr>
           <tr><td>Source-receipt bounded-input SHA-256</td><td><code>90120a5650f5da8472f7ffc734b05a74e9b4ef2075d123fafc35f07addc96a12</code></td><td>Covers the admitted source roster, execution/fixture assemblies, and test receipt. It is not a public-projection input digest.</td></tr>
