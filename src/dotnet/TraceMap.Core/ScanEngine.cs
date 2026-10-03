@@ -1381,6 +1381,7 @@ public static class ScanEngine
 
     private static HashSet<string> NormalizeOptionPaths(string repoPath, IReadOnlyList<string>? paths)
     {
+        repoPath = Path.GetFullPath(repoPath);
         var result = new HashSet<string>(CSharpSemanticExtractor.CreateSourcePathComparer(repoPath));
         foreach (var path in paths ?? [])
         {
