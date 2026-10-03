@@ -70,7 +70,7 @@ Public claim level: shipped workflow with demo-bounded synthetic proof
       values plus route metadata for private material.
 - [x] Bind the page boundary to this independent implementation record and
       verify the recorded base and #803 status through Git ancestry.
-- [x] Fail closed in shallow CI unless trusted pull-request event metadata
-      verifies the recorded base; reject unverified affirmative #803 status.
+- [x] Fetch full history in site CI for pull requests and main pushes; fail
+      closed on missing ancestry objects and unverified affirmative #803 status.
 - [x] Add focused regressions and rerun focused/full site tests, build,
       validation, private-path and diff checks, plus desktop/mobile browsers.

@@ -66,12 +66,11 @@ for private material, and the page's main boundary is compared with this
 independent implementation record and verified through Git ancestry. The merged
 source-plus-compiled route is linked only as a `concept`.
 
-Full-history checkouts verify both ancestry relationships directly. A shallow
-GitHub checkout may not contain the base or #803 commit object; there the
-validator requires the page/spec base to match the pull request base SHA from
-GitHub's event metadata and rejects an affirmative #803 shipped claim that it
-cannot independently verify. It does not describe missing Git objects as
-verified.
+The site-validation workflow now fetches full Git history on pull requests and
+main pushes so both ancestry relationships can be verified directly. Other
+checkouts fail closed when the recorded base object is missing, and every
+checkout rejects an affirmative #803 shipped claim when the repair commit is
+unavailable. Missing Git objects are never described as verified.
 
 ## Validation
 

@@ -79,9 +79,7 @@ export async function validateWebformsGuidedSetupDist({
   errors,
   root,
   repositoryRoot = resolve(root, ".."),
-  implementationStatePath = resolve(repositoryRoot, ".kiro/specs/site-webforms-guided-setup/implementation-state.md"),
-  shallowRepository = gitIsShallow(repositoryRoot),
-  shallowBaseSha
+  implementationStatePath = resolve(repositoryRoot, ".kiro/specs/site-webforms-guided-setup/implementation-state.md")
 }) {
   const pagePath = resolve(dist, "webforms/index.html");
   const articlePath = resolve(dist, "blog/modernizing-web-forms-without-running-it/index.html");
@@ -106,15 +104,7 @@ export async function validateWebformsGuidedSetupDist({
   const activeArticleLinks = activeAnchorHrefs(article);
   requireIncludes(page, '<link rel="canonical" href="https://tracemap.tools/webforms/">', errors, "canonical metadata");
   requireIncludes(page, '<meta property="og:url" content="https://tracemap.tools/webforms/">', errors, "Open Graph URL");
-  const trustedShallowBaseSha = shallowBaseSha ?? await readGitHubPullRequestBaseSha(process.env.GITHUB_EVENT_PATH);
-  validateImplementationBoundary({
-    page,
-    implementationState,
-    repositoryRoot,
-    shallowRepository,
-    shallowBaseSha: trustedShallowBaseSha,
-    errors
-  });
+  validateImplementationBoundary({ page, implementationState, repositoryRoot, errors });
   requireIncludes(page, "Public claim level:", errors, "public claim label");
   requireIncludes(page, "<strong>shipped</strong>", errors, "shipped workflow label");
   requireIncludes(page, "<strong>demo</strong>", errors, "demo proof label");
@@ -164,7 +154,7 @@ export async function validateWebformsGuidedSetupDist({
   }
 }
 
-function validateImplementationBoundary({ page, implementationState, repositoryRoot, shallowRepository, shallowBaseSha, errors }) {
+function validateImplementationBoundary({ page, implementationState, repositoryRoot, errors }) {
   const pageMatch = page.match(/\bdata-main-boundary=["']([0-9a-f]{40})["']/i);
   const repairStateMatch = page.match(/\bdata-repairs-803=["'](shipped|not-shipped)["']/i);
   const stateMatch = implementationState.match(/^Exact base:\s*`([0-9a-f]{40})`\s*$/im);
@@ -181,9 +171,7 @@ function validateImplementationBoundary({ page, implementationState, repositoryR
     return;
   }
   const fullHistoryAvailable = gitCommitExists(repositoryRoot, boundary);
-  const boundaryVerified = fullHistoryAvailable
-    ? gitIsAncestor(repositoryRoot, boundary, "HEAD")
-    : shallowRepository && shallowBaseSha?.toLowerCase() === boundary;
+  const boundaryVerified = fullHistoryAvailable && gitIsAncestor(repositoryRoot, boundary, "HEAD");
   if (!boundaryVerified) {
     errors.push("Web Forms implementation base is not a verified ancestor of the validation checkout");
     return;
@@ -195,23 +183,12 @@ function validateImplementationBoundary({ page, implementationState, repositoryR
     if (recordedRepairState !== expectedState) {
       errors.push(`Web Forms independently recorded #803 ancestry must be ${expectedState} for the recorded implementation base`);
     }
-  } else if (shallowRepository && recordedRepairState !== "not-shipped") {
-    errors.push("Web Forms shallow-checkout validation cannot verify an affirmative #803 shipped claim");
+  } else if (recordedRepairState !== "not-shipped") {
+    errors.push("Web Forms validation cannot verify an affirmative #803 shipped claim without the repair commit");
     expectedState = "not-shipped";
   }
   if (repairStateMatch[1].toLowerCase() !== expectedState) {
     errors.push(`Web Forms #803 ancestry claim must be ${expectedState} for the recorded implementation base`);
-  }
-}
-
-async function readGitHubPullRequestBaseSha(eventPath) {
-  if (!eventPath) return undefined;
-  try {
-    const event = JSON.parse(await readFile(eventPath, "utf8"));
-    const sha = event?.pull_request?.base?.sha;
-    return typeof sha === "string" && /^[0-9a-f]{40}$/i.test(sha) ? sha : undefined;
-  } catch {
-    return undefined;
   }
 }
 
@@ -221,11 +198,6 @@ function gitCommitExists(repositoryRoot, sha) {
 
 function gitIsAncestor(repositoryRoot, ancestor, descendant) {
   return spawnSync("git", ["merge-base", "--is-ancestor", ancestor, descendant], { cwd: repositoryRoot, stdio: "ignore" }).status === 0;
-}
-
-function gitIsShallow(repositoryRoot) {
-  const result = spawnSync("git", ["rev-parse", "--is-shallow-repository"], { cwd: repositoryRoot, encoding: "utf8" });
-  return result.status === 0 && result.stdout.trim() === "true";
 }
 
 function stripHtmlComments(value) {
