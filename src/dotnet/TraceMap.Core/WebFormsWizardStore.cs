@@ -59,8 +59,15 @@ public sealed class WebFormsWizardStore : IDisposable
             Directory.CreateDirectory(parent);
             var staging = Path.Combine(parent, ".wizard-new-" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(staging);
-            try { Directory.Move(staging, root); }
-            finally { if (Directory.Exists(staging)) Directory.Delete(staging); }
+            // Publish the root config inside the staged directory so an interrupted
+            // create can never leave a visible root without its config.
+            var stagedGenerator = Hash(File.ReadAllBytes(typeof(WebFormsWizardStore).Assembly.Location));
+            try
+            {
+                Atomic(Path.Combine(staging, "root.config.json"), Encode("webforms-wizard-root.v1", stagedGenerator, new WebFormsWizardRoot(0, [])));
+                Directory.Move(staging, root);
+            }
+            finally { if (Directory.Exists(staging)) Directory.Delete(staging, recursive: true); }
         }
         var lockPath = Path.Combine(root, ".wizard.lock");
         RejectLink(lockPath);
@@ -73,18 +80,9 @@ public sealed class WebFormsWizardStore : IDisposable
             var path = Path.Combine(root, "root.config.json");
             WebFormsWizardRoot state;
             byte[] bytes;
-            if (resume)
-            {
-                bytes = ReadBytes(path);
-                state = Read<WebFormsWizardRoot>(bytes, "webforms-wizard-root.v1");
-                ValidateRoot(state);
-            }
-            else
-            {
-                state = new(0, []);
-                bytes = Encode("webforms-wizard-root.v1", generator, state);
-                Atomic(path, bytes);
-            }
+            bytes = ReadBytes(path);
+            state = Read<WebFormsWizardRoot>(bytes, "webforms-wizard-root.v1");
+            ValidateRoot(state);
             return new(root, held, generator, state, Hash(bytes));
         }
         catch { held.Dispose(); throw; }
@@ -116,7 +114,8 @@ public sealed class WebFormsWizardStore : IDisposable
         if (old is not null) _ = ReadProject(project.Id);
         if (old is null && state.Projects.Length >= 128) throw Fail("PROJECT_LIMIT");
         var path = ProjectPath(project.Id);
-        if (old is null && Directory.Exists(Path.GetDirectoryName(path)!)) throw Fail("PROJECT_FOLDER_EXISTS");
+        if (old is null && Directory.Exists(Path.GetDirectoryName(path)!) && !IsAbandonedRegistration(Path.GetDirectoryName(path)!))
+            throw Fail("PROJECT_FOLDER_EXISTS");
         var bytes = Encode("webforms-wizard-project.v1", generator, project);
         var next = new WebFormsWizardRoot(checked(state.Revision + 1), state.Projects
             .Where(item => item.Id != project.Id).Append(new(project.Id, Hash(bytes)))
@@ -321,6 +320,18 @@ public sealed class WebFormsWizardStore : IDisposable
         }
         finally { if (File.Exists(staging)) File.Delete(staging); }
     }
+
+    // A create interrupted after writing project.config.json but before the root
+    // registration leaves only that file (and Atomic temp files). It carries no
+    // registered state, so it may be replaced; anything else stays fail-closed.
+    private static bool IsAbandonedRegistration(string folder) =>
+        Directory.EnumerateDirectories(folder).FirstOrDefault() is null
+        && Directory.EnumerateFiles(folder).All(file =>
+        {
+            var name = Path.GetFileName(file);
+            return (name == "project.config.json" || name.StartsWith("project.config.json.", StringComparison.Ordinal) && name.EndsWith(".tmp", StringComparison.Ordinal))
+                && new FileInfo(file).LinkTarget is null;
+        });
 
     private static void RejectLink(string path)
     {
