@@ -170,6 +170,11 @@
     "priority": "0.7"
   },
   {
+    "path": "/webforms/",
+    "changefreq": "monthly",
+    "priority": "0.8"
+  },
+  {
     "path": "/vault-export/",
     "changefreq": "monthly",
     "priority": "0.7"

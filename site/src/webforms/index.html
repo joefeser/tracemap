@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="A bounded guide to TraceMap's shipped terminal wizard for resumable static ASP.NET Web Forms review, with explicit build consent, Windows-only gates, stop conditions, and non-claims.">
+    <meta name="robots" content="index,follow">
+    <meta name="author" content="Joe Feser">
+    <title>Web Forms Guided Setup | TraceMap</title>
+    <link rel="canonical" href="https://tracemap.tools/webforms/">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="TraceMap">
+    <meta property="og:title" content="Web Forms Guided Setup | TraceMap">
+    <meta property="og:description" content="Understand the choices, pauses, consent boundary, repair path, evidence, and stop conditions in TraceMap's shipped Web Forms terminal workflow.">
+    <meta property="og:url" content="https://tracemap.tools/webforms/">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="TraceMap home"><span class="brand-mark" aria-hidden="true">T</span><span>TraceMap</span></a>
+      <nav class="top-nav" aria-label="Primary navigation">
+        <a href="/evidence/">Evidence</a><a href="/outputs/">Outputs</a><a href="/workflows/">Workflows</a><a href="/examples/">Examples</a><a href="/blog/">Blog</a><a href="/capabilities/">Capabilities</a><a href="/docs/">Docs</a><a href="/validation/">Validation</a><a href="/limitations/">Limitations</a><a href="/demo/">Demo</a><a href="https://github.com/joefeser/tracemap">GitHub</a>
+      </nav>
+    </header>
+
+    <main data-webforms-setup="landing" data-main-boundary="684acb3457d1942fb7fde43db77c5cb27e5d1648" data-repairs-803="not-shipped">
+      <section class="page-hero">
+        <p class="eyebrow">Web Forms guided setup</p>
+        <h1>Configure a bounded static review, pause deliberately, and resume from checked state.</h1>
+        <p class="hero-subhead">
+          TraceMap ships a <strong>terminal wizard</strong> over shared persisted
+          wizard state. It is not a GUI, desktop setup screen, browser wizard,
+          or automatic customer onboarding service.
+        </p>
+        <p class="hero-note">
+          Public claim level: <strong>shipped</strong> for the bounded terminal
+          workflow on main. Checked-in synthetic examples remain
+          <strong>demo</strong>. TraceMap does not launch the website or execute SQL.
+        </p>
+        <nav class="hero-actions" aria-label="Web Forms setup resources">
+          <a class="button primary" href="https://github.com/joefeser/tracemap/blob/main/docs/WEBFORMS_NATIVE_WORKFLOW.md">Read the native workflow</a>
+          <a class="button secondary" href="/blog/modernizing-web-forms-without-running-it/">Read the static-evidence overview</a>
+          <a class="button secondary" href="/proof-paths/">Review proof paths</a>
+          <a class="button secondary" href="/limitations/">Read limitations</a>
+        </nav>
+      </section>
+
+      <section class="section">
+        <div class="section-header"><p class="section-kicker">1. Choose the input</p><h2>Pick one website context; do not imply whole-solution onboarding.</h2></div>
+        <div class="workflow-grid" data-setup-block="targets">
+          <article><h3>Website folder</h3><p>Choose a folder with the expected Web Forms structure. If the folder contains C# or VB projects, select the intended project explicitly.</p></article>
+          <article><h3>Solution</h3><p>Choose a solution, then make an explicit selection of one matching website root and its project when project-backed, or its projectless Web Site entry when applicable. Ambiguity is a stop condition; the wizard does not register or scan every project automatically.</p></article>
+          <article><h3>C# or VB project</h3><p>Select one explicit <code>.csproj</code> or <code>.vbproj</code>. Project-defined references and tasks can still involve dependencies, but the selected website target remains explicit.</p></article>
+          <article><h3>Projectless Web Site</h3><p>Choose projectless mode when no project file owns the site. Static syntax and structural evidence remain available; publication is a separate Windows operator step.</p></article>
+        </div>
+      </section>
+
+      <section class="section split-section" data-setup-block="forms">
+        <div><p class="section-kicker">2. Bound the forms</p><h2>Choose all discovered forms or a deliberate subset.</h2></div>
+        <div class="detail-list">
+          <div><strong>All</strong><span>Uses the bounded discovered form inventory. “All” does not establish complete application or historical compiler-input coverage.</span></div>
+          <div><strong>Selected</strong><span>Creates the bounded <code>forms.txt</code> editing surface. It is the normal human-edited file; generated JSON is not.</span></div>
+          <div><strong>Paused</strong><span>The terminal exits with code <code>2</code> so the operator can edit the list. This is a saved pause, not success or failure.</span></div>
+          <div><strong>Continue</strong><span><code>--continue</code> resumes from saved configuration after revalidating the selection and inputs. A blank, missing, or comments-only file is regenerated as a template and pauses again with code <code>2</code>; it is not a failure and empty never means all. An edited selection that escapes the root, duplicates a form, or collides by case fails closed.</span></div>
+          <div><strong>Private state</strong><span>Saved configuration may contain paths and copied binaries. It stays private operator state and is not public evidence or proof that setup succeeded.</span></div>
+        </div>
+      </section>
+
+      <section class="section" data-setup-block="consent">
+        <div class="section-header"><p class="section-kicker">3. Cross execution boundaries deliberately</p><h2>Project builds and projectless publication have different authority.</h2></div>
+        <div class="workflow-grid">
+          <article>
+            <h3>Project-backed build consent</h3>
+            <p>Before the operator types <code>build</code>, the terminal shows the trusted absolute tool path, version-probe arguments, build arguments, and working directory. The executable version itself is probed only after consent as part of the authorized build step.</p>
+            <p>MSBuild tasks may execute code, restore dependencies, and change build folders or source-controlled content. Declining consent executes no build.</p>
+          </article>
+          <article>
+            <h3>Windows-required legacy projects</h3>
+            <p>Classic, non-SDK, and .NET Framework C# or VB targets that resolve to Windows MSBuild are <strong>Windows-only</strong>. On another host, <code>WINDOWS_BUILD_REQUIRED</code> is a stop condition—not reduced cross-platform build support.</p>
+          </article>
+          <article>
+            <h3>Projectless ASP.NET compilation</h3>
+            <p>Compilation remains an external Windows operator step. Typing <code>ready</code> declares that publication was prepared; it is not authenticated compiler provenance and does not prove publication succeeded or came from the declared source.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section split-section" data-setup-block="resume-repair">
+        <div><p class="section-kicker">4. Resume, add, or repair</p><h2>Choose the operation that matches the state change.</h2></div>
+        <div class="detail-list">
+          <div><strong><code>--continue</code></strong><span>Revalidates the retained configuration, inputs, hashes, inventory, and staged copies before resuming the current project.</span></div>
+          <div><strong><code>--add-project</code></strong><span>Adds another website explicitly. It is not automatic solution-wide registration.</span></div>
+          <div><strong><code>--repair-project</code></strong><span>After preview and confirmation, resets one selected project's setup cursor while preserving other projects and the historical state described by the workflow contract.</span></div>
+          <div><strong>Repair limit</strong><span>Repair does not fix customer code, install missing tools, recover source, restore lost provenance, or repair corrupt root configuration. Use manual correction or a new configuration root where required.</span></div>
+        </div>
+      </section>
+
+      <section class="section" data-setup-block="evidence">
+        <div class="section-header"><p class="section-kicker">5. Read static evidence</p><h2>Completion means retained static reports verified—not runtime behavior observed.</h2></div>
+        <div class="workflow-grid">
+          <article><h3>Evidence vocabulary</h3><p>Review rule IDs, emitted evidence tiers, coverage labels, repository and commit identity, extractor versions, spans, limitations, and explicit gaps. A weaker hop remains weaker.</p><p><a href="/evidence/">Evidence model</a> · <a href="/evidence/gaps/">Gap register</a></p></article>
+          <article><h3>Coverage posture</h3><p>Partial, reduced, unresolved, unsupported, paused, declined, failed, external-step, and completed-report states remain distinct. A failed build is not clean evidence.</p><p><a href="/limitations/reduced-coverage/">Reduced coverage</a> · <a href="/static-vs-runtime/">Static versus runtime</a></p></article>
+          <article><h3>Public proof</h3><p>The separate source-plus-compiled example is a public-safe <strong>concept</strong>, not observed extractor proof. It illustrates how source, compiled candidates, gaps, and provenance could be reviewed without upgrading the wizard workflow claim.</p><p><a href="/webforms/source-plus-compiled-proof/">Source plus compiled concept</a> · <a href="/legacy-dotnet/evidence/">Legacy .NET evidence lane</a> · <a href="/legacy-modernization/evidence-map/">Modernization evidence map</a></p></article>
+        </div>
+      </section>
+
+      <section class="section" data-setup-block="stops">
+        <div class="section-header"><p class="section-kicker">Stop conditions and owner handoff</p><h2>Do not convert a blocked prerequisite into a softer success label.</h2></div>
+        <div class="workflow-grid">
+          <article><h3>Operator stops</h3><p>Stop for declined consent, changed inputs, an invalid edited <code>forms.txt</code>, ambiguous targets, missing tools, or <code>WINDOWS_BUILD_REQUIRED</code>. A blank or missing selection file is instead a template-regeneration pause. The operator decides whether to correct the input, obtain the required host/tool, or abandon the attempt.</p></article>
+          <article><h3>Build or repository owner stops</h3><p>Stop for failed external publication, corrupt root state, unavailable source, or unverifiable provenance. A build or repository owner must supply authorized evidence or choose a new bounded root.</p></article>
+          <article><h3>Review owner stops</h3><p>Stop for partial analysis, explicit gaps, or retained reports that cannot be verified. The review owner decides whether the remaining coverage is usable; TraceMap does not grant release approval.</p></article>
+        </div>
+      </section>
+
+      <section class="section callout-section" data-setup-block="non-claims" data-tm-boundary="claim-boundary">
+        <h2>What this shipped workflow does not prove</h2>
+        <p>
+          It does not prove runtime page execution, event firing, branch
+          feasibility, database or SQL execution, service reachability,
+          production usage, deployment state, publication success, selected
+          implementation, customer compatibility, migration parity, release
+          approval, safety, complete coverage, automatic source acquisition,
+          cross-service tracing, or authenticated build provenance.
+        </p>
+        <p>
+          Public pages do not contain customer screenshots, private source or
+          markup, raw SQL, configuration values, credentials, connection
+          material, local paths, private identities, raw fact streams, SQLite,
+          analyzer output, copied binaries, or private validation details.
+          TraceMap does not use LLM calls, embeddings, vector databases, or
+          prompt-based classification for this evidence.
+        </p>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <p>Continue with the <a href="/blog/modernizing-web-forms-without-running-it/">Web Forms evidence overview</a>, <a href="/proof-paths/">proof paths</a>, <a href="/limitations/">limitations</a>, or the <a href="https://github.com/joefeser/tracemap/blob/main/docs/WEBFORMS_NATIVE_WORKFLOW.md">repository workflow</a>.</p>
+      <p class="copyright">© 2026 Joe Feser.</p>
+    </footer>
+  </body>
+</html>
