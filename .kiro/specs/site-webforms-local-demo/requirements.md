@@ -46,8 +46,11 @@ bounded, and repeated evidence?”
    reviewed privacy projection that satisfies Requirement 10.
 6. Validation counts SHALL be reported only with an exact tested commit or an
    explicitly verified tree-equivalent merge commit, a durable public result
-   URL, platform, command mode, generator SHA-256, bounded privacy-projected
-   input SHA-256, pass/fail/skip counts, and Windows publication status.
+   URL, platform, command mode, the source validation receipt's separately
+   labeled generator and bounded-input SHA-256 values, pass/fail/skip counts,
+   and Windows publication status. The source receipt's bounded input includes
+   its admitted source roster, execution/fixture assemblies, and test receipt;
+   its digest SHALL NOT be represented as the digest of the public projection.
    Historical counts SHALL remain labeled historical and SHALL NOT be reused as
    proof for a different tree or current head.
 7. The authentic ASP.NET mapped/mapless publication row SHALL be Windows-only.
@@ -66,7 +69,9 @@ bounded, and repeated evidence?”
 10. Any new public machine-readable derivative SHALL include the exact
     generator SHA-256 and a SHA-256 of its bounded privacy-projected input.
     The input hash SHALL cover only the public projection, never a raw/private
-    source artifact. Public JSON SHALL be allowlisted and SHALL exclude raw
+    source artifact. These projection hashes are independent of and SHALL be
+    displayed separately from the source validation receipt hashes in
+    Requirement 6. Public JSON SHALL be allowlisted and SHALL exclude raw
     SQLite, `facts.ndjson`, logs, source snippets, raw SQL or command text,
     credentials, connection material, customer data, private identities,
     machine-local paths, and unpublished analyzer output.
