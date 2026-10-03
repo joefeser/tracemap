@@ -70,6 +70,8 @@ then may the status record change.
 4. **Cross the execution boundary deliberately**
    - Separate a project-backed build-consent card from the external
      projectless Windows compilation card.
+   - Label classic, non-SDK, and .NET Framework project targets that require
+     Windows MSBuild; `WINDOWS_BUILD_REQUIRED` is a stop on non-Windows hosts.
    - Keep tool path/version/arguments/working directory preview and the exact
      `build` consent concept visible.
    - Label `ready` as a declaration, not proof.
@@ -142,8 +144,9 @@ record with:
 - a concise static terminal-setup summary;
 - an existing proof/evidence route as `preferredProofPath` until #806 is
   present, then the #806 route;
-- limitations covering bounded source/compiled evidence, external Windows
-  compilation, and partial coverage; and
+- limitations covering bounded source/compiled evidence, Windows-required
+  legacy project builds, external Windows projectless compilation, and partial
+  coverage; and
 - non-claims covering runtime, compatibility, migration, publication success,
   cross-service tracing, private data, and AI analysis.
 
@@ -159,10 +162,12 @@ The validator must check:
   links;
 - visible shipped/demo distinction and terminal-not-GUI language;
 - website folder, solution, C#/VB, projectless, explicit selection, all/subset,
-  `forms.txt`, pause, `--continue`, saved state, consent, Windows publication,
-  add-project, repair, stop conditions, and owner handoff concepts;
-- an exact main evidence anchor and an explicit exclusion of #803/dev-only
-  repairs;
+  `forms.txt`, pause, `--continue`, saved state, consent, Windows-required
+  legacy builds, Windows projectless publication, add-project, repair, stop
+  conditions, and owner handoff concepts;
+- the exact revalidated implementation-base anchor and a branch-aware #803
+  assertion: require dev-only exclusion while #803 is absent from that main
+  base, but accept a later verified promotion without demanding stale copy;
 - required limitations/non-claims and absence of forbidden success/runtime
   language;
 - absence of private/local paths, raw source/SQL/configuration, secrets,

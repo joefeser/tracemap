@@ -19,7 +19,9 @@ or public claim-ledger rows.
 The landing page will explain website folder, solution, explicit C#/VB project,
 projectless Web Site, all/subset forms, `forms.txt`, pause/continue, saved
 configuration, build consent, external Windows compilation, explicit project
-addition, isolated repair, stop conditions, and owner handoff.
+addition, isolated repair, stop conditions, and owner handoff. Classic,
+non-SDK, and .NET Framework project builds that resolve to Windows MSBuild are
+also Windows-only and stop on non-Windows hosts.
 
 ## Verified evidence state
 
@@ -34,6 +36,8 @@ addition, isolated repair, stop conditions, and owner handoff.
   `af05c289a799c896862983fd9f4f73a28d882d0c` is an ancestor of `origin/dev`
   and is not an ancestor of the verified `origin/main`. The implementation must
   recheck this fact and must not claim those repairs as shipped until promoted.
+  Validators must bind this assertion to the implementation's exact main base,
+  not permanently require the 2026-10-03 dev-only status after a promotion.
 
 ## Placement and overlap decisions
 

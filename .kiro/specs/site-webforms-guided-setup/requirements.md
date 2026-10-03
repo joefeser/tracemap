@@ -69,14 +69,18 @@ application was compiled, launched, traced, migrated, or proven compatible.
 2. Copy SHALL state that MSBuild tasks may execute code, restore dependencies,
    and change build folders or source-controlled content. Declining build
    consent executes no build.
-3. Projectless ASP.NET compilation SHALL remain an external Windows operator
+3. Classic, non-SDK, and .NET Framework C#/VB project targets that resolve to
+   Windows MSBuild SHALL be labeled Windows-only. A non-Windows host is a stop
+   condition (`WINDOWS_BUILD_REQUIRED`), not reduced cross-platform build
+   support.
+4. Projectless ASP.NET compilation SHALL remain an external Windows operator
    step. Typing `ready` is an operator declaration, not authenticated compiler
    provenance and not proof that publication succeeded.
-4. The page SHALL distinguish `--continue`, `--add-project`, and
+5. The page SHALL distinguish `--continue`, `--add-project`, and
    `--repair-project`. Isolated repair SHALL be described as resetting one
    selected project's setup state while preserving the other projects and
    historical state described by the documented contract.
-5. Copy SHALL state that repair does not fix customer code, corrupt root
+6. Copy SHALL state that repair does not fix customer code, corrupt root
    configuration, missing tools, source acquisition, or lost provenance.
 
 ### 4. Static evidence and proof boundaries
@@ -92,8 +96,9 @@ application was compiled, launched, traced, migrated, or proven compatible.
    SHALL record the exact generator SHA-256 and a SHA-256 of its bounded,
    privacy-projected input. It SHALL NOT hash a private source artifact for a
    shareable public identity.
-5. Windows publication validation SHALL be labeled Windows-only. A macOS/Linux
-   static or test pass SHALL NOT be presented as satisfying that gate.
+5. Windows legacy-project build and projectless publication validation SHALL be
+   labeled Windows-only. A macOS/Linux static or test pass SHALL NOT be
+   presented as satisfying either gate.
 6. Partial, reduced, unresolved, unsupported, paused, declined, failed, and
    external-step states SHALL remain distinct from completed static report
    verification.
@@ -144,8 +149,11 @@ preserve these boundaries:
    Windows-only publication scope, the terminal-not-GUI distinction, and the
    external projectless compilation boundary.
 3. A focused validator and negative tests SHALL enforce the route, metadata,
-   required concepts, link targets, claim labels, main/dev boundary, private
-   data exclusions, and forbidden overclaims.
+   required concepts, link targets, claim labels, the implementation base's
+   revalidated main/dev boundary, private data exclusions, and forbidden
+   overclaims. The validator SHALL require #803's dev-only exclusion only while
+   #803 is not an ancestor of that exact main base; it SHALL NOT hard-code a
+   stale branch status after a later promotion.
 4. Implementation validation SHALL include `cd site && npm run build`,
    `cd site && npm test`, `cd site && npm run validate`, focused validator
    tests, `./scripts/check-private-paths.sh`, and `git diff --check`.
@@ -159,8 +167,10 @@ preserve these boundaries:
 - `/webforms/` presents the exact bounded terminal workflow delivered on main.
 - Website/solution/project/projectless selection, all/subset forms,
   `forms.txt`, `--continue`, saved configuration, build consent, external
-  Windows compilation, `--add-project`, and isolated repair are visible.
-- #803-only repairs are not claimed as main-backed behavior.
+  Windows compilation, Windows-required legacy project builds,
+  `--add-project`, and isolated repair are visible.
+- #803-only repairs are not claimed as main-backed behavior while they remain
+  absent from the revalidated implementation base.
 - Public claims are traceable to exact implementation/docs and synthetic proof;
   gaps and stop conditions are at least as prominent as the happy path.
 - The claim ledger distinguishes this bounded shipped workflow from broader

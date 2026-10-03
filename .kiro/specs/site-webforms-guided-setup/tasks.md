@@ -33,10 +33,13 @@ Public claim level: shipped workflow with demo-bounded synthetic proof
 - [ ] Present all/subset form selection, bounded `forms.txt` pause, exit code 2,
       `--continue`, saved-state revalidation, and fail-closed selection states.
 - [ ] Present project build consent, external projectless ASP.NET compilation,
-      `ready` attestation limits, `--add-project`, and isolated repair.
+      the Windows-MSBuild requirement for classic/non-SDK/.NET Framework
+      projects, `ready` attestation limits, `--add-project`, and isolated
+      repair.
 - [ ] Add stop conditions and owner-routing for changed inputs, missing tools,
-      corrupt state, ambiguous targets, declined consent, failed publication,
-      unverifiable provenance, and partial/unverified results.
+      corrupt state, ambiguous targets, declined consent,
+      `WINDOWS_BUILD_REQUIRED`, failed publication, unverifiable provenance,
+      and partial/unverified results.
 - [ ] Link the #806 proof story only when its route exists; link the existing
       Web Forms article, native docs, evidence, gap, reduced-coverage, and
       static-vs-runtime guidance.
@@ -46,8 +49,8 @@ Public claim level: shipped workflow with demo-bounded synthetic proof
 - [ ] Add `/webforms/` to `site/src/_site/pages.json` and add discovery metadata
       with explicit limitations and non-claims.
 - [ ] Add a focused validator, negative tests, and general-validator wiring for
-      route content, links, metadata, claim boundaries, #803 exclusion, and
-      private-data/overclaim safety.
+      route content, links, metadata, claim boundaries, branch-aware #803
+      status, and private-data/overclaim safety.
 - [ ] Run focused site tests, `npm test`, `npm run validate`, and `npm run build`
       from `site/`.
 - [ ] Complete and record desktop/mobile browser checks for layout, wrapping,
