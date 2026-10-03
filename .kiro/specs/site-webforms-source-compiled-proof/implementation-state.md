@@ -92,3 +92,9 @@ Implementation begins only after owner approval and should start from a freshly
 fetched target branch. Keep the implementation site-only, update this file and
 task checkboxes as work completes, and do not edit generated `site/dist` or
 `site/output` content.
+
+Specification review PR: https://github.com/joefeser/tracemap/pull/810
+
+The specification PR plans #806 and deliberately does not close it. ACK review
+and owner merge remain separate gates; the planning PR grants no implementation
+or merge authority.
