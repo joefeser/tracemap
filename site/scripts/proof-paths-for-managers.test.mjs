@@ -153,7 +153,8 @@ async function createFixture({
     ...proofPathsForManagersRequiredLinks.map(routeEntry),
     routeEntry(databaseDesignReviewRoute),
     routeEntry(databaseDesignReviewProofRoute),
-    routeEntry("/sql/operator-handoff/proof-packet/")
+    routeEntry("/sql/operator-handoff/proof-packet/"),
+    routeEntry("/webforms/source-plus-compiled-proof/")
   ],
   includeInboundLinks = true,
   pageHtml,
@@ -166,7 +167,8 @@ async function createFixture({
     ...proofPathsForManagersRequiredLinks,
     databaseDesignReviewRoute,
     databaseDesignReviewProofRoute,
-    "/sql/operator-handoff/proof-packet/"
+    "/sql/operator-handoff/proof-packet/",
+    "/webforms/source-plus-compiled-proof/"
   ]);
   const source = pageHtml ?? (await page());
 
