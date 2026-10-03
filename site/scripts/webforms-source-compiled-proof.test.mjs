@@ -11,7 +11,7 @@ import { validateWebFormsSourceCompiledProofDist } from "./webforms-source-compi
 
 const siteRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
-test("Web Forms source + compiled proof builds with exact provenance, per-hop tiers, links, and non-claims", async (t) => {
+test("Web Forms source + compiled concept builds with exact provenance, illustrative hops, links, and non-claims", async (t) => {
   const root = await fixture(t);
   await buildSite({ root, log() {} });
   const errors = [];
@@ -69,22 +69,51 @@ test("Web Forms proof generator rejects multiline raw SQL in an allowlisted stri
   );
 });
 
-test("Web Forms proof rejects canonical projection, evidence registry, partial-status, and selected bridge drift", async (t) => {
+test("Web Forms proof generator rejects multiline raw SQL beyond the former scan window", async (t) => {
+  const root = await fixture(t);
+  const inputPath = join(root, "src", "_data", "webforms-source-compiled-proof-input.json");
+  const input = JSON.parse(await readFile(inputPath, "utf8"));
+  input.limitations.push(`SELECT\n${"x".repeat(4096)} FROM private_table`);
+  await writeFile(inputPath, `${JSON.stringify(input, null, 2)}\n`);
+  await assert.rejects(
+    generateWebFormsSourceCompiledProof({ inputPath, outputPath: join(root, "generated.json") }),
+    /Forbidden value/
+  );
+});
+
+test("Web Forms concept generator rejects reintroduced self-authored support aliases", async (t) => {
+  const root = await fixture(t);
+  const inputPath = join(root, "src", "_data", "webforms-source-compiled-proof-input.json");
+  const input = JSON.parse(await readFile(inputPath, "utf8"));
+  input.outcomes[0].orderedHops[0].supportingEvidenceIds = ["self-authored-alias"];
+  await writeFile(inputPath, `${JSON.stringify(input, null, 2)}\n`);
+  await assert.rejects(
+    generateWebFormsSourceCompiledProof({ inputPath, outputPath: join(root, "generated.json") }),
+    /Unallowlisted or protected key/
+  );
+});
+
+test("Web Forms concept rejects self-derived evidence aliases, canonical drift, complete status, and upgraded bridges", async (t) => {
   const root = await fixture(t);
   const assetPath = join(root, "src", "assets", "webforms-source-compiled-proof.json");
   const packet = JSON.parse(await readFile(assetPath, "utf8"));
   packet.coverage.resultStatus = "complete";
   packet.limitations[0] = `${packet.limitations[0]} Altered.`;
-  packet.evidence = packet.evidence.filter((record) => record.id !== "compiled-profile-constructor-call");
-  packet.outcomes[0].orderedHops.find((hop) => hop.id === "dynamic-constructor").evidenceTier = "Tier2Structural";
+  packet.limitations = packet.limitations.filter((value) => !value.includes("No independent extractor output"));
+  const constructor = packet.outcomes[0].orderedHops.find((hop) => hop.id === "dynamic-constructor");
+  constructor.evidenceTier = "Tier2Structural";
+  constructor.supportingEvidenceIds = ["self-derived-alias"];
+  packet.evidence = [{ id: "self-derived-alias" }];
   await writeFile(assetPath, `${JSON.stringify(packet, null, 2)}\n`);
   await buildSite({ root, log() {} });
   const errors = [];
   await validateWebFormsSourceCompiledProofDist({ dist: join(root, "dist"), errors, root });
   const joined = errors.join("\n");
   assert.match(joined, /result status as partial/);
+  assert.match(joined, /independent extractor output is not checked in/);
   assert.match(joined, /unbound compiled bridge hop at Tier3SyntaxOrTextual/);
-  assert.match(joined, /unresolved supporting evidence ID/);
+  assert.match(joined, /must not publish a self-derived evidence registry/);
+  assert.match(joined, /must not publish unverified supporting evidence IDs/);
   assert.match(joined, /does not match a fresh canonical projection/);
 });
 
@@ -101,7 +130,7 @@ test("Web Forms proof rejects rendered page drift from the checked-in asset", as
   const root = await fixture(t);
   const pagePath = join(root, "src", "webforms", "source-plus-compiled-proof", "index.html");
   const page = await readFile(pagePath, "utf8");
-  await writeFile(pagePath, page.replace("fdf948229e9d3b60078c9c2989329da35d5fca5e7c26dd296776491c947b8ff2", "0".repeat(64)));
+  await writeFile(pagePath, page.replace("a9aae27d806b21bb1d8c48f861d0b82533e0862f1c8b12e1683ad58027f4946c", "0".repeat(64)));
   await buildSite({ root, log() {} });
   const errors = [];
   await validateWebFormsSourceCompiledProofDist({ dist: join(root, "dist"), errors, root });

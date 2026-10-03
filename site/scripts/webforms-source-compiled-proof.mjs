@@ -52,7 +52,7 @@ const forbiddenMaterial = [
   /\bpublic\.synthetic_[A-Za-z0-9_]+\b/i
 ];
 const protectedKeys = /(?:sqlText|rawSql|sourceSnippet|literalHash|parameterValue|connectionString|credential|secret|absolutePath|privateIdentity|analyzerOutput|rawIndex)/i;
-const forbiddenStringValue = /(?:\/Users\/|\/home\/|\/private\/|[A-Z]:\\Users\\|file:\/\/|Server\s*=|Password\s*=|User Id\s*=|ConnectionString|\bSELECT\b[\s\S]{0,500}\bFROM\b|\bINSERT\s+INTO\b|\bUPDATE\s+\S+\s+SET\b|\bDELETE\s+FROM\b|\b(?:CREATE|ALTER|DROP)\s+TABLE\b)/i;
+const forbiddenStringValue = /(?:\/Users\/|\/home\/|\/private\/|[A-Z]:\\Users\\|file:\/\/|Server\s*=|Password\s*=|User Id\s*=|ConnectionString|\bSELECT\b[\s\S]*\bFROM\b|\bINSERT\s+INTO\b|\bUPDATE\s+\S+\s+SET\b|\bDELETE\s+FROM\b|\b(?:CREATE|ALTER|DROP)\s+TABLE\b)/i;
 const publicEvidencePath = /^(?:samples\/|site\/src\/_data\/webforms-source-compiled-proof-input\.json$)/;
 
 export async function validateWebFormsSourceCompiledProofDist({ baseUrl = "https://tracemap.tools", dist, errors, root = moduleRoot }) {
@@ -67,7 +67,7 @@ export async function validateWebFormsSourceCompiledProofDist({ baseUrl = "https
   const text = normalizeRenderedText(html);
   if (!html.includes(`<link rel="canonical" href="${baseUrl}${route}">`)) errors.push("Web Forms proof canonical URL is missing or incorrect.");
   if ((html.match(/<h1\b/gi) ?? []).length !== 1) errors.push("Web Forms proof must contain exactly one h1.");
-  for (const phrase of ["Public claim level: demo", expectedCommit, "Dynamic email lookup", "Literal audit call", "independent Fill terminal", "Windows-only", "No runtime execution"]) {
+  for (const phrase of ["Public claim level: concept", "No independent extractor output", expectedCommit, "Dynamic email lookup", "Literal audit call", "independent Fill terminal", "Windows-only", "No runtime execution"]) {
     if (!text.includes(phrase)) errors.push(`Web Forms proof is missing required bounded-claim text: ${phrase}`);
   }
   for (const tier of tiers) if (!text.includes(tier)) errors.push(`Web Forms proof is missing evidence tier: ${tier}`);
@@ -87,8 +87,8 @@ export async function validateWebFormsSourceCompiledProofDist({ baseUrl = "https
 
   const discovery = JSON.parse(await readFile(resolve(root, "src", "_site", "discovery.json"), "utf8"));
   const entry = discovery.find((item) => item.path === route);
-  if (!entry || entry.publicClaimLevel !== "demo" || entry.preferredProofPath !== assetRoute || !entry.limitations?.length || !entry.nonClaims?.length) {
-    errors.push("Web Forms proof discovery metadata is missing its demo boundary, asset proof path, limitations, or non-claims.");
+  if (!entry || entry.publicClaimLevel !== "concept" || entry.preferredProofPath !== assetRoute || !entry.limitations?.length || !entry.nonClaims?.length) {
+    errors.push("Web Forms proof discovery metadata is missing its concept boundary, asset path, limitations, or non-claims.");
   }
 
   const sitemap = await readSitemapLocSet(resolve(dist, "sitemap.xml"));
@@ -106,12 +106,13 @@ export async function validateWebFormsSourceCompiledProofDist({ baseUrl = "https
 
 function validatePacket(packet, errors) {
   if (packet.schemaVersion !== "tracemap.webforms-source-compiled-proof.v1") errors.push("Web Forms proof asset schema version is incorrect.");
-  if (packet.publicClaimLevel !== "demo" || packet.commitSha !== expectedCommit) errors.push("Web Forms proof asset is not bound to the expected demo claim and exact main revision.");
+  if (packet.publicClaimLevel !== "concept" || packet.commitSha !== expectedCommit) errors.push("Web Forms proof asset must fail closed to concept and remain bound to the exact main revision.");
   if (packet.proofBoundary !== "checked-in-public-synthetic-fixtures") errors.push("Web Forms proof asset has an invalid proof boundary.");
   if (!/^[0-9a-f]{64}$/.test(packet.provenance?.generatorSha256 ?? "") || !/^[0-9a-f]{64}$/.test(packet.provenance?.boundedInputSha256 ?? "")) errors.push("Web Forms proof asset requires valid generator and bounded-input SHA-256 values.");
   if (!packet.provenance?.inputProjection?.includes("privacy projection")) errors.push("Web Forms proof asset must identify its bounded input as a privacy projection.");
   if (packet.coverage?.maxDepth !== 20 || packet.coverage?.maxPaths !== 256 || packet.coverage?.maxTraversalWork !== 100000 || packet.coverage?.truncatedByPathOrWorkLimit !== false) errors.push("Web Forms proof asset does not preserve the pinned traversal bounds and truncation state.");
   if (packet.coverage?.resultStatus !== "partial") errors.push("Web Forms proof asset must machine-label its bounded result status as partial.");
+  if (!packet.limitations?.some((value) => value.includes("No independent extractor output"))) errors.push("Web Forms concept asset must disclose that independent extractor output is not checked in.");
   const examples = packet.bridgeTierExamples ?? [];
   for (const tier of ["Tier1Semantic", "Tier2Structural", "Tier3SyntaxOrTextual"]) {
     if (!examples.some((row) => row.ruleId === "combined.paths.compiled-il-bridge.v1" && row.evidenceTier === tier)) errors.push(`Web Forms proof asset must preserve compiled bridge emission at ${tier}.`);
@@ -123,14 +124,14 @@ function validatePacket(packet, errors) {
     if (!Array.isArray(outcome.orderedHops) || outcome.orderedHops.length < 4) errors.push(`Web Forms proof outcome has an incomplete ordered chain: ${outcome.id}`);
     for (const hop of outcome.orderedHops ?? []) {
       if (!requiredRules.includes(hop.ruleId) && hop.ruleId !== "vb.syntax.callgraph.v1") errors.push(`Web Forms proof hop has an unapproved rule ID: ${hop.ruleId}`);
-      if (!tiers.includes(hop.evidenceTier) || !/^samples\//.test(hop.filePath ?? "") || !Number.isInteger(hop.startLine) || !Number.isInteger(hop.endLine) || hop.startLine < 1 || hop.endLine < hop.startLine || !hop.supportingEvidenceIds?.length) errors.push(`Web Forms proof hop has incomplete tier, span, or support provenance: ${hop.id}`);
+      if (!tiers.includes(hop.evidenceTier) || !/^samples\//.test(hop.filePath ?? "") || !Number.isInteger(hop.startLine) || !Number.isInteger(hop.endLine) || hop.startLine < 1 || hop.endLine < hop.startLine) errors.push(`Web Forms proof hop has incomplete illustrative tier or span: ${hop.id}`);
       if (hop.ruleId === "combined.paths.compiled-il-bridge.v1" && hop.evidenceTier !== "Tier3SyntaxOrTextual") errors.push(`Web Forms selected DLL-only reproduction must keep unbound compiled bridge hop at Tier3SyntaxOrTextual: ${hop.id}`);
     }
   }
   if (outcomes.find((row) => row.id === "dynamic-email")?.commandTextState !== "unresolved-operand") errors.push("Dynamic email outcome must remain unresolved.");
   if (outcomes.find((row) => row.id === "literal-audit")?.commandTextState !== "method-local-constant") errors.push("Literal audit outcome must preserve its checked-in method-local constant state.");
   if (outcomes.find((row) => row.id === "fill")?.terminal !== "Fill") errors.push("Fill outcome must remain independently terminal-scoped.");
-  validateEvidenceRegistry(packet, errors);
+  validateConceptBoundary(packet, errors);
 }
 
 async function validateHashes({ packet, root, errors }) {
@@ -149,31 +150,15 @@ async function validateHashes({ packet, root, errors }) {
   }
 }
 
-function validateEvidenceRegistry(packet, errors) {
-  const registry = new Map();
-  for (const record of packet.evidence ?? []) {
-    if (!record.id || registry.has(record.id)) errors.push(`Web Forms proof evidence registry has a missing or duplicate ID: ${record.id ?? "<missing>"}`);
-    if (!requiredRules.includes(record.ruleId) && record.ruleId !== "vb.syntax.callgraph.v1") errors.push(`Web Forms proof evidence record has an unapproved rule ID: ${record.id}`);
-    if (!tiers.includes(record.evidenceTier) || !publicEvidencePath.test(record.filePath ?? "") || !Number.isInteger(record.startLine) || !Number.isInteger(record.endLine) || record.startLine < 1 || record.endLine < record.startLine) errors.push(`Web Forms proof evidence record has incomplete tier or span provenance: ${record.id}`);
-    registry.set(record.id, record);
-  }
-  if (!registry.size) errors.push("Web Forms proof asset requires a supporting-evidence registry.");
-  const checkReferences = (item, label) => {
-    for (const id of item.supportingEvidenceIds ?? []) {
-      const record = registry.get(id);
-      if (!record) {
-        errors.push(`Web Forms proof references an unresolved supporting evidence ID: ${id}`);
-        continue;
-      }
-      for (const field of ["ruleId", "evidenceTier", "filePath", "startLine", "endLine"]) {
-        if (record[field] !== item[field]) errors.push(`Web Forms proof supporting evidence ID ${id} does not match ${label} ${field}.`);
-      }
-    }
+function validateConceptBoundary(packet, errors) {
+  if (packet.evidence !== undefined) errors.push("Web Forms concept asset must not publish a self-derived evidence registry.");
+  const rejectAliases = (item, label) => {
+    if (item.supportingEvidenceIds !== undefined) errors.push(`Web Forms concept asset must not publish unverified supporting evidence IDs for ${label}.`);
   };
-  for (const outcome of packet.outcomes ?? []) for (const hop of outcome.orderedHops ?? []) checkReferences(hop, `hop ${hop.id}`);
+  for (const outcome of packet.outcomes ?? []) for (const hop of outcome.orderedHops ?? []) rejectAliases(hop, `hop ${hop.id}`);
   for (const gap of packet.gaps ?? []) {
-    if (!tiers.includes(gap.evidenceTier) || !publicEvidencePath.test(gap.filePath ?? "") || !Number.isInteger(gap.startLine) || !Number.isInteger(gap.endLine) || gap.startLine < 1 || gap.endLine < gap.startLine || !gap.supportingEvidenceIds?.length) errors.push(`Web Forms proof gap has incomplete tier, span, or support provenance: ${gap.classification}`);
-    checkReferences(gap, `gap ${gap.classification}`);
+    if (!tiers.includes(gap.evidenceTier) || !publicEvidencePath.test(gap.filePath ?? "") || !Number.isInteger(gap.startLine) || !Number.isInteger(gap.endLine) || gap.startLine < 1 || gap.endLine < gap.startLine) errors.push(`Web Forms proof gap has incomplete illustrative tier or span: ${gap.classification}`);
+    rejectAliases(gap, `gap ${gap.classification}`);
   }
 }
 
