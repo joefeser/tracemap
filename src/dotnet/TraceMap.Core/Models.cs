@@ -224,6 +224,7 @@ public static class FactTypes
     public const string SolutionDeclared = nameof(SolutionDeclared);
     public const string ProjectDeclared = nameof(ProjectDeclared);
     public const string PackageReferenced = nameof(PackageReferenced);
+    public const string CentralPackageVersionDeclared = nameof(CentralPackageVersionDeclared);
     public const string TargetFrameworkDeclared = nameof(TargetFrameworkDeclared);
     public const string ConfigFileDeclared = nameof(ConfigFileDeclared);
     public const string SqlFileDeclared = nameof(SqlFileDeclared);
@@ -683,7 +684,7 @@ public static class ScannerVersions
     public const string TraceMap = TraceMapDiagnostics.ToolVersion;
     public const string RepoManifestExtractor = "repo-manifest/0.1.0";
     public const string FileInventoryExtractor = "file-inventory/0.1.0";
-    public const string ProjectFileExtractor = "project-file/0.1.0";
+    public const string ProjectFileExtractor = "project-file/0.2.0"; // 0.2.0: CentralPackageVersionDeclared facts + versionOverride (PR #804)
     public const string NuGetLockfileExtractor = "nuget-lockfile/0.1.0";
     public const string BuildEnvironmentExtractor = "build-environment/0.6.1";
     public const string AnalyzerCapabilityExtractor = "analyzer-capability/0.1.0";
