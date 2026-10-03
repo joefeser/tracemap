@@ -1,25 +1,30 @@
 # Implementation State
 
-Status: specification complete; site implementation not started
+Status: current-head P1 repairs in progress; concept downgrade selected because independent extractor output is not checked in
 
-Branch: `codex/site-webforms-source-compiled-proof-spec`
+Branch: `codex/site-webforms-source-compiled-proof`
+
+Initial implementation revision: `94f4873c60f1ad4dc937b172ae21bb43ed00b0f4`
 
 Base: `origin/main` at
-`d76358f663ce40532fe0954ca9888612d51a4121`
+`5ffd4a54176c002e4c6d41ce0133eab5963ad79b`
 
 Issue: #806
 
 ## Scope decision
 
-This branch defines only the public-site contract for the source-plus-compiled
-Web Forms proof story. It intentionally changes no `site/src` files, scanner or
-reporter code, fixtures, rules, tests, generated site output, or public claims.
+This branch implements only the public-site source-plus-compiled Web Forms proof
+story. It changes site source, a site-owned projection generator/input, focused
+site validators, inbound links, and this spec state. It changes no scanner,
+reporter, fixture, rule, or generated `site/dist` / `site/output` source.
 
-The planned route is `/webforms/source-plus-compiled-proof/`. Its preferred
-claim level is `demo`, contingent on implementation producing a checked-in,
-allowlisted, privacy-projected proof artifact that is bound to the exact public
-fixture revision. If that condition cannot be met, implementation must keep the
-route at `concept`; the spec does not pre-approve a demo claim.
+The route is `/webforms/source-plus-compiled-proof/`. Its claim level is
+`concept`: the checked-in allowlisted projection is deterministic and bound to
+the exact public fixture revision, but it is not independently derived from
+checked-in extractor output. The generator hash identifies the exact generator
+bytes; the bounded-input hash covers the canonical public privacy projection,
+never a private scan, binary, or tree. Those hashes prove projection integrity,
+not extractor truth.
 
 ## Exact-main evidence inspected
 
@@ -51,7 +56,7 @@ route at `concept`; the spec does not pre-approve a demo claim.
 ## Branch boundary
 
 PR #803 merged into `dev` as `af05c289a799c896862983fd9f4f73a28d882d0c`
-but is not an ancestor of the selected `main` baseline. Among other hardening,
+and remains outside the selected `main` baseline. Among other hardening,
 it adds explicit lazy-corpus scan-identity assertions and related Web Forms
 safety/diagnostic repairs. The eventual story may describe those changes only
 as `dev`-only until a later promotion is verified. It must not use #803 to
@@ -69,11 +74,12 @@ strengthen an exact-main proof claim.
 - Existing concept and handoff pages remain authoritative for their broader
   topics; this story promotes only the exact synthetic proof it can show.
 
-## Planned public claim
+## Public claim
 
-Allowed: on the exact selected public fixture revision, TraceMap's deterministic
-static evidence retains the displayed ordered source/compiled candidates and
-the three displayed database API terminal outcomes, with explicit gaps.
+Allowed: the exact selected public fixture revision, rule catalog, and focused
+regression contract support a concept showing how ordered source/compiled
+candidates and three database API terminal outcomes would be reviewed with
+explicit gaps.
 
 Not allowed: runtime reachability or execution, selected branches, warm/cold
 property state, SQL text or parameter recovery, database success, returned
@@ -81,7 +87,43 @@ values, provider selection, source/build authenticity, deployed identity,
 customer compatibility, migration parity, complete tracing, release approval,
 or safety.
 
-## Spec validation
+## Implementation evidence
+
+- Added the ordered three-outcome route and public JSON projection.
+- Added generator/input digest verification, recursive protected-field checks,
+  forbidden public-material checks, per-hop tier/span/rule validation,
+  discovery/sitemap checks, and inbound/outbound link checks.
+- Added a conditional landing-page regression: when `/webforms/` lands under
+  #805, it must link to this proof. The route is not created in this #806 PR,
+  preserving one story per PR.
+- Promoted only the exact synthetic proof row to `demo` in the legacy .NET and
+  modernization maps; broader Web Forms event/route/navigation rows remain
+  hidden.
+
+## Validation
+
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter FullyQualifiedName~LazyConstructorLoggingTests --no-restore` — passed.
+- `cd site && node --test scripts/webforms-source-compiled-proof.test.mjs` — 4 passed.
+- `cd site && npm run build` — passed; generated output remained ignored.
+- `cd site && npm run validate` — passed; 117 HTML files, 3,883 internal
+  references, and 116 sitemap URLs validated.
+- `cd site && npm test` — passed; 1,194 tests passed with no failures, skips,
+  cancellations, or todos.
+- `./scripts/check-private-paths.sh` — passed.
+- `git diff --check` — passed.
+- Desktop browser QA at 1,440 by 1,000 on the proof route — one H1, no
+  horizontal overflow, and no console errors.
+- Mobile browser QA at 390 by 844 on the proof route — one H1, all three
+  evidence chains visible, no horizontal overflow, and no console errors.
+- Mobile browser QA on the current inbound Web Forms article — the proof link
+  is present, no horizontal overflow, and no console errors.
+- `/webforms/` is intentionally absent until #805 implements that separately;
+  this branch's focused validator requires it to link here whenever that route
+  exists. This is a dependency boundary, not proof that the future landing
+  layout has been checked.
+- Commit, ready PR, and ACK remain pending at this checkpoint.
+
+## Earlier spec validation
 
 - `git diff --check` — passed.
 - `./scripts/check-private-paths.sh` — passed.
@@ -124,3 +166,56 @@ A later exact-head Codex review identified one additional P2 tier-preservation
 issue. The evidence model now treats `combined.paths.compiled-il-bridge.v1` as
 a multi-tier rule family and requires every projection and validator to retain
 the tier emitted for each individual edge.
+
+## Current-head implementation review repairs
+
+ACK authorized one consolidated repair batch on PR #814 head
+`ea8533309d0a3a111cf8fee380b020f6a45fe485`. The batch:
+
+- adds a generated supporting-evidence registry and requires every hop and
+  top-level gap reference to resolve to matching rule, tier, and public span;
+- machine-labels the bounded result as `partial`;
+- keeps the generic bridge-tier examples while downgrading every selected
+  DLL-only reproduction bridge to `Tier3SyntaxOrTextual` because this public
+  projection has no source/assembly binding receipt;
+- aligns the literal-audit state with the checked-in
+  `method-local-constant` regression;
+- rejects multiline raw SQL inside parsed allowlisted values;
+- compares the checked-in asset with a fresh canonical in-memory projection,
+  checks rendered hop/version/digest values against the asset, aggregates
+  missing or malformed provenance errors, and invokes validation based on the
+  public route/asset rather than generator presence.
+
+Post-repair validation passed: 8 focused proof tests, full `npm test`, site
+build, full site validation (117 HTML files, 3,883 internal references, 116
+sitemap URLs), the focused .NET regression, private-path guard, and
+`git diff --check`. Desktop 1,440 by 1,000 and mobile 390 by 844 browser checks
+each found one H1, all three outcomes, the partial-status disclosure, no
+horizontal overflow, and no console errors.
+
+## Exact-head P1 fail-closed correction
+
+Codex reviewed `83e3d2cd6c7c241263cf1628ff8ece29478ddb91` and identified two
+P1 trust-boundary failures:
+
+- the SQL detector's 500-character window allowed a long multiline statement
+  to pass; and
+- the supporting-evidence registry was synthesized from the same hop assertions
+  it claimed to support.
+
+The repair removes the SQL length cutoff in both generation and validation and
+adds a regression with more than 4,000 characters between the verb and source
+clause. Because this site-only branch has no independently projected extractor
+output, it takes the specification's fail-closed path: public claim level is
+`concept`, self-derived evidence records and aliases are omitted from the
+generated asset, the page/discovery/claim-ledger rows disclose the missing
+independent evidence, and validators reject any reintroduced evidence registry
+or supporting IDs. Moving back to `demo` now requires a separate bounded
+extractor-owned public projection rather than another site-authored mapping.
+
+Post-P1 validation passed: 10 focused proof tests, all 1,200 site tests, site
+build, full site validation (117 HTML files, 3,883 internal references, 116
+sitemap URLs), the focused `LazyConstructorLoggingTests` lane, private-path
+guard, and `git diff --check`. Desktop 1,440 by 1,000 and mobile 390 by 844
+browser checks each found one H1, all three concept outcomes, the missing
+independent-evidence disclosure, no horizontal overflow, and no console errors.

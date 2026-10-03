@@ -1107,6 +1107,24 @@
     ]
   },
   {
+    "path": "/webforms/source-plus-compiled-proof/",
+    "title": "Web Forms Source + Compiled DLL Proof",
+    "summary": "Concept-level public synthetic illustration of bounded static paths from Web Forms handlers through VB.NET property and constructor work into a separate provider DLL and database API candidates.",
+    "publicClaimLevel": "concept",
+    "sourceType": "site-page",
+    "hintCategory": "evidence",
+    "preferredProofPath": "/assets/webforms-source-compiled-proof.json",
+    "limitations": [
+      "No independent extractor output is checked in for the illustrated supporting aliases, so hop IDs, tiers, and spans are not claimed as extractor-verified evidence.",
+      "The projection is bound to exact main revision 5ffd4a54176c002e4c6d41ce0133eab5963ad79b and checked-in synthetic fixtures; later dev-only hardening is not included.",
+      "Per-hop evidence tiers remain distinct, projectless and virtual bridges stay review candidates, runtime-composed values stay unresolved, and real ASP.NET mapped or mapless publication validation remains Windows-only."
+    ],
+    "nonClaims": [
+      "No runtime execution, browser or page reachability, event firing, branch selection, warm or cold property behavior, provider dispatch, database identity, successful call, returned rows, production behavior, source or build authenticity, deployed identity, customer compatibility, migration parity, complete coverage, release approval, or safety claim.",
+      "No raw or copyable SQL, stored-procedure name, parameter value, source snippet, literal hash, configuration, credential, connection material, local path, private identity, raw SQLite, analyzer output, LLM analysis, embeddings, vector databases, or prompt-based classification."
+    ]
+  },
+  {
     "path": "/legacy-data-surface/",
     "title": "Legacy Data Surface Evidence Story",
     "summary": "Concept-level legacy data surface story inside the legacy .NET evidence lane for deterministic static metadata, mapping clues, query-facing references, persistence context, proof paths, limitations, and owner follow-up.",
