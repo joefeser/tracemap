@@ -8,6 +8,7 @@ Last updated: 2026-10-03
 Implementation branch: `codex/site-webforms-guided-setup`
 Target base: `main`
 Exact base: `5ffd4a54176c002e4c6d41ce0133eab5963ad79b`
+Implementation revision: `bf5b96808631d8196cfef3c7ba051185481d47a1`
 Issue: #805
 
 ## Scope and delivery
