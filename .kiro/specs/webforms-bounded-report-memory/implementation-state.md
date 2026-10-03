@@ -1,5 +1,1229 @@
 # Implementation state
 
+## Isolated PR #798 recovery-cap correction (2026-10-01)
+
+Based on reviewed head 4f231dc3, branch codex/pr798-recovery-cap. The current-head
+Codex finding was a same-cap retry: new default plans already used 20M nodes,
+but recovery also selected 20M. Recovery now chooses max(20M, twice the failed
+plan limit), capped at 50M; absent historical settings still mean 2M. Invalid
+limits and an exhausted 50M plan fail before destination creation. The selected
+cap is used consistently in progress, index construction and recovery receipt.
+This increases capacity, not a guarantee that recovery fits or completes.
+
+Validation: 13 focused Report_recovery cases pass, including budget boundaries,
+actual small-cap recovery/query/tamper checks and an injected typed 50M failure
+that confirms no destination and byte-identical original files. TRX retained
+under /tmp/tracemap-pr798-cap-tests. No 40M/50M-sized corpus was materialized;
+full suite and Windows replay were not run for this isolated local correction.
+The wizard checkout and PR branch were not changed; integration/push remains
+with the parent workflow. Three older unresolved Qodo threads were not in this
+single-finding repair scope.
+
+## Reproducible CLI operator workflow (2026-10-01)
+
+New owner follow-up after the bounded investigation: replace manual screenshot
+round trips with reproducible local projects and regression gates before PR.
+Keep the existing public two-DLL fixture but exercise source/compiled website
+and separate provider scans through scan, combine, report and paths commands.
+The integration theory covers five layouts: attached provider, independently
+scanned provider, DLL-only provider (VB source excluded), reversed combine order,
+and missing provider. Positive layouts pin exact ordered lazy profile methods,
+dynamic Text, literal audit, Fill-only exclusion, one-path cap/gap, repeated
+paths/gaps and unchanged combined-index bytes. Missing provider yields zero
+invented database paths and explicit gaps. All use public CLI command dispatch
+and on-disk scan/combine/report/paths artifacts, not hand-built graph fixtures.
+
+`scripts/wlocal.ps1` runs the expanded corpus, retains operator reports and TRX,
+refuses existing output, and shares the Windows validation entry point. The
+receipt requires each of the five named layouts and includes CLI/fixture binary
+hashes. Local replay passed 32 tests with one explicit Windows-only skip;
+artifacts at `/tmp/tracemap-operator-cleanup-final` were inspected, including
+three DLL-only terminal routes and zero missing-provider routes with 31 gaps.
+Existing-output refusal was exercised. The final receipt-hardened rerun also
+passed 32 with one Windows-only skip in 34 seconds at
+`/tmp/tracemap-operator-cleanup-verified`; generator/input digests were recomputed.
+Initial implementation was pushed as 4507f5f3 to PR #798. No production scanner/reporting code changed; the
+full historical 3018-test result is not presented as a fresh full-suite run.
+
+Follow-up replay at `/tmp/tracemap-operator-cleanup-reports` also passed all 32
+local cases, all three saved-report script suites, and actual comparison/ledger
+generation for four positive layouts. Each capped comparison pins one shared
+and two current-only exact sequences; each unresolved ledger pins one group.
+These HTML artifacts now replay the manual report investigation as part of the
+normal command. Helper changes trigger the Windows workflow too. The final
+expanded Windows CI and PR review remain separate from local test success.
+
+Native-app versus CLI operator coverage is being clarified; no UI coverage is
+claimed from CLI tests. The retained native start/package/resume tests remain a
+separate layer. PR #798 remains open; no Git merge is authorized by the requested
+evidence-combination step.
+
+## Goal completion audit (2026-10-01)
+
+Owner-supplied final ledger photographs establish the previously missing route
+association: the single unresolved group traverses a lazy property, employee
+constructor, profile service, email data lookup and text-scalar wrapper before
+ExecuteScalar. The original three candidates and focused six candidates are
+evidence variants of that group. Retained command type is Text (1); command text
+is forwarded through argument slot 1 and stops at a call-result origin. Together
+with the earlier owner-supplied decompilation, this diagnoses dynamic lookup text,
+not the separate literal stored-procedure audit branch. This is a Tier4Unknown
+owner-evidence reconciliation under workflow.webforms.handler-sql-ledger.v1,
+not independent authentication of private artifacts or exact producer IL target.
+The retained missing/ambiguous return target and unproven dispatch gaps remain.
+
+Completion requirements and evidence:
+
+- Unresolved candidates: route identities now connect the saved group to the
+  observed dynamic source pattern. No constant SQL recovery is asserted.
+- Capped-query omissions: the saved comparison identifies one additional
+  dataset/Fill sequence, with all 27 original exact sequences retained. The
+  45-to-116 variant increase is not a count of new routes. Per-variant causal
+  attribution and exhaustive coverage remain outside what this evidence proves.
+- Historical baseline: all 13 historical Fill symbol sequences and their 41
+  variants are represented in the 18-sequence/56-variant focused comparison;
+  differing scan identities prohibit exact-build parity claims.
+- Demonstrated defects: bounded exact return propagation and removal of the
+  implicit Fill-only migration filter are implemented and regression-tested.
+  The public compiled profile fixture separately pins dynamic Text, literal
+  StoredProcedure audit and Fill paths in both traversal modes.
+- Validation: reread the full-suite TRX (3018 passed, zero failed), both profile
+  cases, Windows TRX (29 passed, zero failed) and live successful Windows run
+  36826541709 at 80cd1fdc. Current changes since that head affect only helper
+  scripts and documentation, not .NET code or fixtures. The saved CLI smoke
+  contains all required scan outputs and retains its NotRun/partial limitations.
+  All three saved-report PowerShell suites (cap shortcut, SQL ledger, chain
+  comparison) passed again during this audit, as did the private-path guard
+  and diff whitespace check. No scanner changes required a new full-suite run.
+
+This closes the bounded investigation goal, not complete private migration
+coverage. No further private scan, runtime SQL execution, private producer-offset
+admission or merge is required or claimed. Earlier chronological pending-status
+entries below are superseded by this audit; their historical limitations remain.
+
+## Saved unresolved-route identity readback (2026-10-01)
+
+The SQL ledger previously displayed only route labels, which can be redacted
+even when the saved node still carries an exact symbol. It now renders a bounded,
+HTML-escaped ordered list of supplied node/symbol/fact/source/scan/commit identities
+inside the private local diagnostic. Missing fields remain null; no label-based
+inference, producer resolution or provenance admission is performed. The existing
+generator digest changes with the renderer; original input hashing is preserved.
+`./scripts/wcap.ps1 -Unresolved` uses the reboot-safe selector and opens only
+unresolved routes from the saved all-terminal requery, without scan or traversal.
+Public ledger and shortcut tests cover identity output, escaping and routing.
+This script-only extension does not change scanner/report graph semantics.
+
+## Owner-supplied saved comparison and bounded diagnosis (2026-10-01)
+
+Evidence source: owner-supplied photographs of the local comparison output and
+decompiled source, not independent admission of private JSON or assemblies.
+No private method names, SQL identifiers, paths or screenshots are published here.
+
+- The original multi-root query retained 256 total variants. Filtering its saved
+  rows to the selected handler gave 27 exact sequences / 45 variants. The focused
+  saved requery gave 28 / 116. The comparison showed 27 shared exact sequences,
+  zero historical-only, one current-only, and 26 shared sequences with changed
+  variant counts. This is one added sequence, not 71 added call chains.
+- The expanded current-only sequence was shown through its terminal: handler,
+  list-model constructor, business lookup, data-access lookup, two dataset
+  wrapper overloads, DbDataAdapter.Fill. It is distinct from the dynamic scalar
+  lookup. Its absence from the capped report is established by the displayed
+  exact-sequence comparison; the comparison alone does not prove the causal
+  reason for every absent evidence variant or complete traversal coverage.
+- The separate historical Fill baseline comparison showed all 13 historical
+  symbol sequences / 41 variants retained among 18 current sequences / 56
+  variants, with five current-only sequences and no changed shared variant
+  counts. Different source/scan identities prevent exact-identity parity for
+  that comparison; symbol sequences are hints, not authenticated build parity.
+- The owner identified the scalar chain in decompiled source: lazy property,
+  object constructor, profile service, email lookup, text-scalar wrapper,
+  ExecuteScalar. The lookup concatenates a runtime identifier into SQL; its
+  locally constructed parameter list is not passed to the text wrapper. This
+  diagnoses the nonconstant Text pattern at source level, separately from
+  literal StoredProcedure logging. The saved ledger's original three unresolved
+  candidates were variants of one group, later six variants in the focused
+  report, not three independently established defects. An exact private
+  producer-fact/offset join remains unverified; do not present this source-level
+  diagnosis as machine-validated command binding or recoverable constant SQL.
+
+Implementation evidence remains the compiled public fixture, conservative
+return-value tracing, all-terminal native packaging, CLI smoke, 3018 passing
+local tests with one Windows-only skip, 29 passing Windows corpus tests at
+80cd1fdc, and the tested saved-report shortcut. No fresh private scan or SQL
+execution was required. The saved cap and historical-sequence comparisons are
+now observed, replacing the earlier pending-comparison status below. Complete
+private coverage, parameter values, runtime execution and private artifact
+admission are not established.
+
+## Reboot-safe cap comparison shortcut (2026-10-01)
+
+`scripts/wcap.ps1` defaults to the user's verify-8 folder, uses the pinned
+status reader to locate the original report, and reads the selected handler
+from the small saved requery receipt. It rejects Fill-only scope and delegates
+to the existing comparison without scanning or traversing. No shell variables
+from a previous session are required. Run `./scripts/wcap.ps1`; use
+`-VerificationRoot` for another folder and `-NoOpen` for automated checks.
+The receipt is selector data, not independently admitted evidence; output
+retains wcompare's unadmitted diagnostic limitations and provenance.
+Shortcut and comparison PowerShell tests passed. This is script-only; the
+previous full .NET and Windows validation remains the code validation baseline.
+
+## Property-driven dynamic lookup regression (2026-10-01)
+
+Windows push run 36826541709 succeeded at exact head
+80cd1fdcaca92224b004aea733a9112d4c6cb9d5: 29 passed, zero skips, including
+both new profile cases and both authentic mapped/mapless ASP.NET publication
+cases. Downloaded receipt generator and bounded-input digests were verified,
+along with 22 source/test-result input hashes (accounting for checkout line
+endings). Execution assembly hashes remain receipt-only, not independently
+rehashed. Artifacts: `/tmp/tracemap-windows-80cd1fdc`. The workflow reported an
+existing action-runtime Node 20 deprecation notice, not a compiler/test warning.
+
+Follow-up validation: standalone CLI smoke completed with 777 facts at
+`/tmp/tracemap-profile-cli-smoke`, Level3SyntaxAnalysis/NotRun with explicit
+unbound-input and unresolved-framework-reference gaps. This is not an admitted
+publication. Public saved-chain comparison script tests passed. The Windows
+corpus filter and receipt now explicitly require both dynamic-profile cases.
+Full .NET suite completed: 3018 passed, zero failed, one Windows-only skip,
+3019 total, in 19m17s. TRX:
+`/tmp/tracemap-profile-validation/profile-full.trx`. The run started with the
+fixture edits present and completed after their commit as b0f9a8a1; test source
+and compiled code were unchanged during the run. Both profile cases passed.
+The expanded corpus script passed 27 tests with one Windows-only skip, including
+both required dynamic-profile cases. Receipt generator and bounded-input digests
+were recomputed successfully at `/tmp/tracemap-profile-corpus-validation`.
+The private-path guard also passed. Windows publication remains not-run locally.
+
+Saved-report cap smoke: querying that same synthetic index and exact compiled
+Profile_Click root with maxPaths=1 retained only the Fill sequence and emitted
+a path-limit gap. maxPaths=256 retained three sequences. `wcompare.ps1` found
+one shared exact sequence, zero historical-only, and two current-only sequences:
+the constructor/profile audit branch and constructor/profile dynamic-email
+branch. Outputs are `/tmp/tracemap-profile-paths-capped`,
+`/tmp/tracemap-profile-paths-full`, and
+`/tmp/tracemap-profile-comparison.local.html`. This proves the local diagnostic
+can identify omitted method sequences; it does not identify the private
+verify-8 omissions or substitute for its historical baseline comparison.
+
+On `codex/webforms-config-migration`, owner-supplied decompilation distinguished
+the dynamic lookup branch from literal stored-procedure logging. The public
+synthetic projectless VB sample now has a separate Profile handler, lazy getter,
+employee constructor, profile service, and separate-DLL data provider. The data
+provider concatenates a runtime identifier into SQL and creates an unused
+parameter collection; the exception audit uses a literal stored procedure.
+No private identifiers or source were copied into the fixture.
+
+Both mixed and compiled-only regressions retain exactly three database paths:
+dynamic Text scalar, literal StoredProcedure scalar, and independent Fill.
+The dynamic text origin joins to the actual compiled String.Concat call; it
+remains unresolved rather than being confused with the audit procedure. All 15
+LazyConstructorLoggingTests passed locally; the existing end-to-end
+DeepProjectlessNativeWorkflowTests packaging regression also passed (1/1).
+Tests compile net48 DLLs and scan,
+combine and query evidence without executing SQL or hosting ASP.NET locally.
+Windows validation is complete for the recorded head above. The owner has now
+supplied the capped-report sequence comparison, summarized at the top of this
+file. Exact private scalar producer identity admission remains unverified.
+
+## Final return-value and all-terminal validation (2026-10-01)
+
+Code head bf0093c8d70d0bf57b292dcb8ceb7718c682f697 passed the final full
+.NET suite: 3016 passed, zero failed, one Windows-only skip, in 17m15s.
+TRX: /tmp/tracemap-migration-all-api-validation/all-api-full.trx.
+Exact-head Windows push run 36817615894 passed 27 tests with zero skips,
+including both authentic ASP.NET publish modes and 11 return-projection cases.
+Downloaded source/test-result hashes, generator hash and bounded-input digest
+were verified; execution assembly hashes are receipt-only because those binaries
+were not uploaded for independent rehashing.
+
+Return-value implementation and all-terminal package regression gates are now
+complete. Private saved-result acceptance is not: rerendering an old ledger does
+not re-extract return summaries or traverse the graph. The private logging text
+producer and original broad-query cap omissions remain unclassified. The overall
+goal remains open; no private parity or expensive rescan is claimed or requested.
+
+## Full return-value validation and all-terminal packaging (2026-09-30)
+
+Code head cc42259d passed the full .NET suite: 3016 passed, zero failed, one
+Windows-only skip, in 16m35s. TRX is retained locally under
+/tmp/tracemap-return-value-validation/return-value-full.trx. A CLI smoke with the
+two synthetic DLLs emitted 59 return summaries and no missing-input gaps; its
+projectless source coverage remains Level3SyntaxAnalysis/NotRun, not a clean
+semantic build. The first smoke used incorrectly source-relative input paths;
+that partial output is preserved separately from the corrected absolute-path run.
+
+Found and removed the migration package's hard-coded Fill-only requery filter.
+The selected handler now targets all database API terminal kinds within the same
+existing traversal bounds. Explicit Fill-only diagnostics are unchanged. The
+native regression adds a synthetic scalar audit call to its copied, committed,
+actually compiled provider before analysis, and checks that the packaged focused
+report retains both Fill and ExecuteScalar with no terminal-name filter. It
+passed: 12 broad native paths, 406 work units, with existing partial labels.
+Reviewer instructions inspect actual saved query scope and recognize older
+Fill-only packages; they do not infer completeness from the absent filter.
+
+Full-solution validation of this additional packaging change and the exact-head
+Windows corpus still remain before publishing. Private unresolved producer
+classification and the original 256-path-cap omissions are not proved by these
+synthetic tests, and the goal must remain open.
+
+## Producer-return resolution integrated (2026-09-30)
+
+The reporter now follows a call-result producer through its exact admitted call
+edge, unique callee body and return summary. Body/operand/summary provenance and
+String/Int32 return signatures are checked. Nested returns and returned argument
+slots are substituted with a shared 64-unit bound, 256-edge/site admission caps,
+and recursion detection. Every retained return site must agree. Virtual producer
+targets, external/runtime composition and legacy missing return evidence remain
+explicit gaps. Existing callvirt endpoint gaps are not removed by a constant.
+
+ReturnSteps retain exact producer, callee-body and return-fact IDs separately
+from call-stack steps. Existing constant-on-encoded-call-path remains a static
+candidate state and can include this separate return evidence. Indexed body,
+return and producer-offset lookups read at most two competitors; the memory
+reader retains the same semantics. Bounded-input hashes include new limits and
+all inspected return evidence, rejected competitors and lookup counts.
+
+Validation: the broader deep/path/command slice passed 162 with one Windows-only
+skip. Final return/property cases passed 13 with zero skips, including exact JSON
+equality between memory and indexed readers. Positive literal and nested
+forwarding, runtime composition, legacy missing summaries, ambiguous/changed/
+malformed summaries, count mismatch, conflicting returns, mutual recursion,
+virtual targets and work exhaustion are covered. Deep Windows selection now
+requires all 11 return-projection cases in addition to the two property cases.
+Full solution and exact-head Windows results are still pending. No private
+verify-8 upgrade, all-route completeness, or work-machine rerun is claimed.
+
+## Return operand extraction implemented; reporting pending (2026-09-30)
+
+Scanner version il-body-evidence/0.1.10 retains ManagedIlReturnValuesObserved
+under dotnet.compiled.il-values.v1. Straight-line returns retain one valid stack
+operand; control-flow returns use the final converged input state at each reached
+ret. Both independent readers must agree on the complete value observations.
+Each body emits a summary capped at 256 sites, with exact generator/input hashes,
+body reference, return count, flow gaps and candidate/unavailable state. The cap
+is included in the bounded-input digest. Limit overflow withholds all return
+origins and emits IlValueReturnSiteLimit. Addresses project to unknown.
+
+The actual compiled VB LiteralText helper now emits the same string fingerprint
+as the direct-literal control. Reporting deliberately still asserts unresolved:
+the producer-return consumer has not been implemented. Existing private saved
+facts lack this new evidence and must not be silently upgraded.
+
+Validation: IL body/value/command and property corpus slice passed 137 tests with
+one Windows-only skip before the final cap checks. The final rebuilt slice of
+return-cap, operand and property tests passed 28 with zero skips. Diff checks
+passed. Full solution and Windows gates remain deferred until the reporting fix
+is integrated; no PR push or private rescan is claimed for this change.
+
+Next: add indexed body/return and exact call-offset lookup rather than scanning
+all retained facts per endpoint. Join the call-result producer to the exact
+callee body and return summary, verify call shape/signature/hash provenance,
+substitute returned argument slots back into the producer call, and follow
+nested return origins with a shared bound and cycle detection. Keep returned
+string composition unknown, record return evidence separately from call-stack
+steps, and test old/missing/ambiguous/tampered summaries and virtual targets.
+
+## Return-value boundary isolated (2026-09-30, follow-up)
+
+Added InsertReturnedLiteral through the same property/constructor/provider path.
+Its private static LiteralText helper returns the identical literal used by the
+working direct control. The test checks the actual compiled helper's instruction
+shape and literal equality with Mono.Cecil, without executing SQL. Both mixed and
+compiled-only projections still report call-result/unresolved-operand for this
+constant-return case. This distinguishes a demonstrated return-tracing limitation
+from the original BuildText(message) case, which performs runtime composition.
+The fixture now has six broad paths, five scalar paths and one Fill path; the
+three InsertLog paths are unchanged. Both updated cases passed locally.
+
+Code inspection: IlCallValueExtractor discards the stack at ret, and the
+control-flow extractor stops at ret without exporting its operand. IL body facts
+retain instruction hashes, not reconstructable instruction streams. Consequently
+reporter-only substitution cannot recover a callee return value from these facts.
+Next implementation must retain bounded, independently agreed return operands,
+then join producer calls to exact callee evidence and substitute arguments with
+cycle/work bounds. Runtime composition and unproven virtual dispatch must retain
+explicit gaps. Legacy saved evidence without return observations must remain
+explicitly unavailable, not be interpreted as a constant. No private rescan has
+been requested; no analyzer fix, private resolution, or cap-omission proof is
+claimed by this diagnostic regression.
+
+## Property-based constructor logging regression (2026-09-30)
+
+Added a separate public synthetic projectless VB source corpus and two external
+net48 build harnesses (website and logging provider). It models a handler that
+constructs a choices object; argument evaluation reads a lazy property, whose
+backing-field miss constructs an employee object. Nested field initialization,
+an authorization branch and an exception branch reach InsertLog in the second
+DLL. InsertLog passes a helper's returned string to an overridable ExecuteText
+wrapper ending at ExecuteScalar. A literal-input control uses the same wrapper,
+and an independent business lookup uses Fill. No session dependency is required.
+
+Both local mixed and compiled-only regressions passed: five paths, four scalar
+paths, three InsertLog paths and one Fill path; 69 compiled / 105 mixed work
+units. The text origin resolves to the exact BuildText producer call by body and
+IL offset, then remains call-result/unresolved-operand with a virtual-dispatch
+gap. Literal text resolves. Fill-only excludes the scalar routes, rather than
+resolving them. These synthetic counts are not private report variant counts.
+
+The corpus is included in the deep Windows validation selection and input roster.
+This change pins the documented current limitation, not a production fix or
+return-value evaluator. It does not execute fixture SQL, prove warm/cold cache
+behavior or exception feasibility, or classify private path-cap omissions.
+Validation: both final property cases passed; the deep set passed 14 with one
+Windows-only skip; command-binding and messy-workspace regressions passed 126
+with one Windows-only skip. Corpus guard, private-path guard and diff checks
+passed. No new Windows execution result is claimed for this fixture yet.
+
+## Consolidated migration handoff in progress (2026-09-30)
+
+Owner requested a normal one-command fresh workflow and a single evidence folder
+for Claude, followed by a PR. Added native migration-review orchestration over
+existing proof import/start, completed-run single-handler mixed Fill requery,
+verified tool retention and a separate bounded evidence index. query-migration
+reads the package's original application evidence plus focused compiled evidence,
+without source/SQL/graph execution. START-HERE.md carries the packaged Claude
+instructions; the canonical review prompt now recognizes this package.
+
+The successful local deep-fixture execution tests the fresh explicit-attestation
+route, ready-native-config reuse, historical receipt-format import, focused root,
+manifest hashes, bounded query, changed-index refusal, existing-output refusal,
+missing-handler failure preservation and unchanged original run. The complete
+deep test passed in 28 seconds. Added receipt-tamper, excessive query-limit and
+changed-proof admission refusals to the broader validation run. The SQL-route
+PowerShell regression, scoped comparison regression and private-path guard pass.
+Exact code head 221ca517 passed all 14 Windows corpus tests with zero skips in
+run 36808893833 (also passed the PR-triggered run 36808947245). Both authentic
+ASP.NET publish modes and the consolidated native test passed. Downloaded TRX
+counts and hash, plus the validation receipt bounded-input digest, were verified.
+PR #798 is open against dev and attached to the task; not merged. Full local
+.NET validation passed 2,996 tests, zero failures, one Windows-only skip in
+13m18s. That build preceded only the sanitized stage diagnostic and help-text
+placement edits; exact-code-head Windows validation covered those final edits.
+No private migration-completeness claim.
+
+Owner-returned saved comparison shows 13 historical symbol sequences/41 variants
+and 18 current/56: all 13 symbol sequences are shared, shared variant counts do
+not differ, five sequences are current-only, and none are historical-only.
+Exact identities differ across scans. The focused Fill query reports zero
+unresolved command-text candidates out of 56 binding occurrences, with depth
+and cycle stops but no path-cap stop. These screenshots are diagnostic evidence,
+not admitted private artifacts or proof of exhaustive coverage. The three
+unresolved candidates from the earlier broader query have not been individually
+classified merely because this focused query has none.
+
+Also corrected wsqlroute's VerificationRoot default output to the verification
+root, outside checkpoint-owned report folders. Previously adding its HTML under
+the native report tree could invalidate the complete artifact roster.
+
+## Scoped saved-route comparison (2026-09-30)
+
+wcompare now accepts optional Handler and SurfaceName=DbDataAdapter.Fill filters
+for every supplied report. This enables broad-versus-single-root comparisons
+without counting unrelated handlers or terminals as missing routes. Root identity
+ambiguity is rejected; absent retained rows remain zero, with original query
+headers and pre-filter counts displayed. Filter arguments are included in the
+bounded-input digest. The public comparison regression passed raw/grouped input,
+scope exclusion, zero matches, ambiguous identities, existing sequence identity
+and saved-evidence checks. This supplies a comparison mechanism, not a private
+baseline result. Windows CI run 36794705978 at native code head f7ad8996 passed
+all 14 corpus tests with zero failures/skips, including native completed-run
+mixed/IL requery, changed-input refusals, and both ASP.NET publish modes. The
+downloaded TRX counts, validation bounded-input digest and TRX hash were checked.
+The later scoped-comparison commit changes only PowerShell/docs, with its own
+passing regression. Owner-returned unresolved fields and route comparisons are
+still required to satisfy the active coverage goal.
+
+## Completed-run handler requery implementation (2026-09-30)
+
+Extended the existing native handler requery to completed checkpoints as well as
+failed-report recovery. Completed mode requires the exact checkpointed bundle,
+hashes its compiled report and combined index, and selects the root through the
+checkpoint-bound evidence query. The original checkpoint/plan/report are checked
+again after traversal. Completed receipts use a nullable recovery hash and an
+optional completedReportSha256; the added property is absent from legacy recovery
+serialization. All existing path/depth/work caps and single-root identity rules
+remain in force. No source scan or combine is invoked.
+
+whandler -VerificationRoot locates the bundle with the original pinned status
+reader, then uses the current built CLI for the separately attributed requery.
+Its orchestration regression passed for both recovery and completed inputs, plus
+unverified-state refusal. The deep native fixture now exercises mixed/IL requery
+of a completed run, command evidence, receipt hashes, original roster stability,
+existing-output rejection, foreign bundle rejection and changed-report refusal.
+Native execution/recovery validation passed 118/118 with no failures/skips in
+4 minutes 4 seconds. The final focused deep-fixture rerun passed in 7 seconds,
+including changed-index refusal. Private unresolved reasons and baseline comparison remain
+pending owner output; neither the new command nor tests resolve those by themselves.
+
+## Remaining coverage goal started (2026-09-30)
+
+The owner requested a new goal for the three unresolved text occurrences,
+256-path truncation and historical route comparison. These are distinct from
+the repaired zero-binding failure. The broad query shares its path cap across
+seven roots; aggregate counts cannot identify omitted routes for one handler.
+
+Added wsqlroute -VerificationRoot to locate the checkpointed completed report
+through its pinned native status reader, requiring matching generator, verified
+artifacts and completed state. -UnresolvedOnly displays only route groups with
+an explicitly retained unresolved command binding, preserving their binding
+fields/reasons and variant counts. Summary counts still describe the entire
+selected handler; saved gaps/query limits remain the original broad query.
+No scan or graph traversal occurs. Tests cover repeated unresolved variants,
+constant exclusion, completed-root resolution and unverified-state refusal.
+
+Code inspection also found RequeryHandlerAsync requires ReportsFailed plus a
+recovery receipt. Thus the existing wrapper cannot requery a successful fresh
+run. The next implementation step is completed-run single-handler admission,
+with immutable combined-index/checkpoint verification and local native tests.
+Do not direct the owner to the recovery-only wrapper for this successful run.
+Private unresolved binding fields and historical/current route artifacts are
+still on the owner's machine; screenshots only supply their aggregate counts.
+
+## Owner fresh-run result and ledger wording (2026-09-30)
+
+Owner-supplied screenshots show a fresh run at f32c6ee9 completed native reports.
+The selected handler's ledger reports 27 route-record groups, 45 variants and
+45 command-binding occurrences: 42 constant-text fingerprints, 42 stored-procedure
+type candidates and 3 unresolved-text candidates. The saved broad query reports
+algorithm 1.3, 20,504 work units and 256 paths with truncation. This confirms the
+observed zero-command-binding failure has changed on the owner's application;
+counts overlap across variants and do not identify 42 distinct procedures.
+Private raw artifacts have not been independently admitted, exhaustive baseline
+parity is still open, and physical drive reads were not measured in these images.
+
+The ledger still printed an unconditional unresolved-command-text warning from
+before command-binding support. Added the existing console counters to its HTML
+and conditioned the missing-binding warning on the retained bindings. SQL-surface
+absence remains distinct from command-binding candidates on database API nodes.
+The helper only projects saved results; this display repair requires no scan.
+The SQL ledger regression covers both present and absent command bindings and
+passed, along with command-verification orchestration, privacy and diff checks.
+The scanner code is unchanged from the full 2,996-pass local suite and 14-pass
+authentic Windows corpus. The traversal/command-evidence repair goal is satisfied
+at its stated scope; complete private migration coverage is not part of that
+acceptance and remains unproven.
+
+## Authentic Windows corpus accepted (2026-09-30)
+
+Code head 6dbdf2baf64c3e8ce510ac2c4aa8483eed6f6372 passed CI run 36788401704:
+14 passed, zero failed, zero skipped. Both authentic ASP.NET mapped/mapless
+publish theories passed. The unchanged 32-MiB logical payload guard measured
+19,483,643 bytes mapped and 15,027,147 bytes mapless; receiver/implicit bridge
+stages read 120/74 rows. Native start/resume passed all assertions and retained
+six mixed routes in 391 work units. Downloaded the public artifacts and checked
+TRX counts, wrapper generator/source hashes (explicit Windows CRLF checkout
+bytes), bounded-input digest, source commit, all published DLL/map hashes, map
+inventory digests and separate provider PDB hashes. Publish roots contain no
+PDBs. Execution assembly hashes are retained by the wrapper but binaries were
+not uploaded, so independent execution-binary rehashing is not claimed.
+
+The public corpus checklist is complete. The final full local suite at the same
+code head passed 2,996 tests, zero failures and one explicit Windows-only skip in
+16 minutes 38 seconds; that skipped theory was separately covered by both
+passing authentic Windows cases above. The focused slice passed 231 tests with
+one Windows skip. Privacy and diff guards passed. The owner-retained private
+application fresh-scan gate remains open.
+No physical drive-read, exhaustive private route parity, SQL execution or
+migration-readiness acceptance is inferred from this synthetic Windows run.
+
+## Authentic Windows corpus follow-up (2026-09-30)
+
+CI run 36787260898 at 4c94db97 built both actual ASP.NET publish modes. It failed
+two checks: mapped graph logical reads were 42,887,673 bytes against the unchanged
+32-MiB guard, and Git read-only object files prevented synthetic native cleanup.
+The retained native output still reported six mixed routes in 391 work units;
+cleanup failure is not promoted to test acceptance.
+
+Downloaded the public published DLLs and reproduced the mapped read excess on
+macOS. VB receiver/implicit/constructor bridges still performed full fact-table
+decodes for predicates limited to known fact types. Changed their input iterators
+to indexed FactsOfTypes queries without changing their candidate predicates or
+ambiguity rules. The same mapped replay fell from 13,943 rows/42,434,281 bytes to
+6,432 rows/19,094,075 bytes. The 32-MiB bound is unchanged; dedicated bridge-stage
+guards cap the small corpus at 200 payload rows per receiver stage. Synthetic
+native teardown clears only the ReadOnly bit on test-owned temporary files before
+deletion. The public replay override used for diagnosis was removed.
+
+The focused 231-test slice passed with one explicit Windows skip and no warnings.
+Final full-suite validation and a fresh authentic Windows CI run are pending.
+These logical read counts are not physical drive-I/O measurements or private
+application acceptance.
+
+## Mixed-query traversal repair locally validated (2026-09-30)
+
+The first completion continuation verified d3ff0281 at origin with a clean local
+worktree. Only the private-path CI guard ran at that head; the existing Windows
+workflow filters do not include this corpus. Added a public-only Windows CI lane
+to execute the same required-publish wrapper, preserving both successes and
+failed-attempt artifacts for exact-head inspection. Authentic Windows results
+remain pending; no new private scan is launched by CI.
+
+The previous corpus-only goal was closed too narrowly; the actual work-machine
+fix remains the acceptance target. A native mixed-report assertion reproduced
+zero deep routes under the 100,000-work limit before the repair. IL-first edge
+priority recovered the handlers but alone still exhausted work. Algorithm 1.3
+adds a bounded reverse terminal-distance pass: at most one quarter of the same
+work budget and at most MaxFrontier state keys, reading indexed predecessor keys
+without whole edge payloads. Only a complete pass can prune a branch; an
+incomplete pass is discarded. Pruning uses an over-approximation of admitted
+edges, does not admit any path, and retains explicit depth gaps. Roots without
+an in-depth reverse witness retain the prior traversal/diagnostic behavior.
+
+The repaired native regression retains six expected routes across all five
+handlers in 391 work units, below a pinned 1,000-work assertion. It checks the
+exact twelve-layer/two-DLL method sequence and command text/type, both branch
+literals, unresolved unknown/computed operands, decoy exclusion, original
+input preservation and byte-identical resume. Depth/cycle gaps remain partial.
+The legacy work/path/frontier guards and compiled-only edge scope are unchanged.
+The focused graph/packet/IL/admission/handoff/native slice passed 231 tests with
+one explicit Windows skip. The final algorithm-1.3 corpus wrapper passed 12
+tests and one Windows skip, retaining a source/executed-assembly-bound receipt.
+The exact final full .NET suite passed 2,996 tests, zero failures and one explicit
+Windows skip in 14 minutes 26 seconds. CLI scan emitted 744 facts with reduced
+syntax coverage and passed artifact validation. Wrapper guards, command-verify
+orchestration, command-fact reader, private-path and diff checks passed; the
+build emitted no warnings. Changes remain on codex/webforms-config-migration.
+The earlier corpus-only patch is superseded by this repair. Authentic Windows
+mapped/mapless and private fresh-scan results remain open; do not close their
+acceptance goal based on this Mac run. No physical drive-read, complete private
+migration or unrun Windows acceptance claim is made.
+
+## Deep projectless cross-DLL corpus started (2026-09-30)
+
+Added projectless synthetic website source and an external net48 build harness.
+The handler forwards through twelve layers into the separately built existing
+legacy provider. The first local native scan/index/combine/compiled-path test
+passed and retained caller-substituted text/type at Fill. All four compiled-only,
+mixed mode, missing-provider and shallow-depth cases passed locally (one second
+test execution after build). Diff whitespace validation passed. This is not yet an
+ASP.NET publish or retained-proof workflow test, nor a full branch/parameter or
+performance acceptance claim. The broader fixture task remains open.
+
+Expanded the corpus with five actual Page handlers, twelve forwarding layers,
+branches, a cycle, same-named decoys and unknown values. Direct query cases pin
+exact method order and UTF-16 IL literal fingerprints. Computed Boolean caller
+operands currently retain an explicit unresolved provenance gap; the fixture
+does not silently infer their text. The native case builds exact committed
+synthetic source in a temporary repository before preparation, avoiding false
+attribution of unrelated prebuilt DLLs to its commit. Generated mapping provenance
+is explicitly not an ASP.NET compiler claim.
+
+The native broad mixed-source report reproduces work exhaustion at 100,000 work
+units with no deep route returned. A separate single-root compiled-only query
+over its retained combined index recovers text/type through the full chain.
+No core scanner or traversal policy was changed, and broad mixed-source parity
+remains open. Both synthetic DLLs are primary because this case compiles both
+from the exact test commit; external private providers cannot inherit that claim.
+
+The Windows publisher now accepts -DeepChain for mapped and mapless outputs,
+and hashes every provider VB build input rather than just one source file.
+Windows tests are visibly skipped on macOS. The retained validation wrapper
+records exact script/input/executed-assembly hashes and refuses existing roots
+or required Windows acceptance on macOS. The first full fixture wrapper passed
+12 local cases with one explicit Windows skip in 10 seconds after build. The
+related IL/admission/grouped-handoff/native slice passed 112 cases with the same
+one skip in 23 seconds. CLI scan emitted 744 facts with syntax/reduced source
+analysis and passed adapter-artifact validation. Wrapper guard tests, publisher
+syntax, private-path and diff checks passed. Source snapshots are now checked
+before/after wrapper execution. The final wrapper rerun passed 12 local cases,
+one explicit Windows skip and no failures in 10 seconds, retaining the TRX and
+generator/input-hashed receipt. The full .NET suite passed 2,995 cases with one
+Windows skip and zero failures in 16 minutes 42 seconds. The build emitted no
+warnings. All new tracked-intent source files passed the private-path guard.
+No scanner/reducer code was changed. Authentic mapped/mapless Windows results
+and broad mixed-query parity remain open; the one-command Windows handoff is
+ready, not executed on this Mac.
+
+## Legacy VB operand repair after owner zero-candidate validation (2026-09-30)
+
+The owner fresh scan observed call-value facts but zero command candidates.
+That result supersedes the earlier local completion language for private
+acceptance. Correct provider IL evidence showed ordinary debug-field stores,
+byref arrays, struct/local addresses, checked arithmetic and mapping loops, plus
+timeout/transaction/mapping APIs that the local fixture had not exercised.
+
+IL 0.1.9 / policy v7 now retains stack shape for these operations without
+claiming heap values. Stores/address reads and calls expose affected objects;
+exposed slots remain exposure-capable on later writes. Address identity depth,
+length and per-instruction origin retention are bounded, and exposure work is
+charged. Unknown calls preserve only unexposed allocation-local receivers;
+argument/call-result origins and escaped objects remain conservatively aliased.
+Known byref call shapes retain non-byref scalar origins. Exported addresses and
+byref operands are unknown, not concrete caller values. Leave drops locals and
+potentially rewritten arguments while re-establishing an empty evaluation stack.
+
+Exact encoded timeout/transaction setters and table-mapping getter/Add contracts
+preserve text/type only. Wrong overloads and mapping escapes discard state.
+A public synthetic net48 VB legacy wrapper exercises the real compiler output,
+with debug fields, ref arrays, struct parameters, loops and all three API shapes.
+Its native encoded caller path carries hashed text through two wrapper calls
+to Fill with a StoredProcedure enum candidate. No private source was copied.
+
+Validation: the full .NET suite passed 2980 tests, zero failures/skips, in
+14m21s before the final address-size guard and three additional regressions.
+The final solution rebuild had zero warnings/errors; the final 122-test IL/native
+slice passed with zero failures/skips in 1m34s. A direct CLI scan of the public
+VB fixture emitted 631 facts and three command candidates, with Level1 semantic
+source analysis, and passed adapter-artifact conformance. Compiled artifact
+context, branch feasibility, command parameters and runtime proof remain partial.
+The CLI smoke requires an absolute compiled-input path; a relative input is
+resolved against the source root, not the invoking working directory.
+
+PowerShell command-facts, immutable command-verification orchestration and
+tool-copy tests passed. Seven artifact-validator tests and the private-path/diff
+guards passed; the unchanged validator test emitted its existing SQLite
+ResourceWarning. Unchanged TypeScript/JVM/Python adapters were not rerun for this
+.NET-only repair. Owner Windows acceptance remains open and requires a new
+output run; old evidence is unchanged and cannot gain the new extractor facts.
+
+## Fresh command validation workflow and final local gates (2026-09-30)
+
+The implementation requirement is complete locally: independently agreed bounded
+IL operands, receiver/configuration joins, exact encoded caller substitution,
+conservative control flow, explicit unresolved gaps and exact generator/input
+provenance are covered by native end-to-end tests. `wcmdverify.ps1` now starts a
+new retained-proof scan through `wverify.ps1 -Run`, then uses only the copied
+distribution. It verifies native generator agreement and the full copied-tool
+fingerprint. Existing output is refused; failures remain preserved.
+
+Completed-run diagnostics filter retained routes without changing query scope.
+Only an admitted evidence-node-limit report failure takes the separately labeled
+recovery plus new compiled-IL handler/Fill requery branch. Public orchestration
+tests cover both branches, failed recovery stopping, changed-tool refusal and
+existing-output refusal. They do not substitute for native evidence admission
+or owner Windows validation. The ledger reports as-supplied command binding,
+hashed text, StoredProcedure-type and unresolved text candidate counts, without
+SQL inference or raw command text. The operational guide gives the exact
+PowerShell entry point and distinguishes both query scopes.
+
+Final local validation against stable .NET binaries: full solution build had
+zero warnings/errors; all 2965 .NET tests passed with zero failures/skips in
+17m01s. SQL-ledger, fresh-command-workflow and tool-copy PowerShell tests passed.
+A direct CLI scan of the public net48 VB wrapper emitted 330 facts, including
+15 command-binding rule records, and passed adapter artifact conformance.
+Source analysis in that explicit smoke remained syntax/reduced, not semantic
+or runtime proof. TypeScript build plus 257 tests, JVM Java 21 tests, Python's
+64 tests and endpoint smoke, seven artifact-validator tests, private-path guard
+and diff check passed. The unchanged JVM extractor emitted a deprecation note;
+the unchanged Python validator test emitted a ResourceWarning; dependency
+installation reported two moderate advisories in the existing TypeScript lock.
+No unrelated dependency update was performed.
+
+Windows-native PDB/ILAsm, private full-site and historical dotnetperf acceptance
+are not run on this macOS host. Original private runs remain untouched; no
+resolved procedure identity, executed SQL, complete coverage or parity is
+claimed. The complete implementation and workflow were pushed normally to
+`origin/codex/webforms-config-migration` at `af420d56` after the local gates.
+The compiled command-value implementation task is complete; the separate
+owner-retained historical comparison checkbox remains open for private validation.
+
+## Protected-region wrapper and AddRange validated (2026-09-30)
+
+Normal-flow fixed points now include protected blocks when both readers agree
+on exception entries. Handler/filter roots receive unknown pre-exception locals
+and potentially modified arguments. Command state starts empty at these roots.
+Leave discards operands/configuration rather than carrying them across unknown
+finally effects. Exception dispatch and finally continuations remain explicit
+gaps, not ordinary fall-through. Handler seeds are work-charged before allocation
+and capped at 1024 declared entries. Policy v6 binds that bound; IL version 0.1.8.
+
+Exact typed provider parameter-array AddRange and framework Array overloads are
+modelled for text/type preservation only. Read-only field loads produce unknown
+values without destroying unrelated stack/local origins; field values remain
+unproven. Incorrect AddRange signatures invalidate the owning command.
+
+The existing public VB net48 PublicSqlDataAccess wrapper builds with zero
+warnings/errors and now has a build-only test project reference (never loaded
+or referenced by net10). Framework negotiation is disabled on that non-reference
+to avoid a proven NU1702 false positive. The native test uses its matching build
+configuration, independently decodes its real compiler output, retains both
+normal ExecuteNonQuery/Fill bindings with argument-slot text and StoredProcedure
+type, and proves exact native/compiled-path generator/input provenance.
+Synthetic tests also cover nested Using regions, parameter loops inside protected
+blocks, caller propagation through those blocks, unknown handler locals, leave
+invalidation, wrong overloads, field reads and entry limits.
+
+The pre-final 225-test IL/path/native regression passed with no build warnings.
+After handler-seed work/entry hardening, all 58 focused tests and the final
+226-test stable-binary IL/path/native regression passed.
+The control-flow/parameter task is complete for the explicitly documented static
+candidate contract, not exception/runtime proof. Broader final gates, the
+immutable-tool Windows workflow and push remain open. Private acceptance is
+still owner validation; no original run has been replaced or upgraded.
+
+## Normal-flow command/parameter loops in progress (2026-09-30)
+
+Normal branches and loops now use independently decoded equality-only operand
+fixed points, with 20000 instruction, 256 slot and 200000 work-unit body bounds.
+Actual fixed-point work is charged to a separate aggregate value budget per
+reader, equal to MaxTotalWorkUnits and isolated from raw body/call admission;
+successor cloning and merging is charged before allocation, including wide
+switch fan-out. Policy v5 binds these limits, and IL extractor version is 0.1.7.
+
+The command binder consumes the agreed control graph, intersects exact command
+and adapter configuration records at joins, and emits endpoints only after
+convergence. Exact encoded get_Parameters plus supported Add/AddWithValue/Clear/
+RemoveAt contracts preserve text/type, not parameter values or ordering.
+Unknown calls receiving a collection invalidate its owning command. Wrong
+collection signatures, command escape and conflicting assignments fail closed.
+The linear lane models the same collection contracts. Caller mapping accepts
+both straight-line and converged normal-flow operand candidates.
+
+All 45 focused operand/command tests passed before the final fan-out charge
+hardening. Tests include independently decoded synthetic parameter loops,
+straight-line collection use, conflicting assignments, command/collection
+escape, incorrect signatures, native fact and compiled path provenance joins,
+control-graph reader disagreement, deterministic convergence and work limits.
+The broader stable-binary regression passed all 213 selected tests after that
+hardening. A subsequent audit isolated value derivation budgets from raw body/
+call admission and added a regression proving exhausted operand budgets retain
+both readers' agreed bodies and calls. The focused 90-test gate and final
+214-test IL/path/native regression both passed against unchanged binaries.
+
+Exception-region bodies still use the reduced local lane: exception-edge and
+loop configuration inside protected regions need a targeted audit/fixture before
+closing the control-flow task. The existing public synthetic
+samples/messy-dotnet-workspace/vb-publish-crossdll-framework/PublicSqlDataAccess.vb
+is an authoritative next fixture: its Using command/adapter regions, conditional
+ExecuteNonQuery versus Fill, and typed AddRange must be covered before claiming
+the wrapper pattern is handled. AddRange is not yet in the supported collection
+contract set. Broader final gates, immutable-tool Windows
+workflow and push remain open. No private acceptance or SQL execution is claimed.
+
+## Exact compiled caller substitution in progress (2026-09-30)
+
+Command text/type argument slots now map through the ordered encoded IL call
+path, with separate static/instance slot numbering, exact target/body/caller
+joins and unique operand facts. Source-only bridges, missing/ambiguous operands,
+changed provenance, unavailable slots and unresolved root arguments stop with
+explicit nested gaps. Encoded callvirt targets retain a dispatch gap. Strings
+stay hashed; no SQL is inferred from names or hashes.
+
+The local-only compiled-command-path-value.v1 candidate binds the exact reporting
+assembly SHA-256 and a bounded consumed-input projection, including rejected
+operand candidates. Limits are 64 caller hops, 128 operands and two competing
+operand records per lookup. Indexed graphs use a dedicated scratch SQL lookup
+rather than a second full payload dictionary; scratch schema is v3. Native call
+value facts additionally retain independently agreed call shape and IL extractor
+version is 0.1.6.
+
+All 17 focused command-binding tests passed, including multi-hop compiled
+wrappers, instance slots, absent/ambiguous/changed operand facts and a source-only
+bridge with orphaned IL operand evidence. Repeated queries retain identical
+binding projections. The broader stable-binary IL/path/native regression passed
+all 195 selected tests. Relevant control-flow/parameter
+configuration, broader gates, immutable-tool Windows workflow and final push
+remain open. This milestone does not complete the goal or validate private runs.
+
+## Compiled command configuration and path projection in progress (2026-09-30)
+
+The scanner now derives independently decoded straight-line command text/type
+configuration candidates and joins them to the same command Execute or adapter
+Fill receiver. Strings remain exact UTF-16 length/hash; argument slots and
+call-return values remain unresolved. The binder invalidates configuration at
+branch targets, exception boundaries and possibly mutating calls, including
+commands exposed through adapters. It has 128 receiver / 200,000 work limits
+per body and a separate aggregate phase bound matching the policy-bound IL
+MaxTotalWorkUnits. Exhaustion withholds that body's command candidates.
+
+Rule dotnet.compiled.il-command-binding.v1 and IL policy v4 document the
+candidate contract. Facts retain exact body, endpoint and configuration-call
+IDs plus generator/input hashes. Compiled path nodes expose an optional
+CommandBinding only after unique same-source body/call/configuration joins with
+matching raw-file/generator/input hashes. Invalid joins keep the existing API
+path and add a binding gap. The local SQL ledger retains this evidence; it still
+does not turn a command string hash or Fill into a resolved SQL/procedure claim.
+
+Synthetic Cecil-written binaries are independently decoded by raw SRM and
+Cecil. Tests cover adapter/command receiver identity, StoredProcedure enum,
+hashed literals, wrapper argument slots, branch targets, mutation, framework
+lookalikes, work caps, native fact materialization, end-to-end compiled path
+projection and changed-provenance rejection without raw literal retention.
+The stable-binary IL/path/native regression passed all 264 tests. A prior run
+overlapped a rebuild and had one checkpoint failure; all four relocation cases
+and the complete 264-test set passed when rerun against unchanged binaries.
+The PowerShell SQL-ledger regression passed. The final 20 operand/command
+checks passed after the setter signature guard. Supporting operand/configuration
+rows are not independent graph symbols or traversal roots; the final 14
+binding/baseline tests passed after that graph-support separation.
+
+Remaining requirements are substantive: exact-call-path caller substitution,
+configuration joins through relevant loops/parameter construction, broader
+final gates, the fresh immutable-tool Windows workflow, and push. Original
+private runs remain unchanged and no private acceptance is claimed. The overall
+compiled handler-to-SQL task remains unchecked; this is not goal completion.
+
+## Compiled operand-origin foundation in progress (2026-09-30)
+
+The active goal is the actual compiled-IL command/receiver binding fix, not
+another saved-report projection. The owned lane now has a bounded local
+operand tracker over both independently decoded streams. It retains hashed
+literal, argument-slot, allocation and call-result origins at exact call sites.
+Value observations join to admitted body/call facts and carry the existing
+exact generator and bounded-input hashes. Rule dotnet.compiled.il-values.v1
+labels these Tier3 candidates; unsupported flow and value-reader disagreement
+emit explicit gaps without upgrading or replacing body evidence.
+
+Initial build passed with zero warnings. All 51 operand/body tests passed,
+including fact joins, provenance and privacy after materialization. The final
+eight focused operand/reader-disagreement regressions also passed after isolating
+value disagreement from independently admitted body evidence.
+This foundation is not the SQL fix: exception flow currently withholds all
+origins, and command configuration, endpoint binding, interprocedural argument
+substitution, end-to-end fixtures and the Windows validation script remain open.
+The overall compiled command-value task checkbox remains unchecked.
+
+## Source command-assignment extraction slice (2026-09-30)
+
+Owner ledger succeeds with 18 groups / 56 variants, 56 database API occurrences
+and zero SQL surfaces. Inspected retained Fill nodes have no command/table/text
+hash evidence. This is an extraction/binding gap, not a report-rendering fix.
+IL body observations currently retain calls and hashes, not command-value flow.
+
+Found and corrected a separate concrete VB semantic boundary omission:
+CommandText property assignments and DbDataAdapter command assignments were
+not emitted. They now retain compiler-resolved receiver identities, constant
+text hashes or dynamic classification, and direct-symbol binding candidates.
+No raw text, parameter values, last-write/alias/branch/runtime binding is claimed.
+Extractor version advances to vb-semantic/0.8.5. Framework lookalikes are rejected.
+
+Validation: five ADO.NET boundary tests and 89 VB-focused tests passed. Modern
+VB CLI smoke emitted 222 facts with Level1SemanticAnalysis and passed artifact
+conformance. All 32 Web Forms composition/code-path review checks passed.
+The build introduced no compiler warnings. Full .NET regression
+and pinned CommunityVB OSS smoke are deferred for this bounded slice; they are
+required before PR readiness. This source slice does not fix the private
+projectless/IL-only command-value path. End-to-end SQL binding remains open;
+do not rerun the old ledger as if it can acquire new facts.
+
+## SQL ledger output-cap correction (2026-09-30)
+
+Owner run at 3fab3a84 failed WEBFORMS_SQL_ROUTE_OUTPUT_LIMIT before output
+creation. The helper rendered the entire retained gap array, contradicting its
+bounded display intent. Replaced that dump with kind/reason counts and bounded
+samples: 1,000 categories admitted, 200 shown, three samples per category,
+1,024 characters per field and 8,192 characters per sample section. Overflow
+counts and display truncation are explicit. Route display has an 8 MiB budget
+and individual text/JSON sections are clipped at 65,536 characters. The existing
+32 MiB final output cap remains; private inputs are not modified.
+
+Regression uses 6,000 repeated gaps with a >32 MiB message payload (and HTML
+escaping expansion) and requires successful output below 100 KiB with exact
+gap counts and explicit truncation. Existing raw/grouped and reference/escaping
+tests remain required. This fixes rendering only, not SQL binding or coverage.
+
+## Saved handler SQL evidence ledger (2026-09-30)
+
+Owner photos show the historical cart routes use downstream publish-member
+candidates and projectless VB receiver bridges, and the bid-group route uses
+VB constructor/receiver bridges. All three symbol hints occur in the saved
+mixed-mode output with 3 / 1 / 3 variants. This resolves this particular count
+discrepancy as a scope difference, not general route parity or complete coverage.
+
+Added `wsqlroute.ps1 -Open`: bounded, file-only raw/grouped path projection of
+database API and retained SQL surfaces, including node rule/tier/span/provenance,
+non-IL transition kinds and original report gaps. No SQL is inferred from method
+names or Fill; absent SQL surfaces and edges remain gaps. Input/output hashes
+bind the private HTML, references fail closed and existing output is preserved.
+Public PowerShell tests cover grouped/raw input, SQL/no-SQL cases, bridges,
+escaping, source preservation, differing node evidence, repeat filenames,
+explicit collision and missing references. Owner ledger readback is pending;
+no SQL command, parameter propagation or runtime completion is claimed.
+
+## Historical-only edge and mixed-mode diagnosis (2026-09-30)
+
+Owner comparison confirms 13 historical symbol sequences / 41 variants versus
+10 current / 34, with all ten shared counts equal, three historical-only hints
+and no current-only hints. Photos show interleaved assembly-qualified and source
+labels in those three sequences, but labels alone do not prove edge kind or a
+porting defect. The compiled-only filter remains unchanged.
+
+The file-only comparator now exposes every supplied historical edge-kind/rule/
+tier/from/to sequence for each relevant symbol group, resolves grouped edge
+references fail-closed, and checks the saved sibling mixed Fill report when
+present (or an explicit -Mixed input). Mixed query/source context and its hash
+are bound into the output. Empty edge arrays and absent mixed reports remain
+explicit gaps. Public tests cover mixed overlap, edge evidence and missing edge
+references. Owner edge readback remains required before any graph correction;
+no runtime or route parity claim is made.
+
+## Saved historical/current route comparison (2026-09-30)
+
+Owner `wprewalk` readback is false for the saved compiled-only 10 / 34 report.
+Added `wcompare.ps1 -Open` to read an original raw handler JSON and the current
+raw or native grouped handoff. It discovers historical handler database API
+JSON files within retained proof directories and asks for an explicit selection.
+Both reports are grouped with the same exact identity-field projection; variant
+counts remain separate. Symbol-only sequence overlap is a hint because it omits
+scan provenance. Query, coverage, declared source/index context and file hashes
+are shown in local HTML. No native admission, rescan or graph traversal is claimed.
+The helper binds its generator and ordered input file hashes to the diagnostic.
+
+Owner comparison of the retained Fill-only 13 / 41 report and current 10 / 34
+report found zero shared exact identities and ten shared symbol sequences.
+This does not yet distinguish three distinct missing routes from alternate
+historical provenance representations. The helper now retains symbol-group
+variant counts and displays historical/current-only symbol sequences plus
+shared count differences ahead of exact-identity differences. Default repeated
+comparisons use a free numbered filename; explicit output collisions still fail.
+
+Regression checks passed for raw/grouped comparison, variant-count changes,
+cross-scan identity differences, empty reports, missing references, output
+collision, symbol aggregation across exact identities, numbered repeat outputs,
+HTML escaping and input preservation. Actual private route diagnosis
+remains pending the owner's symbol-difference details; no traversal fix is inferred
+from arithmetic alone.
+
+## Independent review: compiled-only depth prewalk leak (2026-09-30)
+
+Independently reproduced the review's F1 on `b9223223`: the main compiled-only
+walk depth-truncated, then unrestricted FindShortestTerminalWitness emitted a
+`calls -> surface-evidence` source shortcut with TerminalReachabilityPrewalk.
+That positive path suppressed CompiledBaselineNoPath and expanded reachable
+diagnostics. The review repro was promoted into product tests, with controls
+for valid compiled Fill chains and historical mixed depth recovery.
+
+Fix: skip the unrestricted depth-recovery prewalk for compiled-only queries.
+Their normal bounded IL walk and depth gaps remain authoritative. No new BFS
+policy was introduced. An attachment and terminal each consume a depth edge.
+Owner readback 10 chains / 34 variants at b9223223 is provisional; the photos
+do not establish whether the fallback ran in that specific artifact.
+The fallback skips any root with a positive TerminalPathCount and emits at
+most one witness per zero-terminal root. With one selected root and 34 retained
+variants, depth truncation alone is insufficient to infer contamination.
+`wprewalk.ps1` streams the saved grouped HTML and prints only marker presence,
+without a build, graph walk, native validation or output artifact.
+
+Historical `abcfe32b:wpath.ps1` uses all database APIs, default traversal work
+and raw path-row counts. Later wpath supports Fill and provider filters.
+Those code differences do not establish which exact invocation/artifacts
+produced the historical 13 / 41 grouped readback. Route parity requires its
+actual query provenance and sequences; counts alone remain insufficient.
+
+Validation: the imported leak regression failed on b9223223 before the fix.
+After the fix, 52 focused scope/grouped/attachment tests and six legacy-prewalk/
+report-recovery tests passed. The marker helper passed split-buffer, absence,
+missing-input, content privacy and input-preservation checks. CLI build:
+zero warnings/errors; diff check passed. Full .NET suite and private readback
+were not executed. The historical route comparison remains open.
+
+## Separate compiled call-tree baseline (2026-09-30)
+
+Owner Fill-only photographs show 18 exact chains / 56 variants, 1,579,018
+traversal work units and cycle/depth gaps. Names are readable; mixed paths still
+include source bridges and cannot close historical 13 / 41 parity.
+
+Added `whandler -Requery -CompiledOnly -FillOnly -Open`, isolated default folder
+`handler-requery-compiled-fill`. Traversal permits one existing root attachment
+(semantic identity, PDB identity or publish candidate), then only compiled IL
+call/callvirt/database endpoint edges. It cannot return through source to gain
+extra paths. Full competitor admission and prior budgets stay unchanged.
+Optional query `TraversalScope` is included in the derived receipt input hash;
+legacy queries omit it. No runtime/dispatch/build authenticity claim. An empty
+restricted walk emits a scoped gap rather than NoBackendEvidence placeholders.
+
+Validation: 221 path/recovery/grouped-report tests passed; after the final
+Tier4 query-gap refinement, 28 focused scope/recovery/attachment tests passed.
+PowerShell handler dispatch/guards passed. CLI build: zero warnings/errors;
+diff check passed. Synthetic explicit PDB and publish attachment walks actually
+executed on macOS; Windows-only ASP.NET publish smoke and the full .NET suite
+were not run. Private compiled-only readback remains pending.
+
+## Explicit retained Fill-only comparison scope (2026-09-29)
+
+`whandler.ps1 -Requery -FillOnly -Open` now forwards the exact allowlisted
+`--surface-name DbDataAdapter.Fill` selector and uses a separate default
+`handler-requery-fill` destination. The default all-database-api scope remains
+unchanged. Invalid surface names fail before output writes. The existing receipt
+query/bounded-input digest includes the filter. Global graph admission, source
+bridges, overload/dispatch competitors and budgets are unchanged; no claim of
+IL-only execution or old/new parity. This repeats graph construction/traversal,
+not scan/combine. The owner's Chain 11 photographs retain the intended constructor,
+business/data layer and both framework overloads through the Fill candidate.
+
+Code inspection confirms Cecil and SRM both decode/check IL bodies in
+IlBodyEvidenceExtractor; the reporting bridge consumes those retained agreed
+calls, matching exact MethodDef/assembly-scoped MemberRef targets. Callvirt is
+candidate evidence and calli cannot supply a named member target. No replacement
+IL decoder, assembly loading or guessed external resolution was added.
+
+Validation: 30 grouped/recovery tests, 44 IL body extractor tests and the PowerShell handler guard passed,
+including query filter receipt binding, unchanged original index, invalid-filter
+refusal, default behavior and isolated output. CLI build had zero warnings/errors;
+diff check passed. Private Fill-only count/path
+comparison remains pending and cannot be inferred from passing synthetic tests.
+
+## Pre-PR reconciliation and local label regression (2026-09-29)
+
+The earlier readable-path change `a9267263` shortened canonical method symbols
+in the PowerShell local handoff. Native writer `8762069c` ported that formatter,
+but only supplied `DisplayName`. The graph's general safe-display policy hashes
+canonical compiled identities because `publicKeyToken` contains `token`. Exact
+`SymbolId` remains in the private lossless handoff. Native local-only rendering
+now uses that retained canonical method/constructor symbol when its display is
+redacted; normal global/shared privacy projections and graph matching are
+unchanged. HTML labels are escaped and never used for grouping or identity.
+Regression tests pin method and constructor labels with publicKeyToken, exact
+identity detail, unchanged JSON and lossless restore.
+
+The earlier `037ac6e2` inline-object-creation exclusion from implicit-Me bridging
+and `6783dc0b` constructor qualification are ancestors of current HEAD and their
+guards remain in the current implementation. The IL bridge diff from PR #797's
+merge head `8cae5664` contains indexed fact-type lookups, not target matching
+changes. These inspections do not establish equality of the owner's old/new
+private index bytes or complete private path parity. Old `wpath.ps1` also offers
+an explicit Fill-only query and provider selection; the isolated native query
+currently selects all database APIs. Do not conflate differently scoped counts.
+
+Validation: 35 focused grouped-report and constructor/inline-receiver tests
+passed, plus five public explicit-attachment cases. The Windows mapless provider
+test returns early on macOS, so its nominal pass is not execution evidence; that
+aspnet_compile/decoy check remains deferred to Windows. CLI build had zero
+warnings/errors and diff check passed. Full .NET suite and private historical
+path-identity parity remain unverified. Existing reports are immutable; the repair applies
+to newly generated reports and does not require an immediate owner graph rerun.
+
+## Owner handler requery readback and chain diagnostic (2026-09-29)
+
+Owner hit the diagnostic's 64 MiB JSON cap. The revised v2 helper streams the
+already-generated HTML instead, extracts one complete chain section, and renders
+all its collapsed evidence as safely re-encoded plain text. It hashes the locked
+HTML and selector, never opens the JSON inventory or combined index, and retains
+create-new output semantics. HTML is capped at 512 MiB, a selected section at
+8 MiB and each rendered line at 1 MiB. Tests pass with an oversized unused JSON,
+chain isolation, encoded method names, evidence visibility, immutable input,
+output collision, missing chain and incomplete section rejection. The v1 limits
+and JSON readback description below are historical and superseded by v2.
+
+Owner photographs at `74d2e417` show the isolated query completed with 28 chains,
+116 variants, 1,579,018 work units and truncation (cycle/depth gaps). Those counts
+do not establish identity parity with the historical 13/41 baseline. Visible
+employee/vacation/cart branches require connecting-edge inspection before any
+correctness conclusion. Logical payload observations total 7,728,443 rows and
+24,662,128,780 bytes; these are not physical disk I/O counters.
+
+`wchain.ps1 -Chain 7 -Open` renders a separate, explicitly unadmitted private
+diagnostic from the small handler requery grouped handoff. It exposes exact
+retained symbols (when available), source/scan/commit identities and ordered edge
+records for every variant in the selected chain. It neither recovers missing
+symbol identity nor weakens privacy-safe graph display policies. Input is bounded
+to 64 MiB, variants to 4096, references per variant to 256, and body to 8 MiB.
+The file is read once under a write-denying lock; output is create-new. Script
+generator, input file and selector-bound input hashes are embedded. This helper
+does not validate native commitments or assert graph correctness. Public helper
+tests cover escaping, evidence visibility, provenance, immutable input, selection,
+output collision and invalid endpoints. Private transition inspection is pending.
+
+## Exact handler requery and read observations (2026-09-29)
+
+Branch `codex/webforms-config-migration`. Owner's recovered handler readback was
+below the earlier handler-specific baseline and the aggregate report was capped.
+Inspection of legacy `wpath.ps1` confirmed it called the same C# path reporter
+with one exact symbol; the native report selected several source-bound roots
+under one shared path/work budget. This is a confirmed scope difference, not
+proof of missing port logic.
+
+`whandler.ps1 -Requery -Open` now invokes `requery-handler` against the exact
+failed run and its recovery bundle. It verifies their manifest/checkpoint/index
+commitments, selects one unambiguous source/scan/commit/symbol root through the
+bounded recovery index, hashes the retained combined index, and repeats only
+bounded global graph construction plus that root's traversal. All global
+competitors remain present. A separate new output owns its grouped handoff,
+HTML and generator/input-bound requery receipt. No scan, combine, website build,
+original checkpoint completion, or edits to the recovery bundle occur. Existing
+outputs, cancellation/failure partials and original artifacts are preserved.
+
+Fixed stage readbacks and receipt-bound per-stage elapsed milliseconds and
+logical fact-payload row/byte reads help localize expensive work. These are not
+physical I/O counters. Typed source-metadata/PDB reconciliation lookups and
+per-source endpoint analysis-gap lookups now use the existing fact-type index
+instead of decoding the complete fact corpus to filter it. The full observed
+Windows repeated-I/O cause is still unproven.
+
+Validation: 245 focused .NET report/memory/execution/query tests passed; 11 final
+integration checks passed, including all five public compiled/PDB/publish
+attachment cases. The seven-root synthetic fixture demonstrates shared 256-path
+truncation while the isolated 13-chain/41-variant fixture exactly matches the
+historical full-reader path evidence. This synthetic count is not private parity
+evidence. Three PowerShell helper tests passed; CLI build had zero warnings and
+errors. Full .NET suite and owner-retained isolated handler readback remain
+pending. Matching counts alone will not close path-identity parity.
+
+## Evidence-node limit and report-only recovery (2026-09-29)
+
+Private verify-5 completed its scan and generated handoffs/workbench, then failed
+the hard-coded 2,000,000-token evidence-index limit. New implicit plans explicitly
+select 20,000,000 tokens (supported ceiling 50,000,000); historical absent settings
+retain 2,000,000 and old contexts remain readable. Index construction now builds
+unique secondary indexes after bulk token insertion; duplicate-property admission
+and response/storage/token limits remain enforced.
+
+`wstatus.ps1 -Recover -Open` invokes current-tool `recover-reports` against the
+exact selected failed run. Recovery verifies scan artifacts, original report
+hash commitments and grouped evidence consistency, then copies handoffs/renders
+a new workbench/rebuilds the query index in a separate bundle. It neither changes
+old checkpoints nor claims original completion. A new generator/input-bound
+receipt owns its artifacts; `query-recovery` returns a distinct recovery claim.
+Partial recovery remains on failure. Full native graph repeated-read performance
+is still unresolved; recovery bypasses it, without implying private path parity.
+
+Validation: 187 focused evidence-query/preflight/execution tests passed, including
+more than 2,000,000 synthetic indexed nodes, historical context readback, explicit
+small-cap refusal, duplicate/cancellation handling, recovery tamper cases and
+unchanged original files. Gap/recovery PowerShell helper tests passed. Full .NET
+suite and private-corpus recovery/parity remain unverified.
+
+## Native preflight capacity consistency (2026-09-29)
+
+Branch `codex/webforms-config-migration`. Private retained diagnostics confirmed
+`GraphInputLimitReached` with `graph-facts`: native reporting used unrelated
+250,000-fact defaults while the scan configuration admitted a larger corpus.
+New preflights now explicitly materialize report fact/edge capacity from
+`MaxParentFacts` and text/scratch capacity from the retained artifact bound,
+capped at 16 GiB. Explicit report budgets and historical null-policy digests
+remain unchanged. Text capacity is a 64-bit byte count. No selector pruning or
+unbounded graph admission was introduced; traversal/frontier/output caps remain.
+Larger admission can cost more working set and scratch disk. Historical completed
+runs cannot be upgraded in place; new verification is required. Private-corpus
+path parity and representative scale remain unverified pending owner readback.
+
+Validation: 166 focused preflight/execution/selected-root tests passed; CLI and
+ReportProbe builds had zero warnings/errors; gap-status public tests passed.
+Full .NET suite was not run for this bounded change. An initial test pass had
+stale expected storage defaults plus a runtime-hash race from a concurrent build;
+the corrected expectations and serialized no-build rerun passed completely.
+
+## Independent snapshot and handler-graph admission (2026-09-14)
+
+Large private indexes exposed a budget-ordering defect: the packet snapshot and
+selected-handler graph shared one mutable input budget, so snapshot admission
+could consume the allowance before graph composition began. The two stages now
+have independent fact, edge, and text budgets. A graph that is itself limited
+still fails closed and publishes no path classifications. When only the broader
+snapshot is partial, a fully provenance-supported positive graph path and its
+terminal boundary may be retained; missing-path, no-downstream, and other
+absence conclusions remain `UnknownAnalysisGap`. Regression coverage pins both
+the positive-path retention and the fail-closed no-path case. No private source
+names or snippets are included in the fixture.
+
+The existing page-list runner intentionally publishes a standalone packet and
+does not mutate a completed pipeline workbench. Added a separate standalone
+review wrapper that selects the newest page-list packet, creates a new immutable
+`workbench/` plus compatible hash receipt, and can immediately invoke the
+anonymous page exporter against that exact workbench. This prevents a report-only
+rerun from accidentally exporting an older receipted pipeline packet. Its config
+reader deliberately consumes only `outputRoot`; requiring the page-list runner's
+`indexPath` and form array at this post-packet stage was an unnecessary coupling.
+The page-list runner also accepts `-ReviewRoot`, deriving `scan/index.sqlite` and
+the packet output location from the completed pipeline root while retaining the
+configured form list. This avoids copying or retyping a stale absolute index path.
+Because page aliases are report-local ordinals, a dedicated export wrapper now
+validates the original and newest standalone receipts, matches the retained
+private route locally, and exports the corresponding new alias without printing
+or copying the route. This replaces a manual PowerShell folder-selection pipeline.
+
 ## Handler-rooted HTML and anonymous review packet (2026-09-10)
 
 The one-case source review now renders private HTML organized as trigger,
@@ -998,6 +2222,31 @@ behind compatibility wrappers. The guide separates the normal two-command batch
 and review-set path from optional diagnostic tools, inventories every set artifact,
 and repeats the private/shareable and static-evidence boundaries.
 
+On `codex/vb-webforms-battle-test`, handler-resolution gaps now retain the event
+binding fact that caused them. The modernization packet joins that evidence back
+to an unavailable event chain and emits one closed diagnostic state: resolved,
+missing linked method, ambiguous linked method, unproven cross-file, or
+unclassified unavailable. The private workbench associates gaps by retained
+support as well as scope ID, and the anonymous page-path export preserves only
+the closed state. This fixes pages that previously reported unavailable handlers
+and zero gaps even though the scanner had emitted the resolution evidence.
+
+The anonymous page-path exporter now assigns chain aliases in the deterministic
+source-evidence order already established by the private workbench. It no longer
+sorts presentation order by opaque fact-derived chain hashes, which caused noisy
+whole-page diffs whenever an extractor version changed. The order remains static
+evidence order and explicitly does not claim runtime execution sequence.
+
+Field validation isolated six apparently unavailable handlers to unfamiliar
+framework-specific grid event attributes. The extractor already retained these
+identifier-valued `On...` attributes as Tier 3 server-event candidates but
+intentionally skipped the otherwise independent linked-method resolution step.
+`legacy-webforms/0.13.3` now resolves an exact method in the linked page class
+for these candidates while preserving reduced candidate coverage and an explicit
+limitation that the unfamiliar attribute's framework event semantics, binding,
+and runtime execution remain unproven. Client-prefixed attributes and dynamic or
+non-identifier values remain excluded.
+
 ### Post-fairness field result and actionable summary
 
 The work-machine rerun retained 466 event chains and 361 downstream boundaries.
@@ -1097,3 +2346,15 @@ unrelated output root or local configuration. Regression coverage exercises the
 strict schema, byte ceiling, and both clean-checkout explicit-input modes. The
 operator handoff now describes the ignored JSON workflow instead of editing the
 runner source.
+
+## Recovered handler comparison (2026-09-29)
+
+On `codex/webforms-config-migration`, recovery readback showed nonzero compiled
+paths but a shared path cap across multiple requested handlers. This is not
+evidence of lost C# port logic or single-handler parity. `whandler.ps1` uses the
+recovery evidence index to count one method's retained exact chains and evidence
+variants, reporting distinct source/scan/commit/symbol roots and global truncation.
+The response is bounded, provenance-bound, private, and review-only: no full
+handoff deserialization, scan, or graph traversal. Six focused .NET tests and the
+public script test passed. Owner handler readback and full-graph repeated-I/O
+cause remain pending. No runtime, full coverage, or parity claim.

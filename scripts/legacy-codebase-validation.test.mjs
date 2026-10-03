@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, sep } from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import test from "node:test";
@@ -14,6 +14,7 @@ import {
   readLocalManifest,
   renderLegacyValidationMarkdown,
   sampleStatus,
+  validationProcessLogPath,
   validateManifestPath,
   validateOutputRoot
 } from "./legacy-codebase-validation.mjs";
@@ -28,6 +29,14 @@ test("manifest and output paths must stay under ignored legacy validation tmp ro
   assert.throws(() => validateManifestPath("samples/repos.local.json", root), /Manifest path must be/);
   assert.throws(() => validateManifestPath(".tmp/legacy-codebase-validation/other.json", root), /Manifest path must be/);
   assert.throws(() => validateOutputRoot("reports/legacy", root), /Output root must be under/);
+});
+
+test("process logs do not make scanner output directories non-empty", () => {
+  const sampleOut = join(tmpdir(), "repo", ".tmp", "legacy-codebase-validation", "out", "legacy-winforms-app");
+  const processLog = validationProcessLogPath(sampleOut);
+
+  assert.equal(processLog, join(sampleOut, "..", "_process-logs", "legacy-winforms-app.log"));
+  assert.equal(processLog.startsWith(`${sampleOut}${sep}`), false);
 });
 
 test("local manifest accepts neutral labels and default bounds without exposing paths", async () => {

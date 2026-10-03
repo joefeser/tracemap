@@ -16,15 +16,31 @@ public static class CombinedIndexBuilder
     public static async Task<CombineResult> CombineAsync(CombineOptions options, CancellationToken cancellationToken = default)
     {
         ValidateOptions(options);
+        var attachments = await CompiledAttachmentCombineContracts.AdmitAsync(options, cancellationToken);
 
         var outputPath = Path.GetFullPath(options.OutputPath);
         Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
         if (File.Exists(outputPath))
         {
+            if (attachments is not null) throw new InvalidDataException("COMPILED_ATTACHMENT_COMBINE_OUTPUT_ALREADY_EXISTS");
             File.Delete(outputPath);
         }
+        if (attachments is not null)
+        {
+            // Atomically reserve only this new owned output. Never open a
+            // concurrently created file for replacement after admission.
+            using var reservation = new FileStream(outputPath, FileMode.CreateNew, FileAccess.Write, FileShare.None);
+        }
 
-        await using var connection = new SqliteConnection($"Data Source={outputPath}");
+        // Report composition reads this file immediately after CombineAsync returns.
+        // Do not leave a pooled writer handle behind, including on the fresh path.
+        var connectionString = new SqliteConnectionStringBuilder
+        {
+            DataSource = attachments is null ? outputPath : new Uri(outputPath).AbsoluteUri,
+            Mode = attachments is null ? SqliteOpenMode.ReadWriteCreate : SqliteOpenMode.ReadWrite,
+            Pooling = false
+        }.ToString();
+        await using var connection = new SqliteConnection(connectionString);
         await connection.OpenAsync(cancellationToken);
         await CreateSchemaAsync(connection, cancellationToken);
 
@@ -40,7 +56,7 @@ public static class CombinedIndexBuilder
         {
             var indexPath = Path.GetFullPath(options.IndexPaths[index]);
             var alias = $"source_{index}";
-            await AttachAsync(connection, alias, indexPath, cancellationToken);
+            await AttachAsync(connection, alias, indexPath, cancellationToken, immutable: attachments is not null);
             try
             {
                 var (manifest, manifestJson) = await ReadManifestAsync(connection, alias, cancellationToken);
@@ -105,6 +121,7 @@ public static class CombinedIndexBuilder
             }
         }
 
+        if (attachments is not null) await attachments.WriteAsync(connection, sources, cancellationToken);
         return new CombineResult(outputPath, sources, factCount, symbolCount, relationshipCount, callEdgeCount);
     }
 
@@ -520,11 +537,11 @@ public static class CombinedIndexBuilder
         await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
-    private static async Task AttachAsync(SqliteConnection connection, string alias, string indexPath, CancellationToken cancellationToken)
+    private static async Task AttachAsync(SqliteConnection connection, string alias, string indexPath, CancellationToken cancellationToken, bool immutable = false)
     {
         await using var command = connection.CreateCommand();
         command.CommandText = $"attach database $path as {alias};";
-        command.Parameters.AddWithValue("$path", indexPath);
+        command.Parameters.AddWithValue("$path", immutable ? CompiledAttachmentCombineContracts.ImmutableUri(indexPath) : indexPath);
         await command.ExecuteNonQueryAsync(cancellationToken);
     }
 

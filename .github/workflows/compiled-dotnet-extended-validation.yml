@@ -1,0 +1,100 @@
+name: Compiled .NET extended public validation
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/compiled-dotnet-extended-validation.yml"
+      - "src/dotnet/**"
+      - "samples/compiled-dotnet-evidence/**"
+      - "rules/rule-catalog.yml"
+      - "docs/VALIDATION.md"
+      - "docs/validation/TASK11_WINDOWS_LANE.md"
+      - "scripts/validation/Invoke-Task11Windows.ps1"
+      - "scripts/validation/Test-Task11Windows.ps1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  public-mutation-matrix:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - name: Record SDK identity
+        run: dotnet --info
+      - name: Task 11 public ILAsm runner smoke and synthetic guards
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          pwsh -NoProfile -File scripts/validation/Test-Task11Windows.ps1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $head = (git rev-parse HEAD).Trim()
+          pwsh -NoProfile -File scripts/validation/Invoke-Task11Windows.ps1 `
+            -Lane PublicSmoke -TraceMapRoot (Get-Location).Path `
+            -TraceMapCommit $head -OutputRoot (Join-Path $env:RUNNER_TEMP 'task11-public-smoke')
+      - name: Restore locked dependencies
+        run: dotnet restore src/dotnet/TraceMap.sln --locked-mode
+      - name: Discover Windows ILAsm and ILDAsm candidates
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Write-Output "runner image: ImageOS=$env:ImageOS ImageVersion=$env:ImageVersion arch=$env:PROCESSOR_ARCHITECTURE"
+          # ILAsm ships with the .NET Framework runtime itself under
+          # Framework/Framework64; ILDAsm ships with the Windows SDK NETFX
+          # tools. Windows Kits and Visual Studio cover the remaining
+          # Microsoft-owned installs, then PATH.
+          $roots = @(
+            "$env:WINDIR\Microsoft.NET\Framework64",
+            "$env:WINDIR\Microsoft.NET\Framework",
+            'C:\Program Files\Microsoft SDKs',
+            'C:\Program Files (x86)\Microsoft SDKs',
+            'C:\Program Files (x86)\Windows Kits',
+            'C:\Program Files\Microsoft Visual Studio'
+          )
+          $candidates = @(Get-ChildItem $roots -Recurse -File -Include ilasm.exe,ildasm.exe -ErrorAction SilentlyContinue)
+          $candidates += @(Get-Command ilasm.exe,ildasm.exe -All -ErrorAction SilentlyContinue | ForEach-Object { Get-Item $_.Source })
+          $candidates | Sort-Object FullName -Unique | ForEach-Object {
+            Write-Output "$($_.Name) path: $($_.FullName) version: $($_.VersionInfo.FileVersion) product: $($_.VersionInfo.ProductVersion)"
+            & $_.FullName /? 2>&1 | Select-Object -First 12
+          }
+          foreach ($name in @('ilasm.exe', 'ildasm.exe')) {
+            if (-not @($candidates | Where-Object Name -EQ $name).Count) { Write-Output "$name unavailable" }
+          }
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          if (Test-Path $vswhere) {
+            & $vswhere -latest -products * -property installationPath
+          } else {
+            Write-Output 'vswhere unavailable'
+          }
+          # Hand the selected absolute paths to the parity tests. The ordered
+          # picks mirror the in-test discovery (runtime directories first for
+          # ILAsm, NETFX x64 first for ILDAsm); the tests re-validate paths,
+          # file versions, and product versions before use.
+          $pick = {
+            param($kind)
+            $ordered = @($candidates | Where-Object Name -EQ $kind | Sort-Object FullName -Unique)
+            $preferred = if ($kind -eq 'ilasm.exe') {
+              $ordered | Where-Object { $_.FullName -like '*Microsoft.NET\Framework64\v4.0.30319*' }
+            } else {
+              $ordered | Where-Object { $_.FullName -like '*NETFX 4.8.1 Tools*x64*' }
+            }
+            if ($preferred) { $preferred[0].FullName } elseif ($ordered) { $ordered[0].FullName } else { '' }
+          }
+          $ilasmPick = & $pick 'ilasm.exe'
+          $ildasmPick = & $pick 'ildasm.exe'
+          Write-Output "selected ilasm: $ilasmPick"
+          Write-Output "selected ildasm: $ildasmPick"
+          "TRACEMAP_PARITY_ILASM=$ilasmPick" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "TRACEMAP_PARITY_ILDASM=$ildasmPick" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+      - name: Run extended public rewrite matrix
+        run: dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --logger "console;verbosity=detailed" --filter "FullyQualifiedName~IlRewriteEvidenceExtractorTests|FullyQualifiedName~IlRewriteControlFlowEvidenceExtractorTests|FullyQualifiedName~IlRewriteMemberShapeEvidenceExtractorTests|FullyQualifiedName~IlRewritePdbEvidenceExtractorTests|FullyQualifiedName~IlRewriteAssemblyTopologyTests|FullyQualifiedName~IlRewriteEmbeddedPdbTests|FullyQualifiedName~IlRewritePublicIntegrationTests|FullyQualifiedName~IlAsmIldasmParityGateTests|FullyQualifiedName~IlDasmTextParserTests"

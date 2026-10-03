@@ -1,0 +1,65 @@
+name: Deep projectless Windows validation
+
+on:
+  push:
+    branches: [codex/webforms-config-migration]
+    paths:
+      - .github/workflows/deep-projectless-windows-validation.yml
+      - scripts/validation/Test-DeepProjectlessCorpus.ps1
+      - scripts/wlocal.ps1
+      - scripts/wcompare.ps1
+      - scripts/wsqlroute.ps1
+      - scripts/wcap.ps1
+      - scripts/tests/Test-WebForms*.ps1
+      - scripts/validation/Test-PublicWebFormsPublish.ps1
+      - samples/fixture-build/deep-projectless/**
+      - samples/fixture-build/lazy-constructor/**
+      - samples/messy-dotnet-workspace/vb-lazy-constructor/**
+      - samples/messy-dotnet-workspace/vb-lazy-logging-provider/**
+      - samples/messy-dotnet-workspace/vb-deep-projectless/**
+      - samples/messy-dotnet-workspace/vb-publish-crossdll-framework/**
+      - src/dotnet/**
+  pull_request:
+    paths:
+      - .github/workflows/deep-projectless-windows-validation.yml
+      - scripts/validation/Test-DeepProjectlessCorpus.ps1
+      - scripts/wlocal.ps1
+      - scripts/wcompare.ps1
+      - scripts/wsqlroute.ps1
+      - scripts/wcap.ps1
+      - scripts/tests/Test-WebForms*.ps1
+      - scripts/validation/Test-PublicWebFormsPublish.ps1
+      - samples/fixture-build/deep-projectless/**
+      - samples/fixture-build/lazy-constructor/**
+      - samples/messy-dotnet-workspace/vb-lazy-constructor/**
+      - samples/messy-dotnet-workspace/vb-lazy-logging-provider/**
+      - samples/messy-dotnet-workspace/vb-deep-projectless/**
+      - samples/messy-dotnet-workspace/vb-publish-crossdll-framework/**
+      - src/dotnet/**
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  public-corpus:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - name: Validate deep routes and authentic mapped/mapless ASP.NET publishing
+        shell: pwsh
+        run: ./scripts/validation/Test-DeepProjectlessCorpus.ps1 -RequireWindowsPublish -OutputRoot "${{ runner.temp }}/tracemap-deep-public"
+      - name: Preserve public synthetic results, including failed attempts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: deep-projectless-windows-${{ github.sha }}
+          path: ${{ runner.temp }}/tracemap-deep-public/
+          if-no-files-found: error
+          retention-days: 7

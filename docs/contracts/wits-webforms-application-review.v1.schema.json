@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tracemap.tools/contracts/wits-webforms-application-review.v1.schema.json",
+  "title": "TraceMap private Web Forms application review overlay",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "overlayId", "evidence", "reviewState", "reviewer", "reviewedAtUtc", "decisions", "limitations"],
+  "properties": {
+    "schemaVersion": { "const": "wits-webforms-application-review.v1" },
+    "overlayId": { "type": "string", "pattern": "^application-review-[0-9a-f]{20}$" },
+    "evidence": {
+      "type": "object", "additionalProperties": false,
+      "required": ["packetSchemaVersion", "packetSha256", "packetId", "scanId", "commitSha", "ruleId"],
+      "properties": {
+        "packetSchemaVersion": { "const": "webforms-modernization-packet.v1" },
+        "packetSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "packetId": { "type": "string", "minLength": 1, "maxLength": 1024 },
+        "scanId": { "type": "string", "minLength": 1, "maxLength": 1024 },
+        "commitSha": { "type": "string", "minLength": 7, "maxLength": 64 },
+        "ruleId": { "type": "string", "minLength": 1, "maxLength": 1024 }
+      }
+    },
+    "reviewState": { "enum": ["draft", "completed"] },
+    "reviewer": { "type": ["string", "null"], "minLength": 1, "maxLength": 128, "pattern": "\\S" },
+    "reviewedAtUtc": { "type": ["string", "null"], "format": "date-time", "pattern": "Z$" },
+    "decisions": { "type": "array", "minItems": 1, "maxItems": 1000, "items": { "$ref": "#/$defs/decision" } },
+    "limitations": {
+      "type": "array", "minItems": 3, "maxItems": 3, "uniqueItems": true,
+      "items": { "enum": ["STATIC_EVIDENCE_NOT_RUNTIME_EXECUTION", "HUMAN_REVIEW_NOT_SCANNER_EVIDENCE", "PARTIAL_COVERAGE_PRESERVED"] }
+    }
+  },
+  "$defs": {
+    "decision": {
+      "type": "object", "additionalProperties": false,
+      "required": ["pageId", "surfaceId", "surfaceFactId", "verdict", "migrationDisposition", "capabilityLabel", "comment", "correction"],
+      "properties": {
+        "pageId": { "type": "string", "pattern": "^page-[0-9]{3,4}$" },
+        "surfaceId": { "type": "string", "minLength": 1, "maxLength": 1024 },
+        "surfaceFactId": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "verdict": { "enum": ["unreviewed", "expected-ui-only", "supported-backend-present", "backend-evidence-missing", "binding-or-source-mismatch", "needs-review"] },
+        "migrationDisposition": { "enum": ["unassigned", "retain", "replace-angular", "replace-dotnet", "replace-postgresql", "replace-multiple", "retire", "manual-redesign", "defer"] },
+        "capabilityLabel": { "type": ["string", "null"], "maxLength": 4000 },
+        "comment": { "type": ["string", "null"], "maxLength": 4000 },
+        "correction": {
+          "oneOf": [
+            { "type": "null" },
+            {
+              "type": "object", "additionalProperties": false,
+              "required": ["category", "statement"],
+              "properties": {
+                "category": { "enum": ["binding", "callee", "business-intent", "coverage", "other"] },
+                "statement": { "type": "string", "minLength": 1, "maxLength": 4000 }
+              }
+            }
+          ]
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "oneOf": [
+        { "properties": { "reviewer": { "type": "null" }, "reviewedAtUtc": { "type": "null" } } },
+        { "properties": { "reviewer": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "\\S" }, "reviewedAtUtc": { "type": "string", "format": "date-time", "pattern": "Z$" } } }
+      ]
+    },
+    {
+      "if": { "properties": { "reviewState": { "const": "completed" } }, "required": ["reviewState"] },
+      "then": {
+        "properties": {
+          "reviewer": { "type": "string", "minLength": 1, "pattern": "\\S" },
+          "reviewedAtUtc": { "type": "string", "format": "date-time", "pattern": "Z$" },
+          "decisions": { "items": { "properties": { "verdict": { "not": { "const": "unreviewed" } } } } }
+        }
+      }
+    }
+  ]
+}

@@ -36,7 +36,9 @@ public static class TraceMapCommand
             {
                 "scan" => ScanHelp(),
                 "version" => VersionHelp(),
+                "validate-index" => "tracemap validate-index --index <path> --commit <sha> --facts <count>",
                 "local-review" => LocalReviewHelp(),
+                "webforms-review" => rest.FirstOrDefault() == "wizard" ? WebFormsWizardCommand.Help : WebFormsReviewPreflightCommand.Help,
                 "report" => ReportHelp(),
                 "database-design-review" => DatabaseDesignReviewHelp(),
                 "webforms-modernization" => WebFormsModernizationHelp(),
@@ -67,7 +69,7 @@ public static class TraceMapCommand
                 "explorer" => ExplorerHelp(),
                 _ => RootHelp()
             });
-            return command is "scan" or "version" or "local-review" or "report" or "database-design-review" or "webforms-modernization" or "reduce" or "flow" or "relate" or "export" or "endpoints" or "combine" or "paths" or "route-flow" or "property-flow" or "diff" or "snapshot-diff" or "impact" or "reverse-impact" or "reverse" or "release-review" or "access-review" or "portfolio" or "package-impact" or "package-decision" or "vault" or "docs-export" or "contract-diff" or "baseline" or "evidence-pack" or "explorer" ? 0 : 1;
+            return command is "scan" or "version" or "validate-index" or "local-review" or "webforms-review" or "report" or "database-design-review" or "webforms-modernization" or "reduce" or "flow" or "relate" or "export" or "endpoints" or "combine" or "paths" or "route-flow" or "property-flow" or "diff" or "snapshot-diff" or "impact" or "reverse-impact" or "reverse" or "release-review" or "access-review" or "portfolio" or "package-impact" or "package-decision" or "vault" or "docs-export" or "contract-diff" or "baseline" or "evidence-pack" or "explorer" ? 0 : 1;
         }
 
         using var commandOperation = TraceMapDiagnostics.StartCommand(command);
@@ -77,7 +79,39 @@ public static class TraceMapCommand
             {
                 "scan" => await RunScanAsync(rest, output, error, cancellationToken),
                 "version" => await RunVersionAsync(rest, output, error),
+                "validate-index" => await RunValidateIndexAsync(rest, output, error),
                 "local-review" => await LocalReviewCommand.RunAsync(rest, output, error, RunScanAsync, cancellationToken),
+                "webforms-review" => rest.FirstOrDefault() == "wizard"
+                    ? await WebFormsWizardCommand.RunAsync(rest, Console.In, output, error, cancellationToken)
+                    : rest.FirstOrDefault() == "start"
+                    ? await WebFormsReviewStartCommand.RunAsync(rest, output, error, RunNativeReviewScanAsync, cancellationToken)
+                    : rest.FirstOrDefault() == "migration-review"
+                    ? await WebFormsReviewExecutionCommand.MigrationReviewAsync(rest, output, error, RunNativeReviewScanAsync, cancellationToken)
+                    : rest.FirstOrDefault() == "query-migration"
+                    ? await WebFormsReviewExecutionCommand.QueryMigrationAsync(rest, output, error, cancellationToken)
+                    : rest.FirstOrDefault() == "migrate-config"
+                    ? await WebFormsConfigMigrationCommand.RunAsync(rest, output, error, cancellationToken)
+                    : rest.FirstOrDefault() == "import-proof"
+                    ? await WebFormsProofImportCommand.RunAsync(rest, output, error, cancellationToken)
+                    : rest.FirstOrDefault() is "run" or "resume"
+                    ? await WebFormsReviewExecutionCommand.RunAsync(rest, output, error, RunNativeReviewScanAsync, cancellationToken)
+                    : rest.FirstOrDefault() == "query"
+                    ? await WebFormsReviewExecutionCommand.QueryAsync(rest, output, error, cancellationToken)
+                    : rest.FirstOrDefault() == "recover-reports"
+                    ? await WebFormsReviewExecutionCommand.RecoverReportsAsync(rest, output, error, cancellationToken)
+                    : rest.FirstOrDefault() == "query-recovery"
+                    ? await WebFormsReviewExecutionCommand.QueryRecoveryAsync(rest, output, error, cancellationToken)
+                    : rest.FirstOrDefault() == "requery-handler"
+                    ? await WebFormsReviewExecutionCommand.RequeryHandlerAsync(rest, output, error, cancellationToken)
+                    : rest.FirstOrDefault() == "status"
+                    ? await WebFormsReviewExecutionCommand.StatusAsync(rest, output, error, cancellationToken)
+                    : rest.FirstOrDefault() == "retain-tool"
+                    ? await WebFormsReviewExecutionCommand.RetainToolAsync(rest, output, error, cancellationToken)
+                    : rest.FirstOrDefault() is "relocate" or "retention-plan"
+                    ? await WebFormsReviewExecutionCommand.RetentionAsync(rest, output, error, cancellationToken)
+                    : rest.FirstOrDefault() == "prepare"
+                    ? await WebFormsReviewPreparationCommand.RunAsync(rest, output, error, cancellationToken)
+                    : await WebFormsReviewPreflightCommand.RunAsync(rest, output, error, cancellationToken),
                 "report" => await RunReportAsync(rest, output, error, cancellationToken),
                 "database-design-review" => await RunDatabaseDesignReviewAsync(rest, output, error, cancellationToken),
                 "webforms-modernization" => await RunWebFormsModernizationAsync(rest, output, error, cancellationToken),
@@ -149,6 +183,24 @@ public static class TraceMapCommand
             await output.WriteLineAsync($"Next action: {result.Readiness.NextAction}");
         }
 
+        return 0;
+    }
+
+    private static async Task<int> RunValidateIndexAsync(string[] args, TextWriter output, TextWriter error)
+    {
+        var values = ParseOptions(args);
+        var path = values.GetValueOrDefault("--index");
+        var commit = values.GetValueOrDefault("--commit");
+        var count = values.GetValueOrDefault("--facts");
+        if (string.IsNullOrWhiteSpace(path) || string.IsNullOrWhiteSpace(commit)
+            || !long.TryParse(count, out var expectedFacts) || expectedFacts <= 0)
+        {
+            await error.WriteLineAsync("error: validate-index requires --index, --commit, and positive --facts.");
+            return 1;
+        }
+
+        SqliteIndexValidator.Validate(path, commit, expectedFacts);
+        await output.WriteLineAsync("index-valid");
         return 0;
     }
 
@@ -234,9 +286,18 @@ public static class TraceMapCommand
         return values.HasFlag("--exit-code") && result.HasActionableFindings ? 1 : 0;
     }
 
-    private static async Task<int> RunScanAsync(string[] args, TextWriter output, TextWriter error, CancellationToken cancellationToken)
+    private static Task<int> RunScanAsync(string[] args, TextWriter output, TextWriter error, CancellationToken cancellationToken) =>
+        RunScanWithOptionsAsync(args, output, error, cancellationToken, preserveOptionValues: false);
+
+    // Native configuration already supplies one structured value per option. Do not
+    // apply the public scan CLI's historical comma-list expansion to those paths.
+    private static Task<int> RunNativeReviewScanAsync(string[] args, TextWriter output, TextWriter error, CancellationToken cancellationToken) =>
+        RunScanWithOptionsAsync(args, output, error, cancellationToken, preserveOptionValues: true);
+
+    private static async Task<int> RunScanWithOptionsAsync(string[] args, TextWriter output, TextWriter error,
+        CancellationToken cancellationToken, bool preserveOptionValues)
     {
-        var values = ParseOptions(args);
+        var values = ParseOptions(args, preserveOptionValues, "--retain-source-snapshot");
         if (!values.TryGetValue("--repo", out var repoPath) || string.IsNullOrWhiteSpace(repoPath))
         {
             await error.WriteLineAsync("error: scan requires --repo <path>.");
@@ -249,8 +310,66 @@ public static class TraceMapCommand
             return 1;
         }
 
+        var rewriteBefore = values.GetMany("--il-rewrite-before");
+        if ((values.TryGetValue("--webforms-published-root", out var declaredPublishedRoot)
+            && !string.IsNullOrWhiteSpace(declaredPublishedRoot) || values.TryGetValue("--webforms-publish-source-base", out _))
+            && (!values.TryGetValue("--webforms-publish-receipt", out var declaredPublishReceipt) || string.IsNullOrWhiteSpace(declaredPublishReceipt)))
+        {
+            await error.WriteLineAsync("error: --webforms-published-root requires --webforms-publish-receipt; --webforms-publish-source-base also requires that receipt.");
+            return 1;
+        }
+        var rewriteAfter = values.GetMany("--il-rewrite-after");
+        if (!values.HasFlag("--il-rewrite-evidence") && (rewriteBefore.Count > 0 || rewriteAfter.Count > 0))
+        {
+            await error.WriteLineAsync("error: --il-rewrite-before/--il-rewrite-after require --il-rewrite-evidence.");
+            return 1;
+        }
+
+        if (values.HasFlag("--il-rewrite-evidence") && rewriteBefore.Count != rewriteAfter.Count)
+        {
+            await error.WriteLineAsync("error: --il-rewrite-before and --il-rewrite-after must be declared as equal-length ordinal pairs.");
+            return 1;
+        }
+
+        var rewritePdbBefore = values.GetMany("--il-rewrite-pdb-before");
+        var rewritePdbAfter = values.GetMany("--il-rewrite-pdb-after");
+        if (!values.HasFlag("--il-rewrite-pdb-evidence") && (rewritePdbBefore.Count > 0 || rewritePdbAfter.Count > 0))
+        {
+            await error.WriteLineAsync("error: --il-rewrite-pdb-before/--il-rewrite-pdb-after require --il-rewrite-pdb-evidence.");
+            return 1;
+        }
+
+        if (values.HasFlag("--il-rewrite-pdb-evidence"))
+        {
+            if (!values.HasFlag("--il-rewrite-evidence"))
+            {
+                await error.WriteLineAsync("error: --il-rewrite-pdb-evidence requires --il-rewrite-evidence.");
+                return 1;
+            }
+
+            if (rewritePdbBefore.Count != rewritePdbAfter.Count)
+            {
+                await error.WriteLineAsync("error: --il-rewrite-pdb-before and --il-rewrite-pdb-after must be declared as equal-length ordinal pairs.");
+                return 1;
+            }
+
+            if (rewritePdbBefore.Count != rewriteBefore.Count)
+            {
+                await error.WriteLineAsync("error: --il-rewrite-pdb-before/--il-rewrite-pdb-after must align ordinally with the declared --il-rewrite-before/--il-rewrite-after pairs.");
+                return 1;
+            }
+        }
+
         var sqlValidationSummaryPaths = values.GetMany("--sql-validation-summary");
         var sqlValidationAsOf = ParseSqlValidationAsOf(values, sqlValidationSummaryPaths);
+        var retainSnapshot = values.HasFlag("--retain-source-snapshot");
+        if (!retainSnapshot && new[] { "--source-snapshot-max-files", "--source-snapshot-max-source-bytes", "--source-snapshot-max-roster-bytes" }
+            .Any(key => values.Keys.Contains(key, StringComparer.Ordinal)))
+            throw new ArgumentException("Source snapshot limits require --retain-source-snapshot.");
+        var snapshotMaxFiles = ParsePositiveLong(values, "--source-snapshot-max-files", 1_000_000);
+        var snapshotMaxSourceBytes = ParsePositiveLong(values, "--source-snapshot-max-source-bytes", 68_719_476_736);
+        var snapshotMaxRosterBytes = ParsePositiveLong(values, "--source-snapshot-max-roster-bytes", 67_108_864);
+        if (retainSnapshot) SourceSnapshotRetention.ValidateLimits(snapshotMaxFiles, snapshotMaxSourceBytes, snapshotMaxRosterBytes);
 
         var scanOptions = new ScanOptions(
             repoPath,
@@ -262,7 +381,58 @@ public static class TraceMapCommand
             TargetFramework: values.GetValueOrDefault("--target-framework"),
             Restore: values.HasFlag("--restore"),
             BinlogPaths: values.GetMany("--binlog"),
-            BinlogCommitSha: values.GetValueOrDefault("--binlog-commit-sha"));
+            BinlogCommitSha: values.GetValueOrDefault("--binlog-commit-sha"),
+            CompiledInputPaths: values.GetMany("--compiled-input"),
+            CompiledDependencyPaths: values.GetMany("--compiled-dependency"),
+            CompiledBindingReceiptPaths: values.GetMany("--compiled-binding-receipt"),
+            CompiledInputLimits: new CompiledInputLimits(
+                ParsePositiveInt(values, "--compiled-max-artifacts", 32),
+                ParsePositiveLong(values, "--compiled-max-file-bytes", 67_108_864),
+                ParsePositiveInt(values, "--compiled-max-types", 50_000),
+                ParsePositiveInt(values, "--compiled-max-members", 250_000),
+                ParsePositiveInt(values, "--compiled-max-text", 4_096),
+                ParsePositiveLong(values, "--compiled-max-work", 500_000)),
+            PdbInputPaths: values.GetMany("--pdb-input"),
+            PdbInputLimits: new PdbInputLimits(
+                ParsePositiveInt(values, "--pdb-max-artifacts", 32),
+                ParsePositiveLong(values, "--pdb-max-file-bytes", 67_108_864),
+                ParsePositiveInt(values, "--pdb-max-documents", 50_000),
+                ParsePositiveInt(values, "--pdb-max-methods", 250_000),
+                ParsePositiveInt(values, "--pdb-max-sequence-points", 1_000_000),
+                ParsePositiveInt(values, "--pdb-max-source-files", 50_000),
+                ParsePositiveLong(values, "--pdb-max-source-file-bytes", 67_108_864),
+                ParsePositiveLong(values, "--pdb-max-source-total-bytes", 1_073_741_824),
+                ParsePositiveInt(values, "--pdb-max-text", 4_096),
+                ParsePositiveLong(values, "--pdb-max-work", 1_500_000)),
+            IlBodyEvidence: values.HasFlag("--il-body-evidence"),
+            IlBodyLimits: new IlBodyLimits(
+                ParsePositiveInt(values, "--il-max-bodies", 50_000),
+                ParsePositiveInt(values, "--il-max-instructions-per-body", 100_000),
+                ParsePositiveInt(values, "--il-max-locals-per-body", 10_000),
+                ParsePositiveInt(values, "--il-max-exception-regions-per-body", 10_000),
+                ParsePositiveInt(values, "--il-max-text", 4_096),
+                ParsePositiveLong(values, "--il-max-work", 2_000_000)),
+            IlRewriteEvidence: values.HasFlag("--il-rewrite-evidence"),
+            IlRewriteBeforePaths: values.GetMany("--il-rewrite-before"),
+            IlRewriteAfterPaths: values.GetMany("--il-rewrite-after"),
+            IlRewriteLimits: new IlRewriteLimits(
+                ParsePositiveInt(values, "--il-max-rewrite-pairs", 16)),
+            IlRewritePdbEvidence: values.HasFlag("--il-rewrite-pdb-evidence"),
+            IlRewriteBeforePdbPaths: values.GetMany("--il-rewrite-pdb-before"),
+            IlRewriteAfterPdbPaths: values.GetMany("--il-rewrite-pdb-after"),
+            IlRewritePdbLimits: new IlRewritePdbLimits(
+                ParsePositiveLong(values, "--il-rewrite-pdb-max-file-bytes", 67_108_864),
+                ParsePositiveInt(values, "--il-rewrite-pdb-max-documents", 50_000),
+                ParsePositiveInt(values, "--il-rewrite-pdb-max-methods", 250_000),
+                ParsePositiveInt(values, "--il-rewrite-pdb-max-sequence-points", 1_000_000),
+                ParsePositiveInt(values, "--il-rewrite-pdb-max-text", 4_096),
+                ParsePositiveLong(values, "--il-rewrite-pdb-max-work", 1_500_000)),
+            WebFormsPublishReceiptPath: values.GetValueOrDefault("--webforms-publish-receipt"),
+            ExactSourceScope: values.HasFlag("--exact-source-scope"),
+            ExactSourceMaxFiles: ParsePositiveInt(values, "--exact-source-max-files", 256),
+            ExactSourceMaxBytes: ParsePositiveLong(values, "--exact-source-max-bytes", 67_108_864),
+            WebFormsPublishedRootPath: values.GetValueOrDefault("--webforms-published-root"),
+            WebFormsPublishSourceRelativeBase: values.GetValueOrDefault("--webforms-publish-source-base"));
         var receiptRecorder = new ScanReceiptRecorder(
             scanOptions,
             sqlValidationSummaryPaths.Append(sqlValidationAsOf?.ToString("O") ?? string.Empty));
@@ -334,6 +504,17 @@ public static class TraceMapCommand
                         await ManifestWriter.WriteAsync(Path.Combine(artifactOutputPath, "scan-manifest.json"), result.Manifest, cancellationToken);
                         operation.Complete(TraceMapDiagnosticOutcome.Succeeded);
                         receiptOperation.Complete("succeeded", result.Manifest.AnalysisLevel, "manifest-written");
+                    });
+                }
+                if (retainSnapshot)
+                {
+                    using var retainedOperation = receiptRecorder.StartStage("artifact-write", "source-snapshot-retention",
+                        result.Manifest.AnalysisLevel, "occurred", "completed");
+                    await RunReceiptStageAsync(retainedOperation, async () =>
+                    {
+                        await SourceSnapshotRetention.WriteAsync(artifactOutputPath, repoPath, result,
+                            snapshotMaxFiles, snapshotMaxSourceBytes, snapshotMaxRosterBytes, cancellationToken);
+                        retainedOperation.Complete("succeeded", result.Manifest.AnalysisLevel, "source-snapshot-roster-retained");
                     });
                 }
                 using (var receiptOperation = receiptRecorder.StartStage("artifact-write", "facts-write", result.Manifest.AnalysisLevel, "occurred", "completed"))
@@ -447,7 +628,8 @@ public static class TraceMapCommand
             }
             if (ex is OperationCanceledException && cancellationToken.IsCancellationRequested)
                 throw;
-            await error.WriteLineAsync($"error: {ScanReceiptRecorder.ClassifyOutputFailure(ex)}");
+            await error.WriteLineAsync($"error: {(ex is SourceSnapshotRetentionException retainedFailure
+                ? retainedFailure.Message : ScanReceiptRecorder.ClassifyOutputFailure(ex))}");
             return 1;
         }
 
@@ -461,7 +643,14 @@ public static class TraceMapCommand
         exception is ArgumentException argument
         && argument.Message.StartsWith("--binlog", StringComparison.Ordinal)
             ? argument.Message
-            : ScanReceiptRecorder.ClassifyFailure(exception);
+            : exception is InvalidOperationException scopeError
+                && scopeError.Message is "ExactSourceScopeInvalidOptions"
+                    or "ExactSourceScopeInvalidPath"
+                    or "ExactSourceScopeInventoryMismatch"
+                    or "ExactSourceScopeLimitExceeded"
+                    or "ExactSourceScopeEnumerationLimitExceeded"
+                    ? scopeError.Message
+                    : ScanReceiptRecorder.ClassifyFailure(exception);
 
     private static async Task RunReceiptStageAsync(ScanReceiptOperation operation, Func<Task> action)
     {
@@ -619,8 +808,11 @@ public static class TraceMapCommand
             values.GetValueOrDefault("--surface-list"),
             ParsePositiveInt(values, "--max-traversal-work", 100_000)), cancellationToken);
         await output.WriteLineAsync($"TraceMap Web Forms modernization packet completed: {result.JsonPath}");
-        await output.WriteLineAsync($"Repository: {result.Packet.Sources.Single().RepositoryId}");
-        await output.WriteLineAsync($"Commit SHA: {result.Packet.Sources.Single().CommitSha}");
+        await output.WriteLineAsync($"Sources: {result.Packet.Sources.Count}");
+        foreach (var source in result.Packet.Sources)
+        {
+            await output.WriteLineAsync($"Source repository: {source.RepositoryId}; commit SHA: {source.CommitSha}; scan: {source.ScanId}");
+        }
         await output.WriteLineAsync($"Coverage: {result.Packet.Coverage}");
         await output.WriteLineAsync($"Surfaces: {result.Packet.Summary.SurfaceCount}");
         await output.WriteLineAsync($"Event chains: {result.Packet.Summary.EventChainCount}");
@@ -635,7 +827,12 @@ public static class TraceMapCommand
 
     private static async Task<int> RunPathsAsync(string[] args, TextWriter output, TextWriter error, CancellationToken cancellationToken)
     {
-        var values = ParseOptions(args, "--include-legacy-roots");
+        var values = ParseOptions(args, "--include-legacy-roots", "--exact-from-symbol");
+        if (values.HasFlag("--exact-from-symbol") && !values.TryGetValue("--from-symbol", out _))
+        {
+            await error.WriteLineAsync("error: paths --exact-from-symbol requires --from-symbol.");
+            return 1;
+        }
         if (!values.TryGetValue("--index", out var indexPath) || string.IsNullOrWhiteSpace(indexPath))
         {
             await error.WriteLineAsync("error: paths requires --index <combined.sqlite>.");
@@ -684,7 +881,8 @@ public static class TraceMapCommand
                 MaxDepth: ParsePositiveInt(values, "--max-depth", 8),
                 MaxPaths: ParsePositiveInt(values, "--max-paths", 100),
                 MaxFrontier: ParsePositiveInt(values, "--max-frontier", 10000),
-                MessageDirection: values.GetValueOrDefault("--message-direction")),
+                MessageDirection: values.GetValueOrDefault("--message-direction"))
+            { ExactFromSymbol = values.HasFlag("--exact-from-symbol") },
             cancellationToken);
 
         await output.WriteLineAsync($"TraceMap paths completed: {result.MarkdownPath ?? result.JsonPath}");
@@ -2220,6 +2418,9 @@ public static class TraceMapCommand
     }
 
     private static ParsedOptions ParseOptions(string[] args, params string[] additionalFlags)
+        => ParseOptions(args, preserveOptionValues: false, additionalFlags);
+
+    private static ParsedOptions ParseOptions(string[] args, bool preserveOptionValues, params string[] additionalFlags)
     {
         var values = new Dictionary<string, List<string>>(StringComparer.Ordinal);
         var flags = new HashSet<string>(StringComparer.Ordinal);
@@ -2231,14 +2432,15 @@ public static class TraceMapCommand
                 throw new ArgumentException($"Unexpected argument: {arg}");
             }
 
-            if (arg is "--restore" or "--include-paths" or "--include-reverse" or "--include-impact" or "--allow-identity-mismatch" or "--exit-code" or "--allow-mixed-inputs" or "--release-review"
+            if (arg is "--restore" or "--include-paths" or "--include-reverse" or "--include-impact" or "--allow-identity-mismatch" or "--exit-code" or "--allow-mixed-inputs" or "--release-review" or "--il-body-evidence" or "--il-rewrite-evidence" or "--il-rewrite-pdb-evidence" or "--exact-source-scope"
                 || additionalFlags.Contains(arg, StringComparer.Ordinal))
             {
                 flags.Add(arg);
                 continue;
             }
 
-            if (index + 1 >= args.Length || args[index + 1].StartsWith("--", StringComparison.Ordinal))
+            // Native scan arguments are generated key/value pairs, not caller CLI tokens.
+            if (index + 1 >= args.Length || (!preserveOptionValues && args[index + 1].StartsWith("--", StringComparison.Ordinal)))
             {
                 throw new ArgumentException($"Missing value for {arg}.");
             }
@@ -2250,7 +2452,7 @@ public static class TraceMapCommand
             }
 
             var rawValue = args[++index];
-            if (arg == "--surface-list") list.Add(rawValue);
+            if (preserveOptionValues || arg is "--surface-list" or "--from-symbol") list.Add(rawValue);
             else list.AddRange(rawValue.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
         }
 
@@ -2265,6 +2467,21 @@ public static class TraceMapCommand
         }
 
         if (int.TryParse(value, out var parsed) && parsed > 0)
+        {
+            return parsed;
+        }
+
+        throw new ArgumentException($"{key} must be a positive integer.");
+    }
+
+    private static long ParsePositiveLong(ParsedOptions values, string key, long defaultValue)
+    {
+        if (!values.TryGetValue(key, out var value))
+        {
+            return defaultValue;
+        }
+
+        if (long.TryParse(value, out var parsed) && parsed > 0)
         {
             return parsed;
         }
@@ -2553,6 +2770,7 @@ public static class TraceMapCommand
             Usage:
               tracemap version [--json]
               tracemap local-review run --repo <path> --out <new-output-root> [--webforms-modernization] [--explorer]
+              tracemap webforms-review preflight --config <private-json> --out <new-run-root>
               tracemap scan --repo <path> --out <path>
               tracemap report --index <path> --out <path>
               tracemap database-design-review --index <combined.sqlite> --out <path>
@@ -2584,6 +2802,7 @@ public static class TraceMapCommand
             Commands:
               version   Show installed build identity and bounded local readiness.
               local-review Run a guided local scan and compatible review stages.
+              webforms-review Validate private inputs, prepare declared receipts and checkpoint fresh scans.
               scan      Inventory a repository and emit TraceMap artifacts.
               report    Generate a combined dependency report from a combined index.
               database-design-review Compose existing PostgreSQL design, query, and route evidence.
@@ -2670,7 +2889,7 @@ public static class TraceMapCommand
     {
         return """
             Usage:
-              tracemap scan --repo <path> --out <path> [--solution <path>] [--project <path>] [--include <glob>] [--exclude <glob>] [--target-framework <tfm>] [--restore] [--binlog <path> --binlog-commit-sha <sha>] [--sql-validation-summary <path>]
+              tracemap scan --repo <path> --out <path> [--solution <path>] [--project <path>] [--include <glob>] [--exclude <glob>] [--target-framework <tfm>] [--restore] [--binlog <path> --binlog-commit-sha <sha>] [--compiled-input <assembly>] [--compiled-dependency <assembly>] [--compiled-binding-receipt <json>] [--pdb-input <pdb>] [--sql-validation-summary <path>]
 
             Required:
               --repo <path>   Repository or folder to scan.
@@ -2681,11 +2900,76 @@ public static class TraceMapCommand
               --project <path>         Project to load. Repeat or comma-separate for multiple.
               --include <glob>         Include only matching inventoried paths. Repeatable.
               --exclude <glob>         Exclude matching inventoried paths. Repeatable.
+              --exact-source-scope     Require literal --include paths to equal the complete eligible repository inventory; reject omitted, unsupported, or newly discovered semantic inputs.
+              --exact-source-max-files <count>
+              --exact-source-max-bytes <count>
+                                       Hard file/byte limits for exact source scope (defaults: 256 files, 64 MiB); candidate enumeration has a separate hard limit.
+              --retain-source-snapshot Retain the complete local byte-snapshot roster for later immutable attachment; no source snippets or runtime proof.
+              --source-snapshot-max-files <count>
+              --source-snapshot-max-source-bytes <count>
+              --source-snapshot-max-roster-bytes <count>
+                                       Retention admission limits (defaults: 1000000 files, 64 GiB raw source, 64 MiB streamed roster); requires --retain-source-snapshot.
               --target-framework <tfm> MSBuild TargetFramework property for semantic load.
               --restore                Run dotnet restore for selected solution/project targets before semantic load.
               --binlog <path>          Explicit local MSBuild binary log to ingest offline. Repeatable; never discovered.
               --binlog-commit-sha <sha>
                                        Required with --binlog and must match the repository commit detected by TraceMap.
+              --compiled-input <path>  Explicit primary managed assembly. Repeatable; never discovered.
+              --compiled-dependency <path>
+                                       Explicit dependency candidate admitted under the same bounded policy. Repeatable.
+              --compiled-binding-receipt <path>
+                                       Optional compiled-input-binding-set.v1 receipt. Repeatable.
+              --webforms-publish-receipt <path>
+                                       Explicit local-only webforms-publish-binding.v1 receipt. Never discovered.
+              --webforms-published-root <absolute-path>
+                                       Optional explicit published-file root, independent of receipt location. Hash checked, never written.
+              --webforms-publish-source-base <repo-relative-folder>
+                                       Explicit receipt source-path base inside the repository; receipts remain unchanged.
+              --pdb-input <path>       Explicit portable PDB, assembly with embedded portable PDB, or Windows PDB input. Repeatable; never discovered.
+              --compiled-max-artifacts <count>
+              --compiled-max-file-bytes <count>
+              --compiled-max-types <count>
+              --compiled-max-members <count>
+              --compiled-max-text <count>
+              --compiled-max-work <count>
+                                       Positive deterministic compiled-input limits; max-text must be at least 71.
+              --il-body-evidence        Extract bounded operand-aware IL method-body and direct-call evidence from admitted compiled inputs. Never discovered.
+              --il-max-bodies <count>
+              --il-max-instructions-per-body <count>
+              --il-max-locals-per-body <count>
+              --il-max-exception-regions-per-body <count>
+              --il-max-text <count>
+              --il-max-work <count>
+                                       Positive deterministic IL body/call limits shared with the rewrite lane.
+              --il-rewrite-evidence     Compare operator-declared before/after managed assembly pairs and emit bounded IL rewrite identity edges. The scanner never performs or attributes the rewrite; both sides must independently pass the dual-reader IL body contract.
+              --il-rewrite-before <path>
+              --il-rewrite-after <path>
+                                       Explicit paired inputs. Repeatable; the nth before and after declarations form one ordinal pair and both lists must have equal length.
+              --il-max-rewrite-pairs <count>
+                                       Positive deterministic rewrite-pair limit; declared pairs beyond it emit bounded limit gaps.
+              --il-rewrite-pdb-evidence
+                                       Prove Portable PDB method and sequence-point identities across declared before/after rewrite pairs. Requires --il-rewrite-evidence; each PDB side must bind its own paired assembly by exact portable content identity, and only fully proven pairs emit per-method offset-classified relationships. Never claims behavioral equivalence, source ownership, or preserved debugging behavior.
+              --il-rewrite-pdb-before <path>
+              --il-rewrite-pdb-after <path>
+                                       Explicit paired Portable PDB files or assemblies carrying embedded portable PDBs. Repeatable; the nth PDB declarations pair with the nth declared assembly pair and both lists must match the assembly pair count.
+              --il-rewrite-pdb-max-file-bytes <count>
+              --il-rewrite-pdb-max-documents <count>
+              --il-rewrite-pdb-max-methods <count>
+              --il-rewrite-pdb-max-sequence-points <count>
+              --il-rewrite-pdb-max-text <count>
+              --il-rewrite-pdb-max-work <count>
+                                       Positive deterministic rewrite PDB limits; max-text must be at least 71.
+              --pdb-max-artifacts <count>
+              --pdb-max-file-bytes <count>
+              --pdb-max-documents <count>
+              --pdb-max-methods <count>
+              --pdb-max-sequence-points <count>
+              --pdb-max-source-files <count>
+              --pdb-max-source-file-bytes <count>
+              --pdb-max-source-total-bytes <count>
+              --pdb-max-text <count>
+              --pdb-max-work <count>
+                                       Positive deterministic PDB-input limits; max-text must be at least 71.
               --sql-validation-summary <path>
                                        Explicit sql-validation-summary/v1 input. Repeatable; never executed.
               --sql-validation-as-of <timestamp>
@@ -2772,7 +3056,9 @@ public static class TraceMapCommand
                                          Maximum batch/data-movement rows (default 1000).
               --max-candidates <n>       Maximum structural candidates (default 1000).
               --max-gaps <n>             Maximum gap rows (default 1000).
-              --max-depth <n>            Legacy static-flow traversal depth (default 8).
+              --max-depth <n>            Ordinary legacy path-enumeration depth (default 8).
+                                         A bounded shortest-terminal prewalk may retain one
+                                         longer witness while other branches remain partial.
               --max-paths <n>            Legacy static-flow path limit (default 1000).
               --max-traversal-work <n>   Shared legacy traversal work ceiling (default 100000).
               --max-input-facts <n>      Retained snapshot/graph fact rows (default 250000).
@@ -2803,9 +3089,10 @@ public static class TraceMapCommand
             Selectors:
               --from-endpoint "<M> <P>"  Start from an HTTP endpoint method/path key.
               --from-symbol <symbol>     Start from matching source-local symbol candidates.
+              --exact-from-symbol       Require exact symbol identity for --from-symbol.
               --from-webforms-event <id>  Start from a WebForms event/root fact or selector.
               --from-source <label>      Constrain start evidence to a source label.
-              --to-surface <kind>        sql-query, sql-persistence, http-route, http-client,
+              --to-surface <kind>        database-api, sql-query, sql-persistence, http-route, http-client,
                                           package-config, wcf-operation, asmx-service,
                                           asmx-operation, asmx-client, asmx-config,
                                           asmx-metadata, legacy-data, dependency-surface,
@@ -2826,7 +3113,9 @@ public static class TraceMapCommand
               --view legacy-flows         Use legacy static-flow wording and schema metadata.
 
             Bounds:
-              --max-depth <n>            Default: 8.
+              --max-depth <n>            Ordinary path-enumeration depth. Default: 8.
+                                         A bounded shortest-terminal prewalk may retain one
+                                         longer witness while other branches remain partial.
               --max-paths <n>            Default: 100.
               --max-frontier <n>         Default: 10000.
 

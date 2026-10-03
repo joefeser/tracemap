@@ -1,0 +1,1610 @@
+{
+  "schemaVersion": "compiled-dotnet-fixture-cases.v9",
+  "cases": [
+    {
+      "id": "CS-OVERLOAD-001",
+      "language": "csharp",
+      "shape": "same-name overloads retain complete parameter and return signatures"
+    },
+    {
+      "id": "CS-GENERIC-002",
+      "language": "csharp",
+      "shape": "generic type, generic method, and nested generic type retain arity"
+    },
+    {
+      "id": "CS-INTERFACE-003",
+      "language": "csharp",
+      "shape": "interface, explicit implementation, virtual member, and override remain distinct declarations"
+    },
+    {
+      "id": "CS-SIGNATURE-004",
+      "language": "csharp",
+      "shape": "ref, out, in, array, nullable, and pointer shapes survive metadata normalization"
+    },
+    {
+      "id": "CS-GENERATED-005",
+      "language": "csharp",
+      "shape": "event, lambda, async, and iterator compiler-generated declarations are labeled without source reconciliation"
+    },
+    {
+      "id": "VB-OVERLOAD-001",
+      "language": "visualbasic",
+      "shape": "overloads, default indexed property, interface implementation, override, ByRef, array, module, and generic member"
+    },
+    {
+      "id": "FS-SHAPES-001",
+      "language": "fsharp",
+      "shape": "curried, tupled, record, union, generic, and CompiledName metadata shapes"
+    },
+    {
+      "id": "NS-COLLISION-001",
+      "language": "cross-language",
+      "shape": "same simple type and member names in distinct metadata namespaces remain distinct"
+    },
+    {
+      "id": "CS-RECON-SHAPES-006",
+      "language": "csharp",
+      "shape": "constructors, indexer, explicit event accessors, optional parameter, and exact complete source identities"
+    },
+    {
+      "id": "VB-RECON-SHAPES-002",
+      "language": "visualbasic",
+      "shape": "constructors and optional parameters retain exact source and metadata declaration state"
+    }
+  ],
+  "reconciliationCases": [
+    {
+      "id": "CS-RECON-EXACT-001",
+      "language": "csharp",
+      "expectedSourceIdentity": "source:C#|assembly:name:23:CompiledEvidence.CSharp|version:7:1.0.0.0|culture:7:neutral|publicKeyToken:4:null|module:27:CompiledEvidence.CSharp.dll|targetFramework:25:.NETCoreApp,Version=v10.0|type:namespace:38:TraceMap.CompiledFixtures.CSharp.Alpha|names:8:Widget`1|arity:1|method:8:Overload|arity:0|call:default|hasThis:true|explicitThis:false|(type(namespace:6:System|names:5:Int32))->type(namespace:6:System|names:5:Int32)",
+      "expectedMetadataIdentity": "assembly:name:23:CompiledEvidence.CSharp|version:7:1.0.0.0|culture:7:neutral|publicKeyToken:4:null|module:27:CompiledEvidence.CSharp.dll|targetFramework:25:.NETCoreApp,Version=v10.0|type:namespace:38:TraceMap.CompiledFixtures.CSharp.Alpha|names:8:Widget`1|arity:1|method:8:Overload|arity:0|call:default|hasThis:true|explicitThis:false|(type(namespace:6:System|names:5:Int32))->type(namespace:6:System|names:5:Int32)",
+      "expectedRuleId": "dotnet.compiled.source-identity.v1",
+      "expectedTier": "Tier1Semantic",
+      "expectedOutcome": "exact-one-candidate",
+      "expectedGaps": [],
+      "nonClaims": [
+        "runtime-execution",
+        "dispatch",
+        "reachability",
+        "pdb-correspondence",
+        "il-ownership",
+        "rewrite-equivalence"
+      ]
+    },
+    {
+      "id": "VB-RECON-EXACT-002",
+      "language": "visualbasic",
+      "expectedSourceIdentity": "source:Visual Basic|assembly:name:28:CompiledEvidence.VisualBasic|version:7:1.0.0.0|culture:7:neutral|publicKeyToken:4:null|module:32:CompiledEvidence.VisualBasic.dll|targetFramework:25:.NETCoreApp,Version=v10.0|type:namespace:37:TraceMap.CompiledFixtures.VisualBasic|names:6:Widget|arity:0|method:6:Shapes|arity:0|call:default|hasThis:true|explicitThis:false|(type(namespace:6:System|names:5:Int32)&,type(namespace:6:System|names:5:Int32)[])->type(namespace:6:System|names:4:Void)",
+      "expectedMetadataIdentity": "assembly:name:28:CompiledEvidence.VisualBasic|version:7:1.0.0.0|culture:7:neutral|publicKeyToken:4:null|module:32:CompiledEvidence.VisualBasic.dll|targetFramework:25:.NETCoreApp,Version=v10.0|type:namespace:37:TraceMap.CompiledFixtures.VisualBasic|names:6:Widget|arity:0|method:6:Shapes|arity:0|call:default|hasThis:true|explicitThis:false|(type(namespace:6:System|names:5:Int32)&,type(namespace:6:System|names:5:Int32)[])->type(namespace:6:System|names:4:Void)",
+      "expectedRuleId": "dotnet.compiled.source-identity.v1",
+      "expectedTier": "Tier1Semantic",
+      "expectedOutcome": "exact-one-candidate",
+      "expectedGaps": [],
+      "nonClaims": [
+        "runtime-execution",
+        "dispatch",
+        "reachability",
+        "pdb-correspondence",
+        "il-ownership",
+        "rewrite-equivalence"
+      ]
+    },
+    {
+      "id": "FS-RECON-UNSUPPORTED-003",
+      "language": "fsharp",
+      "expectedSourceIdentity": null,
+      "expectedMetadataIdentity": "assembly:name:23:CompiledEvidence.FSharp|version:7:1.0.0.0|culture:7:neutral|publicKeyToken:4:null|module:27:CompiledEvidence.FSharp.dll|targetFramework:25:.NETCoreApp,Version=v10.0|type:namespace:32:TraceMap.CompiledFixtures.FSharp|names:9:Functions|arity:0|method:18:RenamedForMetadata|arity:1|call:default|hasThis:false|explicitThis:false|(!!0)->!!0",
+      "expectedRuleId": "dotnet.compiled.source-identity.v1",
+      "expectedTier": "Tier4Unknown",
+      "expectedOutcome": "unsupported-source-adapter",
+      "expectedGaps": [
+        "SourceMetadataReconciliationUnsupportedLanguage"
+      ],
+      "nonClaims": [
+        "source-identity",
+        "source-ownership",
+        "guessed-join"
+      ]
+    },
+    {
+      "id": "CS-RECON-ZERO-004",
+      "language": "csharp",
+      "expectedSourceIdentity": "source:C#|assembly:name:23:CompiledEvidence.CSharp|version:7:1.0.0.0|culture:7:neutral|publicKeyToken:4:null|module:27:CompiledEvidence.CSharp.dll|targetFramework:25:.NETCoreApp,Version=v10.0|type:namespace:38:TraceMap.CompiledFixtures.CSharp.Alpha|names:8:Widget`1|arity:1|method:8:Overload|arity:0|call:default|hasThis:true|explicitThis:false|(type(namespace:6:System|names:5:Int32))->type(namespace:6:System|names:5:Int32)",
+      "expectedMetadataIdentity": "assembly:name:23:CompiledEvidence.CSharp|version:7:1.0.0.0|culture:7:neutral|publicKeyToken:4:null|module:27:CompiledEvidence.CSharp.dll|targetFramework:25:.NETCoreApp,Version=v10.0|type:namespace:38:TraceMap.CompiledFixtures.CSharp.Alpha|names:8:Widget`1|arity:1|method:8:Overload|arity:0|call:default|hasThis:true|explicitThis:false|(type(namespace:6:System|names:5:Int32))->type(namespace:6:System|names:5:Int32)",
+      "expectedRuleId": "dotnet.compiled.source-identity.v1",
+      "expectedTier": "Tier4Unknown",
+      "expectedOutcome": "unjoined",
+      "expectedGaps": [
+        "SourceMetadataReconciliationZeroCandidate"
+      ],
+      "nonClaims": [
+        "absence",
+        "fuzzy-match",
+        "cross-assembly-equivalence"
+      ]
+    },
+    {
+      "id": "CS-RECON-MULTIPLE-005",
+      "language": "csharp",
+      "expectedSourceIdentity": "source:C#|assembly:name:23:CompiledEvidence.CSharp|version:7:1.0.0.0|culture:7:neutral|publicKeyToken:4:null|module:27:CompiledEvidence.CSharp.dll|targetFramework:25:.NETCoreApp,Version=v10.0|type:namespace:38:TraceMap.CompiledFixtures.CSharp.Alpha|names:8:Widget`1|arity:1|method:8:Overload|arity:0|call:default|hasThis:true|explicitThis:false|(type(namespace:6:System|names:5:Int32))->type(namespace:6:System|names:5:Int32)",
+      "expectedMetadataIdentity": "assembly:name:23:CompiledEvidence.CSharp|version:7:1.0.0.0|culture:7:neutral|publicKeyToken:4:null|module:27:CompiledEvidence.CSharp.dll|targetFramework:25:.NETCoreApp,Version=v10.0|type:namespace:38:TraceMap.CompiledFixtures.CSharp.Alpha|names:8:Widget`1|arity:1|method:8:Overload|arity:0|call:default|hasThis:true|explicitThis:false|(type(namespace:6:System|names:5:Int32))->type(namespace:6:System|names:5:Int32)",
+      "expectedRuleId": "dotnet.compiled.source-identity.v1",
+      "expectedTier": "Tier4Unknown",
+      "expectedOutcome": "unjoined",
+      "expectedGaps": [
+        "SourceMetadataReconciliationMultipleCandidates",
+        "AmbiguousDuplicateManagedAssembly"
+      ],
+      "nonClaims": [
+        "candidate-selection",
+        "path-preference",
+        "token-preference"
+      ]
+    },
+    {
+      "id": "CS-RECON-REF-006",
+      "language": "csharp",
+      "expectedSourceIdentity": "source:C#|assembly:name:23:CompiledEvidence.CSharp|version:7:1.0.0.0|culture:7:neutral|publicKeyToken:4:null|module:27:CompiledEvidence.CSharp.dll|targetFramework:25:.NETCoreApp,Version=v10.0|type:namespace:38:TraceMap.CompiledFixtures.CSharp.Alpha|names:8:Widget`1|arity:1|method:8:RefShape|arity:0|call:default|hasThis:true|explicitThis:false|(type(namespace:6:System|names:5:Int32)&)->type(namespace:6:System|names:5:Int32)",
+      "expectedMetadataIdentity": "assembly:name:23:CompiledEvidence.CSharp|version:7:1.0.0.0|culture:7:neutral|publicKeyToken:4:null|module:27:CompiledEvidence.CSharp.dll|targetFramework:25:.NETCoreApp,Version=v10.0|type:namespace:38:TraceMap.CompiledFixtures.CSharp.Alpha|names:8:Widget`1|arity:1|method:8:RefShape|arity:0|call:default|hasThis:true|explicitThis:false|(type(namespace:6:System|names:5:Int32)&)->type(namespace:6:System|names:5:Int32)",
+      "expectedRuleId": "dotnet.compiled.source-identity.v1",
+      "expectedTier": "Tier1Semantic",
+      "expectedOutcome": "exact-one-candidate",
+      "expectedGaps": [],
+      "nonClaims": [
+        "same-display-string-equivalence",
+        "same-arity-equivalence"
+      ]
+    },
+    {
+      "id": "CS-RECON-NESTED-GENERIC-007",
+      "language": "csharp",
+      "expectedSourceIdentity": "source:C#|assembly:name:23:CompiledEvidence.CSharp|version:7:1.0.0.0|culture:7:neutral|publicKeyToken:4:null|module:27:CompiledEvidence.CSharp.dll|targetFramework:25:.NETCoreApp,Version=v10.0|type:namespace:38:TraceMap.CompiledFixtures.CSharp.Alpha|names:8:Widget`18:Nested`1|arity:2|method:4:Echo|arity:0|call:default|hasThis:true|explicitThis:false|(!0,!1)->!1",
+      "expectedMetadataIdentity": "assembly:name:23:CompiledEvidence.CSharp|version:7:1.0.0.0|culture:7:neutral|publicKeyToken:4:null|module:27:CompiledEvidence.CSharp.dll|targetFramework:25:.NETCoreApp,Version=v10.0|type:namespace:38:TraceMap.CompiledFixtures.CSharp.Alpha|names:8:Widget`18:Nested`1|arity:2|method:4:Echo|arity:0|call:default|hasThis:true|explicitThis:false|(!0,!1)->!1",
+      "expectedRuleId": "dotnet.compiled.source-identity.v1",
+      "expectedTier": "Tier1Semantic",
+      "expectedOutcome": "exact-one-candidate",
+      "expectedGaps": [],
+      "nonClaims": [
+        "simple-name-join",
+        "containing-generic-parameter-collapse"
+      ]
+    },
+    {
+      "id": "VB-RECON-OPTIONAL-PROPERTY-008",
+      "language": "visualbasic",
+      "expectedSourceIdentity": "source:Visual Basic|assembly:name:28:CompiledEvidence.VisualBasic|version:7:1.0.0.0|culture:7:neutral|publicKeyToken:4:null|module:32:CompiledEvidence.VisualBasic.dll|targetFramework:25:.NETCoreApp,Version=v10.0|type:namespace:37:TraceMap.CompiledFixtures.VisualBasic|names:6:Widget|arity:0|property:12:OptionalItem|call:default|hasThis:true|(type(namespace:6:System|names:5:Int32))->type(namespace:6:System|names:6:String)",
+      "expectedMetadataIdentity": "assembly:name:28:CompiledEvidence.VisualBasic|version:7:1.0.0.0|culture:7:neutral|publicKeyToken:4:null|module:32:CompiledEvidence.VisualBasic.dll|targetFramework:25:.NETCoreApp,Version=v10.0|type:namespace:37:TraceMap.CompiledFixtures.VisualBasic|names:6:Widget|arity:0|property:12:OptionalItem|call:default|hasThis:true|(type(namespace:6:System|names:5:Int32))->type(namespace:6:System|names:6:String)",
+      "expectedRuleId": "dotnet.compiled.source-identity.v1",
+      "expectedTier": "Tier1Semantic",
+      "expectedOutcome": "exact-one-candidate",
+      "expectedGaps": [],
+      "nonClaims": [
+        "optional-default-value-equivalence",
+        "accessor-call-equivalence"
+      ]
+    },
+    {
+      "id": "VB-RECON-GENERIC-ARITY-009",
+      "language": "visualbasic",
+      "expectedSourceIdentity": "source:Visual Basic|assembly:name:28:CompiledEvidence.VisualBasic|version:7:1.0.0.0|culture:7:neutral|publicKeyToken:4:null|module:32:CompiledEvidence.VisualBasic.dll|targetFramework:25:.NETCoreApp,Version=v10.0|type:namespace:37:TraceMap.CompiledFixtures.VisualBasic|names:6:Widget|arity:0|method:12:GenericArity|arity:2|call:default|hasThis:true|explicitThis:false|()->type(namespace:6:System|names:5:Int32)",
+      "expectedMetadataIdentity": "assembly:name:28:CompiledEvidence.VisualBasic|version:7:1.0.0.0|culture:7:neutral|publicKeyToken:4:null|module:32:CompiledEvidence.VisualBasic.dll|targetFramework:25:.NETCoreApp,Version=v10.0|type:namespace:37:TraceMap.CompiledFixtures.VisualBasic|names:6:Widget|arity:0|method:12:GenericArity|arity:2|call:default|hasThis:true|explicitThis:false|()->type(namespace:6:System|names:5:Int32)",
+      "expectedRuleId": "dotnet.compiled.source-identity.v1",
+      "expectedTier": "Tier1Semantic",
+      "expectedOutcome": "exact-one-candidate",
+      "expectedGaps": [],
+      "nonClaims": [
+        "same-name-join",
+        "same-parameter-count-equivalence"
+      ]
+    },
+    {
+      "id": "CS-RECON-DECIMAL-SCOPE-010",
+      "language": "csharp",
+      "expectedSourceIdentity": "source:C#|assembly:name:23:CompiledEvidence.CSharp|version:7:1.0.0.0|culture:7:neutral|publicKeyToken:4:null|module:27:CompiledEvidence.CSharp.dll|targetFramework:25:.NETCoreApp,Version=v10.0|type:namespace:38:TraceMap.CompiledFixtures.CSharp.Alpha|names:8:Widget`1|arity:1|method:12:DecimalShape|arity:0|call:default|hasThis:true|explicitThis:false|(scope(assembly:name:14:System.Runtime|version:8:10.0.0.0|culture:7:neutral|publicKeyToken:16:b03f5f7f11d50a3a)type(namespace:6:System|names:7:Decimal))->scope(assembly:name:14:System.Runtime|version:8:10.0.0.0|culture:7:neutral|publicKeyToken:16:b03f5f7f11d50a3a)type(namespace:6:System|names:7:Decimal)",
+      "expectedMetadataIdentity": "assembly:name:23:CompiledEvidence.CSharp|version:7:1.0.0.0|culture:7:neutral|publicKeyToken:4:null|module:27:CompiledEvidence.CSharp.dll|targetFramework:25:.NETCoreApp,Version=v10.0|type:namespace:38:TraceMap.CompiledFixtures.CSharp.Alpha|names:8:Widget`1|arity:1|method:12:DecimalShape|arity:0|call:default|hasThis:true|explicitThis:false|(scope(assembly:name:14:System.Runtime|version:8:10.0.0.0|culture:7:neutral|publicKeyToken:16:b03f5f7f11d50a3a)type(namespace:6:System|names:7:Decimal))->scope(assembly:name:14:System.Runtime|version:8:10.0.0.0|culture:7:neutral|publicKeyToken:16:b03f5f7f11d50a3a)type(namespace:6:System|names:7:Decimal)",
+      "expectedRuleId": "dotnet.compiled.source-identity.v1",
+      "expectedTier": "Tier1Semantic",
+      "expectedOutcome": "exact-one-candidate",
+      "expectedGaps": [],
+      "nonClaims": [
+        "primitive-encoding-equivalence",
+        "scope-free-decimal-equivalence"
+      ]
+    },
+    {
+      "id": "CS-RECON-CONSTRUCTED-NESTED-011",
+      "language": "csharp",
+      "expectedSourceIdentity": "source:C#|assembly:name:23:CompiledEvidence.CSharp|version:7:1.0.0.0|culture:7:neutral|publicKeyToken:4:null|module:27:CompiledEvidence.CSharp.dll|targetFramework:25:.NETCoreApp,Version=v10.0|type:namespace:38:TraceMap.CompiledFixtures.CSharp.Alpha|names:8:Widget`1|arity:1|method:17:ConstructedNested|arity:0|call:default|hasThis:true|explicitThis:false|(scope(assembly:name:23:CompiledEvidence.CSharp|version:7:1.0.0.0|culture:7:neutral|publicKeyToken:4:null)type(namespace:38:TraceMap.CompiledFixtures.CSharp.Alpha|names:8:Widget`18:Nested`1)<type(namespace:6:System|names:5:Int32),type(namespace:6:System|names:6:String)>)->scope(assembly:name:23:CompiledEvidence.CSharp|version:7:1.0.0.0|culture:7:neutral|publicKeyToken:4:null)type(namespace:38:TraceMap.CompiledFixtures.CSharp.Alpha|names:8:Widget`18:Nested`1)<type(namespace:6:System|names:5:Int32),type(namespace:6:System|names:6:String)>",
+      "expectedMetadataIdentity": "assembly:name:23:CompiledEvidence.CSharp|version:7:1.0.0.0|culture:7:neutral|publicKeyToken:4:null|module:27:CompiledEvidence.CSharp.dll|targetFramework:25:.NETCoreApp,Version=v10.0|type:namespace:38:TraceMap.CompiledFixtures.CSharp.Alpha|names:8:Widget`1|arity:1|method:17:ConstructedNested|arity:0|call:default|hasThis:true|explicitThis:false|(scope(assembly:name:23:CompiledEvidence.CSharp|version:7:1.0.0.0|culture:7:neutral|publicKeyToken:4:null)type(namespace:38:TraceMap.CompiledFixtures.CSharp.Alpha|names:8:Widget`18:Nested`1)<type(namespace:6:System|names:5:Int32),type(namespace:6:System|names:6:String)>)->scope(assembly:name:23:CompiledEvidence.CSharp|version:7:1.0.0.0|culture:7:neutral|publicKeyToken:4:null)type(namespace:38:TraceMap.CompiledFixtures.CSharp.Alpha|names:8:Widget`18:Nested`1)<type(namespace:6:System|names:5:Int32),type(namespace:6:System|names:6:String)>",
+      "expectedRuleId": "dotnet.compiled.source-identity.v1",
+      "expectedTier": "Tier1Semantic",
+      "expectedOutcome": "exact-one-candidate",
+      "expectedGaps": [],
+      "nonClaims": [
+        "inner-argument-only-equivalence",
+        "open-constructed-type-equivalence"
+      ]
+    },
+    {
+      "id": "CS-RECON-DATETIME-SCOPE-012",
+      "language": "csharp",
+      "expectedSourceIdentity": "source:C#|assembly:name:23:CompiledEvidence.CSharp|version:7:1.0.0.0|culture:7:neutral|publicKeyToken:4:null|module:27:CompiledEvidence.CSharp.dll|targetFramework:25:.NETCoreApp,Version=v10.0|type:namespace:38:TraceMap.CompiledFixtures.CSharp.Alpha|names:8:Widget`1|arity:1|method:9:DateShape|arity:0|call:default|hasThis:true|explicitThis:false|(scope(assembly:name:14:System.Runtime|version:8:10.0.0.0|culture:7:neutral|publicKeyToken:16:b03f5f7f11d50a3a)type(namespace:6:System|names:8:DateTime))->scope(assembly:name:14:System.Runtime|version:8:10.0.0.0|culture:7:neutral|publicKeyToken:16:b03f5f7f11d50a3a)type(namespace:6:System|names:8:DateTime)",
+      "expectedMetadataIdentity": "assembly:name:23:CompiledEvidence.CSharp|version:7:1.0.0.0|culture:7:neutral|publicKeyToken:4:null|module:27:CompiledEvidence.CSharp.dll|targetFramework:25:.NETCoreApp,Version=v10.0|type:namespace:38:TraceMap.CompiledFixtures.CSharp.Alpha|names:8:Widget`1|arity:1|method:9:DateShape|arity:0|call:default|hasThis:true|explicitThis:false|(scope(assembly:name:14:System.Runtime|version:8:10.0.0.0|culture:7:neutral|publicKeyToken:16:b03f5f7f11d50a3a)type(namespace:6:System|names:8:DateTime))->scope(assembly:name:14:System.Runtime|version:8:10.0.0.0|culture:7:neutral|publicKeyToken:16:b03f5f7f11d50a3a)type(namespace:6:System|names:8:DateTime)",
+      "expectedRuleId": "dotnet.compiled.source-identity.v1",
+      "expectedTier": "Tier1Semantic",
+      "expectedOutcome": "exact-one-candidate",
+      "expectedGaps": [],
+      "nonClaims": [
+        "special-type-implies-cli-primitive",
+        "scope-free-datetime-equivalence"
+      ]
+    },
+    {
+      "id": "CS-RECON-NONGENERIC-NESTED-013",
+      "language": "csharp",
+      "expectedSourceIdentity": "source:C#|assembly:name:23:CompiledEvidence.CSharp|version:7:1.0.0.0|culture:7:neutral|publicKeyToken:4:null|module:27:CompiledEvidence.CSharp.dll|targetFramework:25:.NETCoreApp,Version=v10.0|type:namespace:38:TraceMap.CompiledFixtures.CSharp.Alpha|names:8:Widget`1|arity:1|method:27:ConstructedNonGenericNested|arity:0|call:default|hasThis:true|explicitThis:false|(scope(assembly:name:23:CompiledEvidence.CSharp|version:7:1.0.0.0|culture:7:neutral|publicKeyToken:4:null)type(namespace:38:TraceMap.CompiledFixtures.CSharp.Alpha|names:8:Widget`116:NonGenericNested)<type(namespace:6:System|names:5:Int32)>)->scope(assembly:name:23:CompiledEvidence.CSharp|version:7:1.0.0.0|culture:7:neutral|publicKeyToken:4:null)type(namespace:38:TraceMap.CompiledFixtures.CSharp.Alpha|names:8:Widget`116:NonGenericNested)<type(namespace:6:System|names:5:Int32)>",
+      "expectedMetadataIdentity": "assembly:name:23:CompiledEvidence.CSharp|version:7:1.0.0.0|culture:7:neutral|publicKeyToken:4:null|module:27:CompiledEvidence.CSharp.dll|targetFramework:25:.NETCoreApp,Version=v10.0|type:namespace:38:TraceMap.CompiledFixtures.CSharp.Alpha|names:8:Widget`1|arity:1|method:27:ConstructedNonGenericNested|arity:0|call:default|hasThis:true|explicitThis:false|(scope(assembly:name:23:CompiledEvidence.CSharp|version:7:1.0.0.0|culture:7:neutral|publicKeyToken:4:null)type(namespace:38:TraceMap.CompiledFixtures.CSharp.Alpha|names:8:Widget`116:NonGenericNested)<type(namespace:6:System|names:5:Int32)>)->scope(assembly:name:23:CompiledEvidence.CSharp|version:7:1.0.0.0|culture:7:neutral|publicKeyToken:4:null)type(namespace:38:TraceMap.CompiledFixtures.CSharp.Alpha|names:8:Widget`116:NonGenericNested)<type(namespace:6:System|names:5:Int32)>",
+      "expectedRuleId": "dotnet.compiled.source-identity.v1",
+      "expectedTier": "Tier1Semantic",
+      "expectedOutcome": "exact-one-candidate",
+      "expectedGaps": [],
+      "nonClaims": [
+        "nested-isgeneric-gate",
+        "containing-argument-omission"
+      ]
+    },
+    {
+      "id": "CS-RECON-PRIMARY-CONSTRUCTOR-014",
+      "language": "csharp",
+      "expectedSourceIdentity": "source:C#|assembly:name:23:CompiledEvidence.CSharp|version:7:1.0.0.0|culture:7:neutral|publicKeyToken:4:null|module:27:CompiledEvidence.CSharp.dll|targetFramework:25:.NETCoreApp,Version=v10.0|type:namespace:38:TraceMap.CompiledFixtures.CSharp.Alpha|names:23:PrimaryConstructorShape|arity:0|constructor:5:.ctor|arity:0|call:default|hasThis:true|explicitThis:false|(type(namespace:6:System|names:5:Int32))->type(namespace:6:System|names:4:Void)",
+      "expectedMetadataIdentity": "assembly:name:23:CompiledEvidence.CSharp|version:7:1.0.0.0|culture:7:neutral|publicKeyToken:4:null|module:27:CompiledEvidence.CSharp.dll|targetFramework:25:.NETCoreApp,Version=v10.0|type:namespace:38:TraceMap.CompiledFixtures.CSharp.Alpha|names:23:PrimaryConstructorShape|arity:0|constructor:5:.ctor|arity:0|call:default|hasThis:true|explicitThis:false|(type(namespace:6:System|names:5:Int32))->type(namespace:6:System|names:4:Void)",
+      "expectedRuleId": "dotnet.compiled.source-identity.v1",
+      "expectedTier": "Tier1Semantic",
+      "expectedOutcome": "exact-one-candidate",
+      "expectedGaps": [],
+      "nonClaims": [
+        "implicit-default-constructor-equivalence",
+        "constructor-omission"
+      ]
+    },
+    {
+      "id": "CS-RECON-REF-FIELD-015",
+      "language": "csharp",
+      "expectedSourceIdentity": "source:C#|assembly:name:23:CompiledEvidence.CSharp|version:7:1.0.0.0|culture:7:neutral|publicKeyToken:4:null|module:27:CompiledEvidence.CSharp.dll|targetFramework:25:.NETCoreApp,Version=v10.0|type:namespace:38:TraceMap.CompiledFixtures.CSharp.Alpha|names:13:RefFieldShape|arity:0|field:5:value|type:type(namespace:6:System|names:5:Int32)&",
+      "expectedMetadataIdentity": "assembly:name:23:CompiledEvidence.CSharp|version:7:1.0.0.0|culture:7:neutral|publicKeyToken:4:null|module:27:CompiledEvidence.CSharp.dll|targetFramework:25:.NETCoreApp,Version=v10.0|type:namespace:38:TraceMap.CompiledFixtures.CSharp.Alpha|names:13:RefFieldShape|arity:0|field:5:value|type:type(namespace:6:System|names:5:Int32)&",
+      "expectedRuleId": "dotnet.compiled.source-identity.v1",
+      "expectedTier": "Tier1Semantic",
+      "expectedOutcome": "exact-one-candidate",
+      "expectedGaps": [],
+      "nonClaims": [
+        "by-value-field-equivalence",
+        "ref-custom-modifier-support"
+      ]
+    },
+    {
+      "id": "CS-RECON-TYPEDREFERENCE-016",
+      "language": "csharp",
+      "expectedSourceIdentity": "source:C#|assembly:name:23:CompiledEvidence.CSharp|version:7:1.0.0.0|culture:7:neutral|publicKeyToken:4:null|module:27:CompiledEvidence.CSharp.dll|targetFramework:25:.NETCoreApp,Version=v10.0|type:namespace:38:TraceMap.CompiledFixtures.CSharp.Alpha|names:8:Widget`1|arity:1|method:19:TypedReferenceShape|arity:0|call:default|hasThis:true|explicitThis:false|(type(namespace:6:System|names:14:TypedReference))->type(namespace:6:System|names:4:Void)",
+      "expectedMetadataIdentity": "assembly:name:23:CompiledEvidence.CSharp|version:7:1.0.0.0|culture:7:neutral|publicKeyToken:4:null|module:27:CompiledEvidence.CSharp.dll|targetFramework:25:.NETCoreApp,Version=v10.0|type:namespace:38:TraceMap.CompiledFixtures.CSharp.Alpha|names:8:Widget`1|arity:1|method:19:TypedReferenceShape|arity:0|call:default|hasThis:true|explicitThis:false|(type(namespace:6:System|names:14:TypedReference))->type(namespace:6:System|names:4:Void)",
+      "expectedRuleId": "dotnet.compiled.source-identity.v1",
+      "expectedTier": "Tier1Semantic",
+      "expectedOutcome": "exact-one-candidate",
+      "expectedGaps": [],
+      "nonClaims": [
+        "scoped-typedreference-equivalence",
+        "runtime-typedreference-safety"
+      ]
+    }
+  ],
+  "pdbCases": [
+    {
+      "id": "CS-PDB-PORTABLE-001",
+      "language": "csharp",
+      "shape": "portable PDB documents, multi-document and non-monotonic ranges, hidden points, async state machine, iterator state machine, lambda, and generated members remain separate",
+      "expectedPdbIdentity": "pdb:format:portable|id:<exact-content-id>|method:<exact-method-row>|sequence:<ordinal>|offset:<il-offset>|document:<document-row>|hidden:<boolean>|range:<exact-range>",
+      "expectedMetadataIdentity": "the exact admitted ManagedMethodDeclared identity selected through the bound module-local MethodDef row",
+      "expectedRuleIds": [
+        "dotnet.compiled.pdb-input.v1",
+        "dotnet.compiled.pdb-identity.v1",
+        "dotnet.compiled.sequence-point.v1"
+      ],
+      "expectedTier": "Tier2Structural",
+      "expectedGaps": [
+        "PdbSourceDocumentZeroCandidate"
+      ],
+      "nonClaims": [
+        "execution",
+        "reachability",
+        "source-semantic-ownership",
+        "generated-member-source-collapse",
+        "il-call-identity"
+      ]
+    },
+    {
+      "id": "VB-PDB-PORTABLE-002",
+      "language": "visualbasic",
+      "shape": "portable PDB document checksums and method rows reconcile without using display names or paths",
+      "expectedPdbIdentity": "pdb:format:portable|id:<exact-content-id>|method:<exact-method-row>",
+      "expectedMetadataIdentity": "the exact admitted Visual Basic ManagedMethodDeclared identity selected through the bound module-local MethodDef row",
+      "expectedRuleIds": [
+        "dotnet.compiled.pdb-input.v1",
+        "dotnet.compiled.pdb-identity.v1",
+        "dotnet.compiled.sequence-point.v1"
+      ],
+      "expectedTier": "Tier2Structural",
+      "expectedGaps": [],
+      "nonClaims": [
+        "execution",
+        "path-based-document-join",
+        "display-name-join",
+        "source-analysis-level-upgrade"
+      ]
+    },
+    {
+      "id": "FS-PDB-PORTABLE-003",
+      "language": "fsharp",
+      "shape": "portable PDB compiled identities and sequence points remain available while source document reconciliation is unsupported",
+      "expectedPdbIdentity": "pdb:format:portable|id:<exact-content-id>|method:<exact-method-row>",
+      "expectedMetadataIdentity": "the exact admitted FSharp ManagedMethodDeclared identity selected through the bound module-local MethodDef row",
+      "expectedRuleIds": [
+        "dotnet.compiled.pdb-input.v1",
+        "dotnet.compiled.pdb-identity.v1",
+        "dotnet.compiled.sequence-point.v1",
+        "dotnet.compiled.pdb-gap.v1"
+      ],
+      "expectedTier": "Tier2Structural",
+      "expectedGaps": [
+        "PdbSourceReconciliationUnsupportedLanguage"
+      ],
+      "nonClaims": [
+        "source-identity",
+        "source-document-join",
+        "guessed-join",
+        "fsharp-source-adapter"
+      ]
+    },
+    {
+      "id": "PDB-BINDING-ZERO-004",
+      "language": "cross-language",
+      "shape": "a PDB whose exact content identity matches no admitted PE CodeView entry remains unjoined",
+      "expectedPdbIdentity": "the exact PDB content ID read from the supplied bytes",
+      "expectedMetadataIdentity": null,
+      "expectedRuleIds": [
+        "dotnet.compiled.pdb-gap.v1"
+      ],
+      "expectedTier": "Tier4Unknown",
+      "expectedGaps": [
+        "PdbAssemblyIdentityMismatch"
+      ],
+      "nonClaims": [
+        "filename-match",
+        "path-proximity-match",
+        "timestamp-match",
+        "candidate-selection"
+      ]
+    },
+    {
+      "id": "PDB-SOURCE-MULTIPLE-005",
+      "language": "cross-language",
+      "shape": "two inventory files with the exact same supported PDB document checksum produce an explicit multiple-candidate gap",
+      "expectedPdbIdentity": "the exact bound PDB document identity including content ID, document row, hash algorithm, checksum, and language",
+      "expectedMetadataIdentity": null,
+      "expectedRuleIds": [
+        "dotnet.compiled.pdb-gap.v1"
+      ],
+      "expectedTier": "Tier4Unknown",
+      "expectedGaps": [
+        "PdbSourceDocumentMultipleCandidates"
+      ],
+      "nonClaims": [
+        "basename-preference",
+        "path-preference",
+        "first-candidate-selection",
+        "source-ownership"
+      ]
+    },
+    {
+      "id": "PDB-WINDOWS-LANE-006",
+      "language": "csharp-visualbasic",
+      "shape": "native Windows PDB bytes are validated on Windows and remain fail-closed until an independent deterministic Windows PDB reader is available",
+      "expectedPdbIdentity": null,
+      "expectedMetadataIdentity": null,
+      "expectedRuleIds": [
+        "dotnet.compiled.pdb-gap.v1"
+      ],
+      "expectedTier": "Tier4Unknown",
+      "expectedGaps": [
+        "WindowsPdbIndependentReaderUnavailable"
+      ],
+      "nonClaims": [
+        "portable-pdb-equivalence",
+        "native-windows-sequence-points",
+        "single-reader-trust",
+        "cross-platform-support"
+      ]
+    }
+  ],
+  "ilCases": [
+    {
+      "id": "CS-IL-OPERAND-001",
+      "language": "csharp",
+      "shape": "same call/ret opcode sequence with different direct-call member operands keeps distinct body identities",
+      "expectedIdentity": "il:assembly:<exact-assembly>|method:<exact-method>|body:instructions:<n>:sha256:<operand-aware-digest>",
+      "expectedRuleIds": [
+        "dotnet.compiled.il-body.v1",
+        "dotnet.compiled.il-call.v1"
+      ],
+      "expectedTier": "Tier2Structural",
+      "expectedGaps": [],
+      "nonClaims": [
+        "execution",
+        "dispatch",
+        "reachability",
+        "source-ownership",
+        "rewrite-equivalence"
+      ]
+    },
+    {
+      "id": "CS-IL-OPERAND-002",
+      "language": "csharp",
+      "shape": "same ldstr/ret opcode sequence with different string literals keeps distinct body identities; literals are digested, never retained verbatim",
+      "expectedIdentity": "il:assembly:<exact-assembly>|method:<exact-method>|body:instructions:<n>:sha256:<operand-aware-digest>",
+      "expectedRuleIds": [
+        "dotnet.compiled.il-body.v1"
+      ],
+      "expectedTier": "Tier2Structural",
+      "expectedGaps": [],
+      "nonClaims": [
+        "literal-retention",
+        "secret-retention",
+        "execution"
+      ]
+    },
+    {
+      "id": "CS-IL-OPERAND-003",
+      "language": "csharp",
+      "shape": "same ldc.i4.s/ret opcode sequence with different numeric constant operands keeps distinct body identities",
+      "expectedIdentity": "il:assembly:<exact-assembly>|method:<exact-method>|body:instructions:<n>:sha256:<operand-aware-digest>",
+      "expectedRuleIds": [
+        "dotnet.compiled.il-body.v1"
+      ],
+      "expectedTier": "Tier2Structural",
+      "expectedGaps": [],
+      "nonClaims": [
+        "semantic-equivalence",
+        "execution"
+      ]
+    },
+    {
+      "id": "CS-IL-BRANCH-005",
+      "language": "csharp",
+      "shape": "reordered switch case blocks produce one identical opcode and constant stream while swapping brfalse/beq target offsets",
+      "expectedIdentity": "il:assembly:<exact-assembly>|method:<exact-method>|body:instructions:<n>:sha256:<operand-aware-digest>",
+      "expectedRuleIds": [
+        "dotnet.compiled.il-body.v1"
+      ],
+      "expectedTier": "Tier2Structural",
+      "expectedGaps": [],
+      "nonClaims": [
+        "control-flow-equivalence",
+        "semantic-equivalence",
+        "execution"
+      ]
+    },
+    {
+      "id": "CS-IL-BRANCH-007",
+      "language": "csharp",
+      "shape": "a dense case set compiles to a genuine five-target switch opcode whose jump-table deltas are all relative to the shared post-table base and stay reader-agreed",
+      "expectedIdentity": "il:assembly:<exact-assembly>|method:<exact-method>|body:instructions:<n>:sha256:<digest>",
+      "expectedRuleIds": [
+        "dotnet.compiled.il-body.v1"
+      ],
+      "expectedTier": "Tier2Structural",
+      "expectedGaps": [],
+      "nonClaims": [
+        "semantic-equivalence",
+        "execution"
+      ]
+    },
+    {
+      "id": "CS-IL-SIGNATURE-004",
+      "language": "csharp",
+      "shape": "same method name and identical body opcode sequence under different full signatures keeps distinct body identities",
+      "expectedIdentity": "il:assembly:<exact-assembly>|method:<exact-signature>|body:instructions:<n>:sha256:<digest>",
+      "expectedRuleIds": [
+        "dotnet.compiled.il-body.v1"
+      ],
+      "expectedTier": "Tier2Structural",
+      "expectedGaps": [],
+      "nonClaims": [
+        "overload-equivalence",
+        "source-ownership"
+      ]
+    },
+    {
+      "id": "CS-IL-CALL-008",
+      "language": "csharp",
+      "shape": "call, callvirt, newobj, ldftn, interface callvirt, generic-instance receiver, MethodSpec instantiation, and constrained. prefix targets carry exact member and type identities with module-local tokens",
+      "expectedIdentity": "il:assembly:<exact-assembly>|method:<exact-method>|body:<digest>|call:<offset>:<opcode>:<target-identity>",
+      "expectedRuleIds": [
+        "dotnet.compiled.il-body.v1",
+        "dotnet.compiled.il-call.v1"
+      ],
+      "expectedTier": "Tier2Structural",
+      "expectedGaps": [],
+      "nonClaims": [
+        "call-graph",
+        "transitive-reachability",
+        "virtual-dispatch-resolution",
+        "cross-assembly-resolution"
+      ]
+    },
+    {
+      "id": "CS-IL-BODY-012",
+      "language": "csharp",
+      "shape": "locals of assorted shapes and catch, filter, and finally exception-region boundaries are committed by digest with counts",
+      "expectedIdentity": "il:assembly:<exact-assembly>|method:<exact-method>|body:instructions:<n>:sha256:<digest>",
+      "expectedRuleIds": [
+        "dotnet.compiled.il-body.v1"
+      ],
+      "expectedTier": "Tier2Structural",
+      "expectedGaps": [],
+      "nonClaims": [
+        "local-value-flow",
+        "exception-behavior",
+        "execution"
+      ]
+    },
+    {
+      "id": "VB-IL-ASSEMBLY-007",
+      "language": "visualbasic",
+      "shape": "an identical trivial Visual Basic body keeps a distinct identity from the same-named C# body in a different assembly",
+      "expectedIdentity": "il:assembly:<exact-vb-assembly>|method:<exact-method>|body:instructions:<n>:sha256:<digest>",
+      "expectedRuleIds": [
+        "dotnet.compiled.il-body.v1",
+        "dotnet.compiled.il-call.v1"
+      ],
+      "expectedTier": "Tier2Structural",
+      "expectedGaps": [],
+      "nonClaims": [
+        "cross-assembly-equivalence",
+        "source-ownership"
+      ]
+    },
+    {
+      "id": "FS-IL-ASSEMBLY-007",
+      "language": "fsharp",
+      "shape": "a compiled F# body and direct call retain IL body and call identities without any source-adapter claim",
+      "expectedIdentity": "il:assembly:<exact-fs-assembly>|method:<exact-method>|body:instructions:<n>:sha256:<digest>",
+      "expectedRuleIds": [
+        "dotnet.compiled.il-body.v1",
+        "dotnet.compiled.il-call.v1"
+      ],
+      "expectedTier": "Tier2Structural",
+      "expectedGaps": [],
+      "nonClaims": [
+        "source-identity",
+        "guessed-join",
+        "fsharp-source-adapter"
+      ]
+    },
+    {
+      "id": "IL-HOSTILE-001",
+      "language": "cross-language",
+      "shape": "a truncated or corrupted method-body IL region inside an admitted assembly fails closed to a rule-backed gap with no positive IL facts",
+      "expectedIdentity": null,
+      "expectedRuleIds": [
+        "dotnet.compiled.il-gap.v1"
+      ],
+      "expectedTier": "Tier4Unknown",
+      "expectedGaps": [
+        "IlMethodBodyUnreadable"
+      ],
+      "nonClaims": [
+        "clean-absence",
+        "partial-body-evidence"
+      ]
+    },
+    {
+      "id": "IL-LIMIT-002",
+      "language": "cross-language",
+      "shape": "instruction, local, exception-region, body-count, or total-work limit exhaustion emits a rule-backed gap and withholds that input's positive IL facts",
+      "expectedIdentity": null,
+      "expectedRuleIds": [
+        "dotnet.compiled.il-gap.v1"
+      ],
+      "expectedTier": "Tier4Unknown",
+      "expectedGaps": [
+        "IlInstructionLimitExceeded"
+      ],
+      "nonClaims": [
+        "clean-absence",
+        "partial-body-evidence"
+      ]
+    }
+  ],
+  "ilRewriteCases": [
+    {
+      "id": "CS-ILRW-OPERAND-001",
+      "language": "csharp",
+      "shape": "same opcode sequence with a changed ldc.i4 constant operand on one method of a declared before/after pair",
+      "expectedIdentity": "rewrite:<exact-method-identity>|before:sha256:<operand-aware-body-digest>:after:sha256:<operand-aware-body-digest>",
+      "expectedRuleIds": [
+        "dotnet.compiled.il-rewrite.v1"
+      ],
+      "expectedTier": "Tier2Structural",
+      "expectedRelationshipKind": "operand-only-change",
+      "expectedGaps": [],
+      "nonClaims": [
+        "semantic-equivalence",
+        "behavior-preservation",
+        "source-ownership",
+        "rewrite-attribution",
+        "pdb-offset-validity"
+      ]
+    },
+    {
+      "id": "CS-ILRW-TOKEN-002",
+      "language": "csharp",
+      "shape": "member inserted before existing methods retargets module-local MethodDef tokens while the joined member identity and its call target identity stay identical",
+      "expectedIdentity": "rewrite:<exact-method-identity>|before:sha256:<digest>:after:sha256:<digest> with before/after metadata tokens and call-site tokens recorded",
+      "expectedRuleIds": [
+        "dotnet.compiled.il-rewrite.v1",
+        "dotnet.compiled.il-rewrite-gap.v1"
+      ],
+      "expectedTier": "Tier2Structural",
+      "expectedRelationshipKind": "unchanged-or-operand-only-change",
+      "expectedGaps": [
+        "IlRewriteMethodAfterOnly"
+      ],
+      "nonClaims": [
+        "stable-cross-build-token-identity",
+        "insertion-relationship",
+        "semantic-equivalence"
+      ]
+    },
+    {
+      "id": "CS-ILRW-CALLRETARGET-003",
+      "language": "csharp",
+      "shape": "call operand rewired from one member to another with identical opcode streams records a call-site retarget with both tokens and both target identities",
+      "expectedIdentity": "rewrite:<exact-method-identity>|call-retarget:<ordinal>:<opcode>",
+      "expectedRuleIds": [
+        "dotnet.compiled.il-rewrite.v1"
+      ],
+      "expectedTier": "Tier2Structural",
+      "expectedRelationshipKind": "operand-only-change",
+      "expectedGaps": [],
+      "nonClaims": [
+        "dispatch",
+        "execution",
+        "target-body-existence",
+        "cross-assembly-resolution"
+      ]
+    },
+    {
+      "id": "CS-ILRW-UNCHANGED-004",
+      "language": "csharp",
+      "shape": "untouched method in a rewritten pair keeps an identical canonical body identity and emits an unchanged edge",
+      "expectedIdentity": "rewrite:<exact-method-identity>|before:sha256:<digest>:after:sha256:<same-digest>",
+      "expectedRuleIds": [
+        "dotnet.compiled.il-rewrite.v1"
+      ],
+      "expectedTier": "Tier2Structural",
+      "expectedRelationshipKind": "unchanged",
+      "expectedGaps": [],
+      "nonClaims": [
+        "semantic-equivalence",
+        "pair-completeness",
+        "insertion-or-removal-absence"
+      ]
+    },
+    {
+      "id": "CS-ILRW-AMBIGUOUS-005",
+      "language": "csharp",
+      "shape": "after side carries two MethodDef rows with one identical complete method identity; the join fails closed",
+      "expectedIdentity": "gap:IlRewriteIdentityAmbiguous",
+      "expectedRuleIds": [
+        "dotnet.compiled.il-rewrite-gap.v1"
+      ],
+      "expectedTier": "Tier4Unknown",
+      "expectedGaps": [
+        "IlRewriteIdentityAmbiguous"
+      ],
+      "nonClaims": [
+        "guessed-join",
+        "majority-vote",
+        "first-row-selection"
+      ]
+    },
+    {
+      "id": "ILRW-HOSTILE-006",
+      "language": "csharp",
+      "shape": "malformed or corrupted after-side body withholds the whole pair without edges",
+      "expectedIdentity": "gap:IlRewriteMalformedInput",
+      "expectedRuleIds": [
+        "dotnet.compiled.il-rewrite-gap.v1"
+      ],
+      "expectedTier": "Tier4Unknown",
+      "expectedGaps": [
+        "IlRewriteMalformedInput"
+      ],
+      "nonClaims": [
+        "partial-edge-emission",
+        "absence-of-change",
+        "crash"
+      ]
+    },
+    {
+      "id": "ILRW-DISAGREE-007",
+      "language": "csharp",
+      "shape": "a side whose Mono.Cecil and System.Reflection.Metadata readings disagree withholds the pair",
+      "expectedIdentity": "gap:IlRewriteReaderDisagreement",
+      "expectedRuleIds": [
+        "dotnet.compiled.il-rewrite-gap.v1"
+      ],
+      "expectedTier": "Tier4Unknown",
+      "expectedGaps": [
+        "IlRewriteReaderDisagreement"
+      ],
+      "nonClaims": [
+        "majority-vote",
+        "single-oracle-trust",
+        "partial-edge-emission"
+      ]
+    },
+    {
+      "id": "CS-ILRW-STRUCTURE-009",
+      "language": "csharp",
+      "shape": "a new local variable changes only non-instruction body structure while the opcode stream and operands stay identical",
+      "expectedIdentity": "rewrite:<exact-method-identity>|before:sha256:<digest>:after:sha256:<digest>",
+      "expectedRuleIds": [
+        "dotnet.compiled.il-rewrite.v1"
+      ],
+      "expectedTier": "Tier2Structural",
+      "expectedRelationshipKind": "body-structure-change",
+      "expectedGaps": [],
+      "nonClaims": [
+        "semantic-equivalence",
+        "operand-change",
+        "behavior-preservation"
+      ]
+    },
+    {
+      "id": "ILRW-BUDGET-008",
+      "language": "csharp",
+      "shape": "exhausted shared work budget stops joining and emits a limit gap instead of guessed edges",
+      "expectedIdentity": "gap:IlRewriteTotalWorkLimitExceeded",
+      "expectedRuleIds": [
+        "dotnet.compiled.il-rewrite-gap.v1"
+      ],
+      "expectedTier": "Tier4Unknown",
+      "expectedGaps": [
+        "IlRewriteTotalWorkLimitExceeded"
+      ],
+      "nonClaims": [
+        "complete-join",
+        "absence-of-relationship"
+      ]
+    },
+    {
+      "id": "CS-ILRW-CFLOW-010",
+      "language": "csharp",
+      "shape": "a compiler-produced for-loop's forward unconditional branch retargets to a different in-range instruction boundary while the opcode stream, every other operand, and the non-instruction body structure stay identical",
+      "expectedIdentity": "rewrite:<exact-method-identity>|before:sha256:<operand-aware-body-digest>:after:sha256:<operand-aware-body-digest> with the branch operand recorded on both sides",
+      "expectedRuleIds": [
+        "dotnet.compiled.il-rewrite.v1"
+      ],
+      "expectedTier": "Tier2Structural",
+      "expectedRelationshipKind": "operand-only-change",
+      "expectedGaps": [],
+      "nonClaims": [
+        "semantic-equivalence",
+        "behavior-preservation",
+        "reachability",
+        "execution",
+        "loop-termination",
+        "source-ownership"
+      ]
+    },
+    {
+      "id": "CS-ILRW-CFLOW-011",
+      "language": "csharp",
+      "shape": "a compiler-produced five-target switch jump-table entry permutation reorders only the recorded target operands of the switch instruction",
+      "expectedIdentity": "rewrite:<exact-method-identity>|before:sha256:<operand-aware-body-digest>:after:sha256:<operand-aware-body-digest> with both switch target vectors digested",
+      "expectedRuleIds": [
+        "dotnet.compiled.il-rewrite.v1"
+      ],
+      "expectedTier": "Tier2Structural",
+      "expectedRelationshipKind": "operand-only-change",
+      "expectedGaps": [],
+      "nonClaims": [
+        "semantic-equivalence",
+        "case-mapping-preservation",
+        "dispatch",
+        "execution",
+        "runtime-equivalence"
+      ]
+    },
+    {
+      "id": "CS-ILRW-CFLOW-012",
+      "language": "csharp",
+      "shape": "a try-region leave retargets from the shared post-handler offset to the post-region code while every other instruction, the leave opcode, and the body structure stay identical",
+      "expectedIdentity": "rewrite:<exact-method-identity>|before:sha256:<operand-aware-body-digest>:after:sha256:<operand-aware-body-digest> with both leave target offsets recorded",
+      "expectedRuleIds": [
+        "dotnet.compiled.il-rewrite.v1"
+      ],
+      "expectedTier": "Tier2Structural",
+      "expectedRelationshipKind": "operand-only-change",
+      "expectedGaps": [],
+      "nonClaims": [
+        "semantic-equivalence",
+        "exception-behavior-preservation",
+        "execution",
+        "runtime-equivalence"
+      ]
+    },
+    {
+      "id": "CS-ILRW-CFLOW-013",
+      "language": "csharp",
+      "shape": "the nested catch region's try start rebinds to the outer finally's try start so the regions stay properly nested while no instruction changes",
+      "expectedIdentity": "rewrite:<exact-method-identity>|before:sha256:<operand-aware-body-digest>:after:sha256:<operand-aware-body-digest> with both exception-region digests changed and both instruction digests equal",
+      "expectedRuleIds": [
+        "dotnet.compiled.il-rewrite.v1"
+      ],
+      "expectedTier": "Tier2Structural",
+      "expectedRelationshipKind": "body-structure-change",
+      "expectedGaps": [],
+      "nonClaims": [
+        "semantic-equivalence",
+        "exception-behavior-preservation",
+        "operand-change",
+        "nesting-validity-proof"
+      ]
+    },
+    {
+      "id": "CS-ILRW-CFLOW-014",
+      "language": "csharp",
+      "shape": "the nested catch handler becomes a fault handler over identical region extents with the catch-type token removed and no instruction change",
+      "expectedIdentity": "rewrite:<exact-method-identity>|before:sha256:<operand-aware-body-digest>:after:sha256:<operand-aware-body-digest> with the handler-kind change committed by digest",
+      "expectedRuleIds": [
+        "dotnet.compiled.il-rewrite.v1"
+      ],
+      "expectedTier": "Tier2Structural",
+      "expectedRelationshipKind": "body-structure-change",
+      "expectedGaps": [],
+      "nonClaims": [
+        "semantic-equivalence",
+        "exception-behavior-preservation",
+        "handler-kind-equivalence"
+      ]
+    },
+    {
+      "id": "CS-ILRW-CFLOW-015",
+      "language": "csharp",
+      "shape": "the fat method-body header's recorded max-stack increases by one while the instructions, locals, exception regions, and init-locals flag are byte-identical",
+      "expectedIdentity": "rewrite:<exact-method-identity>|before:sha256:<operand-aware-body-digest>:after:sha256:<operand-aware-body-digest> with only the recorded max-stack differing",
+      "expectedRuleIds": [
+        "dotnet.compiled.il-rewrite.v1"
+      ],
+      "expectedTier": "Tier2Structural",
+      "expectedRelationshipKind": "body-structure-change",
+      "expectedGaps": [],
+      "nonClaims": [
+        "semantic-equivalence",
+        "evaluation-stack-depth-claim",
+        "operand-change",
+        "behavior-preservation"
+      ]
+    },
+    {
+      "id": "CS-ILRW-CFLOW-016",
+      "language": "csharp",
+      "shape": "an inserted dup/pop pair adds a transient evaluation-stack depth change with a net-neutral stack effect and a changed opcode stream",
+      "expectedIdentity": "rewrite:<exact-method-identity>|before:sha256:<operand-aware-body-digest>:after:sha256:<operand-aware-body-digest> with opcodeSequencePreserved false and no per-instruction claim",
+      "expectedRuleIds": [
+        "dotnet.compiled.il-rewrite.v1"
+      ],
+      "expectedTier": "Tier2Structural",
+      "expectedRelationshipKind": "instruction-stream-change",
+      "expectedGaps": [],
+      "nonClaims": [
+        "semantic-equivalence",
+        "behavior-preservation",
+        "stack-neutrality-proof",
+        "runtime-equivalence",
+        "execution"
+      ]
+    },
+    {
+      "id": "CS-ILRW-CFLOW-017",
+      "language": "csharp",
+      "shape": "an inserted constant/add sequence reshapes the evaluation-stack depth profile of the opcode stream while remaining well-formed decodable IL",
+      "expectedIdentity": "rewrite:<exact-method-identity>|before:sha256:<operand-aware-body-digest>:after:sha256:<operand-aware-body-digest> with opcodeSequencePreserved false and no per-instruction claim",
+      "expectedRuleIds": [
+        "dotnet.compiled.il-rewrite.v1"
+      ],
+      "expectedTier": "Tier2Structural",
+      "expectedRelationshipKind": "instruction-stream-change",
+      "expectedGaps": [],
+      "nonClaims": [
+        "semantic-equivalence",
+        "behavior-preservation",
+        "value-equivalence",
+        "runtime-equivalence",
+        "execution"
+      ]
+    },
+    {
+      "id": "ILRW-CFLOW-HOSTILE-018",
+      "language": "csharp",
+      "shape": "a patched short-branch delta pushes the branch target past the method-body extent on the declared after side",
+      "expectedIdentity": "gap:IlRewriteMalformedInput",
+      "expectedRuleIds": [
+        "dotnet.compiled.il-rewrite-gap.v1"
+      ],
+      "expectedTier": "Tier4Unknown",
+      "expectedGaps": [
+        "IlRewriteMalformedInput"
+      ],
+      "nonClaims": [
+        "partial-edge-emission",
+        "absence-of-change",
+        "crash",
+        "per-method-recovery"
+      ]
+    },
+    {
+      "id": "ILRW-CFLOW-HOSTILE-019",
+      "language": "csharp",
+      "shape": "a patched switch count overruns the bounded jump-table extent on the declared after side",
+      "expectedIdentity": "gap:IlRewriteMalformedInput",
+      "expectedRuleIds": [
+        "dotnet.compiled.il-rewrite-gap.v1"
+      ],
+      "expectedTier": "Tier4Unknown",
+      "expectedGaps": [
+        "IlRewriteMalformedInput"
+      ],
+      "nonClaims": [
+        "partial-edge-emission",
+        "absence-of-change",
+        "crash",
+        "per-method-recovery"
+      ]
+    },
+    {
+      "id": "ILRW-CFLOW-LIMIT-020",
+      "language": "csharp",
+      "shape": "an exception-region limit below a nested-region method's clause count exhausts that side and withholds the whole pair",
+      "expectedIdentity": "gap:IlRewriteExceptionRegionLimitExceeded",
+      "expectedRuleIds": [
+        "dotnet.compiled.il-rewrite-gap.v1"
+      ],
+      "expectedTier": "Tier4Unknown",
+      "expectedGaps": [
+        "IlRewriteExceptionRegionLimitExceeded"
+      ],
+      "nonClaims": [
+        "complete-join",
+        "absence-of-relationship",
+        "per-method-recovery"
+      ]
+    },
+    {
+      "id": "CS-ILRW-MEMBER-TOKEN-021",
+      "language": "csharp",
+      "shape": "InlineField and TypeSpec operands change with the same opcode stream",
+      "expectedClrShape": "static field reference and constructed List<T> type operand",
+      "expectedIdentity": "exact assembly/module and full method signature on both sides",
+      "expectedOutcome": "operand-only-change",
+      "expectedRuleIds": ["dotnet.compiled.il-rewrite.v1"],
+      "expectedTier": "Tier2Structural",
+      "expectedGaps": [],
+      "generatorSha256Property": "ilRewriteGeneratorSha256",
+      "boundedInputSha256Property": "ilRewriteBoundedInputSha256",
+      "limitations": "static metadata identity only; no runtime or rewrite-author claim",
+      "nonClaims": ["execution", "runtime-equivalence", "rewrite-authorship"]
+    },
+    {
+      "id": "CS-ILRW-METHODSPEC-022",
+      "language": "csharp",
+      "shape": "MethodSpec generic argument retargets while call opcode is unchanged",
+      "expectedClrShape": "Ignore<int> to Ignore<string> MethodSpec",
+      "expectedIdentity": "exact generic method declaration and instantiation signature",
+      "expectedOutcome": "operand-only-change",
+      "expectedRuleIds": ["dotnet.compiled.il-rewrite.v1"],
+      "expectedTier": "Tier2Structural",
+      "expectedGaps": [],
+      "generatorSha256Property": "ilRewriteGeneratorSha256",
+      "boundedInputSha256Property": "ilRewriteBoundedInputSha256",
+      "limitations": "static call token only; no dispatch or execution claim",
+      "nonClaims": ["dispatch", "execution", "rewrite-authorship"]
+    },
+    {
+      "id": "CS-ILRW-CALLI-SIG-023",
+      "language": "csharp",
+      "shape": "calli standalone signature changes managed to C calling convention",
+      "expectedClrShape": "function pointer and StandAloneSig operand",
+      "expectedIdentity": "calling convention, this flags, return and argument types, and local signature token",
+      "expectedOutcome": "operand-only-change",
+      "expectedRuleIds": ["dotnet.compiled.il-rewrite.v1"],
+      "expectedTier": "Tier2Structural",
+      "expectedGaps": [],
+      "generatorSha256Property": "ilRewriteGeneratorSha256",
+      "boundedInputSha256Property": "ilRewriteBoundedInputSha256",
+      "limitations": "static signature only; changed convention is not asserted safe to invoke",
+      "nonClaims": ["execution", "runtime-equivalence", "rewrite-authorship"]
+    },
+    {
+      "id": "CS-ILRW-MODIFIER-024",
+      "language": "csharp",
+      "shape": "required and optional custom modifiers change full signatures and therefore method membership",
+      "expectedClrShape": "modreq return and modopt parameter",
+      "expectedIdentity": "before-only and after-only complete method signatures",
+      "expectedOutcome": "membership-delta",
+      "expectedRuleIds": ["dotnet.compiled.il-rewrite-gap.v1"],
+      "expectedTier": "Tier4Unknown",
+      "expectedGaps": ["IlRewriteMethodBeforeOnly", "IlRewriteMethodAfterOnly"],
+      "generatorSha256Property": "ilRewriteGeneratorSha256",
+      "boundedInputSha256Property": "ilRewriteBoundedInputSha256",
+      "limitations": "signature change does not establish a cross-signature join",
+      "nonClaims": ["ambiguous-join", "execution", "rewrite-authorship"]
+    },
+    {
+      "id": "CS-ILRW-ACCESSOR-025",
+      "language": "csharp",
+      "shape": "property getter and event adder bodies change while metadata accessor declarations remain bound",
+      "expectedClrShape": "PropertyMap and EventMap accessor methods",
+      "expectedIdentity": "exact getter, setter, adder, and remover method handles",
+      "expectedOutcome": "operand-and-instruction-change",
+      "expectedRuleIds": ["dotnet.compiled.il-rewrite.v1"],
+      "expectedTier": "Tier2Structural",
+      "expectedGaps": [],
+      "generatorSha256Property": "ilRewriteGeneratorSha256",
+      "boundedInputSha256Property": "ilRewriteBoundedInputSha256",
+      "limitations": "metadata declaration association and body identity only",
+      "nonClaims": ["event-delivery", "execution", "rewrite-authorship"]
+    },
+    {
+      "id": "CS-ILRW-MEMBERSHIP-026",
+      "language": "csharp",
+      "shape": "method removal and insertion emit distinct before-only and after-only membership facts",
+      "expectedClrShape": "MethodDef removal and insertion in one assembly pair",
+      "expectedIdentity": "full signature and assembly/module scope for each one-sided method",
+      "expectedOutcome": "membership-delta",
+      "expectedRuleIds": ["dotnet.compiled.il-rewrite-gap.v1"],
+      "expectedTier": "Tier4Unknown",
+      "expectedGaps": ["IlRewriteMethodBeforeOnly", "IlRewriteMethodAfterOnly"],
+      "generatorSha256Property": "ilRewriteGeneratorSha256",
+      "boundedInputSha256Property": "ilRewriteBoundedInputSha256",
+      "limitations": "one-sided membership proves neither reason nor runtime effect",
+      "nonClaims": ["ambiguous-join", "clean-absence", "rewrite-authorship"]
+    },
+    {
+      "id": "ILRW-HOSTILE-METADATA-027",
+      "language": "csharp",
+      "shape": "invalid InlineField and InlineSig row IDs withhold the pair",
+      "expectedClrShape": "malformed field or standalone-signature token",
+      "expectedIdentity": "after-side malformed-input gap",
+      "expectedOutcome": "malformed",
+      "expectedRuleIds": ["dotnet.compiled.il-rewrite-gap.v1"],
+      "expectedTier": "Tier4Unknown",
+      "expectedGaps": ["IlRewriteMalformedInput"],
+      "generatorSha256Property": "ilRewriteGeneratorSha256",
+      "boundedInputSha256Property": "ilRewriteBoundedInputSha256",
+      "limitations": "malformed token withholds the whole pair",
+      "nonClaims": ["partial-edge-emission", "clean-absence", "rewrite-authorship"]
+    },
+    {
+      "id": "CS-ILRW-VARARG-CALL-028",
+      "language": "csharp",
+      "shape": "compiler-produced vararg MemberRef call retains its MethodDef parent and required-parameter boundary",
+      "expectedClrShape": "vararg MemberRef with optional arguments and sentinel",
+      "expectedIdentity": "complete vararg MemberRef signature with required-parameter count",
+      "expectedOutcome": "unchanged",
+      "expectedRuleIds": ["dotnet.compiled.il-rewrite.v1"],
+      "expectedTier": "Tier2Structural",
+      "expectedGaps": [],
+      "generatorSha256Property": "ilRewriteGeneratorSha256",
+      "boundedInputSha256Property": "ilRewriteBoundedInputSha256",
+      "limitations": "static vararg MemberRef identity only, without runtime or dispatch claim",
+      "nonClaims": ["execution", "dispatch", "rewrite-authorship"]
+    },
+    {
+      "id": "CS-ILRW-INLINETOK-MEMBER-029",
+      "language": "csharp",
+      "shape": "ldtoken field member operand changes without a call opcode",
+      "expectedClrShape": "InlineTok FieldDef operand and RuntimeFieldHandle return",
+      "expectedIdentity": "exact FieldHandle method identity with changed body operand",
+      "expectedOutcome": "operand-only-change",
+      "expectedRuleIds": ["dotnet.compiled.il-rewrite.v1"],
+      "expectedTier": "Tier2Structural",
+      "expectedGaps": [],
+      "generatorSha256Property": "ilRewriteGeneratorSha256",
+      "boundedInputSha256Property": "ilRewriteBoundedInputSha256",
+      "limitations": "static member token only, with no runtime or dispatch claim",
+      "nonClaims": ["execution", "dispatch", "rewrite-authorship"]
+    },
+    {
+      "id": "ILRW-UNSUPPORTED-CALLI-030",
+      "language": "csharp",
+      "shape": "reserved calli calling convention fails closed before a rewrite edge is admitted",
+      "expectedClrShape": "unsupported StandAloneSig calling-convention encoding",
+      "expectedIdentity": "after-side malformed signature gap",
+      "expectedOutcome": "malformed",
+      "expectedRuleIds": ["dotnet.compiled.il-rewrite-gap.v1"],
+      "expectedTier": "Tier4Unknown",
+      "expectedGaps": ["IlRewriteMalformedInput"],
+      "generatorSha256Property": "ilRewriteGeneratorSha256",
+      "boundedInputSha256Property": "ilRewriteBoundedInputSha256",
+      "limitations": "reserved signature encoding withholds the whole pair",
+      "nonClaims": ["partial-edge-emission", "runtime-equivalence", "rewrite-authorship"]
+    },
+    {
+      "id": "CS-ILRW-SAME-TOKEN-SIGNATURE-031",
+      "language": "csharp",
+      "shape": "field token stays numerically equal while the referenced field's full signature changes",
+      "expectedClrShape": "FieldDef with optional modifier on the same metadata row",
+      "expectedIdentity": "same caller MethodDef token with different operand-aware body digest",
+      "expectedOutcome": "operand-only-change",
+      "expectedRuleIds": ["dotnet.compiled.il-rewrite.v1"],
+      "expectedTier": "Tier2Structural",
+      "expectedGaps": [],
+      "generatorSha256Property": "ilRewriteGeneratorSha256",
+      "boundedInputSha256Property": "ilRewriteBoundedInputSha256",
+      "limitations": "same raw token does not establish unchanged member semantics or execution",
+      "nonClaims": ["execution", "runtime-equivalence", "rewrite-authorship"]
+    },
+    {
+      "id": "CS-ILRW-CALLI-VARARG-BOUNDARY-032",
+      "language": "csharp",
+      "shape": "vararg calli moves only the sentinel boundary while token, opcode, and parameter types remain equal",
+      "expectedClrShape": "StandAloneSig vararg with required parameter count one versus zero",
+      "expectedIdentity": "exact calli signature with calling convention and required-parameter count",
+      "expectedOutcome": "operand-only-change",
+      "expectedRuleIds": ["dotnet.compiled.il-rewrite.v1"],
+      "expectedTier": "Tier2Structural",
+      "expectedGaps": [],
+      "generatorSha256Property": "ilRewriteGeneratorSha256",
+      "boundedInputSha256Property": "ilRewriteBoundedInputSha256",
+      "limitations": "static calli signature boundary only, not target, execution, or equivalence",
+      "nonClaims": ["execution", "runtime-equivalence", "rewrite-authorship"]
+    },
+    {
+      "id": "ILRW-TOPO-001",
+      "language": "ecma335",
+      "shape": "a metadata-bearing netmodule cannot supply an assembly-scoped rewrite identity",
+      "expectedClrShape": "Module metadata without an Assembly row",
+      "expectedIdentity": "gap:IlRewriteUnsupportedShape:ManagedNetmoduleInputUnsupported",
+      "expectedOutcome": "unsupported",
+      "expectedRuleIds": ["dotnet.compiled.il-rewrite-gap.v1"],
+      "expectedTier": "Tier4Unknown",
+      "expectedGaps": ["IlRewriteUnsupportedShape"],
+      "generatorSha256Property": "ilRewriteGeneratorSha256",
+      "boundedInputSha256Property": "ilRewriteBoundedInputSha256",
+      "limitations": "netmodule lacks an independently admitted assembly identity; no pair edge is emitted",
+      "nonClaims": ["module-linking", "rewrite-identity", "clean-absence"]
+    },
+    {
+      "id": "ILRW-TOPO-002",
+      "language": "ecma335",
+      "shape": "a manifest with a metadata-bearing AssemblyFile is rejected before a partial single-module rewrite claim",
+      "expectedClrShape": "Assembly manifest with secondary metadata module",
+      "expectedIdentity": "gap:IlRewriteUnsupportedShape:MultiModuleManagedAssemblyUnsupported",
+      "expectedOutcome": "unsupported",
+      "expectedRuleIds": ["dotnet.compiled.il-rewrite-gap.v1"],
+      "expectedTier": "Tier4Unknown",
+      "expectedGaps": ["IlRewriteUnsupportedShape"],
+      "generatorSha256Property": "ilRewriteGeneratorSha256",
+      "boundedInputSha256Property": "ilRewriteBoundedInputSha256",
+      "limitations": "secondary module is not resolved, loaded, or joined; no partial pair edge is emitted",
+      "nonClaims": ["secondary-module-coverage", "rewrite-identity", "clean-absence"]
+    },
+    {
+      "id": "ILRW-TOPO-003",
+      "language": "ecma335",
+      "shape": "an ExportedType forwarder is rejected before a local-only type inventory can look complete",
+      "expectedClrShape": "ExportedType row with ECMA-335 forwarder flag",
+      "expectedIdentity": "gap:IlRewriteUnsupportedShape:TypeForwardingManagedAssemblyUnsupported",
+      "expectedOutcome": "unsupported",
+      "expectedRuleIds": ["dotnet.compiled.il-rewrite-gap.v1"],
+      "expectedTier": "Tier4Unknown",
+      "expectedGaps": ["IlRewriteUnsupportedShape"],
+      "generatorSha256Property": "ilRewriteGeneratorSha256",
+      "boundedInputSha256Property": "ilRewriteBoundedInputSha256",
+      "limitations": "forwarded target assembly is not resolved; no local rewrite edge is inferred",
+      "nonClaims": ["forwarded-target-identity", "rewrite-identity", "clean-absence"]
+    },
+    {
+      "id": "ILRW-TOPO-004",
+      "language": "ecma335",
+      "shape": "duplicate complete method identities within a declared side make the pair ambiguous",
+      "expectedClrShape": "two MethodDef rows with the same complete assembly/module/type/signature identity",
+      "expectedIdentity": "gap:IlRewriteIdentityAmbiguous",
+      "expectedOutcome": "disputed",
+      "expectedRuleIds": ["dotnet.compiled.il-rewrite-gap.v1"],
+      "expectedTier": "Tier4Unknown",
+      "expectedGaps": ["IlRewriteIdentityAmbiguous"],
+      "generatorSha256Property": "ilRewriteGeneratorSha256",
+      "boundedInputSha256Property": "ilRewriteBoundedInputSha256",
+      "limitations": "multiple exact candidates withhold the pair; no first-candidate selection",
+      "nonClaims": ["guessed-join", "rewrite-identity", "clean-absence"]
+    },
+    {
+      "id": "ILRW-TOPO-005",
+      "language": "ecma335",
+      "shape": "two declared pair ordinals may share an assembly identity without cross-pair joins",
+      "expectedClrShape": "same complete assembly/module/member identity in two explicitly separate pair ordinals",
+      "expectedIdentity": "one exact unchanged member edge per admitted pair ordinal",
+      "expectedOutcome": "admitted",
+      "expectedRuleIds": ["dotnet.compiled.il-rewrite.v1"],
+      "expectedTier": "Tier2Structural",
+      "expectedGaps": [],
+      "generatorSha256Property": "ilRewriteGeneratorSha256",
+      "boundedInputSha256Property": "ilRewriteBoundedInputSha256",
+      "limitations": "pair ordinal isolates identical assembly identities; it does not resolve runtime load context",
+      "nonClaims": ["cross-pair-join", "runtime-binding", "rewrite-authorship"]
+    },
+    {
+      "id": "ILRW-TOPO-006",
+      "language": "ecma335",
+      "shape": "many non-forwarded ExportedType rows exhaust the rewrite metadata work budget before traversal",
+      "expectedClrShape": "manifest with 40 non-forwarded exported types",
+      "expectedIdentity": "gap:IlRewriteTotalWorkLimitExceeded:ManagedInputTotalWorkLimitExceeded",
+      "expectedOutcome": "limit-exhausted",
+      "expectedRuleIds": ["dotnet.compiled.il-rewrite-gap.v1"],
+      "expectedTier": "Tier4Unknown",
+      "expectedGaps": ["IlRewriteTotalWorkLimitExceeded"],
+      "generatorSha256Property": "ilRewriteGeneratorSha256",
+      "boundedInputSha256Property": "ilRewriteBoundedInputSha256",
+      "limitations": "exported-type row traversal is charged before admission and cannot produce a partial edge",
+      "nonClaims": ["complete-topology", "partial-edge-emission", "clean-absence"]
+    }
+  ],
+  "ilRewritePdbCases": [
+    {
+      "id": "CS-ILRWPDB-OFFSET-STABLE-001",
+      "language": "csharp",
+      "shape": "a same-size operand-only rewrite (changed ldstr operand) keeps every sequence-point IL offset identical across the declared before/after assembly-and-PDB pair",
+      "expectedIdentity": "il-rewrite-pdb:<exact-method-identity>|before-pdb:<content-id>:method:<row>:after-pdb:<content-id>:method:<row>",
+      "expectedRuleIds": [
+        "dotnet.compiled.il-rewrite-pdb.v1"
+      ],
+      "expectedTier": "Tier2Structural",
+      "expectedOffsetClassification": "sequence-point-offsets-unchanged",
+      "expectedGaps": [],
+      "nonClaims": [
+        "behavioral-equivalence",
+        "source-ownership",
+        "debugging-behavior-preservation",
+        "rewrite-attribution"
+      ]
+    },
+    {
+      "id": "CS-ILRWPDB-OFFSET-SHIFT-002",
+      "language": "csharp",
+      "shape": "an IL insertion before later sequence-point-bearing instructions shifts subsequent sequence-point IL offsets while pre-insertion offsets stay identical",
+      "expectedIdentity": "il-rewrite-pdb:<exact-method-identity>|before-pdb:<content-id>:method:<row>:after-pdb:<content-id>:method:<row>",
+      "expectedRuleIds": [
+        "dotnet.compiled.il-rewrite-pdb.v1"
+      ],
+      "expectedTier": "Tier2Structural",
+      "expectedOffsetClassification": "sequence-point-offsets-changed",
+      "expectedGaps": [],
+      "nonClaims": [
+        "behavioral-equivalence",
+        "source-ownership",
+        "debugging-behavior-preservation",
+        "rewrite-attribution"
+      ]
+    },
+    {
+      "id": "CS-ILRWPDB-IDENTICAL-003",
+      "language": "csharp",
+      "shape": "byte-identical before and after assembly-and-PDB pairs classify every joined method's sequence-point offsets as unchanged",
+      "expectedIdentity": "il-rewrite-pdb:<exact-method-identity>|before-pdb:<content-id>:method:<row>:after-pdb:<content-id>:method:<row>",
+      "expectedRuleIds": [
+        "dotnet.compiled.il-rewrite-pdb.v1"
+      ],
+      "expectedTier": "Tier2Structural",
+      "expectedOffsetClassification": "sequence-point-offsets-unchanged",
+      "expectedGaps": [],
+      "nonClaims": [
+        "behavioral-equivalence",
+        "debugging-behavior-preservation"
+      ]
+    },
+    {
+      "id": "CS-ILRWPDB-AFTER-MISSING-004",
+      "language": "csharp",
+      "shape": "a declared after-side PDB path that does not exist withholds the pair's PDB evidence behind a side-scoped Tier4 gap",
+      "expectedIdentity": "gap:IlRewritePdbSideUnavailable",
+      "expectedRuleIds": [
+        "dotnet.compiled.il-rewrite-pdb-gap.v1"
+      ],
+      "expectedTier": "Tier4Unknown",
+      "expectedGaps": [
+        "IlRewritePdbSideUnavailable"
+      ],
+      "nonClaims": [
+        "partial-edge-emission",
+        "absence-of-debug-information"
+      ]
+    },
+    {
+      "id": "CS-ILRWPDB-BINDING-MISMATCH-005",
+      "language": "csharp",
+      "shape": "a declared after-side PDB whose portable content identity matches no CodeView entry of the paired after assembly fails closed without cross-side re-binding",
+      "expectedIdentity": "gap:IlRewritePdbAssemblyBindingMismatch",
+      "expectedRuleIds": [
+        "dotnet.compiled.il-rewrite-pdb-gap.v1"
+      ],
+      "expectedTier": "Tier4Unknown",
+      "expectedGaps": [
+        "IlRewritePdbAssemblyBindingMismatch"
+      ],
+      "nonClaims": [
+        "cross-side-binding",
+        "nearest-candidate-selection",
+        "partial-edge-emission"
+      ]
+    },
+    {
+      "id": "CS-ILRWPDB-BINDING-AMBIGUOUS-006",
+      "language": "csharp",
+      "shape": "duplicate matching CodeView entries within one paired assembly make the PDB binding ambiguous and withhold the pair",
+      "expectedIdentity": "gap:IlRewritePdbAssemblyBindingAmbiguous",
+      "expectedRuleIds": [
+        "dotnet.compiled.il-rewrite-pdb-gap.v1"
+      ],
+      "expectedTier": "Tier4Unknown",
+      "expectedGaps": [
+        "IlRewritePdbAssemblyBindingAmbiguous"
+      ],
+      "nonClaims": [
+        "first-entry-selection",
+        "partial-edge-emission"
+      ]
+    },
+    {
+      "id": "CS-ILRWPDB-METHOD-DEBUG-ONE-SIDE-007",
+      "language": "csharp",
+      "shape": "a joined method whose PDB method debug information exists on exactly one side emits a bounded one-side-only Tier4 method gap with an omitted-identity digest commitment",
+      "expectedIdentity": "gap:IlRewritePdbMethodDebugInformationAbsent",
+      "expectedRuleIds": [
+        "dotnet.compiled.il-rewrite-pdb-gap.v1"
+      ],
+      "expectedTier": "Tier4Unknown",
+      "expectedGaps": [
+        "IlRewritePdbMethodDebugInformationAbsent"
+      ],
+      "nonClaims": [
+        "debug-information-insertion",
+        "debug-information-removal",
+        "guessed-preservation"
+      ]
+    },
+    {
+      "id": "CS-ILRWPDB-MALFORMED-008",
+      "language": "csharp",
+      "shape": "a truncated or non-BSJB declared PDB side emits a malformed side gap without crashing the scan",
+      "expectedIdentity": "gap:IlRewritePdbSideUnavailable",
+      "expectedRuleIds": [
+        "dotnet.compiled.il-rewrite-pdb-gap.v1"
+      ],
+      "expectedTier": "Tier4Unknown",
+      "expectedGaps": [
+        "IlRewritePdbSideUnavailable"
+      ],
+      "nonClaims": [
+        "crash",
+        "partial-edge-emission"
+      ]
+    },
+    {
+      "id": "CS-ILRWPDB-WINDOWS-009",
+      "language": "csharp",
+      "shape": "a native Windows MSF PDB declared as a side is an unsupported shape that fails closed on every host",
+      "expectedIdentity": "gap:IlRewritePdbUnsupportedShape",
+      "expectedRuleIds": [
+        "dotnet.compiled.il-rewrite-pdb-gap.v1"
+      ],
+      "expectedTier": "Tier4Unknown",
+      "expectedGaps": [
+        "IlRewritePdbUnsupportedShape"
+      ],
+      "nonClaims": [
+        "windows-pdb-support",
+        "single-oracle-trust"
+      ]
+    },
+    {
+      "id": "CS-ILRWPDB-READER-DISAGREE-010",
+      "language": "csharp",
+      "shape": "a PDB side whose System.Reflection.Metadata and Mono.Cecil shape readings disagree withholds the whole pair's PDB evidence",
+      "expectedIdentity": "gap:IlRewritePdbReaderDisagreement",
+      "expectedRuleIds": [
+        "dotnet.compiled.il-rewrite-pdb-gap.v1"
+      ],
+      "expectedTier": "Tier4Unknown",
+      "expectedGaps": [
+        "IlRewritePdbReaderDisagreement"
+      ],
+      "nonClaims": [
+        "majority-vote",
+        "single-oracle-trust",
+        "partial-edge-emission"
+      ]
+    },
+    {
+      "id": "CS-ILRWPDB-BUDGET-011",
+      "language": "csharp",
+      "shape": "exhausted PDB work budget stops the lane with a limit gap instead of guessed relationships",
+      "expectedIdentity": "gap:IlRewritePdbTotalWorkLimitExceeded",
+      "expectedRuleIds": [
+        "dotnet.compiled.il-rewrite-pdb-gap.v1"
+      ],
+      "expectedTier": "Tier4Unknown",
+      "expectedGaps": [
+        "IlRewritePdbTotalWorkLimitExceeded"
+      ],
+      "nonClaims": [
+        "complete-coverage",
+        "absence-of-relationship"
+      ]
+    },
+    {
+      "id": "ILRWPDB-ILASM-PARITY-012",
+      "language": "csharp",
+      "status": "partial",
+      "shape": "assemble the same before/after mutation matrix with the pinned Microsoft ILAsm and cross-check the disassembled IL offsets against the admitted TraceMap evidence using the pinned ILDAsm as the independent oracle; the portable PDB sequence-point half of the original prerequisite executes on every run but stays unclaimed while the hosted ILDAsm observes no portable PDB through /linenum",
+      "expectedIdentity": "unchanged il-rewrite edges for every round-tripped method with matching ILDAsm handler-clause, instruction, local, and max-stack counts",
+      "expectedRuleIds": ["dotnet.compiled.il-rewrite.v1"],
+      "expectedTier": "Tier2Structural",
+      "expectedGaps": ["IldasmPortablePdbLineOracleUnavailable"],
+      "satisfiedBy": [
+        "ILASM-PARITY-CFLOW-002",
+        "ILASM-PARITY-EH-003",
+        "ILASM-PARITY-MUTATE-005"
+      ],
+      "limitations": "the IL-offset cross-check is proven on the pinned hosted toolchain; the portable-PDB sequence-point half stays unclaimed because that ILDAsm emits no .line directives for portable PDBs (see ILASM-PARITY-PDB-006, which records the typed oracle-availability gap and the work-machine receipt), and no test of this gate exercises dotnet.compiled.il-rewrite-pdb.v1",
+      "nonClaims": [
+        "ilasm-general-equivalence",
+        "ildasm-general-equivalence",
+        "mono-cecil-oracle",
+        "portable-pdb-sequence-point-parity"
+      ]
+    },
+    {
+      "id": "ILRWPDB-EMBEDDED-PORTABLE-013",
+      "language": "csharp",
+      "shape": "an assembly with an embedded portable PDB is declared as its own PDB artifact and paired with a rewrite side",
+      "expectedIdentity": "exact embedded portable content identity and method/sequence-point identity bound to the declared assembly bytes",
+      "expectedRuleIds": ["dotnet.compiled.pdb-input.v1", "dotnet.compiled.pdb-identity.v1", "dotnet.compiled.sequence-point.v1", "dotnet.compiled.il-rewrite-pdb.v1"],
+      "expectedTier": "Tier2Structural",
+      "expectedGaps": [],
+      "generatorSha256Property": "ilRewritePdbGeneratorSha256",
+      "boundedInputSha256Property": "ilRewritePdbBoundedInputSha256",
+      "limitations": "embedded debug identity and offset comparison do not prove debugging behavior or runtime equivalence",
+      "nonClaims": [
+        "debugging-behavior-preservation", "runtime-equivalence", "rewrite-authorship"
+      ]
+    },
+    {
+      "id": "ILRWPDB-EMBEDDED-MISSING-014",
+      "language": "csharp",
+      "shape": "a declared assembly PDB artifact with no embedded portable debug entry fails closed",
+      "expectedIdentity": "gap:IlRewritePdbSideUnavailable:EmbeddedPortablePdbMissing",
+      "expectedRuleIds": ["dotnet.compiled.il-rewrite-pdb-gap.v1"],
+      "expectedTier": "Tier4Unknown",
+      "expectedGaps": ["IlRewritePdbSideUnavailable"],
+      "generatorSha256Property": "ilRewritePdbGeneratorSha256",
+      "boundedInputSha256Property": "ilRewritePdbBoundedInputSha256",
+      "limitations": "missing embedded debug evidence withholds the PDB relationship without changing the parent IL rewrite result",
+      "nonClaims": ["debug-information-absence", "partial-edge-emission"]
+    },
+    {
+      "id": "ILRWPDB-EMBEDDED-MISMATCH-015",
+      "language": "csharp",
+      "shape": "declared embedded PDB assembly artifact differs from its paired admitted assembly bytes",
+      "expectedIdentity": "gap:IlRewritePdbAssemblyBindingMismatch:EmbeddedPdbAssemblyArtifactMismatch",
+      "expectedRuleIds": ["dotnet.compiled.il-rewrite-pdb-gap.v1"],
+      "expectedTier": "Tier4Unknown",
+      "expectedGaps": ["IlRewritePdbAssemblyBindingMismatch"],
+      "generatorSha256Property": "ilRewritePdbGeneratorSha256",
+      "boundedInputSha256Property": "ilRewritePdbBoundedInputSha256",
+      "limitations": "byte mismatch withholds the PDB relationship; name or matching content identity alone cannot rebind it",
+      "nonClaims": ["cross-side-binding", "partial-edge-emission", "rewrite-authorship"]
+    },
+    {
+      "id": "ILRWPDB-EMBEDDED-TEXT-LIMIT-016",
+      "language": "csharp",
+      "shape": "an embedded-PDB carrier whose safe locator exceeds the declared rewrite-PDB text limit fails before admission",
+      "expectedIdentity": "gap:IlRewritePdbTextLimitExceeded",
+      "expectedRuleIds": ["dotnet.compiled.il-rewrite-pdb-gap.v1"],
+      "expectedTier": "Tier4Unknown",
+      "expectedGaps": ["IlRewritePdbTextLimitExceeded"],
+      "generatorSha256Property": "ilRewritePdbGeneratorSha256",
+      "boundedInputSha256Property": "ilRewritePdbBoundedInputSha256",
+      "limitations": "the rewrite-PDB locator bound applies independently of the compiled-input text bound",
+      "nonClaims": ["partial-edge-emission", "unbounded-locator", "rewrite-authorship"]
+    }
+  ],
+  "ilasmParityCases": [
+    {
+      "id": "ILASM-PARITY-TOOLS-001",
+      "language": "csharp",
+      "status": "covered",
+      "proofLane": "compiled-dotnet-extended-validation.yml:public-mutation-matrix(windows-latest)",
+      "shape": "ordered Windows discovery pins Microsoft .NET Framework 4.8 ILAsm from the Framework/Framework64 v4.0.30319 runtime directories and Windows SDK NETFX ILDAsm by absolute path, records exact file versions and the runner image, and fails when either pinned 4.8.x tool is missing or not invocable",
+      "expectedIdentity": "pinned absolute tool paths with recorded 4.8.x file versions and runner identity",
+      "expectedRuleIds": [],
+      "expectedTier": "Tier4Unknown",
+      "expectedGaps": [],
+      "prerequisites": "ILAsm ships with the .NET Framework runtime under C:\\Windows\\Microsoft.NET\\Framework64\\v4.0.30319 and the x86 C:\\Windows\\Microsoft.NET\\Framework twin; ILDAsm ships with the Windows SDK NETFX 4.8/4.8.1 Tools (x64 first); both must report a 4.8.x file version",
+      "nonClaims": ["tool-version-portability", "no-general-il-equivalence-claim", "mono-cecil-oracle"]
+    },
+    {
+      "id": "ILASM-PARITY-CFLOW-002",
+      "language": "csharp",
+      "status": "covered",
+      "proofLane": "compiled-dotnet-extended-validation.yml:public-mutation-matrix(windows-latest)",
+      "shape": "the public control-flow fixture assembly disassembles with the pinned ILDAsm, reassembles with the pinned ILAsm, and disassembles again to identical canonical method bodies (not whole-file normalized IL text) while TraceMap joins every method of the bound before/after pair as unchanged with instruction, local, max-stack, and call-offset counts equal to the ILDAsm observation on both sides",
+      "expectedIdentity": "unchanged il-rewrite edges for every method with tokenRetargeted=false and zero gaps",
+      "expectedRuleIds": ["dotnet.compiled.il-rewrite.v1", "dotnet.compiled.il-body.v1", "dotnet.compiled.il-call.v1"],
+      "expectedTier": "Tier2Structural",
+      "expectedGaps": [],
+      "nonClaims": ["no-general-il-equivalence-claim", "behavior-preservation", "mono-cecil-oracle"]
+    },
+    {
+      "id": "ILASM-PARITY-EH-003",
+      "language": "csharp",
+      "status": "covered",
+      "proofLane": "compiled-dotnet-extended-validation.yml:public-mutation-matrix(windows-latest)",
+      "shape": "nested try regions, catch/fault handler kinds and catch type identities, leave targets, and the dense switch table of the public fixtures keep identical canonical exception-clause structure across the independent round trip, with ILDAsm handler-clause counts equal to TraceMap exception-region counts on both sides; the parser also retains filter start offsets when present",
+      "expectedIdentity": "unchanged il-rewrite edges whose exception-region digests are identical on both sides",
+      "expectedRuleIds": ["dotnet.compiled.il-rewrite.v1", "dotnet.compiled.il-body.v1"],
+      "expectedTier": "Tier2Structural",
+      "expectedGaps": [],
+      "nonClaims": ["no-general-il-equivalence-claim", "execution-observability", "mono-cecil-oracle"]
+    },
+    {
+      "id": "ILASM-PARITY-MEMBER-004",
+      "language": "csharp",
+      "status": "covered",
+      "proofLane": "compiled-dotnet-extended-validation.yml:public-mutation-matrix(windows-latest)",
+      "shape": "the public member-shape fixture with generic method specifications, ldtoken type tokens, calli standalone signatures, static field operands, explicitly constructed modopt parameters and modreq returns, property and event accessors, and vararg declarations round trips through the pinned tools with complete method declarations, local signatures, and every symbolic operand retained in the canonical ILDAsm comparison; methods whose raw module-local reference tokens ILAsm renumbered on re-emission classify exactly operand-only-change with every call-retarget identity preserved",
+      "expectedIdentity": "unchanged or operand-only-change il-rewrite edges for every member-shape method with zero gaps and identity-preserving retargets",
+      "expectedRuleIds": ["dotnet.compiled.il-rewrite.v1", "dotnet.compiled.il-body.v1"],
+      "expectedTier": "Tier2Structural",
+      "expectedGaps": [],
+      "limitations": "raw module-local tokens are locations, not stable cross-build identities; renumbering alone is operand-only-change by contract",
+      "nonClaims": ["no-general-il-equivalence-claim", "cross-assembly-resolution", "mono-cecil-oracle"]
+    },
+    {
+      "id": "ILASM-PARITY-MUTATE-005",
+      "language": "csharp",
+      "status": "covered",
+      "proofLane": "compiled-dotnet-extended-validation.yml:public-mutation-matrix(windows-latest)",
+      "shape": "the public branch-retarget, handler-kind, and stack-neutral insertion mutations keep their exact TraceMap relationship classification when the mutated after side passes through ILDAsm and ILAsm before scanning, with identical canonical method bodies (not whole-file normalized disassembly) for the raw and round-tripped after sides",
+      "expectedIdentity": "operand-only-change, body-structure-change, and instruction-stream-change edges identical for the raw and round-tripped after sides",
+      "expectedRuleIds": ["dotnet.compiled.il-rewrite.v1"],
+      "expectedTier": "Tier2Structural",
+      "expectedGaps": [],
+      "nonClaims": ["no-general-il-equivalence-claim", "behavior-preservation", "mono-cecil-oracle"]
+    },
+    {
+      "id": "ILASM-PARITY-PDB-006",
+      "language": "csharp",
+      "status": "deferred",
+      "proofLane": "compiled-dotnet-extended-validation.yml:public-mutation-matrix(windows-latest)",
+      "shape": "the hosted ILDAsm accepts /linenum with the extracted portable PDB adjacent but emits no .line directives; the test checks this durable typed oracle-availability gap and prints a precise work-machine reproduction command instead of claiming parity; when an independent oracle does emit directives, the test compares their non-hidden offset and line/column tuples against TraceMap",
+      "expectedIdentity": "no hosted independent PDB observation; sequence-point parity remains unclaimed until equal sorted tuples are independently observed",
+      "expectedRuleIds": ["dotnet.compiled.sequence-point.v1", "dotnet.compiled.pdb-identity.v1"],
+      "expectedTier": "Tier4Unknown",
+      "expectedGaps": ["IldasmPortablePdbLineOracleUnavailable"],
+      "prerequisites": "ILDAsm 4.8.3928.0 documents /LINENUM for source-line references and has no /pdbpath option; observed on the hosted win25-vs2026 runner on 2026-09-23, that ILDAsm accepted /linenum and disassembled the carrier but emitted no .line directives for the adjacent extracted portable PDB, leaving this case unclaimed pending a work-machine receipt",
+      "nonClaims": ["debug-behavior-preservation", "hidden-sequence-point-parity", "no-general-il-equivalence-claim"]
+    }
+  ]
+}

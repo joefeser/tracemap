@@ -54,7 +54,8 @@ public static partial class CombinedDependencyPathReporter
                 budget,
                 options.StartingFactIds,
                 options.MaxDepth,
-                options.MaxFrontier);
+                options.MaxFrontier,
+                options.MaxTraversalWork);
             var endpoints = CombinedDependencyReporter.MatchEndpoints(read.Sources, read.Facts);
             var surfaces = CombinedDependencyReporter.BuildSurfaces(read.Facts, read.Sources);
             var graph = BuildGraph(read, endpoints, surfaces, null, includeLegacyRoots: true, budget);
@@ -85,16 +86,130 @@ public static partial class CombinedDependencyPathReporter
         }
     }
 
+    internal static async Task<CombinedDependencyPathBuildResult> BuildBoundedCombinedIndexReportWithTraversalAsync(
+        CombinedDependencyPathOptions options,
+        ReportInputBudget budget,
+        CancellationToken cancellationToken = default)
+    {
+        ValidateOptions(options);
+        var sourcePair = ParseSourcePair(options.SourcePair);
+        IReadOnlyList<CombinedReportSource> sources = [];
+        IndexedGraphStore? store = null;
+        try
+        {
+            await using (var connection = new SqliteConnection(new SqliteConnectionStringBuilder
+            {
+                DataSource = options.IndexPath,
+                Mode = SqliteOpenMode.ReadOnly,
+                Cache = SqliteCacheMode.Private,
+                Pooling = false
+            }.ToString()))
+            {
+                await connection.OpenAsync(cancellationToken);
+                if (!await TableExistsAsync(connection, "index_sources", cancellationToken)
+                    || !await TableExistsAsync(connection, "combined_facts", cancellationToken))
+                {
+                    throw new InvalidDataException("WebFormsModernizationCombinedIndexUnsupported");
+                }
+
+                // Read only source metadata before admission checks, never reload
+                // the fact graph to recover from a graph-input limit.
+                sources = (await CombinedDependencyReporter.ReadSourcesAsync(connection, cancellationToken))
+                    .Select(row => row.Source).ToArray();
+
+                store = await CreateIndexedGraphStoreAsync(options.IndexPath, budget.MaxGraphStorageBytes, cancellationToken,
+                    budget.GraphStageObserver);
+
+                await AssertCombinedInputLimitAsync(connection, "combined_facts", budget.MaxFacts, "graph-facts", cancellationToken);
+                if (await ViewExistsAsync(connection, "combined_dependency_edges", cancellationToken))
+                {
+                    await AssertCombinedInputLimitAsync(connection, "combined_dependency_edges", budget.MaxEdges, "graph-edges", cancellationToken);
+                }
+                await using var bytes = connection.CreateCommand();
+                bytes.CommandText = "select coalesce(sum(length(cast(payload_json as blob))), 0) from combined_facts;";
+                if (Convert.ToInt64(await bytes.ExecuteScalarAsync(cancellationToken)) > budget.MaxTextBytes)
+                {
+                    throw new ReportInputLimitException("graph-text-bytes");
+                }
+            }
+
+            var (read, graph) = await BuildGraphAsync(
+                options.IndexPath,
+                sourcePair,
+                options.IncludeLegacyRoots || IsLegacyView(options.View),
+                allowSingleIndex: false,
+                cancellationToken,
+                budget,
+                store);
+            store.MarkObservationStage("report-traversal");
+            var result = BuildReportWithTraversalObservations(options, read, graph, sourcePair);
+            store.MarkObservationStage("input-rehash");
+            await store.AssertInputUnchangedAsync(options.IndexPath, cancellationToken);
+            return result with { GraphStorage = store.Observe(graph.Outgoing) };
+        }
+        catch (ReportInputLimitException exception)
+        {
+            // As with a single index, incomplete input cannot establish a path
+            // or the absence of an overload/dispatch competitor.
+            var read = new CombinedReadResult(sources, [], [], [], [], new Dictionary<string, long>());
+            var graph = new EvidenceGraph(sources);
+            graph.Gaps.Add(new CombinedPathGap(
+                "gap:webforms:graph-input:" + exception.Limit,
+                "GraphInputLimitReached", CombinedDependencyPathClassifications.UnknownAnalysisGap,
+                "Graph input exceeded a deterministic admission limit; no paths were classified from incomplete input.",
+                null, null, null, null, TruncationGapRuleId, EvidenceTiers.Tier4Unknown,
+                null, null, exception.Limit));
+            var report = BuildReport(options, read, graph, sourcePair);
+            return new CombinedDependencyPathBuildResult(
+                report with
+                {
+                    ReportCoverage = "ReducedCoverage",
+                    Summary = report.Summary with { Truncated = true }
+                },
+                new Dictionary<string, CombinedDependencyTraversalObservation>(StringComparer.Ordinal))
+                { RefusedGraphStorage = store?.ObserveRefused() };
+        }
+        finally { store?.Dispose(); }
+    }
+
+    private static async Task AssertCombinedInputLimitAsync(
+        SqliteConnection connection,
+        string objectName,
+        int maximum,
+        string limit,
+        CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.CommandText = $"select count(*) from {objectName};";
+        if (Convert.ToInt64(await command.ExecuteScalarAsync(cancellationToken)) > maximum)
+        {
+            throw new ReportInputLimitException(limit);
+        }
+    }
+
     internal static string TextByteCountSql(params string[] columns) =>
         string.Join(" + ", columns.Select(column => $"coalesce(length(cast({column} as blob)), 0)"));
 
-    private static string CompactFactQuery(bool hasExtractorVersion, string predicate = "1 = 1")
+    private static string CompactFactQuery(bool hasExtractorVersion, bool hasExtractorId, string predicate = "1 = 1")
     {
         var types = string.Join(",", SymbolWitnessFactTypes.Select(type => $"'{type}'"));
         // Use SQLite to discard unconsumed large properties before a managed
         // string is allocated. Invalid JSON remains on the ordinary full path.
         return $$"""
-            with projected as (
+            with checked_properties as (
+                select *, case
+                    when fact_type not in ({{types}}, '{{FactTypes.CallEdge}}') or rule_id like 'legacy.%' then 0
+                    when length(cast(properties_json as blob)) > {{ReportInputBudget.MaxRowTextBytes}} then 0
+                    when json_valid(properties_json) then
+                        json_type(properties_json) = 'object'
+                        and json_type(properties_json, '$.surfaceKind') is null
+                        and not exists (select 1 from json_each(properties_json) entries
+                            where entries.type not in ('text', 'null'))
+                        and not exists (select 1 from json_each(properties_json) entries
+                            group by entries.key having count(*) > 1)
+                    else 0 end as projection_safe
+                from facts where {{predicate}}
+            ), projected as (
                 select *,
                     fact_type in ({{types}}) and rule_id not like 'legacy.%'
                     and not (fact_type = 'MethodInvoked'
@@ -105,28 +220,97 @@ public static partial class CombinedDependencyPathReporter
                             or target_symbol like 'System.Data.SqlClient.SqlDataAdapter.Fill(%'
                             or target_symbol like 'global::Microsoft.Data.SqlClient.SqlDataAdapter.Fill(%'
                             or target_symbol like 'Microsoft.Data.SqlClient.SqlDataAdapter.Fill(%'))
-                    and case when length(cast(properties_json as blob)) > {{ReportInputBudget.MaxRowTextBytes}} then 0
-                        when json_valid(properties_json)
+                    and case when projection_safe
                         then json_type(properties_json, '$.surfaceKind') is null
                         else 0 end as symbol_only
-                from facts where {{predicate}}
+                from checked_properties
             ), input as (
                 select fact_id, scan_id, repo, commit_sha, fact_type, rule_id, evidence_tier,
                        source_symbol, target_symbol, contract_element, file_path, start_line, end_line,
-                       case when symbol_only then '{}' else properties_json end as properties_json,
-                       {{(hasExtractorVersion ? "extractor_version" : "null")}} as version, symbol_only
+                       case when fact_type = '{{FactTypes.CallEdge}}' and projection_safe then
+                           json_patch(json_object(
+                               'argumentCount', coalesce(cast(json_extract(properties_json, '$.argumentCount') as text), ''),
+                               'argumentTypes', coalesce(cast(json_extract(properties_json, '$.argumentTypes') as text), ''),
+                               'argumentTypeResolution', coalesce(cast(json_extract(properties_json, '$.argumentTypeResolution') as text), ''),
+                               'assignedTo', coalesce(cast(json_extract(properties_json, '$.assignedTo') as text), ''),
+                               'callKind', coalesce(cast(json_extract(properties_json, '$.callKind') as text), ''),
+                               'calleeContainingType', coalesce(cast(json_extract(properties_json, '$.calleeContainingType') as text), ''),
+                               'calleeAssemblyName', coalesce(cast(json_extract(properties_json, '$.calleeAssemblyName') as text), ''),
+                               'calleeName', coalesce(cast(json_extract(properties_json, '$.calleeName') as text), ''),
+                               'callerAssemblyName', coalesce(cast(json_extract(properties_json, '$.callerAssemblyName') as text), ''),
+                               'callerName', coalesce(cast(json_extract(properties_json, '$.callerName') as text), ''),
+                               'coverageLabel', coalesce(cast(json_extract(properties_json, '$.coverageLabel') as text), ''),
+                               'sourceSymbolId', coalesce(cast(json_extract(properties_json, '$.sourceSymbolId') as text), ''),
+                               'receiverName', coalesce(cast(json_extract(properties_json, '$.receiverName') as text), ''),
+                               'receiverTypeResolution', coalesce(cast(json_extract(properties_json, '$.receiverTypeResolution') as text), ''),
+                               'targetSymbolId', coalesce(cast(json_extract(properties_json, '$.targetSymbolId') as text), ''),
+                               'targetContainingSymbolId', coalesce(cast(json_extract(properties_json, '$.targetContainingSymbolId') as text), '')),
+                               case when json_type(properties_json, '$.receiverType') is not null
+                                    then json_object('receiverType', cast(json_extract(properties_json, '$.receiverType') as text))
+                                    else json('{}') end)
+                            when fact_type = '{{FactTypes.MethodDeclared}}'
+                                and rule_id = '{{RuleIds.VisualBasicSemanticDeclarations}}'
+                                and projection_safe then
+                            json_object(
+                                'containingType', coalesce(cast(json_extract(properties_json, '$.containingType') as text), ''),
+                                'methodName', coalesce(cast(json_extract(properties_json, '$.methodName') as text), ''),
+                                'name', coalesce(cast(json_extract(properties_json, '$.name') as text), ''),
+                                'memberIdentity', coalesce(cast(json_extract(properties_json, '$.memberIdentity') as text), ''),
+                                'qualifiedContainingType', coalesce(cast(json_extract(properties_json, '$.qualifiedContainingType') as text), ''),
+                                'bodyStartLine', coalesce(cast(json_extract(properties_json, '$.bodyStartLine') as text), ''),
+                                'bodyEndLine', coalesce(cast(json_extract(properties_json, '$.bodyEndLine') as text), ''),
+                                'parameterTypes', coalesce(cast(json_extract(properties_json, '$.parameterTypes') as text), ''),
+                                'lexicalNamespace', coalesce(cast(json_extract(properties_json, '$.lexicalNamespace') as text), ''),
+                                'importedNamespaces', coalesce(cast(json_extract(properties_json, '$.importedNamespaces') as text), ''),
+                                'parameterCount', coalesce(cast(json_extract(properties_json, '$.parameterCount') as text), ''))
+                            when fact_type = '{{FactTypes.MethodDeclared}}'
+                                and rule_id = '{{RuleIds.VisualBasicSyntaxDeclarations}}'
+                                and projection_safe then
+                            json_object(
+                                'containingType', coalesce(cast(json_extract(properties_json, '$.containingType') as text), ''),
+                                'qualifiedContainingType', coalesce(cast(json_extract(properties_json, '$.qualifiedContainingType') as text), ''),
+                                'methodName', coalesce(cast(json_extract(properties_json, '$.methodName') as text), ''),
+                                'name', coalesce(cast(json_extract(properties_json, '$.name') as text), ''),
+                                'memberIdentity', coalesce(cast(json_extract(properties_json, '$.memberIdentity') as text), ''),
+                                'bodyStartLine', coalesce(cast(json_extract(properties_json, '$.bodyStartLine') as text), ''),
+                                'bodyEndLine', coalesce(cast(json_extract(properties_json, '$.bodyEndLine') as text), ''),
+                                'lexicalNamespace', coalesce(cast(json_extract(properties_json, '$.lexicalNamespace') as text), ''),
+                                'importedNamespaces', coalesce(cast(json_extract(properties_json, '$.importedNamespaces') as text), ''),
+                                'parameterCount', coalesce(cast(json_extract(properties_json, '$.parameterCount') as text), ''),
+                                'parameterTypes', coalesce(cast(json_extract(properties_json, '$.parameterTypes') as text), ''))
+                            when fact_type = '{{FactTypes.FieldDeclared}}'
+                                and rule_id = '{{RuleIds.VisualBasicSyntaxDeclarations}}'
+                                and projection_safe then
+                            json_object(
+                                'containingType', coalesce(cast(json_extract(properties_json, '$.containingType') as text), ''),
+                                'qualifiedContainingType', coalesce(cast(json_extract(properties_json, '$.qualifiedContainingType') as text), ''),
+                                'fieldName', coalesce(cast(json_extract(properties_json, '$.fieldName') as text), ''),
+                                'fieldType', coalesce(cast(json_extract(properties_json, '$.fieldType') as text), ''))
+                            when fact_type = '{{FactTypes.TypeDeclared}}'
+                                and rule_id = '{{RuleIds.VisualBasicSyntaxDeclarations}}'
+                                and projection_safe then
+                            json_object(
+                                'name', coalesce(cast(json_extract(properties_json, '$.name') as text), ''),
+                                'qualifiedName', coalesce(cast(json_extract(properties_json, '$.qualifiedName') as text), ''),
+                                'baseTypes', coalesce(cast(json_extract(properties_json, '$.baseTypes') as text), ''))
+                            when symbol_only then '{}'
+                            else properties_json end as properties_json,
+                       {{(hasExtractorVersion ? "extractor_version" : "null")}} as version, symbol_only,
+                       {{(hasExtractorId ? "extractor_id" : "null")}} as extractor_id
                 from projected
             )
-            select *, {{TextByteCountSql("fact_id", "scan_id", "repo", "commit_sha", "fact_type", "rule_id", "evidence_tier", "source_symbol", "target_symbol", "contract_element", "file_path", "properties_json", "version")}}
+            select *, {{TextByteCountSql("fact_id", "scan_id", "repo", "commit_sha", "fact_type", "rule_id", "evidence_tier", "source_symbol", "target_symbol", "contract_element", "file_path", "properties_json", "version", "extractor_id")}}
             from input order by fact_id collate binary;
             """;
     }
 
     private static async Task<IReadOnlyList<CombinedFactRow>> ReadCompactSingleFactsAsync(
         SqliteConnection connection, CombinedReportSource source, bool hasExtractorVersion,
-        ReportInputBudget budget, CancellationToken cancellationToken,
+        bool hasExtractorId, ReportInputBudget budget, CancellationToken cancellationToken,
         IReadOnlySet<string>? selectedFactIds = null,
-        IReadOnlySet<string>? selectedSymbols = null)
+        IReadOnlySet<string>? selectedSymbols = null,
+        int maxFrontier = 10000,
+        int maxTraversalWork = 100_000)
     {
         var rows = new List<CombinedFactRow>();
         var symbols = new HashSet<string>(StringComparer.Ordinal);
@@ -135,7 +319,7 @@ public static partial class CombinedDependencyPathReporter
         await using (var command = connection.CreateCommand())
         {
             var targeted = selectedFactIds is not null;
-            command.CommandText = CompactFactQuery(hasExtractorVersion, targeted
+            command.CommandText = CompactFactQuery(hasExtractorVersion, hasExtractorId, targeted
                 ? "fact_id in (select value from json_each($fact_ids)) "
                     + "or source_symbol in (select value from json_each($symbols)) "
                     + "or (fact_type = 'MethodDeclared' and target_symbol in (select value from json_each($symbols))) "
@@ -158,7 +342,7 @@ public static partial class CombinedDependencyPathReporter
             while (await reader.ReadAsync(cancellationToken))
             {
                 budget.VisitFact();
-                var bytes = reader.GetInt64(16);
+                var bytes = reader.GetInt64(17);
                 budget.CheckRow(bytes);
                 var sourceSymbol = reader.IsDBNull(7) ? null : reader.GetString(7);
                 var targetSymbol = reader.IsDBNull(8) ? null : reader.GetString(8);
@@ -185,13 +369,254 @@ public static partial class CombinedDependencyPathReporter
             var names = batch.Select((_, index) => "$id" + index).ToArray();
             // The interpolated SQL contains generated parameter names only;
             // every fact ID value is bound below.
-            command.CommandText = CompactFactQuery(hasExtractorVersion, $"fact_id in ({string.Join(',', names)})"); // nosemgrep: csharp.lang.security.sqli.csharp-sqli
+            command.CommandText = CompactFactQuery(hasExtractorVersion, hasExtractorId, $"fact_id in ({string.Join(',', names)})"); // nosemgrep: csharp.lang.security.sqli.csharp-sqli
             for (var index = 0; index < batch.Length; index++) command.Parameters.AddWithValue(names[index], batch[index]);
             await using var reader = await command.ExecuteReaderAsync(cancellationToken);
             while (await reader.ReadAsync(cancellationToken))
             {
-                budget.Retain(reader.GetInt64(16));
+                if (!retainedIds.Add(reader.GetString(0))) continue;
+                var bytes = reader.GetInt64(17);
+                budget.Retain(bytes);
                 rows.Add(ReadProjectedFact(reader, source));
+            }
+        }
+
+        // A projectless VB handler call can name only a receiver and a method.
+        // Admit semantic method candidates plus the compact syntax declaration
+        // metadata needed to prove a typed field and its bounded base chain.
+        // The graph rule still requires unique receiver and target identities.
+        var inspectedContextCallIds = new HashSet<string>(StringComparer.Ordinal);
+        var inspectedContextCreationIds = new HashSet<string>(StringComparer.Ordinal);
+        var inspectedContextTypes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var syntaxClosureWork = 0;
+        void CountSyntaxClosureWork()
+        {
+            if (++syntaxClosureWork > maxTraversalWork)
+                throw new ReportInputLimitException("graph-syntax-closure-work");
+        }
+        // Type and field metadata is needed for typed receivers and inherited
+        // fields, but unrelated declarations must not consume every hop's work
+        // allowance. Follow only caller/receiver types and their base chain.
+        async Task AdmitSyntaxTypeContextAsync(IReadOnlyList<CombinedFactRow> references)
+        {
+            var pendingTypes = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
+            void AddType(string? type)
+            {
+                var normalized = NormalizeVisualBasicTypeName(type);
+                if (string.IsNullOrWhiteSpace(normalized)) return;
+                pendingTypes.Add(normalized);
+                pendingTypes.Add(SimpleVisualBasicTypeName(normalized));
+            }
+            foreach (var call in references)
+            {
+                AddType(VisualBasicQualifiedMemberKey(call.SourceSymbol)?.Type);
+                AddType(call.Properties.GetValueOrDefault("receiverType"));
+                AddType(call.Properties.GetValueOrDefault("calleeContainingType"));
+                AddType(call.Properties.GetValueOrDefault("createdType"));
+            }
+            while (true)
+            {
+                var freshTypes = pendingTypes.Where(type => !inspectedContextTypes.Contains(type))
+                    .OrderBy(type => type, StringComparer.OrdinalIgnoreCase).ToArray();
+                if (freshTypes.Length == 0) break;
+                if (freshTypes.Length > maxFrontier
+                    || inspectedContextTypes.Count > budget.MaxFacts - freshTypes.Length)
+                    throw new ReportInputLimitException("handler-call-target-frontier");
+                inspectedContextTypes.UnionWith(freshTypes);
+                foreach (var _ in freshTypes) CountSyntaxClosureWork();
+                await using var contextCommand = connection.CreateCommand();
+                contextCommand.CommandText = CompactFactQuery(hasExtractorVersion, hasExtractorId, $$"""
+                    rule_id = '{{RuleIds.VisualBasicSyntaxDeclarations}}' and json_valid(properties_json) and (
+                        (fact_type = '{{FactTypes.TypeDeclared}}' and (
+                            cast(json_extract(properties_json, '$.qualifiedName') as text) collate nocase in (select value from json_each($type_names))
+                            or cast(json_extract(properties_json, '$.name') as text) collate nocase in (select value from json_each($type_names))))
+                        or (fact_type = '{{FactTypes.FieldDeclared}}' and (
+                            cast(json_extract(properties_json, '$.qualifiedContainingType') as text) collate nocase in (select value from json_each($type_names))
+                            or cast(json_extract(properties_json, '$.containingType') as text) collate nocase in (select value from json_each($type_names)))))
+                    """);
+                contextCommand.Parameters.AddWithValue("$type_names", JsonSerializer.Serialize(freshTypes));
+                await using var contextReader = await contextCommand.ExecuteReaderAsync(cancellationToken);
+                while (await contextReader.ReadAsync(cancellationToken))
+                {
+                    if (!retainedIds.Add(contextReader.GetString(0))) continue;
+                    CountSyntaxClosureWork();
+                    budget.VisitFact();
+                    var bytes = contextReader.GetInt64(17);
+                    budget.CheckRow(bytes);
+                    var row = ReadProjectedFact(contextReader, source);
+                    budget.Retain(bytes);
+                    rows.Add(row);
+                    if (row.FactType == FactTypes.TypeDeclared)
+                    {
+                        foreach (var baseType in SplitVisualBasicBaseTypes(row.Properties.GetValueOrDefault("baseTypes")))
+                            AddType(baseType);
+                    }
+                }
+            }
+        }
+        while (true)
+        {
+            var pendingCalls = rows
+                .Where(row => row.FactType == FactTypes.CallEdge
+                    && row.RuleId == RuleIds.VisualBasicSyntaxCallGraph
+                    && string.Equals(row.Properties.GetValueOrDefault("callKind"), "SyntaxInvocation", StringComparison.Ordinal)
+                    && !string.IsNullOrWhiteSpace(row.Properties.GetValueOrDefault("calleeName"))
+                    && inspectedContextCallIds.Add(row.OriginalFactId))
+                .ToArray();
+            var pendingCreations = rows
+                .Where(row => row.FactType == FactTypes.ObjectCreated
+                    && row.RuleId == RuleIds.VisualBasicSyntaxObjectCreation
+                    && string.Equals(row.ExtractorId, "VisualBasicSyntaxExtractor", StringComparison.Ordinal)
+                    && !string.Equals(row.Properties.GetValueOrDefault("resolution"), "unresolved-constructor", StringComparison.Ordinal)
+                    && !string.IsNullOrWhiteSpace(row.Properties.GetValueOrDefault("createdType"))
+                    && inspectedContextCreationIds.Add(row.OriginalFactId))
+                .ToArray();
+            var bridgeMethodNames = pendingCalls
+                .Select(row => row.Properties.GetValueOrDefault("calleeName"))
+                .Where(name => !string.IsNullOrWhiteSpace(name))
+                .Select(name => name!)
+                .Concat(pendingCreations.Select(_ => "New"))
+                // A name seen in an earlier wave can belong to a newly
+                // admitted receiver type. Deduplicate only this wave.
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(name => name, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+            if (pendingCalls.Length == 0 && pendingCreations.Length == 0) break;
+            await AdmitSyntaxTypeContextAsync([.. pendingCalls, .. pendingCreations]);
+            if (bridgeMethodNames.Length == 0) continue;
+            if (bridgeMethodNames.Length > maxFrontier)
+                throw new ReportInputLimitException("handler-call-target-frontier");
+            foreach (var _ in bridgeMethodNames) CountSyntaxClosureWork();
+            await using var command = connection.CreateCommand();
+            command.CommandText = CompactFactQuery(hasExtractorVersion, hasExtractorId, $$"""
+                json_valid(properties_json) and (
+                    (fact_type = '{{FactTypes.MethodDeclared}}'
+                        and rule_id = '{{RuleIds.VisualBasicSemanticDeclarations}}'
+                        and evidence_tier = '{{EvidenceTiers.Tier1Semantic}}'
+                        and cast(json_extract(properties_json, '$.methodName') as text) collate nocase
+                            in (select value from json_each($method_names)))
+                    or (rule_id = '{{RuleIds.VisualBasicSyntaxDeclarations}}'
+                        and fact_type = '{{FactTypes.MethodDeclared}}'
+                        and coalesce(
+                            cast(json_extract(properties_json, '$.methodName') as text),
+                            cast(json_extract(properties_json, '$.name') as text)) collate nocase
+                            in (select value from json_each($method_names)))
+                ) and coalesce(
+                    cast(json_extract(properties_json, '$.qualifiedContainingType') as text),
+                    cast(json_extract(properties_json, '$.containingType') as text)) collate nocase
+                    in (select value from json_each($context_types))
+                """);
+            command.Parameters.AddWithValue("$method_names", JsonSerializer.Serialize(bridgeMethodNames));
+            command.Parameters.AddWithValue("$context_types", JsonSerializer.Serialize(
+                inspectedContextTypes.OrderBy(type => type, StringComparer.OrdinalIgnoreCase)));
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+            while (await reader.ReadAsync(cancellationToken))
+            {
+                if (!retainedIds.Add(reader.GetString(0))) continue;
+                CountSyntaxClosureWork();
+                budget.VisitFact();
+                var bytes = reader.GetInt64(17);
+                budget.CheckRow(bytes);
+                var row = ReadProjectedFact(reader, source);
+                budget.Retain(bytes);
+                rows.Add(row);
+            }
+
+            // Syntax-only receiver targets need their member body facts in
+            // the bounded graph, not just declaration metadata. Discover
+            // exact type/name/arity body symbols from the retained syntax
+            // declarations, then admit every fact owned by those symbols so
+            // downstream calls and terminals remain connected.
+            var syntaxMembers = rows
+                .Where(row => row.FactType == FactTypes.MethodDeclared
+                    && row.RuleId == RuleIds.VisualBasicSyntaxDeclarations
+                    && int.TryParse(CombinedDependencyReporter.FirstValue(row.Properties, "parameterCount"), out _))
+                .Select(row => new
+                {
+                    Type = VisualBasicContainingType(row),
+                    Name = CombinedDependencyReporter.FirstValue(row.Properties, "methodName", "name"),
+                    Arity = int.Parse(CombinedDependencyReporter.FirstValue(row.Properties, "parameterCount")!)
+                })
+                .Where(member => !string.IsNullOrWhiteSpace(member.Type) && !string.IsNullOrWhiteSpace(member.Name))
+                .Distinct()
+                .ToArray();
+            if (syntaxMembers.Length > 0)
+            {
+                var bodySymbols = new SortedSet<string>(StringComparer.Ordinal);
+                var baseIdentities = rows
+                    .Where(row => row.FactType == FactTypes.MethodDeclared
+                        && (row.RuleId == RuleIds.VisualBasicSyntaxDeclarations
+                            || row.RuleId == RuleIds.VisualBasicSemanticDeclarations)
+                        && bridgeMethodNames.Contains(
+                            CombinedDependencyReporter.FirstValue(row.Properties, "methodName", "name"),
+                            StringComparer.OrdinalIgnoreCase))
+                    .Select(row => row.RuleId == RuleIds.VisualBasicSyntaxDeclarations
+                        ? row.Properties.GetValueOrDefault("memberIdentity")
+                        : row.TargetSymbol)
+                    .Where(identity => !string.IsNullOrWhiteSpace(identity))
+                    .Select(identity => identity!)
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .OrderBy(identity => identity, StringComparer.OrdinalIgnoreCase)
+                    .ToArray();
+                if (baseIdentities.Length > maxFrontier)
+                    throw new ReportInputLimitException("handler-call-target-frontier");
+                var declaredIdentities = baseIdentities
+                    .SelectMany(identity => identity!.StartsWith("Global::", StringComparison.OrdinalIgnoreCase)
+                        ? new[] { identity }
+                        : new[] { identity, "Global::" + identity })
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .OrderBy(identity => identity, StringComparer.OrdinalIgnoreCase)
+                    .ToArray();
+                await using (var bodyCommand = connection.CreateCommand())
+                {
+                    // Declaration identities are full signatures. A substring
+                    // match on a common method name can hide the real body
+                    // behind unrelated symbols before qualification is checked.
+                    bodyCommand.CommandText = "select distinct source_symbol from facts "
+                        + "where source_symbol is not null and trim(source_symbol) <> '' "
+                        + "and source_symbol collate nocase in (select value from json_each($member_identities)) "
+                        + "order by source_symbol collate binary;";
+                    bodyCommand.Parameters.AddWithValue("$member_identities", JsonSerializer.Serialize(declaredIdentities));
+                    await using var bodyReader = await bodyCommand.ExecuteReaderAsync(cancellationToken);
+                    while (await bodyReader.ReadAsync(cancellationToken))
+                    {
+                        CountSyntaxClosureWork();
+                        var symbol = bodyReader.GetString(0);
+                        var member = VisualBasicQualifiedMemberKey(symbol);
+                        if (member is not null && syntaxMembers.Any(candidate =>
+                            candidate.Arity == member.Value.Arity
+                            && string.Equals(candidate.Name, member.Value.Name, StringComparison.OrdinalIgnoreCase)
+                            && VisualBasicTypeMatches(candidate.Type, member.Value.Type)))
+                        {
+                            bodySymbols.Add(symbol);
+                            if (bodySymbols.Count > maxFrontier)
+                                throw new ReportInputLimitException("handler-call-target-frontier");
+                        }
+                    }
+                }
+
+                if (bodySymbols.Count > 0)
+                {
+                    await using var bodyFactsCommand = connection.CreateCommand();
+                    bodyFactsCommand.CommandText = CompactFactQuery(hasExtractorVersion, hasExtractorId,
+                        "source_symbol in (select value from json_each($body_symbols))");
+                    bodyFactsCommand.Parameters.AddWithValue("$body_symbols", JsonSerializer.Serialize(bodySymbols));
+                    await using var bodyFactsReader = await bodyFactsCommand.ExecuteReaderAsync(cancellationToken);
+                    while (await bodyFactsReader.ReadAsync(cancellationToken))
+                    {
+                        CountSyntaxClosureWork();
+                        var factType = bodyFactsReader.GetString(4);
+                        var symbolOnly = bodyFactsReader.GetBoolean(15);
+                        if (symbolOnly && factType != FactTypes.MethodInvoked) continue;
+                        budget.VisitFact();
+                        var bytes = bodyFactsReader.GetInt64(17);
+                        budget.CheckRow(bytes);
+                        var row = ReadProjectedFact(bodyFactsReader, source);
+                        if (!retainedIds.Add(row.OriginalFactId)) continue;
+                        budget.Retain(bytes);
+                        rows.Add(row);
+                    }
+                }
             }
         }
         return rows;
@@ -223,6 +648,7 @@ public static partial class CombinedDependencyPathReporter
         IReadOnlySet<string> selectedFactIds,
         int maxDepth,
         int maxFrontier,
+        int maxSupportingFactIds,
         CancellationToken cancellationToken)
     {
         if (selectedFactIds.Count == 0) return new HashSet<string>(StringComparer.Ordinal);
@@ -259,12 +685,18 @@ public static partial class CombinedDependencyPathReporter
                 }
             }
         }
-        symbols.UnionWith(await ReadHandlerOwnedCallSymbolsAsync(connection, originalIds, maxFrontier, cancellationToken));
+        symbols.UnionWith(await ReadHandlerOwnedCallSymbolsAsync(
+            connection, originalIds, maxFrontier, maxSupportingFactIds, cancellationToken));
         if (symbols.Count > maxFrontier) throw new ReportInputLimitException("graph-frontier");
 
         var traversalQueries = new List<string>();
         if (await TableExistsAsync(connection, "call_edges", cancellationToken))
             traversalQueries.Add("select callee_symbol as target_symbol from call_edges where caller_symbol in (select value from json_each($symbols))");
+        // Retained Tier-1 CallEdge facts are authoritative evidence even when a
+        // resumable or externally assembled index is missing the normalized
+        // call_edges projection. UNION grouping below removes ordinary-table
+        // duplicates without changing traversal order or bounds.
+        traversalQueries.Add("select target_symbol from facts where fact_type='CallEdge' and evidence_tier='Tier1Semantic' and source_symbol in (select value from json_each($symbols))");
         if (await TableExistsAsync(connection, "object_creations", cancellationToken))
             traversalQueries.Add("select created_type as target_symbol from object_creations where caller_symbol in (select value from json_each($symbols))");
         if (await TableExistsAsync(connection, "parameter_forward_edges", cancellationToken))
@@ -273,14 +705,15 @@ public static partial class CombinedDependencyPathReporter
             && await TableExistsAsync(connection, "symbols", cancellationToken))
         {
             const string relationships = "from symbol_relationships relationships "
+                + "left join facts relationship_fact on relationship_fact.scan_id = relationships.scan_id and relationship_fact.fact_id = relationships.relationship_id "
                 + "left join symbols source_symbols on source_symbols.scan_id = relationships.scan_id and source_symbols.symbol_id = relationships.source_symbol_id "
                 + "left join symbols target_symbols on target_symbols.scan_id = relationships.scan_id and target_symbols.symbol_id = relationships.target_symbol_id ";
-            traversalQueries.Add("select coalesce(target_symbols.display_name, relationships.target_symbol_id) as target_symbol "
+            traversalQueries.Add("select coalesce(nullif(relationship_fact.target_symbol, ''), target_symbols.display_name, relationships.target_symbol_id) as target_symbol "
                 + relationships
-                + "where coalesce(source_symbols.display_name, relationships.source_symbol_id) in (select value from json_each($symbols))");
-            traversalQueries.Add("select coalesce(source_symbols.display_name, relationships.source_symbol_id) as target_symbol "
+                + "where coalesce(nullif(relationship_fact.source_symbol, ''), source_symbols.display_name, relationships.source_symbol_id) in (select value from json_each($symbols))");
+            traversalQueries.Add("select coalesce(nullif(relationship_fact.source_symbol, ''), source_symbols.display_name, relationships.source_symbol_id) as target_symbol "
                 + relationships
-                + "where coalesce(target_symbols.display_name, relationships.target_symbol_id) in (select value from json_each($symbols))");
+                + "where coalesce(nullif(relationship_fact.target_symbol, ''), target_symbols.display_name, relationships.target_symbol_id) in (select value from json_each($symbols))");
         }
         if (traversalQueries.Count == 0) return symbols;
 
@@ -320,6 +753,7 @@ public static partial class CombinedDependencyPathReporter
         SqliteConnection connection,
         IReadOnlyList<string> selectedHandlerFactIds,
         int maxTargets,
+        int maxSupportingFactIds,
         CancellationToken cancellationToken)
     {
         var supportingEdgeIds = new SortedSet<string>(StringComparer.Ordinal);
@@ -351,7 +785,12 @@ public static partial class CombinedDependencyPathReporter
                 foreach (var id in SplitList(properties.GetValueOrDefault("supportingEdgeIds")))
                 {
                     supportingEdgeIds.Add(id);
-                    if (supportingEdgeIds.Count > maxTargets) throw new ReportInputLimitException("handler-call-support-frontier");
+                    // Supporting fact identities are an intermediate admission
+                    // set, not graph-frontier symbols. Bound them by the fact
+                    // budget; the distinct target symbols derived below remain
+                    // independently bounded by maxTargets.
+                    if (supportingEdgeIds.Count > maxSupportingFactIds)
+                        throw new ReportInputLimitException("handler-call-support-facts");
                 }
             }
         }
@@ -373,14 +812,131 @@ public static partial class CombinedDependencyPathReporter
             }
         }
 
+        var syntaxCalls = new List<(string SourceSymbol, string FilePath, int StartLine, string RuleId, string EvidenceTier, IReadOnlyDictionary<string, string> Properties)>();
+        await using (var command = connection.CreateCommand())
+        {
+            command.CommandText = "select source_symbol, file_path, start_line, rule_id, evidence_tier, properties_json from facts "
+                + "where fact_type = 'CallEdge' and rule_id in ($syntax_rule_id, $semantic_rule_id) "
+                + "and fact_id in (select value from json_each($edge_ids)) "
+                + "and length(cast(properties_json as blob)) <= $max_row_bytes and json_valid(properties_json) "
+                + "order by file_path collate binary, start_line, fact_id collate binary;";
+            command.Parameters.AddWithValue("$syntax_rule_id", RuleIds.VisualBasicSyntaxCallGraph);
+            command.Parameters.AddWithValue("$semantic_rule_id", RuleIds.VisualBasicSemanticCallGraph);
+            command.Parameters.AddWithValue("$edge_ids", JsonSerializer.Serialize(supportingEdgeIds));
+            command.Parameters.AddWithValue("$max_row_bytes", ReportInputBudget.MaxRowTextBytes);
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+            while (await reader.ReadAsync(cancellationToken))
+            {
+                syntaxCalls.Add((
+                    reader.IsDBNull(0) ? string.Empty : reader.GetString(0),
+                    reader.GetString(1),
+                    reader.GetInt32(2),
+                    reader.GetString(3),
+                    reader.GetString(4),
+                    ParseProperties(reader.GetString(5))));
+            }
+        }
+
+        var bridgeRequests = syntaxCalls
+            .Where(call => string.Equals(call.Properties.GetValueOrDefault("callKind"), "SyntaxInvocation", StringComparison.Ordinal)
+                && !string.IsNullOrWhiteSpace(call.Properties.GetValueOrDefault("receiverName"))
+                && !string.IsNullOrWhiteSpace(call.Properties.GetValueOrDefault("calleeName"))
+                && int.TryParse(call.Properties.GetValueOrDefault("argumentCount"), out _))
+            .Select(call =>
+            {
+                var receiver = call.Properties.GetValueOrDefault("receiverName")!;
+                var creations = syntaxCalls
+                    .Where(creation => IsSupportedVisualBasicReceiverCreation(
+                            creation.RuleId,
+                            creation.EvidenceTier,
+                            creation.Properties.GetValueOrDefault("callKind"))
+                        && SameVisualBasicContainingMember(creation.SourceSymbol, creation.Properties, call.SourceSymbol, call.Properties)
+                        && string.Equals(creation.FilePath, call.FilePath, StringComparison.OrdinalIgnoreCase)
+                        && creation.StartLine <= call.StartLine
+                        && string.Equals(creation.Properties.GetValueOrDefault("assignedTo"), receiver, StringComparison.OrdinalIgnoreCase))
+                    .ToArray();
+                return creations.Length == 1
+                    ? new
+                    {
+                        TypeName = SimpleVisualBasicTypeName(creations[0].Properties.GetValueOrDefault("calleeContainingType")
+                            ?? creations[0].Properties.GetValueOrDefault("calleeName")),
+                        MethodName = call.Properties.GetValueOrDefault("calleeName")!,
+                        ArgumentCount = int.Parse(call.Properties.GetValueOrDefault("argumentCount")!)
+                    }
+                    : null;
+            })
+            .Where(request => request is not null && !string.IsNullOrWhiteSpace(request.TypeName))
+            .Select(request => request!)
+            .ToArray();
+        if (bridgeRequests.Length == 0)
+        {
+            return symbols;
+        }
+
+        var declarationCandidates = new List<(string TargetSymbol, IReadOnlyDictionary<string, string> Properties)>();
+        await using (var command = connection.CreateCommand())
+        {
+            command.CommandText = "select target_symbol, properties_json from facts "
+                + "where fact_type = $fact_type and rule_id = $rule_id and evidence_tier = $evidence_tier "
+                + "and target_symbol is not null and trim(target_symbol) <> '' "
+                + "and length(cast(properties_json as blob)) <= $max_row_bytes and json_valid(properties_json) "
+                + "and cast(json_extract(properties_json, '$.methodName') as text) collate nocase "
+                + "in (select value from json_each($method_names)) "
+                + "order by target_symbol collate binary limit $candidate_limit;";
+            command.Parameters.AddWithValue("$fact_type", FactTypes.MethodDeclared);
+            command.Parameters.AddWithValue("$rule_id", RuleIds.VisualBasicSemanticDeclarations);
+            command.Parameters.AddWithValue("$evidence_tier", EvidenceTiers.Tier1Semantic);
+            command.Parameters.AddWithValue("$max_row_bytes", ReportInputBudget.MaxRowTextBytes);
+            command.Parameters.AddWithValue("$method_names", JsonSerializer.Serialize(bridgeRequests.Select(request => request.MethodName).Distinct(StringComparer.OrdinalIgnoreCase)));
+            command.Parameters.AddWithValue("$candidate_limit", maxTargets + 1L);
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+            while (await reader.ReadAsync(cancellationToken))
+            {
+                declarationCandidates.Add((reader.GetString(0), ParseProperties(reader.GetString(1))));
+                if (declarationCandidates.Count > maxTargets)
+                {
+                    throw new ReportInputLimitException("handler-call-target-frontier");
+                }
+            }
+        }
+
+        foreach (var request in bridgeRequests)
+        {
+            var matches = declarationCandidates
+                .Where(candidate => string.Equals(SimpleVisualBasicTypeName(candidate.Properties.GetValueOrDefault("containingType")), request.TypeName, StringComparison.OrdinalIgnoreCase)
+                    && string.Equals(candidate.Properties.GetValueOrDefault("methodName"), request.MethodName, StringComparison.OrdinalIgnoreCase)
+                    && int.TryParse(candidate.Properties.GetValueOrDefault("parameterCount"), out var parameterCount)
+                    && parameterCount == request.ArgumentCount)
+                .Select(candidate => candidate.TargetSymbol)
+                .Distinct(StringComparer.Ordinal)
+                .ToArray();
+            if (matches.Length == 1)
+            {
+                symbols.Add(matches[0]);
+                if (symbols.Count > maxTargets)
+                {
+                    throw new ReportInputLimitException("handler-call-target-frontier");
+                }
+            }
+        }
+
         return symbols;
+
+        static bool IsSupportedVisualBasicReceiverCreation(string? ruleId, string? evidenceTier, string? callKind) =>
+            ruleId == RuleIds.VisualBasicSyntaxCallGraph
+                && string.Equals(callKind, "SyntaxObjectCreation", StringComparison.Ordinal)
+            || ruleId == RuleIds.VisualBasicSemanticCallGraph
+                && evidenceTier == EvidenceTiers.Tier1Semantic
+                && string.Equals(callKind, "SemanticObjectCreation", StringComparison.Ordinal);
     }
 
-    private static CombinedFactRow ReadProjectedFact(SqliteDataReader reader, CombinedReportSource source) => new(
+    private static CombinedFactRow ReadProjectedFact(SqliteDataReader reader, CombinedReportSource source, bool combinedParser = false) => new(
         $"{source.SourceIndexId}:{reader.GetString(0)}", source.SourceIndexId, source.Label,
         reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.GetString(3),
         reader.GetString(4), reader.GetString(5), reader.GetString(6),
         reader.IsDBNull(7) ? null : reader.GetString(7), reader.IsDBNull(8) ? null : reader.GetString(8),
         reader.IsDBNull(9) ? null : reader.GetString(9), reader.GetString(10), reader.GetInt32(11), reader.GetInt32(12),
-        ParseProperties(reader.GetString(13)), reader.IsDBNull(14) ? null : reader.GetString(14));
+        combinedParser ? CombinedDependencyReporter.ParseProperties(reader.GetString(13)) : ParseProperties(reader.GetString(13)),
+        reader.IsDBNull(14) ? null : reader.GetString(14),
+        reader.IsDBNull(16) ? null : reader.GetString(16));
 }

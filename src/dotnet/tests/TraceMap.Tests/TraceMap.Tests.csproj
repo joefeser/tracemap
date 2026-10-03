@@ -15,6 +15,7 @@
          Without this test-only runtime asset, hosted runners can load a newer SDK Microsoft.Build.dll
          beside the pinned Microsoft.Build.Framework assembly and fail before extraction begins. -->
     <PackageReference Include="Microsoft.Build" Version="$(TraceMapMicrosoftBuildPackageVersion)" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.CodeAnalysis.VisualBasic" Version="5.3.0" PrivateAssets="all" />
     <!-- Explicit native servicing override until Microsoft.Data.Sqlite raises its SQLitePCLRaw dependency floor. -->
     <PackageReference Include="SQLitePCLRaw.lib.e_sqlite3" Version="2.1.12" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
@@ -24,6 +25,11 @@
 
   <ItemGroup>
     <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../../../samples/fixture-build/deep-projectless/DeepWebsite.vbproj" ReferenceOutputAssembly="false" SkipGetTargetFrameworkProperties="true" />
+    <ProjectReference Include="../../../../samples/fixture-build/lazy-constructor/LazyWebsite.vbproj" ReferenceOutputAssembly="false" SkipGetTargetFrameworkProperties="true" />
   </ItemGroup>
 
   <ItemGroup>
@@ -37,6 +43,22 @@
     <ProjectReference Include="..\..\TraceMap.Access.Cli\TraceMap.Access.Cli.csproj" />
     <ProjectReference Include="..\..\TraceMap.SqlValidation\TraceMap.SqlValidation.csproj" />
     <ProjectReference Include="..\..\TraceMap.SqlValidation.Cli\TraceMap.SqlValidation.Cli.csproj" />
+    <ProjectReference Include="..\..\..\..\samples\fixture-build\process-pipe-holder\PipeHolder.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\..\..\..\samples\vb-modern-sample\VbModernSample.vbproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\..\..\..\samples\compiled-dotnet-evidence\csharp\CompiledEvidence.CSharp.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\..\..\..\samples\compiled-dotnet-evidence\csharp\CompiledEvidence.CSharp.ControlFlow.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\..\..\..\samples\compiled-dotnet-evidence\csharp\CompiledEvidence.CSharp.MemberShapes.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\..\..\..\samples\compiled-dotnet-evidence\csharp\CompiledEvidence.CSharp.VarArgCall.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\..\..\..\samples\compiled-dotnet-evidence\vb\CompiledEvidence.VisualBasic.vbproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\..\..\..\samples\compiled-dotnet-evidence\fsharp\CompiledEvidence.FSharp.fsproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\..\..\..\samples\messy-dotnet-workspace\root-alpha\AlphaSite.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\..\..\..\samples\messy-dotnet-workspace\root-beta\BetaSite.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\..\..\..\samples\messy-dotnet-workspace\root-generated\GeneratedSite.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\..\..\..\samples\messy-dotnet-workspace\vb-pdb-build\CompiledProjectless.VB.vbproj" ReferenceOutputAssembly="false" />
+    <!-- IL-only net48 fixture: build it, but never reference/load it in net10.
+         Skip framework negotiation for this non-reference to avoid NU1702. -->
+    <ProjectReference Include="..\..\..\..\samples\messy-dotnet-workspace\vb-publish-crossdll-framework\PublicProof.Framework.vbproj" ReferenceOutputAssembly="false" SkipGetTargetFrameworkProperties="true" />
+    <ProjectReference Include="..\..\..\..\samples\messy-dotnet-workspace\root-crosslanguage\csharp\CrossLanguageEntry.csproj" ReferenceOutputAssembly="false" />
   </ItemGroup>
 
 </Project>

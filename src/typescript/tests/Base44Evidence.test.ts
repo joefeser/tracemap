@@ -1633,7 +1633,7 @@ export async function run(runtimeFlags) {
     expect(first.packet.scanner.artifactProfile).toBe("tracemap.base44.deterministic-artifacts.v1");
     const packetSchema = JSON.parse(await fs.readFile(path.resolve(process.cwd(), "../../docs/contracts/base44-static-evidence.v1.schema.json"), "utf8"));
     expect(packetSchema.properties.artifacts.required.sort()).toEqual(Object.keys(first.packet.artifacts).sort());
-    expect(packetSchema.properties.scanner.required).not.toContain("artifactProfile");
+    expect(packetSchema.properties.scanner.required).toContain("artifactProfile");
     expect(packetSchema.properties.scanner.properties.artifactProfile.const).toBe("tracemap.base44.deterministic-artifacts.v1");
     expect(first.packet.artifacts).toEqual(second.packet.artifacts);
     await expect(fs.stat(path.join(firstOut, "scan-manifest.json"))).resolves.toBeTruthy();
@@ -1825,6 +1825,17 @@ export async function run() { await base44.entities.Example.create(a18); }
       sdkIdentityGap: "",
       sdkIdentityJson: "{}"
     });
+
+    expect(JSON.parse(payload.properties.fieldsJson)).toHaveLength(512);
+    expect(JSON.parse(payload.properties.analysisGapsJson)).toContain("payload-complexity-limit");
+    expect(payload.properties.completeness).toBe("partial");
+  });
+
+  it("bounds fields added by post-initialization mutations", async () => {
+    const assignments = Array.from({ length: 700 }, (_, index) => `payload.field_${index} = ${index};`).join("\n");
+    const { packet } = await reviewFixture(`const payload = {}; ${assignments} base44.entities.WideMutationItem.create(payload);`);
+    const payload = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityPayload
+      && fact.targetSymbol === "WideMutationItem")!;
 
     expect(JSON.parse(payload.properties.fieldsJson)).toHaveLength(512);
     expect(JSON.parse(payload.properties.analysisGapsJson)).toContain("payload-complexity-limit");
@@ -2677,6 +2688,25 @@ export function Screen() {
     expect(payload.properties.completeness).toBe("partial");
     expect(payload.evidenceTier).toBe("Tier4Unknown");
     expect(JSON.parse(payload.properties.analysisGapsJson)).toContain(gap);
+  });
+
+  it("keeps call-position-dependent identifier analysis separate across mutation callsites", async () => {
+    const { packet } = await mutationHookFixture(`
+export function Screen() {
+  const save = useWrite({ mutationFn: (payload) => base44.entities.CachedAliasItem.create(payload) });
+  const shared = { initial: 1 };
+  const payload = shared;
+  save.mutate(payload);
+  const alias = shared;
+  alias.after_first_call = 2;
+  save.mutate(payload);
+}
+`);
+    const payload = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityPayload
+      && fact.targetSymbol === "CachedAliasItem")!;
+
+    expect(payload.properties.completeness).toBe("partial");
+    expect(JSON.parse(payload.properties.analysisGapsJson)).toContain("post-capture-alias-mutation-unresolved");
   });
 
   it("models a finite array push without erasing the array payload kind", async () => {

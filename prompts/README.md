@@ -20,3 +20,22 @@ published from the normal development environment first.
 - `run-webforms-monorepo-correction.md`
 - `run-focused-webforms-monorepo-scan.md`
 - `run-focused-webforms-one-repo-windows.md`
+- `guided-corporate-claude-launcher-setup.md`
+
+## Authorized agent-review prompt
+
+`review-webforms-modernization-evidence.md` is a generic, ready-to-paste prompt
+for a work-machine Claude Code review of an already generated packet, evidence
+corpus, and application workbench. It asks the agent to preserve provenance,
+static-evidence limitations, aliases, and fact/inference/unknown boundaries.
+See `docs/WEBFORMS_AGENT_HANDOFF.md` for the matching commands. Agent output is
+downstream planning material, never TraceMap scanner evidence.
+
+## Corporate Claude launcher discovery
+
+`guided-corporate-claude-launcher-setup.md` asks the work-machine Claude session
+to inspect an approved BAT/Python launcher locally and return only a sanitized
+argument-forwarding contract. It does not ask for launcher source, corporate
+configuration, or secrets. Use its result before adding a launcher override to
+the TraceMap PowerShell handoff. A verified launcher can then be supplied with
+`Start-FocusedWebFormsClaudeReview.ps1 -ClaudeLauncherPath`.

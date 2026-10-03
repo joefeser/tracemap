@@ -557,7 +557,7 @@ public sealed class PropertyMappingTests
         var extraction = ExtractOne(source);
         var collision = Assert.Single(extraction.Gaps, gap =>
             Prop(gap).GetValueOrDefault("shapeState") == "canonical-identity-collision");
-        Assert.Equal("PropertyMappingTargetAmbiguous", collision.Properties["gapKind"]);
+        Assert.Equal("PropertyMappingTargetAmbiguous", collision.Properties!["gapKind"]);
         Assert.Contains("Collapse", collision.Properties.GetValueOrDefault("scopeSymbolId"), StringComparison.Ordinal);
 
         // Different generic instantiations of the same property collapse to one

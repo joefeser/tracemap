@@ -2,6 +2,13 @@ using TraceMap.Reporting;
 
 try
 {
+    if (args.Length == 3 && args[0] == "--validate-application-workbench-inputs")
+    {
+        var packet = WebFormsModernizationPacketReporter.ReadValidatedPacket(args[1]);
+        if (args[2] != "-") WebFormsAgentEvidenceHandoff.ValidateEvidenceCorpus(args[2], packet.Sources[0].ScanId, packet.Sources[0].CommitSha, packet.PacketId);
+        Console.WriteLine("application-workbench-inputs=valid");
+        return 0;
+    }
     if (args.Length is 4 or 5 && args[0] == "--code-path-review-set-handoff")
     {
         var indexPath = args[3] == "-" ? null : args[3];
@@ -23,6 +30,24 @@ try
     if (args.Length == 4 && args[0] == "--batch-inspection")
     {
         foreach (var line in WebFormsRawEvidenceAudit.Run(args[1], args[2], inspectionPath: args[3], inspectAllHandlers: true)) Console.WriteLine(line);
+        return 0;
+    }
+    if (args.Length == 4 && args[0] == "--page-graph-dump")
+    {
+        foreach (var line in WebFormsRawEvidenceAudit.Run(args[1], args[2], inspectionPath: args[3], inspectAllHandlers: true, includeEveryResolvedHandler: true)) Console.WriteLine(line);
+        return 0;
+    }
+    if (args.Length is 4 or 5 && args[0] == "--vb-receiver-bridge-audit")
+    {
+        if (args.Length == 5 && args[4] != "--include-private-identities") throw new InvalidDataException("ReceiverBridgeAuditPrivateOptionInvalid");
+        foreach (var line in WebFormsVisualBasicReceiverBridgeAudit.Run(args[1], args[2], args[3], args.Length == 5)) Console.WriteLine(line);
+        return 0;
+    }
+    if (args.Length == 6 && args[0] == "--vb-constructor-hop-audit")
+    {
+        foreach (var line in WebFormsVisualBasicReceiverBridgeAudit.Run(
+            args[1], args[2], args[3], focusHandlerName: args[4], focusCreatedTypeName: args[5]))
+            if (line.StartsWith("constructorHop", StringComparison.Ordinal)) Console.WriteLine(line);
         return 0;
     }
     if (args.Length == 3 && args[0] == "--database-evidence")
@@ -51,7 +76,10 @@ catch (Exception error)
         "AgentHandoffInputLimit", "AgentHandoffRecipeUnavailable", "AgentHandoffRecipeParameterInvalid", "AgentHandoffInspectionUnavailable",
         "AgentHandoffOutputInvalid", "AgentHandoffCaseLimit", "AgentHandoffCaseUnavailable", "AgentHandoffProvenanceMismatch",
         "AgentHandoffIndexUnavailable", "AgentHandoffIndexProvenanceMismatch", "AgentHandoffCorpusUnavailable", "AgentHandoffCorpusLimit",
-        "AgentHandoffCorpusSchemaMismatch", "AgentHandoffCorpusProvenanceMismatch", "AgentHandoffRecipeSchemaMismatch"];
+        "AgentHandoffCorpusSchemaMismatch", "AgentHandoffCorpusProvenanceMismatch", "AgentHandoffCorpusIntegrityMismatch",
+        "AgentHandoffRecipeSchemaMismatch", "AgentHandoffRecipeCatalogMismatch"];
+    safeCodes = [.. safeCodes, "ApplicationWorkbenchPacketUnavailable", "ApplicationWorkbenchPacketSchemaMismatch"];
+    safeCodes = [.. safeCodes, "ReceiverBridgeAuditInputLimit", "ReceiverBridgeAuditSchemaMismatch", "ReceiverBridgeAuditPrivateOptionInvalid", "ReceiverBridgeAuditFocusInvalid"];
     var code = error is InvalidDataException && safeCodes.Contains(error.Message, StringComparer.Ordinal)
         ? error.Message : "RawAuditInputOrRuntimeFailure";
     Console.Error.WriteLine($"raw-webforms-evidence=failed;code={code}");

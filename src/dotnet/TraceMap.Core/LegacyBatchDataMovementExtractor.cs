@@ -1058,12 +1058,16 @@ public static class LegacyBatchDataMovementExtractor
 
     private static bool IsSystemIoTarget(string target) =>
         target.StartsWith("global::System.IO.File.", StringComparison.Ordinal)
+        || target.StartsWith("Global.System.IO.File.", StringComparison.Ordinal)
         || target.StartsWith("System.IO.File.", StringComparison.Ordinal)
         || target.StartsWith("global::System.IO.Directory.", StringComparison.Ordinal)
+        || target.StartsWith("Global.System.IO.Directory.", StringComparison.Ordinal)
         || target.StartsWith("System.IO.Directory.", StringComparison.Ordinal)
         || target.StartsWith("global::System.IO.FileInfo.", StringComparison.Ordinal)
+        || target.StartsWith("Global.System.IO.FileInfo.", StringComparison.Ordinal)
         || target.StartsWith("System.IO.FileInfo.", StringComparison.Ordinal)
         || target.StartsWith("global::System.IO.DirectoryInfo.", StringComparison.Ordinal)
+        || target.StartsWith("Global.System.IO.DirectoryInfo.", StringComparison.Ordinal)
         || target.StartsWith("System.IO.DirectoryInfo.", StringComparison.Ordinal);
 
     private static bool IsSqlBulkCopyTarget(string target) =>

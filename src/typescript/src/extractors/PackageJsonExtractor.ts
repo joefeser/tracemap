@@ -221,7 +221,7 @@ async function extractPackageLockFacts(manifest: ScanManifest, repoPath: string,
           packageProperties.artifactDigestAlgorithm = "sha512-base64";
           packageProperties.artifactDigest = digest;
         } else {
-          facts.push(lockfileGap(manifest, item, "lockfile-digest-unavailable", "npm lockfile entry did not provide a supported sha512 integrity value.", packageName, evidenceLine, gapCollector));
+          facts.push(lockfileGap(manifest, item, "LockfileDigestUnavailable", "npm lockfile entry did not provide a supported sha512 integrity value.", packageName, evidenceLine, gapCollector));
         }
         facts.push(createFact(
           manifest,

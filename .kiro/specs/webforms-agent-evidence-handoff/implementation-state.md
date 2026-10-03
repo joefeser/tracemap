@@ -1,5 +1,7 @@
 # Implementation state: Web Forms agent evidence handoff
 
+Record type: historical delivery record. PR #735 merged on 2026-09-11.
+
 Branch: `codex/issue-734-agent-evidence-handoff`
 
 Issue: #734
@@ -28,6 +30,13 @@ Pull request: #735
   and one of the four supported evidence tiers before the store is validated.
 - Explicit application-database evidence questions without database execution instructions.
 - Anonymous artifacts remain disconnected from private handoffs.
+- Large-repository validation accepts exporter-valid chunks with more than 2,048
+  supporting IDs. Corpus safety remains bounded by the documented manifest,
+  JSONL-file, line-count, and per-line size limits instead of a producer/consumer
+  item-count mismatch.
+- Exporter-valid aggregate chunks may exceed 4 MiB in large repositories. The
+  streamed consumer now retains a bounded 128 MiB per-line ceiling, alongside
+  the 2 GiB file and 100,000-line ceilings.
 
 ## Validation
 
@@ -46,6 +55,8 @@ Pull request: #735
   Full post-review solution validation passed 1,832 tests. The PowerShell
   review-set smoke test also covers optional configured-index degradation and
   explicit missing-index rejection.
+- Large-corpus compatibility regressions: 26 handoff tests passed; full solution
+  validation passed 1,940 tests with 0 failures.
 
 ## Boundaries
 

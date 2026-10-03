@@ -8,8 +8,9 @@ namespace TraceMap.Reporting;
 /// <summary>Read-only diagnostic, independent of report graph compaction and terminal classification.</summary>
 public static partial class WebFormsRawEvidenceAudit
 {
-    public static IReadOnlyList<string> Run(string indexPath, string reportPath, int maxRows = 500_000, int maxTextBytes = 64 * 1024 * 1024, string? inspectionPath = null, string? startingMethodName = null, bool inspectAllHandlers = false)
+    public static IReadOnlyList<string> Run(string indexPath, string reportPath, int maxRows = 500_000, int maxTextBytes = 64 * 1024 * 1024, string? inspectionPath = null, string? startingMethodName = null, bool inspectAllHandlers = false, bool includeEveryResolvedHandler = false)
     {
+        if (includeEveryResolvedHandler && !inspectAllHandlers) throw new InvalidDataException("RawAuditInvalidLimit");
         if (inspectAllHandlers && (inspectionPath is null || startingMethodName is not null)) throw new InvalidDataException("RawAuditInvalidLimit");
         if (maxRows < 1 || maxRows > 500_000) throw new InvalidDataException("RawAuditInvalidLimit");
         if (maxTextBytes < 1 || maxTextBytes > 64 * 1024 * 1024) throw new InvalidDataException("RawAuditInvalidLimit");
@@ -45,7 +46,7 @@ public static partial class WebFormsRawEvidenceAudit
                 && c.TryGetProperty("traversalObservation", out var o) && o.ValueKind == JsonValueKind.Object
                 && o.GetProperty("stopState").GetString() == "observed-downstream-without-supported-terminal";
         var handlers = root.GetProperty("eventChains").EnumerateArray()
-            .Where(IsPriorityChain)
+            .Where(chain => includeEveryResolvedHandler || IsPriorityChain(chain))
             .Select(c => c.GetProperty("handlerFactId").GetString()).Where(id => !string.IsNullOrEmpty(id))
             .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
         if (startingMethodName is not null) handlers = [];
@@ -110,9 +111,16 @@ public static partial class WebFormsRawEvidenceAudit
         }
         var output = new List<string> { "raw-webforms-evidence=completed", "provenance=matched", $"selectedHandlers={seeds.Count}",
             $"rule={RuleIds.DiagnosticWebFormsRawExactCallEvidence}", "scope=independent-exact-semantic-call-closure-not-report-leaves" };
-        output.Add(startingMethodName is null ? "selection=report-handlers" : "selection=unique-method-hint;not-page-or-event-selection");
+        output.Add(startingMethodName is null
+            ? includeEveryResolvedHandler ? "selection=every-resolved-page-handler" : "selection=report-handlers"
+            : "selection=unique-method-hint;not-page-or-event-selection");
         if (seeds.Count == 0)
         {
+            if (inspectAllHandlers)
+            {
+                WriteBatchInspection(db, transaction, root, scan!, commit!, indexPath, reportPath, inspectionPath!, handlers!, [], [], [], maxRows, maxTextBytes, output, includeEveryResolvedHandler);
+                return output;
+            }
             if (inspectionPath is not null) throw new InvalidDataException("RawAuditInspectionUnavailable");
             return output;
         }
@@ -210,8 +218,8 @@ public static partial class WebFormsRawEvidenceAudit
         output.Add("nonClaim=not-report-leaf-identities;not-runtime-execution;missing-exact-witness-is-not-source-absence;declaration-targets-may-use-different-symbol-format");
         if (inspectAllHandlers)
         {
-            WriteBatchInspection(db, transaction, root, scan!, commit!, reportPath, inspectionPath!, handlers!, states, edges, loaded,
-                maxRows - rows, maxTextBytes - bytes, output);
+            WriteBatchInspection(db, transaction, root, scan!, commit!, indexPath, reportPath, inspectionPath!, handlers!, states, edges, loaded,
+                maxRows - rows, maxTextBytes - bytes, output, includeEveryResolvedHandler);
             return output;
         }
         if (inspectionPath is not null)

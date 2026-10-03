@@ -4,6 +4,8 @@ namespace TraceMap.Reporting;
 
 public static class MarkdownReportWriter
 {
+    private const int CompiledMetadataFactLimit = 50;
+
     public static async Task WriteAsync(string path, ScanResult result, CancellationToken cancellationToken = default)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path))!);
@@ -68,7 +70,24 @@ public static class MarkdownReportWriter
         }
 
         AddBuildEnvironmentDiagnostics(lines, result);
+        if (manifest.CompiledAttachment is { } attachment)
+        {
+            lines.AddRange([
+                "", "## Compiled-only Parent Attachment", "",
+                "LOCAL ONLY. Source analysis and builds were not rerun; parent facts were not copied or relabeled. Static review-only evidence, not runtime execution or SQL proof.", "",
+                $"- Parent scan: `{attachment.ParentScanId}`",
+                $"- Parent manifest SHA-256: `{attachment.ParentManifestSha256}`",
+                $"- Parent index SHA-256: `{attachment.ParentIndexSha256}`",
+                $"- Retained source snapshot SHA-256: `{attachment.ParentSourceSnapshotDigest}`",
+                $"- Verified source files/bytes: `{attachment.SourceFiles}` / `{attachment.SourceBytes}`",
+                $"- Generator SHA-256: `{attachment.GeneratorSha256}`",
+                $"- Bounded input SHA-256: `{attachment.BoundedInputSha256}`", "",
+                attachment.Limitation
+            ]);
+        }
         AddAnalyzerCapabilityDiagnostics(lines, result);
+        AddCompiledMetadataEvidence(lines, result);
+        AddWebFormsPublishEvidence(lines, result);
 
         lines.Add("");
         lines.Add("## Facts By Type");
@@ -271,6 +290,13 @@ public static class MarkdownReportWriter
 
         AddFactSection(
             lines,
+            "Visual Basic Event Evidence",
+            result.Facts.Where(fact => fact.FactType is FactTypes.VisualBasicEventBindingDeclared
+                or FactTypes.VisualBasicEventRaised),
+            fact => $"- `{fact.Properties.GetValueOrDefault("wiringKind") ?? fact.FactType}` `{DisplaySource(fact)}` -> `{DisplayFactName(fact)}` ({fact.EvidenceTier}) at `{fact.Evidence.FilePath}:{fact.Evidence.StartLine}`");
+
+        AddFactSection(
+            lines,
             "WebForms Event Flow",
             result.Facts.Where(fact => fact.FactType == FactTypes.WebFormsEventFlowProjected),
             fact => $"- `{fact.Properties.GetValueOrDefault("flowClassification") ?? "UnknownAnalysisGap"}` `{fact.Properties.GetValueOrDefault("handlerName") ?? DisplayFactName(fact)}` -> `{fact.Properties.GetValueOrDefault("terminalSurfaceKind") ?? "none"}` ({fact.EvidenceTier}, coverage `{fact.Properties.GetValueOrDefault("coverage") ?? "unknown"}`) at `{fact.Evidence.FilePath}:{fact.Evidence.StartLine}`");
@@ -280,6 +306,15 @@ public static class MarkdownReportWriter
             "WebForms Static Logic Signals",
             result.Facts.Where(fact => fact.FactType == FactTypes.WebFormsLogicSignalDetected),
             fact => $"- `{fact.Properties.GetValueOrDefault("signalKind") ?? "unknown"}` for `{fact.Properties.GetValueOrDefault("handlerName") ?? DisplayFactName(fact)}` ({fact.EvidenceTier}) at `{fact.Evidence.FilePath}:{fact.Evidence.StartLine}`");
+
+        AddFactSection(
+            lines,
+            "WebForms Server Behavior",
+            result.Facts.Where(fact => fact.FactType is FactTypes.WebFormsServerNavigationCandidate
+                or FactTypes.WebFormsRequestLifecycleCandidate
+                or FactTypes.WebFormsServerControlStateMutationCandidate
+                or FactTypes.WebFormsInlineServerExpressionReferenceCandidate),
+            fact => $"- `{fact.Properties.GetValueOrDefault("behaviorKind") ?? "unknown"}` in `{fact.Properties.GetValueOrDefault("handlerName") ?? "markup-expression"}` for `{fact.Properties.GetValueOrDefault("controlId") ?? fact.Properties.GetValueOrDefault("navigationKind") ?? fact.Properties.GetValueOrDefault("lifecycleOperation") ?? fact.Properties.GetValueOrDefault("referencedTypeName") ?? "unknown"}` ({fact.EvidenceTier}) at `{fact.Evidence.FilePath}:{fact.Evidence.StartLine}-{fact.Evidence.EndLine}`");
 
         AddFactSection(
             lines,
@@ -415,6 +450,208 @@ public static class MarkdownReportWriter
 
         lines.Add("");
         return string.Join(Environment.NewLine, lines);
+    }
+
+    private static void AddWebFormsPublishEvidence(List<string> lines, ScanResult result)
+    {
+        if (result.Manifest.WebFormsPublishProvenance is not { } publish)
+            return;
+        var publishFacts = result.Facts.Where(fact => fact.RuleId == RuleIds.LegacyWebFormsPublishMap).ToArray();
+        lines.Add("");
+        lines.Add("## Web Forms Published-Site Evidence");
+        lines.Add("");
+        lines.Add($"- Status: `{publish.Status}`; source files: `{publish.SourceFileCount}`; published files: `{publish.PublishedFileCount}`; pages: `{publish.PageCount}`.");
+        lines.Add($"- Generator SHA-256: `{publish.GeneratorSha256}`; bounded input SHA-256: `{publish.BoundedInputSha256}`.");
+        lines.Add($"- Page maps: `{publishFacts.Count(fact => fact.FactType == FactTypes.WebFormsPublishPageMapped)}`; mapless page candidates: `{publishFacts.Count(fact => fact.FactType == FactTypes.WebFormsPublishPageCandidate)}`; bound assemblies: `{publishFacts.Count(fact => fact.FactType == FactTypes.WebFormsPublishAssemblyBound)}`.");
+        lines.Add($"- Gaps: `{(publish.GapKinds.Count == 0 ? "none" : string.Join(",", publish.GapKinds))}`.");
+        lines.Add("- Published-site binding facts are retained in `facts.ndjson` and `index.sqlite`. Ordered source-to-compiled paths are derived after scan from a combined index; they are not extracted facts and are not included in this scan-time report.");
+        lines.Add("- Mapless source-to-method joins remain Tier3 review-only candidates. Static IL and SQL evidence do not prove page activation, runtime calls, or database execution.");
+    }
+
+    private static void AddCompiledMetadataEvidence(List<string> lines, ScanResult result)
+    {
+        var provenance = result.Manifest.CompiledInputProvenance;
+        if (provenance is null)
+        {
+            AddPdbEvidence(lines, result);
+            AddIlBodyEvidence(lines, result);
+            AddIlRewriteEvidence(lines, result);
+            AddIlRewritePdbEvidence(lines, result);
+            return;
+        }
+
+        lines.Add("");
+        lines.Add("## Compiled .NET Metadata Evidence");
+        lines.Add("");
+        lines.Add($"- Coverage: `{provenance.CoverageState}`");
+        lines.Add($"- Artifact visibility: `{provenance.ArtifactVisibility}`");
+        lines.Add($"- Bounded input SHA-256: `{provenance.BoundedInputSha256}`");
+        lines.Add($"- Generator SHA-256: `{provenance.GeneratorSha256}`");
+        if (provenance.OmittedInputCount > 0)
+            lines.Add($"- Compiled inputs omitted by artifact limit: `{provenance.OmittedInputCount}`; omitted-input SHA-256: `{provenance.OmittedInputSha256}`.");
+        lines.Add("- Binary locations use admitted safe locators and metadata tokens; the serialized `1..1` span is a non-source sentinel, not a source line.");
+        lines.Add("- Metadata declarations do not prove source ownership, build freshness, runtime loading, execution, dispatch, or reachability.");
+
+        if (result.Manifest.SourceMetadataReconciliation is { } reconciliation)
+        {
+            lines.Add($"- Source/metadata reconciliation: `{reconciliation.CoverageState}`; exact joins `{reconciliation.ExactJoinCount}`; explicit gaps `{reconciliation.ExplicitGapCount}`; rule `{reconciliation.RuleId}`; extractor `{reconciliation.ExtractorVersion}`.");
+            lines.Add("- Every positive join requires one exact complete identity candidate and bound compiled provenance; zero, multiple, unacceptable, incomplete, and unsupported cases remain unjoined.");
+            foreach (var entry in reconciliation.Entries.Take(CompiledMetadataFactLimit))
+            {
+                lines.Add($"- Reconciliation `{entry.ReconciliationState}`: source `{entry.SourceIdentity}`, metadata `{entry.MetadataIdentity}`, tier `{entry.EvidenceTier}`, provenance `{entry.CompiledProvenanceState}`, gap `{(string.IsNullOrEmpty(entry.GapKind) ? "none" : entry.GapKind)}`.");
+            }
+            var reportOmitted = Math.Max(0, reconciliation.Entries.Count - CompiledMetadataFactLimit);
+            if (reportOmitted > 0)
+                lines.Add($"- {reportOmitted} retained reconciliation entries omitted from this report display; exhaustive rows remain in `facts.ndjson` and `index.sqlite`.");
+            if (reconciliation.OmittedEntryCount > 0)
+                lines.Add($"- {reconciliation.OmittedEntryCount} reconciliation entries omitted from the bounded manifest summary; omitted-entry SHA-256: `{reconciliation.OmittedEntrySha256}`; exhaustive rows remain in `facts.ndjson` and `index.sqlite`.");
+        }
+
+        foreach (var outcome in provenance.Outcomes.OrderBy(item => item.SafeLocator, StringComparer.Ordinal).ThenBy(item => item.Role, StringComparer.Ordinal))
+        {
+            lines.Add($"- Input `{outcome.SafeLocator}` ({outcome.Role}): `{outcome.Outcome}`, provenance `{outcome.ProvenanceState}`, gaps `{(outcome.GapKinds.Count == 0 ? "none" : string.Join(",", outcome.GapKinds))}`.");
+        }
+
+        var facts = result.Facts
+            .Where(fact => fact.Properties.GetValueOrDefault("evidenceLocationKind") == ManagedMetadataExtractor.MetadataLocationKind)
+            .OrderBy(fact => fact.Evidence.FilePath, StringComparer.Ordinal)
+            .ThenBy(fact => fact.Properties.GetValueOrDefault("metadataToken"), StringComparer.Ordinal)
+            .ThenBy(fact => fact.FactId, StringComparer.Ordinal)
+            .ToArray();
+        foreach (var fact in facts.Take(CompiledMetadataFactLimit))
+        {
+            lines.Add($"- `{fact.FactType}` `{DisplayFactName(fact)}` ({fact.EvidenceTier}) at binary `{fact.Evidence.FilePath}` token `{fact.Properties.GetValueOrDefault("metadataToken") ?? "unknown"}`.");
+        }
+        if (facts.Length > CompiledMetadataFactLimit)
+        {
+            lines.Add($"- {facts.Length - CompiledMetadataFactLimit} additional compiled metadata facts omitted from this human-readable sample; exhaustive rows remain in `facts.ndjson` and `index.sqlite`.");
+        }
+
+        AddPdbEvidence(lines, result);
+        AddIlBodyEvidence(lines, result);
+        AddIlRewriteEvidence(lines, result);
+        AddIlRewritePdbEvidence(lines, result);
+    }
+
+    private static void AddPdbEvidence(List<string> lines, ScanResult result)
+    {
+        if (result.Manifest.PdbInputProvenance is not { } pdb)
+            return;
+        var pdbFacts = result.Facts.Where(fact => fact.RuleId is
+                RuleIds.DotNetPdbInput or RuleIds.DotNetPdbIdentity or RuleIds.DotNetPdbSequencePoint or RuleIds.DotNetPdbGap)
+            .ToArray();
+        lines.Add("");
+        lines.Add("## Compiled .NET PDB Evidence");
+        lines.Add("");
+        lines.Add($"- Coverage: `{result.Manifest.PdbEvidenceSummary?.CoverageState ?? pdb.CoverageState}`");
+        lines.Add($"- PDB input coverage: `{pdb.CoverageState}`");
+        lines.Add($"- Artifact visibility: `{pdb.ArtifactVisibility}`");
+        lines.Add($"- Bounded input SHA-256: `{pdb.BoundedInputSha256}`");
+        lines.Add($"- Generator SHA-256: `{pdb.GeneratorSha256}`");
+        lines.Add($"- Documents: `{pdbFacts.Count(fact => fact.FactType == FactTypes.PdbDocumentDeclared)}`; methods: `{pdbFacts.Count(fact => fact.FactType == FactTypes.PdbMethodDeclared)}`; sequence points: `{pdbFacts.Count(fact => fact.FactType == FactTypes.PdbSequencePointDeclared)}`; metadata joins: `{pdbFacts.Count(fact => fact.FactType == FactTypes.MetadataPdbMethodReconciled)}`; source-document joins: `{pdbFacts.Count(fact => fact.FactType == FactTypes.PdbSourceDocumentReconciled)}`; gaps: `{pdbFacts.Count(fact => fact.FactType == FactTypes.AnalysisGap)}`.");
+        lines.Add("- PDB inputs bind to assemblies only through exact CodeView/content identity; source documents bind only through one exact checksum candidate. Raw document names are omitted.");
+        lines.Add("- Sequence points are compiler-produced debug metadata and do not prove statement execution, control flow, calls, behavior, or rewrite preservation.");
+        foreach (var outcome in pdb.Outcomes.OrderBy(item => item.SafeLocator, StringComparer.Ordinal))
+            lines.Add($"- PDB input `{outcome.SafeLocator}`: `{outcome.Outcome}`, format `{outcome.Format}`, binding `{outcome.BindingState}`, gaps `{(outcome.GapKinds.Count == 0 ? "none" : string.Join(",", outcome.GapKinds))}`.");
+        if (result.Manifest.PdbEvidenceSummary is { } summary)
+        {
+            foreach (var entry in summary.Entries.Take(CompiledMetadataFactLimit))
+                lines.Add($"- `{entry.FactType}` endpoint `{entry.SourceIdentity}` -> `{entry.TargetIdentity}` ({entry.EvidenceTier}, fact `{entry.EvidenceFactId}`, provenance `{entry.ProvenanceState}`).");
+            var reportOmitted = Math.Max(0, summary.Entries.Count - CompiledMetadataFactLimit);
+            if (reportOmitted > 0)
+                lines.Add($"- {reportOmitted} retained PDB endpoint entries omitted from this report display; exhaustive rows remain in `facts.ndjson` and `index.sqlite`.");
+            if (summary.OmittedEntryCount > 0)
+                lines.Add($"- {summary.OmittedEntryCount} PDB endpoint entries omitted from the bounded manifest summary; omitted-entry SHA-256: `{summary.OmittedEntrySha256}`; exhaustive rows remain in `facts.ndjson` and `index.sqlite`.");
+        }
+    }
+
+    private static void AddIlBodyEvidence(List<string> lines, ScanResult result)
+    {
+        if (result.Manifest.IlBodyProvenance is not { } il)
+            return;
+        var ilFacts = result.Facts.Where(fact => fact.RuleId is
+                RuleIds.DotNetIlBody or RuleIds.DotNetIlCall or RuleIds.DotNetIlGap)
+            .ToArray();
+        lines.Add("");
+        lines.Add("## Compiled .NET IL Body Evidence");
+        lines.Add("");
+        lines.Add($"- Coverage: `{il.CoverageState}`");
+        lines.Add($"- Artifact visibility: `{il.ArtifactVisibility}`");
+        lines.Add($"- Bounded input SHA-256: `{il.BoundedInputSha256}`");
+        lines.Add($"- Generator SHA-256: `{il.GeneratorSha256}`");
+        lines.Add($"- Method bodies: `{ilFacts.Count(fact => fact.FactType == FactTypes.ManagedIlBodyDeclared)}`; direct call sites: `{ilFacts.Count(fact => fact.FactType == FactTypes.ManagedIlCallObserved)}`; gaps: `{ilFacts.Count(fact => fact.FactType == FactTypes.AnalysisGap)}`.");
+        var valueFacts = result.Facts.Where(fact => fact.RuleId is RuleIds.DotNetIlValues or RuleIds.DotNetIlCommandBinding).ToArray();
+        lines.Add($"- Separate partial operand/command lane: `{valueFacts.Count(fact => fact.FactType == FactTypes.ManagedIlCallValuesObserved)}` call operand observations; `{valueFacts.Count(fact => fact.FactType == FactTypes.ManagedIlDatabaseCommandCandidate)}` command configuration candidates; `{valueFacts.Count(fact => fact.FactType == FactTypes.AnalysisGap)}` explicit gaps. Body coverage above does not establish complete value flow, handler-to-command propagation, parameter binding, SQL identity or execution.");
+        lines.Add("- Body identities commit every instruction operand (call targets, branch and switch targets, string digests, constants, locals, and exception regions) and are cross-checked between Mono.Cecil and a raw System.Reflection.Metadata IL reader.");
+        lines.Add("- IL evidence does not prove execution, dispatch, reachability, behavior, source ownership, semantic equivalence, or rewrite preservation.");
+        foreach (var outcome in il.Outcomes.OrderBy(item => item.SafeLocator, StringComparer.Ordinal))
+            lines.Add($"- IL input `{outcome.SafeLocator}`: `{outcome.Outcome}`, provenance `{outcome.ProvenanceState}`, gaps `{(outcome.GapKinds.Count == 0 ? "none" : string.Join(",", outcome.GapKinds))}`.");
+        foreach (var fact in ilFacts.Where(fact => fact.FactType == FactTypes.ManagedIlBodyDeclared)
+                     .OrderBy(fact => fact.Evidence.FilePath, StringComparer.Ordinal)
+                     .ThenBy(fact => fact.TargetSymbol, StringComparer.Ordinal)
+                     .Take(CompiledMetadataFactLimit))
+            lines.Add($"- Body `{fact.TargetSymbol}` ({fact.Properties.GetValueOrDefault("instructionCount")} instructions, `{fact.Properties.GetValueOrDefault("localCount")}` locals, `{fact.Properties.GetValueOrDefault("exceptionRegionCount")}` exception regions).");
+        var bodyOmitted = Math.Max(0, ilFacts.Count(fact => fact.FactType == FactTypes.ManagedIlBodyDeclared) - CompiledMetadataFactLimit);
+        if (bodyOmitted > 0)
+            lines.Add($"- {bodyOmitted} additional IL body rows omitted from this report display; exhaustive rows remain in `facts.ndjson` and `index.sqlite`.");
+    }
+
+    private static void AddIlRewriteEvidence(List<string> lines, ScanResult result)
+    {
+        if (result.Manifest.IlRewriteProvenance is not { } rewrite)
+            return;
+        var rewriteFacts = result.Facts.Where(fact => fact.RuleId is
+                RuleIds.DotNetIlRewrite or RuleIds.DotNetIlRewriteGap)
+            .ToArray();
+        lines.Add("");
+        lines.Add("## Compiled .NET IL Rewrite Evidence");
+        lines.Add("");
+        lines.Add($"- Coverage: `{rewrite.CoverageState}`");
+        lines.Add($"- Artifact visibility: `{rewrite.ArtifactVisibility}`");
+        lines.Add($"- Bounded input SHA-256: `{rewrite.BoundedInputSha256}`");
+        lines.Add($"- Generator SHA-256: `{rewrite.GeneratorSha256}`");
+        lines.Add($"- Rewrite edges: `{rewriteFacts.Count(fact => fact.FactType == FactTypes.ManagedIlRewriteObserved)}`; call-site retargets: `{rewriteFacts.Count(fact => fact.FactType == FactTypes.ManagedIlCallRetargetObserved)}`; gaps: `{rewriteFacts.Count(fact => fact.FactType == FactTypes.AnalysisGap)}`.");
+        lines.Add("- Every edge joins one exact method identity across an operator-declared before/after pair whose sides independently satisfy the dual-reader IL body contract; ambiguity, one-side-only membership, mismatch, disagreement, and budget exhaustion fail closed to Tier4 gaps.");
+        lines.Add("- Rewrite evidence does not prove semantic equivalence, behavior preservation, compilation provenance, source ownership, PDB offset validity, or safe applicability.");
+        foreach (var outcome in rewrite.Outcomes.OrderBy(item => item.PairId, StringComparer.Ordinal))
+            lines.Add($"- Rewrite pair `{outcome.PairId}` (`{outcome.BeforeSafeLocator}` -> `{outcome.AfterSafeLocator}`): `{outcome.Outcome}`, gaps `{(outcome.GapKinds.Count == 0 ? "none" : string.Join(",", outcome.GapKinds))}`.");
+        foreach (var fact in rewriteFacts.Where(fact => fact.FactType == FactTypes.ManagedIlRewriteObserved)
+                     .OrderBy(fact => fact.Evidence.FilePath, StringComparer.Ordinal)
+                     .ThenBy(fact => fact.TargetSymbol, StringComparer.Ordinal)
+                     .Take(CompiledMetadataFactLimit))
+            lines.Add($"- Edge `{fact.Properties.GetValueOrDefault("methodIdentity")}` ({fact.Properties.GetValueOrDefault("relationshipKind")}, token retargeted `{fact.Properties.GetValueOrDefault("tokenRetargeted")}`, `{fact.Properties.GetValueOrDefault("callRetargetCount")}` call retargets).");
+        var edgeOmitted = Math.Max(0, rewriteFacts.Count(fact => fact.FactType == FactTypes.ManagedIlRewriteObserved) - CompiledMetadataFactLimit);
+        if (edgeOmitted > 0)
+            lines.Add($"- {edgeOmitted} additional rewrite edge rows omitted from this report display; exhaustive rows remain in `facts.ndjson` and `index.sqlite`.");
+    }
+
+    private static void AddIlRewritePdbEvidence(List<string> lines, ScanResult result)
+    {
+        if (result.Manifest.IlRewritePdbProvenance is not { } rewritePdb)
+            return;
+        var rewritePdbFacts = result.Facts.Where(fact => fact.RuleId is
+                RuleIds.DotNetIlRewritePdb or RuleIds.DotNetIlRewritePdbGap)
+            .ToArray();
+        lines.Add("");
+        lines.Add("## Compiled .NET IL Rewrite PDB Evidence");
+        lines.Add("");
+        lines.Add($"- Coverage: `{rewritePdb.CoverageState}`");
+        lines.Add($"- Artifact visibility: `{rewritePdb.ArtifactVisibility}`");
+        lines.Add($"- Bounded input SHA-256: `{rewritePdb.BoundedInputSha256}`");
+        lines.Add($"- Generator SHA-256: `{rewritePdb.GeneratorSha256}`");
+        lines.Add($"- PDB identity relationships: `{rewritePdbFacts.Count(fact => fact.FactType == FactTypes.ManagedIlRewritePdbObserved)}`; gaps: `{rewritePdbFacts.Count(fact => fact.FactType == FactTypes.AnalysisGap)}`.");
+        lines.Add("- Every relationship joins one exact method identity already proven across the before/after assembly pair, with each PDB bound to its own paired assembly by exact portable content identity and every sequence-point offset validated against the proven body extent; missing, malformed, ambiguous, mismatched, row-inconsistent, reader-disputed, and over-budget sides fail closed to Tier4 gaps.");
+        lines.Add("- Rewrite PDB evidence never claims behavioral equivalence, source ownership, preserved debugging behavior, or rewrite attribution; the offset classification compares IL offset vectors only.");
+        foreach (var outcome in rewritePdb.Outcomes.OrderBy(item => item.PairId, StringComparer.Ordinal))
+            lines.Add($"- Rewrite PDB pair `{outcome.PairId}` (`{outcome.BeforePdbSafeLocator}` -> `{outcome.AfterPdbSafeLocator}`): `{outcome.Outcome}`, joined methods `{outcome.JoinedMethodCount}`, relationships `{outcome.PdbRelationshipCount}` (`{outcome.OffsetsUnchangedCount}` offsets-unchanged, `{outcome.OffsetsChangedCount}` offsets-changed), gaps `{(outcome.GapKinds.Count == 0 ? "none" : string.Join(",", outcome.GapKinds))}`.");
+        foreach (var fact in rewritePdbFacts.Where(fact => fact.FactType == FactTypes.ManagedIlRewritePdbObserved)
+                     .OrderBy(fact => fact.Evidence.FilePath, StringComparer.Ordinal)
+                     .ThenBy(fact => fact.TargetSymbol, StringComparer.Ordinal)
+                     .Take(CompiledMetadataFactLimit))
+            lines.Add($"- PDB edge `{fact.Properties.GetValueOrDefault("methodIdentity")}` ({fact.Properties.GetValueOrDefault("sequencePointOffsets")}, rewrite `{fact.Properties.GetValueOrDefault("rewriteRelationshipKind")}`, `{fact.Properties.GetValueOrDefault("beforeSequencePointCount")}` -> `{fact.Properties.GetValueOrDefault("afterSequencePointCount")}` sequence points).");
+        var pdbEdgeOmitted = Math.Max(0, rewritePdbFacts.Count(fact => fact.FactType == FactTypes.ManagedIlRewritePdbObserved) - CompiledMetadataFactLimit);
+        if (pdbEdgeOmitted > 0)
+            lines.Add($"- {pdbEdgeOmitted} additional rewrite PDB relationship rows omitted from this report display; exhaustive rows remain in `facts.ndjson` and `index.sqlite`.");
     }
 
     private static void AddFactSection(List<string> lines, string title, IEnumerable<CodeFact> facts, Func<CodeFact, string> format)

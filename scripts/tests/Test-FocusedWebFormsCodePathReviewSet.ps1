@@ -118,6 +118,18 @@ try {
     catch {
         if ($_.Exception.Message -ne 'CodePathReviewSetIndexUnavailable') { throw }
     }
+
+    $emptyOutput = Join-Path $temp 'empty-output'
+    $emptyInspectionDirectory = Join-Path $emptyOutput 'local-inspection-private'
+    [IO.Directory]::CreateDirectory($emptyInspectionDirectory) | Out-Null
+    $emptyInspection = Join-Path $emptyInspectionDirectory 'webforms-batch-inspection-empty.json'
+    [IO.File]::WriteAllText($emptyInspection, (@{
+        schemaVersion = 'webforms-batch-inspection.v1'; scanId = 'scan-empty'; commitSha = 'commit-empty'
+        availability = 'no-semantic-handler-cases'; cases = @()
+    } | ConvertTo-Json -Depth 4), [Text.UTF8Encoding]::new($false))
+    $emptyOutputLines = @(& $scriptPath -SourceRoot $source -InspectionPath $emptyInspection -OutputRoot $emptyOutput 6>&1 | ForEach-Object { $_.ToString() })
+    if ($emptyOutputLines -notcontains 'codePathReviewSet=not-applicable;reason=no-semantic-handler-cases;primary-workbench-remains-valid') { throw 'Empty semantic inspection did not produce a clean non-applicable result.' }
+    if (@(Get-ChildItem -LiteralPath $emptyInspectionDirectory -Directory -Filter 'webforms-code-path-review-set-*').Count -ne 0) { throw 'Empty semantic inspection created a stale review set.' }
     Write-Host 'PASS focused Web Forms code-path review set'
 }
 finally {

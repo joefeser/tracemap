@@ -43,6 +43,42 @@ public static class GitMetadataProvider
 
     private static string? RunGit(string workingDirectory, bool allowEmpty, params string[] arguments)
     {
+        var result = TryRunGit(workingDirectory, allowEmpty, arguments);
+        // A failed process invocation is retried exactly once: concurrent
+        // scans spawn many git processes, and a transient spawn or timeout
+        // failure must not flip repository identity to the directory-name
+        // fallback. A genuine non-repository exits nonzero on both attempts
+        // and keeps its null result.
+        if (result.Failed)
+            result = TryRunGit(workingDirectory, allowEmpty, arguments);
+        return result.Output;
+    }
+
+    internal sealed record GitResult(string? Output, bool Failed);
+
+    // Process exit is not proof that redirected pipes have finished draining.
+    // Preserve the bounded probe/retry contract instead of admitting an empty
+    // successful result when a continuation is delayed under concurrent scans.
+    internal static GitResult CompleteGitOutput(Task<string> outputTask, Task<string> errorTask,
+        bool allowEmpty, TimeSpan drainTimeout)
+    {
+        try
+        {
+            if (!Task.WaitAll([outputTask, errorTask], drainTimeout) ||
+                !outputTask.IsCompletedSuccessfully || !errorTask.IsCompletedSuccessfully)
+                return new(null, Failed: true);
+            var output = outputTask.Result.Trim();
+            if (!allowEmpty && string.IsNullOrWhiteSpace(output)) return new(null, Failed: true);
+            return new(output, Failed: false);
+        }
+        catch
+        {
+            return new(null, Failed: true);
+        }
+    }
+
+    private static GitResult TryRunGit(string workingDirectory, bool allowEmpty, params string[] arguments)
+    {
         try
         {
             using var process = new Process();
@@ -61,7 +97,7 @@ public static class GitMetadataProvider
 
             if (!process.Start())
             {
-                return null;
+                return new GitResult(null, Failed: true);
             }
 
             var outputTask = process.StandardOutput.ReadToEndAsync();
@@ -77,21 +113,19 @@ public static class GitMetadataProvider
                     // Best-effort cleanup only.
                 }
 
-                return null;
+                return new GitResult(null, Failed: true);
             }
 
             if (process.ExitCode != 0)
             {
-                return null;
+                return new GitResult(null, Failed: true);
             }
 
-            Task.WaitAll([outputTask, errorTask], TimeSpan.FromSeconds(1));
-            var output = outputTask.IsCompletedSuccessfully ? outputTask.Result.Trim() : string.Empty;
-            return allowEmpty || !string.IsNullOrWhiteSpace(output) ? output : null;
+            return CompleteGitOutput(outputTask, errorTask, allowEmpty, TimeSpan.FromSeconds(1));
         }
         catch
         {
-            return null;
+            return new GitResult(null, Failed: true);
         }
     }
 }

@@ -84,6 +84,20 @@ try {
     $legacyContent = [IO.File]::ReadAllText($legacyFile[0].FullName)
     Assert-True ($legacyContent.Contains('unknownDiagnosticOriginCount=1')) 'legacy lineage absence was not explicit'
     Assert-True ($legacyContent.Contains('nextAction=rerun-with-diagnostic-lineage')) 'legacy artifact did not request a lineage-aware rerun'
+
+    $singleFolderFacts = @(
+        @{ factType = 'AnalysisGap'; ruleId = 'vb.semantic.workspace.v1'; evidenceTier = 'Tier4Unknown'; evidence = @{ filePath = 'Default.aspx.vb' }; properties = @{ diagnosticCode = 'CompilerDiagnostic'; diagnosticKind = 'compilation'; guidanceCode = 'ReviewCompilerDiagnostic'; gapKind = 'CompilationDiagnostic'; diagnosticId = 'BC30002' } }
+    )
+    [IO.File]::WriteAllLines((Join-Path $scan 'facts.ndjson'), @($singleFolderFacts | ForEach-Object { $_ | ConvertTo-Json -Compress -Depth 10 }), [Text.UTF8Encoding]::new($false))
+    $singleFolderOutput = Join-Path $testRoot 'single-folder-summary'
+    $singleFolderResult = @(& $script -ReviewOutputPath $review -WebFormsFolder '.' -BackendFolder '.' -ControlsFolder '.' -TraceMapHead $head -OutputDirectory $singleFolderOutput)
+    Assert-True ($singleFolderResult[0] -eq 'focused-webforms-workspace-summary-file=created') 'single-folder summary creation was not reported'
+    $singleFolderFile = @(Get-ChildItem $singleFolderOutput -File -Filter 'focused-webforms-workspace-*.txt')
+    Assert-True ($singleFolderFile.Count -eq 1) 'single-folder workspace summary was not created'
+    $singleFolderContent = [IO.File]::ReadAllText($singleFolderFile[0].FullName)
+    Assert-True ($singleFolderContent.Contains('compilerDiagnosticCount=1')) 'VB compiler diagnostic count incorrect'
+    Assert-True ($singleFolderContent.Contains('diagnostic=application|compilation|CompilationDiagnostic|BC30002|CompilerDiagnostic|ReviewCompilerDiagnostic|count=1')) 'single-folder VB diagnostic lineage missing'
+    Assert-True (-not $singleFolderContent.Contains('Default.aspx.vb')) 'single-folder private source path leaked'
     'focused-webforms-workspace-summary-tests=passed'
 }
 finally {

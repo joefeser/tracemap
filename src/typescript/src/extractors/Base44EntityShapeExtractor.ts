@@ -491,7 +491,7 @@ function analyzeIdentifier(identifier: ts.Identifier, context: ShapeContext, vis
   const candidate = `binding:${bindingName}`;
   if (visitedBindings.has(bindingName)) return unresolvedAnalysis("identifier-reference", "binding-cycle", candidate);
   const referencePosition = identifier.getStart(context.source);
-  const cacheKey = `${referencePosition}:${presence}:${[...visitedBindings].sort().join(",")}`;
+  const cacheKey = `${referencePosition}:${context.callPosition}:${presence}:${[...visitedBindings].sort().join(",")}`;
   const cached = context.analysisCache.get(cacheKey);
   if (cached) return cloneAnalysis(cached);
   const declaration = resolveDeclarationAt(bindingName, identifier, context);
@@ -1249,13 +1249,13 @@ function addBindingMutations(bindingName: string, declaration: ts.VariableDeclar
     if (position <= declarationEnd || position >= context.callPosition) return ts.forEachChild(node, visit);
     const safeArrayPush = isSafeArrayPush(node, bindingName, declaration, context, result);
     const referenceGap = safeArrayPush ? null : unmodeledReferenceUse(node, bindingName, declaration, context);
-    if (referenceGap) result.gaps.push(referenceGap);
+    if (referenceGap) appendBounded(result.gaps, [referenceGap], result);
     if (safeArrayPush && ts.isCallExpression(node)) {
       const conditional = inheritedPresence === "conditional" || isConditionallyExecuted(node, scope);
       for (const argument of node.arguments) {
         if (ts.isSpreadElement(argument)) {
-          result.gaps.push("array-push-spread-unresolved");
-          result.arrayElementOuterKinds.push("unknown");
+          appendBounded(result.gaps, ["array-push-spread-unresolved"], result);
+          appendBounded(result.arrayElementOuterKinds, ["unknown"], result);
           result.arrayElementCount += 1;
           continue;
         }
@@ -1264,11 +1264,11 @@ function addBindingMutations(bindingName: string, declaration: ts.VariableDeclar
           result.fields = result.fields.map((field) => ({ ...field, presence: "conditional" }));
           element.fields = element.fields.map((field) => ({ ...field, presence: "conditional" }));
         }
-        result.arrayElementOuterKinds.push(...element.outerKinds);
-        result.fields.push(...element.fields.map((field): ShapeField => conditional ? { ...field, presence: "conditional" } : field));
-        result.spreads.push(...element.spreads);
-        result.candidateBindings.push(...element.candidateBindings);
-        result.gaps.push(...element.gaps.map((gap) => `array-push:${gap}`));
+        appendBounded(result.arrayElementOuterKinds, element.outerKinds, result);
+        appendBounded(result.fields, element.fields.map((field): ShapeField => conditional ? { ...field, presence: "conditional" } : field), result);
+        appendBounded(result.spreads, element.spreads, result);
+        appendBounded(result.candidateBindings, element.candidateBindings, result);
+        appendBounded(result.gaps, element.gaps.map((gap) => `array-push:${gap}`), result);
         result.arrayElementCount += 1;
       }
       return;
@@ -1279,7 +1279,7 @@ function addBindingMutations(bindingName: string, declaration: ts.VariableDeclar
           applyBindingReassignment(bindingName, node, context, result,
             inheritedPresence === "conditional" || isConditionallyExecuted(node, scope) ? "conditional" : inheritedPresence);
         } else {
-          result.gaps.push(`binding-compound-reassignment:${ts.tokenToString(node.operatorToken.kind) ?? "unknown"}`);
+          appendBounded(result.gaps, [`binding-compound-reassignment:${ts.tokenToString(node.operatorToken.kind) ?? "unknown"}`], result);
         }
         return;
       }
@@ -1288,12 +1288,12 @@ function addBindingMutations(bindingName: string, declaration: ts.VariableDeclar
         return;
       }
       if (field === "<dynamic>") {
-        result.fields.push(fieldEvidence(field, "dynamic-computed", expressionType(node.right), expressionOrigin(node.right), node, context, node.right));
-        result.gaps.push("dynamic-computed-assignment");
+        appendBounded(result.fields, [fieldEvidence(field, "dynamic-computed", expressionType(node.right), expressionOrigin(node.right), node, context, node.right)], result);
+        appendBounded(result.gaps, ["dynamic-computed-assignment"], result);
       } else if (field) {
         const simpleAssignment = node.operatorToken.kind === ts.SyntaxKind.EqualsToken;
-        result.fields.push(fieldEvidence(field, simpleAssignment && inheritedPresence !== "conditional" && !isConditionallyExecuted(node, scope) ? inheritedPresence : "conditional", expressionType(node.right), expressionOrigin(node.right), node, context, node.right));
-        if (!simpleAssignment) result.gaps.push(`compound-property-assignment:${ts.tokenToString(node.operatorToken.kind) ?? "unknown"}`);
+        appendBounded(result.fields, [fieldEvidence(field, simpleAssignment && inheritedPresence !== "conditional" && !isConditionallyExecuted(node, scope) ? inheritedPresence : "conditional", expressionType(node.right), expressionOrigin(node.right), node, context, node.right)], result);
+        if (!simpleAssignment) appendBounded(result.gaps, [`compound-property-assignment:${ts.tokenToString(node.operatorToken.kind) ?? "unknown"}`], result);
       }
     }
     if (ts.isCallExpression(node) && expressionChain(node.expression)?.join(".") === "Object.assign" && ts.isIdentifier(node.arguments[0]) && node.arguments[0].text === bindingName
@@ -1303,20 +1303,20 @@ function addBindingMutations(bindingName: string, declaration: ts.VariableDeclar
         const spread = analyzeExpression(source, context, new Set([bindingName]), conditional ? "conditional" : "spread-derived");
         if (conditional) spread.fields = spread.fields.map((field) => ({ ...field, presence: "conditional" }));
         mergeAnalysis(result, spread);
-        result.gaps.push(...spread.gaps.map((gap) => `object-assign:${gap}`));
+        appendBounded(result.gaps, spread.gaps.map((gap) => `object-assign:${gap}`), result);
       }
     }
     if (((ts.isPrefixUnaryExpression(node) && [ts.SyntaxKind.PlusPlusToken, ts.SyntaxKind.MinusMinusToken].includes(node.operator))
       || ts.isPostfixUnaryExpression(node))
       && assignedField(node.operand, bindingName)
       && resolveDeclarationAt(bindingName, node, context) === declaration) {
-      result.gaps.push("unary-property-mutation");
+      appendBounded(result.gaps, ["unary-property-mutation"], result);
     }
     if (ts.isDeleteExpression(node)) {
       const field = assignedField(node.expression, bindingName);
       if (field && resolveDeclarationAt(bindingName, node, context) === declaration) {
         if (field === "<dynamic>") {
-          result.gaps.push("dynamic-computed-deletion");
+          appendBounded(result.gaps, ["dynamic-computed-deletion"], result);
         } else if (isConditionallyExecuted(node, scope)) {
           result.fields = result.fields.map((candidate) => candidate.name === field ? { ...candidate, presence: "conditional" } : candidate);
         } else {
@@ -1944,7 +1944,8 @@ function appendBounded<T>(target: T[], values: readonly T[], analysis: ShapeAnal
   const remaining = maxShapeCollectionItems - target.length;
   if (remaining > 0) target.push(...values.slice(0, remaining));
   if (values.length > remaining && !analysis.gaps.includes("payload-complexity-limit")) {
-    analysis.gaps.push("payload-complexity-limit");
+    if (analysis.gaps.length >= maxShapeCollectionItems) analysis.gaps[maxShapeCollectionItems - 1] = "payload-complexity-limit";
+    else analysis.gaps.push("payload-complexity-limit");
   }
 }
 

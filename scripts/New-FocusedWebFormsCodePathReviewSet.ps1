@@ -46,7 +46,11 @@ if ($inspectionFile.Length -gt 32MB) { throw 'CodePathReviewSetInspectionLimit' 
 $inspection = [IO.File]::ReadAllText($inspectionFile.FullName) | ConvertFrom-Json -Depth 64
 if ($inspection.schemaVersion -ne 'webforms-batch-inspection.v1') { throw 'CodePathReviewSetSchemaMismatch' }
 $availableCases = @($inspection.cases | ForEach-Object { [string]$_.caseId } | Sort-Object -Unique)
-if ($availableCases.Count -lt 1 -or $availableCases.Count -gt 64) { throw 'CodePathReviewSetCaseLimit' }
+if ($availableCases.Count -eq 0) {
+    Write-Host 'codePathReviewSet=not-applicable;reason=no-semantic-handler-cases;primary-workbench-remains-valid'
+    return
+}
+if ($availableCases.Count -gt 64) { throw 'CodePathReviewSetCaseLimit' }
 if ($CaseId.Count -eq 0) { $selectedCases = @($availableCases) }
 else { $selectedCases = @($CaseId | Sort-Object -Unique) }
 if (@($selectedCases | Where-Object { $_ -notmatch '^case-[0-9]{3}$' -or $_ -notin $availableCases }).Count -ne 0) {

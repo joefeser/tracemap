@@ -1,5 +1,43 @@
 # Web Forms bounded report memory
 
+- [x] Replace manual investigation replay with a public local CLI operator regression workflow (2026-10-01 follow-up; native UI clicks are not covered).
+  - [x] Exercise source plus compiled website, separately scanned provider DLL, combine and report through public command entry points.
+  - [x] Compare attached-provider, separate-provider, DLL-only and reversed-input routes; retain negative missing-provider, cap, Fill-only, repeatability and scope tests.
+  - [x] Provide a short replay command and durable inspectable artifacts with generator/input provenance.
+  - [x] Wire the expanded regression matrix into validation and document the native/CLI coverage boundary.
+  - [x] Validate and publish the cleanup to the existing PR; 32 local tests plus three script suites and four real-report diagnostic layouts passed. PR review and exact-head Windows CI are separate gates; no Git merge implied.
+
+- [x] Build a public projectless VB, two-DLL property/constructor logging regression: outer constructor argument evaluation, lazy getter, nested initializer, authorization/exception logging, call-result command text and a literal control. Verify mixed/compiled routes and Fill-only exclusion without claiming private parity or fixing unsupported return-value propagation.
+
+- [x] Consolidate the repaired analysis into a one-command, one-output-root migration handoff and open a PR (owner requested 2026-09-30; PR #798; private coverage remains separately open below).
+  - [x] Provide a normal fresh-run entry point that performs the focused handler query automatically, rather than only filtering the broad report.
+  - [x] Retain the exact tool, native run, focused results, receipts, one entry-point document and updated Claude instructions under the explicitly selected output root; preserve historical runs.
+  - [x] Make all handoff references explicit and integrity-bound; never select evidence by newest-folder heuristics or silently substitute the broad report for focused results.
+  - [x] Keep diagnostics outside checkpoint-owned report directories and preserve failure/partial states without producing a misleading completed handoff.
+  - [x] Test the complete handoff workflow with the deep projectless VB cross-DLL fixture, including failure, changed-input and existing-output refusals.
+  - [x] Validate on Windows where authentic ASP.NET publication is required; code head 221ca517 passed 14 tests with zero skips, including both authentic publish modes, in run 36808893833.
+  - [x] Open and attach PR #798 against dev with exact-code-head Windows validation and explicit static-evidence limitations; no merge performed.
+
+- [x] Resolve remaining selected-handler coverage questions from the saved successful run without an unnecessary rescan; bounded owner-evidence diagnosis and comparisons are complete, not exhaustive private coverage (see completion audit).
+  - [x] Add a verified completed-run locator and unresolved-binding-only display over retained results; retain complete binding fields and variant counts.
+  - [x] Inspect owner-returned unresolved binding reasons and fix only demonstrated extractor/path defects with local reproductions. Final retained identities associate the one unresolved group with dynamic Text lookup; exact private producer IL target remains unverified.
+  - [x] Support a bounded single-handler requery from a successfully completed native run, preserving its admitted index and checkpoint provenance; native execution/recovery tests passed 118/118, including the completed-run deep fixture.
+  - [x] Compare retained method sequences against the historical handler baseline: owner-returned focused Fill comparison retains all 13 historical symbol sequences and their 41 variants, plus five sequences/15 variants; exact scan identities differ. This does not establish why each broad-query row was omitted or exhaustive coverage.
+
+- [x] Complete the public deep projectless multi-DLL regression corpus including Windows publish workflow, branches/cycles/decoys, exact expected fixture routes and bounded work/artifact/logical-read guards; physical I/O and private application acceptance remain unclaimed.
+  - [x] Build an external net48 harness over projectless website source and test twelve forwarding layers into the separately compiled legacy provider through scan/index/combine/report.
+  - [x] Validate mixed/compiled-only, missing-provider and depth-limit cases on the current fixture (four local cases passed).
+  - [x] Add ordered compiled-method/procedure-fingerprint assertions, branch/cycle/decoy/unknown-operand cases, repeatability and work/artifact/logical-read guards.
+  - [x] Validate native start, retained single-handler compiled query and byte-identical resume on the final fixture.
+  - [x] Validate the one-command receipt wrapper and explicit macOS refusal of required Windows acceptance.
+  - [x] Run authentic mapped/mapless Windows publish tests and inspect returned artifacts; exact code head 6dbdf2ba passed 14 tests with no skips in CI run 36788401704, with publish/source/map/PDB and validation receipt hashes checked.
+  - [x] Fix the reproduced broad mixed-source traversal exhaustion with evidenced IL-first scheduling and bounded reverse-distance pruning; pin all five handlers and six routes below 1,000 work units. Exhaustive mixed-mode parity remains unclaimed.
+
+- [x] Make evidence-token capacity explicit and backward-compatible; bulk-load lookup indexes and recover node-limit report failures into separately labeled private bundles without rescanning.
+  - [x] Increase recovery capacity above the failed plan's cap, bounded at 50M; refuse exhausted plans before creating a bundle (PR #798 current-head review).
+
+- [x] Materialize new native-plan report admission from declared scan capacity while preserving explicit caps and historical checkpoint policies; regress selected-root admission and refusal.
+
 - [x] Audit the full-index path reader, graph ambiguity dependencies, and packet writer.
 - [x] Record the conservative projection and fail-closed admission design.
 - [x] Implement opt-in compact/bounded single-index path input for Web Forms packets.
@@ -70,3 +108,33 @@
 - [x] Publish one compatibility-preserving operator guide for the focused review workflow and diagnostic scripts.
 - [x] Move the private index, output root, and form list into an ignored validated JSON configuration with a generic checked-in example.
 - [x] Harden local configuration type, row, and byte validation and preserve config-free explicit diagnostics.
+- [x] Add bounded recovery-index handler counts with explicit root ambiguity and global truncation, plus public .NET/script tests.
+- [x] Add a separate exact single-handler requery over the verified retained combined index, preserving global competitors and original checkpoints.
+- [x] Pin historical exact-symbol versus source-bound indexed paths and lossless variants with a seven-root shared-budget synthetic regression.
+- [x] Add provenance-bound graph-stage timings and logical fact-payload read counters; avoid full-payload scans for typed reconciliation/gap lookups.
+- [x] Compare owner-retained handler results to the historical handler-specific baseline without treating aggregate counts as parity: all 13 historical symbol sequences retained, five additional sequences; exact source/scan identities differ.
+- [x] Provide a bounded local raw/grouped report comparator with query/source context, exact identity sequences, variant-count differences and labeled symbol-only hints.
+- [x] Provide a bounded saved-file handler database/SQL surface ledger with explicit command/parameter binding gaps; do not infer SQL from API terminal or method names.
+- [x] Retain compiler-resolved VB CommandText and adapter command assignments with receiver identity, hashes and explicit binding limitations.
+- [x] Add independently agreed bounded compiled IL command-value evidence and connect it to handler/database endpoints; saved IL call facts alone do not prove SQL.
+  - [x] Retain dual-decoded method-local operands with exact body/call fact joins, hashed strings, work bounds and explicit unsupported-flow gaps.
+  - [x] Bind straight-line command text/type candidates to the same command/adapter endpoint; validate provenance joins in compiled path reports and preserve evidence in the local ledger.
+  - [x] Substitute caller arguments across exact retained IL call paths without merging source-only candidate bridges.
+  - [x] Cover command configuration through relevant control-flow/parameter construction with conservative joins and targeted compiled fixtures.
+  - [x] Supply and validate the immutable-tool Windows workflow, run required broader gates, and push the completed fix.
+  - [x] Reproduce legacy VB debug-field/ref-array/struct/mapping patterns with actual net48 compiler output; preserve non-byref caller values while rejecting stores, address escapes and wrong API contracts.
+  - [x] Confirm a new owner-retained Windows scan emits command candidates and binds the selected handler; owner-supplied screenshots of a fresh run at f32c6ee9 show 45 binding occurrences, 42 constant-text candidates, 42 StoredProcedure-type candidates and 3 unresolved-text candidates. This is observed console/report evidence, not independent admission of private artifacts or complete route parity.
+- [x] Add a bounded local chain diagnostic showing exact retained identities and ordered connecting rules without rescanning or traversing.
+- [x] Reconcile pre-PR readable-label and receiver fixes with native reporting; restore local compiled labels from exact retained symbols without changing graph or privacy projections.
+- [x] Restore explicit Fill-only terminal query scope for retained handler comparison and bind that scope into the requery receipt.
+- [x] Add an independently traversed compiled-IL baseline with at most one evidenced root attachment, excluding downstream source bridges and binding scope into receipts.
+- [x] Prevent unrestricted depth-recovery witnesses from bypassing compiled-only scope; pin source shortcut exclusion, reachable diagnostics, depth gaps and mixed-query recovery with regression tests.
+- [x] Isolate property/constructor logging return-value loss with an actual compiled constant-return helper and an identical direct-literal control, separately from runtime string composition.
+- [x] Retain bounded dual-decoder return operands and resolve exact producer-call returns, preserving legacy missing evidence, runtime composition, dispatch, cycle and work-limit gaps.
+  - [x] Capture converged local return operands, require reader agreement, and emit bounded rule-backed return summaries with provenance and unavailable/limit states.
+  - [x] Resolve producer returns in the reporting layer with exact joins, argument substitution, bounded cycles/work, and negative legacy/ambiguous/dispatch cases.
+  - [x] Complete full-solution and exact-head Windows validation: code head bf0093c8 passed 3016 local tests with one Windows-only skip; Windows push run 36817615894 passed 27 with zero skips. Private saved-result acceptance remains separate.
+- [x] Remove the migration package's implicit Fill-only filter and prove native packaging retains both Fill and ExecuteScalar from the same synthetic handler; keep explicit historical Fill comparison available.
+- [x] Reproduce property-to-constructor-to-profile dynamic SQL separately from literal audit logging in the local projectless VB site; assert actual compiled concatenation origin and three terminal routes in mixed and compiled-only modes.
+- [x] Provide and test a reboot-safe short command for original-versus-requery saved report comparison, deriving the handler locally and rejecting Fill-only scope.
+- [x] Reconcile owner-supplied saved-report method sequences: 27 exact shared sequences plus one added dataset/Fill sequence; separately preserve the 13-sequence historical Fill baseline at symbol-hint level. Record the source-level dynamic scalar diagnosis and private identity-admission limitations without asserting runtime parity.

@@ -644,6 +644,26 @@ public sealed class StaticHtmlEvidenceExplorerTests
         Assert.DoesNotContain("C:\\private\\OrderService.cs", generated, StringComparison.Ordinal);
     }
 
+    [Theory]
+    [InlineData("projectless-vb-constructor-bridge")]
+    [InlineData("projectless-vb-receiver-bridge")]
+    public async Task Explorer_renders_projectless_vb_bridge_hops_as_supported_paths(string bridgeKind)
+    {
+        using var temp = new TempDirectory();
+        var input = Path.Combine(temp.Path, "scan-output");
+        var output = Path.Combine(temp.Path, "explorer");
+        Directory.CreateDirectory(input);
+        var commitSha = FortyCharCommit("6");
+        await WriteScanArtifactsAsync(input, commitSha: commitSha);
+        await WritePathsReportArtifactAsync(input, commitSha, bridgeEdgeKind: bridgeKind);
+
+        var result = await StaticHtmlEvidenceExplorer.GenerateAsync(new StaticHtmlEvidenceExplorerOptions(input, output));
+
+        Assert.Contains(result.Data.Artifacts, row => row.ArtifactKind == "paths-report" && row.Compatibility == "supported");
+        Assert.Contains(result.Data.Paths, path => path.Hops.Any(hop => hop.EdgeKind == bridgeKind));
+        Assert.DoesNotContain(result.Gaps, gap => gap.RuleId == StaticHtmlEvidenceExplorer.UnsupportedSchemaRuleId);
+    }
+
     [Fact]
     public async Task Explorer_generate_rejects_paths_report_with_non_contiguous_hop_endpoints()
     {
@@ -1786,7 +1806,8 @@ public sealed class StaticHtmlEvidenceExplorerTests
         bool crossSourceEndpoint = false,
         bool reducedCoverage = false,
         bool omitPathLocations = false,
-        bool truncated = false)
+        bool truncated = false,
+        string? bridgeEdgeKind = null)
     {
         var serverCommitSha = FortyCharCommit("2");
         var primarySource = new
@@ -1949,11 +1970,13 @@ public sealed class StaticHtmlEvidenceExplorerTests
                         new
                         {
                             edgeId = "private-edge-id",
-                            edgeKind = crossSourceEndpoint ? "endpoint-match" : "calls",
+                            edgeKind = bridgeEdgeKind ?? (crossSourceEndpoint ? "endpoint-match" : "calls"),
                             fromNodeId = "private-node-start",
                             toNodeId = invalidEdgeTarget ? "wrong-private-node" : "private-node-end",
                             classification = crossSourceEndpoint ? CombinedEndpointClassifications.MatchedEndpoint : "EvidenceEdge",
-                            ruleId = crossSourceEndpoint ? "combined.paths.endpoint-match.v1" : "combined.paths.path.v1",
+                            ruleId = bridgeEdgeKind is null
+                                ? (crossSourceEndpoint ? "combined.paths.endpoint-match.v1" : "combined.paths.path.v1")
+                                : "combined.paths." + bridgeEdgeKind + ".v1",
                             evidenceTier = crossSourceEndpoint ? EvidenceTiers.Tier2Structural : EvidenceTiers.Tier3SyntaxOrTextual,
                             supportingFactIds = new[] { "private-support-fact" },
                             supportingCombinedEdgeIds = new[] { "private-support-edge" },

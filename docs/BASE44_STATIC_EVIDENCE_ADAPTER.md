@@ -32,6 +32,9 @@ The additive JavaScript/JSX/TypeScript/TSX `base44.*.v1` rules cover:
   binding derivation, object spreads, and typed analysis gaps;
 - query shapes for filter, sort, and select arguments without retaining literal
   values;
+- React/JSX/TSX input, select, textarea, and wrapped-control value classes,
+  validation hints, representative select values, and conservative correlation
+  to submitted entity payload fields;
 - static and dynamic environment access;
 - hashed provider origins and dynamic HTTP targets;
 - SQL migration surface hashes and statement kinds; and
@@ -202,6 +205,12 @@ complete syntactic `fieldsJson` alternative set and adds a unique-by-name
 and exact provenance semantics. Unknown or conflicting types remain unknown;
 the static projection does not by itself authorize a database column type. See
 [Base44 entity payload shape v3](BASE44_ENTITY_PAYLOAD_SHAPE_V3.md).
+
+Extractor `base44-evidence/0.15.0` adds `Base44UiInputSemantics` facts with the
+`88mph.base44-ui-input-semantics.v1` descriptor. The evidence is additive and
+widening-only: it may improve smoke values or prevent unsafe storage narrowing,
+but it cannot create database constraints. See
+[Base44 UI input semantics v1](BASE44_UI_INPUT_SEMANTICS_V1.md).
 
 Extractor `base44-evidence/0.4.1` also follows an SDK client through a local
 helper parameter when executable callsites prove the binding. The proof is

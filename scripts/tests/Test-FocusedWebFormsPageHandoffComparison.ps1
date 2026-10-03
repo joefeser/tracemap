@@ -1,0 +1,72 @@
+$ErrorActionPreference = 'Stop'
+$scripts = Split-Path -Parent $PSScriptRoot
+$subject = Join-Path $scripts 'Compare-FocusedWebFormsPageHandoff.ps1'
+$temp = Join-Path ([IO.Path]::GetTempPath()) ('tracemap-page-handoff-compare-' + [Guid]::NewGuid().ToString('N'))
+
+function Write-Handoff([string]$Root, [int]$PathCount, [bool]$IncludeTerminalInventory = $true) {
+    $workbench = Join-Path $Root 'workbench'
+    [IO.Directory]::CreateDirectory($workbench) | Out-Null
+    $paths = if ($PathCount -gt 0) { @(0..($PathCount - 1) | ForEach-Object { @{ factId = "path-$_" } }) } else { @() }
+    $chain = [ordered]@{
+        chainId = 'chain-one'; handlerFactId = 'handler-one'; classification = 'StrongStaticPath'
+        terminalKind = 'sql-query'; traversalStopState = 'supported-terminal-reached'
+        pathEvidence = $paths; callEvidence = @(@{ callEvidenceId = 'call-one' })
+        supportingFactIds = @('fact-one','fact-two'); supportingEdgeIds = @('edge-one')
+    }
+    if ($IncludeTerminalInventory) {
+        $chain.terminalReachabilityAvailable = $true
+        $chain.terminalReachabilityComplete = $true
+        $chain.distinctReachableTerminalCount = 1
+        $chain.reachableTerminalIds = @('terminal-one')
+        $chain.minimumTerminalDistance = 12
+        $chain.pathEnumerationTruncated = $true
+    }
+    $handoff = [ordered]@{
+        schemaVersion = 'webforms-application-page-handoff.v1'
+        pageId = 'page-011'
+        eventChains = @($chain)
+        downstreamBoundaries = @([ordered]@{
+            boundaryId = 'boundary-one'; chainId = 'chain-one'; handlerId = 'handler-one'
+            boundaryCategory = 'database'; boundaryKind = 'sql-query'; boundaryTargetId = 'target-one'
+            terminalEvidenceId = 'terminal-evidence-one'; classification = 'StrongStaticPath'; legacyPathId = 'legacy-one'
+            pathEvidence = @(); supportingFactIds = @(); supportingEdgeIds = @()
+        })
+        gaps = if ($IncludeTerminalInventory) { @() } else { @(@{ classification = 'ObsoleteReachabilityGap' }) }
+    }
+    [IO.File]::WriteAllText((Join-Path $workbench 'page-011.handoff.json'), (($handoff | ConvertTo-Json -Depth 20) + "`n"), [Text.UTF8Encoding]::new($false))
+}
+
+try {
+    $prior = Join-Path $temp 'prior'
+    $current = Join-Path $temp 'current'
+    Write-Handoff $prior 4
+    Write-Handoff $current 1
+    $output = @(& $subject -PriorReviewRoot $prior -ReviewRoot $current -PageId page-011)
+    foreach ($expected in @(
+        'webFormsPageHandoffComparison=valid',
+        'EventChains=prior:1|current:1|delta:0',
+        'Boundaries=prior:1|current:1|delta:0',
+        'PathEvidence=prior:4|current:1|delta:-3',
+        'CallEvidence=prior:1|current:1|delta:0',
+        'coreChainOutcomeDifferences=0',
+        'retainedOutcomeDifferences=0',
+        'classification=stable-retained-outcomes-with-reduced-path-detail')) {
+        if ($expected -notin $output) { throw "Page handoff comparison omitted: $expected" }
+    }
+
+    Write-Handoff $prior 1 $false
+    Write-Handoff $current 1 $true
+    $enrichedOutput = @(& $subject -PriorReviewRoot $prior -ReviewRoot $current -PageId page-011)
+    foreach ($expected in @(
+        'coreChainOutcomeDifferences=0',
+        'terminalInventoryChange=added',
+        'gapClass.ObsoleteReachabilityGap=prior:1|current:0|delta:-1',
+        'retainedOutcomeDifferences=0',
+        'classification=stable-retained-outcomes-with-terminal-inventory-added')) {
+        if ($expected -notin $enrichedOutput) { throw "Page handoff enrichment comparison omitted: $expected" }
+    }
+    Write-Host 'PASS focused Web Forms page handoff comparison'
+}
+finally {
+    if (Test-Path -LiteralPath $temp) { Remove-Item -LiteralPath $temp -Recurse -Force }
+}

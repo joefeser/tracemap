@@ -134,6 +134,7 @@ export const FactTypes = {
   Base44EntityCallsiteDisposition: "Base44EntityCallsiteDisposition",
   Base44EntityPayload: "Base44EntityPayload",
   Base44EntityQuery: "Base44EntityQuery",
+  Base44UiInputSemantics: "Base44UiInputSemantics",
   Base44EnvironmentAccess: "Base44EnvironmentAccess",
   Base44HttpTarget: "Base44HttpTarget",
   Base44MigrationSurface: "Base44MigrationSurface",

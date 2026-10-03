@@ -1,5 +1,91 @@
 # TraceMap Validation Guide
 
+For the reproducible source + compiled website + separate DLL operator workflow,
+run `./scripts/wlocal.ps1` in PowerShell 7. It builds public fixture projects,
+scans and combines independent inputs, generates reports, and asserts attached,
+separate and missing-provider behavior plus cap/Fill/repeatability boundaries.
+See the [local replay and artifact map](../samples/fixture-build/lazy-constructor/README.md).
+The current gate requires at least 32 local passes, including five operator
+layouts, and separately requires authentic Windows publishing when requested.
+Historical validation counts below describe their named older heads.
+
+For deep projectless cross-DLL command evidence, run:
+
+```powershell
+.\scripts\validation\Test-DeepProjectlessCorpus.ps1
+```
+
+The synthetic net48 Page fixture crosses twelve forwarding layers into a
+separate legacy VB provider. It checks exact compiled method order, text/type
+fingerprints, branches/cycles/decoys, unknown values, missing-provider/depth/work
+refusal, logical payload/artifact guards, native proof preparation and immutable
+resume. The current macOS slice passes 12 cases and visibly skips the authentic
+Windows publish theory. Require both mapped/mapless ASP.NET outputs on Windows
+with `-RequireWindowsPublish`; an unrun publish is never accepted as a pass.
+See [corpus commands and limitations](../samples/fixture-build/deep-projectless/README.md).
+The `Deep projectless Windows validation` CI lane runs this same wrapper with
+required mapped/mapless publishing on a Windows runner and retains the public
+synthetic result folder even when tests fail. Its result must be inspected at the
+exact tested head; private application validation remains a separate owner gate.
+
+The authentic Windows run at code head `6dbdf2baf64c3e8ce510ac2c4aa8483eed6f6372`
+[passed all 14 cases, with zero failures or skips](https://github.com/joefeser/tracemap/actions/runs/36788401704).
+Both actual ASP.NET publish modes passed the unchanged 32-MiB logical payload
+guard: mapped read 19,483,643 bytes; mapless read 15,027,147 bytes. Retained TRX,
+validation receipt, published DLL/map hashes, source hashes and separate provider
+PDB hashes were inspected. Source/generator checks accounted explicitly for
+Windows CRLF checkout bytes. Execution assembly hashes are retained in the
+receipt, but those binaries were not uploaded for independent rehashing.
+The native mixed query also passed with six routes in 391 work units. This clears
+the public Windows corpus gate, not the owner-retained application gate.
+The full local .NET suite at that same code head passed 2,996 tests with zero
+failures and one explicit Windows-only skip in 16 minutes 38 seconds. Both
+cases of the skipped theory passed in the authentic Windows run above.
+
+The native five-handler mixed query now prioritizes encoded IL transitions and
+uses a bounded reverse terminal-distance pass to prune branches that cannot finish
+inside the configured depth. All pass work is charged to the same global budget;
+an incomplete reverse pass is discarded. The reproduced query retains six routes
+in 391 work units instead of exhausting 100,000 with no paths. It checks all five
+handlers, both branch literals, the exact deep compiled chain and text/type
+candidate, unknown values and decoy exclusion. Depth/cycle gaps stay partial;
+this is not exhaustive mixed/compiled parity, parameter-value propagation,
+physical drive-read measurement or private migration readiness.
+
+For native one-command start, run the preparation, preflight, execution and
+native-scale suites. Pin explicit receipt/attestation authority, new-root
+reservation, original-config stability across phases, fresh and immutable
+attachment, failed-scan recovery and byte-identical completed resume. The
+2026-09-29 rebuilt slice passed 182 checks with zero failures/skips; final
+exact-head regression and private Windows acceptance remain separate gates.
+Strict fresh synthetic 32/256-page scale retains all 24,000/192,000 sparse
+methods and 128/1,024 static paths under declared stress budgets; see
+[measured scale and limitations](validation/webforms-native-scale-2026-09-29.md).
+
+For native graph-query work accounting, run the combined dependency-path,
+grouped compiled handoff, Web Forms packet, native execution/status and native
+subprocess-scale suites. Pin a shared two-root work/path cap, exact exhaustion,
+no-terminal search work, optional historical counters and grouped round-trip.
+Page and compiled queries each share a budget across their roots; their measured
+sum is not graph-admission or total phase work. Verify an old retained run still
+reports missing measurements as unknown without rewriting its proof.
+
+Git identity probing must distinguish process exit from complete redirected
+output. A timed-out, faulted, cancelled or required-empty pipe read is a failed
+probe and participates in the existing single bounded retry; an intentionally
+empty repository prefix remains valid. `GitMetadataOutputTests` pins this
+distinction without scheduling-dependent sleeps. A targeted identity fixture
+pass does not replace a new exact-head full regression after a failure.
+
+For native compiled Web Forms completed-run copies, validate the execution,
+preflight, preparation, input-validation, evidence-query and native-scale suites.
+The 2026-09-28 rebuilt slice passed 201 tests with zero failures/skips in 3 minutes
+10 seconds; exact-head full regression is a separate gate. A retained public
+256-page/1,024-variant run survived two verified copies and bounded retrieval.
+These are local static-artifact checks, not private Windows junction, full-site,
+runtime SQL or cleanup acceptance. See
+[native workflow relocation and retention](WEBFORMS_NATIVE_WORKFLOW.md#durable-completed-run-copies-and-retention-planning).
+
 This guide defines the repeatable checks used to validate language adapters and cross-index analysis. It complements `docs/ACCEPTANCE.md`: acceptance defines expected behavior, while this file describes the concrete sample and open-source smoke set.
 
 For an operator-oriented multi-repository Angular/.NET scan, combination, and
@@ -7,6 +93,11 @@ interaction-query workflow, see
 [Angular and .NET interaction mapping](ANGULAR_DOTNET_INTERACTION_RUNBOOK.md).
 
 TraceMap validation must stay deterministic and evidence-backed. Do not add LLM calls, embeddings, or prompt-based classification to validation.
+
+The first bounded Windows Task 11 lane, its independent public ILAsm smoke,
+private receipt contract, and C++/CLI feasibility inventory are documented in
+[Task 11 Windows lane](validation/TASK11_WINDOWS_LANE.md). It is local-only and
+does not make the historical corpus a public CI dependency.
 
 ## Required Matrix
 
@@ -28,6 +119,8 @@ Every language adapter should have:
 ## Required Local Commands
 
 Run these before opening or updating a PR that changes scanner behavior:
+
+The build must not introduce compiler or analyzer warnings. Resolve warnings before pushing the PR; narrowly suppress a proven tool false positive only at the affected call and protect the intended behavior with a test.
 
 ```bash
 dotnet build src/dotnet/TraceMap.sln
@@ -935,6 +1028,11 @@ python3 scripts/legacy_codebase_validation.py \
 
 The summary must stay label-only. Do not commit local sample paths, raw scan outputs, raw WSDL/DISCO/XSD contents, endpoint addresses, SOAP actions, namespace URIs, config values, secrets, or generated smoke outputs. WCF metadata facts are static checked-in design-time evidence; they do not prove runtime reachability, deployment, service version compatibility, authorization, binding compatibility, or branch feasibility.
 
+The checked-in Web Forms packet regression also covers the C# composition
+shape `inline AJAX -> ASHX handler -> local helper -> generated WCF client
+operation`. It must end at `wcf-operation` and must not infer remote service or
+database behavior.
+
 ## Legacy WebForms Event Flow Smoke
 
 When changing WebForms markup, code-behind, designer, handler-resolution, or event-flow extraction, run:
@@ -1000,6 +1098,18 @@ unchanged. Inspect `coverage`, `gaps`, and `truncated` before using the packet;
 publish local-only packet output or treat structural candidates as named
 business capabilities, migration estimates, parity, target architecture, or
 release approval.
+
+For projectless VB Web Forms correlation changes, also run:
+
+```bash
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj \
+  --filter ProjectlessVisualBasicWebFormsDiagnosticsTests
+```
+
+The public fixture intentionally contains no `.vbproj` or solution. Confirm
+direct calls are retained by exact handler identity and containing span, the
+UI-only handler remains call-free, and terminal-free gaps distinguish observed
+downstream edges, bounded traversal truncation, and no retained backend edge.
 
 When changing Web Forms batch/data-movement extraction or packet composition,
 run the focused `LegacyBatchDataMovementExtractorTests` and
@@ -1165,6 +1275,7 @@ The script uses exact commit SHAs so results are comparable over time.
 | --- | --- | --- | --- | --- |
 | `ProjectExtensions.Azure.ServiceBus` | C# | `https://github.com/ProjectExtensions/ProjectExtensions.Azure.ServiceBus.git` | `2a8e72c8f5680edf2096b05ac08c39d47a95cef8` | usually `Level1SemanticAnalysisReduced` |
 | `fluentjdf` | C# | `https://github.com/joefeser/fluentjdf.git` | `9490e699a89bb21f4aabf198173fc6382f84a53f` | usually `Level1SemanticAnalysisReduced` |
+| `community-visual-basic` | VB.NET | `https://github.com/CommunityVB/Community.VisualBasic.git` | `20d2a51dfc9f342848ad134952ceaa8d79302559` | `Level1SemanticAnalysisReduced`; see the VB.NET adapter section |
 | `scip-typescript` | TypeScript | `https://github.com/sourcegraph/scip-typescript.git` | `891eb4293709a6a587bf4468dfa1b45a85182fd9` | usually `Level1SemanticAnalysisReduced` |
 | `axios-npm-lock` | JavaScript/TypeScript | `https://github.com/axios/axios.git` | `84a9f3b9a4f3244b8c8e818f557d64c7b964fb25` | usually `Level1SemanticAnalysisReduced`; committed npm `package-lock.json` v3 evidence |
 | `scip-java` | JVM | `https://github.com/sourcegraph/scip-java.git` | `825463cb15d540d45c680593aad1f634330435cf` | usually `Level1SemanticAnalysisReduced` |
@@ -1205,6 +1316,154 @@ sqlite3 <out>/index.sqlite "select count(*) from object_creations;"
 sqlite3 <out>/index.sqlite "select count(*) from argument_flows;"
 sqlite3 <out>/index.sqlite "select target_symbol, properties_json from facts where fact_type='HttpRouteBinding';"
 ```
+
+## VB.NET Adapter
+
+PR #801 promotion-repair examples additionally exercise compiled With and
+conditional members, parenthesis-free generic/default-property expressions,
+negative late-bound expressions, linked-document rollback, and explicit project
+scope typos. Run `PromotionReview` and `VisualBasicDocumentRollback` filters in
+addition to the adapter suites below. `ManagedMetadataExtractorTests` contains
+isolated CLI scans of cyclic TypeSpec, TypeRef and NestedClass metadata; these
+must finish with partial-gap artifacts rather than crash the test process.
+`WebFormsWizardBuildTests` launches the checked-in public `PipeHolder` fixture
+to verify environment controls and independently bounded inherited-pipe drain.
+The local-distribution matrix runs that suite and real directory-junction
+preflight/relocation checks on Windows. A Unix pass is not Windows acceptance.
+
+The wizard returns `WEBFORMS_WIZARD_BUILD_OUTPUT_UNTERMINATED` when a process
+exits without closing its inherited output pipes. It disposes its readers and
+does not accept a partial output hash as build success. Portable process-tree
+cleanup remains best effort: already-orphaned grandchildren cannot reliably be
+discovered after the parent exits; no containment guarantee is made. Builds
+still require explicit consent and never launch a customer website.
+
+Web Forms client brace detection recognizes common regex-literal expression
+positions, division, quoted/template strings and JavaScript/HTML comments. It
+is a bounded textual heuristic, not a complete JavaScript parser; regex literals
+after ambiguous statement contexts and template interpolation are not fully
+parsed. Unterminated recognized literals do not produce a guessed closing brace.
+Inline expression escaping follows the page's explicit Language directive,
+falling back to the linked source extension only if no language is declared.
+Packet path evidence lacking a paired scan/commit identity is omitted with a
+provenance gap instead of borrowing the primary snapshot commit.
+
+The VB.NET adapter follows the same matrix: local modern/legacy/Web Forms
+fixtures, a reducer-compatible shared index, the pinned OSS smoke, and the
+private-path guard. Adapter scope, extractor identities, fact families,
+fallback behavior, supported project types, and limitations are documented in
+[`VBNET_ADAPTER.md`](VBNET_ADAPTER.md); the fixture corpus and the pinned
+smoke repository are documented in
+[`VBNET_FIXTURES.md`](VBNET_FIXTURES.md).
+
+Required local validation for VB.NET adapter changes:
+
+```bash
+dotnet build src/dotnet/TraceMap.sln
+dotnet test src/dotnet/TraceMap.sln
+
+# Focused VB.NET suites: extraction facts, foundation inventory/loading, the
+# synthetic validation matrix, event/Web Forms composition, and fixture syntax checks.
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj \
+  --filter 'FullyQualifiedName~VisualBasic|FullyQualifiedName~VbNetFixture'
+
+# Initial compiler-backed ADO.NET command/adapter/Fill/Execute evidence.
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj \
+  --filter FullyQualifiedName~VisualBasicDataBoundaryTests
+
+# Compiler-backed HTTP/config/file evidence, explicit service gaps, privacy,
+# determinism, and packet/docs/query-recipe/WITS handoff consumption.
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj \
+  --filter FullyQualifiedName~VisualBasicExternalBoundaryTests
+
+# VB scan -> Web Forms packet -> batch inspection -> private/anonymous source
+# review, plus language-aware source navigation and privacy assertions.
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj \
+  --filter 'FullyQualifiedName~VisualBasicWebFormsCompositionTests|FullyQualifiedName~WebFormsCodePathReviewTests'
+
+# Modern (semantic success), legacy (fallback/reduced), and Web Forms
+# (inventory + reduced) CLI fixture scans.
+dotnet run --project src/dotnet/TraceMap.Cli -- scan --repo samples/vb-modern-sample --out <tmp>/vb-modern
+dotnet run --project src/dotnet/TraceMap.Cli -- scan --repo samples/vb-legacy-sample --out <tmp>/vb-legacy
+dotnet run --project src/dotnet/TraceMap.Cli -- scan --repo samples/vb-webforms-sample --out <tmp>/vb-webforms
+
+# Shared artifact conformance (also enforces rule registration) for each scan.
+python3 scripts/validate-adapter-artifacts.py <tmp>/vb-modern
+python3 scripts/validate-adapter-artifacts.py <tmp>/vb-legacy
+python3 scripts/validate-adapter-artifacts.py <tmp>/vb-webforms
+
+# Determinism: two consecutive modern-fixture scans are byte-identical.
+dotnet run --project src/dotnet/TraceMap.Cli -- scan --repo samples/vb-modern-sample --out <tmp>/vb-modern-repeat
+cmp <tmp>/vb-modern/facts.ndjson <tmp>/vb-modern-repeat/facts.ndjson
+
+# Useful inspection queries.
+sqlite3 <tmp>/vb-modern/index.sqlite "select fact_type, count(*) from facts where rule_id like 'vb.%' group by fact_type order by fact_type;"
+sqlite3 <tmp>/vb-modern/index.sqlite "select count(*) from symbols where language = 'visualbasic';"
+sqlite3 <tmp>/vb-modern/index.sqlite "select count(*) from call_edges where rule_id like 'vb.semantic.%';"
+sqlite3 <tmp>/vb-modern/index.sqlite "select count(*) from call_edges where rule_id like 'vb.syntax.%';"
+
+./scripts/check-private-paths.sh
+git diff --check
+```
+
+Expected fixture postures:
+
+- `vb-modern-sample`: `Level1SemanticAnalysis` / `Succeeded`, compiler-resolved
+  Tier1 families, no file-wide fallback duplicates, and no
+  `vb.semantic.workspace.v1` gaps. Individual unresolved call sites may retain
+  bounded Tier3 facts under `vb.syntax.invocation.v1`,
+  `vb.syntax.callgraph.v1`, or `vb.syntax.objectcreation.v1`.
+- `vb-legacy-sample`: `Level1SemanticAnalysisReduced` / `FailedOrPartial`,
+  partial Tier1 evidence over the readable files, no file-wide fallback
+  duplicates, bounded Tier3 evidence for individual unresolved call sites,
+  and category-only gaps carrying bounded `BCxxxxx` ids.
+- `vb-webforms-sample`: `Level1SemanticAnalysisReduced` / `FailedOrPartial`
+  on cross-platform SDKs; bounded VB Handles/AddHandler/RemoveHandler,
+  RaiseEvent, WithEvents designer, linked control/handler, and IsPostBack
+  evidence remains available. Event evidence is never an executed call edge.
+
+The external-boundary synthetic matrix additionally proves shared HTTP and
+configuration facts, shared batch/file projection, compiler-proven WCF/ASMX
+proxy mappings, and explicit mapping gaps for unsupported service shapes.
+Recognized service-framework identities require their expected strong-name public
+key token; unsigned assemblies with the same simple name do not produce Tier 1
+service facts. The matrix also covers renamed and inherited WCF operations,
+ASMX service-context admission, same-name helper rejection, unresolved command
+construction gaps, classic .NET Framework HTTP/configuration assembly names,
+ASMX Web Forms projection, and the shared `sql-query` classification for
+data-adapter Fill.
+
+VB.NET pinned OSS smoke (`community-visual-basic` —
+`CommunityVB/Community.VisualBasic`, MIT, pinned at
+`20d2a51dfc9f342848ad134952ceaa8d79302559`):
+
+```bash
+TRACEMAP_OSS_SMOKE_REPOS=community-visual-basic \
+  scripts/smoke-open-source-repos.sh /tmp/tracemap-oss-cache /tmp/tracemap-oss-smoke
+```
+
+The script clones the pin, resets the working tree with `git clean -fdx`
+(required: design-time builds write `obj/` state inside the clone, which
+changes later design-time loads and gap counts if it is not cleaned), scans
+it, and asserts the required artifacts. Recorded expectations at the pin:
+`Level1SemanticAnalysisReduced` / `FailedOrPartial` with 110,726 facts,
+6,314 `visualbasic` symbols, 928 `vb.semantic` call edges, 517 object
+creations, 175 argument flows, 98 symbol relationships, and 75,455
+category-only `AnalysisGap` rows. Reduced coverage is expected at this pin
+(unrestored packages and out-of-support target frameworks); the smoke proves
+artifact generation and static evidence extraction over a real VB.NET
+repository, not that the repository builds or that coverage is complete.
+
+VB.NET evidence is static and bounded: it never proves compilation success,
+runtime reachability, event firing, execution, deployment, or impact.
+Cross-language symbol-identity joins between VB-scan symbols and C#-declared
+symbols are not established. VB/Web Forms event evidence is static and does
+not establish runtime attachment, firing, ordering, postback behavior, or
+execution.
+Focused review can annotate retained `.vb` spans when raw source is explicitly
+enabled. The supplied source root need not be a Git checkout, and TraceMap does
+not claim that working-tree source equals the recorded scan commit. Anonymous
+HTML/JSON contains structural aliases and safe rule/tier provenance only.
 
 ## What SQL Means Here
 
@@ -2091,3 +2350,1789 @@ TraceMap query recipe. Confirm that mismatches fail before root publication and
 anonymous artifacts contain no handoff links, private identities, local paths,
 fact IDs, or source-of-truth locators. Application-database questions must never
 contain credentials, configuration, raw SQL, or execution instructions.
+
+### Web Forms full application workbench
+
+For changes to all-surface packet review, run:
+
+```bash
+pwsh -NoProfile -File scripts/tests/Test-FocusedWebFormsApplicationWorkbench.ps1
+```
+
+Confirm that one deterministic report/handoff pair is generated per selected
+surface, reports return to the root index, raw source remains opt-in and bounded,
+and an explicitly supplied evidence-docs corpus remains byte-unchanged. The
+workbench is navigation over retained evidence, not a scan, BRD, runtime claim,
+or human-review overlay. Confirm that call projections, unique call facts, and
+normalized source call sites remain distinct; matching syntax/semantic evidence
+collapses only in the normalized view; compiler-resolved declaring type, assembly,
+and technology-family metadata survives into the private handoff; and reaching the
+256-fact call-evidence ceiling is visible separately from traversal truncation.
+Ceiling detection is a bounded-coverage warning and must not be rendered as proof of
+an exact source-call count.
+
+For inline Web Forms client behavior, also confirm that supported jQuery event
+bindings, mutations, and numeric maximum-length constraints retain Tier3 rule
+IDs and exact markup spans through the modernization packet, docs export, and
+page handoff. Trigger rows must render their retained binding and handler spans,
+and source excerpts must remain readable without inheriting inline-code block
+background styling.
+
+### Web Forms one-root review pipeline
+
+For changes to clean-run setup, persisted configuration, bounded project
+selection, resume behavior, or the one-root artifact layout, run:
+
+```bash
+pwsh -NoProfile -File scripts/Invoke-FocusedWebFormsReview.Tests.ps1
+pwsh -NoProfile -File scripts/tests/Test-FocusedWebFormsPipeline.ps1
+pwsh -NoProfile -File scripts/tests/Test-FocusedWebFormsApplicationWorkbench.ps1
+```
+
+Confirm the generated config has exactly seven operational settings; explicit
+solution, project, discovery, and projectless modes remain distinct; discovery
+does not escape the three configured roots; and all-page mode does not create a
+surface list. Confirm an unescaped Windows path fails before JSON parsing with
+forward-slash guidance, including a path containing `\t` that the JSON parser
+could otherwise silently interpret as a tab. A clean end-to-end fixture must
+publish scan, packet, evidence-docs, and workbench folders under one review
+root. Immediately rerun
+the unchanged command and confirm every completed stage reports `state=reused`
+under the same run ID. Changing the config, source commit, TraceMap commit,
+pipeline generator, or any retained artifact must fail resume validation.
+
+Inspect `run-receipt.json` and confirm it records the config and generator
+SHA-256 values, source and TraceMap commits, and the exact relative path, byte
+count, and SHA-256 for every retained stage artifact. Public/shareable
+regression checks must continue to reject private paths, symbols, source, scan
+identity, commit identity, and private-input fingerprints.
+
+## Required multi-language canonical-identity corpus
+
+This required track is now scoped by issue #767 and
+`.kiro/specs/compiled-dotnet-evidence-foundation/`. Its fixture and platform
+matrix is authoritative; do not maintain a second case list here.
+
+The validation floor remains: checked-in public C#, VB.NET, and F# fixtures;
+semantic and failed-build/projectless lanes where supported; explicit F# source
+coverage gaps until an adapter exists; exact full-signature identities; bounded
+ambiguity gaps; validated `facts.ndjson` and `index.sqlite`; deterministic
+repeat scans; and unchanged source-derived evidence when compiled inputs are
+missing, stale, ambiguous, unbound, mismatched, unreadable, or unsupported.
+
+The default fast suite runs portable managed fixtures on macOS and Windows.
+Legacy .NET Framework builds, Windows PDB behavior, ILAsm/ILDAsm, Web Forms
+build behavior, the historical `dotnetperf` corpus, and C++/CLI remain explicit
+Windows lanes. A macOS pass must report those checks as not run rather than
+implying coverage.
+
+### Compiled .NET evidence foundation
+
+The first compiled-evidence slice accepts only assemblies named explicitly by
+`--compiled-input` and dependencies named explicitly by
+`--compiled-dependency`. Both options are repeatable. It does not discover or
+load dependencies from the host, NuGet cache, runtime directory, application
+base, or `PATH`. Run the portable fixture matrix with:
+
+```bash
+dotnet restore src/dotnet/TraceMap.sln --locked-mode
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj \
+  --no-restore --filter FullyQualifiedName~ManagedMetadataExtractorTests
+dotnet test src/dotnet/TraceMap.sln --no-restore
+```
+
+The focused matrix builds public C#, VB.NET, and F# fixtures and checks exact
+assembly, module, type, field, method, constructor, property, and event
+identities. It also covers global and colliding namespaces, nested and generic
+types, overloads, generated members, full CLR signatures, deterministic repeat
+output, metadata-location round trips, missing/malformed/native/over-budget
+inputs, reader disagreement, unbound/stale/mismatched provenance, duplicate
+assemblies, metadata-bearing secondary modules, delimiter-bearing identity
+components, filesystem-semantic receipt-path deduplication, source-analysis
+level isolation, and zero/multiple declared dependency candidates. The
+`local-distribution-validation.yml` macOS and Windows jobs run this same focused
+matrix; Windows-specific PDB, legacy framework, Web Forms build, historical
+corpus, and C++/CLI lanes remain deferred.
+
+A representative local scan is:
+
+```bash
+compiled_fixture="$(pwd)/samples/compiled-dotnet-evidence/csharp/bin/Debug/net10.0/CompiledEvidence.CSharp.dll"
+dotnet run --project src/dotnet/TraceMap.Cli -- scan \
+  --repo samples/modern-sample \
+  --out /tmp/tracemap-compiled-scan \
+  --compiled-input "$compiled_fixture"
+python3 scripts/validate-adapter-artifacts.py /tmp/tracemap-compiled-scan
+```
+
+Relative compiled-input paths are resolved against `--repo`; use an absolute
+path when the admitted binary is outside that repository root.
+
+Inspect all five required artifacts. `scan-manifest.json` must contain
+`compiledInputProvenance` with expected inputs, effective limits, ordered
+outcomes, generator and bounded-input SHA-256 values, coverage, and
+`artifactVisibility=local-only`. Compiled facts must use safe locators,
+`evidenceLocationKind=managed-metadata-v1`, module-local metadata tokens, and a
+`1..1` non-source sentinel with no source snippet hash. Adding compiled inputs
+must not change normalized source facts.
+
+Optional receipts use `compiled-input-binding-set.v1` with a `bindings` array.
+Each `compiled-input-binding.v1` entry names the exact `safeLocator`, artifact
+SHA-256, optional exact assembly identity, binary source repository, 40-hex
+source commit, and binary build identity. When the source commit differs from
+the scan commit, `binarySourceCommitRelation` must be exactly
+`ancestor-of-scan` for the input to be classified as stale; an unequal commit
+without that externally validated relation is a mismatch, because inequality
+alone does not prove ancestry. A receipt is bound only when the artifact and
+optional assembly identity match and all source/build fields are complete;
+otherwise the lane emits an explicit incomplete, stale, mismatch, or unbound
+gap. Receipt paths, raw repository names, and raw build identities are not
+emitted; local facts retain SHA-256 commitments for repository/build identity
+plus the validated source commit and categorical binding state. Any receipt
+read, limit, ambiguity, or schema gap makes compiled coverage partial even when
+all admitted binaries have otherwise bound receipts.
+
+The admission budget defaults to 32 artifacts, 64 MiB per file, 50,000 types,
+250,000 members, 4,096 characters per retained text value, and 500,000 total
+work units. Override these only with the positive `--compiled-max-artifacts`,
+`--compiled-max-file-bytes`, `--compiled-max-types`,
+`--compiled-max-members`, `--compiled-max-text`, and `--compiled-max-work`
+options. All limits must be positive, and `--compiled-max-text` must be at least
+71 characters so a privacy-projected locator can retain its complete SHA-256
+identity. A limit failure is partial coverage, never a clean or complete result.
+When declarations exceed the artifact limit, provenance retains no more than
+the configured number of per-input rows and records the omitted declaration
+count plus a SHA-256 commitment over their privacy-projected identities.
+Receipt paths use the same file/count/text/work budget and a maximum nesting
+depth of 16; metadata-row work for both independent readers is charged from the
+total-work budget before either reader materializes observations.
+
+### Exact source-to-metadata reconciliation
+
+Task 8 activates `dotnet.compiled.source-identity.v1`. The reconciler consumes
+compiler-resolved C# and Visual Basic declaration identities without changing
+their ordinary source facts, and compares them only to the complete normalized
+managed metadata identity. A positive `SourceMetadataIdentityReconciled` edge
+is Tier1 semantic evidence and requires exactly one metadata candidate plus a
+validated `bound` compiled-input receipt. The edge retains the source and
+metadata endpoint identities, source and compiled supporting fact IDs, rule
+and extractor versions, bounded-input and generator SHA-256 values, receipt
+binding SHA-256, compiled provenance state, relationship proof, and limitation.
+The reconciliation-only source endpoint is a complete source-derived normalized
+metadata shape, including enclosing generic arity, generic-parameter ordinals,
+method arity, ref/ByRef modes, constructed enclosing-type arguments, and the
+complete signature. The original Roslyn
+declaration identity is retained separately as `sourceDeclarationIdentity`;
+source-only scans and their ordinary source fact identities are unchanged.
+Named signature types include their full assembly-reference scope on both the
+Roslyn and managed-metadata paths, preventing same namespace/name types from
+different assemblies from comparing equal. Primitive signature codes retain
+their intrinsic ECMA identity; `System.Decimal`, which metadata encodes as a
+scoped value-type reference rather than a CLI primitive, retains that scope.
+Other Roslyn special types that lack CLI primitive signature codes, including
+`System.DateTime`, also follow the scoped named-type path.
+Roslyn error types and unavailable type scopes
+fail closed as incomplete identities and can never produce a Tier1 edge.
+Top-level C# statements are not declarations and do not enter the candidate
+lane. If Roslyn cannot resolve a declaration symbol, its syntax-located
+observation is Tier3 rather than Tier1 and remains paired with an explicit
+Tier4 incomplete-identity gap.
+
+The following never select a candidate: display strings, simple names,
+equal arity, path proximity, timestamps, or metadata tokens. Zero candidates,
+multiple candidates, incomplete source identities, optional-parameter state
+disagreement, and unbound, stale, mismatched, ambiguous, disputed, unsupported,
+or incomplete compiled evidence emit Tier4 `AnalysisGap` facts and no edge.
+When an exact metadata candidate is rejected for optional-parameter mismatch,
+the gap retains that candidate's compiled provenance state and receipt-binding
+digest.
+Compiler-generated members remain separate except for Roslyn's explicit
+associated property/event accessor relationship. State machines, lambda
+methods, backing fields, and generated types are not inferred back to source.
+
+The public cases are versioned in
+`samples/compiled-dotnet-evidence/fixture-cases.json`. They record stable case
+IDs, exact expected source and metadata identities, expected rule and tier,
+expected gaps, and non-claims. The focused tests cover namespaces, nested and
+generic types, overloads with complete signatures, constructors,
+properties/indexers, events and accessors, `ref`/`ByRef`, optional parameters,
+explicit interfaces where representable, scoped decimal signatures,
+scoped non-primitive special types, constructed nested signatures with
+outermost-first arguments even when the nested type declares no parameters, and
+same-looking declarations across assemblies and languages. The C# matrix also
+pins class, struct, record-class, and record-struct primary constructors, ref
+field signatures, and the intrinsic `System.TypedReference` metadata shape.
+Source custom modifiers fail closed rather than producing a partial identity.
+F# has no source adapter: its compiled identities
+remain available, one explicit unsupported-source-adapter gap is emitted, and
+no source join is guessed.
+
+Run the reconciliation lane with:
+
+```bash
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj \
+  --no-restore --filter FullyQualifiedName~SourceMetadataReconciliationTests
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj \
+  --no-restore --filter FullyQualifiedName~ManagedMetadataExtractorTests
+```
+
+For positive CLI scans, pass the exact fixture assembly and its validated
+`compiled-input-binding-set.v1` receipt. Inspect `facts.ndjson` and
+`index.sqlite` for the exhaustive edge/gap rows. `scan-manifest.json`,
+`report.md`, and `scan-receipt.json` carry the bounded
+`source-metadata-reconciliation.v1` summary; each retained entry keeps both
+endpoint identities and provenance, while any receipt-view overflow is
+committed by omitted count and SHA-256. Repeated-scan checks compare
+`facts.ndjson`, the human report, the reconciliation summary, and the indexed
+fact rows byte-for-byte; the operational wall-clock `scannedAt` field and
+receipt stage durations are intentionally not evidence identifiers.
+
+Summary entries also retain their own evidence fact ID, source file and line
+span, commit SHA, exact total join/gap counts, and known rejected-provenance
+state. Per-entry compiled supporting IDs are bounded to 256 with an omitted
+count and digest; summary overflow hashing uses length-framed canonical values
+for every serialized entry field. The Markdown report independently discloses
+its 50-row display bound and points to exhaustive `facts.ndjson` and
+`index.sqlite` rows. If semantic source identity collection is unavailable,
+reconciliation coverage is `source-metadata-partial` even when no candidate row
+could be emitted. `Level1SemanticAnalysisReduced` is also partial because a
+failed project may have omitted declarations even when every retained candidate
+joins; this does not change compiled-input coverage.
+
+Reconciliation coverage is independent of `analysisLevel`. Missing or partial
+compiled inputs never erase, re-tier, or otherwise change source-derived facts.
+Task 8 does not itself read PDBs or sequence points, inspect IL bodies or calls,
+perform rewrite analysis, execute private or historical corpora, add legacy
+Framework/Web Forms or C++/CLI support, or introduce fuzzy/AI matching. The
+separate Task 9 contract below adds only the PDB layer.
+
+The C# and Visual Basic changes in this slice are restricted to the internal
+candidate lane activated by explicit compiled inputs. The full .NET suite and
+source-only partial-compilation regression are required to prove ordinary
+adapter facts stay unchanged. The pinned C#/VB public OSS smoke is explicitly
+deferred for this slice because it does not supply admitted compiled inputs and
+therefore cannot exercise source-to-metadata reconciliation; no public-smoke
+coverage claim is made.
+
+### Independent source canonical-identity matrix
+
+The compiled-evidence matrix does not replace the existing source-side adapter
+regressions. The source matrix remains independently required and must cover:
+
+- identical simple type and member names across namespaces, assemblies,
+  projects, and languages;
+- nested/repeated and partial types, VB root namespaces, aliases/imports, and
+  linked source files;
+- equal-arity overloads with different complete signatures, constructors,
+  properties/indexers, operators, inheritance, and cross-language candidates;
+- reflection, runtime assembly loading, generated/dynamic assemblies, and
+  unresolved factory or registration paths that must fail closed; and
+- end-to-end repository scans, `facts.ndjson`/`index.sqlite` validation,
+  multi-source combine, reducers/reports, bounded ambiguity gaps, and
+  deterministic repeat outputs.
+
+Where an adapter lacks a source lane, including F# until its adapter exists,
+the matrix must assert explicit unsupported coverage and zero inferred source
+joins. Task 8 of the compiled-evidence foundation may consume these source
+fixtures for reconciliation, but it must not redefine or remove their
+source-only acceptance contract.
+
+### PDB identity and sequence-point evidence
+
+Task 9 activates `dotnet.compiled.pdb-input.v1`,
+`dotnet.compiled.pdb-identity.v1`, `dotnet.compiled.sequence-point.v1`, and
+`dotnet.compiled.pdb-gap.v1`. PDB discovery is never ambient. Supply each
+candidate explicitly with `--pdb-input`; the scanner applies the positive
+artifact, byte, document, method, sequence-point, source-file, source-byte,
+text, and total reconciliation-work limits controlled by the `--pdb-max-*`
+options. Paths are resolved and deduplicated using the checkout filesystem's
+case semantics before admission, so relative, absolute, and `./` aliases of
+one present or missing PDB count as one input. PDB binding reads are derived
+only from the admitted compiled-input
+descriptors retained by the compiled evaluator; omitted paths are never
+reopened or allowed to reenter candidate selection. Every SRM document/method
+row and sequence point is charged before work proceeds. Cecil type traversal is
+iterative, and every type, method, and retained sequence point is charged so
+deep empty nesting cannot bypass the work budget or consume the process stack.
+Binding admission retains only a verified artifact path, digest, and CodeView
+identities, not every compiled assembly's bytes. The uniquely matched assembly
+is reread under the compiled file-size bound and its admitted digest is
+reverified immediately before the independent Cecil comparison. A changed,
+missing, oversized, or unreadable matched assembly emits
+`PdbCompiledArtifactChangedOrUnreadable` and no positive PDB facts. Compiled
+binding and PDB file reads poll scan cancellation between bounded chunks.
+Source files are streamed once into reusable
+SHA-1/SHA-256 indexes, poll scan cancellation during file reads, and are never
+reread once per PDB document. Post-admission metadata-method reconciliation
+uses a single index keyed by assembly locator and MethodDef token; sequence
+points use a per-PDB document-row index. Neither lookup repeatedly scans the
+full fact or document collection. The manifest and execution
+receipt retain `pdb-input-provenance.v1`, including the exact generator SHA-256,
+canonical bounded-input SHA-256, safe locators, effective limits, per-input
+outcomes, omissions, and input-only coverage state. Source or metadata
+reconciliation never rewrites this input commitment. They also retain the bounded
+`pdb-evidence-summary.v1` endpoint/support summary and its omitted-entry digest.
+The summary input digest additionally commits the source snapshot, scan commit,
+and retained PDB fact set because source-document edges depend on those inputs.
+The PDB digest participates in `scanId` before PDB fact IDs are derived.
+
+A portable PDB is admitted only when its exact portable content GUID/stamp
+matches exactly one CodeView directory entry from exactly one explicitly admitted managed
+assembly and that assembly has acceptable `bound` compiled provenance. File
+names, path proximity, timestamps, display strings, and metadata tokens alone
+never establish this binding. Duplicate matching CodeView entries in one PE
+remain multiple candidates and emit `AmbiguousPdbAssemblyMatch`; they are not
+collapsed by identical identity text. System.Reflection.Metadata reads the portable
+document, method-debug-information, and ordered sequence-point rows; Mono.Cecil
+independently reads the bound assembly/PDB pair. TraceMap compares complete
+per-method sequence-point shapes including token, ordinal, IL offset, document
+checksum, hidden state, and exact source range. Reader disagreement withholds
+all positive PDB facts for that input and emits `PdbReaderDisagreement`. The
+comparison uses duplicate-sensitive shape counts, not uncharged sorting;
+each observed comparison consumes a PDB work unit.
+
+An admitted input emits separate document and method facts. A
+`MetadataPdbMethodReconciled` edge requires exactly one eligible metadata
+method from the same bound assembly and the exact module-local MethodDef row.
+Every positive fact retains the PDB content identity, raw local PDB digest,
+bounded-input and generator digests, matched assembly identity and safe
+locator, compiled receipt-binding digest, provenance state, rule, tier,
+extractor version, and limitation. Document, method, and sequence-point rows
+also retain their supporting PDB input/document/method fact IDs; method edges
+retain the exact compiled fact ID; sequence points retain the exact
+metadata/PDB reconciliation fact ID. No sequence-point fact is emitted unless
+that exact one-candidate method reconciliation exists. Summary endpoints also
+retain file path, structured line span, and commit SHA directly. These are evidence relationships, not IL
+body or call extraction.
+
+PDB document names are not emitted. Source-document reconciliation compares a
+supported SHA-1 or SHA-256 document checksum to inventoried C# and VB
+source bytes, including the specialized C#/VB source kinds already classified
+by `FileInventory` such as code-behind, designer, generated, and assembly-info
+files. This is checksum indexing, not additional legacy-framework analysis, and
+emits a Tier2 structural checksum edge only for exactly one candidate. Zero candidates,
+multiple candidates, unsupported checksum algorithms, and F# source documents
+emit explicit gaps and no edge. F# still retains its compiled PDB document,
+method, metadata reconciliation, and sequence-point facts; because no F# source
+adapter exists, it emits `PdbSourceReconciliationUnsupportedLanguage` and zero
+guessed source-document joins. PDB coverage and source `analysisLevel` remain
+independent, and missing or partial PDB evidence never changes source facts.
+Any source-, method-, reader-, or input-reconciliation gap makes final PDB
+coverage `pdb-partial` in the manifest's evidence summary, report, and receipt.
+`PdbInputProvenance.CoverageState` describes only the admitted PDB/assembly
+inputs committed by its bounded-input digest; it can remain `pdb-complete`
+when source or method reconciliation is partial. The summary commits the
+source snapshot, scan commit, and retained PDB fact IDs. Its omitted endpoints
+are digested incrementally in the same canonical JSON order without retaining
+exhaustive summary records.
+
+The v3 public fixture catalog adds stable PDB case IDs, expected identity
+formats, rule/tier expectations, gaps, and non-claims. The portable C#/VB/F#
+matrix covers exact binding, mismatched/unbound inputs, zero and multiple
+source-checksum candidates, hidden points, multi-document methods,
+non-monotonic ranges, async/iterator/lambda generated members, malformed and
+missing inputs, limit exhaustion, and deterministic repeat output. Generated
+state-machine and lambda members retain their own metadata/PDB identities and
+are not collapsed back to a source declaration.
+
+Native Windows PDBs are recognized only by the complete MSF 7.00 container
+signature and are intentionally fail-closed in this contract. Other
+non-portable bytes are `MalformedPdbInput`. On macOS
+and Linux they emit `WindowsPdbRequiresWindows`; on Windows they emit
+`WindowsPdbIndependentReaderUnavailable`. The Windows CI lane builds real C#
+and VB native PDBs with the Windows desktop Roslyn compilers and `/debug:full`,
+then proves that no positive document,
+method, or sequence-point facts escape that gap. Mono.Cecil's native reader is
+not accepted as a sole identity oracle. Positive native Windows PDB support
+requires a separately documented independent reader/cross-check contract; no
+portable-equivalence claim is made.
+
+Run the PDB lane with:
+
+```bash
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj \
+  --no-restore --filter FullyQualifiedName~PortablePdbExtractorTests
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj \
+  --no-restore --filter FullyQualifiedName~SourceMetadataReconciliationTests
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj \
+  --no-restore --filter FullyQualifiedName~ManagedMetadataExtractorTests
+```
+
+For a positive CLI scan, pass the exact fixture assembly, its validated
+`compiled-input-binding-set.v1` receipt, and the matching portable PDB. Verify
+all five required scan artifacts plus `scan-receipt.json`. Repeat scans must
+have byte-identical `facts.ndjson` and `report.md`, identical PDB provenance,
+and equivalent indexed PDB rows. Operational timestamps and receipt durations
+remain non-evidence diagnostics. Task 9 performs no IL body/call extraction,
+rewrite analysis, private or `dotnetperf` corpus execution, legacy
+Framework/Web Forms build, C++/CLI work, graph database work, fuzzy matching,
+or AI classification.
+
+### IL body and call evidence (Task 10 first slice)
+
+The first Task 10 slice activates `dotnet.compiled.il-body.v1`,
+`dotnet.compiled.il-call.v1`, and `dotnet.compiled.il-gap.v1` behind the
+explicit `--il-body-evidence` flag. The lane is otherwise inert: without the
+flag a scan produces no IL facts, no `ilBodyProvenance` manifest section, no IL
+known gaps, and unchanged source, compiled-metadata, and PDB behavior. IL
+inputs are never discovered; the lane processes only the artifacts the
+compiled evaluator itself admitted, rereads each one under the compiled
+file-size bound, reverifies its admitted SHA-256 immediately, and emits
+`IlCompiledArtifactChangedOrUnreadable` when the bytes changed, went missing,
+or grew too large. Requesting the flag without any admitted compiled input
+emits the rule-backed `IlCompiledEvidenceUnavailable` gap.
+
+The canonical body identity is operand-aware by construction:
+`<exact metadata method identity>|il-body:instructions:<n>:sha256:<digest>`,
+where the digest commits the complete canonical encoding — opcode sequence,
+resolved direct-call target identities with module-local tokens, branch and
+switch target offsets, string-literal length and SHA-256 digests, numeric
+constant bit patterns, variable and argument indexes, raw non-call token
+operands, ordered local-variable signatures, exception-region boundaries with
+catch-type identities and filter offsets, and max stack. Equal opcode
+sequences with different member, string, constant, or branch-target operands
+therefore produce different identities, and the fixture matrix proves each
+pair. The digest is byte-layout sensitive by design; this slice makes no
+semantic-equivalence or rewrite claim in either direction.
+
+Short integer operands preserve signed `ldc.i4.s` constants and unsigned
+prefix bytes such as `unaligned.`. User-string digests hash the exact UTF-16
+code units in little-endian order, including unpaired surrogates; replacement
+fallback must not collapse distinct literal operands. Regression fixtures
+cover all three valid `unaligned.` alignments and distinct high-surrogate,
+low-surrogate, and replacement-character operands.
+
+Mono.Cecil is not the sole oracle. Mono.Cecil and an independent
+System.Reflection.Metadata single-pass raw-IL reader (opcode tables plus
+metadata token resolution) each rebuild the complete canonical encoding for
+every admitted input, and the two results must agree on the assembly and
+module identity, the method identity, every body digest, every call-site
+offset, opcode, reference kind, reference token, and target identity, the
+locals, the exception regions, and max stack. A method disagreement withholds
+that method's positive IL facts, retains only fully agreed methods from the
+same module, and marks the input and scan partial with `IlReaderDisagreement`.
+An assembly or module identity disagreement withholds the entire input.
+The Cecil lane uses the raw reader's canonical opcode display name only when
+the numeric opcode bytes at that offset equal Cecil's decoded opcode value;
+different numeric opcodes remain a method disagreement. Both lanes still
+decode operands independently and compare full instruction and call digests.
+Fields that cannot
+yet be independently verified are not promoted to positive evidence:
+non-call token operands such as field and signature tokens are committed by
+raw module-local token only, and string literals are committed by digest only
+and never retained verbatim because literal text is unbounded and may contain
+secrets. For an `InlineTok` TypeSpec, the Cecil path retains the token encoded
+in the IL because Cecil can project the decoded type onto another metadata
+table; the raw reader still validates that TypeSpec row and both decoded type
+identities must agree. The `constrained.` prefix target is cross-checked as a
+`constrainedtype` call observation, but its module-local token stays
+explicitly unclaimed because Mono.Cecil cannot reproduce the raw TypeSpec
+token after resolving the operand. `--il-max-text` bounds user strings,
+resolved target identities, and body identities on both readers; a violation
+emits `IlTextLimitExceeded` and withholds the input. The raw reader runs
+first, validating opcode bytes, operand extents, and switch jump tables —
+including overflow-safe table-extent checks and per-target work charges —
+before Mono.Cecil materializes the same operand.
+
+Positive facts keep every required commitment: exact assembly identity, module
+name and MVID, module-local MethodDef token, `evidenceLocationKind=
+managed-il-v1` with the documented `1..1` non-source sentinel, provenance
+state, compiled receipt-binding digest when bound, extractor version,
+generator SHA-256, IL bounded-input SHA-256, and the rule limitation. Body
+facts additionally retain instruction, local, and exception-region counts and
+digests and the supporting compiled `ManagedMethodDeclared` fact ID when
+exactly one candidate exists; call facts retain the IL offset, opcode,
+reference kind, raw reference token, complete member-reference identity as
+encoded in the containing module, and the supporting IL body fact ID. IL user
+strings are digested, not stored. Body facts are separate evidence nodes from
+source, metadata, PDB, and future rewritten-member identities, and no
+source-to-IL or rewrite-equivalence edge is emitted.
+
+Body, instruction-per-body, local-per-body, exception-region-per-body, and
+total-work limits are enforced before retention, with every body,
+instruction, local, region, and call charged to the shared work budget across
+both readers. Exhaustion, malformed IL, unsupported operand encodings, and
+unreadable inputs emit Tier4 `dotnet.compiled.il-gap.v1` gaps for that input
+with no partial positive set. Abstract, external, PInvoke, and bodyless
+methods emit no body fact as a structural observation, not an absence claim.
+
+Run the focused lane with:
+
+```bash
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj   --no-restore --filter FullyQualifiedName~IlBodyEvidenceExtractorTests
+```
+
+For a positive CLI scan, pass an admitted assembly plus the flag:
+
+```bash
+dotnet run --project src/dotnet/TraceMap.Cli -- scan   --repo samples/modern-sample   --out /tmp/tracemap-il-scan   --compiled-input "$(pwd)/samples/compiled-dotnet-evidence/csharp/bin/Debug/net10.0/CompiledEvidence.CSharp.dll"   --il-body-evidence
+```
+
+Repeat scans must produce byte-identical `facts.ndjson` and `report.md`,
+identical `ilBodyProvenance` (schema `il-body-provenance.v1`) in the manifest
+and execution receipt, and matching `dotnet.compiled.il-*` rows in
+`index.sqlite`. The IL bounded-input digest participates in `scanId`. The
+fixture catalog records stable IL case IDs under
+`samples/compiled-dotnet-evidence/fixture-cases.json` (schema v5 or later),
+covering operand-distinct pairs, signature and assembly scoping, call kinds,
+locals and exception regions, hostile corrupted IL, and limit exhaustion.
+
+This slice explicitly defers and makes no claim about: rewritten-member
+identity, metadata-token retargeting across rewrites, rewritten PDB offsets,
+ILAsm/ILDAsm parity, and the extended ECMA-335 mutation matrix from #766. It
+performs no rewrite generation, no call-graph or transitive reachability
+analysis, no runtime loading or execution, and no cross-assembly resolution
+beyond the reference rows encoded in the containing module. The next slice
+below begins the bounded rewrite work; everything else stays deferred.
+
+### Bound compiled IL page-path overlay (public proof slice)
+
+`combined.paths.compiled-il-bridge.v1` adds in-memory path edges when an
+explicitly admitted IL lane is present in a combined index. A Tier1 source
+declaration enters the binary graph only through a `bound`, exact
+`SourceMetadataIdentityReconciled` fact and one matching retained Tier1 call
+source-symbol ID. IL body and call facts must join to their admitted compiled
+method by exact fact IDs and matching verified artifact SHA-256. `call` and
+`newobj` MethodDef targets join only to one method in the same source index;
+assembly-scoped MemberRef targets join only to one exact admitted method across
+the combined index using the complete assembly-reference identity, non-generic
+type path, member name, and signature. If either method is unbound artifact
+context, the exact IL edge is Tier3 review-only and emits a
+`CompiledIlArtifactContext` gap. It does not attribute the context DLL to the
+source commit or connect it to source SQL evidence. `callvirt` is also a Tier3
+review candidate, not a proven dispatch destination. Missing or ambiguous
+admitted targets are gaps; unadmitted external assemblies are not inferred as
+absent.
+An admitted IL call to the exact framework `System.Data.Common.DbDataAdapter.Fill`
+MemberRef or to `ExecuteReader`, `ExecuteNonQuery`, or `ExecuteScalar` on a
+`System.Data` command type (`DbCommand`, `IDbCommand`, `SqlCommand`,
+`OdbcCommand`, or `OleDbCommand`) can terminate a `--to-surface database-api`
+path as a Tier3 `compiled-database-api-candidate`. The assembly, type, and
+member must all match. This identifies a static database API call only. It
+supplies no SQL text, database provider dispatch, source line, or runtime
+proof, and it never substitutes for a `sql-query` terminal.
+
+The public `root-generated` test proves that a bound IL walk can cross an
+excluded generated bridge to supported SQL evidence while the corresponding
+source-only scan remains terminal-free. The `root-crosslanguage` test proves a
+C#→VB MemberRef join and an inherited `Open`-initialized field receiver, and
+duplicate exact identities fail closed. Run them with:
+
+```bash
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj \
+  --filter 'FullyQualifiedName~Bound_IL_walk|FullyQualifiedName~Generated_designer_bridge_is_visible_but_does_not_invent_a_source_terminal'
+```
+
+This overlay does not change the combined database schema or source-only
+results. It does not admit binaries on its own, claim runtime reachability, or
+solve projectless Web Forms source-to-binary binding without an exact admitted
+PDB join. A private page remains
+unproven until its exact built assembly, binding receipt, and source identity
+are admitted and the page-specific path is observed. Single-index Web Forms
+packet compaction does not yet retain the compiled closure; this proof uses a
+combined index, as the application review workflow does.
+
+The additional `vb-pdb-projectless` public fixture covers the formerly missing
+projectless entry when a *portable* PDB is available. Its projectless VB handler
+is compiled by a separate deterministic project, while the source-only combined
+path stops before SQL. The bound scan requires the exact source-document
+checksum, one PDB method row reconciled to one admitted metadata method, and
+visible sequence points contained by one method block. It then traverses a
+cross-assembly IL MemberRef and excluded generated bridge to the SQL terminal.
+Duplicate source declarations or removal of the checksum join withhold the
+entry. Run `dotnet test` with filter
+`FullyQualifiedName~Projectless_VB_handler_enters_bound_IL_only_through_exact_PDB_document_and_method`.
+This is Tier2 static location evidence, not Tier1 semantic binding or runtime
+proof. The work-machine inventory found two classic Windows PDBs and no
+portable PDB, so this path remains unavailable there until a separately
+validated Windows-PDB or other exact source-binding reader exists.
+
+### IL rewrite evidence (Task 10 second slice)
+
+The second Task 10 slice activates `dotnet.compiled.il-rewrite.v1` and
+`dotnet.compiled.il-rewrite-gap.v1` behind the explicit
+`--il-rewrite-evidence` flag with ordinal `--il-rewrite-before` and
+`--il-rewrite-after` inputs (equal counts required; the CLI rejects unflagged
+or unpaired declarations) and `--il-max-rewrite-pairs`. The scanner never
+performs or attributes a rewrite: both sides are operator-declared bounded
+inputs, admitted under the compiled file-size/text bounds with safe external
+locators and raw SHA-256 commitments. The shared compiled-input preflight
+rejects native/mixed-mode inputs, netmodules, and multi-module manifests, and
+enforces type/member row limits plus a compiled metadata work budget shared
+across both sides and all pairs. Pair count is governed by
+`--il-max-rewrite-pairs`; metadata work and IL body work have separate budgets.
+A file that grows past its byte limit during reading produces a side gap.
+Each side must independently pass
+the full first-slice dual-reader IL body contract (raw
+System.Reflection.Metadata decode first, then Mono.Cecil, then exact
+comparison) before any join is attempted. A side that is missing, unreadable,
+oversized, malformed, disputed, unsupported, or over-limit withholds the whole
+pair behind Tier4 gaps; every side-scoped failure is emitted as its own gap
+fact carrying that failing side's `side`, `cause`, and evidence locator, and
+outcome summaries retain the exact `side:cause` pairing. No partial edge set
+is emitted, positive edges always keep the `managed-il-rewrite-v1` location
+kind, and pair outcome labels are exact (`unavailable`, `malformed`,
+`disputed`, `mismatched`, `ambiguous`, `unsupported`, `invalid`,
+`membership-delta`, or `limit-exhausted`) rather than a generic fallback.
+The lane validates the reused body and compiled limits identically to their
+owning extractors before any provenance exists, and the omitted-membership
+digest commits exactly the identities beyond the retained prefix.
+
+An edge is emitted only when the complete exact assembly-scoped method
+identity text occurs exactly once on each side. The edge records both assembly
+identities, both module-local tokens (with `tokenRetargeted`), both canonical
+body identities and digests, a relationship kind — `unchanged`,
+`operand-only-change`, `body-structure-change`,
+`operand-and-body-structure-change`, or `instruction-stream-change` — and
+`opcodeSequencePreserved`. `operand-only-change` additionally requires every
+non-instruction body component (locals, exception regions, max stack,
+init-locals) to match, so structural body changes are never mislabeled as
+operand-only. Call-site retargets are recorded per ordinal
+alignment (both tokens, both target identities, both IL offsets) only when
+instruction counts and opcode sequences are exactly equal; the shared
+opcode-name digest computed by both readers proves the alignment. Zero or
+one-side-only membership emits bounded `IlRewriteMethodBeforeOnly` /
+`IlRewriteMethodAfterOnly` gaps (retained identities capped at eight per side
+with an omitted-count digest commitment) rather than guessed insertion or
+removal edges; more than one candidate on either side emits
+`IlRewriteIdentityAmbiguous`; differing assembly identities emit
+`IlRewriteAssemblyIdentityMismatch` with no joins. Join work is charged to the
+shared `--il-max-work` budget; exhaustion is atomic per pair and emits only
+`IlRewriteTotalWorkLimitExceeded` — no partial edges, membership deltas, or
+other gap kinds survive a join-phase exhaustion. Requesting the flag without
+pairs emits `IlRewritePairUnavailable`; count mismatches emit
+`IlRewritePairDeclarationInvalid`; malformed declared paths fail closed to
+`IlRewriteSideUnavailable` with cause `IlRewriteSideDeclarationInvalid` and a
+privacy-projected locator instead of aborting the scan. Repeated identical
+`(before, after)` declarations are not deduplicated: every declared ordinal
+keeps its own outcome, and the bounded-input digest — which also commits the
+effective `CompiledInputLimits` admission policy alongside the rewrite and
+body limits — stays distinct from a single-declaration scan. Rejected blank
+or unequal-length declarations also commit the ordered privacy-projected
+slots, so changed paths or blank positions cannot share a bounded-input
+digest. Execution-receipt scope fingerprints preserve the same declaration
+order and blank slots with unambiguous framing.
+
+The lane is otherwise inert: without the flag a scan produces no rewrite
+facts, no `ilRewriteProvenance` manifest section, no rewrite known gaps, and
+unchanged source, compiled-metadata, PDB, and IL body/call behavior including
+declared-but-unused pair paths. The manifest, execution receipt, and report
+gain `il-rewrite-provenance.v1` with generator SHA-256, canonical
+bounded-input SHA-256, effective limits, and per-pair outcomes; the digest
+participates in `scanId`. Outcomes never contain raw paths; external inputs
+use the established privacy-projected `__external__/<role>/` locators, and the
+local-only visibility contract is unchanged.
+
+Mono.Cecil is used only to generate deterministic synthetic mutations in the
+public test suite (constant operand change, inserted member that renumbers
+MethodDef tokens, rewired call target, duplicated identity, renamed
+assembly); the scanner itself only verifies. Identical before/after inputs
+must prove every body `unchanged` with zero gaps. Run the focused lane with:
+
+```bash
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj   --no-restore --filter FullyQualifiedName~IlRewriteEvidenceExtractorTests
+```
+
+For a positive CLI scan, pass an explicit pair:
+
+```bash
+dotnet run --project src/dotnet/TraceMap.Cli -- scan   --repo samples/compiled-dotnet-evidence/csharp   --out /tmp/tracemap-ilrewrite-scan   --il-rewrite-evidence   --il-rewrite-before "<before.dll>"   --il-rewrite-after "<after.dll>"
+```
+
+Repeat scans must produce byte-identical `facts.ndjson` and `report.md`,
+identical `ilRewriteProvenance` in the manifest and execution receipt, and
+matching `dotnet.compiled.il-rewrite*` rows in `index.sqlite`. The fixture
+catalog records stable rewrite case IDs under `ilRewriteCases` in
+`samples/compiled-dotnet-evidence/fixture-cases.json` schema v5, covering
+same-opcode operand changes, token retargeting, call retargeting, unchanged
+bodies, duplicate identity, hostile malformed sides, reader disagreement, and
+budget exhaustion.
+
+This slice explicitly defers and makes no claim about: rewritten PDB offsets
+and sequence-point validity after a rewrite, ILAsm/ILDAsm parity,
+evaluation-stack-sensitive rewrites, netmodules, type forwarding, duplicate
+assembly identities, insertion/removal relationships, the extended ECMA-335
+mutation matrix from #766, and Task 11's legacy Windows, `dotnetperf`, and
+C++/CLI lanes. It performs no rewrite generation by the scanner, no semantic
+equivalence or behavior-preservation conclusion, no runtime loading or
+execution, and no cross-assembly resolution beyond the rows encoded in each
+containing module.
+
+### Messy .NET workspace regression
+
+Public-safe synthetic fixtures under `samples/messy-dotnet-workspace/`
+reproduce the workspace shapes observed in real Web Forms/.NET scans without
+copying any private source, names, paths, or artifacts. Seventeen roots are
+scanned independently: `root-alpha` (C# Web Forms site with a twelve-call-edge deep
+chain ending in an ADO.NET-style SQL terminal at graph distance 14, a
+three-node cycle plus a self-cycle with its own handler, ten same-name
+`Process`/`Core` members in one file, and two overloads across two uncertain
+interface receiver implementations), `root-beta` (a second C# root reusing those simple
+names), `vb-projectless` (loose VB files with no `.vbproj`/`.sln`),
+`root-generated` (a designer bridge and bound compiled/PDB evidence), and
+`root-crosslanguage` (a buildable C#→VB→F# project graph), and
+`vb-compound-pages` (three projectless VB Web Forms pages with repeated
+`Process` method names, deeper calls, and zero/two/one supported SQL terminals),
+`vb-split-web` plus `vb-split-backend` (the same page/route shape scanned
+as independent web and backend roots before index combine), and
+`vb-init-web`, `vb-init-backend`, `vb-init-duplicate`, plus
+`vb-init-service-duplicate` (an inline constructor side-effect path and two
+duplicate-type negative controls), plus `vb-qualified-init-web`,
+`vb-qualified-init-backend`, and `vb-qualified-ambiguous-web` (explicit-import
+constructor resolution, a same-simple-name SQL decoy, and fail-closed
+competing imports), plus `vb-review-constructor`,
+`vb-review-semantic`, and `vb-review-projectless` (nested generic type identity,
+parenthesized inline creation, namespace rejection, and compiler-rejected
+constructor fallback), plus `vb-init-single` (the dropdown Init handler and
+constructor-side-effect backend in one projectless source index), and
+`root-route-reconvergence` (two same-named methods in separate classes in
+one file, two call levels, one shared SQL terminal).
+
+The stable case catalog is `samples/messy-dotnet-workspace/case-catalog.json`
+(schema `messy-workspace-case-catalog.v1`). Cases are marked `implemented` or
+`deferred`; implemented means the fixture and its asserted outcome are pinned,
+not that every attempted join succeeds. The cross-language case explicitly
+records a C# syntax downgrade and unsupported F# source ownership. The
+source→metadata→IL/PDB case proves one exact compiled handler join but does
+not close #766's rewritten-PDB or ILAsm/ILDAsm parity work.
+
+The compound-page regression covers the bounded single-index input reader as
+well as the graph: newly discovered projectless VB syntax calls must admit
+their downstream method bodies to a fixed point within the work/frontier/fact
+limits. Same-name method declarations outside admitted caller/receiver/base
+types must not spend those limits, while a name must be reconsidered when a
+new receiver type appears in a later wave. Depths 8 and 10, plus a separately
+combined two-root packet, must
+return the same two/zero/one terminal inventories for the three pages,
+including unqualified and self-qualified VB hops. An
+interrupted input closure must report an explicit
+Tier4 graph-input limit, never a clean no-terminal conclusion. This synthetic
+result does not establish that private pages 2, 3, or 11 are fixed; rerun those
+pages on a fresh merged index to make that claim.
+
+The split-root regression additionally requires one exact page-to-backend
+receiver bridge per page and complete two/zero/one terminal inventories after
+combining the independent projectless VB scans. It currently passes. Thus
+root separation alone does not reproduce the remaining private-page gap; a
+different receiver or call shape must be demonstrated before a resolver change.
+
+The dropdown Init case demonstrates one such missing shape: an inline
+`New SyntheticDataAccess().MyList` object creation in a `For Each` was
+retained, and the constructor independently reached a SQL operation, but
+there was no edge between them. The explicit, unique type-and-arity
+constructor bridge now retains that static side-effect path. The constructor
+then calls a service through another inline `New`, and the service forwards
+through two typed fields to the ADO.NET operation. The syntax extractor retains
+the exact inline-created receiver type for that second hop; duplicate
+constructor or service types in another root produce Tier4 ambiguity gaps.
+The same-index fixture also declares an uncalled same-name method on the
+containing data-access class with its own SQL operation. The inline receiver
+must not acquire an implicit `Me` bridge to that decoy terminal.
+This does not prove property value flow, collection contents, runtime SQL
+execution, or that any private page improved.
+
+The constructor-review case requires exact qualified type identity and preserves
+nested types after balanced generic clauses. An unqualified same-simple-name
+declaration in another namespace yields a Tier4 gap rather than a guessed
+bridge. A compiler-rejected constructor fallback from a semantic project does
+not become a projectless syntax bridge when another root supplies a constructor.
+Parenthesized direct `New` receivers remain explicit syntax evidence; factories
+and arbitrary member chains remain unproven. The static HTML explorer accepts
+both constructor and receiver bridge hops as ordinary paths-report evidence.
+The single-index dropdown variant verifies that compact packet admission
+retains the matching constructor declaration and body before graph bridging;
+the split-root combined-index result alone cannot establish that behavior.
+
+The shared-terminal route case pins the distinction between terminal identity
+and bounded path detail. A handler with two routes to one terminal yields two
+event-chain rows when both fit the configured work/path/depth limits, but one
+distinct supported-terminal identity. With a one-path budget, the terminal
+inventory remains complete while path-detail truncation is explicit. This
+recovers the alternate route rows hidden by the shortest-witness-only packet
+change; it does not prove private page counts or runtime execution.
+
+Pinned behaviors, asserted per catalog case id and pipeline stage
+(extraction, combining, reconciliation, traversal) by
+`MessyWorkspaceRegressionTests`:
+
+- Deep chain: at `--max-depth 12` path enumeration truncates with the
+  `depth` reason while the terminal inventory stays complete with minimum
+  terminal distance 14 and identical boundary identity sets at depths 12 and
+  16 — no false absence from depth truncation. At depth 10 the distance-14
+  terminal falls outside the depth-bounded retained closure; the observation
+  scopes its completeness claim to the retained graph and invents nothing.
+- Cycles: the three-node cycle and the self-recursive branch each get their
+  own handler chain; both terminate, record `cycle` truncation honestly,
+  inventory zero terminals, and surface an explicit
+  `DownstreamWithoutSupportedTerminal` gap scoped to their own binding.
+- Same-name members: ten container-distinct Tier1 identities, no semantic
+  edge crossing engines, each boundary supporting exactly its own engine's
+  terminal fact and class line range with distinct tables and query shape
+  hashes; the handler inventories exactly ten distinct terminal witnesses
+  with no cross-joined evidence.
+- Interface overloads and uncertain receiver: exact int/string call identities
+  survive relationship projection into the combined graph; two implementations
+  per overload produce four distinct terminal witnesses. The Web Forms packet
+  labels all four candidate boundaries `NeedsReviewStaticPath` and does not
+  claim a selected runtime receiver.
+- Merged roots: combine preserves the union of sources, facts, and symbols
+  with per-source namespacing, no symbol deduplication, and no identity that
+  blends namespaces; every terminal stays attributed to its own source label
+  (15 alpha, 1 beta, 1 vb); the merged dependency report lists all three
+  labeled sources. Call edges are compared to the original scans as exact
+  (label, caller, callee) tuples, and terminals as exact (label, original fact
+  id, source symbol, table name) tuples, including multiplicity. The Web Forms
+  packet stays single-page-source by design
+  (`WebFormsModernizationPrimarySourceAmbiguous` for multi-page-source
+  combined indexes), so cross-source attribution is asserted over the merged
+  index directly.
+- Projectless VB: `Level3SyntaxAnalysis` with the fail-closed
+  `NoVisualBasicProjectOrSolution` and per-file `SemanticAnalysisUnavailable`
+  Tier4 gaps, a Tier3 `vb.syntax.database-operation.v1` terminal, and a
+  handler chain that reaches its `sql-query` boundary. No blocker exists for
+  projectless VB in ordinary CI.
+- Generated bridge: the source handler's semantic call into a designer member
+  is retained, but the excluded generated body does not create a false SQL
+  terminal. The packet reports zero reachable source terminals and an explicit
+  downstream gap.
+- C#→VB→F#: all three public projects build; the C# source hop currently falls
+  back to Tier3 syntax with a compilation diagnostic, while the VB→F# call
+  is Tier1 semantic. The F# method is present in admitted compiled metadata,
+  but its source join emits `SourceMetadataReconciliationUnsupportedLanguage`.
+  No complete cross-language source traversal is claimed.
+- Source→metadata→IL/PDB: a bound public build of the generated-root handler
+  has one exact source-to-compiled identity. The same compiled fact owns an
+  operand-aware IL body, a portable-PDB method relationship, and a sequence
+  point. This is not rewritten-PDB offset validity or independent ILAsm parity.
+- Determinism: repeat CLI scans of each root produce byte-identical
+  `facts.ndjson`.
+
+Each implemented case also checks the catalog's expected rules, tiers, and
+positive gap expectations against its produced evidence. The merged-roots case
+checks preserved Tier1 callgraph evidence; it does not claim to exercise the
+cross-source symbol-reconciliation rule.
+
+Run the focused lane with:
+
+```bash
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj   --no-restore --filter FullyQualifiedName~MessyWorkspaceRegressionTests
+```
+
+The slice adds no new derived machine-readable artifact, so generator and
+bounded-input hash pinning stay with the existing manifest provenance; the
+catalog's `artifactPinning` contract records this decision. This slice does
+not complete Task 10: the remaining #766 ILAsm/rewritten-PDB matrix and
+Task 11's private Windows/`dotnetperf` lane stay out of scope.
+
+### IL rewrite PDB evidence (Task 10 fourth slice)
+
+The bounded rewrite-PDB lane activates `dotnet.compiled.il-rewrite-pdb.v1`
+and `dotnet.compiled.il-rewrite-pdb-gap.v1` behind the explicit
+`--il-rewrite-pdb-evidence` flag, which requires `--il-rewrite-evidence` and
+ordinal `--il-rewrite-pdb-before`/`--il-rewrite-pdb-after` declarations that
+must align with the declared assembly pairs. The lane is inert without the
+flag: no `ilRewritePdbProvenance` manifest section, no rewrite-PDB facts or
+known gaps, and no receipt provenance. The CLI additionally rejects declared
+PDB lists without the flag, so the inertness pin — an identical scan
+identity, rewrite digest, and fact bytes between a disabled-lane scan and one
+that carries the unflagged declarations — is asserted through the
+`ScanOptions` API in the focused suite, not through a CLI invocation.
+
+Each declared PDB side must bind its own paired assembly through the exact
+portable content GUID/stamp against the re-read and re-hashed assembly's PE
+CodeView entries; duplicate matching entries, cross-side matches, and changed
+or unreadable matched assemblies fail closed. Both PDB sides must
+independently satisfy the standalone PDB dual-reader contract
+(System.Reflection.Metadata method/sequence-point observations cross-checked
+against Mono.Cecil shape counts), every PDB method row must correspond to a
+dual-reader-proven body on its own side, and every sequence-point IL offset
+must fall inside that body's proven extent. Only fully proven pairs emit
+per-method `ManagedIlRewritePdbObserved` relationships recording the original
+and rewritten member identity, both body identities and digests, both PDB
+method identities and content ids, per-side sequence-point digests, and an
+exact offset classification: `sequence-point-offsets-unchanged` when the
+ordered IL offset vectors are equal, `sequence-point-offsets-changed`
+otherwise. The classification compares IL offset vectors only; lines,
+columns, documents, and hidden flags are committed by per-side digests and
+never imply preserved or correct debugging behavior, behavioral equivalence,
+source ownership, or rewrite attribution. Methods whose debug information
+exists on exactly one side emit a bounded
+`IlRewritePdbMethodDebugInformationAbsent` gap with a retained identity
+prefix and omitted-identity digest; methods with no debug information on
+either side emit nothing, mirroring the bodyless-method structural
+observation.
+
+The public synthetic matrix lives in
+`samples/compiled-dotnet-evidence/fixture-cases.json`
+(`compiled-dotnet-fixture-cases.v6`, `ilRewritePdbCases`): the deterministic
+compiler-produced `CompiledEvidence.CSharp` pair is the before side, and
+Mono.Cecil 0.11.6 — reading and writing portable PDBs, never used as the
+sole oracle — generates the after side inside the test suite. The matrix
+proves operand-only rewrites with stable instruction offsets (every
+relationship offsets-unchanged), IL insertions that shift later offsets
+(exactly one offsets-changed plus unaffected methods unchanged),
+byte-identical pairs, a missing after PDB, a content-identity mismatch
+without cross-side re-binding, a stripped one-side debug-information delta,
+truncated and native-Windows PDB sides, an unavailable parent rewrite pair,
+budget exhaustion, and declaration validation. Windows-native PDBs remain
+unsupported on every host
+(`WindowsPdbRequiresWindows`/`WindowsPdbIndependentReaderUnavailable`).
+
+Pinned local commands:
+
+```bash
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter FullyQualifiedName~IlRewritePdbEvidenceExtractorTests
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter "FullyQualifiedName~IlRewritePdbEvidenceExtractorTests|FullyQualifiedName~IlRewriteEvidenceExtractorTests|FullyQualifiedName~PortablePdbExtractorTests|FullyQualifiedName~IlBodyEvidenceExtractorTests|FullyQualifiedName~ManagedMetadataExtractorTests"
+tracemap scan --repo samples/compiled-dotnet-evidence/csharp --out <out> \
+  --il-rewrite-evidence --il-rewrite-before <before.dll> --il-rewrite-after <after.dll> \
+  --il-rewrite-pdb-evidence --il-rewrite-pdb-before <before.pdb> --il-rewrite-pdb-after <after.pdb>
+python3 scripts/validate-adapter-artifacts.py <out>
+```
+
+ILAsm/ILDAsm parity was assessed on 2026-09-22 and is deferred with exact
+prerequisites recorded in the fixture catalog
+(`ILRWPDB-ILASM-PARITY-012`): the tools were absent from PATH, the .NET SDK
+10.0.201 installation, and the NuGet cache on the assessment host, Homebrew
+bottles mono 6.14.1 but it was not installed, and ordinary CI provides no
+pinned ILAsm toolchain. No ILAsm or ILDAsm parity claim is made by any test
+in this slice, and embedded portable PDBs remain unclaimed
+(`ILRWPDB-EMBEDDED-PORTABLE-013`). This slice does not complete Task 10: the
+remaining #766 evaluation-stack-sensitive rewrites, netmodules, type
+forwarding, duplicate assembly identities, insertion/removal relationship
+edges, the extended ECMA-335 mutation matrix, and ILAsm parity stay open, and
+Task 11's private Windows/`dotnetperf` lane remains separate.
+
+### Control-flow and exception-handling rewrite suite (Task 10 fifth slice)
+
+The public ECMA-335 control-flow/exception-handling rewrite matrix extends
+the `dotnet.compiled.il-rewrite.v1` and `dotnet.compiled.il-rewrite-gap.v1`
+coverage without changing either rule's join, admission, or classification
+behavior. The before side of every pair is the deterministic
+compiler-produced fixture assembly
+`samples/compiled-dotnet-evidence/csharp/bin/Debug/net10.0/CompiledEvidence.CSharp.ControlFlow.dll`
+(built from `IlRewriteControlFlowShapes.cs` with `Deterministic=true`); the
+after sides are deterministic Mono.Cecil 0.11.6 mutations or bounded
+single-byte patches produced inside the public test suite
+(`IlRewriteControlFlowEvidenceExtractorTests`), never hand-written binaries.
+Both sides still pass through the dual-reader IL body contract
+(System.Reflection.Metadata first, Mono.Cecil second, disagreement fails
+closed), so Cecil is never the sole oracle.
+
+Covered shapes (`samples/compiled-dotnet-evidence/fixture-cases.json` schema
+v7, `ilRewriteCases`):
+
+- `CS-ILRW-CFLOW-010` branch retarget: a for-loop's forward branch operand
+  changes to a different in-range instruction boundary; classified
+  `operand-only-change` with the opcode stream preserved.
+- `CS-ILRW-CFLOW-011` switch jump-table permutation: the five-target `switch`
+  vector reorders; classified `operand-only-change` (the fixed-size table
+  keeps every offset stable).
+- `CS-ILRW-CFLOW-012` leave retarget: a try-region `leave.s` retargets to the
+  post-region code; classified `operand-only-change`.
+- `CS-ILRW-CFLOW-013` nested exception-region rebinding: the inner catch's
+  try start rebinds to the outer finally's try start (regions stay properly
+  nested); classified `body-structure-change` with identical instructions.
+- `CS-ILRW-CFLOW-014` handler-kind change: the nested catch becomes a fault
+  handler with the catch-type token removed; classified
+  `body-structure-change`.
+- `CS-ILRW-CFLOW-015` max-stack-only header change: a byte patch bumps the
+  recorded max-stack in the fat method-body header; classified
+  `body-structure-change` with every other component identical.
+- `CS-ILRW-CFLOW-016`/`017` evaluation-stack-sensitive rewrites: an inserted
+  `dup`/`pop` pair (transiently deeper, net stack-neutral) and an inserted
+  constant/`add` sequence (depth-profile reshaping) both classify as
+  `instruction-stream-change` with `opcodeSequencePreserved=false`, no
+  per-instruction claim, and no runtime-equivalence or stack-neutrality
+  conclusion.
+- `ILRW-CFLOW-HOSTILE-018`/`019` bounded malformed operands: a patched short
+  branch delta pushing the target past the body extent and a patched
+  `switch` count overrunning the jump table each withhold the whole pair as
+  an `IlRewriteMalformedInput` Tier4 gap.
+- `ILRW-CFLOW-LIMIT-020` exception-region limit: an
+  `IlBodyLimits(MaxExceptionRegionsPerBody: 1)` scan over the fixture fails
+  closed per side with `IlRewriteExceptionRegionLimitExceeded`.
+
+Every rewrite fact carries `ilRewriteGeneratorSha256` (SHA-256 of the exact
+extractor assembly) and `ilRewriteBoundedInputSha256` (canonical digest over
+the schema, policy, generator, extractor identities, effective limits,
+declared pairs, and per-pair outcomes), pinned by test along with the rule
+ID, tier, limitation text, and extractor version. Repeat scans of the same
+declared pair are byte-identical in `facts.ndjson` and `report.md`, the
+manifest differs only in `scannedAt`, and no artifact contains a local
+absolute path. The plain `samples/modern-sample` source scan is unchanged:
+`Level1SemanticAnalysis` with a null `ilRewriteProvenance` when the lane is
+not declared.
+
+Pinned local validation on 2026-09-22 (macOS): focused
+`IlRewriteControlFlowEvidenceExtractorTests` 16/16; combined compiled-lane
+filter (rewrite PDB, rewrite, PDB, IL body, managed metadata,
+source/metadata reconciliation) 221/221; full `dotnet test
+src/dotnet/TraceMap.sln` 2,190/2,190 with zero failed/skipped and zero build
+warnings; two repeat CLI scans of a branch-retarget pair produced 434 facts
+with 7 `dotnet.compiled.il-rewrite.v1` rows (one `operand-only-change`, six
+`unchanged`), zero gap rows, and byte-identical artifacts;
+`scripts/validate-adapter-artifacts.py`, `scripts/check-private-paths.sh`,
+`node scripts/kiro-review.mjs --self-test`, and `git diff --check` all
+passed. The suite runs in ordinary CI with no ILAsm/ILDAsm dependency: all
+mutations are Cecil-based or single-byte patches that index into the PE
+byte array directly, so they are host-endianness independent.
+
+ILAsm/ILDAsm parity was re-assessed on 2026-09-22 and remains deferred with
+the slice-4 prerequisites (`ILRWPDB-ILASM-PARITY-012`): neither tool is on
+PATH, present in the .NET SDK 10.0.201 installation, or installed via
+Homebrew (mono is not installed), and no pinned ILAsm toolchain exists in
+ordinary CI. Ordinary CI must not depend on an unpinned ILAsm/ILDAsm
+installation; a pinned Windows SDK/Visual Studio `ilasm.exe`+`ildasm.exe`
+lane or a pinned mono/dotnet-runtime ILAsm build plus an independent
+disassembly oracle is the separately documented prerequisite. This slice
+does not complete Task 10: the remaining #766 scope (member/type token,
+constant, string, signature, generic, custom-modifier, function-pointer/
+`calli`, property/event-accessor shapes, netmodules, type forwarding,
+duplicate assembly identities, insertion/removal edges, embedded portable
+PDBs, the extended mutation matrix, and ILAsm parity) stays open, and Task
+11's private Windows/`dotnetperf` lane remains separate.
+
+### Metadata operands and member shapes (Task 10 sixth slice)
+
+The public compiler fixture `CompiledEvidence.CSharp.MemberShapes` plus bounded
+Mono.Cecil mutations exercises case IDs `CS-ILRW-MEMBER-TOKEN-021` through
+`CS-ILRW-CALLI-VARARG-BOUNDARY-032` in `fixture-cases.json` schema v8. A separate
+compiler variant `CompiledEvidence.CSharp.VarArgCall` pins
+`CS-ILRW-VARARG-CALL-028`. No fixture loads or executes an after
+assembly. The scanner reports static, exact assembly/module and full
+method-signature relationships; it does not attribute the rewrite.
+
+`InlineField`, `InlineTok`, and `InlineSig` require the independent
+System.Reflection.Metadata reader to validate the referenced row kind and
+decode its signature before the Cecil body is admitted. Field and general
+token operands bind the full decoded type/member identity as well as the
+module-local row number; a field signature change at the same row changes
+the body digest. `calli` standalone
+signatures preserve calling-convention number, `hasThis`, `explicitThis`,
+required-parameter count, return type, and parameter types in the canonical body operand and call-site
+retarget fact, cross-checked by both readers. The compiler fixture supplies MethodSpec, TypeSpec, generic
+type/method, function pointer, property/event, accessor, and vararg
+declaration shapes. Same-opcode field, InlineTok member, TypeSpec,
+MethodSpec, and `calli` convention changes are paired with exact unchanged
+method identities. A compiler-produced vararg MemberRef call with a
+MethodDef parent retains its required-parameter boundary in its full static
+signature after both readers agree. A vararg `calli` sentinel-only boundary
+change keeps its token and parameter types but changes the body identity.
+Corrupted field/signature token row IDs
+withhold the entire pair as `IlRewriteMalformedInput`; a reserved `calli`
+calling convention withholds the pair as a malformed signature gap.
+
+Required and optional custom modifiers alter complete method signatures,
+so the pair reports explicit before-only and after-only memberships. The
+same relationship represents an inserted and removed MethodDef in one
+pair. Property and event metadata accessor handles are independently checked
+with System.Reflection.Metadata on both sides of getter and adder body
+mutations. These are declaration and body observations, not event delivery
+or runtime behavior claims.
+
+The focused suite is
+`dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj
+--filter FullyQualifiedName~IlRewriteMemberShapeEvidenceExtractorTests`.
+Ordinary `local-distribution-validation.yml` runs it on Windows, Ubuntu,
+and macOS using the SDK compiler and Mono.Cecil only; ILAsm/ILDAsm remains
+outside ordinary CI. Each emitted rewrite fact retains the exact generator
+SHA-256 and privacy-projected bounded-input SHA-256, with rule ID, tier,
+limitations, and a corresponding stable public fixture case ID.
+
+### Public ECMA-335 rewrite integration matrix (Task 10, #766)
+
+The ordinary CI subset runs `IlRewriteAssemblyTopologyTests`,
+`IlRewriteEmbeddedPdbTests`, and `IlRewritePublicIntegrationTests` on Linux,
+macOS, and Windows through `local-distribution-validation.yml`. The separate
+PR and manual `compiled-dotnet-extended-validation.yml` lane runs those tests together with
+all prior public rewrite, control-flow, member-shape, and rewrite-PDB suites.
+Its Windows job discovers `ilasm.exe` and `ildasm.exe` by absolute path and
+records file versions and help output. Discovery is evidence, not parity.
+The extended lane uses only synthetic public fixtures and has no private
+`dotnetperf`, Web Forms, or C++/CLI input.
+
+Local commands for the bounded and extended public lanes are:
+
+```bash
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter 'FullyQualifiedName~IlRewriteAssemblyTopologyTests|FullyQualifiedName~IlRewriteEmbeddedPdbTests|FullyQualifiedName~IlRewritePublicIntegrationTests'
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter 'FullyQualifiedName~IlRewriteEvidenceExtractorTests|FullyQualifiedName~IlRewriteControlFlowEvidenceExtractorTests|FullyQualifiedName~IlRewriteMemberShapeEvidenceExtractorTests|FullyQualifiedName~IlRewritePdbEvidenceExtractorTests|FullyQualifiedName~IlRewriteAssemblyTopologyTests|FullyQualifiedName~IlRewriteEmbeddedPdbTests|FullyQualifiedName~IlRewritePublicIntegrationTests'
+tracemap scan --repo <public-fixture-repo> --out <out> --il-rewrite-evidence --il-rewrite-before <before.dll> --il-rewrite-after <after.dll> --il-rewrite-pdb-evidence --il-rewrite-pdb-before <before-embedded.dll> --il-rewrite-pdb-after <after-embedded.dll>
+```
+
+The embedded PDB declarations name assembly carriers, not extracted private
+`.pdb` files. Each carrier must be byte-identical to its paired declared
+assembly. On Windows, discover candidate tools and their exact file versions
+before invoking them:
+
+```powershell
+Get-ChildItem "$env:WINDIR\Microsoft.NET\Framework64","$env:WINDIR\Microsoft.NET\Framework",'C:\Program Files\Microsoft SDKs','C:\Program Files (x86)\Microsoft SDKs','C:\Program Files (x86)\Windows Kits','C:\Program Files\Microsoft Visual Studio' -Recurse -File -Include ilasm.exe,ildasm.exe -ErrorAction SilentlyContinue | Select-Object FullName,@{N='Version';E={$_.VersionInfo.FileVersion}}
+& '<discovered-absolute-ilasm.exe>' /?
+& '<discovered-absolute-ildasm.exe>' /?
+```
+
+| #766 requirement | Public case or explicit gap | Admission limit |
+| --- | --- | --- |
+| Branch, `switch`, `leave`, nested exception/filter/finally/fault regions, locals, max stack, and stack-sensitive edits | `CS-ILRW-CFLOW-010`–`020` and existing IL body/rewrite suites | Static body relationship; no behavioral equivalence claim. |
+| Member/type tokens, strings, constants, signatures, generics, custom modifiers, function pointers/`calli`, properties/events/accessors | `CS-ILRW-MEMBER-TOKEN-021`–`CS-ILRW-CALLI-VARARG-BOUNDARY-032` and earlier operand cases | Complete assembly/module/member signatures and operands require SRM/Cecil agreement. |
+| Netmodules and metadata-bearing multi-module manifests | `ILRW-TOPO-001` and `002`: `IlRewriteUnsupportedShape` | Secondary modules are not loaded or inferred. |
+| Type forwarding and exported-type work limits | `ILRW-TOPO-003`: `TypeForwardingManagedAssemblyUnsupported`; `006`: `IlRewriteTotalWorkLimitExceeded` | Forwarded targets are not resolved or joined; every exported-type row is charged before traversal. |
+| Duplicate assembly/member identities | `ILRW-TOPO-004` ambiguity gap; `005` proves ordinal pair isolation | No first-candidate or cross-pair join. |
+| Portable PDB document/method/sequence-point identity and rewritten offsets | Existing portable and rewrite-PDB suites plus `ILRWPDB-EMBEDDED-PORTABLE-013` | Offset classifications and hashes do not prove debug behavior. |
+| Missing, mismatched, or over-limit debug evidence | `ILRWPDB-EMBEDDED-MISSING-014`, `MISMATCH-015`, and `TEXT-LIMIT-016`, plus existing PDB binding and reader-disagreement gaps | Withhold the disputed PDB relationship while retaining independent parent IL evidence; the rewrite-PDB locator limit applies independently. |
+| Windows-native PDB | Existing `CS-ILRWPDB-WINDOWS-009` unsupported gap | Requires an independent Windows PDB reader before admission. |
+| Same opcodes, different operands; token retargets and one-sided members | `CS-ILRW-OPERAND-001`, token/member cases, and SRM raw-IL/runtime integration case | Operand-insensitive hashes are non-unique heuristics; no identity edge from them. |
+| Valid, invalid, and hostile bounded PE/metadata shapes | Existing malformed/limit cases and topology unsupported/ambiguous cases | Reader disagreement withholds the entire disputed relationship. |
+| ILAsm/ILDAsm parity | `ILASM-PARITY-TOOLS-001`, `CFLOW-002`, `EH-003`, `MEMBER-004`, and `MUTATE-005` are proven in the extended Windows lane; `ILASM-PARITY-PDB-006` records the typed PDB-oracle gap | Parity is proven only for the public fixture matrix on the pinned .NET Framework 4.8 ILAsm + Windows SDK NETFX ILDAsm toolchain, with ILDAsm as the independent oracle; sequence-point parity stays unclaimed until a work-machine ILDAsm observes portable PDBs and the recorded receipt matches; no general equivalence claim. |
+
+Each new positive assertion and gap uses the existing rule ID and evidence
+tier, complete assembly/module/member signature where applicable, locations,
+extractor version, documented limitation, exact extractor generator SHA-256,
+and privacy-projected bounded-input SHA-256. The fixture catalog binds stable
+case IDs to expected outcomes. SRM reads the admitted PE/PDB independently of
+Mono.Cecil; a disagreement never votes in a relationship. The sole runtime
+corroboration invokes a synthetic parameterless constant method in a
+collectible load context after static admission; it proves only the observed
+return values of that one fixture.
+
+On the 2026-09-22 macOS arm64 host, .NET SDK `10.0.302` is installed, but
+`ilasm`, `ildasm`, and `mono` are absent from PATH and the checked SDK,
+Homebrew, and local .NET locations. `brew info mono` offered version `6.14.1`
+but it was not installed. An available bottle does not pin an independent
+disassembly oracle or prove parity. The PR #782 Windows 2025 VS2026 runner
+discovery on 2026-09-22 found `ildasm.exe` 4.8.3928.0 in both x86 and x64
+directories under `C:\Program Files (x86)\Microsoft SDKs\Windows\v10.0A\bin\NETFX
+4.8 Tools` and `NETFX 4.8.1 Tools`; `ilasm.exe` was unavailable in the
+searched SDK, Visual Studio, and PATH locations. The exact discovery command
+is in `.github/workflows/compiled-dotnet-extended-validation.yml`; the runner
+log is https://github.com/joefeser/tracemap/actions/runs/35782144244/job/106929998051.
+The smallest remaining Windows action is to identify or install a pinned
+`ilasm.exe` compatible with the discovered `ildasm.exe`, then execute
+the same public before/after matrix through assembly and disassembly. Record
+exact invocation commands, independently compare IL operands, offsets, and
+PDB sequence points to SRM and TraceMap, and leave a typed gap for any
+unavailable or disagreeing shape. Task 10 stays open until that evidence
+exists; Task 11's private work-machine lane is separate.
+
+### Public ILAsm/ILDAsm parity gate (Task 10, #766)
+
+The missing prerequisite was the search scope, not the tool: `ILAsm.exe`
+ships with the .NET Framework runtime itself under
+`C:\Windows\Microsoft.NET\Framework64\v4.0.30319\` (and the x86 `Framework`
+twin), which the PR #782 discovery never searched. The extended lane's
+discovery step searches, in order: the .NET Framework `Framework64`/
+`Framework` runtime directories, the Windows SDK `Microsoft SDKs` NETFX
+4.8/4.8.1 Tools directories (x64 first), Windows Kits, Visual Studio, and
+PATH; it then selects one ILAsm and one ILDAsm by that same order and hands
+their absolute paths to the test process through
+`TRACEMAP_PARITY_ILASM`/`TRACEMAP_PARITY_ILDASM`. The in-test discovery consumes
+and re-validates that handoff first, then its own ordered candidates
+(runtime directories, NETFX tools, PATH). Both tools are pinned by absolute
+path with a recorded `4.8.`-prefixed file version AND a non-empty product
+version, plus the runner image identity (`ImageOS`, `ImageVersion`,
+architecture); a discovery hit without either version, or either pinned
+tool failing its own `/?`, fails the case rather than passing silently.
+
+The parity matrix runs only on the extended Windows lane
+(`compiled-dotnet-extended-validation.yml`, `public-mutation-matrix
+(windows-latest)`) through `IlAsmIldasmParityGateTests`; ordinary CI never
+depends on ILAsm or ILDAsm. ILDAsm `/out=... /nobar` text and an ILAsm
+`/dll /nologo /output=...` round trip are the independent oracles, parsed by
+the test-local `IlDasmTextParser` (whose own tests run on every OS); Mono.Cecil
+is never the parity oracle because it is one of TraceMap's two internal
+readers.
+
+The canonical comparison retains complete method declarations (including
+calling conventions, generic constraints and custom modifiers), local
+signatures and initialization, and wrapped instruction operands. Quoted
+literal whitespace stays significant. Exception ends already observed at an
+instruction boundary are never extended to the method end; sibling handlers
+share their protected range, and lexical-scope braces do not close EH blocks.
+Parser regressions cover offsets beyond `0xffff` and reject unsupported
+offset-form EH clauses, malformed `.line` directives and incomplete switches.
+This remains a parser for the bounded public fixtures, not a general ILAsm
+grammar or an ECMA-335 verifier.
+
+The six catalog cases live in `fixture-cases.json` schema v9
+(`ilasmParityCases`):
+
+- `ILASM-PARITY-TOOLS-001` — pinned discovery, versions, and invocability.
+  Observed on the `win25-vs2026` runner image `20260907.229.1` (AMD64):
+  `C:\Windows\Microsoft.NET\Framework64\v4.0.30319\ilasm.exe` file version
+  `4.8.9221.0` (built by `NET481REL1LAST_25H2`) and
+  `C:\Program Files (x86)\Microsoft SDKs\Windows\v10.0A\bin\NETFX 4.8.1
+  Tools\x64\ildasm.exe` file version `4.8.3928.0` (built by `NET48REL1`).
+- `ILASM-PARITY-CFLOW-002` — the control-flow fixture round trips through
+  ILDAsm → ILAsm → ILDAsm with identical canonical member bodies, and the
+  bound before/after scan joins every method (branches, the dense switch
+  table, leave targets, nested exception regions) as `unchanged` with
+  `tokenRetargeted=false`, zero gaps, and instruction, local, max-stack,
+  and call-offset counts equal to the ILDAsm observation on both sides.
+- `ILASM-PARITY-EH-003` — nested try regions, catch/fault handler kinds and
+  catch type identities, leave targets, and the dense switch keep identical
+  canonical exception-clause structure on instruction boundaries, with
+  ILDAsm clause counts equal to TraceMap exception-region counts on both
+  sides. The parser also retains filter start offsets when present.
+- `ILASM-PARITY-MEMBER-004` — the member-shape fixture's generic method
+  specifications, `ldtoken` type tokens, `calli` standalone signatures,
+  static field operands, explicit `modopt` parameters and `modreq` returns,
+  accessors, and vararg
+  declarations round trip with every symbolic operand preserved verbatim in
+  the canonical ILDAsm body. ILAsm renumbers raw module-local reference rows
+  on re-emission (observed for cross-assembly MemberRefs), and TraceMap's
+  operand-aware digests commit raw tokens by documented contract, so those
+  methods classify exactly `operand-only-change` with every call-retarget
+  identity preserved; constructors are joined under their own
+  `constructor:` identity kind.
+  The modifier-bearing input is constructed before disassembly: C#'s
+  non-virtual `in int` alone does not supply a custom-modifier signature.
+  A platform-neutral test checks fixture construction; only the Windows
+  ILDAsm observation establishes independent modifier preservation.
+- `ILASM-PARITY-MUTATE-005` — the branch-retarget, handler-kind, and
+  stack-neutral insertion mutations keep their exact TraceMap relationship
+  classification when the mutated after side passes through the independent
+  round trip first, with identical canonical method bodies, not whole-file
+  normalized disassembly, for the raw and round-tripped after sides.
+- `ILASM-PARITY-PDB-006` — **deferred (Tier4Unknown)**. The non-hidden sequence points of an embedded
+  portable PDB fixture, observed independently via ILDAsm's documented
+  `/linenum` switch with the extracted PDB adjacent to the carrier copy,
+  must equal TraceMap's declared sequence-point tuples (offset, start/end
+  line, start/end column). ILDAsm 4.8.3928.0 has no `/pdbpath` option, and
+  on 2026-09-23 the hosted `win25-vs2026` ILDAsm accepted `/linenum`,
+  disassembled the carrier, and emitted no `.line` directives for the
+  adjacent extracted portable PDB: the typed oracle-availability gap is
+  recorded as `IldasmPortablePdbLineOracleUnavailable` in the fixture catalog,
+  with the precise work-machine command and expected receipt and
+  no PDB parity is claimed. Hidden (`0xfeefee`) points are outside the
+  claim either way. Closing this one prerequisite requires a Windows work
+  machine whose ILDAsm symbol reader observes portable PDBs (for example a
+  Visual Studio/SDK ILDAsm bound to a portable-PDB-capable diasymreader)
+  and the same tuple comparison, or an equally independent documented
+  oracle; Task 10's checkbox stays open on exactly that gap.
+
+Every round-trip leg scans a bound compiled-input pair (binding receipt over
+a temporary git fixture repository) with both `il-body` and `il-rewrite`
+evidence, so the compared facts retain the exact generator SHA-256 and
+privacy-projected bounded-input SHA-256, rule IDs, tiers, locations, and
+limitations of the underlying rules. A repeat scan must be byte-identical.
+The parity claim is bounded to these public fixtures, that pinned 4.8
+toolchain, and those observations; it is not a general IL equivalence,
+execution, or debug-behavior claim. The green exact-head run is
+https://github.com/joefeser/tracemap/actions/runs/35802803285/job/106996742841
+(Windows, all eight gate tests and seven parser tests passed; Ubuntu and
+macOS lanes green; ordinary lanes including all three package-smoke jobs
+green). Task 10's checkbox stays open on the single PDB-prerequisite gap
+above.
+
+### Public projectless Web Site publish without PDB
+
+`samples/messy-dotnet-workspace/vb-publish-projectless` is a source-only,
+public-safe Web Site fixture for the dropdown `Init` → constructor-populated
+list → business/data-access wrapper → inherited `Open` → overloaded procedure
+helper → data-adapter `Fill` shape. The fixture constructs a `SqlDataAdapter`,
+but the published one-argument IL call targets the **public override**
+`System.Data.Common.DbDataAdapter.Fill(DataSet)`. Protected `Fill` overloads
+have different signatures and are not the observed call target (see the
+[.NET Framework API signature](https://learn.microsoft.com/en-us/dotnet/api/system.data.common.dbdataadapter.fill?view=netframework-4.8.1)). Its
+source-only regression test requires that TraceMap **not** claim a SQL path
+before an exact source-to-binary entry is admitted. The fixture contains no
+private source, credentials, or runnable
+database dependency; executing its SQL path is outside the test.
+
+On Windows, `pwsh -NoProfile -File scripts/validation/Test-PublicWebFormsPublish.ps1`
+uses the 32-bit .NET Framework `aspnet_compiler.exe` to precompile this public
+fixture into a fresh temporary directory without `-u`. It checks for one
+`Pages/Lookup.aspx` `.compiled` map, its named DLL, and no PDB, and prints
+the compiler SHA-256 plus the bounded public input SHA-256. It also writes a
+`webforms-publish-binding.v1` receipt **inside that temporary output** with
+the exact script/compiler hashes, source commit, all six source-file hashes,
+all emitted DLL/map hashes, and the page mapping. The receipt is local-only.
+`tracemap scan --webforms-publish-receipt <path>` rechecks the declared
+source and publish bytes, the source commit, and the `.compiled` map before
+emitting local-only page/source/assembly facts; missing or mismatched evidence
+becomes a Tier4 gap. In the combined graph, one uniquely qualified
+projectless VB handler and one bound metadata method in those exact assembly
+bytes may form a Tier3 `projectless-publish-method-candidate` entry. Other
+receipt-listed source methods may form bidirectional Tier3 member candidates
+when the fully qualified containing type, method, and bounded parameter
+shapes select exactly one bound published method. This permits a static IL
+walk to re-enter retained source evidence; it is not a PDB or exact
+source-method identity claim. A missing member candidate stays a gap with a
+categorical reason identifying whether name, receipt-bound assembly,
+qualified type, or parameter shape failed; multiple candidates remain
+ambiguous. The validation
+script is **not** a private-site publishing instruction. Even after the public
+Windows run succeeded and the emitted `.compiled` and metadata identities were
+inspected, the map alone is only page-to-assembly evidence: it is not a verified
+source-method, IL-chain, or runtime claim. A 32-bit-only dependency in a
+private site does not become AnyCPU through CodeDOM configuration.
+
+`Test-PublicWebFormsPublish.ps1 -Updatable` publishes the public
+`vb-publish-mapless` fixture with `-u -v /UBid`: four DLLs (`App_Code`,
+`App_global.asax`, `App_WebReferences`, and `App_Web_*`), exactly three
+`.compiled` maps (`/UBid/App_Code/`, `/UBid/global.asax`, and
+`/UBid/App_WebReferences/`), no page map, and no PDB. The `App_Web_*` metadata still
+declares the code-behind handler and its IL calls. An updatable publish does
+not establish page activation or a generated `ASP.*` page type. Its local
+receipt declares `mapless-source-type-candidate`, hashes every emitted DLL
+and map, and supplies the exact source commit. The scanner requires the
+declared page, source file, map inventory, and an `App_Web_*` assembly. The
+combined graph requires exactly one bound code-behind type and method among
+the selected assemblies; zero or multiple matches produce a gap. The
+source-handler to compiled-method edge is Tier3 and review-only. Without a
+PDB, no source line is assigned to the compiled method. IL call edges and
+source SQL evidence describe a static path, not execution.
+
+The public-only home-Windows check at `822d3b55dc287b1820e8d42ad4c534cf8304242a`
+passed: six public inputs produced two DLLs, two `.compiled` maps, no PDBs,
+and one `Pages/Lookup.aspx` map to `App_Web_r50enpyu` / `ASP.pages_lookup_aspx`.
+Read-only published-IL inspection observed the static chain from
+`LookupPage.Names_Init` through the constructor, business/data-access methods,
+inherited `SqlBaseDA.Open`, and both `ExecProc_DataSet` overloads to the
+public `DbDataAdapter.Fill(DataSet)` target. This does **not** establish a
+TraceMap source-method edge, line identity, cross-assembly App_Code binding,
+runtime execution, or private-site behavior. The follow-up public test at
+`eafc6af1` passed 1/1 and proved an exact admitted IL MemberRef edge from
+`Names_Init` to the `App_Code` constructor. The scanner-side receipt and Tier3
+handler candidate subsequently passed the focused Windows test at `4cebcb65`
+(1/1). That test did not prove a complete reported path to SQL. At exact
+public commit `fa696ce8fd7fd8549aa7483a007a3c7250d8f315`, the expanded
+home-Windows regression passed (exit 0, 1/1): its traversal assertion found
+a report path from `Names_Init` with a Tier3 review-only publish-method
+candidate, at least four admitted IL-call edges, a publish-member candidate,
+and retained `sql-query` evidence. This proves the public static report path,
+not source-line identity, execution, or the private page-002 chain.
+
+PR #793 review repair tightens the same public boundary: the linked code-behind
+must be bound by the page map's receipt digest, non-intrinsic VB parameter
+types must match retained lexical or imported scope, and VB type spelling is
+case-insensitive. A direct type import has its own constructor regression;
+relative publish roots and receipted tool-revision attribution are pinned by
+focused tests. The macOS review-repair validation ran the documented VB.NET
+matrix: 88 adapter/fixture tests, 43 data/external/Web Forms tests, modern,
+legacy, and Web Forms CLI scans with artifact validation, byte-identical
+repeat modern facts, and the pinned `community-visual-basic` smoke at
+`20d2a51dfc9f342848ad134952ceaa8d79302559` (110,726 facts,
+`Level1SemanticAnalysisReduced` / `FailedOrPartial`). The Windows-only
+relative-root publish regression remains to be checked on the pushed repair
+head; a macOS pass does not substitute for it.
+
+### Existing published Web Site, local-only admission probe
+
+`scripts/Invoke-ExistingWebFormsPublishProof.ps1` is a separate diagnostic for
+an already-published Web Site. It does not run `aspnet_compiler`, change the
+source or publish folders, or infer that the published bytes came from the
+current source. Run the public synthetic guard first:
+
+```powershell
+pwsh -NoProfile -File scripts/tests/Test-ExistingWebFormsPublishProof.ps1
+```
+
+On Windows the guard publishes both mapped two-DLL and updatable four-DLL public no-PDB
+fixtures and requires a `Names_Init` to `sql-query` path with a Tier3 source
+candidate in the mapless case. It also checks that the derived ordered hops,
+rule IDs, evidence tiers, source commit, admitted DLL hashes, and review-only
+status appear in the local `compiled-path-review/handler.local.html` and
+`handler.handoff.local.json` outputs. The scan-time `report.md` inventories the
+published-site binding facts, their bounded-input provenance, and gaps; the
+same retained observations live in `facts.ndjson` and `index.sqlite`. The
+ordered path is a later graph projection from `combined.sqlite`, not an
+additional extracted fact. The handoff JSON hashes its generator and the
+bounded path report, manifest, receipt, and combined index. It is local-only
+and may contain private identities; do not share it as an anonymous artifact.
+The local renderer accepts a path report up to 256 MiB, a combined index up
+to 4 GiB, and at most 250,000 explicit graph gaps. It shows 256 detailed gaps and 128 kind/rule count groups
+at most, with omitted counts; the full bounded input remains committed by its
+SHA-256. An input-limit failure reports only the input slot, measured bytes,
+and limit so a saved proof can be diagnosed without another scan.
+If the SQL-query path count is zero, the local replay runs a unique-handler
+`database-api` graph recheck using the saved `scan-ilwork-30000000` facts and
+`combined-ilwork-30000000.sqlite`, narrowing the terminal to
+`DbDataAdapter.Fill`. With no explicit proof root it selects the latest complete
+high-work proof, not merely the latest lower-work proof; if none is saved, it
+stops before a graph query. The initial publish proof explicitly allows its
+base index before a high-work replay exists. A matching saved, receipted high-work API path report
+is reused after its bounded input hash and exact report-byte SHA-256 are checked, avoiding a repeated graph
+query. Otherwise the graph query runs against the saved high-work index. It
+prints truncation and traversal counts and projects
+the separate receipted report into a fresh `path-recheck-*/compiled-api-review/`
+directory (or a new `compiled-api-review-readable-*` sibling when the first
+projection already exists). The method table uses compact display labels;
+the exact length-prefixed identities remain in the collapsed row detail and
+unchanged in the local JSON. The handoff binds the
+exact scan and index hashes. This is a static database API candidate, not
+a SQL-query join or execution claim. To replay these projections without
+building, publishing, scanning, or combining again, run
+`pwsh -NoProfile -File scripts/Replay-ExistingWebFormsCompiledPathReviews.ps1`;
+it selects the most recent saved complete proof in the local temporary folder.
+Repeated SQL-path replay creates a fresh projection and always emits its handoff
+path. A missing or nonunique optional API handler remains an explicit unavailable
+projection; it does not convert a valid gap proof into a failed scan. Integrity
+errors remain failures. API receipts predating `pathReportSha256` are not trusted:
+run `scripts/wview.ps1 -FromSavedProof -RecheckApi` once to explicitly regenerate
+the bounded graph report from saved inputs, without rescanning or recollecting.
+The handoff validates repository name and remote identity against the matching
+scan source, retains a repository-name hash and packet repository ID, rejects
+gaps without a rule or valid tier, and preserves available gap locations,
+source/fact IDs, extractor versions, evidence scope, and candidate counts.
+To add a saved local compiled-path handoff to a **new** normal private
+application workbench without rescanning, run
+`pwsh -NoProfile -File scripts/New-FocusedWebFormsStandaloneReview.ps1 -PacketPath <webforms-modernization.json> -CompiledPathHandoffPath <handler.handoff.local.json>`.
+The standalone review creates a fresh receipted output; it never rewrites an
+old workbench. Its index links to `compiled-paths.local.html` and the exact
+copied JSON, and `application-handoff.json` records the handoff's raw SHA-256,
+path/gap counts, truncation, and `pageVerdictJoined=false`. The repository ID
+and source commit must match exactly one packet source. This is a separate local-only,
+review-only projection, not a page-chain verdict, SQL-query join, or runtime
+execution claim. Do not put these private files in a shareable artifact.
+The short entry point `scripts/wview.ps1` runs the saved-proof replay and
+forwards its selected handoff into the standalone workbench. Run
+`pwsh -NoProfile -File scripts/wview.ps1`; optional `-ProofRoot`, `-PacketPath`,
+`-OutputRoot`, and `-ConfigPath` override discovery. It uses the normal local
+page-list configuration by default and does not rebuild, publish, scan, or
+combine. An explicitly supplied `-ProofRoot` also admits the saved base-index
+route; automatic discovery remains restricted to higher-work proofs. Its public
+wrapper guard is `scripts/tests/Test-WebFormsView.ps1`.
+When a compiled handoff is supplied without `-PacketPath`, packet discovery
+chooses the newest saved packet with exactly one matching repository ID and source commit,
+not merely the newest packet. Discovery is bounded to 64 packets, 128 MiB
+per packet and 512 MiB total read; no compatible packet stops with
+`WEBFORMS_STANDALONE_REVIEW_COMPATIBLE_PACKET_UNAVAILABLE`. Explicitly supplied
+packets still undergo the same attachment guard. A rejected pairing reports
+categorical reasons and source-match counts, never private source names.
+If no matching normal packet exists, `scripts/wview.ps1 -FromSavedProof`
+explicitly composes a **focused** packet from the exact saved combined index
+and creates its workbench under the proof root. It does not replace full-site
+reports, collect sources, scan, publish, or combine. The index hash must match
+the handoff before and after generation. A fresh local receipt records the
+wrapper SHA-256, CLI assembly SHA-256, bounded index/handoff input digest, and
+packet/Markdown artifact hashes;
+the packet source must match the handoff's repository ID and commit, not commit
+alone. Both JSON and Markdown have independent artifact hashes. Default packet bounds remain in force and
+may yield reduced coverage. The public wrapper guard is
+`scripts/tests/Test-SavedWebFormsProofPacket.ps1`; this mock guard verifies
+orchestration and hash rejection, while the .NET modernization packet tests
+verify the actual reporter.
+The packet reporter accepts a combined index with one or more recorded
+sources, including a focused publish proof combined from one scan. It still
+rejects zero sources, invalid commit identity, missing/ambiguous primary Web
+Forms sources, and source/fact mismatches. A combined schema does not imply
+multi-repository coverage. The public .NET single-source regression verifies
+source identity, deterministic packet bytes, and read-only index handling.
+Combined graph admission limits now follow the single-index partial-output
+contract: preserve bounded inventory and source provenance, emit a Tier4
+input-limit gap, and mark coverage reduced and truncated. Never classify
+paths or downstream boundaries from an incomplete graph. The public
+`WebFormsReportMemoryTests` exercise combined fact, edge, and text limits,
+deterministic output, and unchanged index bytes. This does not raise budgets
+or establish private-site success; separately attached saved compiled paths
+remain review-only and do not change the packet's page verdicts.
+The cross-platform projection guard is
+`pwsh -NoProfile -File scripts/tests/Test-ExistingWebFormsCompiledPathHandoff.ps1`.
+The Windows case must
+pass before using this diagnostic on a private site. For a local-only site
+probe, run from a clean TraceMap checkout:
+
+```powershell
+pwsh -NoProfile -File scripts/Invoke-ExistingWebFormsPublishProof.ps1 -HandlerName BidGroupNamesDDL_Init
+```
+
+The script prompts for the source Web Site folder, the existing published
+output folder (containing `bin/` and `.compiled` maps), and the page path
+relative to the source site (for example `BidGroup.aspx` when the site folder
+is `UBid`). It requires zero or one unambiguous page map and a clean source-site Git scope,
+and bounded committed page/code-behind, relevant `Web.config`, plus
+`App_Code` sources. The scan is explicitly limited to those receipted source
+files; it is not a complete-site source scan. It matches the page map by
+exact virtual path, or by one unique application-root-prefixed
+suffix when the `.compiled` virtual path differs from the source-relative
+page path. Uniqueness includes exact and prefixed candidates together; an
+exact match alongside a prefixed match is ambiguous and stops the probe.
+A mapped page selects its named DLL. With no matching page map,
+the mapless path selects every `App_Web_*` DLL and `App_Code` DLL, hashes and
+copies every `.compiled` map, and records an explicit Tier3 source-type
+candidate. No `App_Web_*` DLL or multiple matching maps stop the probe.
+`-AdditionalAssemblyName` may name
+other **exact** DLL filenames only when the operator can attest they were
+built from the same source commit. Every other `bin/*.dll` must be explicitly
+declared outside this focused proof (one `OUTOFSCOPE` response); otherwise
+the probe stops with `unclassified-assemblies`. The local receipt records
+each available DLL hash and its selected/out-of-scope disposition. An
+out-of-scope DLL is never a complete-publish or cross-assembly claim.
+The probe joins copied DLLs to compiled outcomes by unique SHA-256, because
+external safe locators include a hash prefix. A duplicate scanned DLL hash or
+an unmatched outcome stops the proof before source-commit binding.
+When the deployment also contains binaries from another repository or build,
+`-IncludeAllPublishedAssembliesAsContext` instead hashes and scans every
+`bin/*.dll` without excluding any. Only the mapped or mapless Web Site DLLs
+and any explicitly named `-AdditionalAssemblyName` DLLs receive the Web Site
+commit binding. The others are labeled `artifact-context-no-source-commit`
+in the local inventory and remain unbound metadata context. A duplicate
+code-behind type in that context blocks the Tier3 page candidate; a call
+that needs a context DLL cannot become a bound IL edge through this run.
+Use the separately provenance-bound repository run when such an edge is
+needed. This mode does not attribute UnitedFramework or third-party binaries
+to the Web Site commit, nor does it prove a complete cross-repository path.
+The public `vb-publish-crossdll` Windows regression publishes a mapless Web
+Site with five DLLs and three `.compiled` maps, while keeping the independently
+built framework PDB outside the published folder. Five framework provider
+classes expose the same method name; the graph admits only the exact bound
+MemberRef target. The cross-platform `root-crosslanguage` regression separately
+binds and combines two compiled indexes to exercise the same MemberRef rule
+without requiring ASP.NET precompilation. A second source index for the
+framework must bind that exact DLL and reconcile its portable-PDB document
+and method before the compiled call can return to the source SQL terminal.
+The page entry remains Tier3
+review-only, the bound IL call is static evidence, and the PDB bridge is Tier2
+structural evidence, never runtime execution. The regression requires zero
+SQL paths when the framework PDB is unavailable or its DLL is only unbound
+artifact context. Exact IL references into that context remain Tier3 review
+candidates with a `CompiledIlArtifactContext` gap; they cannot establish
+source ownership or complete a source SQL path. A same-named provider,
+an independently rebuilt DLL with different bytes, or an unbound context DLL
+cannot complete this chain. The synthetic fixture does not attest any private
+publish or independently built historical artifact.
+The same public mapless fixture proves that an exact IL path through the
+unbound provider can instead reach the separate `database-api` candidate
+terminal while the `sql-query` path count remains zero.
+Both the initial admission probe and the bound scan use an explicit 8,192-character
+compiled metadata text limit. This is a bounded override of the general 4,096-character
+default, and the effective limit is recorded in each scan manifest. An assembly
+that still exceeds it remains a gap; the script does not drop context DLLs to
+make the probe pass.
+The bound scan also uses a 16,384-character IL text limit, based on the
+categorical probe of the source-bound input. The effective IL limit is recorded
+in the scan manifest; exceeding it still withholds that input's IL evidence.
+`scripts/wp.ps1` summarizes the latest local saved probe, bound IL outcomes,
+and path gap kinds without rerunning a scan or printing source paths or names.
+`scripts/wid.ps1 -TypeName <type> -MethodName <method>` identifies the one
+copied assembly containing that compiled method and runs a bounded dual-reader
+probe on it. Its output consists only of disagreement categories and counts;
+it also counts how many selected overloads have bodies that agree in both
+readers and reports each overload's agreement plus generic collection,
+array-parameter, and by-reference signature flags. It uses the saved publish
+bytes and does not rescan the Web Site.
+`scripts/wgo.ps1 -SourceSiteRoot <site-root> -TypeName <type>
+-MethodName <method>` runs that quick probe first. It starts a separate
+30,000,000-unit replay only when every selected overload agrees; otherwise it
+prints `replaySkipped=selected-method-disagreement` and leaves the saved scan
+unchanged.
+`scripts/wm.ps1 -TypeName <type> -MethodName <method>` correlates a compiled
+method family with its saved IL bodies and per-assembly IL admission outcome.
+It counts exact IL `member:Fill` references by framework owner and assembly
+scope, and prints counts and categorical gaps only. When the relevant assembly has
+`IlTotalWorkLimitExceeded`, `scripts/wr.ps1 -SourceSiteRoot <site-root>
+-TypeName <type> -MethodName <method>` reuses the saved receipt, binding, and
+copied publish bytes for one new scan with an explicit 20,000,000-unit IL
+budget. It writes a separate scan and exact-handler `database-api` path
+report under the same local output root. It verifies the source commit and
+copied assembly hashes before scanning; the original scan is retained. The
+replay path query uses the unique resolved handler symbol from the receipted
+page; the short handler name alone is not an exact graph selector. For an
+existing replay, `scripts/wpath.ps1` reruns only that corrected path query
+against the saved combined index and writes a separate exact-handler report.
+`scripts/wpath.ps1 -FillOnly -TypeName <provider> -MethodName <method>`
+queries only the exact `DbDataAdapter.Fill` terminal and prints categorical
+path, classification, and selected provider counts; its local report retains
+the full evidence chain for review.
+`scripts/wpost.ps1 -TypeName <type> -MethodName <method>` reads a saved replay
+without scanning or querying and reports the selected method family's Fill
+calls and root reachability counts. A
+larger budget changes coverage, not the evidence tier or proof of execution.
+`scripts/wp.ps1 -RecheckPathReasons` reruns only the saved path query against
+the local combined index and prints categorical published-member mismatch
+counts plus `pathRecheckArtifactIlCalls`. The latter counts exact IL references
+that enter unbound artifact context as review-only candidates; it is not a
+source-to-SQL path count. The refreshed report and its hashes stay beside the
+local receipt.
+`scripts/wp.ps1 -RecheckCompiledApi` first requires one handler fact matching
+the receipted page and handler name, then reruns one bounded `database-api`
+path query from its full source symbol against the saved combined index, with
+exact symbol matching. The ordinary `--from-symbol` path selector retains its
+substring behavior; `--exact-from-symbol` requires an identical symbol ID or
+display and records that choice in the query. It
+prints only candidate counts and categorical truncation reasons. Multiple or
+missing handler facts stop the query; multiple graph start nodes withhold the
+path count. `Truncated=True` alone does not identify
+which bound was hit; inspect the reason counts before interpreting zero paths.
+The recheck also counts saved `ManagedIlCallObserved` MemberRefs by fixed
+`Fill`/`Execute*` API families. These global counts may include unreachable
+calls from other published assemblies; they diagnose terminal coverage and do
+not establish a handler path or SQL execution. Only the local receipt hashes
+the private facts input; shareable output contains category counts alone.
+`otherFill` and `otherExecute` separate calls outside the named framework
+families without exposing their assembly or type identities.
+The other `Fill` count is split again by fixed adapter owner and assembly
+categories. The exact-handler traversal also reports how many `Fill`
+MemberRefs have reachable caller methods and how many of those calls are not
+recognized database APIs. These counts still do not establish dispatch or
+execution.
+The command does not rebuild, republish, rescan, or assert SQL source ownership.
+For a unique exact handler, it also prints bounded root-traversal counts and
+fixed edge-kind presence plus categorical graph gaps. These identify where
+the saved graph traversal stopped; graph-wide gaps can belong to unrelated
+methods, and a cycle notice does not by itself establish an omitted terminal.
+Terminal-caller reachability and unresolved IL target counts are restricted
+to the exact handler's traversed component; no private symbol or assembly
+identity is printed.
+For a saved bound scan with one source-bound `IlReaderDisagreement` and one
+source-bound `IlTextLimitExceeded`, `scripts/wil.ps1` locally replays only those
+two copied DLLs through the same independent IL readers. It validates their
+receipt hashes and prints categorical disagreement counts, the first differing
+instruction's opcode/operand category, token kind and identity-part category,
+and the first
+non-text-limit ceiling up to 65,536. Local receipts record the diagnostic
+generator and bounded input SHA-256 values; no identities, tokens, source,
+paths, or private hashes are printed. This diagnostic does not change the
+scanner's fail-closed IL result or establish a source-to-SQL path.
+The source subset follows `CodeBehind`/`CodeFile` in the page directive,
+then conventional VB/C# fallback, and includes every ancestor `Web.config`.
+Source tracking is checked against the exact `HEAD` tree under the Web Site
+folder. On Windows, a unique case-only path difference is accepted only when
+the working file's raw or Git-filtered blob hash matches the committed blob.
+The raw comparison also accepts an exact committed byte match when the
+machine's current line-ending filter differs from the one used for the commit.
+The safe `sourceTrackingCaseAliases` count reports these matches. Missing source fails
+closed with `WEBFORMS_EXISTING_PUBLISH_SOURCE_NOT_COMMITTED` and aggregate
+`sourceNotCommitted*Count` lines by page, linked code, config, and `App_Code`.
+Those counts contain no source paths. An ignored `App_Code` source remains a
+missing committed input even if the Git working tree reports clean.
+If an alias resolves to different committed and working blob identities, the
+probe fails with `WEBFORMS_EXISTING_PUBLISH_SOURCE_MISMATCH` and aggregate
+`sourceMismatch*Count` lines for the same categories. These counts also omit
+paths and hashes; a clean Git status alone does not override this gate.
+For a Web Site whose only tracked content difference is its root `Web.config`,
+`scripts/wf.ps1` provides a local-only snapshot path. It checks every tracked
+Web Site file against `HEAD` using raw and Git-filtered blob identities, requires the existing
+bounded proof to identify only that config mismatch, creates a detached local
+commit containing the current config in a fresh temporary worktree, and runs
+the proof against that exact snapshot. It does not modify the original source
+checkout, branch, or index, and it does not push the private commit. The new
+commit and worktree remain local so the receipt can still resolve its source
+SHA. Run `pwsh -NoProfile -File scripts/wf.ps1` and answer its four input
+prompts; `-PrepareOnly` stops before the scans and source attestation. Only
+attest the snapshot as the publish input if those bytes were actually used to
+produce the deployed binaries. A later config edit does not establish that
+claim. Other source differences stop this helper; it never silently rewrites
+the source-commit claim or treats an unbound probe as a bound result.
+It copies only selected DLLs and the relevant mapped map or all mapless maps
+to a fresh local temporary output, not the source site. It enforces the
+receipt's 256-source, 64-published-file, 32-page, and per-file limits before
+scanning. `-PrepareOnly` stops after the local receipt and copies.
+
+A first, unbound scan records the scanner's exact safe locators and metadata
+identities. Before a second scan may bind the Web Site DLLs, the operator
+must explicitly attest that those DLLs were built from the exact clean source
+commit; declining stops without a bound path claim. The script retains the
+binding receipt, both scans, logs, combined index, and optional handler path
+report only in its local output folder. Its console output contains counts,
+coverage states, a hashed source-repository identity, exact source commit,
+and a local folder path, not source snippets. The binding receipt carries
+the script generator hash and a bounded-input digest. Do not share
+the local receipts, logs, scan, or path report. The existing publish's actual
+compiler and full build-input set remain unknown: the compiler hash in this
+operator-declared receipt is an explicitly labeled unknown sentinel, **not**
+a compiler attribution. A mapless page without a unique bound code-behind
+type, a source-commit attestation that cannot be made, an omitted internal
+DLL, or a scanner limit is a gap to investigate, not permission to guess a
+source-to-binary join.
+
+This diagnostic is a separate proof attempt; it does not rewrite the normal
+Web Forms workbench or establish runtime execution, source-line identity,
+complete application reachability, or private-page success.
+
+### Core publish receipt-set contract
+
+`WebFormsPublishReceiptSetTests`, `WebFormsPublishedRootTests` and
+`WebFormsReviewPreparationTests` pin the additive
+`webforms-publish-binding-set.v1` reader and legacy compatibility:
+
+```text
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter "FullyQualifiedName~WebFormsPublishReceiptSetTests|FullyQualifiedName~WebFormsPublishedRootTests|FullyQualifiedName~WebFormsReviewPreparationTests"
+```
+
+The public set fixture declares 67 pages across three independently bounded
+receipts and asserts deterministic binding facts, global unique membership,
+generator/input commitments and unchanged input bytes. Tampered, nested,
+malformed, duplicate-page, cross-partition map ambiguity, cancellation and
+oversize file/identity cases withhold bindings. Explicit inventory-only members
+retain additional context without creating page bindings; standalone or page-bearing
+inventory members and page-less sets are refused. Sets retain the legacy per-file
+and per-partition bounds, an explicit 64-partition cap and conservative 8 GiB
+artifact read/hash admission. No source/build/runtime completeness is inferred.
+
+The existing PowerShell preparer still has its original single-receipt bounds.
+Native preparation now emits deterministic sets when declared inventory exceeds
+one receipt, and preflight/resume pins every member. The separate optional
+`budgets.maxPublishInputFiles` admits publication inventory without silently
+raising compiled metadata or other input budgets; omitted budgets retain legacy
+admission. Follow-on configuration input-count and hash-byte admission is checked
+before publication, including the actual newly generated receipt/config bytes.
+
+```text
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter "FullyQualifiedName~WebFormsReviewPreflightTests|FullyQualifiedName~WebFormsReviewPreparationTests|FullyQualifiedName~WebFormsPublishReceiptSetTests"
+```
+
+Public integration fixtures cover selected/all-page scope, both fresh scans and
+immutable attachment, 67 declared pages, 368 sources and 69 publication files.
+They check Core's global counts, partition caps and hashes, completed workbench
+navigation inventories, lossless handoff membership, immutable inputs and resume
+tamper rejection. Negative cases cover escaped/nested/duplicated/tampered or
+over-page-limit members and explicit/default budget boundaries. These are declared
+inventory fixtures using public PE inputs, not an ASP.NET compilation parity proof.
+The public Windows compiled Web Site parity checks and representative eight-times
+memory/disk/time validation remain required.
+
+### Bounded combined property projection
+
+```text
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter "FullyQualifiedName~WebFormsReportMemoryTests|FullyQualifiedName~MessyWorkspaceRegressionTests"
+```
+
+The combined reader retains all fact rows and source namespaces while projecting
+only audited graph-consumed properties before managed allocation. Tests compare
+complete serialized path reports with the full reader, retain supporting IDs and
+cross-source competitors, check missing legacy extractor columns, reject
+noncanonical identities, and withhold paths on oversized dependency-edge text.
+Facts whose source-index metadata is absent are rejected, never silently skipped
+by the per-source projection; global competitors cannot disappear that way.
+Duplicate JSON keys, numeric/nested values and non-object property JSON retain
+the combined full parser's exact last-value or empty malformed-properties behavior
+(the single-index parser retains its existing malformed-properties hash behavior).
+Existing compiled attachment/PDB/publish method-chain cases pin the source symbol,
+member identity, body-span and namespace/import context that a source-only
+projection must not omit. The allocation comparison is warmed and isolated from
+parallel test collections; it measures managed allocation, not peak working set.
+Every original fact stays in the read-only combined index. Raw fact/edge/text
+admission and global fact/semantic-index allocations remain: the allocation
+comparison alone is not an eight-times scale or peak-working-set acceptance result.
+
+### Indexed bounded combined graph
+
+The same focused command exercises the private temporary SQLite graph backend.
+Admitted compact facts, nodes and edges are inserted directly into it; there is
+no complete managed fact list or graph followed by a spill. Exact fact-ID and
+source/original-ID facades use indexed row reads, and ordered fact traversal uses
+the .NET ordinal collation. Surface projection retains a lazy repeatable list
+instead of a second full fact-input array. Global aliases retain their complete
+source namespace, with one reconciliation group loaded at a time. Outgoing
+adjacency is paged by exact node ID and local position, at most 64 records with a
+512 KiB serialized target (one already-admitted oversized record is retained
+alone). Reverse traversal does not materialize a full reversed adjacency array.
+SQLite ordering uses an explicit .NET
+ordinal collation, preserving supplementary/BMP Unicode and null-path ordering.
+The backend remains private and ephemeral, pins actual generator/input hashes,
+rechecks input bytes before returning a report, and never writes the input index.
+
+Public 32/256-page cases compare complete serialized reports with the historical
+reader and observe all retained fact and graph node/edge counts, logical database bytes and maximum
+outgoing rows loaded. Dedicated 128/1,024-branch cases retain all 129/1,025 paths and compare
+complete reports in both legacy depth-first and ordinary breadth-first traversal;
+no outgoing page exceeds 64 rows. Tests also pin branch ordering, unchanged
+input/directory contents, cancellation, and fail-closed refusal at a small storage quota. The
+cross-source fixture retains identical original fact IDs independently in each
+namespace. The allocation guard remains unchanged; total allocations are not a
+peak-working-set measurement. The
+default logical database ceiling is 512 MiB, including facts and the order roster;
+the page cache is 8 MiB. Sorter temporary files are outside that logical ceiling,
+and type-specific semantic indexes remain managed. These checks do not replace representative 8x source and
+compiled-distribution elapsed-time, total-disk and peak-memory measurements.

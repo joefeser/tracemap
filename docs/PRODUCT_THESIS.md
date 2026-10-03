@@ -32,6 +32,11 @@ The product stance is intentionally conservative:
 
 ## Open Core
 
+The normative product boundary is documented in
+[OPEN_CORE_BOUNDARY.md](OPEN_CORE_BOUNDARY.md). In short, the open product must
+prove evidence correctly; a commercial layer may operate, retain, and govern
+that evidence at organizational scale.
+
 TraceMap should stay open where openness builds trust:
 
 - deterministic extractors;
@@ -102,4 +107,3 @@ Do not turn the core scanner/reducer into an LLM, embedding, vector database, or
 prompt-classification product. Those tools can exist around the evidence layer,
 but TraceMap's trust comes from deterministic facts, rule IDs, tiers, coverage
 labels, line spans, commit SHA, and explicit gaps.
-

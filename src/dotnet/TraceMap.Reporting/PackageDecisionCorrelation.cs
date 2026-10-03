@@ -181,7 +181,7 @@ public sealed record PackageDecisionEvidence(
 
 public sealed record PackageDecisionNote(string Code, string Message);
 public sealed record PackageDecisionExclusion(string RowId, string Classification, string SourceLabel, string SourceIndexId, string ScanId, string? CommitSha, string RuleId, string EvidenceTier, string Message);
-public sealed record PackageDecisionStaleReference(string RowId, string Classification, string DecisionId, string SourceLabel, string ScanId, string? CommitSha, string RuleId, string EvidenceTier, bool SnapshotPredatesDecision, string Message, PackageDecisionEvidence? Evidence = null);
+public sealed record PackageDecisionStaleReference(string RowId, string Classification, string DecisionId, string SourceLabel, string ScanId, string? CommitSha, string RuleId, string EvidenceTier, bool SnapshotPredatesDecision, string Message, PackageDecisionEvidence Evidence);
 public sealed record PackageDecisionExternalReference(
     string RowId,
     string Classification,
@@ -349,6 +349,8 @@ public static class PackageDecisionCorrelationReporter
 
         var index = await ReadInputsAsync(inputSpecs, cancellationToken);
         var unfilteredSources = index.Sources.OrderBy(source => source.Label, StringComparer.Ordinal).ThenBy(source => source.SourceIndexId, StringComparer.Ordinal).ToArray();
+        if (unfilteredSources.Length == 0)
+            throw new InvalidDataException("package-decision requires at least one source snapshot with repository and commit provenance.");
         var sources = unfilteredSources;
         if (!string.IsNullOrWhiteSpace(options.Source))
             sources = sources.Where(source => SourceMatches(index.RawLabels.GetValueOrDefault(source.SourceIndexId) ?? source.Label, options.Source)).ToArray();
@@ -473,7 +475,31 @@ public static class PackageDecisionCorrelationReporter
                         default: ambiguous.Add(row); break;
                     }
                     if (row.SnapshotPredatesDecision)
-                        stale.Add(new PackageDecisionStaleReference(row.RowId, row.Classification, row.DecisionId, row.SourceLabel, row.ScanId, row.CommitSha, RuleId, row.Evidence.EvidenceTier, true, "The scan predates the producer-declared decision time; later remediation is not represented.", row.Evidence));
+                    {
+                        if (!string.IsNullOrWhiteSpace(row.Evidence.ExtractorId) && !string.IsNullOrWhiteSpace(row.Evidence.ExtractorVersion))
+                        {
+                            stale.Add(new PackageDecisionStaleReference(row.RowId, row.Classification, row.DecisionId, row.SourceLabel, row.ScanId, row.CommitSha, RuleId, row.Evidence.EvidenceTier, true, "The scan predates the producer-declared decision time; later remediation is not represented.", row.Evidence));
+                        }
+                        else
+                        {
+                            AddGap(gaps, options.MaxGaps, ref gapCapReached, new PackageDecisionGap(
+                                $"pd-stale-extractor:{Hash(row.RowId)}",
+                                "ExtractorIdentityUnavailable",
+                                "A legacy evidence row lacks complete extractor identity; no stale-reference finding was emitted.",
+                                RuleId,
+                                EvidenceTiers.Tier4Unknown,
+                                row.DecisionId,
+                                row.SourceLabel,
+                                record.Ecosystem,
+                                row.SourceIndexId,
+                                row.ScanId,
+                                row.CommitSha,
+                                FilePath: row.Evidence.FilePath,
+                                StartLine: row.Evidence.StartLine,
+                                EndLine: row.Evidence.EndLine,
+                                SupportingFactIds: [row.Evidence.FactId]));
+                        }
+                    }
                 }
             }
         }
@@ -508,7 +534,7 @@ public static class PackageDecisionCorrelationReporter
             "package-decision-correlation", Version, comparisonMode ? "DecisionComparisonV1" : "DecisionSnapshotV1",
             new PackageDecisionQuery($"value-hash:{CombinedReportHelpers.Hash(options.DecisionPath, 16)}", $"value-hash:{InputIdentity(inputSpecs, options.ManifestPath, options.BeforeManifestPath, options.AfterManifestPath)}", options.Source is null ? "default" : SafeInputLabel(options.Source), options.Ecosystem, options.DecisionId, options.Classification, options.MaxFindings, options.MaxGaps, options.ExitCode, options.AsOf),
             recordRows.OrderBy(row => row.Classification ?? string.Empty, StringComparer.Ordinal).ThenBy(row => row.ProducerId ?? string.Empty, StringComparer.Ordinal).ThenBy(row => row.DecisionId ?? string.Empty, StringComparer.Ordinal).ToArray(),
-            sources.Select(source => ToSource(source, index.ScannedAt.GetValueOrDefault(source.SourceIndexId), index.KnownGaps.Where(gap => gap.SourceIndexId == source.SourceIndexId))).ToArray(),
+            (sources.Length == 0 ? unfilteredSources : sources).Select(source => ToSource(source, index.ScannedAt.GetValueOrDefault(source.SourceIndexId), index.KnownGaps.Where(gap => gap.SourceIndexId == source.SourceIndexId))).ToArray(),
             selectedExact, selectedMismatch, selectedPossible, selectedAmbiguous,
             excluded.OrderBy(row => row.SourceLabel, StringComparer.Ordinal).ThenBy(row => row.RowId, StringComparer.Ordinal).ToArray(),
             stale.OrderBy(row => row.SourceLabel, StringComparer.Ordinal).ThenBy(row => row.RowId, StringComparer.Ordinal).ToArray(),
@@ -1632,7 +1658,7 @@ public static class PackageDecisionCorrelationReporter
         builder.AppendLine("|---|---|---|---|---|---|");
         foreach (var source in sources.OrderBy(value => value.Label, StringComparer.Ordinal).ThenBy(value => value.SourceIndexId, StringComparer.Ordinal))
             builder.AppendLine($"| {Cell(source.Label)} | {Cell(source.RepoIdentityHash)} | {Cell(source.CommitSha)} | {Cell(source.ScanId)} | {Cell(source.ScannerVersion)} | {Cell(source.CoverageStatus)} |");
-        if (sources.Count == 0) builder.AppendLine("| unavailable | unavailable | unavailable | unavailable | unavailable | ReducedCoverage |");
+        if (sources.Count == 0) throw new InvalidDataException("package-decision report cannot be rendered without source provenance.");
         builder.AppendLine();
     }
 

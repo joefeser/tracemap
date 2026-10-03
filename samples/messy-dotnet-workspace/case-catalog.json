@@ -1,0 +1,423 @@
+{
+  "schemaVersion": "messy-workspace-case-catalog.v1",
+  "description": "Stable case catalog for the public-safe messy .NET workspace regression slice. Cases are marked implemented or deferred; this catalog is an inventory and does not claim deferred cases are proven. Implemented cases are pinned by src/dotnet/tests/TraceMap.Tests/MessyWorkspaceRegressionTests.cs.",
+  "nonClaims": [
+    "runtime-execution",
+    "dynamic-dispatch-resolution",
+    "cross-source-symbol-equivalence",
+    "private-source-reproduction",
+    "fsharp-source-adapter-coverage",
+    "ilasm-rewritten-pdb-parity"
+  ],
+  "artifactPinning": {
+    "determinismContract": "repeat CLI scans of each root produce byte-identical facts.ndjson",
+    "generatorAndInputHashes": "no new derived machine-readable artifact is introduced by this slice; provenance stays in the existing scan manifest (scanner version, commit SHA) and rule-catalog extractor versions",
+    "failureIdentification": "every test assertion names the catalog case id and the pipeline stage: extraction, combining, reconciliation, or traversal"
+  },
+  "cases": [
+    {
+      "id": "MW-DEEP-CHAIN-D10-001",
+      "status": "implemented",
+      "roots": [
+        "root-alpha"
+      ],
+      "shape": "handler chain of twelve call edges across Pages/, Services/, and Data/ folders ending in an ADO.NET-style supported SQL terminal at graph distance 14, beyond depths 8, 10, and 12",
+      "stages": [
+        "extraction",
+        "traversal"
+      ],
+      "expectedRuleIds": [
+        "csharp.semantic.callgraph.v1",
+        "database.operation.call-pattern.v1",
+        "combined.paths.surface-evidence.v1"
+      ],
+      "expectedTiers": [
+        "Tier1Semantic",
+        "Tier3SyntaxOrTextual"
+      ],
+      "expectedGaps": [
+        "TruncatedByLimit:depth"
+      ],
+      "assertions": "at max depth 12 the terminal inventory is complete with identical boundary identity sets at depths 12 and 16 and minimum terminal distance 14; path enumeration honestly truncates with the depth reason while the terminal stays inventoried (no false absence); at depth 10 the distance-14 terminal falls outside the depth-bounded retained closure and the observation must scope its completeness claim to the retained graph instead of implying or inventing a terminal"
+    },
+    {
+      "id": "MW-CYCLE-001",
+      "status": "implemented",
+      "roots": [
+        "root-alpha"
+      ],
+      "shape": "three-node call cycle (First -> Second -> Third -> First) entered from a page handler",
+      "stages": [
+        "extraction",
+        "traversal"
+      ],
+      "expectedRuleIds": [
+        "csharp.semantic.callgraph.v1",
+        "combined.paths.truncation-gap.v1"
+      ],
+      "expectedTiers": [
+        "Tier1Semantic",
+        "Tier4Unknown"
+      ],
+      "expectedGaps": [
+        "TruncatedByLimit:cycle",
+        "DownstreamWithoutSupportedTerminal"
+      ],
+      "assertions": "traversal terminates on the cycle branch, records cycle truncation honestly, and reports the branch as downstream-without-supported-terminal rather than inventing a terminal"
+    },
+    {
+      "id": "MW-CYCLE-SELF-002",
+      "status": "implemented",
+      "roots": [
+        "root-alpha"
+      ],
+      "shape": "self-recursive method (Self calls Self) entered from its own dedicated page handler",
+      "stages": [
+        "extraction",
+        "traversal"
+      ],
+      "expectedRuleIds": [
+        "csharp.semantic.callgraph.v1"
+      ],
+      "expectedTiers": [
+        "Tier1Semantic"
+      ],
+      "expectedGaps": [
+        "DownstreamWithoutSupportedTerminal"
+      ],
+      "assertions": "the self-cycle handler's own chain is selected independently of the three-node cycle: traversal terminates, records cycle truncation, inventories zero terminals, and surfaces its own scoped downstream-without-terminal gap"
+    },
+    {
+      "id": "MW-SAME-NAME-TEN-001",
+      "status": "implemented",
+      "roots": [
+        "root-alpha"
+      ],
+      "shape": "the same method names Process and Core in ten classes in one file, each ending in a distinct SQL terminal",
+      "stages": [
+        "extraction",
+        "reconciliation",
+        "traversal"
+      ],
+      "expectedRuleIds": [
+        "csharp.semantic.callgraph.v1",
+        "database.sql.shape.v1"
+      ],
+      "expectedTiers": [
+        "Tier1Semantic",
+        "Tier3SyntaxOrTextual"
+      ],
+      "expectedGaps": [],
+      "assertions": "ten container-distinct identities survive extraction; traversal inventories ten distinct terminal witnesses; no call edge joins one engine's Process or Core to another engine's container"
+    },
+    {
+      "id": "MW-MERGED-ROOTS-001",
+      "status": "implemented",
+      "roots": [
+        "root-alpha",
+        "root-beta",
+        "vb-projectless"
+      ],
+      "shape": "three independently scanned roots combined into one merged review with explicit labels",
+      "stages": [
+        "combining",
+        "reconciliation"
+      ],
+      "expectedRuleIds": [
+        "csharp.semantic.callgraph.v1"
+      ],
+      "expectedTiers": [
+        "Tier1Semantic"
+      ],
+      "expectedGaps": [],
+      "assertions": "combined sources, facts, and symbols are the union of the inputs with per-source namespacing and no symbol deduplication; root-beta reuses the Process/Core simple names from root-alpha and all eleven original Process identities stay distinct rows; every DatabaseOperationCandidate terminal stays attributed to its own source label (15 alpha, 1 beta, 1 vb) with its own table identity; the merged dependency report lists all three labeled sources; the Web Forms packet stays single-page-source by design, so cross-source attribution is asserted over the merged index directly"
+    },
+    {
+      "id": "MW-VB-PROJECTLESS-001",
+      "status": "implemented",
+      "roots": [
+        "vb-projectless"
+      ],
+      "shape": "loose VB files with no .vbproj or .sln, including an App_Code folder, scanned through the portable Roslyn syntax fallback",
+      "stages": [
+        "extraction"
+      ],
+      "expectedRuleIds": [
+        "vb.semantic.workspace.v1",
+        "vb.syntax.database-operation.v1"
+      ],
+      "expectedTiers": [
+        "Tier3SyntaxOrTextual",
+        "Tier4Unknown"
+      ],
+      "expectedGaps": [
+        "NoVisualBasicProjectOrSolution",
+        "SemanticAnalysisUnavailable"
+      ],
+      "assertions": "analysis level is Level3SyntaxAnalysis; the fail-closed workspace gap is present at Tier4; the data-adapter fill produces a Tier3 database operation attached to the handler; no blocker exists for projectless VB in ordinary CI",
+      "blocker": null
+    },
+    {
+      "id": "MW-FOLDER-SPREAD-001",
+      "status": "implemented",
+      "roots": [
+        "root-alpha",
+        "vb-projectless"
+      ],
+      "shape": "source spread across nested folders (Pages/, Services/, Data/, App_Code/) inside one root and across independently scanned roots",
+      "stages": [
+        "extraction"
+      ],
+      "expectedRuleIds": [
+        "csharp.semantic.callgraph.v1"
+      ],
+      "expectedTiers": [
+        "Tier1Semantic"
+      ],
+      "expectedGaps": [],
+      "assertions": "call edges span folders with folder-relative file paths and the deep chain crosses the Services/ to Data/ boundary"
+    },
+    {
+      "id": "MW-OVERLOAD-001",
+      "status": "implemented",
+      "roots": ["root-alpha"],
+      "shape": "one Web Forms handler invokes int and string interface overloads across two candidate implementations, each ending at its own SQL terminal",
+      "stages": [
+        "extraction",
+        "reconciliation",
+        "traversal"
+      ],
+      "expectedRuleIds": ["csharp.semantic.callgraph.v1", "combined.dispatch-candidate.v1"],
+      "expectedTiers": ["Tier1Semantic"],
+      "expectedGaps": [],
+      "assertions": "the two semantic interface call targets and four implementation relationships retain their int/string signatures without cross-overload joins; the bounded Web Forms packet inventories four distinct candidate terminals"
+    },
+    {
+      "id": "MW-RECEIVER-AMBIGUITY-001",
+      "status": "implemented",
+      "roots": ["root-alpha"],
+      "shape": "an interface-typed receiver with two possible concrete implementations per overload; runtime receiver selection is unknown",
+      "stages": [
+        "extraction",
+        "reconciliation",
+        "traversal"
+      ],
+      "expectedRuleIds": ["csharp.semantic.callgraph.v1", "combined.dispatch-candidate.v1"],
+      "expectedTiers": ["Tier1Semantic"],
+      "expectedGaps": [],
+      "assertions": "four relationship-backed candidate edges join the exact semantic interface call identities; all four supported terminals remain distinct and every candidate boundary is NeedsReviewStaticPath rather than a proven runtime dispatch"
+    },
+    {
+      "id": "MW-CROSSLANGUAGE-001",
+      "status": "implemented",
+      "roots": ["root-crosslanguage"],
+      "shape": "one buildable three-project C# to VB to F# call chain, with F# compiled metadata admitted but F# source ownership unsupported",
+      "stages": [
+        "extraction",
+        "reconciliation"
+      ],
+      "expectedRuleIds": ["vb.semantic.callgraph.v1", "dotnet.compiled.member.v1", "dotnet.compiled.source-identity.v1"],
+      "expectedTiers": ["Tier1Semantic", "Tier2Structural", "Tier4Unknown"],
+      "expectedGaps": ["SourceMetadataReconciliationUnsupportedLanguage"],
+      "alternativeEvidence": [
+        {"expectedRuleIds": ["csharp.semantic.callgraph.v1"], "expectedTiers": ["Tier1Semantic"], "expectedGaps": []},
+        {"expectedRuleIds": ["csharp.syntax.callgraph.v1"], "expectedTiers": ["Tier3SyntaxOrTextual"], "expectedGaps": ["CompilationDiagnostic"]}
+      ],
+      "assertions": "the public projects build, the C# to VB hop is either semantic or explicitly downgraded to syntax plus a compilation gap, the VB to F# call is semantic, the F# compiled method is inventoried, and unsupported F# source ownership emits a gap rather than a guessed join; no complete cross-language source traversal is claimed"
+    },
+    {
+      "id": "MW-GENERATED-MEMBERS-001",
+      "status": "implemented",
+      "roots": ["root-generated"],
+      "shape": "a Web Forms handler calls an auto-generated designer bridge that calls a hand-written SQL terminal",
+      "stages": [
+        "extraction",
+        "traversal"
+      ],
+      "expectedRuleIds": ["csharp.semantic.callgraph.v1", "legacy.flow.static-traversal.v1"],
+      "expectedTiers": ["Tier1Semantic", "Tier4Unknown"],
+      "expectedGaps": ["DownstreamWithoutSupportedTerminal"],
+      "assertions": "the semantic handler call into the generated member is visible, but the excluded generated body is not invented as source call evidence; source traversal reports no terminal and an explicit terminal-evidence gap"
+    },
+    {
+      "id": "MW-SOURCE-METADATA-IL-PDB-001",
+      "status": "implemented",
+      "roots": ["root-generated"],
+      "shape": "the public generated-root handler's source method, exact admitted metadata method, operand-aware IL body, and portable PDB sequence point share one compiled fact identity",
+      "stages": [
+        "extraction",
+        "reconciliation"
+      ],
+      "expectedRuleIds": ["dotnet.compiled.source-identity.v1", "dotnet.compiled.il-body.v1", "dotnet.compiled.pdb-identity.v1", "dotnet.compiled.sequence-point.v1"],
+      "expectedTiers": ["Tier1Semantic", "Tier2Structural"],
+      "expectedGaps": [],
+      "assertions": "a pinned public build and binding receipt yield one exact source-to-metadata handler edge; its compiled fact ID owns an IL body, one metadata-PDB method edge, and a sequence point; this does not claim rewritten PDB offset validity, ILAsm/ILDAsm parity, or runtime behavior"
+    },
+    {
+      "id": "MW-COMPOUND-PAGETWO-001",
+      "status": "implemented",
+      "roots": ["vb-compound-pages"],
+      "shape": "projectless VB Web Forms handler enters a dispatcher that calls five same-name Process methods in one file; two branches continue through unqualified or Me-qualified ContinueRoute calls to distinct SQL terminals",
+      "stages": ["extraction", "reconciliation", "traversal"],
+      "expectedRuleIds": ["vb.syntax.callgraph.v1", "vb.syntax.database-operation.v1", "combined.paths.projectless-vb-receiver-bridge.v1"],
+      "expectedTiers": ["Tier3SyntaxOrTextual"],
+      "expectedGaps": [],
+      "assertions": "five typed receiver calls and exact source-local bridges remain distinct; depth 8 and 10 inventory the same two supported terminal identities without crossing into sibling Process methods"
+    },
+    {
+      "id": "MW-COMPOUND-PAGETHREE-001",
+      "status": "implemented",
+      "roots": ["vb-compound-pages"],
+      "shape": "a separate same-name Web Forms handler traverses Process, Forward, and Finish but has no supported SQL terminal",
+      "stages": ["extraction", "traversal"],
+      "expectedRuleIds": ["vb.syntax.callgraph.v1", "combined.paths.projectless-vb-receiver-bridge.v1"],
+      "expectedTiers": ["Tier3SyntaxOrTextual", "Tier4Unknown"],
+      "expectedGaps": ["DownstreamWithoutSupportedTerminal"],
+      "assertions": "depth 8 and 10 complete retained-graph terminal reachability with zero supported terminals and a selected-chain downstream-without-terminal gap; this never proves runtime absence"
+    },
+    {
+      "id": "MW-COMPOUND-PAGEELEVEN-001",
+      "status": "implemented",
+      "roots": ["vb-compound-pages"],
+      "shape": "a third same-name handler traverses Process, Forward, and Execute to one supported SQL terminal",
+      "stages": ["extraction", "traversal"],
+      "expectedRuleIds": ["vb.syntax.callgraph.v1", "vb.syntax.database-operation.v1", "combined.paths.projectless-vb-receiver-bridge.v1"],
+      "expectedTiers": ["Tier3SyntaxOrTextual"],
+      "expectedGaps": [],
+      "assertions": "depth 8 and 10 retain the same single terminal identity independently from the page-two and page-three routes"
+    },
+    {
+      "id": "MW-SPLIT-VB-001",
+      "status": "implemented",
+      "roots": ["vb-split-web", "vb-split-backend"],
+      "shape": "three projectless VB Web Forms pages and their backend classes are scanned as independent roots, then combined; page two branches through five same-name methods in one backend file to two SQL terminals, page three reaches none, and page eleven reaches one",
+      "stages": ["extraction", "combining", "reconciliation", "traversal"],
+      "expectedRuleIds": ["vb.syntax.callgraph.v1", "vb.syntax.database-operation.v1", "combined.paths.projectless-vb-receiver-bridge.v1"],
+      "expectedTiers": ["Tier3SyntaxOrTextual", "Tier4Unknown"],
+      "expectedGaps": ["DownstreamWithoutSupportedTerminal"],
+      "assertions": "each page has exactly one cross-root receiver bridge; the merged packet retains complete 2/0/1 supported-terminal inventories and matching boundaries; this proves only the synthetic retained graph, not private-corpus behavior or runtime absence"
+    },
+    {
+      "id": "MW-DROPDOWN-CTOR-001",
+      "status": "implemented",
+      "roots": ["vb-init-web", "vb-init-backend"],
+      "shape": "a projectless VB Web Forms DropDownList Init Handles handler iterates New SyntheticDataAccess().MyList inside With; its explicit constructor calls an inline-created service, which forwards through a typed repository field and a typed SQL gateway field to an ADO.NET command terminal",
+      "stages": ["extraction", "combining", "reconciliation", "traversal"],
+      "expectedRuleIds": ["vb.syntax.event-wiring.v1", "vb.syntax.objectcreation.v1", "vb.syntax.database-operation.v1", "combined.paths.projectless-vb-constructor-bridge.v1", "combined.paths.projectless-vb-receiver-bridge.v1"],
+      "expectedTiers": ["Tier3SyntaxOrTextual"],
+      "expectedGaps": [],
+      "assertions": "the control Init binding, two inline unassigned New expressions, exact creation-to-constructor edge, inline service call, two typed-field call hops, and one reachable SQL terminal remain visible after independent scans and combine; property value flow, collection contents, execution, and successful binding are not claimed"
+    },
+    {
+      "id": "MW-DROPDOWN-CTOR-AMBIGUOUS-001",
+      "status": "implemented",
+      "roots": ["vb-init-web", "vb-init-backend", "vb-init-duplicate"],
+      "shape": "two independent backend roots contain the same unqualified VB type name and same-arity explicit constructor, while the page uses an inline New expression",
+      "stages": ["extraction", "combining", "reconciliation", "traversal"],
+      "expectedRuleIds": ["combined.paths.projectless-vb-constructor-bridge.v1"],
+      "expectedTiers": ["Tier4Unknown"],
+      "expectedGaps": ["ProjectlessVisualBasicConstructorTargetAmbiguous"],
+      "assertions": "the duplicate constructor type identities produce an explicit Tier4 ambiguity gap and cannot create a terminal path from the page"
+    },
+    {
+      "id": "MW-DROPDOWN-QUALIFIED-001",
+      "status": "implemented",
+      "roots": ["vb-qualified-init-web", "vb-qualified-init-backend"],
+      "shape": "a projectless VB dropdown Init handler creates an unqualified data-access type imported from one explicit namespace; its constructor calls two same-name helper methods before SQL, while an unrelated same-simple-name constructor in a second namespace has its own SQL decoy",
+      "stages": ["extraction", "combining", "reconciliation", "traversal"],
+      "expectedRuleIds": ["vb.syntax.objectcreation.v1", "combined.paths.projectless-vb-constructor-bridge.v1", "combined.paths.projectless-vb-receiver-bridge.v1", "vb.syntax.database-operation.v1"],
+      "expectedTiers": ["Tier3SyntaxOrTextual"],
+      "expectedGaps": [],
+      "assertions": "only the explicitly imported qualified constructor is bridged, the helper chain reaches one supported SQL terminal with complete retained-graph reachability, and source-local symbol reconciliation cannot merge the unrelated same-name constructor into a false second terminal"
+    },
+    {
+      "id": "MW-DROPDOWN-QUALIFIED-AMBIGUOUS-001",
+      "status": "implemented",
+      "roots": ["vb-qualified-ambiguous-web", "vb-qualified-init-backend"],
+      "shape": "an unqualified projectless VB constructor creation has explicit Imports for two namespaces with same-name same-arity constructor declarations",
+      "stages": ["extraction", "combining", "reconciliation", "traversal"],
+      "expectedRuleIds": ["combined.paths.projectless-vb-constructor-bridge.v1"],
+      "expectedTiers": ["Tier4Unknown"],
+      "expectedGaps": ["ProjectlessVisualBasicConstructorTargetAmbiguous"],
+      "assertions": "competing imported constructor identities fail closed with an explicit ambiguity gap and zero invented SQL terminals"
+    },
+    {
+      "id": "MW-DROPDOWN-OVERLOAD-001",
+      "status": "implemented",
+      "roots": ["vb-overload-web", "vb-overload-framework"],
+      "shape": "a projectless VB dropdown Init handler reads a constructor-populated list; App_Code DataAccess inherits a field-level SQL gateway and Open method that assigns it, then calls that gateway in a separate scan root through an ArrayList/ByRef overload that forwards into an array overload containing an ADO.NET Fill operation",
+      "stages": ["extraction", "combining", "reconciliation", "traversal"],
+      "expectedRuleIds": ["vb.syntax.event-wiring.v1", "vb.syntax.objectcreation.v1", "vb.syntax.database-operation.v1", "combined.paths.projectless-vb-constructor-bridge.v1", "combined.paths.projectless-vb-receiver-bridge.v1"],
+      "expectedTiers": ["Tier3SyntaxOrTextual"],
+      "expectedGaps": [],
+      "assertions": "the inherited Open-initialized field receiver and distinct two- and three-argument gateway overloads are retained, and the merged packet reports one complete supported SQL terminal; this synthetic result does not prove private-corpus behavior or runtime execution"
+    },
+    {
+      "id": "MW-DROPDOWN-INLINE-AMBIGUOUS-001",
+      "status": "implemented",
+      "roots": ["vb-init-web", "vb-init-backend", "vb-init-service-duplicate"],
+      "shape": "two independent backend roots declare the same service type and method reached by an inline New service invocation in a projectless VB constructor",
+      "stages": ["extraction", "combining", "reconciliation", "traversal"],
+      "expectedRuleIds": ["combined.paths.projectless-vb-receiver-bridge.v1"],
+      "expectedTiers": ["Tier4Unknown"],
+      "expectedGaps": ["ProjectlessVisualBasicReceiverTargetAmbiguous"],
+      "assertions": "the inline-created service type stays ambiguous across combined roots, emits a Tier4 receiver gap, and cannot create a terminal path from the page"
+    },
+    {
+      "id": "MW-CONSTRUCTOR-IDENTITY-001",
+      "status": "implemented",
+      "roots": ["vb-review-constructor", "vb-review-semantic", "vb-review-projectless"],
+      "shape": "projectless VB constructs a nested type after a generic outer type and calls through a parenthesized inline New receiver; a creation in its lexical namespace resolves only that namespace's same-simple-name constructor, a root-level creation cannot guess a namespace, and a compiler-rejected semantic-project constructor remains unrelated",
+      "stages": ["extraction", "combining", "reconciliation"],
+      "expectedRuleIds": ["vb.syntax.objectcreation.v1", "vb.syntax.callgraph.v1", "combined.paths.projectless-vb-constructor-bridge.v1"],
+      "expectedTiers": ["Tier3SyntaxOrTextual", "Tier4Unknown"],
+      "expectedGaps": ["ProjectlessVisualBasicConstructorTargetUnavailable"],
+      "assertions": "balanced generic normalization preserves the nested constructor identity, parentheses preserve exact inline-New receiver provenance, lexical namespace evidence selects only its own constructor, root-level unqualified names cannot bridge into an unrelated namespace, and compiler-rejected semantic fallback cannot be rescued by another projectless root"
+    },
+    {
+      "id": "MW-DROPDOWN-SINGLE-001",
+      "status": "implemented",
+      "roots": ["vb-init-single"],
+      "shape": "one projectless Web Forms source index contains a dropdown Init handler and a data-access constructor that populates a list by calling through service, repository, and SQL gateway methods; an uncalled same-name method in the constructor's class is an implicit-Me decoy",
+      "stages": ["extraction", "traversal"],
+      "expectedRuleIds": ["vb.syntax.objectcreation.v1", "combined.paths.projectless-vb-constructor-bridge.v1"],
+      "expectedTiers": ["Tier3SyntaxOrTextual", "Tier4Unknown"],
+      "expectedGaps": [],
+      "assertions": "bounded single-index graph admission retains the constructor declaration and body facts instead of silently losing the side-effect terminal, while inline-New receiver evidence never bridges to the same-name implicit-Me decoy"
+    },
+    {
+      "id": "MW-SHARED-TERMINAL-ROUTES-001",
+      "status": "implemented",
+      "roots": ["root-route-reconvergence"],
+      "shape": "a Web Forms handler calls two same-named Run methods in separate classes within one source file; both continue two levels and converge on one SQL terminal",
+      "stages": ["extraction", "traversal"],
+      "expectedRuleIds": ["legacy.webforms.event-binding.v1", "csharp.semantic.callgraph.v1", "legacy.flow.static-traversal.v1"],
+      "expectedTiers": ["Tier1Semantic", "Tier2Structural"],
+      "expectedGaps": [],
+      "assertions": "the packet retains two bounded event-chain routes while the complete supported-terminal inventory counts their shared terminal once"
+    },
+    {
+      "id": "MW-COMPOUND-LIMIT-001",
+      "status": "implemented",
+      "roots": ["vb-compound-pages"],
+      "shape": "syntax receiver closure exceeds the deliberately tiny traversal-work budget before graph composition",
+      "stages": ["traversal"],
+      "expectedRuleIds": ["combined.paths.truncation-gap.v1"],
+      "expectedTiers": ["Tier4Unknown"],
+      "expectedGaps": ["GraphInputLimitReached"],
+      "assertions": "the packet reports graph-syntax-closure-work as an input limit and never classifies the page-three analogue as a complete zero-terminal result"
+    },
+    {
+      "id": "MW-PUBLISH-NOPDB-001",
+      "status": "implemented",
+      "roots": ["vb-publish-projectless"],
+      "shape": "an actual public VB Web Site publish emits page and App_Code assemblies plus a page mapping but no PDB; a dropdown Init handler crosses the constructor, inherited Open, two procedure helper overloads, and the public DbDataAdapter.Fill(DataSet) call target",
+      "stages": ["extraction", "reconciliation", "traversal"],
+      "expectedRuleIds": ["dotnet.compiled.member.v1", "dotnet.compiled.il-call.v1", "combined.paths.compiled-il-bridge.v1"],
+      "expectedTiers": ["Tier2Structural", "Tier3SyntaxOrTextual"],
+      "expectedGaps": [],
+      "blocker": null,
+      "assertions": "a Windows publish regression must use a bounded receipt and exact admitted DLLs to report the static chain through at least four IL calls to retained SQL evidence, with source-method joins labeled Tier3 review-only; no exact source-line or runtime claim is made"
+    }
+  ]
+}

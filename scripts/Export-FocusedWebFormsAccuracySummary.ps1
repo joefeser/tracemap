@@ -48,7 +48,8 @@ function Get-ScopeRole {
     if ([string]::IsNullOrWhiteSpace($FilePath)) { return "unknown" }
     $normalized = Normalize-RelativePath $FilePath
     foreach ($scope in @($script:scopes | Sort-Object { $_.Prefix.Length } -Descending)) {
-        if ($normalized.Equals($scope.Prefix, [StringComparison]::OrdinalIgnoreCase) -or
+        if ([string]::IsNullOrEmpty($scope.Prefix) -or
+            $normalized.Equals($scope.Prefix, [StringComparison]::OrdinalIgnoreCase) -or
             $normalized.StartsWith($scope.Prefix + "/", [StringComparison]::OrdinalIgnoreCase)) {
             return $scope.Role
         }
@@ -62,10 +63,13 @@ function Get-ArtifactKind {
     $value = $FilePath.Replace('\', '/').ToLowerInvariant()
     foreach ($suffix in @('aspx', 'ascx', 'master', 'ashx', 'asmx')) {
         if ($value.EndsWith(".$suffix.cs")) { return "$suffix-codebehind" }
+        if ($value.EndsWith(".$suffix.vb")) { return "$suffix-codebehind-vb" }
     }
     if ($value.EndsWith('.designer.cs')) { return "designer-cs" }
+    if ($value.EndsWith('.designer.vb')) { return "designer-vb" }
     $kind = switch ([IO.Path]::GetExtension($value)) {
         '.cs' { 'cs' }
+        '.vb' { 'vb' }
         '.aspx' { 'aspx' }
         '.ascx' { 'ascx' }
         '.master' { 'master' }
@@ -73,6 +77,7 @@ function Get-ArtifactKind {
         '.asmx' { 'asmx' }
         '.config' { 'config' }
         '.csproj' { 'csproj' }
+        '.vbproj' { 'vbproj' }
         '.sln' { 'solution' }
         '.resx' { 'resx' }
         default { 'other' }
@@ -89,16 +94,31 @@ function Test-WithinPath {
 }
 
 try {
-    $folders = @($WebFormsFolder, $BackendFolder, $ControlsFolder) | ForEach-Object { Normalize-RelativePath $_ }
-    if (@($folders | Select-Object -Unique).Count -ne 3 -or
-        @($folders | Where-Object { [string]::IsNullOrWhiteSpace($_) -or [IO.Path]::IsPathRooted($_) -or $_ -match '(^|/)\.\.($|/)' }).Count -ne 0) {
+    $folderInputs = @($WebFormsFolder, $BackendFolder, $ControlsFolder)
+    if (@($folderInputs | Where-Object {
+        [string]::IsNullOrWhiteSpace($_) -or
+        [IO.Path]::IsPathRooted($_) -or
+        (Normalize-RelativePath $_) -match '(^|/)\.\.($|/)'
+    }).Count -ne 0) {
         throw "AccuracyScopeInvalid"
     }
-    $script:scopes = @(
+    $folders = @($folderInputs | ForEach-Object {
+        $normalized = Normalize-RelativePath $_
+        if ($normalized -eq '.') { '' } else { $normalized }
+    })
+    $scopeCandidates = @(
         [pscustomobject]@{ Role = 'webforms'; Prefix = $folders[0] },
         [pscustomobject]@{ Role = 'backend'; Prefix = $folders[1] },
         [pscustomobject]@{ Role = 'controls'; Prefix = $folders[2] }
     )
+    $script:scopes = @($scopeCandidates |
+        Group-Object { $_.Prefix.ToLowerInvariant() } |
+        ForEach-Object {
+            [pscustomobject]@{
+                Role = if ($_.Count -eq 1) { $_.Group[0].Role } else { 'application' }
+                Prefix = $_.Group[0].Prefix
+            }
+        })
 
     $reviewRoot = [IO.Path]::GetFullPath($ReviewOutputPath)
     if (-not (Test-Path -LiteralPath $reviewRoot -PathType Container)) { throw "RetainedOutputUnavailable" }
@@ -192,7 +212,7 @@ try {
     foreach ($tier in @('Tier1Semantic', 'Tier2Structural', 'Tier3SyntaxOrTextual', 'Tier4Unknown', 'unclassified')) {
         $lines.Add("evidence$tier=$(Format-Count (Read-Count $tierCounts $tier))")
     }
-    foreach ($scope in @('webforms', 'backend', 'controls', 'other', 'unknown')) {
+    foreach ($scope in @('application', 'webforms', 'backend', 'controls', 'other', 'unknown')) {
         $lines.Add("scope-$scope=facts:$(Format-Count (Read-Count $scopeCounts "$scope|facts"))|tier1:$(Format-Count (Read-Count $scopeCounts "$scope|Tier1Semantic"))|tier2:$(Format-Count (Read-Count $scopeCounts "$scope|Tier2Structural"))|tier3:$(Format-Count (Read-Count $scopeCounts "$scope|Tier3SyntaxOrTextual"))|tier4:$(Format-Count (Read-Count $scopeCounts "$scope|Tier4Unknown"))|gaps:$(Format-Count (Read-Count $scopeCounts "$scope|gaps"))")
     }
 

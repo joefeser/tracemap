@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace></RootNamespace>
+    <Deterministic>true</Deterministic>
+    <DebugType>portable</DebugType>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../vb-pdb-projectless/Pages/Lookup.aspx.vb" Link="Lookup.aspx.vb" />
+    <ProjectReference Include="../root-generated/GeneratedSite.csproj" />
+  </ItemGroup>
+</Project>
