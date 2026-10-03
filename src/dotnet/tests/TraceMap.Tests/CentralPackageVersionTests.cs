@@ -137,6 +137,7 @@ public sealed class CentralPackageVersionTests
         var pin = Assert.Single(ProjectFileReader.ReadCentralPackageVersions(temp.Path, [new FileInventoryItem("Directory.Packages.props", "MSBuildProps", props.Length)]));
 
         Assert.Equal("4.5.6", pin.Version);
-        Assert.True(pin.Line >= 4, $"span line {pin.Line} must cover the child Version element's line"); // item opens L3, Version rides L4
+        Assert.Equal(3, pin.Line); // item identity line
+        Assert.Equal(4, pin.EndLine); // child Version element line — BOTH endpoints preserved
     }
 }

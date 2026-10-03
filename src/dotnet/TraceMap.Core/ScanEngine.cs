@@ -920,7 +920,7 @@ public static class ScanEngine
                 FactTypes.PackageReferenced,
                 RuleIds.ProjectFile,
                 EvidenceTiers.Tier2Structural,
-                new EvidenceSpan(item.ProjectPath, item.Line, item.Line, null, "ProjectFileExtractor", ScannerVersions.ProjectFileExtractor),
+                new EvidenceSpan(item.ProjectPath, item.Line, item.EndLine ?? item.Line, null, "ProjectFileExtractor", ScannerVersions.ProjectFileExtractor),
                 projectPath: item.ProjectPath.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase)
                     || item.ProjectPath.EndsWith(".vbproj", StringComparison.OrdinalIgnoreCase)
                     ? item.ProjectPath
@@ -951,7 +951,7 @@ public static class ScanEngine
                 FactTypes.CentralPackageVersionDeclared,
                 RuleIds.ProjectFile,
                 EvidenceTiers.Tier2Structural,
-                new EvidenceSpan(pin.PropsPath, pin.Line, pin.Line, null, "ProjectFileExtractor", ScannerVersions.ProjectFileExtractor),
+                new EvidenceSpan(pin.PropsPath, pin.Line, pin.EndLine, null, "ProjectFileExtractor", ScannerVersions.ProjectFileExtractor),
                 targetSymbol: pin.PackageName,
                 properties: pinProperties));
         }

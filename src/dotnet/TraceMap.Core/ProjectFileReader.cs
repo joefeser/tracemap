@@ -17,7 +17,8 @@ public sealed record PackageReferenceInfo(
     string DependencyGroup,
     string DependencyScope,
     string? TargetFramework,
-    string? VersionOverride = null);
+    string? VersionOverride = null,
+    int? EndLine = null); // span end when the value rides a child element on a later line
 
 public sealed record NuGetLockfileEntry(
     string LockfilePath,
@@ -45,7 +46,8 @@ public sealed record CentralPackageVersionInfo(
     string PropsPath,
     string PackageName,
     string Version,
-    int Line);
+    int Line,
+    int EndLine); // span covers the item opening through the value element when they differ
 
 public static class ProjectFileReader
 {
@@ -120,8 +122,8 @@ public static class ProjectFileReader
                     continue; // a pin without a version is not version evidence (e.g. property interpolation)
                 }
 
-                // Qodo PR-804: when the version rides a child element on a later line, the evidence span
-                // must cover it — end at the version element's line, not the item's opening line.
+                // PR-804: when the version rides a child element on a later line, the evidence span
+                // must cover BOTH endpoints — start at the item's identity line, end at the value's.
                 var endLine = versionElement is not null ? Math.Max(GetLine(element), GetLine(versionElement)) : GetLine(element);
                 if (idList is null)
                 {
@@ -134,7 +136,7 @@ public static class ProjectFileReader
                         continue;
                     }
 
-                    results.Add(new CentralPackageVersionInfo(props.RelativePath, id, version.Trim(), endLine));
+                    results.Add(new CentralPackageVersionInfo(props.RelativePath, id, version.Trim(), GetLine(element), endLine));
                 }
             }
         }
@@ -184,17 +186,18 @@ public static class ProjectFileReader
                 ?? element.Elements().FirstOrDefault(child => child.Name.LocalName == "Version")?.Value.Trim();
             var overrideElement = element.Elements().FirstOrDefault(child => child.Name.LocalName == "VersionOverride");
             var versionOverride = AttributeValue(element, "VersionOverride") ?? overrideElement?.Value.Trim();
-            var endLine = overrideElement is not null ? Math.Max(GetLine(element), GetLine(overrideElement)) : GetLine(element);
+            var endLine = overrideElement is not null ? Math.Max(GetLine(element), GetLine(overrideElement)) : (int?)null;
             yield return new PackageReferenceInfo(
                 relativePath,
                 packageName,
                 version,
-                endLine,
+                GetLine(element),
                 manifestKind,
                 "PackageReference",
                 "runtime",
                 null,
-                versionOverride);
+                versionOverride,
+                endLine);
         }
     }
 

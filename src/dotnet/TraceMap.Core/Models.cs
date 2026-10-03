@@ -684,7 +684,7 @@ public static class ScannerVersions
     public const string TraceMap = TraceMapDiagnostics.ToolVersion;
     public const string RepoManifestExtractor = "repo-manifest/0.1.0";
     public const string FileInventoryExtractor = "file-inventory/0.1.0";
-    public const string ProjectFileExtractor = "project-file/0.1.0";
+    public const string ProjectFileExtractor = "project-file/0.2.0"; // 0.2.0: CentralPackageVersionDeclared facts + versionOverride (PR #804)
     public const string NuGetLockfileExtractor = "nuget-lockfile/0.1.0";
     public const string BuildEnvironmentExtractor = "build-environment/0.6.1";
     public const string AnalyzerCapabilityExtractor = "analyzer-capability/0.1.0";
