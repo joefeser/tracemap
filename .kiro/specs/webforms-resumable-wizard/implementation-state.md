@@ -531,3 +531,43 @@ diagnostics. No production gate, timeout, retry or expected route was relaxed.
 The changed IL command-binding test class passed 68 tests with one Windows-only
 skip locally. Fresh Windows CI must validate this test-only follow-up; the
 earlier full-suite count does not include it.
+
+## Main promotion PR #801: exact-head review round 2 (2026-10-03)
+
+Repair branch: `codex/promote-dev-to-main-f0aaf582f778`, reviewed head
+`f780db4fe9ed4e667f787a8cc70a4fa6a563c3b1`. Fixes stay on the promotion branch;
+reconcile into dev separately after promotion review.
+
+P1 fixes: VB paren-free statement calls (`conn.Open`, `Call M`) and
+null-conditional invocations no longer throw and drop the rest of the project
+(per-document isolation now emits `VisualBasicDocumentExtractionFailed`);
+Windows Task 11 CI step propagates its guard script exit code; Web Forms
+preparation binds root and nested same-name pages under one application prefix;
+scheme/network-path AJAX URLs no longer resolve to same-named local `.ashx`
+files; inline JS callback scanning stays inside its script and skips comments.
+
+P2 fixes: VB paren-free expression calls (`Dim n = cmd.ExecuteScalar`) emit call
+and ADO.NET operation evidence; explicit `--project` scope excluding a language
+emits a producer-local scope gap; null receipt entries are typed gaps; inline
+server expression string literals are masked; gap-only docs export loads
+framework-migration facts; packet edge commit matches its scan node; behavior
+inventories truncate at the explorer row bound with gaps; raw audit hashing
+streams; wizard builds disable node reuse and bound post-exit pipe drain; wizard
+root/project registration survives interruption; TypeSpec/nesting/scope cycles
+and wrong-table InlineType tokens become typed compiled-input gaps; Base44
+reason spans stay non-empty for parser-recovered nodes. Extractor versions:
+legacy-webforms 0.13.5, vb-semantic 0.8.6, vb-syntax 0.3.23, csharp-semantic
+0.21.2, il-body-evidence 0.1.11, managed-metadata 0.1.1, webforms-publish-map
+0.1.3.
+
+Deferred (design or follow-up, not patched): interrupted wizard start still
+requires explicit repair (pinned by test); scan vs. post-scan source hash budget
+can fail closed after a long scan; VB/C# language-prefixed symbol IDs do not
+join across languages; VB designer/AssemblyInfo files are skipped without a gap;
+unbounded SZARRAY nesting inside one signature blob is not pre-validated.
+
+Validation (Linux sandbox, .NET SDK 10.0.401, root user): full .NET suite 3,158
+passed, 1 skipped, 3 failed; the same 3 fail on unchanged `f780db4f` in this
+environment (root bypasses inaccessible-directory permissions; `/usr/bin/time`
+absent). TypeScript: 258/258 with .NET 10 on PATH. PowerShell and Windows checks
+were not run here (no pwsh); CI remains required.

@@ -1797,7 +1797,7 @@ public sealed class LegacyWebFormsExtractorTests
         Assert.All(events.Concat(mutations).Append(constraint), fact =>
         {
             Assert.Equal(EvidenceTiers.Tier3SyntaxOrTextual, fact.EvidenceTier);
-            Assert.Equal("legacy-webforms/0.13.4", fact.Evidence.ExtractorVersion);
+            Assert.Equal("legacy-webforms/0.13.5", fact.Evidence.ExtractorVersion);
             Assert.DoesNotContain("Saving", JsonSerializer.Serialize(fact), StringComparison.Ordinal);
         });
     }
@@ -1890,7 +1890,7 @@ public sealed class LegacyWebFormsExtractorTests
         {
             Assert.Equal(RuleIds.LegacyWebFormsInlineClientHttpRequest, request.RuleId);
             Assert.Equal(EvidenceTiers.Tier3SyntaxOrTextual, request.EvidenceTier);
-            Assert.Equal("legacy-webforms/0.13.4", request.Evidence.ExtractorVersion);
+            Assert.Equal("legacy-webforms/0.13.5", request.Evidence.ExtractorVersion);
         });
         var handler = Assert.Single(result.Facts, fact =>
             fact.FactType == FactTypes.WebFormsHandlerResolved
