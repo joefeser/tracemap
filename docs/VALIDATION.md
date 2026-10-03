@@ -77,6 +77,13 @@ empty repository prefix remains valid. `GitMetadataOutputTests` pins this
 distinction without scheduling-dependent sleeps. A targeted identity fixture
 pass does not replace a new exact-head full regression after a failure.
 
+`LazyConstructorLoggingTests` joins the nonparallel Git-metadata-sensitive
+collection because its selected compiled roots require a real scan commit.
+An early `LAZY_CORPUS_GIT_IDENTITY_UNAVAILABLE` assertion distinguishes failed
+Git identity acquisition from route-resolution failures without fabricating a
+commit. This isolation is not proof that all concurrent production probes
+succeed; the scanner keeps bounded probes and explicit unknown-identity gaps.
+
 For native compiled Web Forms completed-run copies, validate the execution,
 preflight, preparation, input-validation, evidence-query and native-scale suites.
 The 2026-09-28 rebuilt slice passed 201 tests with zero failures/skips in 3 minutes

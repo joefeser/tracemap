@@ -3160,6 +3160,7 @@ rules:
     emits:
       - WebFormsInlineServerExpressionReferenceCandidate
     limitations:
+      - C# string and character literal text, interpolated text and format clauses are masked using Roslyn expression syntax; interpolation expressions remain candidate evidence, not semantic binding. VB literal masking follows VB quote escaping.
       - Supported expressions are limited to `<%=` render expressions and `<%#` data-binding expressions containing a qualified identifier chain. Code blocks, directives, helper indirection, imports, aliases, generics, indexers, invocations with complex syntax, and dynamic expressions remain outside this bounded join.
       - Resolution requires exactly one repository declaration site for the longest qualified type-name prefix. Visual Basic-linked pages compare identifiers case-insensitively; unresolved or ambiguous references do not emit a positive candidate.
       - A retained candidate proves only the markup span and unique repository declaration. It does not prove ASP.NET dynamic compilation, member binding, expression execution, rendered output, or runtime reachability.
@@ -3196,6 +3197,7 @@ rules:
       - webforms-modernization-packet.v1
       - AnalysisGap
     limitations:
+      - Client and server behavior inventories each retain at most 10000 rows in deterministic order; omitted rows emit WebFormsModernizationClientBehaviorLimitReached or WebFormsModernizationServerBehaviorLimitReached and mark truncation, not complete behavior coverage.
       - Path evidence requires a paired upstream scan and commit identity; missing node or edge provenance is omitted with a gap, never filled with a different primary snapshot commit.
       - A combined index may contain one or more provenance-recorded sources; a single-source combine is not multi-repository coverage. Zero source rows and missing or ambiguous primary Web Forms source identity remain errors.
       - Combined graph fact, edge, node, or text admission limits retain bounded inventory and source provenance but emit a Tier4 input-limit gap with reduced coverage and truncation; no paths or downstream boundaries are classified from the incomplete graph.
@@ -5004,6 +5006,7 @@ rules:
     emits:
       - BuildEnvironmentDiagnostic
     limitations:
+      - Explicit project-scope language exclusions are informational scope diagnostics, not toolchain failures; document extractor failures remain semantic coverage reductions with extractor-defect guidance and redacted exception details.
       - Workspace diagnostics are sanitized categories and do not include raw native output, local paths, private repository names, remotes, package sources, config values, credentials, or source snippets.
       - Categories explain why semantic coverage was reduced; they do not prove runtime compatibility or absence of repository evidence.
       - Syntax, config, SQL, WCF, and WebForms fallback facts remain valid within their own evidence tiers.

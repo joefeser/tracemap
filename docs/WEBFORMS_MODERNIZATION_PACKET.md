@@ -213,6 +213,12 @@ report.
 
 ### Large indexes and OOM recovery
 
+Client and server behavior inventories each have a fixed, independent 10,000-row
+limit. Rows are selected in deterministic order. Omitted rows produce
+`WebFormsModernizationClientBehaviorLimitReached` or
+`WebFormsModernizationServerBehaviorLimitReached` gaps and mark the packet
+truncated; retained rows do not establish complete behavior coverage.
+
 The packet reader streams syntax rows and keeps only the first symbol witnesses
 for a closed set of graph-inert fact types. It retains full graph-relevant rows,
 declared surfaces, unknown types, and legacy rules, plus referenced supporting
