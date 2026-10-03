@@ -48,7 +48,7 @@ jobs:
       - name: Validate promotion process and junction boundaries
         shell: pwsh
         run: |
-          dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter "FullyQualifiedName~WebFormsWizardBuildTests|FullyQualifiedName~DirectoryLinkFixtureTests|FullyQualifiedName~Linked_input_escape_is_rejected|FullyQualifiedName~Separate_receipt_root_rejects_invalid_or_escaped_inputs|FullyQualifiedName~Relocated_history_never_uses_original_policy_locators_to_bypass_current_owned_links"
+          dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter "FullyQualifiedName~WebFormsWizardBuildTests|FullyQualifiedName~DirectoryLinkFixtureTests|FullyQualifiedName~Fixture_cleanup_clears_readonly_git_objects|FullyQualifiedName~Linked_input_escape_is_rejected|FullyQualifiedName~Separate_receipt_root_rejects_invalid_or_escaped_inputs|FullyQualifiedName~Relocated_history_never_uses_original_policy_locators_to_bypass_current_owned_links"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Run portable PDB fixture matrix
         run: dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter FullyQualifiedName~PortablePdbExtractorTests
