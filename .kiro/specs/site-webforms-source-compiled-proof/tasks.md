@@ -38,7 +38,7 @@
 - [x] Complete desktop and mobile browser QA for the proof route and its current
       inbound article; record that #805 still owns the not-yet-present landing
       route and pin its future inbound link with a regression.
-- [ ] Record exact implementation revision, validation, browser results, public
+- [x] Record exact implementation revision, validation, browser results, public
       claim level, known limitations, PR, and ACK state in
       `implementation-state.md`.
 

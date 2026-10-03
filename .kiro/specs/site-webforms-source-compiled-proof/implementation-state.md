@@ -4,6 +4,8 @@ Status: site implementation validated; commit, PR, and ACK pending
 
 Branch: `codex/site-webforms-source-compiled-proof`
 
+Implementation revision: `94f4873c60f1ad4dc937b172ae21bb43ed00b0f4`
+
 Base: `origin/main` at
 `5ffd4a54176c002e4c6d41ce0133eab5963ad79b`
 
