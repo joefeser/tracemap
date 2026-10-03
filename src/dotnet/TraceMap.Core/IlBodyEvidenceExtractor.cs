@@ -1139,7 +1139,11 @@ internal static class IlBodyEvidenceExtractor
                 return $"m:{methodTarget.Kind}:{methodTarget.Token}:{methodTarget.Identity}";
             case System.Reflection.Emit.OperandType.InlineType:
                 var typeToken = ReadInt32(il, ref position);
-                var typeIdentity = provider.GetTypeFromEntityHandle(MetadataTokens.EntityHandle(typeToken));
+                var typeHandle = MetadataTokens.EntityHandle(typeToken);
+                // Reject wrong-table tokens here so Mono.Cecil never casts them later.
+                if (typeHandle.Kind is not (HandleKind.TypeDefinition or HandleKind.TypeReference or HandleKind.TypeSpecification))
+                    throw new IlEvidenceException("IlOperandEncodingUnsupported");
+                var typeIdentity = provider.GetTypeFromEntityHandle(typeHandle);
                 if (typeIdentity.Length > limits.MaxTextLength)
                     throw new IlEvidenceException("IlTextLimitExceeded");
                 if (opcode.Name!.ToString() == "constrained.")
