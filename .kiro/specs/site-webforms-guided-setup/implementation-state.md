@@ -1,95 +1,79 @@
 # Site Web Forms Guided Setup Implementation State
 
-Status: specification complete; implementation not started
-Readiness: ready for site implementation after spec acceptance
-Public claim level: planned `shipped` workflow with `demo`-bounded synthetic proof
+Status: implementation validated; commit, PR, and ACK pending
+Readiness: ready for implementation commit and review
+Public claim level: `shipped` workflow with `demo`-bounded synthetic proof
 
 Last updated: 2026-10-03
-Specification branch: `codex/site-webforms-guided-setup-spec`
+Implementation branch: `codex/site-webforms-guided-setup`
 Target base: `main`
+Exact base: `5ffd4a54176c002e4c6d41ce0133eab5963ad79b`
 Issue: #805
 
-## Scope decision
+## Scope and delivery
 
-The future implementation will add `/webforms/` as the public landing and
-guided-setup route for the native Web Forms terminal workflow. This spec-only
-branch intentionally does not change `site/src/`, validators, generated output,
-or public claim-ledger rows.
+This branch adds `/webforms/` as the public landing and guided-setup route for
+the native Web Forms terminal workflow. It changes only site source, focused
+validators, and this site-prefixed spec record. Generated `site/dist` and
+`site/output` content remains untracked and was not edited by hand.
 
-The landing page will explain website folder, solution, explicit C#/VB project,
-projectless Web Site, all/subset forms, `forms.txt`, pause/continue, saved
-configuration, build consent, external Windows compilation, explicit project
-addition, isolated repair, stop conditions, and owner handoff. Classic,
-non-SDK, and .NET Framework project builds that resolve to Windows MSBuild are
-also Windows-only and stop on non-Windows hosts.
+The page explains website folder, solution, explicit C#/VB project,
+projectless Web Site, all/subset forms, `forms.txt`, pause/continue, private
+saved configuration, build consent, external Windows compilation, explicit
+project addition, isolated repair, stop conditions, and owner handoff. Classic,
+non-SDK, and .NET Framework builds that resolve to Windows MSBuild remain
+Windows-only and stop on non-Windows hosts.
 
-## Verified evidence state
+## Evidence boundary
 
-- Specification base: `d76358f663ce40532fe0954ca9888612d51a4121`,
-  the main merge commit of promotion PR #801.
-- Main-backed delivery chain: PRs #797, #798, #799, #800 and #801.
-- Primary public repository evidence:
-  `docs/WEBFORMS_NATIVE_WORKFLOW.md`,
-  `.kiro/specs/webforms-resumable-wizard/acceptance-audit.md`, wizard source and
-  tests, rule catalog entries, and checked-in synthetic fixtures.
-- Dev-only repair: PR #803 merge
-  `af05c289a799c896862983fd9f4f73a28d882d0c` is an ancestor of `origin/dev`
-  and is not an ancestor of the verified `origin/main`. The implementation must
-  recheck this fact and must not claim those repairs as shipped until promoted.
-  Validators must bind this assertion to the implementation's exact main base,
-  not permanently require the 2026-10-03 dev-only status after a promotion.
+- PRs #797-#801, `docs/WEBFORMS_NATIVE_WORKFLOW.md`, the wizard acceptance
+  audit, persisted wizard/state implementation, tests, rule catalog, and
+  checked-in synthetic fixtures support the shipped workflow claim.
+- PR #803 merge `af05c289a799c896862983fd9f4f73a28d882d0c` is not an
+  ancestor of the exact implementation base (`git merge-base --is-ancestor`
+  exited 1), so its repairs are not presented as shipped.
+- The interface is a terminal wizard over shared persisted state, not a GUI,
+  automatic source acquisition, or automatic whole-solution onboarding.
+- Saved configuration remains private operator state. This implementation uses
+  no private source, raw output, customer screenshot, or new derived proof asset.
 
-## Placement and overlap decisions
+## Integration
 
-- Chosen route: `/webforms/`.
-- Existing `/blog/modernizing-web-forms-without-running-it/` remains the
-  concept overview and should cross-link rather than be replaced.
-- Existing `/legacy-dotnet/evidence/` and
-  `/legacy-modernization/evidence-map/` remain conservative status matrices;
-  only the bounded terminal workflow gains a main-backed row.
-- `/roadmap/#claim-ledger` is the canonical claim-status surface. It should add
-  a Web Forms workflow row without upgrading the broad legacy-validation row.
-- #806 supplies the first-wave source-plus-compiled proof story. #807 and #808
-  consume these orientation/proof routes later; #809 performs the broader
-  capability and roadmap refresh after all four routes exist.
+- Added page registry, discovery, sitemap input, and a focused shipped workflow
+  row to the roadmap claim ledger.
+- Added narrow links/copy to capabilities, docs, limitations, proof paths, the
+  concept article, and the conservative legacy .NET/modernization matrices.
+- Preserved broad Web Forms event/route/navigation rows as hidden; only the
+  bounded terminal setup workflow is labeled shipped.
+- The separate #806 route is not present on this exact base, so this branch
+  does not publish a broken link or copy its unreviewed asset. Add the reciprocal
+  proof link after #806 is merged into the selected base.
 
-## Claim decision
+## Validation
 
-The workflow itself may be labeled `shipped` because its implementation and
-documentation are on main. Synthetic examples and proof projections remain
-`demo`. Neither label supports claims about runtime execution, publication
-success, customer compatibility, complete coverage, migration parity,
-cross-service tracing, release approval, or safety.
-
-The delivered user interface is a terminal wizard over shared persisted state.
-No GUI wizard, automatic source acquisition, arbitrary whole-solution
-onboarding, automatic projectless publication, or operator replacement is in
-scope.
-
-## Public-data boundary
-
-The future implementation may use checked-in public synthetic evidence only.
-It must not publish private source or markup, raw SQL, configuration values,
-credentials, connection material, copied DLL contents, local paths, customer or
-infrastructure identities, raw SQLite/facts/logs, screenshots, or private
-validation details. A new derived machine-readable artifact would require the
-exact generator SHA-256 and a SHA-256 of its bounded privacy-projected input.
-
-## Validation state
-
-For this specification-only branch:
-
+- `cd site && node --test scripts/webforms-guided-setup.test.mjs`: 4 passed.
+- `cd site && npm test`: 1,194 passed; no failures, skips, cancellations, or todos.
+- `cd site && npm run build`: passed.
+- `cd site && npm run validate`: passed; 117 HTML files, 3,881 internal
+  references, and 116 sitemap URLs validated.
+- `./scripts/check-private-paths.sh`: passed.
 - `git diff --check`: passed.
-- `./scripts/check-private-paths.sh`: passed (`Private path guard passed.`).
-- Site build/tests/browser checks: intentionally deferred because this branch
-  makes no site source, route, layout, interaction, metadata, or validator
-  changes.
+- Desktop browser at 1,440 by 1,000: one H1, no horizontal overflow, required
+  stop block present, and zero console errors.
+- Mobile browser at 390 by 844: one H1, no horizontal overflow, stacked actions,
+  keyboard focus visible with a 3px solid outline, and zero console errors.
+- Desktop and mobile screenshots were inspected locally for wrapping and layout;
+  they are validation artifacts, not committed public evidence.
 
-The implementation PR must run focused and full site tests, validation, build,
-private-path and diff guards, plus desktop and mobile browser checks, and record
-the exact results here.
+## Claim boundary and remaining work
 
-## Remaining work
+The shipped label applies only to the bounded main-backed terminal/state
+workflow. Synthetic examples remain demo. Neither label proves runtime page
+execution, event firing, selected branches, SQL execution, publication success,
+customer compatibility, migration parity, cross-service tracing, complete
+coverage, release approval, or safety. macOS site validation does not replace
+Windows legacy-project build or projectless publication validation.
 
-All tasks under **Future implementation work** in `tasks.md` remain open. No
-public site story has been implemented by this specification PR.
+#807-#809 remain separate stories. The implementation revision, PR URL, and ACK
+state will be appended after commit and orchestration without changing the
+public claim.

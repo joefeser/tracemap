@@ -119,6 +119,23 @@
     ]
   },
   {
+    "path": "/webforms/",
+    "title": "Web Forms Guided Setup",
+    "summary": "A shipped, bounded guide to TraceMap's terminal wizard for explicit Web Forms target selection, form scoping, pause and resume, build consent, external projectless publication, isolated repair, and owner-routed stop conditions.",
+    "publicClaimLevel": "shipped",
+    "sourceType": "site-page",
+    "hintCategory": "use-case",
+    "preferredProofPath": "/legacy-dotnet/evidence/",
+    "limitations": [
+      "The delivered interface is a terminal wizard backed by persisted state, not a GUI or automatic onboarding service; ambiguous targets require explicit selection and saved configuration remains private operator state.",
+      "Classic, non-SDK, and .NET Framework project builds that require Windows MSBuild are Windows-only, while projectless ASP.NET compilation is an external Windows operator step; partial and failed states remain distinct from verified retained reports."
+    ],
+    "nonClaims": [
+      "No runtime execution, event firing, branch feasibility, SQL execution, selected implementation, service reachability, production use, publication success, customer compatibility, migration parity, complete coverage, release approval, or safety claim.",
+      "No automatic solution-wide onboarding, source-server acquisition, cross-service tracing, private source, raw SQL, configuration, credentials, connection material, local paths, raw indexes or logs, customer screenshots, or AI-based classification."
+    ]
+  },
+  {
     "path": "/blog/what-tracemap-learned-from-graphify/",
     "title": "What TraceMap Learned from Graphify—Without Becoming Graphify",
     "summary": "A concept-level research story distinguishing external persistent-graph lessons from independently implemented TraceMap evidence, fixtures, boundaries, and deliberate non-adoption decisions.",
