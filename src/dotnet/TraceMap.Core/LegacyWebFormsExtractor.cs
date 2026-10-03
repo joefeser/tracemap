@@ -2742,6 +2742,24 @@ public static partial class LegacyWebFormsExtractor
     private static string MaskExpressionStringLiterals(string text, bool visualBasic)
     {
         var chars = text.ToCharArray();
+        if (!visualBasic)
+        {
+            // Roslyn preserves interpolation expressions as executable syntax,
+            // including nested strings, escaped braces and verbatim/raw literals.
+            var expression = SyntaxFactory.ParseExpression(text);
+            foreach (var node in expression.DescendantNodesAndSelf())
+            {
+                if (node is LiteralExpressionSyntax literal
+                    && (literal.IsKind(SyntaxKind.StringLiteralExpression)
+                        || literal.IsKind(SyntaxKind.CharacterLiteralExpression))
+                    || node is InterpolatedStringTextSyntax or InterpolationFormatClauseSyntax)
+                {
+                    for (var masked = node.SpanStart; masked < Math.Min(node.Span.End, chars.Length); masked++)
+                        chars[masked] = ' ';
+                }
+            }
+            return new string(chars);
+        }
         for (var index = 0; index < chars.Length; index++)
         {
             var quote = chars[index];
@@ -2821,7 +2839,7 @@ public static partial class LegacyWebFormsExtractor
             {
                 var start = index;
                 while (index + 1 < limit && (char.IsLetterOrDigit(text[index + 1]) || text[index + 1] is '_' or '$')) index++;
-                expressionStart = text[start..(index + 1)] is "return" or "throw" or "case" or "typeof" or "void" or "delete" or "yield";
+                expressionStart = text[start..(index + 1)] is "return" or "throw" or "case" or "typeof" or "void" or "delete" or "yield" or "await";
                 continue;
             }
             if (char.IsWhiteSpace(current)) continue;

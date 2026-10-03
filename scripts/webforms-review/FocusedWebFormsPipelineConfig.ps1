@@ -6,7 +6,13 @@ function Assert-FocusedWebFormsUnlinkedPath {
         try { $entry = Get-Item -LiteralPath $current -Force -ErrorAction Stop }
         catch [System.Management.Automation.ItemNotFoundException] { }
         if ($null -ne $entry -and ($entry.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
-            throw 'WEBFORMS_PIPELINE_LINKED_OUTPUT'
+            # Admit only the two OS-owned macOS aliases, with their exact physical
+            # targets. All operator-created links (including a review-root alias)
+            # still fail closed, even if they eventually point under /private.
+            $systemAlias = $IsMacOS -and (
+                ($current -ceq '/tmp' -and $entry.ResolveLinkTarget($true).FullName -ceq '/private/tmp') -or
+                ($current -ceq '/var' -and $entry.ResolveLinkTarget($true).FullName -ceq '/private/var'))
+            if (!$systemAlias) { throw 'WEBFORMS_PIPELINE_LINKED_OUTPUT' }
         }
         $current = [IO.Path]::GetDirectoryName($current)
     }
