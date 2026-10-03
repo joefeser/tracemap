@@ -111,20 +111,31 @@ public static class ProjectFileReader
 
             foreach (var element in document.Descendants().Where(element => element.Name.LocalName == "PackageVersion"))
             {
-                var packageName = AttributeValue(element, "Include") ?? AttributeValue(element, "Update");
-                if (!IsSafeNuGetPackageId(packageName))
-                {
-                    continue;
-                }
-
-                var version = AttributeValue(element, "Version")
-                    ?? element.Elements().FirstOrDefault(child => child.Name.LocalName == "Version")?.Value.Trim();
+                // MSBuild item identities are semicolon-separable: one pin per id, each safety-checked.
+                var idList = AttributeValue(element, "Include") ?? AttributeValue(element, "Update");
+                var versionElement = element.Elements().FirstOrDefault(child => child.Name.LocalName == "Version");
+                var version = AttributeValue(element, "Version") ?? versionElement?.Value.Trim();
                 if (string.IsNullOrWhiteSpace(version))
                 {
                     continue; // a pin without a version is not version evidence (e.g. property interpolation)
                 }
 
-                results.Add(new CentralPackageVersionInfo(props.RelativePath, packageName!, version.Trim(), GetLine(element)));
+                // Qodo PR-804: when the version rides a child element on a later line, the evidence span
+                // must cover it — end at the version element's line, not the item's opening line.
+                var endLine = versionElement is not null ? Math.Max(GetLine(element), GetLine(versionElement)) : GetLine(element);
+                if (idList is null)
+                {
+                    continue;
+                }
+                foreach (var id in idList.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                {
+                    if (!IsSafeNuGetPackageId(id))
+                    {
+                        continue;
+                    }
+
+                    results.Add(new CentralPackageVersionInfo(props.RelativePath, id, version.Trim(), endLine));
+                }
             }
         }
 
@@ -171,13 +182,14 @@ public static class ProjectFileReader
 
             var version = AttributeValue(element, "Version")
                 ?? element.Elements().FirstOrDefault(child => child.Name.LocalName == "Version")?.Value.Trim();
-            var versionOverride = AttributeValue(element, "VersionOverride")
-                ?? element.Elements().FirstOrDefault(child => child.Name.LocalName == "VersionOverride")?.Value.Trim();
+            var overrideElement = element.Elements().FirstOrDefault(child => child.Name.LocalName == "VersionOverride");
+            var versionOverride = AttributeValue(element, "VersionOverride") ?? overrideElement?.Value.Trim();
+            var endLine = overrideElement is not null ? Math.Max(GetLine(element), GetLine(overrideElement)) : GetLine(element);
             yield return new PackageReferenceInfo(
                 relativePath,
                 packageName,
                 version,
-                GetLine(element),
+                endLine,
                 manifestKind,
                 "PackageReference",
                 "runtime",

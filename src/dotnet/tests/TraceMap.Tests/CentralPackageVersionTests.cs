@@ -95,4 +95,48 @@ public sealed class CentralPackageVersionTests
         Assert.Null(result.First(r => r.PackageName == "Serilog").VersionOverride);
         Assert.Equal("2.0.0", result.First(r => r.PackageName == "Other.Lib").VersionOverride); // child-element form
     }
+
+    [Fact]
+    public void ReadCentralPackageVersions_splits_semicolon_grouped_identities()
+    {
+        const string props = """
+            <Project>
+              <ItemGroup>
+                <PackageVersion Include="Contoso.Core;Serilog" Version="1.2.3" />
+                <PackageVersion Include="unsafe../id;Safe.Id" Version="2.0.0" />
+              </ItemGroup>
+            </Project>
+            """;
+        using var temp = new TempDirectory();
+        File.WriteAllText(Path.Combine(temp.Path, "Directory.Packages.props"), props);
+
+        var result = ProjectFileReader.ReadCentralPackageVersions(temp.Path, [new FileInventoryItem("Directory.Packages.props", "MSBuildProps", props.Length)]);
+
+        Assert.Equal(3, result.Count);
+        Assert.Contains(result, pin => pin.PackageName == "Contoso.Core" && pin.Version == "1.2.3");
+        Assert.Contains(result, pin => pin.PackageName == "Serilog" && pin.Version == "1.2.3");
+        Assert.Contains(result, pin => pin.PackageName == "Safe.Id" && pin.Version == "2.0.0"); // unsafe sibling skipped, safe sibling kept
+        Assert.DoesNotContain(result, pin => pin.PackageName.Contains("..", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void ReadCentralPackageVersions_child_element_version_line_is_within_the_span()
+    {
+        const string props = """
+            <Project>
+              <ItemGroup>
+                <PackageVersion Include="Contoso.Core">
+                  <Version>4.5.6</Version>
+                </PackageVersion>
+              </ItemGroup>
+            </Project>
+            """;
+        using var temp = new TempDirectory();
+        File.WriteAllText(Path.Combine(temp.Path, "Directory.Packages.props"), props);
+
+        var pin = Assert.Single(ProjectFileReader.ReadCentralPackageVersions(temp.Path, [new FileInventoryItem("Directory.Packages.props", "MSBuildProps", props.Length)]));
+
+        Assert.Equal("4.5.6", pin.Version);
+        Assert.True(pin.Line >= 4, $"span line {pin.Line} must cover the child Version element's line"); // item opens L3, Version rides L4
+    }
 }
