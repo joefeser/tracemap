@@ -841,7 +841,13 @@ public static partial class EvidenceDocsExporter
 
     private static string GapFactWhereClause(IndexFactLoadMode factLoadMode) => factLoadMode switch
     {
-        IndexFactLoadMode.GapsOnly => "where fact_type = 'AnalysisGap' or fact_type like '%Gap'",
+        // Framework-migration declaration/operation facts are not gap-typed, but the gap
+        // family derives its consumer-unsupported gap chunks from them; omitting them
+        // would make `--families gap` report fewer gaps than a broader selection.
+        IndexFactLoadMode.GapsOnly => "where fact_type = 'AnalysisGap' or fact_type like '%Gap' or rule_id in ('"
+            + RuleIds.DatabaseFrameworkMigrationDeclaration + "', '"
+            + RuleIds.DatabaseFrameworkMigrationOperation + "', '"
+            + RuleIds.DatabaseFrameworkMigrationGap + "')",
         _ => string.Empty
     };
 

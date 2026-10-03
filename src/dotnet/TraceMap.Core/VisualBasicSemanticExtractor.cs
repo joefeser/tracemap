@@ -84,8 +84,28 @@ public static class VisualBasicSemanticExtractor
             .Where(value => !string.IsNullOrWhiteSpace(value))
             .ToArray();
 
+        // An explicit --project scope that selects only other-language projects puts
+        // the repository's VB projects out of scope; that is not a missing project.
+        var visualBasicProjectsScopedOut = options.ProjectPaths is { Count: > 0 }
+            && (fullInventory ?? inventory).Any(item => item.Kind == "VisualBasicProject");
         if (projects.Length == 0)
         {
+            if (vbFiles.Length > 0 && visualBasicProjectsScopedOut)
+            {
+                gaps.Add(CreateGap(
+                    ".",
+                    "The explicit project scope selected no Visual Basic project; inventoried Visual Basic files outside that scope received no semantic analysis.",
+                    "VisualBasicProjectsOutsideProjectScope"));
+                return new SemanticExtractionResult(
+                    facts,
+                    gaps,
+                    Attempted: false,
+                    ReducedCoverage: false,
+                    AnalyzedFiles: analyzedFiles,
+                    CompilationInputFiles: compilationInputFiles,
+                    ProtectedSourceSpans: []);
+            }
+
             if (vbFiles.Length > 0)
             {
                 gaps.Add(CreateGap(
@@ -513,7 +533,47 @@ public static class VisualBasicSemanticExtractor
         }
 
         var model = compilation.GetSemanticModel(tree, ignoreAccessibility: true);
-        analyzedFiles.Add(filePath);
+        ExtractDocumentAtomically(filePath, projectPath, facts, gaps, sourceMetadataCandidates, analyzedFiles,
+            () => ExtractDocumentFacts(repoPath, projectPath, filePath, root, model, facts, gaps, sourceMetadataCandidates));
+    }
+
+    internal static void ExtractDocumentAtomically(string filePath, string? projectPath,
+        List<SemanticFactCandidate> facts, List<SemanticFactCandidate> gaps,
+        List<SourceMetadataIdentityCandidate>? sourceMetadataCandidates, ISet<string> analyzedFiles, Action extract)
+    {
+        var factCount = facts.Count;
+        var gapCount = gaps.Count;
+        var metadataCount = sourceMetadataCandidates?.Count ?? 0;
+        var newlyAnalyzed = analyzedFiles.Add(filePath);
+        try
+        {
+            extract();
+        }
+        catch (Exception ex) when (IsWorkspaceFailure(ex))
+        {
+            // Isolate one document's unexpected extractor failure: discard its partial
+            // semantic evidence, hand the file back to syntax fallback, and label the
+            // reduction instead of failing every later document in the project.
+            facts.RemoveRange(factCount, facts.Count - factCount);
+            gaps.RemoveRange(gapCount, gaps.Count - gapCount);
+            sourceMetadataCandidates?.RemoveRange(metadataCount, sourceMetadataCandidates.Count - metadataCount);
+            if (newlyAnalyzed) analyzedFiles.Remove(filePath);
+            gaps.Add(CreateGap(filePath,
+                $"Visual Basic semantic extraction failed for this project/document attempt ({ex.GetType().Name}); its partial evidence was discarded. Syntax fallback applies only when no other project analyzed the file.",
+                "VisualBasicDocumentExtractionFailed", projectPath));
+        }
+    }
+
+    private static void ExtractDocumentFacts(
+        string repoPath,
+        string? projectPath,
+        string filePath,
+        SyntaxNode root,
+        SemanticModel model,
+        List<SemanticFactCandidate> facts,
+        List<SemanticFactCandidate> gaps,
+        List<SourceMetadataIdentityCandidate>? sourceMetadataCandidates)
+    {
         AddTypeDeclarationFacts(projectPath, filePath, root, model, facts);
         AddMethodDeclarationFacts(projectPath, filePath, root, model, facts);
         AddPropertyDeclarationFacts(projectPath, filePath, root, model, facts);
@@ -524,9 +584,25 @@ public static class VisualBasicSemanticExtractor
         AddTypeSymbolRelationshipFacts(projectPath, filePath, root, model, facts);
         AddMemberSymbolRelationshipFacts(projectPath, filePath, root, model, facts);
         AddPropertyAccessFacts(projectPath, filePath, root, model, facts);
-        AddMethodInvocationFacts(repoPath, projectPath, filePath, root, model, facts, gaps);
+        var unresolvedExpressions = 0;
+        var parenthesisFreeCalls = ParenthesisFreeExpressionCalls(root, model, site =>
+        {
+            if (++unresolvedExpressions > 50) return;
+            var lines = site.GetLocation().GetLineSpan();
+            gaps.Add(CreateGap(filePath,
+                "An executable Visual Basic expression has an unresolved or late-bound member; no method call is inferred.",
+                "ExpressionSemanticResolutionUnavailable", projectPath,
+                lines.StartLinePosition.Line + 1, lines.EndLinePosition.Line + 1,
+                siteHash: FactFactory.Hash(site.ToString(), 32), ruleId: RuleIds.VisualBasicSemanticMethodInvocation));
+        }, () => gaps.Add(CreateGap(filePath,
+            "Parenthesis-free expression analysis reached its deterministic per-document operation-query budget.",
+            "ExpressionOperationBudgetExhausted", projectPath))).ToArray();
+        if (unresolvedExpressions > 50)
+            gaps.Add(CreateGap(filePath, "Unresolved expression diagnostics reached the per-document gap budget.",
+                "ExpressionDiagnosticBudgetExhausted", projectPath));
+        AddMethodInvocationFacts(repoPath, projectPath, filePath, root, model, facts, gaps, parenthesisFreeCalls);
         AddObjectCreationFacts(repoPath, projectPath, filePath, root, model, facts, gaps);
-        AddAdoNetBoundaryFacts(projectPath, filePath, root, model, facts, gaps);
+        AddAdoNetBoundaryFacts(projectPath, filePath, root, model, facts, gaps, parenthesisFreeCalls);
         AddExternalBoundaryFacts(projectPath, filePath, root, model, facts, gaps);
         AddLegacyServiceDeclarationFacts(projectPath, filePath, root, model, facts);
         if (sourceMetadataCandidates is not null)
@@ -1107,7 +1183,7 @@ public static class VisualBasicSemanticExtractor
             }
 
             var receiver = statement.EventExpression is MemberAccessExpressionSyntax memberAccess
-                ? model.GetSymbolInfo(memberAccess.Expression).Symbol
+                ? GetMemberReceiverSymbol(memberAccess, model)
                 : null;
             facts.Add(CreateEventBindingFact(
                 projectPath,
@@ -1239,7 +1315,7 @@ public static class VisualBasicSemanticExtractor
             return null;
         }
 
-        var receiverType = model.GetTypeInfo(member.Expression).Type;
+        var receiverType = member.Expression is { } receiver ? model.GetTypeInfo(receiver).Type : null;
         return receiverType?.GetMembers(member.Name.Identifier.ValueText).OfType<IEventSymbol>().SingleOrDefault();
     }
 
@@ -1577,7 +1653,7 @@ public static class VisualBasicSemanticExtractor
 
         if (node is MemberAccessExpressionSyntax access)
         {
-            var receiver = model.GetSymbolInfo(access.Expression).Symbol;
+            var receiver = GetMemberReceiverSymbol(access, model);
             properties["receiverSymbol"] = receiver?.ToDisplayString(SymbolFormat) ?? string.Empty;
             AddSymbolProperties(properties, "receiver", receiver);
         }
@@ -1611,7 +1687,8 @@ public static class VisualBasicSemanticExtractor
         SyntaxNode root,
         SemanticModel model,
         List<SemanticFactCandidate> facts,
-        List<SemanticFactCandidate> gaps)
+        List<SemanticFactCandidate> gaps,
+        IReadOnlyList<(ExpressionSyntax Site, IMethodSymbol Method)> parenthesisFreeCalls)
     {
         var fallbackFactCount = 0;
         var fallbackTruncationReported = false;
@@ -1641,7 +1718,7 @@ public static class VisualBasicSemanticExtractor
                         projectPath,
                         lineSpan.StartLinePosition.Line + 1,
                         lineSpan.EndLinePosition.Line + 1,
-                        siteHash: FactFactory.Hash(invocation.Expression.ToString(), 32),
+                        siteHash: FactFactory.Hash(InvocationExpressionText(invocation), 32),
                         ruleId: operation is IDynamicInvocationOperation ? RuleIds.VisualBasicSemanticMethodInvocation : null));
                     fallbackFactCount += 2;
                 }
@@ -1656,85 +1733,145 @@ public static class VisualBasicSemanticExtractor
                 continue;
             }
 
-            var enclosing = model.GetEnclosingSymbol(invocation.SpanStart);
-            var enclosingSymbol = enclosing?.ToDisplayString(SymbolFormat);
-            var methodProperties = AddAssemblyProperties(
-                AddSymbolProperties(
-                    AddSymbolProperties(
-                        new SortedDictionary<string, string>(StringComparer.Ordinal)
-                        {
-                            ["containingType"] = method.ContainingType?.ToDisplayString(SymbolFormat) ?? string.Empty,
-                            ["methodName"] = method.Name,
-                            ["methodKind"] = method.MethodKind.ToString()
-                        },
-                        "source",
-                        enclosing),
-                    "target",
-                    method),
-                enclosing?.ContainingAssembly,
-                method.ContainingAssembly);
-            if (invocation.Expression is MemberAccessExpressionSyntax memberAccess)
-            {
-                var receiver = model.GetSymbolInfo(memberAccess.Expression).Symbol;
-                methodProperties["receiverSymbol"] = receiver?.ToDisplayString(SymbolFormat) ?? string.Empty;
-                methodProperties["receiverType"] = model.GetTypeInfo(memberAccess.Expression).Type?.ToDisplayString(SymbolFormat) ?? string.Empty;
-                AddSymbolProperties(methodProperties, "receiver", receiver);
-            }
-
-            facts.Add(CreateSemanticFact(
-                FactTypes.MethodInvoked,
-                RuleIds.VisualBasicSemanticMethodInvocation,
-                projectPath,
-                filePath,
-                invocation,
-                sourceSymbol: enclosingSymbol,
-                targetSymbol: method.ToDisplayString(SymbolFormat),
-                contractElement: method.Name,
-                properties: methodProperties));
-
-            var callProperties = AddAssemblyProperties(
-                AddSymbolProperties(
-                    AddSymbolProperties(
-                        new SortedDictionary<string, string>(StringComparer.Ordinal)
-                        {
-                            ["callerSymbol"] = enclosingSymbol ?? string.Empty,
-                            ["calleeSymbol"] = method.ToDisplayString(SymbolFormat),
-                            ["calleeName"] = method.Name,
-                            ["calleeContainingType"] = method.ContainingType?.ToDisplayString(SymbolFormat) ?? string.Empty,
-                            ["callKind"] = "SemanticMethodInvocation"
-                        },
-                        "source",
-                        enclosing),
-                    "target",
-                    method),
-                enclosing?.ContainingAssembly,
-                method.ContainingAssembly);
-
-            facts.Add(CreateSemanticFact(
-                FactTypes.CallEdge,
-                RuleIds.VisualBasicSemanticCallGraph,
-                projectPath,
-                filePath,
-                invocation,
-                sourceSymbol: enclosingSymbol,
-                targetSymbol: method.ToDisplayString(SymbolFormat),
-                contractElement: method.Name,
-                properties: callProperties));
-
-            AddArgumentPassedFacts(
-                repoPath,
-                projectPath,
-                filePath,
-                model,
-                facts,
-                invocation.ArgumentList.Arguments,
-                method,
-                invocation,
-                enclosing,
-                enclosingSymbol,
-                method.ToDisplayString(SymbolFormat),
-                "SemanticMethodInvocation");
+            AddResolvedCallFacts(repoPath, projectPath, filePath, model, facts, invocation, invocation.Expression,
+                invocation.ArgumentList?.Arguments ?? default, method);
         }
+
+        // VB allows omitting parentheses on parameterless calls in expression context
+        // (`Dim n = cmd.ExecuteScalar`, `While reader.Read`). Those bind to an
+        // IInvocationOperation without any InvocationExpressionSyntax.
+        foreach (var (site, method) in parenthesisFreeCalls)
+            AddResolvedCallFacts(repoPath, projectPath, filePath, model, facts, site, site, default, method);
+    }
+
+    internal static IEnumerable<(ExpressionSyntax Site, IMethodSymbol Method)> ParenthesisFreeExpressionCalls(
+        SyntaxNode root, SemanticModel model, Action<ExpressionSyntax>? unresolved = null, Action? budgetExhausted = null)
+    {
+        var queries = 0;
+        foreach (var node in root.DescendantNodes())
+        {
+            if (node is not (MemberAccessExpressionSyntax or IdentifierNameSyntax or GenericNameSyntax)
+                || node.Parent is MemberAccessExpressionSyntax { Name: var name } && name == node)
+            {
+                continue;
+            }
+            if (++queries > 100_000) { budgetExhausted?.Invoke(); yield break; }
+            var bound = model.GetOperation(node);
+            if (bound is IInvocationOperation { TargetMethod: { } method } operation
+                && operation.Syntax == node
+                && method.ContainingType?.TypeKind != TypeKind.Error)
+            {
+                yield return ((ExpressionSyntax)node, method);
+            }
+            else if (bound is IDynamicMemberReferenceOperation or IInvalidOperation
+                && node.Parent is not InvocationExpressionSyntax
+                && model.GetEnclosingSymbol(node.SpanStart) is IMethodSymbol)
+            {
+                unresolved?.Invoke((ExpressionSyntax)node);
+            }
+        }
+    }
+
+    private static ISymbol? GetMemberReceiverSymbol(MemberAccessExpressionSyntax access, SemanticModel model)
+    {
+        // With-block and conditional-access members have no receiver syntax. The
+        // compiler can still resolve the member; do not fabricate receiver identity
+        // (especially for nested With blocks) or discard the document's evidence.
+        return access.Expression is { } receiver ? model.GetSymbolInfo(receiver).Symbol : null;
+    }
+
+    private static void AddResolvedCallFacts(
+        string repoPath,
+        string? projectPath,
+        string filePath,
+        SemanticModel model,
+        List<SemanticFactCandidate> facts,
+        SyntaxNode site,
+        ExpressionSyntax? expression,
+        SeparatedSyntaxList<ArgumentSyntax> arguments,
+        IMethodSymbol method)
+    {
+        var enclosing = model.GetEnclosingSymbol(site.SpanStart);
+        var enclosingSymbol = enclosing?.ToDisplayString(SymbolFormat);
+        var methodProperties = AddAssemblyProperties(
+            AddSymbolProperties(
+                AddSymbolProperties(
+                    new SortedDictionary<string, string>(StringComparer.Ordinal)
+                    {
+                        ["containingType"] = method.ContainingType?.ToDisplayString(SymbolFormat) ?? string.Empty,
+                        ["methodName"] = method.Name,
+                        ["methodKind"] = method.MethodKind.ToString()
+                    },
+                    "source",
+                    enclosing),
+                "target",
+                method),
+            enclosing?.ContainingAssembly,
+            method.ContainingAssembly);
+        if (expression is MemberAccessExpressionSyntax memberAccess)
+        {
+            var receiver = GetMemberReceiverSymbol(memberAccess, model);
+            methodProperties["receiverSymbol"] = receiver?.ToDisplayString(SymbolFormat) ?? string.Empty;
+            methodProperties["receiverType"] = memberAccess.Expression is { } receiverExpression
+                ? model.GetTypeInfo(receiverExpression).Type?.ToDisplayString(SymbolFormat) ?? string.Empty
+                : string.Empty;
+            methodProperties["receiverIdentityStatus"] = receiver is null ? "unknown" : "compiler-resolved";
+            AddSymbolProperties(methodProperties, "receiver", receiver);
+        }
+
+        facts.Add(CreateSemanticFact(
+            FactTypes.MethodInvoked,
+            RuleIds.VisualBasicSemanticMethodInvocation,
+            projectPath,
+            filePath,
+            site,
+            sourceSymbol: enclosingSymbol,
+            targetSymbol: method.ToDisplayString(SymbolFormat),
+            contractElement: method.Name,
+            properties: methodProperties));
+
+        var callProperties = AddAssemblyProperties(
+            AddSymbolProperties(
+                AddSymbolProperties(
+                    new SortedDictionary<string, string>(StringComparer.Ordinal)
+                    {
+                        ["callerSymbol"] = enclosingSymbol ?? string.Empty,
+                        ["calleeSymbol"] = method.ToDisplayString(SymbolFormat),
+                        ["calleeName"] = method.Name,
+                        ["calleeContainingType"] = method.ContainingType?.ToDisplayString(SymbolFormat) ?? string.Empty,
+                        ["callKind"] = "SemanticMethodInvocation"
+                    },
+                    "source",
+                    enclosing),
+                "target",
+                method),
+            enclosing?.ContainingAssembly,
+            method.ContainingAssembly);
+
+        facts.Add(CreateSemanticFact(
+            FactTypes.CallEdge,
+            RuleIds.VisualBasicSemanticCallGraph,
+            projectPath,
+            filePath,
+            site,
+            sourceSymbol: enclosingSymbol,
+            targetSymbol: method.ToDisplayString(SymbolFormat),
+            contractElement: method.Name,
+            properties: callProperties));
+
+        AddArgumentPassedFacts(
+            repoPath,
+            projectPath,
+            filePath,
+            model,
+            facts,
+            arguments,
+            method,
+            site,
+            enclosing,
+            enclosingSymbol,
+            method.ToDisplayString(SymbolFormat),
+            "SemanticMethodInvocation");
     }
 
     private static void AddUnresolvedInvocationFallback(
@@ -1749,8 +1886,8 @@ public static class VisualBasicSemanticExtractor
         var callerName = enclosing?.ToDisplayString(SymbolFormat);
         var properties = new SortedDictionary<string, string>(StringComparer.Ordinal)
         {
-            ["expressionHash"] = FactFactory.Hash(invocation.Expression.ToString(), 32),
-            ["expressionKind"] = invocation.Expression.Kind().ToString(),
+            ["expressionHash"] = FactFactory.Hash(InvocationExpressionText(invocation), 32),
+            ["expressionKind"] = InvocationExpressionKind(invocation),
             ["invocationName"] = invocationName,
             ["resolution"] = "unresolved"
         };
@@ -1972,7 +2109,8 @@ public static class VisualBasicSemanticExtractor
         SyntaxNode root,
         SemanticModel model,
         List<SemanticFactCandidate> facts,
-        List<SemanticFactCandidate> gaps)
+        List<SemanticFactCandidate> gaps,
+        IReadOnlyList<(ExpressionSyntax Site, IMethodSymbol Method)> parenthesisFreeCalls)
     {
         var boundaryGapCount = 0;
         var boundaryGapBudgetReported = false;
@@ -2089,7 +2227,7 @@ public static class VisualBasicSemanticExtractor
             if (!commandText && !adapterCommand) continue;
 
             var enclosing = model.GetEnclosingSymbol(assignment.SpanStart);
-            var receiver = model.GetSymbolInfo(access.Expression).Symbol;
+            var receiver = GetMemberReceiverSymbol(access, model);
             var assigned = model.GetSymbolInfo(assignment.Right).Symbol;
             var properties = new SortedDictionary<string, string>(StringComparer.Ordinal)
             {
@@ -2137,7 +2275,7 @@ public static class VisualBasicSemanticExtractor
                 continue;
             }
 
-            var receiver = model.GetSymbolInfo(memberAccess.Expression).Symbol;
+            var receiver = GetMemberReceiverSymbol(memberAccess, model);
             var assigned = model.GetSymbolInfo(assignment.Right).Symbol;
             var commandType = assigned is IFieldSymbol { ContainingType: { } enumType } field
                 && GetMetadataName(enumType) == "System.Data.CommandType"
@@ -2179,42 +2317,7 @@ public static class VisualBasicSemanticExtractor
             var method = model.GetSymbolInfo(invocation).Symbol as IMethodSymbol;
             if (method is not null && TryClassifyAdoNetOperation(method, out var operationKind, out var resultKind))
             {
-                var enclosing = model.GetEnclosingSymbol(invocation.SpanStart);
-                var receiver = invocation.Expression is MemberAccessExpressionSyntax access
-                    ? model.GetSymbolInfo(access.Expression).Symbol
-                    : null;
-                var properties = AddAssemblyProperties(
-                    AddSymbolProperties(
-                        AddSymbolProperties(
-                            AddSymbolProperties(
-                                new SortedDictionary<string, string>(StringComparer.Ordinal)
-                                {
-                                    ["coverageLabel"] = "bounded-static-call",
-                                    ["frameworkFamily"] = GetAdoNetFrameworkFamily(method.ContainingType),
-                                    ["limitations"] = "Compiler-resolved static call candidate only; runtime reachability, database identity, SQL, affected rows, returned data, and success are not proven.",
-                                    ["methodName"] = method.Name,
-                                    ["operationKind"] = operationKind,
-                                    ["resultKind"] = resultKind,
-                                    ["targetIdentityStatus"] = "boundary-only"
-                                },
-                                "source",
-                                enclosing),
-                            "target",
-                            method),
-                        "receiver",
-                        receiver),
-                    enclosing?.ContainingAssembly,
-                    method.ContainingAssembly);
-                facts.Add(CreateSemanticFact(
-                    FactTypes.DatabaseOperationCandidate,
-                    RuleIds.DatabaseOperationCallPattern,
-                    projectPath,
-                    filePath,
-                    invocation,
-                    sourceSymbol: enclosing?.ToDisplayString(SymbolFormat),
-                    targetSymbol: method.ToDisplayString(SymbolFormat),
-                    contractElement: operationKind,
-                    properties: properties));
+                AddAdoNetOperationFact(projectPath, filePath, model, facts, invocation, invocation.Expression, method, operationKind, resultKind);
                 continue;
             }
 
@@ -2260,6 +2363,12 @@ public static class VisualBasicSemanticExtractor
                     RuleIds.DatabaseOperationCallPattern);
             }
         }
+
+        foreach (var (site, method) in parenthesisFreeCalls)
+        {
+            if (TryClassifyAdoNetOperation(method, out var operationKind, out var resultKind))
+                AddAdoNetOperationFact(projectPath, filePath, model, facts, site, site, method, operationKind, resultKind);
+        }
     }
 
     private static bool IsPotentialAdoNetCommandCreation(ObjectCreationExpressionSyntax creation)
@@ -2271,6 +2380,55 @@ public static class VisualBasicSemanticExtractor
             typeName = typeName[(lastSeparator + 1)..];
         }
         return typeName.EndsWith("Command", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static void AddAdoNetOperationFact(
+        string? projectPath,
+        string filePath,
+        SemanticModel model,
+        List<SemanticFactCandidate> facts,
+        SyntaxNode site,
+        ExpressionSyntax? expression,
+        IMethodSymbol method,
+        string operationKind,
+        string resultKind)
+    {
+        var enclosing = model.GetEnclosingSymbol(site.SpanStart);
+        var receiver = expression is MemberAccessExpressionSyntax access
+            ? GetMemberReceiverSymbol(access, model)
+            : null;
+        var properties = AddAssemblyProperties(
+            AddSymbolProperties(
+                AddSymbolProperties(
+                    AddSymbolProperties(
+                        new SortedDictionary<string, string>(StringComparer.Ordinal)
+                        {
+                            ["coverageLabel"] = "bounded-static-call",
+                            ["frameworkFamily"] = GetAdoNetFrameworkFamily(method.ContainingType),
+                            ["limitations"] = "Compiler-resolved static call candidate only; runtime reachability, database identity, SQL, affected rows, returned data, and success are not proven.",
+                            ["methodName"] = method.Name,
+                            ["operationKind"] = operationKind,
+                            ["resultKind"] = resultKind,
+                            ["targetIdentityStatus"] = "boundary-only"
+                        },
+                        "source",
+                        enclosing),
+                    "target",
+                    method),
+                "receiver",
+                receiver),
+            enclosing?.ContainingAssembly,
+            method.ContainingAssembly);
+        facts.Add(CreateSemanticFact(
+            FactTypes.DatabaseOperationCandidate,
+            RuleIds.DatabaseOperationCallPattern,
+            projectPath,
+            filePath,
+            site,
+            sourceSymbol: enclosing?.ToDisplayString(SymbolFormat),
+            targetSymbol: method.ToDisplayString(SymbolFormat),
+            contractElement: operationKind,
+            properties: properties));
     }
 
     private static void AddExternalBoundaryFacts(
@@ -2527,7 +2685,7 @@ public static class VisualBasicSemanticExtractor
 
     private static bool TryGetHttpUriArgument(InvocationExpressionSyntax invocation, SemanticModel model, out string value)
     {
-        foreach (var argument in invocation.ArgumentList.Arguments.OfType<SimpleArgumentSyntax>())
+        foreach (var argument in (invocation.ArgumentList?.Arguments ?? default).OfType<SimpleArgumentSyntax>())
         {
             var parameter = (model.GetOperation(argument) as IArgumentOperation)?.Parameter;
             if (parameter?.Name is not ("requestUri" or "requestUriString" or "address"))
@@ -2559,7 +2717,7 @@ public static class VisualBasicSemanticExtractor
 
     private static bool TryGetConstantStringArgument(InvocationExpressionSyntax invocation, SemanticModel model, out string value)
     {
-        foreach (var argument in invocation.ArgumentList.Arguments.OfType<SimpleArgumentSyntax>())
+        foreach (var argument in (invocation.ArgumentList?.Arguments ?? default).OfType<SimpleArgumentSyntax>())
         {
             var constant = model.GetConstantValue(argument.Expression);
             if (constant.HasValue && constant.Value is string text)
@@ -2909,7 +3067,7 @@ public static class VisualBasicSemanticExtractor
             && property.Name.Equals("Parameters", StringComparison.OrdinalIgnoreCase)
             && IsAdoNetType(property.ContainingType, "System.Data.Common.DbCommand"))
         {
-            return model.GetSymbolInfo(parametersAccess.Expression).Symbol;
+            return GetMemberReceiverSymbol(parametersAccess, model);
         }
 
         return null;
@@ -3374,12 +3532,23 @@ public static class VisualBasicSemanticExtractor
             node.Span.Length);
     }
 
-    private static string GetSafeInvocationName(ExpressionSyntax expression) => expression switch
+    // VB null-conditional invocation (`list?(0)`, `callback?(1)`) parses as an
+    // InvocationExpressionSyntax whose Expression is null; parenthesis-free calls
+    // (`conn.Open`, `Call Ping`) have a null ArgumentList. Both are common legacy
+    // shapes and must not abort extraction for the rest of the project.
+    private static string GetSafeInvocationName(ExpressionSyntax? expression) => expression switch
     {
+        null => "conditional-access",
         MemberAccessExpressionSyntax memberAccess => memberAccess.Name.Identifier.ValueText,
         IdentifierNameSyntax identifier => identifier.Identifier.ValueText,
         _ => $"unsupported-{expression.Kind()}-{FactFactory.Hash(expression.ToString(), 16)}"
     };
+
+    private static string InvocationExpressionText(InvocationExpressionSyntax invocation) =>
+        invocation.Expression?.ToString() ?? invocation.ToString();
+
+    private static string InvocationExpressionKind(InvocationExpressionSyntax invocation) =>
+        invocation.Expression?.Kind().ToString() ?? "ConditionalAccessExpression";
 
     private static EvidenceSpan ToEvidenceSpan(string filePath, SyntaxNode node, bool includeSnippetHash = false)
     {

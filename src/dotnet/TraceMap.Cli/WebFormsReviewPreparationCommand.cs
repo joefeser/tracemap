@@ -71,10 +71,19 @@ public static partial class WebFormsReviewPreparationCommand
                 if (map?.Name.LocalName != "preserve" || !SafeVirtual(virtualPath)) throw Fail("MAP_INVALID");
                 maps.Add(new(item.Path, virtualPath!, map.Attribute("assembly")?.Value, map.Attribute("type")?.Value));
             }
+            // Only disambiguate when a selected page actually has competing suffix matches;
+            // unambiguous selections keep their original exact-suffix behavior.
+            var applicationPrefix = selectedPages.Any(page => PageMapMatches(maps, page).Skip(1).Any())
+                ? SelectApplicationPrefix(maps,
+                    sourcePaths.Where(path => path.EndsWith(".aspx", StringComparison.OrdinalIgnoreCase)).Concat(selectedPages)
+                        .Distinct(StringComparer.OrdinalIgnoreCase).ToArray())
+                : null;
             var pages = new List<Page>();
             foreach (var page in selectedPages)
             {
-                var matches = maps.Where(map => map.VirtualPath.EndsWith("/" + page, StringComparison.OrdinalIgnoreCase)).ToArray();
+                var matches = PageMapMatches(maps, page)
+                    .Where(match => applicationPrefix is null || match.Prefix.Equals(applicationPrefix, StringComparison.OrdinalIgnoreCase))
+                    .Select(match => match.Map).ToArray();
                 if (matches.Length > 1) throw Fail("PAGE_MAP_NOT_UNIQUE");
                 if (matches.Length == 0)
                 {
@@ -329,6 +338,28 @@ public static partial class WebFormsReviewPreparationCommand
     private static string Digest(byte[] bytes) => Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
     private static PreparationException Fail(string suffix) => new("WEBFORMS_PREPARATION_" + suffix);
     internal sealed class PreparationException(string code) : Exception(code);
+    private static IEnumerable<(Map Map, string Prefix)> PageMapMatches(IEnumerable<Map> maps, string page) =>
+        maps.Where(map => map.VirtualPath.EndsWith("/" + page, StringComparison.OrdinalIgnoreCase))
+            .Select(map => (map, map.VirtualPath[..^(page.Length + 1)]));
+
+    /// <summary>
+    /// A suffix match alone is ambiguous when a root page and a nested page share a file
+    /// name (`Default.aspx` and `Admin/Default.aspx`). Select the single application
+    /// virtual prefix under which every source page with any map candidate has exactly
+    /// one map; return null when no page is ambiguous, and fail closed when no unique
+    /// prefix explains the maps.
+    /// </summary>
+    private static string? SelectApplicationPrefix(IReadOnlyList<Map> maps, IReadOnlyList<string> pages)
+    {
+        var candidates = pages.Select(page => PageMapMatches(maps, page).ToArray()).Where(items => items.Length > 0).ToArray();
+        if (candidates.All(items => items.Length == 1)) return null;
+        var consistent = candidates.SelectMany(items => items.Select(item => item.Prefix))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Where(prefix => candidates.All(items => items.Count(item => item.Prefix.Equals(prefix, StringComparison.OrdinalIgnoreCase)) == 1))
+            .ToArray();
+        return consistent.Length == 1 ? consistent[0] : throw Fail("PAGE_MAP_NOT_UNIQUE");
+    }
+
     private sealed record SourceFile(string Path, string Sha256);
     private sealed record PublishedFile(string Path, string Sha256, string Kind);
     private sealed record Map(string Path, string VirtualPath, string? Assembly, string? GeneratedType);

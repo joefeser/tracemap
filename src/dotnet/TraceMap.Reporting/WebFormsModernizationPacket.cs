@@ -354,6 +354,8 @@ public static class WebFormsModernizationPacketReporter
     public const string PacketRuleId = RuleIds.LegacyWebFormsModernizationPacket;
     private const string ClaimLevel = "local-only";
     private const string UnknownCoverage = "unknown";
+    // Matches StaticHtmlEvidenceExplorer's per-collection Web Forms packet admission bound.
+    private const int MaxBehaviorRowsPerInventory = 10_000;
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -1086,6 +1088,15 @@ public static class WebFormsModernizationPacketReporter
             .ThenBy(item => item.BehaviorKind, StringComparer.Ordinal)
             .ThenBy(item => item.ClientBehaviorId, StringComparer.Ordinal)
             .ToArray();
+        if (clientBehavior.Length > MaxBehaviorRowsPerInventory)
+        {
+            // Consumers reject collections above their row bound; keep a deterministic
+            // prefix and label the omission instead of producing an unreadable packet.
+            truncated = true;
+            AddGeneratedGap(gaps, options.MaxGaps, snapshot, "WebFormsModernizationClientBehaviorLimitReached", "packet", null,
+                clientBehavior.Skip(MaxBehaviorRowsPerInventory).Select(item => item.Evidence.FactId).Take(256));
+            clientBehavior = clientBehavior.Take(MaxBehaviorRowsPerInventory).ToArray();
+        }
         var serverBehavior = facts
             .Where(fact => fact.FactType is FactTypes.WebFormsServerNavigationCandidate
                 or FactTypes.WebFormsRequestLifecycleCandidate
@@ -1122,6 +1133,13 @@ public static class WebFormsModernizationPacketReporter
             .ThenBy(item => item.BehaviorKind, StringComparer.Ordinal)
             .ThenBy(item => item.ServerBehaviorId, StringComparer.Ordinal)
             .ToArray();
+        if (serverBehavior.Length > MaxBehaviorRowsPerInventory)
+        {
+            truncated = true;
+            AddGeneratedGap(gaps, options.MaxGaps, snapshot, "WebFormsModernizationServerBehaviorLimitReached", "packet", null,
+                serverBehavior.Skip(MaxBehaviorRowsPerInventory).Select(item => item.Evidence.FactId).Take(256));
+            serverBehavior = serverBehavior.Take(MaxBehaviorRowsPerInventory).ToArray();
+        }
         if (gaps.Any(gap => gap.Classification == "WebFormsModernizationGapLimitReached")) truncated = true;
         if (inputLimited)
         {
@@ -1306,7 +1324,7 @@ public static class WebFormsModernizationPacketReporter
         };
     }
 
-    private static IReadOnlyList<WebFormsModernizationPathEvidence> PathEvidence(
+    internal static IReadOnlyList<WebFormsModernizationPathEvidence> PathEvidence(
         CombinedPath? path,
         Snapshot snapshot,
         List<WebFormsModernizationGap> gaps,
@@ -1319,7 +1337,8 @@ public static class WebFormsModernizationPacketReporter
         foreach (var node in path.Nodes.Where(node => node.RuleId is not null && node.EvidenceTier is not null))
         {
             var safePath = node.FilePath is null ? null : SafeFilePath(node.FilePath);
-            if (safePath is null or "path-unavailable" || node.StartLine is null or <= 0 || node.EndLine is null || node.EndLine < node.StartLine)
+            if (safePath is null or "path-unavailable" || node.StartLine is null or <= 0 || node.EndLine is null || node.EndLine < node.StartLine
+                || string.IsNullOrWhiteSpace(node.ScanId) || string.IsNullOrWhiteSpace(node.CommitSha))
             {
                 AddGeneratedGap(gaps, maxGaps, snapshot, "LegacyPathEvidenceProvenanceUnavailable", "path-node", node.NodeId, node.CombinedFactId is null ? [] : [node.CombinedFactId]);
                 continue;
@@ -1330,7 +1349,7 @@ public static class WebFormsModernizationPacketReporter
                 node.RuleId!,
                 node.EvidenceTier!,
                 UnknownCoverage,
-                node.CommitSha ?? snapshot.CommitSha,
+                node.CommitSha,
                 safePath,
                 node.StartLine,
                 node.EndLine,
@@ -1350,16 +1369,23 @@ public static class WebFormsModernizationPacketReporter
                 AddGeneratedGap(gaps, maxGaps, snapshot, "LegacyPathEvidenceProvenanceUnavailable", "path-edge", edge.EdgeId, edge.SupportingFactIds);
                 continue;
             }
-            var edgeScanId = path.Nodes.FirstOrDefault(node => node.NodeId == edge.FromNodeId)?.ScanId
-                ?? path.Nodes.FirstOrDefault(node => node.NodeId == edge.ToNodeId)?.ScanId
-                ?? string.Empty;
+            // Scan and commit provenance must come from the same node: in combined
+            // indexes an edge can belong to a different source than the packet's primary.
+            var edgeNode = path.Nodes.FirstOrDefault(node => node.NodeId == edge.FromNodeId && node.ScanId is not null)
+                ?? path.Nodes.FirstOrDefault(node => node.NodeId == edge.ToNodeId && node.ScanId is not null);
+            var edgeScanId = edgeNode?.ScanId ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(edgeScanId) || string.IsNullOrWhiteSpace(edgeNode?.CommitSha))
+            {
+                AddGeneratedGap(gaps, maxGaps, snapshot, "LegacyPathEvidenceProvenanceUnavailable", "path-edge", edge.EdgeId, edge.SupportingFactIds);
+                continue;
+            }
             items.Add(new WebFormsModernizationPathEvidence(
             edge.EdgeId,
             "path-edge",
             edge.RuleId,
             edge.EvidenceTier,
             UnknownCoverage,
-            snapshot.CommitSha,
+            edgeNode.CommitSha,
             safePath,
             edge.StartLine,
             edge.EndLine,
@@ -1529,7 +1555,7 @@ public static class WebFormsModernizationPacketReporter
             null,
             null,
             "WebFormsModernizationPacketReporter",
-            "webforms-modernization-packet/1.2.0",
+            "webforms-modernization-packet/1.2.1",
             supporting,
             ["The packet failed closed because required evidence was unavailable or bounded by a deterministic limit."]);
     }

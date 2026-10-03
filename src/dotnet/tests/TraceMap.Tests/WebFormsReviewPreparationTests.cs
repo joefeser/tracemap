@@ -272,6 +272,27 @@ public sealed class WebFormsReviewPreparationTests
     }
 
     [Fact]
+    public async Task Root_and_nested_pages_with_the_same_file_name_bind_under_one_application_prefix()
+    {
+        using var fixture = new Fixture();
+        File.WriteAllText(Path.Combine(fixture.Source, "Lookup.aspx"), "<%@ Page Language=\"VB\" Inherits=\"Public.Page\" %>");
+        File.WriteAllText(Path.Combine(fixture.Published, "Root.Lookup.aspx.compiled"),
+            "<preserve virtualPath=\"/prefix/Lookup.aspx\" assembly=\"CompiledEvidence.CSharp\" type=\"Public.RootPage\"/>");
+        fixture.Git("add", "."); fixture.Git("commit", "-qm", "public root page");
+        fixture.Config = fixture.Config with { SourceCommitSha = GitMetadataProvider.Detect(fixture.Source).CommitSha,
+            PageMode = "all", PageRelativePaths = [], SourceFolders = ["."],
+            PublishSourceRelativePaths = ["Lookup.aspx", "Pages/Lookup.aspx", "Pages/Lookup.aspx.vb"],
+            PageMaps = ["Lookup.aspx.compiled", "Root.Lookup.aspx.compiled"] };
+        Assert.True(await fixture.Prepare() == 0, fixture.Error.ToString());
+        Assert.Equal(2, fixture.Manifest().PublishInspection.PageCount);
+        using var publish = JsonDocument.Parse(File.ReadAllText(Path.Combine(fixture.Evidence, "publish-receipt.local.json")));
+        var bindings = publish.RootElement.GetProperty("pages").EnumerateArray()
+            .Select(page => page.GetProperty("virtualPath").GetString() + "=" + page.GetProperty("generatedType").GetString())
+            .Order(StringComparer.Ordinal).ToArray();
+        Assert.Equal(["/prefix/Lookup.aspx=Public.RootPage", "/prefix/Pages/Lookup.aspx=Public.Page"], bindings);
+    }
+
+    [Fact]
     public async Task Nested_site_root_uses_commit_membership_relative_to_that_site()
     {
         using var fixture = new Fixture();

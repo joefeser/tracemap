@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using TraceMap.Cli;
 using TraceMap.Core;
 
@@ -8,6 +9,70 @@ namespace TraceMap.Tests;
 
 public sealed class WebFormsPublishedRootTests
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Binding_inspects_only_the_bounded_hash_verified_map_snapshot(bool mapless)
+    {
+        using var f = new Fixture();
+        var mapPath = Path.Combine(f.Published, "Pages/Lookup.aspx.compiled");
+        var receipt = JsonNode.Parse(File.ReadAllText(f.Receipt))!;
+        if (mapless)
+        {
+            File.WriteAllText(mapPath, "<preserve virtualPath=\"/Other.aspx\" />");
+            receipt["publishedFiles"]![1]!["sha256"] = Hash(mapPath);
+            receipt["publishedMapCount"] = 1;
+            receipt["mapInventorySha256"] = HashText("Pages/Lookup.aspx.compiled:" + Hash(mapPath) + "\n");
+            receipt["pages"] = JsonSerializer.SerializeToNode(new[] { new {
+                virtualPath = "/Pages/Lookup.aspx", sourcePath = "Pages/Lookup.aspx",
+                bindingKind = "mapless-source-type-candidate" } });
+        }
+        File.WriteAllText(f.Receipt, receipt.ToJsonString());
+        var expectedMapHash = Hash(mapPath);
+        var result = WebFormsPublishMapExtractor.Evaluate(f.Source, new string('a', 40),
+            new(f.Source, "unused", WebFormsPublishReceiptPath: f.Receipt, WebFormsPublishedRootPath: f.Published),
+            CancellationToken.None, artifactsCaptured: () => File.WriteAllText(mapPath, new string('x', 1_048_577)));
+        Assert.Equal("bound", result.Provenance!.Status);
+        if (mapless) Assert.Single(result.Candidates!);
+        else Assert.Equal(expectedMapHash, Assert.Single(result.Pages).MapSha256);
+        Assert.Contains("WebFormsPublishInputLimitExceeded", f.Evaluate(f.Published).Provenance!.GapKinds);
+    }
+
+    [Theory]
+    [InlineData("assembly")]
+    [InlineData("compiled-map")]
+    public void Case_variant_artifact_paths_follow_host_identity(string kind)
+    {
+        using var f = new Fixture();
+        var receipt = JsonNode.Parse(File.ReadAllText(f.Receipt))!;
+        var files = receipt["publishedFiles"]!.AsArray();
+        var row = files.Single(x => x!["kind"]!.GetValue<string>() == kind)!.DeepClone();
+        // Windows additionally aliases case variants; other hosts exercise exact duplicates.
+        if (OperatingSystem.IsWindows()) row["path"] = row["path"]!.GetValue<string>().ToUpperInvariant();
+        files.Add(row);
+        File.WriteAllText(f.Receipt, receipt.ToJsonString());
+        var result = f.Evaluate(f.Published);
+        Assert.Equal("gap", result.Provenance!.Status);
+        Assert.Contains("WebFormsPublishReceiptAmbiguous", result.Provenance.GapKinds);
+        Assert.Empty(result.Assemblies);
+        Assert.Empty(result.Pages);
+    }
+
+    [Fact]
+    public void Windows_artifact_lookup_accepts_one_consistent_case_alias_without_duplicate_inventory()
+    {
+        if (!OperatingSystem.IsWindows()) return; // Exercised by the Windows distribution job.
+        using var f = new Fixture();
+        var receipt = JsonNode.Parse(File.ReadAllText(f.Receipt))!;
+        receipt["publishedFiles"]![0]!["path"] = "BIN/APP_WEB_PUBLIC.DLL";
+        receipt["pages"]![0]!["mapPath"] = "PAGES/LOOKUP.ASPX.COMPILED";
+        File.WriteAllText(f.Receipt, receipt.ToJsonString());
+        var result = f.Evaluate(f.Published);
+        Assert.Equal("bound", result.Provenance!.Status);
+        Assert.Single(result.Assemblies);
+        Assert.Single(result.Pages);
+    }
+
     [Fact]
     public async Task CLI_requires_a_receipt_with_an_explicit_root()
     {

@@ -12,6 +12,9 @@ using TraceMap.Storage;
 
 namespace TraceMap.Tests;
 
+// Exact-root fixtures depend on bounded Git probes. Match the existing identity-
+// sensitive collection instead of competing with concurrently scanning fixtures.
+[Collection("Git metadata sensitive")]
 public sealed class IlCommandBindingExtractorTests
 {
     private const string PrivateLiteral = "private-fixture-procedure-never-retained";
@@ -196,6 +199,10 @@ public sealed class IlCommandBindingExtractorTests
             SqliteIndexWriter.Write(index, scan.Manifest, scan.Facts);
             var combine = await CombinedIndexBuilder.CombineAsync(new CombineOptions([index], combined, ["public-deep-regression"]));
             var source = Assert.Single(combine.Sources);
+            Assert.True(Regex.IsMatch(source.CommitSha, "^[0-9a-f]{40}$", RegexOptions.CultureInvariant),
+                $"Deep corpus Git identity unavailable before exact-root admission: handler={handler}; compiledOnly={compiledOnly}; " +
+                $"scanCommit={scan.Manifest.CommitSha}; combinedCommit={source.CommitSha}; scanId={source.ScanId}");
+            Assert.Equal(scan.Manifest.CommitSha, source.CommitSha);
             CombinedPathGraphObservation? observed = null;
             var report = await CombinedDependencyPathReporter.BuildSelectedSymbolsAsync(
                 new CombinedDependencyPathOptions(combined, root, ToSurface: "database-api", SurfaceName: "DbDataAdapter.Fill", MaxDepth: depth)

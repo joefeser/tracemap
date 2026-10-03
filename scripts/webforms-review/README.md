@@ -1,5 +1,12 @@
 # Focused Web Forms review workflow
 
+The compatibility pipeline requires a physical review-root path with no linked
+ancestors. It rejects linked selected-page destinations (including dangling
+links), creates a new temporary file exclusively, and atomically replaces the
+page list. These checks protect against pre-existing links; the review directory
+must remain operator-controlled during execution, not concurrently modified by
+an untrusted process.
+
 For new native .NET source-plus-compiled runs or immutable attachment, use the
 [native operator guide](../../docs/WEBFORMS_NATIVE_WORKFLOW.md). It has one
 explicit config and run root; it does not discover the newest TEMP folder.

@@ -30,6 +30,28 @@ public sealed class WebFormsWizardStoreTests
     }
 
     [Fact]
+    public void Interrupted_project_registration_is_recoverable_but_other_folders_stay_fail_closed()
+    {
+        using var temp = new TempDirectory();
+        var site = Directory.CreateDirectory(Path.Combine(temp.Path, "site")).FullName;
+        var config = Path.Combine(temp.Path, "config");
+        using var store = WebFormsWizardStore.Open(config, false);
+        Assert.True(File.Exists(Path.Combine(config, "root.config.json")));
+        // Simulate a crash after the project file write but before root registration.
+        Directory.CreateDirectory(Path.Combine(config, "website"));
+        File.WriteAllText(Path.Combine(config, "website", "project.config.json"), "{\"partial\":");
+        File.WriteAllText(Path.Combine(config, "website", "project.config.json.0123.tmp"), "");
+        store.SaveProject(Project(site));
+        Assert.Equal("website", store.ReadProject("website").Id);
+
+        Directory.CreateDirectory(Path.Combine(config, "other"));
+        File.WriteAllText(Path.Combine(config, "other", "unrelated.txt"), "keep");
+        Assert.Equal("WEBFORMS_WIZARD_PROJECT_FOLDER_EXISTS", Assert.Throws<InvalidOperationException>(() =>
+            store.SaveProject(Project(site, "other"))).Message);
+        Assert.Equal("keep", File.ReadAllText(Path.Combine(config, "other", "unrelated.txt")));
+    }
+
+    [Fact]
     public void Caller_cannot_mutate_retained_root_references()
     {
         using var temp = new TempDirectory();
