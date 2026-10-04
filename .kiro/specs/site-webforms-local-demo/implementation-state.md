@@ -86,8 +86,8 @@ customer artifacts, and unpublished validation output remain hidden.
 
 ## Validation
 
-- Focused route regressions: 9 passed, 0 failed.
-- Full site tests: 1,219 passed, 0 failed, skipped, cancelled, or todo.
+- Focused route regressions: 10 passed, 0 failed.
+- Full site tests: 1,220 passed, 0 failed, skipped, cancelled, or todo.
 - `npm run build`: passed.
 - `npm run validate`: passed across 119 HTML files, 3,959 internal
   references, and 118 sitemap URLs.
@@ -104,8 +104,10 @@ customer artifacts, and unpublished validation output remain hidden.
 - Ready PR #816 targets `main`. The first ACK pass authorized six current-head
   review-thread repairs covering copy accuracy, visible-only evidence checks,
   broader local-path rejection, graceful missing-file handling, and shallow
-  history. The consolidated patch and regression matrix are awaiting the next
-  exact-head ACK pass.
+  history. A current-head follow-up required adjacent receipt rule, tier,
+  coverage, and provenance metadata for the `reversed` and `repeat` examples;
+  that focused correction and its regression are awaiting the next exact-head
+  ACK pass.
 
 ## Remaining work
 
