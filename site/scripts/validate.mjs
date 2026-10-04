@@ -9,6 +9,7 @@ import { validateAccessSafeEvidenceAcquisitionDist } from "./access-safe-evidenc
 import { validateWebformsModernizationArticleDist } from "./webforms-modernization-article.mjs";
 import { validateWebformsGuidedSetupDist } from "./webforms-guided-setup.mjs";
 import { validateWebFormsSourceCompiledProofDist } from "./webforms-source-compiled-proof.mjs";
+import { validateWebFormsLocalDemoDist } from "./webforms-local-demo.mjs";
 import { validateReducedCoverageArticleDist } from "./reduced-coverage-article.mjs";
 import { validateGapLineNumberArticleDist } from "./gap-line-number-article.mjs";
 import { validateButtonIdentityArticleDist } from "./button-identity-article.mjs";
@@ -268,6 +269,9 @@ export async function validateDist({
     if (await fileExists(resolve(root, "src", "webforms", "source-plus-compiled-proof", "index.html")) ||
         await fileExists(resolve(root, "src", "assets", "webforms-source-compiled-proof.json"))) {
       await validateWebFormsSourceCompiledProofDist({ baseUrl: normalizedBaseUrl, dist, errors, root });
+    }
+    if (await fileExists(resolve(root, "src", "webforms", "local-demo", "index.html"))) {
+      await validateWebFormsLocalDemoDist({ baseUrl: normalizedBaseUrl, dist, errors, root });
     }
     await validateSqlOperatorHandoffDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateSqlProjectRefactorIntentStoryDist({ baseUrl: normalizedBaseUrl, dist, errors });
