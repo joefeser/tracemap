@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
-import { fileExists, normalizeRenderedText } from "./validate-utils.mjs";
+import { decodeHtmlEntities, fileExists, normalizeRenderedText } from "./validate-utils.mjs";
 
 export const webFormsCapabilityRefreshRoutes = [
   "/capabilities/",
@@ -37,6 +37,7 @@ const forbiddenMaterial = [
 
 const forbiddenClaims = [
   /TraceMap (?:ran|executed|observed|launched) (?:the )?(?:Web Forms|page|website|database)/i,
+  /\bTraceMap (?:proves?|verifies?|guarantees?|confirms?)\b[^.!?]{0,160}\b(?:executes?|runs?|is reachable) (?:at runtime|in production)\b/i,
   /(?:customer compatibility|migration parity|complete cross-service tracing) (?:is|was) (?:proven|verified|guaranteed)/i,
   /(?:Web Forms|VB\.NET) (?:support|coverage) (?:is|was) complete/i,
   /(?:safe to run|safe to release|release approved)/i
@@ -130,10 +131,18 @@ function validateStatusRows(html, key, expected, errors, label) {
 }
 
 function validateFutureBoundary(pages, errors) {
-  const combined = [pages.get("/capabilities/"), pages.get("/roadmap/")].filter(Boolean).map(normalizeRenderedText).join(" ");
-  for (const term of futureTerms) if (!combined.includes(term)) errors.push(`Web Forms capability refresh is missing future-work boundary: ${term}`);
+  const capabilities = pages.get("/capabilities/");
+  const roadmap = pages.get("/roadmap/");
+  for (const [route, html] of [["/capabilities/", capabilities], ["/roadmap/", roadmap]]) {
+    if (!html) continue;
+    const text = normalizeRenderedText(html);
+    for (const term of futureTerms) {
+      if (!text.includes(term)) errors.push(`Web Forms capability refresh route ${route} is missing future-work boundary: ${term}`);
+    }
+  }
+  const capabilitiesText = capabilities ? normalizeRenderedText(capabilities) : "";
   for (const phrase of ["candidate bridges", "unresolved values", "partial coverage", "Windows-only"]) {
-    if (!combined.toLowerCase().includes(phrase.toLowerCase())) errors.push(`Web Forms capability refresh is missing bounded evidence term: ${phrase}`);
+    if (!capabilitiesText.toLowerCase().includes(phrase.toLowerCase())) errors.push(`Web Forms capability refresh route /capabilities/ is missing bounded evidence term: ${phrase}`);
   }
 }
 
@@ -143,10 +152,23 @@ async function validateDiscovery({ dist, errors }) {
   let parsed;
   try { parsed = JSON.parse(await readFile(indexPath, "utf8")); }
   catch (error) { errors.push(`Web Forms capability refresh could not parse routes-index.json: ${error.message}`); return; }
-  for (const route of webFormsCapabilityRefreshRoutes) {
+  const expectedMetadata = new Map([
+    ["/capabilities/", { publicClaimLevel: "demo", sourceType: "site-page", hintCategory: "start", preferredProofPath: "/evidence/" }],
+    ["/roadmap/", { publicClaimLevel: "concept", sourceType: "site-page", hintCategory: "roadmap", preferredProofPath: "/proof-paths/" }],
+    ["/legacy-dotnet/evidence/", { publicClaimLevel: "concept", sourceType: "site-page", hintCategory: "evidence", preferredProofPath: "/legacy-evidence/" }],
+    ["/legacy-modernization/evidence-map/", { publicClaimLevel: "concept", sourceType: "site-page", hintCategory: "roadmap", preferredProofPath: "/legacy-evidence/" }],
+    ["/legacy-modernization/review-handoff/", { publicClaimLevel: "concept", sourceType: "site-page", hintCategory: "use-case", preferredProofPath: "/legacy-modernization/evidence-map/" }],
+    ["/manager-packet/", { publicClaimLevel: "demo", sourceType: "site-page", hintCategory: "use-case", preferredProofPath: "/demo/proof-upgrades/" }],
+    ["/manager-faq/", { publicClaimLevel: "concept", sourceType: "site-page", hintCategory: "use-case", preferredProofPath: "/proof-paths/" }],
+    ["/proof-paths/for-managers/", { publicClaimLevel: "concept", sourceType: "site-page", hintCategory: "evidence", preferredProofPath: "/proof-paths/" }]
+  ]);
+  for (const [route, expected] of expectedMetadata) {
     const entry = parsed?.entries?.find((item) => item?.path === route);
     if (!entry) { errors.push(`Web Forms capability refresh discovery is missing route: ${route}`); continue; }
     if (!String(entry.summary ?? "").includes("Web Forms")) errors.push(`Web Forms capability refresh discovery summary is stale for: ${route}`);
+    for (const [field, value] of Object.entries(expected)) {
+      if (entry[field] !== value) errors.push(`Web Forms capability refresh discovery ${field} for ${route} must be ${value}.`);
+    }
     if (!Array.isArray(entry.limitations) || entry.limitations.length < 2 || !Array.isArray(entry.nonClaims) || entry.nonClaims.length < 2) errors.push(`Web Forms capability refresh discovery boundaries are incomplete for: ${route}`);
   }
 }
@@ -158,6 +180,8 @@ function activeAnchorHrefs(html) {
   return hrefs;
 }
 function normalizeAttributeValues(html) {
-  return [...html.matchAll(/\b(?:content|data-[\w-]+|title|aria-label)\s*=\s*["']([^"']*)["']/gi)].map((match) => match[1]).join(" ");
+  return [...html.matchAll(/\b(?:content|data-[\w-]+|title|aria-label|href)\s*=\s*["']([^"']*)["']/gi)]
+    .map((match) => decodeHtmlEntities(match[1]))
+    .join(" ");
 }
 function escapeRegex(value) { return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }
