@@ -38,6 +38,18 @@ public sealed record NuGetLockfileReadResult(
     IReadOnlyList<NuGetLockfileEntry> Entries,
     IReadOnlyList<NuGetLockfileGap> Gaps);
 
+/// A package this repo PRODUCES (a packable project): PackageId (or SDK-style AssemblyName fallback)
+/// with its Version/PackageVersion property. Line is the evidence span END (identity through version).
+/// Declaration evidence from the project file only — no build, no restore, no publish proof (that
+/// remains producer-evidence.v0's publicationStatus sidecar).
+public sealed record ProducedPackageInfo(
+    string ProjectPath,
+    string PackageId,
+    string? Version,
+    bool ExplicitPackageId,
+    int Line,
+    int SpanStart);
+
 /// A central NuGet version pin declared in an MSBuild props file (central package management):
 /// a PackageVersion item in Directory.Packages.props (or equivalent props file). The pin is a
 /// declaration in ITS OWN file; effective-version resolution (override > central > project) is a
@@ -94,6 +106,74 @@ public static class ProjectFileReader
             .OrderBy(item => item.ProjectPath, StringComparer.Ordinal)
             .ThenBy(item => item.PackageName, StringComparer.Ordinal)
             .ThenBy(item => item.Version, StringComparer.Ordinal)
+            .ToArray();
+    }
+
+    /// Reads packages this repo produces from packable projects. Evidence-only rules:
+    /// - PROPERTY values only (PropertyGroup scope) — ItemGroup children never count;
+    /// - IsPackable: LAST property value wins (MSBuild semantics); explicitly false => never emits;
+    /// - PackageId when present; else AssemblyName fallback for SDK-STYLE projects only, marked
+    ///   packageIdSource=AssemblyName (legacy non-SDK projects would invent packages from every
+    ///   AssemblyName — their ids are build artifacts, not package declarations);
+    /// - PackageVersion outranks Version (NuGet pack semantics: Version is the fallback); every property is last-wins;
+    /// - unsafe ids skip the project; unsafe versions emit as unevidenced (null), never projected;
+    /// - the evidence span covers identity line through the version line when they differ.
+    public static IReadOnlyList<ProducedPackageInfo> ReadProducedPackages(string repoPath, IEnumerable<FileInventoryItem> inventory)
+    {
+        var results = new List<ProducedPackageInfo>();
+        foreach (var project in inventory.Where(item => item.Kind is "Project" or "VisualBasicProject"))
+        {
+            var fullPath = Path.Combine(repoPath, project.RelativePath);
+            if (!TryLoadXml(fullPath, out var document))
+            {
+                continue;
+            }
+
+            static bool IsProperty(XElement e) => e.Parent is { Name.LocalName: "PropertyGroup" };
+            var sdkStyle = document.Root?.Attribute("Sdk") is not null;
+
+            // MSBuild evaluation order: property redefinitions REPLACE earlier values — every
+            // property here is LAST-wins, with its line tracked to the winning assignment.
+            bool? packable = null;
+            string? packageId = null;
+            string? assemblyName = null;
+            string? assemblyLine = null;
+            string? plainVersion = null; int? plainVersionLine = null;
+            string? packageVersion = null; int? packageVersionLine = null;
+            int idLine = 1;
+            foreach (var element in document.Descendants().Where(IsProperty))
+            {
+                var name = element.Name.LocalName;
+                var value = element.Value.Trim();
+                if (value.Length == 0) continue;
+                switch (name)
+                {
+                    case "IsPackable": packable = !value.Equals("false", StringComparison.OrdinalIgnoreCase); break;
+                    case "PackageId": packageId = value; idLine = GetLine(element); break;
+                    case "AssemblyName": assemblyName = value; assemblyLine = GetLine(element).ToString(); break;
+                    case "Version": plainVersion = value; plainVersionLine = GetLine(element); break;
+                    case "PackageVersion": packageVersion = value; packageVersionLine = GetLine(element); break;
+                }
+            }
+            var explicitId = packageId is not null;
+            if (!explicitId && sdkStyle && assemblyName is not null)
+            {
+                packageId = assemblyName; // SDK-style fallback; the id line cites the AssemblyName itself
+                if (int.TryParse(assemblyLine, out var al)) idLine = al;
+            }
+            if (packable == false || packageId is null || !IsSafeNuGetPackageId(packageId)) continue;
+            // NuGet pack semantics: PackageVersion is the produced version; Version is its fallback.
+            // Each property is last-wins within itself; selection is by name, not XML order.
+            var version = packageVersion ?? plainVersion;
+            var versionLine = version is null ? null : packageVersion is not null ? packageVersionLine : plainVersionLine;
+            if (version is not null && !IsSafeNuGetResolvedVersion(version)) { version = null; versionLine = null; } // unevidenced, never projected
+            var spanEnd = versionLine is { } vl && version is not null ? Math.Max(idLine, vl) : idLine;
+            results.Add(new ProducedPackageInfo(project.RelativePath, packageId, version, explicitId, spanEnd, idLine));
+        }
+
+        return results
+            .OrderBy(item => item.ProjectPath, StringComparer.Ordinal)
+            .ThenBy(item => item.PackageId, StringComparer.Ordinal)
             .ToArray();
     }
 
