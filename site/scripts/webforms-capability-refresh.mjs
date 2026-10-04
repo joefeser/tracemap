@@ -57,9 +57,9 @@ export async function validateWebFormsCapabilityRefreshDist({ dist, errors }) {
     for (const proofRoute of webFormsProofRoutes) {
       if (!hrefs.has(proofRoute)) errors.push(`Web Forms capability refresh route ${route} is missing proof link: ${proofRoute}`);
     }
-    const surface = `${normalizeRenderedText(html)} ${normalizeAttributeValues(html)}`;
+    const surfaces = [normalizeRenderedText(html), normalizeTagCollapsedText(html), normalizeAttributeValues(html)];
     for (const pattern of [...forbiddenMaterial, ...forbiddenClaims]) {
-      if (pattern.test(surface)) errors.push(`Web Forms capability refresh route ${route} contains forbidden public material or claim: ${pattern}`);
+      if (surfaces.some((surface) => surfaceChunks(surface).some((chunk) => pattern.test(chunk)))) errors.push(`Web Forms capability refresh route ${route} contains forbidden public material or claim: ${pattern}`);
     }
   }
 
@@ -100,6 +100,8 @@ function validateRoadmapLadder(html, errors) {
     const pattern = new RegExp(`<tr\\b(?=[^>]*id=["']${escapeRegex(id)}["'])(?=[^>]*data-claim-level=["']${level}["'])[^>]*>`, "i");
     if (!pattern.test(html)) errors.push(`Web Forms capability refresh roadmap expected ${id} claim level ${level}.`);
   }
+  const futureStatusPattern = /<tr\b(?=[^>]*id=["']claim-webforms-future-automation["'])(?=[^>]*data-evidence-status=["']future-only["'])(?=[^>]*data-wording-status=["']future-facing["'])[^>]*>/i;
+  if (!futureStatusPattern.test(html)) errors.push("Web Forms capability refresh roadmap future automation row must retain future-only evidence and future-facing wording statuses.");
 }
 
 function validateLegacyLane(html, errors) {
@@ -240,5 +242,39 @@ function extractSectionFromMarker(html, attribute) {
   if (start < 0) return "";
   const end = html.indexOf("</section>", start);
   return end < 0 ? "" : html.slice(start, end);
+}
+function surfaceChunks(value) {
+  const text = String(value);
+  const chunks = [];
+  for (let start = 0; start < text.length; start += 320) chunks.push(text.slice(Math.max(0, start - 192), start + 512));
+  return chunks.length > 0 ? chunks : [""];
+}
+function normalizeTagCollapsedText(html) {
+  let text = "";
+  let tag = "";
+  let insideTag = false;
+  let quote = "";
+  for (const char of String(html)) {
+    if (!insideTag) {
+      if (char === "<") {
+        insideTag = true;
+        tag = char;
+      } else {
+        text += char;
+      }
+      continue;
+    }
+    tag += char;
+    if (quote) {
+      if (char === quote) quote = "";
+      continue;
+    }
+    if (char === '"' || char === "'") quote = char;
+    else if (char === ">") {
+      insideTag = false;
+      if (/^<\s*\/?\s*(?:address|article|aside|blockquote|br|dd|div|dl|dt|fieldset|figcaption|figure|footer|form|h[1-6]|header|hr|li|main|nav|ol|p|pre|section|table|tbody|td|tfoot|th|thead|tr|ul)\b/i.test(tag)) text += " ";
+    }
+  }
+  return decodeHtmlEntities(text);
 }
 function escapeRegex(value) { return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }
