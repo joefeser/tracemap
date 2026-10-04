@@ -67,6 +67,7 @@ export async function validateWebFormsCapabilityRefreshDist({ dist, errors }) {
   validateRoadmapLadder(pages.get("/roadmap/"), errors);
   validateLegacyLane(pages.get("/legacy-dotnet/evidence/"), errors);
   validateModernizationMap(pages.get("/legacy-modernization/evidence-map/"), errors);
+  validateSupportingLadders(pages, errors);
   validateFutureBoundary(pages, errors);
   await validateDiscovery({ dist, errors });
 }
@@ -123,6 +124,28 @@ function validateModernizationMap(html, errors) {
   ]), errors, "modernization map");
 }
 
+function validateSupportingLadders(pages, errors) {
+  const expected = [
+    ["/manager-packet/", "section", "data-webforms-manager-ladder", "v1", ["Shipped setup", "Concept projection", "Demo replay", "Demo review"]],
+    ["/manager-faq/", "article", "data-webforms-faq", "claim-ladder", ["guided terminal setup is shipped", "local synthetic replay and review walkthrough are demo-level", "source-plus-compiled projection remains concept-level"]],
+    ["/proof-paths/for-managers/", "tr", "id", "question-webforms-claim-level", ["shipped setup", "concept projection", "demo replay", "demo walkthrough"]],
+    ["/legacy-modernization/review-handoff/", "tr", "data-handoff-row", "webforms-evidence-ladder", ["Shipped guided setup", "concept source-plus-compiled projection", "demo local corpus", "demo review walkthrough"]]
+  ];
+  for (const [route, tag, attribute, value, phrases] of expected) {
+    const html = pages.get(route);
+    if (!html) continue;
+    const block = extractMarkedElement(html, tag, attribute, value);
+    if (!block) {
+      errors.push(`Web Forms capability refresh route ${route} is missing its claim-ladder block.`);
+      continue;
+    }
+    const text = normalizeRenderedText(block);
+    for (const phrase of phrases) {
+      if (!text.includes(phrase)) errors.push(`Web Forms capability refresh route ${route} is missing ladder claim: ${phrase}`);
+    }
+  }
+}
+
 function validateStatusRows(html, key, expected, errors, label) {
   for (const [id, status] of expected) {
     const pattern = new RegExp(`<tr\\b(?=[^>]*${key}=["']${escapeRegex(id)}["'])(?=[^>]*data-public-status=["']${status}["'])[^>]*>`, "i");
@@ -133,14 +156,26 @@ function validateStatusRows(html, key, expected, errors, label) {
 function validateFutureBoundary(pages, errors) {
   const capabilities = pages.get("/capabilities/");
   const roadmap = pages.get("/roadmap/");
-  for (const [route, html] of [["/capabilities/", capabilities], ["/roadmap/", roadmap]]) {
-    if (!html) continue;
-    const text = normalizeRenderedText(html);
+  const capabilitiesBlock = capabilities ? extractSectionFromMarker(capabilities, "data-webforms-future-boundary") : "";
+  const roadmapBlock = roadmap ? extractMarkedElement(roadmap, "tr", "id", "claim-webforms-future-automation") : "";
+  const boundaries = [
+    ["/capabilities/", capabilitiesBlock, ["Still future"]],
+    ["/roadmap/", roadmapBlock, ["future-only", "future-facing", "are not established"]]
+  ];
+  for (const [route, block, boundaryPhrases] of boundaries) {
+    if (!block) {
+      errors.push(`Web Forms capability refresh route ${route} is missing its future-only boundary block.`);
+      continue;
+    }
+    const text = normalizeRenderedText(block);
+    for (const phrase of boundaryPhrases) {
+      if (!text.includes(phrase)) errors.push(`Web Forms capability refresh route ${route} is missing future-only boundary wording: ${phrase}`);
+    }
     for (const term of futureTerms) {
       if (!text.includes(term)) errors.push(`Web Forms capability refresh route ${route} is missing future-work boundary: ${term}`);
     }
   }
-  const capabilitiesText = capabilities ? normalizeRenderedText(capabilities) : "";
+  const capabilitiesText = capabilitiesBlock ? normalizeRenderedText(capabilitiesBlock) : "";
   for (const phrase of ["candidate bridges", "unresolved values", "partial coverage", "Windows-only"]) {
     if (!capabilitiesText.toLowerCase().includes(phrase.toLowerCase())) errors.push(`Web Forms capability refresh route /capabilities/ is missing bounded evidence term: ${phrase}`);
   }
@@ -170,6 +205,18 @@ async function validateDiscovery({ dist, errors }) {
       if (entry[field] !== value) errors.push(`Web Forms capability refresh discovery ${field} for ${route} must be ${value}.`);
     }
     if (!Array.isArray(entry.limitations) || entry.limitations.length < 2 || !Array.isArray(entry.nonClaims) || entry.nonClaims.length < 2) errors.push(`Web Forms capability refresh discovery boundaries are incomplete for: ${route}`);
+    const discoveryFields = [
+      ["summary", [entry.summary]],
+      ["limitations", entry.limitations],
+      ["nonClaims", entry.nonClaims]
+    ];
+    for (const [field, values] of discoveryFields) {
+      if (!Array.isArray(values)) continue;
+      const surface = decodeHtmlEntities(values.map((value) => String(value ?? "")).join(" "));
+      for (const pattern of [...forbiddenMaterial, ...forbiddenClaims]) {
+        if (pattern.test(surface)) errors.push(`Web Forms capability refresh discovery ${field} for ${route} contains forbidden public material or claim: ${pattern}`);
+      }
+    }
   }
 }
 
@@ -183,5 +230,15 @@ function normalizeAttributeValues(html) {
   return [...html.matchAll(/\b(?:content|data-[\w-]+|title|aria-label|href)\s*=\s*["']([^"']*)["']/gi)]
     .map((match) => decodeHtmlEntities(match[1]))
     .join(" ");
+}
+function extractMarkedElement(html, tag, attribute, value) {
+  const pattern = new RegExp(`<${tag}\\b(?=[^>]*\\b${escapeRegex(attribute)}=["']${escapeRegex(value)}["'])[^>]*>[\\s\\S]*?<\\/${tag}>`, "i");
+  return html.match(pattern)?.[0] ?? "";
+}
+function extractSectionFromMarker(html, attribute) {
+  const start = html.search(new RegExp(`<[^>]+\\b${escapeRegex(attribute)}\\b[^>]*>`, "i"));
+  if (start < 0) return "";
+  const end = html.indexOf("</section>", start);
+  return end < 0 ? "" : html.slice(start, end);
 }
 function escapeRegex(value) { return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }

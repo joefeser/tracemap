@@ -47,11 +47,37 @@ test("Web Forms capability refresh rejects claim-level drift and future-work pro
 test("Web Forms capability refresh audits future boundaries on each intended route", async (t) => {
   const root = await fixture(t);
   await buildSite({ root, log() {} });
-  const path = join(root, "dist", "capabilities", "index.html");
-  await writeFile(path, (await readFile(path, "utf8")).replaceAll("Automatic solution-wide discovery", "Automatic repository onboarding"));
+  const capabilities = join(root, "dist", "capabilities", "index.html");
+  const roadmap = join(root, "dist", "roadmap", "index.html");
+  await writeFile(capabilities, (await readFile(capabilities, "utf8")).replace("Still future", "Now shipped"));
+  await writeFile(roadmap, (await readFile(roadmap, "utf8")).replace("are not established", "are shipped"));
   const errors = [];
   await validateWebFormsCapabilityRefreshDist({ dist: join(root, "dist"), errors });
-  assert.match(errors.join("\n"), /route \/capabilities\/ is missing future-work boundary: Automatic solution-wide discovery/);
+  const joined = errors.join("\n");
+  assert.match(joined, /route \/capabilities\/ is missing future-only boundary wording: Still future/);
+  assert.match(joined, /route \/roadmap\/ is missing future-only boundary wording: are not established/);
+});
+
+test("Web Forms capability refresh preserves claim levels on every supporting ladder", async (t) => {
+  const root = await fixture(t);
+  await buildSite({ root, log() {} });
+  const mutations = [
+    ["manager-packet", "Concept projection", "Shipped projection"],
+    ["manager-faq", "remains concept-level", "is shipped"],
+    [join("proof-paths", "for-managers"), "concept projection", "shipped projection"],
+    [join("legacy-modernization", "review-handoff"), "concept source-plus-compiled projection", "shipped source-plus-compiled projection"]
+  ];
+  for (const [route, before, after] of mutations) {
+    const path = join(root, "dist", route, "index.html");
+    await writeFile(path, (await readFile(path, "utf8")).replace(before, after));
+  }
+  const errors = [];
+  await validateWebFormsCapabilityRefreshDist({ dist: join(root, "dist"), errors });
+  const joined = errors.join("\n");
+  assert.match(joined, /route \/manager-packet\/ is missing ladder claim: Concept projection/);
+  assert.match(joined, /route \/manager-faq\/ is missing ladder claim: source-plus-compiled projection remains concept-level/);
+  assert.match(joined, /route \/proof-paths\/for-managers\/ is missing ladder claim: concept projection/);
+  assert.match(joined, /route \/legacy-modernization\/review-handoff\/ is missing ladder claim: concept source-plus-compiled projection/);
 });
 
 test("Web Forms capability refresh pins discovery claim and proof metadata", async (t) => {
@@ -68,6 +94,25 @@ test("Web Forms capability refresh pins discovery claim and proof metadata", asy
   const joined = errors.join("\n");
   assert.match(joined, /discovery publicClaimLevel for \/manager-packet\/ must be demo/);
   assert.match(joined, /discovery preferredProofPath for \/manager-packet\/ must be \/demo\/proof-upgrades\//);
+});
+
+test("Web Forms capability refresh safety-scans every audited discovery text field", async (t) => {
+  const root = await fixture(t);
+  await buildSite({ root, log() {} });
+  const path = join(root, "dist", "routes-index.json");
+  const index = JSON.parse(await readFile(path, "utf8"));
+  const entry = index.entries.find((item) => item.path === "/manager-packet/");
+  const privatePath = ["", "Users", "private", "work"].join("/");
+  entry.summary = "TraceMap confirms Web Forms runs in production.";
+  entry.limitations[0] = privatePath;
+  entry.nonClaims[0] = "Password&#61;synthetic";
+  await writeFile(path, `${JSON.stringify(index, null, 2)}\n`);
+  const errors = [];
+  await validateWebFormsCapabilityRefreshDist({ dist: join(root, "dist"), errors });
+  const joined = errors.join("\n");
+  assert.match(joined, /discovery summary for \/manager-packet\/ contains forbidden public material or claim.*TraceMap/);
+  assert.match(joined, /discovery limitations for \/manager-packet\/ contains forbidden public material or claim.*Users/);
+  assert.match(joined, /discovery nonClaims for \/manager-packet\/ contains forbidden public material or claim.*Password/);
 });
 
 test("Web Forms capability refresh rejects private material and affirmative runtime claims", async (t) => {
