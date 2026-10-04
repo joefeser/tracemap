@@ -131,6 +131,7 @@ export async function validateWebFormsLocalDemoDist({
   if (!activeHtml.includes('data-responsive-artifact-map="table-scroll"')) errors.push("Web Forms local demo is missing its responsive artifact-map contract.");
   for (const phrase of requiredPhrases) if (!text.includes(phrase)) errors.push(`Web Forms local demo is missing required bounded text: ${phrase}`);
   for (const link of requiredLinks) if (!hrefs.has(link)) errors.push(`Web Forms local demo is missing active required link: ${link}`);
+  for (const example of ["reversed", "repeat"]) validateEvidenceExample(activeHtml, example, errors);
 
   validateBoundary({ html: activeHtml, implementationState, repositoryRoot, errors });
   validateProvenance({ html: activeHtml, text, assetText, errors });
@@ -196,6 +197,26 @@ function validateProvenance({ html, text, assetText, errors }) {
   for (const digest of [projectionGenerator, projectionInput]) if (digest && !text.includes(digest)) errors.push(`Web Forms local demo is stale relative to projection digest: ${digest}`);
   if (new Set([sourceGeneratorHash, sourceInputHash, projectionGenerator, projectionInput]).size !== 4) errors.push("Web Forms local demo source-receipt and public-projection hashes must remain distinct.");
   if (!text.includes("Covers the admitted source roster, execution/fixture assemblies, and test receipt") || !text.includes("Covers only the allowlisted privacy-projected input")) errors.push("Web Forms local demo must keep source-receipt and public-projection bounded inputs distinct.");
+}
+
+function validateEvidenceExample(html, example, errors) {
+  const escaped = example.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const block = html.match(new RegExp(`<(?:tr|div)\\b(?=[^>]*\\bdata-evidence-example=["']${escaped}["'])[^>]*>[\\s\\S]*?<\\/(?:tr|div)>`, "i"))?.[0];
+  if (!block) {
+    errors.push(`Web Forms local demo is missing active evidence metadata for ${example}.`);
+    return;
+  }
+  const openingTag = block.match(/^<[^>]+>/)?.[0] ?? "";
+  const requiredAttributes = {
+    "data-rule-id": "validation.deep-projectless-corpus.v1",
+    "data-evidence-tier": "Tier2Structural",
+    "data-coverage-label": "bounded-exact-tree-synthetic-layout",
+    "data-provenance-ref": "#validation-receipt"
+  };
+  for (const [name, value] of Object.entries(requiredAttributes)) {
+    if (!new RegExp(`\\b${name}=["']${value}["']`, "i").test(openingTag)) errors.push(`Web Forms local demo ${example} evidence metadata is missing ${name}.`);
+  }
+  if (!activeAnchorHrefs(block).has("#validation-receipt")) errors.push(`Web Forms local demo ${example} evidence metadata is missing its active provenance link.`);
 }
 
 function gitCommitExists(repositoryRoot, sha) {

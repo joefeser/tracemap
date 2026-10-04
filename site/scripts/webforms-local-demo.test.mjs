@@ -47,6 +47,21 @@ test("Web Forms local demo requires all layouts, query views, and fail-closed ou
   assert.match(errors.join("\n"), /TruncatedByLimit/);
 });
 
+test("Web Forms local demo requires rule, tier, coverage, and provenance on reversed and repeat examples", async (t) => {
+  const root = await fixture(t);
+  const pagePath = join(root, "src", "webforms", "local-demo", "index.html");
+  const page = await readFile(pagePath, "utf8");
+  await writeFile(pagePath, page
+    .replace('data-evidence-example="reversed" data-rule-id="validation.deep-projectless-corpus.v1"', 'data-evidence-example="reversed"')
+    .replace('data-evidence-example="repeat"', 'data-evidence-example="repeat-without-contract"'));
+  await buildSite({ root, log() {} });
+  const errors = [];
+  await validateFixture(root, errors);
+  const joined = errors.join("\n");
+  assert.match(joined, /reversed evidence metadata is missing data-rule-id/);
+  assert.match(joined, /missing active evidence metadata for repeat/);
+});
+
 test("Web Forms local demo ignores required evidence hidden in HTML comments", async (t) => {
   const root = await fixture(t);
   const pagePath = join(root, "src", "webforms", "local-demo", "index.html");
