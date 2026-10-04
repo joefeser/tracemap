@@ -64,7 +64,7 @@ private validation output is published.
 Validated on 2026-10-03 CDT from the implementation worktree:
 
 - `cd site && npm run build`: passed.
-- `cd site && npm test`: 1,234 passed; 0 failed, skipped, cancelled, or todo
+- `cd site && npm test`: 1,235 passed; 0 failed, skipped, cancelled, or todo
   after the ACK-authorized review repair.
 - `cd site && npm run validate`: passed across 120 HTML files, 4,004 internal
   references, and 119 sitemap URLs.
@@ -88,6 +88,12 @@ discovery limitations, and evidence metadata to the reused #806 projection;
 and scans both the page and proof asset across browser-decoded and tag-collapsed
 safety surfaces. Fourteen focused route regressions pass. The repaired head
 still requires the normal exact-head ACK rerun and is not merge-approved here.
+
+A subsequent exact-head P2 showed that HTML comments could still split a
+forbidden token because comment removal inserted a space. The narrow follow-up
+removes comment nodes without creating a browser-inaccurate token boundary and
+adds a fifteenth focused regression for comment-split SQL-like text and local
+paths.
 
 ## Exact-main evidence inspected
 

@@ -237,7 +237,7 @@ function validateBranchBoundary({ html, implementationState, repositoryRoot, err
 
 function gitCommitExists(root, sha) { return spawnSync("git", ["cat-file", "-e", `${sha}^{commit}`], { cwd: root, stdio: "ignore" }).status === 0; }
 function gitIsAncestor(root, ancestor, descendant) { return spawnSync("git", ["merge-base", "--is-ancestor", ancestor, descendant], { cwd: root, stdio: "ignore" }).status === 0; }
-function stripHtmlComments(value) { return String(value).replace(/<!--[\s\S]*?-->/g, " "); }
+function stripHtmlComments(value) { return String(value).replace(/<!--[\s\S]*?-->/g, ""); }
 function escapeRegex(value) { return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }
 function activeAnchorHrefs(value) { return new Set([...stripHtmlComments(value).matchAll(/<a\b[^>]*\bhref\s*=\s*(["'])(.*?)\1/gi)].map((match) => decodeEntities(match[2]))); }
 function normalizeAttributeValues(value) { return [...value.matchAll(/<[^>]+>/g)].flatMap((tag) => [...tag[0].matchAll(/\b[\w:-]+\s*=\s*(["'])(.*?)\1/g)].map((attribute) => decodeEntities(attribute[2]))).join(" ").replace(/\s+/g, " ").trim(); }

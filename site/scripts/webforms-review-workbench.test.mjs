@@ -171,6 +171,17 @@ test("Web Forms review workbench scans browser-decoded and tag-collapsed page te
   assert.ok(errors.filter((error) => String(error).includes("forbidden public material or claim")).length >= 2);
 });
 
+test("Web Forms review workbench preserves browser token adjacency across HTML comments", async (t) => {
+  const root = await fixture(t);
+  const pagePath = join(root, "src", "webforms", "review-workbench", "index.html");
+  const page = await readFile(pagePath, "utf8");
+  await writeFile(pagePath, page.replace("</main>", "<p>SE<!-- split -->LECT value FROM private_table</p><p>/Us<!-- split -->ers/example/private</p></main>"));
+  await buildSite({ root, log() {} });
+  const errors = [];
+  await validateFixture(root, errors);
+  assert.ok(errors.filter((error) => String(error).includes("forbidden public material or claim")).length >= 2);
+});
+
 test("Web Forms review workbench safety-scans the reused proof asset", async (t) => {
   const root = await fixture(t);
   const proofPath = join(root, "src", "assets", "webforms-source-compiled-proof.json");
