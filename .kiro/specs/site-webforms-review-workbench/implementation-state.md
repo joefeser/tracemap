@@ -6,6 +6,8 @@ Branch: `codex/site-webforms-review-workbench`
 
 Exact implementation base: `5fd50ebec3bef40c7c0b3660a754ab08cab45982`
 
+Validated implementation commit: `4b225971bf18299103283ad1db022121d9951939`
+
 PR #803 ancestry at exact base: `not-shipped`
 
 Issue: #808
@@ -123,6 +125,5 @@ mobile width.
 
 ## Handoff
 
-The exact implementation head, ready PR, and ACK state remain to be recorded.
-Do not merge without Joe's approval and do not edit generated `site/dist` or
-`site/output` content.
+The ready PR and ACK state remain to be recorded. Do not merge without Joe's
+approval and do not edit generated `site/dist` or `site/output` content.
