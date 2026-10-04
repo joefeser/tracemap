@@ -44,6 +44,16 @@ test("Web Forms capability refresh rejects claim-level drift and future-work pro
   assert.match(joined, /future-work boundary: Automatic solution-wide discovery/);
 });
 
+test("Web Forms capability refresh rejects visible capability-level drift", async (t) => {
+  const root = await fixture(t);
+  await buildSite({ root, log() {} });
+  const path = join(root, "dist", "capabilities", "index.html");
+  await writeFile(path, (await readFile(path, "utf8")).replace("Concept · source + compiled projection", "Shipped · source + compiled projection"));
+  const errors = [];
+  await validateWebFormsCapabilityRefreshDist({ dist: join(root, "dist"), errors });
+  assert.match(errors.join("\n"), /expected source-compiled visible claim label: Concept · source \+ compiled projection/);
+});
+
 test("Web Forms capability refresh audits future boundaries on each intended route", async (t) => {
   const root = await fixture(t);
   await buildSite({ root, log() {} });
@@ -162,6 +172,16 @@ test("Web Forms capability refresh scans browser-visible tokens collapsed across
   const joined = errors.join("\n");
   assert.match(joined, /manager-packet.*forbidden public material or claim.*Users/);
   assert.match(joined, /manager-packet.*forbidden public material or claim.*TraceMap/);
+});
+
+test("Web Forms capability refresh rejects passive runtime-proof wording", async (t) => {
+  const root = await fixture(t);
+  await buildSite({ root, log() {} });
+  const path = join(root, "dist", "manager-packet", "index.html");
+  await writeFile(path, (await readFile(path, "utf8")).replace("</main>", "<p>Web Forms runtime execution is proven.</p></main>"));
+  const errors = [];
+  await validateWebFormsCapabilityRefreshDist({ dist: join(root, "dist"), errors });
+  assert.match(errors.join("\n"), /manager-packet.*forbidden public material or claim.*runtime/);
 });
 
 async function fixture(t) {
