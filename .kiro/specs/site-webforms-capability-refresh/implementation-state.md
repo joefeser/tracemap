@@ -27,10 +27,10 @@
 ## Validation
 
 - `cd site && npm run build` — passed.
-- `cd site && npm test` — 1,242 passed, 0 failed, 0 skipped.
+- `cd site && npm test` — 1,244 passed, 0 failed, 0 skipped.
 - `cd site && npm run validate` — passed; 120 HTML files, 4,040 internal
   references, 119 sitemap URLs, 11 legacy .NET rows, and 13 modernization rows.
-- Focused validator suites — 29 passed across the new capability refresh,
+- Focused validator suites — 31 passed across the new capability refresh,
   manager proof-path fixtures, and general validation fixtures.
 - Desktop browser check at 1440 x 1000 — all eight audited routes rendered with
   one H1 and no document-width overflow.
@@ -51,3 +51,5 @@
 - Review repair pins discovery claim/proof metadata, validates the future-work
   boundary on each intended route, decodes and scans link targets, and rejects
   ordinary affirmative runtime/production execution wording.
+- Follow-up review repair checks the four supporting ladder blocks, binds future
+  terms to future-only wording, and safety-scans every audited discovery field.
