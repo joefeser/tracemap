@@ -362,6 +362,7 @@ public static class ScanEngine
                     targetFrameworkInfos,
                     ProjectFileReader.ReadPackageReferences(repoPath, inventory),
                     ProjectFileReader.ReadCentralPackageVersions(repoPath, inventory),
+                    ProjectFileReader.ReadProducedPackages(repoPath, inventory),
                     nugetLockfiles,
                     knownGaps,
                     repoPath,
@@ -726,6 +727,7 @@ public static class ScanEngine
         IReadOnlyList<TargetFrameworkInfo> targetFrameworks,
         IReadOnlyList<PackageReferenceInfo> packageReferences,
         IReadOnlyList<CentralPackageVersionInfo> centralPackageVersions,
+        IReadOnlyList<ProducedPackageInfo> producedPackages,
         NuGetLockfileReadResult nugetLockfiles,
         IReadOnlyList<string> knownGaps,
         string repoPath,
@@ -954,6 +956,35 @@ public static class ScanEngine
                 new EvidenceSpan(pin.PropsPath, pin.Line, pin.EndLine, null, "ProjectFileExtractor", ScannerVersions.ProjectFileExtractor),
                 targetSymbol: pin.PackageName,
                 properties: pinProperties));
+        }
+
+        foreach (var produced in producedPackages)
+        {
+            var producedProperties = new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["dependencyGroup"] = "PackageProduced",
+                ["ecosystem"] = "nuget",
+                ["manifestKind"] = "csproj",
+                ["package"] = produced.PackageId,
+                ["packageManager"] = "nuget",
+                ["packageName"] = produced.PackageId,
+                ["projectPath"] = produced.ProjectPath,
+                ["sourceKind"] = "build-file",
+                ["surfaceKind"] = "package-config",
+                ["targetFramework"] = string.Empty
+            };
+            if (!produced.ExplicitPackageId)
+                producedProperties["packageIdSource"] = "AssemblyName"; // fallback id — a weaker claim, visible to consumers
+            AddSafeVersionProperties(producedProperties, produced.Version);
+            facts.Add(FactFactory.Create(
+                manifest,
+                FactTypes.PackageProduced,
+                RuleIds.ProjectFile,
+                EvidenceTiers.Tier2Structural,
+                new EvidenceSpan(produced.ProjectPath, produced.Line, produced.Line, null, "ProjectFileExtractor", ScannerVersions.ProjectFileExtractor),
+                projectPath: produced.ProjectPath,
+                targetSymbol: produced.PackageId,
+                properties: producedProperties));
         }
 
         foreach (var entry in nugetLockfiles.Entries)

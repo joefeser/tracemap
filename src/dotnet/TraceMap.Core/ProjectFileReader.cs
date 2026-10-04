@@ -38,6 +38,16 @@ public sealed record NuGetLockfileReadResult(
     IReadOnlyList<NuGetLockfileEntry> Entries,
     IReadOnlyList<NuGetLockfileGap> Gaps);
 
+/// A package this repo PRODUCES (a packable project): PackageId (or AssemblyName fallback) with its
+/// Version/PackageVersion property. Declaration evidence from the project file only — no build, no
+/// restore, no publish proof (that remains producer-evidence.v0's publicationStatus sidecar).
+public sealed record ProducedPackageInfo(
+    string ProjectPath,
+    string PackageId,
+    string? Version,
+    bool ExplicitPackageId,
+    int Line);
+
 /// A central NuGet version pin declared in an MSBuild props file (central package management):
 /// a PackageVersion item in Directory.Packages.props (or equivalent props file). The pin is a
 /// declaration in ITS OWN file; effective-version resolution (override > central > project) is a
@@ -96,6 +106,56 @@ public static class ProjectFileReader
             .ThenBy(item => item.Version, StringComparer.Ordinal)
             .ToArray();
     }
+
+    /// Reads packages this repo produces from packable projects. Emit rules (evidence-only, no build):
+    /// - IsPackable explicitly "false" (any case) => never a producer;
+    /// - PackageId present => that id (ExplicitPackageId);
+    /// - else AssemblyName when present => that id (template defaults can lie about intent, so the
+    ///   id is marked non-explicit and consumers may treat it as a weaker claim);
+    /// - else the project is not a producer candidate.
+    /// Version: Version property, else PackageVersion property (per-project pin), else null (unevidenced).
+    /// Unsafe ids/versions are skipped (never projected) — same safe-value rules as packages.
+    public static IReadOnlyList<ProducedPackageInfo> ReadProducedPackages(string repoPath, IEnumerable<FileInventoryItem> inventory)
+    {
+        var results = new List<ProducedPackageInfo>();
+        foreach (var project in inventory.Where(item => item.Kind is "Project" or "VisualBasicProject"))
+        {
+            var fullPath = Path.Combine(repoPath, project.RelativePath);
+            if (!TryLoadXml(fullPath, out var document))
+            {
+                continue;
+            }
+
+            var packable = true;
+            string? packageId = null;
+            string? version = null;
+            int line = 1;
+            foreach (var element in document.Descendants())
+            {
+                var name = element.Name.LocalName;
+                if (name is not ("IsPackable" or "PackageId" or "Version" or "PackageVersion" or "AssemblyName")) continue;
+                var value = element.Value.Trim();
+                if (value.Length == 0) continue;
+                var el = GetLine(element);
+                if (name == "IsPackable" && value.Equals("false", StringComparison.OrdinalIgnoreCase)) { packable = false; continue; }
+                if (name == "PackageId" && packageId is null) { packageId = value; line = el; continue; }
+                if (name == "Version" && version is null) { version = value; continue; }
+                if (name == "PackageVersion" && version is null) { version = value; continue; }
+                if (name == "AssemblyName" && packageId is null) { packageId = value; line = el; } // fallback only, non-explicit
+            }
+            if (!packable || packageId is null || !IsSafeNuGetPackageId(packageId)) continue;
+            if (version is not null && !IsSafeNuGetResolvedVersion(version)) version = null; // unsafe version = unevidenced, never projected
+            results.Add(new ProducedPackageInfo(project.RelativePath, packageId, version, HasExplicitPackageId(document), line));
+        }
+
+        return results
+            .OrderBy(item => item.ProjectPath, StringComparer.Ordinal)
+            .ThenBy(item => item.PackageId, StringComparer.Ordinal)
+            .ToArray();
+    }
+
+    static bool HasExplicitPackageId(XDocument document) =>
+        document.Descendants().Any(e => e.Name.LocalName == "PackageId" && !string.IsNullOrWhiteSpace(e.Value));
 
     /// Reads central package management version pins (PackageVersion items) from MSBuild props files.
     /// Only pins with a safe package identity are returned; unsafe versions are returned verbatim —
