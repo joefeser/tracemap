@@ -225,6 +225,7 @@ public static class FactTypes
     public const string ProjectDeclared = nameof(ProjectDeclared);
     public const string PackageReferenced = nameof(PackageReferenced);
     public const string CentralPackageVersionDeclared = nameof(CentralPackageVersionDeclared);
+    public const string PackageProduced = nameof(PackageProduced);
     public const string TargetFrameworkDeclared = nameof(TargetFrameworkDeclared);
     public const string ConfigFileDeclared = nameof(ConfigFileDeclared);
     public const string SqlFileDeclared = nameof(SqlFileDeclared);
