@@ -259,14 +259,14 @@
   {
     "path": "/capabilities/",
     "title": "Capabilities",
-    "summary": "Demo-level capability map for scanner, reducer, report, language adapter, and review-packet surfaces with status labels.",
+    "summary": "Demo-level capability map for scanner, reducer, report, language adapter, review-packet, and bounded Web Forms surfaces with per-claim status labels.",
     "publicClaimLevel": "demo",
     "sourceType": "site-page",
     "hintCategory": "start",
     "preferredProofPath": "/evidence/",
     "limitations": [
       "Capability rows are status-framed and should not be upgraded beyond their supporting public proof.",
-      "Future and dev-only rows remain bounded until main evidence exists."
+      "The Web Forms ladder keeps main-backed terminal setup, concept source-plus-compiled projection, demo replay, and demo walkthrough distinct; broad support and dev-only repairs remain excluded."
     ],
     "nonClaims": [
       "No release approval, operational safety, endpoint performance, or deployment state proof.",
@@ -854,14 +854,14 @@
   {
     "path": "/proof-paths/for-managers/",
     "title": "Proof Paths for Managers",
-    "summary": "Concept-level manager and reviewer guide for reading deterministic static proof paths as evidence packets with coverage labels, limitations, stop conditions, and next-owner routing.",
+    "summary": "Concept-level manager and reviewer guide for reading deterministic static proof paths, including the four-level Web Forms handoff, with coverage labels, limitations, stop conditions, and next-owner routing.",
     "publicClaimLevel": "concept",
     "sourceType": "site-page",
     "hintCategory": "evidence",
     "preferredProofPath": "/proof-paths/",
     "limitations": [
       "The route translates proof paths into decision questions and owner routing; it is not a new scanner result, reducer result, proof source, validation result, packet generator, or approval workflow.",
-      "Manager and reviewer wording must preserve the rule or rule family, evidence tier, coverage label, limitation, non-claim, public claim level, source context, and next-owner handoff."
+      "Manager and reviewer wording must preserve the rule or rule family, evidence tier, coverage label, limitation, non-claim, public claim level, source context, and next-owner handoff; the Web Forms surfaces must not be flattened into one support claim."
     ],
     "nonClaims": [
       "No runtime behavior, production traffic, endpoint performance, outage cause, release safety, operational safety, release approval, complete coverage, autonomous approval, automated management decision, product behavior proof, or customer impact proof.",
@@ -991,14 +991,14 @@
   {
     "path": "/roadmap/",
     "title": "Roadmap Claim Ledger",
-    "summary": "Canonical concept-level ledger for public claim wording, proof paths, evidence status, wording status, and limitations.",
+    "summary": "Canonical concept-level ledger for public claim wording, proof paths, evidence status, wording status, limitations, and the bounded Web Forms claim ladder.",
     "publicClaimLevel": "concept",
     "sourceType": "site-page",
     "hintCategory": "roadmap",
     "preferredProofPath": "/proof-paths/",
     "limitations": [
       "The ledger is a presentation and governance layer, not a replacement for deterministic scanner or reducer outputs.",
-      "Concept rows need checked-in samples, generated summaries, and visible limitations before promotion."
+      "Concept rows need checked-in samples, generated summaries, and visible limitations before promotion; automatic Web Forms discovery, backend onboarding, cross-service tracing, and source-server/PDB acquisition remain future."
     ],
     "nonClaims": [
       "No runtime behavior, production traffic, deployment state, endpoint performance, release safety, operational safety, AI impact analysis, LLM analysis, or complete product coverage proof.",
@@ -1094,14 +1094,14 @@
   {
     "path": "/legacy-modernization/evidence-map/",
     "title": "Legacy Modernization Evidence Map",
-    "summary": "Concept-level reviewer-question map for organizing deterministic static repository evidence, hidden legacy surface families, coverage gaps, and proof paths during modernization planning.",
+    "summary": "Concept-level reviewer-question map that separates the main-backed Web Forms setup, concept projection, demo replay and walkthrough from hidden legacy surface families and future work.",
     "publicClaimLevel": "concept",
     "sourceType": "site-page",
     "hintCategory": "roadmap",
     "preferredProofPath": "/legacy-evidence/",
     "limitations": [
       "The route is planning context and cannot upgrade hidden legacy surface families without public-safe proof.",
-      "Named hidden rows are not support results, demo rows, or migration conclusions."
+      "Named hidden rows are not support results, demo rows, or migration conclusions; broad Web Forms event, route, navigation, and postback support remains hidden."
     ],
     "nonClaims": [
       "No runtime behavior, production telemetry, production traffic, endpoint performance, outage cause, release safety, operational safety, production dependency understanding, exploitability, database existence, package compatibility, migration feasibility, migration completeness, AI impact analysis, LLM analysis, or complete product coverage proof.",
@@ -1111,14 +1111,14 @@
   {
     "path": "/legacy-modernization/review-handoff/",
     "title": "Legacy Modernization Review Handoff",
-    "summary": "Concept-level handoff for carrying deterministic static legacy evidence into modernization owner questions with proof fields, limitations, allowed wording, and stop conditions attached.",
+    "summary": "Concept-level handoff for carrying deterministic static legacy evidence, including the four-part Web Forms claim ladder, into owner questions with proof fields, limitations, allowed wording, and stop conditions attached.",
     "publicClaimLevel": "concept",
     "sourceType": "site-page",
     "hintCategory": "use-case",
     "preferredProofPath": "/legacy-modernization/evidence-map/",
     "limitations": [
       "The route is a public-safe handoff checklist over existing static evidence surfaces, not a modernization decision, migration tool, runtime telemetry source, ownership record, or release approval surface.",
-      "Every matrix row must keep rule context, evidence tier, coverage label, proof path, limitation, owner question, allowed wording, and stop condition attached."
+      "Every matrix row must keep rule context, evidence tier, coverage label, proof path, limitation, owner question, allowed wording, and stop condition attached; candidate bridges and unresolved values remain review-tier."
     ],
     "nonClaims": [
       "No runtime behavior, production traffic, endpoint performance, outage cause, release safety, operational safety, migration success, schema compatibility, database connectivity, database execution, raw data access, AI impact analysis, LLM analysis, embeddings, vector databases, prompt classification, autonomous approval, or complete coverage proof.",
@@ -1128,14 +1128,14 @@
   {
     "path": "/legacy-dotnet/evidence/",
     "title": "Legacy .NET Evidence Lane",
-    "summary": "Concept-level status matrix for legacy .NET static evidence questions, proof-path requirements, row limitations, and conservative hidden defaults.",
+    "summary": "Concept-level status matrix for legacy .NET evidence questions with exact main-backed, demo and concept Web Forms rows plus conservative hidden defaults.",
     "publicClaimLevel": "concept",
     "sourceType": "site-page",
     "hintCategory": "evidence",
     "preferredProofPath": "/legacy-evidence/",
     "limitations": [
       "The lane is a concept-level reviewer matrix, not a scanner coverage page or modernization decision surface.",
-      "Legacy .NET surface rows remain hidden or future until branch-appropriate public-safe proof supports stronger exact wording."
+      "Only the exact Web Forms setup, projection, replay, and walkthrough rows use stronger labels; the broader legacy .NET and Web Forms families remain hidden or future."
     ],
     "nonClaims": [
       "No runtime behavior, production traffic, live endpoint existence, endpoint performance, service reachability, UI reachability, user workflow execution, outage cause, release approval, release safety, operational safety, security posture, exploitability, database existence, query execution, schema compatibility, package compatibility, migration feasibility, migration completeness, or complete product coverage proof.",
@@ -1370,14 +1370,14 @@
   {
     "path": "/manager-packet/",
     "title": "Manager Packet",
-    "summary": "Demo-level manager-facing packet explaining deterministic static evidence, rule IDs, coverage labels, generated summaries, gaps, and limitations.",
+    "summary": "Demo-level manager-facing packet explaining deterministic static evidence, rule IDs, coverage labels, generated summaries, gaps, limitations, and the bounded Web Forms claim ladder.",
     "publicClaimLevel": "demo",
     "sourceType": "site-page",
     "hintCategory": "use-case",
     "preferredProofPath": "/demo/proof-upgrades/",
     "limitations": [
       "The page summarizes public demo evidence from checked-in samples and public-safe routes.",
-      "Manager-facing summaries must keep proof paths, coverage labels, generated summary status, gaps, and limitations visible."
+      "Manager-facing summaries must keep proof paths, coverage labels, generated summary status, gaps, limitations, and distinct Web Forms claim levels visible."
     ],
     "nonClaims": [
       "No runtime behavior, production traffic, deployment state, endpoint performance, release safety, incident root cause, release approval, operational safety, or complete coverage proof.",
@@ -1625,14 +1625,14 @@
   {
     "path": "/manager-faq/",
     "title": "Manager FAQ",
-    "summary": "Concept-level stakeholder FAQ for reading TraceMap deterministic static evidence, proof boundaries, limitations, and owner follow-up.",
+    "summary": "Concept-level stakeholder FAQ for reading TraceMap deterministic static evidence, proof boundaries, the Web Forms claim ladder, limitations, and owner follow-up.",
     "publicClaimLevel": "concept",
     "sourceType": "site-page",
     "hintCategory": "use-case",
     "preferredProofPath": "/proof-paths/",
     "limitations": [
       "The FAQ is stakeholder orientation, not a product-completeness or release decision surface.",
-      "Static evidence can shape review questions but cannot replace owners, telemetry, tests, or release process."
+      "Static evidence can shape review questions but cannot replace owners, telemetry, tests, or release process; Web Forms setup, projection, replay, and walkthrough claims remain distinct."
     ],
     "nonClaims": [
       "No runtime behavior, production traffic, endpoint performance, outage cause, release safety, operational safety, or release approval proof.",
