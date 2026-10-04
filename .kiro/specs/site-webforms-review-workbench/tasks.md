@@ -20,31 +20,31 @@
 
 ## Site implementation
 
-- [ ] Verify the #806 public route and proof projection exist on the chosen
+- [x] Verify the #806 public route and proof projection exist on the chosen
       implementation base and pass their focused validators.
-- [ ] Add `/webforms/review-workbench/` at `demo` only when the dependency proof
+- [x] Add `/webforms/review-workbench/` at `demo` only when the dependency proof
       gate is satisfied; otherwise publish it as `concept` without substitute
       evidence.
-- [ ] Render the seven-step synthetic handler walkthrough with readable
+- [x] Render the seven-step synthetic handler walkthrough with readable
       source/compiled routing and per-hop evidence classifications.
-- [ ] Add public-safe evidence detail, unresolved command, coverage-gap,
+- [x] Add public-safe evidence detail, unresolved command, coverage-gap,
       next-owner, and stop-condition panels.
-- [ ] Explain partial, truncated, query-omitted, path/work-limited,
+- [x] Explain partial, truncated, query-omitted, path/work-limited,
       candidate-only, and missing-input review states without absence claims.
-- [ ] Document the separate 10,000-row client/server packet inventory bounds
+- [x] Document the separate 10,000-row client/server packet inventory bounds
       and gap-budget fallback without applying them to unrelated surfaces or
       promising that a specific overflow gap always survives saturation.
-- [ ] Reuse #806 proof assets; if any new derived asset is required, implement
+- [x] Reuse #806 proof assets; if any new derived asset is required, implement
       and validate its generator and bounded privacy-input SHA-256 contract.
-- [ ] Add the required manager, proof, docs/output, review-room,
+- [x] Add the required manager, proof, docs/output, review-room,
       modernization-handoff, gaps, static/runtime, and limitation links.
-- [ ] Register route, discovery, sitemap/navigation input, and roadmap
+- [x] Register route, discovery, sitemap/navigation input, and roadmap
       claim-ledger metadata.
-- [ ] Add focused route, dependency, evidence-field, claim, bounds, link,
+- [x] Add focused route, dependency, evidence-field, claim, bounds, link,
       discovery, sitemap, and private-data regressions.
-- [ ] Run full site build, test, validation, private-path guard, and whitespace
+- [x] Run full site build, test, validation, private-path guard, and whitespace
       checks.
-- [ ] Complete desktop and mobile browser QA across the landing, proof, and
+- [x] Complete desktop and mobile browser QA across the landing, proof, and
       workbench routes.
 - [ ] Record final route/assets, exact implementation head, validation, browser
       results, public claim level, limitations, PR, and ACK state in
@@ -52,7 +52,7 @@
 
 ## Deferred
 
-- [ ] Leave broader full-application workbench completion and any remaining
+- [x] Leave broader full-application workbench completion and any remaining
       #744 acceptance criteria to #744 or an explicitly authorized successor.
-- [ ] Feed only verified route/claim status into the later #809 capability and
+- [x] Feed only verified route/claim status into the later #809 capability and
       roadmap refresh.

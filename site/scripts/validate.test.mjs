@@ -113,6 +113,7 @@ import {
 } from "./team-evidence-handoff.mjs";
 import { testPlanningHandoffRoute } from "./test-planning-handoff.mjs";
 import { validateDist } from "./validate.mjs";
+import { route as webFormsReviewWorkbenchRoute } from "./webforms-review-workbench.mjs";
 
 test("validateDist accepts generated public sitemap and internal links", async () => {
   const root = await createDistFixture();
@@ -324,7 +325,8 @@ async function createDistFixture({
       ...swiftStoryPageRoutes,
       stakeholderObjectionGuideRoute,
       stakeholderQuestionIndexRoute,
-      "/webforms/source-plus-compiled-proof/"
+      "/webforms/source-plus-compiled-proof/",
+      webFormsReviewWorkbenchRoute
     ])
   ].map((route) => `https://tracemap.tools${route}`)
 } = {}) {
@@ -410,6 +412,7 @@ async function createDistFixture({
     stakeholderObjectionGuideRoute,
     stakeholderQuestionIndexRoute,
     "/webforms/source-plus-compiled-proof/",
+    webFormsReviewWorkbenchRoute,
     "/use-cases/",
     "/outputs/",
     "/use-cases/incident-review/",
