@@ -1,12 +1,12 @@
 # Implementation State
 
-Status: site implementation validated; PR and ACK pending
+Status: ACK-authorized review repair validated; current-head ACK rerun pending
 
 Branch: `codex/site-webforms-review-workbench`
 
 Exact implementation base: `5fd50ebec3bef40c7c0b3660a754ab08cab45982`
 
-Validated implementation commit: `4b225971bf18299103283ad1db022121d9951939`
+Initial validated implementation commit: `4b225971bf18299103283ad1db022121d9951939`
 
 PR #803 ancestry at exact base: `not-shipped`
 
@@ -14,7 +14,7 @@ Issue: #808
 
 Specification PR: https://github.com/joefeser/tracemap/pull/813
 
-Implementation PR: pending
+Implementation PR: https://github.com/joefeser/tracemap/pull/817
 
 ## Implementation decision
 
@@ -64,7 +64,8 @@ private validation output is published.
 Validated on 2026-10-03 CDT from the implementation worktree:
 
 - `cd site && npm run build`: passed.
-- `cd site && npm test`: 1,229 passed; 0 failed, skipped, cancelled, or todo.
+- `cd site && npm test`: 1,234 passed; 0 failed, skipped, cancelled, or todo
+  after the ACK-authorized review repair.
 - `cd site && npm run validate`: passed across 120 HTML files, 4,004 internal
   references, and 119 sitemap URLs.
 - `./scripts/check-private-paths.sh`: passed.
@@ -76,6 +77,17 @@ Desktop browser QA at 1440 x 1000 covered the new route. Mobile QA at 390 x
 overflow, broken images, or browser-console errors/warnings. The two wide
 evidence tables stay within independent horizontally scrollable containers at
 mobile width.
+
+## Review repair
+
+ACK authorized a consolidated repair from reviewed head
+`aa24469c31f68cd440d2b1a77f225ae657474f67`. The repair makes the route
+validator fail closed for malformed proof arrays and unresolvable implementation
+bases; binds rendered commit, command states, outcome coverage, gaps, bounds,
+discovery limitations, and evidence metadata to the reused #806 projection;
+and scans both the page and proof asset across browser-decoded and tag-collapsed
+safety surfaces. Fourteen focused route regressions pass. The repaired head
+still requires the normal exact-head ACK rerun and is not merge-approved here.
 
 ## Exact-main evidence inspected
 
@@ -125,5 +137,5 @@ mobile width.
 
 ## Handoff
 
-The ready PR and ACK state remain to be recorded. Do not merge without Joe's
+The current-head ACK result remains to be recorded. Do not merge without Joe's
 approval and do not edit generated `site/dist` or `site/output` content.
