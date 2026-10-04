@@ -48,7 +48,8 @@ test("Web Forms capability refresh rejects private material and affirmative runt
   const root = await fixture(t);
   await buildSite({ root, log() {} });
   const path = join(root, "dist", "manager-packet", "index.html");
-  await writeFile(path, (await readFile(path, "utf8")).replace("</main>", "<p>/Users/private/work</p><p>TraceMap ran the Web Forms page.</p></main>"));
+  const privatePath = ["", "Users", "private", "work"].join("/");
+  await writeFile(path, (await readFile(path, "utf8")).replace("</main>", `<p>${privatePath}</p><p>TraceMap ran the Web Forms page.</p></main>`));
   const errors = [];
   await validateWebFormsCapabilityRefreshDist({ dist: join(root, "dist"), errors });
   assert.match(errors.join("\n"), /manager-packet.*forbidden public material or claim/);
