@@ -136,7 +136,7 @@ public sealed class PackageProducedTests
     }
 
     [Fact]
-    public void ReadProducedPackages_version_outranks_packageversion_regardless_of_order()
+    public void ReadProducedPackages_packageversion_outranks_version_nuget_semantics()
     {
         const string project = """
             <Project Sdk="Microsoft.NET.Sdk">
@@ -152,7 +152,7 @@ public sealed class PackageProducedTests
 
         var produced = Assert.Single(ProjectFileReader.ReadProducedPackages(temp.Path, [new FileInventoryItem("lib.csproj", "Project", project.Length)]));
 
-        Assert.Equal("3.0.0", produced.Version); // Version property wins even when PackageVersion appears first
+        Assert.Equal("2.5.0", produced.Version); // PackageVersion outranks Version (NuGet pack semantics), regardless of XML order
         Assert.True(produced.Line >= produced.SpanStart); // span covers identity..version
     }
 
@@ -190,5 +190,24 @@ public sealed class PackageProducedTests
 
         Assert.Equal("Contoso.Real", produced.PackageId);
         Assert.True(produced.ExplicitPackageId); // AssemblyName seen FIRST must not win
+    }
+
+    [Fact]
+    public void ReadProducedPackages_last_assignment_wins_for_all_properties()
+    {
+        const string project = """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <PackageId>Contoso.Old</PackageId>
+                <PackageId>Contoso.New</PackageId>
+              </PropertyGroup>
+            </Project>
+            """;
+        using var temp = new TempDirectory();
+        File.WriteAllText(Path.Combine(temp.Path, "lib.csproj"), project);
+
+        var produced = Assert.Single(ProjectFileReader.ReadProducedPackages(temp.Path, [new FileInventoryItem("lib.csproj", "Project", project.Length)]));
+
+        Assert.Equal("Contoso.New", produced.PackageId); // MSBuild: later redefinition replaces
     }
 }

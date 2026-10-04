@@ -115,7 +115,7 @@ public static class ProjectFileReader
     /// - PackageId when present; else AssemblyName fallback for SDK-STYLE projects only, marked
     ///   packageIdSource=AssemblyName (legacy non-SDK projects would invent packages from every
     ///   AssemblyName — their ids are build artifacts, not package declarations);
-    /// - Version property preferred over PackageVersion regardless of XML order;
+    /// - PackageVersion outranks Version (NuGet pack semantics: Version is the fallback); every property is last-wins;
     /// - unsafe ids skip the project; unsafe versions emit as unevidenced (null), never projected;
     /// - the evidence span covers identity line through the version line when they differ.
     public static IReadOnlyList<ProducedPackageInfo> ReadProducedPackages(string repoPath, IEnumerable<FileInventoryItem> inventory)
@@ -132,13 +132,15 @@ public static class ProjectFileReader
             static bool IsProperty(XElement e) => e.Parent is { Name.LocalName: "PropertyGroup" };
             var sdkStyle = document.Root?.Attribute("Sdk") is not null;
 
+            // MSBuild evaluation order: property redefinitions REPLACE earlier values — every
+            // property here is LAST-wins, with its line tracked to the winning assignment.
             bool? packable = null;
             string? packageId = null;
             string? assemblyName = null;
-            string? versionProperty = null;
-            string? packageVersionProperty = null;
+            string? assemblyLine = null;
+            string? plainVersion = null; int? plainVersionLine = null;
+            string? packageVersion = null; int? packageVersionLine = null;
             int idLine = 1;
-            int? versionLine = null;
             foreach (var element in document.Descendants().Where(IsProperty))
             {
                 var name = element.Name.LocalName;
@@ -146,18 +148,25 @@ public static class ProjectFileReader
                 if (value.Length == 0) continue;
                 switch (name)
                 {
-                    case "IsPackable": packable = !value.Equals("false", StringComparison.OrdinalIgnoreCase); break; // last wins
-                    case "PackageId" when packageId is null: packageId = value; idLine = GetLine(element); break;
-                    case "AssemblyName" when assemblyName is null: assemblyName = value; break;
-                    case "Version" when versionProperty is null: versionProperty = value; versionLine ??= GetLine(element); break;
-                    case "PackageVersion" when packageVersionProperty is null: packageVersionProperty = value; versionLine ??= GetLine(element); break;
+                    case "IsPackable": packable = !value.Equals("false", StringComparison.OrdinalIgnoreCase); break;
+                    case "PackageId": packageId = value; idLine = GetLine(element); break;
+                    case "AssemblyName": assemblyName = value; assemblyLine = GetLine(element).ToString(); break;
+                    case "Version": plainVersion = value; plainVersionLine = GetLine(element); break;
+                    case "PackageVersion": packageVersion = value; packageVersionLine = GetLine(element); break;
                 }
             }
             var explicitId = packageId is not null;
-            packageId ??= sdkStyle ? assemblyName : null; // legacy projects: never an AssemblyName fallback
+            if (!explicitId && sdkStyle && assemblyName is not null)
+            {
+                packageId = assemblyName; // SDK-style fallback; the id line cites the AssemblyName itself
+                if (int.TryParse(assemblyLine, out var al)) idLine = al;
+            }
             if (packable == false || packageId is null || !IsSafeNuGetPackageId(packageId)) continue;
-            var version = versionProperty ?? packageVersionProperty; // Version outranks PackageVersion, order-independent
-            if (version is not null && !IsSafeNuGetResolvedVersion(version)) version = null; // unevidenced, never projected
+            // NuGet pack semantics: PackageVersion is the produced version; Version is its fallback.
+            // Each property is last-wins within itself; selection is by name, not XML order.
+            var version = packageVersion ?? plainVersion;
+            var versionLine = version is null ? null : packageVersion is not null ? packageVersionLine : plainVersionLine;
+            if (version is not null && !IsSafeNuGetResolvedVersion(version)) { version = null; versionLine = null; } // unevidenced, never projected
             var spanEnd = versionLine is { } vl && version is not null ? Math.Max(idLine, vl) : idLine;
             results.Add(new ProducedPackageInfo(project.RelativePath, packageId, version, explicitId, spanEnd, idLine));
         }
