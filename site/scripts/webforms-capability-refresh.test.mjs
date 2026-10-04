@@ -50,12 +50,18 @@ test("Web Forms capability refresh audits future boundaries on each intended rou
   const capabilities = join(root, "dist", "capabilities", "index.html");
   const roadmap = join(root, "dist", "roadmap", "index.html");
   await writeFile(capabilities, (await readFile(capabilities, "utf8")).replace("Still future", "Now shipped"));
-  await writeFile(roadmap, (await readFile(roadmap, "utf8")).replace("are not established", "are shipped"));
+  await writeFile(roadmap, (await readFile(roadmap, "utf8"))
+    .replace("are not established", "are shipped")
+    .replace(
+      /(<tr id="claim-webforms-future-automation"[^>]*data-evidence-status=)"future-only"([^>]*data-wording-status=)"future-facing"/,
+      '$1"evidence-backed"$2"live"'
+    ));
   const errors = [];
   await validateWebFormsCapabilityRefreshDist({ dist: join(root, "dist"), errors });
   const joined = errors.join("\n");
   assert.match(joined, /route \/capabilities\/ is missing future-only boundary wording: Still future/);
   assert.match(joined, /route \/roadmap\/ is missing future-only boundary wording: are not established/);
+  assert.match(joined, /roadmap future automation row must retain future-only evidence and future-facing wording statuses/);
 });
 
 test("Web Forms capability refresh preserves claim levels on every supporting ladder", async (t) => {
@@ -139,6 +145,22 @@ test("Web Forms capability refresh decodes link targets and rejects ordinary run
   await validateWebFormsCapabilityRefreshDist({ dist: join(root, "dist"), errors });
   const joined = errors.join("\n");
   assert.match(joined, /manager-packet.*forbidden public material or claim.*Password/);
+  assert.match(joined, /manager-packet.*forbidden public material or claim.*TraceMap/);
+});
+
+test("Web Forms capability refresh scans browser-visible tokens collapsed across tags", async (t) => {
+  const root = await fixture(t);
+  await buildSite({ root, log() {} });
+  const path = join(root, "dist", "manager-packet", "index.html");
+  const html = (await readFile(path, "utf8")).replace(
+    "</main>",
+    "<p>/Us<span>ers</span>/private/work</p><p>TraceMap pro<span>ves</span> the Web Forms page executes at runtime.</p></main>"
+  );
+  await writeFile(path, html);
+  const errors = [];
+  await validateWebFormsCapabilityRefreshDist({ dist: join(root, "dist"), errors });
+  const joined = errors.join("\n");
+  assert.match(joined, /manager-packet.*forbidden public material or claim.*Users/);
   assert.match(joined, /manager-packet.*forbidden public material or claim.*TraceMap/);
 });
 
