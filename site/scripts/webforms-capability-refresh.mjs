@@ -38,6 +38,7 @@ const forbiddenMaterial = [
 const forbiddenClaims = [
   /TraceMap (?:ran|executed|observed|launched) (?:the )?(?:Web Forms|page|website|database)/i,
   /\bTraceMap (?:proves?|verifies?|guarantees?|confirms?)\b[^.!?]{0,160}\b(?:executes?|runs?|is reachable) (?:at runtime|in production)\b/i,
+  /\bruntime (?:behavior|execution|reachability) (?:is|was) (?:proven|verified|guaranteed|confirmed)\b/i,
   /(?:customer compatibility|migration parity|complete cross-service tracing) (?:is|was) (?:proven|verified|guaranteed)/i,
   /(?:Web Forms|VB\.NET) (?:support|coverage) (?:is|was) complete/i,
   /(?:safe to run|safe to release|release approved)/i
@@ -76,14 +77,16 @@ function validateCapabilityLadder(html, errors) {
   if (!html) return;
   if (!/data-webforms-capability-audit=["']v1["']/i.test(html)) errors.push("Web Forms capability refresh is missing its capability audit marker.");
   const expected = new Map([
-    ["guided-setup", "shipped"],
-    ["source-compiled", "concept"],
-    ["local-demo", "demo"],
-    ["review-workbench", "demo"]
+    ["guided-setup", { level: "shipped", label: "Shipped · guided terminal setup" }],
+    ["source-compiled", { level: "concept", label: "Concept · source + compiled projection" }],
+    ["local-demo", { level: "demo", label: "Demo · reproducible local corpus" }],
+    ["review-workbench", { level: "demo", label: "Demo · review-workbench walkthrough" }]
   ]);
-  for (const [name, level] of expected) {
+  for (const [name, { level, label }] of expected) {
     const pattern = new RegExp(`<article\\b(?=[^>]*data-webforms-capability=["']${escapeRegex(name)}["'])(?=[^>]*data-public-claim-level=["']${level}["'])[^>]*>`, "i");
     if (!pattern.test(html)) errors.push(`Web Forms capability refresh expected ${name} claim level ${level}.`);
+    const article = extractMarkedElement(html, "article", "data-webforms-capability", name);
+    if (!article || !normalizeRenderedText(article).includes(label)) errors.push(`Web Forms capability refresh expected ${name} visible claim label: ${label}`);
   }
 }
 
