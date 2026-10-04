@@ -27,10 +27,10 @@
 ## Validation
 
 - `cd site && npm run build` — passed.
-- `cd site && npm test` — 1,247 passed, 0 failed, 0 skipped.
+- `cd site && npm test` — 1,251 passed, 0 failed, 0 skipped.
 - `cd site && npm run validate` — passed; 120 HTML files, 4,040 internal
-  references, 119 sitemap URLs, 11 legacy .NET rows, and 13 modernization rows.
-- Focused validator suites — 34 passed across the new capability refresh,
+  references, 119 sitemap URLs, 15 legacy .NET rows, and 17 modernization rows.
+- Focused validator suites — 38 passed across the new capability refresh,
   manager proof-path fixtures, and general validation fixtures.
 - Desktop browser check at 1440 x 1000 — all eight audited routes rendered with
   one H1 and no document-width overflow.
@@ -57,3 +57,5 @@
   tags and pins the roadmap future row's machine-readable status attributes.
 - Visible capability headings are now bound to their machine-readable levels,
   and passive affirmative runtime-proof wording is rejected.
+- Discovery shape now fails closed, roadmap visible levels are bound to row
+  attributes, and all four added Web Forms rows use the canonical matrix guards.

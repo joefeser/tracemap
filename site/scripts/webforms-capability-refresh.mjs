@@ -102,6 +102,9 @@ function validateRoadmapLadder(html, errors) {
   for (const [id, level] of expected) {
     const pattern = new RegExp(`<tr\\b(?=[^>]*id=["']${escapeRegex(id)}["'])(?=[^>]*data-claim-level=["']${level}["'])[^>]*>`, "i");
     if (!pattern.test(html)) errors.push(`Web Forms capability refresh roadmap expected ${id} claim level ${level}.`);
+    const row = extractMarkedElement(html, "tr", "id", id);
+    const visibleLevel = row.match(/<td\b[^>]*>\s*<code\b[^>]*>\s*([^<]+?)\s*<\/code>\s*<\/td>/i)?.[1]?.trim();
+    if (visibleLevel !== level) errors.push(`Web Forms capability refresh roadmap expected ${id} visible claim level ${level}.`);
   }
   const futureStatusPattern = /<tr\b(?=[^>]*id=["']claim-webforms-future-automation["'])(?=[^>]*data-evidence-status=["']future-only["'])(?=[^>]*data-wording-status=["']future-facing["'])[^>]*>/i;
   if (!futureStatusPattern.test(html)) errors.push("Web Forms capability refresh roadmap future automation row must retain future-only evidence and future-facing wording statuses.");
@@ -192,6 +195,10 @@ async function validateDiscovery({ dist, errors }) {
   let parsed;
   try { parsed = JSON.parse(await readFile(indexPath, "utf8")); }
   catch (error) { errors.push(`Web Forms capability refresh could not parse routes-index.json: ${error.message}`); return; }
+  if (!Array.isArray(parsed?.entries)) {
+    errors.push("Web Forms capability refresh routes-index.json entries must be an array.");
+    return;
+  }
   const expectedMetadata = new Map([
     ["/capabilities/", { publicClaimLevel: "demo", sourceType: "site-page", hintCategory: "start", preferredProofPath: "/evidence/" }],
     ["/roadmap/", { publicClaimLevel: "concept", sourceType: "site-page", hintCategory: "roadmap", preferredProofPath: "/proof-paths/" }],
@@ -203,7 +210,7 @@ async function validateDiscovery({ dist, errors }) {
     ["/proof-paths/for-managers/", { publicClaimLevel: "concept", sourceType: "site-page", hintCategory: "evidence", preferredProofPath: "/proof-paths/" }]
   ]);
   for (const [route, expected] of expectedMetadata) {
-    const entry = parsed?.entries?.find((item) => item?.path === route);
+    const entry = parsed.entries.find((item) => item?.path === route);
     if (!entry) { errors.push(`Web Forms capability refresh discovery is missing route: ${route}`); continue; }
     if (!String(entry.summary ?? "").includes("Web Forms")) errors.push(`Web Forms capability refresh discovery summary is stale for: ${route}`);
     for (const [field, value] of Object.entries(expected)) {
