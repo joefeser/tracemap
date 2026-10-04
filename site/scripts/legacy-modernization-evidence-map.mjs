@@ -24,7 +24,11 @@ const expectedRows = new Map([
   ["asmx-soap-services", { category: "legacy-surface-detection", status: "hidden" }],
   ["remoting", { category: "legacy-surface-detection", status: "hidden" }],
   ["winforms-navigation-events", { category: "legacy-surface-detection", status: "hidden" }],
+  ["webforms-guided-setup", { category: "legacy-surface-detection", status: "shipped" }],
   ["webforms-event-route-navigation", { category: "legacy-surface-detection", status: "hidden" }],
+  ["webforms-source-compiled-proof", { category: "legacy-surface-detection", status: "concept" }],
+  ["webforms-local-demo", { category: "legacy-surface-detection", status: "demo" }],
+  ["webforms-review-workbench", { category: "legacy-surface-detection", status: "demo" }],
   ["legacy-data-metadata", { category: "legacy-surface-detection", status: "hidden" }],
   ["build-environment-diagnostics", { category: "legacy-surface-detection", status: "hidden" }],
   ["flow-composition", { category: "legacy-surface-detection", status: "hidden" }]

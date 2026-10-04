@@ -74,6 +74,19 @@ test("Web Forms capability refresh audits future boundaries on each intended rou
   assert.match(joined, /roadmap future automation row must retain future-only evidence and future-facing wording statuses/);
 });
 
+test("Web Forms capability refresh binds roadmap attributes to visible claim levels", async (t) => {
+  const root = await fixture(t);
+  await buildSite({ root, log() {} });
+  const path = join(root, "dist", "roadmap", "index.html");
+  await writeFile(path, (await readFile(path, "utf8")).replace(
+    /(<tr id="claim-webforms-source-compiled-proof"[\s\S]*?<td><code>)concept(<\/code>)/,
+    "$1shipped$2"
+  ));
+  const errors = [];
+  await validateWebFormsCapabilityRefreshDist({ dist: join(root, "dist"), errors });
+  assert.match(errors.join("\n"), /roadmap expected claim-webforms-source-compiled-proof visible claim level concept/);
+});
+
 test("Web Forms capability refresh preserves claim levels on every supporting ladder", async (t) => {
   const root = await fixture(t);
   await buildSite({ root, log() {} });
@@ -129,6 +142,16 @@ test("Web Forms capability refresh safety-scans every audited discovery text fie
   assert.match(joined, /discovery summary for \/manager-packet\/ contains forbidden public material or claim.*TraceMap/);
   assert.match(joined, /discovery limitations for \/manager-packet\/ contains forbidden public material or claim.*Users/);
   assert.match(joined, /discovery nonClaims for \/manager-packet\/ contains forbidden public material or claim.*Password/);
+});
+
+test("Web Forms capability refresh reports malformed discovery entry collections", async (t) => {
+  const root = await fixture(t);
+  await buildSite({ root, log() {} });
+  const path = join(root, "dist", "routes-index.json");
+  await writeFile(path, '{"entries":{}}\n');
+  const errors = [];
+  await validateWebFormsCapabilityRefreshDist({ dist: join(root, "dist"), errors });
+  assert.match(errors.join("\n"), /routes-index\.json entries must be an array/);
 });
 
 test("Web Forms capability refresh rejects private material and affirmative runtime claims", async (t) => {
