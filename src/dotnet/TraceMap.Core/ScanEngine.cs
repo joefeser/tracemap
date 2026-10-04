@@ -964,7 +964,7 @@ public static class ScanEngine
             {
                 ["dependencyGroup"] = "PackageProduced",
                 ["ecosystem"] = "nuget",
-                ["manifestKind"] = "csproj",
+                ["manifestKind"] = "csproj", // PackageProduced: overridden below for VB projects
                 ["package"] = produced.PackageId,
                 ["packageManager"] = "nuget",
                 ["packageName"] = produced.PackageId,
@@ -975,13 +975,15 @@ public static class ScanEngine
             };
             if (!produced.ExplicitPackageId)
                 producedProperties["packageIdSource"] = "AssemblyName"; // fallback id — a weaker claim, visible to consumers
+            if (produced.ProjectPath.EndsWith(".vbproj", StringComparison.OrdinalIgnoreCase))
+                producedProperties["manifestKind"] = "vbproj";
             AddSafeVersionProperties(producedProperties, produced.Version);
             facts.Add(FactFactory.Create(
                 manifest,
                 FactTypes.PackageProduced,
                 RuleIds.ProjectFile,
                 EvidenceTiers.Tier2Structural,
-                new EvidenceSpan(produced.ProjectPath, produced.Line, produced.Line, null, "ProjectFileExtractor", ScannerVersions.ProjectFileExtractor),
+                new EvidenceSpan(produced.ProjectPath, produced.SpanStart, produced.Line, null, "ProjectFileExtractor", ScannerVersions.ProjectFileExtractor),
                 projectPath: produced.ProjectPath,
                 targetSymbol: produced.PackageId,
                 properties: producedProperties));

@@ -109,4 +109,86 @@ public sealed class PackageProducedTests
 
         Assert.Empty(ProjectFileReader.ReadProducedPackages(temp.Path, [new FileInventoryItem("lib.csproj", "Project", project.Length)]));
     }
+
+    [Fact]
+    public void ReadProducedPackages_last_ispackable_wins_and_properties_only()
+    {
+        const string project = """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <IsPackable>false</IsPackable>
+                <IsPackable>true</IsPackable>
+                <PackageId>Contoso.Order</PackageId>
+              </PropertyGroup>
+              <ItemGroup>
+                <PackageReference Include="X" Version="9.9.9" />
+                <Version>0.0.0-should-not-count</Version>
+              </ItemGroup>
+            </Project>
+            """;
+        using var temp = new TempDirectory();
+        File.WriteAllText(Path.Combine(temp.Path, "lib.csproj"), project);
+
+        var produced = Assert.Single(ProjectFileReader.ReadProducedPackages(temp.Path, [new FileInventoryItem("lib.csproj", "Project", project.Length)]));
+
+        Assert.Equal("Contoso.Order", produced.PackageId); // last IsPackable wins -> emitted
+        Assert.Null(produced.Version); // ItemGroup <Version> is not a property — never a producer version
+    }
+
+    [Fact]
+    public void ReadProducedPackages_version_outranks_packageversion_regardless_of_order()
+    {
+        const string project = """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <PackageVersion>2.5.0</PackageVersion>
+                <PackageId>Contoso.Pin</PackageId>
+                <Version>3.0.0</Version>
+              </PropertyGroup>
+            </Project>
+            """;
+        using var temp = new TempDirectory();
+        File.WriteAllText(Path.Combine(temp.Path, "lib.csproj"), project);
+
+        var produced = Assert.Single(ProjectFileReader.ReadProducedPackages(temp.Path, [new FileInventoryItem("lib.csproj", "Project", project.Length)]));
+
+        Assert.Equal("3.0.0", produced.Version); // Version property wins even when PackageVersion appears first
+        Assert.True(produced.Line >= produced.SpanStart); // span covers identity..version
+    }
+
+    [Fact]
+    public void ReadProducedPackages_legacy_projects_never_fallback_to_assemblyname()
+    {
+        const string legacy = """
+            <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+              <PropertyGroup>
+                <AssemblyName>fluentjdf</AssemblyName>
+              </PropertyGroup>
+            </Project>
+            """;
+        using var temp = new TempDirectory();
+        File.WriteAllText(Path.Combine(temp.Path, "legacy.csproj"), legacy);
+
+        Assert.Empty(ProjectFileReader.ReadProducedPackages(temp.Path, [new FileInventoryItem("legacy.csproj", "Project", legacy.Length)]));
+    }
+
+    [Fact]
+    public void ReadProducedPackages_packageid_overrides_earlier_assemblyname()
+    {
+        const string project = """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <AssemblyName>some.build.name</AssemblyName>
+                <PackageId>Contoso.Real</PackageId>
+              </PropertyGroup>
+            </Project>
+            """;
+        using var temp = new TempDirectory();
+        File.WriteAllText(Path.Combine(temp.Path, "lib.csproj"), project);
+
+        var produced = Assert.Single(ProjectFileReader.ReadProducedPackages(temp.Path, [new FileInventoryItem("lib.csproj", "Project", project.Length)]));
+
+        Assert.Equal("Contoso.Real", produced.PackageId);
+        Assert.True(produced.ExplicitPackageId); // AssemblyName seen FIRST must not win
+    }
 }
