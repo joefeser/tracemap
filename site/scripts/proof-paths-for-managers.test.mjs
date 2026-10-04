@@ -155,7 +155,11 @@ async function createFixture({
     routeEntry(databaseDesignReviewRoute),
     routeEntry(databaseDesignReviewProofRoute),
     routeEntry("/sql/operator-handoff/proof-packet/"),
+    routeEntry("/capabilities/"),
+    routeEntry("/roadmap/"),
+    routeEntry("/webforms/"),
     routeEntry("/webforms/source-plus-compiled-proof/"),
+    routeEntry("/webforms/local-demo/"),
     routeEntry(webFormsReviewWorkbenchRoute)
   ],
   includeInboundLinks = true,
@@ -170,7 +174,11 @@ async function createFixture({
     databaseDesignReviewRoute,
     databaseDesignReviewProofRoute,
     "/sql/operator-handoff/proof-packet/",
+    "/capabilities/",
+    "/roadmap/",
+    "/webforms/",
     "/webforms/source-plus-compiled-proof/",
+    "/webforms/local-demo/",
     webFormsReviewWorkbenchRoute
   ]);
   const source = pageHtml ?? (await page());
