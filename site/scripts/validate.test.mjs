@@ -325,7 +325,9 @@ async function createDistFixture({
       ...swiftStoryPageRoutes,
       stakeholderObjectionGuideRoute,
       stakeholderQuestionIndexRoute,
+      "/webforms/",
       "/webforms/source-plus-compiled-proof/",
+      "/webforms/local-demo/",
       webFormsReviewWorkbenchRoute
     ])
   ].map((route) => `https://tracemap.tools${route}`)
@@ -411,7 +413,9 @@ async function createDistFixture({
     ...swiftStoryPageRoutes,
     stakeholderObjectionGuideRoute,
     stakeholderQuestionIndexRoute,
+    "/webforms/",
     "/webforms/source-plus-compiled-proof/",
+    "/webforms/local-demo/",
     webFormsReviewWorkbenchRoute,
     "/use-cases/",
     "/outputs/",
