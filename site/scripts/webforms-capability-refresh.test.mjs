@@ -44,6 +44,32 @@ test("Web Forms capability refresh rejects claim-level drift and future-work pro
   assert.match(joined, /future-work boundary: Automatic solution-wide discovery/);
 });
 
+test("Web Forms capability refresh audits future boundaries on each intended route", async (t) => {
+  const root = await fixture(t);
+  await buildSite({ root, log() {} });
+  const path = join(root, "dist", "capabilities", "index.html");
+  await writeFile(path, (await readFile(path, "utf8")).replaceAll("Automatic solution-wide discovery", "Automatic repository onboarding"));
+  const errors = [];
+  await validateWebFormsCapabilityRefreshDist({ dist: join(root, "dist"), errors });
+  assert.match(errors.join("\n"), /route \/capabilities\/ is missing future-work boundary: Automatic solution-wide discovery/);
+});
+
+test("Web Forms capability refresh pins discovery claim and proof metadata", async (t) => {
+  const root = await fixture(t);
+  await buildSite({ root, log() {} });
+  const path = join(root, "dist", "routes-index.json");
+  const index = JSON.parse(await readFile(path, "utf8"));
+  const entry = index.entries.find((item) => item.path === "/manager-packet/");
+  entry.publicClaimLevel = "shipped";
+  entry.preferredProofPath = "/capabilities/";
+  await writeFile(path, `${JSON.stringify(index, null, 2)}\n`);
+  const errors = [];
+  await validateWebFormsCapabilityRefreshDist({ dist: join(root, "dist"), errors });
+  const joined = errors.join("\n");
+  assert.match(joined, /discovery publicClaimLevel for \/manager-packet\/ must be demo/);
+  assert.match(joined, /discovery preferredProofPath for \/manager-packet\/ must be \/demo\/proof-upgrades\//);
+});
+
 test("Web Forms capability refresh rejects private material and affirmative runtime claims", async (t) => {
   const root = await fixture(t);
   await buildSite({ root, log() {} });
@@ -53,6 +79,22 @@ test("Web Forms capability refresh rejects private material and affirmative runt
   const errors = [];
   await validateWebFormsCapabilityRefreshDist({ dist: join(root, "dist"), errors });
   assert.match(errors.join("\n"), /manager-packet.*forbidden public material or claim/);
+});
+
+test("Web Forms capability refresh decodes link targets and rejects ordinary runtime overclaims", async (t) => {
+  const root = await fixture(t);
+  await buildSite({ root, log() {} });
+  const path = join(root, "dist", "manager-packet", "index.html");
+  const html = (await readFile(path, "utf8")).replace(
+    "</main>",
+    '<a href="/limitations/?Password&#61;synthetic">Boundary</a><p>TraceMap proves the Web Forms page executes at runtime.</p></main>'
+  );
+  await writeFile(path, html);
+  const errors = [];
+  await validateWebFormsCapabilityRefreshDist({ dist: join(root, "dist"), errors });
+  const joined = errors.join("\n");
+  assert.match(joined, /manager-packet.*forbidden public material or claim.*Password/);
+  assert.match(joined, /manager-packet.*forbidden public material or claim.*TraceMap/);
 });
 
 async function fixture(t) {
