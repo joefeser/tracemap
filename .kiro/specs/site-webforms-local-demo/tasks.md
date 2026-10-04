@@ -16,30 +16,30 @@
 
 ## Future implementation
 
-- [ ] Reverify `origin/main`, PR #801's exact-tree durable result, and PR #803's
+- [x] Reverify `origin/main`, PR #801's exact-tree durable result, and PR #803's
   ancestry immediately before implementing public copy.
-- [ ] Confirm issue #806's public-safe projection is merged and has the fields
+- [x] Confirm issue #806's public-safe projection is merged and has the fields
   needed by the selected examples; stop or separately specify any new
   machine-readable projection rather than importing raw run artifacts.
-- [ ] Add `/webforms/local-demo/` with the replay choice, fresh-clone recipe,
+- [x] Add `/webforms/local-demo/` with the replay choice, fresh-clone recipe,
   artifact map, layout/query examples, receipt provenance, failure matrix,
   gaps, limitations, and owner next steps.
-- [ ] Add page/discovery/sitemap metadata with explicit claim levels,
+- [x] Add page/discovery/sitemap metadata with explicit claim levels,
   limitations, and non-claims.
-- [ ] Update the site claim ledger and focused secondary links from guided
+- [x] Update the site claim ledger and focused secondary links from guided
   setup, source-plus-compiled proof, validation, examples, outputs,
   limitations, capabilities, roadmap, and later the workbench.
-- [ ] Add focused route, provenance, hash, Windows-boundary, failure-matrix,
+- [x] Add focused route, provenance, hash, Windows-boundary, failure-matrix,
   claim, link, responsive-layout, and private/raw-data validators with mutation
   regressions.
-- [ ] Verify the documented instructions from a disposable clean clone or
+- [x] Verify the documented instructions from a disposable clean clone or
   equivalent exact-tree worktree and exercise the cheap fail-closed guard
   cases; record Windows-only cases from their exact durable runner evidence.
-- [ ] Run focused tests, `cd site && npm test`, `npm run build`,
+- [x] Run focused tests, `cd site && npm test`, `npm run build`,
   `npm run validate`, `./scripts/check-private-paths.sh`, and
   `git diff --check`.
-- [ ] Perform desktop and mobile browser checks for `/webforms/local-demo/`
+- [x] Perform desktop and mobile browser checks for `/webforms/local-demo/`
   and its guided-setup/source-proof link path.
-- [ ] Record the implementation branch, exact base/head, validation, browser
+- [x] Record the implementation branch, exact base/head, validation, browser
   results, public claim levels, limitations, PR, and ACK state in
   `implementation-state.md`.

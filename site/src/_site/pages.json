@@ -155,6 +155,11 @@
     "priority": "0.8"
   },
   {
+    "path": "/webforms/local-demo/",
+    "changefreq": "monthly",
+    "priority": "0.8"
+  },
+  {
     "path": "/legacy-data-surface/",
     "changefreq": "monthly",
     "priority": "0.7"
