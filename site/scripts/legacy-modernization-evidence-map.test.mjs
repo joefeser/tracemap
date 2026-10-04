@@ -42,6 +42,15 @@ test("legacy modernization evidence map guard rejects missing required rows", as
   assert.match(validateLegacyModernizationEvidenceMapHtml(html).join("\n"), /missing evidence-map row: asmx-soap-services/);
 });
 
+test("legacy modernization evidence map guard registers the added Web Forms rows", async () => {
+  const html = (await readFile(pageSource, "utf8"))
+    .replace('data-map-row="webforms-guided-setup" data-row-category="legacy-surface-detection" data-public-status="shipped"', 'data-map-row="webforms-guided-setup" data-row-category="legacy-surface-detection" data-public-status="concept"')
+    .replace('data-map-row="webforms-review-workbench"', 'data-map-row="webforms-review-workbench-removed"');
+  const errors = validateLegacyModernizationEvidenceMapHtml(html).join("\n");
+  assert.match(errors, /webforms-guided-setup.*expected shipped/);
+  assert.match(errors, /missing evidence-map row: webforms-review-workbench/);
+});
+
 test("legacy modernization evidence map guard rejects private material and unsupported impact wording", async () => {
   const localPathLeak = `${String.fromCharCode(47)}Users/example/private-sample`;
   const cases = [

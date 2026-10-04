@@ -51,6 +51,15 @@ test("legacy .NET evidence lane guard requires eight matrix fields", async () =>
   assert.match(validateLegacyDotnetEvidenceLaneHtml(html).join("\n"), /winforms has 1 data cells; expected 8/);
 });
 
+test("legacy .NET evidence lane guard registers the added Web Forms rows", async () => {
+  const html = (await readFile(pageSource, "utf8"))
+    .replace('data-lane-row="webforms-guided-setup" data-row-category="legacy-surface" data-public-status="shipped"', 'data-lane-row="webforms-guided-setup" data-row-category="legacy-surface" data-public-status="concept"')
+    .replace(/<tr data-lane-row="webforms-review-workbench"[\s\S]*?<\/tr>/, '<tr data-lane-row="webforms-review-workbench" data-row-category="legacy-surface" data-public-status="demo"><td>Review</td></tr>');
+  const errors = validateLegacyDotnetEvidenceLaneHtml(html).join("\n");
+  assert.match(errors, /webforms-guided-setup.*expected shipped/);
+  assert.match(errors, /webforms-review-workbench has 1 data cells; expected 8/);
+});
+
 test("legacy .NET evidence lane guard rejects private material and unsupported wording", async () => {
   const localPathLeak = `${String.fromCharCode(47)}Users/example/private-sample`;
   const cases = [
