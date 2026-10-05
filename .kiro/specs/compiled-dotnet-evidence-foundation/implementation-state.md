@@ -20,7 +20,14 @@ passes 3,272 tests with zero failures and one Windows ASP.NET publish skip
 Python 64 and Python endpoint smoke pass. Artifact
 validator self-tests pass 7/7 (Python emitted an existing SQLite ResourceWarning);
 private-path and whitespace guards pass. Locked restore and CLI artifact conformance also pass.
-Cross-platform CI and live ACK remain separate PR gates.
+The first PR CI run passed the Linux full suite and public Windows corpus/
+mutation checks but exposed a Windows cleanup failure in the newly included
+existing CLI reconciliation test (79 passed, one failed). Its pooled SQLite
+verification connection retained the index handle after disposal. Disable
+pooling only for that fixture connection; retain every evidence assertion and
+the Windows CI gate. Post-fix warning-as-error metadata/source run passes 80/80 with no warnings;
+full local totals above precede this test-only pooling correction. Fresh
+cross-platform CI and ACK are required on the repair head.
 
 Commands from this worktree (logs retained under `/tmp/tracemap-767-source-*`):
 
@@ -29,6 +36,7 @@ dotnet restore src/dotnet/TraceMap.sln --locked-mode
 dotnet build src/dotnet/TraceMap.sln --no-restore -warnaserror
 dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter 'FullyQualifiedName~Optional_source_matrix' -warnaserror
 dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-build --no-restore --filter 'FullyQualifiedName~ManagedMetadataExtractorTests|FullyQualifiedName~SourceMetadataReconciliationTests'
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter 'FullyQualifiedName~ManagedMetadataExtractorTests|FullyQualifiedName~SourceMetadataReconciliationTests' -warnaserror
 dotnet test src/dotnet/TraceMap.sln --no-build --no-restore --logger 'console;verbosity=normal'
 dotnet run --project src/dotnet/TraceMap.Cli --no-build -- scan --repo samples/modern-sample --out /tmp/tracemap-767-source-cli
 python3 scripts/validate-adapter-artifacts.py /tmp/tracemap-767-source-cli

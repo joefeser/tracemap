@@ -413,7 +413,12 @@ public sealed partial class SourceMetadataReconciliationTests
                 entry => entry.ReconciliationState == "exact-one-candidate" && entry.CompiledProvenanceState == "bound");
             Assert.Contains("Source/metadata reconciliation", await File.ReadAllTextAsync(Path.Combine(first, "report.md")), StringComparison.Ordinal);
 
-            using var connection = new SqliteConnection($"Data Source={Path.Combine(first, "index.sqlite")}");
+            // A pooled handle survives disposal and prevents fixture deletion on Windows.
+            using var connection = new SqliteConnection(new SqliteConnectionStringBuilder
+            {
+                DataSource = Path.Combine(first, "index.sqlite"),
+                Pooling = false
+            }.ToString());
             connection.Open();
             using var command = connection.CreateCommand();
             command.CommandText = "select count(*) from facts where rule_id = $rule and fact_type = $type and source_symbol is not null and target_symbol is not null";
