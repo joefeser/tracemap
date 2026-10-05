@@ -73,3 +73,9 @@ slices and require an implementation-state update before work begins.
   sparse setter-only parameter selection, and pin C#/VB/F# marker evidence
   with positive, negative and reader-disagreement regressions. Default-value
   semantics, F# source extraction and broad #767 acceptance remain open.
+
+- [x] 14. Bounded #767 source optional-marker continuation: prove numeric wide
+  C#/VB source-to-bound-metadata joins with both endpoint evidence envelopes;
+  reject noncanonical/mismatched markers and missing/ambiguous candidates,
+  retain summary omission commitments, and include source reconciliation in
+  portable cross-platform CI. No production sorting change was necessary.

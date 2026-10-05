@@ -7,7 +7,7 @@ using TraceMap.Core;
 
 namespace TraceMap.Tests;
 
-public sealed class SourceMetadataReconciliationTests
+public sealed partial class SourceMetadataReconciliationTests
 {
     [Fact]
     public void Bound_csharp_fixture_reconciles_exact_complete_identities()
