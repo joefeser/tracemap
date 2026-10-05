@@ -134,6 +134,12 @@ Namespace TraceMap.CompiledFixtures.Equivalence
 End Namespace
 
 Namespace TraceMap.CompiledFixtures.Equivalence
+    Public NotInheritable Class OptionShape
+        Public Shared Function NullableRoundtrip(value As Integer?) As Integer?
+            Return value
+        End Function
+    End Class
+
     Public NotInheritable Class OptionalShape
         Public Shared Function Required(value As Integer) As Integer
             Return value

@@ -1,3 +1,66 @@
+# Current continuation: #767 nullable/F# option matrix (2026-10-05)
+
+Branch `codex/767-nullable-option-matrix`, based on verified #822 merge
+`756368375582a9e0f10cceab18890e9905261b28`. Main remains `7f026f5a`.
+No open PR or competing worktree was found; unrelated Base44 edits and other
+worktrees were preserved. Scope: public fixture/test matrix only. No production
+extractor, schema, rule, identity encoding or version change.
+
+Delivered: three matched Nullable<Int32> methods; distinct FSharpOption and
+FSharpValueOption signatures; F# ?arg option-valued signature without CLI
+optional markers; exact metadata/provenance goldens, determinism, duplicate
+ambiguity and malformed/member-budget gaps. The bound F# regression retains
+all four new methods while withholding all source reconciliation edges.
+FSharp.Core is pinned to package 10.1.302 / assembly 10.1.0.0. Eight new tests
+and one strengthened existing test pass; warning-as-error build is clean.
+The surrounding compiled/PDB/IL/rewrite suite passes 306/306. Full .NET
+validation passes 3,280 tests, zero failures, one Windows ASP.NET publish skip
+(3,281 total, 17.77 minutes). Cross-platform CI and ACK remain separate PR gates.
+Two CLI scans produce 359 facts each with six OptionShape methods, three
+signature shapes, no reader disagreement and byte-identical facts/reports;
+artifact conformance passes. TypeScript 258, JVM 36, Python 64 and Python
+endpoint smoke pass. Artifact validator self-tests pass 7/7 (the unchanged
+Python script reports a SQLite ResourceWarning); private-path, Kiro self-test
+and whitespace guards pass.
+
+Commands from this worktree (logs `/tmp/tracemap-767-option-*`):
+
+```sh
+dotnet restore src/dotnet/TraceMap.sln --locked-mode
+dotnet build src/dotnet/TraceMap.sln --no-restore -warnaserror
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter 'FullyQualifiedName~Nullable_option_matrix|FullyQualifiedName~Fsharp_fixture_retains' -warnaserror
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-build --no-restore --filter 'FullyQualifiedName~ManagedMetadataExtractorTests|FullyQualifiedName~SourceMetadataReconciliationTests|FullyQualifiedName~PortablePdbExtractorTests|FullyQualifiedName~IlBodyEvidenceExtractorTests|FullyQualifiedName~IlRewrite'
+dotnet test src/dotnet/TraceMap.sln --no-build --no-restore --logger 'console;verbosity=normal'
+npm ci --prefix src/typescript
+npm run check --prefix src/typescript
+JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home gradle -p src/jvm test
+python3 -m venv /tmp/tracemap-767-option-python-venv
+/tmp/tracemap-767-option-python-venv/bin/python -m pip install -e 'src/python[dev]'
+/tmp/tracemap-767-option-python-venv/bin/python -m pytest src/python/tests
+PYTHON_BIN=/tmp/tracemap-767-option-python-venv/bin/python ./scripts/smoke-python-endpoints.sh
+python3 scripts/test_validate_adapter_artifacts.py
+./scripts/check-private-paths.sh
+node scripts/kiro-review.mjs --self-test
+git diff --check
+```
+
+CLI smoke (run twice with fresh temporary outputs; use absolute fixture paths):
+
+```sh
+dotnet run --project src/dotnet/TraceMap.Cli --no-build -- scan --repo samples/modern-sample --out "$smoke_output" --compiled-input "$fixture_root/csharp/bin/Debug/net10.0/CompiledEvidence.CSharp.dll" --compiled-input "$fixture_root/vb/bin/Debug/net10.0/CompiledEvidence.VisualBasic.dll" --compiled-input "$fixture_root/fsharp/bin/Debug/net10.0/CompiledEvidence.FSharp.dll"
+python3 scripts/validate-adapter-artifacts.py "$smoke_output"
+```
+
+Limits: only documented metadata shape equivalence. No F# source extraction,
+option runtime/allocation semantics, default substitution, PDB/IL ownership or
+rewrite equivalence is inferred. No private/Windows worker was invoked. Source
+adapter OSS smokes are deferred because source extraction is unchanged. The
+private catalog and independent Windows PDB oracle remain unavailable; all
+five epic issues and Tasks 10/11 remain open. Next: another bounded reviewed
+language dimension, not full epic completion.
+
+---
+
 # Current continuation: #767 bound source optional-marker coverage (2026-10-05)
 
 Branch `codex/767-source-optional-ordinals`, based on verified #821 merge
