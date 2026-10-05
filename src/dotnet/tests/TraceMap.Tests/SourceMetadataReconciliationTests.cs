@@ -157,6 +157,9 @@ public sealed partial class SourceMetadataReconciliationTests
         var fixtureCase = ReadCase("FS-RECON-UNSUPPORTED-003");
 
         Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.ManagedMethodDeclared && fact.TargetSymbol == fixtureCase.MetadataIdentity);
+        Assert.Equal(4, result.Facts.Count(fact => fact.FactType == FactTypes.ManagedMethodDeclared
+            && fact.TargetSymbol!.Contains("|names:11:OptionShape|", StringComparison.Ordinal)
+            && fact.Properties["metadataName"] != ".ctor"));
         Assert.DoesNotContain(result.Facts, fact => fact.FactType == FactTypes.SourceMetadataIdentityReconciled);
         var gap = Assert.Single(result.Facts, fact => fact.Properties.GetValueOrDefault("gapKind") == "SourceMetadataReconciliationUnsupportedLanguage");
         Assert.Equal("fsharp", gap.Properties["language"]);

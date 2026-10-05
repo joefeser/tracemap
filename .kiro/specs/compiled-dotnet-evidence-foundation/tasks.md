@@ -79,3 +79,9 @@ slices and require an implementation-state update before work begins.
   reject noncanonical/mismatched markers and missing/ambiguous candidates,
   retain summary omission commitments, and include source reconciliation in
   portable cross-platform CI. No production sorting change was necessary.
+
+- [x] 15. Bounded #767 nullable/option continuation: matched public C#/VB/F#
+  Nullable<Int32> signature goldens, distinct F# option/voption and ?arg
+  metadata, duplicate/malformed/member-limit/determinism tests, and explicit
+  F# source-unsupported coverage. Pin the option dependency scope; runtime,
+  default-value semantics and broader language/epic acceptance remain open.

@@ -4164,3 +4164,9 @@ ordinals, both source/metadata evidence endpoints, comparator rejection and
 summary bounds. The portable local-distribution lane now includes all
 `SourceMetadataReconciliationTests` alongside `ManagedMetadataExtractorTests`.
 See the [case matrix](validation/CLR_SIGNATURE_EQUIVALENCE_MATRIX.md#bound-source-optional-marker-continuation).
+
+For the nullable/F# option matrix, use
+`FullyQualifiedName~Nullable_option_matrix|FullyQualifiedName~Fsharp_fixture_retains`.
+The fixture pins FSharp.Core 10.1.302 and verifies Nullable, option, value-option
+and F# optional-argument metadata without claiming F# source extraction. See
+[the case matrix](validation/CLR_SIGNATURE_EQUIVALENCE_MATRIX.md#nullable-and-f-option-continuation).
