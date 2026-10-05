@@ -4157,3 +4157,10 @@ The optional-parameter continuation uses the `Optional_parameter` filter in
 that same metadata class. It requires independent reader agreement on markers,
 numeric ordering beyond ordinal 9, and sparse setter-only Param-row handling.
 Marker equality does not prove equal default constants or caller behavior.
+
+For the bound C#/VB optional-marker source join, run the
+`FullyQualifiedName~Optional_source_matrix` filter. It covers wide numeric
+ordinals, both source/metadata evidence endpoints, comparator rejection and
+summary bounds. The portable local-distribution lane now includes all
+`SourceMetadataReconciliationTests` alongside `ManagedMetadataExtractorTests`.
+See the [case matrix](validation/CLR_SIGNATURE_EQUIVALENCE_MATRIX.md#bound-source-optional-marker-continuation).
