@@ -94,7 +94,7 @@ slices and require an implementation-state update before work begins.
 
 - [x] 17. Bounded #767 generic-constraint continuation: public C#/VB/F# free,
   reference, value, constructor and interface constraints; independent raw
-  metadata oracles and exact method-token joins; preserve F# struct encoding
+  metadata oracles and exact single/combined-input method-token joins; preserve F# struct encoding
   differences, rejection/determinism coverage and unsupported-source boundary.
   Production constraint facts and full constraint equivalence remain open.
 

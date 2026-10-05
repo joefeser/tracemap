@@ -4,6 +4,17 @@ Branch `codex/767-default-value-matrix`, base #825 merge
 `74364fe5eb4168757d508a232d59958d21eb73a3`; target dev. No competing open PR
 or active worktree found. Existing worktrees and unrelated Base44 edits retained.
 
+ACK repair: Qodo identified that combined-scan tokens were only format-checked
+while exact token assertions covered single-input scans. The same pattern
+existed in the constraint matrix. Both now select one combined endpoint and
+assert its exact raw MethodDef token, signature and optional markers against
+the single-input observation. A temporary combined-token corruption failed all
+11 default/constraint oracle rows; the mutation was removed. Post-repair focused
+validation passes 20/20 with warnings as errors; surrounding metadata/source/
+PDB/IL/rewrite validation passes 335/335 (2m47s). Privacy/spec/whitespace guards
+pass. The full-suite result below predates
+this assertion-only repair; fresh full coverage will run in CI.
+
 Scope: six DefaultShape methods per C#/VB/F# fixture; required/no-default,
 integer 7/9, string/null and decimal attribute encoding. Ten new metadata cases
 plus strengthened bound F# regression. SRM raw constant/attribute evidence and
@@ -26,6 +37,8 @@ typing null as string fixed the fixture.
 Commands from this worktree (logs `/tmp/tracemap-767-defaults-*`):
 
 ```sh
+# Post-repair focused command (surrounding command below also rerun):
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter 'FullyQualifiedName~Default_value_matrix|FullyQualifiedName~Generic_constraint_matrix|FullyQualifiedName~Fsharp_fixture_retains' -warnaserror
 dotnet restore src/dotnet/TraceMap.sln --locked-mode
 dotnet build src/dotnet/TraceMap.sln --no-restore -warnaserror
 dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter 'FullyQualifiedName~Default_value_matrix|FullyQualifiedName~Fsharp_fixture_retains' -warnaserror
