@@ -132,3 +132,23 @@ Namespace TraceMap.CompiledFixtures.Equivalence
         End Function
     End Class
 End Namespace
+
+Namespace TraceMap.CompiledFixtures.Equivalence
+    Public NotInheritable Class OptionalShape
+        Public Shared Function Required(value As Integer) As Integer
+            Return value
+        End Function
+        Public Shared Function OptionalSeven(Optional value As Integer = 7) As Integer
+            Return value
+        End Function
+        Public Shared Function OptionalNine(Optional value As Integer = 9) As Integer
+            Return value
+        End Function
+        Public Shared Function Wide(Optional p0 As Integer = 0, Optional p1 As Integer = 0,
+            Optional p2 As Integer = 0, Optional p3 As Integer = 0, Optional p4 As Integer = 0,
+            Optional p5 As Integer = 0, Optional p6 As Integer = 0, Optional p7 As Integer = 0,
+            Optional p8 As Integer = 0, Optional p9 As Integer = 0, Optional p10 As Integer = 0) As Integer
+            Return p10
+        End Function
+    End Class
+End Namespace

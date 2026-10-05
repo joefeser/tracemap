@@ -85,3 +85,58 @@ Historical status pages describe earlier slices; promotion to main establishes
 ancestry only. The private dependency blocker is the last recorded result from
 #788, not a new inspection or attempted private run. No Windows/private worker
 was invoked for this slice. Tasks 10 and 11 remain unchecked.
+
+## Optional-parameter agreement continuation
+
+Base: `origin/dev` `e9212c53acbdfc83e8dbfc4a83c2272576715db2`, the verified
+merge of #820. Branch: `codex/767-optional-parameter-evidence`. #767 remains
+open; this extends the marker matrix, not default-value or full API equivalence.
+
+`OptionalShape` in each public language fixture supplies a required parameter,
+optional parameters with source defaults 7 and 9, and an eleven-parameter
+optional method. C#/VB use their source optional syntax; F# uses explicit CLI
+`Optional` and `DefaultParameterValue` attributes. This is not F# `?arg` /
+`FSharpOption<T>` source semantics or F# source extraction.
+
+The existing `optionalParameterOrdinals` property is consumed by source
+reconciliation, so equal member identities are insufficient when the readers
+disagree on these markers. `managed-metadata/0.1.3+cecil-0.11.6` compares that
+property before admitting a member. SRM now sorts by numeric sequence number
+before formatting the zero-based ordinals. For a setter-only indexed property,
+it selects Param rows by signature sequence position, excluding the setter
+value even when an index parameter has no Param row. These are additive
+agreement checks; identity encoding and fact schemas are unchanged.
+
+| Case | Input / oracle | Expected evidence / non-claim |
+| --- | --- | --- |
+| CLR-OPT-001 | Required and optional Int32 methods in C#/VB/F# | Equal signature goldens; markers empty versus `0`; three distinct endpoints for each named method |
+| CLR-OPT-002 | Source defaults 7 versus 9 | Both markers are `0`; default-value equality is explicitly unclaimed |
+| CLR-OPT-003 | Eleven optional parameters in each language | Exact `0,1,2,3,4,5,6,7,8,9,10`; no reader disagreement |
+| CLR-OPT-004 | Injected method/property reader observations with equal identities but differing, missing or reordered markers | `CrossCheck` returns the disputed row and `MetadataReaderDisagreement`; identical markers are the positive control |
+| CLR-OPT-005 | Cecil-produced setter-only property, unnamed/unflagged index parameter, optional value | Independent SRM oracle proves only Param sequence 2 exists; property marker is empty, setter method marker is `1` |
+| CLR-OPT-006 | Same property with optional index | SRM proves sequences 1 and 2; property marker is `0`, setter method marker is `0,1` |
+
+The positive fixtures use `dotnet.compiled.member.v1` / Tier2 with exact
+commit, extractor version, metadata locations and generator/input commitments.
+The ordinary disagreement path withholds disputed member rows and emits
+`dotnet.compiled.gap.v1` / Tier4; it cannot invent a source join. The previous
+CLR-SIG-008–012 duplicate, malformed-header and member-limit regressions run
+against the expanded assemblies as well. The prior reversed-input test covers
+byte determinism of all emitted facts, including the new optional methods.
+No new derived machine-readable artifact is introduced.
+
+Regression sequence: both disagreement tests failed on the merged base.
+Enabling the comparison alone then failed the wide-method and sparse-setter
+cases, proving the two SRM normalization defects before repair. The final
+focused optional/signature filter passes 20/20.
+
+```sh
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter 'FullyQualifiedName~Optional_parameter|FullyQualifiedName~Clr_signature' -warnaserror
+```
+
+The existing cross-platform metadata CI filter includes all five added test cases.
+Source-adapter OSS smokes remain deferred because source extraction is
+unchanged; required local adapter checks, full .NET tests and the compiled CLI
+smoke are recorded in the implementation-state note. Windows/private-corpus
+acceptance and the independent ILDAsm PDB oracle remain separate outstanding
+work.

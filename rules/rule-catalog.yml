@@ -124,13 +124,14 @@ rules:
 
   - id: dotnet.compiled.member.v1
     name: Managed type and member metadata identity
-    description: Records exact metadata identities for types, methods, constructors, fields, properties, and events with full signatures and module-local token locations.
+    description: Records exact metadata identities for types, methods, constructors, fields, properties, and events with full signatures and module-local token locations; method and property optional-parameter ordinals require independent Cecil/SRM agreement.
     evidenceTier: Tier2Structural
     emits: [ManagedTypeDeclared, ManagedMethodDeclared, ManagedFieldDeclared, ManagedPropertyDeclared, ManagedEventDeclared, AnalysisGap]
     limitations:
       - A metadata declaration does not prove source ownership, runtime execution, dispatch, reachability, behavior, build freshness, or impact.
       - Metadata tokens are module-local locations and are never stable cross-build identities by themselves.
       - Compiler-generated labels report metadata attributes or shapes only and do not establish a relationship to a source construct.
+      - Optional-parameter ordinals are zero-based metadata markers, not signature identity, default constant values, caller argument substitution, F# option semantics, or complete API equivalence. Disagreement withholds the disputed member even when signature identities agree; setter-only property ordinals exclude the setter value parameter and respect sparse Param rows.
 
   - id: dotnet.compiled.gap.v1
     name: Compiled metadata coverage gap
