@@ -23,3 +23,14 @@ module Functions =
 module IlBodyShapes =
     let ilIdentity (value: int) = value
     let ilCallShape (value: int) = Functions.tupled (value, value)
+
+namespace TraceMap.CompiledFixtures.Equivalence
+
+type SharedShape() =
+    static member Select(value: int) : int = value
+    static member Select(value: string) : string = value
+    static member Reference(value: byref<int>) : int = value
+    static member Echo<'T>(value: 'T) : 'T = value
+    static member Echo<'TLeft, 'TRight>(value: 'TLeft) : 'TLeft = value
+    static member Rank(value: int[]) : int[] = value
+    static member Rank(value: int[,]) : int[,] = value

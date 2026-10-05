@@ -1,3 +1,62 @@
+# Current continuation: #767 CLR signature matrix (2026-10-05)
+
+Branch: `codex/767-clr-signature-matrix`, based on fetched `origin/dev`
+`9dde9bb5f400221e0d8502b5008d61884596230f`. Implementation and local validation complete; PR/ACK delivery pending.
+Scope: public C#/VB/F# matched method-signature fixtures and exact metadata
+assertions for overloads, by-reference parameters, method generic arity and
+array rank, plus ambiguity, malformed input and bounded rejection. No new
+source extraction, identity joins, runtime execution or private input.
+Tasks 10/11 and issues #759/#766/#767/#768/#769 remain open. The validation below proves only this bounded public fixture slice.
+
+The 14 new `Clr_signature` cases pass on macOS with .NET SDK 10.0.302.
+Locked restore and `dotnet build src/dotnet/TraceMap.sln --no-restore
+-warnaserror` pass with zero warnings/errors. Two CLI scans of
+`samples/modern-sample` with all three explicit fixture assemblies each emit
+329 facts, including 21 matrix methods; `facts.ndjson` and `report.md` are
+byte-identical. Both pass `validate-adapter-artifacts.py`. The artifact
+validator self-tests pass 7/7; private-path guard, Kiro self-test and diff
+check pass. The broader compiled filter passes 284/284. The full suite passes 3,258
+tests, zero failures, with one explicit Windows ASP.NET publish skip on macOS
+(3,259 total, 16m23s).
+
+The runnable case matrix and reconciliation are in
+`docs/validation/CLR_SIGNATURE_EQUIVALENCE_MATRIX.md`. Golden strings are
+hand-authored test inputs; no new derived machine-readable format is added.
+The existing cross-platform metadata filter includes the partial test class.
+Source-adapter OSS smokes and unrelated TypeScript/JVM/Python adapter checks
+are deferred because this changes only public fixtures, tests and docs.
+Windows CI remains pending; no Windows/private worker was invoked. The last
+recorded private dependency blocker is historical #788 evidence, not freshly
+verified. Next: open a dev PR and follow live ACK;
+then expand remaining #767 dimensions in separate bounded slices.
+
+Exact local validation commands (from this worktree):
+
+```sh
+dotnet restore src/dotnet/TraceMap.sln --locked-mode
+dotnet build src/dotnet/TraceMap.sln --no-restore -warnaserror
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter 'FullyQualifiedName~Clr_signature' -warnaserror
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-build --no-restore --filter 'FullyQualifiedName~ManagedMetadataExtractorTests|FullyQualifiedName~SourceMetadataReconciliationTests|FullyQualifiedName~PortablePdbExtractorTests|FullyQualifiedName~IlBodyEvidenceExtractorTests|FullyQualifiedName~IlRewrite'
+dotnet test src/dotnet/TraceMap.sln --no-build --no-restore
+python3 scripts/test_validate_adapter_artifacts.py
+./scripts/check-private-paths.sh
+node scripts/kiro-review.mjs --self-test
+git diff --check
+run_root=$(mktemp -d)
+for label in first second; do
+  dotnet src/dotnet/TraceMap.Cli/bin/Debug/net10.0/tracemap.dll scan \
+    --repo samples/modern-sample --out "$run_root/$label" \
+    --compiled-input "$PWD/samples/compiled-dotnet-evidence/csharp/bin/Debug/net10.0/CompiledEvidence.CSharp.dll" \
+    --compiled-input "$PWD/samples/compiled-dotnet-evidence/vb/bin/Debug/net10.0/CompiledEvidence.VisualBasic.dll" \
+    --compiled-input "$PWD/samples/compiled-dotnet-evidence/fsharp/bin/Debug/net10.0/CompiledEvidence.FSharp.dll"
+done
+python3 scripts/validate-adapter-artifacts.py "$run_root/first" "$run_root/second"
+cmp "$run_root/first/facts.ndjson" "$run_root/second/facts.ndjson"
+cmp "$run_root/first/report.md" "$run_root/second/report.md"
+```
+
+---
+
 # Compiled .NET Evidence Foundation Implementation State
 
 Status: Tasks 1-9 are merged into `dev`; PR #774 completed its authorized exact-head ACK review and was merged into `dev` as `ed2fdf1c028b034a9a6013908e8f5b8c29d900a7` on 2026-09-21. The first Task 10 slice (bounded operand-aware IL body/call evidence, PR #775) is also merged into `dev` as `46b2baa125bed00ee9ac1964ce50febd55c3e68e` on 2026-09-21, including the owner-requested P1/P2 follow-up `2d20b4a3` (prefix-operand signed/unsigned distinction and exact UTF-16 literal hashing). PR #779 (slice 4, bounded rewrite PDB identity evidence) merged into `dev` as `7be1f51c0360a7f80e3b7304aee9677fe3c92ddc` on 2026-09-22. PR #780 (slice 5, public control-flow and exception-handling rewrite suite) merged into `dev` as `2766de6933d4d60bb632389eff24bc4bfc2313f0` on 2026-09-22. PR #781 (slice 6, public metadata operands and member shapes) merged into `dev` as `dbb4f10aef8201da7e046b428b7a5c4a2e5105c2` on 2026-09-22; GitHub reported `MERGED` with this exact merge commit, and current `origin/dev` resolved to the same SHA before this integration branch was created. PR #782 (the public ECMA-335 integration continuation: topology suite, embedded portable PDB binding, Git-SHA fixture hardening) merged into `dev` as the true merge commit `dc446ab560c7badf1f1518814685b33ccb9c375d` on 2026-09-22 (second parent `a52d239d7c1e3abb32eb6c1d20ba7a466a2508f1`); every PR check passed on that head, including `public-mutation-matrix (windows-latest)` at 118/118 and all three `package-smoke` operating systems. The remaining Task 10 public rewrite suite from #766 and Task 11 remain open.

@@ -1,5 +1,20 @@
 # .NET Evidence Completeness Status
 
+## Current reconciliation (2026-10-05)
+
+The Task 9-only status below is historical. Fetched `origin/dev` at
+`9dde9bb5` and `origin/main` at `7f026f5a` contain the metadata,
+source-reconciliation, PDB, IL/rewrite, public ILAsm parity and bounded Windows
+runner merges (#772–#788). They do not establish full epic acceptance.
+See the [current acceptance matrix](validation/CLR_SIGNATURE_EQUIVALENCE_MATRIX.md)
+for exact base SHAs, implementation/test evidence, outstanding gaps and host
+requirements. The new #767 slice tests matched C#/VB/F# CLR method signatures
+while preserving distinct assembly/member endpoints. F# source extraction,
+independent ILDAsm portable-PDB line parity, and private corpus acceptance are
+still unclaimed. Tasks 10/11 and issues #759/#766/#767/#768/#769 remain open.
+
+## Historical Task 9 delivery record
+
 Status: Task 8 source/metadata reconciliation merged; Task 9 portable PDB identity and sequence-point evidence implemented locally as of 2026-09-20, with native Windows fail-closed CI validation pending
 
 Authority: `codex/pdb-sequence-point-evidence` based on `origin/dev` at `7dc943f2f9d5de82b0963e3e1b8aa9196116b51c`

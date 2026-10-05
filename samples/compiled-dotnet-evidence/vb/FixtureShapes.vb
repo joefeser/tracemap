@@ -106,3 +106,29 @@ Namespace TraceMap.CompiledFixtures.VisualBasic.Il
         End Function
     End Module
 End Namespace
+
+Namespace TraceMap.CompiledFixtures.Equivalence
+    Public NotInheritable Class SharedShape
+        Public Shared Function [Select](value As Integer) As Integer
+            Return value
+        End Function
+        Public Shared Function [Select](value As String) As String
+            Return value
+        End Function
+        Public Shared Function Reference(ByRef value As Integer) As Integer
+            Return value
+        End Function
+        Public Shared Function Echo(Of T)(value As T) As T
+            Return value
+        End Function
+        Public Shared Function Echo(Of TLeft, TRight)(value As TLeft) As TLeft
+            Return value
+        End Function
+        Public Shared Function Rank(value As Integer()) As Integer()
+            Return value
+        End Function
+        Public Shared Function Rank(value As Integer(,)) As Integer(,)
+            Return value
+        End Function
+    End Class
+End Namespace
