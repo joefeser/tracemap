@@ -1,3 +1,67 @@
+# Current continuation: #767 bound source optional-marker coverage (2026-10-05)
+
+Branch `codex/767-source-optional-ordinals`, based on verified #821 merge
+`a0de5398e38982a2ac606e06f102bc4f02a9a036` from fresh `origin/dev`.
+Main remains `7f026f5a`; no open PR or competing worktree for this slice was
+found. Root Base44 edits and other worktrees were preserved.
+
+Scope: nine tests for real bound C#/VB optional-marker joins and injected
+comparator rejection/ambiguity/summary bounds; add source reconciliation to
+portable metadata CI. Both source observation and compiled endpoint evidence
+remain separate. The previous optional review allegation was not reproducible:
+source ordinals are integers sorted numerically. No production change, identity
+encoding, rule, schema or extractor-version change is needed. A temporary
+lexical-sort mutation failed all nine tests and was removed.
+
+Validation so far: nine new tests pass; the metadata/source filter passes 80/80;
+warning-as-error solution build has zero warnings/errors. Full .NET validation
+passes 3,272 tests with zero failures and one Windows ASP.NET publish skip
+(3,273 total, 19.35 minutes). CLI modern-sample artifacts validate. TypeScript 258, JVM 36,
+Python 64 and Python endpoint smoke pass. Artifact
+validator self-tests pass 7/7 (Python emitted an existing SQLite ResourceWarning);
+private-path and whitespace guards pass. Locked restore and CLI artifact conformance also pass.
+The first PR CI run passed the Linux full suite and public Windows corpus/
+mutation checks but exposed a Windows cleanup failure in the newly included
+existing CLI reconciliation test (79 passed, one failed). Its pooled SQLite
+verification connection retained the index handle after disposal. Disable
+pooling only for that fixture connection; retain every evidence assertion and
+the Windows CI gate. Post-fix warning-as-error metadata/source run passes 80/80 with no warnings;
+full local totals above precede this test-only pooling correction. Fresh
+cross-platform CI and ACK are required on the repair head.
+
+Commands from this worktree (logs retained under `/tmp/tracemap-767-source-*`):
+
+```sh
+dotnet restore src/dotnet/TraceMap.sln --locked-mode
+dotnet build src/dotnet/TraceMap.sln --no-restore -warnaserror
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter 'FullyQualifiedName~Optional_source_matrix' -warnaserror
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-build --no-restore --filter 'FullyQualifiedName~ManagedMetadataExtractorTests|FullyQualifiedName~SourceMetadataReconciliationTests'
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter 'FullyQualifiedName~ManagedMetadataExtractorTests|FullyQualifiedName~SourceMetadataReconciliationTests' -warnaserror
+dotnet test src/dotnet/TraceMap.sln --no-build --no-restore --logger 'console;verbosity=normal'
+dotnet run --project src/dotnet/TraceMap.Cli --no-build -- scan --repo samples/modern-sample --out /tmp/tracemap-767-source-cli
+python3 scripts/validate-adapter-artifacts.py /tmp/tracemap-767-source-cli
+npm ci --prefix src/typescript
+npm run check --prefix src/typescript
+JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home gradle -p src/jvm test
+python3 -m venv /tmp/tracemap-767-source-python-venv
+/tmp/tracemap-767-source-python-venv/bin/python -m pip install -e 'src/python[dev]'
+/tmp/tracemap-767-source-python-venv/bin/python -m pytest src/python/tests
+PYTHON_BIN=/tmp/tracemap-767-source-python-venv/bin/python ./scripts/smoke-python-endpoints.sh
+python3 scripts/test_validate_adapter_artifacts.py
+./scripts/check-private-paths.sh
+node scripts/kiro-review.mjs --self-test
+git diff --check
+```
+
+Limits: test-only/CI change; pinned source-adapter OSS checks
+are deferred because no scanner or adapter behavior changed. No F# source,
+default-value semantics, runtime, Windows-private-worker or corpus acceptance
+is claimed. Tasks 10/11 and #759/#766/#767/#768/#769 remain open. Next public
+work should select another documented language dimension; private catalog and
+independent Windows PDB oracle remain separate blockers.
+
+---
+
 # Current continuation: #767 optional-parameter agreement (2026-10-05)
 
 Branch `codex/767-optional-parameter-evidence`, based on `origin/dev`

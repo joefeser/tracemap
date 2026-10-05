@@ -1,5 +1,16 @@
 # .NET Evidence Completeness Status
 
+## Bound source optional-marker coverage (2026-10-05)
+
+PR #821 is merged into `dev` at `a0de5398`. The next bounded #767 slice
+pins real C#/VB wide optional-parameter joins, negative/ambiguous comparator
+inputs and bounded summary evidence. Source ordinal sorting was already numeric;
+no production fix or extractor version change is needed. Source reconciliation
+joins the portable metadata CI filter. See the
+[acceptance matrix](validation/CLR_SIGNATURE_EQUIVALENCE_MATRIX.md#bound-source-optional-marker-continuation).
+Full default semantics, F# source extraction and private/Windows acceptance
+remain open; this does not close any epic issue.
+
 ## Optional-parameter continuation (2026-10-05)
 
 PR #820 is merged into `dev` at `e9212c53`. The next bounded #767 slice
