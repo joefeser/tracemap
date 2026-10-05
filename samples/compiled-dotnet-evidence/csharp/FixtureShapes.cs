@@ -99,3 +99,19 @@ namespace TraceMap.CompiledFixtures.CSharp.Beta
     {
     }
 }
+
+// Deliberately identical metadata namespace/type names across three assemblies.
+// Equal signatures are shape evidence only, never cross-assembly identity.
+namespace TraceMap.CompiledFixtures.Equivalence
+{
+    public sealed class SharedShape
+    {
+        public static int Select(int value) => value;
+        public static string Select(string value) => value;
+        public static int Reference(ref int value) => value;
+        public static T Echo<T>(T value) => value;
+        public static TLeft Echo<TLeft, TRight>(TLeft value) => value;
+        public static int[] Rank(int[] value) => value;
+        public static int[,] Rank(int[,] value) => value;
+    }
+}

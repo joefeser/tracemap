@@ -60,3 +60,10 @@ slices and require an implementation-state update before work begins.
   - [x] First bounded #768 runner, synthetic fail-closed guards, independent
     public ILAsm smoke, and C++/CLI feasibility inventory. Private corpus
     execution and #769 remain open.
+
+- [x] 12. Bounded #767 continuation: add matched public C#/VB/F# CLR method
+  signatures for overloads, ref/ByRef, generic arity and array rank, exact
+  golden assertions with distinct endpoints/provenance, duplicate/malformed/
+  bounded rejection and deterministic repeat coverage. See
+  `docs/validation/CLR_SIGNATURE_EQUIVALENCE_MATRIX.md`; this does not close
+  the broader language matrix or Tasks 10/11.

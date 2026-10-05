@@ -11,7 +11,7 @@ using TraceMap.Storage;
 
 namespace TraceMap.Tests;
 
-public sealed class ManagedMetadataExtractorTests
+public sealed partial class ManagedMetadataExtractorTests
 {
     [Fact]
     public void Cecil_declaring_type_cycle_has_a_bounded_failure()
