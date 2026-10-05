@@ -1,3 +1,71 @@
+# Current continuation: #767 property/event accessors (2026-10-05)
+
+Branch `codex/767-property-event-matrix`, based on verified #823 merge
+`c389b20dfc0fc3865f8faae12d3df74524031980`; main remains `7f026f5a`.
+No open PR or competing worktree was found. Unrelated Base44 edits and other
+worktrees were preserved. Scope: fixtures/tests/docs only; no production rule,
+identity, schema or extractor-version change.
+
+Delivered: matched Value/Snapshot/Changed metadata shapes in C#/VB/F#;
+independent SRM property/event accessor handles join fixture assertions to
+exact method tokens, preserving distinct endpoints. Value has a setter while
+Snapshot does not despite equal property signatures. VB has an extra explicit
+raiser. The ordinary get_Unbound method is not an accessor. Ten new tests
+cover these shapes, deterministic reversal, duplicate ambiguity, truncated
+headers and member limits. The existing bound F# regression also retains the
+new properties/event while refusing source reconciliation.
+
+Validation: ten new tests and all 316 surrounding compiled/PDB/IL/rewrite
+tests pass; warning-as-error build is clean. Full .NET passes 3,290 tests,
+zero failures, one Windows ASP.NET publish skip (3,291 total, 14.84 minutes).
+Cross-platform CI and live ACK remain separate PR gates.
+Two CLI scans produce 397 facts each, including six properties, three events
+and three getter-looking ordinary methods, with no reader disagreement and
+byte-identical facts/reports. Artifact conformance and seven validator tests,
+private-path guard, Kiro self-test and whitespace checks pass. The unchanged
+Python validator reports a SQLite ResourceWarning. JVM 36 and Python 64 tests
+plus Python endpoint smoke pass. Initial concurrent TypeScript validation had
+257 passes and one MSB4018 shared .NET deps.json file-lock failure. The
+unchanged serial rerun after .NET completion passes all 258 TypeScript tests.
+
+Commands from this worktree (logs `/tmp/tracemap-767-accessors-*`):
+
+```sh
+dotnet restore src/dotnet/TraceMap.sln --locked-mode
+dotnet build src/dotnet/TraceMap.sln --no-restore -warnaserror
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter 'FullyQualifiedName~Property_event_matrix' -warnaserror
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-build --no-restore --filter 'FullyQualifiedName~ManagedMetadataExtractorTests|FullyQualifiedName~SourceMetadataReconciliationTests|FullyQualifiedName~PortablePdbExtractorTests|FullyQualifiedName~IlBodyEvidenceExtractorTests|FullyQualifiedName~IlRewrite'
+dotnet test src/dotnet/TraceMap.sln --no-build --no-restore --logger 'console;verbosity=normal'
+npm ci --prefix src/typescript
+npm run check --prefix src/typescript
+JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home gradle -p src/jvm test
+python3 -m venv /tmp/tracemap-767-accessors-python-venv
+/tmp/tracemap-767-accessors-python-venv/bin/python -m pip install -e 'src/python[dev]'
+/tmp/tracemap-767-accessors-python-venv/bin/python -m pytest src/python/tests
+PYTHON_BIN=/tmp/tracemap-767-accessors-python-venv/bin/python ./scripts/smoke-python-endpoints.sh
+python3 scripts/test_validate_adapter_artifacts.py
+./scripts/check-private-paths.sh
+node scripts/kiro-review.mjs --self-test
+git diff --check
+```
+
+CLI smoke, twice with separate temporary outputs and absolute fixture paths:
+
+```sh
+dotnet run --project src/dotnet/TraceMap.Cli --no-build -- scan --repo samples/modern-sample --out "$smoke_output" --compiled-input "$fixture_root/csharp/bin/Debug/net10.0/CompiledEvidence.CSharp.dll" --compiled-input "$fixture_root/vb/bin/Debug/net10.0/CompiledEvidence.VisualBasic.dll" --compiled-input "$fixture_root/fsharp/bin/Debug/net10.0/CompiledEvidence.FSharp.dll"
+python3 scripts/validate-adapter-artifacts.py "$smoke_output"
+```
+
+Limits: oracle associations are test evidence, not new production accessor
+edges. No equivalent event delivery/storage, source extraction for F#,
+PDB/IL/rewrite ownership or runtime behavior is claimed. Private/Windows worker
+access is unavailable and was not invoked. Source-adapter OSS smokes are
+deferred because extraction is unchanged. All epic issues and Tasks 10/11
+remain open. Next public work should choose another reviewed language
+interaction; private catalog and independent Windows PDB oracle are separate.
+
+---
+
 # Current continuation: #767 nullable/F# option matrix (2026-10-05)
 
 Branch `codex/767-nullable-option-matrix`, based on verified #822 merge

@@ -134,6 +134,26 @@ Namespace TraceMap.CompiledFixtures.Equivalence
 End Namespace
 
 Namespace TraceMap.CompiledFixtures.Equivalence
+    Public NotInheritable Class AccessorShape
+        Public Property Value As Integer
+        Public ReadOnly Property Snapshot As Integer
+            Get
+                Return Value
+            End Get
+        End Property
+        Public Custom Event Changed As System.EventHandler
+            AddHandler(value As System.EventHandler)
+            End AddHandler
+            RemoveHandler(value As System.EventHandler)
+            End RemoveHandler
+            RaiseEvent(sender As Object, e As System.EventArgs)
+            End RaiseEvent
+        End Event
+        Public Function get_Unbound() As Integer
+            Return 0
+        End Function
+    End Class
+
     Public NotInheritable Class OptionShape
         Public Shared Function NullableRoundtrip(value As Integer?) As Integer?
             Return value

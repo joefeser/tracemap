@@ -35,6 +35,14 @@ type SharedShape() =
     static member Rank(value: int[]) : int[] = value
     static member Rank(value: int[,]) : int[,] = value
 
+type AccessorShape() =
+    let changed = new Event<System.EventHandler, System.EventArgs>()
+    member val Value = 0 with get, set
+    member this.Snapshot = this.Value
+    [<CLIEvent>]
+    member _.Changed = changed.Publish
+    member _.get_Unbound() = 0
+
 // CLI Optional metadata is distinct from F# option-valued source arguments.
 type OptionShape() =
     static member NullableRoundtrip(value: System.Nullable<int>) : System.Nullable<int> = value
