@@ -97,3 +97,9 @@ slices and require an implementation-state update before work begins.
   metadata oracles and exact method-token joins; preserve F# struct encoding
   differences, rejection/determinism coverage and unsupported-source boundary.
   Production constraint facts and full constraint equivalence remain open.
+
+- [x] 18. Bounded #767 default-value continuation: public C#/VB/F# required,
+  integer/string/null Constant-table defaults and decimal attribute defaults;
+  independent raw/decoded oracles, exact token/provenance assertions, negative,
+  ambiguous, malformed, bounded and repeat cases; F# source remains unsupported.
+  Production default-value facts and complete default semantics remain open.

@@ -153,3 +153,16 @@ namespace TraceMap.CompiledFixtures.Equivalence
         public static T Disposable<T>(T value) where T : System.IDisposable => value;
     }
 }
+
+namespace TraceMap.CompiledFixtures.Equivalence
+{
+    public sealed class DefaultShape
+    {
+        public static int Required(int value) => value;
+        public static int IntSeven(int value = 7) => value;
+        public static int IntNine(int value = 9) => value;
+        public static string Text(string value = "seven") => value;
+        public static string? NullText(string? value = null) => value;
+        public static decimal DecimalSeven(decimal value = 7m) => value;
+    }
+}

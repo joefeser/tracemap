@@ -1,3 +1,57 @@
+# Current continuation: #767 default values (2026-10-05)
+
+Branch `codex/767-default-value-matrix`, base #825 merge
+`74364fe5eb4168757d508a232d59958d21eb73a3`; target dev. No competing open PR
+or active worktree found. Existing worktrees and unrelated Base44 edits retained.
+
+Scope: six DefaultShape methods per C#/VB/F# fixture; required/no-default,
+integer 7/9, string/null and decimal attribute encoding. Ten new metadata cases
+plus strengthened bound F# regression. SRM raw constant/attribute evidence and
+Cecil decoded values remain independent of TraceMap signatures/optional markers.
+No production default facts, schema or extractor-version change; no runtime
+execution or new derived artifact. Default-value production coverage remains a
+gap. The case/acceptance matrix documents all four child-issue boundaries.
+
+Validation: final focused 11/11 and zero-warning build pass. Two CLI scans
+produce 442 facts each, all 18 default methods and no reader disagreement;
+artifacts validate and facts/reports repeat byte-for-byte. Seven artifact
+validator tests, privacy guard, Kiro self-test and whitespace checks pass. The
+unchanged Python validator reports a SQLite ResourceWarning. All 335 surrounding
+compiled/PDB/IL/rewrite cases pass. Full .NET passes 3,309 tests, zero failures,
+one Windows ASP.NET publish skip (3,310 total; 17.59 minutes). Cross-platform
+CI and live ACK remain separate PR gates. Initial warning-as-error build rejected untyped F# null
+attribute input because the compiler would ignore the attributes; explicitly
+typing null as string fixed the fixture.
+
+Commands from this worktree (logs `/tmp/tracemap-767-defaults-*`):
+
+```sh
+dotnet restore src/dotnet/TraceMap.sln --locked-mode
+dotnet build src/dotnet/TraceMap.sln --no-restore -warnaserror
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter 'FullyQualifiedName~Default_value_matrix|FullyQualifiedName~Fsharp_fixture_retains' -warnaserror
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-build --no-restore --filter 'FullyQualifiedName~ManagedMetadataExtractorTests|FullyQualifiedName~SourceMetadataReconciliationTests|FullyQualifiedName~PortablePdbExtractorTests|FullyQualifiedName~IlBodyEvidenceExtractorTests|FullyQualifiedName~IlRewrite'
+dotnet test src/dotnet/TraceMap.sln --no-build --no-restore --logger 'console;verbosity=normal'
+python3 scripts/test_validate_adapter_artifacts.py
+./scripts/check-private-paths.sh
+node scripts/kiro-review.mjs --self-test
+git diff --check
+```
+
+CLI smoke twice, separate temporary outputs and absolute fixture paths:
+
+```sh
+dotnet run --project src/dotnet/TraceMap.Cli --no-build -- scan --repo samples/modern-sample --out "$smoke_output" --compiled-input "$fixture_root/csharp/bin/Debug/net10.0/CompiledEvidence.CSharp.dll" --compiled-input "$fixture_root/vb/bin/Debug/net10.0/CompiledEvidence.VisualBasic.dll" --compiled-input "$fixture_root/fsharp/bin/Debug/net10.0/CompiledEvidence.FSharp.dll"
+python3 scripts/validate-adapter-artifacts.py "$smoke_output"
+```
+
+Private Windows/corpus access is unavailable and uninvoked. Non-.NET local
+suites and pinned source-adapter OSS smokes are explicitly deferred for this
+fixture/test-only change; public CI still validates adapters. All epic issues
+and Tasks 10/11 remain open. Next work should select a remaining language
+interaction or separately scope bounded production default evidence.
+
+---
+
 # Current continuation: #767 generic constraints (2026-10-05)
 
 Branch `codex/767-generic-constraint-matrix`, base #824 merge
