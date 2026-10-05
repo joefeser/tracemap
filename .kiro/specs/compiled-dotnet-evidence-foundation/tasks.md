@@ -85,3 +85,9 @@ slices and require an implementation-state update before work begins.
   metadata, duplicate/malformed/member-limit/determinism tests, and explicit
   F# source-unsupported coverage. Pin the option dependency scope; runtime,
   default-value semantics and broader language/epic acceptance remain open.
+
+- [x] 16. Bounded #767 property/event continuation: matched public C#/VB/F#
+  property/event signatures and independent metadata-handle accessor oracles,
+  getter-looking decoy, VB raiser distinction, duplicate/malformed/member-limit
+  and repeatability regressions; preserve the F# source-unsupported gap.
+  These tests do not introduce a production accessor association rule.
