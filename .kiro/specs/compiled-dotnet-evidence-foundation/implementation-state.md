@@ -1,3 +1,64 @@
+# Current continuation: #767 optional-parameter agreement (2026-10-05)
+
+Branch `codex/767-optional-parameter-evidence`, based on `origin/dev`
+`e9212c53acbdfc83e8dbfc4a83c2272576715db2` (#820 merged). No open PRs or
+competing optional-parameter worktree were present at reconciliation.
+Implementation complete: require dual-reader agreement on the existing
+`optionalParameterOrdinals` evidence, numeric ordinal ordering, and correct
+setter-only property index parameter selection. Add public C#/VB/F# marker
+fixtures and targeted regressions. Defaults, caller substitution, runtime
+behavior and F# source extraction remain unclaimed. No private/Windows worker
+is needed or authorized by this slice. Tasks 10/11 and all epic issues remain
+open. No fact schema or identity format changes; extractor version is now
+`managed-metadata/0.1.3+cecil-0.11.6`.
+
+Evidence: two disagreement regressions failed on the merged base; adding the
+agreement check alone then failed the wide-ordinal and sparse-setter cases.
+All 20 optional/signature-filter tests now pass (five new cases plus existing
+signature and optional-reconciliation tests). The surrounding compiled lane
+passes 289/289. Locked restore and warning-as-error solution build pass with
+zero warnings/errors. Full .NET suite passes 3,263 tests, zero failures,
+with one Windows ASP.NET publish skip on macOS (3,264 total; 18.34 minutes).
+
+Two three-language CLI scans emit 347 facts each, including 12 optional-method
+observations, correct numeric marker lists and no reader disagreement. All
+required artifacts exist; artifact conformance passes and facts/report are
+byte-identical. TypeScript passes 258 tests, JVM 36, Python 64; the Python
+endpoint smoke passes with expected reduced-coverage labels. Artifact-validator
+self-tests pass 7/7, private-path guard, Kiro self-test and whitespace checks pass.
+
+Commands (from this worktree):
+
+```sh
+dotnet restore src/dotnet/TraceMap.sln --locked-mode
+dotnet build src/dotnet/TraceMap.sln --no-restore -warnaserror
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter 'FullyQualifiedName~Optional_parameter|FullyQualifiedName~Clr_signature' -warnaserror
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-build --no-restore --filter 'FullyQualifiedName~ManagedMetadataExtractorTests|FullyQualifiedName~SourceMetadataReconciliationTests|FullyQualifiedName~PortablePdbExtractorTests|FullyQualifiedName~IlBodyEvidenceExtractorTests|FullyQualifiedName~IlRewrite'
+dotnet test src/dotnet/TraceMap.sln --no-build --no-restore --logger 'console;verbosity=normal'
+npm ci --prefix src/typescript
+npm run check --prefix src/typescript
+JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home gradle -p src/jvm test
+python3 -m venv /tmp/tracemap-767-optional-python-venv
+/tmp/tracemap-767-optional-python-venv/bin/python -m pip install -e 'src/python[dev]'
+/tmp/tracemap-767-optional-python-venv/bin/python -m pytest src/python/tests
+PYTHON_BIN=/tmp/tracemap-767-optional-python-venv/bin/python ./scripts/smoke-python-endpoints.sh
+python3 scripts/test_validate_adapter_artifacts.py
+./scripts/check-private-paths.sh
+node scripts/kiro-review.mjs --self-test
+git diff --check
+```
+
+The repeat CLI command is the three-input loop recorded in the #820 section
+below, using a new temporary output directory and the current extractor.
+Source-adapter pinned OSS smokes are deferred because only compiled-metadata
+agreement changes; no source resolver changes. Cross-platform CI is pending;
+Windows/private workers, native PDB/ILDAsm parity and private corpus receipts
+remain deferred. Delivery targets `dev`; live ACK is the review authority.
+Next implementation work is default-value/other #767 dimensions in separate
+bounded slices.
+
+---
+
 # Current continuation: #767 CLR signature matrix (2026-10-05)
 
 Branch: `codex/767-clr-signature-matrix`, based on fetched `origin/dev`

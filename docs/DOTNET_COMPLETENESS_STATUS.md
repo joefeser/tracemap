@@ -1,6 +1,16 @@
 # .NET Evidence Completeness Status
 
-## Current reconciliation (2026-10-05)
+## Optional-parameter continuation (2026-10-05)
+
+PR #820 is merged into `dev` at `e9212c53`. The next bounded #767 slice
+requires Cecil/SRM agreement on optional-parameter markers, corrects numeric
+ordinal ordering and sparse setter-only property selection, and adds matched
+public C#/VB/F# regressions. Marker equality does not establish default-value,
+source, runtime or complete API equivalence. See the
+[optional-parameter matrix](validation/CLR_SIGNATURE_EQUIVALENCE_MATRIX.md#optional-parameter-agreement-continuation).
+The broader issues and Windows/private dependencies below remain open.
+
+## Previous reconciliation (2026-10-05)
 
 The Task 9-only status below is historical. Fetched `origin/dev` at
 `9dde9bb5` and `origin/main` at `7f026f5a` contain the metadata,

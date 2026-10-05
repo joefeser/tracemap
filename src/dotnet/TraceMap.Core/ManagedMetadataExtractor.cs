@@ -352,7 +352,11 @@ public static class ManagedMetadataExtractor
         return left.Keys.Concat(right.Keys).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal)
             .Where(key => !left.TryGetValue(key, out var leftValue)
                 || !right.TryGetValue(key, out var rightValue)
-                || !string.Equals(leftValue.Identity, rightValue.Identity, StringComparison.Ordinal))
+                || !string.Equals(leftValue.Identity, rightValue.Identity, StringComparison.Ordinal)
+                // Optional markers are consumed by source reconciliation even
+                // though they are not part of a CLR member signature identity.
+                || !string.Equals(leftValue.Properties.GetValueOrDefault("optionalParameterOrdinals"),
+                    rightValue.Properties.GetValueOrDefault("optionalParameterOrdinals"), StringComparison.Ordinal))
             .Select(key => new ReaderDisagreement(
                 key,
                 left.GetValueOrDefault(key)?.Identity,
@@ -1277,8 +1281,8 @@ public static class ManagedMetadataExtractor
         result["optionalParameterOrdinals"] = string.Join(",", method.GetParameters()
             .Select(handle => reader.GetParameter(handle))
             .Where(parameter => parameter.SequenceNumber > 0 && (parameter.Attributes & System.Reflection.ParameterAttributes.Optional) != 0)
-            .Select(parameter => (parameter.SequenceNumber - 1).ToString(CultureInfo.InvariantCulture))
-            .OrderBy(value => value, StringComparer.Ordinal));
+            .OrderBy(parameter => parameter.SequenceNumber)
+            .Select(parameter => (parameter.SequenceNumber - 1).ToString(CultureInfo.InvariantCulture)));
         return result;
     }
 
@@ -1303,8 +1307,10 @@ public static class ManagedMetadataExtractor
             .ToArray();
         var propertyParameterCount = property.DecodeSignature(new MetadataTypeProvider(reader), genericContext: null).ParameterTypes.Length;
         result["optionalParameterOrdinals"] = string.Join(",", parameters
-            .Take(propertyParameterCount)
-            .Where(parameter => (parameter.Attributes & System.Reflection.ParameterAttributes.Optional) != 0)
+            // Param rows are sparse. Select by the signature position, not
+            // row count, so a setter value cannot replace an omitted index row.
+            .Where(parameter => parameter.SequenceNumber <= propertyParameterCount
+                && (parameter.Attributes & System.Reflection.ParameterAttributes.Optional) != 0)
             .Select(parameter => (parameter.SequenceNumber - 1).ToString(CultureInfo.InvariantCulture)));
         return result;
     }
