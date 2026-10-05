@@ -140,3 +140,36 @@ unchanged; required local adapter checks, full .NET tests and the compiled CLI
 smoke are recorded in the implementation-state note. Windows/private-corpus
 acceptance and the independent ILDAsm PDB oracle remain separate outstanding
 work.
+
+## Bound source optional-marker continuation
+
+Base: `origin/dev` `a0de5398e38982a2ac606e06f102bc4f02a9a036`, the verified
+#821 merge (2026-10-05); main remains `7f026f5a`. No open PR or competing
+source-ordinal worktree was present. Branch: `codex/767-source-optional-ordinals`.
+
+The optional review suggestion on #821 claimed lexical source ordering. Current
+`SourceMetadataIdentityCandidate.OptionalParameterOrdinals` is an integer list;
+`SourceMetadataReconciler` sorts integers before serialization. That suggestion
+requires no production fix. Nine new test cases pin the missing source-join
+coverage. A temporary lexical-sort mutation made all nine fail; the mutation
+was removed. Production identities, rules, schemas and versions are unchanged.
+
+| Requirement / case | Implementation and test evidence | Remaining gap | Host/toolchain |
+| --- | --- | --- | --- |
+| #767 CLR-SRC-OPT-001/002 | Bound C#/VB `OptionalShape` scans join all four methods, including eleven optional ordinals; exact marker goldens and both fact endpoints, source spans, metadata location, rule/tier, commit, versions and hashes | Marker equality does not prove default substitution or runtime behavior; no F# source adapter | .NET 10, portable |
+| CLR-SRC-OPT-003 | Injected out-of-order integer source ordinals normalize numerically and repeat identically | Comparator fixture is not reader-admission evidence | .NET 10 |
+| CLR-SRC-OPT-004–007 | Lexically ordered, missing, duplicated and malformed compiled marker strings refuse joins with `SourceMetadataOptionalParameterMismatch` | Synthetic rejected comparator inputs, not malformed PE coverage | .NET 10 |
+| CLR-SRC-OPT-008/009 | Zero/two compiled candidates refuse joins; summary limit zero retains omission count/hash and input/generator commitments | Summary truncation does not remove the underlying facts or change their evidence | .NET 10 |
+| #769 corpus dimensions | Existing runway/Task 11 guards unchanged | Reviewed private catalog/minimized representatives and repeat receipts remain unproven | Authorized isolated Windows worker unavailable to this run |
+| #766 IL/rewrite | Existing operand-aware and independent-reader suites unchanged | Independent portable-PDB line oracle and broader catalog acceptance remain open | Portable readers plus Windows Microsoft tools |
+| #768 Windows lane | Runner/guards and feasibility study unchanged | No passing private bounded receipt; recorded legacy dependency blockers remain historical | Authorized Windows/.NET Framework/MSVC lane |
+
+The metadata-plus-source test filter now runs in the existing Linux/macOS/Windows
+local-distribution workflow; the full Linux adapter suite also includes these
+cases. Public F# assembly evidence remains separate from source reconciliation.
+No private data, runtime execution or new machine-readable artifact is added.
+
+```sh
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-build --no-restore --filter 'FullyQualifiedName~Optional_source_matrix'
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-build --no-restore --filter 'FullyQualifiedName~ManagedMetadataExtractorTests|FullyQualifiedName~SourceMetadataReconciliationTests'
+```
