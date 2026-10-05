@@ -118,6 +118,11 @@ namespace TraceMap.CompiledFixtures.Equivalence
 
 namespace TraceMap.CompiledFixtures.Equivalence
 {
+    public sealed class OptionShape
+    {
+        public static int? NullableRoundtrip(int? value) => value;
+    }
+
     public sealed class OptionalShape
     {
         public static int Required(int value) => value;

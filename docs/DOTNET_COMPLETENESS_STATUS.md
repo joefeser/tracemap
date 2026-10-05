@@ -1,5 +1,15 @@
 # .NET Evidence Completeness Status
 
+## Nullable and F# option coverage (2026-10-05)
+
+PR #822 is merged into `dev` at `75636837`. The next bounded #767 slice
+compares C#/VB/F# Nullable<Int32> signatures and preserves distinct F# option,
+value-option and optional-argument method identities. It pins exact metadata
+scopes, provenance, refusal cases and the F# source-unsupported gap. See the
+[case and acceptance matrix](validation/CLR_SIGNATURE_EQUIVALENCE_MATRIX.md#nullable-and-f-option-continuation).
+No source extraction, runtime equivalence or private/Windows acceptance is
+inferred. All epic issues remain open.
+
 ## Bound source optional-marker coverage (2026-10-05)
 
 PR #821 is merged into `dev` at `a0de5398`. The next bounded #767 slice
