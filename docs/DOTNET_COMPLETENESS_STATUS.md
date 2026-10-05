@@ -1,5 +1,14 @@
 # .NET Evidence Completeness Status
 
+## Generic-constraint coverage (2026-10-05)
+
+PR #824 is merged at `5adfaeb6`. The next bounded #767 matrix pins five
+constraint shapes across C#/VB/F#, including F# struct flag/row differences.
+Independent metadata oracles retain constraints separately from equal method
+signatures. Production constraint evidence remains a gap. See the
+[acceptance matrix](validation/CLR_SIGNATURE_EQUIVALENCE_MATRIX.md#generic-constraint-continuation).
+Private/Windows acceptance and the broader epic remain open.
+
 ## Property/event accessor coverage (2026-10-05)
 
 PR #823 is merged into `dev` at `c389b20d`. The next bounded #767 slice
