@@ -1,5 +1,15 @@
 # .NET Evidence Completeness Status
 
+## Property/event accessor coverage (2026-10-05)
+
+PR #823 is merged into `dev` at `c389b20d`. The next bounded #767 slice
+pins matched C#/VB/F# property/event signatures and verifies accessor method
+endpoints using independent metadata handles. Getter-looking names cannot
+create associations; VB's explicit event raiser remains a distinct method.
+See the [case and acceptance matrix](validation/CLR_SIGNATURE_EQUIVALENCE_MATRIX.md#propertyevent-accessor-continuation).
+No runtime equivalence or F# source support is inferred; broader epic and
+private/Windows acceptance remain open.
+
 ## Nullable and F# option coverage (2026-10-05)
 
 PR #822 is merged into `dev` at `75636837`. The next bounded #767 slice
