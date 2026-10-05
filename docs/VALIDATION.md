@@ -4143,3 +4143,12 @@ default logical database ceiling is 512 MiB, including facts and the order roste
 the page cache is 8 MiB. Sorter temporary files are outside that logical ceiling,
 and type-specific semantic indexes remain managed. These checks do not replace representative 8x source and
 compiled-distribution elapsed-time, total-disk and peak-memory measurements.
+
+### Public CLR method-signature equivalence (#767)
+
+The [bounded three-language signature matrix](validation/CLR_SIGNATURE_EQUIVALENCE_MATRIX.md)
+pins overloads, by-reference parameters, method generic arity and array rank
+with independent golden strings and distinct assembly/member endpoints.
+Run the `Clr_signature` filter or the existing `ManagedMetadataExtractorTests`
+filter. The existing portable distribution lane includes these tests. This is
+metadata shape evidence, not source, PDB, IL, rewrite or runtime equivalence.
