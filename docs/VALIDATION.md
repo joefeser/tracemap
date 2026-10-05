@@ -4170,3 +4170,9 @@ For the nullable/F# option matrix, use
 The fixture pins FSharp.Core 10.1.302 and verifies Nullable, option, value-option
 and F# optional-argument metadata without claiming F# source extraction. See
 [the case matrix](validation/CLR_SIGNATURE_EQUIVALENCE_MATRIX.md#nullable-and-f-option-continuation).
+
+For property/event accessor evidence, run
+`FullyQualifiedName~Property_event_matrix|FullyQualifiedName~Fsharp_fixture_retains`.
+The public C#/VB/F# matrix uses metadata semantics handles to check accessor
+endpoints and rejects name-only associations. See the
+[case matrix](validation/CLR_SIGNATURE_EQUIVALENCE_MATRIX.md#propertyevent-accessor-continuation).

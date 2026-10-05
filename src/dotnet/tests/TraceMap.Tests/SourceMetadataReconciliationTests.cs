@@ -160,6 +160,10 @@ public sealed partial class SourceMetadataReconciliationTests
         Assert.Equal(4, result.Facts.Count(fact => fact.FactType == FactTypes.ManagedMethodDeclared
             && fact.TargetSymbol!.Contains("|names:11:OptionShape|", StringComparison.Ordinal)
             && fact.Properties["metadataName"] != ".ctor"));
+        Assert.Equal(2, result.Facts.Count(fact => fact.FactType == FactTypes.ManagedPropertyDeclared
+            && fact.TargetSymbol!.Contains("|names:13:AccessorShape|", StringComparison.Ordinal)));
+        Assert.Single(result.Facts, fact => fact.FactType == FactTypes.ManagedEventDeclared
+            && fact.TargetSymbol!.Contains("|names:13:AccessorShape|", StringComparison.Ordinal));
         Assert.DoesNotContain(result.Facts, fact => fact.FactType == FactTypes.SourceMetadataIdentityReconciled);
         var gap = Assert.Single(result.Facts, fact => fact.Properties.GetValueOrDefault("gapKind") == "SourceMetadataReconciliationUnsupportedLanguage");
         Assert.Equal("fsharp", gap.Properties["language"]);

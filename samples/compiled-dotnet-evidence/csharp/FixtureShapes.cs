@@ -118,6 +118,14 @@ namespace TraceMap.CompiledFixtures.Equivalence
 
 namespace TraceMap.CompiledFixtures.Equivalence
 {
+    public sealed class AccessorShape
+    {
+        public int Value { get; set; }
+        public int Snapshot => Value;
+        public event System.EventHandler Changed { add { } remove { } }
+        public int get_Unbound() => 0;
+    }
+
     public sealed class OptionShape
     {
         public static int? NullableRoundtrip(int? value) => value;

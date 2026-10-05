@@ -223,3 +223,56 @@ The existing portable metadata/source CI filter includes these tests on Linux,
 macOS and Windows. Source-adapter pinned OSS smokes are deferred because this
 slice changes only fixtures/tests and their documentation. Full-suite and CLI
 results are recorded in the spec implementation state.
+
+## Property/event accessor continuation
+
+Base: `origin/dev` `c389b20dfc0fc3865f8faae12d3df74524031980`, verified #823
+merge; main remains `7f026f5a` (2026-10-05). Branch:
+`codex/767-property-event-matrix`. No open PR or competing worktree was found.
+
+Each public language fixture adds `AccessorShape`: a read/write Int32 `Value`,
+getter-only Int32 `Snapshot`, EventHandler `Changed`, and ordinary method
+`get_Unbound`. C# and VB use inert custom events; F# exposes a CLIEvent. VB's
+custom event additionally emits an explicit raiser. These are metadata fixtures,
+not equivalent implementations of event delivery or backing storage.
+
+The test oracle reads Property/Event accessor handles directly with
+System.Reflection.Metadata and locates the corresponding already cross-checked
+TraceMap method facts by assembly-local metadata token. It never infers an
+association from `get_`, `set_`, `add_`, `remove_` or `raise_` name prefixes.
+Both owning member and method retain separate endpoint identities. This is a
+fixture oracle; no new production accessor-edge rule or runtime claim is added.
+
+| Case | Expected evidence | Counterexample / non-claim |
+| --- | --- | --- |
+| CLR-ACCESSOR-001/002 | Matched `Value`/`Snapshot` property signatures across C#/VB/F#, three distinct assembly/member/fact identities per row | Their equal property signatures do not establish equal accessor availability: only Value has a setter |
+| CLR-ACCESSOR-003 | Matched EventHandler event type with exact System.Runtime scope | Equal event type does not imply storage, delivery or raise behavior |
+| CLR-ACCESSOR-004–006 | Raw metadata handles bind two getters, one setter, add/remove and, for VB only, the explicit raiser to exact method facts with golden instance signatures | No method-name association; nil/other accessor sets and unique role handles are asserted |
+| CLR-ACCESSOR-004–006 decoy | Ordinary `get_Unbound` has the same getter-looking signature but no SpecialName flag or property association | A display/name heuristic cannot mint a property edge |
+| CLR-ACCESSOR-007 | Reverse assembly input order | Byte-identical facts and compiled-input provenance |
+| CLR-ACCESSOR-008–010 | Each expanded language assembly duplicated, header-truncated, or member-limited | Explicit ambiguity/malformed/limit gaps; duplicate observations cannot participate in source reconciliation |
+| CLR-ACCESSOR-011 | Bound F# scan retains both properties and event | Existing explicit unsupported-source gap remains; no source identity edge |
+
+Ten new metadata tests plus the strengthened existing F# test cover these rows.
+Assertions retain `dotnet.compiled.member.v1` / Tier2, owner/method endpoints,
+0x17/0x14/0x06 property/event/method tokens, metadata locations, commit,
+extractor version, exact generator DLL hash and bounded-input hash. Rejection
+facts use `dotnet.compiled.gap.v1` / Tier4 and the same provenance envelope.
+No binary is executed, production formatter changed, or new machine-readable
+artifact introduced. The existing portable CI metadata/source filter includes
+all cases on Linux, macOS and Windows.
+
+| Requirement | Delivered evidence | Remaining gap | Required host/toolchain |
+| --- | --- | --- | --- |
+| #769 dimensions | Existing inventory/admission/selection guards | Reviewed private catalog, representatives and repeat receipts remain unproven | Authorized isolated Windows worker unavailable here |
+| #767 language matrix | #820–#823 signatures, markers, joins and options; this accessor matrix | Defaults, constraints, generated-member and VB receiver/event interactions beyond these cases | Public .NET 10; no F# source claim |
+| #766 IL/PDB/rewrite | Existing operand-aware and independent-reader catalog | Independent portable-PDB line oracle and broader reviewed acceptance | Portable readers plus Windows Microsoft tools |
+| #768 Windows lane | Existing runner and feasibility guards; public CI separate | No passing private bounded receipt; recorded legacy dependency blockers not revalidated here | Authorized Windows/.NET Framework/MSVC |
+
+```sh
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter 'FullyQualifiedName~Property_event_matrix|FullyQualifiedName~Fsharp_fixture_retains' -warnaserror
+```
+
+Pinned source-adapter OSS smokes are deferred for this fixture/test-only change.
+All five epic issues and Tasks 10/11 remain open. Exact validation commands and
+results live in the spec implementation state.
