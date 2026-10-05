@@ -276,3 +276,52 @@ dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore -
 Pinned source-adapter OSS smokes are deferred for this fixture/test-only change.
 All five epic issues and Tasks 10/11 remain open. Exact validation commands and
 results live in the spec implementation state.
+
+## Generic-constraint continuation
+
+Base: verified #824 merge `5adfaeb6fad63ecade0bab29a0fabf682ebd38fa` on
+`origin/dev`; main remains `7f026f5a`. Branch `codex/767-generic-constraint-matrix`.
+No open PR or competing worktree was found; unrelated changes were preserved.
+
+`ConstraintShape` exposes five static identity-shaped generic methods in each
+public C#/VB/F# assembly. All fifteen share the golden method signature
+`arity:1|call:default|hasThis:false|explicitThis:false|(!!0)->!!0`, but their
+constraints differ. Equal signatures do not prove equal instantiation rules.
+
+| Case | Source construct / expected raw CLR evidence | TraceMap evidence and non-claim |
+| --- | --- | --- |
+| CLR-CONSTRAINT-001 | Free: flags 0, no constraint rows | Three distinct assembly/member endpoints with equal signatures |
+| CLR-CONSTRAINT-002 | Reference: flags 4, no constraint rows | Reference constraint is oracle evidence, not a signature component |
+| CLR-CONSTRAINT-003 | Value: C#/VB flags 24 plus System.ValueType; F# flags 8 with no constraint row | Similar source constructs are not identical metadata encodings |
+| CLR-CONSTRAINT-004 | Construct: flags 16, no constraint rows | No object construction or runtime admissibility is tested |
+| CLR-CONSTRAINT-005 | Disposable: flags 0, System.IDisposable constraint | Exact System.Runtime 10.0.0.0 scope and token association |
+| CLR-CONSTRAINT-006 | Fifteen distinct endpoints, one signature shape, reversed input order | Byte-identical facts/provenance; no cross-language identity collapse |
+| CLR-CONSTRAINT-007–009 | Duplicate, truncated and member-limited inputs for each language | Ambiguity, malformed and limit gaps; no eligible duplicate reconciliation |
+| CLR-CONSTRAINT-010 | Bound F# retains all five named method signatures | Explicit unsupported-source gap; no F# source identity edge |
+
+Nine new metadata tests and the strengthened existing F# test cover these rows.
+SRM validates GenericParam owner/index/flags and GenericParamConstraint owner,
+type and assembly scope; Cecil independently reads flags and constraint names.
+Exact assembly-local MethodDef tokens join the oracle observations to TraceMap
+facts from that same input. Facts retain rule `dotnet.compiled.member.v1`, Tier2,
+metadata locations, endpoints, commit, extractor version, exact generator hash
+and bounded-input hash. Rejections retain `dotnet.compiled.gap.v1` / Tier4.
+
+This is a fixture oracle, not a production generic-constraint fact or complete
+constraint-equivalence engine. Generic constraints are not currently included
+in TraceMap's normalized method signatures; this remains a documented coverage
+gap, not a clean constraint comparison. No F# source, PDB, rewritten-body,
+runtime, variance, unmanaged/notnull or static-member constraint claim is made.
+No new machine-readable artifact or production schema/version is introduced.
+
+| Requirement | Implementation/test evidence | Remaining gap | Host/toolchain |
+| --- | --- | --- | --- |
+| #769 dimensions | Existing inventory/admission and synthetic guards | Reviewed private catalog and representative receipts unproven | Authorized Windows/private lane unavailable |
+| #767 language matrix | #820–#824 signatures/options/accessors; current constraint oracle | Production constraint facts, defaults, generated-member and language interactions | Public .NET 10; F# source unsupported |
+| #766 IL/PDB/rewrite | Operand-aware suite and independent reader tests | Broader reviewed matrix and independent PDB line oracle | Portable readers; Windows tools for remaining oracle |
+| #768 Windows | Existing bounded runner and public CI | Passing private bounded receipt and full feasibility acceptance | Authorized Windows/.NET Framework/MSVC unavailable |
+
+Focused command: `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter 'FullyQualifiedName~Generic_constraint_matrix|FullyQualifiedName~Fsharp_fixture_retains' -warnaserror`.
+The existing CI filter includes the new cases on Linux/macOS/Windows. Exact
+validation results and explicit deferrals are in the spec implementation state.
+All epic issues and Tasks 10/11 remain open.

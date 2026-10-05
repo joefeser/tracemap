@@ -178,3 +178,23 @@ Namespace TraceMap.CompiledFixtures.Equivalence
         End Function
     End Class
 End Namespace
+
+Namespace TraceMap.CompiledFixtures.Equivalence
+    Public NotInheritable Class ConstraintShape
+        Public Shared Function Free(Of T)(value As T) As T
+            Return value
+        End Function
+        Public Shared Function Reference(Of T As Class)(value As T) As T
+            Return value
+        End Function
+        Public Shared Function Value(Of T As Structure)(input As T) As T
+            Return input
+        End Function
+        Public Shared Function Construct(Of T As New)(value As T) As T
+            Return value
+        End Function
+        Public Shared Function Disposable(Of T As System.IDisposable)(value As T) As T
+            Return value
+        End Function
+    End Class
+End Namespace
