@@ -4152,3 +4152,8 @@ with independent golden strings and distinct assembly/member endpoints.
 Run the `Clr_signature` filter or the existing `ManagedMetadataExtractorTests`
 filter. The existing portable distribution lane includes these tests. This is
 metadata shape evidence, not source, PDB, IL, rewrite or runtime equivalence.
+
+The optional-parameter continuation uses the `Optional_parameter` filter in
+that same metadata class. It requires independent reader agreement on markers,
+numeric ordering beyond ordinal 9, and sparse setter-only Param-row handling.
+Marker equality does not prove equal default constants or caller behavior.
