@@ -71,7 +71,10 @@ public sealed partial class ManagedMetadataExtractorTests
                 cecilParameter.Constraints.Select(constraint => constraint.ConstraintType.FullName).ToArray());
             var (singleEvaluation, singleFacts, singleCommit) = EvaluateClrMatrix(inputs: [assembly]);
             var fact = Assert.Single(ConstraintMethods(singleFacts), item => item.Properties["metadataToken"] == Token(methodHandle));
-            Assert.Contains(selected, item => item.TargetSymbol == fact.TargetSymbol);
+            var combined = Assert.Single(selected, item => item.TargetSymbol == fact.TargetSymbol);
+            Assert.Equal(Token(methodHandle), combined.Properties["metadataToken"]);
+            Assert.Equal(fact.Properties["signature"], combined.Properties["signature"]);
+            Assert.Equal(fact.Properties["optionalParameterOrdinals"], combined.Properties["optionalParameterOrdinals"]);
             AssertAccessorEvidence(fact, singleEvaluation.Provenance!, singleCommit);
             Assert.Equal(Token(methodHandle), fact.Properties["metadataToken"]);
             Assert.Equal(ConstraintSignature, fact.Properties["signature"]);

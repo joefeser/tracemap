@@ -94,7 +94,10 @@ public sealed partial class ManagedMetadataExtractorTests
 
             var (singleEvaluation, singleFacts, singleCommit) = EvaluateClrMatrix(inputs: [assembly]);
             var fact = Assert.Single(DefaultMethods(singleFacts), item => item.Properties["metadataToken"] == Token(methodHandle));
-            Assert.Contains(matches, item => item.TargetSymbol == fact.TargetSymbol);
+            var combined = Assert.Single(matches, item => item.TargetSymbol == fact.TargetSymbol);
+            Assert.Equal(Token(methodHandle), combined.Properties["metadataToken"]);
+            Assert.Equal(fact.Properties["signature"], combined.Properties["signature"]);
+            Assert.Equal(fact.Properties["optionalParameterOrdinals"], combined.Properties["optionalParameterOrdinals"]);
             Assert.Equal("arity:0" + ClrStatic + "(" + parameterType + ")->" + parameterType, fact.Properties["signature"]);
             Assert.Equal(name == "Required" ? "" : "0", fact.Properties["optionalParameterOrdinals"]);
             AssertAccessorEvidence(fact, singleEvaluation.Provenance!, singleCommit);

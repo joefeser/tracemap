@@ -352,7 +352,9 @@ Ten new metadata cases and the strengthened bound F# test cover these rows.
 SRM checks parameter flags, exact Constant parent/type/blob, and decimal
 attribute parent/constructor/scope/blob. Cecil independently checks decoded
 constant values and decimal constructor arguments. Exact MethodDef tokens from
-the same input bind these observations to TraceMap facts. No fixture assembly
+the same input bind these observations to both single-input and combined-input
+TraceMap facts, with exact token/signature/optional-marker parity asserted.
+The constraint matrix pins the same cross-input invariant. No fixture assembly
 is loaded or executed. All facts retain `dotnet.compiled.member.v1`, Tier2,
 metadata locations, endpoints, commit, extractor version, exact generator and
 bounded-input hashes; rejection facts retain `dotnet.compiled.gap.v1` / Tier4.
