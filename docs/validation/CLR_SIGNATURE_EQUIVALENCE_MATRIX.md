@@ -325,3 +325,53 @@ Focused command: `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csp
 The existing CI filter includes the new cases on Linux/macOS/Windows. Exact
 validation results and explicit deferrals are in the spec implementation state.
 All epic issues and Tasks 10/11 remain open.
+
+## Default-value continuation
+
+Base: verified #825 merge `74364fe5eb4168757d508a232d59958d21eb73a3` on
+`origin/dev`; main remains `7f026f5a`. Branch `codex/767-default-value-matrix`.
+No open PR or competing worktree was found. Existing worktrees and unrelated
+Base44 changes were preserved.
+
+Six `DefaultShape` methods in each public C#/VB/F# fixture separate parameter
+optionality, Constant-table defaults and attribute-encoded defaults. F# uses
+explicit CLI attributes; this does not establish F# source calling semantics.
+
+| Case | Source/CLR oracle | TraceMap evidence and limitation |
+| --- | --- | --- |
+| CLR-DEFAULT-001 | Required Int32, no Optional/HasDefault flags or Constant row | Empty optional ordinals; no default is distinct from a null default |
+| CLR-DEFAULT-002/003 | Optional Int32 7/9: Constant type Int32, blobs 07000000/09000000 | Equal signatures and optional ordinal 0, distinct endpoints and defaults |
+| CLR-DEFAULT-004 | Optional string seven: exact UTF-16 constant bytes | String signature and optional ordinal 0; no runtime substitution claim |
+| CLR-DEFAULT-005 | Optional null string: NullReference code and four zero bytes | Same string signature, different default; null is not an absent row |
+| CLR-DEFAULT-006 | Decimal 7: Optional flag, no HasDefault/Constant row, exact DecimalConstantAttribute constructor and blob | Decimal signature retains System.Runtime scope; absence of a Constant row is not absence of a default |
+| CLR-DEFAULT-007 | Reversed assembly inputs | Byte-identical facts/provenance; six integer methods retain six endpoints despite equal signature/markers |
+| CLR-DEFAULT-008–010 | Duplicate, header-truncated and member-limited inputs per language | Explicit ambiguity/malformed/limit gaps; no eligible duplicate reconciliation |
+| CLR-DEFAULT-011 | Bound F# retains all six named signatures and optional markers | Explicit unsupported-source gap; no F# source reconciliation edge |
+
+Ten new metadata cases and the strengthened bound F# test cover these rows.
+SRM checks parameter flags, exact Constant parent/type/blob, and decimal
+attribute parent/constructor/scope/blob. Cecil independently checks decoded
+constant values and decimal constructor arguments. Exact MethodDef tokens from
+the same input bind these observations to TraceMap facts. No fixture assembly
+is loaded or executed. All facts retain `dotnet.compiled.member.v1`, Tier2,
+metadata locations, endpoints, commit, extractor version, exact generator and
+bounded-input hashes; rejection facts retain `dotnet.compiled.gap.v1` / Tier4.
+
+Default values are not currently production TraceMap fact properties or method
+identity components. This matrix proves the fixture oracle and explicitly
+retains that production coverage gap; it does not prove complete default-value
+comparison, source-to-default reconciliation, caller behavior, enum/date/floating
+point defaults, arbitrary attributes, PDB/IL/rewrite equivalence or F# source
+support. No production schema, version or new derived artifact is introduced.
+
+| Requirement | Implementation/test evidence | Remaining gap | Host/toolchain |
+| --- | --- | --- | --- |
+| #769 corpus dimensions | Existing inventory/admission and synthetic guards | Reviewed private catalog and representative receipts | Authorized Windows/private lane unavailable |
+| #767 language matrix | #820–#825 signatures/options/accessors/constraints; current default-value oracle | Production default/constraint facts, generated-member and language interactions | Public .NET 10; no F# source claim |
+| #766 IL/PDB/rewrite | Operand-aware and independent-reader suite | Broader reviewed matrix and independent PDB line oracle | Portable readers plus Windows tools |
+| #768 Windows | Existing bounded runner and public CI | Passing private bounded receipt and feasibility acceptance | Authorized Windows/.NET Framework/MSVC unavailable |
+
+Focused command: `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter 'FullyQualifiedName~Default_value_matrix|FullyQualifiedName~Fsharp_fixture_retains' -warnaserror`.
+Existing portable CI includes these cases on Linux, macOS and Windows. Exact
+results and deferrals are in the spec implementation state. All epic issues and
+Tasks 10/11 remain open.

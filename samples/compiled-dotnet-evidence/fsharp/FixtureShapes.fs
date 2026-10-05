@@ -73,3 +73,11 @@ type ConstraintShape() =
     static member Value<'T when 'T : struct>(value: 'T) : 'T = value
     static member Construct<'T when 'T : (new : unit -> 'T)>(value: 'T) : 'T = value
     static member Disposable<'T when 'T :> System.IDisposable>(value: 'T) : 'T = value
+
+type DefaultShape() =
+    static member Required(value: int) = value
+    static member IntSeven([<System.Runtime.InteropServices.Optional; System.Runtime.InteropServices.DefaultParameterValue(7)>] value: int) = value
+    static member IntNine([<System.Runtime.InteropServices.Optional; System.Runtime.InteropServices.DefaultParameterValue(9)>] value: int) = value
+    static member Text([<System.Runtime.InteropServices.Optional; System.Runtime.InteropServices.DefaultParameterValue("seven")>] value: string) = value
+    static member NullText([<System.Runtime.InteropServices.Optional; System.Runtime.InteropServices.DefaultParameterValue(null: string)>] value: string) = value
+    static member DecimalSeven([<System.Runtime.InteropServices.Optional; System.Runtime.CompilerServices.DecimalConstant(0uy, 0uy, 0u, 0u, 7u)>] value: decimal) = value
