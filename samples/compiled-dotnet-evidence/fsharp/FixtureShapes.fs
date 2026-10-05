@@ -66,3 +66,10 @@ type OptionalShape() =
         [<System.Runtime.InteropServices.Optional; System.Runtime.InteropServices.DefaultParameterValue(0)>] p8: int,
         [<System.Runtime.InteropServices.Optional; System.Runtime.InteropServices.DefaultParameterValue(0)>] p9: int,
         [<System.Runtime.InteropServices.Optional; System.Runtime.InteropServices.DefaultParameterValue(0)>] p10: int) = p10
+
+type ConstraintShape() =
+    static member Free<'T>(value: 'T) : 'T = value
+    static member Reference<'T when 'T : not struct>(value: 'T) : 'T = value
+    static member Value<'T when 'T : struct>(value: 'T) : 'T = value
+    static member Construct<'T when 'T : (new : unit -> 'T)>(value: 'T) : 'T = value
+    static member Disposable<'T when 'T :> System.IDisposable>(value: 'T) : 'T = value

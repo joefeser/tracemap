@@ -4176,3 +4176,9 @@ For property/event accessor evidence, run
 The public C#/VB/F# matrix uses metadata semantics handles to check accessor
 endpoints and rejects name-only associations. See the
 [case matrix](validation/CLR_SIGNATURE_EQUIVALENCE_MATRIX.md#propertyevent-accessor-continuation).
+
+### Public generic-constraint matrix (#767)
+
+Run `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter 'FullyQualifiedName~Generic_constraint_matrix|FullyQualifiedName~Fsharp_fixture_retains' -warnaserror`.
+The oracle distinguishes raw constraint flags/rows from normalized method
+signatures and keeps F# source unsupported. See the CLR matrix for limitations.
