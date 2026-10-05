@@ -4,6 +4,8 @@
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
     <DebugType>portable</DebugType>
     <Deterministic>true</Deterministic>
+    <!-- The option signature goldens include the FSharp.Core assembly scope. -->
+    <FSharpCoreImplicitPackageVersion>10.1.302</FSharpCoreImplicitPackageVersion>
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="FixtureShapes.fs" />

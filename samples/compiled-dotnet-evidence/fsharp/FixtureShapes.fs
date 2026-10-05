@@ -36,6 +36,12 @@ type SharedShape() =
     static member Rank(value: int[,]) : int[,] = value
 
 // CLI Optional metadata is distinct from F# option-valued source arguments.
+type OptionShape() =
+    static member NullableRoundtrip(value: System.Nullable<int>) : System.Nullable<int> = value
+    static member OptionRoundtrip(value: int option) : int option = value
+    static member ValueOptionRoundtrip(value: int voption) : int voption = value
+    static member OptionalArgument(?value: int) : int option = value
+
 type OptionalShape() =
     static member Required(value: int) = value
     static member OptionalSeven([<System.Runtime.InteropServices.Optional; System.Runtime.InteropServices.DefaultParameterValue(7)>] value: int) = value

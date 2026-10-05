@@ -173,3 +173,53 @@ No private data, runtime execution or new machine-readable artifact is added.
 dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-build --no-restore --filter 'FullyQualifiedName~Optional_source_matrix'
 dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-build --no-restore --filter 'FullyQualifiedName~ManagedMetadataExtractorTests|FullyQualifiedName~SourceMetadataReconciliationTests'
 ```
+
+## Nullable and F# option continuation
+
+Base: `origin/dev` `756368375582a9e0f10cceab18890e9905261b28`, verified #822
+merge; `origin/main` remains `7f026f5a` (2026-10-05). Branch:
+`codex/767-nullable-option-matrix`. No open PR or competing worktree for this
+slice was present. The earlier signature/marker/source-join slices are delivered;
+all five epic issues remain open.
+
+The new public `OptionShape` types compare complete method signatures only.
+Hand-authored goldens name the assembly scopes and instantiated generic types:
+`System.Nullable<Int32>`, `Microsoft.FSharp.Core.FSharpOption<Int32>` and
+`Microsoft.FSharp.Core.FSharpValueOption<Int32>`. The F# fixture pins
+`FSharp.Core` package 10.1.302 (assembly 10.1.0.0), so a compiler SDK update cannot
+silently change the option scope. The System.Runtime reference is 10.0.0.0.
+A different supported reference identity requires an explicit matrix update.
+
+| Case | Source construct / expected evidence | Counterexample or remaining gap | Host/toolchain |
+| --- | --- | --- | --- |
+| CLR-OPTION-001 | C# `int?`, VB `Integer?`, F# `System.Nullable<int>`: equal static roundtrip signatures, three distinct assembly/member/fact identities | Signature equality is not interchangeability or runtime behavior | Public .NET 10 |
+| CLR-OPTION-002 | F# `int option`: exact FSharpOption generic signature | Distinct from Nullable and FSharpValueOption | .NET 10, pinned FSharp.Core |
+| CLR-OPTION-003 | F# `int voption`: exact FSharpValueOption generic signature | Distinct metadata type; no allocation/layout/runtime claim | Same |
+| CLR-OPTION-004 | F# `?value: int`, returned as `int option`: same signature as explicit option roundtrip; empty CLI optional-ordinal list | F# optional source syntax is not a CLI Optional Param flag; different method endpoints remain distinct | Same |
+| CLR-OPTION-005 | Reversed three-assembly input order | Byte-identical provenance and facts, no guessed source edge | Same |
+| CLR-OPTION-006–008 | Each language's expanded assembly copied to a duplicate locator, truncated to a 64-byte header, or admitted with member limit 1 | Explicit duplicate ambiguity, malformed-input and member-limit gaps; duplicate observations are ineligible for source reconciliation | Same; data-only reads |
+| CLR-OPTION-009 | Bound F# scan retains all four OptionShape methods and the existing source-unsupported gap | No source-to-metadata edge; F# source extraction remains unsupported | Same |
+
+Eight new metadata test cases plus the strengthened existing F# source-gap test
+cover these rows. Positive facts require `dotnet.compiled.member.v1` / Tier2,
+exact signature/endpoint, metadata token/location, commit, extractor version,
+exact generator DLL hash and bounded-input hash. Rejections use
+`dotnet.compiled.gap.v1` / Tier4 and the same provenance envelope. Cecil and SRM
+must agree; no assembly is executed. No production extractor, rule, schema or
+identity encoding is changed, and no new machine-readable artifact is added.
+
+| Epic requirement | Delivered evidence | Remaining acceptance | Host/toolchain |
+| --- | --- | --- | --- |
+| #769 corpus dimensions | Existing runway and admission/selection guards | Reviewed private catalog, minimized representatives, deterministic private/projected receipts | Authorized isolated Windows worker unavailable to this run |
+| #767 language matrix | #820 signatures, #821 optional markers, #822 bound C#/VB joins, this nullable/option slice | Defaults/caller semantics, further VB receiver/event and C#/F# generated-member/constraint/quotation interactions | Public .NET fixtures; no F# source claim |
+| #766 IL/PDB/rewrite | Existing operand-aware and independent-reader catalog | Independent portable-PDB line oracle and broader reviewed acceptance | Portable readers; Windows Microsoft tools for oracle |
+| #768 Windows lane | Existing runner, guards, feasibility study; public CI is separate | No passing private bounded receipt; historical legacy dependency blockers remain unverified here | Authorized isolated Windows/.NET Framework/MSVC |
+
+```sh
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter 'FullyQualifiedName~Nullable_option_matrix|FullyQualifiedName~Fsharp_fixture_retains' -warnaserror
+```
+
+The existing portable metadata/source CI filter includes these tests on Linux,
+macOS and Windows. Source-adapter pinned OSS smokes are deferred because this
+slice changes only fixtures/tests and their documentation. Full-suite and CLI
+results are recorded in the spec implementation state.
