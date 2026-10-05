@@ -698,7 +698,7 @@ public static class ScannerVersions
     public const string CSharpPropertyMappingExtractor = "csharp-property-mapping/0.1.0";
     public const string FrameworkMigrationEvidenceExtractor = "framework-migration/0.1.0";
     public const string FrameworkMigrationSyntaxFallbackExtractor = "framework-migration-syntax-fallback/0.1.0";
-    public const string ManagedMetadataExtractor = "managed-metadata/0.1.2+cecil-0.11.6";
+    public const string ManagedMetadataExtractor = "managed-metadata/0.1.3+cecil-0.11.6";
     public const string SourceMetadataReconciliationExtractor = "source-metadata-reconciliation/0.1.0";
     public const string PortablePdbExtractor = "portable-pdb/0.1.0+srm-10.0.0+cecil-0.11.6";
     public const string IlBodyEvidenceExtractor = "il-body-evidence/0.1.11+srm-10.0.0+cecil-0.11.6";

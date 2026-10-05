@@ -34,3 +34,21 @@ type SharedShape() =
     static member Echo<'TLeft, 'TRight>(value: 'TLeft) : 'TLeft = value
     static member Rank(value: int[]) : int[] = value
     static member Rank(value: int[,]) : int[,] = value
+
+// CLI Optional metadata is distinct from F# option-valued source arguments.
+type OptionalShape() =
+    static member Required(value: int) = value
+    static member OptionalSeven([<System.Runtime.InteropServices.Optional; System.Runtime.InteropServices.DefaultParameterValue(7)>] value: int) = value
+    static member OptionalNine([<System.Runtime.InteropServices.Optional; System.Runtime.InteropServices.DefaultParameterValue(9)>] value: int) = value
+    static member Wide(
+        [<System.Runtime.InteropServices.Optional; System.Runtime.InteropServices.DefaultParameterValue(0)>] p0: int,
+        [<System.Runtime.InteropServices.Optional; System.Runtime.InteropServices.DefaultParameterValue(0)>] p1: int,
+        [<System.Runtime.InteropServices.Optional; System.Runtime.InteropServices.DefaultParameterValue(0)>] p2: int,
+        [<System.Runtime.InteropServices.Optional; System.Runtime.InteropServices.DefaultParameterValue(0)>] p3: int,
+        [<System.Runtime.InteropServices.Optional; System.Runtime.InteropServices.DefaultParameterValue(0)>] p4: int,
+        [<System.Runtime.InteropServices.Optional; System.Runtime.InteropServices.DefaultParameterValue(0)>] p5: int,
+        [<System.Runtime.InteropServices.Optional; System.Runtime.InteropServices.DefaultParameterValue(0)>] p6: int,
+        [<System.Runtime.InteropServices.Optional; System.Runtime.InteropServices.DefaultParameterValue(0)>] p7: int,
+        [<System.Runtime.InteropServices.Optional; System.Runtime.InteropServices.DefaultParameterValue(0)>] p8: int,
+        [<System.Runtime.InteropServices.Optional; System.Runtime.InteropServices.DefaultParameterValue(0)>] p9: int,
+        [<System.Runtime.InteropServices.Optional; System.Runtime.InteropServices.DefaultParameterValue(0)>] p10: int) = p10

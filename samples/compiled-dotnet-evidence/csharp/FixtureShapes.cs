@@ -115,3 +115,16 @@ namespace TraceMap.CompiledFixtures.Equivalence
         public static int[,] Rank(int[,] value) => value;
     }
 }
+
+namespace TraceMap.CompiledFixtures.Equivalence
+{
+    public sealed class OptionalShape
+    {
+        public static int Required(int value) => value;
+        public static int OptionalSeven(int value = 7) => value;
+        public static int OptionalNine(int value = 9) => value;
+        public static int Wide(int p0 = 0, int p1 = 0, int p2 = 0, int p3 = 0,
+            int p4 = 0, int p5 = 0, int p6 = 0, int p7 = 0, int p8 = 0,
+            int p9 = 0, int p10 = 0) => p10;
+    }
+}

@@ -67,3 +67,9 @@ slices and require an implementation-state update before work begins.
   bounded rejection and deterministic repeat coverage. See
   `docs/validation/CLR_SIGNATURE_EQUIVALENCE_MATRIX.md`; this does not close
   the broader language matrix or Tasks 10/11.
+
+- [x] 13. Bounded #767 optional-parameter continuation: cross-check existing
+  method/property optional ordinals independently, fix numeric ordering and
+  sparse setter-only parameter selection, and pin C#/VB/F# marker evidence
+  with positive, negative and reader-disagreement regressions. Default-value
+  semantics, F# source extraction and broad #767 acceptance remain open.
