@@ -164,6 +164,13 @@ public sealed partial class SourceMetadataReconciliationTests
             && fact.TargetSymbol!.Contains("|names:13:AccessorShape|", StringComparison.Ordinal)));
         Assert.Single(result.Facts, fact => fact.FactType == FactTypes.ManagedEventDeclared
             && fact.TargetSymbol!.Contains("|names:13:AccessorShape|", StringComparison.Ordinal));
+        foreach (var name in new[] { "Free", "Reference", "Value", "Construct", "Disposable" })
+        {
+            var method = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.ManagedMethodDeclared
+                && fact.TargetSymbol!.Contains("|type:namespace:37:TraceMap.CompiledFixtures.Equivalence|names:15:ConstraintShape|", StringComparison.Ordinal)
+                && fact.Properties["metadataName"] == name);
+            Assert.Equal("arity:1|call:default|hasThis:false|explicitThis:false|(!!0)->!!0", method.Properties["signature"]);
+        }
         Assert.DoesNotContain(result.Facts, fact => fact.FactType == FactTypes.SourceMetadataIdentityReconciled);
         var gap = Assert.Single(result.Facts, fact => fact.Properties.GetValueOrDefault("gapKind") == "SourceMetadataReconciliationUnsupportedLanguage");
         Assert.Equal("fsharp", gap.Properties["language"]);

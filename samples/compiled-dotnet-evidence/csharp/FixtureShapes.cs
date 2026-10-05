@@ -141,3 +141,15 @@ namespace TraceMap.CompiledFixtures.Equivalence
             int p9 = 0, int p10 = 0) => p10;
     }
 }
+
+namespace TraceMap.CompiledFixtures.Equivalence
+{
+    public sealed class ConstraintShape
+    {
+        public static T Free<T>(T value) => value;
+        public static T Reference<T>(T value) where T : class => value;
+        public static T Value<T>(T value) where T : struct => value;
+        public static T Construct<T>(T value) where T : new() => value;
+        public static T Disposable<T>(T value) where T : System.IDisposable => value;
+    }
+}

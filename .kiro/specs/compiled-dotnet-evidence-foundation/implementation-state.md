@@ -1,3 +1,57 @@
+# Current continuation: #767 generic constraints (2026-10-05)
+
+Branch `codex/767-generic-constraint-matrix`, base #824 merge
+`5adfaeb6fad63ecade0bab29a0fabf682ebd38fa`; integration target dev. Existing
+worktrees and unrelated Base44 edits preserved. No competing open PR found.
+
+Scope: five public generic methods per language, independent SRM/Cecil
+constraint oracle, exact MethodDef-token joins, nine new regressions and a
+strengthened bound F# gap test. F# struct emits flags 8/no type row; C#/VB
+emit flags 24/System.ValueType. Method signature equality does not establish
+constraint equivalence. Production constraint facts remain a gap; no extractor,
+identity schema or version changed, no new derived artifact, no runtime loading.
+
+Validation: warning-as-error build and 10 focused cases pass. Two CLI scans
+produce 418 facts each with 15 constraint methods, no reader disagreement and
+byte-identical facts/reports; artifact conformance passes. Seven artifact
+validator tests, private-path, Kiro self-test and whitespace guards pass. The
+unchanged Python validator reports a SQLite ResourceWarning. All 325 surrounding
+compiled/PDB/IL/rewrite tests pass. Full .NET passes 3,299 tests, zero failures,
+one Windows ASP.NET publish skip (3,300 total; 15.32 minutes). CI and live ACK
+remain separate PR gates. Initial fixture build caught a VB
+parameter/function name collision and was corrected. Initial golden assumptions exposed the F#
+struct encoding difference; both readers now must agree on the language-specific
+expected metadata.
+
+Commands from this worktree (logs `/tmp/tracemap-767-constraints-*`):
+
+```sh
+dotnet restore src/dotnet/TraceMap.sln --locked-mode
+dotnet build src/dotnet/TraceMap.sln --no-restore -warnaserror
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter 'FullyQualifiedName~Generic_constraint_matrix|FullyQualifiedName~Fsharp_fixture_retains' -warnaserror
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-build --no-restore --filter 'FullyQualifiedName~ManagedMetadataExtractorTests|FullyQualifiedName~SourceMetadataReconciliationTests|FullyQualifiedName~PortablePdbExtractorTests|FullyQualifiedName~IlBodyEvidenceExtractorTests|FullyQualifiedName~IlRewrite'
+dotnet test src/dotnet/TraceMap.sln --no-build --no-restore --logger 'console;verbosity=normal'
+python3 scripts/test_validate_adapter_artifacts.py
+./scripts/check-private-paths.sh
+node scripts/kiro-review.mjs --self-test
+git diff --check
+```
+
+CLI smoke twice, separate temporary outputs and absolute fixture paths:
+
+```sh
+dotnet run --project src/dotnet/TraceMap.Cli --no-build -- scan --repo samples/modern-sample --out "$smoke_output" --compiled-input "$fixture_root/csharp/bin/Debug/net10.0/CompiledEvidence.CSharp.dll" --compiled-input "$fixture_root/vb/bin/Debug/net10.0/CompiledEvidence.VisualBasic.dll" --compiled-input "$fixture_root/fsharp/bin/Debug/net10.0/CompiledEvidence.FSharp.dll"
+python3 scripts/validate-adapter-artifacts.py "$smoke_output"
+```
+
+Private Windows/corpus execution is unavailable and uninvoked. Source-adapter
+OSS smokes and non-.NET adapter local suites are deferred for this fixture/test
+slice; public CI still exercises the adapters. All epic issues and Tasks 10/11
+remain open. Next work should select one remaining reviewed language interaction
+or design bounded production constraint evidence separately.
+
+---
+
 # Current continuation: #767 property/event accessors (2026-10-05)
 
 Branch `codex/767-property-event-matrix`, based on verified #823 merge
