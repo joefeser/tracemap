@@ -10,5 +10,6 @@
   <ItemGroup>
     <Compile Include="FixtureShapes.fs" />
     <Compile Include="RecordMatrix.fs" />
+    <Compile Include="UnionMatrix.fs" />
   </ItemGroup>
 </Project>

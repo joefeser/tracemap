@@ -1,3 +1,53 @@
+# Current continuation: #767 union factories
+
+Branch `codex/767-union-factory-matrix`, base #830 merge
+`f77773472691c31764b16fd611a4356a126103f8`; target dev. No competing PR/lane.
+Scope: F# union-case factory signatures and mapping attributes versus ordinary
+C#/VB lookalikes, independent SRM/Cecil oracles, exact identities/provenance,
+negative/ambiguous/malformed/bounded/repeat cases and F# source-unsupported gap.
+No runtime union equivalence, source extraction, production rule or schema change.
+Private corpus/Windows worker access remains unavailable and uninvoked.
+Focused validation passes 9/9 with warnings treated as errors. Two CLI scans
+produce 585 facts, six selected factory endpoints, no metadata-reader disagreement
+and byte-identical validated facts/reports. Artifact validator self-tests pass 7/7;
+privacy, Kiro and whitespace guards pass (unchanged Python SQLite ResourceWarning).
+Surrounding compiled tests pass 383/383 (zero failures or skips).
+Full .NET CI on the final head is required;
+a duplicate full local run, non-.NET local suites and pinned source OSS smokes are
+explicitly deferred for this fixture/test-only slice. No full acceptance claim
+comes from issue status or merge ancestry.
+
+The first attribute oracle exposed Cecil's enum-resolution requirement. The
+independent test resolver now admits only the exact pinned FSharp.Core restore
+asset and rejects unknown or wrong-version identities. SRM pins raw constructor
+and attribute fields; Cecil independently decodes enum arguments. The package's
+SourceConstructFlags enum also pins Int32 underlying storage and SumType=1 /
+UnionCase=8. An introduced xUnit2031 warning was fixed with the predicate overload;
+no suppression was added. Production dependency resolution is unchanged.
+
+Commands (logs `/tmp/tracemap-union-*`):
+
+```sh
+dotnet restore src/dotnet/TraceMap.sln --locked-mode
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter 'FullyQualifiedName~Union_matrix|FullyQualifiedName~Fsharp_fixture_retains' -warnaserror
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-build --no-restore --filter 'FullyQualifiedName~ManagedMetadataExtractorTests|FullyQualifiedName~SourceMetadataReconciliationTests|FullyQualifiedName~PortablePdbExtractorTests|FullyQualifiedName~IlBodyEvidenceExtractorTests|FullyQualifiedName~IlRewrite'
+python3 scripts/test_validate_adapter_artifacts.py
+./scripts/check-private-paths.sh
+node scripts/kiro-review.mjs --self-test
+git diff --check
+```
+
+CLI smoke runs twice with separate temporary outputs and absolute public inputs:
+
+```sh
+dotnet run --project src/dotnet/TraceMap.Cli --no-build -- scan --repo samples/modern-sample --out "$smoke_output" --compiled-input "$fixture_root/csharp/bin/Debug/net10.0/CompiledEvidence.CSharp.dll" --compiled-input "$fixture_root/vb/bin/Debug/net10.0/CompiledEvidence.VisualBasic.dll" --compiled-input "$fixture_root/fsharp/bin/Debug/net10.0/CompiledEvidence.FSharp.dll"
+python3 scripts/validate-adapter-artifacts.py "$smoke_output"
+```
+
+Next: PR CI and live ACK. Full union helper,
+layout, generic/struct/null representation, quotation and runtime coverage remain
+open, as do all epic acceptance issues.
+
 # Current continuation: #767 record-generated members
 
 Branch `codex/767-record-generated-matrix`, initially based on #828 `6f168354`.

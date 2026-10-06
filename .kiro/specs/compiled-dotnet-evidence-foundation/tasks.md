@@ -133,3 +133,9 @@ slices and require an implementation-state update before work begins.
   MethodDef/attribute oracles, exact single/combined identities and provenance,
   ambiguity/malformed/limit/repeat cases and explicit F# source-unsupported gap.
   Runtime record equality, full helper coverage and broader acceptance remain open.
+
+- [x] 23. Bounded #767 union-factory continuation: F# type/case mappings and
+  exact factory signatures versus ordinary C#/VB lookalikes, independent raw
+  SRM and Cecil oracles with a pinned test-only enum dependency, single/combined
+  provenance, negative/ambiguous/malformed/bounded/repeat coverage and F# source gap.
+  Full union layout/helpers, runtime and quotation coverage remain open.

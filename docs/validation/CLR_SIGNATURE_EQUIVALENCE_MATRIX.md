@@ -557,3 +557,47 @@ compared against these controlled fixture sources only.
 | #766 | Operand-preserving IL, PDB evidence and public rewrite mutations | Broader edge matrix and independent PDB parity | Public .NET/Windows IL tools |
 | #768 | Public Windows CI and private-runner fail-closed guards | Passing private bounded receipt, endurance and full C++/CLI acceptance | Separately authorized private Windows worker |
 | #759 | Distinct evidence layers and bounded fixture suites | Child criteria remain open | Public and private lanes remain separate |
+
+## Union-factory continuation
+
+Base: #830 merge `f77773472691c31764b16fd611a4356a126103f8` on origin/dev;
+main remains `7f026f5a`. Branch `codex/767-union-factory-matrix`. No competing
+open PR or active union lane was found; unrelated worktrees and edits are preserved.
+
+The F# UnionMatrix has Ready and Failed(Int32) cases. C#/VB ordinary classes
+expose similarly named Ready and NewFailed factories. Their self-return types
+are assembly-scoped: similar signature shapes are not equal signatures or union
+semantics. The ordinary factories intentionally do not implement a union.
+
+| Case | Oracle/evidence | Boundary |
+| --- | --- | --- |
+| CLR-UNION-001–003 | Exact declaring type/MethodDef token, static/public flags, raw class-return/Int32 parameter signature, Cecil decoding and single/combined identities for each language | Six endpoints remain distinct; no display-name join |
+| CLR-UNION-004 | F# type mapping SumType (1), case mapping UnionCase (8), factory ordinals Ready=0 and Failed=1; no mapping on C#/VB lookalikes | Independently pin attribute parent, constructor types/scope, blob fields and named-argument count; no runtime tag/dispatch claim |
+| CLR-UNION-005 | Reversed input order preserves byte-identical facts/provenance | Signature scopes and generated markers remain distinct |
+| CLR-UNION-006–008 | Duplicate assemblies, truncated PE and member limits in all languages | Explicit ambiguity/malformed/limit gaps and source-ineligible duplicates |
+| CLR-UNION-009 | Bound F# scan retains both factory signatures and unsupported-source gap | Metadata mapping is not physical source extraction or source ownership |
+| CLR-UNION-010 | Cecil attribute oracle resolves only the declared pinned FSharp.Core asset; wrong version and System.Runtime requests fail | No ambient dependency probing; enum values/underlying type are checked against that asset |
+
+SRM reads the exact factory signatures and attribute blobs; Cecil independently
+reads types, tokens, signatures, markers and decoded constructor arguments.
+The enum-valued mapping attribute requires FSharp.Core for Cecil decoding. The
+test-only resolver selects the fixture's locked FSharp.Core 10.1.302 restore asset
+(`lib/netstandard2.1/FSharp.Core.dll`), verifies full assembly identity 10.1.0.0,
+and refuses other identities. Missing/multiple assets fail the test explicitly.
+This does not change production dependency admission or add attribute facts.
+
+TraceMap assertions retain rule ID, tier, full assembly/member endpoints, metadata
+location, commit, extractor version, generator/bounded-input hashes and exact
+fixture raw/binding hashes through the shared evidence oracle. No new derived
+artifact, production rule/schema or runtime execution is introduced. Attributes
+are structural metadata, not authenticity or physical-source ownership proof.
+Full union helper/layout, generic/struct/null-representation, quotation and
+runtime semantics remain separate gaps.
+
+| Requirement | Delivered evidence | Remaining gap | Host/toolchain |
+| --- | --- | --- | --- |
+| #769 | Runway and guarded runner contracts | Reviewed private dimension catalog, minimization and deterministic projected output | Authorized isolated Windows corpus access; unavailable/uninvoked |
+| #767 | Merged signatures/defaults/options/accessors/constraints/interfaces/operators/modules/selected records; this union-factory slice | Further generated-member, quotation, receiver and full language acceptance | Public .NET SDK 10.0.302 and declared CI lanes |
+| #766 | Operand-aware IL/PDB/rewrite evidence and public mutations | Broader edge matrix and independent PDB parity | Public .NET plus Windows tools where declared |
+| #768 | Public Windows CI and private-runner guards | Passing private bounded receipt/endurance and complete C++/CLI acceptance | Separately authorized Windows worker |
+| #759 | Distinct evidence layers and bounded public tests | All child acceptance criteria remain open | Public and private lanes remain distinct |
