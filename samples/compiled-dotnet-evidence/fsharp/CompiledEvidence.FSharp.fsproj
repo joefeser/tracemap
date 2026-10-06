@@ -11,5 +11,6 @@
     <Compile Include="FixtureShapes.fs" />
     <Compile Include="RecordMatrix.fs" />
     <Compile Include="UnionMatrix.fs" />
+    <Compile Include="QuotationMatrix.fs" />
   </ItemGroup>
 </Project>

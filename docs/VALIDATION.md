@@ -4254,3 +4254,18 @@ byte-identical. Run the surrounding compiled suite locally and require full .NET
 and cross-platform CI before delivery. Full local .NET duplication, non-.NET local
 suites and pinned source OSS smokes are explicitly deferred for this fixture/test-only
 slice. No runtime union or F# source-extraction coverage is inferred.
+
+### Quotation/expression-tree metadata matrix
+
+```sh
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter 'FullyQualifiedName~Quotation_matrix|FullyQualifiedName~Fsharp_fixture_retains' -warnaserror
+```
+
+The [quotation matrix](validation/CLR_SIGNATURE_EQUIVALENCE_MATRIX.md#quotation-and-expression-tree-continuation)
+pins raw SRM and independent Cecil signatures for expression trees, typed F#
+quotations and delegates, including nested generic arguments and assembly scopes.
+Run the surrounding metadata/source/PDB/IL/rewrite suite, repeated public CLI
+scans and artifact/privacy/spec guards. Require full exact-head .NET and public
+adapter CI; duplicate full local .NET, non-.NET local suites and pinned source
+OSS smokes may be explicitly deferred for this fixture/test-only slice.
+No fixture method is executed; tree contents and runtime semantics are untested.

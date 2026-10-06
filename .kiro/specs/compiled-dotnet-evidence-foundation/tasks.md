@@ -139,3 +139,9 @@ slices and require an implementation-state update before work begins.
   SRM and Cecil oracles with a pinned test-only enum dependency, single/combined
   provenance, negative/ambiguous/malformed/bounded/repeat coverage and F# source gap.
   Full union layout/helpers, runtime and quotation coverage remain open.
+
+- [x] 24. Bounded #767 quotation/expression-tree continuation: public C#/VB
+  expression trees, F# typed quotations and shared Func delegates; independent
+  raw SRM/Cecil nested signature/scope/token oracles, exact single/combined
+  provenance, duplicate/malformed/member-limit/repeat cases and F# source gap.
+  Quotation contents/conversion/runtime and broader language acceptance remain open.
