@@ -1,5 +1,14 @@
 # .NET Evidence Completeness Status
 
+## Record-generated member coverage (2026-10-06)
+
+The bounded #767 continuation pins selected C#/F# record-generated object
+overrides versus ordinary VB lookalikes, independently read with SRM and Cecil.
+Equal signatures preserve distinct assembly/member identities and generated
+markers. No runtime record semantics or F# source ownership is inferred.
+See the [record acceptance matrix](validation/CLR_SIGNATURE_EQUIVALENCE_MATRIX.md#record-generated-member-continuation).
+The broader epic and private corpus/Windows acceptance remain open.
+
 ## Operator/conversion coverage (2026-10-05)
 
 PR #827 is merged at `c155a35f`. The next bounded #767 slice pins C#/VB/F#

@@ -4203,3 +4203,19 @@ The [case matrix](validation/CLR_SIGNATURE_EQUIVALENCE_MATRIX.md#operator-and-co
 pins independent raw metadata oracles, assembly-scoped signatures, source joins,
 per-input provenance, ambiguous/malformed/limited inputs and deterministic repeat
 output. F# source extraction and runtime conversion behavior are not claimed.
+
+### Record-generated member matrix
+
+```sh
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter 'FullyQualifiedName~Record_matrix|FullyQualifiedName~Fsharp_fixture_retains' -warnaserror
+```
+
+The [record matrix](validation/CLR_SIGNATURE_EQUIVALENCE_MATRIX.md#record-generated-member-continuation)
+pins raw MethodDef signatures and generated markers for C#/F# records versus
+ordinary VB lookalikes. Equal CLR signatures do not prove record or runtime
+semantics. SRM and Cecil independently inspect public binaries without executing
+them. Duplicate, malformed and bounded inputs retain gaps; bound F# source scans
+retain unsupported-source coverage. Run the surrounding compiled suite, full .NET
+suite and repeat CLI artifact validation. Non-.NET local suites and source OSS
+smokes may be explicitly deferred for this fixture/test-only slice; adapter CI
+remains required.
