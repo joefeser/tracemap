@@ -124,4 +124,6 @@ slices and require an implementation-state update before work begins.
   container/attribute oracles; F# argument groups and consumed compiled-name
   attributes remain distinct from CLR signature equality. Include single/
   combined provenance, rejection/repeat tests, bound C#/VB joins and explicit
-  F# source gap. Production module/currying relationships remain open.
+  F# source gap. Pin retained CompilationSourceName aliases independently,
+  exact source declaration/span oracles and active build configuration fixtures.
+  Production module/currying relationships remain open.

@@ -5,8 +5,9 @@
 PR #828 is merged at `6f168354`. The next bounded #767 slice compares C#
 static-class, VB Module and F# module methods with exact metadata identities.
 Curried and tupled F# functions share a flat CLR signature but retain distinct
-argument-group metadata. CompiledName is consumed by the compiler; no F# source
-alias edge is invented. Bound C#/VB source joins and F# unsupported-source gaps
+argument-group metadata. CompiledName is consumed by the compiler, while
+CompilationSourceName retains the source aliases. Those aliases alone do not
+establish physical source declarations or ownership edges. Bound C#/VB source joins and F# unsupported-source gaps
 remain separate. See the [acceptance matrix](validation/CLR_SIGNATURE_EQUIVALENCE_MATRIX.md#module-and-currying-continuation).
 The broader language matrix and private Windows/corpus acceptance remain open.
 

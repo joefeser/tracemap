@@ -20,7 +20,29 @@ The metadata oracle corrected two initial assumptions: F# consumes CompiledName
 rather than retaining a method attribute, and the VB module attribute references
 Microsoft.VisualBasic.Core assembly 15.0.0.0 rather than the SDK major version.
 Raw blobs/constructor scopes and independent Cecil decoding pin the actual
-emissions; source aliases are not reconstructed from metadata.
+emissions. Review corrected the initial alias conclusion: CompilationSourceName
+retains curried, tupled and sourceAlias, now pinned independently by SRM and Cecil.
+This metadata does not prove physical source ownership.
+
+PR #829 review repair audits all source reconciliation fixture paths and the
+module/operator/optional source matrix siblings. Active configuration paths replace
+Debug literals; independent declaration identities and exact spans reject
+self-consistent wrong-source substitutions. Focused repair tests pass 16/16. Release build has zero warnings/errors;
+41 source/module tests pass after moving all three original Debug fixture
+directories aside. Source workspace loading recreated empty C#/VB Debug
+directories, preserved separately before restoring original outputs.
+All 368 surrounding metadata/source/PDB/IL/rewrite tests pass after repair.
+Privacy, Kiro and whitespace guards pass. The full-suite result above predates
+this assertion/configuration-only repair; full local rerun is deferred to fresh CI.
+
+Repair commands (logs `/tmp/tracemap-829-*`):
+
+```sh
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter 'FullyQualifiedName~Module_matrix|FullyQualifiedName~Module_source_matrix|FullyQualifiedName~Operator_source_matrix|FullyQualifiedName~Optional_source_matrix_joins|FullyQualifiedName~Source_matrix_oracles|FullyQualifiedName~Fsharp_fixture_retains' -warnaserror
+dotnet build src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj -c Release --no-restore -warnaserror
+# Move only this worktree's compiled fixture bin/Debug directories aside; restore afterward.
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj -c Release --no-build --no-restore --filter 'FullyQualifiedName~SourceMetadataReconciliationTests|FullyQualifiedName~Module_matrix'
+```
 
 Commands (logs `/tmp/tracemap-modules-*`):
 

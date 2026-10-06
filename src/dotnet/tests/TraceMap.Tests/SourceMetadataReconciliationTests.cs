@@ -14,7 +14,7 @@ public sealed partial class SourceMetadataReconciliationTests
     {
         var repo = FindRepoRoot();
         var source = Path.Combine(repo, "samples", "compiled-dotnet-evidence", "csharp");
-        var assembly = Path.Combine(source, "bin", "Debug", "net10.0", "CompiledEvidence.CSharp.dll");
+        var assembly = FixtureAssemblyPath(source, "CompiledEvidence.CSharp.dll");
 
         var result = ScanBound(source, [assembly]);
         var edges = result.Facts.Where(fact => fact.FactType == FactTypes.SourceMetadataIdentityReconciled).ToArray();
@@ -71,7 +71,7 @@ public sealed partial class SourceMetadataReconciliationTests
     {
         var repo = FindRepoRoot();
         var source = Path.Combine(repo, "samples", "compiled-dotnet-evidence", "vb");
-        var assembly = Path.Combine(source, "bin", "Debug", "net10.0", "CompiledEvidence.VisualBasic.dll");
+        var assembly = FixtureAssemblyPath(source, "CompiledEvidence.VisualBasic.dll");
 
         var result = ScanBound(source, [assembly]);
         var edges = result.Facts.Where(fact => fact.FactType == FactTypes.SourceMetadataIdentityReconciled).ToArray();
@@ -101,7 +101,7 @@ public sealed partial class SourceMetadataReconciliationTests
     {
         var repo = FindRepoRoot();
         var source = Path.Combine(repo, "samples", "compiled-dotnet-evidence", "csharp");
-        var otherAssembly = Path.Combine(repo, "samples", "compiled-dotnet-evidence", "vb", "bin", "Debug", "net10.0", "CompiledEvidence.VisualBasic.dll");
+        var otherAssembly = FixtureAssemblyPath(Path.Combine(repo, "samples", "compiled-dotnet-evidence", "vb"), "CompiledEvidence.VisualBasic.dll");
 
         var result = ScanBound(source, [otherAssembly]);
 
@@ -114,7 +114,7 @@ public sealed partial class SourceMetadataReconciliationTests
     {
         var repo = FindRepoRoot();
         var source = Path.Combine(repo, "samples", "compiled-dotnet-evidence", "csharp");
-        var assembly = Path.Combine(source, "bin", "Debug", "net10.0", "CompiledEvidence.CSharp.dll");
+        var assembly = FixtureAssemblyPath(source, "CompiledEvidence.CSharp.dll");
         var duplicateDirectory = Directory.CreateTempSubdirectory("tracemap-duplicate-metadata-");
         var duplicate = Path.Combine(duplicateDirectory.FullName, "duplicate-csharp.dll");
         File.Copy(assembly, duplicate);
@@ -137,7 +137,7 @@ public sealed partial class SourceMetadataReconciliationTests
     {
         var repo = FindRepoRoot();
         var source = Path.Combine(repo, "samples", "compiled-dotnet-evidence", "csharp");
-        var assembly = Path.Combine(source, "bin", "Debug", "net10.0", "CompiledEvidence.CSharp.dll");
+        var assembly = FixtureAssemblyPath(source, "CompiledEvidence.CSharp.dll");
 
         var result = ScanUnbound(source, [assembly]);
 
@@ -151,7 +151,7 @@ public sealed partial class SourceMetadataReconciliationTests
     {
         var repo = FindRepoRoot();
         var source = Path.Combine(repo, "samples", "compiled-dotnet-evidence", "fsharp");
-        var assembly = Path.Combine(source, "bin", "Debug", "net10.0", "CompiledEvidence.FSharp.dll");
+        var assembly = FixtureAssemblyPath(source, "CompiledEvidence.FSharp.dll");
 
         var result = ScanBound(source, [assembly]);
         var fixtureCase = ReadCase("FS-RECON-UNSUPPORTED-003");
@@ -423,7 +423,7 @@ public sealed partial class SourceMetadataReconciliationTests
     {
         var repo = FindRepoRoot();
         var source = Path.Combine(repo, "samples", "compiled-dotnet-evidence", "csharp");
-        var assembly = Path.Combine(source, "bin", "Debug", "net10.0", "CompiledEvidence.CSharp.dll");
+        var assembly = FixtureAssemblyPath(source, "CompiledEvidence.CSharp.dll");
         var temp = Directory.CreateTempSubdirectory("tracemap-source-metadata-cli-");
         try
         {
@@ -490,6 +490,16 @@ public sealed partial class SourceMetadataReconciliationTests
         {
             temp.Delete(recursive: true);
         }
+    }
+
+    private static string FixtureAssemblyPath(string source, string fileName)
+    {
+        var configuration = System.Reflection.CustomAttributeExtensions.GetCustomAttribute<System.Reflection.AssemblyConfigurationAttribute>(
+            typeof(SourceMetadataReconciliationTests).Assembly)?.Configuration;
+        Assert.False(string.IsNullOrWhiteSpace(configuration));
+        var path = Path.Combine(source, "bin", configuration!, "net10.0", fileName);
+        Assert.True(File.Exists(path), path);
+        return path;
     }
 
     private static ScanResult ScanBound(string sourceRepo, IReadOnlyList<string> assemblies)

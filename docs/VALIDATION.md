@@ -4212,3 +4212,13 @@ The [case matrix](validation/CLR_SIGNATURE_EQUIVALENCE_MATRIX.md#module-and-curr
 pins static method identities separately from VB module attributes and F#
 argument-group metadata. Source aliases, runtime calling semantics and F# source
 extraction are not inferred from signature equality.
+
+The module oracle independently decodes CompilationSourceName aliases with SRM
+and Cecil; these names do not prove physical source ownership. Shared source
+matrix oracles pin declaration identities and exact fixture spans for modules,
+operators and optional parameters, with deliberately self-consistent wrong-source
+substitutions rejected. Fixture paths follow the running test assembly configuration.
+Run the source reconciliation suite in Release with `-c Release --no-build
+--no-restore` after a Release build; temporarily make this worktree's three compiled
+fixture `bin/Debug` directories unavailable to prove independence from Debug output,
+then restore those directories.
