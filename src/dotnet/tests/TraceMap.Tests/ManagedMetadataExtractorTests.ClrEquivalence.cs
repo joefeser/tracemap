@@ -147,6 +147,20 @@ public sealed partial class ManagedMetadataExtractorTests
         AssertClrProvenance(gap, provenance, commit);
     }
 
+    private static void AssertClrMemberInput(CodeFact fact, CompiledInputProvenance provenance)
+    {
+        var outcome = Assert.Single(provenance.Outcomes, input => input.SafeLocator == fact.Evidence.FilePath);
+        Assert.Equal(outcome.AssemblyIdentity, fact.Properties["assemblyIdentity"]);
+        // Resolve only the three known public fixtures, never an arbitrary evidence path.
+        var assembly = Assert.Single(new[] { ClrAssembly("csharp"), ClrAssembly("vb"), ClrAssembly("fsharp") },
+            path => Path.GetRelativePath(FindRepoRoot(), path).Replace('\\', '/') == outcome.SafeLocator);
+        var expectedRawHash = Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(assembly))).ToLowerInvariant();
+        Assert.Equal(expectedRawHash, outcome.RawFileSha256);
+        Assert.Equal(expectedRawHash, fact.Properties["rawFileSha256"]);
+        Assert.Matches("^[0-9a-f]{64}$", outcome.ProvenanceBindingInputSha256);
+        Assert.Equal(outcome.ProvenanceBindingInputSha256, fact.Properties["provenanceBindingInputSha256"]);
+    }
+
     private static void AssertClrProvenance(CodeFact fact, CompiledInputProvenance provenance, string commit)
     {
         Assert.Equal(commit, fact.CommitSha);

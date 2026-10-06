@@ -398,12 +398,16 @@ interface name. Raw MethodImpl rows, not names, establish the fixture associatio
 | CLR-INTERFACE-004 | Nine distinct method endpoints/fact IDs across three assemblies with equal signatures | Reversed inputs produce byte-identical facts/provenance |
 | CLR-INTERFACE-005–007 | Duplicate, header-truncated and member-limited inputs in each language | Explicit ambiguity/malformed/limit gaps and no eligible duplicate reconciliation |
 | CLR-INTERFACE-008 | Bound F# retains the declaration, implementation and decoy with exact names/signatures | Unsupported-source gap remains; no F# source edge |
+| CLR-INTERFACE-009 | Single/combined scans reject another assembly's raw hash or an incorrect binding hash, including jointly corrupted fact/outcome raw hashes | Six oracle regressions across all three languages; raw hashes come from the actual fixture bytes |
 
-Seven new metadata cases and the strengthened F# test cover these rows. SRM
+Thirteen new metadata cases and the strengthened F# test cover these rows. SRM
 checks InterfaceImpl and MethodImpl ownership and raw declaration/body MethodDef
 handles; Cecil independently checks interface and override tokens and flags.
 Single-input and combined-input facts must match exact raw tokens, owning type,
-method name, signature and optional markers. Their rule/tier, metadata location,
+method name, signature and optional markers. The shared member helper binds each
+fact to the matching input outcome, assembly identity, actual fixture-byte SHA-256
+and per-input binding SHA-256; accessor, constraint and default matrices inherit
+the same check. Their rule/tier, metadata location,
 commit, extractor version, exact generator and bounded-input hashes remain
 asserted (`dotnet.compiled.member.v1` / Tier2; gaps use
 `dotnet.compiled.gap.v1` / Tier4). No binary is loaded or executed.
