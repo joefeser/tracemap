@@ -155,6 +155,7 @@ public sealed partial class ManagedMetadataExtractorTests
     private static void AssertAccessorEvidence(CodeFact fact, CompiledInputProvenance provenance, string commit)
     {
         AssertClrProvenance(fact, provenance, commit);
+        AssertClrMemberInput(fact, provenance);
         Assert.Equal("dotnet.compiled.member.v1", fact.RuleId);
         Assert.Equal(EvidenceTiers.Tier2Structural, fact.EvidenceTier);
         Assert.Equal(ManagedMetadataExtractor.MetadataLocationKind, fact.Properties["evidenceLocationKind"]);
