@@ -89,3 +89,9 @@ type ExplicitShape() =
     member _.Format(value: string) = "ordinary:" + value
     interface ISharedFormatter with
         member _.Format(value: string) = "explicit:" + value
+
+type OperatorShape() =
+    static member (+) (left: OperatorShape, right: OperatorShape) : OperatorShape = left
+    static member op_Implicit(value: int) : OperatorShape = OperatorShape()
+    static member op_Explicit(value: OperatorShape) : int = 0
+    static member op_LooksLikeOperator(left: OperatorShape, right: OperatorShape) : OperatorShape = right

@@ -176,3 +176,14 @@ namespace TraceMap.CompiledFixtures.Equivalence
         string ISharedFormatter.Format(string value) => "explicit:" + value;
     }
 }
+
+namespace TraceMap.CompiledFixtures.Equivalence
+{
+    public sealed class OperatorShape
+    {
+        public static OperatorShape operator +(OperatorShape left, OperatorShape right) => left;
+        public static implicit operator OperatorShape(int value) => new();
+        public static explicit operator int(OperatorShape value) => 0;
+        public static OperatorShape op_LooksLikeOperator(OperatorShape left, OperatorShape right) => right;
+    }
+}
