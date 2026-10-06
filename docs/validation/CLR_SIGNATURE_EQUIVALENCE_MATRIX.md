@@ -429,3 +429,43 @@ Focused command: `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csp
 Existing CI includes these cases on Linux/macOS/Windows. Exact commands, results
 and deferrals are recorded in the spec state. All epic issues and Tasks 10/11
 remain open.
+
+## Operator and conversion continuation
+
+Base: verified #827 merge `c155a35f3ed111f03fd88e2957e0326093a5eb7b` on
+`origin/dev`; main remains `7f026f5a`. Branch
+`codex/767-operator-conversion-matrix`. No competing open PR was found;
+unrelated worktrees and Base44 edits remain untouched.
+
+The public OperatorShape fixtures compile addition, implicit/widening conversion
+from Int32, explicit/narrowing conversion to Int32, and an ordinary source method
+named op_LooksLikeOperator. The latter shares addition's signature but retains
+its own endpoint. F# marks even this ordinary op_-prefixed method SpecialName;
+C#/VB do not. Neither spelling nor that flag establishes operator semantics.
+
+| Case | Expected metadata/source evidence | Non-claim or explicit gap |
+| --- | --- | --- |
+| CLR-OPERATOR-001–003 | Each language has four exact MethodDef tokens, public/static flags, raw return/parameter types and a declared SpecialName expectation | F# decoy flag differs; no runtime invocation or operator resolution claim |
+| CLR-OPERATOR-004 | Corresponding operators retain assembly-scoped self types, twelve distinct method/fact IDs and three distinct canonical signatures per method name | No cross-assembly identity collapse; ordinary decoy is distinct despite equal within-assembly signature |
+| CLR-OPERATOR-005–007 | Duplicate assemblies, truncated PE headers and member-count limit inputs remain explicit gaps in every language | Duplicate declarations are ineligible for reconciliation; rejected inputs produce no selected methods |
+| CLR-OPERATOR-008–009 | C#/VB bound source joins retain source/metadata endpoint identities, fact references, source spans, rule/tier, commit and extractor versions | Receipt-bound declaration joins do not prove runtime conversion behavior |
+| CLR-OPERATOR-010 | F# compiled signatures remain available under a bound scan | F# source reconciliation is unsupported; no guessed edge |
+
+SRM independently reads raw method signature headers, parameter counts, primitive
+type codes and exact self-type handles. Cecil independently checks method/type
+tokens, return/parameter types and flags. Both single and combined TraceMap scans
+must match hand-authored, assembly-scoped signature goldens and exact metadata
+identities/tokens. The shared member evidence helper checks rule/tier, location,
+commit, extractor version, exact generator/bounded-input SHA-256, raw fixture-byte
+hash and per-input binding hash. Reverse input order must yield identical facts
+and provenance. No new derived artifact, production rule/schema/version, IL body,
+PDB association, source operator-classification rule or conversion edge is added.
+Checked/lifted operators, overload resolution and runtime conversions remain open.
+
+| Requirement | Verified implementation/test evidence at base | Remaining acceptance gap | Host/toolchain |
+| --- | --- | --- | --- |
+| #769 corpus dimensions | Historical runway inventory; separate bounded Windows runner | Authorized catalog/minimization and reproducible privacy-projected outputs | Authorized private corpus and isolated Windows toolchain; not invoked |
+| #767 public language matrix | #820–#827 signatures, optional/defaults, nullable/options, accessors, constraints and explicit-interface fixtures; this slice adds operators/conversions | Remaining language interactions and full reviewed matrix; F# source extraction unsupported | .NET SDK 10.0.302 locally; public cross-platform CI |
+| #766 IL/PDB/rewrite suite | Operand-aware identities, independent reader checks and public mutation lanes already merged | Complete reviewed edge matrix and independent PDB parity | Portable .NET plus declared Windows ILAsm/PDB lanes |
+| #768 Windows/private lane | Public Windows CI, bounded runner guards and C++/CLI feasibility inventory | Passing private bounded receipt, corpus endurance and full feasibility acceptance | Existing authorized isolated Windows worker; unavailable here |
+| #759 parent | Separate source/metadata/PDB/IL/rewrite evidence implementations and bounded validations | Child acceptance criteria remain open; merging a slice does not close the epic | Combination of public and authorized private lanes |

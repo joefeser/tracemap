@@ -1,3 +1,57 @@
+# Current continuation: #767 operators/conversions (2026-10-05)
+
+Branch `codex/767-operator-conversion-matrix`, base #827 merge
+`c155a35f3ed111f03fd88e2957e0326093a5eb7b`; integration target dev.
+No open PR or competing lane found; other worktrees and Base44 edits preserved.
+
+Scope: public C#/VB/F# addition, implicit/explicit conversion and ordinary
+operator-looking method metadata. Independent raw SRM signatures/tokens/flags
+and Cecil oracle; single/combined identities and per-input provenance; negative,
+ambiguous, malformed and bounded cases. No runtime execution or new derived
+artifact; no production operator-classification or conversion edge claim.
+
+Validation: locked restore and build pass without warnings; focused 10/10 and
+surrounding metadata/source/PDB/IL/rewrite 357/357 pass. Two CLI scans retain 478
+facts and all 12 selected methods, no reader disagreement, and byte-identical
+facts/reports. Both outputs validate; validator self-tests 7/7, private-path,
+Kiro and diff checks pass. The validator emits its unchanged SQLite
+ResourceWarning. Full .NET passes 3,331 tests, zero failures and one Windows
+ASP.NET publish skip (3,332 total; 15.18 minutes).
+
+Initial golden assertions incorrectly omitted self-type assembly scope and
+assumed every ordinary op_-prefixed method lacked SpecialName. Tests now retain
+scope and pin the independently observed F# SpecialName difference; neither
+comparison is weakened into a name-only or scope-free identity claim.
+
+Commands (logs `/tmp/tracemap-operators-*`):
+
+```sh
+dotnet restore src/dotnet/TraceMap.sln --locked-mode
+dotnet build src/dotnet/TraceMap.sln --no-restore -warnaserror
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter 'FullyQualifiedName~Operator_matrix|FullyQualifiedName~Operator_source_matrix|FullyQualifiedName~Fsharp_fixture_retains' -warnaserror
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-build --no-restore --filter 'FullyQualifiedName~ManagedMetadataExtractorTests|FullyQualifiedName~SourceMetadataReconciliationTests|FullyQualifiedName~PortablePdbExtractorTests|FullyQualifiedName~IlBodyEvidenceExtractorTests|FullyQualifiedName~IlRewrite'
+dotnet test src/dotnet/TraceMap.sln --no-build --no-restore --logger 'console;verbosity=normal'
+python3 scripts/test_validate_adapter_artifacts.py
+./scripts/check-private-paths.sh
+node scripts/kiro-review.mjs --self-test
+git diff --check
+```
+
+CLI smoke twice with separate temporary outputs and absolute public fixture paths:
+
+```sh
+dotnet run --project src/dotnet/TraceMap.Cli --no-build -- scan --repo samples/modern-sample --out "$smoke_output" --compiled-input "$fixture_root/csharp/bin/Debug/net10.0/CompiledEvidence.CSharp.dll" --compiled-input "$fixture_root/vb/bin/Debug/net10.0/CompiledEvidence.VisualBasic.dll" --compiled-input "$fixture_root/fsharp/bin/Debug/net10.0/CompiledEvidence.FSharp.dll"
+python3 scripts/validate-adapter-artifacts.py "$smoke_output"
+```
+
+Private corpus and Windows worker access remain unavailable/uninvoked. Public
+Windows CI is a separate gate. Non-.NET local suites and pinned source OSS smokes
+are explicitly deferred for this fixture/test-only slice; CI exercises all
+adapters. Broader #767, Tasks 10/11 and all epic issues remain open. Next steps:
+PR/live ACK, then select a remaining documented interaction.
+
+---
+
 # Current continuation: #767 explicit interfaces (2026-10-05)
 
 Branch `codex/767-explicit-interface-matrix`, base #826 merge

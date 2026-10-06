@@ -236,3 +236,20 @@ Namespace TraceMap.CompiledFixtures.Equivalence
         End Function
     End Class
 End Namespace
+
+Namespace TraceMap.CompiledFixtures.Equivalence
+    Public NotInheritable Class OperatorShape
+        Public Shared Operator +(left As OperatorShape, right As OperatorShape) As OperatorShape
+            Return left
+        End Operator
+        Public Shared Widening Operator CType(value As Integer) As OperatorShape
+            Return New OperatorShape()
+        End Operator
+        Public Shared Narrowing Operator CType(value As OperatorShape) As Integer
+            Return 0
+        End Operator
+        Public Shared Function op_LooksLikeOperator(left As OperatorShape, right As OperatorShape) As OperatorShape
+            Return right
+        End Function
+    End Class
+End Namespace
