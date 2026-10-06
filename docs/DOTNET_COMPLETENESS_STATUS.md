@@ -1,5 +1,14 @@
 # .NET Evidence Completeness Status
 
+## Default-value coverage (2026-10-05)
+
+PR #825 is merged at `74364fe5`. The next bounded #767 slice distinguishes
+required, integer, string, null and decimal defaults across C#/VB/F#. Independent
+constant/attribute oracles keep default values separate from method signatures
+and optional markers. Production default-value facts remain a gap. See the
+[acceptance matrix](validation/CLR_SIGNATURE_EQUIVALENCE_MATRIX.md#default-value-continuation).
+Private/Windows acceptance and the broader epic remain open.
+
 ## Generic-constraint coverage (2026-10-05)
 
 PR #824 is merged at `5adfaeb6`. The next bounded #767 matrix pins five

@@ -4182,3 +4182,9 @@ endpoints and rejects name-only associations. See the
 Run `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter 'FullyQualifiedName~Generic_constraint_matrix|FullyQualifiedName~Fsharp_fixture_retains' -warnaserror`.
 The oracle distinguishes raw constraint flags/rows from normalized method
 signatures and keeps F# source unsupported. See the CLR matrix for limitations.
+
+### Public default-value matrix (#767)
+
+Run `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter 'FullyQualifiedName~Default_value_matrix|FullyQualifiedName~Fsharp_fixture_retains' -warnaserror`.
+Constant rows, null defaults and decimal attributes remain distinct from method
+signatures and optional markers. See the CLR matrix for coverage limitations.
