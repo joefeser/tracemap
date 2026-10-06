@@ -4203,3 +4203,12 @@ The [case matrix](validation/CLR_SIGNATURE_EQUIVALENCE_MATRIX.md#operator-and-co
 pins independent raw metadata oracles, assembly-scoped signatures, source joins,
 per-input provenance, ambiguous/malformed/limited inputs and deterministic repeat
 output. F# source extraction and runtime conversion behavior are not claimed.
+
+
+### Module and currying metadata/source matrix
+
+Run `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter 'FullyQualifiedName~Module_matrix|FullyQualifiedName~Module_source_matrix|FullyQualifiedName~Fsharp_fixture_retains' -warnaserror`.
+The [case matrix](validation/CLR_SIGNATURE_EQUIVALENCE_MATRIX.md#module-and-currying-continuation)
+pins static method identities separately from VB module attributes and F#
+argument-group metadata. Source aliases, runtime calling semantics and F# source
+extraction are not inferred from signature equality.

@@ -95,3 +95,11 @@ type OperatorShape() =
     static member op_Implicit(value: int) : OperatorShape = OperatorShape()
     static member op_Explicit(value: OperatorShape) : int = 0
     static member op_LooksLikeOperator(left: OperatorShape, right: OperatorShape) : OperatorShape = right
+
+module ModuleShape =
+    [<CompiledName("Curried")>]
+    let curried (left: int) (right: int) : int = left + right
+    [<CompiledName("Tupled")>]
+    let tupled (left: int, right: int) : int = left + right
+    [<CompiledName("Renamed")>]
+    let sourceAlias (value: int) : int = value
