@@ -601,3 +601,41 @@ runtime semantics remain separate gaps.
 | #766 | Operand-aware IL/PDB/rewrite evidence and public mutations | Broader edge matrix and independent PDB parity | Public .NET plus Windows tools where declared |
 | #768 | Public Windows CI and private-runner guards | Passing private bounded receipt/endurance and complete C++/CLI acceptance | Separately authorized Windows worker |
 | #759 | Distinct evidence layers and bounded public tests | All child acceptance criteria remain open | Public and private lanes remain distinct |
+
+## Quotation and expression-tree continuation
+
+This bounded #767 slice follows merged #831 (`eafa68e7`). Public
+`QuotationMatrix` fixtures expose `Tree`, `Delegate` and `Echo` in C#/VB/F#.
+C#/VB trees return `Expression<Func<Int32>>`; F# typed quotations return
+`FSharpExpr<Int32>`. All three delegate methods return `Func<Int32>`.
+These are metadata signatures: the tests never invoke, compile or evaluate the
+returned trees/delegates and do not prove equivalent expression contents.
+
+| Case | Expected metadata evidence | Non-claim |
+| --- | --- | --- |
+| CLR-QUOTE-001 | C#/VB Tree signatures match, with exact nested Expression/Func type references | No tree-content or runtime equivalence |
+| CLR-QUOTE-002 | F# Tree uses FSharp.Core-scoped FSharpExpr<Int32>, distinct from Expression and Func | No automatic quotation conversion |
+| CLR-QUOTE-003 | All Delegate signatures match while retaining three distinct endpoints | No execution or closure equivalence |
+| CLR-QUOTE-004 | Echo parameter and return preserve both generic wrapper levels where present | No inferred source ownership |
+| CLR-QUOTE-005 | SRM raw signature bytes/TypeRefs/AssemblyRefs and Cecil independently agree on exact MethodDef token and shape | Neither reader alone is the oracle |
+| CLR-QUOTE-006 | Nine distinct endpoints/fact IDs, single/combined input evidence, reversed-input byte determinism | No display-name identity join |
+| CLR-QUOTE-007 | Duplicate primaries emit ambiguity and are source-ineligible | No guessed assembly choice |
+| CLR-QUOTE-008 | Truncated PE and member limit emit partial Tier4 gaps | No clean result from rejected input |
+| CLR-QUOTE-009 | F# compiled methods survive while the source-unsupported gap remains | No F# source extraction |
+
+Every selected fact uses the shared evidence oracle to pin rule/tier, exact
+assembly/member identity and metadata token/location, commit, extractor version,
+generator/bounded-input hashes and per-input raw/binding hashes. No new derived
+machine-readable artifact, production rule, dependency resolver or schema is
+introduced. Reference signatures pin System.Runtime/System.Linq.Expressions
+10.0.0.0 and FSharp.Core 10.1.0.0 from the existing locked toolchain.
+Untyped quotations, splices, captures, generated helpers, quotation contents,
+conversion and runtime behavior remain open.
+
+| Requirement | Implementation/test evidence | Remaining gap | Required host/toolchain |
+| --- | --- | --- | --- |
+| #769 | Existing corpus runway and guarded lane | Reviewed private dimensions/minimizations and deterministic projected catalog | Authorized isolated Windows corpus access; unavailable/uninvoked |
+| #767 | Merged matrices through union factories; quotation signature/oracle tests here | Remaining language interactions and full source/PDB/generated-member acceptance | Public .NET SDK 10.0.302 and declared CI |
+| #766 | Existing operand-aware IL/PDB/rewrite tests | Broader edge matrix and independent PDB parity | Public .NET and declared Windows tools |
+| #768 | Existing public Windows CI and private-runner guards | Private bounded/endurance receipts and complete C++/CLI acceptance | Separately authorized Windows worker |
+| #759 | Distinct evidence layers and bounded public tests | Child acceptance remains open | Separate public/private lanes |

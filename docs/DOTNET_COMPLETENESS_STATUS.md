@@ -1,5 +1,14 @@
 # .NET Evidence Completeness Status
 
+## Quotation/expression-tree coverage (2026-10-06)
+
+PR #831 is merged at `eafa68e7`. The next bounded #767 slice distinguishes
+C#/VB Expression<Func<Int32>>, F# FSharpExpr<Int32> and shared Func<Int32>
+signatures with exact independent reader and provenance assertions. This proves
+metadata shape only, not tree contents, runtime equivalence or F# source ownership.
+See the [acceptance matrix](validation/CLR_SIGNATURE_EQUIVALENCE_MATRIX.md#quotation-and-expression-tree-continuation).
+Private corpus/Windows and broader language/IL/PDB/rewrite acceptance remain open.
+
 ## Union-factory coverage (2026-10-06)
 
 PR #830 is merged at `f7777347`. The next bounded #767 slice pins F#
