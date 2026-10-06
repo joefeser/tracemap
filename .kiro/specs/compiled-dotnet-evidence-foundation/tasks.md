@@ -119,6 +119,15 @@ slices and require an implementation-state update before work begins.
   source joins and retained F# unsupported-source gap. F# decoy SpecialName
   distinction is explicit; runtime resolution/conversion behavior remains open.
 
+- [x] 21. Bounded #767 module/currying continuation: public C# static class,
+  VB Module and F# module, exact method identities/signatures and independent
+  container/attribute oracles; F# argument groups and consumed compiled-name
+  attributes remain distinct from CLR signature equality. Include single/
+  combined provenance, rejection/repeat tests, bound C#/VB joins and explicit
+  F# source gap. Pin retained CompilationSourceName aliases independently,
+  exact source declaration/span oracles and active build configuration fixtures.
+  Production module/currying relationships remain open.
+
 - [x] 22. Bounded #767 record-generated-member continuation: selected C#/F#
   synthesized object overrides versus ordinary VB lookalikes, raw SRM/Cecil
   MethodDef/attribute oracles, exact single/combined identities and provenance,

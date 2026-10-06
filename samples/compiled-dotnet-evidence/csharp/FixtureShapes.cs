@@ -187,3 +187,13 @@ namespace TraceMap.CompiledFixtures.Equivalence
         public static OperatorShape op_LooksLikeOperator(OperatorShape left, OperatorShape right) => right;
     }
 }
+
+namespace TraceMap.CompiledFixtures.Equivalence
+{
+    public static class ModuleShape
+    {
+        public static int Curried(int left, int right) => left + right;
+        public static int Tupled(int left, int right) => left + right;
+        public static int Renamed(int value) => value;
+    }
+}

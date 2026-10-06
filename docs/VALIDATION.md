@@ -4204,6 +4204,25 @@ pins independent raw metadata oracles, assembly-scoped signatures, source joins,
 per-input provenance, ambiguous/malformed/limited inputs and deterministic repeat
 output. F# source extraction and runtime conversion behavior are not claimed.
 
+
+### Module and currying metadata/source matrix
+
+Run `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter 'FullyQualifiedName~Module_matrix|FullyQualifiedName~Module_source_matrix|FullyQualifiedName~Fsharp_fixture_retains' -warnaserror`.
+The [case matrix](validation/CLR_SIGNATURE_EQUIVALENCE_MATRIX.md#module-and-currying-continuation)
+pins static method identities separately from VB module attributes and F#
+argument-group metadata. Source aliases, runtime calling semantics and F# source
+extraction are not inferred from signature equality.
+
+The module oracle independently decodes CompilationSourceName aliases with SRM
+and Cecil; these names do not prove physical source ownership. Shared source
+matrix oracles pin declaration identities and exact fixture spans for modules,
+operators and optional parameters, with deliberately self-consistent wrong-source
+substitutions rejected. Fixture paths follow the running test assembly configuration.
+Run the source reconciliation suite in Release with `-c Release --no-build
+--no-restore` after a Release build; temporarily make this worktree's three compiled
+fixture `bin/Debug` directories unavailable to prove independence from Debug output,
+then restore those directories.
+
 ### Record-generated member matrix
 
 ```sh

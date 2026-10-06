@@ -470,11 +470,58 @@ Checked/lifted operators, overload resolution and runtime conversions remain ope
 | #768 Windows/private lane | Public Windows CI, bounded runner guards and C++/CLI feasibility inventory | Passing private bounded receipt, corpus endurance and full feasibility acceptance | Existing authorized isolated Windows worker; unavailable here |
 | #759 parent | Separate source/metadata/PDB/IL/rewrite evidence implementations and bounded validations | Child acceptance criteria remain open; merging a slice does not close the epic | Combination of public and authorized private lanes |
 
+## Module and currying continuation
+
+Base: verified #828 merge `6f168354a17a90dd16236105e9b1c366d4b76198` on
+`origin/dev`; main remains `7f026f5a`. Branch `codex/767-module-currying-matrix`.
+No competing open PR was found. Other worktrees and unrelated edits are preserved.
+
+ModuleShape is a C# static class, VB Module, or F# module. All have Curried,
+Tupled and Renamed methods. The C#/VB methods are ordinary static functions;
+only F# has source currying and a tupled source argument. F# CompiledName maps
+lowercase/sourceAlias declarations to the three selected metadata names.
+
+| Case | Expected evidence | Limitation / negative assertion |
+| --- | --- | --- |
+| CLR-MODULE-001 | C# sealed/abstract container; three public static MethodDefs with exact raw signatures, tokens and full identities | Static-class structure does not prove source module semantics |
+| CLR-MODULE-002 | VB sealed/non-abstract container with independently decoded StandardModuleAttribute; same static signatures | Preserve container flag difference; scoped attribute constructor identity and blob checked |
+| CLR-MODULE-003 | F# sealed/abstract container; Curried and Tupled have identical two-Int32 parameter signatures | Only Curried has CompilationArgumentCounts `[1,1]`; CompiledName is consumed; CompilationSourceName independently retains curried, tupled and sourceAlias |
+| CLR-MODULE-004 | Nine distinct method/fact IDs across three assemblies; reversed inputs preserve exact facts/provenance | Signature equality does not collapse endpoints or prove source calling conventions; sourceAlias/lowercase aliases are not guessed metadata members |
+| CLR-MODULE-005–007 | Duplicate assemblies, truncated PE and member-count limits in all three languages | Explicit ambiguity/malformed/limit gaps; duplicate methods ineligible for source reconciliation |
+| CLR-MODULE-008–009 | Bound C#/VB source declarations join exact metadata endpoints | Both evidence envelopes remain; no runtime or F# source claim |
+| CLR-MODULE-010 | Bound F# scan retains all three compiled names/signatures | Unsupported-source gap remains; no production source-name or source-currying edge |
+| CLR-MODULE-011 | Independent C#/VB declaration identities and exact fixture spans for modules, operators and optional parameters | Self-consistent substitutions of another method's source symbol, declaration or span are rejected |
+| CLR-MODULE-012 | Source reconciliation fixtures resolve the running test assembly configuration | Release must work with Debug fixture directories unavailable |
+
+SRM reads exact signature and attribute blobs, parent handles, constructor
+signatures and assembly scopes; Cecil independently checks tokens, flags,
+parameter/return types and decoded argument arrays. FSharp.Core is pinned by the
+fixture package and metadata oracle (assembly 10.1.0.0); the VB attribute scope
+is Microsoft.VisualBasic.Core 15.0.0.0. Single/combined facts require exact full
+assembly/member identities, metadata tokens and golden signatures. The shared
+member helper checks rule/tier, metadata location, commit, extractor version,
+exact generator/bounded-input SHA-256, raw fixture bytes and per-input binding
+hash. Source joins preserve source spans, separate endpoints and binding evidence.
+
+This adds a fixture oracle, not a production module/currying classifier or
+attribute relationship rule. CompilationSourceName retains source aliases in
+metadata, independently decoded by SRM and Cecil. An alias alone does not establish
+a physical source declaration, location or ownership edge. No runtime execution, PDB mapping,
+F# source extraction, schema/version change or new derived artifact is introduced.
+
+| Requirement | Verified implementation/test evidence | Remaining gap | Host/toolchain |
+| --- | --- | --- | --- |
+| #769 corpus | Historical inventory/runway and isolated runner contracts | Private catalog, reviewed minimization and deterministic projected artifacts | Authorized isolated Windows/corpus access; unavailable and uninvoked |
+| #767 language matrix | #820–#828 public signatures, defaults/options/constraints, accessors, explicit interfaces and operators; this slice adds modules/currying | Other language interactions and full reviewed acceptance; no F# source adapter | .NET SDK 10.0.302 locally plus public cross-platform CI |
+| #766 IL/PDB/rewrite | Existing operand-aware evidence, independent readers and public mutation lanes | Broader edge matrix and independent PDB parity | Portable .NET and declared Windows ILAsm/PDB lanes |
+| #768 Windows | Existing public CI and bounded runner guards | Private bounded receipt, endurance and complete C++/CLI acceptance | Authorized private Windows worker |
+| #759 parent | Distinct evidence layers and bounded public validation | All child acceptance criteria remain open | Public and separately authorized private lanes |
+
 ## Record-generated member continuation
 
-Branch `codex/767-record-generated-matrix` starts at fetched `origin/dev`
-`6f168354` (#828). During reconciliation GitHub still reported #829 open, so
-its module continuation is not claimed as merged. Main remains `7f026f5a`.
+Branch `codex/767-record-generated-matrix` started at #828 `6f168354`, then
+integrated fresh origin/dev after #829 merged at `874db8a9`. Module/currying
+evidence is now delivered in dev. Main remains `7f026f5a`.
 
 The new `RecordMatrix` public fixtures use a C# sealed positional record, an F#
 record and an ordinary sealed VB class. All expose Count plus object overrides.
@@ -506,7 +553,7 @@ compared against these controlled fixture sources only.
 | Requirement | Delivered evidence | Remaining gap | Required host |
 | --- | --- | --- | --- |
 | #769 | Corpus runway and guarded runner contracts | Private dimension catalog, reviewed minimization and repeatable projected output | Authorized isolated Windows corpus lane; unavailable/uninvoked |
-| #767 | Merged signatures/defaults/options/accessors/constraints/interfaces/operators; this record slice | #829 module merge reconciliation, union/quotation and other targeted generated-member/receiver interactions; full acceptance | Public .NET SDK 10.0.302 plus CI |
+| #767 | Merged signatures/defaults/options/accessors/constraints/interfaces/operators/modules; this record slice | Union/quotation and other targeted generated-member/receiver interactions; full acceptance | Public .NET SDK 10.0.302 plus CI |
 | #766 | Operand-preserving IL, PDB evidence and public rewrite mutations | Broader edge matrix and independent PDB parity | Public .NET/Windows IL tools |
 | #768 | Public Windows CI and private-runner fail-closed guards | Passing private bounded receipt, endurance and full C++/CLI acceptance | Separately authorized private Windows worker |
 | #759 | Distinct evidence layers and bounded fixture suites | Child criteria remain open | Public and private lanes remain separate |
