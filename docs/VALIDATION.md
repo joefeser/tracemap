@@ -4285,3 +4285,19 @@ repeat a public CLI scan with `--il-body-evidence`, validating emitted artifacts
 Require full final-head .NET and public adapter CI. Duplicate full local .NET,
 non-.NET local suites and pinned source OSS smokes are explicitly deferred for
 this fixture/test-only slice. Private Windows and runtime dispatch remain untested.
+
+### C#/VB nested generic ownership matrix
+
+```sh
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter FullyQualifiedName~Nested_matrix -warnaserror
+```
+
+The [nested generic matrix](validation/CLR_SIGNATURE_EQUIVALENCE_MATRIX.md#nested-generic-ownership-continuation)
+pins GenericParam ownership/ordinals, VAR versus MVAR, inherited outer parameters,
+constructed argument order and assembly scopes using raw SRM and independent
+Cecil. Run the surrounding metadata/source/PDB/IL/rewrite suite, repeated public
+CLI scans and artifact/privacy/spec guards. Require full final-head .NET and
+public cross-platform CI. Duplicate full local .NET, non-.NET local suites and
+pinned source OSS smokes are explicitly deferred for this fixture/test-only slice.
+Neither fixture methods nor malformed bytes are executed; source ownership,
+F# nested types, runtime behavior and private Windows acceptance remain unproven.
