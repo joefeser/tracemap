@@ -1,3 +1,58 @@
+# Current continuation: #767 quotation/expression-tree signatures
+
+Branch `codex/767-quotation-expression-matrix`, fresh dev base #831 merge
+`eafa68e7072fb8a6f992fae6fbe6225dcfe707e7`; target dev. No open competing PR
+or active quotation lane found. Unrelated primary Base44 edits/worktrees preserved.
+Scope: C#/VB Expression<Func<Int32>>, F# FSharpExpr<Int32> and shared Func<Int32>
+method signatures, exact SRM/Cecil tokens/type references/assembly scopes,
+single/combined fact provenance, ambiguity/malformed/member-limit/repeat cases,
+and the explicit F# source-unsupported gap. No production rule/schema or derived
+machine artifact. No fixture execution, tree-content or runtime equivalence claim.
+Private corpus/isolated Windows access remains unavailable and uninvoked; #768,
+#769 and parent #759 remain open. Public Windows CI is separate evidence.
+
+Focused tests pass 8/8 with zero warnings/errors. Repeated CLI scans produce
+615 facts and nine selected methods; validated facts/reports are byte-identical.
+Validator self-tests pass 7/7; privacy/spec/whitespace guards pass. Surrounding
+compiled-suite validation passes 390/390 (zero failures/skips). Full final-head
+.NET/public-adapter CI remains required. Duplicate full local .NET, non-.NET local
+suites and pinned source OSS smokes are explicitly deferred for this fixture/test
+slice. The initial focused test caught a handwritten F# namespace length of 26
+instead of 27; the raw SRM/Cecil oracle passed and the golden framing was corrected.
+No production identity check was changed or weakened.
+
+Commands (logs `/tmp/tracemap-quotation-*`):
+
+```sh
+dotnet restore src/dotnet/TraceMap.sln --locked-mode
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter 'FullyQualifiedName~Quotation_matrix|FullyQualifiedName~Fsharp_fixture_retains' -warnaserror
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-build --no-restore --filter 'FullyQualifiedName~ManagedMetadataExtractorTests|FullyQualifiedName~SourceMetadataReconciliationTests|FullyQualifiedName~PortablePdbExtractorTests|FullyQualifiedName~IlBodyEvidenceExtractorTests|FullyQualifiedName~IlRewrite'
+python3 scripts/test_validate_adapter_artifacts.py
+./scripts/check-private-paths.sh
+node scripts/kiro-review.mjs --self-test
+git diff --check
+```
+
+CLI smoke twice, with separate temporary outputs and absolute public fixture paths:
+
+```sh
+dotnet run --project src/dotnet/TraceMap.Cli --no-build -- scan --repo samples/modern-sample --out "$smoke_output" --compiled-input "$fixture_root/csharp/bin/Debug/net10.0/CompiledEvidence.CSharp.dll" --compiled-input "$fixture_root/vb/bin/Debug/net10.0/CompiledEvidence.VisualBasic.dll" --compiled-input "$fixture_root/fsharp/bin/Debug/net10.0/CompiledEvidence.FSharp.dll"
+python3 scripts/validate-adapter-artifacts.py "$smoke_output"
+```
+
+PR #832 opened at `ee95fa67`. Initial exact-head CI passed all gates with
+3,364 .NET tests and one skip; no reruns. Settled ACK review authorized two
+repairs: explicit no-edge expectations and per-input duplicate evidence.
+The shared invariant is evidence separation, audited across this slice's
+single/combined/reversed/duplicate/rejected cases and bound F# scan. No production
+change or unrelated matrix rewrite is needed. Tests now pin both expected safe
+locators, each outcome/gap and three distinct method facts per input, with raw/
+binding provenance, and assert no relationship source endpoints in metadata-only
+output. The matrix states no-edge expectations for every case. Repair focused validation passes 8/8 with zero warnings/errors; privacy/spec/
+whitespace guards pass. Final-head CI/ACK remain required. Untyped
+quotations, splices, captures, generated helpers, conversions and runtime behavior
+remain future scope; broad issue acceptance is not inferred from this slice.
+
 # Current continuation: #767 union factories
 
 Branch `codex/767-union-factory-matrix`, base #830 merge
