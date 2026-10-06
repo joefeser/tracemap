@@ -111,3 +111,10 @@ slices and require an implementation-state update before work begins.
   retained F# unsupported-source boundary. Per-input hashes are checked against
   fixture bytes/outcomes, with cross-assembly corruption regressions and shared
   accessor/constraint/default coverage. Production dispatch edges remain open.
+
+- [x] 20. Bounded #767 operator/conversion continuation: public C#/VB/F#
+  addition, implicit/explicit conversions and ordinary op_-prefixed decoy;
+  independent raw signature/token/flag oracles, assembly-scoped goldens,
+  single/combined per-input provenance, rejection/repeat cases, bound C#/VB
+  source joins and retained F# unsupported-source gap. F# decoy SpecialName
+  distinction is explicit; runtime resolution/conversion behavior remains open.

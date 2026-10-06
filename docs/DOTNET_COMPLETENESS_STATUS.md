@@ -1,5 +1,16 @@
 # .NET Evidence Completeness Status
 
+## Operator/conversion coverage (2026-10-05)
+
+PR #827 is merged at `c155a35f`. The next bounded #767 slice pins C#/VB/F#
+addition and implicit/explicit conversion MethodDefs, raw signatures and an
+ordinary operator-looking decoy. Assembly scopes stay distinct, including
+self-type signatures. F# marks the decoy SpecialName while C#/VB do not;
+this is not proof of operator semantics. Bound C#/VB source joins and the F#
+unsupported-source gap are tested separately. See the
+[acceptance matrix](validation/CLR_SIGNATURE_EQUIVALENCE_MATRIX.md#operator-and-conversion-continuation).
+Private corpus/Windows acceptance and broader language coverage remain open.
+
 ## Explicit-interface coverage (2026-10-05)
 
 PR #826 is merged at `b40267b1`. The next bounded #767 slice pins explicit
