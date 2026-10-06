@@ -11,14 +11,15 @@ unavailable and uninvoked. No duplicate active record lane was found; primary
 checkout unrelated Base44 edits and all other worktrees remain untouched.
 
 Initial focused metadata tests: 7/7. Locked restore and warnings-as-errors test
-build pass. Two public CLI scans produce 520 facts with byte-identical validated
+build pass. After integrating #829, two public CLI scans produce 532 facts with byte-identical validated
 facts/reports. Validator self-tests 7/7, privacy and Kiro guards pass (unchanged
 Python SQLite ResourceWarning). Non-.NET local suites and pinned source OSS smoke
 checks are deferred for this fixture/test-only scope; public adapter CI remains
 required. Final pre-integration focused validation passes 9/9. The old-base full local run
 was intentionally cancelled without a result when #829 merged; it is not passing
-evidence. Rebuild and rerun the compiled suite on the combined tree; full .NET CI
-on the final head is required. A second full local run is deferred to that CI.
+evidence. All 375 metadata/source/PDB/IL/rewrite tests pass on the combined
+tree with warnings treated as errors (zero warnings). Full .NET CI on the final
+head is required; a second full local run is explicitly deferred to that CI.
 
 The first surrounding suite exposed one test-wide uniqueness assumption:
 record-generated IL legitimately adds another constrained call. The IL fixture
@@ -49,7 +50,7 @@ dotnet run --project src/dotnet/TraceMap.Cli --no-build -- scan --repo samples/m
 python3 scripts/validate-adapter-artifacts.py "$smoke_output"
 ```
 
-Next: finish combined-tree validation and exact-head PR review.
+Next: require full cross-platform CI and exact-head PR review.
 All epic issues remain open; discriminated unions/quotations, further VB receiver
 interactions and generated-member/PDB relationships require separate slices.
 
