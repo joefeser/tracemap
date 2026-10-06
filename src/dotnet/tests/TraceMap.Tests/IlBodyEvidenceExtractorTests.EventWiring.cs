@@ -240,10 +240,27 @@ public sealed partial class IlBodyEvidenceExtractorTests
         }
     }
 
-    [Fact]
-    public void Event_wiring_matrix_fsharp_cached_delegate_preserves_generated_helper_identity()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Event_wiring_matrix_fsharp_cached_delegate_preserves_generated_helper_identity(bool renameGeneratedMembers)
     {
         var fixture = Fixture("fsharp", "CompiledEvidence.FSharp");
+        using var temp = new TempDirectory();
+        if (renameGeneratedMembers)
+        {
+            using var renamed = Mono.Cecil.ModuleDefinition.ReadModule(fixture.Assembly);
+            var subscriber = Assert.Single(renamed.Types, type => type.FullName == ReceiverNamespace + ".EventSubscriber");
+            var constructorMethod = Assert.Single(subscriber.Methods, method => method.IsConstructor);
+            var pointer = Assert.Single(constructorMethod.Body.Instructions, instruction => instruction.OpCode.Code == Mono.Cecil.Cil.Code.Ldftn);
+            var callback = Assert.IsType<Mono.Cecil.MethodDefinition>(pointer.Operand);
+            callback.Name = "RenamedCallback";
+            callback.DeclaringType.Name = "RenamedHelper";
+            callback.DeclaringType.DeclaringType.Name = "RenamedContainer";
+            callback.DeclaringType.DeclaringType.Namespace = "PublicSynthetic.Generated";
+            fixture.Assembly = Path.Combine(temp.Path, "renamed.dll");
+            renamed.Write(fixture.Assembly); // Data-only mutation; never load or execute.
+        }
         var scan = Scan(new ScanOptions(fixture.Source, TempOutput(), CompiledInputPaths: [fixture.Assembly], IlBodyEvidence: true));
         using var pe = new PEReader(File.OpenRead(fixture.Assembly));
         var reader = pe.GetMetadataReader();
@@ -263,16 +280,24 @@ public sealed partial class IlBodyEvidenceExtractorTests
         var helper = MetadataTokens.MethodDefinitionHandle(load.Token & 0x00ffffff);
         Assert.Equal(0x06000000, load.Token & unchecked((int)0xff000000));
         var helperDefinition = reader.GetMethodDefinition(helper);
-        Assert.Equal("Invoke", reader.GetString(helperDefinition.Name));
         Assert.Equal(new byte[] { 0x20, 0, 1 }, reader.GetBlobBytes(helperDefinition.Signature));
         var helperType = reader.GetTypeDefinition(helperDefinition.GetDeclaringType());
-        // Compiler-generated name is an explicit SDK-pinned fixture expectation.
-        Assert.Equal("-ctor@14", reader.GetString(helperType.Name));
-        var container = reader.GetTypeDefinition(helperType.GetDeclaringType());
-        const string startupNamespace = "<StartupCode$CompiledEvidence-FSharp>";
-        const string startupName = "$EventWiringMatrix";
-        Assert.Equal(startupNamespace, reader.GetString(container.Namespace));
-        Assert.Equal(startupName, reader.GetString(container.Name));
+        Assert.NotEqual(owner, helperDefinition.GetDeclaringType());
+        Assert.False(helperType.GetDeclaringType().IsNil);
+        // Follow the encoded pointer and raw declaring-type handles. Compiler-generated
+        // names are evidence to encode, never selectors or fixed spelling assumptions.
+        var ownerHandles = new List<TypeDefinitionHandle>();
+        for (var current = helperDefinition.GetDeclaringType(); !current.IsNil; current = reader.GetTypeDefinition(current).GetDeclaringType())
+            ownerHandles.Insert(0, current);
+        var helperNamespace = reader.GetString(reader.GetTypeDefinition(ownerHandles[0]).Namespace);
+        var helperNames = ownerHandles.Select(handle => reader.GetString(reader.GetTypeDefinition(handle).Name)).ToArray();
+        var helperName = reader.GetString(helperDefinition.Name);
+        if (renameGeneratedMembers)
+        {
+            Assert.Equal("PublicSynthetic.Generated", helperNamespace);
+            Assert.Equal(new[] { "RenamedContainer", "RenamedHelper" }, helperNames);
+            Assert.Equal("RenamedCallback", helperName);
+        }
         var stored = Assert.Single(constructor, instruction => instruction.OpCode == OpCodes.Stfld && instruction.Token == MetadataTokens.GetToken(field));
         Assert.True(load.Offset < stored.Offset);
         var fieldLoads = Read(setter).Where(instruction => instruction.OpCode == OpCodes.Ldfld && instruction.Token == MetadataTokens.GetToken(field)).ToArray();
@@ -283,10 +308,15 @@ public sealed partial class IlBodyEvidenceExtractorTests
         var cecilOwner = Assert.Single(module.Types, type => type.FullName == ReceiverNamespace + ".EventSubscriber");
         var cecilField = Assert.Single(cecilOwner.Fields, item => item.MetadataToken.ToInt32() == MetadataTokens.GetToken(field));
         Assert.Equal("System.Action", cecilField.FieldType.FullName);
-        var cecilContainer = Assert.Single(module.Types, type => type.FullName == startupNamespace + "." + startupName);
-        var cecilHelperType = Assert.Single(cecilContainer.NestedTypes, type => type.Name == "-ctor@14");
-        Assert.Equal(MetadataTokens.GetToken(helperDefinition.GetDeclaringType()), cecilHelperType.MetadataToken.ToInt32());
-        var cecilHelper = Assert.Single(cecilHelperType.Methods, method => method.Name == "Invoke");
+        var cecilHelperType = Assert.Single(module.GetTypes(), type => type.MetadataToken.ToInt32() == MetadataTokens.GetToken(helperDefinition.GetDeclaringType()));
+        var cecilOwners = new List<Mono.Cecil.TypeDefinition>();
+        for (var current = cecilHelperType; current is not null; current = current.DeclaringType)
+            cecilOwners.Insert(0, current);
+        Assert.Equal(ownerHandles.Select(handle => MetadataTokens.GetToken(handle)), cecilOwners.Select(type => type.MetadataToken.ToInt32()));
+        Assert.Equal(helperNamespace, cecilOwners[0].Namespace);
+        Assert.Equal(helperNames, cecilOwners.Select(type => type.Name));
+        var cecilHelper = Assert.Single(cecilHelperType.Methods, method => method.MetadataToken.ToInt32() == load.Token);
+        Assert.Equal(helperName, cecilHelper.Name);
         Assert.Equal(load.Token, cecilHelper.MetadataToken.ToInt32());
         Assert.Equal("System.Void", cecilHelper.ReturnType.FullName);
         Assert.Empty(cecilHelper.Parameters);
@@ -301,8 +331,9 @@ public sealed partial class IlBodyEvidenceExtractorTests
             }
         }
         var assembly = ReceiverAssembly("CompiledEvidence.FSharp");
-        var helperIdentity = assembly + "|type:namespace:" + startupNamespace.Length + ":" + startupNamespace
-            + "|names:" + startupName.Length + ":" + startupName + "8:-ctor@14|arity:0|method:6:Invoke|" + EventInstance + "()->" + EventVoid;
+        var helperIdentity = assembly + "|type:namespace:" + helperNamespace.Length + ":" + helperNamespace
+            + "|names:" + string.Concat(helperNames.Select(name => name.Length + ":" + name))
+            + "|arity:0|method:" + helperName.Length + ":" + helperName + "|" + EventInstance + "()->" + EventVoid;
         var handlerIdentity = EventMethod(assembly, "EventSubscriber", "OnTick", EventInstance + "()->" + EventVoid);
         var ctorIdentity = EventMethod(assembly, "EventSubscriber", ".ctor", EventInstance + "()->" + EventVoid).Replace("|method:", "|constructor:", StringComparison.Ordinal);
         CheckLink(ctor, ctorIdentity, load, helper, helperIdentity);

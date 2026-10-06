@@ -813,15 +813,16 @@ fixtures, not a claim of identical generated code or runtime semantics.
 | Case | Expected evidence | Boundary / counterexample |
 | --- | --- | --- |
 | CLR-WIRE-FS-001 | Source property/getter/setter and Action event/add/remove signatures and exact MethodSemantics handles; setter callvirt remove then add | Same structural signatures retain the F# assembly scope; F# setter is not synchronized. |
-| CLR-WIRE-FS-002 | Constructor ldftn targets generated nested `-ctor@14.Invoke`; helper callvirt targets OnTick | Independent SRM raw tokens/signatures and Cecil offsets/opcodes pin two distinct metadata → body → observation chains. Generated names are SDK-pinned fixture expectations, not source identity. |
+| CLR-WIRE-FS-002 | Constructor ldftn targets the exact generated nested callback; helper callvirt targets OnTick | Independent SRM raw tokens/signatures and Cecil offsets/opcodes pin two distinct metadata → body → observation chains. Generated names are read from token-selected metadata and encoded exactly; they are not fixed selectors or source identity. |
 | CLR-WIRE-FS-003 | Constructor stores the handler field once; setter loads that exact field twice and never stores it or loads a function pointer | Reader-level field checks; no new field-flow fact or runtime subscription-lifetime claim. |
 | CLR-WIRE-FS-004 | Duplicate assembly locators, wrong-table remove operand, work limit and repeated scans | Per-input ambiguity and full provenance remain; malformed/limited IL is partial with no positive body/call facts. |
 
 The common theory asserts exact rule IDs, tiers, metadata tokens, body/observation
 endpoints, commit, extractor version and generator/bounded-input/raw/binding
 hashes. The helper theory additionally pins constructor/helper/OnTick identities
-and observation chains. The same independent bounded opcode decoder now reads
-field operands as well as method operands. No production rule/schema or derived
+and observation chains. A data-only renamed-container/type/callback variant proves
+selection is independent of compiler-generated spelling. The same independent
+bounded opcode decoder now reads field operands as well as method operands. No production rule/schema or derived
 machine-readable artifact is added. No F# source extraction, PDB, rewritten IL,
 runtime event delivery or FSharp.Core event implementation equivalence is claimed.
 
