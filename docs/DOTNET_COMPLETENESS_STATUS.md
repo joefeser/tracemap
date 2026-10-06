@@ -1,5 +1,16 @@
 # .NET Evidence Completeness Status
 
+## VB late-bound helper evidence (2026-10-06)
+
+PR #838 is merged at `cc15f276`: collection indexer/conversion evidence is on dev.
+This bounded #767 continuation pins VB late-bound helper calls against a typed
+direct call, keeping source gaps, name-string operands and compiled targets
+separate. See the [late-binding matrix](validation/CLR_SIGNATURE_EQUIVALENCE_MATRIX.md#vb-late-bound-helper-and-source-gap-continuation).
+Runtime receiver/overload resolution, source-to-binary/PDB/rewrite joins, broader
+language coverage and private Windows/corpus acceptance remain open. #838's
+initial Windows wizard identity failures passed one rerun but their cause remains
+unestablished; this slice does not repair or erase that separate evidence.
+
 ## Collection indexers and integer conversions (2026-10-06)
 
 PR #837 is merged at `7fac0ce8`: F# cached event wiring and token-selected
