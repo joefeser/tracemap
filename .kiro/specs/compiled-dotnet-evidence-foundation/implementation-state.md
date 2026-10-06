@@ -1,3 +1,56 @@
+# Current continuation: #767 WithEvents/Handles original-IL matrix
+
+Branch `codex/767-event-wiring-matrix`, fresh dev base #835 merge
+`d4678de1046c3a801db6f39e7724892e86c7ec73`; target dev. #835 exact-head
+CI/ACK passed after an evidence-backed Qodo false-positive disposition. No open
+PR or competing event-wiring worktree; unrelated Base44 edits and other worktrees
+preserved. Main-only site work excluded. Current acceptance table is in the event
+wiring matrix documentation. Private #769/#768 access unavailable/uninvoked.
+
+Scope: VB WithEvents/Handles versus explicit C# remove/assign/add wiring.
+Independent raw SRM signatures/accessor handles, bounded framework-opcode decoding
+and Cecil tokens/flags/offsets pin property/getter/setter/event/add/remove/handler
+identities and original-body observations. VB setter synchronization is a reader
+assertion, not a new emitted behavior claim. Method-pointer ldftn observations
+are distinct from runtime calls. Duplicate locators retain individual provenance;
+wrong-table operands/work limits fail closed; repeats are byte-identical.
+No production rule/schema or new derived artifact. No source/PDB/runtime/rewrite
+or F# wiring equivalence claim. Malformed bytes and fixtures are never executed.
+
+Initial assertions were corrected to reflect the existing contract: the IL-call
+rule includes ldftn method-reference observations, and fact-type selection must
+distinguish declarations from gaps referencing the same endpoint. No production
+identity check was weakened. Focused 4/4 pass with warnings treated as errors.
+Two validated IL-enabled CLI scans yield 2,142 facts, two setter bodies and four
+exact event-call chains with byte-identical facts/report. Validator self-tests
+7/7 (existing SQLite ResourceWarning), privacy/spec/whitespace guards pass.
+Surrounding compiled suite passes 413/413, zero failures/skips; full final-head CI required. Duplicate full
+local .NET, non-.NET local suites and pinned source OSS smokes explicitly deferred
+for this fixture/test-only slice.
+
+Commands (logs `/tmp/tracemap-events-*`):
+
+```sh
+dotnet restore src/dotnet/TraceMap.sln --locked-mode
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter FullyQualifiedName~Event_wiring_matrix -warnaserror
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-build --no-restore --filter 'FullyQualifiedName~ManagedMetadataExtractorTests|FullyQualifiedName~SourceMetadataReconciliationTests|FullyQualifiedName~PortablePdbExtractorTests|FullyQualifiedName~IlBodyEvidenceExtractorTests|FullyQualifiedName~IlRewrite'
+python3 scripts/test_validate_adapter_artifacts.py
+./scripts/check-private-paths.sh
+node scripts/kiro-review.mjs --self-test
+git diff --check
+```
+
+Each CLI repeat uses a new temporary output and absolute public fixture inputs:
+
+```sh
+dotnet run --project src/dotnet/TraceMap.Cli --no-build -- scan --repo samples/modern-sample --out "$smoke_output" --il-body-evidence --compiled-input "$fixture_root/csharp/bin/Debug/net10.0/CompiledEvidence.CSharp.dll" --compiled-input "$fixture_root/vb/bin/Debug/net10.0/CompiledEvidence.VisualBasic.dll"
+python3 scripts/validate-adapter-artifacts.py "$smoke_output"
+```
+
+Next: finish validation, open bounded PR and follow live ACK 0.5.5 (stable
+ab39833, distFresh=true, required lane capabilities available). Broader epic,
+language and private Windows/corpus acceptance remain open.
+
 # Current continuation: #767 C#/VB async and iterator PDB matrix
 
 Branch `codex/767-state-machine-pdb-matrix`, fresh dev base #834 merge
