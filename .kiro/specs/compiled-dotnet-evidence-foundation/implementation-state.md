@@ -4,6 +4,27 @@ Branch `codex/767-explicit-interface-matrix`, base #826 merge
 `b40267b167b46910f6846bb6f0db6e80d8aa58f4`; target dev. No competing open PR
 or active worktree found. Other worktrees and unrelated Base44 edits preserved.
 
+ACK review repair: Qodo identified missing per-member raw/binding hash checks.
+The shared accessor/member helper now ties each fact's locator and assembly to
+its input outcome, hashes the known public fixture bytes, and checks the outcome's
+binding digest. Accessor, constraint and default matrices share this invariant.
+Six corruption cases cover all three languages in single/combined scans, wrong
+raw/binding hashes and jointly corrupted fact/outcome raw hashes. Unbound inputs
+legitimately share the empty binding-set digest; tests do not require distinct
+binding hashes or claim source-bound receipt coverage.
+
+Initial public Windows CI at `d5c85aaa` failed in existing VB optional-source
+binding (`commitSha=unknown`) and Web Forms replay (`SOURCE_IDENTITY_CHANGED`).
+One unchanged-head rerun of each passed; original failures retained in PR #827
+comment `6006749796`. Root cause remains unproven; no identity check was relaxed.
+All initial-head CI passed before ACK authorized this test-only repair.
+Post-repair validation: 348/348 surrounding metadata/source/PDB/IL/rewrite tests
+pass with `-warnaserror`; private-path, Kiro self-test and diff checks pass.
+Command: the surrounding filter listed below, with `--no-restore -warnaserror`
+and rebuilding instead of `--no-build`; log `/tmp/tracemap-827-hash-repair-final.log`.
+The full 3,316-test local run belongs to the initial implementation head; it was
+not repeated for this assertion-only repair. Fresh public CI remains required.
+
 Scope: ISharedFormatter/ExplicitShape in C#/VB/F#, declaration/body/decoy
 identity separation, independent SRM MethodImpl and Cecil override token
 oracles, exact single/combined fact assertions, seven new metadata regressions

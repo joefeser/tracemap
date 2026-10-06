@@ -108,4 +108,6 @@ slices and require an implementation-state update before work begins.
   declarations/explicit implementations with an ordinary same-signature decoy;
   independent MethodImpl/override token oracles, single/combined fact assertions,
   language flag differences, duplicate/malformed/limit/repeat coverage, and
-  retained F# unsupported-source boundary. Production dispatch edges remain open.
+  retained F# unsupported-source boundary. Per-input hashes are checked against
+  fixture bytes/outcomes, with cross-assembly corruption regressions and shared
+  accessor/constraint/default coverage. Production dispatch edges remain open.

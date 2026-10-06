@@ -139,6 +139,51 @@ public sealed partial class ManagedMetadataExtractorTests
         }
     }
 
+    [Theory]
+    [InlineData(false, "rawFileSha256", false)]
+    [InlineData(true, "rawFileSha256", false)]
+    [InlineData(false, "provenanceBindingInputSha256", false)]
+    [InlineData(true, "provenanceBindingInputSha256", false)]
+    [InlineData(false, "rawFileSha256", true)]
+    [InlineData(true, "rawFileSha256", true)]
+    public void Explicit_interface_evidence_oracle_rejects_wrong_input_hashes(
+        bool combined, string field, bool corruptOutcome)
+    {
+        var (all, _, _) = EvaluateClrMatrix();
+        foreach (var language in new[] { "csharp", "vb", "fsharp" })
+        {
+            var (evaluation, facts, commit) = EvaluateClrMatrix(inputs: combined ? null : [ClrAssembly(language)]);
+            var expectedLocator = Path.GetRelativePath(FindRepoRoot(), ClrAssembly(language)).Replace('\\', '/');
+            var methods = InterfaceMethods(facts).Where(fact => fact.Evidence.FilePath == expectedLocator).ToArray();
+            Assert.Equal(3, methods.Length);
+            var other = all.Provenance!.Outcomes.First(input => input.SafeLocator != expectedLocator);
+            // Unbound inputs legitimately share the empty binding-set digest. Inject
+            // another assembly's raw digest into either field to ensure a distinct
+            // wrong value without claiming these unbound receipts differ.
+            var wrongHash = other.RawFileSha256!;
+            foreach (var fact in methods)
+            {
+                AssertAccessorEvidence(fact, evaluation.Provenance!, commit);
+                Assert.NotEqual(fact.Properties[field], wrongHash);
+                var corrupted = fact with
+                {
+                    Properties = new SortedDictionary<string, string>(fact.Properties.ToDictionary(pair => pair.Key, pair => pair.Value), StringComparer.Ordinal)
+                    {
+                        [field] = wrongHash
+                    }
+                };
+                var provenance = evaluation.Provenance!;
+                if (corruptOutcome)
+                    provenance = provenance with
+                    {
+                        Outcomes = provenance.Outcomes.Select(input => input.SafeLocator == expectedLocator
+                            ? input with { RawFileSha256 = other.RawFileSha256 } : input).ToArray()
+                    };
+                Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => AssertAccessorEvidence(corrupted, provenance, commit));
+            }
+        }
+    }
+
     private static CodeFact[] InterfaceMethods(IReadOnlyList<CodeFact> facts) => facts.Where(fact =>
         fact.FactType == FactTypes.ManagedMethodDeclared
         && (fact.TargetSymbol?.Contains(ExplicitOwner, StringComparison.Ordinal) == true
