@@ -1,5 +1,15 @@
 # .NET Evidence Completeness Status
 
+## C#/VB async and iterator PDB coverage (2026-10-06)
+
+PR #834 is merged at `d86f74e7`; its final-head CI and live ACK passed.
+The next bounded #767 slice pins four generated MoveNext endpoints and their
+metadata/PDB/document/sequence links using independent SRM and Cecil oracles.
+Missing or duplicate metadata candidates cannot be repaired by matching names.
+See the [state-machine matrix](validation/CLR_SIGNATURE_EQUIVALENCE_MATRIX.md#async-and-iterator-pdb-continuation).
+No generated source ownership, runtime, rewrite or F# state-machine equivalence
+is inferred. Broader language and private corpus/Windows acceptance remain open.
+
 ## C#/VB nested generic ownership (2026-10-06)
 
 PR #833 is merged at `2f13e1dc`; its final-head CI and live ACK passed.

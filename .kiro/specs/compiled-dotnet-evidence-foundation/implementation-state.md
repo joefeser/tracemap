@@ -1,3 +1,57 @@
+# Current continuation: #767 C#/VB async and iterator PDB matrix
+
+Branch `codex/767-state-machine-pdb-matrix`, fresh dev base #834 merge
+`d86f74e789d9e5b4565ea15b0e3c1505256c969f`; target dev. #834 exact-head
+CI and ACK passed before the owner merged. No competing open PR/state-machine
+worktree. Unrelated primary Base44 edits and all other worktrees preserved;
+main-only site work excluded. Current acceptance table is in the state-machine
+matrix documentation. Private #769/#768 access remains unavailable/uninvoked.
+
+Scope: two generated MoveNext endpoints per C#/VB fixture, exact PDB kickoff-table
+selection, Cecil compiler-attribute and kickoff corroboration, full SRM/Cecil
+sequence-point comparison, metadata/PDB/document/sequence identities and provenance.
+An ordinary Boolean instance MoveNext shares the iterator's name/signature but
+remains distinct. Missing/duplicate metadata candidates fail locally; truncated
+PDB and sequence limits fail closed. No inferred generated source ownership,
+F# state-machine, runtime or rewrite equivalence. No production rule/schema or
+new derived artifact. Binaries and malformed bytes are read only, never executed.
+
+Focused tests pass 6/6 with warnings treated as errors. Public bound CLI scans
+produce 1,950 C# / 1,351 VB facts, each with three exact MoveNext PDB chains;
+repeated facts/report bytes match. Focused tests also repeat bound scan facts
+and PDB provenance. Validator self-tests pass 7/7 (existing SQLite ResourceWarning);
+privacy, spec and whitespace guards pass. Surrounding compiled suite passes
+409/409, zero failures/skips.
+Full final-head CI required; duplicate full local .NET, non-.NET local suites
+and pinned source OSS smokes explicitly deferred for this fixture/test-only slice.
+
+Commands (logs `/tmp/tracemap-state-*`):
+
+```sh
+dotnet restore src/dotnet/TraceMap.sln --locked-mode
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter FullyQualifiedName~State_machine_matrix -warnaserror
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-build --no-restore --filter 'FullyQualifiedName~ManagedMetadataExtractorTests|FullyQualifiedName~SourceMetadataReconciliationTests|FullyQualifiedName~PortablePdbExtractorTests|FullyQualifiedName~IlBodyEvidenceExtractorTests|FullyQualifiedName~IlRewrite'
+python3 scripts/test_validate_adapter_artifacts.py
+./scripts/check-private-paths.sh
+node scripts/kiro-review.mjs --self-test
+git diff --check
+```
+
+For each C#/VB public fixture, a preliminary unbound CLI inventory supplies its
+exact safe locator, raw hash and assembly identity. A temporary existing-schema
+`compiled-input-binding-set.v1` receipt binds those values to the current fixture
+commit and declared public test build, matching the existing test receipt helper.
+Two fresh output directories then receive the same bound command:
+
+```sh
+dotnet run --project src/dotnet/TraceMap.Cli --no-build -- scan --repo "$fixture_source" --compiled-input "$fixture_assembly" --out "$smoke_output" --compiled-binding-receipt "$public_binding" --pdb-input "$fixture_pdb"
+python3 scripts/validate-adapter-artifacts.py "$smoke_output"
+```
+
+Next: finish surrounding validation, open the bounded PR, follow live ACK 0.5.5
+(stable build ab39833, distFresh=true, lane capabilities available). Broader
+#759/#767 and private #768/#769 acceptance stays open.
+
 # Current continuation: #767 C#/VB nested generic ownership
 
 Branch `codex/767-nested-generic-matrix`, fresh dev base #833 merge
