@@ -4360,3 +4360,25 @@ Duplicate full local .NET, non-.NET local suites and pinned source OSS smokes
 are explicitly deferred for this fixture/test-only slice. F# source extraction,
 private corpus receipts, isolated Windows/MSVC and broad epic acceptance remain
 separate gaps, not satisfied by public CI.
+
+### VB late-bound source and compiled helper matrix (#767)
+
+```sh
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore -warnaserror --filter FullyQualifiedName~Late_binding_matrix
+```
+
+Five cases independently pin raw helper signatures/scopes, ldstr versus method
+operands, source gap spans/tiers and the typed direct-call control. A string-only
+mutation changes canonical body identity without inventing a runtime target;
+duplicate inputs, malformed helper tokens, bounded work and repeats stay explicit.
+Do not execute fixture or mutated DLLs. Source-to-binary binding, PDB, rewrite,
+runtime overload selection and other late-binding helpers remain separate gaps.
+
+Run the surrounding metadata/source-reconciliation/PDB/IL/rewrite suite plus
+VisualBasicExtractionTests. Repeat a public CLI scan of the VB fixture source
+with its assembly and `--il-body-evidence`; validate artifacts and compare
+facts/report bytes. Run artifact-validator tests and privacy/spec guards.
+Require full final-head .NET and public cross-platform CI. Duplicate full local
+.NET, non-.NET local suites and pinned source OSS smokes are explicitly deferred
+for this fixture/test-only change. Public CI cannot satisfy private Windows
+corpus/MSVC receipts or broad epic acceptance.
