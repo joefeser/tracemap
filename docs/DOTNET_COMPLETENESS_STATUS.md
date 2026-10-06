@@ -1,5 +1,15 @@
 # .NET Evidence Completeness Status
 
+## C#/VB event wiring (2026-10-06)
+
+PR #835 is merged at `d4678de1`; its final-head CI and live ACK passed after
+an evidence-backed Qodo false-positive disposition. The next bounded #767 slice
+pins VB WithEvents/Handles against explicit C# remove/add wiring with exact
+metadata accessor handles and original IL call/method-pointer observations.
+See the [event wiring matrix](validation/CLR_SIGNATURE_EQUIVALENCE_MATRIX.md#withevents-and-handles-wiring-continuation).
+No runtime subscription, synchronization, source/PDB or rewrite equivalence
+is inferred. Broader language and private corpus/Windows acceptance remain open.
+
 ## C#/VB async and iterator PDB coverage (2026-10-06)
 
 PR #834 is merged at `d86f74e7`; its final-head CI and live ACK passed.

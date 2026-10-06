@@ -4319,3 +4319,20 @@ cross-platform CI. Duplicate full local .NET, non-.NET local suites and pinned
 source OSS smokes are explicitly deferred for this fixture/test-only slice.
 Do not execute fixture methods or malformed bytes. Private Windows, F# state
 machines, runtime behavior and rewritten IL remain separate acceptance gaps.
+
+### C#/VB WithEvents and Handles wiring matrix
+
+```sh
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter FullyQualifiedName~Event_wiring_matrix -warnaserror
+```
+
+The [event wiring matrix](validation/CLR_SIGNATURE_EQUIVALENCE_MATRIX.md#withevents-and-handles-wiring-continuation)
+pins property/event accessor handles, exact remove/add call operands and handler
+ldftn operands through independent SRM/framework-opcode and Cecil readers. The
+method-pointer observations do not imply handler execution. Run the surrounding
+compiled-evidence suite, repeated public CLI scans with `--il-body-evidence`,
+artifact validation and privacy/spec guards. Require full final-head .NET and
+public cross-platform CI. Duplicate full local .NET, non-.NET local suites and
+pinned source OSS smokes are explicitly deferred for this fixture/test-only slice.
+No fixture/malformed DLL execution; source/PDB/rewrite/runtime and private Windows
+acceptance remain separate.
