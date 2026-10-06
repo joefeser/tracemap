@@ -4238,3 +4238,19 @@ retain unsupported-source coverage. Run the surrounding compiled suite, full .NE
 suite and repeat CLI artifact validation. Non-.NET local suites and source OSS
 smokes may be explicitly deferred for this fixture/test-only slice; adapter CI
 remains required.
+
+### Union-factory metadata matrix
+
+```sh
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter 'FullyQualifiedName~Union_matrix|FullyQualifiedName~Fsharp_fixture_retains' -warnaserror
+```
+
+The [union-factory matrix](validation/CLR_SIGNATURE_EQUIVALENCE_MATRIX.md#union-factory-continuation)
+checks exact self-return signatures and F# type/case mapping against ordinary
+C#/VB lookalikes. SRM and Cecil are independent oracles; Cecil's test-only enum
+resolver admits only the fixture's pinned FSharp.Core restore asset, with explicit
+rejection tests for other identities. Repeat CLI artifacts must validate and be
+byte-identical. Run the surrounding compiled suite locally and require full .NET
+and cross-platform CI before delivery. Full local .NET duplication, non-.NET local
+suites and pinned source OSS smokes are explicitly deferred for this fixture/test-only
+slice. No runtime union or F# source-extraction coverage is inferred.

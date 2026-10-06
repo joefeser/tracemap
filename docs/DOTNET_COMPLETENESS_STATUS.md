@@ -1,5 +1,14 @@
 # .NET Evidence Completeness Status
 
+## Union-factory coverage (2026-10-06)
+
+PR #830 is merged at `f7777347`. The next bounded #767 slice pins F#
+union-case factories and type/case mapping attributes versus ordinary C#/VB
+lookalikes. Assembly-scoped self-return signatures remain distinct, and mapping
+metadata does not imply runtime union equivalence or F# source ownership.
+See the [acceptance matrix](validation/CLR_SIGNATURE_EQUIVALENCE_MATRIX.md#union-factory-continuation).
+Broader language/IL/PDB/rewrite and private corpus/Windows acceptance remain open.
+
 ## Record-generated member coverage (2026-10-06)
 
 The bounded #767 continuation pins selected C#/F# record-generated object
