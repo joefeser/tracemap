@@ -790,7 +790,7 @@ Assertions retain exact identities, rule IDs, tiers, metadata/IL locations,
 commit/extractor version and exact generator/bounded-input/raw/binding hashes.
 Existing `dotnet.compiled.member.v1`, `dotnet.compiled.il-body.v1`,
 `dotnet.compiled.il-call.v1` and gap contracts remain unchanged. No rule/schema
-or derived artifact is added. F# event wiring, inherited WithEvents, reassignment
+or derived artifact is added. F# event wiring is covered by the continuation below. Inherited WithEvents, reassignment
 runtime behavior, source/PDB and rewritten-IL equivalence remain outside this slice.
 
 | Requirement | Delivered evidence | Remaining gap | Host/toolchain |
@@ -800,3 +800,35 @@ runtime behavior, source/PDB and rewritten-IL equivalence remain outside this sl
 | #766 | Existing operand-aware IL/PDB/rewrite suite | Full ECMA/rewrite matrix | Public .NET plus declared Windows cases |
 | #768 | Public Windows CI, private runner safeguards | Private endurance and C++/CLI acceptance | Separately authorized Windows worker |
 | #759 | Distinct bounded evidence layers | Child acceptance stays open | Separate public/private lanes |
+
+
+## F# cached event wiring continuation
+
+After #836 merge `9cc14630`, extend the shared event-wiring theory to F#
+`DelegateEvent<Action>` / `[<CLIEvent>]` with explicit `remove_Tick` and
+`add_Tick` calls. The F# subscriber caches one delegate at construction and loads
+that field at both setter sites. This is a targeted comparison with the C#/VB
+fixtures, not a claim of identical generated code or runtime semantics.
+
+| Case | Expected evidence | Boundary / counterexample |
+| --- | --- | --- |
+| CLR-WIRE-FS-001 | Source property/getter/setter and Action event/add/remove signatures and exact MethodSemantics handles; setter callvirt remove then add | Same structural signatures retain the F# assembly scope; F# setter is not synchronized. |
+| CLR-WIRE-FS-002 | Constructor ldftn targets the exact generated nested callback; helper callvirt targets OnTick | Independent SRM raw tokens/signatures and Cecil offsets/opcodes pin two distinct metadata → body → observation chains. Generated names are read from token-selected metadata and encoded exactly; they are not fixed selectors or source identity. |
+| CLR-WIRE-FS-003 | Constructor stores the handler field once; setter loads that exact field twice and never stores it or loads a function pointer | Reader-level field checks; no new field-flow fact or runtime subscription-lifetime claim. |
+| CLR-WIRE-FS-004 | Duplicate assembly locators, wrong-table remove operand, work limit and repeated scans | Per-input ambiguity and full provenance remain; malformed/limited IL is partial with no positive body/call facts. |
+
+The common theory asserts exact rule IDs, tiers, metadata tokens, body/observation
+endpoints, commit, extractor version and generator/bounded-input/raw/binding
+hashes. The helper theory additionally pins constructor/helper/OnTick identities
+and observation chains. A data-only renamed-container/type/callback variant proves
+selection is independent of compiler-generated spelling. The same independent
+bounded opcode decoder now reads field operands as well as method operands. No production rule/schema or derived
+machine-readable artifact is added. No F# source extraction, PDB, rewritten IL,
+runtime event delivery or FSharp.Core event implementation equivalence is claimed.
+
+| Requirement | Implementation/test evidence | Remaining gap | Host/toolchain |
+| --- | --- | --- | --- |
+| #769 | Public runway and minimized dimension fixtures | Private catalog and receipt acceptance | Authorized isolated Windows/private access unavailable in this task |
+| #767 | Three-language Event_wiring_matrix theories and F# helper case | Broader language/source/PDB combinations and runtime acceptance | Public .NET SDK 10.0.302 / pinned FSharp.Core 10.1.302 |
+| #766 | Existing metadata/PDB/operand-preserving IL/rewrite suites plus event operand regressions | Broader rule-specific acceptance | Public .NET/IL tooling |
+| #768 | Public cross-platform CI and guarded lane contract | Historical corpus and C++/CLI validation | Authorized Windows/MSVC unavailable in this task |

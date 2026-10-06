@@ -1,3 +1,85 @@
+# PR #837 current-head review repair
+
+ACK released Codex P2 after the owner resumed current-head repair following the
+terminal Qodo timeout. Scope is generated-name independence only; no merge or
+reviewer retag authorization. Prior head `1825da27` passed full CI (3,390 .NET
+passed / one platform skip, zero build warnings; Windows corpus 148/148).
+Repair validation: focused 8/8 with warnings as errors, surrounding 417/417
+(zero failures/skips), privacy/spec/whitespace guards passed. Logs are
+/tmp/tracemap-fsevent-repair-focused.log and
+/tmp/tracemap-fsevent-repair-surrounding.log. Commands are the focused and
+surrounding filters below (surrounding uses --no-build --no-restore). Production
+extractors and fixture bytes are unchanged; prior validated CLI smoke remains
+applicable. Final-head CI/live ACK still required. Exact source/metadata/IL and
+provenance contracts are preserved.
+
+# Current continuation: #767 F# cached event wiring
+
+Branch `codex/767-fsharp-event-wiring`, fresh origin/dev base #836 merge
+`9cc14630d0d9595904a9e69718c3bc93fa67907b`; target dev. Fetched main/dev,
+reconciled #759/#769/#767/#766/#768 bodies/comments, merged #836 and current
+code/specs. No open PR or competing F# wiring worktree. Preserve unrelated
+Base44 edits and all other worktrees; exclude main-only site changes.
+
+Correction to the prior audit: #836 has a clean exact-head Codex comment at
+https://github.com/joefeser/tracemap/pull/836#issuecomment-6024417753;
+ACK's retained stale classification did not reflect that result. It merged
+before the audit finished, so its terminal already_merged was not pre-merge
+approval. The F# omission from that deliberately bounded C#/VB slice is the
+scope here. Acceptance matrix is in the F# event wiring continuation doc.
+
+Implemented: public F# DelegateEvent<Action>/CLIEvent fixture; cached delegate
+created once, explicit remove/add setter calls; three-language shared identity,
+original IL, duplicate, wrong-table operand, work-limit and repeat tests. Pin
+constructor ldftn → generated nested Invoke and helper callvirt → OnTick with
+independent SRM/opcode and Cecil readers, exact endpoints and full provenance.
+Field loads/stores are independent-reader assertions, not new field-flow facts.
+The unsupported F# source gap remains explicit. No production rule/schema or
+new derived artifact; fixture and malformed bytes are never executed.
+
+The compiler rejects Event<Action,unit> because Action is a nonstandard event
+delegate, so the fixture uses DelegateEvent<Action> and explicit accessors.
+Constructing delegates separately at each setter site produced distinct helpers;
+the final fixture caches one delegate. Constructor identities use the existing
+constructor category, not the method category. These are fixture/test corrections,
+not weakened production identity checks. Review repair: CI uses floating 10.0.x, so generated spellings cannot be called
+SDK-pinned. Helper selection now follows the constructor ldftn token and raw
+declaring-type handles, corroborated with Cecil tokens. Exact identity encoding
+uses those metadata names, without production formatters or name selectors. A
+data-only renamed-container/type/callback variant pins this invariant.
+
+Validation: locked restore on SDK 10.0.302; focused 7/7. Two validated public
+CLI scans: 3,221 facts, three distinct setter bodies, six exact event-call chains;
+facts/report bytes match. Artifact validator 7/7 (existing SQLite ResourceWarning),
+privacy/Kiro/whitespace guards pass. Surrounding compiled suite 416/416, zero failures/skips and no compiler/analyzer
+warnings; final-head full .NET and public cross-platform CI required. Duplicate full local .NET,
+non-.NET local suites and pinned source OSS smokes explicitly deferred for this
+fixture/test-only change.
+
+Commands (logs /tmp/tracemap-fsevent-*):
+
+```sh
+dotnet restore src/dotnet/TraceMap.sln --locked-mode
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter FullyQualifiedName~Event_wiring_matrix -warnaserror
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter 'FullyQualifiedName~ManagedMetadataExtractorTests|FullyQualifiedName~SourceMetadataReconciliationTests|FullyQualifiedName~PortablePdbExtractorTests|FullyQualifiedName~IlBodyEvidenceExtractorTests|FullyQualifiedName~IlRewrite' -warnaserror
+python3 scripts/test_validate_adapter_artifacts.py
+./scripts/check-private-paths.sh
+node scripts/kiro-review.mjs --self-test
+git diff --check
+```
+
+Each of two CLI repeats uses a new temporary output and absolute public inputs:
+
+```sh
+dotnet run --project src/dotnet/TraceMap.Cli --no-build -- scan --repo samples/modern-sample --out "$smoke_output" --il-body-evidence --compiled-input "$fixture_root/csharp/bin/Debug/net10.0/CompiledEvidence.CSharp.dll" --compiled-input "$fixture_root/vb/bin/Debug/net10.0/CompiledEvidence.VisualBasic.dll" --compiled-input "$fixture_root/fsharp/bin/Debug/net10.0/CompiledEvidence.FSharp.dll"
+python3 scripts/validate-adapter-artifacts.py "$smoke_output"
+```
+
+Next: deliver bounded PR through live ACK 0.5.5 stable (ab39833, distFresh=true;
+lane capabilities satisfied). Broader #767/#759, source/PDB/runtime/rewrite
+acceptance remains open. #769/#768 private authorized corpus/isolated Windows
+access unavailable/uninvoked; public CI cannot satisfy private receipts.
+
 # Current continuation: #767 WithEvents/Handles original-IL matrix
 
 Branch `codex/767-event-wiring-matrix`, fresh dev base #835 merge
