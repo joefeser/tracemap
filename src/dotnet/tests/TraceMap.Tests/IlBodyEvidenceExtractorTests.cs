@@ -13,7 +13,7 @@ using TraceMap.Core;
 
 namespace TraceMap.Tests;
 
-public sealed class IlBodyEvidenceExtractorTests
+public sealed partial class IlBodyEvidenceExtractorTests
 {
     [Fact]
     public void Cecil_opcode_name_uses_raw_name_only_for_matching_numeric_opcode()
