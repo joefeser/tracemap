@@ -377,3 +377,51 @@ Focused command: `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csp
 Existing portable CI includes these cases on Linux, macOS and Windows. Exact
 results and deferrals are in the spec implementation state. All epic issues and
 Tasks 10/11 remain open.
+
+## Explicit-interface continuation
+
+Base: verified #826 merge `b40267b167b46910f6846bb6f0db6e80d8aa58f4` on
+`origin/dev`; main remains `7f026f5a`. Branch `codex/767-explicit-interface-matrix`.
+No competing open PR or active worktree was found; unrelated edits were retained.
+
+Each public assembly declares ISharedFormatter.Format(String) and ExplicitShape
+with an explicit implementation plus an ordinary public Format(String) decoy.
+All three methods have equal normalized signatures but different identities.
+VB names its implementing method FormatContract; C# and F# use the qualified
+interface name. Raw MethodImpl rows, not names, establish the fixture association.
+
+| Case | Expected raw metadata | TraceMap evidence and limitation |
+| --- | --- | --- |
+| CLR-INTERFACE-001 | C# InterfaceImpl/MethodImpl bind the interface declaration to its private explicit method | Exact type/method tokens, qualified method name, virtual/new-slot/final flags; ordinary Format is not the implementing body |
+| CLR-INTERFACE-002 | VB binds Format to differently named FormatContract | Same signature does not collapse declaration, implementation or public decoy |
+| CLR-INTERFACE-003 | F# binds the qualified implementation with virtual/new-slot but no Final flag | Preserve the emitted flag difference; no complete class/dispatch equivalence claim |
+| CLR-INTERFACE-004 | Nine distinct method endpoints/fact IDs across three assemblies with equal signatures | Reversed inputs produce byte-identical facts/provenance |
+| CLR-INTERFACE-005–007 | Duplicate, header-truncated and member-limited inputs in each language | Explicit ambiguity/malformed/limit gaps and no eligible duplicate reconciliation |
+| CLR-INTERFACE-008 | Bound F# retains the declaration, implementation and decoy with exact names/signatures | Unsupported-source gap remains; no F# source edge |
+
+Seven new metadata cases and the strengthened F# test cover these rows. SRM
+checks InterfaceImpl and MethodImpl ownership and raw declaration/body MethodDef
+handles; Cecil independently checks interface and override tokens and flags.
+Single-input and combined-input facts must match exact raw tokens, owning type,
+method name, signature and optional markers. Their rule/tier, metadata location,
+commit, extractor version, exact generator and bounded-input hashes remain
+asserted (`dotnet.compiled.member.v1` / Tier2; gaps use
+`dotnet.compiled.gap.v1` / Tier4). No binary is loaded or executed.
+
+This is a fixture oracle, not a new production MethodImpl/dispatch edge. It does
+not prove runtime dispatch, generic interface construction, default interface
+methods, PDB/rewritten-body ownership, equivalent class sealing, or F# source
+support. C#/VB classes are sealed; F# is not. No production schema, extractor
+version or new derived artifact is introduced.
+
+| Requirement | Implementation/test evidence | Remaining gap | Host/toolchain |
+| --- | --- | --- | --- |
+| #769 corpus dimensions | Existing inventory/admission and synthetic guards | Reviewed private catalog and representative receipts | Authorized isolated Windows/private lane unavailable |
+| #767 language matrix | #820–#826 signatures/options/accessors/constraints/defaults; current explicit-interface oracle | Generated members and remaining language interactions; production relationship/default/constraint facts | Public .NET 10; F# source unsupported |
+| #766 IL/PDB/rewrite | Operand-aware and independent-reader suite | Broader reviewed matrix and independent PDB line oracle | Portable readers plus Windows tools |
+| #768 Windows | Existing bounded runner and public CI | Passing private bounded receipt and full feasibility acceptance | Authorized Windows/.NET Framework/MSVC unavailable |
+
+Focused command: `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter 'FullyQualifiedName~Explicit_interface_matrix|FullyQualifiedName~Fsharp_fixture_retains' -warnaserror`.
+Existing CI includes these cases on Linux/macOS/Windows. Exact commands, results
+and deferrals are recorded in the spec state. All epic issues and Tasks 10/11
+remain open.
