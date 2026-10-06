@@ -1,3 +1,55 @@
+# Current continuation: #767 C#/VB nested generic ownership
+
+Branch `codex/767-nested-generic-matrix`, fresh dev base #833 merge
+`2f13e1dc5b138065d183768458b5336d3fbe2579`; target dev. #833 final-head
+CI and ACK passed before the owner merged. No competing open PR/nested lane;
+unrelated Base44 changes and other worktrees preserved. Main-only site work is
+excluded. See the current acceptance table in the nested matrix documentation.
+
+Scope: six named methods per C#/VB fixture, outer/inner/method generic ownership,
+VAR/MVAR ordinals, nested total arity and constructed argument order. Independent
+raw SRM and Cecil oracles precede exact single/combined fact assertions. Per-input
+duplicate identities retain ambiguity/provenance, malformed PE and member-budget
+refusals remain Tier4 partial, and reverse-input output repeats byte-identically.
+No production rule/schema or derived machine-readable artifact added. Binaries
+are read only, never executed. No source/PDB/IL/runtime or F# nested-type claim.
+Private corpus/isolated Windows access remains unavailable and uninvoked.
+
+The first golden signature omitted local assembly scope for constructed self
+types. Corrected the test expectation after inspecting the existing scoped
+signature contract; C#/VB self constructions are analogous but have distinct
+canonical signatures. No identity check was weakened. Focused tests pass 5/5 with
+zero compiler/analyzer warnings. Two validated CLI scans produce 442 facts and
+12 selected methods, with byte-identical facts/reports. Validator self-tests pass
+7/7 (existing Python SQLite ResourceWarning); privacy/spec/whitespace guards pass.
+Surrounding compiled regression run passes 403/403, zero failures/skips.
+Full final-head CI required;
+duplicate full local .NET, non-.NET local suites and pinned source OSS smokes
+explicitly deferred for this fixture/test-only slice.
+
+Commands (logs `/tmp/tracemap-nested-*`):
+
+```sh
+dotnet restore src/dotnet/TraceMap.sln --locked-mode
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter FullyQualifiedName~Nested_matrix -warnaserror
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-build --no-restore --filter 'FullyQualifiedName~ManagedMetadataExtractorTests|FullyQualifiedName~SourceMetadataReconciliationTests|FullyQualifiedName~PortablePdbExtractorTests|FullyQualifiedName~IlBodyEvidenceExtractorTests|FullyQualifiedName~IlRewrite'
+python3 scripts/test_validate_adapter_artifacts.py
+./scripts/check-private-paths.sh
+node scripts/kiro-review.mjs --self-test
+git diff --check
+```
+
+Each CLI smoke uses a fresh temporary output directory and absolute public inputs:
+
+```sh
+dotnet run --project src/dotnet/TraceMap.Cli --no-build -- scan --repo samples/modern-sample --out "$smoke_output" --compiled-input "$fixture_root/csharp/bin/Debug/net10.0/CompiledEvidence.CSharp.dll" --compiled-input "$fixture_root/vb/bin/Debug/net10.0/CompiledEvidence.VisualBasic.dll"
+python3 scripts/validate-adapter-artifacts.py "$smoke_output"
+```
+
+Next: complete local validation, open bounded PR and follow live ACK 0.5.5
+(stable, build ab39833, distFresh=true, required lane capabilities available).
+Broader #759/#767 acceptance and private #768/#769 stay open.
+
 # Current continuation: #767 C#/VB receiver call sites
 
 Branch `codex/767-receiver-dispatch-matrix`, fresh dev base #832 merge

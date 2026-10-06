@@ -151,3 +151,9 @@ slices and require an implementation-state update before work begins.
   oracles, exact metadata/body/call links and provenance, same-opcode/different-
   operand identity regression, per-input ambiguity, malformed-token/work-limit
   refusal and repeats. Runtime dispatch and broader source/PDB acceptance remain open.
+
+- [x] 26. Bounded #767 C#/VB nested generic continuation: exact outer/inner/
+  method generic ownership and positions, constructed argument order, nested
+  total arity, independent raw SRM/Cecil oracles, single/combined provenance,
+  per-input ambiguity, malformed/member-limit refusal and deterministic repeats.
+  Source/PDB/IL/runtime and broader language/epic acceptance remain open.

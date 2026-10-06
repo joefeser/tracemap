@@ -1,5 +1,15 @@
 # .NET Evidence Completeness Status
 
+## C#/VB nested generic ownership (2026-10-06)
+
+PR #833 is merged at `2f13e1dc`; its final-head CI and live ACK passed.
+The next bounded #767 slice pins outer/inner/method generic ownership and
+constructed argument order with independent raw SRM/Cecil assertions. Nested
+classes with no new source parameter still retain their outer CLR parameter.
+Self-type signatures remain assembly-scoped. See the [nested matrix](validation/CLR_SIGNATURE_EQUIVALENCE_MATRIX.md#nested-generic-ownership-continuation).
+Broader language/source/PDB/IL/rewrite and private corpus/Windows acceptance
+remain open; metadata shape does not establish runtime or F# source equivalence.
+
 ## C#/VB receiver call-site coverage (2026-10-06)
 
 PR #832 is merged at `d95df3da`; its remaining Windows package CI later passed.
