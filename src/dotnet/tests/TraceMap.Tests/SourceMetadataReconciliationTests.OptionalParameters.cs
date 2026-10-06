@@ -15,7 +15,7 @@ public sealed partial class SourceMetadataReconciliationTests
         string directory, string fileName, string language)
     {
         var source = Path.Combine(FindRepoRoot(), "samples", "compiled-dotnet-evidence", directory);
-        var result = ScanBound(source, [Path.Combine(source, "bin", "Debug", "net10.0", fileName)]);
+        var result = ScanBound(source, [FixtureAssemblyPath(source, fileName)]);
         var compiled = result.Facts.Where(fact => fact.FactType == FactTypes.ManagedMethodDeclared
             && fact.TargetSymbol!.Contains("|names:13:OptionalShape|", StringComparison.Ordinal)
             && fact.Properties["metadataName"] != ".ctor").ToArray();
@@ -32,6 +32,7 @@ public sealed partial class SourceMetadataReconciliationTests
             var edge = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.SourceMetadataIdentityReconciled
                 && fact.TargetSymbol == member.TargetSymbol);
             var observation = Assert.Single(result.Facts, fact => fact.FactId == edge.Properties["sourceFactId"]);
+            AssertMatrixSourceEndpoint(edge, observation, directory, "OptionalShape", member.Properties["metadataName"]);
             Assert.Equal(expected, member.Properties["optionalParameterOrdinals"]);
             Assert.Equal(expected, observation.Properties["optionalParameterOrdinals"]);
             Assert.Equal(expected, edge.Properties["optionalParameterOrdinals"]);
