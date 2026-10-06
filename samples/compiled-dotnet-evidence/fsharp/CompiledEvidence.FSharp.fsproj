@@ -12,5 +12,6 @@
     <Compile Include="RecordMatrix.fs" />
     <Compile Include="UnionMatrix.fs" />
     <Compile Include="QuotationMatrix.fs" />
+    <Compile Include="EventWiringMatrix.fs" />
   </ItemGroup>
 </Project>
