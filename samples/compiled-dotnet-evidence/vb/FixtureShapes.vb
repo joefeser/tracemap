@@ -253,3 +253,17 @@ Namespace TraceMap.CompiledFixtures.Equivalence
         End Function
     End Class
 End Namespace
+
+Namespace TraceMap.CompiledFixtures.Equivalence
+    Public Module ModuleShape
+        Public Function Curried(left As Integer, right As Integer) As Integer
+            Return left + right
+        End Function
+        Public Function Tupled(left As Integer, right As Integer) As Integer
+            Return left + right
+        End Function
+        Public Function Renamed(value As Integer) As Integer
+            Return value
+        End Function
+    End Module
+End Namespace
