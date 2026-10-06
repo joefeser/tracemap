@@ -1,5 +1,15 @@
 # .NET Evidence Completeness Status
 
+## F# event wiring (2026-10-06)
+
+PR #836 is merged at `9cc14630`; its exact-head Codex comment reports no major
+issues (the earlier ACK stale classification did not reflect that comment).
+This continuation adds F# cached-delegate event wiring, exact accessor/IL
+identities and distinct generated-helper evidence to the C#/VB matrix. See the
+[F# continuation](validation/CLR_SIGNATURE_EQUIVALENCE_MATRIX.md#f-cached-event-wiring-continuation).
+No F# source extraction, runtime or rewrite equivalence is inferred. Broad
+#767/#759 and private corpus/Windows acceptance remain open.
+
 ## C#/VB event wiring (2026-10-06)
 
 PR #835 is merged at `d4678de1`; its final-head CI and live ACK passed after
