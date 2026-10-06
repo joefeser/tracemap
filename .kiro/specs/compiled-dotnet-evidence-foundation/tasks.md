@@ -118,3 +118,10 @@ slices and require an implementation-state update before work begins.
   single/combined per-input provenance, rejection/repeat cases, bound C#/VB
   source joins and retained F# unsupported-source gap. F# decoy SpecialName
   distinction is explicit; runtime resolution/conversion behavior remains open.
+
+- [x] 21. Bounded #767 module/currying continuation: public C# static class,
+  VB Module and F# module, exact method identities/signatures and independent
+  container/attribute oracles; F# argument groups and consumed compiled-name
+  attributes remain distinct from CLR signature equality. Include single/
+  combined provenance, rejection/repeat tests, bound C#/VB joins and explicit
+  F# source gap. Production module/currying relationships remain open.
