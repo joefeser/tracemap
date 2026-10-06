@@ -418,10 +418,10 @@ public sealed partial class IlBodyEvidenceExtractorTests
                 OperandType.InlineI or OperandType.InlineBrTarget or OperandType.InlineField or OperandType.InlineMethod
                     or OperandType.InlineSig or OperandType.InlineString or OperandType.InlineTok or OperandType.InlineType or OperandType.ShortInlineR => 4,
                 OperandType.InlineI8 or OperandType.InlineR => 8,
-                _ => throw new InvalidDataException("Unexpected event fixture operand: " + opcode.OperandType)
+                _ => throw new InvalidDataException("Unexpected fixture operand: " + opcode.OperandType)
             };
             Assert.True(offset + size <= bytes.Length);
-            var token = opcode.OperandType is OperandType.InlineMethod or OperandType.InlineField ? BinaryPrimitives.ReadInt32LittleEndian(bytes.AsSpan(offset, 4)) : 0;
+            var token = opcode.OperandType is OperandType.InlineMethod or OperandType.InlineField or OperandType.InlineType ? BinaryPrimitives.ReadInt32LittleEndian(bytes.AsSpan(offset, 4)) : 0;
             decoded.Add((start, opcode, token));
             offset += size;
         }
