@@ -163,3 +163,9 @@ slices and require an implementation-state update before work begins.
   identities and provenance, ordinary-name counterexample, missing/ambiguous
   method candidates, malformed/sequence-limit refusal and repeated scans.
   Runtime/rewrite, F# state machines and broad source acceptance remain open.
+
+- [x] 28. Bounded #767 VB WithEvents/Handles versus explicit C# wiring:
+  independent accessor/signature/flag and original-IL token oracles, exact
+  metadata/body/call and ldftn identities/provenance, per-input ambiguity,
+  wrong-table operand/work-limit gaps and repeatability. Runtime subscription,
+  source/PDB/rewrite and broader language acceptance remain open.

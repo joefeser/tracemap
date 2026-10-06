@@ -762,3 +762,41 @@ full language/epic acceptance remain outside this slice.
 | #766 | Existing IL/PDB/rewrite and exact generated PDB occurrences | Full ECMA/rewrite/Windows PDB matrix | Public .NET plus declared Windows cases |
 | #768 | Public Windows CI, private runner safeguards | Private endurance and C++/CLI acceptance | Separately authorized Windows worker |
 | #759 | Distinct bounded evidence layers | Child acceptance stays open | Public/private lanes remain separate |
+
+## WithEvents and Handles wiring continuation
+
+After #835 merge `d4678de1`, this bounded #767 slice compares public VB
+`WithEvents Source` / `Handles Source.Tick` with explicit C# remove/assign/add
+wiring. It pins metadata and original IL observations; runtime event delivery,
+subscription lifetime, synchronization behavior and source ownership are unproven.
+
+| Case | Expected evidence | Boundary / counterexample |
+| --- | --- | --- |
+| CLR-WIRE-001 | Source property, exact getter/setter MethodSemantics handles and self-type signatures | C#/VB self types retain distinct assembly scopes. |
+| CLR-WIRE-002 | Tick event's exact add/remove handles and Action signatures | Names alone cannot associate event accessors. |
+| CLR-WIRE-003 | set_Source has callvirt remove_Tick then callvirt add_Tick, independently decoded offsets/tokens | Exact metadata → original-body → observation links; this is encoded order, not proof that both branches execute. |
+| CLR-WIRE-004 | OnTick ldftn operand: two C# loads versus one VB load | ManagedIlCallObserved includes method-pointer observations; ldftn is not a runtime handler invocation. Opcode and null source endpoint remain explicit. |
+| CLR-WIRE-005 | VB setter has Synchronized implementation flag; C# setter does not | Independent-reader fixture assertion only, not a new emitted synchronization property or runtime equivalence claim. |
+| CLR-WIRE-006 | Repeat scans emit byte-identical facts and IL provenance | Similar source intent does not imply identical IL bodies. |
+| CLR-WIRE-007 | Each duplicate locator retains its own setter/body/target observations, raw/binding hashes and ambiguity gap | Source reconciliation stays ineligible; no guessed source join. |
+| CLR-WIRE-008 | Wrong-table call operand and work exhaustion | IlCallTargetIdentityUnavailable / IlTotalWorkLimitExceeded, Tier4 partial and no positive IL bodies/observations; mutated bytes never executed. |
+
+SRM checks raw property/method signatures, TypeDef/MethodDef/MethodSemantics
+handles and assembly scopes. A bounded test decoder uses framework opcode/operand
+width definitions to walk whole IL instructions; unsupported operands fail the
+oracle, rather than searching operand bytes for opcodes. Cecil independently
+checks accessors, flags, instruction offsets/opcodes and target tokens.
+Assertions retain exact identities, rule IDs, tiers, metadata/IL locations,
+commit/extractor version and exact generator/bounded-input/raw/binding hashes.
+Existing `dotnet.compiled.member.v1`, `dotnet.compiled.il-body.v1`,
+`dotnet.compiled.il-call.v1` and gap contracts remain unchanged. No rule/schema
+or derived artifact is added. F# event wiring, inherited WithEvents, reassignment
+runtime behavior, source/PDB and rewritten-IL equivalence remain outside this slice.
+
+| Requirement | Delivered evidence | Remaining gap | Host/toolchain |
+| --- | --- | --- | --- |
+| #769 | Guarded runway/inventory | Reviewed private catalog and receipts | Authorized Windows/private access unavailable and uninvoked |
+| #767 | Matrices through generated PDB; selected C#/VB event wiring here | Broader language/source/PDB interactions | Public .NET 10.0.302 and ordinary CI |
+| #766 | Existing operand-aware IL/PDB/rewrite suite | Full ECMA/rewrite matrix | Public .NET plus declared Windows cases |
+| #768 | Public Windows CI, private runner safeguards | Private endurance and C++/CLI acceptance | Separately authorized Windows worker |
+| #759 | Distinct bounded evidence layers | Child acceptance stays open | Separate public/private lanes |
