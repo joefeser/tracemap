@@ -210,7 +210,17 @@ public sealed class IlBodyEvidenceExtractorTests
         var interfaceCall = calls.Single(call => call.Properties.GetValueOrDefault("opcode") == "callvirt"
             && call.Properties["targetIdentity"].Contains("names:10:ICallShape", StringComparison.Ordinal));
         Assert.Contains("method:5:Apply|", interfaceCall.Properties["targetIdentity"], StringComparison.Ordinal);
-        var constrainedCall = calls.Single(call => call.Properties.GetValueOrDefault("opcode") == "constrained.");
+        using var stream = File.OpenRead(fixture.Assembly);
+        using var pe = new PEReader(stream);
+        var reader = pe.GetMetadataReader();
+        var owner = reader.TypeDefinitions.Single(handle =>
+            reader.GetString(reader.GetTypeDefinition(handle).Namespace) == "TraceMap.CompiledFixtures.CSharp.Il"
+            && reader.GetString(reader.GetTypeDefinition(handle).Name) == "GenericCallShapes");
+        var constrainedMethod = reader.GetTypeDefinition(owner).GetMethods().Single(handle =>
+            reader.GetString(reader.GetMethodDefinition(handle).Name) == "RenderConstrained");
+        var constrainedToken = "0x" + System.Reflection.Metadata.Ecma335.MetadataTokens.GetToken(constrainedMethod).ToString("x8", CultureInfo.InvariantCulture);
+        var constrainedCall = calls.Single(call => call.Properties.GetValueOrDefault("opcode") == "constrained."
+            && call.Properties["metadataToken"] == constrainedToken);
         Assert.Equal("constrainedtype", constrainedCall.Properties["referenceKind"]);
         Assert.Equal("-", constrainedCall.Properties["referenceToken"]);
         Assert.False(string.IsNullOrWhiteSpace(constrainedCall.Properties["targetIdentity"]));
