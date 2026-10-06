@@ -9,5 +9,6 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="FixtureShapes.fs" />
+    <Compile Include="RecordMatrix.fs" />
   </ItemGroup>
 </Project>

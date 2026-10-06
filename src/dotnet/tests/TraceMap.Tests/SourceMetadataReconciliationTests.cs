@@ -212,6 +212,15 @@ public sealed partial class SourceMetadataReconciliationTests
             Assert.Equal(ManagedMetadataExtractorTests.ModuleSignature(name), method.Properties["signature"]);
         }
         Assert.DoesNotContain(result.Facts, fact => fact.FactType == FactTypes.SourceMetadataIdentityReconciled);
+        foreach (var name in new[] { "GetHashCode", "ToString" })
+        {
+            var recordMethod = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.ManagedMethodDeclared
+                && fact.TargetSymbol!.Contains("|type:namespace:37:TraceMap.CompiledFixtures.Equivalence|names:12:RecordMatrix|", StringComparison.Ordinal)
+                && fact.Properties["metadataName"] == name && fact.Properties["signature"].Contains("|()->", StringComparison.Ordinal));
+            Assert.Equal("true", recordMethod.Properties["compilerGenerated"]);
+            Assert.DoesNotContain(result.Facts, fact => fact.FactType == FactTypes.SourceMetadataIdentityReconciled
+                && fact.TargetSymbol == recordMethod.TargetSymbol);
+        }
         var gap = Assert.Single(result.Facts, fact => fact.Properties.GetValueOrDefault("gapKind") == "SourceMetadataReconciliationUnsupportedLanguage");
         Assert.Equal("fsharp", gap.Properties["language"]);
         var entry = Assert.Single(result.Manifest.SourceMetadataReconciliation!.Entries);

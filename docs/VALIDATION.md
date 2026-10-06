@@ -4222,3 +4222,19 @@ Run the source reconciliation suite in Release with `-c Release --no-build
 --no-restore` after a Release build; temporarily make this worktree's three compiled
 fixture `bin/Debug` directories unavailable to prove independence from Debug output,
 then restore those directories.
+
+### Record-generated member matrix
+
+```sh
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter 'FullyQualifiedName~Record_matrix|FullyQualifiedName~Fsharp_fixture_retains' -warnaserror
+```
+
+The [record matrix](validation/CLR_SIGNATURE_EQUIVALENCE_MATRIX.md#record-generated-member-continuation)
+pins raw MethodDef signatures and generated markers for C#/F# records versus
+ordinary VB lookalikes. Equal CLR signatures do not prove record or runtime
+semantics. SRM and Cecil independently inspect public binaries without executing
+them. Duplicate, malformed and bounded inputs retain gaps; bound F# source scans
+retain unsupported-source coverage. Run the surrounding compiled suite, full .NET
+suite and repeat CLI artifact validation. Non-.NET local suites and source OSS
+smokes may be explicitly deferred for this fixture/test-only slice; adapter CI
+remains required.

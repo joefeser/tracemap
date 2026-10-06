@@ -516,3 +516,44 @@ F# source extraction, schema/version change or new derived artifact is introduce
 | #766 IL/PDB/rewrite | Existing operand-aware evidence, independent readers and public mutation lanes | Broader edge matrix and independent PDB parity | Portable .NET and declared Windows ILAsm/PDB lanes |
 | #768 Windows | Existing public CI and bounded runner guards | Private bounded receipt, endurance and complete C++/CLI acceptance | Authorized private Windows worker |
 | #759 parent | Distinct evidence layers and bounded public validation | All child acceptance criteria remain open | Public and separately authorized private lanes |
+
+## Record-generated member continuation
+
+Branch `codex/767-record-generated-matrix` started at #828 `6f168354`, then
+integrated fresh origin/dev after #829 merged at `874db8a9`. Module/currying
+evidence is now delivered in dev. Main remains `7f026f5a`.
+
+The new `RecordMatrix` public fixtures use a C# sealed positional record, an F#
+record and an ordinary sealed VB class. All expose Count plus object overrides.
+Only selected CLR signatures compare equally; the VB Equals implementation is
+intentionally different. No runtime equality, hashing or formatting is claimed.
+
+| Case | Implementation/test evidence | Boundary |
+| --- | --- | --- |
+| CLR-RECORD-001 | C# Equals(Object), GetHashCode and ToString raw MethodDef signatures and generated attributes | Self-typed Equals and other helpers are separate endpoints |
+| CLR-RECORD-002 | VB ordinary object overrides have the same three signatures without generated markers | Method names/signatures do not imply record semantics |
+| CLR-RECORD-003 | F# record object overrides retain generated markers; raw SRM/Cecil token, flag and return-type agreement | No F# source extraction or runtime claim |
+| CLR-RECORD-004 | Nine separate method/fact IDs; independent full assembly/member identities and reversed-input determinism | Cross-assembly signature equality never merges identities |
+| CLR-RECORD-005–007 | Duplicate, truncated PE and member-limit cases in each language | Explicit ambiguity/malformed/limit gaps; no guessed source eligibility |
+| CLR-RECORD-008 | Bound F# scan retains generated record methods and the unsupported-source gap | Generated metadata does not establish physical source ownership |
+
+The oracle reads raw primitive signature bytes, exact declaring type/method
+handles, public/virtual/instance flags, and CompilerGeneratedAttribute parent,
+constructor signature, assembly scope and value. Cecil independently decodes the
+same bounded public input. Single/combined TraceMap assertions pin exact identity,
+metadata token, signature, marker and optional ordinals. Shared provenance checks
+retain rule ID, tier, metadata location, commit, extractor version, generator hash,
+bounded-input hash and the specific fixture's raw/binding hashes.
+
+No new production rule, schema, golden artifact or extractor version is introduced.
+No fixture is executed. Attributes are structural evidence, not trusted proof of
+source authorship or language origin; the compiler-generated marker is explicitly
+compared against these controlled fixture sources only.
+
+| Requirement | Delivered evidence | Remaining gap | Required host |
+| --- | --- | --- | --- |
+| #769 | Corpus runway and guarded runner contracts | Private dimension catalog, reviewed minimization and repeatable projected output | Authorized isolated Windows corpus lane; unavailable/uninvoked |
+| #767 | Merged signatures/defaults/options/accessors/constraints/interfaces/operators/modules; this record slice | Union/quotation and other targeted generated-member/receiver interactions; full acceptance | Public .NET SDK 10.0.302 plus CI |
+| #766 | Operand-preserving IL, PDB evidence and public rewrite mutations | Broader edge matrix and independent PDB parity | Public .NET/Windows IL tools |
+| #768 | Public Windows CI and private-runner fail-closed guards | Passing private bounded receipt, endurance and full C++/CLI acceptance | Separately authorized private Windows worker |
+| #759 | Distinct evidence layers and bounded fixture suites | Child criteria remain open | Public and private lanes remain separate |
