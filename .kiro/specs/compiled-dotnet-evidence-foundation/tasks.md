@@ -175,3 +175,10 @@ slices and require an implementation-state update before work begins.
   identities selected by encoded tokens (including renamed generated members),
   cached-field operand assertions, duplicate/malformed/limit gaps
   and deterministic repeats. No F# source/PDB/runtime/rewrite equivalence claim.
+
+- [x] 30. Bounded #767 C#/VB/F# collection continuation: ArrayList versus
+  List<Object> indexer MethodDef/MemberRef signatures and scopes, generic !0
+  return, unbox.any versus VB conversion-helper original IL; independent raw
+  SRM/opcode/Cecil oracles, exact endpoint/provenance checks, same-opcode/different-
+  operand hashes, duplicate/malformed/work-limit gaps and deterministic repeats.
+  Source/PDB/rewrite/runtime, late binding and broader language acceptance remain open.
