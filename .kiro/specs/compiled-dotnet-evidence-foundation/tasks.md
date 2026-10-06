@@ -145,3 +145,9 @@ slices and require an implementation-state update before work begins.
   raw SRM/Cecil nested signature/scope/token oracles, exact single/combined
   provenance, duplicate/malformed/member-limit/repeat cases and F# source gap.
   Quotation contents/conversion/runtime and broader language acceptance remain open.
+
+- [x] 25. Bounded #767 C#/VB receiver continuation: base/virtual and
+  Me/MyBase/MyClass encoded targets, independent raw SRM/Cecil token/opcode
+  oracles, exact metadata/body/call links and provenance, same-opcode/different-
+  operand identity regression, per-input ambiguity, malformed-token/work-limit
+  refusal and repeats. Runtime dispatch and broader source/PDB acceptance remain open.
