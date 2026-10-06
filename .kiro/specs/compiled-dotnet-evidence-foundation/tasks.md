@@ -157,3 +157,9 @@ slices and require an implementation-state update before work begins.
   total arity, independent raw SRM/Cecil oracles, single/combined provenance,
   per-input ambiguity, malformed/member-limit refusal and deterministic repeats.
   Source/PDB/IL/runtime and broader language/epic acceptance remain open.
+
+- [x] 27. Bounded #767 C#/VB async/iterator PDB continuation: independent
+  kickoff/attribute/token oracles, exact generated metadata/PDB/document/sequence
+  identities and provenance, ordinary-name counterexample, missing/ambiguous
+  method candidates, malformed/sequence-limit refusal and repeated scans.
+  Runtime/rewrite, F# state machines and broad source acceptance remain open.
