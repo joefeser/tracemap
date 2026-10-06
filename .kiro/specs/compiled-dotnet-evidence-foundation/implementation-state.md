@@ -1,3 +1,18 @@
+# PR #837 current-head review repair
+
+ACK released Codex P2 after the owner resumed current-head repair following the
+terminal Qodo timeout. Scope is generated-name independence only; no merge or
+reviewer retag authorization. Prior head `1825da27` passed full CI (3,390 .NET
+passed / one platform skip, zero build warnings; Windows corpus 148/148).
+Repair validation: focused 8/8 with warnings as errors, surrounding 417/417
+(zero failures/skips), privacy/spec/whitespace guards passed. Logs are
+/tmp/tracemap-fsevent-repair-focused.log and
+/tmp/tracemap-fsevent-repair-surrounding.log. Commands are the focused and
+surrounding filters below (surrounding uses --no-build --no-restore). Production
+extractors and fixture bytes are unchanged; prior validated CLI smoke remains
+applicable. Final-head CI/live ACK still required. Exact source/metadata/IL and
+provenance contracts are preserved.
+
 # Current continuation: #767 F# cached event wiring
 
 Branch `codex/767-fsharp-event-wiring`, fresh origin/dev base #836 merge
@@ -27,8 +42,11 @@ delegate, so the fixture uses DelegateEvent<Action> and explicit accessors.
 Constructing delegates separately at each setter site produced distinct helpers;
 the final fixture caches one delegate. Constructor identities use the existing
 constructor category, not the method category. These are fixture/test corrections,
-not weakened production identity checks. The generated helper name is pinned to
-this fixture and SDK; source line changes intentionally require expectation review.
+not weakened production identity checks. Review repair: CI uses floating 10.0.x, so generated spellings cannot be called
+SDK-pinned. Helper selection now follows the constructor ldftn token and raw
+declaring-type handles, corroborated with Cecil tokens. Exact identity encoding
+uses those metadata names, without production formatters or name selectors. A
+data-only renamed-container/type/callback variant pins this invariant.
 
 Validation: locked restore on SDK 10.0.302; focused 7/7. Two validated public
 CLI scans: 3,221 facts, three distinct setter bodies, six exact event-call chains;

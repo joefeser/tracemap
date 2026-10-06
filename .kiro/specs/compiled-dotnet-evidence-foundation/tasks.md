@@ -172,5 +172,6 @@ slices and require an implementation-state update before work begins.
 
 - [x] 29. Bounded #767 F# cached event-wiring continuation: shared exact
   metadata/accessor/body/call checks, independent constructor/helper/OnTick
-  identities and cached-field operand assertions, duplicate/malformed/limit gaps
+  identities selected by encoded tokens (including renamed generated members),
+  cached-field operand assertions, duplicate/malformed/limit gaps
   and deterministic repeats. No F# source/PDB/runtime/rewrite equivalence claim.
