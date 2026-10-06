@@ -611,17 +611,17 @@ C#/VB trees return `Expression<Func<Int32>>`; F# typed quotations return
 These are metadata signatures: the tests never invoke, compile or evaluate the
 returned trees/delegates and do not prove equivalent expression contents.
 
-| Case | Expected metadata evidence | Non-claim |
-| --- | --- | --- |
-| CLR-QUOTE-001 | C#/VB Tree signatures match, with exact nested Expression/Func type references | No tree-content or runtime equivalence |
-| CLR-QUOTE-002 | F# Tree uses FSharp.Core-scoped FSharpExpr<Int32>, distinct from Expression and Func | No automatic quotation conversion |
-| CLR-QUOTE-003 | All Delegate signatures match while retaining three distinct endpoints | No execution or closure equivalence |
-| CLR-QUOTE-004 | Echo parameter and return preserve both generic wrapper levels where present | No inferred source ownership |
-| CLR-QUOTE-005 | SRM raw signature bytes/TypeRefs/AssemblyRefs and Cecil independently agree on exact MethodDef token and shape | Neither reader alone is the oracle |
-| CLR-QUOTE-006 | Nine distinct endpoints/fact IDs, single/combined input evidence, reversed-input byte determinism | No display-name identity join |
-| CLR-QUOTE-007 | Duplicate primaries emit ambiguity and are source-ineligible | No guessed assembly choice |
-| CLR-QUOTE-008 | Truncated PE and member limit emit partial Tier4 gaps | No clean result from rejected input |
-| CLR-QUOTE-009 | F# compiled methods survive while the source-unsupported gap remains | No F# source extraction |
+| Case | Expected metadata evidence | Expected edges | Non-claim |
+| --- | --- | --- | --- |
+| CLR-QUOTE-001 | C#/VB Tree signatures match, with exact nested Expression/Func type references | None: metadata declarations/gaps only; F# source joins forbidden | No tree-content or runtime equivalence |
+| CLR-QUOTE-002 | F# Tree uses FSharp.Core-scoped FSharpExpr<Int32>, distinct from Expression and Func | None: metadata declarations/gaps only; F# source joins forbidden | No automatic quotation conversion |
+| CLR-QUOTE-003 | All Delegate signatures match while retaining three distinct endpoints | None: metadata declarations/gaps only; F# source joins forbidden | No execution or closure equivalence |
+| CLR-QUOTE-004 | Echo parameter and return preserve both generic wrapper levels where present | None: metadata declarations/gaps only; F# source joins forbidden | No inferred source ownership |
+| CLR-QUOTE-005 | SRM raw signature bytes/TypeRefs/AssemblyRefs and Cecil independently agree on exact MethodDef token and shape | None: metadata declarations/gaps only; F# source joins forbidden | Neither reader alone is the oracle |
+| CLR-QUOTE-006 | Nine distinct endpoints/fact IDs, single/combined input evidence, reversed-input byte determinism | None: metadata declarations/gaps only; F# source joins forbidden | No display-name identity join |
+| CLR-QUOTE-007 | Duplicate primaries emit ambiguity and are source-ineligible | None: metadata declarations/gaps only; F# source joins forbidden | No guessed assembly choice |
+| CLR-QUOTE-008 | Truncated PE and member limit emit partial Tier4 gaps | None: metadata declarations/gaps only; F# source joins forbidden | No clean result from rejected input |
+| CLR-QUOTE-009 | F# compiled methods survive while the source-unsupported gap remains | None: metadata declarations/gaps only; F# source joins forbidden | No F# source extraction |
 
 Every selected fact uses the shared evidence oracle to pin rule/tier, exact
 assembly/member identity and metadata token/location, commit, extractor version,
@@ -639,3 +639,12 @@ conversion and runtime behavior remain open.
 | #766 | Existing operand-aware IL/PDB/rewrite tests | Broader edge matrix and independent PDB parity | Public .NET and declared Windows tools |
 | #768 | Existing public Windows CI and private-runner guards | Private bounded/endurance receipts and complete C++/CLI acceptance | Separately authorized Windows worker |
 | #759 | Distinct evidence layers and bounded public tests | Child acceptance remains open | Separate public/private lanes |
+
+The metadata-only evaluation asserts null source endpoints and no
+SourceMetadataIdentityReconciled facts for positive, reversed, duplicate and
+rejected inputs. CLR-QUOTE-009 separately asserts no source-identity edge to each
+F# endpoint in a bound scan. This is an explicit no-edge expectation for these
+cases, not a claim about all possible graph output from other extractors.
+Duplicate inputs are checked per independently expected repository/external safe
+locator: one outcome and ambiguity gap, three named method facts, exact raw and
+binding hashes for each input. Aggregate counts cannot substitute for either path.

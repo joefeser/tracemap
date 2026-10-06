@@ -2,6 +2,7 @@ using System.Reflection;
 using System.Reflection.Metadata;
 using System.Reflection.PortableExecutable;
 using System.Text.Json;
+using System.Security.Cryptography;
 using TraceMap.Core;
 
 namespace TraceMap.Tests;
@@ -76,6 +77,8 @@ public sealed partial class ManagedMetadataExtractorTests
             AssertAccessorEvidence(fact, single.Provenance!, commit);
             AssertAccessorEvidence(combinedFact, combined.Provenance!, combinedCommit);
         }
+        AssertNoQuotationEdges(facts);
+        AssertNoQuotationEdges(combinedFacts);
         Assert.Equal(3, QuotationMethods(facts).Length);
         Assert.DoesNotContain(combinedFacts, fact => fact.Properties.GetValueOrDefault("gapKind") == "MetadataReaderDisagreement");
 
@@ -141,6 +144,8 @@ public sealed partial class ManagedMetadataExtractorTests
         }
         Assert.NotEqual(QuotationSignature("Tree", "csharp"), QuotationSignature("Delegate", "csharp"));
         Assert.NotEqual(QuotationSignature("Tree", "fsharp"), QuotationSignature("Delegate", "fsharp"));
+        AssertNoQuotationEdges(facts);
+        AssertNoQuotationEdges(repeated);
         Assert.Equal(JsonSerializer.Serialize(first.Provenance), JsonSerializer.Serialize(second.Provenance));
         Assert.Equal(JsonSerializer.Serialize(facts), JsonSerializer.Serialize(repeated));
     }
@@ -161,6 +166,39 @@ public sealed partial class ManagedMetadataExtractorTests
         var gaps = facts.Where(fact => fact.Properties.GetValueOrDefault("gapKind") == "AmbiguousDuplicateManagedAssembly").ToArray();
         Assert.Equal(2, gaps.Length);
         Assert.All(gaps, gap => AssertClrGap(gap, duplicate.Provenance!, commit));
+        var rawHash = Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(assembly))).ToLowerInvariant();
+        var expectedLocators = new[]
+        {
+            Path.GetRelativePath(FindRepoRoot(), assembly).Replace('\\', '/'),
+            "__external__/primary/" + rawHash[..12] + "-copy.dll"
+        };
+        Assert.Equal(expectedLocators.Order(StringComparer.Ordinal), duplicate.Provenance!.Outcomes.Select(outcome => outcome.SafeLocator).Order(StringComparer.Ordinal));
+        Assert.Equal(6, QuotationMethods(facts).Select(fact => fact.FactId).Distinct().Count());
+        foreach (var locator in expectedLocators)
+        {
+            var outcome = Assert.Single(duplicate.Provenance.Outcomes, candidate => candidate.SafeLocator == locator);
+            Assert.Equal(rawHash, outcome.RawFileSha256);
+            Assert.Contains("AmbiguousDuplicateManagedAssembly", outcome.GapKinds);
+            var selected = QuotationMethods(facts).Where(fact => fact.Evidence.FilePath == locator).ToArray();
+            Assert.Equal(new[] { "Delegate", "Echo", "Tree" }, selected.Select(fact => fact.Properties["metadataName"]).Order(StringComparer.Ordinal));
+            foreach (var fact in selected)
+            {
+                AssertClrProvenance(fact, duplicate.Provenance, commit);
+                Assert.Equal("dotnet.compiled.member.v1", fact.RuleId);
+                Assert.Equal(EvidenceTiers.Tier2Structural, fact.EvidenceTier);
+                Assert.Equal(ManagedMetadataExtractor.MetadataLocationKind, fact.Properties["evidenceLocationKind"]);
+                Assert.Matches("^0x06[0-9a-f]{6}$", fact.Properties["metadataToken"]);
+                Assert.Equal(outcome.AssemblyIdentity, fact.Properties["assemblyIdentity"]);
+                Assert.Equal(rawHash, fact.Properties["rawFileSha256"]);
+                Assert.Equal(outcome.ProvenanceBindingInputSha256, fact.Properties["provenanceBindingInputSha256"]);
+                Assert.Equal(QuotationSignature(fact.Properties["metadataName"], language), fact.Properties["signature"]);
+            }
+            var gap = Assert.Single(gaps, fact => fact.Evidence.FilePath == locator);
+            Assert.Equal(rawHash, gap.Properties["rawFileSha256"]);
+            Assert.Equal(outcome.ProvenanceBindingInputSha256, gap.Properties["provenanceBindingInputSha256"]);
+        }
+        AssertNoQuotationEdges(facts);
+
         var truncated = Path.Combine(temp.Path, "truncated.dll");
         File.WriteAllBytes(truncated, File.ReadAllBytes(assembly)[..64]);
         Check(truncated, null, "MalformedManagedInput");
@@ -169,9 +207,18 @@ public sealed partial class ManagedMetadataExtractorTests
         {
             var (evaluation, rejected, rejectedCommit) = EvaluateClrMatrix(inputs: [input], limits: limits);
             Assert.Empty(QuotationMethods(rejected));
+            AssertNoQuotationEdges(rejected);
             AssertClrGap(Assert.Single(rejected, fact => fact.Properties.GetValueOrDefault("gapKind") == kind), evaluation.Provenance!, rejectedCommit);
             Assert.Equal("compiled-metadata-partial", evaluation.Provenance!.CoverageState);
         }
+    }
+
+    private static void AssertNoQuotationEdges(IReadOnlyList<CodeFact> facts)
+    {
+        // This metadata-only evaluation has declarations/gaps, never relationship
+        // endpoints. In particular, equal signatures cannot manufacture source joins.
+        Assert.All(facts, fact => Assert.Null(fact.SourceSymbol));
+        Assert.DoesNotContain(facts, fact => fact.FactType == FactTypes.SourceMetadataIdentityReconciled);
     }
 
     private static CodeFact[] QuotationMethods(IReadOnlyList<CodeFact> facts) => facts.Where(fact => fact.FactType == FactTypes.ManagedMethodDeclared

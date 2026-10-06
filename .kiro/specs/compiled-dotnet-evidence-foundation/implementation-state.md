@@ -40,7 +40,16 @@ dotnet run --project src/dotnet/TraceMap.Cli --no-build -- scan --repo samples/m
 python3 scripts/validate-adapter-artifacts.py "$smoke_output"
 ```
 
-Next: complete validation, open bounded PR and use live ACK authority. Untyped
+PR #832 opened at `ee95fa67`. Initial exact-head CI passed all gates with
+3,364 .NET tests and one skip; no reruns. Settled ACK review authorized two
+repairs: explicit no-edge expectations and per-input duplicate evidence.
+The shared invariant is evidence separation, audited across this slice's
+single/combined/reversed/duplicate/rejected cases and bound F# scan. No production
+change or unrelated matrix rewrite is needed. Tests now pin both expected safe
+locators, each outcome/gap and three distinct method facts per input, with raw/
+binding provenance, and assert no relationship source endpoints in metadata-only
+output. The matrix states no-edge expectations for every case. Repair focused validation passes 8/8 with zero warnings/errors; privacy/spec/
+whitespace guards pass. Final-head CI/ACK remain required. Untyped
 quotations, splices, captures, generated helpers, conversions and runtime behavior
 remain future scope; broad issue acceptance is not inferred from this slice.
 
