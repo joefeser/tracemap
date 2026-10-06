@@ -231,6 +231,15 @@ public sealed partial class SourceMetadataReconciliationTests
             Assert.DoesNotContain(result.Facts, fact => fact.FactType == FactTypes.SourceMetadataIdentityReconciled
                 && fact.TargetSymbol == unionFactory.TargetSymbol);
         }
+        foreach (var name in new[] { "Tree", "Delegate", "Echo" })
+        {
+            var quotation = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.ManagedMethodDeclared
+                && fact.TargetSymbol!.Contains("|type:namespace:37:TraceMap.CompiledFixtures.Equivalence|names:15:QuotationMatrix|", StringComparison.Ordinal)
+                && fact.Properties["metadataName"] == name);
+            Assert.Equal(ManagedMetadataExtractorTests.QuotationSignature(name, "fsharp"), quotation.Properties["signature"]);
+            Assert.DoesNotContain(result.Facts, fact => fact.FactType == FactTypes.SourceMetadataIdentityReconciled
+                && fact.TargetSymbol == quotation.TargetSymbol);
+        }
         var gap = Assert.Single(result.Facts, fact => fact.Properties.GetValueOrDefault("gapKind") == "SourceMetadataReconciliationUnsupportedLanguage");
         Assert.Equal("fsharp", gap.Properties["language"]);
         var entry = Assert.Single(result.Manifest.SourceMetadataReconciliation!.Entries);
