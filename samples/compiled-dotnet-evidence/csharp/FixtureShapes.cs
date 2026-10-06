@@ -166,3 +166,13 @@ namespace TraceMap.CompiledFixtures.Equivalence
         public static decimal DecimalSeven(decimal value = 7m) => value;
     }
 }
+
+namespace TraceMap.CompiledFixtures.Equivalence
+{
+    public interface ISharedFormatter { string Format(string value); }
+    public sealed class ExplicitShape : ISharedFormatter
+    {
+        public string Format(string value) => "ordinary:" + value;
+        string ISharedFormatter.Format(string value) => "explicit:" + value;
+    }
+}

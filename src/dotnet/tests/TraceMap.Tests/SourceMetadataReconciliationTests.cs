@@ -185,6 +185,18 @@ public sealed partial class SourceMetadataReconciliationTests
             Assert.Equal("arity:0|call:default|hasThis:false|explicitThis:false|(" + parameterType + ")->" + parameterType, method.Properties["signature"]);
             Assert.Equal(name == "Required" ? "" : "0", method.Properties["optionalParameterOrdinals"]);
         }
+        foreach (var (owner, name) in new[]
+        {
+            ("16:ISharedFormatter", "Format"),
+            ("13:ExplicitShape", "Format"),
+            ("13:ExplicitShape", "TraceMap.CompiledFixtures.Equivalence.ISharedFormatter.Format")
+        })
+        {
+            var method = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.ManagedMethodDeclared
+                && fact.TargetSymbol!.Contains("|type:namespace:37:TraceMap.CompiledFixtures.Equivalence|names:" + owner + "|", StringComparison.Ordinal)
+                && fact.Properties["metadataName"] == name);
+            Assert.Equal("arity:0|call:default|hasThis:true|explicitThis:false|(type(namespace:6:System|names:6:String))->type(namespace:6:System|names:6:String)", method.Properties["signature"]);
+        }
         Assert.DoesNotContain(result.Facts, fact => fact.FactType == FactTypes.SourceMetadataIdentityReconciled);
         var gap = Assert.Single(result.Facts, fact => fact.Properties.GetValueOrDefault("gapKind") == "SourceMetadataReconciliationUnsupportedLanguage");
         Assert.Equal("fsharp", gap.Properties["language"]);

@@ -103,3 +103,11 @@ slices and require an implementation-state update before work begins.
   independent raw/decoded oracles, exact token/provenance assertions, negative,
   ambiguous, malformed, bounded and repeat cases; F# source remains unsupported.
   Production default-value facts and complete default semantics remain open.
+
+- [x] 19. Bounded #767 explicit-interface continuation: matched C#/VB/F#
+  declarations/explicit implementations with an ordinary same-signature decoy;
+  independent MethodImpl/override token oracles, single/combined fact assertions,
+  language flag differences, duplicate/malformed/limit/repeat coverage, and
+  retained F# unsupported-source boundary. Per-input hashes are checked against
+  fixture bytes/outcomes, with cross-assembly corruption regressions and shared
+  accessor/constraint/default coverage. Production dispatch edges remain open.

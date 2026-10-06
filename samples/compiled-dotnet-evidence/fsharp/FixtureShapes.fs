@@ -81,3 +81,11 @@ type DefaultShape() =
     static member Text([<System.Runtime.InteropServices.Optional; System.Runtime.InteropServices.DefaultParameterValue("seven")>] value: string) = value
     static member NullText([<System.Runtime.InteropServices.Optional; System.Runtime.InteropServices.DefaultParameterValue(null: string)>] value: string) = value
     static member DecimalSeven([<System.Runtime.InteropServices.Optional; System.Runtime.CompilerServices.DecimalConstant(0uy, 0uy, 0u, 0u, 7u)>] value: decimal) = value
+
+type ISharedFormatter =
+    abstract Format: value: string -> string
+
+type ExplicitShape() =
+    member _.Format(value: string) = "ordinary:" + value
+    interface ISharedFormatter with
+        member _.Format(value: string) = "explicit:" + value
