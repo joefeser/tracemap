@@ -118,3 +118,9 @@ slices and require an implementation-state update before work begins.
   single/combined per-input provenance, rejection/repeat cases, bound C#/VB
   source joins and retained F# unsupported-source gap. F# decoy SpecialName
   distinction is explicit; runtime resolution/conversion behavior remains open.
+
+- [x] 22. Bounded #767 record-generated-member continuation: selected C#/F#
+  synthesized object overrides versus ordinary VB lookalikes, raw SRM/Cecil
+  MethodDef/attribute oracles, exact single/combined identities and provenance,
+  ambiguity/malformed/limit/repeat cases and explicit F# source-unsupported gap.
+  Runtime record equality, full helper coverage and broader acceptance remain open.

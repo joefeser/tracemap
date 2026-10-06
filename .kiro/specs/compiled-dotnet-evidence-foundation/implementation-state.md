@@ -1,3 +1,54 @@
+# Current continuation: #767 record-generated members
+
+Branch `codex/767-record-generated-matrix`, created from fetched origin/dev
+`6f168354` while #829 is still reported open. Reconcile its merge before delivery.
+Scope: selected C#/F# record-generated object overrides and ordinary VB lookalikes,
+independent SRM/Cecil metadata oracles, exact identities/provenance and bounded
+negative cases. No runtime equality or F# source-extraction claim. No production
+rule/schema change or new derived artifact. Private corpus/Windows access remains
+unavailable and uninvoked. No duplicate active record lane was found; primary
+checkout unrelated Base44 edits and all other worktrees remain untouched.
+
+Initial focused metadata tests: 7/7. Locked restore and warnings-as-errors test
+build pass. Two public CLI scans produce 520 facts with byte-identical validated
+facts/reports. Validator self-tests 7/7, privacy and Kiro guards pass (unchanged
+Python SQLite ResourceWarning). Non-.NET local suites and pinned source OSS smoke
+checks are deferred for this fixture/test-only scope; public adapter CI remains
+required. Final focused validation passes 9/9; full .NET validation is pending.
+
+The first surrounding suite exposed one test-wide uniqueness assumption:
+record-generated IL legitimately adds another constrained call. The IL fixture
+assertion now selects RenderConstrained by its independent SRM declaring type and
+MethodDef token instead of asserting one constrained call in the whole assembly.
+An intermediate repair selected the wrong declaring type and failed explicitly;
+correcting the oracle to GenericCallShapes restored the exact test (9/9 focused).
+This preserves the intended exact call assertion; no production logic changed.
+
+Commands (logs `/tmp/tracemap-record-*`):
+
+```sh
+dotnet restore src/dotnet/TraceMap.sln --locked-mode
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter FullyQualifiedName~Record_matrix -warnaserror
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter 'FullyQualifiedName~ManagedMetadataExtractorTests|FullyQualifiedName~SourceMetadataReconciliationTests|FullyQualifiedName~PortablePdbExtractorTests|FullyQualifiedName~IlBodyEvidenceExtractorTests|FullyQualifiedName~IlRewrite' -warnaserror
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter 'FullyQualifiedName~Record_matrix|FullyQualifiedName~Direct_call_kinds_carry_exact_target_identities_tokens_and_offsets|FullyQualifiedName~Fsharp_fixture_retains' -warnaserror
+dotnet test src/dotnet/TraceMap.sln --no-build --no-restore
+python3 scripts/test_validate_adapter_artifacts.py
+./scripts/check-private-paths.sh
+node scripts/kiro-review.mjs --self-test
+git diff --check
+```
+
+CLI smoke runs twice with separate temporary outputs and absolute public input paths:
+
+```sh
+dotnet run --project src/dotnet/TraceMap.Cli --no-build -- scan --repo samples/modern-sample --out "$smoke_output" --compiled-input "$fixture_root/csharp/bin/Debug/net10.0/CompiledEvidence.CSharp.dll" --compiled-input "$fixture_root/vb/bin/Debug/net10.0/CompiledEvidence.VisualBasic.dll" --compiled-input "$fixture_root/fsharp/bin/Debug/net10.0/CompiledEvidence.FSharp.dll"
+python3 scripts/validate-adapter-artifacts.py "$smoke_output"
+```
+
+Next: reconcile #829 merge state, finish validation and exact-head PR review.
+All epic issues remain open; discriminated unions/quotations, further VB receiver
+interactions and generated-member/PDB relationships require separate slices.
+
 # Current continuation: #767 operators/conversions (2026-10-05)
 
 Branch `codex/767-operator-conversion-matrix`, base #827 merge
