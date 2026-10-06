@@ -171,6 +171,20 @@ public sealed partial class SourceMetadataReconciliationTests
                 && fact.Properties["metadataName"] == name);
             Assert.Equal("arity:1|call:default|hasThis:false|explicitThis:false|(!!0)->!!0", method.Properties["signature"]);
         }
+        foreach (var name in new[] { "Required", "IntSeven", "IntNine", "Text", "NullText", "DecimalSeven" })
+        {
+            var method = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.ManagedMethodDeclared
+                && fact.TargetSymbol!.Contains("|type:namespace:37:TraceMap.CompiledFixtures.Equivalence|names:12:DefaultShape|", StringComparison.Ordinal)
+                && fact.Properties["metadataName"] == name);
+            var parameterType = name switch
+            {
+                "Text" or "NullText" => "type(namespace:6:System|names:6:String)",
+                "DecimalSeven" => "scope(assembly:name:14:System.Runtime|version:8:10.0.0.0|culture:7:neutral|publicKeyToken:16:b03f5f7f11d50a3a)type(namespace:6:System|names:7:Decimal)",
+                _ => "type(namespace:6:System|names:5:Int32)"
+            };
+            Assert.Equal("arity:0|call:default|hasThis:false|explicitThis:false|(" + parameterType + ")->" + parameterType, method.Properties["signature"]);
+            Assert.Equal(name == "Required" ? "" : "0", method.Properties["optionalParameterOrdinals"]);
+        }
         Assert.DoesNotContain(result.Facts, fact => fact.FactType == FactTypes.SourceMetadataIdentityReconciled);
         var gap = Assert.Single(result.Facts, fact => fact.Properties.GetValueOrDefault("gapKind") == "SourceMetadataReconciliationUnsupportedLanguage");
         Assert.Equal("fsharp", gap.Properties["language"]);

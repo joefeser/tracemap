@@ -198,3 +198,26 @@ Namespace TraceMap.CompiledFixtures.Equivalence
         End Function
     End Class
 End Namespace
+
+Namespace TraceMap.CompiledFixtures.Equivalence
+    Public NotInheritable Class DefaultShape
+        Public Shared Function Required(value As Integer) As Integer
+            Return value
+        End Function
+        Public Shared Function IntSeven(Optional value As Integer = 7) As Integer
+            Return value
+        End Function
+        Public Shared Function IntNine(Optional value As Integer = 9) As Integer
+            Return value
+        End Function
+        Public Shared Function Text(Optional value As String = "seven") As String
+            Return value
+        End Function
+        Public Shared Function NullText(Optional value As String = Nothing) As String
+            Return value
+        End Function
+        Public Shared Function DecimalSeven(Optional value As Decimal = 7D) As Decimal
+            Return value
+        End Function
+    End Class
+End Namespace
