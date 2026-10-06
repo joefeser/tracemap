@@ -4194,3 +4194,12 @@ signatures and optional markers. See the CLR matrix for coverage limitations.
 Run `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter 'FullyQualifiedName~Explicit_interface_matrix|FullyQualifiedName~Fsharp_fixture_retains' -warnaserror`.
 Raw MethodImpl tokens bind fixture declarations and implementing methods; an
 ordinary same-signature method cannot substitute. No runtime dispatch is claimed.
+
+
+### Operator and conversion metadata/source matrix
+
+Run `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter 'FullyQualifiedName~Operator_matrix|FullyQualifiedName~Operator_source_matrix|FullyQualifiedName~Fsharp_fixture_retains' -warnaserror`.
+The [case matrix](validation/CLR_SIGNATURE_EQUIVALENCE_MATRIX.md#operator-and-conversion-continuation)
+pins independent raw metadata oracles, assembly-scoped signatures, source joins,
+per-input provenance, ambiguous/malformed/limited inputs and deterministic repeat
+output. F# source extraction and runtime conversion behavior are not claimed.
