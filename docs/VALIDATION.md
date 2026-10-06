@@ -4338,3 +4338,25 @@ public cross-platform CI. Duplicate full local .NET, non-.NET local suites and
 pinned source OSS smokes are explicitly deferred for this fixture/test-only slice.
 No fixture/malformed DLL execution; source/PDB/rewrite/runtime and private Windows
 acceptance remain separate.
+
+### Collection indexer and conversion matrix (#767)
+
+```sh
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter FullyQualifiedName~Collection_matrix -warnaserror
+```
+
+This filter checks all three public languages: exact ArrayList/List<Object>
+signatures and scopes, original get_Item operands, C#/F# unboxing versus VB
+conversion-helper calls, independent SRM/opcode/Cecil readers, full per-fact
+provenance, identical-opcode/different-body-hash counterexamples, duplicate-input
+ambiguity, wrong-table operands, bounded work and deterministic repeats. No test
+executes fixture/malformed binaries or claims runtime conversion equivalence.
+
+Run the surrounding metadata/source-reconciliation/PDB/IL/rewrite tests and two
+public CLI scans with all three assemblies and `--il-body-evidence`; validate
+artifacts and compare facts/report bytes. Run artifact-validator tests and
+privacy/spec guards. Require full final-head .NET and public cross-platform CI.
+Duplicate full local .NET, non-.NET local suites and pinned source OSS smokes
+are explicitly deferred for this fixture/test-only slice. F# source extraction,
+private corpus receipts, isolated Windows/MSVC and broad epic acceptance remain
+separate gaps, not satisfied by public CI.

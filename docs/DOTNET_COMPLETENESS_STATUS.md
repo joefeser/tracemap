@@ -1,5 +1,14 @@
 # .NET Evidence Completeness Status
 
+## Collection indexers and integer conversions (2026-10-06)
+
+PR #837 is merged at `7fac0ce8`: F# cached event wiring and token-selected
+helper identity tests are on dev. This bounded #767 continuation adds public
+C#/VB/F# ArrayList versus List<Object> signatures, indexer operand identity and
+integer-conversion IL tests. See the [collection matrix](validation/CLR_SIGNATURE_EQUIVALENCE_MATRIX.md#collection-indexer-and-conversion-continuation).
+No runtime, source/PDB/rewrite or F# source equivalence is inferred. Broader
+#767/#759 and authorized private corpus/Windows acceptance remain open.
+
 ## F# event wiring (2026-10-06)
 
 PR #836 is merged at `9cc14630`; its exact-head Codex comment reports no major
