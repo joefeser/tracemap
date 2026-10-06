@@ -1,3 +1,55 @@
+# Current continuation: #767 explicit interfaces (2026-10-05)
+
+Branch `codex/767-explicit-interface-matrix`, base #826 merge
+`b40267b167b46910f6846bb6f0db6e80d8aa58f4`; target dev. No competing open PR
+or active worktree found. Other worktrees and unrelated Base44 edits preserved.
+
+Scope: ISharedFormatter/ExplicitShape in C#/VB/F#, declaration/body/decoy
+identity separation, independent SRM MethodImpl and Cecil override token
+oracles, exact single/combined fact assertions, seven new metadata regressions
+and strengthened bound F# gap test. F# emits no Final flag for this explicit
+method; C#/VB do. No production dispatch edge, schema or extractor-version
+change; no runtime loading and no new derived artifact.
+
+Validation: focused 8/8 pass, build warning-free. Two CLI scans yield 460 facts,
+all nine fixture methods, no reader disagreement and byte-identical facts/reports.
+Artifacts validate; seven validator self-tests, privacy, Kiro and whitespace
+checks pass (unchanged Python SQLite ResourceWarning). Initial uniform Final-flag
+expectation failed on F# and is now pinned as a language-specific distinction
+by both readers. All 342 surrounding metadata/source/PDB/IL/rewrite tests pass.
+Full .NET passes 3,316 tests, zero failures, one Windows ASP.NET publish skip
+(3,317 total; 15.42 minutes). Cross-platform CI and live ACK remain separate
+PR gates.
+
+Commands from this worktree (logs `/tmp/tracemap-767-interfaces-*`):
+
+```sh
+dotnet restore src/dotnet/TraceMap.sln --locked-mode
+dotnet build src/dotnet/TraceMap.sln --no-restore -warnaserror
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter 'FullyQualifiedName~Explicit_interface_matrix|FullyQualifiedName~Fsharp_fixture_retains' -warnaserror
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-build --no-restore --filter 'FullyQualifiedName~ManagedMetadataExtractorTests|FullyQualifiedName~SourceMetadataReconciliationTests|FullyQualifiedName~PortablePdbExtractorTests|FullyQualifiedName~IlBodyEvidenceExtractorTests|FullyQualifiedName~IlRewrite'
+dotnet test src/dotnet/TraceMap.sln --no-build --no-restore --logger 'console;verbosity=normal'
+python3 scripts/test_validate_adapter_artifacts.py
+./scripts/check-private-paths.sh
+node scripts/kiro-review.mjs --self-test
+git diff --check
+```
+
+CLI smoke twice, separate temporary outputs and absolute fixture paths:
+
+```sh
+dotnet run --project src/dotnet/TraceMap.Cli --no-build -- scan --repo samples/modern-sample --out "$smoke_output" --compiled-input "$fixture_root/csharp/bin/Debug/net10.0/CompiledEvidence.CSharp.dll" --compiled-input "$fixture_root/vb/bin/Debug/net10.0/CompiledEvidence.VisualBasic.dll" --compiled-input "$fixture_root/fsharp/bin/Debug/net10.0/CompiledEvidence.FSharp.dll"
+python3 scripts/validate-adapter-artifacts.py "$smoke_output"
+```
+
+Private Windows/corpus access is unavailable and uninvoked. Non-.NET local
+suites and pinned source-adapter OSS smokes are explicitly deferred for this
+fixture/test-only slice; public CI still exercises the adapters. All epic
+issues and Tasks 10/11 remain open. Next work should select a remaining reviewed
+language interaction or separately scope a production relationship contract.
+
+---
+
 # Current continuation: #767 default values (2026-10-05)
 
 Branch `codex/767-default-value-matrix`, base #825 merge

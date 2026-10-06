@@ -1,5 +1,14 @@
 # .NET Evidence Completeness Status
 
+## Explicit-interface coverage (2026-10-05)
+
+PR #826 is merged at `b40267b1`. The next bounded #767 slice pins explicit
+interface declaration/body associations across C#/VB/F# using independent raw
+metadata tokens, with ordinary same-signature methods as decoys. The matrix
+preserves language-specific names/flags and does not add production dispatch
+edges. See the [acceptance matrix](validation/CLR_SIGNATURE_EQUIVALENCE_MATRIX.md#explicit-interface-continuation).
+Private/Windows acceptance and broader language coverage remain open.
+
 ## Default-value coverage (2026-10-05)
 
 PR #825 is merged at `74364fe5`. The next bounded #767 slice distinguishes

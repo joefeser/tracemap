@@ -221,3 +221,18 @@ Namespace TraceMap.CompiledFixtures.Equivalence
         End Function
     End Class
 End Namespace
+
+Namespace TraceMap.CompiledFixtures.Equivalence
+    Public Interface ISharedFormatter
+        Function Format(value As String) As String
+    End Interface
+    Public NotInheritable Class ExplicitShape
+        Implements ISharedFormatter
+        Public Function Format(value As String) As String
+            Return "ordinary:" & value
+        End Function
+        Private Function FormatContract(value As String) As String Implements ISharedFormatter.Format
+            Return "explicit:" & value
+        End Function
+    End Class
+End Namespace
