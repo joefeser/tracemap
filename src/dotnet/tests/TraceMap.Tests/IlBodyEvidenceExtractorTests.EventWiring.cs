@@ -24,6 +24,7 @@ public sealed partial class IlBodyEvidenceExtractorTests
     [Theory]
     [InlineData("csharp", "CompiledEvidence.CSharp", false)]
     [InlineData("vb", "CompiledEvidence.VisualBasic", true)]
+    [InlineData("fsharp", "CompiledEvidence.FSharp", false)]
     public void Event_wiring_matrix_pins_accessors_and_encoded_subscriptions(string language, string assemblyName, bool synchronized)
     {
         var fixture = Fixture(language, assemblyName);
@@ -77,7 +78,7 @@ public sealed partial class IlBodyEvidenceExtractorTests
         Assert.Equal(2, subscriptions.Length);
         Assert.Equal(targets.Select(target => MetadataTokens.GetToken(target)), subscriptions.Select(instruction => instruction.Token));
         var handlerLoads = decoded.Where(instruction => instruction.OpCode == OpCodes.Ldftn).ToArray();
-        Assert.Equal(synchronized ? 1 : 2, handlerLoads.Length);
+        Assert.Equal(language == "fsharp" ? 0 : synchronized ? 1 : 2, handlerLoads.Length);
         Assert.All(handlerLoads, instruction => Assert.Equal(MetadataTokens.GetToken(handler), instruction.Token));
         using var module = Mono.Cecil.ModuleDefinition.ReadModule(fixture.Assembly);
         var cecilSubscriber = Assert.Single(module.Types, type => type.FullName == ReceiverNamespace + ".EventSubscriber");
@@ -184,6 +185,7 @@ public sealed partial class IlBodyEvidenceExtractorTests
     [Theory]
     [InlineData("csharp", "CompiledEvidence.CSharp")]
     [InlineData("vb", "CompiledEvidence.VisualBasic")]
+    [InlineData("fsharp", "CompiledEvidence.FSharp")]
     public void Event_wiring_matrix_duplicate_malformed_and_budget_inputs_remain_gaps(string language, string assemblyName)
     {
         var fixture = Fixture(language, assemblyName);
@@ -238,6 +240,112 @@ public sealed partial class IlBodyEvidenceExtractorTests
         }
     }
 
+    [Fact]
+    public void Event_wiring_matrix_fsharp_cached_delegate_preserves_generated_helper_identity()
+    {
+        var fixture = Fixture("fsharp", "CompiledEvidence.FSharp");
+        var scan = Scan(new ScanOptions(fixture.Source, TempOutput(), CompiledInputPaths: [fixture.Assembly], IlBodyEvidence: true));
+        using var pe = new PEReader(File.OpenRead(fixture.Assembly));
+        var reader = pe.GetMetadataReader();
+        var ctor = ReceiverHandle(reader, "EventSubscriber", ".ctor");
+        var setter = ReceiverHandle(reader, "EventSubscriber", "set_Source");
+        var handler = ReceiverHandle(reader, "EventSubscriber", "OnTick");
+        var owner = reader.GetMethodDefinition(ctor).GetDeclaringType();
+        var field = Assert.Single(reader.GetTypeDefinition(owner).GetFields(), handle => reader.GetString(reader.GetFieldDefinition(handle).Name) == "handler");
+        var fieldBlob = reader.GetBlobReader(reader.GetFieldDefinition(field).Signature);
+        Assert.Equal(new byte[] { 6, 0x12 }, fieldBlob.ReadBytes(2)); // FIELD CLASS
+        var action = reader.GetTypeReference((TypeReferenceHandle)fieldBlob.ReadTypeHandle());
+        Assert.Equal("System", reader.GetString(action.Namespace));
+        Assert.Equal("Action", reader.GetString(action.Name));
+        Assert.Equal(0, fieldBlob.RemainingBytes);
+        var constructor = Read(ctor);
+        var load = Assert.Single(constructor, instruction => instruction.OpCode == OpCodes.Ldftn);
+        var helper = MetadataTokens.MethodDefinitionHandle(load.Token & 0x00ffffff);
+        Assert.Equal(0x06000000, load.Token & unchecked((int)0xff000000));
+        var helperDefinition = reader.GetMethodDefinition(helper);
+        Assert.Equal("Invoke", reader.GetString(helperDefinition.Name));
+        Assert.Equal(new byte[] { 0x20, 0, 1 }, reader.GetBlobBytes(helperDefinition.Signature));
+        var helperType = reader.GetTypeDefinition(helperDefinition.GetDeclaringType());
+        // Compiler-generated name is an explicit SDK-pinned fixture expectation.
+        Assert.Equal("-ctor@14", reader.GetString(helperType.Name));
+        var container = reader.GetTypeDefinition(helperType.GetDeclaringType());
+        const string startupNamespace = "<StartupCode$CompiledEvidence-FSharp>";
+        const string startupName = "$EventWiringMatrix";
+        Assert.Equal(startupNamespace, reader.GetString(container.Namespace));
+        Assert.Equal(startupName, reader.GetString(container.Name));
+        var stored = Assert.Single(constructor, instruction => instruction.OpCode == OpCodes.Stfld && instruction.Token == MetadataTokens.GetToken(field));
+        Assert.True(load.Offset < stored.Offset);
+        var fieldLoads = Read(setter).Where(instruction => instruction.OpCode == OpCodes.Ldfld && instruction.Token == MetadataTokens.GetToken(field)).ToArray();
+        Assert.Equal(2, fieldLoads.Length);
+        Assert.DoesNotContain(Read(setter), instruction => instruction.OpCode == OpCodes.Stfld && instruction.Token == MetadataTokens.GetToken(field));
+        var forward = Assert.Single(Read(helper), instruction => instruction.OpCode == OpCodes.Callvirt && instruction.Token == MetadataTokens.GetToken(handler));
+        using var module = Mono.Cecil.ModuleDefinition.ReadModule(fixture.Assembly);
+        var cecilOwner = Assert.Single(module.Types, type => type.FullName == ReceiverNamespace + ".EventSubscriber");
+        var cecilField = Assert.Single(cecilOwner.Fields, item => item.MetadataToken.ToInt32() == MetadataTokens.GetToken(field));
+        Assert.Equal("System.Action", cecilField.FieldType.FullName);
+        var cecilContainer = Assert.Single(module.Types, type => type.FullName == startupNamespace + "." + startupName);
+        var cecilHelperType = Assert.Single(cecilContainer.NestedTypes, type => type.Name == "-ctor@14");
+        Assert.Equal(MetadataTokens.GetToken(helperDefinition.GetDeclaringType()), cecilHelperType.MetadataToken.ToInt32());
+        var cecilHelper = Assert.Single(cecilHelperType.Methods, method => method.Name == "Invoke");
+        Assert.Equal(load.Token, cecilHelper.MetadataToken.ToInt32());
+        Assert.Equal("System.Void", cecilHelper.ReturnType.FullName);
+        Assert.Empty(cecilHelper.Parameters);
+        foreach (var (method, instructions) in new[] { (ctor, new[] { load, stored }), (setter, fieldLoads), (helper, new[] { forward }) })
+        {
+            var cecilMethod = method == helper ? cecilHelper : Assert.Single(cecilOwner.Methods, item => item.MetadataToken.ToInt32() == MetadataTokens.GetToken(method));
+            foreach (var encoded in instructions)
+            {
+                var independent = Assert.Single(cecilMethod.Body.Instructions, item => item.Offset == encoded.Offset);
+                Assert.Equal(encoded.OpCode.Name, independent.OpCode.Name);
+                Assert.Equal(encoded.Token, Assert.IsAssignableFrom<Mono.Cecil.IMetadataTokenProvider>(independent.Operand).MetadataToken.ToInt32());
+            }
+        }
+        var assembly = ReceiverAssembly("CompiledEvidence.FSharp");
+        var helperIdentity = assembly + "|type:namespace:" + startupNamespace.Length + ":" + startupNamespace
+            + "|names:" + startupName.Length + ":" + startupName + "8:-ctor@14|arity:0|method:6:Invoke|" + EventInstance + "()->" + EventVoid;
+        var handlerIdentity = EventMethod(assembly, "EventSubscriber", "OnTick", EventInstance + "()->" + EventVoid);
+        var ctorIdentity = EventMethod(assembly, "EventSubscriber", ".ctor", EventInstance + "()->" + EventVoid).Replace("|method:", "|constructor:", StringComparison.Ordinal);
+        CheckLink(ctor, ctorIdentity, load, helper, helperIdentity);
+        CheckLink(helper, helperIdentity, forward, handler, handlerIdentity);
+        Assert.NotEqual(helperIdentity, handlerIdentity);
+        var sourceGap = Assert.Single(scan.Facts, fact => fact.Properties.GetValueOrDefault("gapKind") == "SourceMetadataReconciliationUnsupportedLanguage");
+        Assert.Equal(RuleIds.DotNetCompiledSourceIdentity, sourceGap.RuleId);
+        Assert.Equal(EvidenceTiers.Tier4Unknown, sourceGap.EvidenceTier);
+        Assert.Equal("fsharp", sourceGap.Properties["language"]);
+        Assert.Equal("CompiledEvidence.FSharp.fsproj", sourceGap.Evidence.FilePath);
+        Assert.Equal(1, sourceGap.Evidence.StartLine);
+        Assert.Equal(1, sourceGap.Evidence.EndLine);
+        Assert.Equal(scan.Manifest.CommitSha, sourceGap.CommitSha);
+        Assert.Equal(scan.Manifest.RepoName, sourceGap.Repo);
+        Assert.Equal("SourceMetadataReconciler", sourceGap.Evidence.ExtractorId);
+        Assert.Equal(ScannerVersions.SourceMetadataReconciliationExtractor, sourceGap.Evidence.ExtractorVersion);
+        Assert.False(string.IsNullOrWhiteSpace(sourceGap.Properties["limitation"]));
+        Assert.DoesNotContain(scan.Facts, fact => fact.FactType == FactTypes.SourceMetadataIdentityReconciled);
+
+        (int Offset, OpCode OpCode, int Token)[] Read(MethodDefinitionHandle handle) => DecodeEventBody(pe.GetMethodBody(reader.GetMethodDefinition(handle).RelativeVirtualAddress).GetILBytes()!);
+        void CheckLink(MethodDefinitionHandle from, string fromIdentity, (int Offset, OpCode OpCode, int Token) encoded, MethodDefinitionHandle to, string toIdentity)
+        {
+            var caller = Assert.Single(scan.Facts, fact => fact.FactType == FactTypes.ManagedMethodDeclared && fact.TargetSymbol == fromIdentity);
+            var target = Assert.Single(scan.Facts, fact => fact.FactType == FactTypes.ManagedMethodDeclared && fact.TargetSymbol == toIdentity);
+            Assert.Equal(ReceiverToken(from), caller.Properties["metadataToken"]);
+            Assert.Equal(ReceiverToken(to), target.Properties["metadataToken"]);
+            var body = Assert.Single(scan.Facts, fact => fact.FactType == FactTypes.ManagedIlBodyDeclared && fact.Properties.GetValueOrDefault("compiledFactId") == caller.FactId);
+            Assert.StartsWith(fromIdentity + "|il-body:instructions:", body.TargetSymbol);
+            Assert.EndsWith(":sha256:" + body.Properties["ilBodySha256"], body.TargetSymbol);
+            var call = Assert.Single(scan.Facts, fact => fact.FactType == FactTypes.ManagedIlCallObserved && fact.Properties["ilBodyFactId"] == body.FactId && fact.Properties["targetIdentity"] == toIdentity);
+            Assert.Equal(ReceiverToken(from), call.Properties["metadataToken"]);
+            Assert.Equal(ReceiverToken(to), call.Properties["referenceToken"]);
+            Assert.Equal("methoddef", call.Properties["referenceKind"]);
+            Assert.Equal(encoded.OpCode.Name, call.Properties["opcode"]);
+            Assert.Equal(encoded.Offset.ToString(CultureInfo.InvariantCulture), call.Properties["ilOffset"]);
+            Assert.Equal(body.TargetSymbol + "|call:" + encoded.OpCode.Name + ":" + encoded.Offset.ToString(CultureInfo.InvariantCulture) + ":" + toIdentity, call.TargetSymbol);
+            Assert.Null(call.SourceSymbol);
+            foreach (var fact in new[] { caller, target }) AssertReceiverEvidence(scan, fact, fixture.Assembly, RuleIds.DotNetCompiledMember);
+            AssertReceiverEvidence(scan, body, fixture.Assembly, RuleIds.DotNetIlBody);
+            AssertReceiverEvidence(scan, call, fixture.Assembly, RuleIds.DotNetIlCall);
+        }
+    }
+
     private static void CheckEventGap(ScanResult scan, CodeFact gap, string assembly, bool il)
     {
         Assert.Equal(il ? RuleIds.DotNetIlGap : RuleIds.DotNetCompiledGap, gap.RuleId);
@@ -282,7 +390,7 @@ public sealed partial class IlBodyEvidenceExtractorTests
                 _ => throw new InvalidDataException("Unexpected event fixture operand: " + opcode.OperandType)
             };
             Assert.True(offset + size <= bytes.Length);
-            var token = opcode.OperandType == OperandType.InlineMethod ? BinaryPrimitives.ReadInt32LittleEndian(bytes.AsSpan(offset, 4)) : 0;
+            var token = opcode.OperandType is OperandType.InlineMethod or OperandType.InlineField ? BinaryPrimitives.ReadInt32LittleEndian(bytes.AsSpan(offset, 4)) : 0;
             decoded.Add((start, opcode, token));
             offset += size;
         }
