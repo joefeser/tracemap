@@ -726,3 +726,39 @@ schema or derived machine-readable artifact is added.
 | #766 | Existing IL/PDB/rewrite suites including operand-preserving receiver regression | Full ECMA/rewrite/PDB matrix | Public .NET plus Windows for declared cases |
 | #768 | Public Windows CI, private runner safeguards | Private endurance receipts and full C++/CLI feasibility | Separately authorized Windows worker |
 | #759 | Bounded evidence layers and explicit gaps | All child acceptance remains open | Distinct public/private lanes |
+
+## Async and iterator PDB continuation
+
+Following #834 merge `d86f74e7`, this bounded #767 slice adds public C#/VB
+`StateMachineMatrix.AwaitOne`, `Enumerate` and an ordinary `MoveNext` lookalike.
+Existing C# generated PDB coverage asserted a nonempty set; this matrix pins each
+of four selected generated endpoints and every sequence point independently.
+
+| Case | Expected evidence | Boundary / non-claim |
+| --- | --- | --- |
+| CLR-STATE-001 | C#/VB async: PDB StateMachineMethod row identifies the exact kickoff and generated MoveNext MethodDefs; MoveNext returns Void | Compiler attribute and Cecil kickoff agree with SRM tokens; no runtime async behavior inferred. |
+| CLR-STATE-002 | C#/VB iterator: same exact identification, MoveNext returns Boolean | Equal CLR method signatures retain distinct declaring-type and assembly identities. |
+| CLR-STATE-003 | Generated metadata → PDB method → document/sequence occurrences use exact fact IDs and identities | Visible source spans and hidden locations match SRM and Cecil; document bytes match the source SHA-256. No generated source-symbol ownership edge. |
+| CLR-STATE-004 | Ordinary MoveNext has the same Boolean instance signature as iterator MoveNext, no kickoff entry and a distinct endpoint | Display-name similarity cannot identify a generated method. |
+| CLR-STATE-005 | Remove or duplicate each selected compiled method candidate | Exact PdbMetadataMethodZeroCandidate / PdbMetadataMethodMultipleCandidates Tier4 gap; no reconciliation/sequence points for that endpoint; other exact rows remain available. |
+| CLR-STATE-006 | Truncated PDB and sequence-point budget | MalformedPortablePdb / PdbSequencePointCountExceeded, partial coverage and no positive PDB methods/links/points; malformed bytes never executed. |
+| CLR-STATE-007 | Repeat each bound public scan | Byte-identical facts and PDB provenance. |
+
+The kickoff table and compiler attributes are independent test oracles, not new
+emitted kickoff-to-generated edges. Existing rules remain
+`dotnet.compiled.member.v1`, `dotnet.compiled.pdb-identity.v1`,
+`dotnet.compiled.sequence-point.v1` (Tier2) and `dotnet.compiled.pdb-gap.v1`
+(Tier4). Assertions pin commit/extractor identity, metadata tokens/PDB identities,
+source or hidden spans, exact generator SHA-256, bounded-input digests, raw
+assembly/PDB/source hashes and binding provenance. No rule/schema/derived artifact
+is added. Fixtures and malformed bytes are decoded only. F# state machines,
+Windows PDB, async iterators, runtime behavior, original/rewrite IL equivalence and
+full language/epic acceptance remain outside this slice.
+
+| Requirement | Delivered evidence | Remaining gap | Host/toolchain |
+| --- | --- | --- | --- |
+| #769 | Guarded runway/inventory workflow | Reviewed private dimension catalog and receipts | Authorized private Windows access unavailable/uninvoked |
+| #767 | Matrices through nested generics; selected C#/VB async/iterator PDB endpoints here | Broader generated/language/source interactions | Public .NET 10.0.302, portable PDB, ordinary CI |
+| #766 | Existing IL/PDB/rewrite and exact generated PDB occurrences | Full ECMA/rewrite/Windows PDB matrix | Public .NET plus declared Windows cases |
+| #768 | Public Windows CI, private runner safeguards | Private endurance and C++/CLI acceptance | Separately authorized Windows worker |
+| #759 | Distinct bounded evidence layers | Child acceptance stays open | Public/private lanes remain separate |
