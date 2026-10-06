@@ -688,3 +688,41 @@ joins/PDB parity and runtime dispatch remain open.
 | #766 | Existing operand-aware IL/PDB/rewrite suite; receiver operand regression | Broad ECMA edge suite and independent PDB parity | Public .NET; Windows for declared cases |
 | #768 | Public Windows CI and guarded private runner | Private receipts/endurance and complete C++/CLI acceptance | Separately authorized Windows worker |
 | #759 | Distinct bounded evidence layers | Child acceptance remains open | Separate public/private lanes |
+
+## Nested generic ownership continuation
+
+After #833 merged at `2f13e1dc`, this bounded #767 slice adds matching public
+C#/VB `NestedMatrix<TOuter>.Inner<TInner>` and `NestedMatrix<TOuter>.Plain`
+fixtures. Existing C# source-reconciliation tests already cover constructed
+nested types; this continuation adds a targeted cross-language metadata oracle,
+not a claim of new source joins or F# nested-type support.
+
+| Case | Expected metadata evidence | Non-claims / counterexamples |
+| --- | --- | --- |
+| CLR-NEST-001 | Inner.Outer uses VAR 0 / !0; InnerValue uses VAR 1 / !1 | Same generic-parameter category cannot erase its ordinal. |
+| CLR-NEST-002 | Inner.Method<TMethod> uses MVAR 0 / !!0 and method arity 1 | Method and type ordinal zero are different identities. |
+| CLR-NEST-003 | Construct uses GENERICINST of the exact nested TypeDef with Int32,String arguments | Both readers pin argument order; self type signatures retain assembly scope. C#/VB constructions are analogous shapes, not equal canonical signatures. |
+| CLR-NEST-004 | Swap reverses arguments to String,Int32 | Equal generic definition and argument set do not imply equal signatures. |
+| CLR-NEST-005 | Plain has one CLR generic parameter owned by its own TypeDef, although its source declaration adds none | Outer methods have equal !0 signatures but different declaring-type endpoints; Inner has total arity 2, Plain has total arity 1. |
+| CLR-NEST-006 | Reversed input order emits byte-identical facts and provenance | Twelve method endpoints/fact IDs stay distinct across owners and assemblies. |
+| CLR-NEST-007 | Each duplicate locator retains six methods, its outcome, raw/binding hashes and ambiguity gap | Source reconciliation remains ineligible, with no guessed source edge. |
+| CLR-NEST-008 | Truncated PE and member budget emit MalformedManagedInput / ManagedInputMemberCountLimitExceeded | Tier4 partial coverage, no method declarations; truncated bytes are never executed. |
+
+`Nested_matrix_pins_generic_owners_positions_and_constructions` checks raw SRM
+signature bytes, exact TypeDef/MethodDef tokens, declaring-type relationships and
+GenericParam parent/index/name, then independent Cecil owners/positions and
+constructed arguments. Hand-authored canonical identities are checked in both
+single-input and combined-input scans. Assertions retain the existing
+`dotnet.compiled.member.v1` Tier2 and `dotnet.compiled.gap.v1` Tier4 rules, metadata
+locations, commit/extractor identity, exact generator SHA-256 and bounded/raw/
+binding input hashes. All metadata-only facts have null source endpoints;
+no source/PDB/original-IL/rewrite/runtime equivalence follows. No production rule,
+schema or derived machine-readable artifact is added.
+
+| Requirement | Delivered evidence | Remaining acceptance gap | Host/toolchain |
+| --- | --- | --- | --- |
+| #769 | Guarded inventory/runway | Reviewed private catalog and authorized receipts | Isolated Windows/private access unavailable and uninvoked |
+| #767 | Merged matrices through receivers; this nested ownership/order matrix | Broader language/source/PDB/generated-member combinations | Public .NET 10.0.302 and declared CI |
+| #766 | Existing IL/PDB/rewrite suites including operand-preserving receiver regression | Full ECMA/rewrite/PDB matrix | Public .NET plus Windows for declared cases |
+| #768 | Public Windows CI, private runner safeguards | Private endurance receipts and full C++/CLI feasibility | Separately authorized Windows worker |
+| #759 | Bounded evidence layers and explicit gaps | All child acceptance remains open | Distinct public/private lanes |
