@@ -648,3 +648,43 @@ cases, not a claim about all possible graph output from other extractors.
 Duplicate inputs are checked per independently expected repository/external safe
 locator: one outcome and ambiguity gap, three named method facts, exact raw and
 binding hashes for each input. Aggregate counts cannot substitute for either path.
+
+## Receiver call-site continuation
+
+This bounded #767 slice follows #832, merged at `d95df3da`. C#/VB public
+`ReceiverBase.Read` and overriding `ReceiverDerived.Read` return distinct constants;
+selected instance wrappers demonstrate the compiler's encoded receiver calls.
+The fixtures are decoded, never executed. Original IL is distinct from source,
+PDB, rewritten IL and runtime dispatch observations.
+
+| Case | Expected encoded evidence | Expected relationships / non-claims |
+| --- | --- | --- |
+| CLR-RECV-001 | C# InvokeVirtual: callvirt to ReceiverBase.Read | Caller metadata fact → original body via compiledFactId; body → call via ilBodyFactId; encoded targetIdentity names exact base MethodDef. Runtime override selection unproven. |
+| CLR-RECV-002 | C# InvokeBase: call to ReceiverBase.Read | Same exact links; direct base target only, no runtime result claim. |
+| CLR-RECV-003 | VB InvokeVirtual (Me): callvirt to ReceiverDerived.Read | Same exact links; encoded override differs from C# base slot. No inferred cross-language target identity. |
+| CLR-RECV-004 | VB InvokeBase (MyBase): call to ReceiverBase.Read | Same exact links; no source/PDB equivalence claim. |
+| CLR-RECV-005 | VB InvokeCurrent (MyClass): call to ReceiverDerived.Read | Same exact links; direct encoded override, no virtual-dispatch resolution claim. |
+| CLR-RECV-006 | VB MyBase/MyClass wrapper bytes differ only in call operand; instruction and body hashes differ | Operand-erased bytes are test comparison only, never an identity/hash or emitted artifact. Repeated facts/provenance are identical. |
+| CLR-RECV-007 | Each duplicate locator retains its outcome, ambiguity gap and exact method/body/call links | Original static observations remain inspectable; source reconciliation remains ineligible and emits no caller ownership edge. |
+| CLR-RECV-008 | TypeDef token in call operand emits IlCallTargetIdentityUnavailable; exhausted work budget emits IlTotalWorkLimitExceeded | Tier4 partial coverage with no positive body/call facts for that input; malformed DLL is never executed. |
+
+SRM independently identifies declaring types, base type, MethodDef tokens,
+instance signatures, virtual/new-slot flags and decodes the complete narrow IL
+opcode grammar. Unknown fixture opcodes fail the oracle. Cecil independently
+checks caller/target tokens, opcode/offset, target owner/name and signature.
+Facts assert exact assembly-scoped caller/target identities, original body/call
+identities, rule IDs, tiers, metadata/IL locations, commit, extractor version,
+exact generator SHA-256 and bounded-input/raw/binding hashes. Call facts have
+null source endpoints: their encoded target relationship is in targetIdentity,
+not a resolved runtime graph edge. Unbound fixtures produce no exact caller
+source-identity edge. No production rule/schema or new derived artifact is added.
+Broader inherited receivers, VB late binding/events, F# receiver behavior, source
+joins/PDB parity and runtime dispatch remain open.
+
+| Requirement | Evidence | Remaining gap | Host/toolchain |
+| --- | --- | --- | --- |
+| #769 | Corpus runway and guarded runner | Private reviewed dimension catalog/minimizations | Authorized isolated Windows corpus access, unavailable/uninvoked |
+| #767 | Merged matrices through quotations; this C#/VB receiver original-IL matrix | Broader language/source/PDB/generated-member interactions | Public .NET SDK 10.0.302 plus declared CI |
+| #766 | Existing operand-aware IL/PDB/rewrite suite; receiver operand regression | Broad ECMA edge suite and independent PDB parity | Public .NET; Windows for declared cases |
+| #768 | Public Windows CI and guarded private runner | Private receipts/endurance and complete C++/CLI acceptance | Separately authorized Windows worker |
+| #759 | Distinct bounded evidence layers | Child acceptance remains open | Separate public/private lanes |

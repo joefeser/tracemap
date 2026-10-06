@@ -4269,3 +4269,19 @@ scans and artifact/privacy/spec guards. Require full exact-head .NET and public
 adapter CI; duplicate full local .NET, non-.NET local suites and pinned source
 OSS smokes may be explicitly deferred for this fixture/test-only slice.
 No fixture method is executed; tree contents and runtime semantics are untested.
+
+### C#/VB receiver call-site matrix
+
+```sh
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter FullyQualifiedName~Receiver_matrix -warnaserror
+```
+
+The [receiver matrix](validation/CLR_SIGNATURE_EQUIVALENCE_MATRIX.md#receiver-call-site-continuation)
+pins C# base/virtual and VB Me/MyBase/MyClass encoded calls with independent SRM
+and Cecil oracles. It verifies original body/call links, operand-aware identity,
+per-input duplicate evidence, invalid call-token refusal, work limits and repeats.
+Never execute the mutated DLL. Run the surrounding compiled-evidence suite and
+repeat a public CLI scan with `--il-body-evidence`, validating emitted artifacts.
+Require full final-head .NET and public adapter CI. Duplicate full local .NET,
+non-.NET local suites and pinned source OSS smokes are explicitly deferred for
+this fixture/test-only slice. Private Windows and runtime dispatch remain untested.

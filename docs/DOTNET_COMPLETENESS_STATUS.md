@@ -1,5 +1,15 @@
 # .NET Evidence Completeness Status
 
+## C#/VB receiver call-site coverage (2026-10-06)
+
+PR #832 is merged at `d95df3da`; its remaining Windows package CI later passed.
+The next bounded #767 slice pins C# base/virtual and VB Me/MyBase/MyClass calls
+with independent raw SRM/Cecil oracles and exact metadata/original-body/call
+links. Same-opcode bodies with different operands retain distinct hashes.
+See the [receiver matrix](validation/CLR_SIGNATURE_EQUIVALENCE_MATRIX.md#receiver-call-site-continuation).
+No runtime dispatch, source/PDB or full language/epic acceptance is inferred.
+Private corpus and isolated Windows acceptance remain open.
+
 ## Quotation/expression-tree coverage (2026-10-06)
 
 PR #831 is merged at `eafa68e7`. The next bounded #767 slice distinguishes
