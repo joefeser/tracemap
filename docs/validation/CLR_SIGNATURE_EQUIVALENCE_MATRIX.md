@@ -832,3 +832,35 @@ runtime event delivery or FSharp.Core event implementation equivalence is claime
 | #767 | Three-language Event_wiring_matrix theories and F# helper case | Broader language/source/PDB combinations and runtime acceptance | Public .NET SDK 10.0.302 / pinned FSharp.Core 10.1.302 |
 | #766 | Existing metadata/PDB/operand-preserving IL/rewrite suites plus event operand regressions | Broader rule-specific acceptance | Public .NET/IL tooling |
 | #768 | Public cross-platform CI and guarded lane contract | Historical corpus and C++/CLI validation | Authorized Windows/MSVC unavailable in this task |
+
+## Collection indexer and conversion continuation
+
+Public `CollectionMatrix` fixtures in C#, VB and F# compare three static methods:
+`ReadLegacy(ArrayList, Int32) -> Object`, `ReadGeneric(List<Object>, Int32) -> Object`
+and `ReadInteger(ArrayList, Int32) -> Int32`. `IlBodyEvidenceExtractorTests.Collections.cs`
+uses raw SRM signatures/handles, an independent framework-opcode walker and Cecil
+as independent oracles. Assembly scope is significant: these net10.0 fixtures
+reference ArrayList through System.Runtime and List through System.Collections.
+
+| Requirement | Implementation/test evidence | Remaining gap | Host/toolchain |
+| --- | --- | --- | --- |
+| #769 corpus dimensions | Public runway and minimized fixtures | Authorized historical inventory and private receipts | Isolated Windows/private access |
+| #767 legacy/generic indexers | Three languages, exact wrapper MethodDefs and get_Item MemberRefs, raw TypeRef/TypeSpec signatures/scopes | Broader collection and language constructs | Public .NET 10 SDK |
+| #767 integer conversions | C#/F# unbox.any Int32 versus VB Microsoft.VisualBasic.Core Conversions.ToInteger(Object) | Runtime values, conversion semantics, late-bound invocation | Public .NET 10 SDK |
+| #766 operand-preserving original IL | Identical indexer opcode streams retain different body hashes; exact body/call endpoints and provenance | Rewrite/PDB/source joins for these methods and broader suite acceptance | Public .NET/IL tools |
+| #768 Windows acceptance | Existing public CI and guarded lane contract | Historical corpus and C++/CLI acceptance | Authorized Windows/MSVC |
+
+The generic get_Item MemberRef returns `!0`, even though its parent TypeSpec is
+List<Object>; tests must not replace that encoded signature with a guessed
+substituted return type. Each fact retains rule/tier, endpoint, metadata location,
+commit/extractor version and exact generator/bounded/raw/binding input hashes.
+Duplicate primary inputs retain separate locators and explicit ambiguity; a
+wrong-table call operand and exhausted work budget emit gaps without positive IL
+facts. Repeated scans retain byte-stable facts/provenance. Fixtures and mutations
+are read as data, never executed. No production rule/schema or new derived
+machine-readable artifact is added.
+
+This is metadata and original IL evidence only. Source ownership, PDB occurrence,
+rewritten identity, runtime collection/conversion equivalence, F# source extraction,
+private corpus and C++/CLI acceptance remain unproven. Existing VB late-bound
+source tests are separate evidence. Broad #767/#759 remain open.
