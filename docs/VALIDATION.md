@@ -4301,3 +4301,21 @@ public cross-platform CI. Duplicate full local .NET, non-.NET local suites and
 pinned source OSS smokes are explicitly deferred for this fixture/test-only slice.
 Neither fixture methods nor malformed bytes are executed; source ownership,
 F# nested types, runtime behavior and private Windows acceptance remain unproven.
+
+### C#/VB async and iterator PDB matrix
+
+```sh
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter FullyQualifiedName~State_machine_matrix -warnaserror
+```
+
+The [state-machine matrix](validation/CLR_SIGNATURE_EQUIVALENCE_MATRIX.md#async-and-iterator-pdb-continuation)
+uses SRM's kickoff table and Cecil's independently read symbols/compiler attributes
+to pin four generated methods and all their sequence points. Missing/duplicate
+metadata rows must refuse joins; truncated PDB and sequence-point limits remain
+explicit gaps. Run the surrounding compiled-evidence suite and repeat a public
+CLI scan; validate emitted artifacts. The focused tests repeat bound PDB scans
+and compare facts/provenance exactly. Require full final-head .NET and public
+cross-platform CI. Duplicate full local .NET, non-.NET local suites and pinned
+source OSS smokes are explicitly deferred for this fixture/test-only slice.
+Do not execute fixture methods or malformed bytes. Private Windows, F# state
+machines, runtime behavior and rewritten IL remain separate acceptance gaps.
