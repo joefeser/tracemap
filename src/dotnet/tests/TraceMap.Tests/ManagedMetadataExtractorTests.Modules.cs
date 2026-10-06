@@ -10,6 +10,7 @@ public sealed partial class ManagedMetadataExtractorTests
 {
     private const string ModuleOwner = "|type:namespace:37:TraceMap.CompiledFixtures.Equivalence|names:11:ModuleShape|arity:0";
     private const string ArgumentCountsAttribute = "Microsoft.FSharp.Core.CompilationArgumentCountsAttribute";
+    private const string SourceNameAttribute = "Microsoft.FSharp.Core.CompilationSourceNameAttribute";
     private const string CompiledNameAttribute = "Microsoft.FSharp.Core.CompiledNameAttribute";
     private const string StandardModuleAttribute = "Microsoft.VisualBasic.CompilerServices.StandardModuleAttribute";
 
@@ -103,10 +104,39 @@ public sealed partial class ManagedMetadataExtractorTests
             }
             var compiledNames = method.GetCustomAttributes().Where(attribute => AttributeName(attribute) == CompiledNameAttribute).ToArray();
             var cecilNames = cecil.CustomAttributes.Where(attribute => attribute.AttributeType.FullName == CompiledNameAttribute).ToArray();
-            // CompiledName is consumed by the F# compiler, not emitted as a
-            // method attribute. The assembly cannot establish sourceAlias ownership.
+            // CompiledName is consumed; the compiler preserves the original
+            // spelling separately in CompilationSourceNameAttribute.
             Assert.Empty(compiledNames);
             Assert.Empty(cecilNames);
+            var sourceNames = method.GetCustomAttributes().Where(attribute => AttributeName(attribute) == SourceNameAttribute).ToArray();
+            var cecilSourceNames = cecil.CustomAttributes.Where(attribute => attribute.AttributeType.FullName == SourceNameAttribute).ToArray();
+            if (language == "fsharp")
+            {
+                var expectedSourceName = name switch { "Curried" => "curried", "Tupled" => "tupled", _ => "sourceAlias" };
+                var raw = reader.GetCustomAttribute(Assert.Single(sourceNames));
+                Assert.Equal(handle, raw.Parent);
+                var constructor = reader.GetMemberReference((MemberReferenceHandle)raw.Constructor);
+                Assert.Equal(".ctor", reader.GetString(constructor.Name));
+                Assert.Equal("2001010e", Convert.ToHexString(reader.GetBlobBytes(constructor.Signature)).ToLowerInvariant());
+                var attributeType = reader.GetTypeReference((TypeReferenceHandle)constructor.Parent);
+                Assert.Equal(HandleKind.AssemblyReference, attributeType.ResolutionScope.Kind);
+                var scope = reader.GetAssemblyReference((AssemblyReferenceHandle)attributeType.ResolutionScope);
+                Assert.Equal("FSharp.Core", reader.GetString(scope.Name));
+                Assert.Equal(new Version(10, 1, 0, 0), scope.Version);
+                Assert.Equal("", reader.GetString(scope.Culture));
+                Assert.Equal("b03f5f7f11d50a3a", Convert.ToHexString(reader.GetBlobBytes(scope.PublicKeyOrToken)).ToLowerInvariant());
+                var blob = reader.GetBlobReader(raw.Value);
+                Assert.Equal(1, blob.ReadUInt16());
+                Assert.Equal(expectedSourceName, blob.ReadSerializedString());
+                Assert.Equal(0, blob.ReadUInt16());
+                Assert.Equal(0, blob.RemainingBytes);
+                Assert.Equal(expectedSourceName, Assert.Single(Assert.Single(cecilSourceNames).ConstructorArguments).Value);
+            }
+            else
+            {
+                Assert.Empty(sourceNames);
+                Assert.Empty(cecilSourceNames);
+            }
             var fact = Assert.Single(ModuleMethods(singleFacts), candidate => candidate.Properties["metadataName"] == name);
             var combinedFact = Assert.Single(ModuleMethods(combinedFacts), candidate => candidate.TargetSymbol == fact.TargetSymbol);
             foreach (var observed in new[] { fact, combinedFact })

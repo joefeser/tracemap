@@ -485,11 +485,13 @@ lowercase/sourceAlias declarations to the three selected metadata names.
 | --- | --- | --- |
 | CLR-MODULE-001 | C# sealed/abstract container; three public static MethodDefs with exact raw signatures, tokens and full identities | Static-class structure does not prove source module semantics |
 | CLR-MODULE-002 | VB sealed/non-abstract container with independently decoded StandardModuleAttribute; same static signatures | Preserve container flag difference; scoped attribute constructor identity and blob checked |
-| CLR-MODULE-003 | F# sealed/abstract container; Curried and Tupled have identical two-Int32 parameter signatures | Only Curried has CompilationArgumentCounts `[1,1]`; CompiledName is consumed rather than emitted as a method attribute |
+| CLR-MODULE-003 | F# sealed/abstract container; Curried and Tupled have identical two-Int32 parameter signatures | Only Curried has CompilationArgumentCounts `[1,1]`; CompiledName is consumed; CompilationSourceName independently retains curried, tupled and sourceAlias |
 | CLR-MODULE-004 | Nine distinct method/fact IDs across three assemblies; reversed inputs preserve exact facts/provenance | Signature equality does not collapse endpoints or prove source calling conventions; sourceAlias/lowercase aliases are not guessed metadata members |
 | CLR-MODULE-005–007 | Duplicate assemblies, truncated PE and member-count limits in all three languages | Explicit ambiguity/malformed/limit gaps; duplicate methods ineligible for source reconciliation |
 | CLR-MODULE-008–009 | Bound C#/VB source declarations join exact metadata endpoints | Both evidence envelopes remain; no runtime or F# source claim |
-| CLR-MODULE-010 | Bound F# scan retains all three compiled names/signatures | Unsupported-source gap remains; no source-name or source-currying edge |
+| CLR-MODULE-010 | Bound F# scan retains all three compiled names/signatures | Unsupported-source gap remains; no production source-name or source-currying edge |
+| CLR-MODULE-011 | Independent C#/VB declaration identities and exact fixture spans for modules, operators and optional parameters | Self-consistent substitutions of another method's source symbol, declaration or span are rejected |
+| CLR-MODULE-012 | Source reconciliation fixtures resolve the running test assembly configuration | Release must work with Debug fixture directories unavailable |
 
 SRM reads exact signature and attribute blobs, parent handles, constructor
 signatures and assembly scopes; Cecil independently checks tokens, flags,
@@ -502,8 +504,9 @@ exact generator/bounded-input SHA-256, raw fixture bytes and per-input binding
 hash. Source joins preserve source spans, separate endpoints and binding evidence.
 
 This adds a fixture oracle, not a production module/currying classifier or
-attribute relationship rule. The compiler's source alias is known from this
-public fixture, not recovered from metadata. No runtime execution, PDB mapping,
+attribute relationship rule. CompilationSourceName retains source aliases in
+metadata, independently decoded by SRM and Cecil. An alias alone does not establish
+a physical source declaration, location or ownership edge. No runtime execution, PDB mapping,
 F# source extraction, schema/version change or new derived artifact is introduced.
 
 | Requirement | Verified implementation/test evidence | Remaining gap | Host/toolchain |
