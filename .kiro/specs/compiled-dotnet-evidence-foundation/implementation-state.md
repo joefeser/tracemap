@@ -1,3 +1,52 @@
+# Current continuation: #767 C#/VB receiver call sites
+
+Branch `codex/767-receiver-dispatch-matrix`, fresh dev base #832 merge
+`d95df3da863f18838198c151d879e63e7fa41476`; target dev. No competing open PR or
+receiver worktree. Unrelated primary Base44 edits and all other worktrees preserved.
+#832 Windows package smoke subsequently passed; its ACK already-merged audit
+is not retrospectively upgraded to merge approval.
+
+Scope: C# base/virtual and VB Me/MyBase/MyClass static encoded targets, exact
+metadata/original-body/call relationships, independent raw SRM and Cecil oracles,
+operand-aware hash distinction, per-input duplicate provenance, malformed call
+token and work-limit refusal, repeatability. Fixtures and mutated DLLs are read
+only, never loaded/executed. No production rule/schema or derived artifact added.
+Private corpus/isolated Windows access remains unavailable and uninvoked under
+#769/#768. Runtime dispatch/source ownership/PDB/rewrite equivalence are not claimed.
+
+Initial build corrected the manifest property name to RepoName. Positive tests
+confirmed C# virtual calls reference the base slot while VB Me references the
+override. Wrong-table call tokens produce IlCallTargetIdentityUnavailable by the
+existing SRM target-reader contract; the initial expected generic operand-gap
+name was corrected, without production changes. Focused validation passes 8/8
+with zero warnings/errors; two validated IL-enabled CLI scans produce 1,641
+facts and five receiver chains with byte-identical facts/reports. Validator
+self-tests pass 7/7; privacy/spec/whitespace guards pass. Surrounding compiled suite passes 398/398 with zero failures/skips.
+Full final-head .NET/public CI required; duplicate full local .NET, non-.NET local
+suites and pinned source OSS smokes explicitly deferred for this fixture/test slice.
+
+Commands (logs `/tmp/tracemap-receiver-*`):
+
+```sh
+dotnet restore src/dotnet/TraceMap.sln --locked-mode
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter FullyQualifiedName~Receiver_matrix -warnaserror
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-build --no-restore --filter 'FullyQualifiedName~ManagedMetadataExtractorTests|FullyQualifiedName~SourceMetadataReconciliationTests|FullyQualifiedName~PortablePdbExtractorTests|FullyQualifiedName~IlBodyEvidenceExtractorTests|FullyQualifiedName~IlRewrite'
+python3 scripts/test_validate_adapter_artifacts.py
+./scripts/check-private-paths.sh
+node scripts/kiro-review.mjs --self-test
+git diff --check
+```
+
+Repeated CLI scans use temporary outputs and absolute public input paths:
+
+```sh
+dotnet run --project src/dotnet/TraceMap.Cli --no-build -- scan --repo samples/modern-sample --out "$smoke_output" --compiled-input "$fixture_root/csharp/bin/Debug/net10.0/CompiledEvidence.CSharp.dll" --compiled-input "$fixture_root/vb/bin/Debug/net10.0/CompiledEvidence.VisualBasic.dll" --il-body-evidence
+python3 scripts/validate-adapter-artifacts.py "$smoke_output"
+```
+
+Next: finish validation, open bounded PR and follow live ACK. Broader receiver,
+language, IL/PDB/rewrite and private-lane acceptance remain open.
+
 # Current continuation: #767 quotation/expression-tree signatures
 
 Branch `codex/767-quotation-expression-matrix`, fresh dev base #831 merge
