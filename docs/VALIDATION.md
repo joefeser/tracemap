@@ -4425,3 +4425,27 @@ Require full final-head .NET and public cross-platform CI. Duplicate full local
 .NET, non-.NET local suites and pinned source OSS smokes are explicitly deferred
 for this fixture/test-only slice. Compiler import conflicts, configuration variants,
 F# source, private Windows/MSVC receipts and broad epic acceptance remain open.
+
+
+### VB import conflict refusal (#767)
+
+```sh
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore -warnaserror --filter FullyQualifiedName~Import_conflict_matrix
+```
+
+Five cases use committed temporary copies of the public VB fixture, including
+three intentionally invalid source variants. An independent Roslyn emit oracle
+must fail with the expected diagnostic/error type; raw SRM verifies the valid
+compiled control. Assert reduced source coverage, exact incomplete identities
+and no affected join, retained compiled facts and an unaffected source control,
+qualified positive/member-limit refusal, full applicable provenance and repeats.
+The malformed alias has an unnamed error type. Never execute fixture binaries.
+
+Run surrounding metadata/source/PDB/IL/rewrite tests plus VisualBasicExtractionTests,
+two validated public CLI scans of the ambiguous-import variant with an explicit
+test binding receipt, and artifact/privacy/spec guards. Require identical facts/
+report bytes and explicit failed source coverage. Test receipts do not prove build
+authenticity. Full final-head .NET/public cross-platform CI is required. Duplicate
+full local .NET, non-.NET local suites and pinned source OSS smokes are explicitly
+deferred for this test-only slice. Private Windows/MSVC and broad epic acceptance
+remain separate gaps.

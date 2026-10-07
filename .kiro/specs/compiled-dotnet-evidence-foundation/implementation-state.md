@@ -1,4 +1,64 @@
-# Current continuation: #767 VB import identity joins
+# Current continuation: #767 VB import-conflict refusal
+
+Branch `codex/767-vb-import-conflicts`, fresh origin/dev base
+`26154c8a2ef14a6f519c239da4a4615f2019f1c3` (#841 merged), target dev. Reconciled
+AGENTS, fetched main/dev, all five issue bodies/comments, merged/open PRs,
+current specs/docs/code/tests and worktrees. No open PR/competing conflict lane.
+Primary Base44 edits and the active site worktree remain untouched. Main-only
+site work excluded. Acceptance matrix is in the import-conflict continuation.
+
+Five tests create committed temporary variants of the public imports fixture:
+ambiguous project imports, missing project import, malformed file alias, fully
+qualified positive control and compiled-member limit. Independent Roslyn emit
+checks diagnostic IDs/error types and exact ambiguous candidates; independent
+SRM decodes the valid binary signature/token. Exact incomplete source identities
+and spans refuse joins, while compiled facts and an unaffected resolved source
+declaration remain separate useful evidence. Failed source stays reduced;
+qualified source succeeds but member limits still yield compiled partial coverage.
+Test receipts deliberately cannot establish build authenticity. No production
+rule/schema or derived public artifact changes; no fixture binary execution.
+
+Validation: SDK 10.0.302 locked restore; focused 5/5 with warnings as errors.
+Surrounding suite 478/478, zero failures/skips. Two validated ambiguous-source CLI scans emit
+1,135 facts, FailedOrPartial/reduced source coverage, no affected source join and
+a retained compiled method; facts/report bytes match. Artifact validator 7/7
+(existing SQLite ResourceWarning); privacy/spec/whitespace guards pass.
+Full final-head .NET/public cross-platform CI and live ACK required. Duplicate
+full local .NET, non-.NET local suites and pinned source OSS smokes explicitly
+deferred for this test-only slice.
+
+Exact commands (logs `/tmp/tracemap-import-conflicts-*`):
+
+```sh
+dotnet restore src/dotnet/TraceMap.sln --locked-mode
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore -warnaserror --filter FullyQualifiedName~Import_conflict_matrix
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-build --no-restore --filter 'FullyQualifiedName~ManagedMetadataExtractorTests|FullyQualifiedName~SourceMetadataReconciliationTests|FullyQualifiedName~PortablePdbExtractorTests|FullyQualifiedName~IlBodyEvidenceExtractorTests|FullyQualifiedName~IlRewrite|FullyQualifiedName~VisualBasicExtractionTests'
+python3 scripts/test_validate_adapter_artifacts.py
+./scripts/check-private-paths.sh
+node scripts/kiro-review.mjs --self-test
+git diff --check
+```
+
+CLI repeats use a temporary committed copy of public VB source with an additional
+`TraceMap.CompiledFixtures.FileImported` project Import. An initial scan supplies
+safe locator/raw SHA/assembly identity for a local public test receipt, attested
+to that temporary source commit (`public-fixture`/`test-build`). Each repeat uses:
+
+```sh
+dotnet run --project src/dotnet/TraceMap.Cli --no-build -- scan --repo "$public_variant" --compiled-input "$PWD/samples/compiled-dotnet-evidence/vb/bin/Debug/net10.0/CompiledEvidence.VisualBasic.dll" --out "$smoke_output" --compiled-binding-receipt "$test_receipt"
+python3 scripts/validate-adapter-artifacts.py "$smoke_output"
+```
+
+Limitations: compiler failure here is source diagnostic/emit evidence, not a claim
+of executing an MSBuild command on invalid code. Receipts are test attestations;
+framework dependency/workspace gaps remain explicit. No F# source, runtime,
+PDB/original IL/rewrite or private-corpus claims. Windows/private catalog and
+MSVC receipts unavailable/uninvoked. Next bounded #767 candidate is overload
+ambiguity/configuration interaction; keep all broad acceptance issues open.
+
+---
+
+# Previous continuation: #767 VB import identity joins
 
 Branch `codex/767-vb-import-identity`, fresh origin/dev base
 `2aee151eb842b9b21783a6fffe09915932e8bcf4` (#840 merged), target dev. Read AGENTS,

@@ -204,3 +204,11 @@ slices and require an implementation-state update before work begins.
   substitution rejection, unbound/duplicate/malformed/member-limit gaps and
   deterministic repeats. Compiler import conflicts/configuration variants,
   PDB/IL/rewrite/runtime and broader language acceptance remain open.
+
+
+- [x] 34. Bounded #767 VB import-conflict refusal: conflicting/missing project
+  imports and malformed aliases; independent compiler diagnostics/error types,
+  raw SRM compiled identities, failed source coverage, exact incomplete identity/
+  span/provenance and no affected join. Qualified/unaffected controls, member-limit
+  refusal and deterministic repeats retain separate source/compiled evidence.
+  Overload/configuration interactions and broad language acceptance remain open.
