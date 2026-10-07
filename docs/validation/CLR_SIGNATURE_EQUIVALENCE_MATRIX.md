@@ -969,3 +969,38 @@ diagnostic; three exact method joins do not establish whole-scan completeness.
 No production rule/schema or new derived public machine-readable artifact is
 added. Runtime, PDB, original/rewritten bodies, F# source extraction, private
 corpus and broad #767/#759 acceptance remain separate and open.
+
+
+## VB import conflict refusal continuation
+
+PR #841 merged at `26154c8a`. Five public synthetic cases now extend its positive
+imports fixture using temporary committed source copies; the checked-in project
+continues to build normally. Conflicting project imports produce BC30561, removal
+of the project import produces BC30002, and an incomplete file alias produces
+BC30203. A separate Roslyn compilation/emit invocation confirms failed compilation,
+error types and (for ambiguity) the two exact candidate namespaces. It never
+executes fixture code. SRM independently decodes the existing binary's MethodDef
+signature/token; its compiled declaration remains distinct from invalid source.
+
+| Requirement | Evidence | Remaining gap | Host/toolchain |
+| --- | --- | --- | --- |
+| #769 corpus dimensions | Public runway/minimized fixtures | Authorized private catalog/receipts | Isolated Windows/private access |
+| #767 import conflicts | FailedOrPartial/reduced source coverage, exact diagnostics/spans, incomplete source identity with no metadata endpoint/edge, qualified positive and unaffected default-import control | Overload ambiguity and other configuration interactions | Public .NET 10 SDK |
+| #766 evidence boundaries | SRM signature/token oracle and compiled provenance retained despite failed source; member-limit refusal and deterministic repeats | PDB/original IL/rewrite/runtime relationships | Public .NET/IL tools |
+| #768 Windows | Public CI and guarded lane | Historical corpus/C++/CLI acceptance | Authorized Windows/MSVC |
+
+The malformed alias yields an unnamed Roslyn error type. Its source declaration
+is preserved as an incomplete observation, not promoted to metadata identity.
+An explicit test receipt deliberately attests the valid fixture binary against
+invalid source: it cannot repair the compiler error or prove build authenticity.
+A separately resolved default-import declaration can still join within a scan
+whose overall source coverage is reduced. Fully qualifying the project type
+resolves the import conflict; exhausting the compiled-member limit still blocks
+that otherwise valid join and marks compiled coverage partial.
+
+Assertions pin rule/tier, source declaration or metadata endpoint/token, source
+span or metadata location, commit, extractor version and applicable generator/
+bounded/binding hashes. Invalid source is compiler input only; no malformed DLL
+or fixture method is executed. No production rule/schema or derived public
+machine-readable artifact changes. F# source, private corpus and broad epic
+acceptance remain open.
