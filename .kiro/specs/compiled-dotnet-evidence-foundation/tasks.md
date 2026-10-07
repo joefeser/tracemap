@@ -220,3 +220,11 @@ slices and require an implementation-state update before work begins.
   source/metadata/body/call provenance, same-opcode/different-operand body hashes,
   wrong-table/work-limit gaps and repeats. Narrowing/configuration interactions,
   source/PDB/IL/rewrite/runtime relationships and broad acceptance remain open.
+
+- [x] 36. Bounded #767 VB narrowing/strictness: implicit versus explicit
+  Long-to-Integer conversion under Option Strict On/Off; independent compiler
+  classification/emit and BC30512 refusal, exact source calls or syntax/gap
+  fallback, SRM/Cecil signatures/tokens and checked conversion IL. Integer
+  control, duplicate/malformed/work-limit gaps, applicable provenance and
+  deterministic repeats. Late-bound configuration, runtime overflow behavior,
+  source/PDB/rewrite joins and broad acceptance remain open.
