@@ -189,3 +189,10 @@ slices and require an implementation-state update before work begins.
   string-only mutation, duplicate/malformed/work-limit gaps and repeats.
   Runtime receiver/overload resolution, other helpers, source-binding/PDB/rewrite
   joins and broader language acceptance remain open.
+
+- [x] 32. Bounded #767 C# ref-like signature continuation: Span/ReadOnlySpan
+  constructions, mutable/readonly by-reference return/parameter signatures,
+  independent SRM/Cecil flags/attribute/modifier checks, exact single/combined
+  provenance, modreq/modopt/absent counterexamples, duplicate/malformed/member-limit
+  gaps and deterministic repeats. Lifetime/runtime, external type classification,
+  source/PDB/IL/rewrite and broader language acceptance remain open.
