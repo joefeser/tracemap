@@ -182,3 +182,10 @@ slices and require an implementation-state update before work begins.
   SRM/opcode/Cecil oracles, exact endpoint/provenance checks, same-opcode/different-
   operand hashes, duplicate/malformed/work-limit gaps and deterministic repeats.
   Source/PDB/rewrite/runtime, late binding and broader language acceptance remain open.
+
+- [x] 31. Bounded #767 VB late-binding continuation: exact LateGet helper
+  MemberRef versus typed MethodDef, independent raw SRM/opcode/Cecil signatures,
+  scopes and string operands; source-gap spans/tiers, full compiled provenance,
+  string-only mutation, duplicate/malformed/work-limit gaps and repeats.
+  Runtime receiver/overload resolution, other helpers, source-binding/PDB/rewrite
+  joins and broader language acceptance remain open.
