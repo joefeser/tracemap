@@ -1,5 +1,15 @@
 # .NET Evidence Completeness Status
 
+## C# ref-like signatures (2026-10-06)
+
+PR #839 is merged at `c8bbfcd8`: VB late-bound source gaps and exact IL helper
+identities are on dev. This bounded #767 continuation pins Span/ReadOnlySpan,
+mutable/readonly by-reference signatures and required versus optional modifiers.
+See the [ref-like signature matrix](validation/CLR_SIGNATURE_EQUIVALENCE_MATRIX.md#c-ref-like-signature-continuation).
+The existing ref-field fixture did not cover these assertions. Runtime lifetime
+safety, source/PDB/IL/rewrite joins, external IsByRefLike classification and broad
+language/private corpus/Windows acceptance remain open.
+
 ## VB late-bound helper evidence (2026-10-06)
 
 PR #838 is merged at `cc15f276`: collection indexer/conversion evidence is on dev.

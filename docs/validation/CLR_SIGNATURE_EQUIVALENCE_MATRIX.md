@@ -902,3 +902,37 @@ and exhausted work budgets retain explicit gaps without positive IL facts.
 Repeat scans preserve facts and provenance. No production rule/schema or new
 machine-readable artifact is introduced. Broad #767/#759, F# source extraction,
 private corpus, runtime, PDB and rewrite acceptance remain open.
+
+## C# ref-like signature continuation
+
+`RefLikeMatrix.cs` adds four metadata-only cases: Pass(Span<Int32>),
+Pass(ReadOnlySpan<Int32>), Borrow(ref Span<Int32>) returning ref Span<Int32>, and
+BorrowReadOnly(in Span<Int32>) returning ref readonly Span<Int32>. The existing
+RefFieldShape is a ref-field fixture, not prior proof of these signatures.
+`ManagedMetadataExtractorTests.RefLike.cs` compares single/combined admission
+using hand-authored identities plus independent raw SRM and Cecil readers.
+
+| Requirement | Evidence | Remaining gap | Host/toolchain |
+| --- | --- | --- | --- |
+| #769 corpus dimensions | Public runway/minimized fixtures | Authorized private catalog and receipts | Isolated Windows/private access |
+| #767 C# ref-like signatures | Four exact MethodDefs; scoped generic VALUETYPE encodings, Int32 argument, BYREF return/parameter and return modreq | Lifetime/escape safety, broader ref-like constructs and cross-language source support | Public .NET 10 SDK |
+| #766 modifier distinction | Data-only modreq/modopt/absent variants retain distinct endpoint identities; SRM checks emitted bytes | Runtime validity, original/rewritten IL identity and PDB joins | Public .NET/IL tools |
+| #768 Windows | Public CI and guarded lane | Historical corpus/C++/CLI acceptance | Authorized Windows/MSVC |
+
+The readonly return encodes modreq(System.Runtime.InteropServices.InAttribute)
+before BYREF Span<Int32>; its parameter has the In flag and its return Param row
+carries IsReadOnlyAttribute. Tests check these separately: flags and attributes
+cannot substitute for signature modifiers. Span and ReadOnlySpan are System.Runtime
+10.0.0.0 TypeRefs with a constructed Int32 argument. The tests inspect references,
+not external type definitions; they do not introduce an IsByRefLike classification
+or prove runtime stack/lifetime semantics. Parameter/return attributes here are
+independent-reader assertions, not new attribute facts.
+
+Every method assertion retains rule/tier, exact endpoint/token/metadata location,
+commit/extractor version and generator/bounded/raw/binding hashes. Duplicate inputs
+retain separate locators and explicit ambiguity; truncated PE and exhausted member
+limits emit partial-coverage gaps. Reversing the input order preserves facts and
+provenance. Mutated assemblies are data only, never executed or claimed runtime
+valid. No production rule/schema or new derived machine-readable artifact is added.
+Source ownership, PDB, original/rewritten bodies, F# source extraction, private
+corpus and broad #767/#759 acceptance remain separate and open.

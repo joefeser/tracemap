@@ -4382,3 +4382,23 @@ Require full final-head .NET and public cross-platform CI. Duplicate full local
 .NET, non-.NET local suites and pinned source OSS smokes are explicitly deferred
 for this fixture/test-only change. Public CI cannot satisfy private Windows
 corpus/MSVC receipts or broad epic acceptance.
+
+### C# ref-like signature matrix (#767)
+
+```sh
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore -warnaserror --filter FullyQualifiedName~Ref_like_matrix
+```
+
+Six cases pin Span/ReadOnlySpan constructions, mutable/readonly by-reference
+signatures and required/optional/absent modifier counterexamples through raw SRM
+and Cecil oracles. Include exact single/combined provenance, duplicate identities,
+truncated PE, member limits and reverse-input repeats. Inspect synthetic mutations
+as data only; no runtime lifetime, source/PDB or rewritten-IL equivalence claim.
+
+Run the surrounding metadata/source-reconciliation/PDB/IL/rewrite suite, two
+validated public CLI scans with the C# fixture assembly, and compare facts/report
+bytes. Run artifact-validator tests plus privacy/spec guards. Require full
+final-head .NET and public cross-platform CI. Duplicate full local .NET,
+non-.NET local suites and pinned source OSS smokes are explicitly deferred for
+this fixture/test-only slice. Public CI does not satisfy private Windows/MSVC
+corpus receipts or broad epic acceptance.
