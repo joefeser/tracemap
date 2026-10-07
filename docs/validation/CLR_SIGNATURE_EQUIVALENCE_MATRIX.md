@@ -1058,3 +1058,21 @@ binary. Repeat scans compare facts and IL provenance. Compiler output inspection
 and source facts remain separate layers; no PDB/rewrite/runtime/F# source claim,
 new machine-readable public golden artifact or production rule/schema change.
 Late-bound dispatch/configuration interactions remain a separate #767 slice.
+
+## Duplicate narrowing input retention
+
+PR #844 merged at `e5de6a4b`; its compiler/narrowing evidence is delivered, but
+its duplicate-input branch counted members without requiring IL bodies or calls.
+This bounded #767 follow-up closes that regression-assertion gap. It does not
+claim a production extractor defect or expand language coverage.
+
+| Requirement | Evidence | Remaining gap | Host/toolchain |
+| --- | --- | --- | --- |
+| Retain original IL per duplicate input | Both FromLong and FromInteger members, bodies and calls selected per expected safe locator; raw SRM/Cecil signatures, tokens, opcodes and exact provenance checked | No source ownership or runtime inference | Public .NET 10 |
+| Reject missing/misattributed evidence | Sixteen in-memory omissions or other-input locator substitutions must fail the same assertions | Not malformed binary execution | Public .NET 10 |
+| Ambiguity and deterministic order | One ambiguity gap per input, no source reconciliation, identical reversed-input facts/IL provenance | Duplicate identity remains ambiguous | Public .NET 10 |
+| Malformed and bounded cases | Existing truncated PE and work-limit cases still require gaps and no IL body/call facts | Broader hostile-input suite remains separate | Public .NET 10 |
+| #769 / #766 / #768 | Existing corpus runway, independent IL/PDB/rewrite tests and public Windows CI | Private catalog/receipts, broader joins, Windows PDB/MSVC acceptance | Authorized isolated Windows lane where required |
+
+No new derived public artifact, rule or schema. No fixture binary is executed.
+Late-bound configuration interactions remain the next language-matrix candidate.

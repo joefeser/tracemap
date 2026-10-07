@@ -1,4 +1,54 @@
-# Current continuation: #767 VB narrowing and Option Strict
+# Current continuation: #767 duplicate narrowing IL retention
+
+Branch `codex/767-duplicate-il-retention`, fresh origin/dev base
+`e5de6a4b2ccf2df97afe307c09097c4f5e5984ff` (#844 merged), target dev. Reconciled
+AGENTS, main/dev, five issue bodies/comments, #844 final review history, no open
+PRs, specs/docs/code/tests and worktrees. Codex eventually completed clean on
+#844, but the duplicate-input IL assertion gap remained in merged code. This
+bounded follow-up repairs that gap before starting another language feature.
+Primary Base44 edits and all sibling worktrees preserved; site lane excluded.
+
+Shared invariant: each admitted duplicate retains independently inspected IL
+under its own artifact locator while source reconciliation remains ambiguous.
+The narrowing helper now selects members per locator and checks member/body/call
+locator consistency. Both FromLong and FromInteger run through its independent
+SRM/Cecil identity/token/checked-conversion assertions. Sixteen omitted or
+misattributed body/call counterexamples reject evidence loss/cross-input reuse.
+Exact gap locators and reversed-input facts/IL provenance are pinned. Existing
+compiler refusal, truncated PE and bounded-work cases remain unchanged. No
+production rule/schema change or derived public artifact; no binary execution.
+
+Validation: focused 7/7; full unfiltered local solution 3,432 passed, zero failed,
+one documented Windows deep-corpus skip (20m37s), warnings as errors and no
+introduced warnings. Duplicate CLI smoke: 2,735 facts, two locators, four expected
+bodies/calls, no source joins, identical reverse-order facts/report bytes. Artifact
+validator 7/7 and privacy/spec/whitespace guards pass. Final-head public CI and
+live ACK required. Exact commands use SDK 10.0.302 and logs /tmp/tracemap-retention-*:
+
+```sh
+dotnet restore src/dotnet/TraceMap.sln --locked-mode
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore -warnaserror --filter FullyQualifiedName~Narrowing_matrix
+dotnet test src/dotnet/TraceMap.sln --no-restore -warnaserror
+python3 scripts/test_validate_adapter_artifacts.py
+./scripts/check-private-paths.sh
+node scripts/kiro-review.mjs --self-test
+git diff --check
+```
+
+CLI: two public VB scans with original and temporary byte-identical compiled
+inputs, --il-body-evidence, reversed input order, separate outputs, artifact
+validation and facts/report comparison. Acceptance matrix is the duplicate
+narrowing retention section of CLR_SIGNATURE_EQUIVALENCE_MATRIX.md.
+
+Limitations: no source-to-binary authenticity, PDB/rewrite/runtime or F# source
+claim. Unbound input/ambiguity/framework gaps remain explicit. Non-.NET local
+and pinned source OSS smoke reruns deferred for this assertion-only change.
+Authorized private catalog/Windows/MSVC receipts remain unavailable/uninvoked.
+Broad issues remain open. Next candidate: late-bound configuration interactions.
+
+---
+
+# Previous continuation: #767 VB narrowing and Option Strict
 
 Branch `codex/767-vb-narrowing`, fresh origin/dev base
 `37552ae3c6bd2bc03aae19f51b9e0b50740a0408` (#843 merged), target dev. Read AGENTS,
