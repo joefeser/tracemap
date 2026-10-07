@@ -4402,3 +4402,26 @@ final-head .NET and public cross-platform CI. Duplicate full local .NET,
 non-.NET local suites and pinned source OSS smokes are explicitly deferred for
 this fixture/test-only slice. Public CI does not satisfy private Windows/MSVC
 corpus receipts or broad epic acceptance.
+
+
+### VB imports and source-to-metadata identity (#767)
+
+```sh
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore -warnaserror --filter FullyQualifiedName~Import_matrix
+```
+
+Six cases check project imports, file aliases and SDK defaults using independent
+raw SRM/Cecil metadata and hand-authored full source/metadata identities. Check
+exact spans/provenance, same-name substitution, unbound input, duplicate candidates,
+truncated PE, member limits and deterministic repeats. Do not execute fixture or
+malformed DLLs. Test binding receipts are public test attestations, not independent
+build-authenticity evidence.
+
+Run surrounding metadata/source-reconciliation/PDB/IL/rewrite tests plus
+VisualBasicExtractionTests. Repeat a public VB CLI scan with its compiled assembly
+and an explicit test binding receipt; validate artifacts, three exact joins and
+identical facts/report bytes. Run artifact-validator tests and privacy/spec guards.
+Require full final-head .NET and public cross-platform CI. Duplicate full local
+.NET, non-.NET local suites and pinned source OSS smokes are explicitly deferred
+for this fixture/test-only slice. Compiler import conflicts, configuration variants,
+F# source, private Windows/MSVC receipts and broad epic acceptance remain open.

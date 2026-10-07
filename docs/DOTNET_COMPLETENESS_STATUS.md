@@ -1,5 +1,16 @@
 # .NET Evidence Completeness Status
 
+## VB import identity joins (2026-10-06)
+
+PR #840 is merged at `2aee151e`: C# ref-like signature evidence is on dev.
+This bounded #767 continuation covers project imports, file aliases and SDK
+default imports through three exact source-to-metadata joins and six regression
+cases. See the [imports matrix](validation/CLR_SIGNATURE_EQUIVALENCE_MATRIX.md#vb-imports-and-source-identity-continuation).
+Same-named types in different namespaces remain distinct. Unbound/duplicate/
+malformed/bounded inputs refuse joins. Compiler import conflicts, configuration
+variants, PDB/IL/rewrite/runtime relationships and private Windows/corpus
+acceptance remain open; test binding receipts do not prove build authenticity.
+
 ## C# ref-like signatures (2026-10-06)
 
 PR #839 is merged at `c8bbfcd8`: VB late-bound source gaps and exact IL helper
