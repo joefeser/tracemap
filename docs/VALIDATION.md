@@ -4449,3 +4449,26 @@ authenticity. Full final-head .NET/public cross-platform CI is required. Duplica
 full local .NET, non-.NET local suites and pinned source OSS smokes are explicitly
 deferred for this test-only slice. Private Windows/MSVC and broad epic acceptance
 remain separate gaps.
+
+
+### VB overload ambiguity and strictness (#767)
+
+```sh
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore -warnaserror --filter FullyQualifiedName~Overload_matrix
+```
+
+Six cases cover exact String/Uri source and compiled targets, ambiguous Nothing
+under Option Strict On/Off, wrong-table call operands and bounded IL work. The
+independent Roslyn emit oracle records failed compilation and both candidates;
+SRM/framework-opcode/Cecil readers pin original signatures/tokens and call
+operands. Same-opcode callers have different body hashes. Assert source spans,
+full applicable provenance, reduced source coverage and bounded gaps. A retained
+valid binary cannot resolve invalid source. Never execute fixture/mutated DLLs.
+
+Run surrounding metadata/source/PDB/IL/rewrite tests plus VisualBasicExtractionTests,
+two validated public VB CLI scans with its assembly and --il-body-evidence, compare
+facts/report bytes and the two distinct source/IL targets, and run artifact/privacy/
+spec guards. Full final-head .NET/public cross-platform CI is required. Duplicate
+full local .NET, non-.NET local suites and pinned source OSS smokes are explicitly
+deferred for this fixture/test-only slice. Unbound binary input, framework/workspace
+gaps, private Windows/MSVC and broad epic acceptance remain explicit limitations.
