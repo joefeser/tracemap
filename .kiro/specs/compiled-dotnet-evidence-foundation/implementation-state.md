@@ -1,4 +1,61 @@
-# Current continuation: #767 VB import-conflict refusal
+# Current continuation: #767 VB overload ambiguity and strictness
+
+Branch `codex/767-vb-overload-ambiguity`, fresh origin/dev base
+`e14d26f1c4c46c2a58d7dbeb2cf11f192cb6e6e9` (#842 merged), target dev. Read AGENTS,
+fetched main/dev, reconciled all five issue bodies/comments, merged/open PRs,
+current specs/docs/code/tests and worktrees. No open PR/competing overload lane.
+Primary Base44 edits and other worktrees untouched; main-only site work excluded.
+Acceptance matrix is in the VB overload/strictness validation continuation.
+
+Added four public VB methods (two SelectValue overloads and two explicitly cast
+callers), plus six regression cases. Independent Roslyn compilation/emit checks
+successful selection versus ambiguous Nothing under Option Strict On/Off; raw
+SRM/framework-opcode/Cecil readers pin exact signatures/tokens and original call
+operands. Same-opcode callers have distinct targets/body hashes. Failed source
+retains Tier3 name-only calls, Tier4 gaps and reduced coverage without losing an
+unaffected resolved call. The valid binary is separate unbound evidence and
+cannot select a source target. Wrong-table operands and IL work limits remain
+explicit gaps. No production rule/schema or derived public artifact changes.
+No fixture or malformed binary execution.
+
+Validation: SDK 10.0.302 locked restore; focused 6/6 with warnings as errors,
+no introduced warnings. Surrounding suite 484/484, zero failures/skips. Two validated public
+CLI scans emit 1,809 facts with two distinct source/IL overload targets and
+identical facts/report bytes. Artifact validator 7/7 (existing SQLite
+ResourceWarning); privacy/spec/whitespace guards pass. Full final-head .NET/
+public cross-platform CI and live ACK required. Duplicate full local .NET,
+non-.NET local suites and pinned source OSS smokes explicitly deferred for this
+fixture/test-only slice.
+
+Exact commands (logs `/tmp/tracemap-overload-*`):
+
+```sh
+dotnet restore src/dotnet/TraceMap.sln --locked-mode
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore -warnaserror --filter FullyQualifiedName~Overload_matrix
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-build --no-restore --filter 'FullyQualifiedName~ManagedMetadataExtractorTests|FullyQualifiedName~SourceMetadataReconciliationTests|FullyQualifiedName~PortablePdbExtractorTests|FullyQualifiedName~IlBodyEvidenceExtractorTests|FullyQualifiedName~IlRewrite|FullyQualifiedName~VisualBasicExtractionTests'
+python3 scripts/test_validate_adapter_artifacts.py
+./scripts/check-private-paths.sh
+node scripts/kiro-review.mjs --self-test
+git diff --check
+```
+
+CLI repeats use separate temporary outputs and the public VB fixture assembly:
+
+```sh
+dotnet run --project src/dotnet/TraceMap.Cli --no-build -- scan --repo samples/compiled-dotnet-evidence/vb --out "$smoke_output" --compiled-input "$PWD/samples/compiled-dotnet-evidence/vb/bin/Debug/net10.0/CompiledEvidence.VisualBasic.dll" --il-body-evidence
+python3 scripts/validate-adapter-artifacts.py "$smoke_output"
+```
+
+Limitations: no source-to-IL ownership or runtime overload execution claim;
+source failure is diagnostic/emit evidence, not execution of an invalid binary.
+Unbound compiled input and framework/workspace gaps remain explicit. No F# source,
+PDB/rewrite or private-corpus claim. Windows/private catalog/MSVC receipts remain
+unavailable/uninvoked. Next bounded #767 candidate is narrowing/late-bound
+configuration interaction; broader acceptance issues stay open.
+
+---
+
+# Previous continuation: #767 VB import-conflict refusal
 
 Branch `codex/767-vb-import-conflicts`, fresh origin/dev base
 `26154c8a2ef14a6f519c239da4a4615f2019f1c3` (#841 merged), target dev. Reconciled
