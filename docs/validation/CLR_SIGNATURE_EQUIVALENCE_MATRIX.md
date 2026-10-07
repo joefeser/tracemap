@@ -1004,3 +1004,32 @@ bounded/binding hashes. Invalid source is compiler input only; no malformed DLL
 or fixture method is executed. No production rule/schema or derived public
 machine-readable artifact changes. F# source, private corpus and broad epic
 acceptance remain open.
+
+
+## VB overload ambiguity and strictness continuation
+
+PR #842 merged at `e14d26f1`. The public OverloadMatrix adds String and System.Uri
+SelectValue overloads plus explicitly cast callers. Six cases compare successful
+and ambiguous source under Option Strict On/Off, malformed call operands and a
+bounded IL work limit. A separate Roslyn compilation/emit invocation proves that
+Nothing is ambiguous (BC30521; two exact parameter-type candidates) in both
+settings, while an explicit String cast selects that overload. Source facts pin
+both valid endpoints and an unaffected Uri call within the failing variant.
+
+| Requirement | Evidence | Remaining gap | Host/toolchain |
+| --- | --- | --- | --- |
+| #769 corpus dimensions | Public runway/minimized fixtures | Authorized private catalog and receipts | Isolated Windows/private access |
+| #767 overload ambiguity | Exact source calls under On/Off; ambiguous Nothing produces Tier3 name-only call, Tier4 gap and FailedOrPartial/reduced source coverage | Narrowing/late-bound overload interactions and other compiler configurations | Public .NET 10 SDK |
+| #766 operand identity | Independent raw SRM/framework-opcode/Cecil readers, full overload MethodDef signatures/tokens, same opcodes/different call operands and body hashes, wrong-table/work-limit gaps | PDB/rewrite/runtime relationships | Public .NET/IL tools |
+| #768 Windows | Public CI and guarded lane | Historical corpus/C++/CLI acceptance | Authorized Windows/MSVC |
+
+The valid compiled binary is deliberately retained alongside invalid source.
+Its call operands prove only the inspected original bytes, never a resolution
+for an ambiguous source invocation. Compiled inputs are unbound and do not create
+source-to-metadata reconciliation edges. The complete source/metadata/body/call
+identities retain rule/tier, source span or metadata location/token, commit,
+extractor/version and applicable generator/bounded/raw/binding hashes. Repeated
+scans preserve facts/provenance; malformed byte mutations are data only.
+No production rule/schema or derived public machine-readable artifact changes.
+No runtime overload execution, source-to-IL ownership, F# source, private corpus
+or broad epic completion claim is made.

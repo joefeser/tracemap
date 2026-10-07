@@ -1,5 +1,15 @@
 # .NET Evidence Completeness Status
 
+## VB overload ambiguity and strictness (2026-10-06)
+
+PR #842 merged at `e14d26f1`, delivering import-conflict refusal. This bounded
+#767 continuation proves explicit String/Uri overload selection and ambiguous
+Nothing refusal under Option Strict On/Off. Independent compiler/SRM/Cecil
+oracles pin source calls and original compiled operands without joining invalid
+source to retained binary evidence. See the [overload matrix](validation/CLR_SIGNATURE_EQUIVALENCE_MATRIX.md#vb-overload-ambiguity-and-strictness-continuation).
+Narrowing/configuration interactions, source/PDB/IL/rewrite/runtime relationships
+and private Windows/corpus acceptance remain open.
+
 ## VB import conflict refusal (2026-10-06)
 
 PR #841 merged at `26154c8a`, delivering exact positive VB import joins. This
