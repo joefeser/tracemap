@@ -49,6 +49,11 @@ public sealed class WebFormsWizardStoreTests
         Assert.Equal("WEBFORMS_WIZARD_PROJECT_FOLDER_EXISTS", Assert.Throws<InvalidOperationException>(() =>
             store.SaveProject(Project(site, "other"))).Message);
         Assert.Equal("keep", File.ReadAllText(Path.Combine(config, "other", "unrelated.txt")));
+        Directory.CreateDirectory(Path.Combine(config, "empty"));
+        Assert.Equal("WEBFORMS_WIZARD_PROJECT_FOLDER_EXISTS", Assert.Throws<InvalidOperationException>(() =>
+            store.SaveProject(Project(site, "empty"))).Message);
+        Assert.Empty(Directory.EnumerateFileSystemEntries(Path.Combine(config, "empty")));
+        Assert.Single(store.State.Projects);
     }
 
     [Fact]

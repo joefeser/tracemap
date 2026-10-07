@@ -224,6 +224,8 @@ public static class FactTypes
     public const string SolutionDeclared = nameof(SolutionDeclared);
     public const string ProjectDeclared = nameof(ProjectDeclared);
     public const string PackageReferenced = nameof(PackageReferenced);
+    public const string CentralPackageVersionDeclared = nameof(CentralPackageVersionDeclared);
+    public const string PackageProduced = nameof(PackageProduced);
     public const string TargetFrameworkDeclared = nameof(TargetFrameworkDeclared);
     public const string ConfigFileDeclared = nameof(ConfigFileDeclared);
     public const string SqlFileDeclared = nameof(SqlFileDeclared);
@@ -683,9 +685,9 @@ public static class ScannerVersions
     public const string TraceMap = TraceMapDiagnostics.ToolVersion;
     public const string RepoManifestExtractor = "repo-manifest/0.1.0";
     public const string FileInventoryExtractor = "file-inventory/0.1.0";
-    public const string ProjectFileExtractor = "project-file/0.1.0";
+    public const string ProjectFileExtractor = "project-file/0.3.0"; // 0.2.0: CPM pins + versionOverride (#804); 0.3.0: PackageProduced facts (#818)
     public const string NuGetLockfileExtractor = "nuget-lockfile/0.1.0";
-    public const string BuildEnvironmentExtractor = "build-environment/0.6.0";
+    public const string BuildEnvironmentExtractor = "build-environment/0.6.1";
     public const string AnalyzerCapabilityExtractor = "analyzer-capability/0.1.0";
     public const string CSharpSyntaxExtractor = "csharp-syntax/0.5.1";
     public const string CSharpAspNetSyntaxRouteExtractor = "csharp-aspnet-syntax-route/0.1.0";
@@ -696,7 +698,7 @@ public static class ScannerVersions
     public const string CSharpPropertyMappingExtractor = "csharp-property-mapping/0.1.0";
     public const string FrameworkMigrationEvidenceExtractor = "framework-migration/0.1.0";
     public const string FrameworkMigrationSyntaxFallbackExtractor = "framework-migration-syntax-fallback/0.1.0";
-    public const string ManagedMetadataExtractor = "managed-metadata/0.1.2+cecil-0.11.6";
+    public const string ManagedMetadataExtractor = "managed-metadata/0.1.3+cecil-0.11.6";
     public const string SourceMetadataReconciliationExtractor = "source-metadata-reconciliation/0.1.0";
     public const string PortablePdbExtractor = "portable-pdb/0.1.0+srm-10.0.0+cecil-0.11.6";
     public const string IlBodyEvidenceExtractor = "il-body-evidence/0.1.11+srm-10.0.0+cecil-0.11.6";
@@ -715,7 +717,7 @@ public static class ScannerVersions
     public const string LegacyWcfExtractor = "legacy-wcf/0.3.1";
     public const string LegacyAsmxExtractor = "legacy-asmx/0.2.0";
     public const string LegacyRemotingExtractor = "legacy-remoting/0.1.0";
-    public const string LegacyWebFormsExtractor = "legacy-webforms/0.13.6";
+    public const string LegacyWebFormsExtractor = "legacy-webforms/0.13.7";
     public const string WebFormsPublishMapExtractor = "webforms-publish-map/0.1.3";
     public const string LegacyWinFormsExtractor = "legacy-winforms/0.1.0";
     public const string LegacyAspNetExtractor = "legacy-aspnet/0.2.0";

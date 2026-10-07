@@ -6,6 +6,7 @@ using TraceMap.Storage;
 
 namespace TraceMap.Tests;
 
+[Collection("Git metadata sensitive")]
 public sealed class LazyConstructorLoggingTests
 {
     [Theory]
@@ -20,6 +21,7 @@ public sealed class LazyConstructorLoggingTests
         var scan = ScanEngine.Scan(new ScanOptions(Path.Combine(repo, "samples", "messy-dotnet-workspace", "vb-lazy-constructor"),
             Path.Combine(temp.Path, "scan"), CompiledInputPaths: [Path.Combine(bin, "PublicLazy.Website.dll"),
                 Path.Combine(bin, "PublicLazy.Framework.dll")], IlBodyEvidence: true));
+        AssertScanIdentity(scan);
         var entry = Assert.Single(scan.Facts, fact => fact.FactType == FactTypes.ManagedMethodDeclared
             && fact.Properties.GetValueOrDefault("metadataName") == "Profile_Click");
         var index = Path.Combine(temp.Path, "index.sqlite");
@@ -90,6 +92,7 @@ public sealed class LazyConstructorLoggingTests
         using var temp = new TempDirectory();
         var scan = ScanEngine.Scan(new ScanOptions(source, Path.Combine(temp.Path, "scan"),
             CompiledInputPaths: assemblies, IlBodyEvidence: true));
+        AssertScanIdentity(scan);
         var entry = Assert.Single(scan.Facts, fact => fact.FactType == FactTypes.ManagedMethodDeclared
             && fact.TargetSymbol!.Contains("LazyOverview|", StringComparison.Ordinal)
             && fact.TargetSymbol.Contains("|method:10:Load_Click|", StringComparison.Ordinal));
@@ -210,6 +213,7 @@ public sealed class LazyConstructorLoggingTests
         using var temp = new TempDirectory();
         var scan = ScanEngine.Scan(new ScanOptions(Path.Combine(repo, "samples", "messy-dotnet-workspace", "vb-lazy-constructor"),
             Path.Combine(temp.Path, "scan"), CompiledInputPaths: [Path.Combine(bin, "PublicLazy.Framework.dll")], IlBodyEvidence: true));
+        AssertScanIdentity(scan);
         var entry = Assert.Single(scan.Facts, fact => fact.FactType == FactTypes.ManagedMethodDeclared
             && fact.Properties.GetValueOrDefault("metadataName") == entryName);
         var literal = Assert.Single(scan.Facts, fact => fact.FactType == FactTypes.ManagedMethodDeclared
@@ -270,6 +274,15 @@ public sealed class LazyConstructorLoggingTests
             Assert.Equal("unresolved-operand", text.State);
             Assert.Contains(gap, text.Gaps);
         }
+    }
+
+    private static void AssertScanIdentity(ScanResult scan)
+    {
+        var sha = scan.Manifest.CommitSha;
+        Assert.True(sha.Length == 40 && sha.All(character => character is >= '0' and <= '9' or >= 'a' and <= 'f'),
+            $"LAZY_CORPUS_GIT_IDENTITY_UNAVAILABLE;commitLength={sha.Length};knownGapCount={scan.Manifest.KnownGaps.Count};" +
+            "selected-root reporting requires a real Git commit; inspect the bounded Git probe/environment, not SQL route resolution.");
+        Assert.False(string.IsNullOrWhiteSpace(scan.Manifest.ScanId));
     }
 
     private static string FindRepo()

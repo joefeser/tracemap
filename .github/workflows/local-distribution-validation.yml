@@ -43,7 +43,7 @@ jobs:
       - name: Restore locked dependencies
         run: dotnet restore src/dotnet/TraceMap.sln --locked-mode
       - name: Run portable compiled metadata fixture matrix
-        run: dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter FullyQualifiedName~ManagedMetadataExtractorTests
+        run: dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter "FullyQualifiedName~ManagedMetadataExtractorTests|FullyQualifiedName~SourceMetadataReconciliationTests"
       # Fail early on OS pipe/junction regressions, before longer metadata lanes.
       - name: Validate promotion process and junction boundaries
         shell: pwsh

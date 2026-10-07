@@ -7,14 +7,14 @@ using TraceMap.Core;
 
 namespace TraceMap.Tests;
 
-public sealed class SourceMetadataReconciliationTests
+public sealed partial class SourceMetadataReconciliationTests
 {
     [Fact]
     public void Bound_csharp_fixture_reconciles_exact_complete_identities()
     {
         var repo = FindRepoRoot();
         var source = Path.Combine(repo, "samples", "compiled-dotnet-evidence", "csharp");
-        var assembly = Path.Combine(source, "bin", "Debug", "net10.0", "CompiledEvidence.CSharp.dll");
+        var assembly = FixtureAssemblyPath(source, "CompiledEvidence.CSharp.dll");
 
         var result = ScanBound(source, [assembly]);
         var edges = result.Facts.Where(fact => fact.FactType == FactTypes.SourceMetadataIdentityReconciled).ToArray();
@@ -71,7 +71,7 @@ public sealed class SourceMetadataReconciliationTests
     {
         var repo = FindRepoRoot();
         var source = Path.Combine(repo, "samples", "compiled-dotnet-evidence", "vb");
-        var assembly = Path.Combine(source, "bin", "Debug", "net10.0", "CompiledEvidence.VisualBasic.dll");
+        var assembly = FixtureAssemblyPath(source, "CompiledEvidence.VisualBasic.dll");
 
         var result = ScanBound(source, [assembly]);
         var edges = result.Facts.Where(fact => fact.FactType == FactTypes.SourceMetadataIdentityReconciled).ToArray();
@@ -101,7 +101,7 @@ public sealed class SourceMetadataReconciliationTests
     {
         var repo = FindRepoRoot();
         var source = Path.Combine(repo, "samples", "compiled-dotnet-evidence", "csharp");
-        var otherAssembly = Path.Combine(repo, "samples", "compiled-dotnet-evidence", "vb", "bin", "Debug", "net10.0", "CompiledEvidence.VisualBasic.dll");
+        var otherAssembly = FixtureAssemblyPath(Path.Combine(repo, "samples", "compiled-dotnet-evidence", "vb"), "CompiledEvidence.VisualBasic.dll");
 
         var result = ScanBound(source, [otherAssembly]);
 
@@ -114,7 +114,7 @@ public sealed class SourceMetadataReconciliationTests
     {
         var repo = FindRepoRoot();
         var source = Path.Combine(repo, "samples", "compiled-dotnet-evidence", "csharp");
-        var assembly = Path.Combine(source, "bin", "Debug", "net10.0", "CompiledEvidence.CSharp.dll");
+        var assembly = FixtureAssemblyPath(source, "CompiledEvidence.CSharp.dll");
         var duplicateDirectory = Directory.CreateTempSubdirectory("tracemap-duplicate-metadata-");
         var duplicate = Path.Combine(duplicateDirectory.FullName, "duplicate-csharp.dll");
         File.Copy(assembly, duplicate);
@@ -137,7 +137,7 @@ public sealed class SourceMetadataReconciliationTests
     {
         var repo = FindRepoRoot();
         var source = Path.Combine(repo, "samples", "compiled-dotnet-evidence", "csharp");
-        var assembly = Path.Combine(source, "bin", "Debug", "net10.0", "CompiledEvidence.CSharp.dll");
+        var assembly = FixtureAssemblyPath(source, "CompiledEvidence.CSharp.dll");
 
         var result = ScanUnbound(source, [assembly]);
 
@@ -151,13 +151,95 @@ public sealed class SourceMetadataReconciliationTests
     {
         var repo = FindRepoRoot();
         var source = Path.Combine(repo, "samples", "compiled-dotnet-evidence", "fsharp");
-        var assembly = Path.Combine(source, "bin", "Debug", "net10.0", "CompiledEvidence.FSharp.dll");
+        var assembly = FixtureAssemblyPath(source, "CompiledEvidence.FSharp.dll");
 
         var result = ScanBound(source, [assembly]);
         var fixtureCase = ReadCase("FS-RECON-UNSUPPORTED-003");
 
         Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.ManagedMethodDeclared && fact.TargetSymbol == fixtureCase.MetadataIdentity);
+        Assert.Equal(4, result.Facts.Count(fact => fact.FactType == FactTypes.ManagedMethodDeclared
+            && fact.TargetSymbol!.Contains("|names:11:OptionShape|", StringComparison.Ordinal)
+            && fact.Properties["metadataName"] != ".ctor"));
+        Assert.Equal(2, result.Facts.Count(fact => fact.FactType == FactTypes.ManagedPropertyDeclared
+            && fact.TargetSymbol!.Contains("|names:13:AccessorShape|", StringComparison.Ordinal)));
+        Assert.Single(result.Facts, fact => fact.FactType == FactTypes.ManagedEventDeclared
+            && fact.TargetSymbol!.Contains("|names:13:AccessorShape|", StringComparison.Ordinal));
+        foreach (var name in new[] { "Free", "Reference", "Value", "Construct", "Disposable" })
+        {
+            var method = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.ManagedMethodDeclared
+                && fact.TargetSymbol!.Contains("|type:namespace:37:TraceMap.CompiledFixtures.Equivalence|names:15:ConstraintShape|", StringComparison.Ordinal)
+                && fact.Properties["metadataName"] == name);
+            Assert.Equal("arity:1|call:default|hasThis:false|explicitThis:false|(!!0)->!!0", method.Properties["signature"]);
+        }
+        foreach (var name in new[] { "Required", "IntSeven", "IntNine", "Text", "NullText", "DecimalSeven" })
+        {
+            var method = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.ManagedMethodDeclared
+                && fact.TargetSymbol!.Contains("|type:namespace:37:TraceMap.CompiledFixtures.Equivalence|names:12:DefaultShape|", StringComparison.Ordinal)
+                && fact.Properties["metadataName"] == name);
+            var parameterType = name switch
+            {
+                "Text" or "NullText" => "type(namespace:6:System|names:6:String)",
+                "DecimalSeven" => "scope(assembly:name:14:System.Runtime|version:8:10.0.0.0|culture:7:neutral|publicKeyToken:16:b03f5f7f11d50a3a)type(namespace:6:System|names:7:Decimal)",
+                _ => "type(namespace:6:System|names:5:Int32)"
+            };
+            Assert.Equal("arity:0|call:default|hasThis:false|explicitThis:false|(" + parameterType + ")->" + parameterType, method.Properties["signature"]);
+            Assert.Equal(name == "Required" ? "" : "0", method.Properties["optionalParameterOrdinals"]);
+        }
+        foreach (var (owner, name) in new[]
+        {
+            ("16:ISharedFormatter", "Format"),
+            ("13:ExplicitShape", "Format"),
+            ("13:ExplicitShape", "TraceMap.CompiledFixtures.Equivalence.ISharedFormatter.Format")
+        })
+        {
+            var method = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.ManagedMethodDeclared
+                && fact.TargetSymbol!.Contains("|type:namespace:37:TraceMap.CompiledFixtures.Equivalence|names:" + owner + "|", StringComparison.Ordinal)
+                && fact.Properties["metadataName"] == name);
+            Assert.Equal("arity:0|call:default|hasThis:true|explicitThis:false|(type(namespace:6:System|names:6:String))->type(namespace:6:System|names:6:String)", method.Properties["signature"]);
+        }
+        foreach (var name in new[] { "op_Addition", "op_Implicit", "op_Explicit", "op_LooksLikeOperator" })
+        {
+            var method = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.ManagedMethodDeclared
+                && fact.TargetSymbol!.Contains("|type:namespace:37:TraceMap.CompiledFixtures.Equivalence|names:13:OperatorShape|", StringComparison.Ordinal)
+                && fact.Properties["metadataName"] == name);
+            Assert.Equal(ManagedMetadataExtractorTests.OperatorSignature(name, "fsharp"), method.Properties["signature"]);
+        }
+        foreach (var name in new[] { "Curried", "Tupled", "Renamed" })
+        {
+            var method = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.ManagedMethodDeclared
+                && fact.TargetSymbol!.Contains("|type:namespace:37:TraceMap.CompiledFixtures.Equivalence|names:11:ModuleShape|", StringComparison.Ordinal)
+                && fact.Properties["metadataName"] == name);
+            Assert.Equal(ManagedMetadataExtractorTests.ModuleSignature(name), method.Properties["signature"]);
+        }
         Assert.DoesNotContain(result.Facts, fact => fact.FactType == FactTypes.SourceMetadataIdentityReconciled);
+        foreach (var name in new[] { "GetHashCode", "ToString" })
+        {
+            var recordMethod = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.ManagedMethodDeclared
+                && fact.TargetSymbol!.Contains("|type:namespace:37:TraceMap.CompiledFixtures.Equivalence|names:12:RecordMatrix|", StringComparison.Ordinal)
+                && fact.Properties["metadataName"] == name && fact.Properties["signature"].Contains("|()->", StringComparison.Ordinal));
+            Assert.Equal("true", recordMethod.Properties["compilerGenerated"]);
+            Assert.DoesNotContain(result.Facts, fact => fact.FactType == FactTypes.SourceMetadataIdentityReconciled
+                && fact.TargetSymbol == recordMethod.TargetSymbol);
+        }
+        foreach (var name in new[] { "get_Ready", "NewFailed" })
+        {
+            var unionFactory = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.ManagedMethodDeclared
+                && fact.TargetSymbol!.Contains("|type:namespace:37:TraceMap.CompiledFixtures.Equivalence|names:11:UnionMatrix|", StringComparison.Ordinal)
+                && fact.Properties["metadataName"] == name);
+            Assert.Equal(ManagedMetadataExtractorTests.UnionSignature(name, "fsharp"), unionFactory.Properties["signature"]);
+            Assert.Equal("true", unionFactory.Properties["compilerGenerated"]);
+            Assert.DoesNotContain(result.Facts, fact => fact.FactType == FactTypes.SourceMetadataIdentityReconciled
+                && fact.TargetSymbol == unionFactory.TargetSymbol);
+        }
+        foreach (var name in new[] { "Tree", "Delegate", "Echo" })
+        {
+            var quotation = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.ManagedMethodDeclared
+                && fact.TargetSymbol!.Contains("|type:namespace:37:TraceMap.CompiledFixtures.Equivalence|names:15:QuotationMatrix|", StringComparison.Ordinal)
+                && fact.Properties["metadataName"] == name);
+            Assert.Equal(ManagedMetadataExtractorTests.QuotationSignature(name, "fsharp"), quotation.Properties["signature"]);
+            Assert.DoesNotContain(result.Facts, fact => fact.FactType == FactTypes.SourceMetadataIdentityReconciled
+                && fact.TargetSymbol == quotation.TargetSymbol);
+        }
         var gap = Assert.Single(result.Facts, fact => fact.Properties.GetValueOrDefault("gapKind") == "SourceMetadataReconciliationUnsupportedLanguage");
         Assert.Equal("fsharp", gap.Properties["language"]);
         var entry = Assert.Single(result.Manifest.SourceMetadataReconciliation!.Entries);
@@ -369,7 +451,7 @@ public sealed class SourceMetadataReconciliationTests
     {
         var repo = FindRepoRoot();
         var source = Path.Combine(repo, "samples", "compiled-dotnet-evidence", "csharp");
-        var assembly = Path.Combine(source, "bin", "Debug", "net10.0", "CompiledEvidence.CSharp.dll");
+        var assembly = FixtureAssemblyPath(source, "CompiledEvidence.CSharp.dll");
         var temp = Directory.CreateTempSubdirectory("tracemap-source-metadata-cli-");
         try
         {
@@ -413,7 +495,12 @@ public sealed class SourceMetadataReconciliationTests
                 entry => entry.ReconciliationState == "exact-one-candidate" && entry.CompiledProvenanceState == "bound");
             Assert.Contains("Source/metadata reconciliation", await File.ReadAllTextAsync(Path.Combine(first, "report.md")), StringComparison.Ordinal);
 
-            using var connection = new SqliteConnection($"Data Source={Path.Combine(first, "index.sqlite")}");
+            // A pooled handle survives disposal and prevents fixture deletion on Windows.
+            using var connection = new SqliteConnection(new SqliteConnectionStringBuilder
+            {
+                DataSource = Path.Combine(first, "index.sqlite"),
+                Pooling = false
+            }.ToString());
             connection.Open();
             using var command = connection.CreateCommand();
             command.CommandText = "select count(*) from facts where rule_id = $rule and fact_type = $type and source_symbol is not null and target_symbol is not null";
@@ -431,6 +518,16 @@ public sealed class SourceMetadataReconciliationTests
         {
             temp.Delete(recursive: true);
         }
+    }
+
+    private static string FixtureAssemblyPath(string source, string fileName)
+    {
+        var configuration = System.Reflection.CustomAttributeExtensions.GetCustomAttribute<System.Reflection.AssemblyConfigurationAttribute>(
+            typeof(SourceMetadataReconciliationTests).Assembly)?.Configuration;
+        Assert.False(string.IsNullOrWhiteSpace(configuration));
+        var path = Path.Combine(source, "bin", configuration!, "net10.0", fileName);
+        Assert.True(File.Exists(path), path);
+        return path;
     }
 
     private static ScanResult ScanBound(string sourceRepo, IReadOnlyList<string> assemblies)

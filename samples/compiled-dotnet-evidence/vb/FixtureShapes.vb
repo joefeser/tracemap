@@ -106,3 +106,164 @@ Namespace TraceMap.CompiledFixtures.VisualBasic.Il
         End Function
     End Module
 End Namespace
+
+Namespace TraceMap.CompiledFixtures.Equivalence
+    Public NotInheritable Class SharedShape
+        Public Shared Function [Select](value As Integer) As Integer
+            Return value
+        End Function
+        Public Shared Function [Select](value As String) As String
+            Return value
+        End Function
+        Public Shared Function Reference(ByRef value As Integer) As Integer
+            Return value
+        End Function
+        Public Shared Function Echo(Of T)(value As T) As T
+            Return value
+        End Function
+        Public Shared Function Echo(Of TLeft, TRight)(value As TLeft) As TLeft
+            Return value
+        End Function
+        Public Shared Function Rank(value As Integer()) As Integer()
+            Return value
+        End Function
+        Public Shared Function Rank(value As Integer(,)) As Integer(,)
+            Return value
+        End Function
+    End Class
+End Namespace
+
+Namespace TraceMap.CompiledFixtures.Equivalence
+    Public NotInheritable Class AccessorShape
+        Public Property Value As Integer
+        Public ReadOnly Property Snapshot As Integer
+            Get
+                Return Value
+            End Get
+        End Property
+        Public Custom Event Changed As System.EventHandler
+            AddHandler(value As System.EventHandler)
+            End AddHandler
+            RemoveHandler(value As System.EventHandler)
+            End RemoveHandler
+            RaiseEvent(sender As Object, e As System.EventArgs)
+            End RaiseEvent
+        End Event
+        Public Function get_Unbound() As Integer
+            Return 0
+        End Function
+    End Class
+
+    Public NotInheritable Class OptionShape
+        Public Shared Function NullableRoundtrip(value As Integer?) As Integer?
+            Return value
+        End Function
+    End Class
+
+    Public NotInheritable Class OptionalShape
+        Public Shared Function Required(value As Integer) As Integer
+            Return value
+        End Function
+        Public Shared Function OptionalSeven(Optional value As Integer = 7) As Integer
+            Return value
+        End Function
+        Public Shared Function OptionalNine(Optional value As Integer = 9) As Integer
+            Return value
+        End Function
+        Public Shared Function Wide(Optional p0 As Integer = 0, Optional p1 As Integer = 0,
+            Optional p2 As Integer = 0, Optional p3 As Integer = 0, Optional p4 As Integer = 0,
+            Optional p5 As Integer = 0, Optional p6 As Integer = 0, Optional p7 As Integer = 0,
+            Optional p8 As Integer = 0, Optional p9 As Integer = 0, Optional p10 As Integer = 0) As Integer
+            Return p10
+        End Function
+    End Class
+End Namespace
+
+Namespace TraceMap.CompiledFixtures.Equivalence
+    Public NotInheritable Class ConstraintShape
+        Public Shared Function Free(Of T)(value As T) As T
+            Return value
+        End Function
+        Public Shared Function Reference(Of T As Class)(value As T) As T
+            Return value
+        End Function
+        Public Shared Function Value(Of T As Structure)(input As T) As T
+            Return input
+        End Function
+        Public Shared Function Construct(Of T As New)(value As T) As T
+            Return value
+        End Function
+        Public Shared Function Disposable(Of T As System.IDisposable)(value As T) As T
+            Return value
+        End Function
+    End Class
+End Namespace
+
+Namespace TraceMap.CompiledFixtures.Equivalence
+    Public NotInheritable Class DefaultShape
+        Public Shared Function Required(value As Integer) As Integer
+            Return value
+        End Function
+        Public Shared Function IntSeven(Optional value As Integer = 7) As Integer
+            Return value
+        End Function
+        Public Shared Function IntNine(Optional value As Integer = 9) As Integer
+            Return value
+        End Function
+        Public Shared Function Text(Optional value As String = "seven") As String
+            Return value
+        End Function
+        Public Shared Function NullText(Optional value As String = Nothing) As String
+            Return value
+        End Function
+        Public Shared Function DecimalSeven(Optional value As Decimal = 7D) As Decimal
+            Return value
+        End Function
+    End Class
+End Namespace
+
+Namespace TraceMap.CompiledFixtures.Equivalence
+    Public Interface ISharedFormatter
+        Function Format(value As String) As String
+    End Interface
+    Public NotInheritable Class ExplicitShape
+        Implements ISharedFormatter
+        Public Function Format(value As String) As String
+            Return "ordinary:" & value
+        End Function
+        Private Function FormatContract(value As String) As String Implements ISharedFormatter.Format
+            Return "explicit:" & value
+        End Function
+    End Class
+End Namespace
+
+Namespace TraceMap.CompiledFixtures.Equivalence
+    Public NotInheritable Class OperatorShape
+        Public Shared Operator +(left As OperatorShape, right As OperatorShape) As OperatorShape
+            Return left
+        End Operator
+        Public Shared Widening Operator CType(value As Integer) As OperatorShape
+            Return New OperatorShape()
+        End Operator
+        Public Shared Narrowing Operator CType(value As OperatorShape) As Integer
+            Return 0
+        End Operator
+        Public Shared Function op_LooksLikeOperator(left As OperatorShape, right As OperatorShape) As OperatorShape
+            Return right
+        End Function
+    End Class
+End Namespace
+
+Namespace TraceMap.CompiledFixtures.Equivalence
+    Public Module ModuleShape
+        Public Function Curried(left As Integer, right As Integer) As Integer
+            Return left + right
+        End Function
+        Public Function Tupled(left As Integer, right As Integer) As Integer
+            Return left + right
+        End Function
+        Public Function Renamed(value As Integer) As Integer
+            Return value
+        End Function
+    End Module
+End Namespace
