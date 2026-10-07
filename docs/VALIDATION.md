@@ -194,6 +194,7 @@ Current default behavior:
 
 - checks `git`, `.NET`, `node`, and `npm`
 - builds the .NET solution and TypeScript adapter
+- restores the checked-in .NET sample projects before scanning; the endpoint server uses the real ASP.NET framework reference so the positive path does not depend on an unresolved-attribute fallback
 - scans `samples/modern-sample`
 - scans `samples/endpoint-server-aspnet`
 - scans `samples/typescript-modern-sample`
