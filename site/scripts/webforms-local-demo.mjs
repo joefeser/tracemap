@@ -176,7 +176,11 @@ function validateBoundary({ html, implementationState, repositoryRoot, errors })
     return;
   }
   if (pageBase !== recordedBase) errors.push("Web Forms local demo page boundary does not match the implementation record.");
-  if (gitCommitExists(repositoryRoot, pageBase) && !gitIsAncestor(repositoryRoot, pageBase, "HEAD")) errors.push("Web Forms local demo implementation base exists locally but is not an ancestor of the validation checkout.");
+  if (!gitCommitExists(repositoryRoot, pageBase)) {
+    errors.push("Web Forms local demo implementation base cannot be resolved as a commit.");
+    return;
+  }
+  if (!gitIsAncestor(repositoryRoot, pageBase, "HEAD")) errors.push("Web Forms local demo implementation base exists locally but is not an ancestor of the validation checkout.");
   if (!gitCommitExists(repositoryRoot, repair803Sha)) {
     if (recordedRepairState !== "not-shipped" || pageRepairState !== "not-shipped") errors.push("Web Forms local demo cannot verify an affirmative #803 shipped claim without the repair commit.");
     return;

@@ -187,6 +187,18 @@ function validateClaimRows(html, errors) {
     const evidenceStatus = getAttribute(row.attributes, "data-evidence-status");
     const wordingStatus = getAttribute(row.attributes, "data-wording-status");
 
+    const cells = [...row.body.matchAll(/<td\b[^>]*>([\s\S]*?)<\/td>/gi)].map((match) => match[1]);
+    if (cells.length !== 7) {
+      errors.push(withEvidence(`Roadmap claim ledger row ${id ?? "(missing id)"} must contain seven visible cells.`, "roadmap/index.html"));
+    } else {
+      for (const [index, label, expected] of [[1, "claim level", claimLevel], [2, "evidence status", evidenceStatus], [6, "wording status", wordingStatus]]) {
+        const codes = [...cells[index].matchAll(/<code\b[^>]*>([\s\S]*?)<\/code>/gi)].map((match) => normalizeRenderedText(match[1]));
+        if (codes.length !== 1 || codes[0] !== expected) {
+          errors.push(withEvidence(`Roadmap claim ledger row ${id ?? "(missing id)"} displayed ${label} does not match its metadata.`, "roadmap/index.html"));
+        }
+      }
+    }
+
     if (!id) {
       errors.push(withEvidence("Roadmap claim ledger row is missing a stable id.", "roadmap/index.html"));
     } else if (ids.has(id)) {
@@ -276,8 +288,8 @@ function requireSetCoverage({ errors, label, required, seen }) {
 }
 
 function extractRows(html, marker) {
-  const pattern = new RegExp(`<tr\\b(?=[^>]*\\b${escapeRegExp(marker)}\\b)([^>]*)>[\\s\\S]*?<\\/tr>`, "gi");
-  return [...html.matchAll(pattern)].map((match) => ({ attributes: match[1] }));
+  const pattern = new RegExp(`<tr\\b(?=[^>]*\\b${escapeRegExp(marker)}\\b)([^>]*)>([\\s\\S]*?)<\\/tr>`, "gi");
+  return [...html.replace(/<!--[\s\S]*?-->/g, "").matchAll(pattern)].map((match) => ({ attributes: match[1], body: match[2] }));
 }
 
 function extractHrefs(html) {

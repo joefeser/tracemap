@@ -22,11 +22,16 @@ Site tests/build/validation, CLI scan/artifact validation, artifact-validator te
 privacy guard, desktop/mobile checks and all three non-.NET local suites passed.
 The Python endpoint smoke retained its expected reduced coverage. The initial
 full .NET run overlapped CLI rebuilds and failed two Web Forms cases; all six
-focused cases pass in isolation. Full demo and clean-assets demo/combined-smoke
+focused cases pass in isolation. The complete isolated suite then passed
+3,432/0/1 at `001f1de3` in 19m40s; hosted .NET independently passed. Full demo and clean-assets demo/combined-smoke
 runs pass. See the audit for the diagnostic limits.
 
-Delivery requires a complete isolated .NET run, current-head public CI and live
-ACK. Their final results belong in the integration PR, which is the delivery
+Review repair adds claim-cell/metadata agreement, explicit unresolved-base gaps
+and LF checkout preservation for the exact-hashed site generator. Published
+ancestry was independently verified through GitHub; both source pins are parents
+of the integration merge. The existing alias-input rejection remains intact.
+
+Delivery requires current-head public CI and live ACK. Their final results belong in the integration PR, which is the delivery
 status authority; this note is the implementation checkpoint. Pinned OSS smokes
 and private Windows/MSVC work remain explicitly deferred. Preserve sibling
 worktrees and the primary checkout's unrelated edits.
