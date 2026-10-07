@@ -864,3 +864,41 @@ This is metadata and original IL evidence only. Source ownership, PDB occurrence
 rewritten identity, runtime collection/conversion equivalence, F# source extraction,
 private corpus and C++/CLI acceptance remain unproven. Existing VB late-bound
 source tests are separate evidence. Broad #767/#759 remain open.
+
+## VB late-bound helper and source-gap continuation
+
+`LateBindingMatrix.vb` uses file-local `Option Strict Off`; the fixture project
+keeps Option Strict On. `ReadFirst(Object)` and `ReadSecond(Object)` call named
+members on unknown receivers. `ReadDirect(LateBindingTarget)` is the typed control.
+All return Object. `IlBodyEvidenceExtractorTests.LateBinding.cs` independently
+checks raw SRM MethodDef/MemberRef signatures and scopes, framework-decoded IL
+operands and Cecil tokens/strings. Nothing executes these fixture methods.
+
+| Requirement | Evidence | Remaining gap | Host/toolchain |
+| --- | --- | --- | --- |
+| #769 corpus dimensions | Public runway/minimized fixtures | Authorized historical catalog and private receipts | Isolated Windows/private access |
+| #767 VB late-bound gaps | Exact source spans, Tier3 name-only calls and Tier4 CallSiteSemanticResolutionUnavailable gaps; typed control retains Tier1 call | Actual runtime receiver/overload selection, argument/copy-back variants | Public .NET 10 SDK |
+| #767 compiled contrast | LateGet MemberRef versus typed First MethodDef; complete seven-parameter helper signature | Other late-binding helpers, C# dynamic dispatch | Public .NET 10 SDK |
+| #766 original IL | Independent ldstr tokens; string-only mutation changes body hash without changing the encoded helper target | Source-to-binary binding, PDB and rewrite joins, runtime behavior | Public .NET/IL tools |
+| #768 Windows | Public CI and guarded lane contract | Historical corpus/C++/CLI acceptance | Authorized Windows/MSVC |
+
+The compiler emits `Microsoft.VisualBasic.CompilerServices.NewLateBinding.LateGet`
+from Microsoft.VisualBasic.Core 15.0.0.0 with parameters Object, System.Type,
+String, Object[], String[], Type[], Boolean[]. The method-name strings are
+operands, not metadata identities. Both late-bound bodies contain exactly one
+encoded helper call; they must not acquire a call to the locally declared
+First/Second methods through name similarity. The typed control instead encodes
+the exact local First MethodDef. Equal opcode streams still have different
+operand-preserving body hashes. A data-only string-token replacement also pins
+this distinction within the same method.
+
+Assertions retain rule/tier, endpoint, source span or metadata location,
+commit/extractor version, and compiled generator/bounded/raw/binding input hashes.
+Source gaps and compiled observations remain separate: unbound input does not
+create source/metadata reconciliation. The existing source gap's diagnostic
+category is not proof of toolchain failure; the fixture build succeeds.
+Duplicate inputs retain separate locators/ambiguity; wrong-table helper tokens
+and exhausted work budgets retain explicit gaps without positive IL facts.
+Repeat scans preserve facts and provenance. No production rule/schema or new
+machine-readable artifact is introduced. Broad #767/#759, F# source extraction,
+private corpus, runtime, PDB and rewrite acceptance remain open.

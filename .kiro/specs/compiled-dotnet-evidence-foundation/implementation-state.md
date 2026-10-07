@@ -1,3 +1,57 @@
+# Current continuation: #767 VB late-bound source gaps and helper IL
+
+Branch `codex/767-late-bound-il-matrix`, fresh origin/dev base
+`cc15f276f3aac34309c7cd1a0bbc763d167b667a` (#838 merged), target dev. Read AGENTS,
+fetched main/dev and reconciled issues/comments, current code/specs and open PRs.
+No open PR or competing late-binding worktree. Preserve primary Base44 dirty
+files and other worktrees; exclude main-only site changes. Acceptance matrix is
+in the late-binding validation continuation. Prior #838 Windows wizard failures
+remain unresolved intermittent evidence despite its passing rerun; no repair here.
+
+Implemented one public VB fixture with file-local Option Strict Off, two unknown
+receiver calls and one typed control. Five regression cases pin independent raw
+SRM/framework-opcode/Cecil signatures, scoped helper/MethodDef targets, string
+operands, exact source gaps/tiers/spans, full compiled provenance, a data-only
+string substitution, duplicate identities, malformed helper operands, bounded work
+and repeatability. No production rule/schema or new derived machine-readable
+artifact. Fixture/malformed bytes are never executed. The source gap hashes the
+member expression (value.First), not the invocation's parentheses.
+
+Validation: SDK 10.0.302 locked restore; build zero warnings/errors; focused 5/5
+with warnings as errors. Surrounding suite 461/461 with zero failures/skips. Two validated CLI repeats
+emit 1,672 facts and three exact method/body/call chains (two helpers); facts/report
+bytes match. Artifact
+validator 7/7 (existing SQLite ResourceWarning); privacy and Kiro guards pass.
+Final-head full .NET/public cross-platform CI and live ACK required. Duplicate
+full local .NET, non-.NET local suites and pinned source OSS smokes explicitly
+deferred for this fixture/test-only slice.
+
+Commands (logs `/tmp/tracemap-late-*`):
+
+```sh
+dotnet restore src/dotnet/TraceMap.sln --locked-mode
+dotnet build src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore -warnaserror
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore -warnaserror --filter FullyQualifiedName~Late_binding_matrix
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-build --no-restore --filter 'FullyQualifiedName~ManagedMetadataExtractorTests|FullyQualifiedName~SourceMetadataReconciliationTests|FullyQualifiedName~PortablePdbExtractorTests|FullyQualifiedName~IlBodyEvidenceExtractorTests|FullyQualifiedName~IlRewrite|FullyQualifiedName~VisualBasicExtractionTests'
+python3 scripts/test_validate_adapter_artifacts.py
+./scripts/check-private-paths.sh
+node scripts/kiro-review.mjs --self-test
+git diff --check
+```
+
+Two CLI repeats use new temporary outputs and the absolute public VB assembly:
+
+```sh
+dotnet run --project src/dotnet/TraceMap.Cli --no-build -- scan --repo samples/compiled-dotnet-evidence/vb --out "$smoke_output" --il-body-evidence --compiled-input "$PWD/samples/compiled-dotnet-evidence/vb/bin/Debug/net10.0/CompiledEvidence.VisualBasic.dll"
+python3 scripts/validate-adapter-artifacts.py "$smoke_output"
+```
+
+Next: bounded PR/live ACK (verified 0.5.5 stable, ab39833, distFresh=true;
+lane capabilities satisfied). Runtime targets, overload/copy-back variants, other
+helpers, source-binding/PDB/rewrite joins and ref-like signatures remain open.
+No F# source inference. Authorized private corpus/Windows/MSVC access remains
+unavailable/uninvoked; this public slice requires neither. Keep broad issues open.
+
 # Current continuation: #767 collection indexers and conversion IL
 
 Branch `codex/767-collection-indexer-matrix`, clean worktree from fresh origin/dev
