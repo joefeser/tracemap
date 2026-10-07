@@ -4496,3 +4496,19 @@ guards. Full local solution and final-head public CI are required. Non-.NET loca
 suites and pinned source OSS smoke reruns are explicitly deferred for this
 fixture/test-only slice. The gated Windows deep-corpus test remains a documented
 local skip; public Windows CI is not private Windows/MSVC acceptance.
+
+### Duplicate narrowing IL retention (#767, follow-up to #844)
+
+Use the narrowing focused command and full local solution command above. The
+seven-case matrix now requires both narrowing/control bodies and calls for each
+of two input locators; sixteen missing/misattributed-fact counterexamples must
+fail its assertions. Reversed compiled-input order must preserve facts and IL
+provenance. Existing compiler refusal, malformed PE and work-limit cases remain.
+
+CLI smoke: scan the public VB fixture with its original assembly and a temporary
+byte-identical copy, then reverse the two `--compiled-input` arguments. Validate
+both outputs, both per-input NarrowingMatrix bodies/calls, ambiguity gaps, no
+source reconciliation, and identical facts/report bytes. Run artifact-validator,
+privacy/spec/whitespace guards and final-head public CI. Non-.NET local and pinned
+source OSS smokes are deferred for this assertion-only change. The gated Windows
+deep-corpus local skip and private Windows/MSVC acceptance remain explicit gaps.

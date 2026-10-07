@@ -228,3 +228,9 @@ slices and require an implementation-state update before work begins.
   control, duplicate/malformed/work-limit gaps, applicable provenance and
   deterministic repeats. Late-bound configuration, runtime overflow behavior,
   source/PDB/rewrite joins and broad acceptance remain open.
+
+- [x] 37. Bounded #767 duplicate narrowing retention repair after #844:
+  independently checked per-input member/body/call identities and provenance for
+  both narrowing and Integer controls; sixteen missing/wrong-locator evidence
+  counterexamples, exact per-input ambiguity gaps and reverse-order determinism.
+  Compiler refusal/malformed/limit cases retained; no engine/schema change.

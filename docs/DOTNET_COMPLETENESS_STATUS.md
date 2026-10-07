@@ -1,5 +1,14 @@
 # .NET Evidence Completeness Status
 
+## Duplicate narrowing IL retention (2026-10-07)
+
+PR #844 merged at `e5de6a4b`; Codex later completed clean, but the reviewed
+per-input IL assertion gap remained in the merged duplicate test. This bounded
+#767 follow-up requires both body and call evidence for each input, rejects
+omitted/misattributed facts, and pins reverse-order determinism. See the
+[retention matrix](validation/CLR_SIGNATURE_EQUIVALENCE_MATRIX.md#duplicate-narrowing-input-retention).
+Late-bound configuration and broader private Windows/identity acceptance remain open.
+
 ## VB narrowing and Option Strict (2026-10-07)
 
 PR #843 merged at `37552ae3`, delivering overload selection/ambiguity evidence.
