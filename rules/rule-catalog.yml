@@ -124,13 +124,14 @@ rules:
 
   - id: dotnet.compiled.member.v1
     name: Managed type and member metadata identity
-    description: Records exact metadata identities for types, methods, constructors, fields, properties, and events with full signatures and module-local token locations.
+    description: Records exact metadata identities for types, methods, constructors, fields, properties, and events with full signatures and module-local token locations; method and property optional-parameter ordinals require independent Cecil/SRM agreement.
     evidenceTier: Tier2Structural
     emits: [ManagedTypeDeclared, ManagedMethodDeclared, ManagedFieldDeclared, ManagedPropertyDeclared, ManagedEventDeclared, AnalysisGap]
     limitations:
       - A metadata declaration does not prove source ownership, runtime execution, dispatch, reachability, behavior, build freshness, or impact.
       - Metadata tokens are module-local locations and are never stable cross-build identities by themselves.
       - Compiler-generated labels report metadata attributes or shapes only and do not establish a relationship to a source construct.
+      - Optional-parameter ordinals are zero-based metadata markers, not signature identity, default constant values, caller argument substitution, F# option semantics, or complete API equivalence. Disagreement withholds the disputed member even when signature identities agree; setter-only property ordinals exclude the setter value parameter and respect sparse Param rows.
 
   - id: dotnet.compiled.gap.v1
     name: Compiled metadata coverage gap
@@ -3160,6 +3161,7 @@ rules:
     emits:
       - WebFormsInlineServerExpressionReferenceCandidate
     limitations:
+      - C# string and character literal text, interpolated text and format clauses are masked using Roslyn expression syntax; interpolation expressions remain candidate evidence, not semantic binding. VB literal masking follows VB quote escaping.
       - Supported expressions are limited to `<%=` render expressions and `<%#` data-binding expressions containing a qualified identifier chain. Code blocks, directives, helper indirection, imports, aliases, generics, indexers, invocations with complex syntax, and dynamic expressions remain outside this bounded join.
       - Resolution requires exactly one repository declaration site for the longest qualified type-name prefix. Visual Basic-linked pages compare identifiers case-insensitively; unresolved or ambiguous references do not emit a positive candidate.
       - A retained candidate proves only the markup span and unique repository declaration. It does not prove ASP.NET dynamic compilation, member binding, expression execution, rendered output, or runtime reachability.
@@ -3196,6 +3198,7 @@ rules:
       - webforms-modernization-packet.v1
       - AnalysisGap
     limitations:
+      - Client and server behavior inventories each retain at most 10000 rows in deterministic order; omitted rows emit WebFormsModernizationClientBehaviorLimitReached or WebFormsModernizationServerBehaviorLimitReached and mark truncation, not complete behavior coverage.
       - Path evidence requires a paired upstream scan and commit identity; missing node or edge provenance is omitted with a gap, never filled with a different primary snapshot commit.
       - A combined index may contain one or more provenance-recorded sources; a single-source combine is not multi-repository coverage. Zero source rows and missing or ambiguous primary Web Forms source identity remain errors.
       - Combined graph fact, edge, node, or text admission limits retain bounded inventory and source provenance but emit a Tier4 input-limit gap with reduced coverage and truncation; no paths or downstream boundaries are classified from the incomplete graph.
@@ -4311,6 +4314,8 @@ rules:
       - ProjectDeclared
       - TargetFrameworkDeclared
       - PackageReferenced
+      - CentralPackageVersionDeclared
+      - PackageProduced
       - AnalysisGap
     limitations:
       - XML files that cannot be parsed are still inventoried but do not emit project metadata facts.
@@ -4319,7 +4324,8 @@ rules:
       - packages.lock.json rows are checked-in lockfile metadata only; the direct/transitive relation comes from the lockfile's own type field and never from package presence alone.
       - NuGet packages.lock.json carries no registry artifact digest; its contentHash is package-content metadata and is never emitted as artifactDigest, so exact-artifact matching is unavailable for NuGet evidence.
       - packages.lock.json extraction is offline and deterministic; restore, dependency solving, package-manager execution, and network access are out of scope, and malformed, unsupported, truncated, or unsafe lockfile shapes emit analysis gaps.
-      - Central package management, imported props/targets, and unresolved property interpolation may reduce package metadata precision.
+      - PackageProduced facts are static project-file declarations (PackageId/AssemblyName + Version properties) and prove intent to produce, never a built/published artifact; IsPackable=false projects and unsafe ids are skipped (unsafe VERSIONS are emitted as unevidenced — version absent — never projected); the AssemblyName fallback applies to SDK-style projects only and carries packageIdSource=AssemblyName so consumers can weigh it as a weaker claim; property values are read from PropertyGroup scope only, with last-IsPackable-wins and Version outranking PackageVersion regardless of XML order.
+      - Central package management pins (PackageVersion items in Directory.Packages.props and equivalent props files) are indexed as CentralPackageVersionDeclared facts in their own file, and explicit per-project VersionOverride pins ride PackageReferenced facts as versionOverride; the EFFECTIVE version (override > central > project) is a consumer-side derivation and is never asserted here. Imported props/targets and unresolved property interpolation may still reduce package metadata precision.
 
   - id: csharp.syntax.memberaccess.v1
     name: C# syntax member access
@@ -5004,6 +5010,7 @@ rules:
     emits:
       - BuildEnvironmentDiagnostic
     limitations:
+      - Explicit project-scope language exclusions are informational scope diagnostics, not toolchain failures; document extractor failures remain semantic coverage reductions with extractor-defect guidance and redacted exception details.
       - Workspace diagnostics are sanitized categories and do not include raw native output, local paths, private repository names, remotes, package sources, config values, credentials, or source snippets.
       - Categories explain why semantic coverage was reduced; they do not prove runtime compatibility or absence of repository evidence.
       - Syntax, config, SQL, WCF, and WebForms fallback facts remain valid within their own evidence tiers.

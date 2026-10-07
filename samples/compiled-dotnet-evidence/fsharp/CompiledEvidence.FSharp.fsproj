@@ -4,8 +4,15 @@
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
     <DebugType>portable</DebugType>
     <Deterministic>true</Deterministic>
+    <!-- The option signature goldens include the FSharp.Core assembly scope. -->
+    <FSharpCoreImplicitPackageVersion>10.1.302</FSharpCoreImplicitPackageVersion>
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="FixtureShapes.fs" />
+    <Compile Include="RecordMatrix.fs" />
+    <Compile Include="UnionMatrix.fs" />
+    <Compile Include="QuotationMatrix.fs" />
+    <Compile Include="EventWiringMatrix.fs" />
+    <Compile Include="CollectionMatrix.fs" />
   </ItemGroup>
 </Project>

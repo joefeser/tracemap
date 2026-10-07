@@ -1,0 +1,1078 @@
+# Public CLR method-signature matrix
+
+Tracking: #767, under #759. This is a bounded public fixture slice, not complete
+language equivalence or completion of either issue.
+
+## Comparison contract
+
+All three fixture assemblies declare
+`TraceMap.CompiledFixtures.Equivalence.SharedShape`. The common name is a
+collision sentinel, not an identity join. The tests compare only the complete
+`signature` property of `dotnet.compiled.member.v1` method facts after the
+Mono.Cecil and System.Reflection.Metadata readers agree. Each signature has a
+hand-authored golden, including calling convention, instance flags, method
+generic arity, return type and parameter types. No production formatter is
+used to manufacture the expected strings.
+
+Every matching triplet must retain three distinct assembly identities,
+member endpoint identities and fact IDs. Assertions retain scan commit,
+extractor ID/version, metadata token/location, the non-source `1..1` span,
+rule, tier, limitation, exact extractor DLL SHA-256 and bounded-input SHA-256.
+Inputs are deliberately unbound: scan commit is not binary-source provenance.
+No source/PDB/IL/rewrite relationship is inferred. F# source extraction remains
+unsupported. Signatures do not capture complete member semantics (for example,
+attributes, optional defaults or generic constraints), and do not prove runtime
+behavior, interchangeable APIs or cross-build identity.
+
+## Executable cases
+
+Sources are the `FixtureShapes.cs`, `FixtureShapes.vb`, and `FixtureShapes.fs`
+files under `samples/compiled-dotnet-evidence/`. All methods below are static;
+C# `static`, VB `Shared`, and F# `static member` share that CLR shape.
+
+| Case | Source construct in C# / VB / F# | Expected signature shape | Counterexample / non-claim |
+| --- | --- | --- | --- |
+| CLR-SIG-001 | `Select(int)` / `Select(Integer)` / `Select(int)` | `(Int32) -> Int32`, arity 0 | Distinct from string overload and byref parameter |
+| CLR-SIG-002 | String overload of `Select` | `(String) -> String`, arity 0 | Same method name does not collapse overloads |
+| CLR-SIG-003 | `ref int` / `ByRef Integer` / `byref<int>` | `(Int32&) -> Int32`, arity 0 | Not a value parameter; no aliasing/runtime claim |
+| CLR-SIG-004 | `Echo<T>` / `Echo(Of T)` / `Echo<'T>` | `(!!0) -> !!0`, arity 1 | Generic parameter name is not identity |
+| CLR-SIG-005 | `Echo<TLeft,TRight>` and counterparts | `(!!0) -> !!0`, arity 2 | Same parameter/return types still differ by method arity |
+| CLR-SIG-006 | `int[]` / `Integer()` / `int[]` overload of `Rank` | Vector input/return | Not rectangular array identity |
+| CLR-SIG-007 | `int[,]` / `Integer(,)` / `int[,]` overload | Rank 2, no sizes, lower bounds `0,0` | Shape is metadata encoding, not observed array bounds |
+| CLR-SIG-008–010 | Duplicate C#, VB, F# assembly at a second locator | `AmbiguousDuplicateManagedAssembly`, Tier4 | No unique source binding; declarations are still observations |
+| CLR-SIG-011 | Each assembly truncated to 64 header bytes | `MalformedManagedInput`, Tier4; no method facts | Data-only read, never load or execute |
+| CLR-SIG-012 | Each assembly with member limit 1 | `ManagedInputMemberCountLimitExceeded`, Tier4; no method facts | Rejection is partial coverage, not absence |
+
+Positive cases use `dotnet.compiled.member.v1`, `Tier2Structural`. Rejections
+use `dotnet.compiled.gap.v1`, `Tier4Unknown`, with input locators and the same
+provenance envelope. The repeat test reverses input order and requires identical
+serialized provenance and facts. No new derived machine-readable format or
+checked-in generated golden is introduced; emitted facts retain the existing
+exact-generator and bounded-input digest contract.
+
+## Commands and lanes
+
+```sh
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter 'FullyQualifiedName~Clr_signature' -warnaserror
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter 'FullyQualifiedName~ManagedMetadataExtractorTests' -warnaserror
+```
+
+The tests are a partial `ManagedMetadataExtractorTests` class, so the existing
+`local-distribution-validation.yml` metadata filter runs them on Linux, macOS
+and Windows with .NET 10; the full adapter-validation suite also includes them.
+No ILAsm, Windows-only API, private corpus, or runtime loading is needed.
+Source-adapter OSS smokes are deferred for this fixture/test-only change:
+source extraction and production scanner code are unchanged. The full .NET
+suite and CLI artifact smoke guard shared fixture consumers.
+
+## Reconciliation at the fetched integration base
+
+Base: `origin/dev` `9dde9bb5f400221e0d8502b5008d61884596230f`;
+`origin/main` `7f026f5a9b59f9f3f2c1e203f1e8b001fdddc261` (2026-10-05).
+All five issues are open, with no issue comments at reconciliation. No open PR
+was found; existing worktrees contain other scopes. This lane targets `dev`,
+consistent with compiled-evidence PRs #772–#788 and the integration policy.
+
+| Requirement | Delivered implementation/test evidence | Remaining acceptance | Required host/toolchain |
+| --- | --- | --- | --- |
+| #769 dimensions | Corpus runway; Task 11 inventory/selection guards | Deduplicated private catalog, reviewed/minimized representatives, deterministic private/projected receipts | Authorized isolated Windows worker; unavailable to this run |
+| #767 language matrix | Metadata foundation #772; source joins #773; PDB #774; messy fixtures #786/#787; this signature slice | Full reviewed language-specific matrix: optional/defaults, VB event/receiver interactions, F# options/constraints/quotations and targeted generated-member interactions | Public .NET 10 fixtures; no F# source-extraction claim |
+| #766 IL/rewrite | #775–#783: operand-aware bodies, before/after edges, PDB, control-flow/member/topology suites and independent Windows ILAsm/ILDAsm | `IldasmPortablePdbLineOracleUnavailable` still blocks independent portable-PDB line parity; broader acceptance must remain bounded to catalog cases | Portable readers locally; Microsoft ILAsm/ILDAsm on Windows |
+| #768 Windows | #785 runner/guards/feasibility study; #788 separate buildable-fix profile | No passing private bounded receipt; legacy dependencies and deferred native/mixed-mode C++/CLI shapes | Isolated Windows x64, Framework/MSVC; last recorded clean private build lacked pinned PostSharp/SQLite packages |
+| #759 epic | Above merged ancestry is present in both fetched branches | Full child acceptance and private endurance evidence remain incomplete | Both public and authorized private lanes |
+
+Historical status pages describe earlier slices; promotion to main establishes
+ancestry only. The private dependency blocker is the last recorded result from
+#788, not a new inspection or attempted private run. No Windows/private worker
+was invoked for this slice. Tasks 10 and 11 remain unchecked.
+
+## Optional-parameter agreement continuation
+
+Base: `origin/dev` `e9212c53acbdfc83e8dbfc4a83c2272576715db2`, the verified
+merge of #820. Branch: `codex/767-optional-parameter-evidence`. #767 remains
+open; this extends the marker matrix, not default-value or full API equivalence.
+
+`OptionalShape` in each public language fixture supplies a required parameter,
+optional parameters with source defaults 7 and 9, and an eleven-parameter
+optional method. C#/VB use their source optional syntax; F# uses explicit CLI
+`Optional` and `DefaultParameterValue` attributes. This is not F# `?arg` /
+`FSharpOption<T>` source semantics or F# source extraction.
+
+The existing `optionalParameterOrdinals` property is consumed by source
+reconciliation, so equal member identities are insufficient when the readers
+disagree on these markers. `managed-metadata/0.1.3+cecil-0.11.6` compares that
+property before admitting a member. SRM now sorts by numeric sequence number
+before formatting the zero-based ordinals. For a setter-only indexed property,
+it selects Param rows by signature sequence position, excluding the setter
+value even when an index parameter has no Param row. These are additive
+agreement checks; identity encoding and fact schemas are unchanged.
+
+| Case | Input / oracle | Expected evidence / non-claim |
+| --- | --- | --- |
+| CLR-OPT-001 | Required and optional Int32 methods in C#/VB/F# | Equal signature goldens; markers empty versus `0`; three distinct endpoints for each named method |
+| CLR-OPT-002 | Source defaults 7 versus 9 | Both markers are `0`; default-value equality is explicitly unclaimed |
+| CLR-OPT-003 | Eleven optional parameters in each language | Exact `0,1,2,3,4,5,6,7,8,9,10`; no reader disagreement |
+| CLR-OPT-004 | Injected method/property reader observations with equal identities but differing, missing or reordered markers | `CrossCheck` returns the disputed row and `MetadataReaderDisagreement`; identical markers are the positive control |
+| CLR-OPT-005 | Cecil-produced setter-only property, unnamed/unflagged index parameter, optional value | Independent SRM oracle proves only Param sequence 2 exists; property marker is empty, setter method marker is `1` |
+| CLR-OPT-006 | Same property with optional index | SRM proves sequences 1 and 2; property marker is `0`, setter method marker is `0,1` |
+
+The positive fixtures use `dotnet.compiled.member.v1` / Tier2 with exact
+commit, extractor version, metadata locations and generator/input commitments.
+The ordinary disagreement path withholds disputed member rows and emits
+`dotnet.compiled.gap.v1` / Tier4; it cannot invent a source join. The previous
+CLR-SIG-008–012 duplicate, malformed-header and member-limit regressions run
+against the expanded assemblies as well. The prior reversed-input test covers
+byte determinism of all emitted facts, including the new optional methods.
+No new derived machine-readable artifact is introduced.
+
+Regression sequence: both disagreement tests failed on the merged base.
+Enabling the comparison alone then failed the wide-method and sparse-setter
+cases, proving the two SRM normalization defects before repair. The final
+focused optional/signature filter passes 20/20.
+
+```sh
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter 'FullyQualifiedName~Optional_parameter|FullyQualifiedName~Clr_signature' -warnaserror
+```
+
+The existing cross-platform metadata CI filter includes all five added test cases.
+Source-adapter OSS smokes remain deferred because source extraction is
+unchanged; required local adapter checks, full .NET tests and the compiled CLI
+smoke are recorded in the implementation-state note. Windows/private-corpus
+acceptance and the independent ILDAsm PDB oracle remain separate outstanding
+work.
+
+## Bound source optional-marker continuation
+
+Base: `origin/dev` `a0de5398e38982a2ac606e06f102bc4f02a9a036`, the verified
+#821 merge (2026-10-05); main remains `7f026f5a`. No open PR or competing
+source-ordinal worktree was present. Branch: `codex/767-source-optional-ordinals`.
+
+The optional review suggestion on #821 claimed lexical source ordering. Current
+`SourceMetadataIdentityCandidate.OptionalParameterOrdinals` is an integer list;
+`SourceMetadataReconciler` sorts integers before serialization. That suggestion
+requires no production fix. Nine new test cases pin the missing source-join
+coverage. A temporary lexical-sort mutation made all nine fail; the mutation
+was removed. Production identities, rules, schemas and versions are unchanged.
+
+| Requirement / case | Implementation and test evidence | Remaining gap | Host/toolchain |
+| --- | --- | --- | --- |
+| #767 CLR-SRC-OPT-001/002 | Bound C#/VB `OptionalShape` scans join all four methods, including eleven optional ordinals; exact marker goldens and both fact endpoints, source spans, metadata location, rule/tier, commit, versions and hashes | Marker equality does not prove default substitution or runtime behavior; no F# source adapter | .NET 10, portable |
+| CLR-SRC-OPT-003 | Injected out-of-order integer source ordinals normalize numerically and repeat identically | Comparator fixture is not reader-admission evidence | .NET 10 |
+| CLR-SRC-OPT-004–007 | Lexically ordered, missing, duplicated and malformed compiled marker strings refuse joins with `SourceMetadataOptionalParameterMismatch` | Synthetic rejected comparator inputs, not malformed PE coverage | .NET 10 |
+| CLR-SRC-OPT-008/009 | Zero/two compiled candidates refuse joins; summary limit zero retains omission count/hash and input/generator commitments | Summary truncation does not remove the underlying facts or change their evidence | .NET 10 |
+| #769 corpus dimensions | Existing runway/Task 11 guards unchanged | Reviewed private catalog/minimized representatives and repeat receipts remain unproven | Authorized isolated Windows worker unavailable to this run |
+| #766 IL/rewrite | Existing operand-aware and independent-reader suites unchanged | Independent portable-PDB line oracle and broader catalog acceptance remain open | Portable readers plus Windows Microsoft tools |
+| #768 Windows lane | Runner/guards and feasibility study unchanged | No passing private bounded receipt; recorded legacy dependency blockers remain historical | Authorized Windows/.NET Framework/MSVC lane |
+
+The metadata-plus-source test filter now runs in the existing Linux/macOS/Windows
+local-distribution workflow; the full Linux adapter suite also includes these
+cases. Public F# assembly evidence remains separate from source reconciliation.
+No private data, runtime execution or new machine-readable artifact is added.
+
+```sh
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-build --no-restore --filter 'FullyQualifiedName~Optional_source_matrix'
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-build --no-restore --filter 'FullyQualifiedName~ManagedMetadataExtractorTests|FullyQualifiedName~SourceMetadataReconciliationTests'
+```
+
+## Nullable and F# option continuation
+
+Base: `origin/dev` `756368375582a9e0f10cceab18890e9905261b28`, verified #822
+merge; `origin/main` remains `7f026f5a` (2026-10-05). Branch:
+`codex/767-nullable-option-matrix`. No open PR or competing worktree for this
+slice was present. The earlier signature/marker/source-join slices are delivered;
+all five epic issues remain open.
+
+The new public `OptionShape` types compare complete method signatures only.
+Hand-authored goldens name the assembly scopes and instantiated generic types:
+`System.Nullable<Int32>`, `Microsoft.FSharp.Core.FSharpOption<Int32>` and
+`Microsoft.FSharp.Core.FSharpValueOption<Int32>`. The F# fixture pins
+`FSharp.Core` package 10.1.302 (assembly 10.1.0.0), so a compiler SDK update cannot
+silently change the option scope. The System.Runtime reference is 10.0.0.0.
+A different supported reference identity requires an explicit matrix update.
+
+| Case | Source construct / expected evidence | Counterexample or remaining gap | Host/toolchain |
+| --- | --- | --- | --- |
+| CLR-OPTION-001 | C# `int?`, VB `Integer?`, F# `System.Nullable<int>`: equal static roundtrip signatures, three distinct assembly/member/fact identities | Signature equality is not interchangeability or runtime behavior | Public .NET 10 |
+| CLR-OPTION-002 | F# `int option`: exact FSharpOption generic signature | Distinct from Nullable and FSharpValueOption | .NET 10, pinned FSharp.Core |
+| CLR-OPTION-003 | F# `int voption`: exact FSharpValueOption generic signature | Distinct metadata type; no allocation/layout/runtime claim | Same |
+| CLR-OPTION-004 | F# `?value: int`, returned as `int option`: same signature as explicit option roundtrip; empty CLI optional-ordinal list | F# optional source syntax is not a CLI Optional Param flag; different method endpoints remain distinct | Same |
+| CLR-OPTION-005 | Reversed three-assembly input order | Byte-identical provenance and facts, no guessed source edge | Same |
+| CLR-OPTION-006–008 | Each language's expanded assembly copied to a duplicate locator, truncated to a 64-byte header, or admitted with member limit 1 | Explicit duplicate ambiguity, malformed-input and member-limit gaps; duplicate observations are ineligible for source reconciliation | Same; data-only reads |
+| CLR-OPTION-009 | Bound F# scan retains all four OptionShape methods and the existing source-unsupported gap | No source-to-metadata edge; F# source extraction remains unsupported | Same |
+
+Eight new metadata test cases plus the strengthened existing F# source-gap test
+cover these rows. Positive facts require `dotnet.compiled.member.v1` / Tier2,
+exact signature/endpoint, metadata token/location, commit, extractor version,
+exact generator DLL hash and bounded-input hash. Rejections use
+`dotnet.compiled.gap.v1` / Tier4 and the same provenance envelope. Cecil and SRM
+must agree; no assembly is executed. No production extractor, rule, schema or
+identity encoding is changed, and no new machine-readable artifact is added.
+
+| Epic requirement | Delivered evidence | Remaining acceptance | Host/toolchain |
+| --- | --- | --- | --- |
+| #769 corpus dimensions | Existing runway and admission/selection guards | Reviewed private catalog, minimized representatives, deterministic private/projected receipts | Authorized isolated Windows worker unavailable to this run |
+| #767 language matrix | #820 signatures, #821 optional markers, #822 bound C#/VB joins, this nullable/option slice | Defaults/caller semantics, further VB receiver/event and C#/F# generated-member/constraint/quotation interactions | Public .NET fixtures; no F# source claim |
+| #766 IL/PDB/rewrite | Existing operand-aware and independent-reader catalog | Independent portable-PDB line oracle and broader reviewed acceptance | Portable readers; Windows Microsoft tools for oracle |
+| #768 Windows lane | Existing runner, guards, feasibility study; public CI is separate | No passing private bounded receipt; historical legacy dependency blockers remain unverified here | Authorized isolated Windows/.NET Framework/MSVC |
+
+```sh
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter 'FullyQualifiedName~Nullable_option_matrix|FullyQualifiedName~Fsharp_fixture_retains' -warnaserror
+```
+
+The existing portable metadata/source CI filter includes these tests on Linux,
+macOS and Windows. Source-adapter pinned OSS smokes are deferred because this
+slice changes only fixtures/tests and their documentation. Full-suite and CLI
+results are recorded in the spec implementation state.
+
+## Property/event accessor continuation
+
+Base: `origin/dev` `c389b20dfc0fc3865f8faae12d3df74524031980`, verified #823
+merge; main remains `7f026f5a` (2026-10-05). Branch:
+`codex/767-property-event-matrix`. No open PR or competing worktree was found.
+
+Each public language fixture adds `AccessorShape`: a read/write Int32 `Value`,
+getter-only Int32 `Snapshot`, EventHandler `Changed`, and ordinary method
+`get_Unbound`. C# and VB use inert custom events; F# exposes a CLIEvent. VB's
+custom event additionally emits an explicit raiser. These are metadata fixtures,
+not equivalent implementations of event delivery or backing storage.
+
+The test oracle reads Property/Event accessor handles directly with
+System.Reflection.Metadata and locates the corresponding already cross-checked
+TraceMap method facts by assembly-local metadata token. It never infers an
+association from `get_`, `set_`, `add_`, `remove_` or `raise_` name prefixes.
+Both owning member and method retain separate endpoint identities. This is a
+fixture oracle; no new production accessor-edge rule or runtime claim is added.
+
+| Case | Expected evidence | Counterexample / non-claim |
+| --- | --- | --- |
+| CLR-ACCESSOR-001/002 | Matched `Value`/`Snapshot` property signatures across C#/VB/F#, three distinct assembly/member/fact identities per row | Their equal property signatures do not establish equal accessor availability: only Value has a setter |
+| CLR-ACCESSOR-003 | Matched EventHandler event type with exact System.Runtime scope | Equal event type does not imply storage, delivery or raise behavior |
+| CLR-ACCESSOR-004–006 | Raw metadata handles bind two getters, one setter, add/remove and, for VB only, the explicit raiser to exact method facts with golden instance signatures | No method-name association; nil/other accessor sets and unique role handles are asserted |
+| CLR-ACCESSOR-004–006 decoy | Ordinary `get_Unbound` has the same getter-looking signature but no SpecialName flag or property association | A display/name heuristic cannot mint a property edge |
+| CLR-ACCESSOR-007 | Reverse assembly input order | Byte-identical facts and compiled-input provenance |
+| CLR-ACCESSOR-008–010 | Each expanded language assembly duplicated, header-truncated, or member-limited | Explicit ambiguity/malformed/limit gaps; duplicate observations cannot participate in source reconciliation |
+| CLR-ACCESSOR-011 | Bound F# scan retains both properties and event | Existing explicit unsupported-source gap remains; no source identity edge |
+
+Ten new metadata tests plus the strengthened existing F# test cover these rows.
+Assertions retain `dotnet.compiled.member.v1` / Tier2, owner/method endpoints,
+0x17/0x14/0x06 property/event/method tokens, metadata locations, commit,
+extractor version, exact generator DLL hash and bounded-input hash. Rejection
+facts use `dotnet.compiled.gap.v1` / Tier4 and the same provenance envelope.
+No binary is executed, production formatter changed, or new machine-readable
+artifact introduced. The existing portable CI metadata/source filter includes
+all cases on Linux, macOS and Windows.
+
+| Requirement | Delivered evidence | Remaining gap | Required host/toolchain |
+| --- | --- | --- | --- |
+| #769 dimensions | Existing inventory/admission/selection guards | Reviewed private catalog, representatives and repeat receipts remain unproven | Authorized isolated Windows worker unavailable here |
+| #767 language matrix | #820–#823 signatures, markers, joins and options; this accessor matrix | Defaults, constraints, generated-member and VB receiver/event interactions beyond these cases | Public .NET 10; no F# source claim |
+| #766 IL/PDB/rewrite | Existing operand-aware and independent-reader catalog | Independent portable-PDB line oracle and broader reviewed acceptance | Portable readers plus Windows Microsoft tools |
+| #768 Windows lane | Existing runner and feasibility guards; public CI separate | No passing private bounded receipt; recorded legacy dependency blockers not revalidated here | Authorized Windows/.NET Framework/MSVC |
+
+```sh
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter 'FullyQualifiedName~Property_event_matrix|FullyQualifiedName~Fsharp_fixture_retains' -warnaserror
+```
+
+Pinned source-adapter OSS smokes are deferred for this fixture/test-only change.
+All five epic issues and Tasks 10/11 remain open. Exact validation commands and
+results live in the spec implementation state.
+
+## Generic-constraint continuation
+
+Base: verified #824 merge `5adfaeb6fad63ecade0bab29a0fabf682ebd38fa` on
+`origin/dev`; main remains `7f026f5a`. Branch `codex/767-generic-constraint-matrix`.
+No open PR or competing worktree was found; unrelated changes were preserved.
+
+`ConstraintShape` exposes five static identity-shaped generic methods in each
+public C#/VB/F# assembly. All fifteen share the golden method signature
+`arity:1|call:default|hasThis:false|explicitThis:false|(!!0)->!!0`, but their
+constraints differ. Equal signatures do not prove equal instantiation rules.
+
+| Case | Source construct / expected raw CLR evidence | TraceMap evidence and non-claim |
+| --- | --- | --- |
+| CLR-CONSTRAINT-001 | Free: flags 0, no constraint rows | Three distinct assembly/member endpoints with equal signatures |
+| CLR-CONSTRAINT-002 | Reference: flags 4, no constraint rows | Reference constraint is oracle evidence, not a signature component |
+| CLR-CONSTRAINT-003 | Value: C#/VB flags 24 plus System.ValueType; F# flags 8 with no constraint row | Similar source constructs are not identical metadata encodings |
+| CLR-CONSTRAINT-004 | Construct: flags 16, no constraint rows | No object construction or runtime admissibility is tested |
+| CLR-CONSTRAINT-005 | Disposable: flags 0, System.IDisposable constraint | Exact System.Runtime 10.0.0.0 scope and token association |
+| CLR-CONSTRAINT-006 | Fifteen distinct endpoints, one signature shape, reversed input order | Byte-identical facts/provenance; no cross-language identity collapse |
+| CLR-CONSTRAINT-007–009 | Duplicate, truncated and member-limited inputs for each language | Ambiguity, malformed and limit gaps; no eligible duplicate reconciliation |
+| CLR-CONSTRAINT-010 | Bound F# retains all five named method signatures | Explicit unsupported-source gap; no F# source identity edge |
+
+Nine new metadata tests and the strengthened existing F# test cover these rows.
+SRM validates GenericParam owner/index/flags and GenericParamConstraint owner,
+type and assembly scope; Cecil independently reads flags and constraint names.
+Exact assembly-local MethodDef tokens join the oracle observations to TraceMap
+facts from that same input. Facts retain rule `dotnet.compiled.member.v1`, Tier2,
+metadata locations, endpoints, commit, extractor version, exact generator hash
+and bounded-input hash. Rejections retain `dotnet.compiled.gap.v1` / Tier4.
+
+This is a fixture oracle, not a production generic-constraint fact or complete
+constraint-equivalence engine. Generic constraints are not currently included
+in TraceMap's normalized method signatures; this remains a documented coverage
+gap, not a clean constraint comparison. No F# source, PDB, rewritten-body,
+runtime, variance, unmanaged/notnull or static-member constraint claim is made.
+No new machine-readable artifact or production schema/version is introduced.
+
+| Requirement | Implementation/test evidence | Remaining gap | Host/toolchain |
+| --- | --- | --- | --- |
+| #769 dimensions | Existing inventory/admission and synthetic guards | Reviewed private catalog and representative receipts unproven | Authorized Windows/private lane unavailable |
+| #767 language matrix | #820–#824 signatures/options/accessors; current constraint oracle | Production constraint facts, defaults, generated-member and language interactions | Public .NET 10; F# source unsupported |
+| #766 IL/PDB/rewrite | Operand-aware suite and independent reader tests | Broader reviewed matrix and independent PDB line oracle | Portable readers; Windows tools for remaining oracle |
+| #768 Windows | Existing bounded runner and public CI | Passing private bounded receipt and full feasibility acceptance | Authorized Windows/.NET Framework/MSVC unavailable |
+
+Focused command: `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter 'FullyQualifiedName~Generic_constraint_matrix|FullyQualifiedName~Fsharp_fixture_retains' -warnaserror`.
+The existing CI filter includes the new cases on Linux/macOS/Windows. Exact
+validation results and explicit deferrals are in the spec implementation state.
+All epic issues and Tasks 10/11 remain open.
+
+## Default-value continuation
+
+Base: verified #825 merge `74364fe5eb4168757d508a232d59958d21eb73a3` on
+`origin/dev`; main remains `7f026f5a`. Branch `codex/767-default-value-matrix`.
+No open PR or competing worktree was found. Existing worktrees and unrelated
+Base44 changes were preserved.
+
+Six `DefaultShape` methods in each public C#/VB/F# fixture separate parameter
+optionality, Constant-table defaults and attribute-encoded defaults. F# uses
+explicit CLI attributes; this does not establish F# source calling semantics.
+
+| Case | Source/CLR oracle | TraceMap evidence and limitation |
+| --- | --- | --- |
+| CLR-DEFAULT-001 | Required Int32, no Optional/HasDefault flags or Constant row | Empty optional ordinals; no default is distinct from a null default |
+| CLR-DEFAULT-002/003 | Optional Int32 7/9: Constant type Int32, blobs 07000000/09000000 | Equal signatures and optional ordinal 0, distinct endpoints and defaults |
+| CLR-DEFAULT-004 | Optional string seven: exact UTF-16 constant bytes | String signature and optional ordinal 0; no runtime substitution claim |
+| CLR-DEFAULT-005 | Optional null string: NullReference code and four zero bytes | Same string signature, different default; null is not an absent row |
+| CLR-DEFAULT-006 | Decimal 7: Optional flag, no HasDefault/Constant row, exact DecimalConstantAttribute constructor and blob | Decimal signature retains System.Runtime scope; absence of a Constant row is not absence of a default |
+| CLR-DEFAULT-007 | Reversed assembly inputs | Byte-identical facts/provenance; six integer methods retain six endpoints despite equal signature/markers |
+| CLR-DEFAULT-008–010 | Duplicate, header-truncated and member-limited inputs per language | Explicit ambiguity/malformed/limit gaps; no eligible duplicate reconciliation |
+| CLR-DEFAULT-011 | Bound F# retains all six named signatures and optional markers | Explicit unsupported-source gap; no F# source reconciliation edge |
+
+Ten new metadata cases and the strengthened bound F# test cover these rows.
+SRM checks parameter flags, exact Constant parent/type/blob, and decimal
+attribute parent/constructor/scope/blob. Cecil independently checks decoded
+constant values and decimal constructor arguments. Exact MethodDef tokens from
+the same input bind these observations to both single-input and combined-input
+TraceMap facts, with exact token/signature/optional-marker parity asserted.
+The constraint matrix pins the same cross-input invariant. No fixture assembly
+is loaded or executed. All facts retain `dotnet.compiled.member.v1`, Tier2,
+metadata locations, endpoints, commit, extractor version, exact generator and
+bounded-input hashes; rejection facts retain `dotnet.compiled.gap.v1` / Tier4.
+
+Default values are not currently production TraceMap fact properties or method
+identity components. This matrix proves the fixture oracle and explicitly
+retains that production coverage gap; it does not prove complete default-value
+comparison, source-to-default reconciliation, caller behavior, enum/date/floating
+point defaults, arbitrary attributes, PDB/IL/rewrite equivalence or F# source
+support. No production schema, version or new derived artifact is introduced.
+
+| Requirement | Implementation/test evidence | Remaining gap | Host/toolchain |
+| --- | --- | --- | --- |
+| #769 corpus dimensions | Existing inventory/admission and synthetic guards | Reviewed private catalog and representative receipts | Authorized Windows/private lane unavailable |
+| #767 language matrix | #820–#825 signatures/options/accessors/constraints; current default-value oracle | Production default/constraint facts, generated-member and language interactions | Public .NET 10; no F# source claim |
+| #766 IL/PDB/rewrite | Operand-aware and independent-reader suite | Broader reviewed matrix and independent PDB line oracle | Portable readers plus Windows tools |
+| #768 Windows | Existing bounded runner and public CI | Passing private bounded receipt and feasibility acceptance | Authorized Windows/.NET Framework/MSVC unavailable |
+
+Focused command: `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter 'FullyQualifiedName~Default_value_matrix|FullyQualifiedName~Fsharp_fixture_retains' -warnaserror`.
+Existing portable CI includes these cases on Linux, macOS and Windows. Exact
+results and deferrals are in the spec implementation state. All epic issues and
+Tasks 10/11 remain open.
+
+## Explicit-interface continuation
+
+Base: verified #826 merge `b40267b167b46910f6846bb6f0db6e80d8aa58f4` on
+`origin/dev`; main remains `7f026f5a`. Branch `codex/767-explicit-interface-matrix`.
+No competing open PR or active worktree was found; unrelated edits were retained.
+
+Each public assembly declares ISharedFormatter.Format(String) and ExplicitShape
+with an explicit implementation plus an ordinary public Format(String) decoy.
+All three methods have equal normalized signatures but different identities.
+VB names its implementing method FormatContract; C# and F# use the qualified
+interface name. Raw MethodImpl rows, not names, establish the fixture association.
+
+| Case | Expected raw metadata | TraceMap evidence and limitation |
+| --- | --- | --- |
+| CLR-INTERFACE-001 | C# InterfaceImpl/MethodImpl bind the interface declaration to its private explicit method | Exact type/method tokens, qualified method name, virtual/new-slot/final flags; ordinary Format is not the implementing body |
+| CLR-INTERFACE-002 | VB binds Format to differently named FormatContract | Same signature does not collapse declaration, implementation or public decoy |
+| CLR-INTERFACE-003 | F# binds the qualified implementation with virtual/new-slot but no Final flag | Preserve the emitted flag difference; no complete class/dispatch equivalence claim |
+| CLR-INTERFACE-004 | Nine distinct method endpoints/fact IDs across three assemblies with equal signatures | Reversed inputs produce byte-identical facts/provenance |
+| CLR-INTERFACE-005–007 | Duplicate, header-truncated and member-limited inputs in each language | Explicit ambiguity/malformed/limit gaps and no eligible duplicate reconciliation |
+| CLR-INTERFACE-008 | Bound F# retains the declaration, implementation and decoy with exact names/signatures | Unsupported-source gap remains; no F# source edge |
+| CLR-INTERFACE-009 | Single/combined scans reject another assembly's raw hash or an incorrect binding hash, including jointly corrupted fact/outcome raw hashes | Six oracle regressions across all three languages; raw hashes come from the actual fixture bytes |
+
+Thirteen new metadata cases and the strengthened F# test cover these rows. SRM
+checks InterfaceImpl and MethodImpl ownership and raw declaration/body MethodDef
+handles; Cecil independently checks interface and override tokens and flags.
+Single-input and combined-input facts must match exact raw tokens, owning type,
+method name, signature and optional markers. The shared member helper binds each
+fact to the matching input outcome, assembly identity, actual fixture-byte SHA-256
+and per-input binding SHA-256; accessor, constraint and default matrices inherit
+the same check. Their rule/tier, metadata location,
+commit, extractor version, exact generator and bounded-input hashes remain
+asserted (`dotnet.compiled.member.v1` / Tier2; gaps use
+`dotnet.compiled.gap.v1` / Tier4). No binary is loaded or executed.
+
+This is a fixture oracle, not a new production MethodImpl/dispatch edge. It does
+not prove runtime dispatch, generic interface construction, default interface
+methods, PDB/rewritten-body ownership, equivalent class sealing, or F# source
+support. C#/VB classes are sealed; F# is not. No production schema, extractor
+version or new derived artifact is introduced.
+
+| Requirement | Implementation/test evidence | Remaining gap | Host/toolchain |
+| --- | --- | --- | --- |
+| #769 corpus dimensions | Existing inventory/admission and synthetic guards | Reviewed private catalog and representative receipts | Authorized isolated Windows/private lane unavailable |
+| #767 language matrix | #820–#826 signatures/options/accessors/constraints/defaults; current explicit-interface oracle | Generated members and remaining language interactions; production relationship/default/constraint facts | Public .NET 10; F# source unsupported |
+| #766 IL/PDB/rewrite | Operand-aware and independent-reader suite | Broader reviewed matrix and independent PDB line oracle | Portable readers plus Windows tools |
+| #768 Windows | Existing bounded runner and public CI | Passing private bounded receipt and full feasibility acceptance | Authorized Windows/.NET Framework/MSVC unavailable |
+
+Focused command: `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter 'FullyQualifiedName~Explicit_interface_matrix|FullyQualifiedName~Fsharp_fixture_retains' -warnaserror`.
+Existing CI includes these cases on Linux/macOS/Windows. Exact commands, results
+and deferrals are recorded in the spec state. All epic issues and Tasks 10/11
+remain open.
+
+## Operator and conversion continuation
+
+Base: verified #827 merge `c155a35f3ed111f03fd88e2957e0326093a5eb7b` on
+`origin/dev`; main remains `7f026f5a`. Branch
+`codex/767-operator-conversion-matrix`. No competing open PR was found;
+unrelated worktrees and Base44 edits remain untouched.
+
+The public OperatorShape fixtures compile addition, implicit/widening conversion
+from Int32, explicit/narrowing conversion to Int32, and an ordinary source method
+named op_LooksLikeOperator. The latter shares addition's signature but retains
+its own endpoint. F# marks even this ordinary op_-prefixed method SpecialName;
+C#/VB do not. Neither spelling nor that flag establishes operator semantics.
+
+| Case | Expected metadata/source evidence | Non-claim or explicit gap |
+| --- | --- | --- |
+| CLR-OPERATOR-001–003 | Each language has four exact MethodDef tokens, public/static flags, raw return/parameter types and a declared SpecialName expectation | F# decoy flag differs; no runtime invocation or operator resolution claim |
+| CLR-OPERATOR-004 | Corresponding operators retain assembly-scoped self types, twelve distinct method/fact IDs and three distinct canonical signatures per method name | No cross-assembly identity collapse; ordinary decoy is distinct despite equal within-assembly signature |
+| CLR-OPERATOR-005–007 | Duplicate assemblies, truncated PE headers and member-count limit inputs remain explicit gaps in every language | Duplicate declarations are ineligible for reconciliation; rejected inputs produce no selected methods |
+| CLR-OPERATOR-008–009 | C#/VB bound source joins retain source/metadata endpoint identities, fact references, source spans, rule/tier, commit and extractor versions | Receipt-bound declaration joins do not prove runtime conversion behavior |
+| CLR-OPERATOR-010 | F# compiled signatures remain available under a bound scan | F# source reconciliation is unsupported; no guessed edge |
+
+SRM independently reads raw method signature headers, parameter counts, primitive
+type codes and exact self-type handles. Cecil independently checks method/type
+tokens, return/parameter types and flags. Both single and combined TraceMap scans
+must match hand-authored, assembly-scoped signature goldens and exact metadata
+identities/tokens. The shared member evidence helper checks rule/tier, location,
+commit, extractor version, exact generator/bounded-input SHA-256, raw fixture-byte
+hash and per-input binding hash. Reverse input order must yield identical facts
+and provenance. No new derived artifact, production rule/schema/version, IL body,
+PDB association, source operator-classification rule or conversion edge is added.
+Checked/lifted operators, overload resolution and runtime conversions remain open.
+
+| Requirement | Verified implementation/test evidence at base | Remaining acceptance gap | Host/toolchain |
+| --- | --- | --- | --- |
+| #769 corpus dimensions | Historical runway inventory; separate bounded Windows runner | Authorized catalog/minimization and reproducible privacy-projected outputs | Authorized private corpus and isolated Windows toolchain; not invoked |
+| #767 public language matrix | #820–#827 signatures, optional/defaults, nullable/options, accessors, constraints and explicit-interface fixtures; this slice adds operators/conversions | Remaining language interactions and full reviewed matrix; F# source extraction unsupported | .NET SDK 10.0.302 locally; public cross-platform CI |
+| #766 IL/PDB/rewrite suite | Operand-aware identities, independent reader checks and public mutation lanes already merged | Complete reviewed edge matrix and independent PDB parity | Portable .NET plus declared Windows ILAsm/PDB lanes |
+| #768 Windows/private lane | Public Windows CI, bounded runner guards and C++/CLI feasibility inventory | Passing private bounded receipt, corpus endurance and full feasibility acceptance | Existing authorized isolated Windows worker; unavailable here |
+| #759 parent | Separate source/metadata/PDB/IL/rewrite evidence implementations and bounded validations | Child acceptance criteria remain open; merging a slice does not close the epic | Combination of public and authorized private lanes |
+
+## Module and currying continuation
+
+Base: verified #828 merge `6f168354a17a90dd16236105e9b1c366d4b76198` on
+`origin/dev`; main remains `7f026f5a`. Branch `codex/767-module-currying-matrix`.
+No competing open PR was found. Other worktrees and unrelated edits are preserved.
+
+ModuleShape is a C# static class, VB Module, or F# module. All have Curried,
+Tupled and Renamed methods. The C#/VB methods are ordinary static functions;
+only F# has source currying and a tupled source argument. F# CompiledName maps
+lowercase/sourceAlias declarations to the three selected metadata names.
+
+| Case | Expected evidence | Limitation / negative assertion |
+| --- | --- | --- |
+| CLR-MODULE-001 | C# sealed/abstract container; three public static MethodDefs with exact raw signatures, tokens and full identities | Static-class structure does not prove source module semantics |
+| CLR-MODULE-002 | VB sealed/non-abstract container with independently decoded StandardModuleAttribute; same static signatures | Preserve container flag difference; scoped attribute constructor identity and blob checked |
+| CLR-MODULE-003 | F# sealed/abstract container; Curried and Tupled have identical two-Int32 parameter signatures | Only Curried has CompilationArgumentCounts `[1,1]`; CompiledName is consumed; CompilationSourceName independently retains curried, tupled and sourceAlias |
+| CLR-MODULE-004 | Nine distinct method/fact IDs across three assemblies; reversed inputs preserve exact facts/provenance | Signature equality does not collapse endpoints or prove source calling conventions; sourceAlias/lowercase aliases are not guessed metadata members |
+| CLR-MODULE-005–007 | Duplicate assemblies, truncated PE and member-count limits in all three languages | Explicit ambiguity/malformed/limit gaps; duplicate methods ineligible for source reconciliation |
+| CLR-MODULE-008–009 | Bound C#/VB source declarations join exact metadata endpoints | Both evidence envelopes remain; no runtime or F# source claim |
+| CLR-MODULE-010 | Bound F# scan retains all three compiled names/signatures | Unsupported-source gap remains; no production source-name or source-currying edge |
+| CLR-MODULE-011 | Independent C#/VB declaration identities and exact fixture spans for modules, operators and optional parameters | Self-consistent substitutions of another method's source symbol, declaration or span are rejected |
+| CLR-MODULE-012 | Source reconciliation fixtures resolve the running test assembly configuration | Release must work with Debug fixture directories unavailable |
+
+SRM reads exact signature and attribute blobs, parent handles, constructor
+signatures and assembly scopes; Cecil independently checks tokens, flags,
+parameter/return types and decoded argument arrays. FSharp.Core is pinned by the
+fixture package and metadata oracle (assembly 10.1.0.0); the VB attribute scope
+is Microsoft.VisualBasic.Core 15.0.0.0. Single/combined facts require exact full
+assembly/member identities, metadata tokens and golden signatures. The shared
+member helper checks rule/tier, metadata location, commit, extractor version,
+exact generator/bounded-input SHA-256, raw fixture bytes and per-input binding
+hash. Source joins preserve source spans, separate endpoints and binding evidence.
+
+This adds a fixture oracle, not a production module/currying classifier or
+attribute relationship rule. CompilationSourceName retains source aliases in
+metadata, independently decoded by SRM and Cecil. An alias alone does not establish
+a physical source declaration, location or ownership edge. No runtime execution, PDB mapping,
+F# source extraction, schema/version change or new derived artifact is introduced.
+
+| Requirement | Verified implementation/test evidence | Remaining gap | Host/toolchain |
+| --- | --- | --- | --- |
+| #769 corpus | Historical inventory/runway and isolated runner contracts | Private catalog, reviewed minimization and deterministic projected artifacts | Authorized isolated Windows/corpus access; unavailable and uninvoked |
+| #767 language matrix | #820–#828 public signatures, defaults/options/constraints, accessors, explicit interfaces and operators; this slice adds modules/currying | Other language interactions and full reviewed acceptance; no F# source adapter | .NET SDK 10.0.302 locally plus public cross-platform CI |
+| #766 IL/PDB/rewrite | Existing operand-aware evidence, independent readers and public mutation lanes | Broader edge matrix and independent PDB parity | Portable .NET and declared Windows ILAsm/PDB lanes |
+| #768 Windows | Existing public CI and bounded runner guards | Private bounded receipt, endurance and complete C++/CLI acceptance | Authorized private Windows worker |
+| #759 parent | Distinct evidence layers and bounded public validation | All child acceptance criteria remain open | Public and separately authorized private lanes |
+
+## Record-generated member continuation
+
+Branch `codex/767-record-generated-matrix` started at #828 `6f168354`, then
+integrated fresh origin/dev after #829 merged at `874db8a9`. Module/currying
+evidence is now delivered in dev. Main remains `7f026f5a`.
+
+The new `RecordMatrix` public fixtures use a C# sealed positional record, an F#
+record and an ordinary sealed VB class. All expose Count plus object overrides.
+Only selected CLR signatures compare equally; the VB Equals implementation is
+intentionally different. No runtime equality, hashing or formatting is claimed.
+
+| Case | Implementation/test evidence | Boundary |
+| --- | --- | --- |
+| CLR-RECORD-001 | C# Equals(Object), GetHashCode and ToString raw MethodDef signatures and generated attributes | Self-typed Equals and other helpers are separate endpoints |
+| CLR-RECORD-002 | VB ordinary object overrides have the same three signatures without generated markers | Method names/signatures do not imply record semantics |
+| CLR-RECORD-003 | F# record object overrides retain generated markers; raw SRM/Cecil token, flag and return-type agreement | No F# source extraction or runtime claim |
+| CLR-RECORD-004 | Nine separate method/fact IDs; independent full assembly/member identities and reversed-input determinism | Cross-assembly signature equality never merges identities |
+| CLR-RECORD-005–007 | Duplicate, truncated PE and member-limit cases in each language | Explicit ambiguity/malformed/limit gaps; no guessed source eligibility |
+| CLR-RECORD-008 | Bound F# scan retains generated record methods and the unsupported-source gap | Generated metadata does not establish physical source ownership |
+
+The oracle reads raw primitive signature bytes, exact declaring type/method
+handles, public/virtual/instance flags, and CompilerGeneratedAttribute parent,
+constructor signature, assembly scope and value. Cecil independently decodes the
+same bounded public input. Single/combined TraceMap assertions pin exact identity,
+metadata token, signature, marker and optional ordinals. Shared provenance checks
+retain rule ID, tier, metadata location, commit, extractor version, generator hash,
+bounded-input hash and the specific fixture's raw/binding hashes.
+
+No new production rule, schema, golden artifact or extractor version is introduced.
+No fixture is executed. Attributes are structural evidence, not trusted proof of
+source authorship or language origin; the compiler-generated marker is explicitly
+compared against these controlled fixture sources only.
+
+| Requirement | Delivered evidence | Remaining gap | Required host |
+| --- | --- | --- | --- |
+| #769 | Corpus runway and guarded runner contracts | Private dimension catalog, reviewed minimization and repeatable projected output | Authorized isolated Windows corpus lane; unavailable/uninvoked |
+| #767 | Merged signatures/defaults/options/accessors/constraints/interfaces/operators/modules; this record slice | Union/quotation and other targeted generated-member/receiver interactions; full acceptance | Public .NET SDK 10.0.302 plus CI |
+| #766 | Operand-preserving IL, PDB evidence and public rewrite mutations | Broader edge matrix and independent PDB parity | Public .NET/Windows IL tools |
+| #768 | Public Windows CI and private-runner fail-closed guards | Passing private bounded receipt, endurance and full C++/CLI acceptance | Separately authorized private Windows worker |
+| #759 | Distinct evidence layers and bounded fixture suites | Child criteria remain open | Public and private lanes remain separate |
+
+## Union-factory continuation
+
+Base: #830 merge `f77773472691c31764b16fd611a4356a126103f8` on origin/dev;
+main remains `7f026f5a`. Branch `codex/767-union-factory-matrix`. No competing
+open PR or active union lane was found; unrelated worktrees and edits are preserved.
+
+The F# UnionMatrix has Ready and Failed(Int32) cases. C#/VB ordinary classes
+expose similarly named Ready and NewFailed factories. Their self-return types
+are assembly-scoped: similar signature shapes are not equal signatures or union
+semantics. The ordinary factories intentionally do not implement a union.
+
+| Case | Oracle/evidence | Boundary |
+| --- | --- | --- |
+| CLR-UNION-001–003 | Exact declaring type/MethodDef token, static/public flags, raw class-return/Int32 parameter signature, Cecil decoding and single/combined identities for each language | Six endpoints remain distinct; no display-name join |
+| CLR-UNION-004 | F# type mapping SumType (1), case mapping UnionCase (8), factory ordinals Ready=0 and Failed=1; no mapping on C#/VB lookalikes | Independently pin attribute parent, constructor types/scope, blob fields and named-argument count; no runtime tag/dispatch claim |
+| CLR-UNION-005 | Reversed input order preserves byte-identical facts/provenance | Signature scopes and generated markers remain distinct |
+| CLR-UNION-006–008 | Duplicate assemblies, truncated PE and member limits in all languages | Explicit ambiguity/malformed/limit gaps and source-ineligible duplicates |
+| CLR-UNION-009 | Bound F# scan retains both factory signatures and unsupported-source gap | Metadata mapping is not physical source extraction or source ownership |
+| CLR-UNION-010 | Cecil attribute oracle resolves only the declared pinned FSharp.Core asset; wrong version and System.Runtime requests fail | No ambient dependency probing; enum values/underlying type are checked against that asset |
+
+SRM reads the exact factory signatures and attribute blobs; Cecil independently
+reads types, tokens, signatures, markers and decoded constructor arguments.
+The enum-valued mapping attribute requires FSharp.Core for Cecil decoding. The
+test-only resolver selects the fixture's locked FSharp.Core 10.1.302 restore asset
+(`lib/netstandard2.1/FSharp.Core.dll`), verifies full assembly identity 10.1.0.0,
+and refuses other identities. Missing/multiple assets fail the test explicitly.
+This does not change production dependency admission or add attribute facts.
+
+TraceMap assertions retain rule ID, tier, full assembly/member endpoints, metadata
+location, commit, extractor version, generator/bounded-input hashes and exact
+fixture raw/binding hashes through the shared evidence oracle. No new derived
+artifact, production rule/schema or runtime execution is introduced. Attributes
+are structural metadata, not authenticity or physical-source ownership proof.
+Full union helper/layout, generic/struct/null-representation, quotation and
+runtime semantics remain separate gaps.
+
+| Requirement | Delivered evidence | Remaining gap | Host/toolchain |
+| --- | --- | --- | --- |
+| #769 | Runway and guarded runner contracts | Reviewed private dimension catalog, minimization and deterministic projected output | Authorized isolated Windows corpus access; unavailable/uninvoked |
+| #767 | Merged signatures/defaults/options/accessors/constraints/interfaces/operators/modules/selected records; this union-factory slice | Further generated-member, quotation, receiver and full language acceptance | Public .NET SDK 10.0.302 and declared CI lanes |
+| #766 | Operand-aware IL/PDB/rewrite evidence and public mutations | Broader edge matrix and independent PDB parity | Public .NET plus Windows tools where declared |
+| #768 | Public Windows CI and private-runner guards | Passing private bounded receipt/endurance and complete C++/CLI acceptance | Separately authorized Windows worker |
+| #759 | Distinct evidence layers and bounded public tests | All child acceptance criteria remain open | Public and private lanes remain distinct |
+
+## Quotation and expression-tree continuation
+
+This bounded #767 slice follows merged #831 (`eafa68e7`). Public
+`QuotationMatrix` fixtures expose `Tree`, `Delegate` and `Echo` in C#/VB/F#.
+C#/VB trees return `Expression<Func<Int32>>`; F# typed quotations return
+`FSharpExpr<Int32>`. All three delegate methods return `Func<Int32>`.
+These are metadata signatures: the tests never invoke, compile or evaluate the
+returned trees/delegates and do not prove equivalent expression contents.
+
+| Case | Expected metadata evidence | Expected edges | Non-claim |
+| --- | --- | --- | --- |
+| CLR-QUOTE-001 | C#/VB Tree signatures match, with exact nested Expression/Func type references | None: metadata declarations/gaps only; F# source joins forbidden | No tree-content or runtime equivalence |
+| CLR-QUOTE-002 | F# Tree uses FSharp.Core-scoped FSharpExpr<Int32>, distinct from Expression and Func | None: metadata declarations/gaps only; F# source joins forbidden | No automatic quotation conversion |
+| CLR-QUOTE-003 | All Delegate signatures match while retaining three distinct endpoints | None: metadata declarations/gaps only; F# source joins forbidden | No execution or closure equivalence |
+| CLR-QUOTE-004 | Echo parameter and return preserve both generic wrapper levels where present | None: metadata declarations/gaps only; F# source joins forbidden | No inferred source ownership |
+| CLR-QUOTE-005 | SRM raw signature bytes/TypeRefs/AssemblyRefs and Cecil independently agree on exact MethodDef token and shape | None: metadata declarations/gaps only; F# source joins forbidden | Neither reader alone is the oracle |
+| CLR-QUOTE-006 | Nine distinct endpoints/fact IDs, single/combined input evidence, reversed-input byte determinism | None: metadata declarations/gaps only; F# source joins forbidden | No display-name identity join |
+| CLR-QUOTE-007 | Duplicate primaries emit ambiguity and are source-ineligible | None: metadata declarations/gaps only; F# source joins forbidden | No guessed assembly choice |
+| CLR-QUOTE-008 | Truncated PE and member limit emit partial Tier4 gaps | None: metadata declarations/gaps only; F# source joins forbidden | No clean result from rejected input |
+| CLR-QUOTE-009 | F# compiled methods survive while the source-unsupported gap remains | None: metadata declarations/gaps only; F# source joins forbidden | No F# source extraction |
+
+Every selected fact uses the shared evidence oracle to pin rule/tier, exact
+assembly/member identity and metadata token/location, commit, extractor version,
+generator/bounded-input hashes and per-input raw/binding hashes. No new derived
+machine-readable artifact, production rule, dependency resolver or schema is
+introduced. Reference signatures pin System.Runtime/System.Linq.Expressions
+10.0.0.0 and FSharp.Core 10.1.0.0 from the existing locked toolchain.
+Untyped quotations, splices, captures, generated helpers, quotation contents,
+conversion and runtime behavior remain open.
+
+| Requirement | Implementation/test evidence | Remaining gap | Required host/toolchain |
+| --- | --- | --- | --- |
+| #769 | Existing corpus runway and guarded lane | Reviewed private dimensions/minimizations and deterministic projected catalog | Authorized isolated Windows corpus access; unavailable/uninvoked |
+| #767 | Merged matrices through union factories; quotation signature/oracle tests here | Remaining language interactions and full source/PDB/generated-member acceptance | Public .NET SDK 10.0.302 and declared CI |
+| #766 | Existing operand-aware IL/PDB/rewrite tests | Broader edge matrix and independent PDB parity | Public .NET and declared Windows tools |
+| #768 | Existing public Windows CI and private-runner guards | Private bounded/endurance receipts and complete C++/CLI acceptance | Separately authorized Windows worker |
+| #759 | Distinct evidence layers and bounded public tests | Child acceptance remains open | Separate public/private lanes |
+
+The metadata-only evaluation asserts null source endpoints and no
+SourceMetadataIdentityReconciled facts for positive, reversed, duplicate and
+rejected inputs. CLR-QUOTE-009 separately asserts no source-identity edge to each
+F# endpoint in a bound scan. This is an explicit no-edge expectation for these
+cases, not a claim about all possible graph output from other extractors.
+Duplicate inputs are checked per independently expected repository/external safe
+locator: one outcome and ambiguity gap, three named method facts, exact raw and
+binding hashes for each input. Aggregate counts cannot substitute for either path.
+
+## Receiver call-site continuation
+
+This bounded #767 slice follows #832, merged at `d95df3da`. C#/VB public
+`ReceiverBase.Read` and overriding `ReceiverDerived.Read` return distinct constants;
+selected instance wrappers demonstrate the compiler's encoded receiver calls.
+The fixtures are decoded, never executed. Original IL is distinct from source,
+PDB, rewritten IL and runtime dispatch observations.
+
+| Case | Expected encoded evidence | Expected relationships / non-claims |
+| --- | --- | --- |
+| CLR-RECV-001 | C# InvokeVirtual: callvirt to ReceiverBase.Read | Caller metadata fact → original body via compiledFactId; body → call via ilBodyFactId; encoded targetIdentity names exact base MethodDef. Runtime override selection unproven. |
+| CLR-RECV-002 | C# InvokeBase: call to ReceiverBase.Read | Same exact links; direct base target only, no runtime result claim. |
+| CLR-RECV-003 | VB InvokeVirtual (Me): callvirt to ReceiverDerived.Read | Same exact links; encoded override differs from C# base slot. No inferred cross-language target identity. |
+| CLR-RECV-004 | VB InvokeBase (MyBase): call to ReceiverBase.Read | Same exact links; no source/PDB equivalence claim. |
+| CLR-RECV-005 | VB InvokeCurrent (MyClass): call to ReceiverDerived.Read | Same exact links; direct encoded override, no virtual-dispatch resolution claim. |
+| CLR-RECV-006 | VB MyBase/MyClass wrapper bytes differ only in call operand; instruction and body hashes differ | Operand-erased bytes are test comparison only, never an identity/hash or emitted artifact. Repeated facts/provenance are identical. |
+| CLR-RECV-007 | Each duplicate locator retains its outcome, ambiguity gap and exact method/body/call links | Original static observations remain inspectable; source reconciliation remains ineligible and emits no caller ownership edge. |
+| CLR-RECV-008 | TypeDef token in call operand emits IlCallTargetIdentityUnavailable; exhausted work budget emits IlTotalWorkLimitExceeded | Tier4 partial coverage with no positive body/call facts for that input; malformed DLL is never executed. |
+
+SRM independently identifies declaring types, base type, MethodDef tokens,
+instance signatures, virtual/new-slot flags and decodes the complete narrow IL
+opcode grammar. Unknown fixture opcodes fail the oracle. Cecil independently
+checks caller/target tokens, opcode/offset, target owner/name and signature.
+Facts assert exact assembly-scoped caller/target identities, original body/call
+identities, rule IDs, tiers, metadata/IL locations, commit, extractor version,
+exact generator SHA-256 and bounded-input/raw/binding hashes. Call facts have
+null source endpoints: their encoded target relationship is in targetIdentity,
+not a resolved runtime graph edge. Unbound fixtures produce no exact caller
+source-identity edge. No production rule/schema or new derived artifact is added.
+Broader inherited receivers, VB late binding/events, F# receiver behavior, source
+joins/PDB parity and runtime dispatch remain open.
+
+| Requirement | Evidence | Remaining gap | Host/toolchain |
+| --- | --- | --- | --- |
+| #769 | Corpus runway and guarded runner | Private reviewed dimension catalog/minimizations | Authorized isolated Windows corpus access, unavailable/uninvoked |
+| #767 | Merged matrices through quotations; this C#/VB receiver original-IL matrix | Broader language/source/PDB/generated-member interactions | Public .NET SDK 10.0.302 plus declared CI |
+| #766 | Existing operand-aware IL/PDB/rewrite suite; receiver operand regression | Broad ECMA edge suite and independent PDB parity | Public .NET; Windows for declared cases |
+| #768 | Public Windows CI and guarded private runner | Private receipts/endurance and complete C++/CLI acceptance | Separately authorized Windows worker |
+| #759 | Distinct bounded evidence layers | Child acceptance remains open | Separate public/private lanes |
+
+## Nested generic ownership continuation
+
+After #833 merged at `2f13e1dc`, this bounded #767 slice adds matching public
+C#/VB `NestedMatrix<TOuter>.Inner<TInner>` and `NestedMatrix<TOuter>.Plain`
+fixtures. Existing C# source-reconciliation tests already cover constructed
+nested types; this continuation adds a targeted cross-language metadata oracle,
+not a claim of new source joins or F# nested-type support.
+
+| Case | Expected metadata evidence | Non-claims / counterexamples |
+| --- | --- | --- |
+| CLR-NEST-001 | Inner.Outer uses VAR 0 / !0; InnerValue uses VAR 1 / !1 | Same generic-parameter category cannot erase its ordinal. |
+| CLR-NEST-002 | Inner.Method<TMethod> uses MVAR 0 / !!0 and method arity 1 | Method and type ordinal zero are different identities. |
+| CLR-NEST-003 | Construct uses GENERICINST of the exact nested TypeDef with Int32,String arguments | Both readers pin argument order; self type signatures retain assembly scope. C#/VB constructions are analogous shapes, not equal canonical signatures. |
+| CLR-NEST-004 | Swap reverses arguments to String,Int32 | Equal generic definition and argument set do not imply equal signatures. |
+| CLR-NEST-005 | Plain has one CLR generic parameter owned by its own TypeDef, although its source declaration adds none | Outer methods have equal !0 signatures but different declaring-type endpoints; Inner has total arity 2, Plain has total arity 1. |
+| CLR-NEST-006 | Reversed input order emits byte-identical facts and provenance | Twelve method endpoints/fact IDs stay distinct across owners and assemblies. |
+| CLR-NEST-007 | Each duplicate locator retains six methods, its outcome, raw/binding hashes and ambiguity gap | Source reconciliation remains ineligible, with no guessed source edge. |
+| CLR-NEST-008 | Truncated PE and member budget emit MalformedManagedInput / ManagedInputMemberCountLimitExceeded | Tier4 partial coverage, no method declarations; truncated bytes are never executed. |
+
+`Nested_matrix_pins_generic_owners_positions_and_constructions` checks raw SRM
+signature bytes, exact TypeDef/MethodDef tokens, declaring-type relationships and
+GenericParam parent/index/name, then independent Cecil owners/positions and
+constructed arguments. Hand-authored canonical identities are checked in both
+single-input and combined-input scans. Assertions retain the existing
+`dotnet.compiled.member.v1` Tier2 and `dotnet.compiled.gap.v1` Tier4 rules, metadata
+locations, commit/extractor identity, exact generator SHA-256 and bounded/raw/
+binding input hashes. All metadata-only facts have null source endpoints;
+no source/PDB/original-IL/rewrite/runtime equivalence follows. No production rule,
+schema or derived machine-readable artifact is added.
+
+| Requirement | Delivered evidence | Remaining acceptance gap | Host/toolchain |
+| --- | --- | --- | --- |
+| #769 | Guarded inventory/runway | Reviewed private catalog and authorized receipts | Isolated Windows/private access unavailable and uninvoked |
+| #767 | Merged matrices through receivers; this nested ownership/order matrix | Broader language/source/PDB/generated-member combinations | Public .NET 10.0.302 and declared CI |
+| #766 | Existing IL/PDB/rewrite suites including operand-preserving receiver regression | Full ECMA/rewrite/PDB matrix | Public .NET plus Windows for declared cases |
+| #768 | Public Windows CI, private runner safeguards | Private endurance receipts and full C++/CLI feasibility | Separately authorized Windows worker |
+| #759 | Bounded evidence layers and explicit gaps | All child acceptance remains open | Distinct public/private lanes |
+
+## Async and iterator PDB continuation
+
+Following #834 merge `d86f74e7`, this bounded #767 slice adds public C#/VB
+`StateMachineMatrix.AwaitOne`, `Enumerate` and an ordinary `MoveNext` lookalike.
+Existing C# generated PDB coverage asserted a nonempty set; this matrix pins each
+of four selected generated endpoints and every sequence point independently.
+
+| Case | Expected evidence | Boundary / non-claim |
+| --- | --- | --- |
+| CLR-STATE-001 | C#/VB async: PDB StateMachineMethod row identifies the exact kickoff and generated MoveNext MethodDefs; MoveNext returns Void | Compiler attribute and Cecil kickoff agree with SRM tokens; no runtime async behavior inferred. |
+| CLR-STATE-002 | C#/VB iterator: same exact identification, MoveNext returns Boolean | Equal CLR method signatures retain distinct declaring-type and assembly identities. |
+| CLR-STATE-003 | Generated metadata → PDB method → document/sequence occurrences use exact fact IDs and identities | Visible source spans and hidden locations match SRM and Cecil; document bytes match the source SHA-256. No generated source-symbol ownership edge. |
+| CLR-STATE-004 | Ordinary MoveNext has the same Boolean instance signature as iterator MoveNext, no kickoff entry and a distinct endpoint | Display-name similarity cannot identify a generated method. |
+| CLR-STATE-005 | Remove or duplicate each selected compiled method candidate | Exact PdbMetadataMethodZeroCandidate / PdbMetadataMethodMultipleCandidates Tier4 gap; no reconciliation/sequence points for that endpoint; other exact rows remain available. |
+| CLR-STATE-006 | Truncated PDB and sequence-point budget | MalformedPortablePdb / PdbSequencePointCountExceeded, partial coverage and no positive PDB methods/links/points; malformed bytes never executed. |
+| CLR-STATE-007 | Repeat each bound public scan | Byte-identical facts and PDB provenance. |
+
+The kickoff table and compiler attributes are independent test oracles, not new
+emitted kickoff-to-generated edges. Existing rules remain
+`dotnet.compiled.member.v1`, `dotnet.compiled.pdb-identity.v1`,
+`dotnet.compiled.sequence-point.v1` (Tier2) and `dotnet.compiled.pdb-gap.v1`
+(Tier4). Assertions pin commit/extractor identity, metadata tokens/PDB identities,
+source or hidden spans, exact generator SHA-256, bounded-input digests, raw
+assembly/PDB/source hashes and binding provenance. No rule/schema/derived artifact
+is added. Fixtures and malformed bytes are decoded only. F# state machines,
+Windows PDB, async iterators, runtime behavior, original/rewrite IL equivalence and
+full language/epic acceptance remain outside this slice.
+
+| Requirement | Delivered evidence | Remaining gap | Host/toolchain |
+| --- | --- | --- | --- |
+| #769 | Guarded runway/inventory workflow | Reviewed private dimension catalog and receipts | Authorized private Windows access unavailable/uninvoked |
+| #767 | Matrices through nested generics; selected C#/VB async/iterator PDB endpoints here | Broader generated/language/source interactions | Public .NET 10.0.302, portable PDB, ordinary CI |
+| #766 | Existing IL/PDB/rewrite and exact generated PDB occurrences | Full ECMA/rewrite/Windows PDB matrix | Public .NET plus declared Windows cases |
+| #768 | Public Windows CI, private runner safeguards | Private endurance and C++/CLI acceptance | Separately authorized Windows worker |
+| #759 | Distinct bounded evidence layers | Child acceptance stays open | Public/private lanes remain separate |
+
+## WithEvents and Handles wiring continuation
+
+After #835 merge `d4678de1`, this bounded #767 slice compares public VB
+`WithEvents Source` / `Handles Source.Tick` with explicit C# remove/assign/add
+wiring. It pins metadata and original IL observations; runtime event delivery,
+subscription lifetime, synchronization behavior and source ownership are unproven.
+
+| Case | Expected evidence | Boundary / counterexample |
+| --- | --- | --- |
+| CLR-WIRE-001 | Source property, exact getter/setter MethodSemantics handles and self-type signatures | C#/VB self types retain distinct assembly scopes. |
+| CLR-WIRE-002 | Tick event's exact add/remove handles and Action signatures | Names alone cannot associate event accessors. |
+| CLR-WIRE-003 | set_Source has callvirt remove_Tick then callvirt add_Tick, independently decoded offsets/tokens | Exact metadata → original-body → observation links; this is encoded order, not proof that both branches execute. |
+| CLR-WIRE-004 | OnTick ldftn operand: two C# loads versus one VB load | ManagedIlCallObserved includes method-pointer observations; ldftn is not a runtime handler invocation. Opcode and null source endpoint remain explicit. |
+| CLR-WIRE-005 | VB setter has Synchronized implementation flag; C# setter does not | Independent-reader fixture assertion only, not a new emitted synchronization property or runtime equivalence claim. |
+| CLR-WIRE-006 | Repeat scans emit byte-identical facts and IL provenance | Similar source intent does not imply identical IL bodies. |
+| CLR-WIRE-007 | Each duplicate locator retains its own setter/body/target observations, raw/binding hashes and ambiguity gap | Source reconciliation stays ineligible; no guessed source join. |
+| CLR-WIRE-008 | Wrong-table call operand and work exhaustion | IlCallTargetIdentityUnavailable / IlTotalWorkLimitExceeded, Tier4 partial and no positive IL bodies/observations; mutated bytes never executed. |
+
+SRM checks raw property/method signatures, TypeDef/MethodDef/MethodSemantics
+handles and assembly scopes. A bounded test decoder uses framework opcode/operand
+width definitions to walk whole IL instructions; unsupported operands fail the
+oracle, rather than searching operand bytes for opcodes. Cecil independently
+checks accessors, flags, instruction offsets/opcodes and target tokens.
+Assertions retain exact identities, rule IDs, tiers, metadata/IL locations,
+commit/extractor version and exact generator/bounded-input/raw/binding hashes.
+Existing `dotnet.compiled.member.v1`, `dotnet.compiled.il-body.v1`,
+`dotnet.compiled.il-call.v1` and gap contracts remain unchanged. No rule/schema
+or derived artifact is added. F# event wiring is covered by the continuation below. Inherited WithEvents, reassignment
+runtime behavior, source/PDB and rewritten-IL equivalence remain outside this slice.
+
+| Requirement | Delivered evidence | Remaining gap | Host/toolchain |
+| --- | --- | --- | --- |
+| #769 | Guarded runway/inventory | Reviewed private catalog and receipts | Authorized Windows/private access unavailable and uninvoked |
+| #767 | Matrices through generated PDB; selected C#/VB event wiring here | Broader language/source/PDB interactions | Public .NET 10.0.302 and ordinary CI |
+| #766 | Existing operand-aware IL/PDB/rewrite suite | Full ECMA/rewrite matrix | Public .NET plus declared Windows cases |
+| #768 | Public Windows CI, private runner safeguards | Private endurance and C++/CLI acceptance | Separately authorized Windows worker |
+| #759 | Distinct bounded evidence layers | Child acceptance stays open | Separate public/private lanes |
+
+
+## F# cached event wiring continuation
+
+After #836 merge `9cc14630`, extend the shared event-wiring theory to F#
+`DelegateEvent<Action>` / `[<CLIEvent>]` with explicit `remove_Tick` and
+`add_Tick` calls. The F# subscriber caches one delegate at construction and loads
+that field at both setter sites. This is a targeted comparison with the C#/VB
+fixtures, not a claim of identical generated code or runtime semantics.
+
+| Case | Expected evidence | Boundary / counterexample |
+| --- | --- | --- |
+| CLR-WIRE-FS-001 | Source property/getter/setter and Action event/add/remove signatures and exact MethodSemantics handles; setter callvirt remove then add | Same structural signatures retain the F# assembly scope; F# setter is not synchronized. |
+| CLR-WIRE-FS-002 | Constructor ldftn targets the exact generated nested callback; helper callvirt targets OnTick | Independent SRM raw tokens/signatures and Cecil offsets/opcodes pin two distinct metadata → body → observation chains. Generated names are read from token-selected metadata and encoded exactly; they are not fixed selectors or source identity. |
+| CLR-WIRE-FS-003 | Constructor stores the handler field once; setter loads that exact field twice and never stores it or loads a function pointer | Reader-level field checks; no new field-flow fact or runtime subscription-lifetime claim. |
+| CLR-WIRE-FS-004 | Duplicate assembly locators, wrong-table remove operand, work limit and repeated scans | Per-input ambiguity and full provenance remain; malformed/limited IL is partial with no positive body/call facts. |
+
+The common theory asserts exact rule IDs, tiers, metadata tokens, body/observation
+endpoints, commit, extractor version and generator/bounded-input/raw/binding
+hashes. The helper theory additionally pins constructor/helper/OnTick identities
+and observation chains. A data-only renamed-container/type/callback variant proves
+selection is independent of compiler-generated spelling. The same independent
+bounded opcode decoder now reads field operands as well as method operands. No production rule/schema or derived
+machine-readable artifact is added. No F# source extraction, PDB, rewritten IL,
+runtime event delivery or FSharp.Core event implementation equivalence is claimed.
+
+| Requirement | Implementation/test evidence | Remaining gap | Host/toolchain |
+| --- | --- | --- | --- |
+| #769 | Public runway and minimized dimension fixtures | Private catalog and receipt acceptance | Authorized isolated Windows/private access unavailable in this task |
+| #767 | Three-language Event_wiring_matrix theories and F# helper case | Broader language/source/PDB combinations and runtime acceptance | Public .NET SDK 10.0.302 / pinned FSharp.Core 10.1.302 |
+| #766 | Existing metadata/PDB/operand-preserving IL/rewrite suites plus event operand regressions | Broader rule-specific acceptance | Public .NET/IL tooling |
+| #768 | Public cross-platform CI and guarded lane contract | Historical corpus and C++/CLI validation | Authorized Windows/MSVC unavailable in this task |
+
+## Collection indexer and conversion continuation
+
+Public `CollectionMatrix` fixtures in C#, VB and F# compare three static methods:
+`ReadLegacy(ArrayList, Int32) -> Object`, `ReadGeneric(List<Object>, Int32) -> Object`
+and `ReadInteger(ArrayList, Int32) -> Int32`. `IlBodyEvidenceExtractorTests.Collections.cs`
+uses raw SRM signatures/handles, an independent framework-opcode walker and Cecil
+as independent oracles. Assembly scope is significant: these net10.0 fixtures
+reference ArrayList through System.Runtime and List through System.Collections.
+
+| Requirement | Implementation/test evidence | Remaining gap | Host/toolchain |
+| --- | --- | --- | --- |
+| #769 corpus dimensions | Public runway and minimized fixtures | Authorized historical inventory and private receipts | Isolated Windows/private access |
+| #767 legacy/generic indexers | Three languages, exact wrapper MethodDefs and get_Item MemberRefs, raw TypeRef/TypeSpec signatures/scopes | Broader collection and language constructs | Public .NET 10 SDK |
+| #767 integer conversions | C#/F# unbox.any Int32 versus VB Microsoft.VisualBasic.Core Conversions.ToInteger(Object) | Runtime values, conversion semantics, late-bound invocation | Public .NET 10 SDK |
+| #766 operand-preserving original IL | Identical indexer opcode streams retain different body hashes; exact body/call endpoints and provenance | Rewrite/PDB/source joins for these methods and broader suite acceptance | Public .NET/IL tools |
+| #768 Windows acceptance | Existing public CI and guarded lane contract | Historical corpus and C++/CLI acceptance | Authorized Windows/MSVC |
+
+The generic get_Item MemberRef returns `!0`, even though its parent TypeSpec is
+List<Object>; tests must not replace that encoded signature with a guessed
+substituted return type. Each fact retains rule/tier, endpoint, metadata location,
+commit/extractor version and exact generator/bounded/raw/binding input hashes.
+Duplicate primary inputs retain separate locators and explicit ambiguity; a
+wrong-table call operand and exhausted work budget emit gaps without positive IL
+facts. Repeated scans retain byte-stable facts/provenance. Fixtures and mutations
+are read as data, never executed. No production rule/schema or new derived
+machine-readable artifact is added.
+
+This is metadata and original IL evidence only. Source ownership, PDB occurrence,
+rewritten identity, runtime collection/conversion equivalence, F# source extraction,
+private corpus and C++/CLI acceptance remain unproven. Existing VB late-bound
+source tests are separate evidence. Broad #767/#759 remain open.
+
+## VB late-bound helper and source-gap continuation
+
+`LateBindingMatrix.vb` uses file-local `Option Strict Off`; the fixture project
+keeps Option Strict On. `ReadFirst(Object)` and `ReadSecond(Object)` call named
+members on unknown receivers. `ReadDirect(LateBindingTarget)` is the typed control.
+All return Object. `IlBodyEvidenceExtractorTests.LateBinding.cs` independently
+checks raw SRM MethodDef/MemberRef signatures and scopes, framework-decoded IL
+operands and Cecil tokens/strings. Nothing executes these fixture methods.
+
+| Requirement | Evidence | Remaining gap | Host/toolchain |
+| --- | --- | --- | --- |
+| #769 corpus dimensions | Public runway/minimized fixtures | Authorized historical catalog and private receipts | Isolated Windows/private access |
+| #767 VB late-bound gaps | Exact source spans, Tier3 name-only calls and Tier4 CallSiteSemanticResolutionUnavailable gaps; typed control retains Tier1 call | Actual runtime receiver/overload selection, argument/copy-back variants | Public .NET 10 SDK |
+| #767 compiled contrast | LateGet MemberRef versus typed First MethodDef; complete seven-parameter helper signature | Other late-binding helpers, C# dynamic dispatch | Public .NET 10 SDK |
+| #766 original IL | Independent ldstr tokens; string-only mutation changes body hash without changing the encoded helper target | Source-to-binary binding, PDB and rewrite joins, runtime behavior | Public .NET/IL tools |
+| #768 Windows | Public CI and guarded lane contract | Historical corpus/C++/CLI acceptance | Authorized Windows/MSVC |
+
+The compiler emits `Microsoft.VisualBasic.CompilerServices.NewLateBinding.LateGet`
+from Microsoft.VisualBasic.Core 15.0.0.0 with parameters Object, System.Type,
+String, Object[], String[], Type[], Boolean[]. The method-name strings are
+operands, not metadata identities. Both late-bound bodies contain exactly one
+encoded helper call; they must not acquire a call to the locally declared
+First/Second methods through name similarity. The typed control instead encodes
+the exact local First MethodDef. Equal opcode streams still have different
+operand-preserving body hashes. A data-only string-token replacement also pins
+this distinction within the same method.
+
+Assertions retain rule/tier, endpoint, source span or metadata location,
+commit/extractor version, and compiled generator/bounded/raw/binding input hashes.
+Source gaps and compiled observations remain separate: unbound input does not
+create source/metadata reconciliation. The existing source gap's diagnostic
+category is not proof of toolchain failure; the fixture build succeeds.
+Duplicate inputs retain separate locators/ambiguity; wrong-table helper tokens
+and exhausted work budgets retain explicit gaps without positive IL facts.
+Repeat scans preserve facts and provenance. No production rule/schema or new
+machine-readable artifact is introduced. Broad #767/#759, F# source extraction,
+private corpus, runtime, PDB and rewrite acceptance remain open.
+
+## C# ref-like signature continuation
+
+`RefLikeMatrix.cs` adds four metadata-only cases: Pass(Span<Int32>),
+Pass(ReadOnlySpan<Int32>), Borrow(ref Span<Int32>) returning ref Span<Int32>, and
+BorrowReadOnly(in Span<Int32>) returning ref readonly Span<Int32>. The existing
+RefFieldShape is a ref-field fixture, not prior proof of these signatures.
+`ManagedMetadataExtractorTests.RefLike.cs` compares single/combined admission
+using hand-authored identities plus independent raw SRM and Cecil readers.
+
+| Requirement | Evidence | Remaining gap | Host/toolchain |
+| --- | --- | --- | --- |
+| #769 corpus dimensions | Public runway/minimized fixtures | Authorized private catalog and receipts | Isolated Windows/private access |
+| #767 C# ref-like signatures | Four exact MethodDefs; scoped generic VALUETYPE encodings, Int32 argument, BYREF return/parameter and return modreq | Lifetime/escape safety, broader ref-like constructs and cross-language source support | Public .NET 10 SDK |
+| #766 modifier distinction | Data-only modreq/modopt/absent variants retain distinct endpoint identities; SRM checks emitted bytes | Runtime validity, original/rewritten IL identity and PDB joins | Public .NET/IL tools |
+| #768 Windows | Public CI and guarded lane | Historical corpus/C++/CLI acceptance | Authorized Windows/MSVC |
+
+The readonly return encodes modreq(System.Runtime.InteropServices.InAttribute)
+before BYREF Span<Int32>; its parameter has the In flag and its return Param row
+carries IsReadOnlyAttribute. Tests check these separately: flags and attributes
+cannot substitute for signature modifiers. Span and ReadOnlySpan are System.Runtime
+10.0.0.0 TypeRefs with a constructed Int32 argument. The tests inspect references,
+not external type definitions; they do not introduce an IsByRefLike classification
+or prove runtime stack/lifetime semantics. Parameter/return attributes here are
+independent-reader assertions, not new attribute facts.
+
+Every method assertion retains rule/tier, exact endpoint/token/metadata location,
+commit/extractor version and generator/bounded/raw/binding hashes. Duplicate inputs
+retain separate locators and explicit ambiguity; truncated PE and exhausted member
+limits emit partial-coverage gaps. Reversing the input order preserves facts and
+provenance. Mutated assemblies are data only, never executed or claimed runtime
+valid. No production rule/schema or new derived machine-readable artifact is added.
+Source ownership, PDB, original/rewritten bodies, F# source extraction, private
+corpus and broad #767/#759 acceptance remain separate and open.
+
+
+## VB imports and source identity continuation
+
+PR #840 merged at `2aee151e` before this #767 slice. The public VB project now
+contains a project namespace import, a file alias and an SDK default import.
+`ViaProject` and `ViaAlias` use different `ImportToken` types with the same short
+name; `ViaDefault` uses `System.Collections.Generic.List(Of Integer)` without an
+explicit file import. Six tests independently decode raw SRM signatures and
+Cecil metadata, then check hand-authored full source/metadata identities and
+source spans against the existing reconciliation implementation.
+
+| Requirement | Implementation/test evidence | Remaining gap | Host/toolchain |
+| --- | --- | --- | --- |
+| #769 corpus dimensions | Public runway/minimized fixtures | Authorized private catalog and receipts | Isolated Windows/private access |
+| #767 imports | Three exact source declarations, MethodDef tokens, namespace/scope/generic identities; bound joins, unbound refusal, duplicate candidates, truncated PE and member-limit gaps | Compiler import conflicts, overload interactions and configuration variants | Public .NET 10 SDK |
+| #766 identity | Independent SRM/Cecil readers, exact endpoint/source-span/provenance oracles and substitution counterexamples | Original/rewritten IL and PDB relationships for these methods | Public .NET/IL tools |
+| #768 Windows | Public CI and guarded lane | Historical corpus/C++/CLI acceptance | Authorized Windows/MSVC |
+
+Tests retain rule/tier, source span or metadata location/token, commit and
+extractor version; compiled evidence and joins retain generator, bounded-input
+and binding hashes. Repeated scans compare facts and provenance exactly.
+The alias is resolved by Roslyn to its full type identity; alias spelling and
+short-name similarity are not identity. Duplicate assembly inputs remain two
+candidates. Malformed bytes are inspected as data only, never executed.
+
+Binding receipts are explicit test attestations over public fixture bytes and
+the observed checkout commit, not independent build-authenticity proof. CLI
+coverage still reports unresolved framework dependencies and a redacted workspace
+diagnostic; three exact method joins do not establish whole-scan completeness.
+No production rule/schema or new derived public machine-readable artifact is
+added. Runtime, PDB, original/rewritten bodies, F# source extraction, private
+corpus and broad #767/#759 acceptance remain separate and open.
+
+
+## VB import conflict refusal continuation
+
+PR #841 merged at `26154c8a`. Five public synthetic cases now extend its positive
+imports fixture using temporary committed source copies; the checked-in project
+continues to build normally. Conflicting project imports produce BC30561, removal
+of the project import produces BC30002, and an incomplete file alias produces
+BC30203. A separate Roslyn compilation/emit invocation confirms failed compilation,
+error types and (for ambiguity) the two exact candidate namespaces. It never
+executes fixture code. SRM independently decodes the existing binary's MethodDef
+signature/token; its compiled declaration remains distinct from invalid source.
+
+| Requirement | Evidence | Remaining gap | Host/toolchain |
+| --- | --- | --- | --- |
+| #769 corpus dimensions | Public runway/minimized fixtures | Authorized private catalog/receipts | Isolated Windows/private access |
+| #767 import conflicts | FailedOrPartial/reduced source coverage, exact diagnostics/spans, incomplete source identity with no metadata endpoint/edge, qualified positive and unaffected default-import control | Overload ambiguity and other configuration interactions | Public .NET 10 SDK |
+| #766 evidence boundaries | SRM signature/token oracle and compiled provenance retained despite failed source; member-limit refusal and deterministic repeats | PDB/original IL/rewrite/runtime relationships | Public .NET/IL tools |
+| #768 Windows | Public CI and guarded lane | Historical corpus/C++/CLI acceptance | Authorized Windows/MSVC |
+
+The malformed alias yields an unnamed Roslyn error type. Its source declaration
+is preserved as an incomplete observation, not promoted to metadata identity.
+An explicit test receipt deliberately attests the valid fixture binary against
+invalid source: it cannot repair the compiler error or prove build authenticity.
+A separately resolved default-import declaration can still join within a scan
+whose overall source coverage is reduced. Fully qualifying the project type
+resolves the import conflict; exhausting the compiled-member limit still blocks
+that otherwise valid join and marks compiled coverage partial.
+
+Assertions pin rule/tier, source declaration or metadata endpoint/token, source
+span or metadata location, commit, extractor version and applicable generator/
+bounded/binding hashes. Invalid source is compiler input only; no malformed DLL
+or fixture method is executed. No production rule/schema or derived public
+machine-readable artifact changes. F# source, private corpus and broad epic
+acceptance remain open.
+
+
+## VB overload ambiguity and strictness continuation
+
+PR #842 merged at `e14d26f1`. The public OverloadMatrix adds String and System.Uri
+SelectValue overloads plus explicitly cast callers. Six cases compare successful
+and ambiguous source under Option Strict On/Off, malformed call operands and a
+bounded IL work limit. A separate Roslyn compilation/emit invocation proves that
+Nothing is ambiguous (BC30521; two exact parameter-type candidates) in both
+settings, while an explicit String cast selects that overload. Source facts pin
+both valid endpoints and an unaffected Uri call within the failing variant.
+
+| Requirement | Evidence | Remaining gap | Host/toolchain |
+| --- | --- | --- | --- |
+| #769 corpus dimensions | Public runway/minimized fixtures | Authorized private catalog and receipts | Isolated Windows/private access |
+| #767 overload ambiguity | Exact source calls under On/Off; ambiguous Nothing produces Tier3 name-only call, Tier4 gap and FailedOrPartial/reduced source coverage | Narrowing/late-bound overload interactions and other compiler configurations | Public .NET 10 SDK |
+| #766 operand identity | Independent raw SRM/framework-opcode/Cecil readers, full overload MethodDef signatures/tokens, same opcodes/different call operands and body hashes, wrong-table/work-limit gaps | PDB/rewrite/runtime relationships | Public .NET/IL tools |
+| #768 Windows | Public CI and guarded lane | Historical corpus/C++/CLI acceptance | Authorized Windows/MSVC |
+
+The valid compiled binary is deliberately retained alongside invalid source.
+Its call operands prove only the inspected original bytes, never a resolution
+for an ambiguous source invocation. Compiled inputs are unbound and do not create
+source-to-metadata reconciliation edges. The complete source/metadata/body/call
+identities retain rule/tier, source span or metadata location/token, commit,
+extractor/version and applicable generator/bounded/raw/binding hashes. Repeated
+scans preserve facts/provenance; malformed byte mutations are data only.
+No production rule/schema or derived public machine-readable artifact changes.
+No runtime overload execution, source-to-IL ownership, F# source, private corpus
+or broad epic completion claim is made.
+
+## VB narrowing and Option Strict continuation
+
+Reconciled after #843 merged at `37552ae3` (2026-10-07), targeting dev in
+`codex/767-vb-narrowing`. The prior overload matrix proves String/Uri selection
+and ambiguous Nothing refusal; it does not establish numeric narrowing behavior.
+
+| Requirement / case | Implementation and independent evidence | Remaining gap | Host/toolchain |
+| --- | --- | --- | --- |
+| Explicit Long to Integer, Strict On/Off | Public `NarrowingMatrix.vb`; Roslyn numeric/narrowing classification and successful emit; exact Tier1 source calls; raw SRM and Cecil signature/token/checked `conv.ovf.i4` agreement | No runtime overflow behavior claim | Public .NET 10 SDK |
+| Implicit Long to Integer, Strict Off | Committed public-source variant; independently emitted assembly inspected as unbound compiled input; exact call operand and checked conversion | No source-to-binary authenticity join | Public .NET 10 SDK |
+| Implicit Long to Integer, Strict On | Emit fails BC30512 at line 7; target null with one rejected candidate; Tier3 name-only call, Tier4 diagnostic/gap, reduced source coverage | Retained valid binary cannot repair rejected source | Public .NET 10 SDK |
+| Integer control | Exact Tier1 call and Int32 signature, same AcceptInteger MethodDef target with no conversion opcode | Runtime equivalence not inferred | Public .NET 10 SDK |
+| Duplicate/malformed/bounded inputs | Duplicate assembly ambiguity, truncated PE and total IL work-limit gaps; no source joins; no body/call facts from rejected malformed/bounded input | No hostile binary execution or full fuzzing claim | Public .NET 10 SDK |
+| #769 corpus dimensions | Public minimized dimensions and staged runway remain delivered | Authorized private catalog and representative receipts unavailable/uninvoked | Isolated authorized Windows lane |
+| #766 / #768 | Existing independent IL/rewrite/PDB tests and public Windows CI remain delivered | Broader rule-specific joins, historical corpus, Windows PDB and C++/CLI acceptance remain open | Public CI plus isolated Windows/MSVC where required |
+
+Seven regressions retain exact rule IDs, tiers, endpoints, source spans or metadata
+locations, commit and extractor versions, plus generated-artifact/bounded-input
+SHA-256 provenance. Valid source variants emit inspection-only DLLs with explicit
+assembly version and target-framework attributes; failed emit does not supply a
+binary. Repeat scans compare facts and IL provenance. Compiler output inspection
+and source facts remain separate layers; no PDB/rewrite/runtime/F# source claim,
+new machine-readable public golden artifact or production rule/schema change.
+Late-bound dispatch/configuration interactions remain a separate #767 slice.
+
+## Duplicate narrowing input retention
+
+PR #844 merged at `e5de6a4b`; its compiler/narrowing evidence is delivered, but
+its duplicate-input branch counted members without requiring IL bodies or calls.
+This bounded #767 follow-up closes that regression-assertion gap. It does not
+claim a production extractor defect or expand language coverage.
+
+| Requirement | Evidence | Remaining gap | Host/toolchain |
+| --- | --- | --- | --- |
+| Retain original IL per duplicate input | Both FromLong and FromInteger members, bodies and calls selected per expected safe locator; raw SRM/Cecil signatures, tokens, opcodes and exact provenance checked | No source ownership or runtime inference | Public .NET 10 |
+| Reject missing/misattributed evidence | Sixteen in-memory omissions or other-input locator substitutions must fail the same assertions | Not malformed binary execution | Public .NET 10 |
+| Ambiguity and deterministic order | One ambiguity gap per input, no source reconciliation, identical reversed-input facts/IL provenance | Duplicate identity remains ambiguous | Public .NET 10 |
+| Malformed and bounded cases | Existing truncated PE and work-limit cases still require gaps and no IL body/call facts | Broader hostile-input suite remains separate | Public .NET 10 |
+| #769 / #766 / #768 | Existing corpus runway, independent IL/PDB/rewrite tests and public Windows CI | Private catalog/receipts, broader joins, Windows PDB/MSVC acceptance | Authorized isolated Windows lane where required |
+
+No new derived public artifact, rule or schema. No fixture binary is executed.
+Late-bound configuration interactions remain the next language-matrix candidate.

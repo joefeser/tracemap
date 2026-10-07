@@ -96,6 +96,8 @@ public static class BuildEnvironmentDiagnosticExtractor
             ?? ExtractSafeDiagnosticIdentifier(raw);
         var code = gapKind switch
         {
+            "VisualBasicProjectsOutsideProjectScope" or "CSharpProjectsOutsideProjectScope" => "ProjectScopeExcludedLanguage",
+            "VisualBasicDocumentExtractionFailed" => "DocumentExtractionFailed",
             "MSBuildRegistrationFailed" => "MSBuildRegistrationFailed",
             "RestoreFailed" => CategorizeRestoreFailure(raw),
             "CompilationCreateFailed" or "CompilationMissing" => "CompilationCreationFailed",
@@ -115,6 +117,7 @@ public static class BuildEnvironmentDiagnosticExtractor
         };
         var kind = gapKind switch
         {
+            "VisualBasicProjectsOutsideProjectScope" or "CSharpProjectsOutsideProjectScope" => DiagnosticKindScanScope,
             "RestoreFailed" => DiagnosticKindRestore,
             "CompilationDiagnostic" => DiagnosticKindCompilation,
             _ => DiagnosticKindWorkspace
@@ -936,6 +939,8 @@ public static class BuildEnvironmentDiagnosticExtractor
     {
         return diagnosticCode switch
         {
+            "ProjectScopeExcludedLanguage" => "ReviewScanScope",
+            "DocumentExtractionFailed" => "ReportExtractorDefect",
             "LegacyTargetFramework" or "MissingReferenceAssemblies" => "UseCompatibleReferenceAssemblies",
             "OldMsBuildToolsVersion" or "VisualStudioVersionDeclared" => "UseCompatibleMSBuildToolset",
             "ImportedLegacyTargets" or "UnknownImportedTargets" => "ReviewImportedTargets",
@@ -958,6 +963,7 @@ public static class BuildEnvironmentDiagnosticExtractor
 
     private static string CoverageEffectFor(string diagnosticCode, string diagnosticKind)
     {
+        if (diagnosticCode == "ProjectScopeExcludedLanguage") return "informational";
         if (diagnosticKind is DiagnosticKindWorkspace or DiagnosticKindCompilation)
         {
             return "reduces-semantic-coverage";
@@ -978,6 +984,10 @@ public static class BuildEnvironmentDiagnosticExtractor
 
     private static string MessageFor(string diagnosticCode, string diagnosticKind)
     {
+        if (diagnosticCode == "ProjectScopeExcludedLanguage")
+            return "Projects for this language were excluded by the requested project scope; no workspace load was attempted for them.";
+        if (diagnosticCode == "DocumentExtractionFailed")
+            return "Semantic document extraction failed; syntax fallback remains available. Report the extractor defect; private exception details were redacted.";
         return diagnosticKind switch
         {
             DiagnosticKindRestore => $"Restore diagnostic category: {diagnosticCode}. Native output was redacted.",
@@ -990,6 +1000,8 @@ public static class BuildEnvironmentDiagnosticExtractor
     {
         return guidanceCode switch
         {
+            "ReviewScanScope" => "Review the explicitly selected project scope before requesting additional language coverage.",
+            "ReportExtractorDefect" => "Report the document extraction defect with a minimal reproducer; dependency restoration is not a proven remedy.",
             "UseCompatibleReferenceAssemblies" => "Compatible reference assemblies appear necessary for semantic analysis.",
             "UseCompatibleMSBuildToolset" => "A compatible MSBuild toolset appears necessary for this project style.",
             "UseCompatibleWebApplicationTargets" => "Visual Studio Web Application targets appear necessary for full project load.",

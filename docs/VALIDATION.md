@@ -77,6 +77,13 @@ empty repository prefix remains valid. `GitMetadataOutputTests` pins this
 distinction without scheduling-dependent sleeps. A targeted identity fixture
 pass does not replace a new exact-head full regression after a failure.
 
+`LazyConstructorLoggingTests` joins the nonparallel Git-metadata-sensitive
+collection because its selected compiled roots require a real scan commit.
+An early `LAZY_CORPUS_GIT_IDENTITY_UNAVAILABLE` assertion distinguishes failed
+Git identity acquisition from route-resolution failures without fabricating a
+commit. This isolation is not proof that all concurrent production probes
+succeed; the scanner keeps bounded probes and explicit unknown-identity gaps.
+
 For native compiled Web Forms completed-run copies, validate the execution,
 preflight, preparation, input-validation, evidence-query and native-scale suites.
 The 2026-09-28 rebuilt slice passed 201 tests with zero failures/skips in 3 minutes
@@ -4136,3 +4143,372 @@ default logical database ceiling is 512 MiB, including facts and the order roste
 the page cache is 8 MiB. Sorter temporary files are outside that logical ceiling,
 and type-specific semantic indexes remain managed. These checks do not replace representative 8x source and
 compiled-distribution elapsed-time, total-disk and peak-memory measurements.
+
+### Public CLR method-signature equivalence (#767)
+
+The [bounded three-language signature matrix](validation/CLR_SIGNATURE_EQUIVALENCE_MATRIX.md)
+pins overloads, by-reference parameters, method generic arity and array rank
+with independent golden strings and distinct assembly/member endpoints.
+Run the `Clr_signature` filter or the existing `ManagedMetadataExtractorTests`
+filter. The existing portable distribution lane includes these tests. This is
+metadata shape evidence, not source, PDB, IL, rewrite or runtime equivalence.
+
+The optional-parameter continuation uses the `Optional_parameter` filter in
+that same metadata class. It requires independent reader agreement on markers,
+numeric ordering beyond ordinal 9, and sparse setter-only Param-row handling.
+Marker equality does not prove equal default constants or caller behavior.
+
+For the bound C#/VB optional-marker source join, run the
+`FullyQualifiedName~Optional_source_matrix` filter. It covers wide numeric
+ordinals, both source/metadata evidence endpoints, comparator rejection and
+summary bounds. The portable local-distribution lane now includes all
+`SourceMetadataReconciliationTests` alongside `ManagedMetadataExtractorTests`.
+See the [case matrix](validation/CLR_SIGNATURE_EQUIVALENCE_MATRIX.md#bound-source-optional-marker-continuation).
+
+For the nullable/F# option matrix, use
+`FullyQualifiedName~Nullable_option_matrix|FullyQualifiedName~Fsharp_fixture_retains`.
+The fixture pins FSharp.Core 10.1.302 and verifies Nullable, option, value-option
+and F# optional-argument metadata without claiming F# source extraction. See
+[the case matrix](validation/CLR_SIGNATURE_EQUIVALENCE_MATRIX.md#nullable-and-f-option-continuation).
+
+For property/event accessor evidence, run
+`FullyQualifiedName~Property_event_matrix|FullyQualifiedName~Fsharp_fixture_retains`.
+The public C#/VB/F# matrix uses metadata semantics handles to check accessor
+endpoints and rejects name-only associations. See the
+[case matrix](validation/CLR_SIGNATURE_EQUIVALENCE_MATRIX.md#propertyevent-accessor-continuation).
+
+### Public generic-constraint matrix (#767)
+
+Run `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter 'FullyQualifiedName~Generic_constraint_matrix|FullyQualifiedName~Fsharp_fixture_retains' -warnaserror`.
+The oracle distinguishes raw constraint flags/rows from normalized method
+signatures and keeps F# source unsupported. See the CLR matrix for limitations.
+
+### Public default-value matrix (#767)
+
+Run `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter 'FullyQualifiedName~Default_value_matrix|FullyQualifiedName~Fsharp_fixture_retains' -warnaserror`.
+Constant rows, null defaults and decimal attributes remain distinct from method
+signatures and optional markers. See the CLR matrix for coverage limitations.
+
+### Public explicit-interface matrix (#767)
+
+Run `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter 'FullyQualifiedName~Explicit_interface_matrix|FullyQualifiedName~Fsharp_fixture_retains' -warnaserror`.
+Raw MethodImpl tokens bind fixture declarations and implementing methods; an
+ordinary same-signature method cannot substitute. No runtime dispatch is claimed.
+
+
+### Operator and conversion metadata/source matrix
+
+Run `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter 'FullyQualifiedName~Operator_matrix|FullyQualifiedName~Operator_source_matrix|FullyQualifiedName~Fsharp_fixture_retains' -warnaserror`.
+The [case matrix](validation/CLR_SIGNATURE_EQUIVALENCE_MATRIX.md#operator-and-conversion-continuation)
+pins independent raw metadata oracles, assembly-scoped signatures, source joins,
+per-input provenance, ambiguous/malformed/limited inputs and deterministic repeat
+output. F# source extraction and runtime conversion behavior are not claimed.
+
+
+### Module and currying metadata/source matrix
+
+Run `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter 'FullyQualifiedName~Module_matrix|FullyQualifiedName~Module_source_matrix|FullyQualifiedName~Fsharp_fixture_retains' -warnaserror`.
+The [case matrix](validation/CLR_SIGNATURE_EQUIVALENCE_MATRIX.md#module-and-currying-continuation)
+pins static method identities separately from VB module attributes and F#
+argument-group metadata. Source aliases, runtime calling semantics and F# source
+extraction are not inferred from signature equality.
+
+The module oracle independently decodes CompilationSourceName aliases with SRM
+and Cecil; these names do not prove physical source ownership. Shared source
+matrix oracles pin declaration identities and exact fixture spans for modules,
+operators and optional parameters, with deliberately self-consistent wrong-source
+substitutions rejected. Fixture paths follow the running test assembly configuration.
+Run the source reconciliation suite in Release with `-c Release --no-build
+--no-restore` after a Release build; temporarily make this worktree's three compiled
+fixture `bin/Debug` directories unavailable to prove independence from Debug output,
+then restore those directories.
+
+### Record-generated member matrix
+
+```sh
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter 'FullyQualifiedName~Record_matrix|FullyQualifiedName~Fsharp_fixture_retains' -warnaserror
+```
+
+The [record matrix](validation/CLR_SIGNATURE_EQUIVALENCE_MATRIX.md#record-generated-member-continuation)
+pins raw MethodDef signatures and generated markers for C#/F# records versus
+ordinary VB lookalikes. Equal CLR signatures do not prove record or runtime
+semantics. SRM and Cecil independently inspect public binaries without executing
+them. Duplicate, malformed and bounded inputs retain gaps; bound F# source scans
+retain unsupported-source coverage. Run the surrounding compiled suite, full .NET
+suite and repeat CLI artifact validation. Non-.NET local suites and source OSS
+smokes may be explicitly deferred for this fixture/test-only slice; adapter CI
+remains required.
+
+### Union-factory metadata matrix
+
+```sh
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter 'FullyQualifiedName~Union_matrix|FullyQualifiedName~Fsharp_fixture_retains' -warnaserror
+```
+
+The [union-factory matrix](validation/CLR_SIGNATURE_EQUIVALENCE_MATRIX.md#union-factory-continuation)
+checks exact self-return signatures and F# type/case mapping against ordinary
+C#/VB lookalikes. SRM and Cecil are independent oracles; Cecil's test-only enum
+resolver admits only the fixture's pinned FSharp.Core restore asset, with explicit
+rejection tests for other identities. Repeat CLI artifacts must validate and be
+byte-identical. Run the surrounding compiled suite locally and require full .NET
+and cross-platform CI before delivery. Full local .NET duplication, non-.NET local
+suites and pinned source OSS smokes are explicitly deferred for this fixture/test-only
+slice. No runtime union or F# source-extraction coverage is inferred.
+
+### Quotation/expression-tree metadata matrix
+
+```sh
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter 'FullyQualifiedName~Quotation_matrix|FullyQualifiedName~Fsharp_fixture_retains' -warnaserror
+```
+
+The [quotation matrix](validation/CLR_SIGNATURE_EQUIVALENCE_MATRIX.md#quotation-and-expression-tree-continuation)
+pins raw SRM and independent Cecil signatures for expression trees, typed F#
+quotations and delegates, including nested generic arguments and assembly scopes.
+Run the surrounding metadata/source/PDB/IL/rewrite suite, repeated public CLI
+scans and artifact/privacy/spec guards. Require full exact-head .NET and public
+adapter CI; duplicate full local .NET, non-.NET local suites and pinned source
+OSS smokes may be explicitly deferred for this fixture/test-only slice.
+No fixture method is executed; tree contents and runtime semantics are untested.
+
+### C#/VB receiver call-site matrix
+
+```sh
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter FullyQualifiedName~Receiver_matrix -warnaserror
+```
+
+The [receiver matrix](validation/CLR_SIGNATURE_EQUIVALENCE_MATRIX.md#receiver-call-site-continuation)
+pins C# base/virtual and VB Me/MyBase/MyClass encoded calls with independent SRM
+and Cecil oracles. It verifies original body/call links, operand-aware identity,
+per-input duplicate evidence, invalid call-token refusal, work limits and repeats.
+Never execute the mutated DLL. Run the surrounding compiled-evidence suite and
+repeat a public CLI scan with `--il-body-evidence`, validating emitted artifacts.
+Require full final-head .NET and public adapter CI. Duplicate full local .NET,
+non-.NET local suites and pinned source OSS smokes are explicitly deferred for
+this fixture/test-only slice. Private Windows and runtime dispatch remain untested.
+
+### C#/VB nested generic ownership matrix
+
+```sh
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter FullyQualifiedName~Nested_matrix -warnaserror
+```
+
+The [nested generic matrix](validation/CLR_SIGNATURE_EQUIVALENCE_MATRIX.md#nested-generic-ownership-continuation)
+pins GenericParam ownership/ordinals, VAR versus MVAR, inherited outer parameters,
+constructed argument order and assembly scopes using raw SRM and independent
+Cecil. Run the surrounding metadata/source/PDB/IL/rewrite suite, repeated public
+CLI scans and artifact/privacy/spec guards. Require full final-head .NET and
+public cross-platform CI. Duplicate full local .NET, non-.NET local suites and
+pinned source OSS smokes are explicitly deferred for this fixture/test-only slice.
+Neither fixture methods nor malformed bytes are executed; source ownership,
+F# nested types, runtime behavior and private Windows acceptance remain unproven.
+
+### C#/VB async and iterator PDB matrix
+
+```sh
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter FullyQualifiedName~State_machine_matrix -warnaserror
+```
+
+The [state-machine matrix](validation/CLR_SIGNATURE_EQUIVALENCE_MATRIX.md#async-and-iterator-pdb-continuation)
+uses SRM's kickoff table and Cecil's independently read symbols/compiler attributes
+to pin four generated methods and all their sequence points. Missing/duplicate
+metadata rows must refuse joins; truncated PDB and sequence-point limits remain
+explicit gaps. Run the surrounding compiled-evidence suite and repeat a public
+CLI scan; validate emitted artifacts. The focused tests repeat bound PDB scans
+and compare facts/provenance exactly. Require full final-head .NET and public
+cross-platform CI. Duplicate full local .NET, non-.NET local suites and pinned
+source OSS smokes are explicitly deferred for this fixture/test-only slice.
+Do not execute fixture methods or malformed bytes. Private Windows, F# state
+machines, runtime behavior and rewritten IL remain separate acceptance gaps.
+
+### C#/VB/F# event wiring matrix
+
+```sh
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter FullyQualifiedName~Event_wiring_matrix -warnaserror
+```
+
+The [event wiring matrix](validation/CLR_SIGNATURE_EQUIVALENCE_MATRIX.md#withevents-and-handles-wiring-continuation)
+pins property/event accessor handles, exact remove/add call operands and handler
+ldftn operands through independent SRM/framework-opcode and Cecil readers. F#
+uses a cached delegate: its constructor targets a generated helper, whose body
+references OnTick; the setter loads the same field at both sites. The
+method-pointer observations do not imply handler execution. Run the surrounding
+compiled-evidence suite, repeated public CLI scans with `--il-body-evidence`,
+artifact validation and privacy/spec guards. Require full final-head .NET and
+public cross-platform CI. Duplicate full local .NET, non-.NET local suites and
+pinned source OSS smokes are explicitly deferred for this fixture/test-only slice.
+No fixture/malformed DLL execution; source/PDB/rewrite/runtime and private Windows
+acceptance remain separate.
+
+### Collection indexer and conversion matrix (#767)
+
+```sh
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter FullyQualifiedName~Collection_matrix -warnaserror
+```
+
+This filter checks all three public languages: exact ArrayList/List<Object>
+signatures and scopes, original get_Item operands, C#/F# unboxing versus VB
+conversion-helper calls, independent SRM/opcode/Cecil readers, full per-fact
+provenance, identical-opcode/different-body-hash counterexamples, duplicate-input
+ambiguity, wrong-table operands, bounded work and deterministic repeats. No test
+executes fixture/malformed binaries or claims runtime conversion equivalence.
+
+Run the surrounding metadata/source-reconciliation/PDB/IL/rewrite tests and two
+public CLI scans with all three assemblies and `--il-body-evidence`; validate
+artifacts and compare facts/report bytes. Run artifact-validator tests and
+privacy/spec guards. Require full final-head .NET and public cross-platform CI.
+Duplicate full local .NET, non-.NET local suites and pinned source OSS smokes
+are explicitly deferred for this fixture/test-only slice. F# source extraction,
+private corpus receipts, isolated Windows/MSVC and broad epic acceptance remain
+separate gaps, not satisfied by public CI.
+
+### VB late-bound source and compiled helper matrix (#767)
+
+```sh
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore -warnaserror --filter FullyQualifiedName~Late_binding_matrix
+```
+
+Five cases independently pin raw helper signatures/scopes, ldstr versus method
+operands, source gap spans/tiers and the typed direct-call control. A string-only
+mutation changes canonical body identity without inventing a runtime target;
+duplicate inputs, malformed helper tokens, bounded work and repeats stay explicit.
+Do not execute fixture or mutated DLLs. Source-to-binary binding, PDB, rewrite,
+runtime overload selection and other late-binding helpers remain separate gaps.
+
+Run the surrounding metadata/source-reconciliation/PDB/IL/rewrite suite plus
+VisualBasicExtractionTests. Repeat a public CLI scan of the VB fixture source
+with its assembly and `--il-body-evidence`; validate artifacts and compare
+facts/report bytes. Run artifact-validator tests and privacy/spec guards.
+Require full final-head .NET and public cross-platform CI. Duplicate full local
+.NET, non-.NET local suites and pinned source OSS smokes are explicitly deferred
+for this fixture/test-only change. Public CI cannot satisfy private Windows
+corpus/MSVC receipts or broad epic acceptance.
+
+### C# ref-like signature matrix (#767)
+
+```sh
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore -warnaserror --filter FullyQualifiedName~Ref_like_matrix
+```
+
+Six cases pin Span/ReadOnlySpan constructions, mutable/readonly by-reference
+signatures and required/optional/absent modifier counterexamples through raw SRM
+and Cecil oracles. Include exact single/combined provenance, duplicate identities,
+truncated PE, member limits and reverse-input repeats. Inspect synthetic mutations
+as data only; no runtime lifetime, source/PDB or rewritten-IL equivalence claim.
+
+Run the surrounding metadata/source-reconciliation/PDB/IL/rewrite suite, two
+validated public CLI scans with the C# fixture assembly, and compare facts/report
+bytes. Run artifact-validator tests plus privacy/spec guards. Require full
+final-head .NET and public cross-platform CI. Duplicate full local .NET,
+non-.NET local suites and pinned source OSS smokes are explicitly deferred for
+this fixture/test-only slice. Public CI does not satisfy private Windows/MSVC
+corpus receipts or broad epic acceptance.
+
+
+### VB imports and source-to-metadata identity (#767)
+
+```sh
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore -warnaserror --filter FullyQualifiedName~Import_matrix
+```
+
+Six cases check project imports, file aliases and SDK defaults using independent
+raw SRM/Cecil metadata and hand-authored full source/metadata identities. Check
+exact spans/provenance, same-name substitution, unbound input, duplicate candidates,
+truncated PE, member limits and deterministic repeats. Do not execute fixture or
+malformed DLLs. Test binding receipts are public test attestations, not independent
+build-authenticity evidence.
+
+Run surrounding metadata/source-reconciliation/PDB/IL/rewrite tests plus
+VisualBasicExtractionTests. Repeat a public VB CLI scan with its compiled assembly
+and an explicit test binding receipt; validate artifacts, three exact joins and
+identical facts/report bytes. Run artifact-validator tests and privacy/spec guards.
+Require full final-head .NET and public cross-platform CI. Duplicate full local
+.NET, non-.NET local suites and pinned source OSS smokes are explicitly deferred
+for this fixture/test-only slice. Compiler import conflicts, configuration variants,
+F# source, private Windows/MSVC receipts and broad epic acceptance remain open.
+
+
+### VB import conflict refusal (#767)
+
+```sh
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore -warnaserror --filter FullyQualifiedName~Import_conflict_matrix
+```
+
+Five cases use committed temporary copies of the public VB fixture, including
+three intentionally invalid source variants. An independent Roslyn emit oracle
+must fail with the expected diagnostic/error type; raw SRM verifies the valid
+compiled control. Assert reduced source coverage, exact incomplete identities
+and no affected join, retained compiled facts and an unaffected source control,
+qualified positive/member-limit refusal, full applicable provenance and repeats.
+The malformed alias has an unnamed error type. Never execute fixture binaries.
+
+Run surrounding metadata/source/PDB/IL/rewrite tests plus VisualBasicExtractionTests,
+two validated public CLI scans of the ambiguous-import variant with an explicit
+test binding receipt, and artifact/privacy/spec guards. Require identical facts/
+report bytes and explicit failed source coverage. Test receipts do not prove build
+authenticity. Full final-head .NET/public cross-platform CI is required. Duplicate
+full local .NET, non-.NET local suites and pinned source OSS smokes are explicitly
+deferred for this test-only slice. Private Windows/MSVC and broad epic acceptance
+remain separate gaps.
+
+
+### VB overload ambiguity and strictness (#767)
+
+```sh
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore -warnaserror --filter FullyQualifiedName~Overload_matrix
+```
+
+Six cases cover exact String/Uri source and compiled targets, ambiguous Nothing
+under Option Strict On/Off, wrong-table call operands and bounded IL work. The
+independent Roslyn emit oracle records failed compilation and both candidates;
+SRM/framework-opcode/Cecil readers pin original signatures/tokens and call
+operands. Same-opcode callers have different body hashes. Assert source spans,
+full applicable provenance, reduced source coverage and bounded gaps. A retained
+valid binary cannot resolve invalid source. Never execute fixture/mutated DLLs.
+
+Run surrounding metadata/source/PDB/IL/rewrite tests plus VisualBasicExtractionTests,
+two validated public VB CLI scans with its assembly and --il-body-evidence, compare
+facts/report bytes and the two distinct source/IL targets, and run artifact/privacy/
+spec guards. Full final-head .NET/public cross-platform CI is required. Duplicate
+full local .NET, non-.NET local suites and pinned source OSS smokes are explicitly
+deferred for this fixture/test-only slice. Unbound binary input, framework/workspace
+gaps, private Windows/MSVC and broad epic acceptance remain explicit limitations.
+
+### VB narrowing and Option Strict (#767)
+
+```sh
+dotnet restore src/dotnet/TraceMap.sln --locked-mode
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore -warnaserror --filter FullyQualifiedName~Narrowing_matrix
+dotnet test src/dotnet/TraceMap.sln --no-restore -warnaserror
+```
+
+Seven cases cover implicit/explicit Long-to-Integer conversion under Strict
+On/Off, an Integer control, duplicate ambiguity, truncated PE and IL work limits.
+Independent Roslyn classification/emit and raw SRM/framework-opcode/Cecil readers
+pin acceptance versus BC30512 refusal, exact source/metadata/call identities and
+checked `conv.ovf.i4` instructions. Assert full applicable provenance, syntax-only
+fallback/reduced source coverage, unbound binary separation and deterministic
+repeats. No fixture or malformed DLL is executed.
+
+Repeat public VB CLI scans with its compiled assembly and `--il-body-evidence`;
+validate artifacts, exact NarrowingMatrix source and IL targets, and identical
+facts/report bytes. Run artifact-validator tests, privacy/spec and whitespace
+guards. Full local solution and final-head public CI are required. Non-.NET local
+suites and pinned source OSS smoke reruns are explicitly deferred for this
+fixture/test-only slice. The gated Windows deep-corpus test remains a documented
+local skip; public Windows CI is not private Windows/MSVC acceptance.
+
+### Duplicate narrowing IL retention (#767, follow-up to #844)
+
+Use the narrowing focused command and full local solution command above. The
+seven-case matrix now requires both narrowing/control bodies and calls for each
+of two input locators; sixteen missing/misattributed-fact counterexamples must
+fail its assertions. Reversed compiled-input order must preserve facts and IL
+provenance. Existing compiler refusal, malformed PE and work-limit cases remain.
+
+CLI smoke: scan the public VB fixture with its original assembly and a temporary
+byte-identical copy, then reverse the two `--compiled-input` arguments. Validate
+both outputs, both per-input NarrowingMatrix bodies/calls, ambiguity gaps, no
+source reconciliation, and identical facts/report bytes. Run artifact-validator,
+privacy/spec/whitespace guards and final-head public CI. Non-.NET local and pinned
+source OSS smokes are deferred for this assertion-only change. The gated Windows
+deep-corpus local skip and private Windows/MSVC acceptance remain explicit gaps.

@@ -7,7 +7,7 @@ using TraceMap.Core;
 namespace TraceMap.Tests;
 
 [Collection("Git metadata sensitive")]
-public sealed class PortablePdbExtractorTests
+public sealed partial class PortablePdbExtractorTests
 {
     [Fact]
     public void Bound_portable_pdb_emits_exact_document_method_sequence_point_and_source_edges()
