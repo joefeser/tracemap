@@ -136,19 +136,51 @@ public sealed partial class IlBodyEvidenceExtractorTests
             input = Path.Combine(temp.Path, "copy.dll");
             File.WriteAllBytes(input, mode == "malformed" ? File.ReadAllBytes(fixture.Assembly)[..64] : File.ReadAllBytes(fixture.Assembly));
         }
-        var scan = Scan(new ScanOptions(fixture.Source, Path.Combine(temp.Path, "out"),
+        var options = new ScanOptions(fixture.Source, Path.Combine(temp.Path, "out"),
             CompiledInputPaths: mode == "duplicate" ? [fixture.Assembly, input] : [input], IlBodyEvidence: true,
-            IlBodyLimits: mode == "bounded" ? new IlBodyLimits(MaxTotalWorkUnits: 8) : null));
+            IlBodyLimits: mode == "bounded" ? new IlBodyLimits(MaxTotalWorkUnits: 8) : null);
+        var scan = Scan(options);
         var kind = mode switch { "duplicate" => "AmbiguousDuplicateManagedAssembly", "malformed" => "MalformedManagedInput", _ => "IlTotalWorkLimitExceeded" };
         var gaps = scan.Facts.Where(f => f.Properties.GetValueOrDefault("gapKind") == kind).ToArray();
         Assert.NotEmpty(gaps);
         foreach (var gap in gaps) CheckEventGap(scan, gap, input, il: mode == "bounded");
         Assert.DoesNotContain(scan.Facts, f => f.FactType == FactTypes.SourceMetadataIdentityReconciled);
         if (mode != "duplicate") Assert.DoesNotContain(scan.Facts, f => f.FactType is FactTypes.ManagedIlBodyDeclared or FactTypes.ManagedIlCallObserved);
-        else Assert.Equal(2, scan.Facts.Count(f => f.FactType == FactTypes.ManagedMethodDeclared && f.TargetSymbol == NarrowingMethod("FromLong")));
+        else
+        {
+            var hash = Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(input))).ToLowerInvariant();
+            var locators = new[] { Path.GetRelativePath(fixture.Source, fixture.Assembly).Replace('\\', '/'), "__external__/primary/" + hash[..12] + "-copy.dll" };
+            Assert.Equal(locators.Order(StringComparer.Ordinal), scan.Manifest.CompiledInputProvenance!.Outcomes.Select(o => o.SafeLocator).Order(StringComparer.Ordinal));
+            Assert.Equal(locators.Order(StringComparer.Ordinal), gaps.Select(g => g.Evidence.FilePath).Order(StringComparer.Ordinal));
+            foreach (var locator in locators)
+            {
+                CheckNarrowingBinary(scan, input, locator);
+                foreach (var name in new[] { "FromLong", "FromInteger" })
+                {
+                    var member = Assert.Single(scan.Facts, f => f.FactType == FactTypes.ManagedMethodDeclared
+                        && f.Evidence.FilePath == locator && f.TargetSymbol == NarrowingMethod(name));
+                    Assert.NotEqual("eligible", member.Properties["sourceReconciliationEligibility"]);
+                    var body = Assert.Single(scan.Facts, f => f.FactType == FactTypes.ManagedIlBodyDeclared && f.Properties["compiledFactId"] == member.FactId);
+                    var call = Assert.Single(scan.Facts, f => f.FactType == FactTypes.ManagedIlCallObserved && f.Properties["ilBodyFactId"] == body.FactId);
+                    // Prove this regression rejects missing evidence and evidence attributed to the other input.
+                    foreach (var fact in new[] { body, call })
+                    {
+                        var omitted = scan with { Facts = scan.Facts.Where(f => f.FactId != fact.FactId).ToArray() };
+                        Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => CheckNarrowingBinary(omitted, input, locator));
+                        var otherLocator = Assert.Single(locators, l => l != locator);
+                        var misattributed = scan with { Facts = scan.Facts.Select(f => f.FactId == fact.FactId
+                            ? f with { Evidence = f.Evidence with { FilePath = otherLocator } } : f).ToArray() };
+                        Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => CheckNarrowingBinary(misattributed, input, locator));
+                    }
+                }
+            }
+            var repeat = Scan(options with { OutputPath = Path.Combine(temp.Path, "reversed"), CompiledInputPaths = [input, fixture.Assembly] });
+            Assert.Equal(JsonSerializer.Serialize(scan.Facts), JsonSerializer.Serialize(repeat.Facts));
+            Assert.Equal(JsonSerializer.Serialize(scan.Manifest.IlBodyProvenance), JsonSerializer.Serialize(repeat.Manifest.IlBodyProvenance));
+        }
     }
 
-    private static void CheckNarrowingBinary(ScanResult scan, string assembly)
+    private static void CheckNarrowingBinary(ScanResult scan, string assembly, string? locator = null)
     {
         using var pe = new PEReader(File.OpenRead(assembly));
         var reader = pe.GetMetadataReader();
@@ -156,7 +188,7 @@ public sealed partial class IlBodyEvidenceExtractorTests
         var owner = Assert.Single(cecil.Types, t => t.FullName == ReceiverNamespace + ".NarrowingMatrix");
         var targetHandle = ReceiverHandle(reader, "NarrowingMatrix", "AcceptInteger");
         Assert.Equal(new byte[] { 0, 1, 8, 8 }, reader.GetBlobBytes(reader.GetMethodDefinition(targetHandle).Signature));
-        var target = Assert.Single(scan.Facts, f => f.FactType == FactTypes.ManagedMethodDeclared && f.TargetSymbol == NarrowingMethod("AcceptInteger"));
+        var target = Assert.Single(scan.Facts, f => f.FactType == FactTypes.ManagedMethodDeclared && (locator is null || f.Evidence.FilePath == locator) && f.TargetSymbol == NarrowingMethod("AcceptInteger"));
         Assert.Equal($"0x{MetadataTokens.GetToken(targetHandle):x8}", target.Properties["metadataToken"]);
         AssertReceiverEvidence(scan, target, assembly, RuleIds.DotNetCompiledMember);
         foreach (var name in new[] { "FromLong", "FromInteger" })
@@ -176,11 +208,14 @@ public sealed partial class IlBodyEvidenceExtractorTests
             var encoded = Assert.Single(decoded, i => i.OpCode == OpCodes.Call);
             Assert.Equal(MetadataTokens.GetToken(targetHandle), encoded.Token);
             Assert.Equal(encoded.Token, Assert.IsType<Mono.Cecil.MethodDefinition>(Assert.Single(independent.Body.Instructions, i => i.OpCode == Mono.Cecil.Cil.OpCodes.Call).Operand).MetadataToken.ToInt32());
-            var member = Assert.Single(scan.Facts, f => f.FactType == FactTypes.ManagedMethodDeclared && f.TargetSymbol == NarrowingMethod(name));
+            var member = Assert.Single(scan.Facts, f => f.FactType == FactTypes.ManagedMethodDeclared && (locator is null || f.Evidence.FilePath == locator) && f.TargetSymbol == NarrowingMethod(name));
             Assert.Equal($"0x{MetadataTokens.GetToken(handle):x8}", member.Properties["metadataToken"]);
             var body = Assert.Single(scan.Facts, f => f.FactType == FactTypes.ManagedIlBodyDeclared && f.Properties["compiledFactId"] == member.FactId);
+            Assert.Equal(member.Evidence.FilePath, body.Evidence.FilePath);
             Assert.Equal(member.TargetSymbol + "|il-body:instructions:" + decoded.Length.ToString(CultureInfo.InvariantCulture) + ":sha256:" + body.Properties["ilBodySha256"], body.TargetSymbol);
             var call = Assert.Single(scan.Facts, f => f.FactType == FactTypes.ManagedIlCallObserved && f.Properties["ilBodyFactId"] == body.FactId);
+            Assert.Equal(member.Evidence.FilePath, call.Evidence.FilePath);
+            Assert.Equal(target.Evidence.FilePath, call.Evidence.FilePath);
             Assert.Equal(target.TargetSymbol, call.Properties["targetIdentity"]);
             Assert.Equal($"0x{encoded.Token:x8}", call.Properties["referenceToken"]);
             Assert.Equal("methoddef", call.Properties["referenceKind"]);
