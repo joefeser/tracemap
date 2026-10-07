@@ -212,3 +212,11 @@ slices and require an implementation-state update before work begins.
   span/provenance and no affected join. Qualified/unaffected controls, member-limit
   refusal and deterministic repeats retain separate source/compiled evidence.
   Overload/configuration interactions and broad language acceptance remain open.
+
+
+- [x] 35. Bounded #767 VB overload ambiguity/strictness: exact String/Uri
+  selection versus ambiguous Nothing under Option Strict On/Off; independent
+  compiler diagnostics/candidates and SRM/opcode/Cecil signatures/tokens, exact
+  source/metadata/body/call provenance, same-opcode/different-operand body hashes,
+  wrong-table/work-limit gaps and repeats. Narrowing/configuration interactions,
+  source/PDB/IL/rewrite/runtime relationships and broad acceptance remain open.
