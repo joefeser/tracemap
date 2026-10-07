@@ -1,5 +1,15 @@
 # .NET Evidence Completeness Status
 
+## VB import conflict refusal (2026-10-06)
+
+PR #841 merged at `26154c8a`, delivering exact positive VB import joins. This
+bounded #767 continuation adds conflicting/missing imports and malformed aliases,
+with failed-compilation gaps, independent compiler/SRM oracles, a qualified
+positive control and member-limit refusal. See the [conflict matrix](validation/CLR_SIGNATURE_EQUIVALENCE_MATRIX.md#vb-import-conflict-refusal-continuation).
+Valid compiled declarations remain evidence of inspected bytes, not proof that
+invalid source built successfully. Overload/configuration interactions, PDB/IL/
+rewrite/runtime relationships and private Windows/corpus acceptance remain open.
+
 ## VB import identity joins (2026-10-06)
 
 PR #840 is merged at `2aee151e`: C# ref-like signature evidence is on dev.
