@@ -31,7 +31,7 @@ force push, or direct protected-branch update.
 | Audit the suspicious reset | Compare #802 commit `99b440dc` with the #801 merge-base tree | Both trees are `1163de1ea0bc4f57cd762ebc3a85ee014bc6fff2`. The reset PR did not discard functionality relative to the shared promotion. Its first-parent diff alone is misleading. |
 | Detect duplicated implementation across the split | Main-only paths contain no engine implementation; `git cherry <main> <dev>` has zero patch-equivalent (`-`) non-merge commits | No evidence that the .NET sequence reimplemented main-only engine code. This comparison does not measure every historical engineering choice or prove every test was necessary. |
 | Correct catalog drift | `ProjectFileReader.ReadProducedPackages` uses `packageVersion ?? plainVersion`; `ReadProducedPackages_packageversion_outranks_version_nuget_semantics` pins a conflicting-property example | Corrected rule-catalog prose to say PackageVersion outranks Version. Implementation and test already agree; no engine behavior change. |
-| Repair the public positive endpoint fixture | The demo failed its connected-path assertion. Sample build reproduced CS0246 for ASP.NET attributes; restoring assets alone did not fix it. Semantic plus syntax fallback route facts produced AmbiguousMatch, which correctly withheld a cross-source path | Add the real Microsoft.AspNetCore.App framework reference and MVC import. Restore sample assets explicitly in both public demo and combined-path smoke scripts. The unchanged full demo passes: 8 paths / 24 reverse results. No endpoint identity, ambiguity or partial-coverage rule was weakened. |
+| Repair the public positive endpoint fixture | The demo failed its connected-path assertion. Sample build reproduced CS0246 for ASP.NET attributes; restoring assets alone did not fix it. The failed scan retained semantic plus fallback route evidence and AmbiguousMatch; the required cross-source path was absent | Add the real Microsoft.AspNetCore.App framework reference and MVC import. Restore sample assets explicitly in both public demo and combined-path smoke scripts. The unchanged full demo passes at `001f1de3`: 8 paths / 20 reverse results. No endpoint identity, ambiguity or partial-coverage rule was weakened. AmbiguousMatch and NeedsReviewPath remain explicit after the repair. |
 
 The repeated language work is substantially acceptance evidence around existing
 behavior, not a claim that each PR shipped a new extractor. Source symbols,
@@ -39,6 +39,33 @@ compiled members, PDB occurrences, original IL, rewritten IL and runtime evidenc
 remain distinct. This reconciliation does not close #759/#766/#767/#768/#769,
 prove F# source extraction, or turn public fixture coverage into private-corpus
 acceptance. No fixture binaries, customer sites or restricted corpus were executed.
+
+## Review repair and ancestry proof
+
+The public GitHub commit objects and local Git agree: `001f1de3` has parent
+`4f1a4b03`, whose ordered parents are pinned main `7f026f5a` and pinned dev
+`f6149cd9`. Both `git merge-base --is-ancestor <pin> HEAD` checks succeed.
+A copied or flattened review snapshot does not replace this published ancestry.
+
+Review found two inherited site-validator gaps. The roadmap now compares all
+three displayed enum fields with each row's metadata and rejects missing,
+contradictory, multiple or comment-only values. The affected row retains its
+conservative concept classification; its metadata and registered future-facing
+wording now agree. The hidden-navigation row also uses its exact registered
+wording-status token. The local-demo validator now rejects unresolvable base commits,
+with separate missing-history, missing-commit, non-ancestor and valid-base cases.
+
+The proof generator's exact bytes are pinned to LF through a narrow Git attribute.
+A real `core.autocrlf=true` checkout regression proves byte preservation, with a
+negative control showing conversion when the attribute is absent. Exact raw-byte
+SHA-256 checks remain unchanged. Existing tests still reject supporting-evidence
+alias input; the redundant defensive projection is an informational cleanup,
+not an admitted alias or a provenance bypass, and is unchanged.
+
+This follow-up touches site validation, checkout policy and documentation only;
+the .NET engine, tests and sample fixture bytes remain those tested at `001f1de3`.
+Full final-head CI remains required; duplicating the 19m40s local .NET suite for
+these site-only corrections is deferred.
 
 ## Validation
 
@@ -48,9 +75,10 @@ smoke commands were rebuilding the CLI. One refusal was
 before mutation of the partition fixture. All six selected cases then passed in
 an isolated `--no-build --no-restore` rerun. Concurrent tool rebuild/resource
 interference is a suspected cause, not a proven product regression or a clean
-full-suite result. The complete isolated rerun and final-head CI/ACK results are
-recorded in the integration PR before it is declared ready; this committed audit
-does not substitute for those live delivery gates.
+full-suite result. The isolated solution rerun at `001f1de3` subsequently passed
+3,432 tests with zero failures and one explicit Windows ASP.NET publish skip in
+19m40s. Hosted .NET independently passed 3,432/1 with zero build warnings.
+Final-head CI and ACK remain separate delivery gates.
 
 Commands run in the combined integration worktree, with generated output outside
 tracked source. `dotnet test` builds the solution; `-warnaserror` rejects introduced
@@ -59,12 +87,12 @@ compiler/analyzer warnings.
 | Command / check | Result |
 | --- | --- |
 | `dotnet restore src/dotnet/TraceMap.sln --locked-mode` | Passed |
-| `dotnet test src/dotnet/TraceMap.sln --no-restore -warnaserror` | Complete isolated run required; see the integration PR for its final result |
+| `dotnet test src/dotnet/TraceMap.sln --no-restore -warnaserror` | Passed at `001f1de3`: 3,432 passed / 0 failed / 1 explicit Windows-only skip; 19m40s |
 | `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-build --no-restore --filter 'FullyQualifiedName~Invalid_partition_inventory_never_creates_a_run_or_exposes_input_paths\|FullyQualifiedName~Real_native_pipeline_completes_and_completed_continue_only_verifies_retained_reports'` | 6 passed |
-| `JAVA_HOME=<Homebrew-Java-21> ./scripts/demo-public.sh <temporary-output>` | Original and restore-only runs failed the connected-path assertion; real-framework fixture and clean-assets runs passed the complete demo (8 paths / 24 reverse results) |
+| `JAVA_HOME=<Homebrew-Java-21> ./scripts/demo-public.sh <temporary-output>` | Original and restore-only runs failed the connected-path assertion; Real-framework and clean-assets runs passed; final `001f1de3` run passed with 8 paths / 20 reverse results (the earlier commit identity produced 24 reverse results) |
 | `./scripts/smoke-combined-paths.sh <temporary-output>` | Passed with sample assets initially absent: connected path, bogus-selector negative, repeat-byte equality, reverse provenance and privacy assertions |
 | `bash -n scripts/demo-public.sh scripts/smoke-combined-paths.sh` and `node scripts/demo-public-assert.mjs self-test` | Passed |
-| `npm test --prefix site` | 1,251 passed; zero failures/skips |
+| `npm test --prefix site` | 1,261 passed after review regressions; zero failures/skips |
 | `npm run build --prefix site` | Passed |
 | `npm run validate --prefix site` | Passed: 120 HTML files, 4,040 internal references, 119 sitemap URLs and bounded evidence-row validators |
 | `dotnet src/dotnet/TraceMap.Cli/bin/Debug/net10.0/tracemap.dll scan --repo samples/modern-sample --out <temporary-output> --restore` | Passed: 27 facts, Level1SemanticAnalysis |

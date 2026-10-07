@@ -9,6 +9,10 @@
 - [x] Verify complete public demo and combined-path smoke with sample assets absent and unchanged assertions.
 - [x] Validate site, public CLI artifacts and desktop/mobile pages.
 
+- [x] Complete isolated .NET suite: 3,432 passed, zero failed, one explicit Windows-only skip.
+- [x] Verify published parent chain independently through GitHub commit objects.
+- [x] Harden imported site claim, base-commit and exact-byte checkout validation with regressions.
+
 Delivery gates: complete isolated local .NET success, final-head public CI and
 live ACK review. Record these results in the integration PR; a draft or a
 committed audit alone does not satisfy them.
