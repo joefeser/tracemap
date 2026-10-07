@@ -4472,3 +4472,27 @@ spec guards. Full final-head .NET/public cross-platform CI is required. Duplicat
 full local .NET, non-.NET local suites and pinned source OSS smokes are explicitly
 deferred for this fixture/test-only slice. Unbound binary input, framework/workspace
 gaps, private Windows/MSVC and broad epic acceptance remain explicit limitations.
+
+### VB narrowing and Option Strict (#767)
+
+```sh
+dotnet restore src/dotnet/TraceMap.sln --locked-mode
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore -warnaserror --filter FullyQualifiedName~Narrowing_matrix
+dotnet test src/dotnet/TraceMap.sln --no-restore -warnaserror
+```
+
+Seven cases cover implicit/explicit Long-to-Integer conversion under Strict
+On/Off, an Integer control, duplicate ambiguity, truncated PE and IL work limits.
+Independent Roslyn classification/emit and raw SRM/framework-opcode/Cecil readers
+pin acceptance versus BC30512 refusal, exact source/metadata/call identities and
+checked `conv.ovf.i4` instructions. Assert full applicable provenance, syntax-only
+fallback/reduced source coverage, unbound binary separation and deterministic
+repeats. No fixture or malformed DLL is executed.
+
+Repeat public VB CLI scans with its compiled assembly and `--il-body-evidence`;
+validate artifacts, exact NarrowingMatrix source and IL targets, and identical
+facts/report bytes. Run artifact-validator tests, privacy/spec and whitespace
+guards. Full local solution and final-head public CI are required. Non-.NET local
+suites and pinned source OSS smoke reruns are explicitly deferred for this
+fixture/test-only slice. The gated Windows deep-corpus test remains a documented
+local skip; public Windows CI is not private Windows/MSVC acceptance.

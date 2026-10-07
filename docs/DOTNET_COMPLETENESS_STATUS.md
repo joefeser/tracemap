@@ -1,5 +1,15 @@
 # .NET Evidence Completeness Status
 
+## VB narrowing and Option Strict (2026-10-07)
+
+PR #843 merged at `37552ae3`, delivering overload selection/ambiguity evidence.
+This bounded #767 continuation pins implicit/explicit Long-to-Integer narrowing
+under Strict On/Off, compiler refusal and checked original IL with independent
+oracles. See the [narrowing matrix](validation/CLR_SIGNATURE_EQUIVALENCE_MATRIX.md#vb-narrowing-and-option-strict-continuation).
+Late-bound configuration, runtime overflow behavior, source/PDB/rewrite joins
+and private Windows/corpus acceptance remain open. #843's initial Web Forms CI
+failure passed one unchanged-head rerun; its cause remains unestablished.
+
 ## VB overload ambiguity and strictness (2026-10-06)
 
 PR #842 merged at `e14d26f1`, delivering import-conflict refusal. This bounded

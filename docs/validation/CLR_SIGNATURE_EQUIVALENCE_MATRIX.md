@@ -1033,3 +1033,28 @@ scans preserve facts/provenance; malformed byte mutations are data only.
 No production rule/schema or derived public machine-readable artifact changes.
 No runtime overload execution, source-to-IL ownership, F# source, private corpus
 or broad epic completion claim is made.
+
+## VB narrowing and Option Strict continuation
+
+Reconciled after #843 merged at `37552ae3` (2026-10-07), targeting dev in
+`codex/767-vb-narrowing`. The prior overload matrix proves String/Uri selection
+and ambiguous Nothing refusal; it does not establish numeric narrowing behavior.
+
+| Requirement / case | Implementation and independent evidence | Remaining gap | Host/toolchain |
+| --- | --- | --- | --- |
+| Explicit Long to Integer, Strict On/Off | Public `NarrowingMatrix.vb`; Roslyn numeric/narrowing classification and successful emit; exact Tier1 source calls; raw SRM and Cecil signature/token/checked `conv.ovf.i4` agreement | No runtime overflow behavior claim | Public .NET 10 SDK |
+| Implicit Long to Integer, Strict Off | Committed public-source variant; independently emitted assembly inspected as unbound compiled input; exact call operand and checked conversion | No source-to-binary authenticity join | Public .NET 10 SDK |
+| Implicit Long to Integer, Strict On | Emit fails BC30512 at line 7; target null with one rejected candidate; Tier3 name-only call, Tier4 diagnostic/gap, reduced source coverage | Retained valid binary cannot repair rejected source | Public .NET 10 SDK |
+| Integer control | Exact Tier1 call and Int32 signature, same AcceptInteger MethodDef target with no conversion opcode | Runtime equivalence not inferred | Public .NET 10 SDK |
+| Duplicate/malformed/bounded inputs | Duplicate assembly ambiguity, truncated PE and total IL work-limit gaps; no source joins; no body/call facts from rejected malformed/bounded input | No hostile binary execution or full fuzzing claim | Public .NET 10 SDK |
+| #769 corpus dimensions | Public minimized dimensions and staged runway remain delivered | Authorized private catalog and representative receipts unavailable/uninvoked | Isolated authorized Windows lane |
+| #766 / #768 | Existing independent IL/rewrite/PDB tests and public Windows CI remain delivered | Broader rule-specific joins, historical corpus, Windows PDB and C++/CLI acceptance remain open | Public CI plus isolated Windows/MSVC where required |
+
+Seven regressions retain exact rule IDs, tiers, endpoints, source spans or metadata
+locations, commit and extractor versions, plus generated-artifact/bounded-input
+SHA-256 provenance. Valid source variants emit inspection-only DLLs with explicit
+assembly version and target-framework attributes; failed emit does not supply a
+binary. Repeat scans compare facts and IL provenance. Compiler output inspection
+and source facts remain separate layers; no PDB/rewrite/runtime/F# source claim,
+new machine-readable public golden artifact or production rule/schema change.
+Late-bound dispatch/configuration interactions remain a separate #767 slice.

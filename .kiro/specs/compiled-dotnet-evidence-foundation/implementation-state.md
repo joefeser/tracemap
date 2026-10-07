@@ -1,4 +1,63 @@
-# Current continuation: #767 VB overload ambiguity and strictness
+# Current continuation: #767 VB narrowing and Option Strict
+
+Branch `codex/767-vb-narrowing`, fresh origin/dev base
+`37552ae3c6bd2bc03aae19f51b9e0b50740a0408` (#843 merged), target dev. Read AGENTS,
+fetched main/dev and reconciled all five issue bodies/comments, merged/open PRs,
+specs/docs/code/tests and worktrees. No competing open PR or narrowing lane.
+Primary Base44 edits and other worktrees preserved; main-only site work excluded.
+Acceptance matrix: CLR_SIGNATURE_EQUIVALENCE_MATRIX.md narrowing continuation.
+
+Added public NarrowingMatrix (AcceptInteger, FromLong with explicit CInt, and
+FromInteger control) and seven regressions. Committed temporary source variants
+exercise Strict On/Off and implicit/explicit narrowing. Independent Roslyn
+classification/emit pins numeric narrowing, BC30512 refusal and rejected target
+candidate. Successful emitted DLLs are inspected as unbound inputs; rejected
+source is paired only with separate valid fixture bytes. Raw SRM/framework-opcode/
+Cecil readers pin exact signatures/tokens, checked conv.ovf.i4 and call targets.
+Source refusal retains Tier3 syntax calls and Tier4 diagnostic/gap with reduced
+coverage; unaffected controls remain semantic. Duplicate/malformed/work-limit
+cases retain gaps, and repeated scans preserve facts/provenance. No rule/schema
+or public derived-artifact change; no fixture/malformed binary execution.
+
+Validation: focused 7/7; full unfiltered local solution passed 3,432 tests,
+zero failures, one gated Windows deep-corpus skip, in 20m53s with warnings as
+errors and no introduced warnings. The full run includes final diagnostic span
+and site-hash assertions. CLI repeats validated 1,864 facts,
+two source and original-IL AcceptInteger calls, and identical facts/report bytes.
+Artifact validator 7/7; privacy/spec/whitespace guards passed. Final-head public
+CI and live ACK required. ACK 0.5.5 stable, build ab39833, fresh distribution and
+all required lane capabilities verified.
+
+Exact commands (logs /tmp/tracemap-narrow-*):
+
+```sh
+dotnet restore src/dotnet/TraceMap.sln --locked-mode
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore -warnaserror --filter FullyQualifiedName~Narrowing_matrix
+dotnet test src/dotnet/TraceMap.sln --no-restore -warnaserror
+python3 scripts/test_validate_adapter_artifacts.py
+./scripts/check-private-paths.sh
+node scripts/kiro-review.mjs --self-test
+git diff --check
+```
+
+CLI repeats use separate temporary outputs:
+
+```sh
+dotnet run --project src/dotnet/TraceMap.Cli --no-build -- scan --repo samples/compiled-dotnet-evidence/vb --out "$smoke_output" --compiled-input "$PWD/samples/compiled-dotnet-evidence/vb/bin/Debug/net10.0/CompiledEvidence.VisualBasic.dll" --il-body-evidence
+python3 scripts/validate-adapter-artifacts.py "$smoke_output"
+```
+
+Limitations: compiler acceptance/IL inspection do not prove runtime overflow or
+source-to-binary authenticity. Unbound input and framework/workspace gaps remain
+explicit. Non-.NET local suites and pinned source OSS smoke reruns are deferred
+for this fixture/test-only slice. The gated Windows deep-corpus local skip is
+expected; authorized private catalog/Windows/MSVC receipts remain unavailable/
+uninvoked. No F# source/PDB/rewrite claim. Next bounded candidate: late-bound
+configuration interactions. Broad issues stay open.
+
+---
+
+# Previous continuation: #767 VB overload ambiguity and strictness
 
 Branch `codex/767-vb-overload-ambiguity`, fresh origin/dev base
 `e14d26f1c4c46c2a58d7dbeb2cf11f192cb6e6e9` (#842 merged), target dev. Read AGENTS,
