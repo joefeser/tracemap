@@ -1,3 +1,58 @@
+# Current continuation: #767 C# ref-like signatures
+
+Branch `codex/767-ref-like-signatures`, fresh origin/dev base
+`c8bbfcd80e6a136bfdc4dcdff766e14a47eb01dd` (#839 merged), target dev. Read AGENTS,
+fetched main/dev, reconciled all five issue bodies/latest comments and merged/open
+PRs, current specs/docs/code/tests. No open PR or competing ref-like worktree.
+Primary Base44 edits and other worktrees preserved; main-only site work excluded.
+Existing RefFieldShape does not cover the selected signatures. Acceptance matrix
+is in the ref-like validation continuation.
+
+Implemented four public C# methods and six tests: Span/ReadOnlySpan VALUETYPE
+constructions, BYREF return/parameters, required return InAttribute modifier,
+separate parameter In flag and return IsReadOnlyAttribute. Independent SRM/Cecil
+oracles and hand-authored identities pin exact single/combined provenance.
+Data-only required/optional/absent modifier variants cannot collapse. Duplicate
+inputs, truncated PE, member limits and reversed input order retain explicit
+ambiguity/gaps/determinism. No production rule/schema or new derived artifact.
+No fixture or mutated assembly execution; no runtime-validity claim for mutations.
+
+Validation: locked restore on SDK 10.0.302; build zero warnings/errors; focused
+6/6 with warnings as errors. Surrounding suite 434/434, zero failures/skips. Two validated CLI scans
+emit 352 facts with four distinct ref-like signatures/endpoints; facts/report
+bytes match. Artifact validator 7/7 (existing SQLite ResourceWarning); privacy,
+spec and whitespace guards pass. Final-head full .NET/public cross-platform CI and live ACK required.
+Duplicate full local .NET, non-.NET local suites and pinned source OSS smokes are
+explicitly deferred for this fixture/test-only change.
+
+Commands (logs `/tmp/tracemap-ref-*`):
+
+```sh
+dotnet restore src/dotnet/TraceMap.sln --locked-mode
+dotnet build src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore -warnaserror
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore -warnaserror --filter FullyQualifiedName~Ref_like_matrix
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-build --no-restore --filter 'FullyQualifiedName~ManagedMetadataExtractorTests|FullyQualifiedName~SourceMetadataReconciliationTests|FullyQualifiedName~PortablePdbExtractorTests|FullyQualifiedName~IlBodyEvidenceExtractorTests|FullyQualifiedName~IlRewrite'
+python3 scripts/test_validate_adapter_artifacts.py
+./scripts/check-private-paths.sh
+node scripts/kiro-review.mjs --self-test
+git diff --check
+```
+
+Two CLI repeats use new temporary outputs and the absolute public C# assembly:
+
+```sh
+dotnet run --project src/dotnet/TraceMap.Cli --no-build -- scan --repo samples/modern-sample --out "$smoke_output" --compiled-input "$PWD/samples/compiled-dotnet-evidence/csharp/bin/Debug/net10.0/CompiledEvidence.CSharp.dll"
+python3 scripts/validate-adapter-artifacts.py "$smoke_output"
+```
+
+Next: bounded PR/live ACK (verified 0.5.5 stable, ab39833, distFresh=true;
+lane capabilities satisfied). Do not infer lifetime/escape safety or external
+IsByRefLike classification from TypeRefs, or source/PDB/IL/rewrite identity from
+signatures. Source imports/overload interactions and broader #767 acceptance
+remain; no F# source claim. Authorized private corpus/Windows/MSVC access remains
+unavailable/uninvoked; public fixtures require neither. Prior Windows wizard
+instability remains separate unresolved evidence. Keep broad issues open.
+
 # Current continuation: #767 VB late-bound source gaps and helper IL
 
 Branch `codex/767-late-bound-il-matrix`, fresh origin/dev base
