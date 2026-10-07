@@ -936,3 +936,36 @@ provenance. Mutated assemblies are data only, never executed or claimed runtime
 valid. No production rule/schema or new derived machine-readable artifact is added.
 Source ownership, PDB, original/rewritten bodies, F# source extraction, private
 corpus and broad #767/#759 acceptance remain separate and open.
+
+
+## VB imports and source identity continuation
+
+PR #840 merged at `2aee151e` before this #767 slice. The public VB project now
+contains a project namespace import, a file alias and an SDK default import.
+`ViaProject` and `ViaAlias` use different `ImportToken` types with the same short
+name; `ViaDefault` uses `System.Collections.Generic.List(Of Integer)` without an
+explicit file import. Six tests independently decode raw SRM signatures and
+Cecil metadata, then check hand-authored full source/metadata identities and
+source spans against the existing reconciliation implementation.
+
+| Requirement | Implementation/test evidence | Remaining gap | Host/toolchain |
+| --- | --- | --- | --- |
+| #769 corpus dimensions | Public runway/minimized fixtures | Authorized private catalog and receipts | Isolated Windows/private access |
+| #767 imports | Three exact source declarations, MethodDef tokens, namespace/scope/generic identities; bound joins, unbound refusal, duplicate candidates, truncated PE and member-limit gaps | Compiler import conflicts, overload interactions and configuration variants | Public .NET 10 SDK |
+| #766 identity | Independent SRM/Cecil readers, exact endpoint/source-span/provenance oracles and substitution counterexamples | Original/rewritten IL and PDB relationships for these methods | Public .NET/IL tools |
+| #768 Windows | Public CI and guarded lane | Historical corpus/C++/CLI acceptance | Authorized Windows/MSVC |
+
+Tests retain rule/tier, source span or metadata location/token, commit and
+extractor version; compiled evidence and joins retain generator, bounded-input
+and binding hashes. Repeated scans compare facts and provenance exactly.
+The alias is resolved by Roslyn to its full type identity; alias spelling and
+short-name similarity are not identity. Duplicate assembly inputs remain two
+candidates. Malformed bytes are inspected as data only, never executed.
+
+Binding receipts are explicit test attestations over public fixture bytes and
+the observed checkout commit, not independent build-authenticity proof. CLI
+coverage still reports unresolved framework dependencies and a redacted workspace
+diagnostic; three exact method joins do not establish whole-scan completeness.
+No production rule/schema or new derived public machine-readable artifact is
+added. Runtime, PDB, original/rewritten bodies, F# source extraction, private
+corpus and broad #767/#759 acceptance remain separate and open.

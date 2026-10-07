@@ -1,4 +1,61 @@
-# Current continuation: #767 C# ref-like signatures
+# Current continuation: #767 VB import identity joins
+
+Branch `codex/767-vb-import-identity`, fresh origin/dev base
+`2aee151eb842b9b21783a6fffe09915932e8bcf4` (#840 merged), target dev. Read AGENTS,
+fetched main/dev and reconciled all five issue bodies/comments, merged/open PRs,
+current specs/docs/code/tests and worktrees. No competing imports lane/open PR.
+Primary Base44 edits and other worktrees preserved; main-only site work excluded.
+Acceptance matrix is in the VB imports validation continuation.
+
+Implemented a public VB project import, file alias and SDK default-import fixture
+with three methods and six tests. Independent raw SRM/Cecil oracles pin signatures,
+namespace/scopes and tokens; hand-authored source declarations and metadata
+identities pin exact spans/joins/provenance. Two ImportToken types share only a
+short name. Unbound, duplicate, malformed and member-limit inputs refuse joins;
+substitution counterexamples and repeated scans retain exact identities.
+No production rule/schema or derived public artifact changes. No binary execution.
+
+Validation: SDK 10.0.302 locked restore; build zero warnings/errors; focused 6/6
+with warnings as errors. Surrounding suite 473/473, zero failures/skips. Two validated
+bound CLI scans emit 1,134 facts and three exact method joins; facts/report bytes
+match. Artifact validator 7/7 (existing SQLite ResourceWarning); privacy/spec/
+whitespace guards pass. Final-head full .NET/public cross-platform CI and live ACK
+required. Duplicate full local .NET, non-.NET local suites and pinned source OSS
+smokes explicitly deferred for this fixture/test-only slice.
+
+Commands (logs `/tmp/tracemap-imports-*`):
+
+```sh
+dotnet restore src/dotnet/TraceMap.sln --locked-mode
+dotnet build src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore -warnaserror
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore -warnaserror --filter FullyQualifiedName~Import_matrix
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-build --no-restore --filter 'FullyQualifiedName~ManagedMetadataExtractorTests|FullyQualifiedName~SourceMetadataReconciliationTests|FullyQualifiedName~PortablePdbExtractorTests|FullyQualifiedName~IlBodyEvidenceExtractorTests|FullyQualifiedName~IlRewrite|FullyQualifiedName~VisualBasicExtractionTests'
+python3 scripts/test_validate_adapter_artifacts.py
+./scripts/check-private-paths.sh
+node scripts/kiro-review.mjs --self-test
+git diff --check
+```
+
+CLI repeats used separate temporary outputs and an explicit local test receipt
+constructed from the initial public assembly outcome (safe locator, raw SHA-256,
+assembly identity and checkout commit; `public-fixture`/`test-build` attestation):
+
+```sh
+dotnet run --project src/dotnet/TraceMap.Cli --no-build -- scan --repo samples/compiled-dotnet-evidence/vb --out "$smoke_output" --compiled-input "$PWD/samples/compiled-dotnet-evidence/vb/bin/Debug/net10.0/CompiledEvidence.VisualBasic.dll" --compiled-binding-receipt /tmp/tracemap-imports-receipt.json
+python3 scripts/validate-adapter-artifacts.py "$smoke_output"
+```
+
+Limitations: receipts attest the test inputs, not independent build authenticity.
+CLI coverage retains unresolved framework dependencies and a redacted workspace
+diagnostic. Compiler import conflicts, overload/configuration variants, PDB,
+original/rewritten IL and runtime remain separate. Private corpus/Windows/MSVC
+receipts unavailable/uninvoked; no customer/private execution. No F# source claim.
+Next: inspect the remaining #767 configuration/import-conflict acceptance before
+moving to broader #766 rules; keep all broad issues open.
+
+---
+
+# Previous continuation: #767 C# ref-like signatures
 
 Branch `codex/767-ref-like-signatures`, fresh origin/dev base
 `c8bbfcd80e6a136bfdc4dcdff766e14a47eb01dd` (#839 merged), target dev. Read AGENTS,

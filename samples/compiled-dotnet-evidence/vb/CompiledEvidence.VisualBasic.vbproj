@@ -6,4 +6,7 @@
     <DebugType>portable</DebugType>
     <Deterministic>true</Deterministic>
   </PropertyGroup>
+  <ItemGroup>
+    <Import Include="TraceMap.CompiledFixtures.ProjectImported" />
+  </ItemGroup>
 </Project>

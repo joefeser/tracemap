@@ -196,3 +196,11 @@ slices and require an implementation-state update before work begins.
   provenance, modreq/modopt/absent counterexamples, duplicate/malformed/member-limit
   gaps and deterministic repeats. Lifetime/runtime, external type classification,
   source/PDB/IL/rewrite and broader language acceptance remain open.
+
+
+- [x] 33. Bounded #767 VB imports continuation: project namespace, file alias
+  and SDK default imports; independent SRM/Cecil signatures/scopes/tokens,
+  hand-authored source declarations, exact joins/spans/provenance, same-name
+  substitution rejection, unbound/duplicate/malformed/member-limit gaps and
+  deterministic repeats. Compiler import conflicts/configuration variants,
+  PDB/IL/rewrite/runtime and broader language acceptance remain open.
