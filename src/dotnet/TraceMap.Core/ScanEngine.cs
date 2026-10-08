@@ -717,7 +717,11 @@ public static class ScanEngine
                     continue;
 
                 if (!baseline.TryGetValue(path, out var expected))
+                {
+                    if (IsKnownGeneratedCompilationInput(path))
+                        continue;
                     throw new SourceSnapshotException(details: [$"{path} (no baseline digest captured)"]);
+                }
                 if (!itemsByPath.TryGetValue(path, out var item))
                     throw new SourceSnapshotException(details: [$"{path} (missing from verification inventory)"]);
                 if (!string.Equals(expected, CreateSourceSnapshotDigest(repoPath, [item], cancellationToken), StringComparison.Ordinal))
@@ -732,6 +736,21 @@ public static class ScanEngine
 
     private static bool IsSemanticMetadataKind(string kind) =>
         kind is "Solution" or "Project" or "VisualBasicProject" or "MSBuildProps" or "MSBuildTargets";
+
+    // Toolchain-generated compilation inputs (Razor SDK, source generators, SDK targets)
+    // materialize when the project is evaluated for semantic analysis — they are outputs of the
+    // scan's own build evaluation, not source evidence, so they carry no pre-scan baseline.
+    // Real source files that appear without a baseline still refuse (guard stays strict there).
+    private static bool IsKnownGeneratedCompilationInput(string relativePath)
+    {
+        var fileName = Path.GetFileName(relativePath);
+        return fileName.Equals("RazorAssemblyInfo.cs", StringComparison.Ordinal)
+            || fileName.Equals("MvcApplicationPartsAssemblyInfo.cs", StringComparison.Ordinal)
+            || fileName.EndsWith(".AssemblyInfo.cs", StringComparison.Ordinal)
+            || fileName.EndsWith(".AssemblyAttributes.cs", StringComparison.Ordinal)
+            || fileName.EndsWith(".GlobalUsings.g.cs", StringComparison.Ordinal)
+            || fileName.EndsWith(".g.cs", StringComparison.Ordinal);
+    }
 
     private static IReadOnlyList<FileInventoryItem> IncludeSemanticInputs(
         IReadOnlyList<FileInventoryItem> inventory,
