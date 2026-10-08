@@ -24,3 +24,30 @@ period in standard .NETCoreApp target names; corrected the target validator.
 Next: full Debug suite, sample smoke, review and PR.
 Private estate scans and downstream upgrade-authority behavior are not acceptance
 claims of this public-fixture slice.
+
+## Acceptance map
+
+| Requirement | Evidence / remaining validation |
+| --- | --- |
+| Default-off CLI option, existing files only | CLI off/on regression; no build/restore call added by option |
+| Discover bin at arbitrary depth, separate from snapshot | Multi-configuration fixture; source snapshot unchanged after observed deps change and real mid-scan synthetic build |
+| Correct SDK format and project exclusion | Exact target/library keys; synthetic direct/transitive graph; actual SDK-generated CLI manifest smoke emitted 31 transitive package rows with no deps gaps |
+| Package fact shape with build-output provenance | Rule/tier/extractor, package/version/target/relation, exact input/generator hashes, JSON pointer, unknown build commit/freshness |
+| No overstated closure or source directness | Graph ambiguity/missing-edge unknowns; emitted-target scope documented; unsupported metadata yields explicit gaps |
+| Unique file/target/package rows | Multi-target/BOM positive; duplicate property, case collision and multiple-version negative cases |
+| Bounded and malformed cases | File, byte, total-byte, discovery and library limits; malformed/truncated/unsafe/unsupported/missing/symlink cases |
+| Delivery | PR #848 targets dev; full Debug validation and ACK in progress |
+
+Public CLI smoke and artifact validator pass. Actual SDK manifest smoke uses the
+public TraceMap CLI build output, not a customer artifact. No language adapter
+behavior changed; pinned external OSS adapter runs are deferred. Private estate
+acceptance and downstream planner mapping remain out of scope.
+
+The initial full Debug run reported an existing MW-DETERMINISM root-beta repeat
+scan mismatch. The run finished with 3,456 passed, one failed and one Windows-only skip in
+19m03s. The failed test then passed in isolation on the same binaries in 11s.
+Root cause is not established; the failed run is not recorded as a pass.
+New integration tests now join the existing Git metadata sensitive nonparallel
+collection. Self-review fixes allow an existing build writer handle and reject trailing-newline
+identities. All 79 focused tests pass, including 29 deps.json cases. The next full
+Debug run validates the isolated integration tests and these fixes.

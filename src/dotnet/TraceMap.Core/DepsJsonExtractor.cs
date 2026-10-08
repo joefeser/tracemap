@@ -18,9 +18,9 @@ internal static class DepsJsonExtractor
 {
     private static readonly HashSet<string> Excluded = new(StringComparer.OrdinalIgnoreCase)
         { ".git", ".tracemap", ".nuget", "obj", "node_modules" };
-    private static readonly Regex Name = new("^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$", RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100));
-    private static readonly Regex Version = new("^[0-9]+(?:\\.[0-9]+){0,3}(?:-[0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*)?(?:\\+[0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*)?$", RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100));
-    private static readonly Regex Target = new("^[A-Za-z0-9.][A-Za-z0-9._/+,=\\-]{0,255}$", RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100));
+    private static readonly Regex Name = new("^[A-Za-z0-9][A-Za-z0-9._-]{0,127}\\z", RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100));
+    private static readonly Regex Version = new("^[0-9]+(?:\\.[0-9]+){0,3}(?:-[0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*)?(?:\\+[0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*)?\\z", RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100));
+    private static readonly Regex Target = new("^[A-Za-z0-9.][A-Za-z0-9._/+,=\\-]{0,255}\\z", RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100));
 
     internal static DepsJsonResult Read(ScanOptions options, CancellationToken cancellationToken)
     {
@@ -101,7 +101,7 @@ internal static class DepsJsonExtractor
                     }
                     try
                     {
-                        using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
+                        using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
                         if (stream.Length > limits.MaxFileBytes || stream.Length > limits.MaxTotalBytes - bytesRead)
                         {
                             gaps.Add(new(relative, "deps-json-byte-limit"));
