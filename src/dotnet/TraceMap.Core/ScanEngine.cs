@@ -744,10 +744,14 @@ public static class ScanEngine
     private static bool IsKnownGeneratedCompilationInput(string relativePath)
     {
         // OrdinalIgnoreCase: Windows filesystems are case-insensitive and MSBuild/Roslyn
-        // may report the same generated file with any casing
+        // may report the same generated file with any casing. Modern SDKs emit the
+        // PROJECT-PREFIXED forms ({Proj}.RazorAssemblyInfo.cs) alongside bare ones —
+        // observed on a real .NET 10 Web API estate scan.
         var fileName = Path.GetFileName(relativePath);
         return fileName.Equals("RazorAssemblyInfo.cs", StringComparison.OrdinalIgnoreCase)
             || fileName.Equals("MvcApplicationPartsAssemblyInfo.cs", StringComparison.OrdinalIgnoreCase)
+            || fileName.EndsWith(".RazorAssemblyInfo.cs", StringComparison.OrdinalIgnoreCase)
+            || fileName.EndsWith(".MvcApplicationPartsAssemblyInfo.cs", StringComparison.OrdinalIgnoreCase)
             || fileName.EndsWith(".AssemblyInfo.cs", StringComparison.OrdinalIgnoreCase)
             || fileName.EndsWith(".AssemblyAttributes.cs", StringComparison.OrdinalIgnoreCase)
             || fileName.EndsWith(".GlobalUsings.g.cs", StringComparison.OrdinalIgnoreCase)
