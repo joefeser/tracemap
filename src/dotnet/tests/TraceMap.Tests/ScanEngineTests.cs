@@ -357,6 +357,56 @@ public sealed class ScanEngineTests
     }
 
     [Fact]
+    public void Semantic_input_guard_tolerates_generator_emitted_inputs_without_a_baseline()
+    {
+        using var temp = new TempDirectory();
+        const string realPath = "Real.cs";
+        File.WriteAllText(Path.Combine(temp.Path, realPath), "public sealed class Real { }");
+        var inventory = new[] { new FileInventoryItem(realPath, "CSharp", new FileInfo(Path.Combine(temp.Path, realPath)).Length) };
+        var baseline = ScanEngine.CaptureSemanticInputSnapshot(temp.Path, inventory);
+        var semanticResult = new SemanticExtractionResult(
+            [],
+            [],
+            true,
+            false,
+            new HashSet<string>(StringComparer.Ordinal) { realPath },
+            CompilationInputFiles: new HashSet<string>(StringComparer.Ordinal)
+            {
+                realPath,
+                "RazorAssemblyInfo.cs",
+                "obj/Debug/net8.0/RazorAssemblyInfo.cs",
+                "obj/Debug/net8.0/Sample.Web.GlobalUsings.g.cs",
+                "obj/Release/net48/Sample.Web.AssemblyInfo.cs"
+            });
+
+        ScanEngine.VerifySemanticInputSnapshot(temp.Path, inventory, semanticResult, baseline);
+    }
+
+    [Fact]
+    public void Semantic_input_guard_still_refuses_unknown_inputs_without_a_baseline()
+    {
+        using var temp = new TempDirectory();
+        const string realPath = "Real.cs";
+        File.WriteAllText(Path.Combine(temp.Path, realPath), "public sealed class Real { }");
+        var inventory = new[] { new FileInventoryItem(realPath, "CSharp", new FileInfo(Path.Combine(temp.Path, realPath)).Length) };
+        var baseline = ScanEngine.CaptureSemanticInputSnapshot(temp.Path, inventory);
+        var semanticResult = new SemanticExtractionResult(
+            [],
+            [],
+            true,
+            false,
+            new HashSet<string>(StringComparer.Ordinal) { realPath },
+            CompilationInputFiles: new HashSet<string>(StringComparer.Ordinal) { realPath, "HandWritten.cs" });
+
+        var exception = Assert.Throws<SourceSnapshotException>(() =>
+            ScanEngine.VerifySemanticInputSnapshot(temp.Path, inventory, semanticResult, baseline));
+        Assert.Equal(SourceSnapshotException.ErrorCode, exception.Message);
+        var details = SourceSnapshotException.Describe(exception);
+        Assert.NotNull(details);
+        Assert.Contains("HandWritten.cs (no baseline digest captured)", details);
+    }
+
+    [Fact]
     public void Semantic_input_guard_detects_same_size_source_changes_across_project_loading()
     {
         using var temp = new TempDirectory();
