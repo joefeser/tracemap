@@ -75,3 +75,10 @@ The live gate therefore holds the consolidated findings pending Baz, despite a
 completed exact-head review being visible upstream. No review-finding repair or
 resolution is claimed while ACK withholds patch authority. A separate bounded
 ACK reader repair needs owner direction; no trust check is weakened here.
+
+After diagnosing the missing-URL reader defect, the original read-only wait was
+interrupted and a bounded 60-second confirmation run returned
+`human_decision_required / REQUIRED_REVIEW_QUORUM_NOT_MET`,
+`workerMayStop=true`, eight held findings, no failed/pending checks, and CLEAN
+merge state on published head `0da74d7d`. This is not merge readiness. The
+follow-up commits remain local to avoid invalidating the pending review batch.
