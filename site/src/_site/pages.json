@@ -150,6 +150,21 @@
     "priority": "0.7"
   },
   {
+    "path": "/webforms/source-plus-compiled-proof/",
+    "changefreq": "monthly",
+    "priority": "0.8"
+  },
+  {
+    "path": "/webforms/local-demo/",
+    "changefreq": "monthly",
+    "priority": "0.8"
+  },
+  {
+    "path": "/webforms/review-workbench/",
+    "changefreq": "monthly",
+    "priority": "0.8"
+  },
+  {
     "path": "/legacy-data-surface/",
     "changefreq": "monthly",
     "priority": "0.7"
@@ -163,6 +178,11 @@
     "path": "/roadmap/",
     "changefreq": "monthly",
     "priority": "0.7"
+  },
+  {
+    "path": "/webforms/",
+    "changefreq": "monthly",
+    "priority": "0.8"
   },
   {
     "path": "/vault-export/",

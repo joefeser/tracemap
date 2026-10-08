@@ -7,6 +7,11 @@ import { buildSite, topNavigationLinks } from "./build.mjs";
 import { validateAdoptionPlaybookDist } from "./adoption-playbook.mjs";
 import { validateAccessSafeEvidenceAcquisitionDist } from "./access-safe-evidence-acquisition.mjs";
 import { validateWebformsModernizationArticleDist } from "./webforms-modernization-article.mjs";
+import { validateWebformsGuidedSetupDist } from "./webforms-guided-setup.mjs";
+import { validateWebFormsSourceCompiledProofDist } from "./webforms-source-compiled-proof.mjs";
+import { validateWebFormsLocalDemoDist } from "./webforms-local-demo.mjs";
+import { validateWebFormsReviewWorkbenchDist } from "./webforms-review-workbench.mjs";
+import { validateWebFormsCapabilityRefreshDist } from "./webforms-capability-refresh.mjs";
 import { validateReducedCoverageArticleDist } from "./reduced-coverage-article.mjs";
 import { validateGapLineNumberArticleDist } from "./gap-line-number-article.mjs";
 import { validateButtonIdentityArticleDist } from "./button-identity-article.mjs";
@@ -103,7 +108,11 @@ export async function validateSite(options = {}) {
   const legacyDotnetEvidenceLaneResult = await validateLegacyDotnetEvidenceLane({ root });
   const legacyModernizationResult = await validateLegacyModernizationEvidenceMap({ root });
   const legacyDataSurfaceResult = await validateLegacyDataSurface({ root });
-  const result = await validateDist({ root });
+  const result = await validateDist({
+    root,
+    requireWebformsGuidedSetup: true,
+    requireWebFormsCapabilityRefresh: true
+  });
 
   log(
     `Validated ${result.htmlFileCount} HTML files, ${result.internalReferenceCount} internal references, ${result.sitemapUrlCount} sitemap URLs, ${legacyStoryResult.scannedFileCount} legacy story safety targets, ${legacyDotnetEvidenceLaneResult.rowCount} legacy .NET evidence-lane rows, ${legacyModernizationResult.rowCount} legacy modernization evidence-map rows, and ${legacyDataSurfaceResult.rowCount} legacy data surface rows.`
@@ -117,6 +126,8 @@ export async function validateDist({
   requireMsbuildBinlogEvidence = true,
   requireAccessSafeEvidenceAcquisition = true,
   requireWebformsModernizationArticle = true,
+  requireWebformsGuidedSetup = false,
+  requireWebFormsCapabilityRefresh = false,
   requireReducedCoverageArticle = true,
   requireGapLineNumberArticle = true,
   requireButtonIdentityArticle = true,
@@ -167,6 +178,9 @@ export async function validateDist({
     }
   if (requireWebformsModernizationArticle) {
     await validateWebformsModernizationArticleDist({ baseUrl: normalizedBaseUrl, dist, errors });
+  }
+  if (requireWebformsGuidedSetup) {
+    await validateWebformsGuidedSetupDist({ baseUrl: normalizedBaseUrl, dist, errors, root });
   }
   if (requireReducedCoverageArticle) {
     await validateReducedCoverageArticleDist({ baseUrl: normalizedBaseUrl, dist, errors });
@@ -259,6 +273,19 @@ export async function validateDist({
     await validateSiteClaimGuardrailsDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateStaticTriageDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateStaticVsRuntimeDist({ baseUrl: normalizedBaseUrl, dist, errors });
+    if (await fileExists(resolve(root, "src", "webforms", "source-plus-compiled-proof", "index.html")) ||
+        await fileExists(resolve(root, "src", "assets", "webforms-source-compiled-proof.json"))) {
+      await validateWebFormsSourceCompiledProofDist({ baseUrl: normalizedBaseUrl, dist, errors, root });
+    }
+    if (await fileExists(resolve(root, "src", "webforms", "local-demo", "index.html"))) {
+      await validateWebFormsLocalDemoDist({ baseUrl: normalizedBaseUrl, dist, errors, root });
+    }
+    if (await fileExists(resolve(root, "src", "webforms", "review-workbench", "index.html"))) {
+      await validateWebFormsReviewWorkbenchDist({ baseUrl: normalizedBaseUrl, dist, errors, root });
+    }
+    if (requireWebFormsCapabilityRefresh) {
+      await validateWebFormsCapabilityRefreshDist({ dist, errors });
+    }
     await validateSqlOperatorHandoffDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateSqlProjectRefactorIntentStoryDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateSqlRunbookProofPacketDist({ baseUrl: normalizedBaseUrl, dist, errors });

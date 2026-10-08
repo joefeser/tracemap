@@ -38,7 +38,7 @@ run_ts_scan() {
 run_dotnet_scan() {
   local repo_path="$1"
   local out_path="$2"
-  dotnet run --project "$DOTNET_CLI" -- scan --repo "$repo_path" --out "$out_path"
+  dotnet run --project "$DOTNET_CLI" -- scan --repo "$repo_path" --out "$out_path" --restore
   require_file "$out_path/scan-manifest.json"
   require_file "$out_path/facts.ndjson"
   require_file "$out_path/index.sqlite"

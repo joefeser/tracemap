@@ -1,0 +1,262 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="A public-safe Web Forms review walkthrough for inspecting one checked-in synthetic source and compiled route, its provenance, unresolved command state, explicit gaps, and bounded next questions.">
+    <meta name="robots" content="index,follow">
+    <meta name="author" content="Joe Feser">
+    <title>Web Forms Review Workbench Walkthrough | TraceMap</title>
+    <link rel="canonical" href="https://tracemap.tools/webforms/review-workbench/">
+    <meta property="og:type" content="article">
+    <meta property="og:site_name" content="TraceMap">
+    <meta property="og:title" content="Web Forms Review Workbench Walkthrough | TraceMap">
+    <meta property="og:description" content="Follow seven static-review steps while source, compiled evidence, candidates, gaps, provenance, and stop conditions remain distinct.">
+    <meta property="og:url" content="https://tracemap.tools/webforms/review-workbench/">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="TraceMap home"><span class="brand-mark" aria-hidden="true">T</span><span>TraceMap</span></a>
+      <nav class="top-nav" aria-label="Primary navigation">
+        <a href="/evidence/">Evidence</a><a href="/outputs/">Outputs</a><a href="/workflows/">Workflows</a>
+        <a href="/examples/">Examples</a><a href="/blog/">Blog</a><a href="/capabilities/">Capabilities</a>
+        <a href="/docs/">Docs</a><a href="/validation/">Validation</a><a href="/limitations/">Limitations</a>
+        <a href="/demo/">Demo</a><a href="https://github.com/joefeser/tracemap">GitHub</a>
+      </nav>
+    </header>
+
+    <main data-webforms-review-workbench="walkthrough" data-public-claim-level="demo" data-proof-claim-level="concept" data-implementation-base="5fd50ebec3bef40c7c0b3660a754ab08cab45982" data-repairs-803="not-shipped">
+      <section class="page-hero" id="overview">
+        <p class="eyebrow">Web Forms · public review walkthrough</p>
+        <h1>Inspect one static route, then stop where its evidence stops.</h1>
+        <p class="hero-subhead">This authored walkthrough demonstrates how a reviewer can read one checked-in synthetic Web Forms handler, a source-plus-compiled route, an illustrative evidence detail, an unresolved command category, and a coverage gap without treating static reachability as observed application behavior.</p>
+        <p class="hero-note"><strong>Public claim level: demo</strong> for the seven-step reading sequence. The reused <a href="/webforms/source-plus-compiled-proof/">source-plus-compiled projection</a> remains <strong>concept</strong>: No independent extractor output is checked in for its illustrative hop IDs, tiers, spans, or supporting aliases. Nothing here proves runtime execution, page activation, browser reachability, source/build authenticity, deployed identity, complete coverage, migration parity, release approval, or safety.</p>
+        <nav class="hero-actions" aria-label="Web Forms review walkthrough links">
+          <a class="button primary" href="#guided-review">Start the review</a>
+          <a class="button secondary" href="/assets/webforms-source-compiled-proof.json">Inspect the public projection</a>
+          <a class="button secondary" href="/webforms/local-demo/">Open the artifact map</a>
+          <a class="button secondary" href="/manager-packet/">Manager packet</a>
+        </nav>
+      </section>
+
+      <section class="section split-section" id="walkthrough-boundary">
+        <div><p class="section-kicker">Walkthrough boundary</p><h2>This is a reading guide, not a public product workbench.</h2></div>
+        <div class="detail-list">
+          <div><strong>Displayed material</strong><span>Allowlisted fields from <code>tracemap.webforms-source-compiled-proof.v1</code>, checked-in public synthetic paths, and authored reviewer guidance.</span></div>
+          <div><strong>Evidence posture</strong><span>The sequence is a demo. Its reused route projection remains concept-level, <code>partial</code>, and bounded static evidence with explicit candidates and gaps.</span></div>
+          <div><strong>Private workflow</strong><span>The shipped native workbench remains private/local. This page does not load an index, accept uploads, query retained evidence, display raw handoffs, or reproduce private output.</span></div>
+          <div><strong>Broader tracker</strong><span>Issue <a href="https://github.com/joefeser/tracemap/issues/744">#744</a> remains open. This one-handler walkthrough does not claim every requested full-application workbench feature shipped.</span></div>
+          <div><strong>Branch boundary</strong><span>PR #803 repairs are <code>not-shipped</code> at implementation base <code>5fd50ebec3bef40c7c0b3660a754ab08cab45982</code> and are not cited as main-backed proof.</span></div>
+        </div>
+      </section>
+
+      <section class="section" id="guided-review" aria-labelledby="guided-review-heading">
+        <div class="section-header">
+          <p class="section-kicker">Guided review</p>
+          <h2 id="guided-review-heading">Seven steps keep identity, evidence, uncertainty, and ownership together.</h2>
+          <p>The steps are ordinary HTML and remain readable without JavaScript. Labels—not color—distinguish source observations, compiled structure, review candidates, and gaps.</p>
+        </div>
+        <div class="workflow-grid" data-review-step-list>
+          <article data-review-step="1" id="step-scope">
+            <p class="eyebrow">Step 1 · scope and provenance</p>
+            <h3>Confirm the exact public projection before reading a route.</h3>
+            <p>Repository <code>joefeser/tracemap</code>; selected projection commit <code>5ffd4a54176c002e4c6d41ce0133eab5963ad79b</code>; schema <code>tracemap.webforms-source-compiled-proof.v1</code>; coverage <code>bounded-static-evidence</code>; result <code>partial</code>; no path/work truncation recorded for this projection.</p>
+            <p><a href="#provenance">Read the full public-safe provenance card</a>. Stop if the selected commit, projection digests, versions, coverage, or limitation cannot be confirmed.</p>
+          </article>
+          <article data-review-step="2" id="step-handler">
+            <p class="eyebrow">Step 2 · choose the handler</p>
+            <h3>Choose the synthetic <code>Profile_Click</code> row.</h3>
+            <p>The authored selection points to <code>samples/messy-dotnet-workspace/vb-lazy-constructor/Overview.aspx.vb:13-15</code>, rule <code>vb.syntax.declarations.v1</code>, tier <code>Tier3SyntaxOrTextual</code>. Selection is navigation state, not proof that a page loaded or an event fired.</p>
+          </article>
+          <article data-review-step="3" id="step-route">
+            <p class="eyebrow">Step 3 · read the route</p>
+            <h3>Follow ordered observations without flattening their tiers.</h3>
+            <p>Read the six rows below in order. Source syntax, compiled metadata, candidate bridges, and the terminal candidate retain separate labels; display names are never join keys.</p>
+            <p><a href="#ordered-route">Open the ordered route</a>. Stop before calling a candidate bridge an exact compiled call or runtime dispatch.</p>
+          </article>
+          <article data-review-step="4" id="step-detail">
+            <p class="eyebrow">Step 4 · open evidence detail</p>
+            <h3>Keep the rule, tier, span, version, coverage, and limitation adjacent.</h3>
+            <p>The getter detail carries <code>dotnet.compiled.member.v1</code>, <code>Tier2Structural</code>, its public relative span, extractor version, projection namespace, and concept limitation.</p>
+            <p><a href="#evidence-detail">Inspect the detail</a>. The public projection does not carry an independently verified supporting-evidence ID, so the missing reference stays visible as a gap.</p>
+          </article>
+          <article data-review-step="5" id="step-command">
+            <p class="eyebrow">Step 5 · inspect the unresolved command</p>
+            <h3>Read categorical state without publishing a value.</h3>
+            <p>The selected outcome records command type state <code>method-local-constant</code> and command text state <code>unresolved-operand</code>, with <code>IlCommandOperandValueUnresolved</code> and <code>IlCommandVirtualDispatchUnproven</code>.</p>
+            <p><a href="#unresolved-command">Inspect the safe command panel</a>. Reaching an <code>ExecuteScalar</code> API candidate is not execution, success, parameter binding, or a returned value.</p>
+          </article>
+          <article data-review-step="6" id="step-gap">
+            <p class="eyebrow">Step 6 · inspect a coverage gap</p>
+            <h3>Preserve the virtual-dispatch uncertainty.</h3>
+            <p><code>IlCommandVirtualDispatchUnproven</code> remains <code>Tier4Unknown</code> with <code>reduced</code> coverage. Encoded <code>callvirt</code> structure does not select an override, provider, or runtime target.</p>
+            <p><a href="#coverage-gap">Inspect the gap</a>. Stop before a display-name join, type-only member guess, or candidate bridge becomes an exact destination.</p>
+          </article>
+          <article data-review-step="7" id="step-owner">
+            <p class="eyebrow">Step 7 · ask or stop</p>
+            <h3>Route the smallest unanswered question to an owner.</h3>
+            <p>Ask the application/runtime owner which input, branch, and provider need separate observation; ask the database owner only for independently authorized database evidence. Stop if no public-safe evidence or owner can answer without exposing protected material.</p>
+            <p><a href="#ask-or-stop">Record the owner question and stop condition</a>. The walkthrough never substitutes for source, database, runtime, migration, release, or application-owner review.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section" id="ordered-route" aria-labelledby="ordered-route-heading">
+        <div class="section-header">
+          <p class="section-kicker">Ordered route</p>
+          <h2 id="ordered-route-heading">The weakest hop stays visible.</h2>
+          <p>These rows reproduce the allowlisted <code>dynamic-email</code> ordering from the concept projection. They illustrate how to review the route; they are not independently projected extractor facts.</p>
+        </div>
+        <div class="claim-ledger-wrap">
+          <table class="claim-ledger-table" data-workbench-route>
+            <caption>One synthetic handler to a static database API terminal candidate.</caption>
+            <thead><tr><th scope="col">Order</th><th scope="col">Label</th><th scope="col">Evidence class</th><th scope="col">Rule and tier</th><th scope="col">Public span</th><th scope="col">Limitation</th></tr></thead>
+            <tbody>
+              <tr data-route-hop="dynamic-handler"><th scope="row">1</th><td><code>Profile_Click</code> handler</td><td>source syntax</td><td><code>vb.syntax.declarations.v1</code> · <code>Tier3SyntaxOrTextual</code></td><td><code>Overview.aspx.vb:13-15</code></td><td>Declared handler syntax does not prove event binding, page activation, or firing.</td></tr>
+              <tr data-route-hop="dynamic-getter"><th scope="row">2</th><td><code>EmployeeInfo</code> getter</td><td>compiled metadata observation</td><td><code>dotnet.compiled.member.v1</code> · <code>Tier2Structural</code></td><td><code>Overview.aspx.vb:20-25</code></td><td>Metadata identity does not prove the getter executed or that this source built the binary.</td></tr>
+              <tr data-route-hop="dynamic-constructor"><th scope="row">3</th><td><code>ProfileEmployee</code> constructor</td><td>source-to-compiled review candidate</td><td><code>combined.paths.compiled-il-bridge.v1</code> · <code>Tier3SyntaxOrTextual</code></td><td><code>Overview.aspx.vb:31-35</code></td><td>The projectless bridge is not an exact compiled call.</td></tr>
+              <tr data-route-hop="dynamic-profile"><th scope="row">4</th><td><code>GetProfile</code></td><td>compiled-route review candidate</td><td><code>combined.paths.compiled-il-bridge.v1</code> · <code>Tier3SyntaxOrTextual</code></td><td><code>Overview.aspx.vb:39-47</code></td><td>Static ordering does not prove branch feasibility.</td></tr>
+              <tr data-route-hop="dynamic-provider"><th scope="row">5</th><td><code>GetEmail</code> in provider DLL</td><td>provider-boundary candidate</td><td><code>combined.paths.compiled-il-bridge.v1</code> · <code>Tier3SyntaxOrTextual</code></td><td><code>PublicLog.vb:6-11</code></td><td>The candidate does not select a provider implementation or runtime dispatch.</td></tr>
+              <tr data-route-hop="dynamic-terminal"><th scope="row">6</th><td><code>ExecuteScalar</code> API terminal</td><td>database-terminal candidate</td><td><code>combined.paths.compiled-il-bridge.v1</code> · <code>Tier3SyntaxOrTextual</code></td><td><code>PublicLog.vb:13-17</code></td><td>A terminal API shape does not prove command execution, success, or returned data.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="section split-section" id="evidence-detail" data-evidence-detail="dynamic-getter" data-rule-id="dotnet.compiled.member.v1" data-evidence-tier="Tier2Structural" data-coverage-label="bounded-static-evidence" data-provenance-ref="#provenance">
+        <div><p class="section-kicker">Evidence detail</p><h2>One structural observation, with its missing support left open.</h2></div>
+        <div class="detail-list">
+          <div><strong>Illustrative subject</strong><span><code>EmployeeInfo</code> getter in the selected synthetic route.</span></div>
+          <div><strong>Rule and tier</strong><span><code>dotnet.compiled.member.v1</code> · <code>Tier2Structural</code>.</span></div>
+          <div><strong>Relative location</strong><span><code>samples/messy-dotnet-workspace/vb-lazy-constructor/Overview.aspx.vb:20-25</code>.</span></div>
+          <div><strong>Selected commit</strong><span><code>5ffd4a54176c002e4c6d41ce0133eab5963ad79b</code>.</span></div>
+          <div><strong>Extractor version</strong><span><code>managed-metadata/0.1.2+cecil-0.11.6</code>.</span></div>
+          <div><strong>Coverage</strong><span><code>bounded-static-evidence</code>; overall result <code>partial</code>.</span></div>
+          <div><strong>Namespace</strong><span>Authored projection namespace <code>public-projection:tracemap.webforms-source-compiled-proof.v1</code>. An independent source/index namespace is unavailable in the public asset.</span></div>
+          <div><strong>Supporting reference</strong><span><code>unavailable-in-concept-projection</code>. The asset intentionally omits unverified supporting evidence IDs; this is a visible provenance gap, not a value to reconstruct.</span></div>
+          <div><strong>Limitation</strong><span>This is an illustrative projection row, not an extractor-verified fact, runtime observation, build-authenticity claim, or deployed-binary identity.</span></div>
+        </div>
+      </section>
+
+      <section class="section split-section" id="unresolved-command" data-command-state="unresolved-operand">
+        <div><p class="section-kicker">Unresolved command</p><h2>Keep the terminal shape; withhold the command value.</h2></div>
+        <div class="detail-list">
+          <div><strong>Terminal category</strong><span><code>ExecuteScalar</code> API candidate.</span></div>
+          <div><strong>Command type state</strong><span><code>method-local-constant</code>.</span></div>
+          <div><strong>Command text state</strong><span><code>unresolved-operand</code>.</span></div>
+          <div><strong>Outcome coverage</strong><span><code>bounded-static-evidence-with-explicit-gaps</code>.</span></div>
+          <div><strong>Retained gaps</strong><span><code>IlCommandOperandValueUnresolved</code> and <code>IlCommandVirtualDispatchUnproven</code>.</span></div>
+          <div><strong>Withheld material</strong><span>No command text, procedure name, parameter, connection material, configuration value, source snippet, or executable body is published.</span></div>
+          <div><strong>Stop condition</strong><span>Stop before guessing the value, provider, database identity, execution, success, or returned value.</span></div>
+        </div>
+      </section>
+
+      <section class="section split-section" id="coverage-gap" data-coverage-gap="IlCommandVirtualDispatchUnproven" data-rule-id="combined.paths.compiled-command-value.v1" data-evidence-tier="Tier4Unknown" data-coverage-label="reduced">
+        <div><p class="section-kicker">Coverage gap</p><h2>A virtual-call shape is not a selected implementation.</h2></div>
+        <div class="detail-list">
+          <div><strong>Classification</strong><span><code>IlCommandVirtualDispatchUnproven</code>.</span></div>
+          <div><strong>Rule and tier</strong><span><code>combined.paths.compiled-command-value.v1</code> · <code>Tier4Unknown</code>.</span></div>
+          <div><strong>Relative location</strong><span><code>samples/messy-dotnet-workspace/vb-lazy-logging-provider/PublicLog.vb:13-17</code>.</span></div>
+          <div><strong>Coverage</strong><span><code>reduced</code>.</span></div>
+          <div><strong>Meaning</strong><span>Encoded <code>callvirt</code> evidence leaves runtime override and provider selection unresolved.</span></div>
+          <div><strong>Next bounded question</strong><span>Can the application/runtime owner provide separate authorized evidence for the selected provider and dispatch target?</span></div>
+          <div><strong>Stop condition</strong><span>Stop before using a display name, type-only member guess, or candidate edge as an exact compiled destination or runtime target.</span></div>
+        </div>
+      </section>
+
+      <section class="section" id="review-states" aria-labelledby="review-states-heading">
+        <div class="section-header"><p class="section-kicker">Reviewer decisions</p><h2 id="review-states-heading">Partial and missing evidence change the next question—not the observed facts.</h2></div>
+        <div class="claim-ledger-wrap">
+          <table class="claim-ledger-table" data-review-state-table>
+            <caption>Bounded next questions for common evidence states.</caption>
+            <thead><tr><th scope="col">Evidence state</th><th scope="col">What remains known</th><th scope="col">Next bounded question and owner</th><th scope="col">Stop condition</th></tr></thead>
+            <tbody>
+              <tr data-review-state="partial"><th scope="row">Reduced or partial source analysis</th><td>Retained lower-tier evidence and named gaps.</td><td>Ask the source/build owner which project, toolchain, or input evidence is missing.</td><td>Stop before semantic, clean, absent, or complete wording.</td></tr>
+              <tr data-review-state="truncated"><th scope="row">Packet truncated</th><td>A deterministic retained prefix and an exact truncation reason.</td><td>Ask the packet owner which configured inventory or graph bound was reached.</td><td>Stop before absence or complete-inventory claims.</td></tr>
+              <tr data-review-state="query-omitted"><th scope="row">Query slice omitted</th><td>Returned children and an explicit omission marker.</td><td>Ask the evidence owner for the exact child pointer or a smaller authorized slice.</td><td>Stop before treating an omitted child as absent.</td></tr>
+              <tr data-review-state="path-work-limited"><th scope="row">Path or work limited</th><td>Retained paths and the named limit gap.</td><td>Ask the application owner for a narrower question or a separately justified bound change.</td><td>Stop before complete reachability claims.</td></tr>
+              <tr data-review-state="candidate"><th scope="row">Candidate bridge only</th><td>A static review candidate and its bounded support.</td><td>Ask the build/source owner whether exact PDB/source identity or unambiguous compiled evidence exists.</td><td>Stop before calling the candidate an IL call or runtime target.</td></tr>
+              <tr data-review-state="input-missing"><th scope="row">Required input missing</th><td>Existing independent evidence plus the input gap.</td><td>Ask the evidence owner for the exact authorized bounded input.</td><td>Stop; never substitute a nearby or newer artifact or infer absence.</td></tr>
+              <tr data-review-state="command-unresolved"><th scope="row">Command value unresolved</th><td>Terminal call shape and categorical value-origin gap.</td><td>Ask the source/database owner whether separate authorized evidence can answer the value question.</td><td>Stop before publishing or guessing command material.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="section split-section" id="inventory-bounds" data-client-inventory-limit="10000" data-server-inventory-limit="10000">
+        <div><p class="section-kicker">Modernization packet bounds</p><h2>Client and server behavior inventories have independent limits.</h2></div>
+        <div class="detail-list">
+          <div><strong>Client inventory</strong><span>Retains at most the first 10,000 client behavior rows in deterministic order. Overflow marks the packet truncated and may retain <code>WebFormsModernizationClientBehaviorLimitReached</code>.</span></div>
+          <div><strong>Server inventory</strong><span>Separately retains at most the first 10,000 server behavior rows in deterministic order. Overflow marks the packet truncated and may retain <code>WebFormsModernizationServerBehaviorLimitReached</code>.</span></div>
+          <div><strong>Gap-budget fallback</strong><span>If the configured packet gap budget is already saturated, a later inventory-specific gap may instead appear as <code>WebFormsModernizationGapLimitReached</code>. The specific client/server label is not guaranteed to survive saturation.</span></div>
+          <div><strong>Scope</strong><span>These are packet behavior-inventory bounds—not handler, page, compiled-path, graph-node, total-fact, query, or general workbench limits. This selected projection does not claim it observed an inventory overflow.</span></div>
+        </div>
+      </section>
+
+      <section class="section" id="provenance" aria-labelledby="provenance-heading">
+        <div class="section-header"><p class="section-kicker">Public-safe provenance</p><h2 id="provenance-heading">The walkthrough reuses the #806 projection; it creates no second evidence asset.</h2></div>
+        <div class="claim-ledger-wrap">
+          <table class="claim-ledger-table" data-workbench-provenance>
+            <caption>Projection identity and bounded-input commitments.</caption>
+            <thead><tr><th scope="col">Field</th><th scope="col">Recorded value</th><th scope="col">Boundary</th></tr></thead>
+            <tbody>
+              <tr><th scope="row">Repository and commit</th><td><code>joefeser/tracemap</code> · <code>5ffd4a54176c002e4c6d41ce0133eab5963ad79b</code></td><td>Exact selected public projection revision, not current deployment identity.</td></tr>
+              <tr><th scope="row">Generator SHA-256</th><td><code>a9aae27d806b21bb1d8c48f861d0b82533e0862f1c8b12e1683ad58027f4946c</code></td><td>Exact generator bytes for the reused projection.</td></tr>
+              <tr><th scope="row">Bounded input SHA-256</th><td><code>23000bf21810695f70f3b5e9f96f460037c1611534b8a5ab7d63a8d63effcd54</code></td><td>Canonical allowlisted privacy-projected input only; never a private source or binary hash.</td></tr>
+              <tr><th scope="row">Extractor/reporter versions</th><td><code>vb-semantic/0.8.7</code> · <code>vb-syntax/0.3.23</code> · <code>managed-metadata/0.1.2+cecil-0.11.6</code> · <code>il-body-evidence/0.1.11+srm-10.0.0+cecil-0.11.6</code> · <code>path-reporter/1.3</code></td><td>Version labels do not upgrade illustrative fields to observed extractor output.</td></tr>
+              <tr><th scope="row">Bounds</th><td><code>maxDepth=20</code> · <code>maxPaths=256</code> · <code>maxTraversalWork=100000</code></td><td>Absence beyond any bound is not proven.</td></tr>
+              <tr><th scope="row">Coverage</th><td><code>bounded-static-evidence</code> · <code>partial</code> · <code>truncatedByPathOrWorkLimit=false</code></td><td>Not truncated by these path/work bounds does not mean complete application coverage.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="section split-section" id="ask-or-stop">
+        <div><p class="section-kicker">Ask or stop</p><h2>The next question stays smaller than the evidence gap.</h2></div>
+        <div class="detail-list">
+          <div><strong>Application/runtime owner</strong><span>Which input, branch, property state, provider, and runtime dispatch would need separate observation?</span></div>
+          <div><strong>Build/source owner</strong><span>Can exact source/PDB/compiled identity be established for the candidate bridge without substituting another artifact?</span></div>
+          <div><strong>Database owner</strong><span>Is separately authorized evidence available for database identity, effective command, parameters, execution, success, and returned data?</span></div>
+          <div><strong>Stop</strong><span>Stop when the next answer would require private material, an unavailable input, a guessed join, a stronger tier, or an unsupported runtime, migration, release, completeness, or safety conclusion.</span></div>
+        </div>
+      </section>
+
+      <section class="section boundary-section" id="non-claims">
+        <div><p class="section-kicker">Non-claims</p><h2>Static review does not observe the application.</h2></div>
+        <ul>
+          <li>No runtime execution, page activation, browser or user reachability, event firing, branch feasibility, selected provider, runtime dispatch, effective command value, database identity, execution, success, or returned data is claimed.</li>
+          <li>No source/build authenticity, deployed-binary identity, current external-input validation, customer compatibility, migration parity, migration effort, complete application coverage, arbitrary graph capacity, release approval, or operational safety is claimed.</li>
+          <li>No customer image, private screenshot, raw workbench output, raw handoff, raw index, raw facts, analyzer output, source value, command text, raw SQL, credential, connection material, local path, private infrastructure identity, or private validation detail is published.</li>
+          <li>No LLM call, prompt classification, embedding, vector database, autonomous review, or replacement of source, database, runtime, migration, release, application-owner, or human judgment is part of this walkthrough.</li>
+        </ul>
+      </section>
+
+      <section class="section link-section" id="next-routes">
+        <div><p class="section-kicker">Continue with the owning surface</p><h2>Link out instead of duplicating authority.</h2></div>
+        <div class="link-grid">
+          <a href="/webforms/">Web Forms guided setup</a>
+          <a href="/webforms/source-plus-compiled-proof/">Source + compiled proof</a>
+          <a href="/webforms/local-demo/">Reproducible local demo</a>
+          <a href="/manager-packet/">Manager packet</a>
+          <a href="/proof-paths/for-managers/">Manager proof paths</a>
+          <a href="/docs/">Documentation map</a>
+          <a href="/outputs/">Output orientation</a>
+          <a href="/review-room/demo-path/">Generic review-room demo path</a>
+          <a href="/legacy-modernization/review-handoff/">Modernization review handoff</a>
+          <a href="/static-vs-runtime/">Static versus runtime</a>
+          <a href="/limitations/">Limitations</a>
+          <a href="/limitations/reduced-coverage/">Reduced-coverage playbook</a>
+          <a href="/evidence/gaps/">Evidence gaps</a>
+          <a href="/roadmap/#claim-ledger">Claim ledger</a>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <p>TraceMap is a deterministic static evidence tool. Public examples are synthetic and bounded.</p>
+      <p>Continue with <a href="/limitations/">limitations</a>, the <a href="/static-vs-runtime/">static/runtime boundary</a>, or the <a href="/legacy-modernization/review-handoff/">modernization review handoff</a>.</p>
+    </footer>
+  </body>
+</html>

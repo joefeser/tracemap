@@ -113,6 +113,7 @@ import {
 } from "./team-evidence-handoff.mjs";
 import { testPlanningHandoffRoute } from "./test-planning-handoff.mjs";
 import { validateDist } from "./validate.mjs";
+import { route as webFormsReviewWorkbenchRoute } from "./webforms-review-workbench.mjs";
 
 test("validateDist accepts generated public sitemap and internal links", async () => {
   const root = await createDistFixture();
@@ -323,7 +324,11 @@ async function createDistFixture({
       swiftRealWorldSmokeRoute,
       ...swiftStoryPageRoutes,
       stakeholderObjectionGuideRoute,
-      stakeholderQuestionIndexRoute
+      stakeholderQuestionIndexRoute,
+      "/webforms/",
+      "/webforms/source-plus-compiled-proof/",
+      "/webforms/local-demo/",
+      webFormsReviewWorkbenchRoute
     ])
   ].map((route) => `https://tracemap.tools${route}`)
 } = {}) {
@@ -408,6 +413,10 @@ async function createDistFixture({
     ...swiftStoryPageRoutes,
     stakeholderObjectionGuideRoute,
     stakeholderQuestionIndexRoute,
+    "/webforms/",
+    "/webforms/source-plus-compiled-proof/",
+    "/webforms/local-demo/",
+    webFormsReviewWorkbenchRoute,
     "/use-cases/",
     "/outputs/",
     "/use-cases/incident-review/",
@@ -2606,12 +2615,12 @@ function roadmapClaimLedgerPage() {
     <a href="/review-claim-checklist/">Review claim checklist</a>
     <table>
       <tbody>
-        <tr id="claim-shipped" data-claim-row data-claim-level="shipped" data-evidence-status="evidence-backed" data-wording-status="live"><td>shipped</td></tr>
-        <tr id="claim-demo-partial" data-claim-row data-claim-level="demo" data-evidence-status="partial/reduced coverage" data-wording-status="demo-only"><td>demo</td></tr>
-        <tr id="claim-demo-gap" data-claim-row data-claim-level="demo" data-evidence-status="gap-labeled demo evidence" data-wording-status="demo-only"><td>gap</td></tr>
-        <tr id="claim-concept-future" data-claim-row data-claim-level="concept" data-evidence-status="future-only" data-wording-status="future-facing"><td>concept</td></tr>
-        <tr id="claim-hidden-internal" data-claim-row data-claim-level="hidden" data-evidence-status="hidden/internal" data-wording-status="hidden-from-public-navigation"><td>hidden</td></tr>
-        <tr id="claim-forbidden" data-claim-row data-claim-level="hidden" data-evidence-status="not-yet-backed" data-wording-status="forbidden"><td>forbidden</td></tr>
+        <tr id="claim-shipped" data-claim-row data-claim-level="shipped" data-evidence-status="evidence-backed" data-wording-status="live"><td>Fixture</td><td><code>shipped</code></td><td><code>evidence-backed</code></td><td>Proof</td><td>Limit</td><td>Artifact</td><td><code>live</code></td></tr>
+        <tr id="claim-demo-partial" data-claim-row data-claim-level="demo" data-evidence-status="partial/reduced coverage" data-wording-status="demo-only"><td>Fixture</td><td><code>demo</code></td><td><code>partial/reduced coverage</code></td><td>Proof</td><td>Limit</td><td>Artifact</td><td><code>demo-only</code></td></tr>
+        <tr id="claim-demo-gap" data-claim-row data-claim-level="demo" data-evidence-status="gap-labeled demo evidence" data-wording-status="demo-only"><td>Fixture</td><td><code>demo</code></td><td><code>gap-labeled demo evidence</code></td><td>Proof</td><td>Limit</td><td>Artifact</td><td><code>demo-only</code></td></tr>
+        <tr id="claim-concept-future" data-claim-row data-claim-level="concept" data-evidence-status="future-only" data-wording-status="future-facing"><td>Fixture</td><td><code>concept</code></td><td><code>future-only</code></td><td>Proof</td><td>Limit</td><td>Artifact</td><td><code>future-facing</code></td></tr>
+        <tr id="claim-hidden-internal" data-claim-row data-claim-level="hidden" data-evidence-status="hidden/internal" data-wording-status="hidden-from-public-navigation"><td>Fixture</td><td><code>hidden</code></td><td><code>hidden/internal</code></td><td>Proof</td><td>Limit</td><td>Artifact</td><td><code>hidden-from-public-navigation</code></td></tr>
+        <tr id="claim-forbidden" data-claim-row data-claim-level="hidden" data-evidence-status="not-yet-backed" data-wording-status="forbidden"><td>Fixture</td><td><code>hidden</code></td><td><code>not-yet-backed</code></td><td>Proof</td><td>Limit</td><td>Artifact</td><td><code>forbidden</code></td></tr>
       </tbody>
     </table>
     <table>

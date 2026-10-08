@@ -118,7 +118,9 @@ run_dotnet_scan() {
   local repo_path="$1"
   local out_path="$2"
   local label="$3"
-  dotnet run --no-build --project "$DOTNET_CLI" -- scan --repo "$repo_path" --out "$out_path"
+  # These checked-in samples are not all solution members. Restore their own
+  # assets so a clean checkout can retain semantic calls across the demo path.
+  dotnet run --no-build --project "$DOTNET_CLI" -- scan --repo "$repo_path" --out "$out_path" --restore
   node "$ASSERT_HELPER" scan-artifacts "$label" "$out_path"
 }
 

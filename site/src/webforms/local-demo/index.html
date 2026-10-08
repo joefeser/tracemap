@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Reproduce TraceMap's public synthetic Web Forms corpus, understand its retained artifact roles, and keep Windows publication, static evidence, gaps, and provenance distinct.">
+    <meta name="robots" content="index,follow">
+    <meta name="author" content="Joe Feser">
+    <title>Reproducible Web Forms Local Demo | TraceMap</title>
+    <link rel="canonical" href="https://tracemap.tools/webforms/local-demo/">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="TraceMap">
+    <meta property="og:title" content="Reproducible Web Forms Local Demo | TraceMap">
+    <meta property="og:description" content="Replay five public synthetic Web Forms layouts, orient each retained artifact, and review exact-tree validation without turning static evidence into runtime proof.">
+    <meta property="og:url" content="https://tracemap.tools/webforms/local-demo/">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="TraceMap home"><span class="brand-mark" aria-hidden="true">T</span><span>TraceMap</span></a>
+      <nav class="top-nav" aria-label="Primary navigation">
+        <a href="/evidence/">Evidence</a><a href="/outputs/">Outputs</a><a href="/workflows/">Workflows</a>
+        <a href="/examples/">Examples</a><a href="/blog/">Blog</a><a href="/capabilities/">Capabilities</a>
+        <a href="/docs/">Docs</a><a href="/validation/">Validation</a><a href="/limitations/">Limitations</a>
+        <a href="/demo/">Demo</a><a href="https://github.com/joefeser/tracemap">GitHub</a>
+      </nav>
+    </header>
+
+    <main data-webforms-local-demo="v1" data-main-boundary="79ac39cf4459e913944786d755566568d02eccab" data-repairs-803="not-shipped">
+      <section class="page-hero" id="overview">
+        <p class="eyebrow">Web Forms · reproducible local demo</p>
+        <h1>Replay the public corpus, then inspect the right artifact.</h1>
+        <p class="hero-subhead">The one-command local workflow builds checked-in synthetic Web Forms projects, scans attached and separate provider layouts, retains bounded reports, and refuses unsupported or incomplete acceptance states. It does not need customer code or a database.</p>
+        <p class="hero-note" data-public-claim-level="demo"><strong>Public claim level: demo.</strong> The validation receipt below is bound to one exact public synthetic tree and durable Windows result. Workflow orientation without a matching projected artifact remains <strong>concept</strong>. Raw indexes, facts, logs, test receipts, binaries, source, and machine-local paths remain hidden.</p>
+        <nav class="hero-actions" aria-label="Web Forms local demo links">
+          <a class="button primary" href="#replay">Reproduce the demo</a>
+          <a class="button secondary" href="#artifact-map">Open the artifact map</a>
+          <a class="button secondary" href="/webforms/source-plus-compiled-proof/">Inspect the projected proof</a>
+          <a class="button secondary" href="/webforms/">Guided setup</a>
+        </nav>
+      </section>
+
+      <section class="section split-section" id="replay">
+        <div><p class="section-kicker">Choose the replay</p><h2>Local static replay and Windows publication are separate gates.</h2></div>
+        <div class="detail-list">
+          <div><strong>Default local replay</strong><span>Use PowerShell 7, the documented .NET toolchain, and a fresh output root. <code>pwsh -File scripts/wlocal.ps1 -OutputRoot &lt;fresh-output-root&gt;</code> exercises checked-in public fixtures only.</span></div>
+          <div><strong>Authentic publication</strong><span><code>-RequireWindowsPublish</code> additionally requires mapped and mapless ASP.NET publication on Windows. A non-Windows refusal or skipped Windows theory is not a pass.</span></div>
+          <div><strong>Prerequisites</strong><span>Follow <a href="https://github.com/joefeser/tracemap/blob/main/docs/VALIDATION.md">the validation guide</a>, <a href="https://github.com/joefeser/tracemap/blob/main/docs/WEBFORMS_NATIVE_WORKFLOW.md">the native workflow</a>, and <a href="https://github.com/joefeser/tracemap/blob/main/samples/fixture-build/lazy-constructor/README.md">the public corpus map</a>.</span></div>
+          <div><strong>Execution boundary</strong><span>The workflow builds and analyzes fixture artifacts. It does not launch a Web Forms site, execute fixture database methods, run SQL, or observe a user request.</span></div>
+        </div>
+      </section>
+
+      <section class="section command-section" id="clean-clone">
+        <div><p class="section-kicker">Exact-tree recipe</p><h2>Start clean and preserve failures.</h2><p>Check out the exact tested head shown in the receipt, install the documented prerequisites, choose a new output root, and keep the result folder when a gate refuses admission. Later trees need their own result; this count is not current-head proof.</p></div>
+        <pre class="command-block"><code>git clone https://github.com/joefeser/tracemap.git
+cd tracemap
+git checkout afe6152ccb58ad11b61ef4782ba82afdfe7651b7
+pwsh -File scripts/wlocal.ps1 -OutputRoot &lt;fresh-output-root&gt;</code></pre>
+      </section>
+
+      <section class="section" id="artifact-map">
+        <div class="section-header"><p class="section-kicker">Artifact map</p><h2>Each retained class answers one bounded question.</h2><p>The map describes roles only. Public review uses the allowlisted projection; retained raw artifacts stay local.</p></div>
+        <div class="claim-ledger-wrap" data-responsive-artifact-map="table-scroll">
+          <table class="claim-ledger-table">
+            <caption>Retained artifact classes and their public treatment.</caption>
+            <thead><tr><th scope="col">Artifact class</th><th scope="col">Question answered</th><th scope="col">Public treatment</th><th scope="col">Boundary</th></tr></thead>
+            <tbody>
+              <tr><td>Validation receipt</td><td>Which bounded generator, inputs, test result, platform, and acceptance mode were admitted?</td><td>Publish only categorical counts, rule/tier, durable result, and separately labeled source-receipt hashes.</td><td>The local-only receipt and its bounded input roster are not published.</td></tr>
+              <tr><td>Test receipt</td><td>Did the named synthetic suite pass, fail, or skip?</td><td>Summarize exact pass/fail/skip counts from the admitted receipt.</td><td>Raw TRX remains hidden; a skipped Windows case is not a pass.</td></tr>
+              <tr><td>Scan/report family</td><td>Which source or compiled scope was indexed?</td><td>Use the <a href="/webforms/source-plus-compiled-proof/">allowlisted concept projection</a>.</td><td>No raw <code>facts.ndjson</code>, SQLite, logs, or report bodies.</td></tr>
+              <tr><td>Combined artifact</td><td>Which independent website and provider scopes were available?</td><td>Describe labels and source/compiled roles.</td><td>The combined index remains local and does not prove runtime composition.</td></tr>
+              <tr><td>Path view</td><td>Which ordered static route or explicit gap was retained?</td><td>Show bounded labels, rules, tiers, coverage, unresolved state, and gaps through the projection.</td><td>No source snippets, command bodies, parameter values, or database identity.</td></tr>
+              <tr><td>Cap comparison</td><td>What disappeared at the configured one-path result bound?</td><td>Show the admitted count and <code>TruncatedByLimit</code> gap under <code>combined.paths.truncation-gap.v1</code>, Tier4Unknown.</td><td>One retained path is not complete application coverage.</td></tr>
+              <tr><td>Unresolved-value view</td><td>Which static value stayed unknown?</td><td>Show a categorical unresolved operand and owner question.</td><td>No raw SQL, procedure name, scheduled command, or connection material.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="section" id="layouts">
+        <div class="section-header"><p class="section-kicker">Five layouts</p><h2>Input placement changes the evidence available, not the claim boundary.</h2></div>
+        <div class="claim-ledger-wrap"><table class="claim-ledger-table"><caption>Public synthetic operator layouts.</caption><thead><tr><th scope="col">Layout</th><th scope="col">Admitted inputs</th><th scope="col">Expected review result</th><th scope="col">Claim</th></tr></thead><tbody>
+          <tr><td><code>attached</code></td><td>Website source plus website and provider DLLs.</td><td>Three bounded terminal candidates, including the separately projected Fill route.</td><td><code>demo</code> layout pass; projected path details remain <code>concept</code>.</td></tr>
+          <tr><td><code>separate</code></td><td>Website scan and provider scan combined after independent indexing.</td><td>The same admitted getter/constructor/profile/provider route shape.</td><td>No runtime service or provider selection claim.</td></tr>
+          <tr><td><code>separate-dll-only</code></td><td>Provider scan excludes VB source and retains compiled provider evidence.</td><td>Three terminal routes remain available through compiled candidates.</td><td>Compiled-only candidates do not prove source freshness or execution.</td></tr>
+          <tr data-evidence-example="reversed" data-rule-id="validation.deep-projectless-corpus.v1" data-evidence-tier="Tier2Structural" data-coverage-label="bounded-exact-tree-synthetic-layout" data-provenance-ref="#validation-receipt"><td><code>reversed</code></td><td>Provider-first combine order.</td><td>The admitted static route and command-state assertions remain the same.</td><td>Order independence is bounded to this synthetic corpus. <code>validation.deep-projectless-corpus.v1</code> · Tier2Structural · <code>bounded-exact-tree-synthetic-layout</code> · <a href="#validation-receipt">exact-tree receipt</a>.</td></tr>
+          <tr><td><code>missing</code></td><td>Website source and website DLL without the provider scope.</td><td>No invented database route; <code>SelectorNoMatch</code> and other Tier4Unknown gaps stay visible.</td><td>Missing evidence is not proof of runtime absence.</td></tr>
+        </tbody></table></div>
+      </section>
+
+      <section class="section split-section" id="query-views">
+        <div><p class="section-kicker">Four query views</p><h2>Bounds and filters stay attached to the result.</h2></div>
+        <div class="detail-list">
+          <div><strong><code>all</code></strong><span>For the four positive layouts, retains all three admitted static terminal candidates plus explicit gaps for the selected synthetic handler. The <code>missing</code> layout retains gaps and zero paths.</span></div>
+          <div><strong><code>fill</code></strong><span>Filters to the independent Fill terminal. A zero-unresolved subset does not resolve command values excluded by the filter.</span></div>
+          <div><strong><code>capped</code></strong><span>Retains one path and a <code>TruncatedByLimit</code> Tier4Unknown gap. The cap is a coverage boundary, not a severity or completeness judgment.</span></div>
+          <div data-evidence-example="repeat" data-rule-id="validation.deep-projectless-corpus.v1" data-evidence-tier="Tier2Structural" data-coverage-label="bounded-exact-tree-synthetic-layout" data-provenance-ref="#validation-receipt"><strong><code>repeat</code></strong><span>Checks admitted paths, gaps, and index bytes for deterministic equality. Repeat success does not prove that a prior intermittent failure was fixed. <code>validation.deep-projectless-corpus.v1</code> · Tier2Structural · <code>bounded-exact-tree-synthetic-layout</code> · <a href="#validation-receipt">exact-tree receipt</a>.</span></div>
+        </div>
+      </section>
+
+      <section class="section" id="selected-evidence">
+        <div class="section-header"><p class="section-kicker">Selected public evidence</p><h2>Reuse the projection; do not copy the retained run.</h2><p data-public-claim-level="concept"><strong>Claim level: concept.</strong> These examples come from the #806 allowlisted projection, whose illustrative hop IDs, tiers, and spans are not independent extractor-output proof.</p></div>
+        <div class="evidence-grid">
+          <article><h3>Attached and separate</h3><p>The projected <strong>Dynamic email lookup</strong> and <strong>Literal audit call</strong> preserve source, constructor, provider, and API-terminal categories while unresolved operands and branch feasibility remain explicit gaps.</p><p><code>combined.paths.compiled-il-bridge.v1</code> · Tier2Structural/Tier3SyntaxOrTextual candidates · bounded static evidence</p></article>
+          <article><h3>Compiled-only provider</h3><p>The projected <strong>Independent Fill terminal</strong> keeps the provider DLL boundary and database API terminal visible without claiming that a runtime implementation was selected or rows were returned.</p><p><code>dotnet.compiled.member.v1</code> · Tier2Structural metadata · review candidate</p></article>
+          <article><h3>Missing and capped</h3><p>Missing-provider refusal preserves query gaps instead of inventing a route. The capped view preserves <code>TruncatedByLimit</code> rather than presenting one path as complete coverage.</p><p><code>combined.paths.query-gap.v1</code> / <code>combined.paths.truncation-gap.v1</code> · Tier4Unknown</p></article>
+        </div>
+        <p><a href="/assets/webforms-source-compiled-proof.json">Open the public-safe projection</a> or <a href="/webforms/source-plus-compiled-proof/">read its evidence and limitation guide</a>.</p>
+      </section>
+
+      <section class="section" id="validation-receipt">
+        <div class="section-header"><p class="section-kicker">Exact-tree validation receipt</p><h2>A durable Windows result, not a floating current-head claim.</h2></div>
+        <div class="claim-ledger-wrap"><table class="claim-ledger-table"><caption>Verified bindings for the admitted public synthetic result.</caption><thead><tr><th scope="col">Field</th><th scope="col">Verified value</th><th scope="col">Meaning</th></tr></thead><tbody>
+          <tr><td>Tested PR head</td><td><code>afe6152ccb58ad11b61ef4782ba82afdfe7651b7</code></td><td>Exact commit exercised by the durable result.</td></tr>
+          <tr><td>Tree-equivalent main merge</td><td><code>d76358f663ce40532fe0954ca9888612d51a4121</code></td><td>Shares tree <code>1163de1ea0bc4f57cd762ebc3a85ee014bc6fff2</code> with the tested head.</td></tr>
+          <tr><td>Durable result</td><td><a href="https://github.com/joefeser/tracemap/actions/runs/37125942534">GitHub Actions run 37125942534</a></td><td>Windows Server 2025; required mapped and mapless ASP.NET publication.</td></tr>
+          <tr><td>Counts</td><td>148 passed · 0 failed · 0 skipped</td><td>The test count includes 2 Windows publication cases, 2 profile dynamic-lookup cases, and 5 operator layouts. Four additional diagnostic-layout admission checks are recorded separately in the receipt.</td></tr>
+          <tr><td>Receipt class</td><td><code>validation.deep-projectless-corpus.v1</code> · <code>Tier2Structural</code></td><td>Synthetic static validation with explicit limitations.</td></tr>
+          <tr><td>Source-receipt generator SHA-256</td><td><code>529f399c5492f89d12785beb091eda70b7ea6191be60c8fd53a81e818027ec39</code></td><td>Digest of the exact local validation wrapper used by that result.</td></tr>
+          <tr><td>Source-receipt bounded-input SHA-256</td><td><code>90120a5650f5da8472f7ffc734b05a74e9b4ef2075d123fafc35f07addc96a12</code></td><td>Covers the admitted source roster, execution/fixture assemblies, and test receipt. It is not a public-projection input digest.</td></tr>
+          <tr><td>Public-projection generator SHA-256</td><td><code>a9aae27d806b21bb1d8c48f861d0b82533e0862f1c8b12e1683ad58027f4946c</code></td><td>Digest for the separate #806 public generator.</td></tr>
+          <tr><td>Public-projection bounded-input SHA-256</td><td><code>23000bf21810695f70f3b5e9f96f460037c1611534b8a5ab7d63a8d63effcd54</code></td><td>Covers only the allowlisted privacy-projected input; it is independent of the source receipt.</td></tr>
+        </tbody></table></div>
+        <p>This exact-tree result remains valid evidence for its named tree. It is historical with respect to later <code>main</code> revisions and must not be relabeled as validation of this page's implementation head.</p>
+      </section>
+
+      <section class="section" id="failure-evidence">
+        <div class="section-header"><p class="section-kicker">Failure remains evidence</p><h2>Refusal is not converted into partial success.</h2></div>
+        <div class="claim-ledger-wrap"><table class="claim-ledger-table"><caption>Fail-closed outcomes and owner next steps.</caption><thead><tr><th scope="col">Condition</th><th scope="col">Outcome</th><th scope="col">Owner action</th></tr></thead><tbody>
+          <tr><td>Existing output root</td><td><code>DEEP_CORPUS_OUTPUT_NOT_FRESH</code>; tests do not start.</td><td>Choose a new empty destination.</td></tr>
+          <tr><td>Windows publication required on another platform</td><td><code>DEEP_CORPUS_WINDOWS_REQUIRED</code>; no output is written.</td><td>Move the exact tree to a suitable Windows runner.</td></tr>
+          <tr><td>Test process fails</td><td><code>DEEP_CORPUS_TEST_FAILED;outputs-preserved</code>; no admitted validation receipt.</td><td>Inspect retained failure evidence; do not call the corpus validated.</td></tr>
+          <tr><td>Required layout, wizard case, or Windows publication case missing</td><td>Validation refuses admission.</td><td>Restore the exact prerequisite or record the gap.</td></tr>
+          <tr><td>Generator or bounded input changes</td><td><code>DEEP_CORPUS_INPUT_CHANGED;outputs-preserved-not-admitted</code>.</td><td>Run again from a fresh root and bind the new exact tree.</td></tr>
+          <tr><td>Cap, repeat, comparison, or unresolved-ledger mismatch</td><td>Corpus fails rather than reporting a partial pass.</td><td>Investigate the changed assertion and retain the failed output.</td></tr>
+        </tbody></table></div>
+      </section>
+
+      <section class="section boundary-section" id="non-claims">
+        <div><p class="section-kicker">Non-claims and remaining gaps</p><h2>The demo stops at deterministic static evidence.</h2></div>
+        <ul>
+          <li>No runtime page, fixture method, database command, branch, provider dispatch, parameter value, or returned-row observation.</li>
+          <li>No customer compatibility, private application coverage, migration parity, complete cross-service tracing, physical drive-I/O measurement, release approval, or safety-to-run claim.</li>
+          <li>Candidate bridges, unresolved values, Tier4Unknown gaps, result caps, and partial/reduced coverage remain visible; missing evidence is not runtime absence.</li>
+          <li>PR #803 diagnostics and scheduling repairs are not ancestors of this page's exact <code>main</code> boundary and are not described as shipped.</li>
+          <li>No raw SQLite, <code>facts.ndjson</code>, analyzer log, TRX, source snippet, raw SQL, command body, configuration, credential, connection material, private identity, local path, customer artifact, or unpublished validation output is public.</li>
+          <li>No LLM call, embedding, vector database, or prompt-based classification is part of this evidence.</li>
+        </ul>
+      </section>
+
+      <section class="section callout-section" id="continue-review">
+        <h2>Continue from reproduction to review.</h2>
+        <p>Use the <a href="/webforms/">guided setup</a> for operator choices, the <a href="/webforms/source-plus-compiled-proof/">source + compiled proof</a> for the projected chain, the <a href="/webforms/review-workbench/">review-workbench walkthrough</a> for the seven-step evidence reading, <a href="/legacy-modernization/review-handoff/">review handoff</a> for owner questions, <a href="/validation/">validation</a> for repository-wide gates, <a href="/outputs/">outputs</a> for retention boundaries, and <a href="/limitations/">limitations</a> before drawing a conclusion.</p>
+      </section>
+    </main>
+
+    <footer class="site-footer"><p>See the <a href="/examples/">example index</a>, <a href="/legacy-dotnet/evidence/">legacy .NET evidence lane</a>, <a href="/legacy-modernization/evidence-map/">modernization evidence map</a>, <a href="/capabilities/">capabilities</a>, and <a href="/roadmap/#claim-ledger">claim ledger</a>.</p><p class="copyright">© 2026 Joe Feser.</p></footer>
+  </body>
+</html>
