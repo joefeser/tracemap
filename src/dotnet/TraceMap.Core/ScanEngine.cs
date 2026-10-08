@@ -92,7 +92,7 @@ public static class ScanEngine
             }
             catch (SourceInventoryException ex)
             {
-                throw new SourceSnapshotException(ex);
+                throw new SourceSnapshotException(ex, [$"re-read failed: {ex.InnerException?.Message ?? ex.Message}"]);
             }
 
             progress?.FinishStage(
@@ -205,7 +205,7 @@ public static class ScanEngine
         }
         catch (SourceInventoryException ex)
         {
-            var transformed = new SourceSnapshotException(ex);
+            var transformed = new SourceSnapshotException(ex, [$"re-read failed: {ex.InnerException?.Message ?? ex.Message}"]);
             progress?.FailActiveStage(ScanProgressReporter.ScanOperation, "SOURCE_VERIFICATION_FAILED");
             preVerificationReceipt?.Fail(transformed, "stage-started");
             throw transformed;
@@ -431,13 +431,13 @@ public static class ScanEngine
             verificationDigest = CreateSourceSnapshotDigest(repoPath, verificationSnapshotInventory);
             cancellationToken.ThrowIfCancellationRequested();
             if (!string.Equals(sourceSnapshotDigest, verificationDigest, StringComparison.Ordinal))
-                throw new SourceSnapshotException();
+                throw new SourceSnapshotException(details: ["(whole-tree digest mismatch: file list and sizes identical but some watched file's content changed — re-scan when the tree is idle)"]);
             progress?.FinishStage(ScanProgressReporter.ScanOperation, ScanProgressStages.SourceVerification, "completed");
             verificationReceipt?.Complete("succeeded", manifest.AnalysisLevel, "source-snapshot-verified");
         }
         catch (SourceInventoryException ex)
         {
-            var transformed = new SourceSnapshotException(ex);
+            var transformed = new SourceSnapshotException(ex, [$"re-read failed: {ex.InnerException?.Message ?? ex.Message}"]);
             progress?.FailActiveStage(ScanProgressReporter.ScanOperation, "SOURCE_VERIFICATION_FAILED");
             verificationReceipt?.Fail(transformed, "stage-started");
             throw transformed;
@@ -572,7 +572,7 @@ public static class ScanEngine
                 var path = Path.Combine(repoPath, item.RelativePath.Replace('/', Path.DirectorySeparatorChar));
                 using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
                 if (stream.Length != item.SizeBytes)
-                    throw new SourceSnapshotException();
+                    throw new SourceSnapshotException(details: [$"{item.RelativePath} (size changed during scan: {item.SizeBytes} -> {stream.Length})"]);
 
                 BinaryPrimitives.WriteInt64BigEndian(lengthBuffer, item.SizeBytes);
                 hash.AppendData(lengthBuffer);
@@ -587,7 +587,7 @@ public static class ScanEngine
                 }
 
                 if (bytesRead != item.SizeBytes || stream.Length != item.SizeBytes)
-                    throw new SourceSnapshotException();
+                    throw new SourceSnapshotException(details: [$"{item.RelativePath} (bytes changed while being read)"]);
             }
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
@@ -605,7 +605,35 @@ public static class ScanEngine
         var expectedItems = expected.OrderBy(item => item.RelativePath, StringComparer.Ordinal).ToArray();
         var observedItems = observed.OrderBy(item => item.RelativePath, StringComparer.Ordinal).ToArray();
         if (!expectedItems.SequenceEqual(observedItems))
-            throw new SourceSnapshotException();
+            throw new SourceSnapshotException(details: DescribeInventoryDrift(expectedItems, observedItems));
+    }
+
+    private static IReadOnlyList<string> DescribeInventoryDrift(
+        FileInventoryItem[] expectedItems,
+        FileInventoryItem[] observedItems)
+    {
+        var observedByPath = observedItems.ToDictionary(item => item.RelativePath, StringComparer.Ordinal);
+        var expectedPaths = expectedItems.Select(item => item.RelativePath).ToHashSet(StringComparer.Ordinal);
+        var details = new List<string>();
+        foreach (var item in expectedItems)
+        {
+            if (!observedByPath.TryGetValue(item.RelativePath, out var observedItem))
+                details.Add($"{item.RelativePath} (disappeared)");
+            else if (!item.Equals(observedItem))
+                details.Add($"{item.RelativePath} (changed: {item.Kind} {item.SizeBytes} -> {observedItem.Kind} {observedItem.SizeBytes})");
+            if (details.Count >= 3)
+                return details;
+        }
+        foreach (var item in observedItems)
+        {
+            if (!expectedPaths.Contains(item.RelativePath))
+            {
+                details.Add($"{item.RelativePath} (appeared)");
+                if (details.Count >= 3)
+                    return details;
+            }
+        }
+        return details;
     }
 
     private static void VerifySourceSnapshotInventoryMembership(
@@ -621,7 +649,35 @@ public static class ScanEngine
             .OrderBy(item => item.RelativePath, StringComparer.Ordinal)
             .ToArray();
         if (!expectedItems.SequenceEqual(observedItems))
-            throw new SourceSnapshotException();
+            throw new SourceSnapshotException(details: DescribeMembershipDrift(expectedItems, observedItems));
+    }
+
+    private static IReadOnlyList<string> DescribeMembershipDrift(
+        (string RelativePath, string Kind)[] expectedItems,
+        (string RelativePath, string Kind)[] observedItems)
+    {
+        var observedByPath = observedItems.ToDictionary(item => item.RelativePath, StringComparer.Ordinal);
+        var expectedPaths = expectedItems.Select(item => item.RelativePath).ToHashSet(StringComparer.Ordinal);
+        var details = new List<string>();
+        foreach (var item in expectedItems)
+        {
+            if (!observedByPath.TryGetValue(item.RelativePath, out var observedItem))
+                details.Add($"{item.RelativePath} (disappeared)");
+            else if (observedItem.Kind != item.Kind)
+                details.Add($"{item.RelativePath} (kind changed: {item.Kind} -> {observedItem.Kind})");
+            if (details.Count >= 3)
+                return details;
+        }
+        foreach (var item in observedItems)
+        {
+            if (!expectedPaths.Contains(item.RelativePath))
+            {
+                details.Add($"{item.RelativePath} (appeared)");
+                if (details.Count >= 3)
+                    return details;
+            }
+        }
+        return details;
     }
 
     internal static IReadOnlyDictionary<string, string> CaptureSemanticInputSnapshot(
@@ -660,17 +716,17 @@ public static class ScanEngine
                 if (path.StartsWith("__external__/", StringComparison.Ordinal))
                     continue;
 
-                if (!baseline.TryGetValue(path, out var expected)
-                    || !itemsByPath.TryGetValue(path, out var item)
-                    || !string.Equals(expected, CreateSourceSnapshotDigest(repoPath, [item], cancellationToken), StringComparison.Ordinal))
-                {
-                    throw new SourceSnapshotException();
-                }
+                if (!baseline.TryGetValue(path, out var expected))
+                    throw new SourceSnapshotException(details: [$"{path} (no baseline digest captured)"]);
+                if (!itemsByPath.TryGetValue(path, out var item))
+                    throw new SourceSnapshotException(details: [$"{path} (missing from verification inventory)"]);
+                if (!string.Equals(expected, CreateSourceSnapshotDigest(repoPath, [item], cancellationToken), StringComparison.Ordinal))
+                    throw new SourceSnapshotException(details: [$"{path} (protected input bytes changed)"]);
             }
         }
         catch (SourceInventoryException ex)
         {
-            throw new SourceSnapshotException(ex);
+            throw new SourceSnapshotException(ex, [$"re-read failed: {ex.InnerException?.Message ?? ex.Message}"]);
         }
     }
 

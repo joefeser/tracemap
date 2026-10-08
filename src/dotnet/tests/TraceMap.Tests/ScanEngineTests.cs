@@ -332,6 +332,9 @@ public sealed class ScanEngineTests
             ScanEngine.CreateSourceSnapshotDigest(temp.Path, staleInventory));
 
         Assert.Equal(SourceSnapshotException.ErrorCode, exception.Message);
+        var digestDetails = SourceSnapshotException.Describe(exception);
+        Assert.NotNull(digestDetails);
+        Assert.Contains("Sample.cs", digestDetails);
     }
 
     [Fact]
@@ -347,6 +350,10 @@ public sealed class ScanEngineTests
             ScanEngine.VerifySourceSnapshotInventory(initial, observed));
 
         Assert.Equal(SourceSnapshotException.ErrorCode, exception.Message);
+        var details = SourceSnapshotException.Describe(exception);
+        Assert.NotNull(details);
+        Assert.Contains("Added.sql", details);
+        Assert.Contains("(appeared)", details);
     }
 
     [Fact]

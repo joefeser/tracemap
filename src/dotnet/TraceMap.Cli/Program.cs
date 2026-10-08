@@ -155,7 +155,10 @@ public static class TraceMapCommand
         catch (Exception ex)
         {
             commandOperation.Complete(TraceMapDiagnosticOutcome.Failed);
-            await error.WriteLineAsync($"error: {ex.Message}");
+            var snapshotDetail = SourceSnapshotException.Describe(ex);
+            await error.WriteLineAsync(snapshotDetail is null
+                ? $"error: {ex.Message}"
+                : $"error: {ex.Message} ({snapshotDetail})");
             return 1;
         }
     }
@@ -2986,6 +2989,7 @@ public static class TraceMapCommand
             Truthfulness failures (exit code 1; normal scan artifacts are not written):
               SourceInventoryIncomplete          An in-scope inventory entry could not be read.
               SourceSnapshotChangedDuringScan    Protected input bytes changed or disappeared during analysis.
+                                                  When the differing input is known, the error names up to three paths.
               A commit-bound failure may write only scan-receipt.json with categorical diagnostics.
             """;
     }
