@@ -5,5 +5,5 @@
 - [x] Add opt-in CLI/Core option and separate bounded bin discovery; retain source snapshot exclusions.
 - [x] Add typed package filtering, deterministic per-file/target identities, exact generator/input hashes and unknown build freshness.
 - [x] Add valid, malformed, ambiguous, duplicate, limit, scope and snapshot regression cases.
-- [ ] Complete focused and full Debug validation and sample CLI smoke.
+- [x] Complete focused and full Debug validation and sample CLI smoke.
 - [ ] Deliver bounded PR to dev and complete live ACK review.

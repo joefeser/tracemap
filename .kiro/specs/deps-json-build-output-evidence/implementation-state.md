@@ -16,12 +16,12 @@ PackageReference declarations. Runtime manifests can omit build/compile-only
 packages. Scan commit identifies the observation context; buildCommitSha and
 freshness remain unknown. The manifest's sha512 is never a registry artifact digest.
 
-Validation in progress: 75 focused package/CLI/scan cases pass, including 25 new
+Validation: 79 focused package/CLI/scan cases pass, including 29 new
 deps.json cases and a real bounded synthetic build during the scan. An initial --no-restore build on the fresh worktree found
 no assets; locked restore succeeded. Initial focused tests exposed the leading
 period in standard .NETCoreApp target names; corrected the target validator.
 
-Next: full Debug suite, sample smoke, review and PR.
+Next: settle the consolidated review batch and deliver validated follow-up fixes.
 Private estate scans and downstream upgrade-authority behavior are not acceptance
 claims of this public-fixture slice.
 
@@ -36,7 +36,7 @@ claims of this public-fixture slice.
 | No overstated closure or source directness | Graph ambiguity/missing-edge unknowns; emitted-target scope documented; unsupported metadata yields explicit gaps |
 | Unique file/target/package rows | Multi-target/BOM positive; duplicate property, case collision and multiple-version negative cases |
 | Bounded and malformed cases | File, byte, total-byte, discovery and library limits; malformed/truncated/unsafe/unsupported/missing/symlink cases |
-| Delivery | PR #848 targets dev; full Debug validation and ACK in progress |
+| Delivery | PR #848 targets dev; full Debug validation passed; ACK review blocked as recorded below |
 
 Public CLI smoke and artifact validator pass. Actual SDK manifest smoke uses the
 public TraceMap CLI build output, not a customer artifact. No language adapter
@@ -51,3 +51,27 @@ New integration tests now join the existing Git metadata sensitive nonparallel
 collection. Self-review fixes allow an existing build writer handle and reject trailing-newline
 identities. All 79 focused tests pass, including 29 deps.json cases. The next full
 Debug run validates the isolated integration tests and these fixes.
+
+The second full Debug run passed: 3,461 passed, zero failed, one Windows-only
+skip, total 3,462, in 21m41s. Command:
+`dotnet test src/dotnet/TraceMap.sln --no-restore -warnaserror`.
+This run tested implementation commit `6bca5b8a`. A subsequent narrow scan-ID
+change binds both generator and bounded-input hashes when opt-in is enabled;
+the 79-case focused suite passed again after that change (18s), using:
+`dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore -warnaserror --filter 'FullyQualifiedName~DepsJsonEvidenceTests|FullyQualifiedName~PackageDecisionLockfileEvidenceTests|FullyQualifiedName~ScanEngineTests|FullyQualifiedName~CliTests'`.
+
+Owner clarified that Qodo is retired and Baz replaces it. Lane version 0.3.0
+explicitly disables Qodo and admits exact-head Baz evidence through ACK's
+trustedHostedReviewerQuorum capability, preserving required Codex batching and
+two bounded Baz fix cycles. No Baz/Qodo request was issued.
+
+Review blocker on published head `0da74d7df7bd451c1d8b4bfd49a72ae5d474903c`:
+ACK 0.5.5 (stable, ab39833, fresh distribution) sees Baz finding threads but does
+not admit Baz's empty-body COMMENTED review. `gh pr view --json reviews` omits
+its URL; GitHub REST returns review 5463905446 with the exact published commit
+and URL. ACK's Baz interaction classifier requires that URL to corroborate root
+finding threads; its supplemental history reader currently hydrates Qodo only.
+The live gate therefore holds the consolidated findings pending Baz, despite a
+completed exact-head review being visible upstream. No review-finding repair or
+resolution is claimed while ACK withholds patch authority. A separate bounded
+ACK reader repair needs owner direction; no trust check is weakened here.

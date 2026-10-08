@@ -301,7 +301,7 @@ public static class ScanEngine
                 ilRewriteEvaluation.Provenance?.BoundedInputSha256,
                 ilRewritePdbEvaluation.Provenance?.BoundedInputSha256,
                 webFormsPublishEvaluation.Provenance?.BoundedInputSha256,
-                depsJson?.BoundedInputSha256),
+                depsJson is null ? null : $"{depsJson.GeneratorSha256}:{depsJson.BoundedInputSha256}"),
             git.RepoName,
             git.RemoteUrl,
             git.Branch,
@@ -516,7 +516,7 @@ public static class ScanEngine
         string? ilRewriteBoundedInputSha256,
         string? ilRewritePdbBoundedInputSha256 = null,
         string? webFormsPublishBoundedInputSha256 = null,
-        string? depsJsonBoundedInputSha256 = null)
+        string? depsJsonInputSignature = null)
     {
         var signature = string.Join('\n', inventory.Select(item => $"{item.RelativePath}|{item.Kind}|{item.SizeBytes}"));
         var binlogSignature = MsBuildBinlogExtractor.CreateInputSignature(options.BinlogPaths, repoPath: options.RepoPath);
@@ -534,7 +534,7 @@ public static class ScanEngine
             $"ilrewrite={ilRewriteBoundedInputSha256 ?? string.Empty}",
             $"ilrewritepdb={ilRewritePdbBoundedInputSha256 ?? string.Empty}",
             $"webformspublish={webFormsPublishBoundedInputSha256 ?? string.Empty}");
-        if (options.IndexDepsJson) optionSignature += $"|depsjson={depsJsonBoundedInputSha256}";
+        if (options.IndexDepsJson) optionSignature += $"|depsjson={depsJsonInputSignature}";
         var repoIdentity = string.IsNullOrWhiteSpace(git.RemoteUrl) ? git.RepoName : git.RemoteUrl;
         return "scan-" + FactFactory.Hash($"{repoIdentity}|{git.CommitSha}|{sourceSnapshotDigest}|{signature}|{optionSignature}|{binlogSignature}", 20);
     }
