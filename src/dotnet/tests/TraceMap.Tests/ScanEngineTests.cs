@@ -376,6 +376,10 @@ public sealed class ScanEngineTests
                 "RazorAssemblyInfo.cs",
                 "obj/Debug/net8.0/RazorAssemblyInfo.cs",
                 "Sample.Web.Api/obj/Debug/net10.0/Sample.Web.Api.RazorAssemblyInfo.cs",
+                "Sample.Worker.Tests/obj/Debug/net10.0/SelfRegisteredExtensions.cs",
+                "SelfRegisteredExtensions.cs",
+                "Sample.Tests/bin/Debug/net10.0/AnythingGenerated.cs",
+                "src/nested/obj/release/Deeply.Nested.Generated.cs",
                 "obj/Debug/net8.0/Sample.Web.GlobalUsings.g.cs",
                 "obj/Release/net48/Sample.Web.AssemblyInfo.cs"
             });

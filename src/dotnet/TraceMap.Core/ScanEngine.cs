@@ -744,12 +744,21 @@ public static class ScanEngine
     private static bool IsKnownGeneratedCompilationInput(string relativePath)
     {
         // OrdinalIgnoreCase: Windows filesystems are case-insensitive and MSBuild/Roslyn
-        // may report the same generated file with any casing. Modern SDKs emit the
-        // PROJECT-PREFIXED forms ({Proj}.RazorAssemblyInfo.cs) alongside bare ones —
-        // observed on a real .NET 10 Web API estate scan.
+        // may report the same generated file with any casing.
+        // Two rules, both evidence-backed from a real .NET 10 estate scan:
+        // 1. Path-segment rule (the general one): any compilation input under an obj/ or bin/
+        //    segment is toolchain output by MSBuild's own convention — source never lives there.
+        //    Covers all current and future generators ({Proj}.RazorAssemblyInfo.cs, xUnit's
+        //    SelfRegisteredExtensions.cs, GlobalUsings, AssemblyInfo/Attributes, *.g.cs).
+        // 2. Name rule (belt-and-suspenders when a generator reports a bare name without a path):
+        //    the observed generated file names.
+        var segments = relativePath.Split('/', '\\');
+        if (segments.Contains("obj") || segments.Contains("bin"))
+            return true;
         var fileName = Path.GetFileName(relativePath);
         return fileName.Equals("RazorAssemblyInfo.cs", StringComparison.OrdinalIgnoreCase)
             || fileName.Equals("MvcApplicationPartsAssemblyInfo.cs", StringComparison.OrdinalIgnoreCase)
+            || fileName.Equals("SelfRegisteredExtensions.cs", StringComparison.OrdinalIgnoreCase)
             || fileName.EndsWith(".RazorAssemblyInfo.cs", StringComparison.OrdinalIgnoreCase)
             || fileName.EndsWith(".MvcApplicationPartsAssemblyInfo.cs", StringComparison.OrdinalIgnoreCase)
             || fileName.EndsWith(".AssemblyInfo.cs", StringComparison.OrdinalIgnoreCase)
