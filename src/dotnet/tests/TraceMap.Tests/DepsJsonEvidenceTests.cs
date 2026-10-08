@@ -5,6 +5,8 @@ using TraceMap.Core;
 
 namespace TraceMap.Tests;
 
+// The integration cases create Git repositories and invoke a bounded SDK build.
+[Collection("Git metadata sensitive")]
 public sealed class DepsJsonEvidenceTests
 {
     private const string Target = ".NETCoreApp,Version=v8.0";
@@ -190,6 +192,52 @@ public sealed class DepsJsonEvidenceTests
         Assert.EndsWith("Reduced", result.Manifest.AnalysisLevel, StringComparison.Ordinal);
         Assert.Equal("FailedOrPartial", result.Manifest.BuildStatus);
         Assert.Contains(result.Facts, x => x.FactType == FactTypes.AnalysisGap && x.Properties.GetValueOrDefault("gapKind") == "deps-json-invalid");
+    }
+
+    [Theory]
+    [InlineData("name")]
+    [InlineData("version")]
+    [InlineData("target")]
+    public void Trailing_newlines_are_not_safe_package_or_target_identity(string field)
+    {
+        using var temp = new TempDirectory();
+        var json = System.Text.Json.Nodes.JsonNode.Parse(Fixture)!;
+        var targets = json["targets"]!.AsObject();
+        if (field == "target")
+        {
+            var value = targets[Target]!.DeepClone();
+            targets.Remove(Target);
+            targets[Target + "\n"] = value;
+        }
+        else
+        {
+            const string oldKey = "Example.Direct/1.2.0";
+            var newKey = field == "name" ? "Example.Direct\n/1.2.0" : "Example.Direct/1.2.0\n";
+            var group = targets[Target]!.AsObject();
+            var value = group[oldKey]!.DeepClone();
+            group.Remove(oldKey);
+            group[newKey] = value;
+            var libraries = json["libraries"]!.AsObject();
+            value = libraries[oldKey]!.DeepClone();
+            libraries.Remove(oldKey);
+            libraries[newKey] = value;
+        }
+        Write(temp.Path, json.ToJsonString());
+        var result = Read(temp.Path);
+        Assert.Empty(result.Rows);
+        Assert.Contains(result.Gaps, x => x.Kind == "deps-json-invalid");
+    }
+
+    [Fact]
+    public void Existing_writer_handle_does_not_block_observed_build_output_reads()
+    {
+        using var temp = new TempDirectory();
+        Write(temp.Path, Fixture);
+        using var writer = new FileStream(Path.Combine(temp.Path, "bin/Debug/net8.0/Sample.deps.json"),
+            FileMode.Open, FileAccess.ReadWrite, FileShare.ReadWrite | FileShare.Delete);
+        var result = Read(temp.Path);
+        Assert.Empty(result.Gaps);
+        Assert.Equal(2, result.Rows.Count);
     }
 
     [Fact]
