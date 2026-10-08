@@ -479,7 +479,7 @@ public static class TraceMapCommand
             }
             if (ex is OperationCanceledException && cancellationToken.IsCancellationRequested)
                 throw;
-            await error.WriteLineAsync($"error: {SafeScanError(ex)}");
+            await error.WriteLineAsync(FormatScanError(ex));
             return 1;
         }
         try
@@ -654,6 +654,17 @@ public static class TraceMapCommand
                     or "ExactSourceScopeEnumerationLimitExceeded"
                     ? scopeError.Message
                     : ScanReceiptRecorder.ClassifyFailure(exception);
+
+    // categorical error line for the scan command; appends up to three differing
+    // input paths when the snapshot guard knows them (Data["details"], relative paths only)
+    internal static string FormatScanError(Exception exception)
+    {
+        var categorical = SafeScanError(exception);
+        var snapshotDetail = SourceSnapshotException.Describe(exception);
+        return snapshotDetail is null
+            ? $"error: {categorical}"
+            : $"error: {categorical} ({snapshotDetail})";
+    }
 
     private static async Task RunReceiptStageAsync(ScanReceiptOperation operation, Func<Task> action)
     {
