@@ -15,6 +15,7 @@ import {
   proofPathsForManagersRoute,
   validateProofPathsForManagersDist
 } from "./proof-paths-for-managers.mjs";
+import { route as webFormsReviewWorkbenchRoute } from "./webforms-review-workbench.mjs";
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const sourcePagePath = resolve(scriptDir, "..", "src", "proof-paths", "for-managers", "index.html");
@@ -153,7 +154,13 @@ async function createFixture({
     ...proofPathsForManagersRequiredLinks.map(routeEntry),
     routeEntry(databaseDesignReviewRoute),
     routeEntry(databaseDesignReviewProofRoute),
-    routeEntry("/sql/operator-handoff/proof-packet/")
+    routeEntry("/sql/operator-handoff/proof-packet/"),
+    routeEntry("/capabilities/"),
+    routeEntry("/roadmap/"),
+    routeEntry("/webforms/"),
+    routeEntry("/webforms/source-plus-compiled-proof/"),
+    routeEntry("/webforms/local-demo/"),
+    routeEntry(webFormsReviewWorkbenchRoute)
   ],
   includeInboundLinks = true,
   pageHtml,
@@ -166,7 +173,13 @@ async function createFixture({
     ...proofPathsForManagersRequiredLinks,
     databaseDesignReviewRoute,
     databaseDesignReviewProofRoute,
-    "/sql/operator-handoff/proof-packet/"
+    "/sql/operator-handoff/proof-packet/",
+    "/capabilities/",
+    "/roadmap/",
+    "/webforms/",
+    "/webforms/source-plus-compiled-proof/",
+    "/webforms/local-demo/",
+    webFormsReviewWorkbenchRoute
   ]);
   const source = pageHtml ?? (await page());
 
