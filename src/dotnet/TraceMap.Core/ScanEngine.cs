@@ -258,13 +258,15 @@ public static class ScanEngine
             .OrderBy(gap => gap, StringComparer.Ordinal)
             .Distinct(StringComparer.Ordinal)
             .ToArray();
+        var depsJson = options.IndexDepsJson ? DepsJsonExtractor.Read(options, cancellationToken) : null;
         var nugetLockfiles = ProjectFileReader.ReadNuGetLockfiles(repoPath, inventory);
-        var nugetLockfileGaps = nugetLockfiles.Gaps
+        var packageManifestGaps = nugetLockfiles.Gaps
             .Select(gap => $"NuGet lockfile analysis reported `{gap.Category}`.")
+            .Concat(depsJson?.Gaps.Select(gap => $"Build-output dependency analysis reported `{gap.Kind}`.") ?? [])
             .OrderBy(gap => gap, StringComparer.Ordinal)
             .Distinct(StringComparer.Ordinal)
             .ToArray();
-        var nugetLockfileReducedCoverage = nugetLockfileGaps.Length > 0;
+        var packageManifestReducedCoverage = packageManifestGaps.Length > 0;
         var migrationFallbackReducedCoverage = migrationFallbackGaps.Length > 0;
         var semanticBuildReducedCoverage = semanticResult.GapFacts.Any(gap =>
             gap.RuleId != RuleIds.DatabaseFrameworkMigrationGap
@@ -273,11 +275,11 @@ public static class ScanEngine
             ? semanticBuildReducedCoverage ? "FailedOrPartial" : "Succeeded"
             : "NotRun";
         var semanticAnalysisLevel = semanticResult.Attempted
-            ? semanticToolchainReducedCoverage || migrationFallbackReducedCoverage || nugetLockfileReducedCoverage ? "Level1SemanticAnalysisReduced" : "Level1SemanticAnalysis"
-            : migrationFallbackReducedCoverage || nugetLockfileReducedCoverage ? "Level3SyntaxAnalysisReduced" : "Level3SyntaxAnalysis";
-        var provisionalBuildStatus = nugetLockfileReducedCoverage ? "FailedOrPartial" : semanticBuildStatus;
+            ? semanticToolchainReducedCoverage || migrationFallbackReducedCoverage || packageManifestReducedCoverage ? "Level1SemanticAnalysisReduced" : "Level1SemanticAnalysis"
+            : migrationFallbackReducedCoverage || packageManifestReducedCoverage ? "Level3SyntaxAnalysisReduced" : "Level3SyntaxAnalysis";
+        var provisionalBuildStatus = packageManifestReducedCoverage ? "FailedOrPartial" : semanticBuildStatus;
         var provisionalKnownGaps = semanticKnownGaps
-            .Concat(nugetLockfileGaps)
+            .Concat(packageManifestGaps)
             .Concat(pdbEvaluation.KnownGaps)
             .Concat(ilEvaluation.KnownGaps)
             .Concat(ilRewriteEvaluation.KnownGaps)
@@ -298,7 +300,8 @@ public static class ScanEngine
                 ilEvaluation.Provenance?.BoundedInputSha256,
                 ilRewriteEvaluation.Provenance?.BoundedInputSha256,
                 ilRewritePdbEvaluation.Provenance?.BoundedInputSha256,
-                webFormsPublishEvaluation.Provenance?.BoundedInputSha256),
+                webFormsPublishEvaluation.Provenance?.BoundedInputSha256,
+                depsJson?.BoundedInputSha256),
             git.RepoName,
             git.RemoteUrl,
             git.Branch,
@@ -344,7 +347,7 @@ public static class ScanEngine
             AnalysisLevel = binlogReducedCoverage && !semanticToolchainReducedCoverage
                 ? semanticResult.Attempted ? "Level1SemanticAnalysisReduced" : "Level3SyntaxAnalysisReduced"
                 : semanticAnalysisLevel,
-            BuildStatus = binlogReducedCoverage || nugetLockfileReducedCoverage ? "FailedOrPartial" : semanticBuildStatus,
+            BuildStatus = binlogReducedCoverage || packageManifestReducedCoverage ? "FailedOrPartial" : semanticBuildStatus,
             KnownGaps = knownGaps
         };
 
@@ -364,6 +367,7 @@ public static class ScanEngine
                     ProjectFileReader.ReadCentralPackageVersions(repoPath, inventory),
                     ProjectFileReader.ReadProducedPackages(repoPath, inventory),
                     nugetLockfiles,
+                    depsJson,
                     knownGaps,
                     repoPath,
                     semanticResult,
@@ -511,7 +515,8 @@ public static class ScanEngine
         string? ilBoundedInputSha256,
         string? ilRewriteBoundedInputSha256,
         string? ilRewritePdbBoundedInputSha256 = null,
-        string? webFormsPublishBoundedInputSha256 = null)
+        string? webFormsPublishBoundedInputSha256 = null,
+        string? depsJsonBoundedInputSha256 = null)
     {
         var signature = string.Join('\n', inventory.Select(item => $"{item.RelativePath}|{item.Kind}|{item.SizeBytes}"));
         var binlogSignature = MsBuildBinlogExtractor.CreateInputSignature(options.BinlogPaths, repoPath: options.RepoPath);
@@ -529,6 +534,7 @@ public static class ScanEngine
             $"ilrewrite={ilRewriteBoundedInputSha256 ?? string.Empty}",
             $"ilrewritepdb={ilRewritePdbBoundedInputSha256 ?? string.Empty}",
             $"webformspublish={webFormsPublishBoundedInputSha256 ?? string.Empty}");
+        if (options.IndexDepsJson) optionSignature += $"|depsjson={depsJsonBoundedInputSha256}";
         var repoIdentity = string.IsNullOrWhiteSpace(git.RemoteUrl) ? git.RepoName : git.RemoteUrl;
         return "scan-" + FactFactory.Hash($"{repoIdentity}|{git.CommitSha}|{sourceSnapshotDigest}|{signature}|{optionSignature}|{binlogSignature}", 20);
     }
@@ -729,6 +735,7 @@ public static class ScanEngine
         IReadOnlyList<CentralPackageVersionInfo> centralPackageVersions,
         IReadOnlyList<ProducedPackageInfo> producedPackages,
         NuGetLockfileReadResult nugetLockfiles,
+        DepsJsonResult? depsJson,
         IReadOnlyList<string> knownGaps,
         string repoPath,
         SemanticExtractionResult semanticResult,
@@ -988,6 +995,8 @@ public static class ScanEngine
                 targetSymbol: produced.PackageId,
                 properties: producedProperties));
         }
+
+        if (depsJson is not null) facts.AddRange(DepsJsonExtractor.Materialize(manifest, depsJson));
 
         foreach (var entry in nugetLockfiles.Entries)
         {
