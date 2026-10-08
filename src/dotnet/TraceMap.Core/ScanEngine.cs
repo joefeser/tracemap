@@ -743,13 +743,15 @@ public static class ScanEngine
     // Real source files that appear without a baseline still refuse (guard stays strict there).
     private static bool IsKnownGeneratedCompilationInput(string relativePath)
     {
+        // OrdinalIgnoreCase: Windows filesystems are case-insensitive and MSBuild/Roslyn
+        // may report the same generated file with any casing
         var fileName = Path.GetFileName(relativePath);
-        return fileName.Equals("RazorAssemblyInfo.cs", StringComparison.Ordinal)
-            || fileName.Equals("MvcApplicationPartsAssemblyInfo.cs", StringComparison.Ordinal)
-            || fileName.EndsWith(".AssemblyInfo.cs", StringComparison.Ordinal)
-            || fileName.EndsWith(".AssemblyAttributes.cs", StringComparison.Ordinal)
-            || fileName.EndsWith(".GlobalUsings.g.cs", StringComparison.Ordinal)
-            || fileName.EndsWith(".g.cs", StringComparison.Ordinal);
+        return fileName.Equals("RazorAssemblyInfo.cs", StringComparison.OrdinalIgnoreCase)
+            || fileName.Equals("MvcApplicationPartsAssemblyInfo.cs", StringComparison.OrdinalIgnoreCase)
+            || fileName.EndsWith(".AssemblyInfo.cs", StringComparison.OrdinalIgnoreCase)
+            || fileName.EndsWith(".AssemblyAttributes.cs", StringComparison.OrdinalIgnoreCase)
+            || fileName.EndsWith(".GlobalUsings.g.cs", StringComparison.OrdinalIgnoreCase)
+            || fileName.EndsWith(".g.cs", StringComparison.OrdinalIgnoreCase);
     }
 
     private static IReadOnlyList<FileInventoryItem> IncludeSemanticInputs(
