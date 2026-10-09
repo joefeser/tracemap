@@ -87,6 +87,26 @@ reasons, gap counts, and partial coverage are preserved. Known cutoff messages a
 regenerated from fixed scanner-owned cause templates after privacy projection;
 arbitrary incoming messages and source-derived fields still pass through redaction.
 
+To inspect the newest completed handler report without another graph traversal:
+
+```powershell
+.\scripts\wrequery.ps1 C:\work\website-review -AllowUpdatedReader -InspectLatest
+```
+
+Selection is scoped to the saved project (use `-Project` if needed), ordered by
+directory modification time and name, bounded to 128 completed report folders,
+and explicitly **not filtered by handler**. The selected path is printed. Native
+status still verifies the saved run, and report bytes are checked against their
+local requery receipt; this is not independent authentication of that receipt.
+No new report is written and no source scan, combine, or graph traversal occurs.
+
+Both inspection and new requery summaries now show up to 20 distinct retained
+database endpoint records, counts of variants ending at each record, text/type
+binding states, origin kinds, last retained argument-hop identities, return-step
+counts, and up to eight value-resolution gaps per binding. Missing binding fields
+are unavailable, not resolved. SQL literals and command values are not printed;
+even a hash-only constant does not identify SQL text or a stored procedure.
+
 ## Mixed-query traversal repair: work-machine validation
 
 For a successful saved verification run, inspect unresolved command bindings
