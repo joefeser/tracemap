@@ -15,6 +15,7 @@ public sealed class LazyConstructorLoggingTests
     [InlineData(true, "missing")]
     [InlineData(true, "malformed")]
     [InlineData(true, "virtual")]
+    [InlineData(true, "operand-tampered")]
     public async Task Property_profile_dynamic_lookup_is_distinct_from_literal_audit(bool compiledOnly, string dispatchFlags)
     {
         var repo = FindRepo();
@@ -34,7 +35,17 @@ public sealed class LazyConstructorLoggingTests
             && fact.Properties.GetValueOrDefault("metadataName") == "ExecuteSql");
         Assert.True(int.TryParse(executor.Properties["methodDispatchFlags"], out var flags));
         Assert.Equal(0, flags & (int)System.Reflection.MethodAttributes.Virtual);
-        if (dispatchFlags != "retained")
+        if (dispatchFlags == "operand-tampered")
+        {
+            var call = Assert.Single(facts, fact => fact.FactType == FactTypes.ManagedIlCallObserved
+                && fact.Properties.GetValueOrDefault("targetIdentity")?.Contains("member:8:GetEmail|", StringComparison.Ordinal) == true);
+            var operand = Assert.Single(facts, fact => fact.FactType == FactTypes.ManagedIlCallValuesObserved
+                && fact.Properties.GetValueOrDefault("ilBodyFactId") == call.Properties["ilBodyFactId"]
+                && fact.Properties.GetValueOrDefault("ilOffset") == call.Properties["ilOffset"]);
+            var properties = new Dictionary<string, string>(operand.Properties) { ["ilBoundedInputSha256"] = new string('f', 64) };
+            facts[facts.IndexOf(operand)] = operand with { Properties = properties };
+        }
+        else if (dispatchFlags != "retained")
         {
             var properties = new Dictionary<string, string>(executor.Properties);
             if (dispatchFlags == "missing") properties.Remove("methodDispatchFlags");
@@ -63,7 +74,7 @@ public sealed class LazyConstructorLoggingTests
         Assert.Equal("1", binding.CommandTypeFromPath!.Origin.Identity);
         var text = binding.CommandTextFromPath!;
         Assert.Equal("callvirt", Assert.Single(text.Steps).Opcode);
-        Assert.Equal(dispatchFlags != "retained", text.Gaps.Contains("IlCommandVirtualDispatchUnproven"));
+        Assert.Equal(dispatchFlags is "missing" or "malformed" or "virtual", text.Gaps.Contains("IlCommandVirtualDispatchUnproven"));
         Assert.Equal("symbolic-string-composition", text.State);
         Assert.Equal("call-result", text.Origin.Kind);
         var producerBody = Assert.Single(scan.Facts, fact => $"{source.SourceIndexId}:{fact.FactId}" == text.OriginBodyFactId);
@@ -71,10 +82,25 @@ public sealed class LazyConstructorLoggingTests
             && fact.Properties.GetValueOrDefault("ilBodyFactId") == producerBody.FactId
             && fact.Properties.GetValueOrDefault("ilOffset") == text.Origin.Identity);
         Assert.Contains("Concat", producer.Properties["targetIdentity"], StringComparison.Ordinal);
-        Assert.Contains("IlCommandCompositionValueNotMaterialized", text.Gaps);
+        Assert.Contains("SymbolicStringValueNotMaterialized", text.Limitations!);
+        Assert.DoesNotContain("IlCommandCompositionValueNotMaterialized", text.Gaps);
         Assert.DoesNotContain("IlCommandReturnTargetEdgeMissing", text.Gaps);
         Assert.Equal("System.String.Concat", text.Composition!.Operation);
         Assert.Equal(3, text.Composition.Operands.Count);
+        Assert.Equal(3, text.Composition.OperandBindings.Count);
+        Assert.Equal("method-local-constant", text.Composition.OperandBindings[0].State);
+        Assert.NotNull(text.Composition.OperandBindings[1].OriginMethodIdentity);
+        Assert.Null(text.Composition.OperandBindings[1].Composition);
+        if (dispatchFlags == "operand-tampered")
+        {
+            Assert.Equal("unresolved-call-evidence", text.Composition.OperandBindings[1].State);
+            Assert.Contains("IlCommandCallerOperandProvenanceUnavailable", text.Composition.OperandBindings[1].Gaps);
+        }
+        else if (compiledOnly)
+        {
+            Assert.Equal("constant-on-encoded-call-path", text.Composition.OperandBindings[1].State);
+            Assert.Equal(3, text.Composition.OperandBindings[1].Steps.Count);
+        }
         Assert.Equal($"{source.SourceIndexId}:{producer.FactId}", text.Composition.ProducerCallFactId);
         Assert.Equal(text.OriginBodyFactId, text.Composition.BodyFactId);
         var operandEvidence = Assert.Single(scan.Facts, fact => $"{source.SourceIndexId}:{fact.FactId}" == text.Composition.OperandFactId);
@@ -122,6 +148,10 @@ public sealed class LazyConstructorLoggingTests
             Assert.Equal(64, document.RootElement.GetProperty("boundedInputSha256").GetString()!.Length);
             var html = await File.ReadAllTextAsync(Path.Combine(output, RetainedMethodGraphWriter.HtmlName));
             Assert.Contains("Call graph tree", html);
+            Assert.Contains("Supported symbolic expression", html);
+            Assert.Contains("IL slot 1", html);
+            Assert.Contains("Command text routes", html);
+            Assert.DoesNotContain("SELECT Email", html, StringComparison.Ordinal);
             Assert.Contains("UNRESOLVED METHOD TARGET", html);
             await RetainedMethodGraphWriter.WriteAsync(graph, output, new string('a', 64), 16_000_000, default);
             Assert.Equal(json, await File.ReadAllTextAsync(Path.Combine(output, RetainedMethodGraphWriter.JsonName)));
@@ -382,8 +412,18 @@ public sealed class LazyConstructorLoggingTests
         else
         {
             Assert.Equal(entryName == "InsertComposedTextTwoHops" && mutation == "none" ? "symbolic-string-composition" : "unresolved-operand", text.State);
-            Assert.Contains(gap, text.Gaps);
-            if (entryName == "InsertComposedTextTwoHops" && mutation == "none") Assert.Equal(2, text.Composition!.Operands.Count);
+            if (gap == "IlCommandCompositionValueNotMaterialized")
+                Assert.Contains("SymbolicStringValueNotMaterialized", text.Limitations!);
+            else Assert.Contains(gap, text.Gaps);
+            if (entryName == "InsertComposedTextTwoHops" && mutation == "none")
+            {
+                Assert.Equal(2, text.Composition!.Operands.Count);
+                var argument = text.Composition.OperandBindings[1];
+                Assert.Equal("unresolved-root-argument", argument.State);
+                Assert.Equal("1", argument.Origin.Identity);
+                Assert.Contains("InsertComposedTextTwoHops", argument.OriginMethodIdentity!);
+                Assert.Contains("IlCommandRootArgumentUnresolved", argument.Gaps);
+            }
             if (mutation.StartsWith("concat-", StringComparison.Ordinal)) Assert.Null(text.Composition);
             if (mutation.StartsWith("target-", StringComparison.Ordinal))
             {

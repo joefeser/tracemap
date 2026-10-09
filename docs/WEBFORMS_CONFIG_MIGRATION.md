@@ -934,7 +934,18 @@ overloads in `mscorlib, Version=4.0.0.0, Culture=neutral,
 PublicKeyToken=b77a5c561934e089`. Exact retained call/body/operand provenance and
 ordered operand evidence are required. The command binding reports
 `symbolic-string-composition` with the producer, operand fact, body, and ordered
-origins at Tier3SyntaxOrTextual; `IlCommandCompositionValueNotMaterialized` remains.
+origins at Tier3SyntaxOrTextual. New reports classify non-materialization under
+`limitations: ["SymbolicStringValueNotMaterialized"]`, not as a missing-evidence
+gap. Ordered `operandBindings` trace each operand backwards along that retained
+path, preserving exact hop facts and the final method identity. Each operand has
+the existing 64-work bound, at most three operands are traced, and nested symbolic
+composition is not expanded. A root argument, non-IL bridge, missing evidence,
+or uncertain dispatch remains an explicit operand-level gap. The private HTML
+shows a readable route, expression and operand summaries above exact evidence.
+Parameter names are not retained in these scans: labels use IL argument slots
+(slot zero is the receiver for instance methods), never inferred source names.
+The share exports only aliased method/fact identities, bounded slots, allowlisted
+states/gaps and hop links; it never exports constant identities or SQL text.
 This is a bounded intrinsic projection, not an admitted callee-body edge.
 
 No SQL text is reconstructed, and string hashes are never concatenated into a

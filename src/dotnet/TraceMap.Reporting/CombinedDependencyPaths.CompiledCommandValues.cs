@@ -25,18 +25,21 @@ public static partial class CombinedDependencyPathReporter
             var type = Resolve(binding.CommandTypeOrigin, "constant-int32");
             nodes[index] = nodes[index] with { CommandBinding = binding with { CommandTextFromPath = text, CommandTypeFromPath = type } };
 
-            CompiledCommandPathValueBinding Resolve(CompiledCommandOperandOrigin initial, string constantKind)
+            CompiledCommandPathValueBinding Resolve(CompiledCommandOperandOrigin initial, string constantKind,
+                string? initialScope = null, string? initialMethod = null, int? initialIncoming = null, bool allowComposition = true)
             {
                 var current = initial;
-                var scope = binding.IlBodyFactId;
-                var methodId = binding.ContainingMethodFactId;
+                var scope = initialScope ?? binding.IlBodyFactId;
+                var methodId = initialMethod ?? binding.ContainingMethodFactId;
                 var steps = new List<CompiledCommandValueStep>();
                 var gaps = new SortedSet<string>(StringComparer.Ordinal);
                 var materials = new List<object>();
+                foreach (var id in new[] { scope, methodId }.OfType<string>())
+                    if (facts.TryGetValue(id, out var originFact)) materials.Add(ProjectCommandValueFact(originFact));
                 var returnSteps = new List<CompiledCommandReturnStep>();
-                var returns = new CommandReturnResolver(graph, materials, gaps, returnSteps, constantKind);
+                var returns = new CommandReturnResolver(graph, materials, gaps, returnSteps, constantKind, allowComposition);
                 var state = "unresolved-operand";
-                var incoming = index - 2;
+                var incoming = initialIncoming ?? index - 2;
                 while (current.Kind is "argument-slot" or "call-result")
                 {
                     if (++returns.Work > MaxCompiledCommandValueHops)
@@ -75,6 +78,11 @@ public static partial class CombinedDependencyPathReporter
                 if (current.Kind == constantKind) state = steps.Count == 0 && returnSteps.Count == 0 ? "method-local-constant" : "constant-on-encoded-call-path";
                 else if (returns.Composition is not null) state = "symbolic-string-composition";
                 else if (current.Kind != "argument-slot") gaps.Add("IlCommandOperandValueUnresolved");
+                var composition = returns.Composition;
+                if (composition is not null)
+                    composition = composition with { OperandBindings = composition.Operands.Select(operand =>
+                        Resolve(operand, constantKind, scope, methodId, incoming, allowComposition: false)).ToArray() };
+                if (methodId is not null && facts.TryGetValue(methodId, out var finalMethod)) materials.Add(ProjectCommandValueFact(finalMethod));
                 var input = JsonSerializer.SerializeToUtf8Bytes(new
                 {
                     Schema = "compiled-command-path-value.v1", Initial = initial, binding.IlBodyFactId,
@@ -82,11 +90,15 @@ public static partial class CombinedDependencyPathReporter
                     MaxHops = MaxCompiledCommandValueHops, MaxArguments = MaxCompiledCommandCallArguments,
                     MaxOperandCompetitors = 2,
                     MaxReturnSites = 256, MaxProducerEdges = MaxCommandProducerEdges,
-                    ExpectedConstantKind = constantKind, Inputs = materials
+                    ExpectedConstantKind = constantKind, InitialScope = initialScope, InitialMethod = initialMethod,
+                    InitialIncoming = initialIncoming, AllowComposition = allowComposition,
+                    OperandBindings = composition?.OperandBindings, Inputs = materials
                 });
                 return new("compiled-command-path-value.v1", CompiledCommandValueRuleId, EvidenceTiers.Tier3SyntaxOrTextual,
                     state, current, scope, steps, gaps.ToArray(), generator, Convert.ToHexStringLower(SHA256.HashData(input)))
-                    { ReturnSteps = returnSteps.Count == 0 ? null : returnSteps, Composition = returns.Composition };
+                    { ReturnSteps = returnSteps.Count == 0 ? null : returnSteps, Composition = composition,
+                        OriginMethodIdentity = methodId is not null ? facts.GetValueOrDefault(methodId)?.TargetSymbol : null,
+                        Limitations = composition is null ? null : ["SymbolicStringValueNotMaterialized"] };
             }
         }
     }

@@ -208,12 +208,19 @@ public sealed record CompiledCommandPathValueBinding(string Schema, string RuleI
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public CompiledStringComposition? Composition { get; init; }
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? OriginMethodIdentity { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<string>? Limitations { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public IReadOnlyList<CompiledCommandReturnStep>? ReturnSteps { get; init; }
 }
 
 public sealed record CompiledStringComposition(string RuleId, string EvidenceTier, string Operation,
     string ProducerCallFactId, string OperandFactId, string BodyFactId,
-    IReadOnlyList<CompiledCommandOperandOrigin> Operands);
+    IReadOnlyList<CompiledCommandOperandOrigin> Operands)
+{
+    public IReadOnlyList<CompiledCommandPathValueBinding> OperandBindings { get; init; } = [];
+}
 
 public sealed record CompiledCommandReturnStep(string ProducerCallFactId, string CalleeBodyFactId,
     string ReturnFactId, string GeneratorSha256, string BoundedInputSha256);

@@ -187,8 +187,21 @@ try {
                 [ordered]@{operation=(Code $c.operation @('System.String.Concat'));
                     producer=(Alias 'F' $c.producerCallFactId);operand=(Alias 'F' $c.operandFactId);body=(Alias 'F' $c.bodyFactId);
                     operandKinds=@($c.operands | Select-Object -First 3 | ForEach-Object {
-                        Code $_.kind @('call-result','argument-slot','constant-string-hash','unknown','null') })}
+                        Code $_.kind @('call-result','argument-slot','constant-string-hash','unknown','null') });
+                    operandBindings=@(if ($c.PSObject.Properties['operandBindings']) { $c.operandBindings | Select-Object -First 3 | ForEach-Object {
+                        $b = $_
+                        [ordered]@{state=(Code $b.state @('method-local-constant','constant-on-encoded-call-path','unresolved-operand','unresolved-root-argument','unresolved-non-il-bridge','unresolved-call-evidence','unresolved-slot','limit'));
+                            originKind=(Code $b.origin.kind @('call-result','argument-slot','constant-string-hash','unknown','null'));
+                            originBody=(Alias 'F' $b.originBodyFactId);
+                            method=$(if ($b.PSObject.Properties['originMethodIdentity']) { Alias 'S' $b.originMethodIdentity });
+                            argumentSlot=$(if ($b.origin.kind -ceq 'argument-slot' -and [string]$b.origin.identity -cmatch '\A(?:0|[1-9][0-9]{0,2})\z') { [int]$b.origin.identity });
+                            steps=@($b.steps | Select-Object -First 64 | ForEach-Object { [ordered]@{
+                                call=(Alias 'F' $_.callFactId);operand=(Alias 'F' $_.operandFactId);body=(Alias 'F' $_.callerBodyFactId);
+                                callerMethod=(Alias 'F' $_.callerMethodFactId);targetMethod=(Alias 'F' $_.targetMethodFactId)} });
+                            gaps=@($b.gaps | Select-Object -First 16 | ForEach-Object { Code $_ $traceGaps })}
+                    } })}
             });
+            limitations=@(if ($value.PSObject.Properties['limitations']) { $value.limitations | Select-Object -First 8 | ForEach-Object { Code $_ @('SymbolicStringValueNotMaterialized') } });
             gaps=@($value.gaps | ForEach-Object { Code $_ $traceGaps })}
     })
     $projection = [ordered]@{nodes=$projectedNodes; edges=$projectedEdges; calls=$projectedCalls;
