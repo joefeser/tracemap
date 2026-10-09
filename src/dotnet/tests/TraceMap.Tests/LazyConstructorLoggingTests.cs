@@ -79,6 +79,12 @@ public sealed class LazyConstructorLoggingTests
                 && call.State == "no-admitted-method-target-edge" && call.Offset is not null);
             Assert.Contains(graph.Nodes, node => Method(node, "GetEmail"));
             Assert.Contains(graph.Nodes, node => Method(node, "WriteAudit"));
+            var unresolvedTrace = Assert.Single(graph.CommandTraces, trace =>
+                trace.CommandText?.Gaps.Contains("IlCommandReturnTargetEdgeMissing") == true);
+            Assert.Equal("call-result", unresolvedTrace.CommandText!.Origin.Kind);
+            var producerId = Assert.Single(unresolvedTrace.ProducerCallFactIds);
+            Assert.Equal($"{source.SourceIndexId}:{producer.FactId}", producerId);
+            Assert.Contains(graph.Calls, call => call.FactId == producerId && call.EncodedTarget!.Contains("Concat", StringComparison.Ordinal));
             Assert.Equal(graph.Nodes.Count, graph.Nodes.Select(node => node.NodeId).Distinct().Count());
             Assert.All(graph.Edges, edge =>
             {

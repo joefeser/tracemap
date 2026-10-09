@@ -19,7 +19,7 @@ try {
         evidenceTier='Tier3SyntaxOrTextual';state='no-admitted-method-target-edge';
         gapReasons=@('admitted-memberref-target-not-unique',"$secret-free-text")})
     @{schemaVersion='retained-method-graph.v1';indexSha256="$secret-hash";
-      graph=@{nodes=$nodes;edges=$edges;calls=$calls;cutoffs=@("$secret-cutoff");roots=@("$secret-node-1")}} |
+      graph=@{nodes=$nodes;edges=$edges;calls=$calls;commandTraces=@();cutoffs=@("$secret-cutoff");roots=@("$secret-node-1")}} |
         ConvertTo-Json -Depth 20 | Set-Content -LiteralPath $inputFile
     $before = (Get-FileHash $inputFile).Hash
     & $helper $temp -GraphPath $inputFile -Method "$secret.Method1" -OutputPath $outputFile | Out-Null
@@ -30,7 +30,7 @@ try {
 try {
     $nodes[0].symbolId = "$secret.Focus()"; $nodes[0].displayName = "$secret.Focus()"
     @{schemaVersion='retained-method-graph.v1';indexSha256="$secret-hash";
-      graph=@{nodes=$nodes;edges=$edges;calls=$calls;cutoffs=@("$secret-cutoff");roots=@("$secret-node-1")}} |
+      graph=@{nodes=$nodes;edges=$edges;calls=$calls;commandTraces=@();cutoffs=@("$secret-cutoff");roots=@("$secret-node-1")}} |
         ConvertTo-Json -Depth 20 | Set-Content -LiteralPath $inputFile
     $before = (Get-FileHash $inputFile).Hash
     & $helper $temp -GraphPath $inputFile -Method 'Focus()' -OutputPath $outputFile | Out-Null
@@ -69,12 +69,12 @@ try {
     $focusCall = $calls[0].Clone()
     $focusCall.encodedTarget = 'memberref|type:PRIVATE|member:10:get_Secret|->type(namespace:6:System|names:6:String)'
     @{schemaVersion='retained-method-graph.v1';graph=@{nodes=$nodes;edges=$edges;
-        calls=@($busyCalls)+@($focusCall);cutoffs=@();roots=@("$secret-node-1")}} |
+        calls=@($busyCalls)+@($focusCall);commandTraces=@();cutoffs=@();roots=@("$secret-node-1")}} |
         ConvertTo-Json -Depth 20 | Set-Content -LiteralPath $inputFile
     $priorityOutput = Join-Path $temp 'priority.json'
     & $helper $temp -GraphPath $inputFile -Method 'Focus()' -OutputPath $priorityOutput | Out-Null
     $priority = Get-Content -LiteralPath $priorityOutput -Raw | ConvertFrom-Json -Depth 24
-    if ($priority.schemaVersion -cne 'aliased-method-graph.v2' -or !$priority.graph.focusRecordsComplete) { throw 'Focus coverage not complete.' }
+    if ($priority.schemaVersion -cne 'aliased-method-graph.v3' -or !$priority.graph.focusRecordsComplete) { throw 'Focus coverage not complete.' }
     $focusId = @($priority.graph.nodes | Where-Object focus)[0].id
     if ($priority.graph.calls[0].caller -cne $focusId) { throw 'Busy neighbor starved focus.' }
     if ($priority.graph.calls[0].targetShape.member -cne 'property-getter' -or
@@ -84,12 +84,31 @@ try {
     if ($coverage.exportedCalls -ne 119 -or $coverage.omittedCalls -ne 31) { throw 'Caller omissions incorrect.' }
     foreach ($call in $busyCalls) { $call.callerNodeId = "$secret-node-1" }
     @{schemaVersion='retained-method-graph.v1';graph=@{nodes=$nodes;edges=$edges;
-        calls=@($busyCalls)+@($focusCall);cutoffs=@();roots=@("$secret-node-1")}} |
+        calls=@($busyCalls)+@($focusCall);commandTraces=@();cutoffs=@();roots=@("$secret-node-1")}} |
         ConvertTo-Json -Depth 20 | Set-Content -LiteralPath $inputFile
     $overflowOutput = Join-Path $temp 'focus-overflow.json'
     & $helper $temp -GraphPath $inputFile -Method 'Focus()' -OutputPath $overflowOutput | Out-Null
     $overflow = Get-Content -LiteralPath $overflowOutput -Raw | ConvertFrom-Json -Depth 24
     if ($overflow.graph.focusRecordsComplete -or $overflow.graph.calls.Count -ne 120 -or
         @($overflow.graph.callerCoverage | Where-Object focus)[0].omittedCalls -ne 31) { throw 'Focus overflow concealed.' }
+    $trace = @{endpointNodeId="$secret-node-2";pathNodeIds=@("$secret-node-1","$secret-node-2");
+        producerCallFactIds=@("$secret-fact");commandText=@{state='unresolved-operand';origin=@{kind='call-result';identity="$secret-offset"};
+        originBodyFactId="$secret-body";ruleId="$secret-rule";gaps=@('IlCommandReturnTargetEdgeMissing',"$secret-gap");
+        steps=@(@{callFactId="$secret-step";operandFactId="$secret-operand";callerBodyFactId="$secret-body";
+            callerMethodFactId="$secret-method";targetMethodFactId="$secret-method2"})}}
+    @{schemaVersion='retained-method-graph.v1';graph=@{nodes=$nodes;edges=$edges;
+        calls=@($busyCalls)+@($focusCall);commandTraces=@($trace);cutoffs=@();roots=@("$secret-node-1")}} |
+        ConvertTo-Json -Depth 20 | Set-Content -LiteralPath $inputFile
+    $traceOutput = Join-Path $temp 'trace.json'
+    & $helper $temp -GraphPath $inputFile -Method 'Focus()' -OutputPath $traceOutput | Out-Null
+    $traceRaw = Get-Content -LiteralPath $traceOutput -Raw
+    if ($traceRaw.Contains($secret)) { throw 'Private trace content leaked.' }
+    $traceResult = $traceRaw | ConvertFrom-Json -Depth 24
+    $exportedTrace = $traceResult.graph.commandTraces[0]
+    if ($exportedTrace.missingProducerRecords -ne 0 -or
+        $exportedTrace.producers[0] -cne $traceResult.graph.calls[0].fact -or
+        $exportedTrace.originBody -cne $traceResult.graph.calls[0].body -or
+        $exportedTrace.gaps[0] -cne 'IlCommandReturnTargetEdgeMissing' -or
+        $exportedTrace.gaps[1] -cne 'other-or-unavailable') { throw 'Producer trace lost linkage or privacy.' }
     Write-Output 'Aliased graph exporter tests passed.'
 } finally { Remove-Item -LiteralPath $temp -Recurse -Force }
