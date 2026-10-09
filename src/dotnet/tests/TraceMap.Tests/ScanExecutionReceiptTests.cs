@@ -28,6 +28,22 @@ public sealed class ScanExecutionReceiptTests
     }
 
     [Fact]
+    public void Deps_scope_cannot_be_forged_by_additional_input_text()
+    {
+        var options = new ScanOptions("repo", "out");
+        string Fingerprint(ScanOptions value, string[] additional)
+        {
+            var recorder = new ScanReceiptRecorder(value, additional);
+            recorder.Bind(new GitMetadata("repo", null, "dev", CommitSha, []));
+            return recorder.CreateReceipt().AuthorizedScopeFingerprint;
+        }
+        var marker = "deps-json:" + JsonSerializer.Serialize(new DepsJsonLimits());
+        var enabled = Fingerprint(options with { IndexDepsJson = true }, ["a"]);
+        Assert.NotEqual(enabled, Fingerprint(options, ["a", marker]));
+        Assert.NotEqual(enabled, Fingerprint(options, ["a\n" + marker]));
+    }
+
+    [Fact]
     public void Authorized_scope_preserves_rewrite_pair_order_and_blank_slots()
     {
         var options = new ScanOptions("repo", "out", IlRewriteEvidence: true,
