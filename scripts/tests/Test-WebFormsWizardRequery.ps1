@@ -16,6 +16,19 @@ function global:dotnet {
            workbenchPath=$global:WizardRequeryWorkbench } | ConvertTo-Json -Compress
     } elseif ($args -contains 'requery-handler') {
         $global:LASTEXITCODE = $global:WizardRequeryExit
+        if ($global:WizardRequeryExit -eq 0) {
+            $destination = $args[10]
+            [IO.Directory]::CreateDirectory($destination) | Out-Null
+            $handoffPath = Join-Path $destination 'compiled-paths.handoff.local.json'
+            @{schemaVersion='webforms-compiled-grouped-handoff.v1';header=@{gaps=@(
+                @{gapKind='TruncatedByLimit';reason='depth';filePath='synthetic/Page.vb';startLine=12;
+                  nodeId='node-1';ruleId='synthetic.rule';evidenceTier='Tier4Unknown';message='Depth limit reached.'})}} |
+                ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $handoffPath
+            @{schemaVersion='webforms-handler-requery.v1';truncated=$true;artifacts=@(@{
+                relativePath='compiled-paths.handoff.local.json';bytes=(Get-Item $handoffPath).Length;
+                sha256=(Get-FileHash $handoffPath).Hash.ToLowerInvariant()})} |
+                ConvertTo-Json -Depth 8 | Set-Content (Join-Path $destination 'handler-requery.local.json')
+        }
     } else { throw 'Unexpected dotnet operation (no builds or scans allowed).' }
 }
 function Save-Fixture([string]$Relative = ('runs/sample-' + ('a' * 32))) {
@@ -36,13 +49,18 @@ function Expect-Failure([scriptblock]$Action, [string]$Message) {
 }
 try {
     Save-Fixture
-    & $helper $temporary -Handler Page_Load | Out-Null
+    $output = @(& $helper $temporary -Handler Page_Load)
+    if (($output -join "`n") -notmatch 'depth: 1 retained gaps' -or
+        ($output -join "`n") -notmatch 'location=synthetic/Page.vb; line=12') { throw 'Missing bounded depth details.' }
     if ($global:WizardRequeryCalls.Count -ne 2) { throw 'Expected status then requery.' }
     $call = $global:WizardRequeryCalls[1]
     $expectedRun = Join-Path (Join-Path $temporary ('runs/sample-' + ('a' * 32))) 'run'
     if ($call[4] -ne $expectedRun -or $call[6] -ne (Split-Path $global:WizardRequeryWorkbench -Parent) -or
         $call[8] -ne 'Page_Load') { throw 'Saved nested run or verified bundle was not used.' }
     $firstOutput = $call[10]
+    . (Join-Path $PSScriptRoot '../WebFormsRequeryDiagnostics.ps1')
+    Add-Content (Join-Path $firstOutput 'compiled-paths.handoff.local.json') ' '
+    Expect-Failure { Write-WebFormsTruncationSummary $firstOutput } 'SUMMARY_HANDOFF_CHANGED'
     & $helper $temporary -Project sample -Handler Page_Load | Out-Null
     if ($global:WizardRequeryCalls[3][10] -eq $firstOutput) { throw 'Output must be fresh.' }
     $global:WizardRequeryState = 'failed'

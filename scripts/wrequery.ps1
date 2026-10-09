@@ -7,6 +7,7 @@ param(
 )
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'WebFormsRequeryDiagnostics.ps1')
 function Read-Locator([string]$Path, [string]$Schema) {
     $file = Get-Item -LiteralPath $Path
     if ($file.Length -gt 1048576) { throw 'WEBFORMS_WIZARD_LOCATOR_TOO_LARGE' }
@@ -45,9 +46,9 @@ if (!(Test-Path -LiteralPath $cli -PathType Leaf)) {
 }
 if (!$Handler) { $Handler = Read-Host 'Handler name (for example Page_Load)' }
 if ($Handler -cnotmatch '\A[A-Za-z0-9_]{1,128}\z') { throw 'WEBFORMS_HANDLER_INVALID' }
-$statusText = @(& dotnet $cli webforms-review status --run $run --json)
-if ($LASTEXITCODE -ne 0) { throw 'WEBFORMS_HANDLER_STATUS_FAILED' }
-$status = ($statusText -join "`n") | ConvertFrom-Json
+$verified = Get-WebFormsVerifiedStatus $cli $run
+$run = $verified.Run
+$status = $verified.Status
 if ($status.schemaVersion -ne 'webforms-review-status.v1' -or
     $status.readerMatchesOriginalGenerator -ne $true -or
     $status.retainedArtifactsVerified -ne $true -or
@@ -60,4 +61,5 @@ $destination = Join-Path $Root ("handler-requery-$Project-" + [guid]::NewGuid().
 if ($LASTEXITCODE -ne 0) { throw 'WEBFORMS_HANDLER_REQUERY_FAILED;originals-preserved;partial-output-preserved' }
 $report = Join-Path $destination 'compiled-paths.local.html'
 Write-Output "Handler report: $report"
+Write-WebFormsTruncationSummary $destination
 if ($Open) { Invoke-Item -LiteralPath $report }
