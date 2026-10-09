@@ -104,7 +104,12 @@ public sealed class WebFormsWizardExecutionTests
         if (outputFailsAfterCompletion)
         {
             using var failing = new CompletionFailingWriter();
-            await Assert.ThrowsAsync<IOException>(() => WebFormsWizardExecution.RunAsync(store, "site", commit, failing, error));
+            var exitCode = -1;
+            var exception = await Record.ExceptionAsync(async () =>
+            { exitCode = await WebFormsWizardExecution.RunAsync(store, "site", commit, failing, error); });
+            Assert.True(exception is not null,
+                $"Expected output IOException after verified completion; exit={exitCode}; observed={exception?.GetType().Name ?? "none"}; diagnostics={error}");
+            Assert.IsType<IOException>(exception);
         }
         else
         {
