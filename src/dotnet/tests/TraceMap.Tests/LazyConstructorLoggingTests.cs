@@ -55,6 +55,9 @@ public sealed class LazyConstructorLoggingTests
             && fact.Properties.GetValueOrDefault("ilOffset") == text.Origin.Identity);
         Assert.Contains("Concat", producer.Properties["targetIdentity"], StringComparison.Ordinal);
         Assert.Contains("IlCommandOperandValueUnresolved", text.Gaps);
+        Assert.Contains("IlCommandReturnTargetMissingOrAmbiguous", text.Gaps);
+        Assert.Contains("IlCommandReturnTargetEdgeMissing", text.Gaps);
+        Assert.Empty(text.ReturnSteps ?? []);
         var audit = Assert.Single(report.Paths, path => path.Nodes.Any(node => Method(node, "WriteAudit")));
         Assert.Equal("4", audit.Nodes.Last().CommandBinding!.CommandTypeFromPath!.Origin.Identity);
         Assert.Equal("method-local-constant", audit.Nodes.Last().CommandBinding!.CommandTextFromPath!.State);
@@ -196,6 +199,10 @@ public sealed class LazyConstructorLoggingTests
     [Theory]
     [InlineData("InsertReturnedLiteral", "none", null)]
     [InlineData("InsertForwardedLiteral", "none", null)]
+    [InlineData("InsertReturnedLiteralTwoHops", "none", null)]
+    [InlineData("InsertComposedTextTwoHops", "none", "IlCommandReturnTargetEdgeMissing")]
+    [InlineData("InsertReturnedLiteral", "target-missing", "IlCommandReturnTargetEdgeMissing")]
+    [InlineData("InsertReturnedLiteral", "target-ambiguous", "IlCommandReturnTargetEdgeMissing")]
     [InlineData("InsertRecursiveText", "none", "IlCommandReturnCycle")]
     [InlineData("InsertVirtualText", "none", "IlCommandReturnVirtualDispatchUnproven")]
     [InlineData("InsertReturnedLiteral", "missing", "IlCommandReturnEvidenceMissingOrAmbiguous")]
@@ -223,7 +230,9 @@ public sealed class LazyConstructorLoggingTests
         var summary = Assert.Single(scan.Facts, fact => fact.FactType == FactTypes.ManagedIlReturnValuesObserved
             && fact.Properties.GetValueOrDefault("ilBodyFactId") == body.FactId);
         var facts = scan.Facts.ToList();
-        if (mutation == "missing") facts.RemoveAll(fact => fact.FactType == FactTypes.ManagedIlReturnValuesObserved);
+        if (mutation == "target-missing") facts.Remove(literal);
+        else if (mutation == "target-ambiguous") facts.Add(literal with { FactId = literal.FactId + "-competitor" });
+        else if (mutation == "missing") facts.RemoveAll(fact => fact.FactType == FactTypes.ManagedIlReturnValuesObserved);
         else if (mutation == "ambiguous") facts.Add(summary with { FactId = summary.FactId + "-competitor" });
         else if (mutation != "none")
         {
@@ -257,6 +266,10 @@ public sealed class LazyConstructorLoggingTests
             { CompiledOnly = true, ExactFromSymbol = true, MaxTraversalWork = 10_000 },
             [new(source.SourceIndexId, source.ScanId, source.CommitSha, entry.TargetSymbol!)], combinedIndex: true);
         var text = Assert.Single(report.Paths).Nodes.Last().CommandBinding!.CommandTextFromPath!;
+        // Duplicate declarations are refused by graph admission before return
+        // projection, so no candidate call edge is admitted to the resolver.
+        if (mutation == "target-ambiguous") Assert.Contains(report.Gaps, item => item.GapKind == "CompiledIlTargetAmbiguous");
+        if (entryName.EndsWith("TwoHops", StringComparison.Ordinal)) Assert.Equal(2, text.Steps.Count);
         var memoryReport = await CombinedDependencyPathReporter.BuildReportAsync(
             new CombinedDependencyPathOptions(combined, temp.Path, FromSymbol: entry.TargetSymbol,
                 ToSurface: "database-api", SurfaceName: "SqlCommand.ExecuteScalar", MaxDepth: 20)
@@ -273,7 +286,15 @@ public sealed class LazyConstructorLoggingTests
         {
             Assert.Equal("unresolved-operand", text.State);
             Assert.Contains(gap, text.Gaps);
+            if (mutation.StartsWith("target-", StringComparison.Ordinal) || entryName == "InsertComposedTextTwoHops")
+            {
+                Assert.Equal("call-result", text.Origin.Kind);
+                Assert.Empty(text.ReturnSteps ?? []);
+                Assert.Contains("IlCommandReturnTargetMissingOrAmbiguous", text.Gaps);
+                Assert.Contains("IlCommandOperandValueUnresolved", text.Gaps);
+            }
         }
+        Assert.DoesNotContain("SELECT ", JsonSerializer.Serialize(report), StringComparison.Ordinal);
     }
 
     private static void AssertScanIdentity(ScanResult scan)

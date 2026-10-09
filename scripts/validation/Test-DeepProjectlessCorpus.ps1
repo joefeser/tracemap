@@ -30,6 +30,10 @@ try {
         'src/dotnet/tests/TraceMap.Tests/LazyConstructorLoggingTests.cs',
         'src/dotnet/tests/TraceMap.Tests/WebFormsOperatorWorkflowTests.cs',
         'scripts/wlocal.ps1',
+        'scripts/wrequery.ps1',
+        'scripts/WebFormsRequeryDiagnostics.ps1',
+        'scripts/tests/Test-WebFormsWizardRequery.ps1',
+        'scripts/tests/Test-WebFormsRequeryDiagnostics.ps1',
         'scripts/wcompare.ps1',
         'scripts/wsqlroute.ps1',
         'scripts/tests/Test-WebFormsChainComparison.ps1',
@@ -45,6 +49,8 @@ try {
         'src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj',
         'src/dotnet/tests/TraceMap.Tests/CombinedDependencyPathTests.cs',
         'src/dotnet/TraceMap.Reporting/CombinedDependencyPaths.cs',
+        'src/dotnet/TraceMap.Reporting/CombinedDependencyPaths.CommandReturns.cs',
+        'src/dotnet/TraceMap.Reporting/CombinedDependencyPaths.CompiledCommandValues.cs',
         'src/dotnet/TraceMap.Reporting/CombinedDependencyPaths.IndexedGraph.cs',
         'scripts/validation/Test-PublicWebFormsPublish.ps1'
     )
@@ -91,7 +97,7 @@ try {
     $operatorPassed = @($rows | Where-Object {
         $_.testName -like '*WebForms_operator_source_compiled_and_separate_dll_reports*' -and $_.outcome -ceq 'Passed'
     }).Count
-    if ($passed -lt 32 -or $nativePassed -ne 1 -or $propertyPassed -ne 2 -or $returnPassed -ne 11 -or $profilePassed -ne 2 -or $operatorPassed -ne 5 -or @($rows | Where-Object { $_.outcome -notin @('Passed', 'NotExecuted') }).Count -ne 0) {
+    if ($passed -lt 36 -or $nativePassed -ne 1 -or $propertyPassed -ne 2 -or $returnPassed -ne 15 -or $profilePassed -ne 2 -or $operatorPassed -ne 5 -or @($rows | Where-Object { $_.outcome -notin @('Passed', 'NotExecuted') }).Count -ne 0) {
         throw 'DEEP_CORPUS_TEST_RECEIPT_NOT_ADMITTED'
     }
     foreach ($layout in @('attached', 'separate', 'separate-dll-only', 'reversed', 'missing')) {
@@ -110,7 +116,8 @@ try {
             $_.testName.EndsWith('.' + $requiredWizardTest, [StringComparison]::Ordinal) -and $_.outcome -ceq 'Passed'
         }).Count -ne 1) { throw 'DEEP_CORPUS_WIZARD_ACCEPTANCE_MISSING' }
     }
-    foreach ($test in @('Test-WebFormsChainComparison.ps1', 'Test-WebFormsSqlRoute.ps1', 'Test-WebFormsCapShortcut.ps1')) {
+    foreach ($test in @('Test-WebFormsChainComparison.ps1', 'Test-WebFormsSqlRoute.ps1', 'Test-WebFormsCapShortcut.ps1',
+        'Test-WebFormsWizardRequery.ps1', 'Test-WebFormsRequeryDiagnostics.ps1')) {
         & (Join-Path $TraceMapRoot ('scripts/tests/' + $test))
     }
     foreach ($layout in @('attached', 'separate', 'separate-dll-only', 'reversed')) {
