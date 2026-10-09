@@ -999,3 +999,28 @@ binding gaps and runtime non-claims are unchanged.
 Older retained scans lack these flags and must be freshly scanned with the updated
 extractor to benefit; rebuilding/requerying alone cannot manufacture missing
 metadata evidence. The fresh scan should use a separate run, preserving the old one.
+
+### VB delegate construction and later command operands
+
+The `dotnet.compiled.il-values.v1` bounded extractor now models the stack effects of `ldftn` (push one
+unknown pointer) and `ldvirtftn` (consume one receiver, push one unknown pointer).
+These instructions commonly precede LINQ delegate constructors. They are not calls
+to the referenced method. Previously, an unsupported pointer load invalidated the
+normal-flow stack and made later helper-call operands `stack-unavailable`.
+
+This change retains no pointer value, delegate invocation target, or runtime dispatch
+claim. Indirect `calli` remains unsupported; stack underflow still fails closed.
+Equality-only joins and exception/finally limitations are unchanged. In particular,
+a conditionally rewritten argument cannot be relabeled as the original input slot.
+
+The compile-only `StructuredProfileProbe` public VB fixture includes a rewritten
+argument, date/value-type calls, a nested `Using`, two LINQ delegates, and enclosing
+`Catch`/`Finally` (three exception regions). Its later helper call must retain valid
+stack shape while reporting the rewritten operand as unknown. No fixture network
+or application code is executed. Tests pin the compiled pointer instructions and
+exception regions, not only handwritten IL.
+
+This is an extractor change: run `wrefresh.ps1` to create new evidence, then query
+with `wrequery.ps1 -LatestRefresh -MethodGraph` and export with `wgraph-share.ps1`.
+Requerying an older scan cannot repair its retained operand state. The public
+regression does not establish private Windows application acceptance.

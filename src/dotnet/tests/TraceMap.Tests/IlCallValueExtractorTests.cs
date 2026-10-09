@@ -4,6 +4,49 @@ namespace TraceMap.Tests;
 
 public sealed class IlCallValueExtractorTests
 {
+    [Theory]
+    [InlineData("ldftn")]
+    [InlineData("ldvirtftn")]
+    public void Delegate_pointer_stack_effect_does_not_erase_later_caller_argument(string opcode)
+    {
+        var instructions = new List<string> { "0:0:ldnull:" };
+        if (opcode == "ldvirtftn") instructions.Add("1:1:dup:");
+        instructions.AddRange([$"2:2:{opcode}:m:delegate-target", "3:3:newobj:m:delegate-ctor",
+            "4:4:pop:", "5:5:ldarg.1:", "6:6:call:m:consume", "7:7:ret:"]);
+        var calls = new[] { Call(3, "newobj", new(2, true, false, true)), Call(6, "call", new(1, false, false, true)) };
+        var flow = IlCallValueExtractor.Extract(instructions, calls, 8, false);
+        Assert.Equal(2, flow.Calls.Count); // Loading a pointer is not executing its target.
+        Assert.All(flow.Calls, call => Assert.Equal("control-flow-candidate", call.State));
+        Assert.Equal("unknown", flow.Calls[0].Arguments[1].Kind);
+        Assert.Equal(new IlValueOrigin("argument-slot", "1"), Assert.Single(flow.Calls[1].Arguments));
+        Assert.DoesNotContain("IlValueInstructionUnavailable", flow.Gaps);
+        Assert.Equal(System.Text.Json.JsonSerializer.Serialize(flow),
+            System.Text.Json.JsonSerializer.Serialize(IlCallValueExtractor.Extract(instructions, calls, 8, false)));
+    }
+
+    [Fact]
+    public void Delegate_pointer_does_not_restore_conditionally_rewritten_argument()
+    {
+        var flow = IlCallValueExtractor.Extract([
+            "0:0:ldarg.0:", "1:1:brfalse.s:br:0x4", "2:2:ldstr:str:3:aaa", "3:3:starg.s:v:1",
+            "4:4:ldftn:m:target", "5:5:pop:", "6:6:ldarg.1:", "7:7:call:m:consume"
+        ], [Call(7, "call", new(1, false, false, true))], 8, false);
+        Assert.Equal("control-flow-candidate", Assert.Single(flow.Calls).State);
+        Assert.Equal("unknown", Assert.Single(flow.Calls[0].Arguments).Kind);
+    }
+
+    [Theory]
+    [InlineData("ldvirtftn", "IlValueStackUnavailable")]
+    [InlineData("calli", "IlValueInstructionUnavailable")]
+    public void Pointer_underflow_and_indirect_call_still_fail_closed(string opcode, string gap)
+    {
+        var flow = IlControlFlowValueExtractor.Extract([
+            $"0:0:{opcode}:m:target", "1:1:ldarg.1:", "2:2:call:m:consume"
+        ], [Call(2, "call", new(1, false, false, true))], 8);
+        Assert.Equal("stack-unavailable", Assert.Single(flow.Calls).State);
+        Assert.Contains(gap, flow.Gaps);
+    }
+
     [Fact]
     public void Return_operand_retains_constant_argument_and_call_result_without_execution()
     {
