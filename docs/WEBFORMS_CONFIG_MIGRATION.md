@@ -861,7 +861,7 @@ to 120 nodes, 240 edges, 120 call records and 256 KiB output. A new `graph-share
 is created; existing files are never overwritten. Input is limited to 16 MiB and
 50,000 records per primary collection. No customer scan or tests run.
 
-Rule `diagnostics.graph.aliased-slice.v2` emits an allowlisted projection, not a redacted
+Rule `diagnostics.graph.aliased-slice.v3` emits an allowlisted projection, not a redacted
 copy: sequential aliases replace names, paths, rules, source IDs, node IDs, fact IDs and
 encoded targets. No reverse map is written. Only fixed technical edge/state/reason/tier
 categories pass through. Unknown codes become `other-or-unavailable`. Free-form gaps,
@@ -886,3 +886,24 @@ They are syntactic hints, not verified framework identity or dispatch resolution
 and signature fragments remain excluded. Older aliases need not match the new export.
 
 Synthetic regression: `pwsh -NoProfile -File scripts/tests/Test-WebFormsGraphShare.ps1`.
+
+Version 3 adds `commandTraces`. Regenerate the private graph with the updated CLI
+and `wrequery.ps1 -MethodGraph` before exporting; existing source scans and the retained
+index are reused. Older graphs without this field are explicitly refused rather than
+silently exporting an empty diagnostic. The reader chooses one shortest retained
+root-to-endpoint witness (up to 64 endpoints), runs the existing provenance-checked
+command-value resolver unchanged, and joins its stopped `call-result` origin by exact
+body identity and IL offset to the retained producer call facts. These are candidate
+static value flows, not runtime execution or exhaustive path variants.
+
+The share exporter retains up to 16 focus-containing traces, with aliased endpoint/path,
+argument-forwarding steps, return steps, origin kind/body, exact producer fact aliases
+and allowlisted failure reasons. Producer call records take priority over other calls;
+missing records are counted. Origin values, offsets and input provenance digests are not
+shared. Trace aliases and call/edge aliases use the same maps. Empty producer lists and
+unknown failure reasons remain unknown, never guessed. A shortest witness can stop at
+a non-IL bridge even when another witness could continue; its explicit gap is not proof
+that every route fails. Producer aliases identify the retained unresolved origin; if
+return resolution fails inside a nested producer, the gap can describe that deeper
+failure rather than the outer origin call. The existing 256 KiB share-output limit
+still applies.

@@ -91,6 +91,14 @@ try {
     }
     $focusIds = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
     foreach ($node in $focus) { [void]$focusIds.Add($node.nodeId) }
+    if (!$graph.PSObject.Properties['commandTraces']) { throw 'command-traces-missing-regenerate-graph' }
+    $traceCandidates = @($graph.commandTraces | Where-Object {
+        @($_.pathNodeIds | Where-Object { $focusIds.Contains([string]$_) }).Count -gt 0
+    })
+    if ($traceCandidates.Count -gt 16) { $limited = $true }
+    $traceCandidates = @($traceCandidates | Select-Object -First 16)
+    $producerIds = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+    foreach ($trace in $traceCandidates) { foreach ($id in $trace.producerCallFactIds) { [void]$producerIds.Add([string]$id) } }
     # Focus records first, then round-robin other callers. No caller can consume
     # the whole neighborhood budget before the focus has been represented.
     function Prioritize([object[]]$Records, [string]$CallerField, [int]$Limit) {
@@ -124,9 +132,11 @@ try {
             kind=(Code $_.edgeKind $kinds); rule=(Alias 'R' $_.ruleId); tier=(Code $_.evidenceTier $tiers);
             facts=@($_.supportingFactIds | Select-Object -First 8 | ForEach-Object { Alias 'F' $_ })}
     })
-    $calls = @($graph.calls | Where-Object { $selected.Contains($_.callerNodeId) })
+    $calls = @($graph.calls | Where-Object { $selected.Contains($_.callerNodeId) -or $producerIds.Contains($_.factId) })
     if ($calls.Count -gt 120) { $limited = $true }
-    $keptCalls = @(Prioritize $calls 'callerNodeId' 120)
+    $producerCalls = @($calls | Where-Object { $producerIds.Contains($_.factId) })
+    $otherCalls = @($calls | Where-Object { !$producerIds.Contains($_.factId) })
+    $keptCalls = @(@($producerCalls | Select-Object -First 120) + @(Prioritize $otherCalls 'callerNodeId' ([Math]::Max(0,120-$producerCalls.Count))))
     $projectedCalls = @($keptCalls | ForEach-Object {
         if (@($_.gapReasons).Count -gt 8) { $limited = $true }
         [ordered]@{caller=(Alias 'N' $_.callerNodeId); fact=(Alias 'F' $_.factId); body=(Alias 'F' $_.bodyFactId);
@@ -147,13 +157,39 @@ try {
             availableOutgoingEdges=$totalEdges;exportedOutgoingEdges=$retainedEdges;omittedOutgoingEdges=($totalEdges-$retainedEdges)}
     })
     $focusComplete = @($callerCoverage | Where-Object { $_.focus -and ($_.omittedCalls -gt 0 -or $_.omittedOutgoingEdges -gt 0) }).Count -eq 0
+    $traceGaps = @('IlCommandReturnTargetEdgeMissing','IlCommandReturnTargetEdgesAmbiguous','IlCommandReturnTargetMethodMissing',
+        'IlCommandReturnTargetMethodsAmbiguous','IlCommandReturnTargetMissingOrAmbiguous','IlCommandReturnProducerMissingOrAmbiguous',
+        'IlCommandVirtualDispatchUnproven','IlCommandReturnVirtualDispatchUnproven','IlCommandOperandValueUnresolved',
+        'IlCommandNonIlCallerBridge','IlCommandRootArgumentUnresolved','IlCommandReturnBodyMissingOrAmbiguous',
+        'IlCommandReturnEvidenceMissingOrAmbiguous','IlCommandReturnSignatureUnsupported','IlCommandReturnProvenanceUnavailable',
+        'IlCommandCallerOperandMissingOrAmbiguous','IlCommandCallerOperandProvenanceUnavailable','IlCommandReturnCycle',
+        'IlCommandReturnWorkLimit','IlCommandCallerHopLimit')
+    $projectedTraces = @($traceCandidates | ForEach-Object {
+        $trace = $_; $value = $trace.commandText
+        if ($null -eq $value) {
+            [ordered]@{endpoint=(Alias 'N' $trace.endpointNodeId);state='command-binding-unavailable'}
+            return
+        }
+        [ordered]@{endpoint=(Alias 'N' $trace.endpointNodeId);path=@($trace.pathNodeIds | ForEach-Object { Alias 'N' $_ });
+            state=(Code $value.state @('unresolved-operand','unresolved-root-argument','unresolved-non-il-bridge','unresolved-call-evidence','unresolved-slot','limit','method-local-constant','constant-on-encoded-call-path'));
+            originKind=(Code $value.origin.kind @('call-result','argument-slot','constant-string-hash','constant-int32','unknown','null','allocation-site'));
+            originBody=(Alias 'F' $value.originBodyFactId);rule=(Alias 'R' $value.ruleId);
+            producers=@($trace.producerCallFactIds | ForEach-Object { Alias 'F' $_ });
+            missingProducerRecords=@($trace.producerCallFactIds | Where-Object { $id = $_; @($keptCalls | Where-Object { $_.factId -ceq $id }).Count -eq 0 }).Count;
+            steps=@($value.steps | ForEach-Object { [ordered]@{call=(Alias 'F' $_.callFactId);operand=(Alias 'F' $_.operandFactId);
+                body=(Alias 'F' $_.callerBodyFactId);callerMethod=(Alias 'F' $_.callerMethodFactId);targetMethod=(Alias 'F' $_.targetMethodFactId)} });
+            returnSteps=@(if ($value.PSObject.Properties['returnSteps'] -and $null -ne $value.returnSteps) { $value.returnSteps | ForEach-Object {
+                [ordered]@{producer=(Alias 'F' $_.producerCallFactId);body=(Alias 'F' $_.calleeBodyFactId);returnFact=(Alias 'F' $_.returnFactId)} } });
+            gaps=@($value.gaps | ForEach-Object { Code $_ $traceGaps })}
+    })
     $projection = [ordered]@{nodes=$projectedNodes; edges=$projectedEdges; calls=$projectedCalls;
+        commandTraces=$projectedTraces;traceScope='one-shortest-retained-witness-per-endpoint-not-all-variants';
         callerCoverage=$callerCoverage;focusRecordsComplete=$focusComplete;
         sliceLimited=$limited; sourceHadCutoffs=(@($graph.cutoffs).Count -gt 0);
         limits=@{radius=3;nodes=120;edges=240;calls=120}}
     $bytes = [Text.Encoding]::UTF8.GetBytes(($projection | ConvertTo-Json -Depth 20 -Compress))
     $hash = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($bytes)).ToLowerInvariant()
-    $result = [ordered]@{schemaVersion='aliased-method-graph.v2';ruleId='diagnostics.graph.aliased-slice.v2';
+    $result = [ordered]@{schemaVersion='aliased-method-graph.v3';ruleId='diagnostics.graph.aliased-slice.v3';
         generatorSha256=(Get-FileHash -LiteralPath $PSCommandPath -Algorithm SHA256).Hash.ToLowerInvariant();
         boundedInputSha256=$hash; claim='unverified-local-diagnostic-projection-not-evidence-authentication';
         limitations=@('Names, paths, identities, rules and targets use per-export sequential aliases; no alias map is exported.',
@@ -167,7 +203,11 @@ try {
     try { $stream.Write($outputBytes) } finally { $stream.Dispose() }
     Write-Output "Aliased diagnostic saved: $OutputPath"
     Write-Output "Bytes=$($outputBytes.Length); focus representations=$($focus.Count); focusRecordsComplete=$focusComplete; sliceLimited=$limited. Review before sharing. Private graph unchanged."
+    Write-Output "Command traces=$($projectedTraces.Count); scope=one-shortest-retained-witness-per-endpoint."
 } catch {
+    if ($_.Exception.Message -ceq 'command-traces-missing-regenerate-graph') {
+        throw 'GRAPH_SHARE_READER_UPDATE_REQUIRED: rebuild the CLI and rerun wrequery.ps1 -MethodGraph against the retained run, then export again. No source rescan required.'
+    }
     # Never surface parser errors or exception messages that may contain private input.
     throw 'GRAPH_SHARE_FAILED: check method selection, input schema/size, and a fresh writable output path. Private graph unchanged.'
 }

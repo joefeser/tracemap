@@ -8,7 +8,12 @@ namespace TraceMap.Reporting;
 
 public sealed record RetainedMethodGraph(IReadOnlyList<string> Roots, IReadOnlyList<CombinedPathNode> Nodes,
     IReadOnlyList<CombinedPathEdge> Edges, IReadOnlyList<RetainedMethodCall> Calls,
-    IReadOnlyList<CombinedPathGap> Gaps, IReadOnlyList<string> Cutoffs, int Work, int MaxDepth, int MaxRecords, int MaxWork);
+    IReadOnlyList<CombinedPathGap> Gaps, IReadOnlyList<string> Cutoffs, int Work, int MaxDepth, int MaxRecords, int MaxWork)
+{
+    public IReadOnlyList<RetainedCommandTrace> CommandTraces { get; init; } = [];
+}
+public sealed record RetainedCommandTrace(string EndpointNodeId, IReadOnlyList<string> PathNodeIds,
+    CompiledCommandPathValueBinding? CommandText, IReadOnlyList<string> ProducerCallFactIds);
 public sealed record RetainedMethodCall(string CallerNodeId, string FactId, string BodyFactId,
     string? Offset, string? Opcode, string? EncodedTarget, string RuleId, string EvidenceTier,
     string State, IReadOnlyList<string> GapReasons);
@@ -22,6 +27,7 @@ public static partial class CombinedDependencyPathReporter
         var visited = roots.Select(n => n.NodeId).ToHashSet(StringComparer.Ordinal);
         var queue = new Queue<(string Id, int Depth)>(roots.Select(n => (n.NodeId, 0)));
         var edges = new List<CombinedPathEdge>();
+        var parents = new Dictionary<string, GraphEdge>(StringComparer.Ordinal);
         var cutoffs = new SortedSet<string>(StringComparer.Ordinal);
         var work = 0;
         while (queue.TryDequeue(out var current))
@@ -35,7 +41,11 @@ public static partial class CombinedDependencyPathReporter
                 if (!visited.Contains(edge.ToNodeId) && visited.Count >= options.MaxFrontier)
                 { cutoffs.Add("node-limit:" + current.Id); continue; }
                 edges.Add(edge.ToReportEdge());
-                if (visited.Add(edge.ToNodeId)) queue.Enqueue((edge.ToNodeId, current.Depth + 1));
+                if (visited.Add(edge.ToNodeId))
+                {
+                    parents[edge.ToNodeId] = edge;
+                    queue.Enqueue((edge.ToNodeId, current.Depth + 1));
+                }
             }
         }
         var calls = new List<RetainedMethodCall>();
@@ -58,6 +68,27 @@ public static partial class CombinedDependencyPathReporter
                 gapsByFact[call.CombinedFactId].Select(g => g.Reason ?? g.GapKind).Distinct().Order().ToArray()));
         }
         var callIds = calls.Select(c => c.FactId).ToHashSet(StringComparer.Ordinal);
+        var traces = new List<RetainedCommandTrace>();
+        foreach (var endpoint in visited.Order(StringComparer.Ordinal).Where(id => graph.Nodes[id].CommandBinding is not null))
+        {
+            if (traces.Count >= 64) { cutoffs.Add("command-trace-limit"); break; }
+            var pathIds = new List<string> { endpoint };
+            var pathEdges = new List<CombinedPathEdge>();
+            var cursor = endpoint;
+            while (parents.TryGetValue(cursor, out var parent))
+            {
+                pathEdges.Add(parent.ToReportEdge()); cursor = parent.FromNodeId; pathIds.Add(cursor);
+            }
+            pathIds.Reverse(); pathEdges.Reverse();
+            var pathNodes = pathIds.Select(id => graph.Nodes[id].ToReportNode()).ToArray();
+            ProjectCompiledCommandValues(graph, pathNodes, pathEdges.ToArray());
+            var text = pathNodes[^1].CommandBinding?.CommandTextFromPath;
+            var producers = new List<string>();
+            if (text?.Origin.Kind == "call-result" && graph.CommandFactsByCombinedId.TryGetValue(text.OriginBodyFactId, out var body))
+                producers.AddRange(graph.CommandRelatedFacts(body.SourceIndexId, FactTypes.ManagedIlCallObserved,
+                    body.OriginalFactId + "/" + text.Origin.Identity).Select(f => f.CombinedFactId));
+            traces.Add(new(endpoint, pathIds, text, producers));
+        }
         var relevantGaps = graph.Gaps.Where(g => g.NodeId is not null && visited.Contains(g.NodeId) ||
             g.CombinedFactId is not null && callIds.Contains(g.CombinedFactId)).Take(options.MaxFrontier + 1).ToArray();
         if (relevantGaps.Length > options.MaxFrontier) cutoffs.Add("gap-record-limit");
@@ -65,7 +96,7 @@ public static partial class CombinedDependencyPathReporter
                 .Select(id => SanitizeNode(graph.Nodes[id].ToReportNode())).ToArray(),
             edges.OrderBy(e => e.EdgeId, StringComparer.Ordinal).ToArray(), calls.OrderBy(c => c.FactId, StringComparer.Ordinal).ToArray(),
             relevantGaps.Take(options.MaxFrontier).Select(SanitizeGap).ToArray(), cutoffs.ToArray(), work, options.MaxDepth,
-            options.MaxFrontier, options.MaxTraversalWork);
+            options.MaxFrontier, options.MaxTraversalWork) { CommandTraces = traces };
     }
 }
 
@@ -127,6 +158,7 @@ public static class RetainedMethodGraphWriter
             html.Append("</details></section>");
         }
         html.Append($"<details><summary>Retained gaps</summary><pre>{E(JsonSerializer.Serialize(graph.Gaps, options))}</pre></details>");
+        html.Append($"<details open><summary>Command text traces — one shortest retained witness per endpoint, not all variants</summary><pre>{E(JsonSerializer.Serialize(graph.CommandTraces, options))}</pre></details>");
         if (Encoding.UTF8.GetByteCount(html.ToString()) > maxBytes) throw new InvalidDataException("METHOD_GRAPH_OUTPUT_LIMIT");
         Directory.CreateDirectory(directory);
         await File.WriteAllBytesAsync(Path.Combine(directory, JsonName), bytes, token);
