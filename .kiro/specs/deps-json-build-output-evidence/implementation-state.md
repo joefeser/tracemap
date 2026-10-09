@@ -165,3 +165,10 @@ Validation: dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj
 passed 74 tests (5s). The JSON regression verifies serialized supporting IDs,
 multiple contributing facts and deterministic order. Hosted final-head validation
 and exact-head review remain required; no merge authorization.
+
+Fresh Codex discussion_r4226851909 identified the sibling provenance omission in
+PackageDecisionCorrelation. Both new freshness-gap producers have now been
+inspected. Correlation retains sorted/deduplicated combined fact IDs in its existing
+SupportingFactIds field; source/scan/commit bindings stay intact. The regression
+checks all triggering IDs with and without a selected decision. The same 74-test
+command passes (9s). Final-head CI and review remain separate evidence.
