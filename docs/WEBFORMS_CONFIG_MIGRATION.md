@@ -29,6 +29,21 @@ still apply. If the Debug CLI is missing, run the normal solution build first.
 Helper regression checks: `pwsh -NoProfile -File scripts/tests/Test-WebFormsWizardRequery.ps1`
 (after building the CLI).
 
+The helper prints retained truncation counts and up to three location/node/rule
+examples per reason (at most ten reasons, 256 characters per field). Missing
+locations are explicitly unavailable, not inferred. The console projection checks
+the handoff bytes against the newly written requery receipt and refuses changed
+bytes; it is not a new evidence artifact or independent receipt authentication.
+Its read bound is 64 MiB for the handoff and 4 MiB for the receipt; larger reports
+remain preserved with an explicit summary-unavailable message.
+
+For the known Windows drive-letter casing failure, status may retry once using
+the alternate drive-letter case, only after `WEBFORMS_EXECUTION_CHECKPOINT_INVALID`.
+The successful spelling is passed to requery. All native verification remains
+required; no checkpoint hashes are rewritten and other integrity failures do not
+trigger a retry. This handles drive-letter casing, not arbitrary folder-case changes.
+Additional synthetic checks: `pwsh -NoProfile -File scripts/tests/Test-WebFormsRequeryDiagnostics.ps1`.
+
 ## Mixed-query traversal repair: work-machine validation
 
 For a successful saved verification run, inspect unresolved command bindings
