@@ -118,7 +118,10 @@ After verifying the pinned ACK installation, run:
 ACK_ROOT=/path/to/verified/ack-v0.5.5 node --test scripts/pr-review-loop-consumer.test.mjs
 ```
 
-This loads the actual lane YAML into ACK 0.5.5's offline simulator. Missing and
+This uses ACK 0.5.5's actual packet loader with an explicit repository root and
+lane path. Git-backed loading must establish repo-local committed provenance;
+missing, altered, external, untracked and overlay configurations are rejected.
+The resulting packet then enters ACK's offline simulator. Missing and
 stale Baz cannot release a Codex-clean batch; current Baz can. Disabled Qodo is
 neither awaited nor requested by the loop. The test requires the pinned release
 and does not install software, call GitHub or invoke local reviewers. It covers

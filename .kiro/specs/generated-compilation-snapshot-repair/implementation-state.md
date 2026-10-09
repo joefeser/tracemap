@@ -114,3 +114,31 @@ suite. Windows hosted validation remains required; no retry erased a failure.
 
 Public endpoint-server-aspnet CLI smoke: 103 facts, Level1SemanticAnalysis;
 validate-adapter-artifacts.py passed. Private-path and diff guards passed.
+
+## 2026-10-09 committed lane loader follow-up
+
+Owner authorized all remaining #847 issues. Branch codex/snapshot-review,
+remote PR branch zcode/snapshot-diff-naming. All hosted checks on 7a2cd364 passed,
+including .NET, five-adapter combine, Windows public corpus/mutation matrix and
+Windows package smoke. Baz discussion_r4226984798 identified injected lane
+provenance in the consumer fixture. The regression now obtains the packet from
+ACK 0.5.5's exported loadPacket with explicit worktree root and lane path. It
+asserts loader-derived committed/repo-local state, then passes that packet to
+the real offline policy simulator. Disposable Git fixtures pin rejection of
+missing, modified, external, untracked and packet-overlay authority. The tests
+never supply their own source claims to the positive loader path, invoke hosted
+reviewers or change ACK. This proves loader and simulator behavior, not hosted
+reviewer return or merge readiness.
+
+Validation: ACK_ROOT=<verified-v0.5.5> node --test
+scripts/pr-review-loop-consumer.test.mjs passed 8 tests; node --test
+scripts/pr-review-loop-lane.test.mjs passed 3 tests. Private-path guard and git
+diff --check passed. Full .NET and CLI reruns are deferred for this JavaScript
+test/runbook-only follow-up; preceding production head passed all hosted checks
+and the documented 3,451-test local suite. Final-head hosted checks and ACK
+review freshness remain distinct gates. No merge authorized.
+
+Merge order recommendation: #847 to dev first, then update #848 with the merged
+dev and validate its deps-json/snapshot interaction before merging #848. A
+read-only merge-tree check of the current branches was conflict-free. No branch
+integration or merge was performed by this follow-up.

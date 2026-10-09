@@ -9,4 +9,5 @@
 - [x] Separate exact-scope membership from retained compiler input identity.
 - [x] Preserve fatal snapshot conflicts and relative path diagnostics across C#/VB.
 - [x] Add real pinned ACK consumer regression, stable custom-intermediate fixture and Git-sensitive completion validation.
+- [x] Verify canonical ACK lane loading and reject missing, altered, external, untracked and overlay authority.
 - [ ] Complete hosted final-head validation and fresh review.
