@@ -389,13 +389,16 @@ public static class PackageDecisionCorrelationReporter
         var blockedSources = new HashSet<string>(StringComparer.Ordinal);
         if (sources.Length == 0 && options.Source is not null)
             AddGap(gaps, options.MaxGaps, ref gapCapReached, new PackageDecisionGap($"pd-selector-source:{Hash(options.Source)}", "SelectorNoMatch", "The requested source selector matched no source snapshot.", RuleId, EvidenceTiers.Tier4Unknown, SourceLabel: SafeInputLabel(options.Source)));
-        foreach (var source in sources.Where(source => index.Facts.Any(fact =>
-            fact.SourceIndexId == source.SourceIndexId && IsBuildOutputPackage(fact))))
+        var buildOutputFacts = index.Facts.Where(IsBuildOutputPackage)
+            .ToLookup(fact => fact.SourceIndexId, StringComparer.Ordinal);
+        foreach (var source in sources.Where(source => buildOutputFacts.Contains(source.SourceIndexId)))
             AddGap(gaps, options.MaxGaps, ref gapCapReached, new PackageDecisionGap(
                 "pd-build-output:" + Hash(source.SourceIndexId), "BuildOutputFreshnessUnknown",
                 "Build-output package observations have no proven producing commit and are excluded from current-source correlation.",
                 RuleId, EvidenceTiers.Tier4Unknown, SourceLabel: source.Label,
-                SourceIndexId: source.SourceIndexId, ScanId: source.ScanId, CommitSha: SafeCommit(source.CommitSha)));
+                SourceIndexId: source.SourceIndexId, ScanId: source.ScanId, CommitSha: SafeCommit(source.CommitSha),
+                SupportingFactIds: buildOutputFacts[source.SourceIndexId].Select(fact => fact.CombinedFactId)
+                    .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray()));
         foreach (var record in records)
         {
             if (findingCapReached && !comparisonMode)

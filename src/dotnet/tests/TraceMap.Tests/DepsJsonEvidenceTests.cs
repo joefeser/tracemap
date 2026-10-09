@@ -389,9 +389,16 @@ public sealed class DepsJsonEvidenceTests
         var correlation = await PackageDecisionCorrelationReporter.WriteAsync(new PackageDecisionOptions(decision, index, Path.Combine(temp.Path, "decision-report")));
         Assert.Empty(correlation.Report.PossibleMatches);
         Assert.Empty(correlation.Report.ExactMatches);
-        Assert.Contains(correlation.Report.Gaps, gap => gap.Classification == "BuildOutputFreshnessUnknown");
+        var expectedSupportingIds = scan.Facts.Where(fact => fact.FactType == FactTypes.PackageReferenced
+            && fact.Properties.GetValueOrDefault("evidenceSource") == "build-output")
+            .Select(fact => fact.FactId).Order(StringComparer.Ordinal).ToArray();
+        Assert.NotEmpty(expectedSupportingIds);
+        var freshness = Assert.Single(correlation.Report.Gaps, gap => gap.Classification == "BuildOutputFreshnessUnknown");
+        Assert.Equal(expectedSupportingIds, freshness.SupportingFactIds);
+        Assert.Equal(scan.Manifest.ScanId, freshness.ScanId);
+        Assert.Equal(scan.Manifest.CommitSha, freshness.CommitSha);
         var empty = await PackageDecisionCorrelationReporter.WriteAsync(new PackageDecisionOptions(decision, index, Path.Combine(temp.Path, "empty-report"), DecisionId: "not-selected"));
-        Assert.Contains(empty.Report.Gaps, gap => gap.Classification == "BuildOutputFreshnessUnknown");
+        Assert.Equal(expectedSupportingIds, Assert.Single(empty.Report.Gaps, gap => gap.Classification == "BuildOutputFreshnessUnknown").SupportingFactIds);
         var delta = Path.Combine(temp.Path, "delta.json");
         await File.WriteAllTextAsync(delta, """
             {"version":"package-delta.v1","changes":[{"id":"synthetic-change","packageName":"Example.Direct",
