@@ -107,6 +107,13 @@ counts, and up to eight value-resolution gaps per binding. Missing binding field
 are unavailable, not resolved. SQL literals and command values are not printed;
 even a hash-only constant does not identify SQL text or a stored procedure.
 
+Return-target failures retain the legacy `IlCommandReturnTargetMissingOrAmbiguous`
+code and now additionally distinguish missing/ambiguous admitted call edges from
+missing/ambiguous target method evidence. These are evidence-admission diagnoses,
+not claims that a method is absent from the application. The synthetic compiled
+acceptance matrix is documented in `samples/fixture-build/lazy-constructor/README.md`
+and replayed by `scripts/wlocal.ps1`; virtual dispatch remains explicitly unproven.
+
 ## Mixed-query traversal repair: work-machine validation
 
 For a successful saved verification run, inspect unresolved command bindings

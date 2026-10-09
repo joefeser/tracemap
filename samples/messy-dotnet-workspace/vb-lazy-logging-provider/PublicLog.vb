@@ -39,6 +39,19 @@ Namespace PublicLazy.Framework
             ExecuteText(LiteralText())
         End Sub
 
+        Public Sub InsertReturnedLiteralTwoHops()
+            ForwardToExecutor(LiteralText())
+        End Sub
+
+        Public Sub InsertComposedTextTwoHops(value As String)
+            ' Framework producer is intentionally not supplied as a scanned DLL.
+            ForwardToExecutor(String.Concat("SELECT ", value))
+        End Sub
+
+        Private Sub ForwardToExecutor(text As String)
+            ExecuteText(text)
+        End Sub
+
         Private Shared Function LiteralText() As String
             Return "SELECT 1 /* public literal control */"
         End Function

@@ -50,13 +50,21 @@ public static partial class CombinedDependencyPathReporter
                 var candidates = outgoing.Where(edge => edge.SupportingFactIds.Contains(producer.CombinedFactId, StringComparer.Ordinal)
                     && edge.EdgeKind is "compiled-il-call" or "compiled-il-callvirt-candidate").Take(2).ToArray();
                 foreach (var edge in candidates) materials.Add(edge.ToReportEdge());
-                if (candidates.Length != 1) return Fail("IlCommandReturnTargetMissingOrAmbiguous");
+                if (candidates.Length != 1)
+                {
+                    gaps.Add(candidates.Length == 0 ? "IlCommandReturnTargetEdgeMissing" : "IlCommandReturnTargetEdgesAmbiguous");
+                    return Fail("IlCommandReturnTargetMissingOrAmbiguous");
+                }
                 var selected = candidates[0].ToReportEdge();
                 var targets = selected.SupportingFactIds.Select(id => facts.GetValueOrDefault(id)).OfType<CombinedFactRow>()
                     .Where(fact => fact.FactType == FactTypes.ManagedMethodDeclared && fact.TargetSymbol is not null
                         && SymbolNodeId(fact.SourceIndexId, fact.TargetSymbol) == selected.ToNodeId).Take(2).ToArray();
                 foreach (var target in targets) materials.Add(ProjectCommandValueFact(target));
-                if (targets.Length != 1) return Fail("IlCommandReturnTargetMissingOrAmbiguous");
+                if (targets.Length != 1)
+                {
+                    gaps.Add(targets.Length == 0 ? "IlCommandReturnTargetMethodMissing" : "IlCommandReturnTargetMethodsAmbiguous");
+                    return Fail("IlCommandReturnTargetMissingOrAmbiguous");
+                }
                 var agreed = TryCommandCallOperands(graph, facts, graph.CommandFactsByOriginalId, selected, targets[0].CombinedFactId,
                     out var call, out var operands, out var body, out var caller, out var callee,
                     out var receiver, out _, out var arguments, out var hasThis, out var inspected, out var reason);
