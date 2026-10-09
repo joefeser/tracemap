@@ -49,3 +49,7 @@ freshness/coverage gap. The original package facts remain available to consumers
 that preserve build-output provenance. Core limit overrides may lower, but never
 raise, the documented resource caps. Opt-in options are init-only properties so
 the existing positional ScanOptions constructor and deconstruction remain intact.
+
+Scope follows ScanEngine.ApplyScope: nonblank include globs explicitly override
+project-directory restrictions; excludes still win. Empty include entries are
+ignored. Decision-report freshness gaps remain visible without decision pairings.

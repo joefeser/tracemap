@@ -147,7 +147,8 @@ public sealed class ScanReceiptRecorder
             NormalizeOrdered(options.IlRewriteBeforePdbPaths),
             NormalizeOrdered(options.IlRewriteAfterPdbPaths),
             options.IlRewritePdbLimits?.ToString() ?? string.Empty,
-            Normalize(additionalAuthorizedInputs)));
+            Normalize(additionalAuthorizedInputs)
+                + (options.IndexDepsJson ? "\ndeps-json:" + JsonSerializer.Serialize(options.DepsJsonLimits ?? new DepsJsonLimits()) : string.Empty)));
     }
 
     public bool CanWriteAuthoritativeReceipt => repositoryIdentityHash is not null && commitSha is not null && runId is not null;

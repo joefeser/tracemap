@@ -33,6 +33,7 @@ internal static class DepsJsonExtractor
         var root = Path.GetFullPath(options.RepoPath);
         var output = Path.GetFullPath(options.OutputPath).TrimEnd(Path.DirectorySeparatorChar);
         var comparer = CSharpSemanticExtractor.CreateSourcePathComparer(root);
+        var includes = (options.IncludeGlobs ?? []).Where(glob => !string.IsNullOrWhiteSpace(glob)).ToArray();
         var projectDirectories = (options.ProjectPaths ?? []).Select(project => Path.GetDirectoryName(
             Path.GetRelativePath(root, Path.GetFullPath(project, root)))!.Replace('\\', '/')).ToArray();
         var rows = new List<DepsJsonRow>();
@@ -95,9 +96,9 @@ internal static class DepsJsonExtractor
                         continue;
                     }
                     if (!inBin || !path.EndsWith(".deps.json", StringComparison.OrdinalIgnoreCase)) continue;
-                    if ((options.IncludeGlobs?.Count ?? 0) > 0
-                        && !options.IncludeGlobs!.Any(glob => ScanEngine.GlobMatches(relative, glob, comparer))) continue;
-                    if ((options.IncludeGlobs?.Any(glob => !string.IsNullOrWhiteSpace(glob)) != true)
+                    if (includes.Length > 0
+                        && !includes.Any(glob => ScanEngine.GlobMatches(relative, glob, comparer))) continue;
+                    if (includes.Length == 0
                         && projectDirectories.Length > 0 && !projectDirectories.Any(dir => string.IsNullOrEmpty(dir)
                         || comparer.Equals(dir, ".") || relative.StartsWith(dir + "/", comparer == StringComparer.OrdinalIgnoreCase
                             ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal))) continue;

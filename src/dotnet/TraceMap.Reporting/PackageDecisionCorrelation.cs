@@ -389,6 +389,13 @@ public static class PackageDecisionCorrelationReporter
         var blockedSources = new HashSet<string>(StringComparer.Ordinal);
         if (sources.Length == 0 && options.Source is not null)
             AddGap(gaps, options.MaxGaps, ref gapCapReached, new PackageDecisionGap($"pd-selector-source:{Hash(options.Source)}", "SelectorNoMatch", "The requested source selector matched no source snapshot.", RuleId, EvidenceTiers.Tier4Unknown, SourceLabel: SafeInputLabel(options.Source)));
+        foreach (var source in sources.Where(source => index.Facts.Any(fact =>
+            fact.SourceIndexId == source.SourceIndexId && IsBuildOutputPackage(fact))))
+            AddGap(gaps, options.MaxGaps, ref gapCapReached, new PackageDecisionGap(
+                "pd-build-output:" + Hash(source.SourceIndexId), "BuildOutputFreshnessUnknown",
+                "Build-output package observations have no proven producing commit and are excluded from current-source correlation.",
+                RuleId, EvidenceTiers.Tier4Unknown, SourceLabel: source.Label,
+                SourceIndexId: source.SourceIndexId, ScanId: source.ScanId, CommitSha: SafeCommit(source.CommitSha)));
         foreach (var record in records)
         {
             if (findingCapReached && !comparisonMode)
@@ -400,9 +407,6 @@ public static class PackageDecisionCorrelationReporter
                 var recordKey = $"{record.ProducerId}\u001f{record.DecisionId}";
                 if (!pairingRows.TryAdd((recordKey, source.SourceIndexId), []))
                     pairingRows[(recordKey, source.SourceIndexId)] = [];
-                if (index.Facts.Any(fact => fact.SourceIndexId == source.SourceIndexId && IsBuildOutputPackage(fact)))
-                    AddGap(gaps, options.MaxGaps, ref gapCapReached, SourceGap("BuildOutputFreshnessUnknown",
-                        "Build-output package observations have no proven producing commit and are excluded from current-source correlation.", record, source));
                 var sourceFacts = PackageEvidenceRows(index.Facts, source.SourceIndexId);
                 var rows = sourceFacts.Where(fact => string.Equals(fact.Properties.GetValueOrDefault("ecosystem"), record.Ecosystem, StringComparison.OrdinalIgnoreCase)
                     && string.Equals(NormalizeName(record.Ecosystem, record.PackageName), NormalizeName(record.Ecosystem, fact.Properties.GetValueOrDefault("packageName") ?? string.Empty), StringComparison.Ordinal)).ToArray();
