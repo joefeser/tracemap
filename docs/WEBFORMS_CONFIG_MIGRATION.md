@@ -863,7 +863,8 @@ is created; existing files are never overwritten. Input is limited to 16 MiB and
 
 Rule `diagnostics.graph.aliased-slice.v3` emits an allowlisted projection, not a redacted
 copy: sequential aliases replace names, paths, rules, source IDs, node IDs, fact IDs and
-encoded targets. No reverse map is written. Only fixed technical edge/state/reason/tier
+encoded targets. No reverse map is written unless `-PrivateMap` is explicitly selected;
+that map is separate and private. Only fixed technical edge/state/reason/tier
 categories pass through. Unknown codes become `other-or-unavailable`. Free-form gaps,
 private digests, raw SQL, line numbers and offsets are omitted. The generator digest
 hashes this exporter; the bounded-input digest hashes only the projected `graph` object
@@ -907,3 +908,20 @@ that every route fails. Producer aliases identify the retained unresolved origin
 return resolution fails inside a nested producer, the gap can describe that deeper
 failure rather than the outer origin call. The existing 256 KiB share-output limit
 still applies.
+
+### Private alias lookup
+
+Opt in with `wgraph-share.ps1 <review-root> -Method <private-method> -PrivateMap`.
+The shared JSON is unchanged by this switch. A separate, explicitly private map is
+written under `<review-root>/private-graph-maps/`, bound to the exact shared bytes by
+SHA-256 and carrying its own generator/bounded-input hashes. Never upload that folder
+or map. Both outputs use create-new semantics; failures can leave partial outputs,
+which must not be treated as complete exports.
+
+Run `wgraph-alias.ps1 <review-root> T1` to inspect the latest private map, or pass an
+exact map file instead of the root. The helper validates the map content hash and
+prints the associated share filename/hash before displaying the original identifier.
+This is a local integrity check, not authentication. Always use aliases from that same
+export. A previous sanitized export cannot be reversed without its private graph/map.
+The mapping fixes diagnostic identity visibility; it does not invent missing call
+edges or claim that an unknown external method has been resolved.
