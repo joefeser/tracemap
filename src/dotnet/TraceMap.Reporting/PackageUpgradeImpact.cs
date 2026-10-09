@@ -181,7 +181,7 @@ public static class PackageUpgradeImpactReporter
         var read = await ReadIndexAsync(connection, cancellationToken);
         var selectedSources = ApplySourceFilter(read.Sources, options.Source);
         var selectedSourceIds = selectedSources.Select(source => source.SourceIndexId).ToHashSet(StringComparer.Ordinal);
-        var surfaces = CombinedDependencyReporter.BuildSurfaces(read.Facts)
+        var surfaces = CombinedDependencyReporter.BuildSurfaces(read.Facts.Where(fact => !PackageDecisionCorrelationReporter.IsBuildOutputPackage(fact)).ToArray())
             .Where(surface => surface.SurfaceKind == "package-config")
             .Where(surface => surface.FactType == FactTypes.PackageReferenced)
             .Where(surface => !string.IsNullOrWhiteSpace(surface.PackageName))
@@ -205,6 +205,9 @@ public static class PackageUpgradeImpactReporter
                 .Where(gap => gap.SourceIndexId == source.SourceIndexId || string.Equals(gap.SourceLabel, source.Label, StringComparison.Ordinal))
                 .Select(gap => $"{gap.Category}: {gap.Example}")
                 .ToArray()))
+            .Concat(read.Facts.Any(fact => selectedSourceIds.Contains(fact.SourceIndexId)
+                && PackageDecisionCorrelationReporter.IsBuildOutputPackage(fact))
+                ? new[] { "Build-output package evidence has unknown freshness and is excluded from current-source impact findings." } : [])
             .Distinct(StringComparer.Ordinal)
             .OrderBy(value => value, StringComparer.Ordinal)
             .ToArray();

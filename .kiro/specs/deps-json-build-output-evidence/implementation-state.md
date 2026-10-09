@@ -82,3 +82,28 @@ interrupted and a bounded 60-second confirmation run returned
 `workerMayStop=true`, eight held findings, no failed/pending checks, and CLEAN
 merge state on published head `0da74d7d`. This is not merge readiness. The
 follow-up commits remain local to avoid invalidating the pending review batch.
+
+## Owner-authorized consolidated review repair
+
+Owner explicitly requested fixes and fresh Codex review on both #847 and #848,
+with Baz re-reviewing pushes automatically. This authorizes repair despite the
+known ACK 0.5.5 Baz URL reader blockage; it does not authorize merge or bypass
+final review. All eight raw findings were inspected on published head 0da74d7d.
+
+Repairs: align include/project scope, ignore noncandidate file links, enforce
+absolute caps and protected output roots, preserve the old positional ScanOptions
+constructor via init-only opt-in properties, and report dependency gaps accurately.
+The two overlapping freshness findings share one invariant: observations of an
+unknown build cannot become current-source declaration evidence. The requested
+PackageReferenced contract stays intact; correlation/impact consumers exclude
+these observations with explicit gaps. Public regression cases cover each family.
+
+Validation command includes DepsJsonEvidenceTests, PackageDecisionLockfileEvidenceTests,
+PackageUpgradeImpactTests, CliTests, and ScanEngineTests with --no-restore -warnaserror.
+An initial 99-test pass also emitted xUnit2031; the assertion was corrected before
+rerunning. Final validation and review results follow in the PR readback.
+
+Final repair validation: 99 focused tests pass, zero warnings/errors (15s).
+Public deps.json CLI smoke passes with four facts. Private-path and diff guards pass.
+Full final-head validation is delegated to the existing hosted .NET workflow;
+the prior local full result remains 3,461 passed / one Windows-only skip.

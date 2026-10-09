@@ -178,9 +178,11 @@ public sealed record ScanOptions(
     int ExactSourceMaxFiles = 256,
     long ExactSourceMaxBytes = 67_108_864,
     string? WebFormsPublishedRootPath = null,
-    string? WebFormsPublishSourceRelativeBase = null,
-    bool IndexDepsJson = false,
-    DepsJsonLimits? DepsJsonLimits = null);
+    string? WebFormsPublishSourceRelativeBase = null)
+{
+    public bool IndexDepsJson { get; init; }
+    public DepsJsonLimits? DepsJsonLimits { get; init; }
+}
 
 public sealed record FileInventoryItem(
     string RelativePath,

@@ -26,8 +26,10 @@ internal static class DepsJsonExtractor
     {
         var limits = options.DepsJsonLimits ?? new DepsJsonLimits();
         if (limits.MaxFiles <= 0 || limits.MaxFileBytes <= 0 || limits.MaxTotalBytes <= 0
-            || limits.MaxDirectoryEntries <= 0 || limits.MaxLibraries <= 0)
-            throw new ArgumentOutOfRangeException(nameof(options), "deps.json limits must be positive.");
+            || limits.MaxDirectoryEntries <= 0 || limits.MaxLibraries <= 0
+            || limits.MaxFileBytes > 8_388_608 || limits.MaxTotalBytes > 67_108_864
+            || limits.MaxFiles > 128 || limits.MaxDirectoryEntries > 100_000 || limits.MaxLibraries > 20_000)
+            throw new ArgumentOutOfRangeException(nameof(options), "deps.json limits must be positive and cannot exceed the documented resource caps.");
         var root = Path.GetFullPath(options.RepoPath);
         var output = Path.GetFullPath(options.OutputPath).TrimEnd(Path.DirectorySeparatorChar);
         var comparer = CSharpSemanticExtractor.CreateSourcePathComparer(root);
@@ -40,7 +42,11 @@ internal static class DepsJsonExtractor
         var work = 0;
         long bytesRead = 0;
         var pending = new Stack<(string Path, bool InBin)>();
-        pending.Push((root, false));
+        if (comparer.Equals(root.TrimEnd(Path.DirectorySeparatorChar), output)
+            || root.StartsWith(output + Path.DirectorySeparatorChar, comparer == StringComparer.OrdinalIgnoreCase
+                ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal))
+            gaps.Add(new(".", "deps-json-output-boundary"));
+        else pending.Push((root, false));
         while (pending.Count > 0)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -77,6 +83,7 @@ internal static class DepsJsonExtractor
                     var attrs = File.GetAttributes(path);
                     var isDirectory = (attrs & FileAttributes.Directory) != 0;
                     if (isDirectory && Excluded.Contains(Path.GetFileName(path))) continue;
+                    if (!isDirectory && (!inBin || !path.EndsWith(".deps.json", StringComparison.OrdinalIgnoreCase))) continue;
                     if ((attrs & FileAttributes.ReparsePoint) != 0)
                     {
                         gaps.Add(new(relative, "deps-json-linked-path"));
@@ -90,7 +97,8 @@ internal static class DepsJsonExtractor
                     if (!inBin || !path.EndsWith(".deps.json", StringComparison.OrdinalIgnoreCase)) continue;
                     if ((options.IncludeGlobs?.Count ?? 0) > 0
                         && !options.IncludeGlobs!.Any(glob => ScanEngine.GlobMatches(relative, glob, comparer))) continue;
-                    if (projectDirectories.Length > 0 && !projectDirectories.Any(dir => string.IsNullOrEmpty(dir)
+                    if ((options.IncludeGlobs?.Any(glob => !string.IsNullOrWhiteSpace(glob)) != true)
+                        && projectDirectories.Length > 0 && !projectDirectories.Any(dir => string.IsNullOrEmpty(dir)
                         || comparer.Equals(dir, ".") || relative.StartsWith(dir + "/", comparer == StringComparer.OrdinalIgnoreCase
                             ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal))) continue;
                     if (++files > limits.MaxFiles)

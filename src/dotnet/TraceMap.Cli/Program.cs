@@ -380,7 +380,6 @@ public static class TraceMapCommand
             ExcludeGlobs: values.GetMany("--exclude"),
             TargetFramework: values.GetValueOrDefault("--target-framework"),
             Restore: values.HasFlag("--restore"),
-            IndexDepsJson: values.HasFlag("--index-deps-json"),
             BinlogPaths: values.GetMany("--binlog"),
             BinlogCommitSha: values.GetValueOrDefault("--binlog-commit-sha"),
             CompiledInputPaths: values.GetMany("--compiled-input"),
@@ -433,7 +432,8 @@ public static class TraceMapCommand
             ExactSourceMaxFiles: ParsePositiveInt(values, "--exact-source-max-files", 256),
             ExactSourceMaxBytes: ParsePositiveLong(values, "--exact-source-max-bytes", 67_108_864),
             WebFormsPublishedRootPath: values.GetValueOrDefault("--webforms-published-root"),
-            WebFormsPublishSourceRelativeBase: values.GetValueOrDefault("--webforms-publish-source-base"));
+            WebFormsPublishSourceRelativeBase: values.GetValueOrDefault("--webforms-publish-source-base"))
+        { IndexDepsJson = values.HasFlag("--index-deps-json") };
         var receiptRecorder = new ScanReceiptRecorder(
             scanOptions,
             sqlValidationSummaryPaths.Append(sqlValidationAsOf?.ToString("O") ?? string.Empty));
