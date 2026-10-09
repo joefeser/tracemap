@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Diagnostics;
 using System.Security.Cryptography;
 using TraceMap.Cli;
@@ -370,8 +371,11 @@ public sealed class DepsJsonEvidenceTests
         Assert.False(new ScanOptions("repo", "out").IndexDepsJson);
     }
 
-    [Fact]
-    public async Task Build_output_cannot_become_current_source_correlation_or_impact_evidence()
+    [Theory]
+    [InlineData(1)]
+    [InlineData(128)]
+    [InlineData(130)]
+    public async Task Build_output_cannot_become_current_source_correlation_or_impact_evidence(int copies)
     {
         using var temp = new TempDirectory();
         var root = Path.Combine(temp.Path, "repo");
@@ -379,7 +383,10 @@ public sealed class DepsJsonEvidenceTests
         InitGit(root);
         var scan = ScanEngine.Scan(new ScanOptions(root, Path.Combine(temp.Path, "scan")) { IndexDepsJson = true });
         var index = Path.Combine(temp.Path, "index.sqlite");
-        SqliteIndexWriter.Write(index, scan.Manifest, scan.Facts);
+        var facts = scan.Facts.SelectMany(fact => fact.FactType == FactTypes.PackageReferenced
+            ? Enumerable.Range(0, copies).Reverse().Select(i => fact with { FactId = fact.FactId + $"-{i:D3}" })
+            : [fact]).ToArray();
+        SqliteIndexWriter.Write(index, scan.Manifest, facts);
         var decision = Path.Combine(temp.Path, "decision.json");
         await File.WriteAllTextAsync(decision, """
             {"version":"package-decision.v1","records":[{"decisionId":"synthetic-decision","decisionKind":"reject",
@@ -389,16 +396,32 @@ public sealed class DepsJsonEvidenceTests
         var correlation = await PackageDecisionCorrelationReporter.WriteAsync(new PackageDecisionOptions(decision, index, Path.Combine(temp.Path, "decision-report")));
         Assert.Empty(correlation.Report.PossibleMatches);
         Assert.Empty(correlation.Report.ExactMatches);
-        var expectedSupportingIds = scan.Facts.Where(fact => fact.FactType == FactTypes.PackageReferenced
+        var expectedSupportingIds = facts.Where(fact => fact.FactType == FactTypes.PackageReferenced
             && fact.Properties.GetValueOrDefault("evidenceSource") == "build-output")
             .Select(fact => fact.FactId).Order(StringComparer.Ordinal).ToArray();
         Assert.NotEmpty(expectedSupportingIds);
         var freshness = Assert.Single(correlation.Report.Gaps, gap => gap.Classification == "BuildOutputFreshnessUnknown");
-        Assert.Equal(expectedSupportingIds, freshness.SupportingFactIds);
+        Assert.Equal(expectedSupportingIds.Take(256), freshness.SupportingFactIds);
+        Assert.Equal(Math.Max(0, expectedSupportingIds.Length - 256), freshness.SupportingFactIdsOmittedCount);
+        var markdown = await File.ReadAllTextAsync(correlation.MarkdownPath!);
+        Assert.Contains(expectedSupportingIds[0], markdown);
+        if (expectedSupportingIds.Length > 8)
+        {
+            Assert.DoesNotContain(expectedSupportingIds[^1], markdown);
+            Assert.Contains($"{expectedSupportingIds.Length - 8} supporting fact IDs omitted", markdown);
+        }
+        using var json = JsonDocument.Parse(await File.ReadAllTextAsync(correlation.JsonPath!));
+        var jsonGap = Assert.Single(json.RootElement.GetProperty("gaps").EnumerateArray(),
+            gap => gap.GetProperty("classification").GetString() == "BuildOutputFreshnessUnknown");
+        Assert.Equal(Math.Min(256, expectedSupportingIds.Length), jsonGap.GetProperty("supportingFactIds").GetArrayLength());
+        Assert.Equal(freshness.SupportingFactIdsOmittedCount, jsonGap.GetProperty("supportingFactIdsOmittedCount").GetInt32());
         Assert.Equal(scan.Manifest.ScanId, freshness.ScanId);
         Assert.Equal(scan.Manifest.CommitSha, freshness.CommitSha);
         var empty = await PackageDecisionCorrelationReporter.WriteAsync(new PackageDecisionOptions(decision, index, Path.Combine(temp.Path, "empty-report"), DecisionId: "not-selected"));
-        Assert.Equal(expectedSupportingIds, Assert.Single(empty.Report.Gaps, gap => gap.Classification == "BuildOutputFreshnessUnknown").SupportingFactIds);
+        Assert.Equal(expectedSupportingIds.Take(256), Assert.Single(empty.Report.Gaps, gap => gap.Classification == "BuildOutputFreshnessUnknown").SupportingFactIds);
+        var capped = await PackageDecisionCorrelationReporter.WriteAsync(new PackageDecisionOptions(decision, index, Path.Combine(temp.Path, "capped-report"), DecisionId: "not-selected", MaxGaps: 1));
+        Assert.Equal("SelectorNoMatch", Assert.Single(capped.Report.Gaps).Classification);
+        Assert.True(capped.Report.Summary.GapCapReached);
         var delta = Path.Combine(temp.Path, "delta.json");
         await File.WriteAllTextAsync(delta, """
             {"version":"package-delta.v1","changes":[{"id":"synthetic-change","packageName":"Example.Direct",

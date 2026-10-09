@@ -7,4 +7,5 @@
 - [x] Add valid, malformed, ambiguous, duplicate, limit, scope and snapshot regression cases.
 - [x] Complete focused and full Debug validation and sample CLI smoke.
 - [x] Preserve disabled-mode receipt compatibility and retain per-gap supporting fact IDs.
+- [x] Bound freshness provenance in JSON/Markdown, preserve selector-gap priority and version source-attributed coverage reports.
 - [ ] Deliver bounded PR to dev and complete live ACK review.

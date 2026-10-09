@@ -127,11 +127,12 @@ public sealed record PackageImpactGap(
     IReadOnlyList<KeyValuePair<string, string>>? Metadata = null)
 {
     public IReadOnlyList<string> SupportingFactIds { get; init; } = [];
+    public int SupportingFactIdsOmittedCount { get; init; }
 }
 
 public static class PackageUpgradeImpactReporter
 {
-    private const string Version = "1.0";
+    private const string Version = "1.1";
     private const string DeltaVersion = "package-delta.v1";
     private const string RuleId = "package.upgrade.impact.v1";
     private const int MarkdownRowLimit = 200;
@@ -206,7 +207,7 @@ public static class PackageUpgradeImpactReporter
         var buildOutputFactsBySource = read.Facts
             .Where(PackageDecisionCorrelationReporter.IsBuildOutputPackage)
             .GroupBy(fact => fact.SourceIndexId, StringComparer.Ordinal)
-            .ToDictionary(group => group.Key, group => group.Select(fact => fact.OriginalFactId).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray(), StringComparer.Ordinal);
+            .ToDictionary(group => group.Key, group => PackageGapFactEvidence.Bound(group.Select(fact => fact.OriginalFactId)), StringComparer.Ordinal);
         var coverageWarnings = selectedSources
             .SelectMany(source => CoverageWarningsFor(source, read.KnownGaps
                 .Where(gap => gap.SourceIndexId == source.SourceIndexId || string.Equals(gap.SourceLabel, source.Label, StringComparison.Ordinal))
@@ -216,7 +217,7 @@ public static class PackageUpgradeImpactReporter
                     ? new[] { "Build-output package evidence has unknown freshness and is excluded from current-source impact findings." } : [])
                 .Distinct(StringComparer.Ordinal)
                 .Select(warning => (Source: source, Warning: warning, FactIds: warning.StartsWith("Build-output package evidence", StringComparison.Ordinal)
-                    ? buildOutputFactsBySource[source.SourceIndexId] : Array.Empty<string>())))
+                    ? buildOutputFactsBySource[source.SourceIndexId] : (Ids: (IReadOnlyList<string>)Array.Empty<string>(), OmittedCount: 0))))
             .OrderBy(item => item.Source.Label, StringComparer.Ordinal)
             .ThenBy(item => item.Warning, StringComparer.Ordinal)
             .ToArray();
@@ -256,7 +257,7 @@ public static class PackageUpgradeImpactReporter
 
         foreach (var item in coverageWarnings)
         {
-            AddGap(gaps, options.MaxGaps, ref gapCapReached, CoverageGap(item.Warning, item.Source) with { SupportingFactIds = item.FactIds });
+            AddGap(gaps, options.MaxGaps, ref gapCapReached, CoverageGap(item.Warning, item.Source) with { SupportingFactIds = item.FactIds.Ids, SupportingFactIdsOmittedCount = item.FactIds.OmittedCount });
         }
 
         var reportCoverage = reducedCoverage || gapCapReached || findingCapReached ? "ReducedCoverage" : "FullEvidenceAvailable";
@@ -716,7 +717,7 @@ public static class PackageUpgradeImpactReporter
             builder.AppendLine("| --- | --- | --- | --- |");
             foreach (var gap in report.Gaps.Take(MarkdownRowLimit))
             {
-                builder.AppendLine($"| {Cell(gap.Classification)} | {Cell(gap.ChangeId ?? "n/a")} | {Cell(gap.Message)} | {Cell($"{gap.RuleId} {gap.EvidenceTier}")} |");
+                builder.AppendLine($"| {Cell(gap.Classification)} | {Cell(gap.ChangeId ?? "n/a")} | {Cell(gap.Message)} | {Cell($"{gap.RuleId} {gap.EvidenceTier}" + PackageGapFactEvidence.Summary(gap.SupportingFactIds, gap.SupportingFactIdsOmittedCount))} |");
             }
         }
 

@@ -6681,6 +6681,8 @@ rules:
       - PackageImpactFinding
       - PackageImpactGap
     limitations:
+      - Package impact report version 1.1 identifies the source-attributed coverage-gap projection; identical warnings across sources retain separate source/scan/commit identities. The delta input and rule IDs remain v1.
+      - Build-output freshness gaps retain at most 256 sorted unique supporting fact IDs in JSON and eight in Markdown, with explicit supportingFactIdsOmittedCount in JSON and an omitted-ID count in Markdown.
       - Package findings are static package declaration evidence only and do not prove package restore, installed versions, transitive dependency resolution, runtime loading, deployment, or API compatibility.
       - Lockfile, import/usage, and package-call evidence is adapter-dependent and is only included when deterministic package identity facts with documented limitations exist.
       - Version values are descriptive and safely rendered or hashed; TraceMap does not interpret semantic versioning, changelog impact, or compatibility.
@@ -6713,6 +6715,7 @@ rules:
       - PackageDecisionArtifactChange
       - PackageDecisionExternalReference
     limitations:
+      - Build-output freshness gaps follow existing selector diagnostics in the bounded gap budget. Their supporting fact IDs are sorted and deduplicated, capped at 256 in JSON and eight in Markdown, with explicit omitted counts; gap-budget omissions remain visible through GapCapReached.
       - Exact and possible matches remain separate; missing adapter digest or dependency-relation capability is an explicit gap.
       - Correlation is static snapshot evidence and does not prove restore, execution, runtime loading, deployment, safety, or business impact.
       - Reduced coverage and unknown commit identity produce analysis gaps rather than excluded-source conclusions.
