@@ -62,5 +62,34 @@ try {
     $selectedOutput = Join-Path $temp 'selected.json'
     & $helper $temp -Method 'Focus()' -OutputPath $selectedOutput | Out-Null
     if ((Get-FileHash $outputFile).Hash -cne (Get-FileHash $selectedOutput).Hash) { throw 'Latest graph selection changed projection.' }
+    # A busy neighbor sorts before the focus: focus call records must still survive.
+    $busyCalls = @(1..150 | ForEach-Object { @{callerNodeId="$secret-node-2";factId="$secret-busy-$_";
+        bodyFactId="$secret-body2";encodedTarget="$secret-target-$_";opcode='call';ruleId="$secret-rule";
+        evidenceTier='Tier2Structural';state='no-admitted-method-target-edge';gapReasons=@()} })
+    $focusCall = $calls[0].Clone()
+    $focusCall.encodedTarget = 'memberref|type:PRIVATE|member:10:get_Secret|->type(namespace:6:System|names:6:String)'
+    @{schemaVersion='retained-method-graph.v1';graph=@{nodes=$nodes;edges=$edges;
+        calls=@($busyCalls)+@($focusCall);cutoffs=@();roots=@("$secret-node-1")}} |
+        ConvertTo-Json -Depth 20 | Set-Content -LiteralPath $inputFile
+    $priorityOutput = Join-Path $temp 'priority.json'
+    & $helper $temp -GraphPath $inputFile -Method 'Focus()' -OutputPath $priorityOutput | Out-Null
+    $priority = Get-Content -LiteralPath $priorityOutput -Raw | ConvertFrom-Json -Depth 24
+    if ($priority.schemaVersion -cne 'aliased-method-graph.v2' -or !$priority.graph.focusRecordsComplete) { throw 'Focus coverage not complete.' }
+    $focusId = @($priority.graph.nodes | Where-Object focus)[0].id
+    if ($priority.graph.calls[0].caller -cne $focusId) { throw 'Busy neighbor starved focus.' }
+    if ($priority.graph.calls[0].targetShape.member -cne 'property-getter' -or
+        $priority.graph.calls[0].targetShape.returns -cne 'string') { throw 'Safe target shape missing.' }
+    if ((Get-Content $priorityOutput -Raw).Contains('PRIVATE')) { throw 'Target name leaked.' }
+    $coverage = @($priority.graph.callerCoverage | Where-Object { $_.availableCalls -eq 150 })[0]
+    if ($coverage.exportedCalls -ne 119 -or $coverage.omittedCalls -ne 31) { throw 'Caller omissions incorrect.' }
+    foreach ($call in $busyCalls) { $call.callerNodeId = "$secret-node-1" }
+    @{schemaVersion='retained-method-graph.v1';graph=@{nodes=$nodes;edges=$edges;
+        calls=@($busyCalls)+@($focusCall);cutoffs=@();roots=@("$secret-node-1")}} |
+        ConvertTo-Json -Depth 20 | Set-Content -LiteralPath $inputFile
+    $overflowOutput = Join-Path $temp 'focus-overflow.json'
+    & $helper $temp -GraphPath $inputFile -Method 'Focus()' -OutputPath $overflowOutput | Out-Null
+    $overflow = Get-Content -LiteralPath $overflowOutput -Raw | ConvertFrom-Json -Depth 24
+    if ($overflow.graph.focusRecordsComplete -or $overflow.graph.calls.Count -ne 120 -or
+        @($overflow.graph.callerCoverage | Where-Object focus)[0].omittedCalls -ne 31) { throw 'Focus overflow concealed.' }
     Write-Output 'Aliased graph exporter tests passed.'
 } finally { Remove-Item -LiteralPath $temp -Recurse -Force }

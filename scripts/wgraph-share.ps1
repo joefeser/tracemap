@@ -76,6 +76,40 @@ try {
     $reasons = @('same-assembly-methoddef-target-not-unique','admitted-memberref-target-not-unique',
         'target-assembly-present-without-bound-provenance','exact-il-target-present-without-source-commit-binding',
         'command-binding-join-invalid-or-ambiguous')
+    function TargetShape([string]$Target) {
+        # Derived categories only: never copy a matched identifier or signature fragment.
+        $member = 'method-or-unknown'
+        if ($Target -cmatch '\|(?:member|method):[0-9]+:get_') { $member = 'property-getter' }
+        elseif ($Target -cmatch '\|(?:member|method):[0-9]+:set_') { $member = 'property-setter' }
+        elseif ($Target -cmatch '\|(?:member|constructor):5:\.ctor\|') { $member = 'constructor' }
+        $returns = 'other-or-unknown'
+        if ($Target -cmatch '->type\(namespace:6:System\|names:6:String\)$') { $returns = 'string' }
+        elseif ($Target -cmatch '->type\(namespace:6:System\|names:5:Int32\)$') { $returns = 'int32' }
+        elseif ($Target -cmatch '->type\(namespace:6:System\|names:4:Void\)$') { $returns = 'void' }
+        $reference = if ($Target.StartsWith('memberref|',[StringComparison]::Ordinal)) { 'memberref' } else { 'other-or-unknown' }
+        return [ordered]@{reference=$reference;member=$member;returns=$returns}
+    }
+    $focusIds = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+    foreach ($node in $focus) { [void]$focusIds.Add($node.nodeId) }
+    # Focus records first, then round-robin other callers. No caller can consume
+    # the whole neighborhood budget before the focus has been represented.
+    function Prioritize([object[]]$Records, [string]$CallerField, [int]$Limit) {
+        $ordered = [Collections.Generic.List[object]]::new()
+        foreach ($record in $Records) {
+            if ($focusIds.Contains([string]$record.$CallerField)) { $ordered.Add($record) }
+        }
+        $groups = @($Records | Where-Object { !$focusIds.Contains([string]$_.$CallerField) } | Group-Object -Property $CallerField)
+        $round = 0
+        while ($ordered.Count -lt $Limit) {
+            $added = $false
+            foreach ($group in $groups) {
+                if ($round -lt $group.Count -and $ordered.Count -lt $Limit) { $ordered.Add($group.Group[$round]); $added = $true }
+            }
+            if (!$added) { break }
+            $round++
+        }
+        return @($ordered | Select-Object -First $Limit)
+    }
     $projectedNodes = @($graph.nodes | Where-Object { $selected.Contains($_.nodeId) } | ForEach-Object {
         [ordered]@{id=(Alias 'N' $_.nodeId); symbol=(Alias 'S' $_.symbolId); source=(Alias 'I' $_.sourceIndexId);
             file=(Alias 'P' $_.filePath); rule=(Alias 'R' $_.ruleId); tier=(Code $_.evidenceTier $tiers);
@@ -83,7 +117,8 @@ try {
     })
     $edges = @($graph.edges | Where-Object { $selected.Contains($_.fromNodeId) -and $selected.Contains($_.toNodeId) })
     if ($edges.Count -gt 240) { $limited = $true }
-    $projectedEdges = @($edges | Select-Object -First 240 | ForEach-Object {
+    $keptEdges = @(Prioritize $edges 'fromNodeId' 240)
+    $projectedEdges = @($keptEdges | ForEach-Object {
         if (@($_.supportingFactIds).Count -gt 8) { $limited = $true }
         [ordered]@{id=(Alias 'E' $_.edgeId); from=(Alias 'N' $_.fromNodeId); to=(Alias 'N' $_.toNodeId);
             kind=(Code $_.edgeKind $kinds); rule=(Alias 'R' $_.ruleId); tier=(Code $_.evidenceTier $tiers);
@@ -91,20 +126,34 @@ try {
     })
     $calls = @($graph.calls | Where-Object { $selected.Contains($_.callerNodeId) })
     if ($calls.Count -gt 120) { $limited = $true }
-    $projectedCalls = @($calls | Select-Object -First 120 | ForEach-Object {
+    $keptCalls = @(Prioritize $calls 'callerNodeId' 120)
+    $projectedCalls = @($keptCalls | ForEach-Object {
         if (@($_.gapReasons).Count -gt 8) { $limited = $true }
         [ordered]@{caller=(Alias 'N' $_.callerNodeId); fact=(Alias 'F' $_.factId); body=(Alias 'F' $_.bodyFactId);
             target=(Alias 'T' $_.encodedTarget); opcode=(Code $_.opcode @('call','callvirt','newobj'));
+            targetShape=(TargetShape ([string]$_.encodedTarget));
             state=(Code $_.state @('retained-target-edge','no-admitted-method-target-edge'));
             rule=(Alias 'R' $_.ruleId); tier=(Code $_.evidenceTier $tiers);
             reasons=@($_.gapReasons | Select-Object -First 8 | ForEach-Object { Code $_ $reasons })}
     })
+    $callerCoverage = @($graph.nodes | Where-Object { $selected.Contains($_.nodeId) } | ForEach-Object {
+        $id = $_.nodeId
+        $totalCalls = @($calls | Where-Object { $_.callerNodeId -ceq $id }).Count
+        $retainedCalls = @($keptCalls | Where-Object { $_.callerNodeId -ceq $id }).Count
+        $totalEdges = @($graph.edges | Where-Object { $_.fromNodeId -ceq $id }).Count
+        $retainedEdges = @($keptEdges | Where-Object { $_.fromNodeId -ceq $id }).Count
+        [ordered]@{caller=(Alias 'N' $id);focus=$focusIds.Contains($id);availableCalls=$totalCalls;
+            exportedCalls=$retainedCalls;omittedCalls=($totalCalls-$retainedCalls);
+            availableOutgoingEdges=$totalEdges;exportedOutgoingEdges=$retainedEdges;omittedOutgoingEdges=($totalEdges-$retainedEdges)}
+    })
+    $focusComplete = @($callerCoverage | Where-Object { $_.focus -and ($_.omittedCalls -gt 0 -or $_.omittedOutgoingEdges -gt 0) }).Count -eq 0
     $projection = [ordered]@{nodes=$projectedNodes; edges=$projectedEdges; calls=$projectedCalls;
+        callerCoverage=$callerCoverage;focusRecordsComplete=$focusComplete;
         sliceLimited=$limited; sourceHadCutoffs=(@($graph.cutoffs).Count -gt 0);
         limits=@{radius=3;nodes=120;edges=240;calls=120}}
     $bytes = [Text.Encoding]::UTF8.GetBytes(($projection | ConvertTo-Json -Depth 20 -Compress))
     $hash = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($bytes)).ToLowerInvariant()
-    $result = [ordered]@{schemaVersion='aliased-method-graph.v1';ruleId='diagnostics.graph.aliased-slice.v1';
+    $result = [ordered]@{schemaVersion='aliased-method-graph.v2';ruleId='diagnostics.graph.aliased-slice.v2';
         generatorSha256=(Get-FileHash -LiteralPath $PSCommandPath -Algorithm SHA256).Hash.ToLowerInvariant();
         boundedInputSha256=$hash; claim='unverified-local-diagnostic-projection-not-evidence-authentication';
         limitations=@('Names, paths, identities, rules and targets use per-export sequential aliases; no alias map is exported.',
@@ -117,7 +166,7 @@ try {
     $stream = [IO.FileStream]::new($OutputPath,[IO.FileMode]::CreateNew,[IO.FileAccess]::Write,[IO.FileShare]::None)
     try { $stream.Write($outputBytes) } finally { $stream.Dispose() }
     Write-Output "Aliased diagnostic saved: $OutputPath"
-    Write-Output "Bytes=$($outputBytes.Length); focus representations=$($focus.Count); sliceLimited=$limited. Review before sharing. Private graph unchanged."
+    Write-Output "Bytes=$($outputBytes.Length); focus representations=$($focus.Count); focusRecordsComplete=$focusComplete; sliceLimited=$limited. Review before sharing. Private graph unchanged."
 } catch {
     # Never surface parser errors or exception messages that may contain private input.
     throw 'GRAPH_SHARE_FAILED: check method selection, input schema/size, and a fresh writable output path. Private graph unchanged.'
