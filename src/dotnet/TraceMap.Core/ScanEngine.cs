@@ -92,7 +92,7 @@ public static class ScanEngine
             }
             catch (SourceInventoryException ex)
             {
-                throw new SourceSnapshotException(ex, [$"re-read failed: {ex.InnerException?.Message ?? ex.Message}"]);
+                throw new SourceSnapshotException(ex, ["source input re-read failed"]);
             }
 
             progress?.FinishStage(
@@ -131,6 +131,11 @@ public static class ScanEngine
                     ? semanticToolchainReducedCoverage ? "semantic-reduced" : "semantic"
                     : semanticToolchainReducedCoverage ? "syntax-reduced" : "syntax";
                 cancellationToken.ThrowIfCancellationRequested();
+                var generatedInputs = CaptureGeneratedCompilationInputs(repoPath, fullInventory, semanticResult);
+                var generatedSnapshot = CaptureSemanticInputSnapshot(repoPath, generatedInputs, cancellationToken);
+                semanticInputSnapshot = semanticInputSnapshot.Concat(generatedSnapshot)
+                    .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
+                fullInventory = fullInventory.Concat(generatedInputs).OrderBy(item => item.RelativePath, StringComparer.Ordinal).ToArray();
                 VerifySemanticInputSnapshot(repoPath, fullInventory, semanticResult, semanticInputSnapshot, cancellationToken);
                 semanticOperation.Complete(semanticToolchainReducedCoverage
                     ? TraceMapDiagnosticOutcome.Partial
@@ -175,6 +180,8 @@ public static class ScanEngine
                 sourcePathComparer,
                 options.IncludeGlobs,
                 ExactSourceEnumerationLimit(options));
+            refreshedFullInventory = refreshedFullInventory.Concat(CaptureGeneratedCompilationInputs(repoPath, refreshedFullInventory, semanticResult))
+                .OrderBy(item => item.RelativePath, StringComparer.Ordinal).ToArray();
             var refreshedInventory = ApplyScope(refreshedFullInventory, repoPath, options);
             refreshedInventory = IncludeSemanticallyAnalyzedFiles(
                 refreshedInventory,
@@ -205,7 +212,7 @@ public static class ScanEngine
         }
         catch (SourceInventoryException ex)
         {
-            var transformed = new SourceSnapshotException(ex, [$"re-read failed: {ex.InnerException?.Message ?? ex.Message}"]);
+            var transformed = new SourceSnapshotException(ex, ["source input re-read failed"]);
             progress?.FailActiveStage(ScanProgressReporter.ScanOperation, "SOURCE_VERIFICATION_FAILED");
             preVerificationReceipt?.Fail(transformed, "stage-started");
             throw transformed;
@@ -413,6 +420,8 @@ public static class ScanEngine
                 sourcePathComparer,
                 options.IncludeGlobs,
                 ExactSourceEnumerationLimit(options));
+            verificationFullInventory = verificationFullInventory.Concat(CaptureGeneratedCompilationInputs(repoPath, verificationFullInventory, semanticResult))
+                .OrderBy(item => item.RelativePath, StringComparer.Ordinal).ToArray();
             var verificationInventory = ApplyScope(verificationFullInventory, repoPath, options);
             verificationInventory = IncludeSemanticallyAnalyzedFiles(
                 verificationInventory,
@@ -437,7 +446,7 @@ public static class ScanEngine
         }
         catch (SourceInventoryException ex)
         {
-            var transformed = new SourceSnapshotException(ex, [$"re-read failed: {ex.InnerException?.Message ?? ex.Message}"]);
+            var transformed = new SourceSnapshotException(ex, ["source input re-read failed"]);
             progress?.FailActiveStage(ScanProgressReporter.ScanOperation, "SOURCE_VERIFICATION_FAILED");
             verificationReceipt?.Fail(transformed, "stage-started");
             throw transformed;
@@ -718,8 +727,6 @@ public static class ScanEngine
 
                 if (!baseline.TryGetValue(path, out var expected))
                 {
-                    if (IsKnownGeneratedCompilationInput(path))
-                        continue;
                     throw new SourceSnapshotException(details: [$"{path} (no baseline digest captured)"]);
                 }
                 if (!itemsByPath.TryGetValue(path, out var item))
@@ -730,30 +737,64 @@ public static class ScanEngine
         }
         catch (SourceInventoryException ex)
         {
-            throw new SourceSnapshotException(ex, [$"re-read failed: {ex.InnerException?.Message ?? ex.Message}"]);
+            throw new SourceSnapshotException(ex, ["source input re-read failed"]);
         }
     }
 
     private static bool IsSemanticMetadataKind(string kind) =>
         kind is "Solution" or "Project" or "VisualBasicProject" or "MSBuildProps" or "MSBuildTargets";
 
-    // Toolchain-generated compilation inputs (Razor SDK, source generators, SDK targets)
-    // materialize when the project is evaluated for semantic analysis — they are outputs of the
-    // scan's own build evaluation, not source evidence, so they carry no pre-scan baseline.
-    // Real source files that appear without a baseline still refuse (guard stays strict there).
+    // Generated paths nominate inputs for bounded post-generation capture, never an exemption
+    // from hashing. Only exact repository-local compilation inputs are admitted.
+    internal static IReadOnlyList<FileInventoryItem> CaptureGeneratedCompilationInputs(
+        string repoPath, IReadOnlyList<FileInventoryItem> inventory, SemanticExtractionResult semanticResult)
+    {
+        var known = inventory.Select(item => item.RelativePath).ToHashSet(StringComparer.Ordinal);
+        var result = new List<FileInventoryItem>();
+        long bytes = 0;
+        foreach (var path in (semanticResult.CompilationInputFiles ?? new HashSet<string>()).Order(StringComparer.Ordinal))
+        {
+            if (known.Contains(path) || path.StartsWith("__external__/", StringComparison.Ordinal)) continue;
+            if (!IsKnownGeneratedCompilationInput(path)) continue; // Ordinary new source still fails the baseline guard.
+            var normalized = path.Replace('\\', '/');
+            if (Path.IsPathRooted(path) || normalized.Split('/').Any(segment => segment is ".." or "." or ""))
+                throw new SourceSnapshotException(details: ["invalid generated compilation input path"]);
+            try
+            {
+                var current = repoPath;
+                foreach (var segment in normalized.Split('/'))
+                {
+                    current = Path.Combine(current, segment);
+                    if ((File.GetAttributes(current) & FileAttributes.ReparsePoint) != 0)
+                        throw new SourceSnapshotException(details: ["linked generated compilation input"]);
+                }
+                var size = new FileInfo(current).Length;
+                if (result.Count >= 4096 || size > 67_108_864 - bytes)
+                    throw new SourceSnapshotException(details: ["generated compilation input capture limit"]);
+                bytes += size;
+                result.Add(new(path, path.EndsWith(".vb", StringComparison.OrdinalIgnoreCase) ? "VisualBasic" : "CSharp", size));
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                throw new SourceSnapshotException(ex, ["generated compilation input re-read failed"]);
+            }
+        }
+        return result;
+    }
+
     private static bool IsKnownGeneratedCompilationInput(string relativePath)
     {
         // OrdinalIgnoreCase: Windows filesystems are case-insensitive and MSBuild/Roslyn
         // may report the same generated file with any casing.
         // Two rules, both evidence-backed from a real .NET 10 estate scan:
         // 1. Path-segment rule (the general one): any compilation input under an obj/ or bin/
-        //    segment is toolchain output by MSBuild's own convention — source never lives there.
+        //    segment is a candidate for post-generation capture, subject to verification.
         //    Covers all current and future generators ({Proj}.RazorAssemblyInfo.cs, xUnit's
         //    SelfRegisteredExtensions.cs, GlobalUsings, AssemblyInfo/Attributes, *.g.cs).
         // 2. Name rule (belt-and-suspenders when a generator reports a bare name without a path):
         //    the observed generated file names.
         var segments = relativePath.Split('/', '\\');
-        if (segments.Contains("obj") || segments.Contains("bin"))
+        if (segments.Contains("obj", StringComparer.OrdinalIgnoreCase) || segments.Contains("bin", StringComparer.OrdinalIgnoreCase))
             return true;
         var fileName = Path.GetFileName(relativePath);
         return fileName.Equals("RazorAssemblyInfo.cs", StringComparison.OrdinalIgnoreCase)
