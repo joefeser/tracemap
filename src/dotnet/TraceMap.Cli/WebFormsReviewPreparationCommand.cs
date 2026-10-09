@@ -69,7 +69,10 @@ public static partial class WebFormsReviewPreparationCommand
                 var map = XDocument.Load(reader).Root;
                 var virtualPath = map?.Attribute("virtualPath")?.Value;
                 if (map?.Name.LocalName != "preserve" || !SafeVirtual(virtualPath)) throw Fail("MAP_INVALID");
-                maps.Add(new(item.Path, virtualPath!, map.Attribute("assembly")?.Value, map.Attribute("type")?.Value));
+                // Directory preserves (for example /App_Code/) are retained and hashed
+                // publication inputs, not page bindings or application-prefix witnesses.
+                if (!virtualPath!.EndsWith('/'))
+                    maps.Add(new(item.Path, virtualPath, map.Attribute("assembly")?.Value, map.Attribute("type")?.Value));
             }
             // Only disambiguate when a selected page actually has competing suffix matches;
             // unambiguous selections keep their original exact-suffix behavior.
@@ -332,8 +335,15 @@ public static partial class WebFormsReviewPreparationCommand
     }
     private static bool Within(string root, string path) => Paths.Equals(root, path) || path.StartsWith(root + Path.DirectorySeparatorChar,
         OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
-    private static bool SafeVirtual(string? path) => path is not null && path.StartsWith('/') && !path.Contains('\\')
-        && path.IndexOfAny([':', '?', '#', '%']) < 0 && path[1..].Split('/').All(part => part is not ("" or "." or ".."));
+    private static bool SafeVirtual(string? path)
+    {
+        if (path is null || path.Length < 2 || !path.StartsWith('/') || path.Contains('\\')
+            || path.IndexOfAny([':', '?', '#', '%']) >= 0) return false;
+        // Permit exactly one trailing directory separator, without normalizing away
+        // empty interior segments, traversal, or an empty/root-only virtual path.
+        var segments = path.EndsWith('/') ? path[1..^1] : path[1..];
+        return segments.Split('/').All(part => part is not ("" or "." or ".."));
+    }
     private static string Normalize(string path) => path.Replace('\\', '/');
     private static string Digest(byte[] bytes) => Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
     private static PreparationException Fail(string suffix) => new("WEBFORMS_PREPARATION_" + suffix);

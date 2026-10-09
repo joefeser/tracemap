@@ -149,6 +149,11 @@ public sealed class WebFormsWizardExecutionTests
     private static async Task<WebFormsWizardStore> Ready(string root)
     {
         var (site, published) = Inputs(root);
+        // Real ASP.NET publications include directory preserves alongside page maps.
+        // Exercise discovery/staging as well as preparation and completed continuation.
+        foreach (var name in new[] { "App_Code", "App_WebReferences" })
+            File.WriteAllText(Path.Combine(published, "bin", name + ".compiled"),
+                $"<preserve virtualPath=\"/{name}/\" assembly=\"CompiledEvidence.CSharp\" />");
         var store = WebFormsWizardStore.Open(Path.Combine(root, "config"), false);
         site = WebFormsWizardStore.Physical(site);
         store.SaveProject(new("site", site, site, "projectless", "all", ["Default.aspx"], null, [], [], "publication"));

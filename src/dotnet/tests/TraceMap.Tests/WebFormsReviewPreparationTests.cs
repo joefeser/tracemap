@@ -12,6 +12,72 @@ public sealed class WebFormsReviewPreparationTests
     private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase, WriteIndented = true };
 
     [Theory]
+    [InlineData("/App_Code/")]
+    [InlineData("/application/App_WebReferences/")]
+    [InlineData("/prefix/Pages/Lookup.aspx/")]
+    public async Task Directory_preserves_remain_hashed_inventory_without_becoming_page_bindings(string virtualPath)
+    {
+        using var fixture = new Fixture();
+        const string directoryMap = "bin/App_Code.compiled";
+        File.WriteAllText(Path.Combine(fixture.Published, directoryMap),
+            $"<preserve virtualPath=\"{virtualPath}\" assembly=\"CompiledEvidence.CSharp\" />");
+        fixture.Config = fixture.Config with { PageMaps = [.. fixture.Config.PageMaps, directoryMap] };
+        fixture.Save();
+        var before = fixture.Hashes(fixture.Published);
+        var review = Path.Combine(fixture.Root, "directory-review");
+        Assert.True(await TraceMapCommand.RunAsync(["webforms-review", "start", "--config", fixture.ConfigPath,
+            "--out", review, "--attest-exact-source-commit", fixture.Config.SourceCommitSha], fixture.Output, fixture.Error) == 0,
+            fixture.Error.ToString());
+        using var receipt = JsonDocument.Parse(File.ReadAllText(Path.Combine(review, "evidence", "publish-receipt.local.json")));
+        Assert.Equal(2, receipt.RootElement.GetProperty("publishedMapCount").GetInt32());
+        var page = Assert.Single(receipt.RootElement.GetProperty("pages").EnumerateArray());
+        Assert.Equal("/prefix/Pages/Lookup.aspx", page.GetProperty("virtualPath").GetString());
+        Assert.Contains(receipt.RootElement.GetProperty("publishedFiles").EnumerateArray(),
+            file => file.GetProperty("path").GetString() == directoryMap
+                && file.GetProperty("sha256").GetString() == Hash(Path.Combine(fixture.Published, directoryMap)));
+        Assert.Equal(before.OrderBy(item => item.Key), fixture.Hashes(fixture.Published).OrderBy(item => item.Key));
+        var run = Path.Combine(review, "run");
+        var completed = fixture.Hashes(review);
+        Assert.Equal(0, await TraceMapCommand.RunAsync(["webforms-review", "resume", "--run", run], fixture.Output, fixture.Error));
+        Assert.Equal(completed.OrderBy(item => item.Key), fixture.Hashes(review).OrderBy(item => item.Key));
+    }
+
+    [Fact]
+    public async Task Directory_preserve_cannot_replace_a_missing_page_binding()
+    {
+        using var fixture = new Fixture();
+        File.WriteAllText(fixture.Map,
+            "<preserve virtualPath=\"/prefix/Pages/Lookup.aspx/\" assembly=\"CompiledEvidence.CSharp\" type=\"Public.Page\" />");
+        Assert.Equal(1, await fixture.Prepare());
+        Assert.Contains("WEBFORMS_PREPARATION_MAPLESS_WEB_ASSEMBLY_UNAVAILABLE", fixture.Error.ToString(), StringComparison.Ordinal);
+        Assert.False(Directory.Exists(fixture.Evidence));
+    }
+
+    [Theory]
+    [InlineData("/")]
+    [InlineData("//")]
+    [InlineData("/App_Code//")]
+    [InlineData("//App_Code/")]
+    [InlineData("/app//App_Code/")]
+    [InlineData("/app/../App_Code/")]
+    [InlineData("/app/./App_Code/")]
+    [InlineData("/App_Code%2f/")]
+    [InlineData("/App_Code?x/")]
+    [InlineData("/App_Code#x/")]
+    [InlineData("/C:/App_Code/")]
+    [InlineData("/app\\App_Code/")]
+    [InlineData("App_Code/")]
+    [InlineData("")]
+    public async Task Directory_preserve_support_does_not_relax_unsafe_virtual_paths(string virtualPath)
+    {
+        using var fixture = new Fixture();
+        File.WriteAllText(fixture.Map, $"<preserve virtualPath=\"{virtualPath}\" assembly=\"CompiledEvidence.CSharp\" />");
+        Assert.Equal(1, await fixture.Prepare());
+        Assert.Contains("WEBFORMS_PREPARATION_MAP_INVALID", fixture.Error.ToString(), StringComparison.Ordinal);
+        Assert.False(Directory.Exists(fixture.Evidence));
+    }
+
+    [Theory]
     [InlineData(false)]
     [InlineData(true)]
     public async Task Start_prepares_pins_and_renders_fresh_or_immutable_attachment_in_one_owned_root(bool attach)
