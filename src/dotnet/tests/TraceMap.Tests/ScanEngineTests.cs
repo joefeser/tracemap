@@ -357,7 +357,7 @@ public sealed class ScanEngineTests
     }
 
     [Fact]
-    public void Semantic_input_guard_tolerates_generator_emitted_inputs_without_a_baseline()
+    public void Semantic_input_guard_hashes_generated_inputs_and_detects_same_size_mutation()
     {
         using var temp = new TempDirectory();
         const string realPath = "Real.cs";
@@ -381,10 +381,64 @@ public sealed class ScanEngineTests
                 "Sample.Tests/bin/Debug/net10.0/AnythingGenerated.cs",
                 "src/nested/obj/release/Deeply.Nested.Generated.cs",
                 "obj/Debug/net8.0/Sample.Web.GlobalUsings.g.cs",
-                "obj/Release/net48/Sample.Web.AssemblyInfo.cs"
+                "obj/Release/net48/Sample.Web.AssemblyInfo.cs",
+                "Obj/Debug/OtherGenerated.cs",
+                "BIN/Debug/OtherGenerated.cs"
             });
 
-        ScanEngine.VerifySemanticInputSnapshot(temp.Path, inventory, semanticResult, baseline);
+        foreach (var path in semanticResult.CompilationInputFiles!.Where(path => path != realPath))
+        {
+            var full = Path.Combine(temp.Path, path);
+            Directory.CreateDirectory(Path.GetDirectoryName(full)!);
+            File.WriteAllText(full, "public class Alpha { }");
+        }
+        var generated = ScanEngine.CaptureGeneratedCompilationInputs(temp.Path, inventory, semanticResult);
+        var captured = inventory.Concat(generated).ToArray();
+        var combinedBaseline = baseline.Concat(ScanEngine.CaptureSemanticInputSnapshot(temp.Path, generated))
+            .ToDictionary(pair => pair.Key, pair => pair.Value);
+        ScanEngine.VerifySemanticInputSnapshot(temp.Path, captured, semanticResult, combinedBaseline);
+        var before = ScanEngine.CreateSourceSnapshotDigest(temp.Path, captured);
+        File.WriteAllText(Path.Combine(temp.Path, "RazorAssemblyInfo.cs"), "public class Bravo { }");
+        Assert.NotEqual(before, ScanEngine.CreateSourceSnapshotDigest(temp.Path, captured));
+        Assert.Throws<SourceSnapshotException>(() => ScanEngine.VerifySemanticInputSnapshot(temp.Path, captured, semanticResult, combinedBaseline));
+    }
+
+    [Theory]
+    [InlineData("missing")]
+    [InlineData("escape")]
+    [InlineData("limit")]
+    [InlineData("link")]
+    public void Generated_capture_fails_closed_without_exposing_private_paths(string kind)
+    {
+        if (kind == "link" && OperatingSystem.IsWindows()) return;
+        using var temp = new TempDirectory();
+        var path = kind == "escape" ? "../obj/Hidden.cs" : "Obj/Debug/Generated.cs";
+        var full = Path.Combine(temp.Path, "Obj/Debug/Generated.cs");
+        Directory.CreateDirectory(Path.GetDirectoryName(full)!);
+        if (kind == "limit")
+        {
+            using var stream = File.Create(full);
+            stream.SetLength(67_108_865);
+        }
+        if (kind == "link") File.CreateSymbolicLink(full, Path.Combine(temp.Path, "not-present"));
+        var semantic = new SemanticExtractionResult([], [], true, false, CompilationInputFiles: new HashSet<string> { path });
+        var error = Assert.Throws<SourceSnapshotException>(() => ScanEngine.CaptureGeneratedCompilationInputs(temp.Path, [], semantic));
+        Assert.DoesNotContain(temp.Path, SourceSnapshotException.Describe(error) ?? "");
+    }
+
+    [Fact]
+    public void Semantic_re_read_failure_details_are_categorical()
+    {
+        using var temp = new TempDirectory();
+        var path = Path.Combine(temp.Path, "Sample.cs");
+        File.WriteAllText(path, "public class Sample { }");
+        var inventory = FileInventory.Collect(temp.Path);
+        var baseline = ScanEngine.CaptureSemanticInputSnapshot(temp.Path, inventory);
+        File.Delete(path);
+        var semantic = new SemanticExtractionResult([], [], true, false, CompilationInputFiles: new HashSet<string> { "Sample.cs" });
+        var error = Assert.Throws<SourceSnapshotException>(() => ScanEngine.VerifySemanticInputSnapshot(temp.Path, inventory, semantic, baseline));
+        Assert.Equal("source input re-read failed", SourceSnapshotException.Describe(error));
+        Assert.DoesNotContain(temp.Path, SourceSnapshotException.Describe(error)!);
     }
 
     [Fact]
