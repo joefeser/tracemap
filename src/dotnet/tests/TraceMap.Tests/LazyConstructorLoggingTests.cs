@@ -47,16 +47,21 @@ public sealed class LazyConstructorLoggingTests
         var binding = lookup.Nodes.Last().CommandBinding!;
         Assert.Equal("1", binding.CommandTypeFromPath!.Origin.Identity);
         var text = binding.CommandTextFromPath!;
-        Assert.Equal("unresolved-operand", text.State);
+        Assert.Equal("symbolic-string-composition", text.State);
         Assert.Equal("call-result", text.Origin.Kind);
         var producerBody = Assert.Single(scan.Facts, fact => $"{source.SourceIndexId}:{fact.FactId}" == text.OriginBodyFactId);
         var producer = Assert.Single(scan.Facts, fact => fact.FactType == FactTypes.ManagedIlCallObserved
             && fact.Properties.GetValueOrDefault("ilBodyFactId") == producerBody.FactId
             && fact.Properties.GetValueOrDefault("ilOffset") == text.Origin.Identity);
         Assert.Contains("Concat", producer.Properties["targetIdentity"], StringComparison.Ordinal);
-        Assert.Contains("IlCommandOperandValueUnresolved", text.Gaps);
-        Assert.Contains("IlCommandReturnTargetMissingOrAmbiguous", text.Gaps);
-        Assert.Contains("IlCommandReturnTargetEdgeMissing", text.Gaps);
+        Assert.Contains("IlCommandCompositionValueNotMaterialized", text.Gaps);
+        Assert.DoesNotContain("IlCommandReturnTargetEdgeMissing", text.Gaps);
+        Assert.Equal("System.String.Concat", text.Composition!.Operation);
+        Assert.Equal(3, text.Composition.Operands.Count);
+        Assert.Equal($"{source.SourceIndexId}:{producer.FactId}", text.Composition.ProducerCallFactId);
+        Assert.Equal(text.OriginBodyFactId, text.Composition.BodyFactId);
+        var operandEvidence = Assert.Single(scan.Facts, fact => $"{source.SourceIndexId}:{fact.FactId}" == text.Composition.OperandFactId);
+        Assert.Equal(operandEvidence.Properties["argumentOrigins"], JsonSerializer.Serialize(text.Composition.Operands));
         Assert.Empty(text.ReturnSteps ?? []);
         var audit = Assert.Single(report.Paths, path => path.Nodes.Any(node => Method(node, "WriteAudit")));
         Assert.Equal("4", audit.Nodes.Last().CommandBinding!.CommandTypeFromPath!.Origin.Identity);
@@ -80,7 +85,7 @@ public sealed class LazyConstructorLoggingTests
             Assert.Contains(graph.Nodes, node => Method(node, "GetEmail"));
             Assert.Contains(graph.Nodes, node => Method(node, "WriteAudit"));
             var unresolvedTrace = Assert.Single(graph.CommandTraces, trace =>
-                trace.CommandText?.Gaps.Contains("IlCommandReturnTargetEdgeMissing") == true);
+                trace.CommandText?.Composition is not null);
             Assert.Equal("call-result", unresolvedTrace.CommandText!.Origin.Kind);
             var producerId = Assert.Single(unresolvedTrace.ProducerCallFactIds);
             Assert.Equal($"{source.SourceIndexId}:{producer.FactId}", producerId);
@@ -249,7 +254,13 @@ public sealed class LazyConstructorLoggingTests
     [InlineData("InsertReturnedLiteral", "none", null)]
     [InlineData("InsertForwardedLiteral", "none", null)]
     [InlineData("InsertReturnedLiteralTwoHops", "none", null)]
-    [InlineData("InsertComposedTextTwoHops", "none", "IlCommandReturnTargetEdgeMissing")]
+    [InlineData("InsertComposedTextTwoHops", "none", "IlCommandCompositionValueNotMaterialized")]
+    [InlineData("InsertComposedTextTwoHops", "concat-provenance", "IlCommandCompositionProvenanceUnavailable")]
+    [InlineData("InsertComposedTextTwoHops", "concat-malformed", "IlCommandCompositionOperandsUnavailable")]
+    [InlineData("InsertComposedTextTwoHops", "concat-byref", "IlCommandCompositionProvenanceUnavailable")]
+    [InlineData("InsertComposedTextTwoHops", "concat-scope", "IlCommandReturnTargetEdgeMissing")]
+    [InlineData("InsertComposedTextTwoHops", "concat-virtual", "IlCommandReturnTargetEdgeMissing")]
+    [InlineData("InsertComposedTextTwoHops", "concat-signature", "IlCommandReturnTargetEdgeMissing")]
     [InlineData("InsertReturnedLiteral", "target-missing", "IlCommandReturnTargetEdgeMissing")]
     [InlineData("InsertReturnedLiteral", "target-ambiguous", "IlCommandReturnTargetEdgeMissing")]
     [InlineData("InsertRecursiveText", "none", "IlCommandReturnCycle")]
@@ -279,7 +290,27 @@ public sealed class LazyConstructorLoggingTests
         var summary = Assert.Single(scan.Facts, fact => fact.FactType == FactTypes.ManagedIlReturnValuesObserved
             && fact.Properties.GetValueOrDefault("ilBodyFactId") == body.FactId);
         var facts = scan.Facts.ToList();
-        if (mutation == "target-missing") facts.Remove(literal);
+        if (mutation.StartsWith("concat-", StringComparison.Ordinal))
+        {
+            var entryBody = Assert.Single(facts, fact => fact.FactType == FactTypes.ManagedIlBodyDeclared
+                && fact.Properties.GetValueOrDefault("compiledFactId") == entry.FactId);
+            var concat = Assert.Single(facts, fact => fact.FactType == FactTypes.ManagedIlCallObserved
+                && fact.Properties.GetValueOrDefault("ilBodyFactId") == entryBody.FactId
+                && fact.Properties.GetValueOrDefault("targetIdentity")?.Contains("member:6:Concat|", StringComparison.Ordinal) == true);
+            var operand = Assert.Single(facts, fact => fact.FactType == FactTypes.ManagedIlCallValuesObserved
+                && fact.Properties.GetValueOrDefault("ilBodyFactId") == entryBody.FactId
+                && fact.Properties.GetValueOrDefault("ilOffset") == concat.Properties["ilOffset"]);
+            var target = mutation is "concat-scope" or "concat-virtual" or "concat-signature" ? concat : operand;
+            var properties = new Dictionary<string, string>(target.Properties);
+            if (mutation == "concat-provenance") properties["ilBoundedInputSha256"] = new string('f', 64);
+            if (mutation == "concat-malformed") properties["argumentOrigins"] = "[";
+            if (mutation == "concat-byref") properties["callByReferenceParameters"] = "11";
+            if (mutation == "concat-scope") properties["targetIdentity"] = properties["targetIdentity"].Replace("mscorlib", "fakecore", StringComparison.Ordinal);
+            if (mutation == "concat-signature") properties["targetIdentity"] = properties["targetIdentity"].Replace("names:6:String", "names:6:Object", StringComparison.Ordinal);
+            if (mutation == "concat-virtual") properties["opcode"] = "callvirt";
+            facts[facts.IndexOf(target)] = target with { Properties = properties };
+        }
+        else if (mutation == "target-missing") facts.Remove(literal);
         else if (mutation == "target-ambiguous") facts.Add(literal with { FactId = literal.FactId + "-competitor" });
         else if (mutation == "missing") facts.RemoveAll(fact => fact.FactType == FactTypes.ManagedIlReturnValuesObserved);
         else if (mutation == "ambiguous") facts.Add(summary with { FactId = summary.FactId + "-competitor" });
@@ -333,9 +364,11 @@ public sealed class LazyConstructorLoggingTests
         }
         else
         {
-            Assert.Equal("unresolved-operand", text.State);
+            Assert.Equal(entryName == "InsertComposedTextTwoHops" && mutation == "none" ? "symbolic-string-composition" : "unresolved-operand", text.State);
             Assert.Contains(gap, text.Gaps);
-            if (mutation.StartsWith("target-", StringComparison.Ordinal) || entryName == "InsertComposedTextTwoHops")
+            if (entryName == "InsertComposedTextTwoHops" && mutation == "none") Assert.Equal(2, text.Composition!.Operands.Count);
+            if (mutation.StartsWith("concat-", StringComparison.Ordinal)) Assert.Null(text.Composition);
+            if (mutation.StartsWith("target-", StringComparison.Ordinal))
             {
                 Assert.Equal("call-result", text.Origin.Kind);
                 Assert.Empty(text.ReturnSteps ?? []);

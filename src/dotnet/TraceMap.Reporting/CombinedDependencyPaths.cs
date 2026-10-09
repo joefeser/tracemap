@@ -206,8 +206,14 @@ public sealed record CompiledCommandPathValueBinding(string Schema, string RuleI
     string GeneratorSha256, string BoundedInputSha256, string ArtifactVisibility = "local-only")
 {
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public CompiledStringComposition? Composition { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public IReadOnlyList<CompiledCommandReturnStep>? ReturnSteps { get; init; }
 }
+
+public sealed record CompiledStringComposition(string RuleId, string EvidenceTier, string Operation,
+    string ProducerCallFactId, string OperandFactId, string BodyFactId,
+    IReadOnlyList<CompiledCommandOperandOrigin> Operands);
 
 public sealed record CompiledCommandReturnStep(string ProducerCallFactId, string CalleeBodyFactId,
     string ReturnFactId, string GeneratorSha256, string BoundedInputSha256);
