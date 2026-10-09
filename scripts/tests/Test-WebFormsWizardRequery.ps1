@@ -7,6 +7,7 @@ $global:WizardRequeryCalls = [Collections.Generic.List[object]]::new()
 $global:WizardRequeryState = 'reports-completed-review-only'
 $global:WizardRequeryExit = 0
 $global:WizardRequeryOriginalReader = $true
+$global:WizardRequeryCause = $null
 $global:WizardRequeryWorkbench = Join-Path $temporary 'reports/index.html'
 function global:dotnet {
     $global:WizardRequeryCalls.Add(@($args))
@@ -22,7 +23,7 @@ function global:dotnet {
             [IO.Directory]::CreateDirectory($destination) | Out-Null
             $handoffPath = Join-Path $destination 'compiled-paths.handoff.local.json'
             @{schemaVersion='webforms-compiled-grouped-handoff.v1';header=@{gaps=@(
-                @{gapKind='TruncatedByLimit';reason='depth';filePath='synthetic/Page.vb';startLine=12;
+                @{gapKind='TruncatedByLimit';reason='depth';cutoffCause=$global:WizardRequeryCause;filePath='synthetic/Page.vb';startLine=12;
                   nodeId='node-1';ruleId='synthetic.rule';evidenceTier='Tier4Unknown';message='Depth limit reached.'})}} |
                 ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $handoffPath
             @{schemaVersion='webforms-handler-requery.v1';truncated=$true;artifacts=@(@{
@@ -64,6 +65,13 @@ try {
     Expect-Failure { Write-WebFormsTruncationSummary $firstOutput } 'SUMMARY_HANDOFF_CHANGED'
     & $helper $temporary -Project sample -Handler Page_Load | Out-Null
     if ($global:WizardRequeryCalls[3][10] -eq $firstOutput) { throw 'Output must be fresh.' }
+    $global:WizardRequeryCause = 'candidate-identity-roundtrip'
+    $display = @(& $helper $temporary -Handler Page_Load)
+    if (($display -join "`n") -notmatch 'identity round trips \(not application recursion\): 1 retained gaps') { throw 'Identity diagnostics not separated.' }
+    $global:WizardRequeryCause = 'terminal-route-not-found-within-depth-bound'
+    $display = @(& $helper $temporary -Handler Page_Load)
+    if (($display -join "`n") -notmatch 'bounded terminal-route uncertainty: 1 retained gaps') { throw 'Bounded uncertainty not separated.' }
+    $global:WizardRequeryCause = $null
     $global:WizardRequeryState = 'failed'
     Expect-Failure { & $helper $temporary -Handler Page_Load } 'COMPLETED_STATE_NOT_ADMITTED'
     $global:WizardRequeryState = 'reports-completed-review-only'
@@ -88,6 +96,6 @@ try {
     Write-Output 'Web Forms wizard requery helper tests passed.'
 } finally {
     Remove-Item Function:\dotnet
-    Remove-Variable WizardRequeryCalls,WizardRequeryState,WizardRequeryExit,WizardRequeryWorkbench,WizardRequeryOriginalReader -Scope Global
+    Remove-Variable WizardRequeryCalls,WizardRequeryState,WizardRequeryExit,WizardRequeryWorkbench,WizardRequeryOriginalReader,WizardRequeryCause -Scope Global
     [IO.Directory]::Delete($temporary, $true)
 }

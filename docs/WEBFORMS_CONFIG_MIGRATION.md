@@ -81,6 +81,12 @@ The console reports retained gap counts by cause; legacy reports explicitly lack
 this detail. No alias edge is silently removed, no partial result becomes complete,
 and none of these labels authorizes increasing every query budget.
 
+Console and HTML summaries separate identity round trips from bounded terminal-route
+uncertainty and other/legacy cutoffs. This is presentation only: stored depth/cycle
+reasons, gap counts, and partial coverage are preserved. Known cutoff messages are
+regenerated from fixed scanner-owned cause templates after privacy projection;
+arbitrary incoming messages and source-derived fields still pass through redaction.
+
 ## Mixed-query traversal repair: work-machine validation
 
 For a successful saved verification run, inspect unresolved command bindings

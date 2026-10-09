@@ -4243,13 +4243,7 @@ public static partial class CombinedDependencyPathReporter
             var gap = TruncatedGap(reason, rejectedEdge?.ToNodeId ?? state.NodeIds[^1], graph) with
             {
                 CutoffCause = cause,
-                Message = cause switch
-                {
-                    "terminal-route-not-found-within-depth-bound" => "No terminal route was found from this candidate in the depth-bounded reverse graph. A longer route or missing evidence remains possible; the edge was not traversed.",
-                    "terminal-distance-exceeds-remaining-depth" => "The known reverse-graph terminal distance exceeds the remaining path depth. The candidate edge was not traversed.",
-                    "candidate-identity-roundtrip" => "The proposed publish-member candidate edge immediately returns across a candidate identity bridge. This is not proof of application recursion; the edge was not traversed.",
-                    _ => $"Path search was truncated by {reason} limit; static traversal does not prove runtime recursion or execution."
-                }
+                Message = CutoffDiagnosticMessage(cause) ?? "Traversal cutoff; coverage remains partial."
             };
             if (witnessCounts.GetValueOrDefault(reason) >= 3 || !witnessedCutoffs.Add(gap.GapId)) return gap;
             witnessCounts[reason] = witnessCounts.GetValueOrDefault(reason) + 1;
@@ -5142,13 +5136,26 @@ public static partial class CombinedDependencyPathReporter
         return edge with { FilePath = edge.FilePath is null ? null : SafePath(edge.FilePath) };
     }
 
-    private static CombinedPathGap SanitizeGap(CombinedPathGap gap)
+    internal static string? CutoffDiagnosticMessage(string? cause) => cause switch
+    {
+        "terminal-route-not-found-within-depth-bound" => "No terminal route was found within the reverse-search depth bound. Longer routes or missing evidence remain possible. The candidate edge was not traversed.",
+        "terminal-distance-exceeds-remaining-depth" => "The known terminal distance exceeds the remaining path depth. The candidate edge was not traversed.",
+        "candidate-identity-roundtrip" => "An immediate return across a publish-member identity candidate was skipped. This is not evidence of application recursion.",
+        "depth-limit-reached" => "Traversal reached the configured edge-depth limit. Coverage remains partial.",
+        "repeated-node-cycle" => "Traversal skipped a repeated node. This static cycle is not proof of runtime recursion.",
+        _ => null
+    };
+
+    internal static CombinedPathGap SanitizeGap(CombinedPathGap gap)
     {
         return gap with
         {
             Classification = NormalizeClassification(gap.Classification, legacyMode: true),
             SourceLabel = gap.SourceLabel is null ? null : SafeSourceLabel(gap.SourceLabel),
-            Message = SafeDisplay(gap.Message) ?? "redacted",
+            // Regenerate only fixed scanner-owned prose. Never exempt the
+            // incoming message or any source-derived field from redaction.
+            Message = (gap.GapKind == "TruncatedByLimit" && gap.RuleId == TruncationGapRuleId
+                ? CutoffDiagnosticMessage(gap.CutoffCause) : null) ?? SafeDisplay(gap.Message) ?? "redacted",
             FilePath = gap.FilePath is null ? null : SafePath(gap.FilePath),
             CutoffWitness = gap.CutoffWitness is not { } witness ? null : witness with
             {

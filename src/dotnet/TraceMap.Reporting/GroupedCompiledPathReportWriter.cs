@@ -94,6 +94,10 @@ public static class GroupedCompiledPathReportWriter
             }
             W($"<section><h2>Coverage and retained gaps</h2><p>{report.Gaps.Count} gap records remain in the indexed handoff. Gap absence is not proof of complete coverage.</p><ul>");
             W("</ul><h3>Sampled root-to-cutoff prefixes</h3><p>At most three witnesses per depth/cycle reason and 64 edges per witness. These are traversal diagnostics, not database paths or runtime proof. Other gaps may have no retained witness.</p>");
+            var cutoffGaps = report.Gaps.Where(gap => gap.GapKind == "TruncatedByLimit").ToArray();
+            var identityReturns = cutoffGaps.Count(gap => gap.CutoffCause == "candidate-identity-roundtrip");
+            var terminalUncertainty = cutoffGaps.Count(gap => gap.CutoffCause == "terminal-route-not-found-within-depth-bound");
+            W($"<p>Identity round trips (not application recursion): {identityReturns}. Bounded terminal-route uncertainty: {terminalUncertainty}. Other or legacy cutoffs: {cutoffGaps.Length - identityReturns - terminalUncertainty}. These are retained gap counts, not missing paths. Original depth/cycle accounting and partial coverage remain unchanged.</p>");
             foreach (var gap in report.Gaps.Where(gap => gap.CutoffWitness is not null).Take(6))
             {
                 var witness = gap.CutoffWitness!;
