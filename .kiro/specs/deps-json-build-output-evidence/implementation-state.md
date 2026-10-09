@@ -122,3 +122,14 @@ fingerprints and no-pairing freshness coverage; three lane tests passed. Two new
 test setups initially lacked receipt binding / used an inadmissible empty decision
 file; corrected to bind identity and use an unmatched valid decision selector.
 Public CLI smoke and artifact validation pass. Final-head full tests remain hosted.
+
+The final review found a framing collision shared by the Codex and Baz findings:
+additional authorized input text could mimic the appended deps marker. Receipt
+scope now hashes a structured envelope containing the prior-scope SHA-256,
+explicit opt-in boolean and effective limits. Adversarial marker/list/newline
+regressions prove the build-output authorization cannot be forged this way.
+This intentionally changes receipt scope fingerprints without changing schema.
+
+Framing regression validation: 121 focused Debug cases passed with warnings as
+errors (16s). The two current-head review comments describe the same collision
+and are addressed by the single structured-envelope repair.
