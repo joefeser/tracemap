@@ -72,6 +72,9 @@ public sealed class CSharpSemanticExtractorTests
 
         var result = ScanEngine.Scan(new ScanOptions(temp.Path, Path.Combine(temp.Path, ".tracemap")));
 
+        Assert.DoesNotContain(result.Inventory, item => item.RelativePath.Contains("/obj/", StringComparison.Ordinal));
+        Assert.Contains(result.SourceSnapshotInventory!, item => item.RelativePath.EndsWith(".GlobalUsings.g.cs", StringComparison.Ordinal));
+        Assert.Contains(result.SourceSnapshotInventory!, item => item.RelativePath.EndsWith(".AssemblyInfo.cs", StringComparison.Ordinal));
         Assert.Equal("Level1SemanticAnalysis", result.Manifest.AnalysisLevel);
         Assert.Equal("Succeeded", result.Manifest.BuildStatus);
         Assert.Contains(result.Facts, fact =>
