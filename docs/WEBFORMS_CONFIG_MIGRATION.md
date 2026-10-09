@@ -955,6 +955,12 @@ references under `combined.paths.compiled-command-value.v1` at Tier4Unknown.
 It does not relax any admission check. It covers the forwarding provenance gate,
 not every possible return-resolution failure. Shared output allows one failure
 record per operand and at most 17 fixed check categories, with aliased references.
+Each failure also includes the allowlisted retained `operandState` and the body's
+exception-region count (when valid). This distinguishes `stack-unavailable`,
+`exception-flow-unavailable`, and `call-shape-unavailable` without exposing IL,
+offsets, literals or hashes. An exception-region count is context, not proof that
+exception handling caused the failure. Unknown state strings are never copied
+into the diagnostic. These are existing retained facts; no rescan is required.
 This is a bounded intrinsic projection, not an admitted callee-body edge.
 
 No SQL text is reconstructed, and string hashes are never concatenated into a

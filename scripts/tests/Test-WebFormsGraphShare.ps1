@@ -98,6 +98,7 @@ try {
             operandBindings=@(@{state='unresolved-root-argument';origin=@{kind='argument-slot';identity='1'};
                 originBodyFactId="$secret-body";originMethodIdentity="$secret-method";steps=@();gaps=@('IlCommandRootArgumentUnresolved',"$secret-gap");
                 operandCheckFailures=@(@{edgeId="$secret-edge";callFactId="$secret-fact";operandFactId="$secret-operand";bodyFactId="$secret-body";
+                    operandState='stack-unavailable';exceptionRegionCount=2;
                     privateHash="$secret-hash";failedChecks=@('operand-state',"$secret-check")})})};
         limitations=@('SymbolicStringValueNotMaterialized',"$secret-limitation");
         originBodyFactId="$secret-body";ruleId="$secret-rule";gaps=@('IlCommandReturnTargetEdgeMissing',"$secret-gap");
@@ -124,6 +125,7 @@ try {
         $exportedTrace.limitations[1] -cne 'other-or-unavailable') { throw 'Operand trace projection failed.' }
     $failure = $exportedTrace.composition.operandBindings[0].operandCheckFailures[0]
     if ($failure.call -cne $exportedTrace.producers[0] -or
+        $failure.operandState -cne 'stack-unavailable' -or $failure.exceptionRegionCount -ne 2 -or
         ($failure.failedChecks -join ',') -cne 'operand-state,other-or-unavailable') { throw 'Operand checks lost linkage or privacy.' }
     if ($exportedTrace.missingProducerRecords -ne 0 -or
         $exportedTrace.producers[0] -cne $traceResult.graph.calls[0].fact -or
