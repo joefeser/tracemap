@@ -102,6 +102,18 @@ try {
     $global:WizardRequeryExit = 1
     Expect-Failure { & $helper $temporary -Handler Page_Load } 'REQUERY_FAILED'
     $global:WizardRequeryExit = 0
+    Expect-Failure { & $helper $temporary -Handler Page_Load -LatestRefresh } 'REFRESH_SELECTION_UNAVAILABLE'
+    $refresh = Join-Path $temporary ('refresh-sample-' + ('b' * 32))
+    [IO.Directory]::CreateDirectory((Join-Path $refresh 'run')) | Out-Null
+    $global:WizardRequeryCalls.Clear()
+    & $helper $temporary -Handler Page_Load -LatestRefresh | Out-Null
+    if ($global:WizardRequeryCalls[0][4] -cne (Join-Path $refresh 'run') -or
+        $global:WizardRequeryCalls[1][4] -cne (Join-Path $refresh 'run')) { throw 'Refresh query used old run.' }
+    $global:WizardRequeryState = 'failed'
+    $global:WizardRequeryCalls.Clear()
+    Expect-Failure { & $helper $temporary -Handler Page_Load -LatestRefresh } 'COMPLETED_STATE_NOT_ADMITTED'
+    if ($global:WizardRequeryCalls.Count -ne 1) { throw 'Failed refresh fell back or queried.' }
+    $global:WizardRequeryState = 'reports-completed-review-only'
     Expect-Failure { & $helper $temporary -Project absent -Handler Page_Load } 'PROJECT_NOT_FOUND'
     Expect-Failure { & $helper $temporary -Handler "Page_Load`n" } 'HANDLER_INVALID'
     Save-Fixture '../outside'
