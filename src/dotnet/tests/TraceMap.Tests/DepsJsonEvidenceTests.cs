@@ -257,6 +257,9 @@ public sealed class DepsJsonEvidenceTests
         result = DepsJsonExtractor.Read(options with { IncludeGlobs = ["sibling/**"] }, default);
         Assert.Equal(2, result.Rows.Count);
         Assert.All(result.Rows, row => Assert.StartsWith("sibling/", row.Path));
+        result = DepsJsonExtractor.Read(options with { IncludeGlobs = ["", "  "] }, default);
+        Assert.Equal(2, result.Rows.Count);
+        Assert.All(result.Rows, row => Assert.StartsWith("selected/", row.Path));
     }
 
     [Fact]
@@ -387,6 +390,8 @@ public sealed class DepsJsonEvidenceTests
         Assert.Empty(correlation.Report.PossibleMatches);
         Assert.Empty(correlation.Report.ExactMatches);
         Assert.Contains(correlation.Report.Gaps, gap => gap.Classification == "BuildOutputFreshnessUnknown");
+        var empty = await PackageDecisionCorrelationReporter.WriteAsync(new PackageDecisionOptions(decision, index, Path.Combine(temp.Path, "empty-report"), DecisionId: "not-selected"));
+        Assert.Contains(empty.Report.Gaps, gap => gap.Classification == "BuildOutputFreshnessUnknown");
         var delta = Path.Combine(temp.Path, "delta.json");
         await File.WriteAllTextAsync(delta, """
             {"version":"package-delta.v1","changes":[{"id":"synthetic-change","packageName":"Example.Direct",

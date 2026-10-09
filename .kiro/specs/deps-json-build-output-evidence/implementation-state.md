@@ -107,3 +107,18 @@ Final repair validation: 99 focused tests pass, zero warnings/errors (15s).
 Public deps.json CLI smoke passes with four facts. Private-path and diff guards pass.
 Full final-head validation is delegated to the existing hosted .NET workflow;
 the prior local full result remains 3,461 passed / one Windows-only skip.
+
+## Second returned review batch
+
+Receipt authorization fingerprints now bind the opt-in flag and effective limits.
+Blank include entries are normalized consistently. Existing include-over-project
+precedence is documented and regression-tested, not reversed in response to a
+conflicting reviewer suggestion. Freshness gaps are emitted once per selected
+source even with no decision pairings. The Qodo-era runbook and positive lane
+regression were updated to Codex/Baz and verified ACK 0.5.5 capability usage.
+
+Validation: 120 focused tests passed with warnings as errors, including receipt
+fingerprints and no-pairing freshness coverage; three lane tests passed. Two new
+test setups initially lacked receipt binding / used an inadmissible empty decision
+file; corrected to bind identity and use an unmatched valid decision selector.
+Public CLI smoke and artifact validation pass. Final-head full tests remain hosted.

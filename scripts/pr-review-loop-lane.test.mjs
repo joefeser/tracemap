@@ -19,55 +19,57 @@ function blockAfter(pattern, indentation) {
 }
 
 const quorum = blockAfter(/^      trustedCodeReview:\s*$/m, 8)
+const baz = blockAfter(/^    baz:\s*$/m, 6)
 const qodo = blockAfter(/^    qodo:\s*$/m, 6)
 const codex = blockAfter(/^    codex:\s*$/m, 6)
 const claudeLocal = blockAfter(/^    claude-local:\s*$/m, 6)
 const localReviewFallback = blockAfter(/^  localReviewFallback:\s*$/m, 4)
 
-function boundedCurrentHeadRecoveryEligible({ codexCurrent, qodoReturnedOnce, qodoRequestCountZero }) {
-  const fastQuorum = /minimumReturned:\s*1\b/.test(quorum)
+function boundedCurrentHeadRecoveryEligible({ codexCurrent, bazCurrent, qodoRequestCountZero }) {
+  return /minimumReturned:\s*1\b/.test(quorum)
     && /preferAllReturned:\s*false\b/.test(quorum)
-  const qodoOnePass = /requirement:\s*required\b/.test(qodo)
-    && /waitUntilReturnedBeforeProcessing:\s*true\b/.test(qodo)
-    && /requestAllowed:\s*explicit_only\b/.test(qodo)
+    && /requirement:\s*disabled\b/.test(qodo)
+    && /waitUntilReturnedBeforeProcessing:\s*false\b/.test(qodo)
     && /requestRetryCeiling:\s*0\b/.test(qodo)
-  const codexExactHeadRequired = /requirement:\s*required\b/.test(codex)
+    && /authority:\s*trusted_exact_head\b/.test(baz)
+    && /- trustedCodeReview\b/.test(baz)
+    && /maxFixCycles:\s*2\b/.test(baz)
+    && /requirement:\s*required\b/.test(codex)
     && /waitUntilReturnedBeforeProcessing:\s*true\b/.test(codex)
-    && /requestAllowed:\s*policy\b/.test(codex)
-    && /requestRetryCeiling:\s*2\b/.test(codex)
-  return fastQuorum && qodoOnePass && codexExactHeadRequired
-    && codexCurrent && qodoReturnedOnce && qodoRequestCountZero
+    && codexCurrent && bazCurrent && qodoRequestCountZero
 }
 
 test('TraceMap admits stable ACK v0.5.2 through v0.5.x with required review capabilities', () => {
   assert.match(lane, /requiredVersion:\s*">=0\.5\.2 <0\.6\.0"/)
   assert.match(runbook, /ACK `>=0\.5\.2 <0\.6\.0`/)
-  assert.match(runbook, /v0\.5\.2/)
-  assert.match(runbook, /949f31b733de89c1019939ca07f8399c1e170d59/)
+  assert.match(runbook, /v0\.5\.5/)
+  assert.match(runbook, /ab398330c03fbe34b7fdd600efa9698adf003a67/)
   assert.doesNotMatch(runbook, /v0\.5\.[01]\b/)
+  assert.match(lane, /- trustedHostedReviewerQuorum/)
+  assert.match(runbook, /Qodo is disabled: do not request or await it/)
   assert.match(lane, /- reviewQuorum/)
   assert.match(lane, /- requiredReviewerBatching/)
   assert.equal(boundedCurrentHeadRecoveryEligible({
     codexCurrent: true,
-    qodoReturnedOnce: true,
+    bazCurrent: true,
     qodoRequestCountZero: true,
   }), true)
 })
 
-test('stale Codex plus stale Qodo cannot satisfy the consumer lane contract', () => {
+test('stale Codex or stale Baz cannot satisfy the consumer lane contract', () => {
   assert.equal(boundedCurrentHeadRecoveryEligible({
     codexCurrent: false,
-    qodoReturnedOnce: true,
+    bazCurrent: true,
     qodoRequestCountZero: true,
   }), false)
   assert.equal(boundedCurrentHeadRecoveryEligible({
     codexCurrent: true,
-    qodoReturnedOnce: false,
+    bazCurrent: false,
     qodoRequestCountZero: true,
   }), false)
   assert.equal(boundedCurrentHeadRecoveryEligible({
     codexCurrent: true,
-    qodoReturnedOnce: true,
+    bazCurrent: true,
     qodoRequestCountZero: false,
   }), false)
 })

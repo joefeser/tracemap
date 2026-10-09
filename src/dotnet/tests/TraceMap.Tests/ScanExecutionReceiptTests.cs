@@ -11,6 +11,23 @@ public sealed class ScanExecutionReceiptTests
     private const string CommitSha = "0123456789abcdef0123456789abcdef01234567";
 
     [Fact]
+    public void Authorized_scope_binds_deps_opt_in_and_effective_limits()
+    {
+        var options = new ScanOptions("repo", "out");
+        string Fingerprint(ScanOptions value)
+        {
+            var recorder = new ScanReceiptRecorder(value);
+            recorder.Bind(new GitMetadata("repo", null, "dev", CommitSha, []));
+            return recorder.CreateReceipt().AuthorizedScopeFingerprint;
+        }
+        var enabled = options with { IndexDepsJson = true };
+        Assert.NotEqual(Fingerprint(options), Fingerprint(enabled));
+        Assert.Equal(Fingerprint(enabled), Fingerprint(enabled with { DepsJsonLimits = new DepsJsonLimits() }));
+        Assert.NotEqual(Fingerprint(enabled), Fingerprint(enabled with { DepsJsonLimits = new DepsJsonLimits(MaxFiles: 1) }));
+        Assert.Equal(Fingerprint(options), Fingerprint(options with { DepsJsonLimits = new DepsJsonLimits(MaxFiles: 1) }));
+    }
+
+    [Fact]
     public void Authorized_scope_preserves_rewrite_pair_order_and_blank_slots()
     {
         var options = new ScanOptions("repo", "out", IlRewriteEvidence: true,
