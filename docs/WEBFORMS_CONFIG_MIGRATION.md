@@ -844,3 +844,35 @@ generator SHA-256 and bounded input, and the native receipt hashes both graph ar
 This is partial static evidence, not an exhaustive runtime call graph. Inspect a missing
 connection by finding the caller, then its encoded target and retained gap reasons; use
 that actual shape to build a regression fixture before changing resolution rules.
+
+### Small aliased diagnostic export
+
+Do not share the private graph directly. `scripts/wgraph-share.ps1` reads the latest
+method graph beneath a review root (or an explicit `-GraphPath`) without rebuilding
+or traversing the retained index:
+
+```powershell
+.\scripts\wgraph-share.ps1 C:\work\synthetic-review -Method Lookup
+```
+
+The private literal selector is used only locally. Between one and sixteen matching
+source/compiled nodes are allowed. The three-hop caller/callee neighborhood is bounded
+to 120 nodes, 240 edges, 120 call records and 256 KiB output. A new `graph-share-*.json`
+is created; existing files are never overwritten. Input is limited to 16 MiB and
+50,000 records per primary collection. No customer scan or tests run.
+
+Rule `diagnostics.graph.aliased-slice.v1` emits an allowlisted projection, not a redacted
+copy: sequential aliases replace names, paths, rules, source IDs, node IDs, fact IDs and
+encoded targets. No reverse map is written. Only fixed technical edge/state/reason/tier
+categories pass through. Unknown codes become `other-or-unavailable`. Free-form gaps,
+private digests, raw SQL, line numbers and offsets are omitted. The generator digest
+hashes this exporter; the bounded-input digest hashes only the projected `graph` object
+serialized compactly with PowerShell `ConvertTo-Json -Depth 20 -Compress` and UTF-8.
+
+This is an unauthenticated diagnostic view, not a replacement for original evidence.
+Truncation and original cutoff presence are explicit. Aliases are consistent within
+an export, not stable across exports. Equality of target aliases is encoded-string
+equality only. Topology remains visible and may itself be sensitive: review the small
+file and follow organizational sharing policy before sending it.
+
+Synthetic regression: `pwsh -NoProfile -File scripts/tests/Test-WebFormsGraphShare.ps1`.
