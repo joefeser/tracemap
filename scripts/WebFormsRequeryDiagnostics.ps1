@@ -67,6 +67,14 @@ function Write-WebFormsTruncationSummary([string]$Directory) {
             Write-Output "    location=$(Short-Text $gap.filePath); line=$(Short-Text $gap.startLine); node=$(Short-Text $gap.nodeId)"
             Write-Output "    rule=$(Short-Text $gap.ruleId); tier=$(Short-Text $gap.evidenceTier); detail=$(Short-Text $gap.message)"
         }
+        foreach ($gap in @($group.Group | Where-Object { $_.PSObject.Properties['cutoffWitness'] -and $null -ne $_.cutoffWitness } | Select-Object -First 3)) {
+            $witness = $gap.cutoffWitness
+            Write-Output "    Root-to-cutoff sample; prefixTruncated=$($witness.prefixTruncated); lastEdgeNotTraversed=$($witness.lastEdgeNotTraversed)"
+            foreach ($edge in @($witness.edges | Select-Object -First 64)) {
+                Write-Output "      $(Short-Text $edge.fromNodeId) -> $(Short-Text $edge.toNodeId)"
+                Write-Output "      kind=$(Short-Text $edge.edgeKind); rule=$(Short-Text $edge.ruleId); tier=$(Short-Text $edge.evidenceTier); location=$(Short-Text $edge.filePath):$(Short-Text $edge.startLine)"
+            }
+        }
     }
     Write-Output 'Display bounded to 10 reasons, 3 examples each, 256 characters per field. Unavailable means not retained; no stopped branch is inferred.'
 }

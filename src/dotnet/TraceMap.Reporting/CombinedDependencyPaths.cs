@@ -248,6 +248,10 @@ public sealed record CombinedPathEdge(
 
 public sealed record CombinedPathNote(string Code, string Message);
 
+// A sampled traversal prefix, never a terminal path or runtime claim.
+public sealed record CombinedCutoffWitness(IReadOnlyList<CombinedPathNode> Nodes,
+    IReadOnlyList<CombinedPathEdge> Edges, bool PrefixTruncated, bool LastEdgeNotTraversed);
+
 public sealed record CombinedPathGap(
     string GapId,
     string GapKind,
@@ -283,6 +287,8 @@ public sealed record CombinedPathGap(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     int? RegistrationEvidenceCount = null)
 {
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public CombinedCutoffWitness? CutoffWitness { get; init; }
     [JsonIgnore]
     public IReadOnlyList<string> EffectiveSupportingFactIds => SupportingFactIds is { Count: > 0 }
         ? SupportingFactIds
@@ -4222,6 +4228,20 @@ public static partial class CombinedDependencyPathReporter
 
         var paths = new List<CombinedPath>();
         var gaps = new List<CombinedPathGap>();
+        var witnessedCutoffs = new HashSet<string>(StringComparer.Ordinal);
+        var witnessCounts = new Dictionary<string, int>(StringComparer.Ordinal);
+        CombinedPathGap Cutoff(string reason, PathState state, GraphEdge? rejectedEdge = null)
+        {
+            var gap = TruncatedGap(reason, rejectedEdge?.ToNodeId ?? state.NodeIds[^1], graph);
+            if (witnessCounts.GetValueOrDefault(reason) >= 3 || !witnessedCutoffs.Add(gap.GapId)) return gap;
+            witnessCounts[reason] = witnessCounts.GetValueOrDefault(reason) + 1;
+            var nodeIds = rejectedEdge is null ? state.NodeIds.ToArray() : state.NodeIds.Append(rejectedEdge.ToNodeId).ToArray();
+            var edgeIds = rejectedEdge is null ? state.EdgeIds.ToArray() : state.EdgeIds.Append(rejectedEdge.EdgeId).ToArray();
+            return gap with { CutoffWitness = new(
+                nodeIds.Take(65).Select(id => graph.Nodes[id].ToReportNode()).ToArray(),
+                edgeIds.Take(64).Select(id => graph.EdgesById[id].ToReportEdge()).ToArray(),
+                edgeIds.Length > 64, rejectedEdge is not null) };
+        }
         var reachedNodeIds = starts.Select(node => node.NodeId).ToHashSet(StringComparer.Ordinal);
         // Terminal inventory answers which supported terminals are reachable;
         // ordinary enumeration still retains bounded, distinct route detail.
@@ -4400,7 +4420,7 @@ public static partial class CombinedDependencyPathReporter
                 truncated = true;
                 RecordNodeShape(traversal[state.RootNodeId], currentNodeId, frontier: true);
                 traversal[state.RootNodeId].MarkTruncated("depth");
-                gaps.Add(TruncatedGap("depth", currentNodeId, graph));
+                gaps.Add(Cutoff("depth", state));
                 YieldLegacyRoot(state.RootNodeId);
                 continue;
             }
@@ -4454,7 +4474,7 @@ public static partial class CombinedDependencyPathReporter
                     truncated = true;
                     traversal[state.RootNodeId].MarkTruncated("depth");
                     RecordNodeShape(traversal[state.RootNodeId], edge.ToNodeId, frontier: true);
-                    gaps.Add(TruncatedGap("depth", edge.ToNodeId, graph));
+                    gaps.Add(Cutoff("depth", state, edge));
                     continue;
                 }
                 if (IsDispatchCandidateCrossHop(graph, state, edge))
@@ -4475,7 +4495,7 @@ public static partial class CombinedDependencyPathReporter
                     {
                         truncated = true;
                         traversal[state.RootNodeId].MarkTruncated("cycle");
-                        gaps.Add(TruncatedGap("cycle", edge.ToNodeId, graph));
+                        gaps.Add(Cutoff("cycle", state, edge));
                     }
                     continue;
                 }
@@ -5107,7 +5127,12 @@ public static partial class CombinedDependencyPathReporter
             Classification = NormalizeClassification(gap.Classification, legacyMode: true),
             SourceLabel = gap.SourceLabel is null ? null : SafeSourceLabel(gap.SourceLabel),
             Message = SafeDisplay(gap.Message) ?? "redacted",
-            FilePath = gap.FilePath is null ? null : SafePath(gap.FilePath)
+            FilePath = gap.FilePath is null ? null : SafePath(gap.FilePath),
+            CutoffWitness = gap.CutoffWitness is not { } witness ? null : witness with
+            {
+                Nodes = witness.Nodes.Select(SanitizeNode).ToArray(),
+                Edges = witness.Edges.Select(SanitizeEdge).ToArray()
+            }
         };
     }
 
