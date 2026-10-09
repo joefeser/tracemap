@@ -16,6 +16,9 @@ public sealed class LazyConstructorLoggingTests
     [InlineData(true, "malformed")]
     [InlineData(true, "virtual")]
     [InlineData(true, "operand-tampered")]
+    [InlineData(true, "operand-state")]
+    [InlineData(true, "operand-schema")]
+    [InlineData(true, "operand-shape")]
     public async Task Property_profile_dynamic_lookup_is_distinct_from_literal_audit(bool compiledOnly, string dispatchFlags)
     {
         var repo = FindRepo();
@@ -35,14 +38,18 @@ public sealed class LazyConstructorLoggingTests
             && fact.Properties.GetValueOrDefault("metadataName") == "ExecuteSql");
         Assert.True(int.TryParse(executor.Properties["methodDispatchFlags"], out var flags));
         Assert.Equal(0, flags & (int)System.Reflection.MethodAttributes.Virtual);
-        if (dispatchFlags == "operand-tampered")
+        if (dispatchFlags.StartsWith("operand-", StringComparison.Ordinal))
         {
             var call = Assert.Single(facts, fact => fact.FactType == FactTypes.ManagedIlCallObserved
                 && fact.Properties.GetValueOrDefault("targetIdentity")?.Contains("member:8:GetEmail|", StringComparison.Ordinal) == true);
             var operand = Assert.Single(facts, fact => fact.FactType == FactTypes.ManagedIlCallValuesObserved
                 && fact.Properties.GetValueOrDefault("ilBodyFactId") == call.Properties["ilBodyFactId"]
                 && fact.Properties.GetValueOrDefault("ilOffset") == call.Properties["ilOffset"]);
-            var properties = new Dictionary<string, string>(operand.Properties) { ["ilBoundedInputSha256"] = new string('f', 64) };
+            var properties = new Dictionary<string, string>(operand.Properties);
+            if (dispatchFlags == "operand-tampered") properties["ilBoundedInputSha256"] = new string('f', 64);
+            if (dispatchFlags == "operand-state") properties["valueState"] = "unsupported";
+            if (dispatchFlags == "operand-schema") properties["valueSchema"] = "unsupported";
+            if (dispatchFlags == "operand-shape") properties["callShapeSupported"] = "false";
             facts[facts.IndexOf(operand)] = operand with { Properties = properties };
         }
         else if (dispatchFlags != "retained")
@@ -91,10 +98,13 @@ public sealed class LazyConstructorLoggingTests
         Assert.Equal("method-local-constant", text.Composition.OperandBindings[0].State);
         Assert.NotNull(text.Composition.OperandBindings[1].OriginMethodIdentity);
         Assert.Null(text.Composition.OperandBindings[1].Composition);
-        if (dispatchFlags == "operand-tampered")
+        if (dispatchFlags.StartsWith("operand-", StringComparison.Ordinal))
         {
             Assert.Equal("unresolved-call-evidence", text.Composition.OperandBindings[1].State);
             Assert.Contains("IlCommandCallerOperandProvenanceUnavailable", text.Composition.OperandBindings[1].Gaps);
+            var failure = Assert.Single(text.Composition.OperandBindings[1].OperandCheckFailures!);
+            Assert.Equal(dispatchFlags switch { "operand-tampered" => "operand-body-input-match", "operand-shape" => "call-shape", _ => dispatchFlags }, Assert.Single(failure.FailedChecks));
+            Assert.NotEmpty(failure.CallFactId);
         }
         else if (compiledOnly)
         {

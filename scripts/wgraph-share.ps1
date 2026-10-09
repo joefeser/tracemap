@@ -166,6 +166,19 @@ try {
         'IlCommandCallerOperandMissingOrAmbiguous','IlCommandCallerOperandProvenanceUnavailable','IlCommandReturnCycle',
         'IlCommandReturnWorkLimit','IlCommandCallerHopLimit','IlCommandCompositionValueNotMaterialized',
         'IlCommandCompositionOperandsUnavailable','IlCommandCompositionProvenanceUnavailable')
+    function Project-OperandChecks($value) {
+        if (!$value.PSObject.Properties['operandCheckFailures']) { return }
+        $allowed = @('operand-rule','operand-tier','operand-schema','operand-state','call-shape',
+            'operand-body-link','operand-call-offset','caller-body-binary-match',
+            'body-binary-present','body-generator-present','body-input-present',
+            'operand-body-binary-match','operand-body-generator-match','operand-body-input-match',
+            'call-body-binary-match','call-body-generator-match','call-body-input-match')
+        $value.operandCheckFailures | Select-Object -First 1 | ForEach-Object {
+            [ordered]@{edge=(Alias 'E' $_.edgeId);call=(Alias 'F' $_.callFactId);
+                operand=(Alias 'F' $_.operandFactId);body=(Alias 'F' $_.bodyFactId);
+                failedChecks=@($_.failedChecks | Select-Object -First 17 | ForEach-Object { Code $_ $allowed })}
+        }
+    }
     $projectedTraces = @($traceCandidates | ForEach-Object {
         $trace = $_; $value = $trace.commandText
         if ($null -eq $value) {
@@ -198,10 +211,12 @@ try {
                             steps=@($b.steps | Select-Object -First 64 | ForEach-Object { [ordered]@{
                                 call=(Alias 'F' $_.callFactId);operand=(Alias 'F' $_.operandFactId);body=(Alias 'F' $_.callerBodyFactId);
                                 callerMethod=(Alias 'F' $_.callerMethodFactId);targetMethod=(Alias 'F' $_.targetMethodFactId)} });
+                            operandCheckFailures=@(Project-OperandChecks $b);
                             gaps=@($b.gaps | Select-Object -First 16 | ForEach-Object { Code $_ $traceGaps })}
                     } })}
             });
             limitations=@(if ($value.PSObject.Properties['limitations']) { $value.limitations | Select-Object -First 8 | ForEach-Object { Code $_ @('SymbolicStringValueNotMaterialized') } });
+            operandCheckFailures=@(Project-OperandChecks $value);
             gaps=@($value.gaps | ForEach-Object { Code $_ $traceGaps })}
     })
     $projection = [ordered]@{nodes=$projectedNodes; edges=$projectedEdges; calls=$projectedCalls;

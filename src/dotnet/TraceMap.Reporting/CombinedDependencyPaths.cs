@@ -212,8 +212,14 @@ public sealed record CompiledCommandPathValueBinding(string Schema, string RuleI
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public IReadOnlyList<string>? Limitations { get; init; }
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<CompiledOperandCheckFailure>? OperandCheckFailures { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public IReadOnlyList<CompiledCommandReturnStep>? ReturnSteps { get; init; }
 }
+
+public sealed record CompiledOperandCheckFailure(string RuleId, string EvidenceTier,
+    string EdgeId, string CallFactId, string OperandFactId, string BodyFactId,
+    IReadOnlyList<string> FailedChecks);
 
 public sealed record CompiledStringComposition(string RuleId, string EvidenceTier, string Operation,
     string ProducerCallFactId, string OperandFactId, string BodyFactId,
