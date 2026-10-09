@@ -4,7 +4,8 @@ param(
     [Parameter(Mandatory, Position=0)][string]$Root,
     [string]$Method,
     [string]$GraphPath,
-    [string]$OutputPath
+    [string]$OutputPath,
+    [switch]$PrivateMap
 )
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
@@ -192,18 +193,44 @@ try {
     $result = [ordered]@{schemaVersion='aliased-method-graph.v3';ruleId='diagnostics.graph.aliased-slice.v3';
         generatorSha256=(Get-FileHash -LiteralPath $PSCommandPath -Algorithm SHA256).Hash.ToLowerInvariant();
         boundedInputSha256=$hash; claim='unverified-local-diagnostic-projection-not-evidence-authentication';
-        limitations=@('Names, paths, identities, rules and targets use per-export sequential aliases; no alias map is exported.',
+        limitations=@('Names, paths, identities, rules and targets use per-export sequential aliases; no alias map is included in this shared file.',
             'Topology and allowlisted technical categories remain visible. Review before sharing; sanitization is not organizational approval.',
             'Target aliases identify equal encoded strings only, not resolved methods. Unknown codes are not copied.',
             'No private input hash, source hash, SQL, free-form gaps, offsets, line numbers or original provenance is exported.');graph=$projection}
     $outputBytes = [Text.Encoding]::UTF8.GetBytes(($result | ConvertTo-Json -Depth 24))
     if ($outputBytes.Length -gt 262144) { throw 'output-limit' }
     if (!$OutputPath) { $OutputPath = Join-Path $Root ('graph-share-' + [guid]::NewGuid().ToString('N') + '.json') }
+    $mapBytes = $null
+    if ($PrivateMap) {
+        $reverse = [ordered]@{}
+        foreach ($kind in @($aliases.Keys | Sort-Object)) {
+            foreach ($entry in @($aliases[$kind].GetEnumerator() | Sort-Object Value)) { $reverse[$entry.Value] = $entry.Key }
+        }
+        $shareHash = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($outputBytes)).ToLowerInvariant()
+        $mapInput = [ordered]@{shareSha256=$shareHash;aliases=$reverse}
+        $mapInputBytes = [Text.Encoding]::UTF8.GetBytes(($mapInput | ConvertTo-Json -Depth 8 -Compress))
+        $map = [ordered]@{schemaVersion='private-graph-aliases.v1';visibility='PRIVATE-DO-NOT-SHARE';
+            ruleId='diagnostics.graph.private-alias-map.v1';generatorSha256=$result.generatorSha256;
+            boundedInputSha256=[Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($mapInputBytes)).ToLowerInvariant();
+            shareFileName=[IO.Path]::GetFileName($OutputPath);mapping=$mapInput}
+        $mapBytes = [Text.Encoding]::UTF8.GetBytes(($map | ConvertTo-Json -Depth 12))
+        if ($mapBytes.Length -gt 8388608) { throw 'map-limit' }
+        $mapDirectory = Join-Path $Root 'private-graph-maps'
+        [void][IO.Directory]::CreateDirectory($mapDirectory)
+        $mapPath = Join-Path $mapDirectory ([IO.Path]::GetFileNameWithoutExtension($OutputPath) + '.aliases.private.json')
+    }
     $stream = [IO.FileStream]::new($OutputPath,[IO.FileMode]::CreateNew,[IO.FileAccess]::Write,[IO.FileShare]::None)
-    try { $stream.Write($outputBytes) } finally { $stream.Dispose() }
+    try {
+        if ($PrivateMap) {
+            $mapStream = [IO.FileStream]::new($mapPath,[IO.FileMode]::CreateNew,[IO.FileAccess]::Write,[IO.FileShare]::None)
+            try { $mapStream.Write($mapBytes) } finally { $mapStream.Dispose() }
+        }
+        $stream.Write($outputBytes)
+    } finally { $stream.Dispose() }
     Write-Output "Aliased diagnostic saved: $OutputPath"
     Write-Output "Bytes=$($outputBytes.Length); focus representations=$($focus.Count); focusRecordsComplete=$focusComplete; sliceLimited=$limited. Review before sharing. Private graph unchanged."
     Write-Output "Command traces=$($projectedTraces.Count); scope=one-shortest-retained-witness-per-endpoint."
+    if ($PrivateMap) { Write-Output "PRIVATE alias map saved separately: $mapPath — DO NOT UPLOAD. Use wgraph-alias.ps1 with this map and an alias." }
 } catch {
     if ($_.Exception.Message -ceq 'command-traces-missing-regenerate-graph') {
         throw 'GRAPH_SHARE_READER_UPDATE_REQUIRED: rebuild the CLI and rerun wrequery.ps1 -MethodGraph against the retained run, then export again. No source rescan required.'

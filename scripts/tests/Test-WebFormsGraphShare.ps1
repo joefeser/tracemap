@@ -110,5 +110,22 @@ try {
         $exportedTrace.originBody -cne $traceResult.graph.calls[0].body -or
         $exportedTrace.gaps[0] -cne 'IlCommandReturnTargetEdgeMissing' -or
         $exportedTrace.gaps[1] -cne 'other-or-unavailable') { throw 'Producer trace lost linkage or privacy.' }
-    Write-Output 'Aliased graph exporter tests passed.'
+    $mappedOutput = Join-Path $temp 'mapped.json'
+    & $helper $temp -GraphPath $inputFile -Method 'Focus()' -OutputPath $mappedOutput -PrivateMap | Out-Null
+    if ((Get-Content -LiteralPath $mappedOutput -Raw) -cne $traceRaw) { throw 'Private map changed shared artifact.' }
+    $mapPath = Join-Path $temp 'private-graph-maps/mapped.aliases.private.json'
+    $mapDocument = Get-Content -LiteralPath $mapPath -Raw | ConvertFrom-Json -Depth 16
+    if ($mapDocument.mapping.shareSha256 -ine (Get-FileHash $mappedOutput).Hash) { throw 'Map not tied to exact share.' }
+    $targetAlias = $traceResult.graph.calls[0].target
+    $lookupHelper = Join-Path $PSScriptRoot '../wgraph-alias.ps1'
+    $lookup = @(& $lookupHelper $mapPath $targetAlias)
+    $rootLookup = @(& $lookupHelper $temp $targetAlias)
+    if (($rootLookup -join "`n") -cne ($lookup -join "`n")) { throw 'Latest private map lookup differs.' }
+    if (($lookup -join "`n") -notlike "*$($focusCall.encodedTarget)*") { throw 'Alias does not resolve to actual target.' }
+    $mapDocument.mapping.aliases.$targetAlias = 'tampered'
+    $mapDocument | ConvertTo-Json -Depth 16 | Set-Content -LiteralPath $mapPath
+    $failed = $false
+    try { & $lookupHelper $mapPath $targetAlias | Out-Null } catch { $failed = $true }
+    if (!$failed) { throw 'Changed map was accepted.' }
+    Write-Output 'Aliased graph exporter and private lookup tests passed.'
 } finally { Remove-Item -LiteralPath $temp -Recurse -Force }
