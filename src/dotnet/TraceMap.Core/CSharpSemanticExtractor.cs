@@ -154,7 +154,7 @@ public static class CSharpSemanticExtractor
         var facts = new List<SemanticFactCandidate>();
         var gaps = new List<SemanticFactCandidate>();
         var analyzedFiles = new HashSet<string>(StringComparer.Ordinal);
-        var compilationInputFiles = new HashSet<string>(StringComparer.Ordinal);
+        var compilationInputFiles = new CompilationInputSet();
         var protectedSourceSpans = new List<ProtectedSourceSpan>();
         List<SourceMetadataIdentityCandidate>? sourceMetadataCandidates = options.CompiledInputPaths is { Count: > 0 }
             || options.CompiledDependencyPaths is { Count: > 0 }
@@ -544,7 +544,7 @@ public static class CSharpSemanticExtractor
         List<SemanticFactCandidate> gaps,
         HashSet<string> loadedProjectPaths,
         HashSet<string> analyzedFiles,
-        HashSet<string> compilationInputFiles,
+        CompilationInputSet compilationInputFiles,
         List<ProtectedSourceSpan> protectedSourceSpans,
         List<SourceMetadataIdentityCandidate>? sourceMetadataCandidates,
         IReadOnlySet<string>? selectedProjectPaths,
@@ -597,7 +597,7 @@ public static class CSharpSemanticExtractor
         List<SemanticFactCandidate> facts,
         List<SemanticFactCandidate> gaps,
         HashSet<string> analyzedFiles,
-        HashSet<string> compilationInputFiles,
+        CompilationInputSet compilationInputFiles,
         List<ProtectedSourceSpan> protectedSourceSpans,
         List<SourceMetadataIdentityCandidate>? sourceMetadataCandidates,
         int? projectOrdinal,
@@ -655,17 +655,17 @@ public static class CSharpSemanticExtractor
         {
             cancellationToken.ThrowIfCancellationRequested();
             var projection = ToRelativePathProjection(repoPath, document.FilePath);
-            if (!projection.IsExternal && !IsCompilerGeneratedDocument(document, cancellationToken))
+            if (!projection.IsExternal)
             {
                 if (compilationInputPaths.TryGetValue(projection.Path, out var canonicalCompilationInputPath))
                 {
-                    compilationInputFiles.Add(canonicalCompilationInputPath);
+                    compilationInputFiles.Record(canonicalCompilationInputPath, document.GetTextAsync(cancellationToken).GetAwaiter().GetResult());
                 }
                 else if (File.Exists(Path.Combine(repoPath, projection.Path.Replace('/', Path.DirectorySeparatorChar))))
                 {
                     // A repository-local compilation input that appeared after initial
                     // inventory remains protected so source mutation fails loudly.
-                    compilationInputFiles.Add(projection.Path);
+                    compilationInputFiles.Record(projection.Path, document.GetTextAsync(cancellationToken).GetAwaiter().GetResult());
                 }
                 else
                 {
@@ -5506,7 +5506,8 @@ public static class CSharpSemanticExtractor
 
     private static bool IsWorkspaceException(Exception ex)
     {
-        return ex is not OperationCanceledException
+        return ex is not SourceSnapshotException
+            and not OperationCanceledException
             and not OutOfMemoryException
             and not StackOverflowException;
     }

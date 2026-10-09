@@ -3,6 +3,8 @@ using TraceMap.Core;
 
 namespace TraceMap.Tests;
 
+// Completion assertions require stable Git probes, independently of unrelated corpus process load.
+[Collection("Git metadata sensitive")]
 public sealed class WebFormsWizardExecutionTests
 {
     [Fact]
@@ -59,7 +61,7 @@ public sealed class WebFormsWizardExecutionTests
     [Fact]
     public async Task Real_native_pipeline_completes_and_completed_continue_only_verifies_retained_reports()
     {
-        // Exercise independent cold runs while the corpus is active; a passing
+        // Exercise independent cold runs in the Git-sensitive collection; a passing
         // retry must never hide a prior failed attempt.
         for (var attempt = 0; attempt < 3; attempt++) await VerifyCompletedRun(false);
     }
@@ -104,7 +106,12 @@ public sealed class WebFormsWizardExecutionTests
         if (outputFailsAfterCompletion)
         {
             using var failing = new CompletionFailingWriter();
-            await Assert.ThrowsAsync<IOException>(() => WebFormsWizardExecution.RunAsync(store, "site", commit, failing, error));
+            var exitCode = -1;
+            var exception = await Record.ExceptionAsync(async () =>
+            { exitCode = await WebFormsWizardExecution.RunAsync(store, "site", commit, failing, error); });
+            Assert.True(exception is not null,
+                $"Expected output IOException after verified completion; exit={exitCode}; observed={exception?.GetType().Name ?? "none"}; diagnostics={error}");
+            Assert.IsType<IOException>(exception);
         }
         else
         {

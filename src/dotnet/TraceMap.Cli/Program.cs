@@ -155,7 +155,10 @@ public static class TraceMapCommand
         catch (Exception ex)
         {
             commandOperation.Complete(TraceMapDiagnosticOutcome.Failed);
-            await error.WriteLineAsync($"error: {ex.Message}");
+            var snapshotDetail = SourceSnapshotException.Describe(ex);
+            await error.WriteLineAsync(snapshotDetail is null
+                ? $"error: {ex.Message}"
+                : $"error: {ex.Message} ({snapshotDetail})");
             return 1;
         }
     }
@@ -476,7 +479,7 @@ public static class TraceMapCommand
             }
             if (ex is OperationCanceledException && cancellationToken.IsCancellationRequested)
                 throw;
-            await error.WriteLineAsync($"error: {SafeScanError(ex)}");
+            await error.WriteLineAsync(FormatScanError(ex));
             return 1;
         }
         try
@@ -651,6 +654,17 @@ public static class TraceMapCommand
                     or "ExactSourceScopeEnumerationLimitExceeded"
                     ? scopeError.Message
                     : ScanReceiptRecorder.ClassifyFailure(exception);
+
+    // categorical error line for the scan command; appends up to three differing
+    // input paths when the snapshot guard knows them (Data["details"], relative paths only)
+    internal static string FormatScanError(Exception exception)
+    {
+        var categorical = SafeScanError(exception);
+        var snapshotDetail = SourceSnapshotException.Describe(exception);
+        return snapshotDetail is null
+            ? $"error: {categorical}"
+            : $"error: {categorical} ({snapshotDetail})";
+    }
 
     private static async Task RunReceiptStageAsync(ScanReceiptOperation operation, Func<Task> action)
     {
@@ -2986,6 +3000,7 @@ public static class TraceMapCommand
             Truthfulness failures (exit code 1; normal scan artifacts are not written):
               SourceInventoryIncomplete          An in-scope inventory entry could not be read.
               SourceSnapshotChangedDuringScan    Protected input bytes changed or disappeared during analysis.
+                                                  When the differing input is known, the error names up to three paths.
               A commit-bound failure may write only scan-receipt.json with categorical diagnostics.
             """;
     }

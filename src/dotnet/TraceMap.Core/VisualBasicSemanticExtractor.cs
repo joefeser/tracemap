@@ -46,7 +46,7 @@ public static class VisualBasicSemanticExtractor
         var facts = new List<SemanticFactCandidate>();
         var gaps = new List<SemanticFactCandidate>();
         var analyzedFiles = new HashSet<string>(StringComparer.Ordinal);
-        var compilationInputFiles = new HashSet<string>(StringComparer.Ordinal);
+        var compilationInputFiles = new CompilationInputSet();
         List<SourceMetadataIdentityCandidate>? sourceMetadataCandidates = options.CompiledInputPaths is { Count: > 0 }
             || options.CompiledDependencyPaths is { Count: > 0 }
             || options.CompiledBindingReceiptPaths is { Count: > 0 }
@@ -310,7 +310,7 @@ public static class VisualBasicSemanticExtractor
         List<SemanticFactCandidate> gaps,
         HashSet<string> loadedProjectPaths,
         HashSet<string> analyzedFiles,
-        HashSet<string> compilationInputFiles,
+        CompilationInputSet compilationInputFiles,
         List<SourceMetadataIdentityCandidate>? sourceMetadataCandidates,
         IReadOnlySet<string>? selectedProjectPaths,
         CancellationToken cancellationToken)
@@ -356,7 +356,7 @@ public static class VisualBasicSemanticExtractor
         List<SemanticFactCandidate> facts,
         List<SemanticFactCandidate> gaps,
         HashSet<string> analyzedFiles,
-        HashSet<string> compilationInputFiles,
+        CompilationInputSet compilationInputFiles,
         List<SourceMetadataIdentityCandidate>? sourceMetadataCandidates,
         CancellationToken cancellationToken)
     {
@@ -409,17 +409,16 @@ public static class VisualBasicSemanticExtractor
             var compilerGenerated = IsCompilerGeneratedDocument(document.FilePath);
             if (compilationInputPaths.TryGetValue(projection.Path, out var canonicalCompilationInputPath))
             {
-                compilationInputFiles.Add(canonicalCompilationInputPath);
+                compilationInputFiles.Record(canonicalCompilationInputPath, document.GetTextAsync(cancellationToken).GetAwaiter().GetResult());
             }
-            else if (!compilerGenerated
-                && File.Exists(Path.Combine(repoPath, projection.Path.Replace('/', Path.DirectorySeparatorChar))))
+            else if (File.Exists(Path.Combine(repoPath, projection.Path.Replace('/', Path.DirectorySeparatorChar))))
             {
                 // A repository-local Visual Basic compilation input that appeared
                 // after initial inventory remains protected so source mutation
                 // fails loudly.
-                compilationInputFiles.Add(projection.Path);
+                compilationInputFiles.Record(projection.Path, document.GetTextAsync(cancellationToken).GetAwaiter().GetResult());
             }
-            else if (!compilerGenerated)
+            else
             {
                 unavailableCompilationInputObserved = true;
             }
@@ -3637,7 +3636,8 @@ public static class VisualBasicSemanticExtractor
 
     private static bool IsWorkspaceFailure(Exception ex)
     {
-        return ex is not OperationCanceledException
+        return ex is not SourceSnapshotException
+            and not OperationCanceledException
             and not OutOfMemoryException
             and not StackOverflowException;
     }
