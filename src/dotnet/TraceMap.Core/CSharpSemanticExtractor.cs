@@ -5506,7 +5506,8 @@ public static class CSharpSemanticExtractor
 
     private static bool IsWorkspaceException(Exception ex)
     {
-        return ex is not OperationCanceledException
+        return ex is not SourceSnapshotException
+            and not OperationCanceledException
             and not OutOfMemoryException
             and not StackOverflowException;
     }

@@ -69,3 +69,48 @@ root cause is not established and the Windows failure is not erased by that pass
 The test retains its required IOException assertion and now includes the actual
 exit code and categorical native diagnostics when completion was never reached.
 Final-head hosted Windows rerun is required; no customer/private-worker execution.
+
+## 2026-10-09 renewed current-head repair
+
+Branch: codex/snapshot-review, remote zcode/snapshot-diff-naming. Owner renewed
+repair of both PR heads after hosted failures. This batch preserves the three
+separate boundaries: ordinary source-scope membership, immutable compiler input
+identity and runtime Git availability. Exact-source validation uses ordinary
+inventory; generated compiler inputs remain hashed in the authoritative snapshot.
+Snapshot exceptions cannot be swallowed by C#/VB workspace fallback. Cross-language
+checksum conflicts retain validated relative paths; Unix filename colons remain
+readable while drive/absolute/traversal paths are redacted.
+
+The Linux full-suite failure was reproduced locally: a hidden framework-attribute
+file under custom build-int was omitted by FileInventory, and the fixture's first
+post-commit evaluation changed AssemblyInfo from 965 to 1006 bytes. Exact compiler
+inputs omitted by Hidden/System attributes now receive bounded checksum-backed
+capture, like obj/bin inputs. The unchanged-scan fixture builds again after its
+Git commit to stabilize generated informational-version metadata. Existing mutation
+guards are retained; a scan that changes initially inventoried bytes still fails.
+
+Windows previously failed WEBFORMS_REVIEW_SOURCE_IDENTITY_CHANGED before the output
+writer was reached. The completion test now uses the existing nonparallel Git
+metadata sensitive collection; production Git timeouts, retries and identity gates
+are unchanged. This isolates the completion assertion from unrelated concurrent
+Git-heavy corpus load. It is not proof of the exact transient probe that failed;
+final-head hosted Windows validation is still required.
+
+Added a real ACK 0.5.5 offline consumer regression using the actual lane YAML:
+missing/stale Baz holds a clean Codex batch, current Baz permits it, retired Qodo
+is not requested or awaited. The separate manual request-review command is outside
+that lane test and remains prohibited for retired Qodo. No network/provider calls
+are made by the regression; no ACK source changes or paid review invoked.
+
+Focused command: dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj
+--no-restore -warnaserror --filter
+'FullyQualifiedName~CSharpFullSnapshotStabilityTests|FullyQualifiedName~ScanEngineTests|FullyQualifiedName~CSharpSemanticExtractorTests|FullyQualifiedName~VisualBasic|FullyQualifiedName~ExactSource|FullyQualifiedName~WebFormsWizardExecutionTests'
+passed 176 tests (71s). Lane configuration tests: 3 pass. Pinned consumer tests:
+3 pass with ACK_ROOT pointing to the verified v0.5.5 installation. Full Debug
+solution validation completed: dotnet test src/dotnet/TraceMap.sln --no-restore
+-warnaserror passed 3,451 tests, zero failed, one Windows-only skip (20m18s).
+The failed Linux case and all wizard completion assertions now pass in the full
+suite. Windows hosted validation remains required; no retry erased a failure.
+
+Public endpoint-server-aspnet CLI smoke: 103 facts, Level1SemanticAnalysis;
+validate-adapter-artifacts.py passed. Private-path and diff guards passed.

@@ -3636,7 +3636,8 @@ public static class VisualBasicSemanticExtractor
 
     private static bool IsWorkspaceFailure(Exception ex)
     {
-        return ex is not OperationCanceledException
+        return ex is not SourceSnapshotException
+            and not OperationCanceledException
             and not OutOfMemoryException
             and not StackOverflowException;
     }

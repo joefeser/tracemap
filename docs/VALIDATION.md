@@ -4,7 +4,11 @@ For generated compilation snapshot changes (PR #847), run ScanEngineTests and
 CliTests in Debug with warnings as errors. Exact generated compilation inputs
 receive a post-generation digest (4,096 files / 64 MiB maximum), are included in
 source snapshot identity, and remain verified. obj/bin names only nominate
-capture candidates; other build output remains outside the source inventory.
+capture candidates, as do compiler-observed Hidden/System inputs omitted by
+FileInventory (including custom intermediate directories). Immutable compiler
+checksums are mandatory in each case; other build output remains outside the
+source inventory. Run CSharpFullSnapshotStabilityTests, ExactSourceScopeTests,
+VisualBasic tests and the Git-sensitive WebFormsWizardExecutionTests as well.
 
 
 For the reproducible source + compiled website + separate DLL operator workflow,

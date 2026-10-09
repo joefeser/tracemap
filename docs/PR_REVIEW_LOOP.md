@@ -109,3 +109,19 @@ Run the consumer lane regression with:
 ```bash
 node --test scripts/pr-review-loop-lane.test.mjs
 ```
+
+### Pinned consumer regression
+
+After verifying the pinned ACK installation, run:
+
+```sh
+ACK_ROOT=/path/to/verified/ack-v0.5.5 node --test scripts/pr-review-loop-consumer.test.mjs
+```
+
+This loads the actual lane YAML into ACK 0.5.5's offline simulator. Missing and
+stale Baz cannot release a Codex-clean batch; current Baz can. Disabled Qodo is
+neither awaited nor requested by the loop. The test requires the pinned release
+and does not install software, call GitHub or invoke local reviewers. It covers
+pr-loop policy, not manual use of the separate request-review CLI: operators
+must still never explicitly request retired Qodo. Keep the lightweight lane-text
+tests as configuration assertions, not substitutes for consumer behavior.
