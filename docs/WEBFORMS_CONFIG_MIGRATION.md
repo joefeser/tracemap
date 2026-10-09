@@ -861,7 +861,7 @@ to 120 nodes, 240 edges, 120 call records and 256 KiB output. A new `graph-share
 is created; existing files are never overwritten. Input is limited to 16 MiB and
 50,000 records per primary collection. No customer scan or tests run.
 
-Rule `diagnostics.graph.aliased-slice.v1` emits an allowlisted projection, not a redacted
+Rule `diagnostics.graph.aliased-slice.v2` emits an allowlisted projection, not a redacted
 copy: sequential aliases replace names, paths, rules, source IDs, node IDs, fact IDs and
 encoded targets. No reverse map is written. Only fixed technical edge/state/reason/tier
 categories pass through. Unknown codes become `other-or-unavailable`. Free-form gaps,
@@ -874,5 +874,15 @@ Truncation and original cutoff presence are explicit. Aliases are consistent wit
 an export, not stable across exports. Equality of target aliases is encoded-string
 equality only. Topology remains visible and may itself be sensitive: review the small
 file and follow organizational sharing policy before sending it.
+
+Version 2 prioritizes all focus callers before round-robin selection from other callers,
+for both edges and encoded calls. `callerCoverage` reports available, exported and omitted
+calls and outgoing edges per selected node, including outgoing edges excluded by the node
+slice. `focusRecordsComplete` is relative to records in the input graph, never a claim of
+complete scanning, resolution or runtime coverage. If focus records exceed the caps, it
+is false; caps are not silently raised. Sanitized target-shape hints expose only fixed
+categories for reference kind, getter/setter/constructor shape and primitive return shape.
+They are syntactic hints, not verified framework identity or dispatch resolution. Names
+and signature fragments remain excluded. Older aliases need not match the new export.
 
 Synthetic regression: `pwsh -NoProfile -File scripts/tests/Test-WebFormsGraphShare.ps1`.
