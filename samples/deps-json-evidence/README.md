@@ -42,3 +42,10 @@ source snapshot. Source changes still fail the existing snapshot guard.
 
 Format references: Microsoft's [DependencyContextJsonReader](https://github.com/dotnet/runtime/blob/main/src/libraries/Microsoft.Extensions.DependencyModel/src/DependencyContextJsonReader.cs) and SDK
 [DependencyContextBuilder](https://github.com/dotnet/sdk/blob/main/src/Tasks/Microsoft.NET.Build.Tasks/DependencyContextBuilder.cs). Neither provides a top-level direct-dependency list.
+
+TraceMap's package-decision correlation and package-impact reports exclude these
+unknown-build observations from current-source findings and report an explicit
+freshness/coverage gap. The original package facts remain available to consumers
+that preserve build-output provenance. Core limit overrides may lower, but never
+raise, the documented resource caps. Opt-in options are init-only properties so
+the existing positional ScanOptions constructor and deconstruction remain intact.

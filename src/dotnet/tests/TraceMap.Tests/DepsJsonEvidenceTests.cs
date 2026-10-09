@@ -2,6 +2,8 @@ using System.Diagnostics;
 using System.Security.Cryptography;
 using TraceMap.Cli;
 using TraceMap.Core;
+using TraceMap.Reporting;
+using TraceMap.Storage;
 
 namespace TraceMap.Tests;
 
@@ -156,7 +158,7 @@ public sealed class DepsJsonEvidenceTests
         using var error = new StringWriter();
         var destination = Path.Combine(temp.Path, "on");
         Assert.Equal(0, await TraceMapCommand.RunAsync(["scan", "--repo", repo, "--out", destination, "--index-deps-json"], output, error));
-        var on = ScanEngine.Scan(new ScanOptions(repo, destination, IndexDepsJson: true));
+        var on = ScanEngine.Scan(new ScanOptions(repo, destination) { IndexDepsJson = true });
         Assert.Equal(before.Manifest.SourceSnapshotDigest, on.Manifest.SourceSnapshotDigest);
         Assert.NotEqual(before.Manifest.ScanId, on.Manifest.ScanId);
         var facts = on.Facts.Where(x => x.Properties.GetValueOrDefault("manifestKind") == "deps.json").ToArray();
@@ -175,7 +177,7 @@ public sealed class DepsJsonEvidenceTests
         Assert.DoesNotContain(on.Inventory, x => x.RelativePath.StartsWith("bin/", StringComparison.Ordinal));
         Assert.DoesNotContain(on.SourceSnapshotInventory!, x => x.RelativePath.StartsWith("bin/", StringComparison.Ordinal));
         Write(repo, Fixture.Replace("2.3.0", "2.4.0"));
-        var changed = ScanEngine.Scan(new ScanOptions(repo, destination, IndexDepsJson: true));
+        var changed = ScanEngine.Scan(new ScanOptions(repo, destination) { IndexDepsJson = true });
         Assert.Equal(on.Manifest.SourceSnapshotDigest, changed.Manifest.SourceSnapshotDigest);
         Assert.NotEqual(on.Manifest.ScanId, changed.Manifest.ScanId);
         Assert.Contains(changed.Facts, x => x.Properties.GetValueOrDefault("resolvedVersion") == "2.4.0");
@@ -188,9 +190,11 @@ public sealed class DepsJsonEvidenceTests
         using var temp = new TempDirectory();
         Write(temp.Path, "{");
         InitGit(temp.Path);
-        var result = ScanEngine.Scan(new ScanOptions(temp.Path, temp.Path + "-out", IndexDepsJson: true));
+        var result = ScanEngine.Scan(new ScanOptions(temp.Path, temp.Path + "-out") { IndexDepsJson = true });
         Assert.EndsWith("Reduced", result.Manifest.AnalysisLevel, StringComparison.Ordinal);
         Assert.Equal("FailedOrPartial", result.Manifest.BuildStatus);
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.BuildStatus
+            && fact.Properties["reason"].StartsWith("Package/dependency evidence", StringComparison.Ordinal));
         Assert.Contains(result.Facts, x => x.FactType == FactTypes.AnalysisGap && x.Properties.GetValueOrDefault("gapKind") == "deps-json-invalid");
     }
 
@@ -250,7 +254,7 @@ public sealed class DepsJsonEvidenceTests
         var result = DepsJsonExtractor.Read(options, default);
         Assert.Equal(2, result.Rows.Count);
         Assert.All(result.Rows, row => Assert.StartsWith("selected/", row.Path));
-        result = DepsJsonExtractor.Read(options with { ProjectPaths = null, IncludeGlobs = ["sibling/**"] }, default);
+        result = DepsJsonExtractor.Read(options with { IncludeGlobs = ["sibling/**"] }, default);
         Assert.Equal(2, result.Rows.Count);
         Assert.All(result.Rows, row => Assert.StartsWith("sibling/", row.Path));
     }
@@ -295,11 +299,11 @@ public sealed class DepsJsonEvidenceTests
         File.WriteAllText(Path.Combine(builder, "Generated.csproj"),
             "<Project Sdk=\"Microsoft.NET.Sdk\"><PropertyGroup><TargetFramework>net10.0</TargetFramework></PropertyGroup></Project>");
         File.WriteAllText(Path.Combine(builder, "Generated.cs"), "public class Generated { }");
-        var initial = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "baseline"), IndexDepsJson: true));
+        var initial = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "baseline")) { IndexDepsJson = true });
         using var writer = new BuildDuringScanWriter(() =>
             Run(builder, "dotnet", "build", "Generated.csproj", "--nologo", "-o", Path.Combine(repo, "bin/generated")));
         using var progress = new ScanProgressReporter(writer, null);
-        var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "during"), IndexDepsJson: true),
+        var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "during")) { IndexDepsJson = true },
             receiptRecorder: null, progress: progress);
         Assert.True(writer.Built);
         Assert.True(File.Exists(Path.Combine(repo, "bin/generated/Generated.deps.json")));
@@ -307,6 +311,91 @@ public sealed class DepsJsonEvidenceTests
         Assert.DoesNotContain(result.SourceSnapshotInventory!, x => x.RelativePath.StartsWith("bin/", StringComparison.Ordinal));
         var reread = Read(repo);
         Assert.DoesNotContain(reread.Gaps, x => x.Path.EndsWith("Generated.deps.json", StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [InlineData("file")]
+    [InlineData("total")]
+    [InlineData("count")]
+    [InlineData("directories")]
+    [InlineData("libraries")]
+    public void Custom_limits_cannot_exceed_absolute_caps(string limit)
+    {
+        using var temp = new TempDirectory();
+        var limits = limit switch
+        {
+            "file" => new DepsJsonLimits(MaxFileBytes: int.MaxValue),
+            "total" => new DepsJsonLimits(MaxTotalBytes: long.MaxValue),
+            "count" => new DepsJsonLimits(MaxFiles: int.MaxValue),
+            "directories" => new DepsJsonLimits(MaxDirectoryEntries: int.MaxValue),
+            _ => new DepsJsonLimits(MaxLibraries: int.MaxValue)
+        };
+        Assert.Throws<ArgumentOutOfRangeException>(() => Read(temp.Path, limits));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Output_root_or_ancestor_is_not_traversed(bool ancestor)
+    {
+        using var temp = new TempDirectory();
+        var root = Path.Combine(temp.Path, "repo");
+        Write(root, Fixture);
+        var result = DepsJsonExtractor.Read(new ScanOptions(root, ancestor ? temp.Path : root), default);
+        Assert.Empty(result.Rows);
+        Assert.Contains(result.Gaps, gap => gap.Kind == "deps-json-output-boundary");
+    }
+
+    [Fact]
+    public void Unrelated_file_links_do_not_reduce_dependency_coverage()
+    {
+        if (OperatingSystem.IsWindows()) return;
+        using var temp = new TempDirectory();
+        Write(temp.Path, Fixture);
+        var target = Path.Combine(temp.Path, "bin/Debug/net8.0/Sample.deps.json");
+        File.CreateSymbolicLink(Path.Combine(temp.Path, "LICENSE"), target);
+        File.CreateSymbolicLink(Path.Combine(temp.Path, "bin/Assembly.dll"), target);
+        Assert.Empty(Read(temp.Path).Gaps);
+    }
+
+    [Fact]
+    public void Opt_in_properties_preserve_the_existing_positional_constructor()
+    {
+        var constructor = Assert.Single(typeof(ScanOptions).GetConstructors(),
+            ctor => ctor.GetParameters().LastOrDefault()?.Name == "WebFormsPublishSourceRelativeBase");
+        Assert.DoesNotContain(constructor.GetParameters(), parameter => parameter.Name == "IndexDepsJson");
+        Assert.False(new ScanOptions("repo", "out").IndexDepsJson);
+    }
+
+    [Fact]
+    public async Task Build_output_cannot_become_current_source_correlation_or_impact_evidence()
+    {
+        using var temp = new TempDirectory();
+        var root = Path.Combine(temp.Path, "repo");
+        Write(root, Fixture);
+        InitGit(root);
+        var scan = ScanEngine.Scan(new ScanOptions(root, Path.Combine(temp.Path, "scan")) { IndexDepsJson = true });
+        var index = Path.Combine(temp.Path, "index.sqlite");
+        SqliteIndexWriter.Write(index, scan.Manifest, scan.Facts);
+        var decision = Path.Combine(temp.Path, "decision.json");
+        await File.WriteAllTextAsync(decision, """
+            {"version":"package-decision.v1","records":[{"decisionId":"synthetic-decision","decisionKind":"reject",
+            "ecosystem":"nuget","packageName":"Example.Direct","artifactVersion":"1.2.0",
+            "producer":{"id":"synthetic-producer","policyVersion":"1"},"decisionTimeUtc":"2026-08-18T00:00:00Z"}]}
+            """);
+        var correlation = await PackageDecisionCorrelationReporter.WriteAsync(new PackageDecisionOptions(decision, index, Path.Combine(temp.Path, "decision-report")));
+        Assert.Empty(correlation.Report.PossibleMatches);
+        Assert.Empty(correlation.Report.ExactMatches);
+        Assert.Contains(correlation.Report.Gaps, gap => gap.Classification == "BuildOutputFreshnessUnknown");
+        var delta = Path.Combine(temp.Path, "delta.json");
+        await File.WriteAllTextAsync(delta, """
+            {"version":"package-delta.v1","changes":[{"id":"synthetic-change","packageName":"Example.Direct",
+            "ecosystem":"nuget","changeType":"updated","oldVersion":"1.2.0","newVersion":"2.0.0"}]}
+            """);
+        var impact = await PackageUpgradeImpactReporter.WriteAsync(new PackageImpactOptions(index, delta, Path.Combine(temp.Path, "impact")));
+        Assert.Empty(impact.Report.Findings);
+        Assert.Equal("ReducedCoverage", impact.Report.ReportCoverage);
+        Assert.Contains(impact.Report.Gaps, gap => gap.Message.Contains("unknown freshness", StringComparison.Ordinal));
     }
 
     private sealed class BuildDuringScanWriter(Action build) : StringWriter
@@ -324,7 +413,7 @@ public sealed class DepsJsonEvidenceTests
     }
 
     private static DepsJsonResult Read(string root, DepsJsonLimits? limits = null) => DepsJsonExtractor.Read(
-        new ScanOptions(root, Path.Combine(root, "out"), DepsJsonLimits: limits), default);
+        new ScanOptions(root, Path.Combine(root, "out")) { DepsJsonLimits = limits }, default);
     private static void Write(string root, string text, string relative = "bin/Debug/net8.0/Sample.deps.json")
     {
         var file = Path.Combine(root, relative);

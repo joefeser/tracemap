@@ -781,7 +781,7 @@ public static class ScanEngine
                 properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
                 {
                     ["status"] = manifest.BuildStatus,
-                    ["reason"] = GetBuildStatusReason(manifest, semanticResult, binlogFacts)
+                    ["reason"] = GetBuildStatusReason(manifest, semanticResult, binlogFacts, knownGaps)
                 })
         };
 
@@ -1298,7 +1298,8 @@ public static class ScanEngine
     private static string GetBuildStatusReason(
         ScanManifest manifest,
         SemanticExtractionResult semanticResult,
-        IReadOnlyList<CodeFact> binlogFacts)
+        IReadOnlyList<CodeFact> binlogFacts,
+        IReadOnlyList<string> knownGaps)
     {
         if (manifest.BuildStatus == "Succeeded")
         {
@@ -1309,6 +1310,10 @@ public static class ScanEngine
         {
             return "No C# or Visual Basic project was available for MSBuildWorkspace semantic analysis.";
         }
+
+        if (knownGaps.Any(gap => (gap.StartsWith("NuGet lockfile analysis reported", StringComparison.Ordinal)
+            || gap.StartsWith("Build-output dependency analysis reported", StringComparison.Ordinal))))
+            return "Package/dependency evidence coverage is partial; inspect package manifest gaps and any separate semantic diagnostics.";
 
         var hasBinlogGap = binlogFacts.Any(fact =>
             fact.FactType == FactTypes.AnalysisGap

@@ -400,6 +400,9 @@ public static class PackageDecisionCorrelationReporter
                 var recordKey = $"{record.ProducerId}\u001f{record.DecisionId}";
                 if (!pairingRows.TryAdd((recordKey, source.SourceIndexId), []))
                     pairingRows[(recordKey, source.SourceIndexId)] = [];
+                if (index.Facts.Any(fact => fact.SourceIndexId == source.SourceIndexId && IsBuildOutputPackage(fact)))
+                    AddGap(gaps, options.MaxGaps, ref gapCapReached, SourceGap("BuildOutputFreshnessUnknown",
+                        "Build-output package observations have no proven producing commit and are excluded from current-source correlation.", record, source));
                 var sourceFacts = PackageEvidenceRows(index.Facts, source.SourceIndexId);
                 var rows = sourceFacts.Where(fact => string.Equals(fact.Properties.GetValueOrDefault("ecosystem"), record.Ecosystem, StringComparison.OrdinalIgnoreCase)
                     && string.Equals(NormalizeName(record.Ecosystem, record.PackageName), NormalizeName(record.Ecosystem, fact.Properties.GetValueOrDefault("packageName") ?? string.Empty), StringComparison.Ordinal)).ToArray();
@@ -974,9 +977,15 @@ public static class PackageDecisionCorrelationReporter
     /// </summary>
     private static IReadOnlyList<CombinedFactRow> PackageEvidenceRows(IEnumerable<CombinedFactRow> facts, string sourceIndexId) =>
         facts.Where(fact => fact.SourceIndexId == sourceIndexId)
+            .Where(fact => !IsBuildOutputPackage(fact))
             .Select(fact => fact.FactType == FactTypes.PackageReferenced ? fact : ProjectSwiftLockfileEvidence(fact))
             .OfType<CombinedFactRow>()
             .ToArray();
+
+    internal static bool IsBuildOutputPackage(CombinedFactRow fact) =>
+        fact.FactType == FactTypes.PackageReferenced &&
+        (fact.Properties.GetValueOrDefault("evidenceSource") == "build-output"
+            || fact.Properties.GetValueOrDefault("manifestKind") == "deps.json");
 
     private static CombinedFactRow? ProjectSwiftLockfileEvidence(CombinedFactRow fact)
     {
