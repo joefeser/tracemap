@@ -65,6 +65,49 @@ public sealed class LazyConstructorLoggingTests
         Assert.Single(report.Paths, path => path.Nodes.Last().SurfaceName == "DbDataAdapter.Fill");
         Assert.DoesNotContain(report.Gaps, gap => gap.GapKind == "TruncatedByLimit");
         Assert.DoesNotContain("SELECT Email", JsonSerializer.Serialize(report), StringComparison.Ordinal);
+        if (!compiledOnly)
+        {
+            RetainedMethodGraph? graph = null;
+            var graphOptions = new CombinedDependencyPathOptions(combined, temp.Path, MaxDepth: 20, MaxFrontier: 10000)
+            { ExactFromSymbol = true, MethodGraphObserver = value => graph = value };
+            var graphReport = await CombinedDependencyPathReporter.BuildSelectedSymbolsAsync(graphOptions,
+                [new(source.SourceIndexId, source.ScanId, source.CommitSha, entry.TargetSymbol!)], true);
+            Assert.NotNull(graph);
+            Assert.Empty(graphReport.Paths);
+            Assert.Null(graphReport.Query.ToSurface);
+            Assert.Contains(graph.Calls, call => call.EncodedTarget?.Contains("Concat", StringComparison.Ordinal) == true
+                && call.State == "no-admitted-method-target-edge" && call.Offset is not null);
+            Assert.Contains(graph.Nodes, node => Method(node, "GetEmail"));
+            Assert.Contains(graph.Nodes, node => Method(node, "WriteAudit"));
+            Assert.Equal(graph.Nodes.Count, graph.Nodes.Select(node => node.NodeId).Distinct().Count());
+            Assert.All(graph.Edges, edge =>
+            {
+                Assert.Contains(graph.Nodes, node => node.NodeId == edge.FromNodeId);
+                Assert.Contains(graph.Nodes, node => node.NodeId == edge.ToNodeId);
+            });
+            var output = Path.Combine(temp.Path, "graph");
+            await RetainedMethodGraphWriter.WriteAsync(graph, output, new string('a', 64), 16_000_000, default);
+            var json = await File.ReadAllTextAsync(Path.Combine(output, RetainedMethodGraphWriter.JsonName));
+            Assert.DoesNotContain("SELECT Email", json, StringComparison.Ordinal);
+            using var document = JsonDocument.Parse(json);
+            Assert.Equal(64, document.RootElement.GetProperty("generatorSha256").GetString()!.Length);
+            Assert.Equal(64, document.RootElement.GetProperty("boundedInputSha256").GetString()!.Length);
+            var html = await File.ReadAllTextAsync(Path.Combine(output, RetainedMethodGraphWriter.HtmlName));
+            Assert.Contains("Call graph tree", html);
+            Assert.Contains("UNRESOLVED METHOD TARGET", html);
+            await RetainedMethodGraphWriter.WriteAsync(graph, output, new string('a', 64), 16_000_000, default);
+            Assert.Equal(json, await File.ReadAllTextAsync(Path.Combine(output, RetainedMethodGraphWriter.JsonName)));
+            await Assert.ThrowsAsync<InvalidDataException>(() => RetainedMethodGraphWriter.WriteAsync(graph,
+                Path.Combine(temp.Path, "too-small"), new string('a', 64), 1, default));
+            Assert.False(Directory.Exists(Path.Combine(temp.Path, "too-small")));
+            RetainedMethodGraph? bounded = null;
+            await CombinedDependencyPathReporter.BuildSelectedSymbolsAsync(graphOptions with
+                { MaxDepth = 1, MethodGraphObserver = value => bounded = value },
+                [new(source.SourceIndexId, source.ScanId, source.CommitSha, entry.TargetSymbol!)], true);
+            Assert.NotNull(bounded);
+            Assert.Contains(bounded.Cutoffs, cutoff => cutoff.StartsWith("depth-limit:", StringComparison.Ordinal));
+            Assert.True(bounded.Nodes.Count < graph.Nodes.Count);
+        }
     }
 
     [Theory]

@@ -30,13 +30,16 @@ public static partial class WebFormsReviewExecutionCommand
                 args[3] != "--bundle" || args[5] != "--handler" || args[7] != "--out") throw Fail("HANDLER_REQUERY_ARGUMENT_INVALID");
             string? surfaceName = null;
             var compiledOnly = false;
+            var methodGraph = false;
             for (var i = 9; i < args.Length; i += 2)
             {
                 if (args[i] == "--surface-name" && args[i + 1] == "DbDataAdapter.Fill" && surfaceName is null) surfaceName = args[i + 1];
                 else if (args[i] == "--traversal-scope" && args[i + 1] == "compiled-il" && !compiledOnly) compiledOnly = true;
+                else if (args[i] == "--view" && args[i + 1] == "method-graph" && !methodGraph) methodGraph = true;
                 else throw Fail("HANDLER_REQUERY_SURFACE_OR_SCOPE_INVALID");
             }
             var run = WebFormsReviewPreflightCommand.PhysicalPath(args[2]);
+            if (methodGraph && (compiledOnly || surfaceName is not null)) throw Fail("HANDLER_REQUERY_SURFACE_OR_SCOPE_INVALID");
             var bundle = WebFormsReviewPreflightCommand.PhysicalPath(args[4]);
             var handler = args[6];
             if (handler.Length is < 1 or > 128 || handler.Any(c => !char.IsAsciiLetterOrDigit(c) && c != '_')) throw Fail("HANDLER_REQUERY_ARGUMENT_INVALID");
@@ -119,11 +122,13 @@ public static partial class WebFormsReviewExecutionCommand
             var config = plan.Configuration;
             var budget = config.Budgets.Reports ?? new();
             WebFormsReviewPreflightCommand.ValidateReportBudgets(budget);
-            var options = new CombinedDependencyPathOptions(indexPath, destination, ToSurface: "database-api", SurfaceName: surfaceName, IncludeLegacyRoots: true,
+            RetainedMethodGraph? graphView = null;
+            var options = new CombinedDependencyPathOptions(indexPath, destination, ToSurface: methodGraph ? null : "database-api", SurfaceName: surfaceName, IncludeLegacyRoots: true,
                 MaxDepth: config.Budgets.GraphMaxDepth, MaxPaths: config.Budgets.GraphMaxPaths, MaxFrontier: budget.MaxFrontier)
-            { ExactFromSymbol = true, CompiledOnly = compiledOnly, MaxTraversalWork = checked((int)config.Budgets.GraphMaxWork) };
+            { ExactFromSymbol = true, CompiledOnly = compiledOnly, MaxTraversalWork = checked((int)config.Budgets.GraphMaxWork),
+                MethodGraphObserver = methodGraph ? graph => graphView = graph : null };
             await output.WriteLineAsync($"handlerStage=graph-started;maxPaths={options.MaxPaths};maxWork={options.MaxTraversalWork};single-root=true");
-            await output.WriteLineAsync($"handlerQuery.terminalScope={(surfaceName is null ? "all-database-api" : "DbDataAdapter.Fill")};mixed-source-and-compiled={(compiledOnly ? "false" : "true")}");
+            await output.WriteLineAsync($"handlerQuery.terminalScope={(methodGraph ? "unfiltered-all-outgoing" : surfaceName is null ? "all-database-api" : "DbDataAdapter.Fill")};mixed-source-and-compiled={(compiledOnly ? "false" : "true")}");
             await output.WriteLineAsync($"handlerQuery.traversalScope={(compiledOnly ? "compiled-il-with-root-attachment" : "mixed")};root-attachment-not-il-proof=true");
             CombinedPathGraphObservation? observation = null;
             failureStage = "graph";
@@ -145,6 +150,12 @@ public static partial class WebFormsReviewExecutionCommand
             var grouped = GroupedCompiledPathHandoffBuilder.Create(paths, index.Sha256, limits, token);
             await output.WriteLineAsync("handlerStage=reports-started;no-scan;no-combine");
             await GroupedCompiledPathReportWriter.WriteAsync(grouped, destination, limits, token);
+            if (methodGraph)
+            {
+                if (graphView is null) throw Fail("HANDLER_REQUERY_GRAPH_UNAVAILABLE");
+                await RetainedMethodGraphWriter.WriteAsync(graphView, destination, index.Sha256, budget.MaxOutputBytes, token);
+                await output.WriteLineAsync($"methodGraph=unfiltered-retained;nodes={graphView.Nodes.Count};edges={graphView.Edges.Count};calls={graphView.Calls.Count};cutoffs={graphView.Cutoffs.Count};no-terminal-pruning");
+            }
             if (Digest(receiptBytes) != Digest(await WebFormsReviewPreflightCommand.ReadSmallAsync(receiptPath, 4_194_304, token)) ||
                 Digest(planBytes) != Digest(await WebFormsReviewPreflightCommand.ReadSmallAsync(OwnedPath(run, "run-manifest.json"), 4_194_304, token)) ||
                 history.Sha256 != (await ReadHistoryAsync(run, plan, Digest(planBytes), first.RuntimeInputsSha256, token)).Sha256)
@@ -155,13 +166,14 @@ public static partial class WebFormsReviewExecutionCommand
                 throw Fail("HANDLER_REQUERY_COMPLETED_REPORT_CHANGED");
             var generator = await WebFormsReviewPreflightCommand.HashAsync("generator", typeof(WebFormsReviewExecutionCommand).Assembly.Location, 67_108_864, token);
             var artifacts = new List<WebFormsReviewArtifact>();
-            foreach (var name in new[] { GroupedCompiledPathReportWriter.HtmlName, GroupedCompiledPathReportWriter.HandoffName })
+            foreach (var name in new[] { GroupedCompiledPathReportWriter.HtmlName, GroupedCompiledPathReportWriter.HandoffName }
+                         .Concat(methodGraph ? new[] { RetainedMethodGraphWriter.HtmlName, RetainedMethodGraphWriter.JsonName } : []))
             {
                 var artifact = await WebFormsReviewPreflightCommand.HashAsync("report", Path.Combine(destination, name), budget.MaxOutputBytes, token);
                 artifacts.Add(new(name, artifact.Bytes, artifact.Sha256));
             }
             var receipt = new WebFormsHandlerRequeryReceipt("webforms-handler-requery.v1", HandlerRequeryRule, "local-only",
-                "single-handler-retained-static-review-not-parity", generator.Sha256, "", grouped.GeneratorSha256,
+                methodGraph ? "unfiltered-retained-method-graph-not-runtime-completeness" : "single-handler-retained-static-review-not-parity", generator.Sha256, "", grouped.GeneratorSha256,
                 plan.RunId, Digest(planBytes), history.Sha256!, completed ? null : Digest(receiptBytes), index.Sha256, roots[0], paths.Query,
                 grouped.Chains.Count, grouped.Variants.Count, paths.Summary.Truncated, paths.Summary.TraversalWorkUnits, artifacts,
                 [completed ? "One exact source/scan/commit/symbol root was selected from the checkpointed completed report index."
@@ -180,7 +192,9 @@ public static partial class WebFormsReviewExecutionCommand
                 value.All(c => char.IsAsciiLetterOrDigit(c) || c is '_' or '-' or '.') ? value : "none-or-redacted";
             foreach (var gap in safeGaps)
                 await output.WriteLineAsync($"handlerGap.kind={SafeCode(gap.GapKind)};reason={SafeCode(gap.Reason)}");
-            await output.WriteLineAsync($"handlerRequery=completed-separate-report;exactChains={grouped.Chains.Count};evidenceVariants={grouped.Variants.Count};truncated={paths.Summary.Truncated};workUnits={paths.Summary.TraversalWorkUnits};no-scan;no-combine;originals-preserved");
+            await output.WriteLineAsync(methodGraph
+                ? $"handlerRequery=completed-separate-method-graph;truncated={paths.Summary.Truncated};workUnits={paths.Summary.TraversalWorkUnits};no-scan;no-combine;originals-preserved"
+                : $"handlerRequery=completed-separate-report;exactChains={grouped.Chains.Count};evidenceVariants={grouped.Variants.Count};truncated={paths.Summary.Truncated};workUnits={paths.Summary.TraversalWorkUnits};no-scan;no-combine;originals-preserved");
             return 0;
         }
         catch (OperationCanceledException) when (token.IsCancellationRequested) { throw; }

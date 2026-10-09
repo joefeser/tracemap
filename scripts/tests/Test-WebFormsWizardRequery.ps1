@@ -79,6 +79,11 @@ try {
     $display = @(& $helper $temporary -Handler Page_Load)
     if (($display -join "`n") -notmatch 'bounded terminal-route uncertainty: 1 retained gaps') { throw 'Bounded uncertainty not separated.' }
     $global:WizardRequeryCause = $null
+    $graphDisplay = @(& $helper $temporary -Handler Page_Load -MethodGraph)
+    $graphCall = $global:WizardRequeryCalls[$global:WizardRequeryCalls.Count - 1]
+    if ($graphCall[-2] -ne '--view' -or $graphCall[-1] -ne 'method-graph' -or
+        ($graphDisplay -join "`n") -notmatch 'method-graph.local.html') { throw 'Graph mode was not forwarded.' }
+    Expect-Failure { & $helper $temporary -MethodGraph -InspectLatest } 'cannot be combined'
     $beforeInspect = $global:WizardRequeryCalls.Count
     $inspection = @(& $helper $temporary -InspectLatest)
     if ($global:WizardRequeryCalls.Count -ne $beforeInspect + 1 -or
