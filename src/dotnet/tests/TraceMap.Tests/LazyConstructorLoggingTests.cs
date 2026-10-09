@@ -9,6 +9,34 @@ namespace TraceMap.Tests;
 [Collection("Git metadata sensitive")]
 public sealed class LazyConstructorLoggingTests
 {
+    [Fact]
+    public void Structured_vb_profile_preserves_stack_shape_without_inventing_rewritten_argument_origin()
+    {
+        var repo = FindRepo();
+        var configuration = new DirectoryInfo(AppContext.BaseDirectory).Parent!.Name;
+        var binary = Path.Combine(repo, "samples", "fixture-build", "lazy-constructor", "bin", configuration, "net48", "PublicLazy.Website.dll");
+        using (var module = Mono.Cecil.ModuleDefinition.ReadModule(binary))
+        {
+            var method = Assert.Single(module.Types.Single(type => type.Name == "StructuredProfileProbe").Methods,
+                method => method.Name == "Lookup");
+            Assert.Equal(3, method.Body.ExceptionHandlers.Count);
+            Assert.Equal(2, method.Body.Instructions.Count(instruction => instruction.OpCode == Mono.Cecil.Cil.OpCodes.Ldftn));
+            Assert.Contains(method.Body.Instructions, instruction => instruction.OpCode == Mono.Cecil.Cil.OpCodes.Starg_S);
+        }
+        using var temp = new TempDirectory();
+        var scan = ScanEngine.Scan(new ScanOptions(Path.Combine(repo, "samples", "messy-dotnet-workspace", "vb-lazy-constructor"),
+            Path.Combine(temp.Path, "scan"), CompiledInputPaths: [binary], IlBodyEvidence: true));
+        AssertScanIdentity(scan);
+        var call = Assert.Single(scan.Facts, fact => fact.FactType == FactTypes.ManagedIlCallObserved
+            && fact.Properties.GetValueOrDefault("targetIdentity")?.Contains("ObserveOperand", StringComparison.Ordinal) == true);
+        var operand = Assert.Single(scan.Facts, fact => fact.FactType == FactTypes.ManagedIlCallValuesObserved
+            && fact.Properties.GetValueOrDefault("ilBodyFactId") == call.Properties["ilBodyFactId"]
+            && fact.Properties.GetValueOrDefault("ilOffset") == call.Properties["ilOffset"]);
+        Assert.Equal("control-flow-candidate", operand.Properties["valueState"]);
+        Assert.Contains("unknown", operand.Properties["argumentOrigins"]);
+        Assert.DoesNotContain("argument-slot", operand.Properties["argumentOrigins"]);
+    }
+
     [Theory]
     [InlineData(true, "retained")]
     [InlineData(false, "retained")]

@@ -1,5 +1,6 @@
 Imports System
 Imports System.Configuration
+Imports System.Linq
 Imports PublicLazy.Framework
 
 ' Public synthetic static corpus. Never run the website or database calls.
@@ -100,4 +101,38 @@ Public Class UnrelatedLog
     Public Sub InsertLog(message As String)
         Throw New NotSupportedException()
     End Sub
+End Class
+
+' Compile-only regression for normal flow through VB Using, delegates and EH.
+' Public synthetic data only; this method and its I/O are never executed.
+Public Class StructuredProfileProbe
+    Public Function Lookup(user As String, Optional period As String = "") As String
+        If user.StartsWith("public-") Then
+            user = "normalized-" & user
+        End If
+        Dim result As String = ""
+        Try
+            If period = String.Empty Then
+                Dim nextDate As Date = Date.Now.AddMonths(1)
+                period = CStr(nextDate.Year) & nextDate.Month.ToString("D2")
+            End If
+            Using client As New System.Net.WebClient()
+                client.Headers.Add("Content-Type", "application/json")
+                result = client.UploadString("https://example.invalid/profile", "POST", user & period)
+            End Using
+            Dim rows = New String() {result, "public-language"}
+            Dim selected = rows.Where(Function(item) item.Length > 0).Select(Function(item) item.ToUpperInvariant())
+            result = String.Join(", ", selected)
+            result = ObserveOperand(user)
+        Catch failure As Exception
+            result = failure.Message
+        Finally
+            System.Diagnostics.Debug.WriteLine(result)
+        End Try
+        Return result
+    End Function
+
+    Private Function ObserveOperand(value As String) As String
+        Return value
+    End Function
 End Class

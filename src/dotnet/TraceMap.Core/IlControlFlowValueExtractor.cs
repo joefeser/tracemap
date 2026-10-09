@@ -256,6 +256,10 @@ internal static class IlControlFlowValueExtractor
             if (opcode == "castclass") { var value = Pop(); Push(value); return false; }
             if (opcode is "box" or "unbox.any") { var value = Pop(); Push(value); return false; }
             if (opcode == "ldtoken") { Push(Unknown); return false; }
+            // Delegate construction loads a function pointer, not a call result.
+            // Preserve only its stack effect; no delegate dispatch/value is proven.
+            if (opcode == "ldftn") { Push(Unknown); return false; }
+            if (opcode == "ldvirtftn") { Expose(Pop()); Push(Unknown); return false; }
             if (opcode == "newarr") { _ = Pop(); Push(new("allocation-site", instruction.Offset.ToString(CultureInfo.InvariantCulture))); return false; }
             if (opcode == "ldfld") { Expose(Pop()); Push(Unknown); gaps.Add("IlValueFieldOriginUnavailable"); return false; }
             if (opcode == "ldsfld") { Push(Unknown); gaps.Add("IlValueFieldOriginUnavailable"); return false; }
