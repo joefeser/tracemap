@@ -37,6 +37,7 @@ public static partial class CombinedDependencyPathReporter
                 foreach (var id in new[] { scope, methodId }.OfType<string>())
                     if (facts.TryGetValue(id, out var originFact)) materials.Add(ProjectCommandValueFact(originFact));
                 var returnSteps = new List<CompiledCommandReturnStep>();
+                var checkFailures = new List<CompiledOperandCheckFailure>();
                 var returns = new CommandReturnResolver(graph, materials, gaps, returnSteps, constantKind, allowComposition);
                 var state = "unresolved-operand";
                 var incoming = initialIncoming ?? index - 2;
@@ -58,7 +59,7 @@ public static partial class CombinedDependencyPathReporter
                     { gaps.Add("IlCommandNonIlCallerBridge"); state = "unresolved-non-il-bridge"; break; }
                     var agreed = TryCommandCallOperands(graph, facts, original, edge, methodId,
                             out var call, out var value, out var body, out var caller, out var target,
-                            out var receiver, out var result, out var arguments, out var hasThis, out var operandCandidates, out var reason);
+                            out var receiver, out var result, out var arguments, out var hasThis, out var operandCandidates, out var reason, checkFailures);
                     foreach (var inspected in new[] { call, body, caller, target }.OfType<CombinedFactRow>())
                         materials.Add(ProjectCommandValueFact(inspected));
                     foreach (var inspected in operandCandidates) materials.Add(ProjectCommandValueFact(inspected));
@@ -98,6 +99,7 @@ public static partial class CombinedDependencyPathReporter
                     state, current, scope, steps, gaps.ToArray(), generator, Convert.ToHexStringLower(SHA256.HashData(input)))
                     { ReturnSteps = returnSteps.Count == 0 ? null : returnSteps, Composition = composition,
                         OriginMethodIdentity = methodId is not null ? facts.GetValueOrDefault(methodId)?.TargetSymbol : null,
+                        OperandCheckFailures = checkFailures.Count == 0 ? null : checkFailures,
                         Limitations = composition is null ? null : ["SymbolicStringValueNotMaterialized"] };
             }
         }
@@ -125,7 +127,8 @@ public static partial class CombinedDependencyPathReporter
         out CombinedFactRow? body, out CombinedFactRow? caller, out CombinedFactRow? target,
         out CompiledCommandOperandOrigin? receiver, out CompiledCommandOperandOrigin? result,
         out CompiledCommandOperandOrigin[]? arguments, out bool hasThis,
-        out IReadOnlyList<CombinedFactRow> operandCandidates, out string reason)
+        out IReadOnlyList<CombinedFactRow> operandCandidates, out string reason,
+        List<CompiledOperandCheckFailure>? checkFailures = null)
     {
         call = value = body = caller = target = null;
         receiver = result = null; arguments = null; hasThis = false; reason = "IlCommandCallerFactJoinUnavailable";
@@ -157,18 +160,28 @@ public static partial class CombinedDependencyPathReporter
         if (operands.Count != 1) { reason = "IlCommandCallerOperandMissingOrAmbiguous"; return false; }
         value = operands[0];
         var operandFact = value; var bodyFact = body; var callFact = call;
-        if (value.RuleId != RuleIds.DotNetIlValues || value.EvidenceTier != EvidenceTiers.Tier3SyntaxOrTextual
-            || value.Properties.GetValueOrDefault("valueSchema") != "il-call-values.v1"
-            || value.Properties.GetValueOrDefault("valueState") is not ("straight-line-candidate" or "control-flow-candidate")
-            || value.Properties.GetValueOrDefault("callShapeSupported") != "true"
-            || value.Properties.GetValueOrDefault("ilBodyFactId") != body.OriginalFactId
-            || value.Properties.GetValueOrDefault("ilOffset") != call.Properties.GetValueOrDefault("ilOffset")
-            || new[] { "rawFileSha256", "ilGeneratorSha256", "ilBoundedInputSha256" }.Any(key =>
-                string.IsNullOrEmpty(bodyFact.Properties.GetValueOrDefault(key))
-                || operandFact.Properties.GetValueOrDefault(key) != bodyFact.Properties.GetValueOrDefault(key)
-                || callFact.Properties.GetValueOrDefault(key) != bodyFact.Properties.GetValueOrDefault(key))
-            || caller.Properties.GetValueOrDefault("rawFileSha256") != body.Properties.GetValueOrDefault("rawFileSha256"))
-        { reason = "IlCommandCallerOperandProvenanceUnavailable"; return false; }
+        var failedChecks = new List<string>();
+        void Check(bool valid, string code) { if (!valid) failedChecks.Add(code); }
+        Check(value.RuleId == RuleIds.DotNetIlValues, "operand-rule");
+        Check(value.EvidenceTier == EvidenceTiers.Tier3SyntaxOrTextual, "operand-tier");
+        Check(value.Properties.GetValueOrDefault("valueSchema") == "il-call-values.v1", "operand-schema");
+        Check(value.Properties.GetValueOrDefault("valueState") is "straight-line-candidate" or "control-flow-candidate", "operand-state");
+        Check(value.Properties.GetValueOrDefault("callShapeSupported") == "true", "call-shape");
+        Check(value.Properties.GetValueOrDefault("ilBodyFactId") == body.OriginalFactId, "operand-body-link");
+        Check(value.Properties.GetValueOrDefault("ilOffset") == call.Properties.GetValueOrDefault("ilOffset"), "operand-call-offset");
+        foreach (var (key, label) in new[] { ("rawFileSha256", "binary"), ("ilGeneratorSha256", "generator"), ("ilBoundedInputSha256", "input") })
+        {
+            Check(!string.IsNullOrEmpty(bodyFact.Properties.GetValueOrDefault(key)), "body-" + label + "-present");
+            Check(operandFact.Properties.GetValueOrDefault(key) == bodyFact.Properties.GetValueOrDefault(key), "operand-body-" + label + "-match");
+            Check(callFact.Properties.GetValueOrDefault(key) == bodyFact.Properties.GetValueOrDefault(key), "call-body-" + label + "-match");
+        }
+        Check(caller.Properties.GetValueOrDefault("rawFileSha256") == body.Properties.GetValueOrDefault("rawFileSha256"), "caller-body-binary-match");
+        if (failedChecks.Count > 0)
+        {
+            checkFailures?.Add(new("combined.paths.compiled-command-value.v1", EvidenceTiers.Tier4Unknown,
+                edge.EdgeId, call.CombinedFactId, value.CombinedFactId, body.CombinedFactId, failedChecks));
+            reason = "IlCommandCallerOperandProvenanceUnavailable"; return false;
+        }
         var signature = target.Properties.GetValueOrDefault("signature")?.Split('|', 5);
         if (signature is not { Length: 5 } || signature[1] != "call:default" || signature[3] != "explicitThis:false"
             || signature[2] is not ("hasThis:true" or "hasThis:false")) return false;

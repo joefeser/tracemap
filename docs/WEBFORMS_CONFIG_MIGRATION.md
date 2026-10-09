@@ -946,6 +946,15 @@ Parameter names are not retained in these scans: labels use IL argument slots
 (slot zero is the receiver for instance methods), never inferred source names.
 The share exports only aliased method/fact identities, bounded slots, allowlisted
 states/gaps and hop links; it never exports constant identities or SQL text.
+When argument forwarding fails `IlCommandCallerOperandProvenanceUnavailable`,
+`operandCheckFailures` names all failed predicates: rule, tier, schema, operand
+state, supported call shape, body/offset links, required body hash presence, and
+binary/generator/input equality. These are categorical check names, never hash
+values or source text. The diagnostic carries the exact edge/call/operand/body
+references under `combined.paths.compiled-command-value.v1` at Tier4Unknown.
+It does not relax any admission check. It covers the forwarding provenance gate,
+not every possible return-resolution failure. Shared output allows one failure
+record per operand and at most 17 fixed check categories, with aliased references.
 This is a bounded intrinsic projection, not an admitted callee-body edge.
 
 No SQL text is reconstructed, and string hashes are never concatenated into a

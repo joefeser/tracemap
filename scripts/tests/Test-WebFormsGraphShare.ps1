@@ -96,7 +96,9 @@ try {
         composition=@{operation='System.String.Concat';producerCallFactId="$secret-fact";operandFactId="$secret-operand";bodyFactId="$secret-body";
             operands=@(@{kind='constant-string-hash';identity="$secret-literal"},@{kind='argument-slot';identity="$secret-slot"},@{kind="$secret-kind";identity="$secret-other"});
             operandBindings=@(@{state='unresolved-root-argument';origin=@{kind='argument-slot';identity='1'};
-                originBodyFactId="$secret-body";originMethodIdentity="$secret-method";steps=@();gaps=@('IlCommandRootArgumentUnresolved',"$secret-gap")})};
+                originBodyFactId="$secret-body";originMethodIdentity="$secret-method";steps=@();gaps=@('IlCommandRootArgumentUnresolved',"$secret-gap");
+                operandCheckFailures=@(@{edgeId="$secret-edge";callFactId="$secret-fact";operandFactId="$secret-operand";bodyFactId="$secret-body";
+                    privateHash="$secret-hash";failedChecks=@('operand-state',"$secret-check")})})};
         limitations=@('SymbolicStringValueNotMaterialized',"$secret-limitation");
         originBodyFactId="$secret-body";ruleId="$secret-rule";gaps=@('IlCommandReturnTargetEdgeMissing',"$secret-gap");
         steps=@(@{callFactId="$secret-step";operandFactId="$secret-operand";callerBodyFactId="$secret-body";
@@ -120,6 +122,9 @@ try {
         $exportedTrace.composition.operandBindings[0].method -cnotmatch '^S[0-9]+$' -or
         $exportedTrace.limitations[0] -cne 'SymbolicStringValueNotMaterialized' -or
         $exportedTrace.limitations[1] -cne 'other-or-unavailable') { throw 'Operand trace projection failed.' }
+    $failure = $exportedTrace.composition.operandBindings[0].operandCheckFailures[0]
+    if ($failure.call -cne $exportedTrace.producers[0] -or
+        ($failure.failedChecks -join ',') -cne 'operand-state,other-or-unavailable') { throw 'Operand checks lost linkage or privacy.' }
     if ($exportedTrace.missingProducerRecords -ne 0 -or
         $exportedTrace.producers[0] -cne $traceResult.graph.calls[0].fact -or
         $exportedTrace.originBody -cne $traceResult.graph.calls[0].body -or
