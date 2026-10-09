@@ -47,7 +47,7 @@ public sealed class LazyConstructorLoggingTests
                 && fact.Properties.GetValueOrDefault("ilOffset") == call.Properties["ilOffset"]);
             var properties = new Dictionary<string, string>(operand.Properties);
             if (dispatchFlags == "operand-tampered") properties["ilBoundedInputSha256"] = new string('f', 64);
-            if (dispatchFlags == "operand-state") properties["valueState"] = "unsupported";
+            if (dispatchFlags == "operand-state") properties["valueState"] = "stack-unavailable";
             if (dispatchFlags == "operand-schema") properties["valueSchema"] = "unsupported";
             if (dispatchFlags == "operand-shape") properties["callShapeSupported"] = "false";
             facts[facts.IndexOf(operand)] = operand with { Properties = properties };
@@ -105,6 +105,8 @@ public sealed class LazyConstructorLoggingTests
             var failure = Assert.Single(text.Composition.OperandBindings[1].OperandCheckFailures!);
             Assert.Equal(dispatchFlags switch { "operand-tampered" => "operand-body-input-match", "operand-shape" => "call-shape", _ => dispatchFlags }, Assert.Single(failure.FailedChecks));
             Assert.NotEmpty(failure.CallFactId);
+            if (dispatchFlags == "operand-state") Assert.Equal("stack-unavailable", failure.OperandState);
+            Assert.NotNull(failure.ExceptionRegionCount);
         }
         else if (compiledOnly)
         {

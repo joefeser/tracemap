@@ -176,6 +176,8 @@ try {
         $value.operandCheckFailures | Select-Object -First 1 | ForEach-Object {
             [ordered]@{edge=(Alias 'E' $_.edgeId);call=(Alias 'F' $_.callFactId);
                 operand=(Alias 'F' $_.operandFactId);body=(Alias 'F' $_.bodyFactId);
+                operandState=$(if ($_.PSObject.Properties['operandState']) { Code $_.operandState @('straight-line-candidate','control-flow-candidate','stack-unavailable','exception-flow-unavailable','call-shape-unavailable','unavailable') });
+                exceptionRegionCount=$(if ($_.PSObject.Properties['exceptionRegionCount'] -and [string]$_.exceptionRegionCount -cmatch '\A(?:0|[1-9][0-9]{0,4})\z') { [int]$_.exceptionRegionCount });
                 failedChecks=@($_.failedChecks | Select-Object -First 17 | ForEach-Object { Code $_ $allowed })}
         }
     }

@@ -112,7 +112,7 @@ public static partial class CombinedDependencyPathReporter
         var keys = new[] { "rawFileSha256", "ilGeneratorSha256", "ilBoundedInputSha256", "ilBodyFactId", "compiledFactId",
             "ilCallFactId", "ilOffset", "opcode", "referenceKind", "targetIdentity", "signature", "valueSchema", "valueState",
             "callHasThis", "callParameterCount", "callShapeSupported", "callByReferenceParameters", "receiverOrigin", "resultOrigin", "argumentOrigins",
-            "returnOrigins", "returnCount", "returnFlowGaps", "methodDispatchFlags" };
+            "returnOrigins", "returnCount", "returnFlowGaps", "methodDispatchFlags", "exceptionRegionCount" };
         var properties = new SortedDictionary<string, string>(StringComparer.Ordinal);
         foreach (var key in keys)
             if (fact.Properties.TryGetValue(key, out var value)) properties.Add(key, value.Length <= 64 * 1024 ? value
@@ -179,7 +179,20 @@ public static partial class CombinedDependencyPathReporter
         if (failedChecks.Count > 0)
         {
             checkFailures?.Add(new("combined.paths.compiled-command-value.v1", EvidenceTiers.Tier4Unknown,
-                edge.EdgeId, call.CombinedFactId, value.CombinedFactId, body.CombinedFactId, failedChecks));
+                edge.EdgeId, call.CombinedFactId, value.CombinedFactId, body.CombinedFactId, failedChecks)
+            {
+                OperandState = value.Properties.GetValueOrDefault("valueState") switch
+                {
+                    "straight-line-candidate" => "straight-line-candidate",
+                    "control-flow-candidate" => "control-flow-candidate",
+                    "stack-unavailable" => "stack-unavailable",
+                    "exception-flow-unavailable" => "exception-flow-unavailable",
+                    "call-shape-unavailable" => "call-shape-unavailable",
+                    _ => "unavailable"
+                },
+                ExceptionRegionCount = int.TryParse(body.Properties.GetValueOrDefault("exceptionRegionCount"),
+                    NumberStyles.None, CultureInfo.InvariantCulture, out var regions) && regions >= 0 ? regions : null
+            });
             reason = "IlCommandCallerOperandProvenanceUnavailable"; return false;
         }
         var signature = target.Properties.GetValueOrDefault("signature")?.Split('|', 5);

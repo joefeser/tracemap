@@ -219,7 +219,11 @@ public sealed record CompiledCommandPathValueBinding(string Schema, string RuleI
 
 public sealed record CompiledOperandCheckFailure(string RuleId, string EvidenceTier,
     string EdgeId, string CallFactId, string OperandFactId, string BodyFactId,
-    IReadOnlyList<string> FailedChecks);
+    IReadOnlyList<string> FailedChecks)
+{
+    public string OperandState { get; init; } = "unavailable";
+    public int? ExceptionRegionCount { get; init; }
+}
 
 public sealed record CompiledStringComposition(string RuleId, string EvidenceTier, string Operation,
     string ProducerCallFactId, string OperandFactId, string BodyFactId,
