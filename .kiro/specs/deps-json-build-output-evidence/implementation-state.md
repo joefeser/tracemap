@@ -146,3 +146,22 @@ Validation: dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj
 --no-restore -warnaserror --filter
 'FullyQualifiedName~PackageUpgradeImpactTests|FullyQualifiedName~PackageDecisionCorrelationTests|FullyQualifiedName~DepsJsonEvidenceTests|FullyQualifiedName~ScanExecutionReceiptTests'
 passed 73 tests (7s). Final-head hosted checks and ACK freshness remain required.
+
+## 2026-10-09 current-head repair
+
+Branch: codex/deps-json-evidence. Owner renewed repair of both PRs after hosted
+results settled. On b78582be all hosted build, adapter and Windows checks passed;
+Baz returned receipt compatibility and per-gap provenance findings.
+Disabled deps indexing now preserves the legacy v1 authorization fingerprint;
+enabled indexing retains collision-resistant structured framing. A legacy scope
+vector and existing injection/limit tests pin both contracts. Package impact
+freshness gaps serialize sorted, deduplicated original supporting fact IDs,
+scoped by their existing source label, scan ID and commit. Additive init-only
+properties preserve positional construction. No source impact claims added.
+
+Validation: dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj
+--no-restore -warnaserror --filter
+'FullyQualifiedName~PackageUpgradeImpactTests|FullyQualifiedName~ScanExecutionReceiptTests|FullyQualifiedName~DepsJsonEvidenceTests|FullyQualifiedName~PackageDecisionCorrelationTests'
+passed 74 tests (5s). The JSON regression verifies serialized supporting IDs,
+multiple contributing facts and deterministic order. Hosted final-head validation
+and exact-head review remain required; no merge authorization.
