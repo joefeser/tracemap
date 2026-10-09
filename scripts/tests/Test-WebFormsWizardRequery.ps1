@@ -24,7 +24,11 @@ function global:dotnet {
             $handoffPath = Join-Path $destination 'compiled-paths.handoff.local.json'
             @{schemaVersion='webforms-compiled-grouped-handoff.v1';header=@{gaps=@(
                 @{gapKind='TruncatedByLimit';reason='depth';cutoffCause=$global:WizardRequeryCause;filePath='synthetic/Page.vb';startLine=12;
-                  nodeId='node-1';ruleId='synthetic.rule';evidenceTier='Tier4Unknown';message='Depth limit reached.'})}} |
+                  nodeId='node-1';ruleId='synthetic.rule';evidenceTier='Tier4Unknown';message='Depth limit reached.'})};
+                variants=@(@{nodeReferences=@('endpoint')}); nodes=@{endpoint=@{
+                    nodeId='endpoint-id';surfaceKind='database-api';surfaceName='SqlCommand.ExecuteScalar';
+                    commandBinding=@{commandTextFromPath=@{state='unresolved-operand';origin=@{kind='call-result';identity='private-sql-marker'};
+                        ruleId='synthetic.command';evidenceTier='Tier3SyntaxOrTextual';steps=@();gaps=@('IlCommandOperandValueUnresolved')}}}}} |
                 ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $handoffPath
             @{schemaVersion='webforms-handler-requery.v1';truncated=$true;artifacts=@(@{
                 relativePath='compiled-paths.handoff.local.json';bytes=(Get-Item $handoffPath).Length;
@@ -54,6 +58,9 @@ try {
     $output = @(& $helper $temporary -Handler Page_Load)
     if (($output -join "`n") -notmatch 'depth: 1 retained gaps' -or
         ($output -join "`n") -notmatch 'location=synthetic/Page.vb; line=12') { throw 'Missing bounded depth details.' }
+    if (($output -join "`n") -notmatch 'IlCommandOperandValueUnresolved' -or
+        ($output -join "`n") -notmatch 'commandTypeFromPath: unavailable' -or
+        ($output -join "`n") -match 'private-sql-marker') { throw 'Command diagnostic missing or leaked value.' }
     if ($global:WizardRequeryCalls.Count -ne 2) { throw 'Expected status then requery.' }
     $call = $global:WizardRequeryCalls[1]
     $expectedRun = Join-Path (Join-Path $temporary ('runs/sample-' + ('a' * 32))) 'run'
@@ -72,6 +79,10 @@ try {
     $display = @(& $helper $temporary -Handler Page_Load)
     if (($display -join "`n") -notmatch 'bounded terminal-route uncertainty: 1 retained gaps') { throw 'Bounded uncertainty not separated.' }
     $global:WizardRequeryCause = $null
+    $beforeInspect = $global:WizardRequeryCalls.Count
+    $inspection = @(& $helper $temporary -InspectLatest)
+    if ($global:WizardRequeryCalls.Count -ne $beforeInspect + 1 -or
+        ($inspection -join "`n") -notmatch 'Inspecting latest completed report') { throw 'Inspection must only call status, not traverse.' }
     $global:WizardRequeryState = 'failed'
     Expect-Failure { & $helper $temporary -Handler Page_Load } 'COMPLETED_STATE_NOT_ADMITTED'
     $global:WizardRequeryState = 'reports-completed-review-only'

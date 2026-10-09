@@ -89,4 +89,50 @@ function Write-WebFormsTruncationSummary([string]$Directory) {
         }
     }
     Write-Output 'Display bounded to 10 reasons, 3 examples each, 256 characters per field. Unavailable means not retained; no stopped branch is inferred.'
+    Write-Output 'Database command bindings: retained endpoint evidence only; no SQL execution or resolved SQL text claim.'
+    if (!$handoff.PSObject.Properties['nodes'] -or !$handoff.PSObject.Properties['variants']) {
+        Write-Output 'Endpoint detail unavailable in this handoff.'
+        return
+    }
+    $endpoints = @{}
+    foreach ($variant in $handoff.variants) {
+        $references = @($variant.nodeReferences)
+        if ($references.Count -eq 0) { continue }
+        $reference = [string]$references[-1]
+        $property = $handoff.nodes.PSObject.Properties[$reference]
+        if ($null -eq $property) { throw 'WEBFORMS_HANDLER_ENDPOINT_REFERENCE_INVALID' }
+        $node = $property.Value
+        if ($node.surfaceKind -ne 'database-api') { continue }
+        if (!$endpoints.ContainsKey($reference)) { $endpoints[$reference] = @{ Node=$node; Count=0 } }
+        $endpoints[$reference].Count++
+    }
+    Write-Output "Distinct retained endpoint records: $($endpoints.Count); displaying at most 20."
+    foreach ($reference in @($endpoints.Keys | Sort-Object | Select-Object -First 20)) {
+        $entry = $endpoints[$reference]
+        $node = $entry.Node
+        Write-Output "  endpoint=$(Short-Text $node.surfaceName); variants=$($entry.Count); node=$(Short-Text $node.nodeId)"
+        if (!$node.PSObject.Properties['commandBinding'] -or $null -eq $node.commandBinding) {
+            Write-Output '    command binding unavailable: endpoint retained, configuration/value evidence not retained.'
+            continue
+        }
+        $binding = $node.commandBinding
+        foreach ($field in @('commandTextFromPath', 'commandTypeFromPath')) {
+            if (!$binding.PSObject.Properties[$field] -or $null -eq $binding.$field) {
+                Write-Output "    ${field}: unavailable (not evidence of a resolved value)"
+                continue
+            }
+            $value = $binding.$field
+            Write-Output "    ${field}: state=$(Short-Text $value.state); originKind=$(Short-Text $value.origin.kind); rule=$(Short-Text $value.ruleId); tier=$(Short-Text $value.evidenceTier)"
+            Write-Output "      argument steps=$(@($value.steps).Count); retained gaps=$(@($value.gaps).Count)"
+            $steps = @($value.steps)
+            if ($steps.Count -gt 0) {
+                $last = $steps[-1]
+                Write-Output "      last retained argument hop: caller=$(Short-Text $last.callerMethodFactId); target=$(Short-Text $last.targetMethodFactId); slot=$(Short-Text $last.targetArgumentSlot); opcode=$(Short-Text $last.opcode)"
+            }
+            $returnCount = if ($value.PSObject.Properties['returnSteps']) { @($value.returnSteps).Count } else { 0 }
+            Write-Output "      retained return steps=$returnCount"
+            foreach ($gap in @($value.gaps | Select-Object -First 8)) { Write-Output "      gap=$(Short-Text $gap)" }
+        }
+    }
+    Write-Output 'Command values and SQL literals are not printed. Hash-only constants do not identify SQL text or a stored procedure.'
 }

@@ -4,7 +4,8 @@ param(
     [string]$Project,
     [string]$Handler,
     [switch]$Open,
-    [switch]$AllowUpdatedReader
+    [switch]$AllowUpdatedReader,
+    [switch]$InspectLatest
 )
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
@@ -45,8 +46,10 @@ $cli = Join-Path (Split-Path $PSScriptRoot -Parent) 'src/dotnet/TraceMap.Cli/bin
 if (!(Test-Path -LiteralPath $cli -PathType Leaf)) {
     throw 'Build TraceMap first: dotnet build src\dotnet\tracemap.sln'
 }
-if (!$Handler) { $Handler = Read-Host 'Handler name (for example Page_Load)' }
-if ($Handler -cnotmatch '\A[A-Za-z0-9_]{1,128}\z') { throw 'WEBFORMS_HANDLER_INVALID' }
+if (!$InspectLatest) {
+    if (!$Handler) { $Handler = Read-Host 'Handler name (for example Page_Load)' }
+    if ($Handler -cnotmatch '\A[A-Za-z0-9_]{1,128}\z') { throw 'WEBFORMS_HANDLER_INVALID' }
+}
 $verified = Get-WebFormsVerifiedStatus $cli $run
 $run = $verified.Run
 $status = $verified.Status
@@ -60,6 +63,18 @@ if ($status.readerMatchesOriginalGenerator -ne $true) {
     Write-Output 'Updated reader explicitly allowed; retained artifacts verified by native status. Original producer identity remains unchanged; this new query has its own provenance.'
 }
 $bundle = [IO.Path]::GetDirectoryName([string]$status.workbenchPath)
+if ($InspectLatest) {
+    $reports = @(Get-ChildItem -LiteralPath $Root -Directory | Where-Object {
+        $_.Name -cmatch ('\Ahandler-requery-' + [regex]::Escape($Project) + '-[a-f0-9]{32}\z') -and
+        (Test-Path -LiteralPath (Join-Path $_.FullName 'handler-requery.local.json') -PathType Leaf)
+    } | Select-Object -First 129)
+    if ($reports.Count -gt 128) { throw 'WEBFORMS_HANDLER_REPORT_SELECTION_LIMIT' }
+    if ($reports.Count -eq 0) { throw 'WEBFORMS_HANDLER_REPORT_NOT_FOUND' }
+    $latest = $reports | Sort-Object LastWriteTimeUtc,Name -Descending | Select-Object -First 1
+    Write-Output "Inspecting latest completed report for project $Project (not filtered by handler): $($latest.FullName)"
+    Write-WebFormsTruncationSummary $latest.FullName
+    return
+}
 $destination = Join-Path $Root ("handler-requery-$Project-" + [guid]::NewGuid().ToString('N'))
 & dotnet $cli webforms-review requery-handler --run $run --bundle $bundle --handler $Handler --out $destination
 if ($LASTEXITCODE -ne 0) { throw 'WEBFORMS_HANDLER_REQUERY_FAILED;originals-preserved;partial-output-preserved' }
