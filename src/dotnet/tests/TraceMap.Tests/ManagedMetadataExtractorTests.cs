@@ -636,6 +636,9 @@ public sealed partial class ManagedMetadataExtractorTests
         Assert.Equal("identity-a", gap.CecilIdentity);
         Assert.Equal("identity-b", gap.SystemReflectionMetadataIdentity);
         Assert.Equal(["MetadataReaderDisagreement"], ManagedMetadataExtractor.ReaderDisagreementGapKinds(gaps));
+        var flagsLeft = cecil with { Properties = new Dictionary<string, string> { ["methodDispatchFlags"] = "6" } };
+        var flagsRight = flagsLeft with { Properties = new Dictionary<string, string> { ["methodDispatchFlags"] = "70" } };
+        Assert.Single(ManagedMetadataExtractor.CrossCheck([flagsLeft], [flagsRight]));
     }
 
     [Fact]

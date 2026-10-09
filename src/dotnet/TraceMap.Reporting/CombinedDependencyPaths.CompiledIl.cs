@@ -5,6 +5,17 @@ namespace TraceMap.Reporting;
 
 public static partial class CombinedDependencyPathReporter
 {
+    private static bool HasNonVirtualInstanceTarget(CombinedFactRow target)
+    {
+        // callvirt also supplies a null check for ordinary instance methods.
+        // Absent/invalid flags (including older retained scans) prove nothing.
+        if (!ushort.TryParse(target.Properties.GetValueOrDefault("methodDispatchFlags"),
+            System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var flags)) return false;
+        const System.Reflection.MethodAttributes excluded = System.Reflection.MethodAttributes.Virtual
+            | System.Reflection.MethodAttributes.Static | System.Reflection.MethodAttributes.Abstract;
+        return ((System.Reflection.MethodAttributes)flags & excluded) == 0;
+    }
+
     private const string CompiledIlBridgeRuleId = "combined.paths.compiled-il-bridge.v1";
     private const string ProjectlessPdbIdentityRuleId = "combined.paths.projectless-pdb-identity.v1";
     private const string ProjectlessPublishCandidateRuleId = "combined.paths.projectless-publish-candidate.v1";
@@ -228,7 +239,7 @@ public static partial class CombinedDependencyPathReporter
                 caller.FilePath, caller.StartLine, caller.EndLine, caller.RuleId, caller.EvidenceTier);
             var to = graph.GetOrAddSymbolNode(target.SourceIndexId, target.SourceLabel, target.TargetSymbol!,
                 target.FilePath, target.StartLine, target.EndLine, target.RuleId, target.EvidenceTier);
-            var virtualCandidate = opcode == "callvirt";
+            var virtualCandidate = opcode == "callvirt" && !HasNonVirtualInstanceTarget(target);
             var artifactContext = caller.Properties.GetValueOrDefault("provenanceState") != "bound"
                 || targetProvenance != "bound";
             graph.AddEdge(new GraphEdge(

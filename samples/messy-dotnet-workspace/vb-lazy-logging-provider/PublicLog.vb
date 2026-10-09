@@ -7,7 +7,8 @@ Namespace PublicLazy.Framework
             ' Deliberately unused: creating parameters does not bind them to SQL.
             Dim parameters As New System.Collections.ArrayList()
             parameters.Add(New SqlParameter("@user", user))
-            Return CStr(ExecuteSql("SELECT Email FROM public_people WHERE UserId = '" & user & "'"))
+            Dim receiver As ProfileData = Me
+            Return CStr(receiver.ExecuteSql("SELECT Email FROM public_people WHERE UserId = '" & user & "'"))
         End Function
 
         Public Function ExecuteSql(text As String) As Object
