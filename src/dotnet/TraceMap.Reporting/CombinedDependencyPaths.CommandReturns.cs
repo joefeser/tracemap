@@ -19,7 +19,7 @@ public static partial class CombinedDependencyPathReporter
     private sealed record RetainedReturn(long Offset, string State, CompiledCommandOperandOrigin Origin);
 
     private sealed class CommandReturnResolver(EvidenceGraph graph, List<object> materials,
-        SortedSet<string> gaps, List<CompiledCommandReturnStep> steps, string constantKind)
+        SortedSet<string> gaps, List<CompiledCommandReturnStep> steps, string constantKind, bool allowComposition = true)
     {
         private readonly HashSet<string> active = new(StringComparer.Ordinal);
         public int Work { get; set; }
@@ -46,7 +46,7 @@ public static partial class CombinedDependencyPathReporter
                 var producer = calls[0];
                 // Only describe the current origin, not a nested return branch whose
                 // remaining returns have not been checked for agreement.
-                if (active.Count == 1 && constantKind == "constant-string-hash" && TryConcatArity(producer, out var arity))
+                if (allowComposition && active.Count == 1 && constantKind == "constant-string-hash" && TryConcatArity(producer, out var arity))
                 {
                     var values = graph.CommandFacts is IIndexedCombinedFacts indexed
                         ? indexed.CallOperandFacts(producer.SourceIndexId, producer.OriginalFactId)
@@ -80,7 +80,7 @@ public static partial class CombinedDependencyPathReporter
                         return Fail("IlCommandCompositionOperandsUnavailable");
                     Composition = new("combined.paths.framework-string-composition.v1", EvidenceTiers.Tier3SyntaxOrTextual,
                         "System.String.Concat", producer.CombinedFactId, value.CombinedFactId, callerBody.CombinedFactId, compositionOperands);
-                    return Fail("IlCommandCompositionValueNotMaterialized");
+                    return false; // Supported symbolic result, not missing call evidence.
                 }
                 if (!graph.Outgoing.TryGetValue(SymbolNodeId(callerMethod.SourceIndexId, callerMethod.TargetSymbol), out var outgoing))
                     return Fail("IlCommandReturnTargetUnavailable");

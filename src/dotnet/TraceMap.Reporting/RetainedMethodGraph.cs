@@ -118,8 +118,9 @@ public static class RetainedMethodGraphWriter
         if (bytes.LongLength > maxBytes) throw new InvalidDataException("METHOD_GRAPH_OUTPUT_LIMIT");
         static string E(string? value) => WebUtility.HtmlEncode(value ?? "unavailable");
         static string Label(CombinedPathNode node)
+            => MethodLabel(node.SymbolId ?? node.DisplayName);
+        static string MethodLabel(string symbol)
         {
-            var symbol = node.SymbolId ?? node.DisplayName;
             var member = System.Text.RegularExpressions.Regex.Match(symbol, @"\|(?:method|constructor):\d+:([^|]+)\|");
             if (!member.Success) return symbol;
             var types = System.Text.RegularExpressions.Regex.Matches(symbol[..member.Index], @"\|names:\d+:([^|]+)\|");
@@ -158,7 +159,26 @@ public static class RetainedMethodGraphWriter
             html.Append("</details></section>");
         }
         html.Append($"<details><summary>Retained gaps</summary><pre>{E(JsonSerializer.Serialize(graph.Gaps, options))}</pre></details>");
-        html.Append($"<details open><summary>Command text traces — one shortest retained witness per endpoint, not all variants</summary><pre>{E(JsonSerializer.Serialize(graph.CommandTraces, options))}</pre></details>");
+        html.Append("<h2>Command text routes</h2><p>One shortest retained witness per endpoint, not all variants. Static evidence only; no execution claim.</p>");
+        foreach (var trace in graph.CommandTraces)
+        {
+            html.Append($"<h3>{E(string.Join(" → ", trace.PathNodeIds.Select(id => nodes.TryGetValue(id, out var n) ? Label(n) : id)))}</h3>");
+            if (trace.CommandText?.Composition is { } composition)
+            {
+                static string OperandLabel(CompiledCommandOperandOrigin origin) => origin.Kind switch
+                {
+                    "constant-string-hash" => "constant (hash retained)",
+                    "argument-slot" => "argument (IL slot " + origin.Identity + ")",
+                    "null" => "null",
+                    _ => origin.Kind + " (value unknown)"
+                };
+                html.Append($"<p>Supported symbolic expression: {E(composition.Operation)}({E(string.Join(", ", composition.Operands.Select(OperandLabel)))})</p><p>Limitation: plaintext value is not materialized. Parameter names are not retained; IL slots are not source names.</p><ol>");
+                foreach (var operand in composition.OperandBindings)
+                    html.Append($"<li>{E(OperandLabel(operand.Origin))} in {E(operand.OriginMethodIdentity is { } identity ? MethodLabel(identity) : "unknown method")}; {operand.Steps.Count} argument hops; state: {E(operand.State)}; gaps: {E(string.Join(", ", operand.Gaps))}</li>");
+                html.Append("</ol>");
+            }
+            html.Append($"<details><summary>Exact command evidence and operand traces</summary><pre>{E(JsonSerializer.Serialize(trace, options))}</pre></details>");
+        }
         if (Encoding.UTF8.GetByteCount(html.ToString()) > maxBytes) throw new InvalidDataException("METHOD_GRAPH_OUTPUT_LIMIT");
         Directory.CreateDirectory(directory);
         await File.WriteAllBytesAsync(Path.Combine(directory, JsonName), bytes, token);
