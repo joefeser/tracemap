@@ -64,6 +64,23 @@ query retains its own generator provenance. Without the switch, the helper still
 requires the original reader identity. Do not repair or rescan the original run
 just to obtain these diagnostic samples.
 
+Cutoff gaps now also retain an optional `cutoffCause`, without changing the
+existing conservative `depth` / `cycle` reasons or traversal decisions:
+
+- `depth-limit-reached`: enumeration reached its configured edge-depth cap.
+- `terminal-distance-exceeds-remaining-depth`: reverse-graph distance is known
+  but cannot fit within the remaining depth.
+- `terminal-route-not-found-within-depth-bound`: the reverse search found no
+  route within its own depth bound. This does not prove a terminal is unreachable;
+  longer routes or missing graph evidence remain possible.
+- `candidate-identity-roundtrip`: an immediate reverse pair of publish-member
+  candidate edges. It remains a retained cycle gap, not application recursion proof.
+- `repeated-node-cycle`: another repeated-node cutoff, also not runtime recursion proof.
+
+The console reports retained gap counts by cause; legacy reports explicitly lack
+this detail. No alias edge is silently removed, no partial result becomes complete,
+and none of these labels authorizes increasing every query budget.
+
 ## Mixed-query traversal repair: work-machine validation
 
 For a successful saved verification run, inspect unresolved command bindings

@@ -97,7 +97,7 @@ public static class GroupedCompiledPathReportWriter
             foreach (var gap in report.Gaps.Where(gap => gap.CutoffWitness is not null).Take(6))
             {
                 var witness = gap.CutoffWitness!;
-                W($"<details><summary>{H(gap.Reason)}: {H(Location(gap.FilePath, gap.StartLine, gap.EndLine))}</summary><p>Prefix truncated: {witness.PrefixTruncated}; final candidate edge not traversed: {witness.LastEdgeNotTraversed}</p><ol>");
+                W($"<details><summary>{H(gap.Reason)} / {H(gap.CutoffCause)}: {H(Location(gap.FilePath, gap.StartLine, gap.EndLine))}</summary><p>{H(gap.Message)}</p><p>Prefix truncated: {witness.PrefixTruncated}; final candidate edge not traversed: {witness.LastEdgeNotTraversed}</p><ol>");
                 for (var i = 0; i < witness.Edges.Count; i++)
                 {
                     var edge = witness.Edges[i];

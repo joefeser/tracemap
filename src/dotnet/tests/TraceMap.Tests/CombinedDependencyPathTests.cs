@@ -272,6 +272,44 @@ public sealed class CombinedDependencyPathTests
         Assert.Equal(20, noTerminal.Report.Summary.TraversalWorkUnits);
     }
 
+    [Theory]
+    [InlineData("projectless-publish-member-candidate", "b", "a", true)]
+    [InlineData("calls", "b", "a", false)]
+    [InlineData("projectless-publish-member-candidate", "b", "c", false)]
+    public void Publish_identity_roundtrip_is_only_an_immediate_candidate_reverse(string kind, string from, string to, bool expected)
+    {
+        Assert.Equal(expected, CombinedDependencyPathReporter.IsPublishIdentityRoundtrip(
+            "projectless-publish-member-candidate", "a", "b", kind, from, to));
+    }
+
+    [Fact]
+    public async Task Reverse_pruning_distinguishes_missing_bounded_route_from_known_excess_distance()
+    {
+        using var temp = new TempDirectory();
+        var manifest = Manifest("server", "tracemap-milestone15");
+        var index = Path.Combine(temp.Path, "index.sqlite");
+        var combined = Path.Combine(temp.Path, "combined.sqlite");
+        var facts = new List<CodeFact>
+        {
+            CallFact(manifest, "Root.Start()", "Leaf.Query()", "Graph.cs", 1),
+            CallFact(manifest, "Root.Start()", "Branch.Long()", "Graph.cs", 2),
+            CallFact(manifest, "Branch.Long()", "Leaf.Query()", "Graph.cs", 3),
+            CallFact(manifest, "Root.Start()", "Branch.Unknown()", "Graph.cs", 4),
+            QueryPatternFact(manifest, "Leaf.Query()", "Graph.cs", 5)
+        };
+        SqliteIndexWriter.Write(index, manifest, facts);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([index], combined, ["server"]));
+        var result = await CombinedDependencyPathReporter.WriteAsync(new CombinedDependencyPathOptions(combined,
+            Path.Combine(temp.Path, "out"), FromSymbol: "Root.Start()", ToSurface: "sql-query",
+            View: LegacyFlowReportConstants.View, MaxDepth: 2, MaxPaths: 100, MaxFrontier: 100)
+            { MaxTraversalWork = 4096 });
+        Assert.NotEmpty(result.Report.Paths);
+        Assert.True(result.Report.Summary.Truncated);
+        Assert.Contains(result.Report.Gaps, gap => gap.CutoffCause == "terminal-route-not-found-within-depth-bound");
+        Assert.Contains(result.Report.Gaps, gap => gap.CutoffCause == "terminal-distance-exceeds-remaining-depth");
+        Assert.All(result.Report.Gaps.Where(gap => gap.CutoffCause is not null), gap => Assert.Equal("depth", gap.Reason));
+    }
+
     [Fact]
     public async Task Legacy_terminal_prewalk_retains_shortest_witness_beyond_display_depth()
     {
