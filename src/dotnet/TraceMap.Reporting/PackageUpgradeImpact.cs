@@ -200,16 +200,20 @@ public static class PackageUpgradeImpactReporter
             .ThenBy(change => change.Id, StringComparer.Ordinal)
             .ToArray();
 
+        var buildOutputSourceIds = read.Facts
+            .Where(PackageDecisionCorrelationReporter.IsBuildOutputPackage)
+            .Select(fact => fact.SourceIndexId).ToHashSet(StringComparer.Ordinal);
         var coverageWarnings = selectedSources
             .SelectMany(source => CoverageWarningsFor(source, read.KnownGaps
                 .Where(gap => gap.SourceIndexId == source.SourceIndexId || string.Equals(gap.SourceLabel, source.Label, StringComparison.Ordinal))
                 .Select(gap => $"{gap.Category}: {gap.Example}")
-                .ToArray()))
-            .Concat(read.Facts.Any(fact => selectedSourceIds.Contains(fact.SourceIndexId)
-                && PackageDecisionCorrelationReporter.IsBuildOutputPackage(fact))
-                ? new[] { "Build-output package evidence has unknown freshness and is excluded from current-source impact findings." } : [])
-            .Distinct(StringComparer.Ordinal)
-            .OrderBy(value => value, StringComparer.Ordinal)
+                .ToArray())
+                .Concat(buildOutputSourceIds.Contains(source.SourceIndexId)
+                    ? new[] { "Build-output package evidence has unknown freshness and is excluded from current-source impact findings." } : [])
+                .Distinct(StringComparer.Ordinal)
+                .Select(warning => (Source: source, Warning: warning)))
+            .OrderBy(item => item.Source.Label, StringComparer.Ordinal)
+            .ThenBy(item => item.Warning, StringComparer.Ordinal)
             .ToArray();
         var reducedCoverage = coverageWarnings.Length > 0;
         var findings = new List<PackageImpactFinding>();
@@ -245,9 +249,9 @@ public static class PackageUpgradeImpactReporter
             }
         }
 
-        foreach (var warning in coverageWarnings.Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal))
+        foreach (var item in coverageWarnings)
         {
-            AddGap(gaps, options.MaxGaps, ref gapCapReached, CoverageGap(warning, selectedSources));
+            AddGap(gaps, options.MaxGaps, ref gapCapReached, CoverageGap(item.Warning, item.Source));
         }
 
         var reportCoverage = reducedCoverage || gapCapReached || findingCapReached ? "ReducedCoverage" : "FullEvidenceAvailable";
@@ -545,11 +549,10 @@ public static class PackageUpgradeImpactReporter
             ]));
     }
 
-    private static PackageImpactGap CoverageGap(string warning, IReadOnlyList<CombinedReportSource> sources)
+    private static PackageImpactGap CoverageGap(string warning, CombinedReportSource source)
     {
-        var source = sources.OrderBy(item => item.Label, StringComparer.Ordinal).FirstOrDefault();
         return new PackageImpactGap(
-            $"package-coverage:{CombinedReportHelpers.Hash($"{warning}:{source?.ScanId}", 24)}",
+            $"package-coverage:{CombinedReportHelpers.Hash($"{source.SourceIndexId}:{warning}:{source.ScanId}", 24)}",
             "ReducedCoverage",
             warning,
             RuleId,

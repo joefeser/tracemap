@@ -133,3 +133,16 @@ This intentionally changes receipt scope fingerprints without changing schema.
 Framing regression validation: 121 focused Debug cases passed with warnings as
 errors (16s). The two current-head review comments describe the same collision
 and are addressed by the single structured-envelope repair.
+
+## Combined-source warning provenance repair
+
+ACK admitted Codex finding discussion_r4226666963 on 33b38dbd. Coverage warnings
+now retain the exact emitting source through gap construction, including source
+label, scan ID and commit. This also fixes the same misattribution for existing
+per-source coverage warnings; correlation already retains source identity.
+The regression matrix covers only the later source emitting build evidence,
+both sources emitting it, source filtering and bounded gap output.
+Validation: dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj
+--no-restore -warnaserror --filter
+'FullyQualifiedName~PackageUpgradeImpactTests|FullyQualifiedName~PackageDecisionCorrelationTests|FullyQualifiedName~DepsJsonEvidenceTests|FullyQualifiedName~ScanExecutionReceiptTests'
+passed 73 tests (7s). Final-head hosted checks and ACK freshness remain required.

@@ -10,6 +10,46 @@ namespace TraceMap.Tests;
 
 public sealed class PackageUpgradeImpactTests
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Build_output_gaps_preserve_each_source_identity_and_filter(bool bothSources)
+    {
+        using var temp = new TempDirectory();
+        var indexes = new List<string>();
+        foreach (var label in new[] { "alpha", "zeta" })
+        {
+            var manifest = Manifest(label, "test") with { CommitSha = new string(label == "alpha" ? 'a' : 'b', 40) };
+            var fact = PackageFact(manifest, "Synthetic.Package", "nuget", "bin/Debug/Sample.deps.json", "transitive", "1.0.0");
+            if (bothSources || label == "zeta")
+                fact = fact with { Properties = new SortedDictionary<string, string>(fact.Properties.ToDictionary(pair => pair.Key, pair => pair.Value), StringComparer.Ordinal)
+                { ["evidenceSource"] = "build-output", ["manifestKind"] = "deps.json" } };
+            var index = Path.Combine(temp.Path, label + ".sqlite");
+            SqliteIndexWriter.Write(index, manifest, [fact]);
+            indexes.Add(index);
+        }
+        var combined = Path.Combine(temp.Path, "combined.sqlite");
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions(indexes, combined, ["alpha", "zeta"]));
+        var delta = Path.Combine(temp.Path, "delta.json");
+        await File.WriteAllTextAsync(delta, """
+            {"version":"package-delta.v1","changes":[{"id":"synthetic","packageName":"Synthetic.Package","ecosystem":"nuget","changeType":"updated"}]}
+            """);
+        var options = new PackageImpactOptions(combined, delta, Path.Combine(temp.Path, "report"));
+        var report = (await PackageUpgradeImpactReporter.WriteAsync(options)).Report;
+        var gaps = report.Gaps.Where(gap => gap.Message.Contains("unknown freshness", StringComparison.Ordinal)).ToArray();
+        Assert.Equal(bothSources ? 2 : 1, gaps.Length);
+        foreach (var gap in gaps)
+        {
+            Assert.Equal("scan-" + gap.SourceLabel, gap.ScanId);
+            Assert.Equal(new string(gap.SourceLabel == "alpha" ? 'a' : 'b', 40), gap.CommitSha);
+        }
+        Assert.Contains(gaps, gap => gap.SourceLabel == "zeta");
+        var filtered = (await PackageUpgradeImpactReporter.WriteAsync(options with { Source = "alpha", OutputPath = Path.Combine(temp.Path, "filtered") })).Report;
+        Assert.Equal(bothSources ? 1 : 0, filtered.Gaps.Count(gap => gap.Message.Contains("unknown freshness", StringComparison.Ordinal)));
+        var capped = (await PackageUpgradeImpactReporter.WriteAsync(options with { MaxGaps = 1, OutputPath = Path.Combine(temp.Path, "capped") })).Report;
+        Assert.Single(capped.Gaps);
+    }
+
     [Fact]
     public async Task PackageImpact_reads_single_index_and_redacts_unsafe_delta_versions()
     {
