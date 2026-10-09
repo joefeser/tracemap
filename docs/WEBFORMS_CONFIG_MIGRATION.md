@@ -4,6 +4,31 @@ For a new migration-review handoff, use the [consolidated native workflow](#cons
 below. It creates one output folder for the reviewer. The diagnostic commands in
 the intervening sections remain available for investigating historical runs.
 
+## Query one handler from a completed wizard configuration
+
+From the TraceMap checkout, using its existing Debug build:
+
+```powershell
+.\scripts\wrequery.ps1 C:\work\website-review
+```
+
+Enter the handler method name when prompted. Alternatively supply `-Handler Page_Load`.
+For a configuration containing multiple projects, supply `-Project <saved-project-id>`.
+Optional `-Open` opens the generated HTML report.
+
+The helper reads the saved project/run locator, checks the referenced project file
+hash, and asks native status to verify the completed retained reports and original
+reader identity. Native requery performs artifact admission; the helper does not
+replace full wizard configuration validation. It uses the verified report location
+automatically and writes a fresh `handler-requery-<project>-<unique-id>` directory
+under the configuration root. It does not rebuild, scan, combine, change budgets,
+or overwrite the original run. This is a bounded new traversal of retained evidence,
+not runtime proof or complete-path proof. Existing truncation and coverage limits
+still apply. If the Debug CLI is missing, run the normal solution build first.
+
+Helper regression checks: `pwsh -NoProfile -File scripts/tests/Test-WebFormsWizardRequery.ps1`
+(after building the CLI).
+
 ## Mixed-query traversal repair: work-machine validation
 
 For a successful saved verification run, inspect unresolved command bindings
