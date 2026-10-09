@@ -63,6 +63,10 @@ function Write-WebFormsTruncationSummary([string]$Directory) {
     $groups = @($gaps | Group-Object reason | Sort-Object Name)
     foreach ($group in @($groups | Select-Object -First 10)) {
         Write-Output "  $(Short-Text $group.Name): $($group.Count) retained gaps"
+        $causes = @($group.Group | Group-Object { if ($_.PSObject.Properties['cutoffCause']) { $_.cutoffCause } else { 'unavailable-legacy-report' } } | Sort-Object Name)
+        foreach ($cause in @($causes | Select-Object -First 10)) {
+            Write-Output "    cause=$(Short-Text $cause.Name); retainedGaps=$($cause.Count)"
+        }
         foreach ($gap in @($group.Group | Select-Object -First 3)) {
             Write-Output "    location=$(Short-Text $gap.filePath); line=$(Short-Text $gap.startLine); node=$(Short-Text $gap.nodeId)"
             Write-Output "    rule=$(Short-Text $gap.ruleId); tier=$(Short-Text $gap.evidenceTier); detail=$(Short-Text $gap.message)"

@@ -289,6 +289,8 @@ public sealed record CombinedPathGap(
 {
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public CombinedCutoffWitness? CutoffWitness { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? CutoffCause { get; init; }
     [JsonIgnore]
     public IReadOnlyList<string> EffectiveSupportingFactIds => SupportingFactIds is { Count: > 0 }
         ? SupportingFactIds
@@ -4159,6 +4161,11 @@ public static partial class CombinedDependencyPathReporter
                 or "projectless-source-pdb-identity" or "projectless-publish-member-candidate"
                 or "projectless-publish-method-candidate");
 
+    internal static bool IsPublishIdentityRoundtrip(string previousKind, string previousFrom, string previousTo,
+        string nextKind, string nextFrom, string nextTo) =>
+        previousKind == "projectless-publish-member-candidate" && nextKind == previousKind &&
+        previousFrom == nextTo && previousTo == nextFrom;
+
     private static (Dictionary<string, int>? Distances, int Work) FindTerminalDistances(
         EvidenceGraph graph, IReadOnlySet<string> terminals, int maxDepth, int maxStates, int maxWork)
     {
@@ -4230,9 +4237,20 @@ public static partial class CombinedDependencyPathReporter
         var gaps = new List<CombinedPathGap>();
         var witnessedCutoffs = new HashSet<string>(StringComparer.Ordinal);
         var witnessCounts = new Dictionary<string, int>(StringComparer.Ordinal);
-        CombinedPathGap Cutoff(string reason, PathState state, GraphEdge? rejectedEdge = null)
+        CombinedPathGap Cutoff(string reason, PathState state, GraphEdge? rejectedEdge = null, string? cause = null)
         {
-            var gap = TruncatedGap(reason, rejectedEdge?.ToNodeId ?? state.NodeIds[^1], graph);
+            cause ??= reason == "depth" ? "depth-limit-reached" : "repeated-node-cycle";
+            var gap = TruncatedGap(reason, rejectedEdge?.ToNodeId ?? state.NodeIds[^1], graph) with
+            {
+                CutoffCause = cause,
+                Message = cause switch
+                {
+                    "terminal-route-not-found-within-depth-bound" => "No terminal route was found from this candidate in the depth-bounded reverse graph. A longer route or missing evidence remains possible; the edge was not traversed.",
+                    "terminal-distance-exceeds-remaining-depth" => "The known reverse-graph terminal distance exceeds the remaining path depth. The candidate edge was not traversed.",
+                    "candidate-identity-roundtrip" => "The proposed publish-member candidate edge immediately returns across a candidate identity bridge. This is not proof of application recursion; the edge was not traversed.",
+                    _ => $"Path search was truncated by {reason} limit; static traversal does not prove runtime recursion or execution."
+                }
+            };
             if (witnessCounts.GetValueOrDefault(reason) >= 3 || !witnessedCutoffs.Add(gap.GapId)) return gap;
             witnessCounts[reason] = witnessCounts.GetValueOrDefault(reason) + 1;
             var nodeIds = rejectedEdge is null ? state.NodeIds.ToArray() : state.NodeIds.Append(rejectedEdge.ToNodeId).ToArray();
@@ -4474,7 +4492,8 @@ public static partial class CombinedDependencyPathReporter
                     truncated = true;
                     traversal[state.RootNodeId].MarkTruncated("depth");
                     RecordNodeShape(traversal[state.RootNodeId], edge.ToNodeId, frontier: true);
-                    gaps.Add(Cutoff("depth", state, edge));
+                    gaps.Add(Cutoff("depth", state, edge, terminalDistances.ContainsKey(edge.ToNodeId)
+                        ? "terminal-distance-exceeds-remaining-depth" : "terminal-route-not-found-within-depth-bound"));
                     continue;
                 }
                 if (IsDispatchCandidateCrossHop(graph, state, edge))
@@ -4495,7 +4514,10 @@ public static partial class CombinedDependencyPathReporter
                     {
                         truncated = true;
                         traversal[state.RootNodeId].MarkTruncated("cycle");
-                        gaps.Add(Cutoff("cycle", state, edge));
+                        var prior = state.EdgeIds.Count > 0 ? graph.EdgesById[state.EdgeIds[^1]] : null;
+                        var identityRoundtrip = prior is not null && IsPublishIdentityRoundtrip(
+                            prior.EdgeKind, prior.FromNodeId, prior.ToNodeId, edge.EdgeKind, edge.FromNodeId, edge.ToNodeId);
+                        gaps.Add(Cutoff("cycle", state, edge, identityRoundtrip ? "candidate-identity-roundtrip" : "repeated-node-cycle"));
                     }
                     continue;
                 }
