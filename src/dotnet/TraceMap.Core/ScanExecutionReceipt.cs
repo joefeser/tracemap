@@ -117,7 +117,7 @@ public sealed class ScanReceiptRecorder
 
     public ScanReceiptRecorder(ScanOptions options, IEnumerable<string>? additionalAuthorizedInputs = null)
     {
-        scopeFingerprint = Hash(string.Join('\n',
+        var scope = string.Join('\n',
             Normalize(options.SolutionPaths),
             Normalize(options.ProjectPaths),
             Normalize(options.IncludeGlobs),
@@ -147,7 +147,13 @@ public sealed class ScanReceiptRecorder
             NormalizeOrdered(options.IlRewriteBeforePdbPaths),
             NormalizeOrdered(options.IlRewriteAfterPdbPaths),
             options.IlRewritePdbLimits?.ToString() ?? string.Empty,
-            Normalize(additionalAuthorizedInputs)));
+            Normalize(additionalAuthorizedInputs));
+        scopeFingerprint = !options.IndexDepsJson ? Hash(scope) : Hash(JsonSerializer.Serialize(new
+        {
+            baseScopeSha256 = Hash(scope),
+            indexDepsJson = options.IndexDepsJson,
+            depsJsonLimits = options.IndexDepsJson ? options.DepsJsonLimits ?? new DepsJsonLimits() : null
+        }));
     }
 
     public bool CanWriteAuthoritativeReceipt => repositoryIdentityHash is not null && commitSha is not null && runId is not null;

@@ -178,7 +178,11 @@ public sealed record ScanOptions(
     int ExactSourceMaxFiles = 256,
     long ExactSourceMaxBytes = 67_108_864,
     string? WebFormsPublishedRootPath = null,
-    string? WebFormsPublishSourceRelativeBase = null);
+    string? WebFormsPublishSourceRelativeBase = null)
+{
+    public bool IndexDepsJson { get; init; }
+    public DepsJsonLimits? DepsJsonLimits { get; init; }
+}
 
 public sealed record FileInventoryItem(
     string RelativePath,
@@ -686,6 +690,7 @@ public static class ScannerVersions
     public const string RepoManifestExtractor = "repo-manifest/0.1.0";
     public const string FileInventoryExtractor = "file-inventory/0.1.0";
     public const string ProjectFileExtractor = "project-file/0.3.0"; // 0.2.0: CPM pins + versionOverride (#804); 0.3.0: PackageProduced facts (#818)
+    public const string DepsJsonExtractor = "deps-json/0.1.0";
     public const string NuGetLockfileExtractor = "nuget-lockfile/0.1.0";
     public const string BuildEnvironmentExtractor = "build-environment/0.6.1";
     public const string AnalyzerCapabilityExtractor = "analyzer-capability/0.1.0";
