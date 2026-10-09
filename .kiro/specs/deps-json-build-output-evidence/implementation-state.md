@@ -172,3 +172,33 @@ inspected. Correlation retains sorted/deduplicated combined fact IDs in its exis
 SupportingFactIds field; source/scan/commit bindings stay intact. The regression
 checks all triggering IDs with and without a selected decision. The same 74-test
 command passes (9s). Final-head CI and review remain separate evidence.
+
+## 2026-10-09 owner-authorized consolidated follow-up
+
+Branch: codex/deps-json-evidence. Four Baz findings (4226911398, 4226911403,
+4226911409, 4226911413) were explicitly authorized together after the configured
+review-cycle ceiling. Both freshness-gap producers now retain at most 256 sorted,
+unique fact IDs, plus SupportingFactIdsOmittedCount; Markdown shows eight with
+the total omitted from that view. IDs remain original IDs for impact and combined
+IDs for correlation. Source/scan/commit bindings remain intact. Correlation adds
+freshness gaps after existing selector diagnostics, preserving MaxGaps=1 behavior
+and reporting the dropped gap via GapCapReached. Package impact report version
+1.1 explicitly identifies source-attributed coverage cardinality; package-delta.v1
+and evidence rule IDs are unchanged. No current-build or runtime claims added.
+
+Validation: dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj
+--no-restore -warnaserror --filter
+'FullyQualifiedName~PackageUpgradeImpactTests|FullyQualifiedName~ScanExecutionReceiptTests|FullyQualifiedName~DepsJsonEvidenceTests|FullyQualifiedName~PackageDecisionCorrelationTests'
+passed 78 tests (7s), including 256/260-ID bounds, reverse input ordering, JSON
+round trips, Markdown omissions, source selectors and the single-gap budget.
+Private-path guard and git diff --check passed. Full-suite repetition is deferred
+to hosted CI for this reporting-only follow-up; the preceding cb92c43b hosted
+.NET, five-adapter combine, Windows and package smoke checks all passed. Final-head
+CI and live ACK freshness are separate remaining gates. No merge authorization.
+
+Public CLI smoke: `dotnet src/dotnet/TraceMap.Cli/bin/Debug/net10.0/tracemap.dll
+scan --repo samples/endpoint-server-aspnet --out <temporary-output> --index-deps-json`
+and `python3 scripts/validate-adapter-artifacts.py <temporary-output>` passed:
+105 facts, Level1SemanticAnalysisReduced with the explicit missing-deps evidence
+gap retained. This reporting follow-up changes no language adapter; additional
+pinned language smoke runs are deferred to unchanged hosted lanes.

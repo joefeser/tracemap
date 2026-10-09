@@ -11,9 +11,11 @@ namespace TraceMap.Tests;
 public sealed class PackageUpgradeImpactTests
 {
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task Build_output_gaps_preserve_each_source_identity_and_filter(bool bothSources)
+    [InlineData(false, 2)]
+    [InlineData(true, 2)]
+    [InlineData(false, 260)]
+    [InlineData(true, 256)]
+    public async Task Build_output_gaps_preserve_each_source_identity_and_filter(bool bothSources, int factCount)
     {
         using var temp = new TempDirectory();
         var indexes = new List<string>();
@@ -25,7 +27,8 @@ public sealed class PackageUpgradeImpactTests
                 fact = fact with { Properties = new SortedDictionary<string, string>(fact.Properties.ToDictionary(pair => pair.Key, pair => pair.Value), StringComparer.Ordinal)
                 { ["evidenceSource"] = "build-output", ["manifestKind"] = "deps.json" } };
             var index = Path.Combine(temp.Path, label + ".sqlite");
-            SqliteIndexWriter.Write(index, manifest, [fact with { FactId = fact.FactId + "-second" }, fact]);
+            SqliteIndexWriter.Write(index, manifest, Enumerable.Range(0, factCount).Reverse()
+                .Select(i => fact with { FactId = fact.FactId + $"-{i:D3}" }).ToArray());
             indexes.Add(index);
         }
         var combined = Path.Combine(temp.Path, "combined.sqlite");
@@ -37,17 +40,31 @@ public sealed class PackageUpgradeImpactTests
         var options = new PackageImpactOptions(combined, delta, Path.Combine(temp.Path, "report"));
         var report = (await PackageUpgradeImpactReporter.WriteAsync(options)).Report;
         var gaps = report.Gaps.Where(gap => gap.Message.Contains("unknown freshness", StringComparison.Ordinal)).ToArray();
+        Assert.Equal("1.1", report.Version); // Per-source coverage projection is explicitly versioned.
         Assert.Equal(bothSources ? 2 : 1, gaps.Length);
+        var markdown = await File.ReadAllTextAsync(Path.Combine(temp.Path, "report", "package-impact-report.md"));
         foreach (var gap in gaps)
         {
             Assert.Equal("scan-" + gap.SourceLabel, gap.ScanId);
-            Assert.Equal(2, gap.SupportingFactIds.Count);
+            Assert.Equal(Math.Min(256, factCount), gap.SupportingFactIds.Count);
+            Assert.Equal(Math.Max(0, factCount - 256), gap.SupportingFactIdsOmittedCount);
+            Assert.Contains(gap.SupportingFactIds[0], markdown);
+            if (factCount > 8)
+            {
+                Assert.Contains($"{factCount - 8} supporting fact IDs omitted", markdown);
+                // Only the gaps section: ordinary source findings have their own provenance.
+                Assert.DoesNotContain(gap.SupportingFactIds[^1], markdown.Split("## Gaps", StringSplitOptions.None)[1]);
+            }
             Assert.Equal(gap.SupportingFactIds.Order(StringComparer.Ordinal), gap.SupportingFactIds);
             Assert.Contains("Synthetic.Package", gap.SupportingFactIds[0]);
             Assert.Equal(new string(gap.SourceLabel == "alpha" ? 'a' : 'b', 40), gap.CommitSha);
         }
         Assert.Contains(gaps, gap => gap.SourceLabel == "zeta");
-        Assert.Contains("\"supportingFactIds\"", await File.ReadAllTextAsync(Path.Combine(temp.Path, "report", "package-impact-report.json")));
+        var json = await File.ReadAllTextAsync(Path.Combine(temp.Path, "report", "package-impact-report.json"));
+        var roundTrip = JsonSerializer.Deserialize<PackageImpactDocument>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true })!;
+        Assert.Equal("1.1", roundTrip.Version);
+        Assert.Equal(gaps.Select(gap => gap.SupportingFactIdsOmittedCount),
+            roundTrip.Gaps.Where(gap => gap.SupportingFactIds.Count > 0).Select(gap => gap.SupportingFactIdsOmittedCount));
         var filtered = (await PackageUpgradeImpactReporter.WriteAsync(options with { Source = "alpha", OutputPath = Path.Combine(temp.Path, "filtered") })).Report;
         Assert.Equal(bothSources ? 1 : 0, filtered.Gaps.Count(gap => gap.Message.Contains("unknown freshness", StringComparison.Ordinal)));
         var capped = (await PackageUpgradeImpactReporter.WriteAsync(options with { MaxGaps = 1, OutputPath = Path.Combine(temp.Path, "capped") })).Report;
