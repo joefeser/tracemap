@@ -12,6 +12,28 @@ namespace TraceMap.Tests;
 
 public sealed class ScanEngineTests
 {
+    [Theory]
+    [InlineData("obj/Debug/a:b.cs", "obj/Debug/a:b.cs")]
+    [InlineData("C:/private/input.cs", "(invalid relative path)")]
+    [InlineData("../outside.cs", "(invalid relative path)")]
+    public void Compiler_input_conflict_diagnostics_preserve_safe_relative_paths(string path, string expected)
+    {
+        var first = new CompilationInputSet();
+        var second = new CompilationInputSet();
+        first.Record(path, Microsoft.CodeAnalysis.Text.SourceText.From("class Alpha {}"));
+        second.Record(path, Microsoft.CodeAnalysis.Text.SourceText.From("class Bravo {}"));
+        var error = Assert.Throws<SourceSnapshotException>(() => SemanticExtractionResultMerge.Merge(
+            new SemanticExtractionResult([], [], true, false, CompilationInputFiles: first),
+            new SemanticExtractionResult([], [], true, false, CompilationInputFiles: second)));
+        Assert.Contains(expected, SourceSnapshotException.Describe(error)!);
+        foreach (var (type, name) in new[] { (typeof(CSharpSemanticExtractor), "IsWorkspaceException"), (typeof(VisualBasicSemanticExtractor), "IsWorkspaceFailure") })
+        {
+            var filter = type.GetMethod(name, System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!;
+            Assert.False((bool)filter.Invoke(null, [error])!);
+            Assert.True((bool)filter.Invoke(null, [new IOException("workspace unavailable")])!);
+        }
+    }
+
     [Fact]
     public void Missing_project_compilation_input_is_a_reduced_coverage_gap_not_a_snapshot_change()
     {

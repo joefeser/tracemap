@@ -162,7 +162,7 @@ public static class ScanEngine
         var discoveredSnapshotInventory = IncludeSemanticInputs(repoPath, inventory, fullInventory, semanticResult);
         if (options.ExactSourceScope)
         {
-            ValidateExactSourceScope(fullInventory, discoveredSnapshotInventory, options,
+            ValidateExactSourceScope(fullInventory, inventory, options,
                 CSharpSemanticExtractor.CreateSourcePathComparer(repoPath));
         }
         IReadOnlyList<FileInventoryItem> authoritativeSnapshotInventory;
@@ -191,7 +191,7 @@ public static class ScanEngine
                 semanticResult);
             if (options.ExactSourceScope)
             {
-                ValidateExactSourceScope(refreshedFullInventory, refreshedSnapshotInventory, options,
+                ValidateExactSourceScope(refreshedFullInventory, refreshedInventory, options,
                     sourcePathComparer);
             }
             VerifySourceSnapshotInventoryMembership(discoveredSnapshotInventory, refreshedSnapshotInventory);
@@ -430,7 +430,7 @@ public static class ScanEngine
                 semanticResult);
             if (options.ExactSourceScope)
             {
-                ValidateExactSourceScope(verificationFullInventory, verificationSnapshotInventory, options,
+                ValidateExactSourceScope(verificationFullInventory, verificationInventory, options,
                     sourcePathComparer);
             }
             VerifySourceSnapshotInventory(authoritativeSnapshotInventory, verificationSnapshotInventory);
@@ -756,19 +756,21 @@ public static class ScanEngine
         foreach (var path in (semanticResult.CompilationInputFiles ?? new HashSet<string>()).Order(StringComparer.Ordinal))
         {
             if (known.Contains(path) || path.StartsWith("__external__/", StringComparison.Ordinal)) continue;
-            if (!IsKnownGeneratedCompilationInput(path)) continue; // Ordinary new source still fails the baseline guard.
             var normalized = path.Replace('\\', '/');
             if (Path.IsPathRooted(path) || normalized.Split('/').Any(segment => segment is ".." or "." or ""))
                 throw new SourceSnapshotException(details: ["invalid generated compilation input path"]);
             try
             {
+                var inventoryExcluded = IsKnownGeneratedCompilationInput(path);
                 var current = repoPath;
                 foreach (var segment in normalized.Split('/'))
                 {
                     current = Path.Combine(current, segment);
+                    inventoryExcluded |= (File.GetAttributes(current) & (FileAttributes.Hidden | FileAttributes.System)) != 0;
                     if ((File.GetAttributes(current) & FileAttributes.ReparsePoint) != 0)
                         throw new SourceSnapshotException(details: ["linked generated compilation input"]);
                 }
+                if (!inventoryExcluded) continue; // Ordinary new source still requires its initial baseline.
                 var size = new FileInfo(current).Length;
                 if (result.Count >= 4096 || size > 67_108_864 - bytes)
                     throw new SourceSnapshotException(details: ["generated compilation input capture limit"]);

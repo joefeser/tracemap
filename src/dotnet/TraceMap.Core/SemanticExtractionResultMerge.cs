@@ -89,7 +89,7 @@ internal static class SemanticExtractionResultMerge
             foreach (var (path, checksum) in input.Checksums)
             {
                 if (merged.Checksums.TryGetValue(path, out var prior) && prior != checksum)
-                    throw new SourceSnapshotException(details: ["compilation inputs disagree across project evaluations"]);
+                    throw CompilationInputSet.Failure(path, "compilation inputs disagree across project evaluations");
                 merged.Checksums[path] = checksum;
             }
         return merged;

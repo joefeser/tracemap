@@ -43,11 +43,11 @@ internal sealed class CompilationInputSet() : HashSet<string>(StringComparer.Ord
         if (Convert.ToHexString(actual) != expected.Digest)
             throw Failure(path, "compilation input differs from immutable compiler document");
     }
-    private static SourceSnapshotException Failure(string path, string reason)
+    internal static SourceSnapshotException Failure(string path, string reason)
     {
         var normalized = path.Replace('\\', '/');
         var safe = !Path.IsPathRooted(path) && !normalized.Split('/').Any(segment => segment is ".." or "." or "")
-            && !normalized.Contains(':') ? normalized : "(invalid relative path)";
+            && !(normalized.Length >= 2 && char.IsAsciiLetter(normalized[0]) && normalized[1] == ':') ? normalized : "(invalid relative path)";
         return new SourceSnapshotException(details: [$"{safe} ({reason})"]);
     }
 
