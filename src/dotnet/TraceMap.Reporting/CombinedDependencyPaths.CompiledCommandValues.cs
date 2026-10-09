@@ -73,6 +73,7 @@ public static partial class CombinedDependencyPathReporter
                     if (edge.EdgeKind == "compiled-il-callvirt-candidate") gaps.Add("IlCommandVirtualDispatchUnproven");
                 }
                 if (current.Kind == constantKind) state = steps.Count == 0 && returnSteps.Count == 0 ? "method-local-constant" : "constant-on-encoded-call-path";
+                else if (returns.Composition is not null) state = "symbolic-string-composition";
                 else if (current.Kind != "argument-slot") gaps.Add("IlCommandOperandValueUnresolved");
                 var input = JsonSerializer.SerializeToUtf8Bytes(new
                 {
@@ -85,7 +86,7 @@ public static partial class CombinedDependencyPathReporter
                 });
                 return new("compiled-command-path-value.v1", CompiledCommandValueRuleId, EvidenceTiers.Tier3SyntaxOrTextual,
                     state, current, scope, steps, gaps.ToArray(), generator, Convert.ToHexStringLower(SHA256.HashData(input)))
-                    { ReturnSteps = returnSteps.Count == 0 ? null : returnSteps };
+                    { ReturnSteps = returnSteps.Count == 0 ? null : returnSteps, Composition = returns.Composition };
             }
         }
     }

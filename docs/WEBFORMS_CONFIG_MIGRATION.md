@@ -925,3 +925,23 @@ This is a local integrity check, not authentication. Always use aliases from tha
 export. A previous sanitized export cannot be reversed without its private graph/map.
 The mapping fixes diagnostic identity visibility; it does not invent missing call
 edges or claim that an unknown external method has been resolved.
+
+### Framework string composition
+
+Rule `combined.paths.framework-string-composition.v1` recognizes only direct
+`call` member references to the two- and three-string `System.String.Concat`
+overloads in `mscorlib, Version=4.0.0.0, Culture=neutral,
+PublicKeyToken=b77a5c561934e089`. Exact retained call/body/operand provenance and
+ordered operand evidence are required. The command binding reports
+`symbolic-string-composition` with the producer, operand fact, body, and ordered
+origins at Tier3SyntaxOrTextual; `IlCommandCompositionValueNotMaterialized` remains.
+This is a bounded intrinsic projection, not an admitted callee-body edge.
+
+No SQL text is reconstructed, and string hashes are never concatenated into a
+value. Unknown operands and downstream virtual-dispatch gaps remain unknown.
+Nested return computations, other assemblies/overloads, and virtual calls are not
+promoted by this rule. Malformed operands or mismatched provenance fail closed.
+The shared graph exports only the allowlisted operation, aliased fact references,
+and ordered operand kinds, never operand identities or literals. Rebuild the CLI
+and regenerate the method graph from the retained run to obtain this projection;
+no application execution or source rescan is required.

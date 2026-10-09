@@ -92,7 +92,9 @@ try {
     if ($overflow.graph.focusRecordsComplete -or $overflow.graph.calls.Count -ne 120 -or
         @($overflow.graph.callerCoverage | Where-Object focus)[0].omittedCalls -ne 31) { throw 'Focus overflow concealed.' }
     $trace = @{endpointNodeId="$secret-node-2";pathNodeIds=@("$secret-node-1","$secret-node-2");
-        producerCallFactIds=@("$secret-fact");commandText=@{state='unresolved-operand';origin=@{kind='call-result';identity="$secret-offset"};
+        producerCallFactIds=@("$secret-fact");commandText=@{state='symbolic-string-composition';origin=@{kind='call-result';identity="$secret-offset"};
+        composition=@{operation='System.String.Concat';producerCallFactId="$secret-fact";operandFactId="$secret-operand";bodyFactId="$secret-body";
+            operands=@(@{kind='constant-string-hash';identity="$secret-literal"},@{kind='argument-slot';identity="$secret-slot"},@{kind="$secret-kind";identity="$secret-other"})};
         originBodyFactId="$secret-body";ruleId="$secret-rule";gaps=@('IlCommandReturnTargetEdgeMissing',"$secret-gap");
         steps=@(@{callFactId="$secret-step";operandFactId="$secret-operand";callerBodyFactId="$secret-body";
             callerMethodFactId="$secret-method";targetMethodFactId="$secret-method2"})}}
@@ -105,6 +107,12 @@ try {
     if ($traceRaw.Contains($secret)) { throw 'Private trace content leaked.' }
     $traceResult = $traceRaw | ConvertFrom-Json -Depth 24
     $exportedTrace = $traceResult.graph.commandTraces[0]
+    if ($exportedTrace.state -cne 'symbolic-string-composition' -or
+        $exportedTrace.composition.operation -cne 'System.String.Concat' -or
+        $exportedTrace.composition.producer -cne $exportedTrace.producers[0] -or
+        ($exportedTrace.composition.operandKinds -join ',') -cne 'constant-string-hash,argument-slot,other-or-unavailable') {
+        throw 'Symbolic composition lost linkage or allowlisting.'
+    }
     if ($exportedTrace.missingProducerRecords -ne 0 -or
         $exportedTrace.producers[0] -cne $traceResult.graph.calls[0].fact -or
         $exportedTrace.originBody -cne $traceResult.graph.calls[0].body -or

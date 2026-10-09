@@ -23,6 +23,7 @@ public static partial class CombinedDependencyPathReporter
     {
         private readonly HashSet<string> active = new(StringComparer.Ordinal);
         public int Work { get; set; }
+        public CompiledStringComposition? Composition { get; private set; }
 
         public bool Resolve(CompiledCommandOperandOrigin origin, string scope, string? method,
             out CompiledCommandOperandOrigin resolved, out string resolvedScope, out string? resolvedMethod)
@@ -43,6 +44,44 @@ public static partial class CombinedDependencyPathReporter
                 var calls = Related(callerBody.SourceIndexId, FactTypes.ManagedIlCallObserved, callerBody.OriginalFactId + "/" + origin.Identity);
                 if (calls.Count != 1) return Fail("IlCommandReturnProducerMissingOrAmbiguous");
                 var producer = calls[0];
+                // Only describe the current origin, not a nested return branch whose
+                // remaining returns have not been checked for agreement.
+                if (active.Count == 1 && constantKind == "constant-string-hash" && TryConcatArity(producer, out var arity))
+                {
+                    var values = graph.CommandFacts is IIndexedCombinedFacts indexed
+                        ? indexed.CallOperandFacts(producer.SourceIndexId, producer.OriginalFactId)
+                        : graph.CommandOperandFacts(producer.SourceIndexId, producer.OriginalFactId);
+                    if (values.Count != 1) return Fail("IlCommandCompositionOperandsUnavailable");
+                    var value = values[0];
+                    materials.Add(ProjectCommandValueFact(producer));
+                    materials.Add(ProjectCommandValueFact(value));
+                    if (value.RuleId != RuleIds.DotNetIlValues || value.EvidenceTier != EvidenceTiers.Tier3SyntaxOrTextual
+                        || value.Properties.GetValueOrDefault("valueSchema") != "il-call-values.v1"
+                        || value.Properties.GetValueOrDefault("valueState") is not ("straight-line-candidate" or "control-flow-candidate")
+                        || value.Properties.GetValueOrDefault("callShapeSupported") != "true"
+                        || value.Properties.GetValueOrDefault("callHasThis") != "false"
+                        || value.Properties.GetValueOrDefault("callParameterCount") != arity.ToString(CultureInfo.InvariantCulture)
+                        || value.Properties.TryGetValue("callByReferenceParameters", out var mask) && mask != new string('0', arity)
+                        || value.Properties.GetValueOrDefault("ilBodyFactId") != callerBody.OriginalFactId
+                        || value.Properties.GetValueOrDefault("ilOffset") != producer.Properties.GetValueOrDefault("ilOffset")
+                        || callerMethod.Properties.GetValueOrDefault("rawFileSha256") != callerBody.Properties.GetValueOrDefault("rawFileSha256")
+                        || new[] { "rawFileSha256", "ilGeneratorSha256", "ilBoundedInputSha256" }.Any(property =>
+                            string.IsNullOrEmpty(callerBody.Properties.GetValueOrDefault(property))
+                            || producer.Properties.GetValueOrDefault(property) != callerBody.Properties.GetValueOrDefault(property)
+                            || value.Properties.GetValueOrDefault(property) != callerBody.Properties.GetValueOrDefault(property)))
+                        return Fail("IlCommandCompositionProvenanceUnavailable");
+                    var compositionJson = value.Properties.GetValueOrDefault("argumentOrigins");
+                    if (compositionJson is null || compositionJson.Length > 64 * 1024) return Fail("IlCommandCompositionOperandsUnavailable");
+                    CompiledCommandOperandOrigin[]? compositionOperands;
+                    try { compositionOperands = JsonSerializer.Deserialize<CompiledCommandOperandOrigin[]>(compositionJson); }
+                    catch (JsonException) { return Fail("IlCommandCompositionOperandsUnavailable"); }
+                    if (compositionOperands is null || compositionOperands.Length != arity || compositionOperands.Any(o => o is null ||
+                        !(o.Kind == "null" && o.Identity == "" || ValidCompiledCommandOrigin(o))))
+                        return Fail("IlCommandCompositionOperandsUnavailable");
+                    Composition = new("combined.paths.framework-string-composition.v1", EvidenceTiers.Tier3SyntaxOrTextual,
+                        "System.String.Concat", producer.CombinedFactId, value.CombinedFactId, callerBody.CombinedFactId, compositionOperands);
+                    return Fail("IlCommandCompositionValueNotMaterialized");
+                }
                 if (!graph.Outgoing.TryGetValue(SymbolNodeId(callerMethod.SourceIndexId, callerMethod.TargetSymbol), out var outgoing))
                     return Fail("IlCommandReturnTargetUnavailable");
                 materials.Add(new { ProducerNode = SymbolNodeId(callerMethod.SourceIndexId, callerMethod.TargetSymbol), ProducerEdgeCount = outgoing.Count });
@@ -139,5 +178,17 @@ public static partial class CombinedDependencyPathReporter
             return values;
         }
         private bool Fail(string gap) { gaps.Add(gap); return false; }
+    }
+
+    private static bool TryConcatArity(CombinedFactRow call, out int arity)
+    {
+        arity = 0;
+        if (call.Properties.GetValueOrDefault("opcode") != "call" || call.Properties.GetValueOrDefault("referenceKind") != "memberref") return false;
+        const string type = "type(namespace:6:System|names:6:String)";
+        const string prefix = "memberref|type:scope(assembly:name:8:mscorlib|version:7:4.0.0.0|culture:7:neutral|publicKeyToken:16:b77a5c561934e089)type(namespace:6:System|names:6:String)|member:6:Concat|arity:0|call:default|hasThis:false|explicitThis:false|(";
+        foreach (var count in new[] { 2, 3 })
+            if (call.Properties.GetValueOrDefault("targetIdentity") == prefix + string.Join(",", Enumerable.Repeat(type, count)) + ")->" + type)
+            { arity = count; return true; }
+        return false;
     }
 }

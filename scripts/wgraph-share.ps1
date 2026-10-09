@@ -164,7 +164,8 @@ try {
         'IlCommandNonIlCallerBridge','IlCommandRootArgumentUnresolved','IlCommandReturnBodyMissingOrAmbiguous',
         'IlCommandReturnEvidenceMissingOrAmbiguous','IlCommandReturnSignatureUnsupported','IlCommandReturnProvenanceUnavailable',
         'IlCommandCallerOperandMissingOrAmbiguous','IlCommandCallerOperandProvenanceUnavailable','IlCommandReturnCycle',
-        'IlCommandReturnWorkLimit','IlCommandCallerHopLimit')
+        'IlCommandReturnWorkLimit','IlCommandCallerHopLimit','IlCommandCompositionValueNotMaterialized',
+        'IlCommandCompositionOperandsUnavailable','IlCommandCompositionProvenanceUnavailable')
     $projectedTraces = @($traceCandidates | ForEach-Object {
         $trace = $_; $value = $trace.commandText
         if ($null -eq $value) {
@@ -172,7 +173,7 @@ try {
             return
         }
         [ordered]@{endpoint=(Alias 'N' $trace.endpointNodeId);path=@($trace.pathNodeIds | ForEach-Object { Alias 'N' $_ });
-            state=(Code $value.state @('unresolved-operand','unresolved-root-argument','unresolved-non-il-bridge','unresolved-call-evidence','unresolved-slot','limit','method-local-constant','constant-on-encoded-call-path'));
+            state=(Code $value.state @('unresolved-operand','unresolved-root-argument','unresolved-non-il-bridge','unresolved-call-evidence','unresolved-slot','limit','method-local-constant','constant-on-encoded-call-path','symbolic-string-composition'));
             originKind=(Code $value.origin.kind @('call-result','argument-slot','constant-string-hash','constant-int32','unknown','null','allocation-site'));
             originBody=(Alias 'F' $value.originBodyFactId);rule=(Alias 'R' $value.ruleId);
             producers=@($trace.producerCallFactIds | ForEach-Object { Alias 'F' $_ });
@@ -181,6 +182,13 @@ try {
                 body=(Alias 'F' $_.callerBodyFactId);callerMethod=(Alias 'F' $_.callerMethodFactId);targetMethod=(Alias 'F' $_.targetMethodFactId)} });
             returnSteps=@(if ($value.PSObject.Properties['returnSteps'] -and $null -ne $value.returnSteps) { $value.returnSteps | ForEach-Object {
                 [ordered]@{producer=(Alias 'F' $_.producerCallFactId);body=(Alias 'F' $_.calleeBodyFactId);returnFact=(Alias 'F' $_.returnFactId)} } });
+            composition=$(if ($value.PSObject.Properties['composition'] -and $null -ne $value.composition) {
+                $c = $value.composition
+                [ordered]@{operation=(Code $c.operation @('System.String.Concat'));
+                    producer=(Alias 'F' $c.producerCallFactId);operand=(Alias 'F' $c.operandFactId);body=(Alias 'F' $c.bodyFactId);
+                    operandKinds=@($c.operands | Select-Object -First 3 | ForEach-Object {
+                        Code $_.kind @('call-result','argument-slot','constant-string-hash','unknown','null') })}
+            });
             gaps=@($value.gaps | ForEach-Object { Code $_ $traceGaps })}
     })
     $projection = [ordered]@{nodes=$projectedNodes; edges=$projectedEdges; calls=$projectedCalls;
