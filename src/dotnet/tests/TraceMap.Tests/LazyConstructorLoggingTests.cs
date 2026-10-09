@@ -10,9 +10,12 @@ namespace TraceMap.Tests;
 public sealed class LazyConstructorLoggingTests
 {
     [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public async Task Property_profile_dynamic_lookup_is_distinct_from_literal_audit(bool compiledOnly)
+    [InlineData(true, "retained")]
+    [InlineData(false, "retained")]
+    [InlineData(true, "missing")]
+    [InlineData(true, "malformed")]
+    [InlineData(true, "virtual")]
+    public async Task Property_profile_dynamic_lookup_is_distinct_from_literal_audit(bool compiledOnly, string dispatchFlags)
     {
         var repo = FindRepo();
         var configuration = new DirectoryInfo(AppContext.BaseDirectory).Parent!.Name;
@@ -26,7 +29,19 @@ public sealed class LazyConstructorLoggingTests
             && fact.Properties.GetValueOrDefault("metadataName") == "Profile_Click");
         var index = Path.Combine(temp.Path, "index.sqlite");
         var combined = Path.Combine(temp.Path, "combined.sqlite");
-        SqliteIndexWriter.Write(index, scan.Manifest, scan.Facts);
+        var facts = scan.Facts.ToList();
+        var executor = Assert.Single(facts, fact => fact.FactType == FactTypes.ManagedMethodDeclared
+            && fact.Properties.GetValueOrDefault("metadataName") == "ExecuteSql");
+        Assert.True(int.TryParse(executor.Properties["methodDispatchFlags"], out var flags));
+        Assert.Equal(0, flags & (int)System.Reflection.MethodAttributes.Virtual);
+        if (dispatchFlags != "retained")
+        {
+            var properties = new Dictionary<string, string>(executor.Properties);
+            if (dispatchFlags == "missing") properties.Remove("methodDispatchFlags");
+            else properties["methodDispatchFlags"] = dispatchFlags == "virtual" ? "70" : "bad-flags";
+            facts[facts.IndexOf(executor)] = executor with { Properties = properties };
+        }
+        SqliteIndexWriter.Write(index, scan.Manifest, facts);
         var composition = await CombinedIndexBuilder.CombineAsync(new CombineOptions([index], combined, ["synthetic-profile"]));
         var source = Assert.Single(composition.Sources);
         var report = await CombinedDependencyPathReporter.BuildSelectedSymbolsAsync(
@@ -47,6 +62,8 @@ public sealed class LazyConstructorLoggingTests
         var binding = lookup.Nodes.Last().CommandBinding!;
         Assert.Equal("1", binding.CommandTypeFromPath!.Origin.Identity);
         var text = binding.CommandTextFromPath!;
+        Assert.Equal("callvirt", Assert.Single(text.Steps).Opcode);
+        Assert.Equal(dispatchFlags != "retained", text.Gaps.Contains("IlCommandVirtualDispatchUnproven"));
         Assert.Equal("symbolic-string-composition", text.State);
         Assert.Equal("call-result", text.Origin.Kind);
         var producerBody = Assert.Single(scan.Facts, fact => $"{source.SourceIndexId}:{fact.FactId}" == text.OriginBodyFactId);

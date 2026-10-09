@@ -945,3 +945,18 @@ The shared graph exports only the allowlisted operation, aliased fact references
 and ordered operand kinds, never operand identities or literals. Rebuild the CLI
 and regenerate the method graph from the retained run to obtain this projection;
 no application execution or source rescan is required.
+
+### Non-virtual targets encoded with callvirt
+
+`dotnet.compiled.member.v1` retains `methodDispatchFlags` from both Mono.Cecil
+and System.Reflection.Metadata; disagreement excludes the method fact.
+`combined.paths.compiled-il-bridge.v1` classifies a uniquely matched `callvirt`
+target as `compiled-il-call` only when retained flags establish a non-virtual,
+non-static, non-abstract instance method. The instruction can supply a null check
+without virtual dispatch. Genuine virtual methods (including final overrides),
+missing/malformed flags, and ambiguous targets remain conservative. Artifact/source
+binding gaps and runtime non-claims are unchanged.
+
+Older retained scans lack these flags and must be freshly scanned with the updated
+extractor to benefit; rebuilding/requerying alone cannot manufacture missing
+metadata evidence. The fresh scan should use a separate run, preserving the old one.

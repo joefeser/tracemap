@@ -98,7 +98,7 @@ public static partial class CombinedDependencyPathReporter
         var keys = new[] { "rawFileSha256", "ilGeneratorSha256", "ilBoundedInputSha256", "ilBodyFactId", "compiledFactId",
             "ilCallFactId", "ilOffset", "opcode", "referenceKind", "targetIdentity", "signature", "valueSchema", "valueState",
             "callHasThis", "callParameterCount", "callShapeSupported", "callByReferenceParameters", "receiverOrigin", "resultOrigin", "argumentOrigins",
-            "returnOrigins", "returnCount", "returnFlowGaps" };
+            "returnOrigins", "returnCount", "returnFlowGaps", "methodDispatchFlags" };
         var properties = new SortedDictionary<string, string>(StringComparer.Ordinal);
         foreach (var key in keys)
             if (fact.Properties.TryGetValue(key, out var value)) properties.Add(key, value.Length <= 64 * 1024 ? value

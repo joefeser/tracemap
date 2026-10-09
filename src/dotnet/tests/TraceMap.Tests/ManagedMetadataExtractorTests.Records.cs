@@ -85,6 +85,7 @@ public sealed partial class ManagedMetadataExtractorTests
             foreach (var observed in new[] { fact, combinedFact })
             {
                 Assert.Equal(FactTypes.ManagedMethodDeclared, observed.FactType);
+                Assert.Equal(((int)cecil.Attributes).ToString(System.Globalization.CultureInfo.InvariantCulture), observed.Properties["methodDispatchFlags"]);
                 Assert.Equal(expectedAssembly, observed.Properties["assemblyIdentity"]);
                 Assert.Equal(Token(handle), observed.Properties["metadataToken"]);
                 Assert.Equal(signature, observed.Properties["signature"]);
