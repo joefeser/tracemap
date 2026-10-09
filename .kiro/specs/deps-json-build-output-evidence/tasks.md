@@ -6,4 +6,5 @@
 - [x] Add typed package filtering, deterministic per-file/target identities, exact generator/input hashes and unknown build freshness.
 - [x] Add valid, malformed, ambiguous, duplicate, limit, scope and snapshot regression cases.
 - [x] Complete focused and full Debug validation and sample CLI smoke.
+- [x] Preserve disabled-mode receipt compatibility and retain per-gap supporting fact IDs.
 - [ ] Deliver bounded PR to dev and complete live ACK review.

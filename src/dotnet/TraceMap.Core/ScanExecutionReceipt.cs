@@ -148,7 +148,7 @@ public sealed class ScanReceiptRecorder
             NormalizeOrdered(options.IlRewriteAfterPdbPaths),
             options.IlRewritePdbLimits?.ToString() ?? string.Empty,
             Normalize(additionalAuthorizedInputs));
-        scopeFingerprint = Hash(JsonSerializer.Serialize(new
+        scopeFingerprint = !options.IndexDepsJson ? Hash(scope) : Hash(JsonSerializer.Serialize(new
         {
             baseScopeSha256 = Hash(scope),
             indexDepsJson = options.IndexDepsJson,

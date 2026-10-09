@@ -25,7 +25,7 @@ public sealed class PackageUpgradeImpactTests
                 fact = fact with { Properties = new SortedDictionary<string, string>(fact.Properties.ToDictionary(pair => pair.Key, pair => pair.Value), StringComparer.Ordinal)
                 { ["evidenceSource"] = "build-output", ["manifestKind"] = "deps.json" } };
             var index = Path.Combine(temp.Path, label + ".sqlite");
-            SqliteIndexWriter.Write(index, manifest, [fact]);
+            SqliteIndexWriter.Write(index, manifest, [fact with { FactId = fact.FactId + "-second" }, fact]);
             indexes.Add(index);
         }
         var combined = Path.Combine(temp.Path, "combined.sqlite");
@@ -41,9 +41,13 @@ public sealed class PackageUpgradeImpactTests
         foreach (var gap in gaps)
         {
             Assert.Equal("scan-" + gap.SourceLabel, gap.ScanId);
+            Assert.Equal(2, gap.SupportingFactIds.Count);
+            Assert.Equal(gap.SupportingFactIds.Order(StringComparer.Ordinal), gap.SupportingFactIds);
+            Assert.Contains("Synthetic.Package", gap.SupportingFactIds[0]);
             Assert.Equal(new string(gap.SourceLabel == "alpha" ? 'a' : 'b', 40), gap.CommitSha);
         }
         Assert.Contains(gaps, gap => gap.SourceLabel == "zeta");
+        Assert.Contains("\"supportingFactIds\"", await File.ReadAllTextAsync(Path.Combine(temp.Path, "report", "package-impact-report.json")));
         var filtered = (await PackageUpgradeImpactReporter.WriteAsync(options with { Source = "alpha", OutputPath = Path.Combine(temp.Path, "filtered") })).Report;
         Assert.Equal(bothSources ? 1 : 0, filtered.Gaps.Count(gap => gap.Message.Contains("unknown freshness", StringComparison.Ordinal)));
         var capped = (await PackageUpgradeImpactReporter.WriteAsync(options with { MaxGaps = 1, OutputPath = Path.Combine(temp.Path, "capped") })).Report;

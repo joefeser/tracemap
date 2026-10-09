@@ -11,6 +11,22 @@ public sealed class ScanExecutionReceiptTests
     private const string CommitSha = "0123456789abcdef0123456789abcdef01234567";
 
     [Fact]
+    public void Disabled_deps_preserves_legacy_v1_scope_fingerprint()
+    {
+        var options = new ScanOptions("synthetic", "output");
+        var recorder = new ScanReceiptRecorder(options);
+        recorder.Bind(new GitMetadata("synthetic", null, "main", new string('a', 40), []));
+        var fields = Enumerable.Repeat(string.Empty, 26).ToArray();
+        fields[5] = "no-restore";
+        fields[15] = "no-il-body-evidence";
+        fields[17] = "no-il-rewrite-evidence";
+        fields[21] = "no-il-rewrite-pdb-evidence";
+        foreach (var index in new[] { 18, 19, 22, 23 }) fields[index] = "[]";
+        var legacy = Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(string.Join('\n', fields))));
+        Assert.Equal(legacy, recorder.CreateReceipt().AuthorizedScopeFingerprint);
+    }
+
+    [Fact]
     public void Authorized_scope_binds_deps_opt_in_and_effective_limits()
     {
         var options = new ScanOptions("repo", "out");
