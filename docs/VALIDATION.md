@@ -4524,3 +4524,15 @@ source reconciliation, and identical facts/report bytes. Run artifact-validator,
 privacy/spec/whitespace guards and final-head public CI. Non-.NET local and pinned
 source OSS smokes are deferred for this assertion-only change. The gated Windows
 deep-corpus local skip and private Windows/MSVC acceptance remain explicit gaps.
+
+## Opt-in build-output dependencies
+
+Run `dotnet test src/dotnet/TraceMap.sln --filter FullyQualifiedName~DepsJsonEvidenceTests`
+in standard Debug configuration, followed by the full Debug suite. The suite
+checks SDK-shaped direct/transitive graphs, project exclusion, ambiguous graphs,
+duplicate/malformed input, bounds, file/target grouping, CLI opt-in, source
+snapshot independence and a bounded synthetic build during a scan.
+
+Smoke: `dotnet run --project src/dotnet/TraceMap.Cli -- scan --repo samples/deps-json-evidence --out <outside-output> --index-deps-json`.
+The flag reads existing build outputs without building; freshness and build commit
+remain unknown. See [the public fixture and evidence contract](../samples/deps-json-evidence/README.md).
