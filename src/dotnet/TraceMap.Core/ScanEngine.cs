@@ -135,8 +135,7 @@ public static class ScanEngine
                 var generatedSnapshot = CaptureSemanticInputSnapshot(repoPath, generatedInputs, cancellationToken);
                 semanticInputSnapshot = semanticInputSnapshot.Concat(generatedSnapshot)
                     .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
-                fullInventory = fullInventory.Concat(generatedInputs).OrderBy(item => item.RelativePath, StringComparer.Ordinal).ToArray();
-                VerifySemanticInputSnapshot(repoPath, fullInventory, semanticResult, semanticInputSnapshot, cancellationToken);
+                VerifySemanticInputSnapshot(repoPath, fullInventory.Concat(generatedInputs).ToArray(), semanticResult, semanticInputSnapshot, cancellationToken);
                 semanticOperation.Complete(semanticToolchainReducedCoverage
                     ? TraceMapDiagnosticOutcome.Partial
                     : TraceMapDiagnosticOutcome.Succeeded);
@@ -160,7 +159,7 @@ public static class ScanEngine
         }
 
         inventory = IncludeSemanticallyAnalyzedFiles(inventory, fullInventory, semanticResult);
-        var discoveredSnapshotInventory = IncludeSemanticInputs(inventory, fullInventory, semanticResult);
+        var discoveredSnapshotInventory = IncludeSemanticInputs(repoPath, inventory, fullInventory, semanticResult);
         if (options.ExactSourceScope)
         {
             ValidateExactSourceScope(fullInventory, discoveredSnapshotInventory, options,
@@ -180,14 +179,13 @@ public static class ScanEngine
                 sourcePathComparer,
                 options.IncludeGlobs,
                 ExactSourceEnumerationLimit(options));
-            refreshedFullInventory = refreshedFullInventory.Concat(CaptureGeneratedCompilationInputs(repoPath, refreshedFullInventory, semanticResult))
-                .OrderBy(item => item.RelativePath, StringComparer.Ordinal).ToArray();
             var refreshedInventory = ApplyScope(refreshedFullInventory, repoPath, options);
             refreshedInventory = IncludeSemanticallyAnalyzedFiles(
                 refreshedInventory,
                 refreshedFullInventory,
                 semanticResult);
             var refreshedSnapshotInventory = IncludeSemanticInputs(
+                repoPath,
                 refreshedInventory,
                 refreshedFullInventory,
                 semanticResult);
@@ -199,7 +197,7 @@ public static class ScanEngine
             VerifySourceSnapshotInventoryMembership(discoveredSnapshotInventory, refreshedSnapshotInventory);
             VerifySemanticInputSnapshot(
                 repoPath,
-                refreshedFullInventory,
+                refreshedSnapshotInventory,
                 semanticResult,
                 semanticInputSnapshot,
                 cancellationToken);
@@ -420,14 +418,13 @@ public static class ScanEngine
                 sourcePathComparer,
                 options.IncludeGlobs,
                 ExactSourceEnumerationLimit(options));
-            verificationFullInventory = verificationFullInventory.Concat(CaptureGeneratedCompilationInputs(repoPath, verificationFullInventory, semanticResult))
-                .OrderBy(item => item.RelativePath, StringComparer.Ordinal).ToArray();
             var verificationInventory = ApplyScope(verificationFullInventory, repoPath, options);
             verificationInventory = IncludeSemanticallyAnalyzedFiles(
                 verificationInventory,
                 verificationFullInventory,
                 semanticResult);
             var verificationSnapshotInventory = IncludeSemanticInputs(
+                repoPath,
                 verificationInventory,
                 verificationFullInventory,
                 semanticResult);
@@ -438,6 +435,7 @@ public static class ScanEngine
             }
             VerifySourceSnapshotInventory(authoritativeSnapshotInventory, verificationSnapshotInventory);
             verificationDigest = CreateSourceSnapshotDigest(repoPath, verificationSnapshotInventory);
+            VerifySemanticInputSnapshot(repoPath, verificationSnapshotInventory, semanticResult, semanticInputSnapshot, cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
             if (!string.Equals(sourceSnapshotDigest, verificationDigest, StringComparison.Ordinal))
                 throw new SourceSnapshotException(details: ["(whole-tree digest mismatch: file list and sizes identical but some watched file's content changed — re-scan when the tree is idle)"]);
@@ -725,6 +723,9 @@ public static class ScanEngine
                 if (path.StartsWith("__external__/", StringComparison.Ordinal))
                     continue;
 
+                if (semanticResult.CompilationInputFiles is CompilationInputSet compilerInputs
+                    && compilerInputs.Checksums.ContainsKey(path))
+                    compilerInputs.Verify(path, Path.Combine(repoPath, path.Replace('/', Path.DirectorySeparatorChar)));
                 if (!baseline.TryGetValue(path, out var expected))
                 {
                     throw new SourceSnapshotException(details: [$"{path} (no baseline digest captured)"]);
@@ -735,7 +736,7 @@ public static class ScanEngine
                     throw new SourceSnapshotException(details: [$"{path} (protected input bytes changed)"]);
             }
         }
-        catch (SourceInventoryException ex)
+        catch (Exception ex) when (ex is SourceInventoryException or IOException or UnauthorizedAccessException)
         {
             throw new SourceSnapshotException(ex, ["source input re-read failed"]);
         }
@@ -771,6 +772,9 @@ public static class ScanEngine
                 var size = new FileInfo(current).Length;
                 if (result.Count >= 4096 || size > 67_108_864 - bytes)
                     throw new SourceSnapshotException(details: ["generated compilation input capture limit"]);
+                if (semanticResult.CompilationInputFiles is not CompilationInputSet compilerInputs)
+                    throw new SourceSnapshotException(details: ["compilation input lacks immutable compiler evidence"]);
+                compilerInputs.Verify(path, current);
                 bytes += size;
                 result.Add(new(path, path.EndsWith(".vb", StringComparison.OrdinalIgnoreCase) ? "VisualBasic" : "CSharp", size));
             }
@@ -782,33 +786,13 @@ public static class ScanEngine
         return result;
     }
 
-    private static bool IsKnownGeneratedCompilationInput(string relativePath)
-    {
-        // OrdinalIgnoreCase: Windows filesystems are case-insensitive and MSBuild/Roslyn
-        // may report the same generated file with any casing.
-        // Two rules, both evidence-backed from a real .NET 10 estate scan:
-        // 1. Path-segment rule (the general one): any compilation input under an obj/ or bin/
-        //    segment is a candidate for post-generation capture, subject to verification.
-        //    Covers all current and future generators ({Proj}.RazorAssemblyInfo.cs, xUnit's
-        //    SelfRegisteredExtensions.cs, GlobalUsings, AssemblyInfo/Attributes, *.g.cs).
-        // 2. Name rule (belt-and-suspenders when a generator reports a bare name without a path):
-        //    the observed generated file names.
-        var segments = relativePath.Split('/', '\\');
-        if (segments.Contains("obj", StringComparer.OrdinalIgnoreCase) || segments.Contains("bin", StringComparer.OrdinalIgnoreCase))
-            return true;
-        var fileName = Path.GetFileName(relativePath);
-        return fileName.Equals("RazorAssemblyInfo.cs", StringComparison.OrdinalIgnoreCase)
-            || fileName.Equals("MvcApplicationPartsAssemblyInfo.cs", StringComparison.OrdinalIgnoreCase)
-            || fileName.Equals("SelfRegisteredExtensions.cs", StringComparison.OrdinalIgnoreCase)
-            || fileName.EndsWith(".RazorAssemblyInfo.cs", StringComparison.OrdinalIgnoreCase)
-            || fileName.EndsWith(".MvcApplicationPartsAssemblyInfo.cs", StringComparison.OrdinalIgnoreCase)
-            || fileName.EndsWith(".AssemblyInfo.cs", StringComparison.OrdinalIgnoreCase)
-            || fileName.EndsWith(".AssemblyAttributes.cs", StringComparison.OrdinalIgnoreCase)
-            || fileName.EndsWith(".GlobalUsings.g.cs", StringComparison.OrdinalIgnoreCase)
-            || fileName.EndsWith(".g.cs", StringComparison.OrdinalIgnoreCase);
-    }
+    private static bool IsKnownGeneratedCompilationInput(string relativePath) =>
+        relativePath.Split('/', '\\').SkipLast(1)
+            .Any(segment => segment.Equals("obj", StringComparison.OrdinalIgnoreCase)
+                || segment.Equals("bin", StringComparison.OrdinalIgnoreCase));
 
     private static IReadOnlyList<FileInventoryItem> IncludeSemanticInputs(
+        string repoPath,
         IReadOnlyList<FileInventoryItem> inventory,
         IReadOnlyList<FileInventoryItem> fullInventory,
         SemanticExtractionResult semanticResult)
@@ -818,6 +802,7 @@ public static class ScanEngine
             .Concat(fullInventory.Where(item =>
                 IsSemanticMetadataKind(item.Kind)
                 || compilationInputFiles.Contains(item.RelativePath)))
+            .Concat(CaptureGeneratedCompilationInputs(repoPath, fullInventory, semanticResult))
             .GroupBy(item => item.RelativePath, StringComparer.Ordinal)
             .Select(group => group.First())
             .OrderBy(item => item.RelativePath, StringComparer.Ordinal)
