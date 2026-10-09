@@ -948,6 +948,15 @@ no application execution or source rescan is required.
 
 ### Non-virtual targets encoded with callvirt
 
+For a completed wizard project, run `scripts/wrefresh.ps1 <configuration-root>`
+(with `-Project <id>` for multi-project roots). It builds the CLI, locates the old
+run's prepared configuration and receipts, and calls native `start` with a unique
+`refresh-<project>-<id>` output folder. Native admission still verifies the inputs;
+the helper never supplies a new source attestation. It preserves the old run and
+wizard configuration, stops on build/start failure, and runs no test suite.
+The printed fresh review root is separate from the wizard's original run locator.
+Helper checks: `pwsh -NoProfile -File scripts/tests/Test-WebFormsRefresh.ps1`.
+
 `dotnet.compiled.member.v1` retains `methodDispatchFlags` from both Mono.Cecil
 and System.Reflection.Metadata; disagreement excludes the method fact.
 `combined.paths.compiled-il-bridge.v1` classifies a uniquely matched `callvirt`
