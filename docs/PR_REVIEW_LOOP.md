@@ -7,14 +7,13 @@ review readiness:
 .agent-control/lanes/pr-review-loop.yaml
 ```
 
-The lane treats Codex and Qodo as a trusted review group. Qodo remains required
-and can be requested only by an explicit owner action. The initial batch waits
-for Qodo's single return. After Qodo has returned once, a later-head stale result
-is terminal residual risk: ACK must not request, retry, or wait for a second
-Qodo return. Exact-head Codex may then satisfy the configured fast quorum after
-all findings are patched or dispositioned. Stale Codex plus stale Qodo cannot
-satisfy the lane. Checks, threads, findings, merge state, risky-file gates, and
-`main`/release promotion policy remain unchanged.
+The lane requires Codex and trusted exact-head Baz review evidence before partial
+findings are processed. Qodo is disabled: do not request or await it. ACK observes
+Baz reviews automatically; it never requests Baz. Numeric quorum alone cannot
+release a batch while the trusted Baz return is missing. Stale Baz does not count
+as exact-head evidence. Baz has at most two finding/fix cycles; clean verification
+at the ceiling remains permitted. Checks, threads, findings, merge state,
+risky-file gates and main/release promotion policy remain unchanged.
 
 After `FRESH_REVIEW_FIX_CYCLE_CEILING_REACHED`, the trusted lane may use the
 configured `claude-local` reviewer as a bounded fallback. This is a read-only
@@ -40,8 +39,8 @@ can use the fallback.
 Operational boundaries:
 
 - Codex review requests are policy-controlled and bounded.
-- Qodo review requests are explicit owner actions; the normal loop must not
-  post `@qodo-code-review review`.
+- Qodo is retired and disabled. Do not request or await it.
+- Baz re-reviews automatically after pushes; no manual trigger is sent.
 - Automatic local review is Claude-only, read-only, exact-head, and available
   only after the configured Codex freshness ceiling.
 - During a typed hosted-review failure or non-return, Joe may explicitly invoke
@@ -53,22 +52,22 @@ Operational boundaries:
 - Merge-commit readback is the default; squash merge requires separate owner
   approval.
 
-The one-pass Qodo lifecycle, bounded current-head Codex recovery, and trusted
-local-review fallback use the immutable Agent Control Kit `v0.5.2` release
-at `949f31b733de89c1019939ca07f8399c1e170d59`. Before a loop, verify the exact
+The trusted Baz batch, bounded Codex recovery, and local-review fallback require
+verified capabilities. This example uses immutable Agent Control Kit `v0.5.5`
+at `ab398330c03fbe34b7fdd600efa9698adf003a67`. Before a loop, verify the exact
 checkout, stable identity, release receipt, and consumer lane. The lane requires
-ACK `>=0.5.2 <0.6.0` for consolidated invariant-audit repair briefs. This example
+ACK `>=0.5.2 <0.6.0` plus trustedHostedReviewerQuorum and the other declared capabilities; version range alone is insufficient. This example
 uses the verified local release installation; set `ACK_ROOT` to the actual
 release checkout and retain its matching receipt when installing elsewhere:
 
 ```bash
-ACK_ROOT="$HOME/.local/share/agent-control-kit/releases/v0.5.2"
-ACK_RELEASE_RECEIPT="$ACK_ROOT/.agent-control/tmp/releases/v0.5.2.json"
-ACK_SHA=949f31b733de89c1019939ca07f8399c1e170d59
+ACK_ROOT="$HOME/.local/share/agent-control-kit/releases/v0.5.5"
+ACK_RELEASE_RECEIPT="$ACK_ROOT/.agent-control/tmp/releases/v0.5.5.json"
+ACK_SHA=ab398330c03fbe34b7fdd600efa9698adf003a67
 
 git -C "$ACK_ROOT" fetch origin --tags
 test "$(git -C "$ACK_ROOT" rev-parse HEAD)" = "$ACK_SHA"
-test "$(git -C "$ACK_ROOT" rev-parse 'v0.5.2^{commit}')" = "$ACK_SHA"
+test "$(git -C "$ACK_ROOT" rev-parse 'v0.5.5^{commit}')" = "$ACK_SHA"
 npm --prefix "$ACK_ROOT" run build
 node "$ACK_ROOT/dist/cli.js" version --json
 node "$ACK_ROOT/dist/cli.js" release verify \

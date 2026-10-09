@@ -373,11 +373,9 @@ public sealed class ScanEngineTests
             CompilationInputFiles: new HashSet<string>(StringComparer.Ordinal)
             {
                 realPath,
-                "RazorAssemblyInfo.cs",
                 "obj/Debug/net8.0/RazorAssemblyInfo.cs",
                 "Sample.Web.Api/obj/Debug/net10.0/Sample.Web.Api.RazorAssemblyInfo.cs",
                 "Sample.Worker.Tests/obj/Debug/net10.0/SelfRegisteredExtensions.cs",
-                "SelfRegisteredExtensions.cs",
                 "Sample.Tests/bin/Debug/net10.0/AnythingGenerated.cs",
                 "src/nested/obj/release/Deeply.Nested.Generated.cs",
                 "obj/Debug/net8.0/Sample.Web.GlobalUsings.g.cs",
@@ -392,15 +390,57 @@ public sealed class ScanEngineTests
             Directory.CreateDirectory(Path.GetDirectoryName(full)!);
             File.WriteAllText(full, "public class Alpha { }");
         }
+        var compilerInputs = new CompilationInputSet();
+        foreach (var path in semanticResult.CompilationInputFiles!)
+        {
+            using var stream = File.OpenRead(Path.Combine(temp.Path, path));
+            compilerInputs.Record(path, Microsoft.CodeAnalysis.Text.SourceText.From(stream));
+        }
+        semanticResult = semanticResult with { CompilationInputFiles = compilerInputs };
         var generated = ScanEngine.CaptureGeneratedCompilationInputs(temp.Path, inventory, semanticResult);
         var captured = inventory.Concat(generated).ToArray();
         var combinedBaseline = baseline.Concat(ScanEngine.CaptureSemanticInputSnapshot(temp.Path, generated))
             .ToDictionary(pair => pair.Key, pair => pair.Value);
         ScanEngine.VerifySemanticInputSnapshot(temp.Path, captured, semanticResult, combinedBaseline);
         var before = ScanEngine.CreateSourceSnapshotDigest(temp.Path, captured);
-        File.WriteAllText(Path.Combine(temp.Path, "RazorAssemblyInfo.cs"), "public class Bravo { }");
+        File.WriteAllText(Path.Combine(temp.Path, "obj/Debug/net8.0/RazorAssemblyInfo.cs"), "public class Bravo { }");
         Assert.NotEqual(before, ScanEngine.CreateSourceSnapshotDigest(temp.Path, captured));
         Assert.Throws<SourceSnapshotException>(() => ScanEngine.VerifySemanticInputSnapshot(temp.Path, captured, semanticResult, combinedBaseline));
+    }
+
+    [Theory]
+    [InlineData("obj/Debug/Anything.cs")]
+    [InlineData("RazorAssemblyInfo.cs")]
+    [InlineData("New.g.cs")]
+    public void Generated_resemblance_without_compiler_evidence_never_admits_new_source(string relative)
+    {
+        using var temp = new TempDirectory();
+        var full = Path.Combine(temp.Path, relative);
+        Directory.CreateDirectory(Path.GetDirectoryName(full)!);
+        File.WriteAllText(full, "class Sample { }");
+        var semantic = new SemanticExtractionResult([], [], true, false, CompilationInputFiles: new HashSet<string> { relative });
+        Assert.Throws<SourceSnapshotException>(() =>
+        {
+            var generated = ScanEngine.CaptureGeneratedCompilationInputs(temp.Path, [], semantic);
+            ScanEngine.VerifySemanticInputSnapshot(temp.Path, generated, semantic, new Dictionary<string, string>());
+        });
+    }
+
+    [Fact]
+    public void Compiler_document_checksum_rejects_rewrite_before_post_extraction_capture()
+    {
+        using var temp = new TempDirectory();
+        const string relative = "obj/Debug/Sample.AssemblyInfo.cs";
+        var full = Path.Combine(temp.Path, relative);
+        Directory.CreateDirectory(Path.GetDirectoryName(full)!);
+        File.WriteAllText(full, "class Alpha { }");
+        var compilerInputs = new CompilationInputSet();
+        using (var stream = File.OpenRead(full))
+            compilerInputs.Record(relative, Microsoft.CodeAnalysis.Text.SourceText.From(stream));
+        File.WriteAllText(full, "class Bravo { }");
+        var semantic = new SemanticExtractionResult([], [], true, false, CompilationInputFiles: compilerInputs);
+        Assert.Throws<SourceSnapshotException>(() => ScanEngine.CaptureGeneratedCompilationInputs(temp.Path, [], semantic));
+        Assert.NotNull(typeof(SourceSnapshotException).GetConstructor([typeof(Exception)]));
     }
 
     [Theory]

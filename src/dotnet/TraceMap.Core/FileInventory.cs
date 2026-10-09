@@ -15,6 +15,8 @@ public sealed class SourceSnapshotException : Exception
     public const string ErrorCode = "SourceSnapshotChangedDuringScan";
     public const string DetailsKey = "details";
 
+    public SourceSnapshotException(Exception innerException) : this(innerException, null) { }
+
     public SourceSnapshotException(Exception? innerException = null, IReadOnlyList<string>? details = null)
         : base(ErrorCode, innerException)
     {

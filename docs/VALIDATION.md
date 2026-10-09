@@ -2,6 +2,12 @@
 
 Operator examples use generic site, page, and handler names. Historical receipts remain bound to their recorded input bytes; genericized examples do not establish a fresh platform validation result.
 
+For generated compilation snapshot changes (PR #847), run ScanEngineTests and
+CliTests in Debug with warnings as errors. Exact generated compilation inputs
+receive a post-generation digest (4,096 files / 64 MiB maximum), are included in
+source snapshot identity, and remain verified. obj/bin names only nominate
+capture candidates; other build output remains outside the source inventory.
+
 For the reproducible source + compiled website + separate DLL operator workflow,
 run `./scripts/wlocal.ps1` in PowerShell 7. It builds public fixture projects,
 scans and combines independent inputs, generates reports, and asserts attached,
@@ -4503,9 +4509,3 @@ source reconciliation, and identical facts/report bytes. Run artifact-validator,
 privacy/spec/whitespace guards and final-head public CI. Non-.NET local and pinned
 source OSS smokes are deferred for this assertion-only change. The gated Windows
 deep-corpus local skip and private Windows/MSVC acceptance remain explicit gaps.
-
-For generated compilation snapshot changes (PR #847), run ScanEngineTests and
-CliTests in Debug with warnings as errors. Exact generated compilation inputs
-receive a post-generation digest (4,096 files / 64 MiB maximum), are included in
-source snapshot identity, and remain verified. obj/bin names only nominate
-capture candidates; other build output remains outside the source inventory.

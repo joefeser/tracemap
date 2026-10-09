@@ -83,6 +83,15 @@ internal static class SemanticExtractionResultMerge
             return first;
         }
 
-        return new HashSet<string>(first.Concat(second), StringComparer.Ordinal);
+        var merged = new CompilationInputSet();
+        merged.UnionWith(first.Concat(second));
+        foreach (var input in new[] { first, second }.OfType<CompilationInputSet>())
+            foreach (var (path, checksum) in input.Checksums)
+            {
+                if (merged.Checksums.TryGetValue(path, out var prior) && prior != checksum)
+                    throw new SourceSnapshotException(details: ["compilation inputs disagree across project evaluations"]);
+                merged.Checksums[path] = checksum;
+            }
+        return merged;
     }
 }
