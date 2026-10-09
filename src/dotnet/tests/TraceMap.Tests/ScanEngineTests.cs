@@ -439,8 +439,21 @@ public sealed class ScanEngineTests
             compilerInputs.Record(relative, Microsoft.CodeAnalysis.Text.SourceText.From(stream));
         File.WriteAllText(full, "class Bravo { }");
         var semantic = new SemanticExtractionResult([], [], true, false, CompilationInputFiles: compilerInputs);
-        Assert.Throws<SourceSnapshotException>(() => ScanEngine.CaptureGeneratedCompilationInputs(temp.Path, [], semantic));
+        var mismatch = Assert.Throws<SourceSnapshotException>(() => ScanEngine.CaptureGeneratedCompilationInputs(temp.Path, [], semantic));
+        Assert.Contains(relative, SourceSnapshotException.Describe(mismatch)!);
+        Assert.DoesNotContain(temp.Path, SourceSnapshotException.Describe(mismatch)!);
         Assert.NotNull(typeof(SourceSnapshotException).GetConstructor([typeof(Exception)]));
+    }
+
+    [Fact]
+    public void Snapshot_details_escape_log_control_characters()
+    {
+        var exception = new SourceSnapshotException(details: ["src/line\nbreak\u001b.cs", "src/\u2028separator.cs"]);
+        var details = SourceSnapshotException.Describe(exception)!;
+        Assert.Contains("src/line\\u000abreak\\u001b.cs", details);
+        Assert.Contains("src/\\u2028separator.cs", details);
+        Assert.DoesNotContain('\n', details);
+        Assert.DoesNotContain('\u001b', details);
     }
 
     [Theory]

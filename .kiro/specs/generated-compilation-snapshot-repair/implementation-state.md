@@ -52,3 +52,20 @@ Three reviewer-lane regressions pass. Generated compiler inputs remain only in
 SourceSnapshotInventory, not the ordinary extraction inventory; SDK-generated
 GlobalUsings and AssemblyInfo are positively asserted. Final-head hosted full
 suite and Windows checks remain required. No runtime application execution.
+
+## Final diagnostics and Windows validation limitation
+
+Fresh Codex findings now name validated repository-relative paths in compiler
+checksum errors and escape control/line-separator characters in CLI details.
+166 focused cases pass with warnings as errors (57s). The final exact-type
+IOException assertion was rebuilt and all five wizard tests passed (19s).
+
+Hosted Windows run 37883651935 on 01e5dc94 failed one of 148 corpus tests:
+WebFormsWizardExecutionTests.Output_failure_after_verified_completion_preserves_completed_cursor.
+The retained public synthetic artifacts show a succeeded scan receipt followed
+by a scan-failed native artifact-validation checkpoint. This projectless case
+has no generated compiler inputs. An isolated local rerun passed (one test, 3s);
+root cause is not established and the Windows failure is not erased by that pass.
+The test retains its required IOException assertion and now includes the actual
+exit code and categorical native diagnostics when completion was never reached.
+Final-head hosted Windows rerun is required; no customer/private-worker execution.
