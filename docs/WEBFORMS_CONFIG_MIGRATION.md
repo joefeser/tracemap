@@ -815,3 +815,32 @@ not revalidate every retained raw artifact or the external source/publish inputs
 Hashes establish local integrity, not authenticity. The query remains subject
 to the native 2,048-node/128-KiB response bounds. SQL parameter values and runtime
 behavior remain unverified unless supported by separately identified evidence.
+# Unfiltered retained method graph
+
+After building the updated reader, inspect the outgoing graph independently of database-reaching paths:
+
+```powershell
+.\scripts\wrequery.ps1 C:\work\synthetic-review -Handler Names_Init -AllowUpdatedReader -MethodGraph -Open
+```
+
+This reuses the verified saved run and writes `method-graph.local.html` and
+`method-graph.local.json` in a new handler report folder. It does not scan, combine,
+execute the application, or modify original artifacts. Native equivalent: append
+`--view method-graph` to `webforms-review requery-handler`.
+
+Rule `combined.graph.retained-outgoing.v1` projects all admitted outgoing edge kinds,
+without database-terminal filtering or reverse-terminal pruning. Unique-node breadth-first
+expansion preserves shared targets and cycles as linked back-references. The expandable
+tree includes source/compiled identity candidates without treating them as runtime calls.
+Encoded IL targets, caller/body/call IDs, offsets, opcode, evidence rule/tier and retained
+gap reasons remain visible even when no method-target edge was admitted. An absent edge
+does not establish absent behavior; framework or unbound targets may lack declarations.
+
+Limits remain explicit: inherited graph admission, depth and work limits; MaxFrontier
+bounds nodes, edges, encoded calls and gap records separately; output-byte limits refuse
+oversized artifacts. The tree display has a 64-level bound; node links expose the remaining
+retained adjacency. No raw source or SQL literals are included. The JSON binds the reporting
+generator SHA-256 and bounded input, and the native receipt hashes both graph artifacts.
+This is partial static evidence, not an exhaustive runtime call graph. Inspect a missing
+connection by finding the caller, then its encoded target and retained gap reasons; use
+that actual shape to build a regression fixture before changing resolution rules.

@@ -32,6 +32,8 @@ public sealed record CombinedDependencyPathOptions(
     internal IReadOnlySet<string>? StartingFactIds { get; init; }
     public bool ExactFromSymbol { get; init; }
     public bool CompiledOnly { get; init; }
+    [JsonIgnore]
+    public Action<RetainedMethodGraph>? MethodGraphObserver { get; init; }
     internal IReadOnlyList<CombinedPathSymbolRoot>? SymbolRoots { get; init; }
     // Deterministic work bound, including nonterminal/cyclic exploration.
     public int MaxTraversalWork { get; init; } = 100_000;
@@ -614,6 +616,7 @@ public static partial class CombinedDependencyPathReporter
         var paths = new List<CombinedPath>();
         var truncated = false;
         SearchResult? search = null;
+        RetainedMethodGraph? methodGraph = null;
 
         if (resolvedStarts.TotalMatchCount > startNodes.Count)
         {
@@ -634,7 +637,13 @@ public static partial class CombinedDependencyPathReporter
             truncated = true;
         }
 
-        if (startNodes.Count == 0)
+        if (options.MethodGraphObserver is not null)
+        {
+            methodGraph = BuildMethodGraph(graph, read, startNodes, options);
+            truncated |= methodGraph.Cutoffs.Count != 0;
+            options.MethodGraphObserver(methodGraph);
+        }
+        else if (startNodes.Count == 0)
         {
             gaps.Add(CreateSelectorGap(read, options, sourceFilter));
         }
@@ -795,11 +804,11 @@ public static partial class CombinedDependencyPathReporter
                 options.MaxDepth,
                 options.MaxPaths,
                 options.MaxFrontier,
-                Algorithm,
+                methodGraph is not null ? "unique-node-breadth-first-outgoing" : Algorithm,
                 AlgorithmVersion,
                 CombinedReportHelpers.NormalizeMessageDirection(options.MessageDirection, "paths"),
                 options.MaxTraversalWork,
-                options.ExactFromSymbol) { SymbolRoots = options.SymbolRoots, TraversalScope = options.CompiledOnly ? "compiled-il-with-root-attachment" : null },
+                options.ExactFromSymbol) { SymbolRoots = options.SymbolRoots, TraversalScope = methodGraph is not null ? "unfiltered-retained-outgoing" : options.CompiledOnly ? "compiled-il-with-root-attachment" : null },
             read.Sources.Select(source => legacyMode ? SanitizeSource(source) : source).OrderBy(source => source.Label, StringComparer.Ordinal).ThenBy(source => source.SourceIndexId, StringComparer.Ordinal).ToArray(),
             new CombinedPathSummary(
                 read.Sources.Count,
@@ -808,7 +817,7 @@ public static partial class CombinedDependencyPathReporter
                 sortedPaths.Length,
                 sortedGaps.Length,
                 selectorCandidateCount,
-                truncated) { TraversalWorkUnits = search?.Work ?? 0 },
+                truncated) { TraversalWorkUnits = methodGraph?.Work ?? search?.Work ?? 0 },
             sortedPaths,
             sortedGaps,
             new CombinedPathInventory(

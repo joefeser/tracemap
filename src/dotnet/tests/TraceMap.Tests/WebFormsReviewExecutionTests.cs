@@ -1319,6 +1319,16 @@ public sealed class WebFormsReviewExecutionTests
             Assert.NotNull(handlerReceipt.GraphObservation);
             Assert.Equal(handlerReceipt.CombinedIndexSha256, handlerReceipt.GraphObservation.InputSha256);
             Assert.Contains("no-scan;no-combine", requeryOutput.ToString());
+            var graphFolder = Path.Combine(fixture.Root, "handler-method-graph");
+            Assert.Equal(0, await TraceMapCommand.RunAsync(["webforms-review", "requery-handler", "--run", fixture.Run,
+                "--bundle", target, "--handler", "Names_Init", "--out", graphFolder, "--view", "method-graph"], requeryOutput, error));
+            var graphReceipt = JsonSerializer.Deserialize<WebFormsHandlerRequeryReceipt>(File.ReadAllText(Path.Combine(graphFolder,
+                WebFormsReviewExecutionCommand.HandlerRequeryName)), JsonOptions)!;
+            Assert.Equal("unfiltered-retained-outgoing", graphReceipt.Query.TraversalScope);
+            Assert.Null(graphReceipt.Query.ToSurface);
+            Assert.Equal(WebFormsReviewExecutionCommand.HandlerRequeryHash(graphReceipt), graphReceipt.BoundedInputSha256);
+            Assert.Contains(graphReceipt.Artifacts, artifact => artifact.RelativePath == TraceMap.Reporting.RetainedMethodGraphWriter.JsonName);
+            Assert.Contains("Call graph tree", File.ReadAllText(Path.Combine(graphFolder, TraceMap.Reporting.RetainedMethodGraphWriter.HtmlName)));
             var fillFolder = Path.Combine(fixture.Root, "handler-fill-query");
             using var fillOutput = new StringWriter();
             Assert.Equal(0, await TraceMapCommand.RunAsync(["webforms-review", "requery-handler", "--run", fixture.Run,

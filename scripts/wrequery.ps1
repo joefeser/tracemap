@@ -5,9 +5,11 @@ param(
     [string]$Handler,
     [switch]$Open,
     [switch]$AllowUpdatedReader,
-    [switch]$InspectLatest
+    [switch]$InspectLatest,
+    [switch]$MethodGraph
 )
 Set-StrictMode -Version Latest
+if ($MethodGraph -and $InspectLatest) { throw 'MethodGraph and InspectLatest cannot be combined.' }
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'WebFormsRequeryDiagnostics.ps1')
 function Read-Locator([string]$Path, [string]$Schema) {
@@ -76,9 +78,12 @@ if ($InspectLatest) {
     return
 }
 $destination = Join-Path $Root ("handler-requery-$Project-" + [guid]::NewGuid().ToString('N'))
-& dotnet $cli webforms-review requery-handler --run $run --bundle $bundle --handler $Handler --out $destination
+$extra = @()
+if ($MethodGraph) { $extra = @('--view', 'method-graph') }
+& dotnet $cli webforms-review requery-handler --run $run --bundle $bundle --handler $Handler --out $destination @extra
 if ($LASTEXITCODE -ne 0) { throw 'WEBFORMS_HANDLER_REQUERY_FAILED;originals-preserved;partial-output-preserved' }
 $report = Join-Path $destination 'compiled-paths.local.html'
+if ($MethodGraph) { $report = Join-Path $destination 'method-graph.local.html' }
 Write-Output "Handler report: $report"
-Write-WebFormsTruncationSummary $destination
+if (!$MethodGraph) { Write-WebFormsTruncationSummary $destination }
 if ($Open) { Invoke-Item -LiteralPath $report }
