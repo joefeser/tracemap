@@ -6,7 +6,8 @@ param(
     [switch]$Open,
     [switch]$AllowUpdatedReader,
     [switch]$InspectLatest,
-    [switch]$MethodGraph
+    [switch]$MethodGraph,
+    [switch]$LatestRefresh
 )
 Set-StrictMode -Version Latest
 if ($MethodGraph -and $InspectLatest) { throw 'MethodGraph and InspectLatest cannot be combined.' }
@@ -44,6 +45,17 @@ if ($relative -cnotmatch ('\Aruns/' + [regex]::Escape($Project) + '-[a-f0-9]{32}
     throw 'WEBFORMS_WIZARD_RUN_LOCATOR_INVALID'
 }
 $run = Join-Path (Join-Path $Root $relative) 'run'
+if ($LatestRefresh) {
+    if ($InspectLatest) { throw 'LatestRefresh and InspectLatest cannot be combined.' }
+    $refreshes = @(Get-ChildItem -LiteralPath $Root -Directory | Where-Object {
+        $_.Name -cmatch ('\Arefresh-' + [regex]::Escape($Project) + '-[a-f0-9]{32}\z')
+    } | Select-Object -First 129)
+    if ($refreshes.Count -eq 0 -or $refreshes.Count -gt 128) { throw 'WEBFORMS_REFRESH_SELECTION_UNAVAILABLE' }
+    $fresh = $refreshes | Sort-Object LastWriteTimeUtc,Name -Descending | Select-Object -First 1
+    $run = Join-Path $fresh.FullName 'run'
+    Write-Output "Selected fresh run: $run"
+    # Verify this exact run below. Never fall back to an older successful run.
+}
 $cli = Join-Path (Split-Path $PSScriptRoot -Parent) 'src/dotnet/TraceMap.Cli/bin/Debug/net10.0/tracemap.dll'
 if (!(Test-Path -LiteralPath $cli -PathType Leaf)) {
     throw 'Build TraceMap first: dotnet build src\dotnet\tracemap.sln'

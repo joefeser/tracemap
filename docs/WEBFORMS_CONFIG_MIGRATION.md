@@ -955,6 +955,10 @@ run's prepared configuration and receipts, and calls native `start` with a uniqu
 the helper never supplies a new source attestation. It preserves the old run and
 wizard configuration, stops on build/start failure, and runs no test suite.
 The printed fresh review root is separate from the wizard's original run locator.
+Use `wrequery.ps1 <configuration-root> -LatestRefresh -MethodGraph` to query
+the newest project-specific refresh. Native status must verify that exact run;
+a failed/incomplete latest refresh never falls back to old evidence. The new
+handler report remains under the configuration root for `wgraph-share.ps1`.
 Helper checks: `pwsh -NoProfile -File scripts/tests/Test-WebFormsRefresh.ps1`.
 
 `dotnet.compiled.member.v1` retains `methodDispatchFlags` from both Mono.Cecil
