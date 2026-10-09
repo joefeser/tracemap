@@ -282,6 +282,28 @@ public sealed class CombinedDependencyPathTests
             "projectless-publish-member-candidate", "a", "b", kind, from, to));
     }
 
+    [Theory]
+    [InlineData("terminal-route-not-found-within-depth-bound")]
+    [InlineData("terminal-distance-exceeds-remaining-depth")]
+    [InlineData("candidate-identity-roundtrip")]
+    [InlineData("depth-limit-reached")]
+    [InlineData("repeated-node-cycle")]
+    public void Cutoff_prose_is_regenerated_without_exempting_arbitrary_messages(string cause)
+    {
+        var gap = new CombinedPathGap("gap", "TruncatedByLimit", "NeedsReviewPath",
+            "SELECT private_marker FROM private_table", null, null, null, null,
+            "combined.paths.truncation-gap.v1", "Tier4Unknown", null, null, "depth") { CutoffCause = cause };
+        var sanitized = CombinedDependencyPathReporter.SanitizeGap(gap);
+        Assert.Equal(CombinedDependencyPathReporter.CutoffDiagnosticMessage(cause), sanitized.Message);
+        Assert.DoesNotContain("redacted-hash", sanitized.Message);
+        Assert.DoesNotContain("private_marker", sanitized.Message);
+        var unknown = CombinedDependencyPathReporter.SanitizeGap(gap with { CutoffCause = "unrecognized" });
+        Assert.DoesNotContain("private_marker", unknown.Message);
+        var otherRule = CombinedDependencyPathReporter.SanitizeGap(gap with { RuleId = "other.rule" });
+        Assert.DoesNotContain("private_marker", otherRule.Message);
+        Assert.NotEqual(sanitized.Message, otherRule.Message);
+    }
+
     [Fact]
     public async Task Reverse_pruning_distinguishes_missing_bounded_route_from_known_excess_distance()
     {

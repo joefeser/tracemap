@@ -53,14 +53,22 @@ function Write-WebFormsTruncationSummary([string]$Directory) {
     $handoff = [Text.Encoding]::UTF8.GetString($bytes).TrimStart([char]0xFEFF) | ConvertFrom-Json
     if ($handoff.schemaVersion -ne 'webforms-compiled-grouped-handoff.v1') { throw 'WEBFORMS_HANDLER_SUMMARY_SCHEMA_INVALID' }
     $gaps = @($handoff.header.gaps | Where-Object { $_.gapKind -ceq 'TruncatedByLimit' })
-    Write-Output "Truncation: $($receipt.truncated); retained limit gaps: $($gaps.Count). Counts are retained gap records, not missing paths."
+    Write-Output "Truncation: $($receipt.truncated); retained cutoff gaps: $($gaps.Count). Counts are retained gap records, not missing paths."
     function Short-Text($Value) {
         if ($null -eq $Value -or [string]::IsNullOrWhiteSpace([string]$Value)) { return 'unavailable' }
         $valueText = [regex]::Replace([string]$Value, '[\p{Cc}\p{Cf}]', ' ')
         if ($valueText.Length -gt 256) { return $valueText.Substring(0,256) + '…' }
         return $valueText
     }
-    $groups = @($gaps | Group-Object reason | Sort-Object Name)
+    $groups = @($gaps | Group-Object {
+        $reason = $_.reason
+        $cause = if ($_.PSObject.Properties['cutoffCause']) { $_.cutoffCause } else { $null }
+        switch ($cause) {
+            'candidate-identity-roundtrip' { 'identity round trips (not application recursion)' }
+            'terminal-route-not-found-within-depth-bound' { 'bounded terminal-route uncertainty' }
+            default { $reason }
+        }
+    } | Sort-Object Name)
     foreach ($group in @($groups | Select-Object -First 10)) {
         Write-Output "  $(Short-Text $group.Name): $($group.Count) retained gaps"
         $causes = @($group.Group | Group-Object { if ($_.PSObject.Properties['cutoffCause']) { $_.cutoffCause } else { 'unavailable-legacy-report' } } | Sort-Object Name)
