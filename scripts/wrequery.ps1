@@ -3,7 +3,8 @@ param(
     [Parameter(Mandatory, Position = 0)][string]$Root,
     [string]$Project,
     [string]$Handler,
-    [switch]$Open
+    [switch]$Open,
+    [switch]$AllowUpdatedReader
 )
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
@@ -50,10 +51,13 @@ $verified = Get-WebFormsVerifiedStatus $cli $run
 $run = $verified.Run
 $status = $verified.Status
 if ($status.schemaVersion -ne 'webforms-review-status.v1' -or
-    $status.readerMatchesOriginalGenerator -ne $true -or
+    (!$AllowUpdatedReader -and $status.readerMatchesOriginalGenerator -ne $true) -or
     $status.retainedArtifactsVerified -ne $true -or
     $status.state -ne 'reports-completed-review-only') {
     throw 'WEBFORMS_HANDLER_COMPLETED_STATE_NOT_ADMITTED'
+}
+if ($status.readerMatchesOriginalGenerator -ne $true) {
+    Write-Output 'Updated reader explicitly allowed; retained artifacts verified by native status. Original producer identity remains unchanged; this new query has its own provenance.'
 }
 $bundle = [IO.Path]::GetDirectoryName([string]$status.workbenchPath)
 $destination = Join-Path $Root ("handler-requery-$Project-" + [guid]::NewGuid().ToString('N'))

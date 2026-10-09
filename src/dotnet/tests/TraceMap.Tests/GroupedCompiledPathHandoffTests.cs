@@ -145,9 +145,17 @@ public sealed class GroupedCompiledPathHandoffTests
         try
         {
             var report = Report() with { CoverageWarnings = ["<script>alert('public fixture')</script>"] };
+            report = report with { Gaps = [report.Gaps[0] with
+            {
+                Reason = "depth", CutoffWitness = new(report.Paths[0].Nodes, report.Paths[0].Edges, false, true)
+            }] };
             var packet = GroupedCompiledPathHandoffBuilder.Create(report, IndexHash);
             var result = await GroupedCompiledPathReportWriter.WriteAsync(packet, folder);
             var html = await File.ReadAllTextAsync(result.HtmlPath);
+            Assert.Contains("Sampled root-to-cutoff prefixes", html);
+            Assert.Contains("final candidate edge not traversed: True", html);
+            Assert.Contains("compiled-il.v1", html);
+            Assert.Equal(JsonSerializer.Serialize(report), JsonSerializer.Serialize(GroupedCompiledPathHandoffBuilder.Restore(packet)));
             Assert.DoesNotContain("<script>", html);
             Assert.Contains("&lt;script&gt;", html);
             Assert.Contains("3 exact chains", html);

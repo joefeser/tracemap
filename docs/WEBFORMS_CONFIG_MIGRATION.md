@@ -44,6 +44,26 @@ required; no checkpoint hashes are rewritten and other integrity failures do not
 trigger a retry. This handles drive-letter casing, not arbitrary folder-case changes.
 Additional synthetic checks: `pwsh -NoProfile -File scripts/tests/Test-WebFormsRequeryDiagnostics.ps1`.
 
+New queries from the updated build retain up to three sampled root-to-cutoff
+prefixes per depth/cycle reason, each capped at 64 edges. The existing
+`combined.paths.truncation-gap.v1` gap keeps its classification and limitations;
+its optional `cutoffWitness` carries ordered node/edge evidence, covered by the
+existing report input and generator hashes. The grouped HTML exposes these under
+**Sampled root-to-cutoff prefixes**, including edge kind, rule, tier, and location.
+The console helper prints retained edge samples too. A rejected final edge is
+explicitly marked not traversed, and a shortened prefix is labeled truncated.
+Samples do not enumerate all cutoff routes, prove terminal reachability, or
+change path/depth/work budgets. Legacy handoffs without witnesses remain readable;
+their missing history cannot be reconstructed from the gap's node alone.
+
+This diagnostic requires a new CLI build, unlike the earlier script-only fix.
+When querying an older retained run with that updated build, explicitly pass
+`-AllowUpdatedReader` to `wrequery.ps1`. Native artifact verification remains
+mandatory; original producer identity is not rewritten, and the separate new
+query retains its own generator provenance. Without the switch, the helper still
+requires the original reader identity. Do not repair or rescan the original run
+just to obtain these diagnostic samples.
+
 ## Mixed-query traversal repair: work-machine validation
 
 For a successful saved verification run, inspect unresolved command bindings

@@ -6,13 +6,14 @@ $temporary = Join-Path ([IO.Path]::GetTempPath()) ('wizard-requery-test-' + [gui
 $global:WizardRequeryCalls = [Collections.Generic.List[object]]::new()
 $global:WizardRequeryState = 'reports-completed-review-only'
 $global:WizardRequeryExit = 0
+$global:WizardRequeryOriginalReader = $true
 $global:WizardRequeryWorkbench = Join-Path $temporary 'reports/index.html'
 function global:dotnet {
     $global:WizardRequeryCalls.Add(@($args))
     $global:LASTEXITCODE = 0
     if ($args -contains 'status') {
         @{ schemaVersion='webforms-review-status.v1'; state=$global:WizardRequeryState;
-           readerMatchesOriginalGenerator=$true; retainedArtifactsVerified=$true;
+           readerMatchesOriginalGenerator=$global:WizardRequeryOriginalReader; retainedArtifactsVerified=$true;
            workbenchPath=$global:WizardRequeryWorkbench } | ConvertTo-Json -Compress
     } elseif ($args -contains 'requery-handler') {
         $global:LASTEXITCODE = $global:WizardRequeryExit
@@ -66,6 +67,14 @@ try {
     $global:WizardRequeryState = 'failed'
     Expect-Failure { & $helper $temporary -Handler Page_Load } 'COMPLETED_STATE_NOT_ADMITTED'
     $global:WizardRequeryState = 'reports-completed-review-only'
+    $global:WizardRequeryOriginalReader = $false
+    Expect-Failure { & $helper $temporary -Handler Page_Load } 'COMPLETED_STATE_NOT_ADMITTED'
+    $updated = @(& $helper $temporary -Handler Page_Load -AllowUpdatedReader)
+    if (($updated -join "`n") -notmatch 'Updated reader explicitly allowed') { throw 'Missing reader provenance notice.' }
+    $global:WizardRequeryState = 'failed'
+    Expect-Failure { & $helper $temporary -Handler Page_Load -AllowUpdatedReader } 'COMPLETED_STATE_NOT_ADMITTED'
+    $global:WizardRequeryState = 'reports-completed-review-only'
+    $global:WizardRequeryOriginalReader = $true
     $global:WizardRequeryExit = 1
     Expect-Failure { & $helper $temporary -Handler Page_Load } 'REQUERY_FAILED'
     $global:WizardRequeryExit = 0
@@ -79,6 +88,6 @@ try {
     Write-Output 'Web Forms wizard requery helper tests passed.'
 } finally {
     Remove-Item Function:\dotnet
-    Remove-Variable WizardRequeryCalls,WizardRequeryState,WizardRequeryExit,WizardRequeryWorkbench -Scope Global
+    Remove-Variable WizardRequeryCalls,WizardRequeryState,WizardRequeryExit,WizardRequeryWorkbench,WizardRequeryOriginalReader -Scope Global
     [IO.Directory]::Delete($temporary, $true)
 }

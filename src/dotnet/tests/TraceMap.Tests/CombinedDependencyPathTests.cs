@@ -226,6 +226,25 @@ public sealed class CombinedDependencyPathTests
         Assert.Contains(paths.Report.Gaps, gap => gap.Reason == "path" && gap.GapKind == "TruncatedByLimit");
         var depth = await CombinedDependencyPathReporter.WriteAsync(options with { MaxDepth = 2 });
         Assert.Contains(depth.Report.Gaps, gap => gap.Reason == "depth" && gap.GapKind == "TruncatedByLimit");
+        var witnesses = depth.Report.Gaps.Where(gap => gap.CutoffWitness is not null).ToArray();
+        Assert.InRange(witnesses.Length, 1, 3);
+        Assert.All(witnesses, gap =>
+        {
+            var witness = gap.CutoffWitness!;
+            Assert.NotEmpty(witness.Edges);
+            Assert.Equal(witness.Edges.Count + 1, witness.Nodes.Count);
+            Assert.Equal(gap.NodeId, witness.Nodes[^1].NodeId);
+            Assert.False(witness.PrefixTruncated);
+            for (var i = 0; i < witness.Edges.Count; i++)
+            {
+                Assert.Equal(witness.Nodes[i].NodeId, witness.Edges[i].FromNodeId);
+                Assert.Equal(witness.Nodes[i + 1].NodeId, witness.Edges[i].ToNodeId);
+                Assert.False(string.IsNullOrEmpty(witness.Edges[i].RuleId));
+                Assert.False(string.IsNullOrEmpty(witness.Edges[i].EvidenceTier));
+            }
+        });
+        var depthAgain = await CombinedDependencyPathReporter.WriteAsync(options with { MaxDepth = 2 });
+        Assert.Equal(JsonSerializer.Serialize(depth.Report), JsonSerializer.Serialize(depthAgain.Report));
         facts.Add(CallFact(manifest, "Leaf.L0()", "Root.Start()", "Graph.cs", 200));
         var cycleIndex = Path.Combine(temp.Path, "cycle.sqlite");
         var cycleCombined = Path.Combine(temp.Path, "cycle-combined.sqlite");
@@ -234,6 +253,9 @@ public sealed class CombinedDependencyPathTests
         var cycle = await CombinedDependencyPathReporter.WriteAsync(options with { IndexPath = cycleCombined });
         Assert.Equal(64, cycle.Report.Paths.Count);
         Assert.Contains(cycle.Report.Gaps, gap => gap.Reason == "cycle" && gap.GapKind == "TruncatedByLimit");
+        var cycleWitnesses = cycle.Report.Gaps.Where(gap => gap.Reason == "cycle" && gap.CutoffWitness is not null).ToArray();
+        Assert.InRange(cycleWitnesses.Length, 1, 3);
+        Assert.All(cycleWitnesses, gap => Assert.True(gap.CutoffWitness!.LastEdgeNotTraversed));
         var workOptions = options with { MaxTraversalWork = 20 };
         var workBounded = await CombinedDependencyPathReporter.WriteAsync(workOptions);
         Assert.Contains(workBounded.Report.Gaps, gap => gap.Reason == "work" && gap.GapKind == "TruncatedByLimit");
