@@ -9,4 +9,4 @@
 - [x] PackageProduced facts with sourceKind=ci-workflow / manifestKind=github-workflow / workflowPath matching the pinned upgrade-authority contract bytes.
 - [x] Fingerprint binding: flag joins the scan-conditions receipt scope fingerprint (both-off keeps the legacy v1 hash) and the scan-id signature carries generator + bounded-input hashes.
 - [x] Rule catalog, VALIDATION, public sample fixture and this spec updated.
-- [ ] Deliver bounded PR to dev and complete the Baz + Codex review loop.
+- [x] Deliver bounded PR to dev and complete the Baz + Codex review loop.

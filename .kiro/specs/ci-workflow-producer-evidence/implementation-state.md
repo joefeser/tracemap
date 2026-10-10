@@ -115,6 +115,16 @@ Baz returned five inline findings; dispositions:
 
 Focused suite after fixes: 32/32 pass.
 
+## Loop convergence (head `c48dac1f`)
+
+Baz re-reviewed at the codex-fix head and marked every finding addressed
+(its TOCTOU thread notes the Windows path-check residual, which the rule
+catalog documents). Codex completed a review of `c48dac1f` (07:12Z,
+COMMENTED, zero inline comments) — the zero-finding delta round. All PR
+checks green; PR #851 mergeable. Merge remains owner-mediated. Full Debug
+suite at `c48dac1f`: 3,533 passed, 0 failed, 1 Windows-only skip; CLI smoke
+emits exactly one ci-workflow PackageProduced fact from the public fixture.
+
 Follow-ups for later slices: msbuild `/t:Pack` invocations, composite action
 pack steps, partial env substitution, and other CI vendors — each needs its
 own typed-gap-first design before facts.
