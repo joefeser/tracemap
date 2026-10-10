@@ -4536,3 +4536,29 @@ snapshot independence and a bounded synthetic build during a scan.
 Smoke: `dotnet run --project src/dotnet/TraceMap.Cli -- scan --repo samples/deps-json-evidence --out <outside-output> --index-deps-json`.
 The flag reads existing build outputs without building; freshness and build commit
 remain unknown. See [the public fixture and evidence contract](../samples/deps-json-evidence/README.md).
+
+## Opt-in CI workflow producer evidence
+
+Run `dotnet test src/dotnet/TraceMap.sln --filter FullyQualifiedName~CiWorkflowProducerEvidenceTests`
+in standard Debug configuration, followed by the full Debug suite, plus
+`--filter FullyQualifiedName~ScanExecutionReceiptTests` for the scan-conditions
+fingerprint binding. The suite checks pure-CI producers, project+CI override
+coexistence, env-templated versions (resolvable and unresolvable), flag-off
+output invariance, duplicate-key collapse/conflict, unparseable/unsupported
+YAML, deep-layout exclusion, resource caps, exclusions/links/output boundary,
+CLI opt-in, coverage reduction, inventory invariance and the pinned
+upgrade-authority fact shape.
+
+Smoke: `dotnet run --project src/dotnet/TraceMap.Cli -- scan --repo samples/ci-workflow-producers --out <outside-output> --index-ci-producers`.
+The flag reads `.github/workflows/*.yml|*.yaml` at exactly that depth without
+building; see [the public fixture and evidence contract](../samples/ci-workflow-producers/README.md).
+
+Independent PR #851 regression coverage also pins inner-env shadowing, opaque
+effective scopes, heredoc/multiline shell data rejection, commands following
+`&&`/`||`, linked `.github` parents, empty property overrides, intact dedupe
+evidence spans, successful-fact provenance fields and project-fallback input
+hashes. These are static definition checks, not workflow execution proof.
+
+Discovery regressions must prove lazy enumeration stops at the candidate/entry
+bound, overflow produces one deterministic gap and no rows, and embedded quoted
+or escaped shell operators cannot truncate an unsafe PackageId into a safe one.

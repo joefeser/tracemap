@@ -264,10 +264,15 @@ public static class ScanEngine
             .Distinct(StringComparer.Ordinal)
             .ToArray();
         var depsJson = options.IndexDepsJson ? DepsJsonExtractor.Read(options, cancellationToken) : null;
+        var producedPackages = ProjectFileReader.ReadProducedPackages(repoPath, inventory);
+        var ciProducers = options.IndexCiProducers
+            ? CiWorkflowProducerExtractor.Read(options, producedPackages, cancellationToken)
+            : null;
         var nugetLockfiles = ProjectFileReader.ReadNuGetLockfiles(repoPath, inventory);
         var packageManifestGaps = nugetLockfiles.Gaps
             .Select(gap => $"NuGet lockfile analysis reported `{gap.Category}`.")
             .Concat(depsJson?.Gaps.Select(gap => $"Build-output dependency analysis reported `{gap.Kind}`.") ?? [])
+            .Concat(ciProducers?.Gaps.Select(gap => $"CI workflow producer analysis reported `{gap.Kind}`.") ?? [])
             .OrderBy(gap => gap, StringComparer.Ordinal)
             .Distinct(StringComparer.Ordinal)
             .ToArray();
@@ -306,7 +311,10 @@ public static class ScanEngine
                 ilRewriteEvaluation.Provenance?.BoundedInputSha256,
                 ilRewritePdbEvaluation.Provenance?.BoundedInputSha256,
                 webFormsPublishEvaluation.Provenance?.BoundedInputSha256,
-                depsJson is null ? null : $"{depsJson.GeneratorSha256}:{depsJson.BoundedInputSha256}"),
+                depsJson is null ? null : $"{depsJson.GeneratorSha256}:{depsJson.BoundedInputSha256}",
+                ciProducersInputSignature: ciProducers is null
+                    ? null
+                    : $"{ciProducers.GeneratorSha256}:{ciProducers.BoundedInputSha256}"),
             git.RepoName,
             git.RemoteUrl,
             git.Branch,
@@ -370,9 +378,10 @@ public static class ScanEngine
                     targetFrameworkInfos,
                     ProjectFileReader.ReadPackageReferences(repoPath, inventory),
                     ProjectFileReader.ReadCentralPackageVersions(repoPath, inventory),
-                    ProjectFileReader.ReadProducedPackages(repoPath, inventory),
+                    producedPackages,
                     nugetLockfiles,
                     depsJson,
+                    ciProducers,
                     knownGaps,
                     repoPath,
                     semanticResult,
@@ -523,7 +532,8 @@ public static class ScanEngine
         string? ilRewriteBoundedInputSha256,
         string? ilRewritePdbBoundedInputSha256 = null,
         string? webFormsPublishBoundedInputSha256 = null,
-        string? depsJsonInputSignature = null)
+        string? depsJsonInputSignature = null,
+        string? ciProducersInputSignature = null)
     {
         var signature = string.Join('\n', inventory.Select(item => $"{item.RelativePath}|{item.Kind}|{item.SizeBytes}"));
         var binlogSignature = MsBuildBinlogExtractor.CreateInputSignature(options.BinlogPaths, repoPath: options.RepoPath);
@@ -542,6 +552,7 @@ public static class ScanEngine
             $"ilrewritepdb={ilRewritePdbBoundedInputSha256 ?? string.Empty}",
             $"webformspublish={webFormsPublishBoundedInputSha256 ?? string.Empty}");
         if (options.IndexDepsJson) optionSignature += $"|depsjson={depsJsonInputSignature}";
+        if (options.IndexCiProducers) optionSignature += $"|ciproducers={ciProducersInputSignature}";
         var repoIdentity = string.IsNullOrWhiteSpace(git.RemoteUrl) ? git.RepoName : git.RemoteUrl;
         return "scan-" + FactFactory.Hash($"{repoIdentity}|{git.CommitSha}|{sourceSnapshotDigest}|{signature}|{optionSignature}|{binlogSignature}", 20);
     }
@@ -854,6 +865,7 @@ public static class ScanEngine
         IReadOnlyList<ProducedPackageInfo> producedPackages,
         NuGetLockfileReadResult nugetLockfiles,
         DepsJsonResult? depsJson,
+        CiWorkflowResult? ciProducers,
         IReadOnlyList<string> knownGaps,
         string repoPath,
         SemanticExtractionResult semanticResult,
@@ -1115,6 +1127,7 @@ public static class ScanEngine
         }
 
         if (depsJson is not null) facts.AddRange(DepsJsonExtractor.Materialize(manifest, depsJson));
+        if (ciProducers is not null) facts.AddRange(CiWorkflowProducerExtractor.Materialize(manifest, ciProducers));
 
         foreach (var entry in nugetLockfiles.Entries)
         {
@@ -1430,7 +1443,8 @@ public static class ScanEngine
         }
 
         if (knownGaps.Any(gap => (gap.StartsWith("NuGet lockfile analysis reported", StringComparison.Ordinal)
-            || gap.StartsWith("Build-output dependency analysis reported", StringComparison.Ordinal))))
+            || gap.StartsWith("Build-output dependency analysis reported", StringComparison.Ordinal)
+            || gap.StartsWith("CI workflow producer analysis reported", StringComparison.Ordinal))))
             return "Package/dependency evidence coverage is partial; inspect package manifest gaps and any separate semantic diagnostics.";
 
         var hasBinlogGap = binlogFacts.Any(fact =>
