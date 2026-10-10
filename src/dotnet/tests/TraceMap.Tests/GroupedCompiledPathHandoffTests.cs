@@ -160,6 +160,7 @@ public sealed class GroupedCompiledPathHandoffTests
             Assert.Contains("&lt;script&gt;", html);
             Assert.Contains("3 exact chains", html);
             Assert.Contains("4 retained variants", html);
+            Assert.DoesNotContain("Database operations and command inputs", html); // Non-database paths are not relabeled.
             Assert.Contains("not runtime execution", html);
             foreach (var variant in packet.Variants) Assert.Contains(variant.Path.PathId, html);
             var ids = Regex.Matches(html, " id=\"([^\"]+)\"").Select(match => match.Groups[1].Value).ToArray();
@@ -253,6 +254,43 @@ public sealed class GroupedCompiledPathHandoffTests
         values.TryGetValue(key, out var value);
         values[key] = change(value!);
         return values;
+    }
+
+    [Fact]
+    public async Task Command_summary_preserves_variant_differences_escapes_inputs_and_bounds_display()
+    {
+        var folder = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "tracemap-command-summary-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var report = Report();
+            var origin = new CompiledCommandOperandOrigin("call-result", "unprinted-offset");
+            var value = new CompiledCommandPathValueBinding("compiled-command-path-value.v1", "command.v1", "Tier3SyntaxOrTextual",
+                "symbolic-method-return", origin, "body", [], [], IndexHash, IndexHash)
+            { SymbolicInput = new("method", "<script>runtime</script>", "producer", "body", "return", ["IlCommandReturnOriginUnknown"]) };
+            var deep = value;
+            for (var i = 0; i < 6; i++) deep = value with { SymbolicInput = null, Alternatives = [deep], State = "symbolic-argument-alternatives" };
+            var binding = new CompiledCommandConfigurationCandidate("command.v1", "fact", "body", "call", [], origin, origin, origin, origin, IndexHash, IndexHash)
+            { CommandTextFromPath = value };
+            var template = report.Paths[0];
+            report = report with { Paths = [
+                template with { Nodes = [template.Nodes[0] with { SurfaceName = "SqlCommand.ExecuteScalar", CommandBinding = binding }] },
+                template with { PathId = "path:alternate", Nodes = [template.Nodes[0] with { SurfaceName = "SqlCommand.ExecuteScalar",
+                    CommandBinding = binding with { CommandTextFromPath = value with { SymbolicInput = null, State = "unresolved-operand", Gaps = ["IlCommandReturnTargetMissingOrAmbiguous"] }, CommandTypeFromPath = deep } }] }
+            ] };
+            var handoff = GroupedCompiledPathHandoffBuilder.Create(report, IndexHash);
+            var output = await GroupedCompiledPathReportWriter.WriteAsync(handoff, folder);
+            var html = await File.ReadAllTextAsync(output.HtmlPath);
+            Assert.Contains("1 exact chains", html);
+            Assert.Contains("path:alternate", html);
+            Assert.Contains("Value uncertainty: IlCommandReturnOriginUnknown", html);
+            Assert.Contains("Connection / evidence gaps: IlCommandReturnTargetMissingOrAmbiguous", html);
+            Assert.Contains("Expression display limit reached", html);
+            Assert.Contains("&lt;script&gt;runtime&lt;/script&gt;", html);
+            Assert.DoesNotContain("<script>", html);
+            Assert.DoesNotContain("unprinted-offset", html);
+            Assert.Equal(JsonSerializer.Serialize(report), JsonSerializer.Serialize(GroupedCompiledPathHandoffBuilder.Restore(handoff)));
+        }
+        finally { if (Directory.Exists(folder)) Directory.Delete(folder, true); }
     }
 
     private static CombinedPathNode Node(string id, string symbol) => new(

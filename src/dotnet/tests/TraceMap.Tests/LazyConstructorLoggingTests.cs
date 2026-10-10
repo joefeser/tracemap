@@ -165,6 +165,22 @@ public sealed class LazyConstructorLoggingTests
         Assert.Contains("Possible argument origins", html);
         if (tamper == "runtime") Assert.Contains("Symbolic method input", html);
         Assert.DoesNotContain("SELECT Value", html);
+        if (tamper == "runtime")
+        {
+            var handoff = GroupedCompiledPathHandoffBuilder.Create(report, new string('a', 64));
+            var grouped = await GroupedCompiledPathReportWriter.WriteAsync(handoff, Path.Combine(temp.Path, "normal-report"));
+            var normalHtml = await File.ReadAllTextAsync(grouped.HtmlPath);
+            Assert.Contains("Database operations and command inputs", normalHtml);
+            Assert.Contains("SqlCommand.ExecuteScalar", normalHtml);
+            Assert.Contains("CommandType.Text", normalHtml);
+            Assert.Contains("Value returned by PublicLazy.Framework.RuntimeIdentity.get_ActiveIdentifier()", normalHtml);
+            Assert.Contains("Possible input alternatives", normalHtml);
+            Assert.Contains("Value uncertainty: IlCommandReturnOriginUnknown", normalHtml);
+            Assert.Contains("Connection / evidence gaps: none retained", normalHtml);
+            Assert.DoesNotContain("IlCommandOperandValueUnresolved", normalHtml);
+            Assert.DoesNotContain("SELECT Value", normalHtml);
+            Assert.Equal(JsonSerializer.Serialize(report), JsonSerializer.Serialize(GroupedCompiledPathHandoffBuilder.Restore(handoff)));
+        }
     }
 
     [Theory]
