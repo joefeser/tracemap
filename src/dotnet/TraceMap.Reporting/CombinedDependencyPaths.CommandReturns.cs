@@ -89,6 +89,13 @@ public static partial class CombinedDependencyPathReporter
                     return Fail("IlCommandReturnTargetUnavailable");
                 materials.Add(new { ProducerNode = SymbolNodeId(callerMethod.SourceIndexId, callerMethod.TargetSymbol), ProducerEdgeCount = outgoing.Count });
                 if (outgoing.Count > MaxCommandProducerEdges) return Fail("IlCommandReturnEdgeLimit");
+                var frameworkCandidates = outgoing.Where(edge => edge.EdgeKind == FrameworkVersionCandidateEdge
+                    && edge.SupportingFactIds.Contains(producer.CombinedFactId, StringComparer.Ordinal)).Take(2).ToArray();
+                if (frameworkCandidates.Length != 0)
+                {
+                    foreach (var edge in frameworkCandidates) materials.Add(edge.ToReportEdge());
+                    return Fail("IlCommandReturnFrameworkVersionBindingUnproven");
+                }
                 var candidates = outgoing.Where(edge => edge.SupportingFactIds.Contains(producer.CombinedFactId, StringComparer.Ordinal)
                     && edge.EdgeKind is "compiled-il-call" or "compiled-il-callvirt-candidate").Take(2).ToArray();
                 foreach (var edge in candidates) materials.Add(edge.ToReportEdge());

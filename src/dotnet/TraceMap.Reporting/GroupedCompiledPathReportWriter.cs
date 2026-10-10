@@ -50,6 +50,8 @@ public static class GroupedCompiledPathReportWriter
             W("<h1>Grouped compiled method paths</h1>");
             W("<p class=\"notice\">LOCAL ONLY — review-only static candidates, not runtime execution or proof that SQL ran. Grouping is a display/index operation; no evidence variant was removed.</p>");
             W($"<p>{handoff.Chains.Count} exact chains · {handoff.Variants.Count} retained variants · coverage {H(report.ReportCoverage)} · truncated {H(report.Summary.Truncated.ToString())}. <a href=\"{HandoffName}\">Lossless indexed handoff JSON</a></p>");
+            if (report.Paths.Any(path => path.Edges.Any(edge => edge.EdgeKind == "compiled-il-framework-version-candidate")))
+                W("<p class=\"notice\">Framework-version candidate routes are present (Tier3). Declaring assembly identity remains exact, but embedded desktop framework type versions differ. Runtime binding and compatibility are unproven; argument and return-value propagation stop at this boundary. ‘Exact chains’ describes identity-based grouping, not exact runtime binding.</p>");
             if (handoff.Chains.Count == 0)
                 W("<p class=\"notice\">No terminal routes were retained by this path query. This is not evidence that the handler has no database dependencies. Inspect selector, traversal and coverage gaps below; a method graph is a separate diagnostic view, not a path report.</p>");
             W("<nav aria-label=\"Method chains\"><ul>");

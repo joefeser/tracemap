@@ -297,12 +297,13 @@ if ($RecheckPathReasons -or $RecheckCompiledApi) {
             foreach ($kind in @('projectless-publish-method-candidate',
                     'projectless-publish-member-candidate', 'projectless-vb-constructor-bridge',
                     'projectless-vb-receiver-bridge', 'compiled-il-call',
-                    'compiled-il-callvirt-candidate', 'compiled-database-api-candidate')) {
+                    'compiled-il-callvirt-candidate', 'compiled-il-framework-version-candidate', 'compiled-database-api-candidate')) {
                 Write-Output "compiledApiTraversed.$kind=$(@($recheck.rootTraversal.traversedEdgeKinds) -ccontains $kind)"
             }
             foreach ($kind in @('ProjectlessPublishGeneratedTypeUnavailable',
                     'ProjectlessPublishSourceAmbiguous', 'ProjectlessPublishMetadataAmbiguous',
-                    'CompiledIlTargetUnavailable', 'CompiledIlTargetAmbiguous')) {
+                    'CompiledIlTargetUnavailable', 'CompiledIlTargetAmbiguous',
+                    'CompiledIlFrameworkVersionAmbiguous', 'CompiledIlFrameworkVersionCandidate')) {
                 Write-Output "compiledApiGap.$kind=$(@($recheck.gaps | Where-Object { $_.gapKind -ceq $kind }).Count)"
             }
         }

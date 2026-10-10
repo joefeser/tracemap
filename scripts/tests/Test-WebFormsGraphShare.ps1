@@ -14,10 +14,11 @@ try {
     $edges = @(1..149 | ForEach-Object { @{edgeId="$secret-edge-$_";fromNodeId="$secret-node-$_";
         toNodeId=($secret + '-node-' + ($_+1));edgeKind='compiled-il-call';ruleId="$secret-rule";
         evidenceTier='Tier3SyntaxOrTextual';supportingFactIds=@("$secret-fact")} })
+    $edges[0].edgeKind = 'compiled-il-framework-version-candidate'
     $calls = @(@{callerNodeId="$secret-node-1";factId="$secret-fact";bodyFactId="$secret-body";
         offset="$secret-offset";opcode='callvirt';encodedTarget="$secret-target";ruleId="$secret-rule";
         evidenceTier='Tier3SyntaxOrTextual';state='no-admitted-method-target-edge';
-        gapReasons=@('admitted-memberref-target-not-unique',"$secret-free-text")})
+        gapReasons=@('admitted-memberref-target-not-unique','embedded-framework-version-difference-runtime-binding-unproven',"$secret-free-text")})
     @{schemaVersion='retained-method-graph.v1';indexSha256="$secret-hash";
       graph=@{nodes=$nodes;edges=$edges;calls=$calls;commandTraces=@();cutoffs=@("$secret-cutoff");roots=@("$secret-node-1")}} |
         ConvertTo-Json -Depth 20 | Set-Content -LiteralPath $inputFile
@@ -37,9 +38,11 @@ try {
     $raw = Get-Content -LiteralPath $outputFile -Raw
     if ($raw.Contains($secret) -or $raw.Contains('C:\')) { throw 'Private marker leaked.' }
     $result = $raw | ConvertFrom-Json -Depth 24
+    if (!$raw.Contains('compiled-il-framework-version-candidate') -or
+        !$raw.Contains('embedded-framework-version-difference-runtime-binding-unproven')) { throw 'Framework candidate uncertainty was lost.' }
     if (!$result.graph.sliceLimited -or !$result.graph.sourceHadCutoffs -or $result.graph.nodes.Count -ne 4) { throw "Bounds not retained: limited=$($result.graph.sliceLimited), cutoffs=$($result.graph.sourceHadCutoffs), nodes=$($result.graph.nodes.Count)" }
     if ($result.graph.calls[0].fact -cne $result.graph.edges[0].facts[0]) { throw 'Fact aliases lost identity.' }
-    if ($result.graph.calls[0].reasons[1] -cne 'other-or-unavailable') { throw 'Unknown reason not suppressed.' }
+    if ($result.graph.calls[0].reasons -cnotcontains 'other-or-unavailable') { throw 'Unknown reason not suppressed.' }
     $projection = [Text.Encoding]::UTF8.GetBytes(($result.graph | ConvertTo-Json -Depth 20 -Compress))
     $digest = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($projection)).ToLowerInvariant()
     if ($result.boundedInputSha256 -cne $digest) { throw 'Projected-input hash mismatch.' }

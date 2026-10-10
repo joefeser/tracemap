@@ -61,7 +61,7 @@ public static partial class CombinedDependencyPathReporter
             if (!visited.Contains(id)) continue;
             if (calls.Count >= options.MaxFrontier) { cutoffs.Add("call-record-limit"); break; }
             var admitted = graph.Outgoing.TryGetValue(id, out var outgoing) && outgoing.Any(e =>
-                (e.EdgeKind is "compiled-il-call" or "compiled-il-callvirt-candidate") && e.SupportingFactIds.Contains(call.CombinedFactId));
+                (e.EdgeKind is "compiled-il-call" or "compiled-il-callvirt-candidate" or FrameworkVersionCandidateEdge) && e.SupportingFactIds.Contains(call.CombinedFactId));
             calls.Add(new(id, call.CombinedFactId, body.CombinedFactId, call.Properties.GetValueOrDefault("ilOffset"),
                 call.Properties.GetValueOrDefault("opcode"), call.Properties.GetValueOrDefault("targetIdentity"),
                 call.RuleId, call.EvidenceTier, admitted ? "retained-target-edge" : "no-admitted-method-target-edge",

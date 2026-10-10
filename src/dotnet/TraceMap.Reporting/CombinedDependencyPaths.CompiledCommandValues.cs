@@ -94,6 +94,8 @@ public static partial class CombinedDependencyPathReporter
                     { gaps.Add("IlCommandRootArgumentUnresolved"); state = "unresolved-root-argument"; break; }
                     var edge = edges[incoming--];
                     materials.Add(new { edge.EdgeId, edge.EdgeKind, edge.FromNodeId, edge.ToNodeId, edge.SupportingFactIds });
+                    if (edge.EdgeKind == FrameworkVersionCandidateEdge)
+                    { gaps.Add("IlCommandFrameworkVersionBindingUnproven"); state = "unresolved-framework-version-bridge"; break; }
                     if (edge.EdgeKind is not ("compiled-il-call" or "compiled-il-callvirt-candidate"))
                     { gaps.Add("IlCommandNonIlCallerBridge"); state = "unresolved-non-il-bridge"; break; }
                     var agreed = TryCommandCallOperands(graph, facts, original, edge, methodId,

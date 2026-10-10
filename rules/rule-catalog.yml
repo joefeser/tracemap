@@ -3931,6 +3931,23 @@ rules:
       - The graph overlay does not rewrite source facts, the combined database schema, or existing source-only path evidence.
       - Optional command configuration is retained only from one il-command-binding.v1 fact with exact same-source body/call/configuration fact joins and matching raw-file, IL generator and bounded-input hashes. It remains Tier3 static configuration, not SQL/procedure identity or execution; malformed, missing, differently bound or competing candidates leave the API path intact and produce a binding gap. Caller argument substitution and parameter propagation are separate requirements.
 
+  - id: combined.paths.framework-signature-candidate.v1
+    name: Embedded desktop framework signature version candidate
+    description: After an exact MemberRef lookup finds no target, compares length-framed signatures with selected embedded desktop framework versions normalized and emits a review edge only for one candidate.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - compiled-il-framework-version-candidate path edge
+      - CompiledIlFrameworkVersionCandidate gap
+      - CompiledIlFrameworkVersionAmbiguous gap
+      - CompiledIlVirtualDispatchUnproven gap
+    limitations:
+      - Declaring assembly identity remains exact, including version, name, culture and public key token. Only parameter and return type scopes for mscorlib, System and System.Data with neutral culture, token b77a5c561934e089 and version 2.0.0.0 or 4.0.0.0 are compared tolerantly. Other names, versions and signature structure remain exact.
+      - Exact matches take precedence, including exact ambiguity. Multiple normalized targets remain a gap; no first candidate is selected. MethodDef lookup is unchanged.
+      - This is not CLR binding policy, a binding redirect, type forwarding, deployment proof or runtime compatibility. Both directions are static review candidates only. Original identities, source and compiled provenance are retained unchanged.
+      - Existing input admission, publish receipt and source entry gates remain independent. The candidate does not upgrade unbound compiled provenance. Virtual dispatch uncertainty remains separately visible.
+      - Command argument and return value propagation cannot use this candidate as a proven binding. Paths retain an explicit framework-version uncertainty gap.
+      - Parsing is bounded to 65536 characters, 256 type nodes and nesting depth 32. Unsupported shaped arrays, function pointers and malformed identities receive no tolerant match. Existing extractor and traversal limits still apply; missing candidates do not establish absence.
+
   - id: combined.paths.projectless-pdb-identity.v1
     name: Exact projectless source-to-PDB method path entry
     description: Adds an in-memory path entry from one projectless VB method declaration to one bound metadata method when a checksum-matched portable PDB document has visible sequence points uniquely owned by that source method block.
