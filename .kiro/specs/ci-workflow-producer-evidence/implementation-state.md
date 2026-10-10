@@ -188,3 +188,19 @@ CI fact with both provenance hashes, zero gaps, Level1SemanticAnalysis.
 `git diff --check` passed. The public fixture remains
 the only CLI smoke input; private corpus and authentic Windows validation are
 deferred to their existing pinned hosted lanes.
+
+### Hosted Windows test isolation follow-up
+
+The `public-corpus` job for `db25f93a` failed its full terminal wizard replay
+with `WEBFORMS_REVIEW_SOURCE_IDENTITY_CHANGED` (147 passed, 1 failed).
+`WebFormsWizardCommandTests` lacked the Git-sensitive collection already used
+by `WebFormsWizardExecutionTests`; exact-identity assertions were running
+alongside the Git-heavy corpus. Apply the same existing nonparallel collection
+to the terminal command tests. This addresses the documented probe-contention
+risk without relaxing production identity validation or increasing timeouts.
+The retained job log does not identify which individual Git probe failed.
+
+Local wizard command/execution and GitMetadataOutput regression selection:
+29 passed, zero failed/skipped, warnings as errors. Runtime code is unchanged;
+the previous 3,558-pass full runtime validation remains prior-head evidence.
+Hosted Windows validation must confirm this scheduling-only correction.
