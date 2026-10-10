@@ -132,13 +132,20 @@ public sealed class FrameworkSignatureCandidateTests
     [InlineData(4, 2, "work")]
     [InlineData(4, 2, "fill")]
     [InlineData(4, 2, "appcode")]
+    [InlineData(2, 2, "base-fill")]
+    [InlineData(4, 4, "base-fill")]
+    [InlineData(4, 2, "preserved-base-fill")]
+    [InlineData(4, 4, "fake-base-fill-namespace")]
+    [InlineData(4, 4, "fake-base-fill-assembly")]
+    [InlineData(4, 4, "fake-base-fill-token")]
+    [InlineData(4, 4, "fake-base-fill-culture")]
     public async Task Mixed_framework_source_to_database_path_preserves_candidate_boundary(int callerVersion, int providerVersion, string scenario)
     {
         using var temp = new TempDirectory();
         var callerPath = Path.Combine(temp.Path, "PublicWebsite.dll");
         var providerPath = Path.Combine(temp.Path, "PublicProvider.dll");
         var instanceCall = scenario is "virtual" or "nonvirtual" or "missing-flags";
-        Build(callerPath, callerVersion, true, instanceCall, scenario is "return-flow" or "appcode" ? scenario : "valid");
+        Build(callerPath, callerVersion, true, instanceCall, scenario is "return-flow" or "appcode" or "preserved-base-fill" ? scenario : "valid");
         Build(providerPath, providerVersion, false, instanceCall, scenario);
         var paths = new List<string> { callerPath, providerPath };
         if (scenario == "appcode")
@@ -194,7 +201,7 @@ public sealed class FrameworkSignatureCandidateTests
             MaxDepth: scenario == "depth" ? 1 : 12) { ExactFromSymbol = true, MaxTraversalWork = scenario == "work" ? 1 : 10000 };
         var roots = new[] { new CombinedPathSymbolRoot(source.SourceIndexId, source.ScanId, source.CommitSha, declaration.Properties["memberIdentity"]) };
         var report = await CombinedDependencyPathReporter.BuildSelectedSymbolsAsync(options, roots, true);
-        if (scenario is "missing-receipt" or "wrong-receipt" or "ambiguous" or "exact-ambiguous" or "work"
+        if (scenario is "missing-receipt" or "wrong-receipt" or "ambiguous" or "exact-ambiguous" or "work" or "fake-base-fill-namespace" or "fake-base-fill-assembly" or "fake-base-fill-token" or "fake-base-fill-culture"
             or "provider-version" or "provider-name" or "framework-token" or "framework-culture" or "parameter-type" or "return-type" or "ineligible-provenance")
         {
             Assert.Empty(report.Paths);
@@ -215,14 +222,14 @@ public sealed class FrameworkSignatureCandidateTests
             Assert.Contains(path.Notes, n => n.Code == "TerminalReachabilityPrewalk");
             Assert.True(report.Summary.Truncated);
         }
-        var endpoint = scenario is "fill" or "appcode" ? "DbDataAdapter.Fill" : "SqlCommand.ExecuteScalar";
+        var endpoint = scenario is "fill" or "appcode" or "base-fill" or "preserved-base-fill" ? "DbDataAdapter.Fill" : "SqlCommand.ExecuteScalar";
         Assert.Equal(endpoint, path.Nodes.Last().SurfaceName);
         if (scenario == "appcode")
         {
             Assert.Contains(path.Nodes, n => n.SymbolId?.Contains("PublicAppCode", StringComparison.Ordinal) == true);
             Assert.Contains(path.Nodes, n => n.SymbolId?.Contains("PublicProvider", StringComparison.Ordinal) == true);
         }
-        var candidate = callerVersion != providerVersion && scenario != "exact-wins";
+        var candidate = callerVersion != providerVersion && scenario is not ("exact-wins" or "preserved-base-fill");
         Assert.Equal(candidate, path.Edges.Any(e => e.EdgeKind == "compiled-il-framework-version-candidate"));
         if (candidate)
         {
@@ -238,6 +245,13 @@ public sealed class FrameworkSignatureCandidateTests
         RetainedMethodGraph? graph = null;
         await CombinedDependencyPathReporter.BuildSelectedSymbolsAsync(options with { ToSurface = null, MethodGraphObserver = value => graph = value }, roots, true);
         Assert.NotNull(graph);
+        if (scenario is "base-fill" or "preserved-base-fill")
+        {
+            Assert.Contains(graph.Calls, c => c.EncodedTarget?.Contains("names:11:DataAdapter)|member:4:Fill|", StringComparison.Ordinal) == true);
+            Assert.DoesNotContain(report.Gaps, g => g.GapKind == "CompiledIlFrameworkVersionCandidate");
+            var fillOnly = await CombinedDependencyPathReporter.BuildSelectedSymbolsAsync(options with { SurfaceName = "DbDataAdapter.Fill" }, roots, true);
+            Assert.Single(fillOnly.Paths);
+        }
         if (scenario == "depth") Assert.Empty(graph.CommandTraces);
         else Assert.NotEmpty(graph.CommandTraces);
         if (scenario != "depth")
@@ -271,6 +285,15 @@ public sealed class FrameworkSignatureCandidateTests
         module.AssemblyReferences.Add(data);
         var list = new TypeReference("System.Collections", "ArrayList", module, core);
         var dataset = new TypeReference("System.Data", "DataSet", module, data);
+        if (caller && scenario == "preserved-base-fill")
+        {
+            // Model the observed native compiler behavior: the caller's own
+            // framework is 4.0, but the imported provider signature retains 2.0.
+            var oldCore = new AssemblyNameReference("mscorlib", new Version(2, 0, 0, 0)) { PublicKeyToken = Convert.FromHexString("b77a5c561934e089") };
+            var oldData = new AssemblyNameReference("System.Data", new Version(2, 0, 0, 0)) { PublicKeyToken = Convert.FromHexString("b77a5c561934e089") };
+            module.AssemblyReferences.Add(oldCore); module.AssemblyReferences.Add(oldData);
+            list.Scope = oldCore; dataset.Scope = oldData;
+        }
         if (scenario == "parameter-type") list.Name = "OtherList";
         if (scenario == "return-type") dataset.Name = "OtherData";
         var type = new TypeDefinition("", caller ? "Entry" : "Provider", TypeAttributes.Public | TypeAttributes.Class, module.TypeSystem.Object);
@@ -312,12 +335,23 @@ public sealed class FrameworkSignatureCandidateTests
             else
             {
                 il.Emit(virtualCall ? OpCodes.Ldarg_1 : OpCodes.Ldarg_0); il.Emit(OpCodes.Newobj, ctor);
-                if (scenario is "fill" or "appcode")
+                if (scenario is "fill" or "appcode" or "base-fill" or "preserved-base-fill" or "fake-base-fill-namespace" or "fake-base-fill-assembly" or "fake-base-fill-token" or "fake-base-fill-culture")
                 {
                     var adapter = new TypeReference("System.Data.SqlClient", "SqlDataAdapter", module, data);
                     var adapterCtor = new MethodReference(".ctor", module.TypeSystem.Void, adapter) { HasThis = true };
                     adapterCtor.Parameters.Add(new(command));
-                    var fill = new MethodReference("Fill", module.TypeSystem.Int32, new TypeReference("System.Data.Common", "DbDataAdapter", module, data)) { HasThis = true };
+                    var owner = new TypeReference(scenario == "fake-base-fill-namespace" ? "Other.Common" : "System.Data.Common",
+                        scenario is "fill" or "appcode" ? "DbDataAdapter" : "DataAdapter", module, data);
+                    if (scenario is "fake-base-fill-assembly" or "fake-base-fill-token" or "fake-base-fill-culture")
+                    {
+                        var fake = new AssemblyNameReference(scenario == "fake-base-fill-assembly" ? "PublicData" : "System.Data", new Version(4, 0, 0, 0))
+                        {
+                            PublicKeyToken = scenario == "fake-base-fill-token" ? new byte[8] : Convert.FromHexString("b77a5c561934e089"),
+                            Culture = scenario == "fake-base-fill-culture" ? "en-US" : ""
+                        };
+                        module.AssemblyReferences.Add(fake); owner.Scope = fake;
+                    }
+                    var fill = new MethodReference("Fill", module.TypeSystem.Int32, owner) { HasThis = true };
                     fill.Parameters.Add(new(dataset));
                     il.Emit(OpCodes.Newobj, adapterCtor); il.Emit(OpCodes.Ldnull); il.Emit(OpCodes.Callvirt, fill);
                 }
