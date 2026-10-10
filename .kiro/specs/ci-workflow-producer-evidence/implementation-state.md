@@ -125,8 +125,27 @@ checks green; PR #851 mergeable. Merge remains owner-mediated. Full Debug
 suite at `c48dac1f`: 3,533 passed, 0 failed, 1 Windows-only skip; CLI smoke
 emits exactly one ci-workflow PackageProduced fact from the public fixture.
 
-Follow-ups for later slices: msbuild `/t:Pack` invocations, composite action
-pack steps, partial env substitution, and other CI vendors — each needs its
-own typed-gap-first design before facts.
+Follow-ups for later slices — each needs its own typed-gap-first design
+before facts:
+
+- msbuild `/t:Pack` invocations, partial env substitution, and other CI
+  vendors (GitLab, Azure Pipelines).
+- **Reusable workflow calls and composite actions (backlogged 2026-10-10
+  after owner design discussion).** Two cross-repo carriers of pack logic
+  are currently *silent* non-evidence (no fact, no gap): job-level
+  `uses: owner/repo/.github/workflows/*.yml@ref` (reusable workflows,
+  incl. local `./.github/...` forms) and step-level composite actions
+  (`action.yml` with `runs.using: composite`, which can hold `run:` steps).
+  Stage 1 (cheap, coverage-honest): a typed gap naming each un-followed
+  reference — no facts, no crawling. Stage 2 (bounded opt-in): an explicitly
+  supplied workflow-repo checkout + ref indexed like the binlog/deps.json
+  lanes (hashed as its own bounded input, freshness unknown), with literal
+  `with:` inputs mapped through the callee's `workflow_call.inputs`
+  defaults. Design constraints pinned in that discussion: `env` never
+  crosses the workflow_call boundary (only inputs/secrets), so the env
+  scope chain correctly stops at the call edge; moving refs (`@main`,
+  tags) make the effective definition time-dependent and only SHA-pinned
+  references support a deterministic merge; callee→callee nesting needs
+  its own absolute limits.
 
 
