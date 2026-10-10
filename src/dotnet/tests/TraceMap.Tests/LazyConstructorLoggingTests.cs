@@ -167,6 +167,29 @@ public sealed class LazyConstructorLoggingTests
         Assert.DoesNotContain("SELECT Value", html);
         if (tamper == "runtime")
         {
+            // Match the normal operator query as well as the compiled diagnostic:
+            // mixed traversal, legacy root mode, same index and exact root.
+            var normal = await CombinedDependencyPathReporter.BuildSelectedSymbolsAsync(
+                options with { CompiledOnly = false, IncludeLegacyRoots = true },
+                [new(source.SourceIndexId, source.ScanId, source.CommitSha, entry.TargetSymbol!)], combinedIndex: true);
+            Assert.Contains(normal.Paths, candidate => candidate.Nodes.Last().SurfaceName == "SqlCommand.ExecuteScalar"
+                && candidate.Nodes.Last().CommandBinding?.CommandTextFromPath?.Composition is not null);
+            var sourceHandler = Assert.Single(scan.Facts, fact => fact.FactType == FactTypes.MethodDeclared
+                && fact.TargetSymbol == "BatchRuntimeProfile_Click");
+            var sourceNormal = await CombinedDependencyPathReporter.BuildSelectedSymbolsAsync(
+                options with { CompiledOnly = false, IncludeLegacyRoots = true },
+                [new(source.SourceIndexId, source.ScanId, source.CommitSha, sourceHandler.Properties["memberIdentity"])], combinedIndex: true);
+            RetainedMethodGraph? sourceGraph = null;
+            await CombinedDependencyPathReporter.BuildSelectedSymbolsAsync(options with { CompiledOnly = false, IncludeLegacyRoots = true,
+                ToSurface = null, MethodGraphObserver = value => sourceGraph = value },
+                [new(source.SourceIndexId, source.ScanId, source.CommitSha, sourceHandler.Properties["memberIdentity"])], combinedIndex: true);
+            // No publication/PDB identity receipt binds this synthetic source
+            // handler to its compiled counterpart. Both views must preserve that
+            // boundary instead of inventing a source-to-IL attachment by name.
+            Assert.Equal(1, sourceNormal.Summary.SelectorCandidateCount);
+            Assert.Empty(sourceNormal.Paths);
+            Assert.Empty(sourceGraph!.CommandTraces);
+            Assert.Contains(sourceNormal.Gaps, gap => gap.Reason == "target-assembly-present-without-bound-provenance");
             var handoff = GroupedCompiledPathHandoffBuilder.Create(report, new string('a', 64));
             var grouped = await GroupedCompiledPathReportWriter.WriteAsync(handoff, Path.Combine(temp.Path, "normal-report"));
             var normalHtml = await File.ReadAllTextAsync(grouped.HtmlPath);

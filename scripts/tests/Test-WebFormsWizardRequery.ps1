@@ -21,6 +21,12 @@ function global:dotnet {
         if ($global:WizardRequeryExit -eq 0) {
             $destination = $args[10]
             [IO.Directory]::CreateDirectory($destination) | Out-Null
+            if ($args -contains 'method-graph') {
+                @{schemaVersion='webforms-handler-requery.v1';truncated=$false;pathEnumerationPerformed=$false;
+                    primaryReport='method-graph.local.html';artifacts=@()} | ConvertTo-Json |
+                    Set-Content (Join-Path $destination 'handler-requery.local.json')
+                return
+            }
             $handoffPath = Join-Path $destination 'compiled-paths.handoff.local.json'
             @{schemaVersion='webforms-compiled-grouped-handoff.v1';header=@{gaps=@(
                 @{gapKind='TruncatedByLimit';reason='depth';cutoffCause=$global:WizardRequeryCause;filePath='synthetic/Page.vb';startLine=12;
@@ -82,7 +88,8 @@ try {
     $graphDisplay = @(& $helper $temporary -Handler Page_Load -MethodGraph)
     $graphCall = $global:WizardRequeryCalls[$global:WizardRequeryCalls.Count - 1]
     if ($graphCall[-2] -ne '--view' -or $graphCall[-1] -ne 'method-graph' -or
-        ($graphDisplay -join "`n") -notmatch 'method-graph.local.html') { throw 'Graph mode was not forwarded.' }
+        ($graphDisplay -join "`n") -notmatch 'method-graph.local.html' -or
+        ($graphDisplay -join "`n") -notmatch 'Terminal path enumeration was not run') { throw 'Graph mode was not forwarded or labeled.' }
     Expect-Failure { & $helper $temporary -MethodGraph -InspectLatest } 'cannot be combined'
     $beforeInspect = $global:WizardRequeryCalls.Count
     $inspection = @(& $helper $temporary -InspectLatest)

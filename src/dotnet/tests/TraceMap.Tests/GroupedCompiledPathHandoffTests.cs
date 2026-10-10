@@ -293,6 +293,23 @@ public sealed class GroupedCompiledPathHandoffTests
         finally { if (Directory.Exists(folder)) Directory.Delete(folder, true); }
     }
 
+    [Fact]
+    public async Task Empty_path_report_explicitly_disclaims_absence_of_database_dependencies()
+    {
+        var folder = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "tracemap-empty-report-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var report = Report();
+            report = report with { Paths = [], Summary = report.Summary with { PathCount = 0 } };
+            var output = await GroupedCompiledPathReportWriter.WriteAsync(GroupedCompiledPathHandoffBuilder.Create(report, IndexHash), folder);
+            var html = await File.ReadAllTextAsync(output.HtmlPath);
+            Assert.Contains("0 exact chains", html);
+            Assert.Contains("No terminal routes were retained by this path query", html);
+            Assert.Contains("not evidence that the handler has no database dependencies", html);
+        }
+        finally { if (Directory.Exists(folder)) Directory.Delete(folder, true); }
+    }
+
     private static CombinedPathNode Node(string id, string symbol) => new(
         NodeId: id, NodeKind: "Method", DisplayName: symbol, SourceIndexId: "source", SourceLabel: "retained",
         ScanId: "scan", CommitSha: new('c', 40), SymbolId: symbol, CombinedFactId: null,

@@ -50,6 +50,8 @@ public static class GroupedCompiledPathReportWriter
             W("<h1>Grouped compiled method paths</h1>");
             W("<p class=\"notice\">LOCAL ONLY — review-only static candidates, not runtime execution or proof that SQL ran. Grouping is a display/index operation; no evidence variant was removed.</p>");
             W($"<p>{handoff.Chains.Count} exact chains · {handoff.Variants.Count} retained variants · coverage {H(report.ReportCoverage)} · truncated {H(report.Summary.Truncated.ToString())}. <a href=\"{HandoffName}\">Lossless indexed handoff JSON</a></p>");
+            if (handoff.Chains.Count == 0)
+                W("<p class=\"notice\">No terminal routes were retained by this path query. This is not evidence that the handler has no database dependencies. Inspect selector, traversal and coverage gaps below; a method graph is a separate diagnostic view, not a path report.</p>");
             W("<nav aria-label=\"Method chains\"><ul>");
             for (var index = 0; index < handoff.Chains.Count; index++)
             {

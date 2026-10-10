@@ -1317,6 +1317,8 @@ public sealed class WebFormsReviewExecutionTests
             Assert.True(handlerReceipt.Query.ExactFromSymbol);
             Assert.Single(handlerReceipt.Query.SymbolRoots!);
             Assert.NotNull(handlerReceipt.GraphObservation);
+            Assert.True(handlerReceipt.PathEnumerationPerformed);
+            Assert.Equal(TraceMap.Reporting.GroupedCompiledPathReportWriter.HtmlName, handlerReceipt.PrimaryReport);
             Assert.Equal(handlerReceipt.CombinedIndexSha256, handlerReceipt.GraphObservation.InputSha256);
             Assert.Contains("no-scan;no-combine", requeryOutput.ToString());
             var graphFolder = Path.Combine(fixture.Root, "handler-method-graph");
@@ -1326,6 +1328,11 @@ public sealed class WebFormsReviewExecutionTests
                 WebFormsReviewExecutionCommand.HandlerRequeryName)), JsonOptions)!;
             Assert.Equal("unfiltered-retained-outgoing", graphReceipt.Query.TraversalScope);
             Assert.Null(graphReceipt.Query.ToSurface);
+            Assert.False(graphReceipt.PathEnumerationPerformed);
+            Assert.Equal(TraceMap.Reporting.RetainedMethodGraphWriter.HtmlName, graphReceipt.PrimaryReport);
+            Assert.False(File.Exists(Path.Combine(graphFolder, TraceMap.Reporting.GroupedCompiledPathReportWriter.HtmlName)));
+            Assert.False(File.Exists(Path.Combine(graphFolder, TraceMap.Reporting.GroupedCompiledPathReportWriter.HandoffName)));
+            Assert.DoesNotContain(graphReceipt.Artifacts, artifact => artifact.RelativePath.StartsWith("compiled-paths.", StringComparison.Ordinal));
             Assert.Equal(WebFormsReviewExecutionCommand.HandlerRequeryHash(graphReceipt), graphReceipt.BoundedInputSha256);
             Assert.Contains(graphReceipt.Artifacts, artifact => artifact.RelativePath == TraceMap.Reporting.RetainedMethodGraphWriter.JsonName);
             Assert.Contains("Call graph tree", File.ReadAllText(Path.Combine(graphFolder, TraceMap.Reporting.RetainedMethodGraphWriter.HtmlName)));
