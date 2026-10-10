@@ -46,6 +46,7 @@ public sealed class LazyConstructorLoggingTests
     [InlineData("wrong-hash")]
     [InlineData("expression-cycle")]
     [InlineData("getter")]
+    [InlineData("runtime")]
     public async Task Structured_profile_batch_traces_both_argument_alternatives_into_nested_SQL_composition(string tamper)
     {
         var repo = FindRepo();
@@ -57,7 +58,7 @@ public sealed class LazyConstructorLoggingTests
                 Path.Combine(bin, "PublicLazy.Framework.dll")], IlBodyEvidence: true));
         AssertScanIdentity(scan);
         var entry = Assert.Single(scan.Facts, fact => fact.FactType == FactTypes.ManagedMethodDeclared
-            && fact.Properties.GetValueOrDefault("metadataName") == (tamper == "getter" ? "BatchGetterProfile_Click" : "BatchProfile_Click"));
+            && fact.Properties.GetValueOrDefault("metadataName") == (tamper == "runtime" ? "BatchRuntimeProfile_Click" : tamper == "getter" ? "BatchGetterProfile_Click" : "BatchProfile_Click"));
         var index = Path.Combine(temp.Path, "index.sqlite");
         var combined = Path.Combine(temp.Path, "combined.sqlite");
         var facts = scan.Facts.ToList();
@@ -79,7 +80,7 @@ public sealed class LazyConstructorLoggingTests
             properties["argumentOrigins"] = JsonSerializer.Serialize(origins);
             facts[facts.IndexOf(operand)] = operand with { Properties = properties };
         }
-        else if (tamper is not ("none" or "getter"))
+        else if (tamper is not ("none" or "getter" or "runtime"))
         {
             var call = Assert.Single(facts, fact => fact.FactType == FactTypes.ManagedIlCallObserved
                 && fact.Properties.GetValueOrDefault("targetIdentity")?.Contains("ObserveOperand", StringComparison.Ordinal) == true);
@@ -116,7 +117,7 @@ public sealed class LazyConstructorLoggingTests
             Assert.Contains(expressions, value => value.Gaps.Contains("IlCommandExpressionLimit"));
             return;
         }
-        if (tamper is not ("none" or "getter"))
+        if (tamper is not ("none" or "getter" or "runtime"))
         {
             Assert.Equal("unresolved-call-evidence", middle.State);
             Assert.Null(middle.Alternatives);
@@ -126,11 +127,25 @@ public sealed class LazyConstructorLoggingTests
         Assert.Equal("symbolic-argument-alternatives", middle.State);
         Assert.Equal(2, middle.Alternatives!.Count);
         var unchanged = Assert.Single(middle.Alternatives, alternative => alternative.Composition is null);
-        Assert.Equal("constant-on-encoded-call-path", unchanged.State);
+        Assert.Equal(tamper == "runtime" ? "symbolic-method-return" : "constant-on-encoded-call-path", unchanged.State);
         var rewritten = Assert.Single(middle.Alternatives, alternative => alternative.Composition is not null);
         Assert.Equal("System.String.Concat", rewritten.Composition!.Operation);
         Assert.Equal(2, rewritten.Composition.OperandBindings.Count);
-        Assert.All(rewritten.Composition.OperandBindings, operand => Assert.Equal("constant-string-hash", operand.Origin.Kind));
+        if (tamper == "runtime")
+        {
+            Assert.Equal("constant-string-hash", rewritten.Composition.OperandBindings[0].Origin.Kind);
+            foreach (var input in new[] { unchanged, rewritten.Composition.OperandBindings[1] })
+            {
+                Assert.Equal("symbolic-method-return", input.State);
+                Assert.NotNull(input.SymbolicInput);
+                Assert.Contains("get_ActiveIdentifier", input.SymbolicInput.MethodIdentity);
+                Assert.NotEmpty(input.SymbolicInput.ValueGaps);
+                Assert.Contains(input.ReturnSteps!, step => step.ProducerCallFactId == input.SymbolicInput.ProducerCallFactId
+                    && step.ReturnFactId == input.SymbolicInput.ReturnFactId && step.CalleeBodyFactId == input.SymbolicInput.BodyFactId);
+            }
+            Assert.Equal(JsonSerializer.Serialize(unchanged.SymbolicInput), JsonSerializer.Serialize(rewritten.Composition.OperandBindings[1].SymbolicInput));
+        }
+        else Assert.All(rewritten.Composition.OperandBindings, operand => Assert.Equal("constant-string-hash", operand.Origin.Kind));
         Assert.All(new[] { text, middle, unchanged, rewritten }.Concat(rewritten.Composition.OperandBindings),
             operand => Assert.Empty(operand.Gaps));
         Assert.Equal(unchanged.Origin, rewritten.Composition.OperandBindings[1].Origin);
@@ -143,11 +158,12 @@ public sealed class LazyConstructorLoggingTests
             [new(source.SourceIndexId, source.ScanId, source.CommitSha, entry.TargetSymbol!)], combinedIndex: true);
         Assert.NotNull(graph);
         var trace = Assert.Single(graph.CommandTraces);
-        Assert.Equal(tamper == "getter" ? 4 : 2, trace.ProducerCallFactIds.Count);
+        Assert.Equal(tamper == "runtime" ? 3 : tamper == "getter" ? 4 : 2, trace.ProducerCallFactIds.Count);
         Assert.All(trace.ProducerCallFactIds, id => Assert.Contains(graph.Calls, call => call.FactId == id));
         await RetainedMethodGraphWriter.WriteAsync(graph, temp.Path, new string('a', 64), 16_000_000, default);
         var html = await File.ReadAllTextAsync(Path.Combine(temp.Path, RetainedMethodGraphWriter.HtmlName));
         Assert.Contains("Possible argument origins", html);
+        if (tamper == "runtime") Assert.Contains("Symbolic method input", html);
         Assert.DoesNotContain("SELECT Value", html);
     }
 
@@ -568,8 +584,16 @@ public sealed class LazyConstructorLoggingTests
             Assert.Equal("constant-string-hash", text.Origin.Kind);
             Assert.Equal(entryName == "InsertForwardedLiteral" ? 2 : 1, text.ReturnSteps!.Count);
         }
+        else if (mutation == "conflict")
+        {
+            Assert.Equal("symbolic-method-return", text.State);
+            Assert.Contains(gap!, text.SymbolicInput!.ValueGaps);
+            Assert.DoesNotContain(gap!, text.Gaps);
+            Assert.Equal("call-result", text.Origin.Kind);
+        }
         else
         {
+            Assert.Null(text.SymbolicInput);
             Assert.Equal(entryName == "InsertComposedTextTwoHops" && mutation == "none" ? "symbolic-string-composition" : "unresolved-operand", text.State);
             if (gap == "IlCommandCompositionValueNotMaterialized")
                 Assert.Contains("SymbolicStringValueNotMaterialized", text.Limitations!);
@@ -598,8 +622,8 @@ public sealed class LazyConstructorLoggingTests
     [Theory]
     [InlineData("InsertGetterLiteral", "constant-on-encoded-call-path")]
     [InlineData("InsertReturnFrameLimit", "limit")]
-    [InlineData("InsertGetterDynamic", "unresolved-operand")]
-    [InlineData("InsertGetterSharedDynamic", "unresolved-operand")]
+    [InlineData("InsertGetterDynamic", "symbolic-method-return")]
+    [InlineData("InsertGetterSharedDynamic", "symbolic-method-return")]
     [InlineData("InsertReturnedConcat", "symbolic-string-composition")]
     [InlineData("InsertReturnedChoice", "symbolic-argument-alternatives")]
     [InlineData("InsertReturnedConcatArgument", "symbolic-string-composition")]
@@ -645,9 +669,12 @@ public sealed class LazyConstructorLoggingTests
         }
         else if (entryName.Contains("Dynamic", StringComparison.Ordinal))
         {
-            Assert.Contains("IlCommandReturnOriginUnknown", text.Gaps);
-            Assert.Equal("unknown", text.Origin.Kind);
-            Assert.Contains(entryName.Contains("Shared", StringComparison.Ordinal) ? "get_SharedDynamic" : "get_DynamicInner", text.OriginMethodIdentity!);
+            Assert.Contains("IlCommandReturnOriginUnknown", text.SymbolicInput!.ValueGaps);
+            Assert.DoesNotContain("IlCommandOperandValueUnresolved", text.Gaps);
+            Assert.DoesNotContain("IlCommandReturnOriginUnknown", text.Gaps);
+            Assert.Contains("MethodReturnValueNotEvaluated", text.Limitations!);
+            Assert.Equal("call-result", text.Origin.Kind);
+            Assert.Contains(entryName.Contains("Shared", StringComparison.Ordinal) ? "get_SharedDynamic" : "get_DynamicInner", text.SymbolicInput.MethodIdentity);
             Assert.Equal(entryName.Contains("Shared", StringComparison.Ordinal) ? 1 : 2, text.ReturnSteps!.Count);
         }
         else if (entryName.EndsWith("Argument", StringComparison.Ordinal))

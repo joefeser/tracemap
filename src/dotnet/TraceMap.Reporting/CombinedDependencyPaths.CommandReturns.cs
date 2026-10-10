@@ -28,6 +28,7 @@ public static partial class CombinedDependencyPathReporter
         public int Work { get; set; }
         public CompiledStringComposition? Composition { get; private set; }
         public CommandReturnFrame? AdmittedFrame { get; private set; }
+        public CompiledSymbolicMethodInput? SymbolicInput { get; private set; }
 
         public bool Resolve(CompiledCommandOperandOrigin origin, string scope, string? method,
             out CompiledCommandOperandOrigin resolved, out string resolvedScope, out string? resolvedMethod)
@@ -147,16 +148,25 @@ public static partial class CombinedDependencyPathReporter
                 steps.Add(new(producer.CombinedFactId, targetBody.CombinedFactId, summary.CombinedFactId,
                     summary.Properties["ilGeneratorSha256"], summary.Properties["ilBoundedInputSha256"]));
                 CompiledCommandOperandOrigin? common = null;
+                var disagree = false;
                 foreach (var returned in returns)
                 {
                     if (++Work > MaxCompiledCommandValueHops) return Fail("IlCommandReturnWorkLimit");
                     // All sites must agree before exposing a symbolic expression.
                     // Its argument slots remain bound to this exact invocation.
-                    if (common is not null && common != returned.Origin) return Fail("IlCommandReturnValuesDisagree");
+                    if (common is not null && common != returned.Origin) disagree = true;
                     common = returned.Origin;
                 }
+                // An admitted invocation is still a symbolic input when its value cannot
+                // be reduced. Do not confuse value uncertainty with missing call evidence.
+                if (disagree || common!.Kind == "unknown")
+                {
+                    SymbolicInput = new(callee.CombinedFactId, callee.TargetSymbol!, producer.CombinedFactId,
+                        targetBody.CombinedFactId, summary.CombinedFactId,
+                        [disagree ? "IlCommandReturnValuesDisagree" : "IlCommandReturnOriginUnknown"]);
+                    return false;
+                }
                 resolved = common!; resolvedScope = targetBody.CombinedFactId; resolvedMethod = callee.CombinedFactId;
-                if (resolved.Kind == "unknown") return Fail("IlCommandReturnOriginUnknown");
                 if (resolved.Kind != constantKind && resolved.Kind is not ("argument-slot" or "call-result" or "argument-alternatives"))
                     return Fail("IlCommandReturnValueUnresolved");
                 AdmittedFrame = new(targetBody.CombinedFactId, callee.CombinedFactId, scope, method,

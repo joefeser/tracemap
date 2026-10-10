@@ -113,6 +113,12 @@ try {
     $trace.commandText.composition.operandBindings += @{state='symbolic-argument-alternatives';
         origin=@{kind='argument-alternatives';identity="$secret-alternatives"};originBodyFactId="$secret-body";
         steps=@();gaps=@();alternatives=@($leaf,$nested)}
+    $symbolic = @{state='symbolic-method-return';origin=@{kind='call-result';identity="$secret-offset"};
+        originBodyFactId="$secret-body";steps=@();gaps=@();symbolicInput=@{
+            methodFactId="$secret-method-fact";methodIdentity="$secret-runtime-getter";
+            producerCallFactId="$secret-fact";bodyFactId="$secret-return-body";returnFactId="$secret-return-fact";
+            valueGaps=@('IlCommandReturnOriginUnknown',"$secret-free-text");privateValue="$secret-runtime-value"}}
+    $trace.commandText.composition.operandBindings += $symbolic
     # Pin every categorical producer code, while arbitrary free text remains redacted.
     # New codes must be explicitly allowlisted by the exporter, never copied by pattern.
     $reporting = Join-Path $PSScriptRoot '../../src/dotnet/TraceMap.Reporting'
@@ -131,6 +137,14 @@ try {
     $traceResult = $traceRaw | ConvertFrom-Json -Depth 48
     $exportedTrace = $traceResult.graph.commandTraces[0]
     $choices = $exportedTrace.composition.operandBindings[1]
+    $inputBoundary = $exportedTrace.composition.operandBindings[2]
+    if ($inputBoundary.state -cne 'symbolic-method-return' -or $inputBoundary.gaps.Count -ne 0 -or
+        $inputBoundary.symbolicInput.method -cnotmatch '^S[0-9]+$' -or
+        $inputBoundary.symbolicInput.producer -cne $exportedTrace.producers[0] -or
+        $inputBoundary.symbolicInput.limitation -cne 'MethodReturnValueNotEvaluated' -or
+        ($inputBoundary.symbolicInput.valueGaps -join ',') -cne 'IlCommandReturnOriginUnknown,other-or-unavailable') {
+        throw 'Symbolic input lost provenance, uncertainty separation, or privacy.'
+    }
     if ((($exportedTrace.gaps | Select-Object -Skip 2) -join ',') -cne ($codes -join ',') -or
         $exportedTrace.method -cnotmatch '^S[0-9]+$') { throw 'Defined command reason or stopping method lost.' }
     if ($choices.state -cne 'symbolic-argument-alternatives' -or $choices.alternatives.Count -ne 2 -or

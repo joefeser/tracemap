@@ -1077,3 +1077,23 @@ stopping methods and producer-call links without exposing names or values.
 The local getter matrix also composes the two-getter chain with conditional
 argument normalization, Using/finally and the separate-DLL database wrapper.
 It scans compiled fixtures only; it never executes their HTTP or SQL code.
+
+## Symbolic method inputs
+
+The `combined.paths.compiled-command-value.v1` projection retains a
+`symbolic-method-return` boundary when an exact nonvirtual invocation, unique
+method/body, and provenance-checked return summary are admitted but the return
+value is unknown or its retained return sites disagree. The optional
+`symbolicInput` records the method, producer call, body, return fact, and separate
+`valueGaps`. Its parent binding hashes the bounded evidence and identifies the
+exact reporting generator. Share exports alias these identities and hash only
+their privacy projection.
+
+This preserves an input to a supported SQL string expression without requiring
+the employee/session/cache value to become a constant. It does not evaluate heap
+state, materialize SQL, prove branch feasibility, parameterization, runtime
+execution, or all-path completeness. `MethodReturnValueNotEvaluated` remains
+explicit. Missing/ambiguous targets, virtual dispatch, malformed or mismatched
+evidence, and work/depth limits remain structural gaps; none become symbolic
+success. The local corpus covers session/cache and impersonation getters with
+exception handling through argument alternatives and cross-assembly SQL calls.
