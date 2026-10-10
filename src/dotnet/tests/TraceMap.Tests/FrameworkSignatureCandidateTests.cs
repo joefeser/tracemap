@@ -270,6 +270,8 @@ public sealed class FrameworkSignatureCandidateTests
         var written = await GroupedCompiledPathReportWriter.WriteAsync(handoff, Path.Combine(temp.Path, "report"));
         var html = await File.ReadAllTextAsync(written.HtmlPath);
         Assert.Contains(endpoint, html);
+        if (scenario is "base-fill" or "preserved-base-fill")
+            Assert.Contains("historical DbDataAdapter.Fill surface groups", html);
         if (candidate) Assert.Contains("Framework-version candidate routes are present (Tier3)", html);
     }
 
