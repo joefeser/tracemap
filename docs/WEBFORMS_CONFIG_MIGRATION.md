@@ -6,6 +6,13 @@ the intervening sections remain available for investigating historical runs.
 
 ## Query one handler from a completed wizard configuration
 
+Member-level source-to-published-method candidate bridges use the admitted publish
+receipt's assembly hash, qualified type, and compatible unique method signature.
+They do not require a separate full build-binding receipt (`provenanceState=bound`).
+Missing or mismatched publication bindings still withhold the bridge. These remain
+Tier3 candidate connections, not full source/build provenance or runtime proof;
+existing provenance, dispatch, and traversal-limit gaps still apply.
+
 From the TraceMap checkout, using its existing Debug build:
 
 ```powershell
