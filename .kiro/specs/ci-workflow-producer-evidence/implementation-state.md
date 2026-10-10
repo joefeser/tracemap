@@ -149,3 +149,42 @@ before facts:
   its own absolute limits.
 
 
+
+## Independent no-ACK review (2026-10-10)
+
+Reviewed head `4490ea5bbffd07c98e8d346db2952d2c4efd3ccf` against base
+`556cc4193c8584d82eb75f426c94efacd126858e`. Review and remediation are
+owner-requested, outside ACK; no merge or bot retag is authorized by this work.
+
+Confirmed P1/P2 repairs:
+
+- Unknown/empty inner env declarations now mask parent literals; opaque
+  env/defaults scope values fail closed instead of disappearing.
+- Here-documents, multiline shell quotes, here-strings/block comments and
+  substitutions produce run-level unsupported gaps rather than facts from data.
+  Unmodeled YAML escapes and folded blocks retaining newlines are unsupported.
+- Commands after both characters of `&&`/`||` are recognized. Inline option
+  values no longer swallow the following property; MSBuild slash/single-long
+  property spellings are recognized. Empty overrides invalidate prior literals,
+  and grouped property lists cannot silently retain project fallback identity.
+- FIFO opens are nonblocking and nonseekable handles are rejected before reads;
+  attribute-read failures are caught as gaps, and CI-only partial coverage uses
+  the package-evidence build-status explanation.
+- Linked `.github` ancestors are rejected. Unix opens use held directory
+  handles plus no-follow `openat` for every component; macOS ELOOP uses its
+  actual value (62). Windows concurrent replacement remains a documented
+  residual; this is not an atomic snapshot of a changing repository.
+- CI facts now include generator/input SHA-256 fields. The input digest also
+  binds the projected project identity inputs actually used for fallback.
+- Dedupe keeps an intact occurrence, preferring one with known version when
+  available; another command's version/project cannot ride the wrong span.
+
+The initial 11 regression cases failed against the original head and passed
+with remediation. Focused CI-producer/receipt validation passed 82/82 with warnings as errors.
+The full Debug suite (`dotnet test src/dotnet/TraceMap.sln --no-restore
+-warnaserror`) passed 3,558 tests, zero failures, one explicit Windows-only
+skip (21m35s). The public CLI smoke produced one `Contoso.Sample` 0.1.0
+CI fact with both provenance hashes, zero gaps, Level1SemanticAnalysis.
+`git diff --check` passed. The public fixture remains
+the only CLI smoke input; private corpus and authentic Windows validation are
+deferred to their existing pinned hosted lanes.

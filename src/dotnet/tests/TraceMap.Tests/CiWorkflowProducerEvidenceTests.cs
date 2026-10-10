@@ -860,6 +860,8 @@ public sealed class CiWorkflowProducerEvidenceTests
         var scan = ScanEngine.Scan(new ScanOptions(temp.Path, temp.Path + "-out") { IndexCiProducers = true });
         Assert.EndsWith("Reduced", scan.Manifest.AnalysisLevel, StringComparison.Ordinal);
         Assert.Equal("FailedOrPartial", scan.Manifest.BuildStatus);
+        Assert.Contains(scan.Facts, fact => fact.Properties.GetValueOrDefault("reason")
+            == "Package/dependency evidence coverage is partial; inspect package manifest gaps and any separate semantic diagnostics.");
         var fact = Assert.Single(scan.Facts, fact => fact.Properties.GetValueOrDefault("sourceKind") == "ci-workflow");
         Assert.False(fact.Properties.ContainsKey("version"));
         var gap = Assert.Single(scan.Facts, fact => fact.FactType == FactTypes.AnalysisGap
@@ -907,10 +909,205 @@ public sealed class CiWorkflowProducerEvidenceTests
         var properties = json.RootElement.GetProperty("Properties");
         // The upgrade-authority fusion contract: provenance rides sourceKind=ci-workflow.
         foreach (var key in new[] { "dependencyGroup", "ecosystem", "manifestKind", "package", "packageManager",
-                     "packageName", "projectPath", "sourceKind", "surfaceKind", "version", "workflowPath" })
+                     "packageName", "projectPath", "sourceKind", "surfaceKind", "version", "workflowPath",
+                     "generatorSha256", "boundedInputSha256" })
             Assert.True(properties.TryGetProperty(key, out _), $"missing contract property {key}");
         Assert.Equal("PackageProduced", json.RootElement.GetProperty("FactType").GetString());
         Assert.Equal("package-config", properties.GetProperty("surfaceKind").GetString());
+    }
+
+    [Theory]
+    [InlineData("${{ matrix.version }}")]
+    [InlineData("''")]
+    [InlineData("")]
+    [InlineData("|")]
+    public void Unknown_inner_env_masks_literal_parent(string value)
+    {
+        using var temp = new TempDirectory();
+        WriteWorkflow(temp.Path, "pack.yml", $$$"""
+            env:
+              VERSION: 1.0.0
+            jobs:
+              build:
+                env:
+                  VERSION: {{{value}}}
+                steps:
+                  - run: dotnet pack -p:PackageId=Contoso.Job -p:PackageVersion=${{ env.VERSION }}
+                  - env:
+                      VERSION: {{{value}}}
+                    run: dotnet pack -p:PackageId=Contoso.Step -p:PackageVersion=${{ env.VERSION }}
+            """);
+        var result = Read(temp.Path);
+        Assert.Equal(2, result.Rows.Count);
+        Assert.All(result.Rows, row => Assert.Null(row.Version));
+        Assert.Equal(2, result.Gaps.Count);
+    }
+
+    [Theory]
+    [InlineData("&&")]
+    [InlineData("||")]
+    public void Pack_after_double_operator_is_indexed(string separator)
+    {
+        using var temp = new TempDirectory();
+        WriteWorkflow(temp.Path, "pack.yml", $$$"""
+            jobs:
+              build:
+                steps:
+                  - run: echo ready {{{separator}}} dotnet pack -p:PackageId=Contoso.Chained -p:PackageVersion=2.0.0
+            """);
+        Assert.Equal("Contoso.Chained", Assert.Single(Read(temp.Path).Rows).Package);
+    }
+
+    [Fact]
+    public void Linked_github_parent_is_not_repository_evidence()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        var outside = Path.Combine(temp.Path, "outside");
+        Directory.CreateDirectory(repo);
+        WriteWorkflow(outside, "pack.yml", PureCiWorkflow);
+        Directory.CreateSymbolicLink(Path.Combine(repo, ".github"), Path.Combine(outside, ".github"));
+        var result = Read(repo);
+        Assert.Empty(result.Rows);
+        Assert.Contains(result.Gaps, gap => gap.Kind == "ci-workflow-linked-path");
+    }
+
+    [Theory]
+    [InlineData("cat <<'EOF'\n      dotnet pack -p:PackageId=Contoso.Data\n      EOF")]
+    [InlineData("echo \"data\n      dotnet pack -p:PackageId=Contoso.Data\n      \"")]
+    public void Multiline_shell_data_is_not_a_pack_definition(string script)
+    {
+        using var temp = new TempDirectory();
+        WriteWorkflow(temp.Path, "pack.yml", "jobs:\n  build:\n    steps:\n      - run: |\n          "
+            + script.Replace("\n      ", "\n          ", StringComparison.Ordinal));
+        var result = Read(temp.Path);
+        Assert.Empty(result.Rows);
+        Assert.Contains(result.Gaps, gap => gap.Kind == "ci-workflow-unsupported");
+    }
+
+    [Theory]
+    [InlineData("env: { VERSION: '${{ matrix.version }}' }")]
+    [InlineData("defaults: { run: { shell: python } }")]
+    public void Opaque_effective_scope_is_not_silently_ignored(string scope)
+    {
+        using var temp = new TempDirectory();
+        WriteWorkflow(temp.Path, "pack.yml", $$$"""
+            env:
+              VERSION: 1.0.0
+            jobs:
+              build:
+                {{{scope}}}
+                steps:
+                  - run: dotnet pack -p:PackageId=Contoso.Opaque -p:PackageVersion=${{ env.VERSION }}
+            """);
+        var result = Read(temp.Path);
+        Assert.Empty(result.Rows);
+        Assert.Contains(result.Gaps, gap => gap.Kind == "ci-workflow-unsupported");
+    }
+
+    [Fact]
+    public void Input_digest_binds_referenced_project_identity()
+    {
+        using var temp = new TempDirectory();
+        WriteWorkflow(temp.Path, "pack.yml", "jobs:\n  build:\n    steps:\n      - run: dotnet pack src/Core.csproj");
+        WriteProject(temp.Path, "src/Core.csproj", "<Project><PropertyGroup><PackageId>Contoso.One</PackageId></PropertyGroup></Project>");
+        var first = Read(temp.Path);
+        WriteProject(temp.Path, "src/Core.csproj", "<Project><PropertyGroup><PackageId>Contoso.Two</PackageId></PropertyGroup></Project>");
+        var second = Read(temp.Path);
+        Assert.Equal("Contoso.One", Assert.Single(first.Rows).Package);
+        Assert.Equal("Contoso.Two", Assert.Single(second.Rows).Package);
+        Assert.NotEqual(first.BoundedInputSha256, second.BoundedInputSha256);
+        Assert.Equal(second.BoundedInputSha256, Read(temp.Path).BoundedInputSha256);
+    }
+
+    [Fact]
+    public void Collapsed_row_keeps_version_and_project_with_their_actual_evidence_span()
+    {
+        using var temp = new TempDirectory();
+        WriteWorkflow(temp.Path, "a.yml", "jobs:\n  build:\n    steps:\n      - run: dotnet pack -p:PackageId=Contoso.Dup");
+        WriteWorkflow(temp.Path, "b.yml", "jobs:\n  build:\n    steps:\n      - run: dotnet pack src/Core.csproj -p:PackageId=Contoso.Dup -p:PackageVersion=2.0.0");
+        var row = Assert.Single(Read(temp.Path).Rows);
+        Assert.Equal("2.0.0", row.Version);
+        Assert.Equal("src/Core.csproj", row.ProjectPath);
+        Assert.Equal(".github/workflows/b.yml", row.WorkflowPath);
+    }
+
+    [Fact]
+    public void Empty_property_override_cannot_reuse_an_earlier_literal()
+    {
+        using var temp = new TempDirectory();
+        WriteWorkflow(temp.Path, "pack.yml", "jobs:\n  build:\n    steps:\n      - run: dotnet pack -p:PackageId=Contoso.Old -p:PackageId=");
+        var result = Read(temp.Path);
+        Assert.Empty(result.Rows);
+        Assert.Contains(result.Gaps, gap => gap.Kind == "ci-producer-id-unevidenced");
+    }
+
+    [Theory]
+    [InlineData("jobs:\n  build:\n    steps:\n      - run: \"dotnet pack -p:PackageId=Contoso.\\u0041\"")]
+    [InlineData("jobs:\n  build:\n    steps:\n      - run: >\n          dotnet pack -p:PackageId=Contoso.Good\n\n          -p:PackageId=Contoso.Bad")]
+    [InlineData("jobs:\n  build:\n    steps:\n      - run: >\n          dotnet pack -p:PackageId=Contoso.Good\n            -p:PackageId=Contoso.Bad")]
+    public void Unmodeled_yaml_text_transformations_are_gaps(string workflow)
+    {
+        using var temp = new TempDirectory();
+        WriteWorkflow(temp.Path, "pack.yml", workflow);
+        var result = Read(temp.Path);
+        Assert.Empty(result.Rows);
+        Assert.Contains(result.Gaps, gap => gap.Kind == "ci-workflow-unsupported");
+    }
+
+    [Theory]
+    [InlineData("-c=Release -p:PackageId=Contoso.New")]
+    [InlineData("/p:PackageId=Contoso.New")]
+    [InlineData("/property:PackageId=Contoso.New")]
+    [InlineData("-property:PackageId=Contoso.New")]
+    public void Property_overrides_are_not_skipped_by_option_spelling(string flags)
+    {
+        using var temp = new TempDirectory();
+        WriteProject(temp.Path, "src/Core.csproj", "<Project><PropertyGroup><PackageId>Contoso.Old</PackageId></PropertyGroup></Project>");
+        WriteWorkflow(temp.Path, "pack.yml", "jobs:\n  build:\n    steps:\n      - run: dotnet pack src/Core.csproj " + flags);
+        Assert.Equal("Contoso.New", Assert.Single(Read(temp.Path).Rows).Package);
+    }
+
+    [Fact]
+    public void Grouped_property_override_is_not_a_literal_project_fallback()
+    {
+        using var temp = new TempDirectory();
+        WriteProject(temp.Path, "src/Core.csproj", "<Project><PropertyGroup><PackageId>Contoso.Old</PackageId></PropertyGroup></Project>");
+        WriteWorkflow(temp.Path, "pack.yml", "jobs:\n  build:\n    steps:\n      - run: dotnet pack src/Core.csproj \"-p:Version=2.0.0;PackageId=Contoso.New\"");
+        var result = Read(temp.Path);
+        Assert.Empty(result.Rows);
+        Assert.Contains(result.Gaps, gap => gap.Kind == "ci-producer-id-unevidenced");
+    }
+
+    [Fact]
+    public void Fifo_workflow_does_not_wait_for_a_writer()
+    {
+        if (!OperatingSystem.IsMacOS() && !OperatingSystem.IsLinux()) return;
+        using var temp = new TempDirectory();
+        var workflows = Path.Combine(temp.Path, ".github", "workflows");
+        Directory.CreateDirectory(workflows);
+        Run(temp.Path, "mkfifo", Path.Combine(workflows, "pipe.yml"));
+        var result = Read(temp.Path);
+        Assert.Empty(result.Rows);
+        Assert.Contains(result.Gaps, gap => gap.Kind == "ci-workflow-read-failed");
+    }
+
+    [Fact]
+    public void Powershell_continuation_cannot_emit_the_superseded_id()
+    {
+        using var temp = new TempDirectory();
+        WriteWorkflow(temp.Path, "pack.yml", "jobs:\n  build:\n    steps:\n      - shell: pwsh\n        run: |\n          dotnet pack -p:PackageId=Contoso.Old `\n            -p:PackageId=Contoso.New");
+        var result = Read(temp.Path);
+        Assert.Empty(result.Rows);
+        Assert.Contains(result.Gaps, gap => gap.Kind == "ci-workflow-unsupported");
+    }
+
+    [Fact]
+    public void Folded_comment_applies_after_folding_the_whole_shell_line()
+    {
+        using var temp = new TempDirectory();
+        WriteWorkflow(temp.Path, "pack.yml", "jobs:\n  build:\n    steps:\n      - run: >\n          dotnet pack -p:PackageId=Contoso.Good #\n          -p:PackageId=Contoso.Bad");
+        Assert.Equal("Contoso.Good", Assert.Single(Read(temp.Path).Rows).Package);
     }
 
     private static CiWorkflowResult Read(string root, ScanOptions? options = null) => CiWorkflowProducerExtractor.Read(
