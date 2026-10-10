@@ -134,6 +134,11 @@ public sealed class FrameworkSignatureCandidateTests
     [InlineData(4, 2, "appcode")]
     [InlineData(2, 2, "base-fill")]
     [InlineData(4, 4, "base-fill")]
+    [InlineData(4, 2, "base-fill")]
+    [InlineData(2, 4, "base-fill")]
+    [InlineData(2, 2, "preserved-base-fill")]
+    [InlineData(4, 4, "preserved-base-fill")]
+    [InlineData(2, 4, "preserved-base-fill")]
     [InlineData(4, 2, "preserved-base-fill")]
     [InlineData(4, 4, "fake-base-fill-namespace")]
     [InlineData(4, 4, "fake-base-fill-assembly")]
@@ -145,7 +150,7 @@ public sealed class FrameworkSignatureCandidateTests
         var callerPath = Path.Combine(temp.Path, "PublicWebsite.dll");
         var providerPath = Path.Combine(temp.Path, "PublicProvider.dll");
         var instanceCall = scenario is "virtual" or "nonvirtual" or "missing-flags";
-        Build(callerPath, callerVersion, true, instanceCall, scenario is "return-flow" or "appcode" or "preserved-base-fill" ? scenario : "valid");
+        Build(callerPath, callerVersion, true, instanceCall, scenario is "return-flow" or "appcode" or "preserved-base-fill" ? scenario : "valid", providerVersion);
         Build(providerPath, providerVersion, false, instanceCall, scenario);
         var paths = new List<string> { callerPath, providerPath };
         if (scenario == "appcode")
@@ -248,7 +253,7 @@ public sealed class FrameworkSignatureCandidateTests
         if (scenario is "base-fill" or "preserved-base-fill")
         {
             Assert.Contains(graph.Calls, c => c.EncodedTarget?.Contains("names:11:DataAdapter)|member:4:Fill|", StringComparison.Ordinal) == true);
-            Assert.DoesNotContain(report.Gaps, g => g.GapKind == "CompiledIlFrameworkVersionCandidate");
+            Assert.Equal(candidate, report.Gaps.Any(g => g.GapKind == "CompiledIlFrameworkVersionCandidate"));
             var fillOnly = await CombinedDependencyPathReporter.BuildSelectedSymbolsAsync(options with { SurfaceName = "DbDataAdapter.Fill" }, roots, true);
             Assert.Single(fillOnly.Paths);
         }
@@ -268,7 +273,7 @@ public sealed class FrameworkSignatureCandidateTests
         if (candidate) Assert.Contains("Framework-version candidate routes are present (Tier3)", html);
     }
 
-    private static void Build(string path, int version, bool caller, bool virtualCall, string scenario = "valid")
+    private static void Build(string path, int version, bool caller, bool virtualCall, string scenario = "valid", int importedVersion = 2)
     {
         using var assembly = AssemblyDefinition.CreateAssembly(new(caller ? "PublicWebsite" : "PublicProvider", new Version(1, 0, 0, 0)),
             caller ? "PublicWebsite.dll" : "PublicProvider.dll", ModuleKind.Dll);
@@ -287,12 +292,13 @@ public sealed class FrameworkSignatureCandidateTests
         var dataset = new TypeReference("System.Data", "DataSet", module, data);
         if (caller && scenario == "preserved-base-fill")
         {
-            // Model the observed native compiler behavior: the caller's own
-            // framework is 4.0, but the imported provider signature retains 2.0.
-            var oldCore = new AssemblyNameReference("mscorlib", new Version(2, 0, 0, 0)) { PublicKeyToken = Convert.FromHexString("b77a5c561934e089") };
-            var oldData = new AssemblyNameReference("System.Data", new Version(2, 0, 0, 0)) { PublicKeyToken = Convert.FromHexString("b77a5c561934e089") };
-            module.AssemblyReferences.Add(oldCore); module.AssemblyReferences.Add(oldData);
-            list.Scope = oldCore; dataset.Scope = oldData;
+            // Preserve the provider's embedded signature independently of the
+            // caller framework. Only 4-to-2 was observed in the native fixture;
+            // the other pairs are synthetic metadata controls, not runtime proof.
+            var importedCore = new AssemblyNameReference("mscorlib", new Version(importedVersion, 0, 0, 0)) { PublicKeyToken = Convert.FromHexString("b77a5c561934e089") };
+            var importedData = new AssemblyNameReference("System.Data", new Version(importedVersion, 0, 0, 0)) { PublicKeyToken = Convert.FromHexString("b77a5c561934e089") };
+            module.AssemblyReferences.Add(importedCore); module.AssemblyReferences.Add(importedData);
+            list.Scope = importedCore; dataset.Scope = importedData;
         }
         if (scenario == "parameter-type") list.Name = "OtherList";
         if (scenario == "return-type") dataset.Name = "OtherData";

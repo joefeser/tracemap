@@ -116,3 +116,19 @@ treated as errors, including all 63 framework/boundary cases plus
 CombinedDependencyPathTests, GroupedCompiledPathHandoffTests and
 CompiledBaselinePrewalkTests. See the
 [Windows unchanged-fixture requery prompt](../WINDOWS_BASE_FILL_REQUERY_PROMPT.md).
+
+### Bidirectional inherited-terminal matrix
+
+Five further synthetic metadata controls complete the 2/4 cross-product for
+inherited `DataAdapter.Fill`: differing embedded signatures in both directions
+must retain a Tier3 candidate and stop argument propagation; provider-preserving
+signatures under all four caller/provider pairs must remain exact. All exercise
+normal, compiled-only, Fill-only, retained graph and HTML reporting. The reverse
+2-to-4 control does not claim a native CLR2 compiler or runtime can load a CLR4
+provider. It checks only how the indexer handles those independently encoded
+identities. Native validation remains a separate gate.
+
+Validation of this extension: 188/188 selected tests pass, zero skips, warnings
+treated as errors; this includes all 68 framework/signature cases and the same
+three adjacent reporting suites named above. The extension changes tests and
+documentation only, not production extraction or reporting behavior.
