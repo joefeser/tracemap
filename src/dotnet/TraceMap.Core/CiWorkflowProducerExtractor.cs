@@ -24,6 +24,7 @@ internal static class CiWorkflowProducerExtractor
 {
     // Absolute resource caps, deliberately not options-tunable.
     internal const int MaxFiles = 64;
+    internal const int MaxDiscoveryEntries = 4096;
     internal const int MaxFileBytes = 1_048_576;
     internal const long MaxTotalBytes = 8_388_608;
 
@@ -76,7 +77,7 @@ internal static class CiWorkflowProducerExtractor
         {
             observed = observed.Order(StringComparer.Ordinal),
             gaps = OrderGaps(gaps),
-            limits = new { maxFiles = MaxFiles, maxFileBytes = MaxFileBytes, maxTotalBytes = MaxTotalBytes }
+            limits = new { maxFiles = MaxFiles, maxDiscoveryEntries = MaxDiscoveryEntries, maxFileBytes = MaxFileBytes, maxTotalBytes = MaxTotalBytes }
         });
         return new(ResolveConflicts(rows, gaps), OrderGaps(gaps).ToArray(),
             Convert.ToHexString(SHA256.HashData(generator)).ToLowerInvariant(), FactFactory.Hash(signature, 64));
@@ -98,11 +99,13 @@ internal static class CiWorkflowProducerExtractor
         List<string> candidates;
         try
         {
-            candidates = Directory.EnumerateFiles(workflows)
-                .Where(path => path.EndsWith(".yml", StringComparison.OrdinalIgnoreCase)
-                    || path.EndsWith(".yaml", StringComparison.OrdinalIgnoreCase))
-                .Order(StringComparer.Ordinal)
-                .ToList();
+            candidates = DiscoverCandidates(Directory.EnumerateFileSystemEntries(workflows), root,
+                options.ExcludeGlobs ?? [], comparer, cancellationToken, out var limitGap);
+            if (limitGap is not null)
+            {
+                gaps.Add(new(".github/workflows", limitGap));
+                return;
+            }
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -113,16 +116,12 @@ internal static class CiWorkflowProducerExtractor
         {
             cancellationToken.ThrowIfCancellationRequested();
             var relative = Path.GetRelativePath(root, path).Replace('\\', '/');
-            if ((options.ExcludeGlobs ?? []).Any(glob => ScanEngine.GlobMatches(relative, glob, comparer)))
-                continue;
-            if (++files > MaxFiles)
-            {
-                gaps.Add(new(relative, "ci-workflow-file-limit"));
-                return;
-            }
             try
             {
-                if (File.GetAttributes(path).HasFlag(FileAttributes.ReparsePoint))
+                var attributes = File.GetAttributes(path);
+                if (attributes.HasFlag(FileAttributes.Directory)) continue;
+                files++;
+                if (attributes.HasFlag(FileAttributes.ReparsePoint))
                 {
                     gaps.Add(new(relative, "ci-workflow-linked-path"));
                     continue;
@@ -152,6 +151,38 @@ internal static class CiWorkflowProducerExtractor
                 gaps.Add(new(relative, "ci-workflow-read-failed"));
             }
         }
+    }
+
+    internal static List<string> DiscoverCandidates(IEnumerable<string> entries, string root,
+        IReadOnlyList<string> exclusions, StringComparer comparer, CancellationToken cancellationToken,
+        out string? limitGap)
+    {
+        var candidates = new List<string>();
+        var inspected = 0;
+        limitGap = null;
+        foreach (var path in entries)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (++inspected > MaxDiscoveryEntries)
+            {
+                // Use the same categorical omission whichever bound is observed first.
+                limitGap = "ci-workflow-file-limit";
+                return [];
+            }
+            if (!path.EndsWith(".yml", StringComparison.OrdinalIgnoreCase)
+                && !path.EndsWith(".yaml", StringComparison.OrdinalIgnoreCase)) continue;
+            var relative = Path.GetRelativePath(root, path).Replace('\\', '/');
+            if (exclusions.Any(glob => ScanEngine.GlobMatches(relative, glob, comparer))) continue;
+            if (candidates.Count == MaxFiles)
+            {
+                // Never choose an arbitrary filesystem-order prefix as producer evidence.
+                limitGap = "ci-workflow-file-limit";
+                return [];
+            }
+            candidates.Add(path);
+        }
+        candidates.Sort(StringComparer.Ordinal);
+        return candidates;
     }
 
     private const int OReadOnly = 0;
@@ -894,8 +925,8 @@ internal static class CiWorkflowProducerExtractor
     // ---- shared quote/expression scanner -------------------------------------------------------
 
     /// Visits characters that are outside quotes and outside ${{ }} expressions. A quote
-    /// starts only at a token boundary (start, after whitespace or structural punctuation).
-    private static void Walk(string text, Action<int, char, char?> visit)
+    /// starts at a token boundary for YAML; shell callers admit embedded quoted fragments.
+    private static void Walk(string text, Action<int, char, char?> visit, bool shellQuotes = false)
     {
         var inSingle = false;
         var inDouble = false;
@@ -919,10 +950,11 @@ internal static class CiWorkflowProducerExtractor
                 else if (c == '"') inDouble = false;
                 continue;
             }
+            if (shellQuotes && c == '\\' && i + 1 < text.Length) { i++; continue; }
             if (c is '\'' or '"')
             {
                 char? previous = i == 0 ? null : text[i - 1];
-                if (previous is null or ' ' or '\t' or ':' or '-' or ',' or '[' or '{' or '=')
+                if (shellQuotes || previous is null or ' ' or '\t' or ':' or '-' or ',' or '[' or '{' or '=')
                 {
                     if (c == '\'') inSingle = true;
                     else inDouble = true;
@@ -1152,7 +1184,7 @@ internal static class CiWorkflowProducerExtractor
         Walk(text, (index, c, previous) =>
         {
             if (cut < 0 && c == '#' && previous is null or ' ' or '\t') cut = index;
-        });
+        }, shellQuotes: true);
         return cut < 0 ? text : text[..cut];
     }
 
@@ -1194,15 +1226,12 @@ internal static class CiWorkflowProducerExtractor
                 else if (c == '"') inDouble = false;
                 continue;
             }
+            if (c == '\\' && i + 1 < text.Length) { i++; continue; }
             if (c is '\'' or '"')
             {
-                char? previous = i == 0 ? null : text[i - 1];
-                if (previous is null or ' ' or '\t' or ':' or '-' or ',' or '[' or '{' or '=')
-                {
-                    if (c == '\'') inSingle = true;
-                    else inDouble = true;
-                    continue;
-                }
+                if (c == '\'') inSingle = true;
+                else inDouble = true;
+                continue;
             }
             if (c == '$' && i + 2 < text.Length && text[i + 1] == '{' && text[i + 2] == '{') { expression++; i += 2; continue; }
             if (c == '&' && i + 1 < text.Length && text[i + 1] == '&') { Cut(i); i++; pieceStart = i + 1; }

@@ -4558,3 +4558,7 @@ effective scopes, heredoc/multiline shell data rejection, commands following
 `&&`/`||`, linked `.github` parents, empty property overrides, intact dedupe
 evidence spans, successful-fact provenance fields and project-fallback input
 hashes. These are static definition checks, not workflow execution proof.
+
+Discovery regressions must prove lazy enumeration stops at the candidate/entry
+bound, overflow produces one deterministic gap and no rows, and embedded quoted
+or escaped shell operators cannot truncate an unsafe PackageId into a safe one.

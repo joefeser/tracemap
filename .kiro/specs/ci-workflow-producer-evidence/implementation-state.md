@@ -204,3 +204,26 @@ Local wizard command/execution and GitMetadataOutput regression selection:
 29 passed, zero failed/skipped, warnings as errors. Runtime code is unchanged;
 the previous 3,558-pass full runtime validation remains prior-head evidence.
 Hosted Windows validation must confirm this scheduling-only correction.
+
+Hosted confirmation: Windows public-corpus run `38069213747` passed on
+`4b79e06f` (148 passed, zero failed/skipped, both Windows publishing cases).
+
+### Owner-requested assessment of the two runtime Baz findings
+
+Both findings were confirmed and repaired: embedded shell quotes could split
+an unsafe package id into a false safe prefix; workflow discovery materialized
+all candidates before enforcing its cap. Shell operator/comment scanning now
+honors embedded quotes and escapes consistently with tokenization. Discovery
+retains at most 64 candidates, inspects at most 4,096 directory entries plus
+one overflow witness, and sorts only after bounded collection succeeds.
+Either overflow emits the same deterministic `ci-workflow-file-limit` gap and
+no rows, avoiding filesystem-order-dependent producer evidence. Exclusions
+remain honored within the absolute discovery bound.
+
+Eight added regression cases cover embedded quotes/escaped operators, bounded
+lazy enumeration, and enumeration-order-independent overflow. The combined
+CI-producer/receipt/wizard/Git-output selection passed 119/119 with warnings as
+errors; the public fixture CLI smoke passed with one CI fact and zero gaps.
+The separate test-only persisted-artifact suggestion was not part of the
+owner-requested two runtime findings. Full hosted checks for the new runtime
+head remain separate from the prior-head full-suite and Windows evidence.

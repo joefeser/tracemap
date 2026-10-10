@@ -12,3 +12,5 @@
 - [x] Deliver bounded PR to dev and complete the Baz + Codex review loop.
 
 - [x] Independent no-ACK P1/P2 review: preserve env shadowing, reject opaque scopes and multiline shell data, fix operator splitting/empty overrides, bind provenance and intact dedupe spans, and reject linked workflow ancestors.
+
+- [x] Bound discovery before sorting and preserve embedded shell quote/escape semantics; reject overflow without filesystem-order-dependent partial facts.
