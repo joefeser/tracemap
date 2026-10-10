@@ -182,6 +182,7 @@ public sealed record ScanOptions(
 {
     public bool IndexDepsJson { get; init; }
     public DepsJsonLimits? DepsJsonLimits { get; init; }
+    public bool IndexCiProducers { get; init; }
 }
 
 public sealed record FileInventoryItem(
@@ -691,6 +692,7 @@ public static class ScannerVersions
     public const string FileInventoryExtractor = "file-inventory/0.1.0";
     public const string ProjectFileExtractor = "project-file/0.3.0"; // 0.2.0: CPM pins + versionOverride (#804); 0.3.0: PackageProduced facts (#818)
     public const string DepsJsonExtractor = "deps-json/0.1.0";
+    public const string CiWorkflowExtractor = "ci-workflow/0.1.0";
     public const string NuGetLockfileExtractor = "nuget-lockfile/0.1.0";
     public const string BuildEnvironmentExtractor = "build-environment/0.6.1";
     public const string AnalyzerCapabilityExtractor = "analyzer-capability/0.1.0";

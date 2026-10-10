@@ -622,7 +622,8 @@ public static class ProjectFileReader
         }
     }
 
-    private static bool IsSafeNuGetPackageId(string? value)
+    // Shared with the CI workflow producer lane so both source kinds apply one id/version policy.
+    internal static bool IsSafeNuGetPackageId(string? value)
     {
         return !string.IsNullOrWhiteSpace(value)
             && value.Length <= 128
@@ -637,7 +638,7 @@ public static class ProjectFileReader
             && SafeLockfileTargetFrameworkPattern.IsMatch(value);
     }
 
-    private static bool IsSafeNuGetResolvedVersion(string value)
+    internal static bool IsSafeNuGetResolvedVersion(string value)
     {
         return value.Length is > 0 and <= 128
             && SafeNuGetResolvedVersionPattern.IsMatch(value);
