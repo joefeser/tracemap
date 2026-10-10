@@ -3,7 +3,7 @@ using System.Globalization;
 namespace TraceMap.Core;
 
 /// <summary>Normal-flow fixed point over independently decoded canonical IL.
-/// Joins retain an origin only when every reached predecessor agrees. This does
+/// Joins retain bounded scalar alternatives or unknown. This does
 /// not model exception edges, branch feasibility, heap aliases or execution.</summary>
 internal static class IlControlFlowValueExtractor
 {
@@ -34,7 +34,8 @@ internal static class IlControlFlowValueExtractor
     }
 
     internal static IlValueFlowObservation Extract(IReadOnlyList<string> encoded,
-        IReadOnlyList<IlCallObservation> calls, int maxStack, IReadOnlyList<IlValueExceptionEntry>? exceptionEntries = null)
+        IReadOnlyList<IlCallObservation> calls, int maxStack, IReadOnlyList<IlValueExceptionEntry>? exceptionEntries = null,
+        IReadOnlyList<IlValueExceptionRegion>? exceptionRegions = null)
     {
         if (encoded.Count > MaxInstructions) return new([], ["IlValueControlFlowInstructionLimit"]);
         if (exceptionEntries?.Count > MaxExceptionEntries) return new([], ["IlValueExceptionEntryLimit"]);
@@ -47,6 +48,29 @@ internal static class IlControlFlowValueExtractor
         }).ToArray();
         if (instructions.Length == 0) return new([], []);
         var positions = instructions.Select((value, index) => (value.Offset, index)).ToDictionary(value => value.Offset, value => value.index);
+        if (exceptionRegions?.Count > MaxExceptionEntries || exceptionRegions?.Any(region =>
+            !positions.ContainsKey(region.HandlerStart) || region.HandlerEnd <= region.HandlerStart
+            || region.FilterStart is { } filter && (!positions.ContainsKey(filter) || filter >= region.HandlerStart)) == true)
+            return new([], ["IlValueExceptionEntryUnavailable"]);
+        // A scalar argument survives leave only with complete handler ranges,
+        // no address exposure anywhere, and no write in ANY handler/filter.
+        // This overapproximates crossed finally blocks; it does not dispatch EH.
+        var unsafeArguments = new HashSet<int>();
+        var unsafeHandlerMemory = false;
+        var regionWork = 0;
+        foreach (var instruction in instructions)
+        {
+            regionWork += 1 + (exceptionRegions?.Count ?? 0);
+            if (regionWork > MaxWorkUnits) return new([], ["IlValueControlFlowWorkLimit"], WorkUnits: MaxWorkUnits);
+            var inHandler = exceptionRegions?.Any(region => instruction.Offset >= (region.FilterStart ?? region.HandlerStart)
+                && instruction.Offset < region.HandlerEnd) == true;
+            if (inHandler && (instruction.Opcode is "calli" or "jmp" or "localloc" or "cpblk" or "initblk" or "arglist" or "stobj"
+                || instruction.Opcode.StartsWith("stind.", StringComparison.Ordinal))) unsafeHandlerMemory = true;
+            if (Slot(instruction.Opcode, instruction.Operand, "ldarga", out var slot)
+                || Slot(instruction.Opcode, instruction.Operand, "starg", out slot)
+                && inHandler)
+                unsafeArguments.Add(slot);
+        }
         var byOffset = calls.Where(call => call.Opcode is "call" or "callvirt" or "newobj").ToDictionary(call => call.Offset);
         var gaps = new SortedSet<string>(StringComparer.Ordinal);
         var entries = new Dictionary<int, int>();
@@ -58,6 +82,10 @@ internal static class IlControlFlowValueExtractor
             entries[position] = entry.StackCount;
         }
         if (entries.Count > 0) gaps.Add("IlValueExceptionFlowUnavailable");
+        if (exceptionRegions is not null && !entries.Keys.Order().SequenceEqual(exceptionRegions
+            .SelectMany(region => region.FilterStart is { } filter ? new[] { positions[region.HandlerStart], positions[filter] }
+                : new[] { positions[region.HandlerStart] }).Distinct().Order()))
+            return new([], ["IlValueExceptionEntryUnavailable"]);
         var successors = new int[instructions.Length][];
         for (var index = 0; index < instructions.Length; index++)
         {
@@ -99,7 +127,7 @@ internal static class IlControlFlowValueExtractor
                 inputs[0]!.Arguments[modified] = Argument(modified);
         if (inputs[0]!.Arguments.Count > MaxSlots) return new([], ["IlValueControlFlowSlotLimit"]);
         queue.Enqueue(0); queued.Add(0);
-        var work = 0;
+        var work = regionWork;
         foreach (var entry in entries.OrderBy(pair => pair.Key))
         {
             if ((work += 1 + inputs[0]!.Arguments.Count + entry.Value) > MaxWorkUnits)
@@ -237,9 +265,12 @@ internal static class IlControlFlowValueExtractor
             if (opcode is "br" or "br.s") return false;
             if (opcode is "leave" or "leave.s")
             {
+                var preserved = exceptionRegions is null || unsafeHandlerMemory ? [] : state.Arguments
+                    .Where(pair => !unsafeArguments.Contains(pair.Key)).ToArray();
                 Clear("IlValueExceptionFlowUnavailable");
+                foreach (var pair in preserved) state.Arguments[pair.Key] = pair.Value;
                 // leave establishes an empty evaluation stack. Locals and
-                // potentially rewritten arguments remain unknown across finally.
+                // arguments without the conservative mutation proof stay unknown.
                 state.InvalidStack = false; return true;
             }
             if (opcode == "switch" || opcode.StartsWith("brtrue", StringComparison.Ordinal) || opcode.StartsWith("brfalse", StringComparison.Ordinal))
@@ -293,19 +324,21 @@ internal static class IlControlFlowValueExtractor
                 target.InvalidStack = true; target.Stack.Clear(); gaps.Add("IlValueStackMergeUnavailable");
             }
             else for (var index = 0; index < target.Stack.Count; index++)
-                if (target.Stack[index] != incoming.Stack[index] && target.Stack[index] != Unknown)
-                { target.Stack[index] = Unknown; changed = true; }
+            {
+                var joined = IlArgumentAlternatives.Join(target.Stack[index], incoming.Stack[index]);
+                if (target.Stack[index] != joined) { target.Stack[index] = joined; changed = true; }
+            }
             foreach (var key in target.Locals.Keys.Concat(incoming.Locals.Keys).Distinct().ToArray())
             {
                 var value = target.Locals.GetValueOrDefault(key, Unknown);
-                if (value != incoming.Locals.GetValueOrDefault(key, Unknown) && value != Unknown)
-                { target.Locals[key] = Unknown; changed = true; }
+                var joined = IlArgumentAlternatives.Join(value, incoming.Locals.GetValueOrDefault(key, Unknown));
+                if (value != joined) { target.Locals[key] = joined; changed = true; }
             }
             foreach (var key in target.Arguments.Keys.Concat(incoming.Arguments.Keys).Distinct().ToArray())
             {
                 var value = target.Arguments.GetValueOrDefault(key, Argument(key));
-                if (value != incoming.Arguments.GetValueOrDefault(key, Argument(key)) && value != Unknown)
-                { target.Arguments[key] = Unknown; changed = true; }
+                var joined = IlArgumentAlternatives.Join(value, incoming.Arguments.GetValueOrDefault(key, Argument(key)));
+                if (value != joined) { target.Arguments[key] = joined; changed = true; }
             }
             return changed;
         }

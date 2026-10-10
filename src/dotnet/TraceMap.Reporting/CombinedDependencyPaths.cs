@@ -208,6 +208,8 @@ public sealed record CompiledCommandPathValueBinding(string Schema, string RuleI
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public CompiledStringComposition? Composition { get; init; }
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<CompiledCommandPathValueBinding>? Alternatives { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? OriginMethodIdentity { get; init; }
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public IReadOnlyList<string>? Limitations { get; init; }

@@ -14,6 +14,11 @@ Partial Public Class LazyOverview
     Public Sub Profile_Click(sender As Object, args As EventArgs)
         PublicQueries.Lookup(ProfileContext.EmployeeInfo.Region)
     End Sub
+
+    Public Sub BatchProfile_Click(sender As Object, args As EventArgs)
+        Dim service As New StructuredProfileProbe()
+        service.Lookup("public-user")
+    End Sub
 End Class
 
 Public Class ProfileContext
@@ -133,6 +138,7 @@ Public Class StructuredProfileProbe
     End Function
 
     Private Function ObserveOperand(value As String) As String
-        Return value
+        Dim data As New ProfileData()
+        Return CStr(data.ExecuteSql("SELECT Value FROM public_batch WHERE Key = '" & value & "'"))
     End Function
 End Class

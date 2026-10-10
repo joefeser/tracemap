@@ -27,7 +27,7 @@ namespace TraceMap.Core;
 internal static class IlBodyEvidenceExtractor
 {
     internal const string SchemaVersion = "il-body-provenance.v1";
-    internal const string PolicyVersion = "explicit-il-body-evidence.v7";
+    internal const string PolicyVersion = "explicit-il-body-evidence.v8";
     internal const string IlLocationKind = "managed-il-v1";
     internal const string BodyLimitation = "IL body evidence proves only that the admitted assembly contains this exact bounded operand-aware instruction stream at this module-local method row; it does not prove execution, dispatch, reachability, behavior, source ownership, semantic equivalence, or rewrite preservation.";
     internal const string CallLimitation = "A call site records the static member reference or calli standalone signature encoded in this module's IL; a calli signature does not identify a target member. No call site proves execution, virtual dispatch resolution, target presence, cross-assembly resolution, call-graph reachability, or rewrite equivalence.";
@@ -168,7 +168,8 @@ internal static class IlBodyEvidenceExtractor
             expectedInputs = expected,
             effectiveLimits = limits,
             controlFlowValueLimits = new { IlControlFlowValueExtractor.MaxInstructions, IlControlFlowValueExtractor.MaxSlots,
-                IlControlFlowValueExtractor.MaxWorkUnits, IlControlFlowValueExtractor.MaxExceptionEntries },
+                IlControlFlowValueExtractor.MaxWorkUnits, IlControlFlowValueExtractor.MaxExceptionEntries,
+                IlArgumentAlternatives.MaxAlternatives, IlArgumentAlternatives.MaxEncodedLength },
             valueDerivationAggregateWorkPerReader = limits.MaxTotalWorkUnits,
             maxRetainedReturnSites = IlCallValueExtractor.MaxRetainedReturnSites,
             outcomes = outcomes.Select(item => new
@@ -1365,11 +1366,14 @@ internal static class IlBodyEvidenceExtractor
             return new([], ["IlValueWorkLimitExceeded"]);
         var boundaries = new HashSet<long>();
         var entries = new List<IlValueExceptionEntry>();
+        var regions = new List<IlValueExceptionRegion>();
         foreach (var handler in handlers)
         {
             var parts = handler.Split(':');
             var handlerStart = long.Parse(parts[5].Split('+')[0], NumberStyles.HexNumber, CultureInfo.InvariantCulture);
             entries.Add(new(handlerStart, parts[1] is "catch" or "filter" ? 1 : 0));
+            regions.Add(new(handlerStart, handlerStart + long.Parse(parts[5].Split('+')[1], NumberStyles.HexNumber, CultureInfo.InvariantCulture),
+                parts[7] == "-1" ? null : long.Parse(parts[7], NumberStyles.HexNumber, CultureInfo.InvariantCulture)));
             foreach (var index in new[] { 3, 5 })
             {
                 var range = parts[index].Split('+');
@@ -1383,7 +1387,7 @@ internal static class IlBodyEvidenceExtractor
                 boundaries.Add(filterStart); entries.Add(new(filterStart, 1));
             }
         }
-        var flow = IlCallValueExtractor.Extract(instructions, calls, maxStack, handlers.Count != 0, boundaries, entries);
+        var flow = IlCallValueExtractor.Extract(instructions, calls, maxStack, handlers.Count != 0, boundaries, entries, regions);
         return budget.TryConsume(flow.WorkUnits) ? flow : new([], ["IlValueControlFlowAggregateWorkLimit"]);
     }
 

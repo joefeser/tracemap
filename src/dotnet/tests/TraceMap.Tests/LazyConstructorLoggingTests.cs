@@ -33,8 +33,121 @@ public sealed class LazyConstructorLoggingTests
             && fact.Properties.GetValueOrDefault("ilBodyFactId") == call.Properties["ilBodyFactId"]
             && fact.Properties.GetValueOrDefault("ilOffset") == call.Properties["ilOffset"]);
         Assert.Equal("control-flow-candidate", operand.Properties["valueState"]);
-        Assert.Contains("unknown", operand.Properties["argumentOrigins"]);
-        Assert.DoesNotContain("argument-slot", operand.Properties["argumentOrigins"]);
+        var origins = System.Text.Json.JsonSerializer.Deserialize<IlValueOrigin[]>(operand.Properties["argumentOrigins"])!;
+        Assert.Equal("argument-alternatives", Assert.Single(origins).Kind);
+        var choices = System.Text.Json.JsonSerializer.Deserialize<IlValueOrigin[]>(origins[0].Identity)!;
+        Assert.Equal(new[] { "argument-slot", "call-result" }, choices.Select(choice => choice.Kind));
+    }
+
+    [Theory]
+    [InlineData("none")]
+    [InlineData("nested")]
+    [InlineData("oversized")]
+    [InlineData("wrong-hash")]
+    [InlineData("expression-cycle")]
+    public async Task Structured_profile_batch_traces_both_argument_alternatives_into_nested_SQL_composition(string tamper)
+    {
+        var repo = FindRepo();
+        var configuration = new DirectoryInfo(AppContext.BaseDirectory).Parent!.Name;
+        var bin = Path.Combine(repo, "samples", "fixture-build", "lazy-constructor", "bin", configuration, "net48");
+        using var temp = new TempDirectory();
+        var scan = ScanEngine.Scan(new ScanOptions(Path.Combine(repo, "samples", "messy-dotnet-workspace", "vb-lazy-constructor"),
+            Path.Combine(temp.Path, "scan"), CompiledInputPaths: [Path.Combine(bin, "PublicLazy.Website.dll"),
+                Path.Combine(bin, "PublicLazy.Framework.dll")], IlBodyEvidence: true));
+        AssertScanIdentity(scan);
+        var entry = Assert.Single(scan.Facts, fact => fact.FactType == FactTypes.ManagedMethodDeclared
+            && fact.Properties.GetValueOrDefault("metadataName") == "BatchProfile_Click");
+        var index = Path.Combine(temp.Path, "index.sqlite");
+        var combined = Path.Combine(temp.Path, "combined.sqlite");
+        var facts = scan.Facts.ToList();
+        if (tamper == "expression-cycle")
+        {
+            // Synthetic retained-origin cycle: the previous loop iteration's
+            // value may originate at this same concatenation instruction.
+            var lookupCall = Assert.Single(facts, fact => fact.FactType == FactTypes.ManagedIlCallObserved
+                && fact.Properties.GetValueOrDefault("targetIdentity")?.Contains("ObserveOperand", StringComparison.Ordinal) == true);
+            var producer = facts.Where(fact => fact.FactType == FactTypes.ManagedIlCallObserved
+                && fact.Properties.GetValueOrDefault("ilBodyFactId") == lookupCall.Properties["ilBodyFactId"]
+                && fact.Properties.GetValueOrDefault("targetIdentity")?.Contains("Concat", StringComparison.Ordinal) == true)
+                .OrderBy(fact => int.Parse(fact.Properties["ilOffset"], System.Globalization.CultureInfo.InvariantCulture)).First();
+            var operand = Assert.Single(facts, fact => fact.FactType == FactTypes.ManagedIlCallValuesObserved
+                && fact.Properties.GetValueOrDefault("ilCallFactId") == producer.FactId);
+            var properties = new Dictionary<string, string>(operand.Properties);
+            var origins = JsonSerializer.Deserialize<IlValueOrigin[]>(properties["argumentOrigins"])!;
+            origins[1] = new("call-result", producer.Properties["ilOffset"]);
+            properties["argumentOrigins"] = JsonSerializer.Serialize(origins);
+            facts[facts.IndexOf(operand)] = operand with { Properties = properties };
+        }
+        else if (tamper != "none")
+        {
+            var call = Assert.Single(facts, fact => fact.FactType == FactTypes.ManagedIlCallObserved
+                && fact.Properties.GetValueOrDefault("targetIdentity")?.Contains("ObserveOperand", StringComparison.Ordinal) == true);
+            var operand = Assert.Single(facts, fact => fact.FactType == FactTypes.ManagedIlCallValuesObserved
+                && fact.Properties.GetValueOrDefault("ilCallFactId") == call.FactId);
+            var properties = new Dictionary<string, string>(operand.Properties);
+            if (tamper == "wrong-hash") properties["ilBoundedInputSha256"] = new string('f', 64);
+            else properties["argumentOrigins"] = JsonSerializer.Serialize(new[] { new IlValueOrigin("argument-alternatives",
+                tamper == "oversized" ? new string('x', 769) : JsonSerializer.Serialize(new[] {
+                    new IlValueOrigin("argument-alternatives", "[]"), new IlValueOrigin("argument-slot", "1") })) });
+            facts[facts.IndexOf(operand)] = operand with { Properties = properties };
+        }
+        SqliteIndexWriter.Write(index, scan.Manifest, facts);
+        var result = await CombinedIndexBuilder.CombineAsync(new CombineOptions([index], combined, ["synthetic-batch"]));
+        var source = Assert.Single(result.Sources);
+        var options = new CombinedDependencyPathOptions(combined, temp.Path, ToSurface: "database-api", MaxDepth: 20, MaxPaths: 256)
+            { CompiledOnly = true, ExactFromSymbol = true, MaxTraversalWork = 100_000 };
+        var report = await CombinedDependencyPathReporter.BuildSelectedSymbolsAsync(options,
+            [new(source.SourceIndexId, source.ScanId, source.CommitSha, entry.TargetSymbol!)], combinedIndex: true);
+        var path = Assert.Single(report.Paths);
+        Assert.Equal("SqlCommand.ExecuteScalar", path.Nodes.Last().SurfaceName);
+        var text = path.Nodes.Last().CommandBinding!.CommandTextFromPath!;
+        var middle = text.Composition!.OperandBindings[1];
+        if (tamper == "expression-cycle")
+        {
+            var expressions = new List<CompiledCommandPathValueBinding>();
+            void Walk(CompiledCommandPathValueBinding value)
+            {
+                expressions.Add(value);
+                Assert.True(expressions.Count <= 32);
+                foreach (var child in (value.Alternatives ?? []).Concat(value.Composition?.OperandBindings ?? [])) Walk(child);
+            }
+            Walk(text);
+            Assert.Contains(expressions, value => value.Gaps.Contains("IlCommandExpressionLimit"));
+            return;
+        }
+        if (tamper != "none")
+        {
+            Assert.Equal("unresolved-call-evidence", middle.State);
+            Assert.Null(middle.Alternatives);
+            Assert.NotEmpty(middle.Gaps);
+            return;
+        }
+        Assert.Equal("symbolic-argument-alternatives", middle.State);
+        Assert.Equal(2, middle.Alternatives!.Count);
+        var unchanged = Assert.Single(middle.Alternatives, alternative => alternative.Composition is null);
+        Assert.Equal("constant-on-encoded-call-path", unchanged.State);
+        var rewritten = Assert.Single(middle.Alternatives, alternative => alternative.Composition is not null);
+        Assert.Equal("System.String.Concat", rewritten.Composition!.Operation);
+        Assert.Equal(2, rewritten.Composition.OperandBindings.Count);
+        Assert.All(rewritten.Composition.OperandBindings, operand => Assert.Equal("constant-string-hash", operand.Origin.Kind));
+        Assert.All(new[] { text, middle, unchanged, rewritten }.Concat(rewritten.Composition.OperandBindings),
+            operand => Assert.Empty(operand.Gaps));
+        Assert.Equal(unchanged.Origin, rewritten.Composition.OperandBindings[1].Origin);
+        var repeat = await CombinedDependencyPathReporter.BuildSelectedSymbolsAsync(options,
+            [new(source.SourceIndexId, source.ScanId, source.CommitSha, entry.TargetSymbol!)], combinedIndex: true);
+        Assert.Equal(JsonSerializer.Serialize(text), JsonSerializer.Serialize(repeat.Paths.Single().Nodes.Last().CommandBinding!.CommandTextFromPath));
+        RetainedMethodGraph? graph = null;
+        await CombinedDependencyPathReporter.BuildSelectedSymbolsAsync(new(combined, temp.Path, MaxDepth: 20, MaxFrontier: 10000)
+            { CompiledOnly = true, ExactFromSymbol = true, MethodGraphObserver = value => graph = value },
+            [new(source.SourceIndexId, source.ScanId, source.CommitSha, entry.TargetSymbol!)], combinedIndex: true);
+        Assert.NotNull(graph);
+        var trace = Assert.Single(graph.CommandTraces);
+        Assert.Equal(2, trace.ProducerCallFactIds.Count);
+        Assert.All(trace.ProducerCallFactIds, id => Assert.Contains(graph.Calls, call => call.FactId == id));
+        await RetainedMethodGraphWriter.WriteAsync(graph, temp.Path, new string('a', 64), 16_000_000, default);
+        var html = await File.ReadAllTextAsync(Path.Combine(temp.Path, RetainedMethodGraphWriter.HtmlName));
+        Assert.Contains("Possible argument origins", html);
+        Assert.DoesNotContain("SELECT Value", html);
     }
 
     [Theory]

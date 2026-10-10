@@ -109,7 +109,8 @@ internal static partial class IlCommandBindingExtractor
 
         void InvalidateEffects(IlCallValueObservation values)
         {
-            var passed = values.Arguments.Append(values.Receiver).Select(IlValueAddresses.Target).ToHashSet();
+            var passed = values.Arguments.Append(values.Receiver).Select(IlValueAddresses.Target)
+                .SelectMany(IlArgumentAlternatives.Members).ToHashSet();
             foreach (var pair in collections)
                 if (passed.Contains(pair.Key) || escaped.Contains(pair.Key)) escaped.Add(pair.Value);
             // An adapter exposes its command to the callee/provider too.
