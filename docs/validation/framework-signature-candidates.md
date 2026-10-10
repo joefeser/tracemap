@@ -132,3 +132,21 @@ Validation of this extension: 188/188 selected tests pass, zero skips, warnings
 treated as errors; this includes all 68 framework/signature cases and the same
 three adjacent reporting suites named above. The extension changes tests and
 documentation only, not production extraction or reporting behavior.
+
+### Unchanged native requery result
+
+Windows validation at `ae9b439f591444bdee51a13a0705348454e445b4` passed
+63 focused tests and a warnings-as-errors CLI build. CLI SHA-256:
+`921244e7824b540a4bc83d2cd5a903360473e6e9a53afeff44de0f619095c9ad`.
+Both native C# and VB retained indexes produced one path, one grouped chain and
+one variant in each of normal, compiled-only and Fill-only modes. Two exact DLL
+hops and original 2.0/4.0 signature scopes remained unchanged, with zero version
+candidate edges and no traversal truncation. All 48 original fixture/input files
+were verified unchanged. Reduced coverage and unbound source provenance remain;
+these results are not a private-application or runtime validation.
+
+That run also exposed a presentation omission: endpoint limitations were retained
+in JSON but absent from grouped HTML. The writer now displays HTML-escaped
+endpoint limitations beside each database endpoint. A new HTML assertion failed
+for all four preserved-signature controls before the change; the fix does not
+alter graph construction, terminal matching or evidence tiers.

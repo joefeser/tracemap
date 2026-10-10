@@ -77,6 +77,8 @@ public static class GroupedCompiledPathReportWriter
                 {
                     var endpoint = handoff.Nodes[reference];
                     W($"<h4>{H(endpoint.SurfaceName ?? Compact(endpoint))}</h4><p>Endpoint evidence: {H(endpoint.RuleId)} / {H(endpoint.EvidenceTier)}; {H(Location(endpoint.FilePath, endpoint.StartLine, endpoint.EndLine))}. Node reference: <code>{H(reference)}</code></p>");
+                    foreach (var limitation in endpoint.Limitations ?? [])
+                        W($"<p>Endpoint limitation: {H(limitation)}</p>");
                     var variants = group.VariantIndexes.Where(variant => handoff.Variants[variant].NodeReferences.LastOrDefault() == reference);
                     W($"<p>Retained variants: {H(string.Join(", ", variants.Select(variant => handoff.Variants[variant].Path.PathId)))}</p>");
                     foreach (var (label, value) in new[] { ("Command text expression", endpoint.CommandBinding?.CommandTextFromPath),
