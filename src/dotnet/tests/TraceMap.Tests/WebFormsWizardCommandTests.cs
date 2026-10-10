@@ -3,6 +3,8 @@ using TraceMap.Core;
 
 namespace TraceMap.Tests;
 
+// Terminal completion also rechecks Git identity; isolate it from concurrent corpus process load.
+[Collection("Git metadata sensitive")]
 public sealed class WebFormsWizardCommandTests
 {
     [Fact]
