@@ -60,6 +60,42 @@ public sealed class ScanExecutionReceiptTests
     }
 
     [Fact]
+    public void Authorized_scope_binds_ci_producer_opt_in_and_keeps_lanes_distinct()
+    {
+        var options = new ScanOptions("repo", "out");
+        string Fingerprint(ScanOptions value)
+        {
+            var recorder = new ScanReceiptRecorder(value);
+            recorder.Bind(new GitMetadata("repo", null, "dev", CommitSha, []));
+            return recorder.CreateReceipt().AuthorizedScopeFingerprint;
+        }
+        var ci = options with { IndexCiProducers = true };
+        var deps = options with { IndexDepsJson = true };
+        // A disabled-lane scan can never be reused as an enabled-lane scan, in any combination.
+        Assert.NotEqual(Fingerprint(options), Fingerprint(ci));
+        Assert.NotEqual(Fingerprint(deps), Fingerprint(ci));
+        Assert.NotEqual(Fingerprint(deps), Fingerprint(deps with { IndexCiProducers = true }));
+        Assert.Equal(Fingerprint(ci), Fingerprint(ci with { IndexDepsJson = false }));
+        Assert.Equal(Fingerprint(options), Fingerprint(options with { IndexCiProducers = false }));
+    }
+
+    [Fact]
+    public void Ci_producer_scope_cannot_be_forged_by_additional_input_text()
+    {
+        var options = new ScanOptions("repo", "out");
+        string Fingerprint(ScanOptions value, string[] additional)
+        {
+            var recorder = new ScanReceiptRecorder(value, additional);
+            recorder.Bind(new GitMetadata("repo", null, "dev", CommitSha, []));
+            return recorder.CreateReceipt().AuthorizedScopeFingerprint;
+        }
+        var marker = "{\"baseScopeSha256\":\"x\",\"indexDepsJson\":false,\"depsJsonLimits\":null,\"indexCiProducers\":true}";
+        var enabled = Fingerprint(options with { IndexCiProducers = true }, ["a"]);
+        Assert.NotEqual(enabled, Fingerprint(options, ["a", marker]));
+        Assert.NotEqual(enabled, Fingerprint(options, ["a\n" + marker]));
+    }
+
+    [Fact]
     public void Authorized_scope_preserves_rewrite_pair_order_and_blank_slots()
     {
         var options = new ScanOptions("repo", "out", IlRewriteEvidence: true,
