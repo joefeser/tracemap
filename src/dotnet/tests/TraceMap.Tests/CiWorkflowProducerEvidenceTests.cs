@@ -780,7 +780,7 @@ public sealed class CiWorkflowProducerEvidenceTests
         Assert.Empty(capped.Gaps);
         WriteWorkflow(temp.Path, "overflow.yml", PureCiWorkflow);
         var overflow = Read(temp.Path);
-        Assert.Equal(CiWorkflowProducerExtractor.MaxFiles, overflow.Rows.Count);
+        Assert.Empty(overflow.Rows); // Overflow must not select a filesystem-order-dependent subset.
         Assert.Contains(overflow.Gaps, gap => gap.Kind == "ci-workflow-file-limit");
 
         using var large = new TempDirectory();
@@ -1108,6 +1108,61 @@ public sealed class CiWorkflowProducerEvidenceTests
         using var temp = new TempDirectory();
         WriteWorkflow(temp.Path, "pack.yml", "jobs:\n  build:\n    steps:\n      - run: >\n          dotnet pack -p:PackageId=Contoso.Good #\n          -p:PackageId=Contoso.Bad");
         Assert.Equal("Contoso.Good", Assert.Single(Read(temp.Path).Rows).Package);
+    }
+
+    [Theory]
+    [InlineData("Contoso\"Pipe|Id\"")]
+    [InlineData("Contoso'Pipe|Id'")]
+    [InlineData("Contoso\"Semi;Id\"")]
+    [InlineData("Contoso\"Hash # Id\"")]
+    [InlineData("Contoso\\|Id")]
+    public void Embedded_shell_quotes_and_escapes_cannot_invent_a_truncated_safe_id(string id)
+    {
+        using var temp = new TempDirectory();
+        WriteWorkflow(temp.Path, "pack.yml", "jobs:\n  build:\n    steps:\n      - run: |\n          dotnet pack -p:PackageId=" + id);
+        var result = Read(temp.Path);
+        Assert.Empty(result.Rows);
+        Assert.Contains(result.Gaps, gap => gap.Kind == "ci-producer-id-unevidenced");
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void Discovery_stops_enumerating_at_its_absolute_bound(bool workflows)
+    {
+        using var temp = new TempDirectory();
+        var limit = workflows ? CiWorkflowProducerExtractor.MaxFiles : CiWorkflowProducerExtractor.MaxDiscoveryEntries;
+        var yielded = 0;
+        IEnumerable<string> Entries()
+        {
+            for (var i = 0; i <= limit; i++)
+            {
+                yielded++;
+                yield return Path.Combine(temp.Path, ".github", "workflows", $"{i}." + (workflows ? "yml" : "txt"));
+            }
+            throw new InvalidOperationException("enumerated beyond the bounded overflow witness");
+        }
+        var candidates = CiWorkflowProducerExtractor.DiscoverCandidates(Entries(), temp.Path, [],
+            StringComparer.Ordinal, default, out var gap);
+        Assert.Empty(candidates);
+        Assert.Equal(limit + 1, yielded);
+        Assert.Equal("ci-workflow-file-limit", gap);
+    }
+
+    [Fact]
+    public void Discovery_overflow_has_one_deterministic_gap_regardless_of_enumeration_order()
+    {
+        using var temp = new TempDirectory();
+        var entries = Enumerable.Range(0, CiWorkflowProducerExtractor.MaxFiles + 1)
+            .Select(i => Path.Combine(temp.Path, $"{i}.yml"))
+            .Concat(Enumerable.Range(0, CiWorkflowProducerExtractor.MaxDiscoveryEntries + 1)
+                .Select(i => Path.Combine(temp.Path, $"{i}.txt"))).ToArray();
+        Assert.Empty(CiWorkflowProducerExtractor.DiscoverCandidates(entries, temp.Path, [],
+            StringComparer.Ordinal, default, out var forward));
+        Assert.Empty(CiWorkflowProducerExtractor.DiscoverCandidates(entries.Reverse(), temp.Path, [],
+            StringComparer.Ordinal, default, out var reverse));
+        Assert.Equal("ci-workflow-file-limit", forward);
+        Assert.Equal(forward, reverse);
     }
 
     private static CiWorkflowResult Read(string root, ScanOptions? options = null) => CiWorkflowProducerExtractor.Read(
