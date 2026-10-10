@@ -1443,7 +1443,8 @@ public static class ScanEngine
         }
 
         if (knownGaps.Any(gap => (gap.StartsWith("NuGet lockfile analysis reported", StringComparison.Ordinal)
-            || gap.StartsWith("Build-output dependency analysis reported", StringComparison.Ordinal))))
+            || gap.StartsWith("Build-output dependency analysis reported", StringComparison.Ordinal)
+            || gap.StartsWith("CI workflow producer analysis reported", StringComparison.Ordinal))))
             return "Package/dependency evidence coverage is partial; inspect package manifest gaps and any separate semantic diagnostics.";
 
         var hasBinlogGap = binlogFacts.Any(fact =>

@@ -49,17 +49,25 @@ internal static class CiWorkflowProducerExtractor
         var producedByPath = producedPackages
             .GroupBy(package => package.ProjectPath, comparer)
             .ToDictionary(group => group.Key, group => group.First(), comparer);
-        if (Directory.Exists(workflows))
+        try
         {
-            if (File.GetAttributes(workflows).HasFlag(FileAttributes.ReparsePoint))
-                gaps.Add(new(".github/workflows", "ci-workflow-linked-path"));
-            else if (comparer.Equals(workflows.TrimEnd(Path.DirectorySeparatorChar), output)
-                || workflows.StartsWith(output + Path.DirectorySeparatorChar,
-                    comparer == StringComparer.OrdinalIgnoreCase ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal))
-                gaps.Add(new(".github/workflows", "ci-workflow-output-boundary"));
-            else
-                ReadWorkflows(root, workflows, options, comparer, producedByPath, rows, gaps, observed,
-                    ref files, ref bytesRead, cancellationToken);
+            if (Directory.Exists(workflows))
+            {
+                if (File.GetAttributes(Path.Combine(root, ".github")).HasFlag(FileAttributes.ReparsePoint)
+                    || File.GetAttributes(workflows).HasFlag(FileAttributes.ReparsePoint))
+                    gaps.Add(new(".github/workflows", "ci-workflow-linked-path"));
+                else if (comparer.Equals(workflows.TrimEnd(Path.DirectorySeparatorChar), output)
+                    || workflows.StartsWith(output + Path.DirectorySeparatorChar,
+                        comparer == StringComparer.OrdinalIgnoreCase ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal))
+                    gaps.Add(new(".github/workflows", "ci-workflow-output-boundary"));
+                else
+                    ReadWorkflows(root, workflows, options, comparer, producedByPath, rows, gaps, observed,
+                        ref files, ref bytesRead, cancellationToken);
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            gaps.Add(new(".github/workflows", "ci-workflow-discovery-failed"));
         }
         if (files == 0 && gaps.Count == 0) gaps.Add(new(".github/workflows", "ci-workflow-not-found"));
         using var generator = File.OpenRead(typeof(CiWorkflowProducerExtractor).Assembly.Location);
@@ -107,11 +115,6 @@ internal static class CiWorkflowProducerExtractor
             var relative = Path.GetRelativePath(root, path).Replace('\\', '/');
             if ((options.ExcludeGlobs ?? []).Any(glob => ScanEngine.GlobMatches(relative, glob, comparer)))
                 continue;
-            if (File.GetAttributes(path).HasFlag(FileAttributes.ReparsePoint))
-            {
-                gaps.Add(new(relative, "ci-workflow-linked-path"));
-                continue;
-            }
             if (++files > MaxFiles)
             {
                 gaps.Add(new(relative, "ci-workflow-file-limit"));
@@ -119,7 +122,12 @@ internal static class CiWorkflowProducerExtractor
             }
             try
             {
-                using var stream = OpenNoFollow(path, out var linked);
+                if (File.GetAttributes(path).HasFlag(FileAttributes.ReparsePoint))
+                {
+                    gaps.Add(new(relative, "ci-workflow-linked-path"));
+                    continue;
+                }
+                using var stream = OpenNoFollow(root, path, out var linked);
                 if (linked || stream is null)
                 {
                     gaps.Add(new(relative, "ci-workflow-linked-path"));
@@ -137,7 +145,7 @@ internal static class CiWorkflowProducerExtractor
                 if (stream.ReadByte() != -1) throw new IOException("Changed workflow file");
                 var hash = Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
                 observed.Add(relative + "\0" + hash);
-                ParseWorkflow(relative, bytes, root, producedByPath, rows, gaps);
+                ParseWorkflow(relative, bytes, root, producedByPath, rows, gaps, observed);
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
@@ -149,31 +157,52 @@ internal static class CiWorkflowProducerExtractor
     private const int OReadOnly = 0;
     private const int NoFollowMacOs = 0x0100;
     private const int NoFollowLinux = 0x20000;
-    private const int ErrnoLoop = 40; // ELOOP: O_NOFOLLOW hit a final symlink
+    private const int ErrnoLoopLinux = 40;
+    private const int ErrnoLoopMacOs = 62; // ELOOP: O_NOFOLLOW hit a final symlink
 
     [DllImport("libc", SetLastError = true, EntryPoint = "open")]
     private static extern int open(string path, int flags);
+
+    [DllImport("libc", SetLastError = true, EntryPoint = "openat")]
+    private static extern int openat(SafeFileHandle directory, string path, int flags);
 
     /// Opens the workflow without following a final symlink. Unix platforms use a true
     /// O_NOFOLLOW descriptor (the read bytes belong to the opened inode even if the path is
     /// swapped afterwards); Windows — where creating symlinks already needs elevated
     /// privileges — keeps the documented path-check residual.
-    private static FileStream? OpenNoFollow(string path, out bool linked)
+    private static FileStream? OpenNoFollow(string root, string path, out bool linked)
     {
         linked = false;
         if (OperatingSystem.IsMacOS() || OperatingSystem.IsLinux())
         {
-            var descriptor = open(path, OReadOnly | (OperatingSystem.IsMacOS() ? NoFollowMacOs : NoFollowLinux));
-            if (descriptor < 0)
+            var noFollow = OperatingSystem.IsMacOS() ? NoFollowMacOs : NoFollowLinux;
+            var directoryFlags = noFollow | (OperatingSystem.IsMacOS() ? 0x100000 : 0x10000); // O_DIRECTORY
+            using var rootHandle = CheckedHandle(open(root, OReadOnly | directoryFlags));
+            using var github = CheckedHandle(openat(rootHandle, ".github", directoryFlags));
+            using var workflows = CheckedHandle(openat(github, "workflows", directoryFlags));
+            // Resolve each component from its held parent descriptor. O_NOFOLLOW on the
+            // leaf alone would still follow a swapped .github/workflows directory.
+            var nonBlocking = OperatingSystem.IsMacOS() ? 0x4 : 0x800; // O_NONBLOCK: never wait for a FIFO writer
+            var descriptor = openat(workflows, Path.GetFileName(path), OReadOnly | noFollow | nonBlocking);
+            if (descriptor < 0
+                && Marshal.GetLastWin32Error() == (OperatingSystem.IsMacOS() ? ErrnoLoopMacOs : ErrnoLoopLinux))
             {
-                if (Marshal.GetLastWin32Error() == ErrnoLoop)
-                {
-                    linked = true;
-                    return null;
-                }
-                throw new IOException($"Workflow open failed (errno {Marshal.GetLastWin32Error()}).");
+                linked = true;
+                return null;
             }
-            return new FileStream(new SafeFileHandle((IntPtr)descriptor, ownsHandle: true), FileAccess.Read);
+            var handle = CheckedHandle(descriptor);
+            try
+            {
+                var opened = new FileStream(handle, FileAccess.Read);
+                if (opened.CanSeek) return opened;
+                opened.Dispose();
+                throw new IOException("Workflow must be a seekable regular file.");
+            }
+            catch
+            {
+                handle.Dispose();
+                throw;
+            }
         }
         if (IsLink(path))
         {
@@ -188,6 +217,12 @@ internal static class CiWorkflowProducerExtractor
             return null;
         }
         return stream;
+    }
+
+    private static SafeFileHandle CheckedHandle(int descriptor)
+    {
+        if (descriptor < 0) throw new IOException($"Workflow open failed (errno {Marshal.GetLastWin32Error()}).");
+        return new SafeFileHandle((IntPtr)descriptor, ownsHandle: true);
     }
 
     private static bool IsLink(string path)
@@ -222,11 +257,10 @@ internal static class CiWorkflowProducerExtractor
                 .ThenBy(row => row.StartLine)
                 .ThenBy(row => row.EndLine)
                 .ToList();
-            resolved.Add(ordered[0] with
-            {
-                Version = versions.FirstOrDefault(),
-                ProjectPath = ordered.Select(row => row.ProjectPath).FirstOrDefault(path => path is not null)
-            });
+            // Keep the entire evidence tuple from one occurrence. A version/project from
+            // another command must never be attributed to the first command's line span.
+            resolved.Add(versions.Length == 0 ? ordered[0]
+                : ordered.First(row => row.Version == versions[0]));
         }
         return resolved.OrderBy(row => row.WorkflowPath, StringComparer.Ordinal)
             .ThenBy(row => row.Package, StringComparer.Ordinal)
@@ -244,6 +278,8 @@ internal static class CiWorkflowProducerExtractor
         {
             var properties = new SortedDictionary<string, string>(StringComparer.Ordinal)
             {
+                ["generatorSha256"] = result.GeneratorSha256,
+                ["boundedInputSha256"] = result.BoundedInputSha256,
                 ["dependencyGroup"] = "PackageProduced",
                 ["ecosystem"] = "nuget",
                 ["manifestKind"] = "github-workflow",
@@ -303,7 +339,8 @@ internal static class CiWorkflowProducerExtractor
         string root,
         IReadOnlyDictionary<string, ProducedPackageInfo> producedByPath,
         List<CiWorkflowProducerRow> rows,
-        List<CiWorkflowGap> gaps)
+        List<CiWorkflowGap> gaps,
+        List<string> observed)
     {
         try
         {
@@ -318,8 +355,24 @@ internal static class CiWorkflowProducerExtractor
                             "pack text under a non-command shell", script.StartLine));
                     continue;
                 }
+                if (!IsLineOrientedScript(script))
+                {
+                    gaps.Add(new(path, "ci-workflow-unsupported",
+                        "multiline shell data or unsupported shell syntax", script.StartLine));
+                    continue;
+                }
                 foreach (var occurrence in ExtractPackOccurrences(path, root, script))
+                {
+                    if (occurrence.RawPackageId is null && occurrence.ProjectTarget is { } target)
+                    {
+                        producedByPath.TryGetValue(target, out var project);
+                        observed.Add("project-identity\0" + JsonSerializer.Serialize(new
+                        {
+                            target, project?.PackageId, project?.ExplicitPackageId
+                        }));
+                    }
                     ResolveOccurrence(occurrence, producedByPath, rows, gaps);
+                }
             }
         }
         catch (WorkflowFormatException ex)
@@ -590,6 +643,27 @@ internal static class CiWorkflowProducerExtractor
         if (!KeyPattern.IsMatch(key)) Unsupported($"unsupported key syntax: {Truncate(key)}");
         if (key == "<<") Unsupported("merge keys");
         if (!mapping.SeenKeys.Add(key)) Fail($"duplicate key: {Truncate(key)}");
+        if (mapping.Role is "env-workflow" or "env-job" or "env-step")
+        {
+            // Even an unknown/empty binding shadows the same name in an outer scope.
+            var literal = string.Empty;
+            if (value.Length > 0)
+            {
+                if (IsBlockHeader(value)) { ParseBlockHeader(value); ConsumeBlock(column); }
+                else
+                {
+                    var classified = ClassifyValue(value);
+                    if (!value.Contains("${{", StringComparison.Ordinal)) literal = classified;
+                }
+            }
+            switch (mapping.Role)
+            {
+                case "env-workflow": _workflowEnv[key] = literal; break;
+                case "env-job": JobEnv(mapping.JobId)[key] = literal; break;
+                default: _stepEnv![key] = literal; break;
+            }
+            return;
+        }
         if (value.Length == 0)
         {
             _pendingBlock = (column, mapping, key);
@@ -629,20 +703,10 @@ internal static class CiWorkflowProducerExtractor
             }
             return;
         }
-        if (mapping.Role is "env-workflow" or "env-job" or "env-step")
-        {
-            if (IsBlockHeader(value)) { ParseBlockHeader(value); ConsumeBlock(column); return; }
-            if (!value.Contains("${{", StringComparison.Ordinal) && ClassifyValue(value) is { Length: > 0 } literal)
-            {
-                switch (mapping.Role)
-                {
-                    case "env-workflow": _workflowEnv[key] = literal; break;
-                    case "env-job": JobEnv(mapping.JobId)[key] = literal; break;
-                    default: _stepEnv?.Add(key, literal); break;
-                }
-            }
-            return; // templated, flow, or empty env values leave the variable unresolved
-        }
+        if ((mapping.Role is "root" or "job" or "step" && key == "env")
+            || (mapping.Role is "root" or "job" && key == "defaults")
+            || (mapping.Role is "defaults-root" or "defaults-job" && key == "run"))
+            Unsupported("effective env/defaults scope must be a mapping block");
         ConsumeOpaqueValue(value, column);
     }
 
@@ -671,6 +735,11 @@ internal static class CiWorkflowProducerExtractor
             ParseBlockHeader(value);
             var (contentLines, startLine, endLine) = ConsumeBlock(keyColumn);
             if (contentLines.Count == 0) return null;
+            // YAML retains newlines around empty/more-indented folded lines; joining
+            // those with spaces would turn separate commands into property overrides.
+            if (value[0] == '>' && (contentLines.Any(line => line.Text.Length > 0 && char.IsWhiteSpace(line.Text[0]))
+                || contentLines.Zip(contentLines.Skip(1)).Any(pair => pair.Second.LineNo != pair.First.LineNo + 1)))
+                Unsupported("folded scalar with blank or more-indented lines");
             return value[0] == '>'
                 ? new RunScript([(string.Join(" ", contentLines.Select(line => line.Text)), startLine)],
                     Folded: true, startLine, endLine, EmptyEnv, RootWorkingDirectory)
@@ -790,6 +859,7 @@ internal static class CiWorkflowProducerExtractor
                 i++;
                 continue;
             }
+            if (quote == '"' && c == '\\') Unsupported("unmodeled double-quoted YAML escape");
             if (quote == '"' && c == '"')
             {
                 if (i + 1 != value.Length) Unsupported("text after closing quote");
@@ -909,6 +979,30 @@ internal static class CiWorkflowProducerExtractor
             && tokens[1].Equals("pack", StringComparison.OrdinalIgnoreCase);
     });
 
+    private static bool IsLineOrientedScript(RunScript script)
+    {
+        foreach (var (raw, _) in script.Lines)
+        {
+            var text = StripShellComment(raw);
+            // Here-documents, PowerShell here-strings/block comments and substitutions
+            // can contain pack-looking data. They need a real shell parser; gap the block.
+            if (text.Contains("<<", StringComparison.Ordinal)
+                || text.Contains("@\"", StringComparison.Ordinal) || text.Contains("@'", StringComparison.Ordinal)
+                || text.Contains("<#", StringComparison.Ordinal) || text.Contains('`')
+                || text.Contains("$(", StringComparison.Ordinal)) return false;
+            char quote = '\0';
+            for (var i = 0; i < text.Length; i++)
+            {
+                var c = text[i];
+                if (c == '\\' && quote != '\'' && i + 1 < text.Length) { i++; continue; }
+                if (quote != '\0') { if (c == quote) quote = '\0'; continue; }
+                if (c is '\'' or '"') quote = c;
+            }
+            if (quote != '\0') return false;
+        }
+        return true;
+    }
+
     private sealed record PackOccurrence(
         string WorkflowPath, string? RawPackageId, string? RawVersion,
         string? ProjectTarget, bool TargetUnresolvable, int StartLine, int EndLine,
@@ -941,6 +1035,11 @@ internal static class CiWorkflowProducerExtractor
                 var token = tokens[i];
                 if (TryReadPropertyAssignment(token, out var name, out var assignedValue))
                 {
+                    if (assignedValue.Contains(';') || assignedValue.Contains(','))
+                    {
+                        packageId = "${{ unsupported-property-list }}";
+                        break;
+                    }
                     if (name.Equals("PackageId", StringComparison.OrdinalIgnoreCase)) packageId = assignedValue;
                     else if (name.Equals("PackageVersion", StringComparison.OrdinalIgnoreCase)) packageVersion = assignedValue;
                     else if (name.Equals("Version", StringComparison.OrdinalIgnoreCase)) plainVersion = assignedValue;
@@ -952,7 +1051,7 @@ internal static class CiWorkflowProducerExtractor
                     // flag can never invent a wrong target (targets must end in a project or
                     // solution extension).
                     var flag = token.Split(':', '=')[0];
-                    if (ValueTakingFlags.Contains(flag, StringComparer.OrdinalIgnoreCase)) i++;
+                    if (token == flag && ValueTakingFlags.Contains(flag, StringComparer.OrdinalIgnoreCase)) i++;
                     continue;
                 }
                 if (target is null && unresolvableTarget == false && IsProjectOrSolutionPath(token))
@@ -970,11 +1069,16 @@ internal static class CiWorkflowProducerExtractor
         string? assignment = null;
         if (token.Length > 3 && (token.StartsWith("-p:", StringComparison.Ordinal) || token.StartsWith("-P:", StringComparison.Ordinal)))
             assignment = token[3..];
-        else if (token.Length > 11 && token.StartsWith("--property:", StringComparison.Ordinal))
+        else if (token.Length > 3 && token.StartsWith("/p:", StringComparison.OrdinalIgnoreCase))
+            assignment = token[3..];
+        else if (token.Length > 10 && (token.StartsWith("-property:", StringComparison.OrdinalIgnoreCase)
+            || token.StartsWith("/property:", StringComparison.OrdinalIgnoreCase)))
+            assignment = token[10..];
+        else if (token.Length > 11 && token.StartsWith("--property:", StringComparison.OrdinalIgnoreCase))
             assignment = token[11..];
         if (assignment is null) return false;
         var split = assignment.IndexOf('=');
-        if (split <= 0 || split == assignment.Length - 1) return false;
+        if (split <= 0) return false;
         name = assignment[..split];
         value = assignment[(split + 1)..];
         return true;
@@ -1101,8 +1205,8 @@ internal static class CiWorkflowProducerExtractor
                 }
             }
             if (c == '$' && i + 2 < text.Length && text[i + 1] == '{' && text[i + 2] == '{') { expression++; i += 2; continue; }
-            if (c == '&' && i + 1 < text.Length && text[i + 1] == '&') { Cut(i); i++; }
-            else if (c == '|' && i + 1 < text.Length && text[i + 1] == '|') { Cut(i); i++; }
+            if (c == '&' && i + 1 < text.Length && text[i + 1] == '&') { Cut(i); i++; pieceStart = i + 1; }
+            else if (c == '|' && i + 1 < text.Length && text[i + 1] == '|') { Cut(i); i++; pieceStart = i + 1; }
             else if (c is '&' or '|' or ';') Cut(i);
         }
         pieces.Add(text[pieceStart..]);
@@ -1253,6 +1357,7 @@ internal static class CiWorkflowProducerExtractor
             return value.StartsWith('$') ? null : value; // shell variable form: unevidence
         var match = EnvExpression.Match(value.Trim());
         return match.Success && env.TryGetValue(match.Groups["name"].Value, out var literal)
+            && !string.IsNullOrEmpty(literal)
             ? literal
             : null;
     }

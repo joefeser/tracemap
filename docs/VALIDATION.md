@@ -4552,3 +4552,9 @@ upgrade-authority fact shape.
 Smoke: `dotnet run --project src/dotnet/TraceMap.Cli -- scan --repo samples/ci-workflow-producers --out <outside-output> --index-ci-producers`.
 The flag reads `.github/workflows/*.yml|*.yaml` at exactly that depth without
 building; see [the public fixture and evidence contract](../samples/ci-workflow-producers/README.md).
+
+Independent PR #851 regression coverage also pins inner-env shadowing, opaque
+effective scopes, heredoc/multiline shell data rejection, commands following
+`&&`/`||`, linked `.github` parents, empty property overrides, intact dedupe
+evidence spans, successful-fact provenance fields and project-fallback input
+hashes. These are static definition checks, not workflow execution proof.
