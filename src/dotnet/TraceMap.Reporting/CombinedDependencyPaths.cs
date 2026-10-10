@@ -217,7 +217,13 @@ public sealed record CompiledCommandPathValueBinding(string Schema, string RuleI
     public IReadOnlyList<CompiledOperandCheckFailure>? OperandCheckFailures { get; init; }
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public IReadOnlyList<CompiledCommandReturnStep>? ReturnSteps { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public CompiledSymbolicMethodInput? SymbolicInput { get; init; }
 }
+
+public sealed record CompiledSymbolicMethodInput(string MethodFactId, string MethodIdentity,
+    string ProducerCallFactId, string BodyFactId, string ReturnFactId,
+    IReadOnlyList<string> ValueGaps);
 
 public sealed record CompiledOperandCheckFailure(string RuleId, string EvidenceTier,
     string EdgeId, string CallFactId, string OperandFactId, string BodyFactId,

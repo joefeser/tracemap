@@ -186,10 +186,19 @@ try {
                 failedChecks=@($_.failedChecks | Select-Object -First 17 | ForEach-Object { Code $_ $allowed })}
         }
     }
+    function Project-SymbolicInput($b) {
+        if (!$b.PSObject.Properties['symbolicInput'] -or $null -eq $b.symbolicInput) { return $null }
+        $s = $b.symbolicInput
+        [ordered]@{method=(Alias 'S' $s.methodIdentity);methodFact=(Alias 'F' $s.methodFactId);
+            producer=(Alias 'F' $s.producerCallFactId);body=(Alias 'F' $s.bodyFactId);returnFact=(Alias 'F' $s.returnFactId);
+            limitation='MethodReturnValueNotEvaluated';
+            valueGaps=@($s.valueGaps | Select-Object -First 2 | ForEach-Object { Code $_ @('IlCommandReturnOriginUnknown','IlCommandReturnValuesDisagree') })}
+    }
     function Project-Value($b, [int]$depth) {
         if ($depth -gt 4) { return [ordered]@{state='limit';gaps=@('IlCommandExpressionLimit')} }
         [ordered]@{
-            state=(Code $b.state @('method-local-constant','constant-on-encoded-call-path','unresolved-operand','unresolved-root-argument','unresolved-non-il-bridge','unresolved-call-evidence','unresolved-slot','limit','symbolic-string-composition','symbolic-argument-alternatives'));
+            state=(Code $b.state @('method-local-constant','constant-on-encoded-call-path','unresolved-operand','unresolved-root-argument','unresolved-non-il-bridge','unresolved-call-evidence','unresolved-slot','limit','symbolic-string-composition','symbolic-argument-alternatives','symbolic-method-return'));
+            symbolicInput=(Project-SymbolicInput $b);
             originKind=(Code $b.origin.kind @('call-result','argument-slot','argument-alternatives','constant-string-hash','constant-int32','unknown','null'));
             originBody=(Alias 'F' $b.originBodyFactId);
             method=$(if ($b.PSObject.Properties['originMethodIdentity']) { Alias 'S' $b.originMethodIdentity });
@@ -220,7 +229,8 @@ try {
             return
         }
         [ordered]@{endpoint=(Alias 'N' $trace.endpointNodeId);path=@($trace.pathNodeIds | ForEach-Object { Alias 'N' $_ });
-            state=(Code $value.state @('unresolved-operand','unresolved-root-argument','unresolved-non-il-bridge','unresolved-call-evidence','unresolved-slot','limit','method-local-constant','constant-on-encoded-call-path','symbolic-string-composition','symbolic-argument-alternatives'));
+            state=(Code $value.state @('unresolved-operand','unresolved-root-argument','unresolved-non-il-bridge','unresolved-call-evidence','unresolved-slot','limit','method-local-constant','constant-on-encoded-call-path','symbolic-string-composition','symbolic-argument-alternatives','symbolic-method-return'));
+            symbolicInput=(Project-SymbolicInput $value);
             originKind=(Code $value.origin.kind @('call-result','argument-slot','argument-alternatives','constant-string-hash','constant-int32','unknown','null','allocation-site'));
             originBody=(Alias 'F' $value.originBodyFactId);rule=(Alias 'R' $value.ruleId);
             method=$(if ($value.PSObject.Properties['originMethodIdentity'] -and $value.originMethodIdentity) { Alias 'S' $value.originMethodIdentity } else { $null });
@@ -232,7 +242,7 @@ try {
                 [ordered]@{producer=(Alias 'F' $_.producerCallFactId);body=(Alias 'F' $_.calleeBodyFactId);returnFact=(Alias 'F' $_.returnFactId)} } });
             composition=(Project-Composition $value 0);
             alternatives=@(if ($value.PSObject.Properties['alternatives']) { $value.alternatives | Select-Object -First 4 | ForEach-Object { Project-Value $_ 1 } });
-            limitations=@(if ($value.PSObject.Properties['limitations']) { $value.limitations | Select-Object -First 8 | ForEach-Object { Code $_ @('SymbolicStringValueNotMaterialized') } });
+            limitations=@(if ($value.PSObject.Properties['limitations']) { $value.limitations | Select-Object -First 8 | ForEach-Object { Code $_ @('SymbolicStringValueNotMaterialized','MethodReturnValueNotEvaluated') } });
             operandCheckFailures=@(Project-OperandChecks $value);
             gaps=@($value.gaps | ForEach-Object { Code $_ $traceGaps })}
     })

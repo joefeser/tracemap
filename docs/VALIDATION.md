@@ -17,7 +17,7 @@ scans and combines independent inputs, generates reports, and asserts attached,
 separate and missing-provider behavior plus cap/Fill/repeatability boundaries.
 See the [local replay and artifact map](../samples/fixture-build/lazy-constructor/README.md).
 The current gate requires 21 command-return cases, nine profile cases, seven getter-return
-cases, six structured argument cases and five operator layouts (plus the native and
+cases, seven structured argument cases and five operator layouts (plus the native and
 property corpus checks), and separately requires authentic Windows publishing when requested.
 Historical validation counts below describe their named older heads.
 

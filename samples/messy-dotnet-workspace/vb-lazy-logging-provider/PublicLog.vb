@@ -2,6 +2,33 @@ Imports System.Data
 Imports System.Data.SqlClient
 
 Namespace PublicLazy.Framework
+    ' Analysis-only runtime identity boundary. No session or database is executed.
+    Public Class RuntimeIdentity
+        Public Identifier As String
+        Public Impersonated As RuntimeIdentity
+        Public Shared ReadOnly Property ActiveIdentifier As String
+            Get
+                Try
+                    If Current.Impersonated IsNot Nothing Then
+                        Return Current.Impersonated.Identifier
+                    End If
+                    Return Current.Identifier
+                Catch ex As Exception
+                    Return Nothing
+                End Try
+            End Get
+        End Property
+        Private Shared ReadOnly Property Current As RuntimeIdentity
+            Get
+                Dim context = System.Web.HttpContext.Current
+                Dim key = context.User.Identity.Name & ":synthetic-user"
+                If context.Session IsNot Nothing Then
+                    Return DirectCast(context.Session(key), RuntimeIdentity)
+                End If
+                Return DirectCast(context.Cache(key), RuntimeIdentity)
+            End Get
+        End Property
+    End Class
     Public Class PublicInput
         Public Shared ReadOnly Property Outer As String
             Get

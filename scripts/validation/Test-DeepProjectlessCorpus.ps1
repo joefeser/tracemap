@@ -103,7 +103,7 @@ try {
     $structuredPassed = @($rows | Where-Object {
         $_.testName -like '*Structured_profile_batch_traces_both_argument_alternatives*' -and $_.outcome -ceq 'Passed'
     }).Count
-    if ($passed -lt 36 -or $nativePassed -ne 1 -or $propertyPassed -ne 2 -or $returnPassed -ne 21 -or $profilePassed -ne 9 -or $operatorPassed -ne 5 -or $getterPassed -ne 7 -or $structuredPassed -ne 6 -or @($rows | Where-Object { $_.outcome -notin @('Passed', 'NotExecuted') }).Count -ne 0) {
+    if ($passed -lt 36 -or $nativePassed -ne 1 -or $propertyPassed -ne 2 -or $returnPassed -ne 21 -or $profilePassed -ne 9 -or $operatorPassed -ne 5 -or $getterPassed -ne 7 -or $structuredPassed -ne 7 -or @($rows | Where-Object { $_.outcome -notin @('Passed', 'NotExecuted') }).Count -ne 0) {
         throw 'DEEP_CORPUS_TEST_RECEIPT_NOT_ADMITTED'
     }
     foreach ($layout in @('attached', 'separate', 'separate-dll-only', 'reversed', 'missing')) {

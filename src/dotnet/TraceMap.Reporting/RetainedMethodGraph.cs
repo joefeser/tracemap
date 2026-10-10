@@ -171,6 +171,12 @@ public static class RetainedMethodGraphWriter
         foreach (var trace in graph.CommandTraces)
         {
             html.Append($"<h3>{E(string.Join(" → ", trace.PathNodeIds.Select(id => nodes.TryGetValue(id, out var n) ? Label(n) : id)))}</h3>");
+            void AppendSymbolicInput(CompiledCommandPathValueBinding value)
+            {
+                if (value.SymbolicInput is { } input)
+                    html.Append($"<p>Symbolic method input: {E(MethodLabel(input.MethodIdentity))}. Invocation evidence retained; return value not evaluated. Value uncertainty: {E(string.Join(", ", input.ValueGaps))}. No runtime value or branch feasibility claim.</p>");
+            }
+            if (trace.CommandText is { } commandText) AppendSymbolicInput(commandText);
             if (trace.CommandText?.Composition is { } composition)
             {
                 static string OperandLabel(CompiledCommandOperandOrigin origin) => origin.Kind switch
@@ -185,6 +191,7 @@ public static class RetainedMethodGraphWriter
                 {
                     if (depth > 4) { html.Append("<li>Expression display limit</li>"); return; }
                     html.Append($"<li>{E(OperandLabel(operand.Origin))} in {E(operand.OriginMethodIdentity is { } identity ? MethodLabel(identity) : "unknown method")}; {operand.Steps.Count} argument hops; state: {E(operand.State)}; gaps: {E(string.Join(", ", operand.Gaps))}");
+                    AppendSymbolicInput(operand);
                     if (operand.Alternatives is { } choices)
                     {
                         html.Append("<p>Possible argument origins (branch feasibility not proven):</p><ul>");
