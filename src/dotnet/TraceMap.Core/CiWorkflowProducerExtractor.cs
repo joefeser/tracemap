@@ -118,6 +118,13 @@ internal static class CiWorkflowProducerExtractor
             try
             {
                 using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+                // Re-check through the opened handle's path: a candidate swapped for a symlink
+                // between the attribute check and this open must never parse as evidence.
+                if (IsLink(path))
+                {
+                    gaps.Add(new(relative, "ci-workflow-linked-path"));
+                    continue;
+                }
                 if (stream.Length > MaxFileBytes || stream.Length > MaxTotalBytes - bytesRead)
                 {
                     gaps.Add(new(relative, "ci-workflow-byte-limit"));
@@ -136,6 +143,18 @@ internal static class CiWorkflowProducerExtractor
             {
                 gaps.Add(new(relative, "ci-workflow-read-failed"));
             }
+        }
+    }
+
+    private static bool IsLink(string path)
+    {
+        try
+        {
+            return File.ResolveLinkTarget(path, returnFinalTarget: false) is not null;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return true; // a path whose link state cannot be proven is not workflow evidence
         }
     }
 
@@ -265,369 +284,467 @@ internal static class CiWorkflowProducerExtractor
         public HashSet<string> SeenKeys { get; } = new(StringComparer.Ordinal);
     }
 
-    /// A run block captured from jobs.<id>.steps[*].run with its effective literal env
-    /// (step over job over workflow scope).
-    private sealed record RunScript(
-        IReadOnlyList<(string Text, int LineNo)> Lines, bool Folded, int StartLine, int EndLine,
-        IReadOnlyDictionary<string, string> Env);
+/// A run block captured from jobs.<id>.steps[*].run. Env resolution is deferred until the
+/// whole document is parsed (env may be declared after jobs/steps); WorkingDir carries the
+/// effective literal working directory (step over job defaults over workflow defaults).
+private sealed record WorkingDirectory(bool Known, string? Path);
 
-    private sealed class WorkflowParser(byte[] bytes)
+private sealed record RunScript(
+    IReadOnlyList<(string Text, int LineNo)> Lines, bool Folded, int StartLine, int EndLine,
+    IReadOnlyDictionary<string, string> Env, WorkingDirectory WorkingDir);
+
+private sealed class WorkflowParser(byte[] bytes)
+{
+    private readonly record struct WdScope(byte State, string? Path)
     {
-        private readonly string[] _lines = SplitLines(bytes);
-        private readonly Dictionary<string, string> _workflowEnv = new(StringComparer.Ordinal);
-        private readonly List<RunScript> _runs = [];
-        private readonly Stack<Frame> _frames = [];
-        private Dictionary<string, string>? _jobEnv;
-        private Dictionary<string, string>? _stepEnv;
-        private RunScript? _stepRun;
-        private (int Column, Frame Parent, string Key)? _pendingBlock;
-        private (int Column, string? JobId, bool Step)? _pendingItem;
-        private int _index;
-        private bool _sawContent;
+        public static readonly WdScope Absent = new(0, null);
+        public static WdScope Known(string path) => new(1, path);
+        public static readonly WdScope Unknown = new(2, null);
+        public bool IsAbsent => State == 0;
+    }
 
-        public List<RunScript> Parse()
+    private readonly string[] _lines = SplitLines(bytes);
+    private readonly Dictionary<string, string> _workflowEnv = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, Dictionary<string, string>> _jobEnvs = new(StringComparer.Ordinal);
+    private readonly List<(string JobId, RunScript Script, Dictionary<string, string> StepEnv)> _pendingRuns = [];
+    private readonly Stack<Frame> _frames = [];
+    private Dictionary<string, string>? _stepEnv;
+    private RunScript? _stepRun;
+    private WdScope _rootDefaultWd = WdScope.Absent;
+    private WdScope _jobDefaultWd = WdScope.Absent;
+    private WdScope _stepWd = WdScope.Absent;
+    private (int Column, Frame Parent, string Key)? _pendingBlock;
+    private (int Column, string? JobId, bool Step)? _pendingItem;
+    private int _index;
+    private bool _sawContent;
+
+    public List<RunScript> Parse()
+    {
+        _frames.Push(new Frame(0, sequence: false) { Role = "root" });
+        while (_index < _lines.Length)
         {
-            _frames.Push(new Frame(0, sequence: false) { Role = "root" });
-            while (_index < _lines.Length)
+            var raw = _lines[_index];
+            var lineNo = _index + 1;
+            _index++;
+            if (raw.Trim().Length == 0) continue;
+            var indent = 0;
+            while (indent < raw.Length && raw[indent] == ' ') indent++;
+            if (indent < raw.Length && raw[indent] == '\t') Fail("tab used for indentation");
+            var content = StripComment(raw[indent..]).TrimEnd();
+            if (content.Length == 0) continue;
+            if (content == "---")
             {
-                var raw = _lines[_index];
-                var lineNo = _index + 1;
-                _index++;
-                if (raw.Trim().Length == 0) continue;
-                var indent = 0;
-                while (indent < raw.Length && raw[indent] == ' ') indent++;
-                if (indent < raw.Length && raw[indent] == '\t') Fail("tab used for indentation");
-                var content = StripComment(raw[indent..]).TrimEnd();
-                if (content.Length == 0) continue;
-                if (content == "---")
-                {
-                    if (_sawContent) Unsupported("multiple YAML documents");
-                    continue;
-                }
-                if (content == "...")
-                {
-                    _sawContent = true;
-                    continue;
-                }
-                if (content[0] == '%') Unsupported("YAML directives");
+                if (_sawContent) Unsupported("multiple YAML documents");
+                continue;
+            }
+            if (content == "...")
+            {
                 _sawContent = true;
-                var isDash = content == "-" || content.StartsWith("- ", StringComparison.Ordinal);
-                ProcessStructuralLine(content, indent, isDash, lineNo);
+                continue;
             }
-            while (_frames.Count > 1) Pop();
-            return _runs;
+            if (content[0] == '%') Unsupported("YAML directives");
+            _sawContent = true;
+            var isDash = content == "-" || content.StartsWith("- ", StringComparison.Ordinal);
+            ProcessStructuralLine(content, indent, isDash, lineNo);
         }
-
-        private void ProcessStructuralLine(string content, int indent, bool isDash, int lineNo)
+        while (_frames.Count > 1) Pop();
+        // Env maps are complete only now: resolve every run with its full scope chain
+        // (step over job over workflow), regardless of YAML key order.
+        return _pendingRuns.Select(pending =>
         {
-            if (_pendingBlock is { } open && indent > open.Column)
-                OpenBlock(open, indent, isDash);
-            else if (_pendingItem is { } item && indent > item.Column)
-                OpenItemBody(item, indent, isDash);
-            else if (_pendingBlock is { } closed && closed.Parent.Role == "jobs")
-                Fail($"job '{Truncate(closed.Key)}' must be a mapping block");
-            else
-            {
-                _pendingBlock = null;
-                _pendingItem = null; // the pending key or item had a null body
-            }
+            var effective = new Dictionary<string, string>(_workflowEnv, StringComparer.Ordinal);
+            if (_jobEnvs.TryGetValue(pending.JobId, out var jobEnv))
+                foreach (var (name, literal) in jobEnv) effective[name] = literal;
+            foreach (var (name, literal) in pending.StepEnv) effective[name] = literal;
+            return pending.Script with { Env = effective };
+        }).ToList();
+    }
 
-            while (_frames.Count > 1)
-            {
-                var top = _frames.Peek();
-                if (!top.Sequence && indent < top.Column) { Pop(); continue; }
-                if (top.Sequence && indent <= top.Column && !(indent == top.Column && isDash)) { Pop(); continue; }
-                break;
-            }
-
-            var current = _frames.Peek();
-            if (isDash)
-            {
-                if (!current.Sequence || indent != current.Column)
-                    Fail("sequence item outside a sequence block");
-                ProcessSequenceItem(content, indent);
-                return;
-            }
-            if (current.Sequence || indent != current.Column)
-                Unsupported("unexpected indentation (plain scalar continuation)");
-            ProcessKeyLine(current, content, indent, lineNo);
-        }
-
-        /// Opens the nested block of a pending key; the current line is its first member.
-        private void OpenBlock((int Column, Frame Parent, string Key) open, int indent, bool isDash)
+    private void ProcessStructuralLine(string content, int indent, bool isDash, int lineNo)
+    {
+        if (_pendingBlock is { } open && indent > open.Column)
+            OpenBlock(open, indent, isDash);
+        else if (_pendingItem is { } item && indent > item.Column)
+            OpenItemBody(item, indent, isDash);
+        else if (_pendingBlock is { } closed && closed.Parent.Role == "jobs")
+            Fail($"job '{Truncate(closed.Key)}' must be a mapping block");
+        else
         {
             _pendingBlock = null;
-            var role = (open.Parent.Role, open.Key) switch
-            {
-                ("root", "jobs") => "jobs",
-                ("jobs", _) => "job",
-                ("job", "steps") => "steps",
-                ("root", "env") => "env-workflow",
-                ("job", "env") => "env-job",
-                ("step", "env") => "env-step",
-                _ => "other"
-            };
-            if (role is "jobs" or "job" or "env-workflow" or "env-job" or "env-step" && isDash)
-                Fail($"{(role == "job" ? "job" : role.StartsWith("env-", StringComparison.Ordinal) ? "env" : role)} must be a mapping block");
-            if (role == "steps" && !isDash) Fail("steps must be a sequence block");
-            if (role == "job") _jobEnv = new Dictionary<string, string>(StringComparer.Ordinal);
-            _frames.Push(new Frame(indent, isDash)
-            {
-                Role = role,
-                JobId = role == "job" ? open.Key : open.Parent.JobId
-            });
+            _pendingItem = null; // the pending key or item had a null body
         }
 
-        /// Opens the body of a bare "- " sequence item; the current line is its first member.
-        private void OpenItemBody((int Column, string? JobId, bool Step) item, int indent, bool isDash)
+        while (_frames.Count > 1)
         {
-            _pendingItem = null;
-            if (isDash) Unsupported("sequence items inside a sequence item body");
-            var frame = new Frame(indent, sequence: false)
-            {
-                Role = item.Step ? "step" : "other",
-                JobId = item.JobId
-            };
-            _frames.Push(frame);
-            if (item.Step) _stepEnv = [];
+            var top = _frames.Peek();
+            if (!top.Sequence && indent < top.Column) { Pop(); continue; }
+            if (top.Sequence && indent <= top.Column && !(indent == top.Column && isDash)) { Pop(); continue; }
+            break;
         }
 
-        private void Pop()
+        var current = _frames.Peek();
+        if (isDash)
         {
-            var frame = _frames.Pop();
-            if (frame.Role != "step") return;
-            if (_stepRun is { } script)
-            {
-                var effective = new Dictionary<string, string>(_workflowEnv, StringComparer.Ordinal);
-                if (_jobEnv is not null) foreach (var (name, literal) in _jobEnv) effective[name] = literal;
-                if (_stepEnv is not null) foreach (var (name, literal) in _stepEnv) effective[name] = literal;
-                _runs.Add(script with { Env = effective });
-            }
-            _stepRun = null;
-            _stepEnv = null;
+            if (!current.Sequence || indent != current.Column)
+                Fail("sequence item outside a sequence block");
+            ProcessSequenceItem(content, indent);
+            return;
         }
+        if (current.Sequence || indent != current.Column)
+            Unsupported("unexpected indentation (plain scalar continuation)");
+        ProcessKeyLine(current, content, indent, lineNo);
+    }
 
-        private void ProcessSequenceItem(string content, int dashColumn)
+    /// Opens the nested block of a pending key; the current line is its first member.
+    private void OpenBlock((int Column, Frame Parent, string Key) open, int indent, bool isDash)
+    {
+        _pendingBlock = null;
+        var role = (open.Parent.Role, open.Key) switch
         {
-            var sequence = _frames.Peek();
-            var rest = content == "-" ? string.Empty : content[1..];
-            var spaces = 0;
-            while (spaces < rest.Length && rest[spaces] == ' ') spaces++;
-            var itemColumn = dashColumn + 1 + spaces;
-            var itemContent = spaces >= rest.Length ? string.Empty : rest[spaces..];
-            if (itemContent.Length == 0)
-            {
-                _pendingItem = (dashColumn, sequence.JobId, sequence.Role == "steps");
-                return;
-            }
-            var split = SplitKey(itemContent);
-            if (split is null)
-            {
-                if (itemContent == "-" || itemContent.StartsWith("- ", StringComparison.Ordinal))
-                    Fail("nested sequence items are not modeled");
-                ClassifyValue(itemContent); // plain or opaque single-line flow scalar item
-                return;
-            }
-            var frame = new Frame(itemColumn, sequence: false)
-            {
-                Role = sequence.Role == "steps" ? "step" : "other",
-                JobId = sequence.JobId
-            };
-            _frames.Push(frame);
-            if (sequence.Role == "steps") _stepEnv = [];
-            var (key, value) = split.Value;
-            ApplyKey(frame, key, value, itemColumn, lineNo: _index);
+            ("root", "jobs") => "jobs",
+            ("jobs", _) => "job",
+            ("job", "steps") => "steps",
+            ("root", "env") => "env-workflow",
+            ("job", "env") => "env-job",
+            ("step", "env") => "env-step",
+            ("root", "defaults") => "defaults-root",
+            ("job", "defaults") => "defaults-job",
+            ("defaults-root", "run") => "defaults-run-root",
+            ("defaults-job", "run") => "defaults-run-job",
+            _ => "other"
+        };
+        if (role is not "steps" and not "other" && isDash)
+            Fail($"{RoleName(role)} must be a mapping block");
+        if (role == "steps" && !isDash) Fail("steps must be a sequence block");
+        if (role == "job") _jobDefaultWd = WdScope.Absent;
+        _frames.Push(new Frame(indent, isDash)
+        {
+            Role = role,
+            JobId = role == "job" ? open.Key : open.Parent.JobId
+        });
+    }
+
+    private static string RoleName(string role) => role switch
+    {
+        "jobs" => "jobs",
+        "job" => "job",
+        "env-workflow" or "env-job" or "env-step" => "env",
+        "defaults-root" or "defaults-job" => "defaults",
+        "defaults-run-root" or "defaults-run-job" => "defaults run",
+        _ => role
+    };
+
+    /// Opens the body of a bare "- " sequence item; the current line is its first member.
+    private void OpenItemBody((int Column, string? JobId, bool Step) item, int indent, bool isDash)
+    {
+        _pendingItem = null;
+        if (isDash) Unsupported("sequence items inside a sequence item body");
+        var frame = new Frame(indent, sequence: false)
+        {
+            Role = item.Step ? "step" : "other",
+            JobId = item.JobId
+        };
+        _frames.Push(frame);
+        if (item.Step) BeginStep();
+    }
+
+    private void BeginStep()
+    {
+        _stepEnv = [];
+        _stepWd = WdScope.Absent;
+    }
+
+    private void Pop()
+    {
+        var frame = _frames.Pop();
+        if (frame.Role != "step" || frame.JobId is null) return;
+        if (_stepRun is { } script)
+            _pendingRuns.Add((frame.JobId, script with { WorkingDir = EffectiveWorkingDirectory() },
+                new Dictionary<string, string>(_stepEnv ?? [], StringComparer.Ordinal)));
+        _stepRun = null;
+        _stepEnv = null;
+        _stepWd = WdScope.Absent;
+    }
+
+    /// GitHub precedence: step working-directory, then job defaults.run, then workflow
+    /// defaults.run, then the repository root. A declared-but-templated directory is
+    /// unprovable and stays unknown; an undeclared one is the known repository root.
+    private WorkingDirectory EffectiveWorkingDirectory()
+    {
+        var selected = !_stepWd.IsAbsent ? _stepWd
+            : !_jobDefaultWd.IsAbsent ? _jobDefaultWd
+            : !_rootDefaultWd.IsAbsent ? _rootDefaultWd
+            : WdScope.Absent;
+        return selected.State == 1 ? new WorkingDirectory(true, selected.Path)
+            : selected.State == 2 ? new WorkingDirectory(false, null)
+            : new WorkingDirectory(true, null);
+    }
+
+    private void ProcessSequenceItem(string content, int dashColumn)
+    {
+        var sequence = _frames.Peek();
+        var rest = content == "-" ? string.Empty : content[1..];
+        var spaces = 0;
+        while (spaces < rest.Length && rest[spaces] == ' ') spaces++;
+        var itemColumn = dashColumn + 1 + spaces;
+        var itemContent = spaces >= rest.Length ? string.Empty : rest[spaces..];
+        if (itemContent.Length == 0)
+        {
+            _pendingItem = (dashColumn, sequence.JobId, sequence.Role == "steps");
+            return;
         }
-
-        private void ProcessKeyLine(Frame mapping, string content, int column, int lineNo)
+        var split = SplitKey(itemContent);
+        if (split is null)
         {
-            var split = SplitKey(content);
-            if (split is null) Unsupported("plain scalar where a mapping key was expected");
-            var (key, value) = split.Value;
-            ApplyKey(mapping, key, value, column, lineNo);
+            if (itemContent == "-" || itemContent.StartsWith("- ", StringComparison.Ordinal))
+                Fail("nested sequence items are not modeled");
+            ClassifyValue(itemContent); // plain or opaque single-line flow scalar item
+            return;
         }
-
-        private void ApplyKey(Frame mapping, string key, string value, int column, int lineNo)
+        var frame = new Frame(itemColumn, sequence: false)
         {
-            if (!KeyPattern.IsMatch(key)) Unsupported($"unsupported key syntax: {Truncate(key)}");
-            if (key == "<<") Unsupported("merge keys");
-            if (!mapping.SeenKeys.Add(key)) Fail($"duplicate key: {Truncate(key)}");
-            if (value.Length == 0)
+            Role = sequence.Role == "steps" ? "step" : "other",
+            JobId = sequence.JobId
+        };
+        _frames.Push(frame);
+        if (sequence.Role == "steps") BeginStep();
+        var (key, value) = split.Value;
+        ApplyKey(frame, key, value, itemColumn, lineNo: _index);
+    }
+
+    private void ProcessKeyLine(Frame mapping, string content, int column, int lineNo)
+    {
+        var split = SplitKey(content);
+        if (split is null) Unsupported("plain scalar where a mapping key was expected");
+        var (key, value) = split.Value;
+        ApplyKey(mapping, key, value, column, lineNo);
+    }
+
+    private void ApplyKey(Frame mapping, string key, string value, int column, int lineNo)
+    {
+        if (!KeyPattern.IsMatch(key)) Unsupported($"unsupported key syntax: {Truncate(key)}");
+        if (key == "<<") Unsupported("merge keys");
+        if (!mapping.SeenKeys.Add(key)) Fail($"duplicate key: {Truncate(key)}");
+        if (value.Length == 0)
+        {
+            _pendingBlock = (column, mapping, key);
+            return;
+        }
+        if (mapping.Role == "jobs")
+            Unsupported($"job '{Truncate(key)}' must be a mapping block");
+        if (mapping.Role == "root" && key == "jobs")
+            Unsupported("jobs must be a mapping block");
+        if (mapping.Role == "job" && key == "steps")
+            Unsupported("steps must be a sequence block");
+        if (mapping.Role == "step" && key == "run")
+        {
+            _stepRun = ParseRunValue(value, column, lineNo);
+            return;
+        }
+        if (mapping.Role == "step" && key == "working-directory")
+        {
+            _stepWd = ClassifyWorkingDirectory(value, column);
+            return;
+        }
+        if (mapping.Role is "defaults-run-root" or "defaults-run-job")
+        {
+            if (key != "working-directory") { ConsumeOpaqueValue(value, column); return; }
+            var scope = ClassifyWorkingDirectory(value, column);
+            if (mapping.Role == "defaults-run-root") _rootDefaultWd = scope;
+            else _jobDefaultWd = scope;
+            return;
+        }
+        if (mapping.Role is "env-workflow" or "env-job" or "env-step")
+        {
+            if (IsBlockHeader(value)) { ParseBlockHeader(value); ConsumeBlock(column); return; }
+            if (!value.Contains("${{", StringComparison.Ordinal) && ClassifyValue(value) is { Length: > 0 } literal)
             {
-                _pendingBlock = (column, mapping, key);
-                return;
-            }
-            if (mapping.Role == "jobs")
-                Unsupported($"job '{Truncate(key)}' must be a mapping block");
-            if (mapping.Role == "root" && key == "jobs")
-                Unsupported("jobs must be a mapping block");
-            if (mapping.Role == "job" && key == "steps")
-                Unsupported("steps must be a sequence block");
-            if (mapping.Role == "step" && key == "run")
-            {
-                _stepRun = ParseRunValue(value, column, lineNo);
-                return;
-            }
-            if (mapping.Role is "env-workflow" or "env-job" or "env-step")
-            {
-                if (IsBlockHeader(value)) { ParseBlockHeader(value); ConsumeBlock(column); return; }
-                if (!value.Contains("${{", StringComparison.Ordinal) && ClassifyValue(value) is { Length: > 0 } literal)
+                switch (mapping.Role)
                 {
-                    switch (mapping.Role)
-                    {
-                        case "env-workflow": _workflowEnv[key] = literal; break;
-                        case "env-job": _jobEnv?.Add(key, literal); break;
-                        default: _stepEnv?.Add(key, literal); break;
-                    }
+                    case "env-workflow": _workflowEnv[key] = literal; break;
+                    case "env-job": JobEnv(mapping.JobId)[key] = literal; break;
+                    default: _stepEnv?.Add(key, literal); break;
                 }
-                return; // templated, flow, or empty env values leave the variable unresolved
             }
-            ConsumeOpaqueValue(value, column);
+            return; // templated, flow, or empty env values leave the variable unresolved
         }
+        ConsumeOpaqueValue(value, column);
+    }
 
-        private RunScript? ParseRunValue(string value, int keyColumn, int lineNo)
+    /// A working-directory is evidence only as a literal; templated, flow, or block values
+    /// leave the directory unprovable (targets under it are not attributed).
+    private WdScope ClassifyWorkingDirectory(string value, int column)
+    {
+        if (IsBlockHeader(value)) { ParseBlockHeader(value); ConsumeBlock(column); return WdScope.Unknown; }
+        if (!value.Contains("${{", StringComparison.Ordinal) && ClassifyValue(value) is { Length: > 0 } literal)
+            return WdScope.Known(literal);
+        return WdScope.Unknown;
+    }
+
+    private Dictionary<string, string> JobEnv(string? jobId)
+    {
+        if (jobId is null) return [];
+        if (!_jobEnvs.TryGetValue(jobId, out var env))
+            _jobEnvs[jobId] = env = new Dictionary<string, string>(StringComparer.Ordinal);
+        return env;
+    }
+
+    private RunScript? ParseRunValue(string value, int keyColumn, int lineNo)
+    {
+        if (IsBlockHeader(value))
         {
-            if (IsBlockHeader(value))
+            ParseBlockHeader(value);
+            var (contentLines, startLine, endLine) = ConsumeBlock(keyColumn);
+            if (contentLines.Count == 0) return null;
+            return value[0] == '>'
+                ? new RunScript([(string.Join(" ", contentLines.Select(line => line.Text)), startLine)],
+                    Folded: true, startLine, endLine, EmptyEnv, RootWorkingDirectory)
+                : new RunScript(contentLines, Folded: false, startLine, endLine, EmptyEnv, RootWorkingDirectory);
+        }
+        var scalar = ClassifyValue(value);
+        if (scalar.Length == 0) Unsupported("run must be a scalar or block scalar");
+        return new RunScript([(scalar, lineNo)], Folded: false, lineNo, lineNo, EmptyEnv, RootWorkingDirectory);
+    }
+
+    private static readonly IReadOnlyDictionary<string, string> EmptyEnv =
+        new Dictionary<string, string>(StringComparer.Ordinal);
+    private static readonly WorkingDirectory RootWorkingDirectory = new(true, null);
+
+    private static bool IsBlockHeader(string value) => value.Length > 0 && (value[0] == '|' || value[0] == '>');
+
+    private (List<(string Text, int LineNo)> Content, int StartLine, int EndLine) ConsumeBlock(int keyColumn)
+    {
+        var content = new List<(string, int)>();
+        var blockIndent = -1;
+        int startLine = 0, endLine = 0;
+        int line;
+        for (line = _index; line < _lines.Length; line++)
+        {
+            var candidate = _lines[line];
+            if (candidate.Trim().Length == 0) continue;
+            var ind = 0;
+            while (ind < candidate.Length && candidate[ind] == ' ') ind++;
+            if (blockIndent < 0)
             {
-                ParseBlockHeader(value);
-                var (contentLines, startLine, endLine) = ConsumeBlock(keyColumn);
-                if (contentLines.Count == 0) return null;
-                return value[0] == '>'
-                    ? new RunScript([(string.Join(" ", contentLines.Select(line => line.Text)), startLine)],
-                        Folded: true, startLine, endLine, EmptyEnv)
-                    : new RunScript(contentLines, Folded: false, startLine, endLine, EmptyEnv);
+                if (ind <= keyColumn) break;
+                blockIndent = ind;
             }
-            var scalar = ClassifyValue(value);
-            if (scalar.Length == 0) Unsupported("run must be a scalar or block scalar");
-            return new RunScript([(scalar, lineNo)], Folded: false, lineNo, lineNo, EmptyEnv);
+            if (ind < blockIndent) break;
+            if (startLine == 0) startLine = line + 1;
+            endLine = line + 1;
+            content.Add((candidate[blockIndent..], line + 1));
         }
+        _index = line;
+        return (content, startLine, endLine);
+    }
 
-        private static readonly IReadOnlyDictionary<string, string> EmptyEnv =
-            new Dictionary<string, string>(StringComparer.Ordinal);
+    /// Consumes a value we do not model: block scalars advance the index, flow collections
+    /// stay opaque, everything else is a plain scalar.
+    private void ConsumeOpaqueValue(string value, int column)
+    {
+        if (IsBlockHeader(value)) { ParseBlockHeader(value); ConsumeBlock(column); }
+        else ClassifyValue(value);
+    }
 
-        private static bool IsBlockHeader(string value) => value.Length > 0 && (value[0] == '|' || value[0] == '>');
-
-        private (List<(string Text, int LineNo)> Content, int StartLine, int EndLine) ConsumeBlock(int keyColumn)
+    /// Validates a block scalar header (chomping indicators only); explicit indentation
+    /// indicators are unsupported.
+    private static void ParseBlockHeader(string value)
+    {
+        var chompSeen = false;
+        for (var i = 1; i < value.Length; i++)
         {
-            var content = new List<(string, int)>();
-            var blockIndent = -1;
-            int startLine = 0, endLine = 0;
-            int line;
-            for (line = _index; line < _lines.Length; line++)
+            if (value[i] is '-' or '+')
             {
-                var candidate = _lines[line];
-                if (candidate.Trim().Length == 0) continue;
-                var ind = 0;
-                while (ind < candidate.Length && candidate[ind] == ' ') ind++;
-                if (blockIndent < 0)
-                {
-                    if (ind <= keyColumn) break;
-                    blockIndent = ind;
-                }
-                if (ind < blockIndent) break;
-                if (startLine == 0) startLine = line + 1;
-                endLine = line + 1;
-                content.Add((candidate[blockIndent..], line + 1));
+                if (chompSeen) Unsupported("block scalar header");
+                chompSeen = true;
             }
-            _index = line;
-            return (content, startLine, endLine);
-        }
-
-        /// Consumes a value we do not model: block scalars advance the index, flow collections
-        /// stay opaque, everything else is a plain scalar.
-        private void ConsumeOpaqueValue(string value, int column)
-        {
-            if (IsBlockHeader(value)) { ParseBlockHeader(value); ConsumeBlock(column); }
-            else ClassifyValue(value);
-        }
-
-        /// Validates a block scalar header (chomping indicators only); explicit indentation
-        /// indicators are unsupported.
-        private static void ParseBlockHeader(string value)
-        {
-            var chompSeen = false;
-            for (var i = 1; i < value.Length; i++)
-            {
-                if (value[i] is '-' or '+')
-                {
-                    if (chompSeen) Unsupported("block scalar header");
-                    chompSeen = true;
-                }
-                else if (char.IsDigit(value[i])) Unsupported("explicit block indentation indicators");
-                else Unsupported("block scalar header");
-            }
-        }
-
-        /// Classifies a scalar value: quoted values are unescaped, single-line flow
-        /// collections return empty (opaque), and constructs outside the subset fail the file.
-        private static string ClassifyValue(string value)
-        {
-            switch (value[0])
-            {
-                case '&' or '*' or '!' or '`' or '@' or '%':
-                    Unsupported($"YAML '{value[0]}' construct");
-                    return string.Empty;
-                case '"' or '\'':
-                    return Unquote(value);
-                case '[' or '{':
-                    RequireBalancedFlow(value);
-                    return string.Empty;
-                default:
-                    return value;
-            }
-        }
-
-        private static void RequireBalancedFlow(string value)
-        {
-            var square = 0;
-            var curly = 0;
-            Walk(value, (_, c, _) =>
-            {
-                if (c == '[') square++;
-                else if (c == ']') square--;
-                else if (c == '{') curly++;
-                else if (c == '}') curly--;
-            });
-            if (square != 0 || curly != 0) Unsupported("multi-line flow collections");
-        }
-
-        private static string Unquote(string value)
-        {
-            var quote = value[0];
-            var builder = new StringBuilder();
-            for (var i = 1; i < value.Length; i++)
-            {
-                var c = value[i];
-                if (quote == '\'' && c == '\'')
-                {
-                    if (i + 1 < value.Length && value[i + 1] == '\'') { builder.Append('\''); i++; continue; }
-                    if (i + 1 != value.Length) Unsupported("text after closing quote");
-                    return builder.ToString();
-                }
-                if (quote == '"' && c == '\\' && i + 1 < value.Length && value[i + 1] is '"' or '\\')
-                {
-                    builder.Append(value[i + 1]);
-                    i++;
-                    continue;
-                }
-                if (quote == '"' && c == '"')
-                {
-                    if (i + 1 != value.Length) Unsupported("text after closing quote");
-                    return builder.ToString();
-                }
-                builder.Append(c);
-            }
-            Unsupported("unterminated quoted scalar");
-            return string.Empty;
-        }
-
-        private static string[] SplitLines(byte[] bytes)
-        {
-            var text = Encoding.UTF8.GetString(bytes);
-            if (text.StartsWith('\ufeff')) text = text[1..];
-            return text.Replace("\r\n", "\n").Replace('\r', '\n').Split('\n');
+            else if (char.IsDigit(value[i])) Unsupported("explicit block indentation indicators");
+            else Unsupported("block scalar header");
         }
     }
+
+    /// Classifies a scalar value: quoted values are unescaped, single-line flow
+    /// collections return empty (opaque), and constructs outside the subset fail the file.
+    private static string ClassifyValue(string value)
+    {
+        switch (value[0])
+        {
+            case '&' or '*' or '!' or '`' or '@' or '%':
+                Unsupported($"YAML '{value[0]}' construct");
+                return string.Empty;
+            case '"' or '\'':
+                return Unquote(value);
+            case '[' or '{':
+                RequireBalancedFlow(value);
+                return string.Empty;
+            default:
+                return value;
+        }
+    }
+
+    private static void RequireBalancedFlow(string value)
+    {
+        var square = 0;
+        var curly = 0;
+        Walk(value, (_, c, _) =>
+        {
+            if (c == '[') square++;
+            else if (c == ']') square--;
+            else if (c == '{') curly++;
+            else if (c == '}') curly--;
+        });
+        if (square != 0 || curly != 0) Unsupported("multi-line flow collections");
+    }
+
+    private static string Unquote(string value)
+    {
+        var quote = value[0];
+        var builder = new StringBuilder();
+        for (var i = 1; i < value.Length; i++)
+        {
+            var c = value[i];
+            if (quote == '\'' && c == '\'')
+            {
+                if (i + 1 < value.Length && value[i + 1] == '\'') { builder.Append('\''); i++; continue; }
+                if (i + 1 != value.Length) Unsupported("text after closing quote");
+                return builder.ToString();
+            }
+            if (quote == '"' && c == '\\' && i + 1 < value.Length && value[i + 1] is '"' or '\\')
+            {
+                builder.Append(value[i + 1]);
+                i++;
+                continue;
+            }
+            if (quote == '"' && c == '"')
+            {
+                if (i + 1 != value.Length) Unsupported("text after closing quote");
+                return builder.ToString();
+            }
+            builder.Append(c);
+        }
+        Unsupported("unterminated quoted scalar");
+        return string.Empty;
+    }
+
+    private static readonly UTF8Encoding StrictUtf8 = new(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true);
+
+    private static string[] SplitLines(byte[] bytes)
+    {
+        // Malformed bytes are invalid evidence, never silently replacement-decoded text.
+        string text;
+        try
+        {
+            text = StrictUtf8.GetString(bytes);
+        }
+        catch (DecoderFallbackException)
+        {
+            Fail("malformed UTF-8");
+            return [];
+        }
+        if (text.StartsWith('\ufeff')) text = text[1..];
+        return text.Replace("\r\n", "\n").Replace('\r', '\n').Split('\n');
+    }
+}
 
     // ---- shared quote/expression scanner -------------------------------------------------------
 
@@ -711,7 +828,8 @@ internal static class CiWorkflowProducerExtractor
 
     private sealed record PackOccurrence(
         string WorkflowPath, string? RawPackageId, string? RawVersion,
-        string? ProjectTarget, int StartLine, int EndLine, IReadOnlyDictionary<string, string> Env);
+        string? ProjectTarget, bool TargetUnresolvable, int StartLine, int EndLine,
+        IReadOnlyDictionary<string, string> Env);
 
     private static readonly string[] ValueTakingFlags =
     [
@@ -734,6 +852,7 @@ internal static class CiWorkflowProducerExtractor
             string? packageVersion = null;
             string? plainVersion = null;
             string? target = null;
+            var unresolvableTarget = false;
             for (var i = 2; i < tokens.Count; i++)
             {
                 var token = tokens[i];
@@ -753,10 +872,11 @@ internal static class CiWorkflowProducerExtractor
                     if (ValueTakingFlags.Contains(flag, StringComparer.OrdinalIgnoreCase)) i++;
                     continue;
                 }
-                if (target is null && IsProjectOrSolutionPath(token)) target = NormalizeTarget(root, token);
+                if (target is null && unresolvableTarget == false && IsProjectOrSolutionPath(token))
+                    target = ResolveTarget(root, script.WorkingDir, token, ref unresolvableTarget);
             }
             yield return new PackOccurrence(workflowPath, packageId, packageVersion ?? plainVersion,
-                target, startLine, endLine, script.Env);
+                target, unresolvableTarget, startLine, endLine, script.Env);
         }
     }
 
@@ -782,11 +902,23 @@ internal static class CiWorkflowProducerExtractor
         || token.EndsWith(".vbproj", StringComparison.OrdinalIgnoreCase)
         || token.EndsWith(".sln", StringComparison.OrdinalIgnoreCase);
 
-    private static string? NormalizeTarget(string root, string token)
+    /// Resolves a pack target against the run's effective working directory. A relative
+    /// target under an unprovable directory is unresolvable (attribution omitted, never
+    /// guessed); absolute targets resolve on their own.
+    private static string? ResolveTarget(string root, WorkingDirectory workingDirectory, string token, ref bool unresolvable)
     {
         try
         {
-            var relative = Path.GetRelativePath(root, Path.GetFullPath(token, root)).Replace('\\', '/');
+            var baseDirectory = workingDirectory.Known
+                ? Path.Combine(root, workingDirectory.Path ?? string.Empty)
+                : null;
+            if (!Path.IsPathRooted(token) && baseDirectory is null)
+            {
+                unresolvable = true;
+                return null;
+            }
+            var relative = Path.GetRelativePath(root, Path.GetFullPath(token, baseDirectory ?? root))
+                .Replace('\\', '/');
             return relative.StartsWith("../", StringComparison.Ordinal) || relative == ".." ? null : relative;
         }
         catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
@@ -974,6 +1106,11 @@ internal static class CiWorkflowProducerExtractor
         {
             packageId = produced.PackageId; // CI packs the project: its explicit declaration is the id evidence
         }
+        else if (occurrence.TargetUnresolvable)
+        {
+            gaps.Add(new(occurrence.WorkflowPath, "ci-producer-id-unevidenced",
+                "relative target under an unprovable working directory", occurrence.StartLine));
+        }
         else if (occurrence.ProjectTarget is { } solution && solution.EndsWith(".sln", StringComparison.OrdinalIgnoreCase))
         {
             gaps.Add(new(occurrence.WorkflowPath, "ci-producer-id-unevidenced",
@@ -1003,8 +1140,13 @@ internal static class CiWorkflowProducerExtractor
                     "unsafe literal version", occurrence.StartLine));
             else version = resolved;
         }
+        // projectPath attributes the packed PROJECT; solution targets never ride the fact.
         rows.Add(new CiWorkflowProducerRow(occurrence.WorkflowPath, packageId, version,
-            occurrence.ProjectTarget, occurrence.StartLine, occurrence.EndLine));
+            occurrence.ProjectTarget is { } attributed
+                && !attributed.EndsWith(".sln", StringComparison.OrdinalIgnoreCase)
+                ? attributed
+                : null,
+            occurrence.StartLine, occurrence.EndLine));
     }
 
     /// Resolves a flag value that is exactly one ${{ env.NAME }} expression against the

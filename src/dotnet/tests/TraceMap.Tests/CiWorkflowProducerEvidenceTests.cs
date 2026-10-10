@@ -408,6 +408,145 @@ public sealed class CiWorkflowProducerEvidenceTests
     }
 
     [Fact]
+    public void Env_declared_after_jobs_or_steps_still_resolves()
+    {
+        const string workflow = """
+            jobs:
+              release:
+                steps:
+                  - run: dotnet pack src/Core.csproj -p:PackageId=Contoso.Later -p:PackageVersion=${{ env.PKG_VERSION }}
+                env:
+                  PKG_VERSION: 5.5.5
+            env:
+              JOB_FALLBACK: 1.0.0
+            """;
+        using var temp = new TempDirectory();
+        WriteWorkflow(temp.Path, "pack.yml", workflow);
+        WriteProject(temp.Path, "src/Core.csproj", PureCiProject);
+
+        var result = Read(temp.Path);
+        var row = Assert.Single(result.Rows);
+        Assert.Equal("5.5.5", row.Version); // job env declared after steps, resolved post-parse
+        Assert.Empty(result.Gaps);
+    }
+
+    [Fact]
+    public void Working_directory_resolves_relative_pack_targets()
+    {
+        const string declaredProject = """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <PackageId>Contoso.InSrc</PackageId>
+              </PropertyGroup>
+            </Project>
+            """;
+        // GitHub resolves every working-directory against the workspace root; step values
+        // replace (never chain onto) the defaults value.
+        const string workflow = """
+            defaults:
+              run:
+                working-directory: src
+            jobs:
+              steplevel:
+                steps:
+                  - run: dotnet pack InSrc.csproj -p:PackageId=Contoso.StepWd -p:PackageVersion=1.0.0
+                    working-directory: nested
+              jobdefault:
+                steps:
+                  - run: dotnet pack InSrc.csproj
+              templated:
+                steps:
+                  - run: dotnet pack InSrc.csproj -p:PackageId=Contoso.UnresolvedWd
+                    working-directory: ${{ matrix.dir }}
+            """;
+        using var temp = new TempDirectory();
+        WriteWorkflow(temp.Path, "pack.yml", workflow);
+        WriteProject(temp.Path, "nested/InSrc.csproj", declaredProject);
+        WriteProject(temp.Path, "src/InSrc.csproj", declaredProject);
+
+        var result = Read(temp.Path);
+        Assert.Empty(result.Gaps);
+        // Step working-directory (workspace-relative) resolves the relative target; the
+        // literal id keeps the fact and the attribution follows the effective directory.
+        var step = Assert.Single(result.Rows, row => row.Package == "Contoso.StepWd");
+        Assert.Equal("nested/InSrc.csproj", step.ProjectPath);
+        // The job default (inherited from workflow defaults) resolves a project-declared id.
+        var declared = Assert.Single(result.Rows, row => row.Package == "Contoso.InSrc");
+        Assert.Equal("src/InSrc.csproj", declared.ProjectPath);
+        // A templated working-directory cannot attribute a relative target: the literal id
+        // fact survives without projectPath, never a guessed path.
+        var templated = Assert.Single(result.Rows, row => row.Package == "Contoso.UnresolvedWd");
+        Assert.Null(templated.ProjectPath);
+    }
+
+    [Fact]
+    public void Unprovable_working_directory_gaps_project_fallback_ids()
+    {
+        const string workflow = """
+            jobs:
+              build:
+                steps:
+                  - run: dotnet pack Core.csproj
+                    working-directory: ${{ env.SUBDIR }}
+            """;
+        using var temp = new TempDirectory();
+        WriteWorkflow(temp.Path, "pack.yml", workflow);
+        WriteProject(temp.Path, "src/Core.csproj", PureCiProject);
+
+        var result = Read(temp.Path);
+        Assert.Empty(result.Rows);
+        var gap = Assert.Single(result.Gaps, gap => gap.Kind == "ci-producer-id-unevidenced");
+        Assert.Contains("unprovable working directory", gap.Detail!, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Malformed_utf8_is_an_invalid_workflow_gap()
+    {
+        using var temp = new TempDirectory();
+        var file = Path.Combine(temp.Path, ".github", "workflows", "pack.yml");
+        Directory.CreateDirectory(Path.GetDirectoryName(file)!);
+        var prefix = "jobs:\n  build:\n    steps:\n      - run: dotnet pack src/Core.csproj -p:PackageId=Contoso.Bad"
+            .Select(c => (byte)c).ToList();
+        prefix.AddRange([0xFF, 0xFE, 0x00]); // invalid UTF-8 payload
+        File.WriteAllBytes(file, prefix.ToArray());
+
+        var result = Read(temp.Path);
+        Assert.Empty(result.Rows);
+        Assert.Contains(result.Gaps, gap => gap.Kind == "ci-workflow-invalid"
+            && gap.Path.EndsWith("pack.yml", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Literal_flag_identity_is_complete_evidence_without_a_target()
+    {
+        // The pinned upgrade-authority contract: -p:PackageId + version flags are complete
+        // ci-defined identity evidence on their own. The project target is attribution
+        // metadata — omitted when the command names none, never a reason to drop the fact
+        // to a gap.
+        const string workflow = """
+            jobs:
+              build:
+                steps:
+                  - run: dotnet pack -p:PackageId=Contoso.Targetless -p:PackageVersion=3.1.4
+                  - run: dotnet pack Contoso.sln -p:PackageId=Contoso.SlnScoped -p:PackageVersion=2.2.2
+            """;
+        using var temp = new TempDirectory();
+        WriteWorkflow(temp.Path, "pack.yml", workflow);
+        WriteProject(temp.Path, "src/Core.csproj", PureCiProject);
+
+        var result = Read(temp.Path);
+        Assert.Equal(2, result.Rows.Count);
+        Assert.All(result.Rows, row =>
+        {
+            Assert.Null(row.ProjectPath);
+            Assert.False(string.IsNullOrEmpty(row.Package));
+        });
+        Assert.Contains(result.Rows, row => row.Package == "Contoso.Targetless" && row.Version == "3.1.4");
+        Assert.Contains(result.Rows, row => row.Package == "Contoso.SlnScoped" && row.Version == "2.2.2");
+        Assert.Empty(result.Gaps);
+    }
+
+    [Fact]
     public void Shell_pipes_subshells_and_templates_do_not_invent_pack_commands()
     {
         const string workflow = """
