@@ -394,6 +394,7 @@ public static partial class CombinedDependencyPathReporter
 
     private static bool ValidCompiledCommandOrigin(CompiledCommandOperandOrigin value)
     {
+        if (value.Kind == "argument-alternatives") return ReadCommandAlternatives(value) is not null;
         if (value.Identity is null || value.Identity.Length > 256) return false;
         if (value.Kind == "unknown") return value.Identity.Length == 0;
         if (value.Kind is "allocation-site" or "call-result" or "argument-slot" or "constant-int32")
@@ -407,6 +408,22 @@ public static partial class CombinedDependencyPathReporter
             && int.TryParse(parts[1], System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var length)
             && length >= 0 && length.ToString(System.Globalization.CultureInfo.InvariantCulture) == parts[1]
             && parts[2].Length == 64 && parts[2].All(character => character is >= '0' and <= '9' or >= 'a' and <= 'f');
+    }
+
+    private static CompiledCommandOperandOrigin[]? ReadCommandAlternatives(CompiledCommandOperandOrigin value)
+    {
+        if (value.Identity is null || value.Identity.Length > 768) return null;
+        try
+        {
+            var values = System.Text.Json.JsonSerializer.Deserialize<CompiledCommandOperandOrigin[]>(value.Identity);
+            if (values is not { Length: >= 2 and <= 4 } || values.Any(item => item is null
+                || item.Kind is not ("argument-slot" or "call-result" or "constant-string-hash" or "constant-int32" or "null")
+                || !(item.Kind == "null" && item.Identity == "" || ValidCompiledCommandOrigin(item)))) return null;
+            var canonical = values.Distinct().OrderBy(item => item.Kind, StringComparer.Ordinal)
+                .ThenBy(item => item.Identity, StringComparer.Ordinal).ToArray();
+            return System.Text.Json.JsonSerializer.Serialize(canonical) == value.Identity ? values : null;
+        }
+        catch (System.Text.Json.JsonException) { return null; }
     }
 
     private static string RetainedSourceIndex(string compiledIndex, IReadOnlyDictionary<string, CompiledAttachmentIndexLink> parents) =>

@@ -8,21 +8,22 @@ internal static class IlCallValueExtractor
 {
     internal const string Schema = "il-call-values.v1";
     internal const int MaxRetainedReturnSites = 256;
-    internal const string Limitation = "Bounded method-local operand origins only. Normal branch/loop flow uses equality-only fixed-point joins, including protected blocks with known exception entries. Handler/filter roots have unknown pre-exception local state; leave discards locals and potentially rewritten arguments across unmodelled finally effects, re-establishing only an empty operand stack. Exception dispatch and finally continuations are not reconstructed. Strings are length plus SHA-256 of exact UTF-16 code units, never raw text. Argument slots are not values. Object origins are allocation/call-site identities, not runtime objects. Function-pointer loads preserve only stack shape with unknown pointer values, never delegate dispatch; indirect calls remain unsupported. Ordinary field/array/indirect operations preserve stack shape but their loaded values remain unknown. Stores and address exposure conservatively invalidate affected configuration; exposed slots remain exposure-capable on later writes. Known byref call shapes retain non-byref scalar operands only; addresses and byref arguments are exported as unknown, never dereferenced caller values. Unsupported instructions, byref returns, stack failures and work limits invalidate or withhold operand state. Consumers must invalidate configuration across unknown call effects. No heap contents, field value, branch feasibility, SQL execution or runtime dispatch is proven.";
+    internal const string Limitation = "Bounded method-local operand origins only. Normal branch/loop flow uses bounded fixed-point joins, retaining at most four flat scalar origin alternatives (768 encoded characters); unsupported or overflowing joins become unknown, including protected blocks with known exception entries. Handler/filter roots have unknown pre-exception local state; leave discards locals and re-establishes an empty operand stack. Scalar argument origins survive only with complete handler/filter ranges, no address exposure anywhere and no writes to that argument in any handler/filter; unsafe handler memory operations prevent preservation. Exception dispatch and finally continuations are not reconstructed. Strings are length plus SHA-256 of exact UTF-16 code units, never raw text. Argument slots are not values. Object origins are allocation/call-site identities, not runtime objects. Function-pointer loads preserve only stack shape with unknown pointer values, never delegate dispatch; indirect calls remain unsupported. Ordinary field/array/indirect operations preserve stack shape but their loaded values remain unknown. Stores and address exposure conservatively invalidate affected configuration; exposed slots remain exposure-capable on later writes. Known byref call shapes retain non-byref scalar operands only; addresses and byref arguments are exported as unknown, never dereferenced caller values. Unsupported instructions, byref returns, stack failures and work limits invalidate or withhold operand state. Consumers must invalidate configuration across unknown call effects. No heap contents, field value, branch feasibility, SQL execution or runtime dispatch is proven.";
     private static readonly IlValueOrigin Unknown = new("unknown", "");
 
     internal static IlValueFlowObservation Extract(IReadOnlyList<string> instructions,
         IReadOnlyList<IlCallObservation> calls, int maxStack, bool hasExceptionRegions,
         IReadOnlyCollection<long>? exceptionBoundaries = null,
-        IReadOnlyList<IlValueExceptionEntry>? exceptionEntries = null)
+        IReadOnlyList<IlValueExceptionEntry>? exceptionEntries = null,
+        IReadOnlyList<IlValueExceptionRegion>? exceptionRegions = null)
     {
         // Exception edges remain in the explicitly reduced local lane. Normal
-        // branch/loop flow uses a bounded fixed point with equality-only joins.
+        // branch/loop flow uses a bounded fixed point with scalar alternatives.
         if ((!hasExceptionRegions || exceptionEntries is not null) && (calls.Any(call => call.StackShape?.ByReferenceParameters.Contains('1') == true)
             || instructions.Any(instruction => instruction.Split(':', 4)[3].StartsWith("br:0x", StringComparison.Ordinal)
                 || instruction.Split(':', 4)[3].StartsWith("sw:", StringComparison.Ordinal)
                 || RequiresControlFlow(instruction.Split(':', 4)[2]))))
-            return IlControlFlowValueExtractor.Extract(instructions, calls, maxStack, exceptionEntries);
+            return IlControlFlowValueExtractor.Extract(instructions, calls, maxStack, exceptionEntries, exceptionRegions);
         var events = new List<IlCallValueObservation>();
         var returns = new List<IlReturnValueObservation>();
         var afterReturn = false;

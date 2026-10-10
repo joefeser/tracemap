@@ -104,15 +104,28 @@ try {
         originBodyFactId="$secret-body";ruleId="$secret-rule";gaps=@('IlCommandReturnTargetEdgeMissing',"$secret-gap");
         steps=@(@{callFactId="$secret-step";operandFactId="$secret-operand";callerBodyFactId="$secret-body";
             callerMethodFactId="$secret-method";targetMethodFactId="$secret-method2"})}}
+    $leaf = @{state='method-local-constant';origin=@{kind='constant-string-hash';identity="$secret-value"};
+        originBodyFactId="$secret-body";steps=@();gaps=@()}
+    $nested = @{state='symbolic-string-composition';origin=@{kind='call-result';identity="$secret-offset"};
+        originBodyFactId="$secret-body";steps=@();gaps=@();composition=@{
+            operation='System.String.Concat';producerCallFactId="$secret-fact";operandFactId="$secret-operand";bodyFactId="$secret-body";
+            operands=@($leaf.origin,$leaf.origin);operandBindings=@($leaf,$leaf)}}
+    $trace.commandText.composition.operandBindings += @{state='symbolic-argument-alternatives';
+        origin=@{kind='argument-alternatives';identity="$secret-alternatives"};originBodyFactId="$secret-body";
+        steps=@();gaps=@();alternatives=@($leaf,$nested)}
     @{schemaVersion='retained-method-graph.v1';graph=@{nodes=$nodes;edges=$edges;
         calls=@($busyCalls)+@($focusCall);commandTraces=@($trace);cutoffs=@();roots=@("$secret-node-1")}} |
-        ConvertTo-Json -Depth 20 | Set-Content -LiteralPath $inputFile
+        ConvertTo-Json -Depth 48 | Set-Content -LiteralPath $inputFile
     $traceOutput = Join-Path $temp 'trace.json'
     & $helper $temp -GraphPath $inputFile -Method 'Focus()' -OutputPath $traceOutput | Out-Null
     $traceRaw = Get-Content -LiteralPath $traceOutput -Raw
     if ($traceRaw.Contains($secret)) { throw 'Private trace content leaked.' }
-    $traceResult = $traceRaw | ConvertFrom-Json -Depth 24
+    $traceResult = $traceRaw | ConvertFrom-Json -Depth 48
     $exportedTrace = $traceResult.graph.commandTraces[0]
+    $choices = $exportedTrace.composition.operandBindings[1]
+    if ($choices.state -cne 'symbolic-argument-alternatives' -or $choices.alternatives.Count -ne 2 -or
+        $choices.alternatives[1].composition.operandBindings.Count -ne 2 -or
+        $choices.alternatives[1].composition.operation -cne 'System.String.Concat') { throw 'Nested alternatives lost.' }
     if ($exportedTrace.state -cne 'symbolic-string-composition' -or
         $exportedTrace.composition.operation -cne 'System.String.Concat' -or
         $exportedTrace.composition.producer -cne $exportedTrace.producers[0] -or

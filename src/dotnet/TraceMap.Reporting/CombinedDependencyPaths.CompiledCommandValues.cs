@@ -10,6 +10,8 @@ public static partial class CombinedDependencyPathReporter
     private const string CompiledCommandValueRuleId = "combined.paths.compiled-command-value.v1";
     private const int MaxCompiledCommandValueHops = 64;
     private const int MaxCompiledCommandCallArguments = 128;
+    private const int MaxCommandExpressionDepth = 4;
+    private const int MaxCommandExpressionNodes = 32;
 
     private static void ProjectCompiledCommandValues(EvidenceGraph graph, CombinedPathNode[] nodes, CombinedPathEdge[] edges)
     {
@@ -21,12 +23,14 @@ public static partial class CombinedDependencyPathReporter
         for (var index = 1; index < nodes.Length; index++)
         {
             if (nodes[index].CommandBinding is not { } binding) continue;
+            var expressionNodes = 0;
             var text = Resolve(binding.CommandTextOrigin, "constant-string-hash");
+            expressionNodes = 0;
             var type = Resolve(binding.CommandTypeOrigin, "constant-int32");
             nodes[index] = nodes[index] with { CommandBinding = binding with { CommandTextFromPath = text, CommandTypeFromPath = type } };
 
             CompiledCommandPathValueBinding Resolve(CompiledCommandOperandOrigin initial, string constantKind,
-                string? initialScope = null, string? initialMethod = null, int? initialIncoming = null, bool allowComposition = true)
+                string? initialScope = null, string? initialMethod = null, int? initialIncoming = null, bool allowComposition = true, int depth = 0)
             {
                 var current = initial;
                 var scope = initialScope ?? binding.IlBodyFactId;
@@ -41,7 +45,21 @@ public static partial class CombinedDependencyPathReporter
                 var returns = new CommandReturnResolver(graph, materials, gaps, returnSteps, constantKind, allowComposition);
                 var state = "unresolved-operand";
                 var incoming = initialIncoming ?? index - 2;
-                while (current.Kind is "argument-slot" or "call-result")
+                CompiledCommandPathValueBinding[] Expand(IEnumerable<CompiledCommandOperandOrigin> origins)
+                {
+                    var expanded = new List<CompiledCommandPathValueBinding>();
+                    foreach (var origin in origins)
+                    {
+                        if (expressionNodes >= MaxCommandExpressionNodes)
+                        { gaps.Add("IlCommandExpressionLimit"); break; }
+                        expanded.Add(Resolve(origin, constantKind, scope, methodId, incoming, true, depth + 1));
+                    }
+                    return expanded.ToArray();
+                }
+                var expressionNodesAtEntry = expressionNodes;
+                var limited = ++expressionNodes > MaxCommandExpressionNodes || depth >= MaxCommandExpressionDepth;
+                if (limited) { state = "limit"; gaps.Add("IlCommandExpressionLimit"); }
+                while (!limited && current.Kind is "argument-slot" or "call-result")
                 {
                     if (++returns.Work > MaxCompiledCommandValueHops)
                     { gaps.Add("IlCommandCallerHopLimit"); state = "limit"; break; }
@@ -76,13 +94,23 @@ public static partial class CombinedDependencyPathReporter
                         value.Properties["ilGeneratorSha256"], value.Properties["ilBoundedInputSha256"]));
                     if (edge.EdgeKind == "compiled-il-callvirt-candidate") gaps.Add("IlCommandVirtualDispatchUnproven");
                 }
-                if (current.Kind == constantKind) state = steps.Count == 0 && returnSteps.Count == 0 ? "method-local-constant" : "constant-on-encoded-call-path";
+                if (!limited && current.Kind == constantKind) state = steps.Count == 0 && returnSteps.Count == 0 ? "method-local-constant" : "constant-on-encoded-call-path";
                 else if (returns.Composition is not null) state = "symbolic-string-composition";
-                else if (current.Kind != "argument-slot") gaps.Add("IlCommandOperandValueUnresolved");
+                else if (!limited && current.Kind is not ("argument-slot" or "argument-alternatives")) gaps.Add("IlCommandOperandValueUnresolved");
+                CompiledCommandPathValueBinding[]? alternatives = null;
+                if (!limited && current.Kind == "argument-alternatives")
+                {
+                    var choices = ReadCommandAlternatives(current);
+                    if (choices is null) gaps.Add("IlCommandOperandValueUnresolved");
+                    else
+                    {
+                        state = "symbolic-argument-alternatives";
+                        alternatives = Expand(choices);
+                    }
+                }
                 var composition = returns.Composition;
                 if (composition is not null)
-                    composition = composition with { OperandBindings = composition.Operands.Select(operand =>
-                        Resolve(operand, constantKind, scope, methodId, incoming, allowComposition: false)).ToArray() };
+                    composition = composition with { OperandBindings = Expand(composition.Operands) };
                 if (methodId is not null && facts.TryGetValue(methodId, out var finalMethod)) materials.Add(ProjectCommandValueFact(finalMethod));
                 var input = JsonSerializer.SerializeToUtf8Bytes(new
                 {
@@ -93,11 +121,12 @@ public static partial class CombinedDependencyPathReporter
                     MaxReturnSites = 256, MaxProducerEdges = MaxCommandProducerEdges,
                     ExpectedConstantKind = constantKind, InitialScope = initialScope, InitialMethod = initialMethod,
                     InitialIncoming = initialIncoming, AllowComposition = allowComposition,
-                    OperandBindings = composition?.OperandBindings, Inputs = materials
+                    MaxCommandExpressionDepth, MaxCommandExpressionNodes, Depth = depth, expressionNodesAtEntry,
+                    Alternatives = alternatives, OperandBindings = composition?.OperandBindings, Inputs = materials
                 });
                 return new("compiled-command-path-value.v1", CompiledCommandValueRuleId, EvidenceTiers.Tier3SyntaxOrTextual,
                     state, current, scope, steps, gaps.ToArray(), generator, Convert.ToHexStringLower(SHA256.HashData(input)))
-                    { ReturnSteps = returnSteps.Count == 0 ? null : returnSteps, Composition = composition,
+                    { ReturnSteps = returnSteps.Count == 0 ? null : returnSteps, Composition = composition, Alternatives = alternatives,
                         OriginMethodIdentity = methodId is not null ? facts.GetValueOrDefault(methodId)?.TargetSymbol : null,
                         OperandCheckFailures = checkFailures.Count == 0 ? null : checkFailures,
                         Limitations = composition is null ? null : ["SymbolicStringValueNotMaterialized"] };

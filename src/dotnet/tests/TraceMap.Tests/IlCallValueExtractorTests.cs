@@ -5,6 +5,52 @@ namespace TraceMap.Tests;
 public sealed class IlCallValueExtractorTests
 {
     [Theory]
+    [InlineData("none", true)]
+    [InlineData("write", false)]
+    [InlineData("address", false)]
+    [InlineData("unsafe", false)]
+    [InlineData("missing-regions", false)]
+    public void Leave_preserves_rewritten_scalar_only_when_all_handler_ranges_exclude_mutation(string mode, bool preserved)
+    {
+        var code = new List<string> { "0:0:ldstr:str:3:aaa", "1:1:starg.s:v:1", "2:2:leave.s:br:0x8" };
+        if (mode == "write") code.AddRange(["3:3:ldnull:", "4:4:starg.s:v:1"]);
+        else if (mode == "address") code.AddRange(["3:3:ldarga.s:v:1", "4:4:pop:"]);
+        else if (mode == "unsafe") code.AddRange(["3:3:arglist:", "4:4:pop:"]);
+        else code.AddRange(["3:3:nop:", "4:4:nop:"]);
+        code.AddRange(["5:5:endfinally:", "8:8:ldarg.1:", "9:9:call:m:consume", "10:a:ret:"]);
+        var flow = IlControlFlowValueExtractor.Extract(code, [Call(9, "call", new(1, false, false, true))], 8,
+            [new(3, 0)], mode == "missing-regions" ? null : [new(3, 6)]);
+        var call = Assert.Single(flow.Calls);
+        Assert.Equal("control-flow-candidate", call.State);
+        Assert.Equal(preserved ? "constant-string-hash" : "unknown", Assert.Single(call.Arguments).Kind);
+        Assert.Contains("IlValueExceptionFlowUnavailable", flow.Gaps);
+    }
+
+    [Fact]
+    public void Argument_alternatives_are_canonical_flat_bounded_and_unknown_is_absorbing()
+    {
+        var first = new IlValueOrigin("argument-slot", "1");
+        var second = new IlValueOrigin("call-result", "8");
+        var joined = IlArgumentAlternatives.Join(first, second);
+        Assert.Equal(joined, IlArgumentAlternatives.Join(second, first));
+        Assert.Equal(joined, IlArgumentAlternatives.Join(joined, first));
+        Assert.Equal("unknown", IlArgumentAlternatives.Join(joined, new("unknown", "")).Kind);
+        Assert.Equal("unknown", IlArgumentAlternatives.Join(joined, new("local-address", "0:argument-slot:1")).Kind);
+        for (var i = 0; i < 4; i++) joined = IlArgumentAlternatives.Join(joined, new("call-result", (20 + i).ToString()));
+        Assert.Equal("unknown", joined.Kind);
+        Assert.Equal("unknown", IlArgumentAlternatives.Join(joined, first).Kind);
+    }
+
+    [Fact]
+    public void Incomplete_handler_ranges_cannot_authorize_leave_preservation()
+    {
+        var flow = IlControlFlowValueExtractor.Extract(["0:0:leave.s:br:0x2", "1:1:endfinally:", "2:2:ret:"], [], 8,
+            [new(1, 0)], []);
+        Assert.Empty(flow.Calls);
+        Assert.Contains("IlValueExceptionEntryUnavailable", flow.Gaps);
+    }
+
+    [Theory]
     [InlineData("ldftn")]
     [InlineData("ldvirtftn")]
     public void Delegate_pointer_stack_effect_does_not_erase_later_caller_argument(string opcode)
@@ -32,7 +78,7 @@ public sealed class IlCallValueExtractorTests
             "4:4:ldftn:m:target", "5:5:pop:", "6:6:ldarg.1:", "7:7:call:m:consume"
         ], [Call(7, "call", new(1, false, false, true))], 8, false);
         Assert.Equal("control-flow-candidate", Assert.Single(flow.Calls).State);
-        Assert.Equal("unknown", Assert.Single(flow.Calls[0].Arguments).Kind);
+        Assert.Equal("argument-alternatives", Assert.Single(flow.Calls[0].Arguments).Kind);
     }
 
     [Theory]
@@ -68,7 +114,7 @@ public sealed class IlCallValueExtractorTests
             "0:0:ldarg.0:", "1:1:brfalse.s:br:0x4", "2:2:ldstr:str:3:aaa", "3:3:br.s:br:0x5",
             $"4:4:ldstr:str:3:{(equal ? "aaa" : "bbb")}", "5:5:ret:"
         ], [], 8, false);
-        Assert.Equal(equal ? "constant-string-hash" : "unknown", Assert.Single(flow.Returns!).Origin.Kind);
+        Assert.Equal(equal ? "constant-string-hash" : "argument-alternatives", Assert.Single(flow.Returns!).Origin.Kind);
     }
 
     [Fact]
@@ -166,7 +212,7 @@ public sealed class IlCallValueExtractorTests
             "7:7:ldloc.0:-", "8:8:call:m:consume", "9:9:ret:-"
         ], [Call(8, "call", new(1, false, false, true))], 8, false);
         var argument = Assert.Single(Assert.Single(flow.Calls).Arguments);
-        Assert.Equal(equal ? "constant-string-hash" : "unknown", argument.Kind);
+        Assert.Equal(equal ? "constant-string-hash" : "argument-alternatives", argument.Kind);
         Assert.Equal("control-flow-candidate", Assert.Single(flow.Calls).State);
         Assert.NotNull(flow.ControlFlow);
     }

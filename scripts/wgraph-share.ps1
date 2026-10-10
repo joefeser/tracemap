@@ -165,7 +165,7 @@ try {
         'IlCommandReturnEvidenceMissingOrAmbiguous','IlCommandReturnSignatureUnsupported','IlCommandReturnProvenanceUnavailable',
         'IlCommandCallerOperandMissingOrAmbiguous','IlCommandCallerOperandProvenanceUnavailable','IlCommandReturnCycle',
         'IlCommandReturnWorkLimit','IlCommandCallerHopLimit','IlCommandCompositionValueNotMaterialized',
-        'IlCommandCompositionOperandsUnavailable','IlCommandCompositionProvenanceUnavailable')
+        'IlCommandCompositionOperandsUnavailable','IlCommandCompositionProvenanceUnavailable','IlCommandExpressionLimit')
     function Project-OperandChecks($value) {
         if (!$value.PSObject.Properties['operandCheckFailures']) { return }
         $allowed = @('operand-rule','operand-tier','operand-schema','operand-state','call-shape',
@@ -181,6 +181,33 @@ try {
                 failedChecks=@($_.failedChecks | Select-Object -First 17 | ForEach-Object { Code $_ $allowed })}
         }
     }
+    function Project-Value($b, [int]$depth) {
+        if ($depth -gt 4) { return [ordered]@{state='limit';gaps=@('IlCommandExpressionLimit')} }
+        [ordered]@{
+            state=(Code $b.state @('method-local-constant','constant-on-encoded-call-path','unresolved-operand','unresolved-root-argument','unresolved-non-il-bridge','unresolved-call-evidence','unresolved-slot','limit','symbolic-string-composition','symbolic-argument-alternatives'));
+            originKind=(Code $b.origin.kind @('call-result','argument-slot','argument-alternatives','constant-string-hash','constant-int32','unknown','null'));
+            originBody=(Alias 'F' $b.originBodyFactId);
+            method=$(if ($b.PSObject.Properties['originMethodIdentity']) { Alias 'S' $b.originMethodIdentity });
+            argumentSlot=$(if ($b.origin.kind -ceq 'argument-slot' -and [string]$b.origin.identity -cmatch '\A(?:0|[1-9][0-9]{0,2})\z') { [int]$b.origin.identity });
+            steps=@($b.steps | Select-Object -First 64 | ForEach-Object { [ordered]@{
+                call=(Alias 'F' $_.callFactId);operand=(Alias 'F' $_.operandFactId);body=(Alias 'F' $_.callerBodyFactId);
+                callerMethod=(Alias 'F' $_.callerMethodFactId);targetMethod=(Alias 'F' $_.targetMethodFactId)} });
+            operandCheckFailures=@(Project-OperandChecks $b);
+            returnSteps=@(if ($b.PSObject.Properties['returnSteps']) { $b.returnSteps | Select-Object -First 64 | ForEach-Object {
+                [ordered]@{producer=(Alias 'F' $_.producerCallFactId);body=(Alias 'F' $_.calleeBodyFactId);returnFact=(Alias 'F' $_.returnFactId)} } });
+            gaps=@($b.gaps | Select-Object -First 16 | ForEach-Object { Code $_ $traceGaps });
+            composition=(Project-Composition $b $depth);
+            alternatives=@(if ($b.PSObject.Properties['alternatives']) { $b.alternatives | Select-Object -First 4 | ForEach-Object { Project-Value $_ ($depth + 1) } })
+        }
+    }
+    function Project-Composition($b, [int]$depth) {
+        if ($depth -ge 4 -or !$b.PSObject.Properties['composition'] -or $null -eq $b.composition) { return $null }
+        $c = $b.composition
+        [ordered]@{operation=(Code $c.operation @('System.String.Concat'));
+            producer=(Alias 'F' $c.producerCallFactId);operand=(Alias 'F' $c.operandFactId);body=(Alias 'F' $c.bodyFactId);
+            operandKinds=@($c.operands | Select-Object -First 3 | ForEach-Object { Code $_.kind @('call-result','argument-slot','argument-alternatives','constant-string-hash','unknown','null') });
+            operandBindings=@(if ($c.PSObject.Properties['operandBindings']) { $c.operandBindings | Select-Object -First 3 | ForEach-Object { Project-Value $_ ($depth + 1) } })}
+    }
     $projectedTraces = @($traceCandidates | ForEach-Object {
         $trace = $_; $value = $trace.commandText
         if ($null -eq $value) {
@@ -188,8 +215,8 @@ try {
             return
         }
         [ordered]@{endpoint=(Alias 'N' $trace.endpointNodeId);path=@($trace.pathNodeIds | ForEach-Object { Alias 'N' $_ });
-            state=(Code $value.state @('unresolved-operand','unresolved-root-argument','unresolved-non-il-bridge','unresolved-call-evidence','unresolved-slot','limit','method-local-constant','constant-on-encoded-call-path','symbolic-string-composition'));
-            originKind=(Code $value.origin.kind @('call-result','argument-slot','constant-string-hash','constant-int32','unknown','null','allocation-site'));
+            state=(Code $value.state @('unresolved-operand','unresolved-root-argument','unresolved-non-il-bridge','unresolved-call-evidence','unresolved-slot','limit','method-local-constant','constant-on-encoded-call-path','symbolic-string-composition','symbolic-argument-alternatives'));
+            originKind=(Code $value.origin.kind @('call-result','argument-slot','argument-alternatives','constant-string-hash','constant-int32','unknown','null','allocation-site'));
             originBody=(Alias 'F' $value.originBodyFactId);rule=(Alias 'R' $value.ruleId);
             producers=@($trace.producerCallFactIds | ForEach-Object { Alias 'F' $_ });
             missingProducerRecords=@($trace.producerCallFactIds | Where-Object { $id = $_; @($keptCalls | Where-Object { $_.factId -ceq $id }).Count -eq 0 }).Count;
@@ -197,26 +224,8 @@ try {
                 body=(Alias 'F' $_.callerBodyFactId);callerMethod=(Alias 'F' $_.callerMethodFactId);targetMethod=(Alias 'F' $_.targetMethodFactId)} });
             returnSteps=@(if ($value.PSObject.Properties['returnSteps'] -and $null -ne $value.returnSteps) { $value.returnSteps | ForEach-Object {
                 [ordered]@{producer=(Alias 'F' $_.producerCallFactId);body=(Alias 'F' $_.calleeBodyFactId);returnFact=(Alias 'F' $_.returnFactId)} } });
-            composition=$(if ($value.PSObject.Properties['composition'] -and $null -ne $value.composition) {
-                $c = $value.composition
-                [ordered]@{operation=(Code $c.operation @('System.String.Concat'));
-                    producer=(Alias 'F' $c.producerCallFactId);operand=(Alias 'F' $c.operandFactId);body=(Alias 'F' $c.bodyFactId);
-                    operandKinds=@($c.operands | Select-Object -First 3 | ForEach-Object {
-                        Code $_.kind @('call-result','argument-slot','constant-string-hash','unknown','null') });
-                    operandBindings=@(if ($c.PSObject.Properties['operandBindings']) { $c.operandBindings | Select-Object -First 3 | ForEach-Object {
-                        $b = $_
-                        [ordered]@{state=(Code $b.state @('method-local-constant','constant-on-encoded-call-path','unresolved-operand','unresolved-root-argument','unresolved-non-il-bridge','unresolved-call-evidence','unresolved-slot','limit'));
-                            originKind=(Code $b.origin.kind @('call-result','argument-slot','constant-string-hash','unknown','null'));
-                            originBody=(Alias 'F' $b.originBodyFactId);
-                            method=$(if ($b.PSObject.Properties['originMethodIdentity']) { Alias 'S' $b.originMethodIdentity });
-                            argumentSlot=$(if ($b.origin.kind -ceq 'argument-slot' -and [string]$b.origin.identity -cmatch '\A(?:0|[1-9][0-9]{0,2})\z') { [int]$b.origin.identity });
-                            steps=@($b.steps | Select-Object -First 64 | ForEach-Object { [ordered]@{
-                                call=(Alias 'F' $_.callFactId);operand=(Alias 'F' $_.operandFactId);body=(Alias 'F' $_.callerBodyFactId);
-                                callerMethod=(Alias 'F' $_.callerMethodFactId);targetMethod=(Alias 'F' $_.targetMethodFactId)} });
-                            operandCheckFailures=@(Project-OperandChecks $b);
-                            gaps=@($b.gaps | Select-Object -First 16 | ForEach-Object { Code $_ $traceGaps })}
-                    } })}
-            });
+            composition=(Project-Composition $value 0);
+            alternatives=@(if ($value.PSObject.Properties['alternatives']) { $value.alternatives | Select-Object -First 4 | ForEach-Object { Project-Value $_ 1 } });
             limitations=@(if ($value.PSObject.Properties['limitations']) { $value.limitations | Select-Object -First 8 | ForEach-Object { Code $_ @('SymbolicStringValueNotMaterialized') } });
             operandCheckFailures=@(Project-OperandChecks $value);
             gaps=@($value.gaps | ForEach-Object { Code $_ $traceGaps })}
@@ -225,8 +234,8 @@ try {
         commandTraces=$projectedTraces;traceScope='one-shortest-retained-witness-per-endpoint-not-all-variants';
         callerCoverage=$callerCoverage;focusRecordsComplete=$focusComplete;
         sliceLimited=$limited; sourceHadCutoffs=(@($graph.cutoffs).Count -gt 0);
-        limits=@{radius=3;nodes=120;edges=240;calls=120}}
-    $bytes = [Text.Encoding]::UTF8.GetBytes(($projection | ConvertTo-Json -Depth 20 -Compress))
+        limits=@{radius=3;nodes=120;edges=240;calls=120;expressionDepth=4;alternatives=4;compositionOperands=3}}
+    $bytes = [Text.Encoding]::UTF8.GetBytes(($projection | ConvertTo-Json -Depth 40 -Compress))
     $hash = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($bytes)).ToLowerInvariant()
     $result = [ordered]@{schemaVersion='aliased-method-graph.v3';ruleId='diagnostics.graph.aliased-slice.v3';
         generatorSha256=(Get-FileHash -LiteralPath $PSCommandPath -Algorithm SHA256).Hash.ToLowerInvariant();
@@ -235,7 +244,7 @@ try {
             'Topology and allowlisted technical categories remain visible. Review before sharing; sanitization is not organizational approval.',
             'Target aliases identify equal encoded strings only, not resolved methods. Unknown codes are not copied.',
             'No private input hash, source hash, SQL, free-form gaps, offsets, line numbers or original provenance is exported.');graph=$projection}
-    $outputBytes = [Text.Encoding]::UTF8.GetBytes(($result | ConvertTo-Json -Depth 24))
+    $outputBytes = [Text.Encoding]::UTF8.GetBytes(($result | ConvertTo-Json -Depth 48))
     if ($outputBytes.Length -gt 262144) { throw 'output-limit' }
     if (!$OutputPath) { $OutputPath = Join-Path $Root ('graph-share-' + [guid]::NewGuid().ToString('N') + '.json') }
     $mapBytes = $null

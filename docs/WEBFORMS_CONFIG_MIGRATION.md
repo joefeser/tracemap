@@ -938,8 +938,10 @@ origins at Tier3SyntaxOrTextual. New reports classify non-materialization under
 `limitations: ["SymbolicStringValueNotMaterialized"]`, not as a missing-evidence
 gap. Ordered `operandBindings` trace each operand backwards along that retained
 path, preserving exact hop facts and the final method identity. Each operand has
-the existing 64-work bound, at most three operands are traced, and nested symbolic
-composition is not expanded. A root argument, non-IL bridge, missing evidence,
+the existing 64-work bound. Nested composition and scalar alternatives share a
+32-node expression budget and four-level depth bound per command property;
+each concatenation has at most three operands and each alternative set at most
+four members. Exhaustion emits `IlCommandExpressionLimit`. A root argument, non-IL bridge, missing evidence,
 or uncertain dispatch remains an explicit operand-level gap. The private HTML
 shows a readable route, expression and operand summaries above exact evidence.
 Parameter names are not retained in these scans: labels use IL argument slots
@@ -965,7 +967,7 @@ This is a bounded intrinsic projection, not an admitted callee-body edge.
 
 No SQL text is reconstructed, and string hashes are never concatenated into a
 value. Unknown operands and downstream virtual-dispatch gaps remain unknown.
-Nested return computations, other assemblies/overloads, and virtual calls are not
+Unsupported return computations, other assemblies/overloads, and virtual calls are not
 promoted by this rule. Malformed operands or mismatched provenance fail closed.
 The shared graph exports only the allowlisted operation, aliased fact references,
 and ordered operand kinds, never operand identities or literals. Rebuild the CLI
@@ -1016,7 +1018,9 @@ a conditionally rewritten argument cannot be relabeled as the original input slo
 The compile-only `StructuredProfileProbe` public VB fixture includes a rewritten
 argument, date/value-type calls, a nested `Using`, two LINQ delegates, and enclosing
 `Catch`/`Finally` (three exception regions). Its later helper call must retain valid
-stack shape while reporting the rewritten operand as unknown. No fixture network
+stack shape while retaining both the original slot and rewritten call-result as
+bounded alternatives. The integrated test follows both through SQL composition
+and the separate provider to the scalar database API. No fixture network
 or application code is executed. Tests pin the compiled pointer instructions and
 exception regions, not only handwritten IL.
 
@@ -1024,3 +1028,37 @@ This is an extractor change: run `wrefresh.ps1` to create new evidence, then que
 with `wrequery.ps1 -LatestRefresh -MethodGraph` and export with `wgraph-share.ps1`.
 Requerying an older scan cannot repair its retained operand state. The public
 regression does not establish private Windows application acceptance.
+
+### Batched argument tracing and one-command validation
+
+`dotnet.compiled.il-values.v1` now keeps up to four canonical scalar origin
+alternatives at stack, local and argument joins. Unknown and unsupported origins,
+including addresses and differing heap allocations, absorb the join; exceeding
+four members or 768 encoded characters produces unknown. Loops cannot grow an
+unbounded expression. These are possibilities, not branch predicates or runtime
+values. Equality remains exact for identical origins.
+
+Complete independently decoded handler/filter ranges permit a narrow `leave`
+summary: preserve an argument only if it has no address exposure anywhere and no
+write in any handler/filter. Unsafe handler memory operations disable preservation.
+Locals are still discarded. Catch/filter entry seeds stay unknown; exception
+dispatch and finally continuation paths are not reconstructed. The scan carries
+updated extractor/version/budget hashes; older scans cannot gain these origins.
+
+The report and private HTML expose `symbolic-argument-alternatives` and nested
+compositions. Each child has its own exact evidence/provenance links. The shared
+export retains only bounded tree structure, aliases and technical categories;
+it never exports the encoded origin alternatives, string hashes or SQL literals.
+Malformed/nested alternative encodings and mismatched provenance fail closed.
+
+After pulling this branch, run:
+
+```powershell
+.\scripts\wgraph-refresh.ps1 C:\path\to\wizard-root
+```
+
+Enter the handler and focus method when prompted, or pass `-Handler` and `-Method`.
+The wrapper builds and scans into a fresh run, queries its method graph, then
+creates the shared export and separate private alias map. It stops on a failed
+stage and never uploads anything, runs tests, or substitutes an older graph.
+For multi-project roots add `-Project <id>`. Share only the generated shared JSON.

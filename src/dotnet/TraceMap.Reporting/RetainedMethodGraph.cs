@@ -84,10 +84,17 @@ public static partial class CombinedDependencyPathReporter
             ProjectCompiledCommandValues(graph, pathNodes, pathEdges.ToArray());
             var text = pathNodes[^1].CommandBinding?.CommandTextFromPath;
             var producers = new List<string>();
-            if (text?.Origin.Kind == "call-result" && graph.CommandFactsByCombinedId.TryGetValue(text.OriginBodyFactId, out var body))
-                producers.AddRange(graph.CommandRelatedFacts(body.SourceIndexId, FactTypes.ManagedIlCallObserved,
-                    body.OriginalFactId + "/" + text.Origin.Identity).Select(f => f.CombinedFactId));
-            traces.Add(new(endpoint, pathIds, text, producers));
+            var expressions = new Queue<CompiledCommandPathValueBinding>();
+            if (text is not null) expressions.Enqueue(text);
+            for (var count = 0; count < MaxCommandExpressionNodes && expressions.TryDequeue(out var expression); count++)
+            {
+                if (expression.Origin.Kind == "call-result" && graph.CommandFactsByCombinedId.TryGetValue(expression.OriginBodyFactId, out var body))
+                    producers.AddRange(graph.CommandRelatedFacts(body.SourceIndexId, FactTypes.ManagedIlCallObserved,
+                        body.OriginalFactId + "/" + expression.Origin.Identity).Take(2).Select(f => f.CombinedFactId));
+                foreach (var child in (expression.Alternatives ?? []).Concat(expression.Composition?.OperandBindings ?? []))
+                    expressions.Enqueue(child);
+            }
+            traces.Add(new(endpoint, pathIds, text, producers.Distinct(StringComparer.Ordinal).ToArray()));
         }
         var relevantGaps = graph.Gaps.Where(g => g.NodeId is not null && visited.Contains(g.NodeId) ||
             g.CombinedFactId is not null && callIds.Contains(g.CombinedFactId)).Take(options.MaxFrontier + 1).ToArray();
@@ -173,8 +180,25 @@ public static class RetainedMethodGraphWriter
                     _ => origin.Kind + " (value unknown)"
                 };
                 html.Append($"<p>Supported symbolic expression: {E(composition.Operation)}({E(string.Join(", ", composition.Operands.Select(OperandLabel)))})</p><p>Limitation: plaintext value is not materialized. Parameter names are not retained; IL slots are not source names.</p><ol>");
-                foreach (var operand in composition.OperandBindings)
-                    html.Append($"<li>{E(OperandLabel(operand.Origin))} in {E(operand.OriginMethodIdentity is { } identity ? MethodLabel(identity) : "unknown method")}; {operand.Steps.Count} argument hops; state: {E(operand.State)}; gaps: {E(string.Join(", ", operand.Gaps))}</li>");
+                void AppendOperand(CompiledCommandPathValueBinding operand, int depth)
+                {
+                    if (depth > 4) { html.Append("<li>Expression display limit</li>"); return; }
+                    html.Append($"<li>{E(OperandLabel(operand.Origin))} in {E(operand.OriginMethodIdentity is { } identity ? MethodLabel(identity) : "unknown method")}; {operand.Steps.Count} argument hops; state: {E(operand.State)}; gaps: {E(string.Join(", ", operand.Gaps))}");
+                    if (operand.Alternatives is { } choices)
+                    {
+                        html.Append("<p>Possible argument origins (branch feasibility not proven):</p><ul>");
+                        foreach (var choice in choices.Take(4)) AppendOperand(choice, depth + 1);
+                        html.Append("</ul>");
+                    }
+                    if (operand.Composition is { } nested)
+                    {
+                        html.Append($"<p>{E(nested.Operation)} (symbolic, no plaintext)</p><ol>");
+                        foreach (var child in nested.OperandBindings.Take(3)) AppendOperand(child, depth + 1);
+                        html.Append("</ol>");
+                    }
+                    html.Append("</li>");
+                }
+                foreach (var operand in composition.OperandBindings) AppendOperand(operand, 1);
                 html.Append("</ol>");
             }
             html.Append($"<details><summary>Exact command evidence and operand traces</summary><pre>{E(JsonSerializer.Serialize(trace, options))}</pre></details>");
