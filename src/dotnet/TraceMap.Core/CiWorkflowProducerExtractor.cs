@@ -1,5 +1,7 @@
 using System.Diagnostics.CodeAnalysis;
+using System.Runtime.InteropServices;
 using System.Security.Cryptography;
+using Microsoft.Win32.SafeHandles;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -117,10 +119,8 @@ internal static class CiWorkflowProducerExtractor
             }
             try
             {
-                using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
-                // Re-check through the opened handle's path: a candidate swapped for a symlink
-                // between the attribute check and this open must never parse as evidence.
-                if (IsLink(path))
+                using var stream = OpenNoFollow(path, out var linked);
+                if (linked || stream is null)
                 {
                     gaps.Add(new(relative, "ci-workflow-linked-path"));
                     continue;
@@ -146,6 +146,50 @@ internal static class CiWorkflowProducerExtractor
         }
     }
 
+    private const int OReadOnly = 0;
+    private const int NoFollowMacOs = 0x0100;
+    private const int NoFollowLinux = 0x20000;
+    private const int ErrnoLoop = 40; // ELOOP: O_NOFOLLOW hit a final symlink
+
+    [DllImport("libc", SetLastError = true, EntryPoint = "open")]
+    private static extern int open(string path, int flags);
+
+    /// Opens the workflow without following a final symlink. Unix platforms use a true
+    /// O_NOFOLLOW descriptor (the read bytes belong to the opened inode even if the path is
+    /// swapped afterwards); Windows — where creating symlinks already needs elevated
+    /// privileges — keeps the documented path-check residual.
+    private static FileStream? OpenNoFollow(string path, out bool linked)
+    {
+        linked = false;
+        if (OperatingSystem.IsMacOS() || OperatingSystem.IsLinux())
+        {
+            var descriptor = open(path, OReadOnly | (OperatingSystem.IsMacOS() ? NoFollowMacOs : NoFollowLinux));
+            if (descriptor < 0)
+            {
+                if (Marshal.GetLastWin32Error() == ErrnoLoop)
+                {
+                    linked = true;
+                    return null;
+                }
+                throw new IOException($"Workflow open failed (errno {Marshal.GetLastWin32Error()}).");
+            }
+            return new FileStream(new SafeFileHandle((IntPtr)descriptor, ownsHandle: true), FileAccess.Read);
+        }
+        if (IsLink(path))
+        {
+            linked = true;
+            return null;
+        }
+        var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+        if (IsLink(path))
+        {
+            stream.Dispose();
+            linked = true;
+            return null;
+        }
+        return stream;
+    }
+
     private static bool IsLink(string path)
     {
         try
@@ -164,7 +208,7 @@ internal static class CiWorkflowProducerExtractor
         List<CiWorkflowProducerRow> rows, List<CiWorkflowGap> gaps)
     {
         var resolved = new List<CiWorkflowProducerRow>();
-        foreach (var group in rows.GroupBy(row => row.Package, StringComparer.Ordinal))
+        foreach (var group in rows.GroupBy(row => row.Package, StringComparer.OrdinalIgnoreCase))
         {
             var versions = group.Select(row => row.Version).Where(version => version is not null)
                 .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
@@ -264,8 +308,19 @@ internal static class CiWorkflowProducerExtractor
         try
         {
             foreach (var script in new WorkflowParser(bytes).Parse())
+            {
+                if (!script.CommandShell)
+                {
+                    // The text is handed to a non-command interpreter (or an unprovable one):
+                    // a pack-looking line is unevidence, never a producer fact.
+                    if (ContainsPackCommand(script))
+                        gaps.Add(new(path, "ci-workflow-unsupported",
+                            "pack text under a non-command shell", script.StartLine));
+                    continue;
+                }
                 foreach (var occurrence in ExtractPackOccurrences(path, root, script))
                     ResolveOccurrence(occurrence, producedByPath, rows, gaps);
+            }
         }
         catch (WorkflowFormatException ex)
         {
@@ -284,35 +339,44 @@ internal static class CiWorkflowProducerExtractor
         public HashSet<string> SeenKeys { get; } = new(StringComparer.Ordinal);
     }
 
-/// A run block captured from jobs.<id>.steps[*].run. Env resolution is deferred until the
-/// whole document is parsed (env may be declared after jobs/steps); WorkingDir carries the
-/// effective literal working directory (step over job defaults over workflow defaults).
-private sealed record WorkingDirectory(bool Known, string? Path);
+    /// A run block captured from jobs.<id>.steps[*].run. Env resolution is deferred until the
+    /// whole document is parsed (env may be declared after jobs/steps); WorkingDir carries the
+    /// effective literal working directory (step over job defaults over workflow defaults).
+    private sealed record WorkingDirectory(bool Known, string? Path);
 
-private sealed record RunScript(
-    IReadOnlyList<(string Text, int LineNo)> Lines, bool Folded, int StartLine, int EndLine,
-    IReadOnlyDictionary<string, string> Env, WorkingDirectory WorkingDir);
+    private sealed record RunScript(
+        IReadOnlyList<(string Text, int LineNo)> Lines, bool Folded, int StartLine, int EndLine,
+        IReadOnlyDictionary<string, string> Env, WorkingDirectory WorkingDir, bool CommandShell = true);
 
-private sealed class WorkflowParser(byte[] bytes)
-{
-    private readonly record struct WdScope(byte State, string? Path)
+    /// Shells GitHub runs as command interpreters for run blocks; anything else (python,
+    /// custom `shell: tool {0}` forms, templated shells) is not command-line evidence.
+    private static readonly string[] CommandShells =
+        ["bash", "sh", "pwsh", "powershell", "cmd"];
+
+    private sealed class WorkflowParser(byte[] bytes)
     {
-        public static readonly WdScope Absent = new(0, null);
-        public static WdScope Known(string path) => new(1, path);
-        public static readonly WdScope Unknown = new(2, null);
+    private readonly record struct ScopeValue(byte State, string? Value)
+    {
+        public static readonly ScopeValue Absent = new(0, null);
+        public static ScopeValue Known(string value) => new(1, value);
+        public static readonly ScopeValue Unknown = new(2, null);
         public bool IsAbsent => State == 0;
     }
 
     private readonly string[] _lines = SplitLines(bytes);
     private readonly Dictionary<string, string> _workflowEnv = new(StringComparer.Ordinal);
     private readonly Dictionary<string, Dictionary<string, string>> _jobEnvs = new(StringComparer.Ordinal);
-    private readonly List<(string JobId, RunScript Script, Dictionary<string, string> StepEnv)> _pendingRuns = [];
+    private readonly List<(string JobId, RunScript Script, Dictionary<string, string> StepEnv,
+        ScopeValue StepWd, ScopeValue StepShell)> _pendingRuns = [];
     private readonly Stack<Frame> _frames = [];
     private Dictionary<string, string>? _stepEnv;
     private RunScript? _stepRun;
-    private WdScope _rootDefaultWd = WdScope.Absent;
-    private WdScope _jobDefaultWd = WdScope.Absent;
-    private WdScope _stepWd = WdScope.Absent;
+    private ScopeValue _rootDefaultWd = ScopeValue.Absent;
+    private readonly Dictionary<string, ScopeValue> _jobDefaultWds = new(StringComparer.Ordinal);
+    private ScopeValue _rootDefaultShell = ScopeValue.Absent;
+    private readonly Dictionary<string, ScopeValue> _jobDefaultShells = new(StringComparer.Ordinal);
+    private ScopeValue _stepWd = ScopeValue.Absent;
+    private ScopeValue _stepShell = ScopeValue.Absent;
     private (int Column, Frame Parent, string Key)? _pendingBlock;
     private (int Column, string? JobId, bool Step)? _pendingItem;
     private int _index;
@@ -356,7 +420,18 @@ private sealed class WorkflowParser(byte[] bytes)
             if (_jobEnvs.TryGetValue(pending.JobId, out var jobEnv))
                 foreach (var (name, literal) in jobEnv) effective[name] = literal;
             foreach (var (name, literal) in pending.StepEnv) effective[name] = literal;
-            return pending.Script with { Env = effective };
+            var wd = ResolveScope(pending.StepWd,
+                _jobDefaultWds.TryGetValue(pending.JobId, out var jobWd) ? jobWd : ScopeValue.Absent, _rootDefaultWd);
+            var shell = ResolveScope(pending.StepShell,
+                _jobDefaultShells.TryGetValue(pending.JobId, out var jobShell) ? jobShell : ScopeValue.Absent, _rootDefaultShell);
+            return pending.Script with
+            {
+                Env = effective,
+                WorkingDir = wd.State == 1 ? new WorkingDirectory(true, wd.Value)
+                    : wd.State == 2 ? new WorkingDirectory(false, null)
+                    : new WorkingDirectory(true, null),
+                CommandShell = shell.IsAbsent || (shell.State == 1 && CommandShells.Contains(shell.Value, StringComparer.OrdinalIgnoreCase))
+            };
         }).ToList();
     }
 
@@ -416,7 +491,6 @@ private sealed class WorkflowParser(byte[] bytes)
         if (role is not "steps" and not "other" && isDash)
             Fail($"{RoleName(role)} must be a mapping block");
         if (role == "steps" && !isDash) Fail("steps must be a sequence block");
-        if (role == "job") _jobDefaultWd = WdScope.Absent;
         _frames.Push(new Frame(indent, isDash)
         {
             Role = role,
@@ -451,7 +525,8 @@ private sealed class WorkflowParser(byte[] bytes)
     private void BeginStep()
     {
         _stepEnv = [];
-        _stepWd = WdScope.Absent;
+        _stepWd = ScopeValue.Absent;
+        _stepShell = ScopeValue.Absent;
     }
 
     private void Pop()
@@ -459,26 +534,16 @@ private sealed class WorkflowParser(byte[] bytes)
         var frame = _frames.Pop();
         if (frame.Role != "step" || frame.JobId is null) return;
         if (_stepRun is { } script)
-            _pendingRuns.Add((frame.JobId, script with { WorkingDir = EffectiveWorkingDirectory() },
-                new Dictionary<string, string>(_stepEnv ?? [], StringComparer.Ordinal)));
+            _pendingRuns.Add((frame.JobId, script,
+                new Dictionary<string, string>(_stepEnv ?? [], StringComparer.Ordinal), _stepWd, _stepShell));
         _stepRun = null;
         _stepEnv = null;
-        _stepWd = WdScope.Absent;
+        _stepWd = ScopeValue.Absent;
+        _stepShell = ScopeValue.Absent;
     }
 
-    /// GitHub precedence: step working-directory, then job defaults.run, then workflow
-    /// defaults.run, then the repository root. A declared-but-templated directory is
-    /// unprovable and stays unknown; an undeclared one is the known repository root.
-    private WorkingDirectory EffectiveWorkingDirectory()
-    {
-        var selected = !_stepWd.IsAbsent ? _stepWd
-            : !_jobDefaultWd.IsAbsent ? _jobDefaultWd
-            : !_rootDefaultWd.IsAbsent ? _rootDefaultWd
-            : WdScope.Absent;
-        return selected.State == 1 ? new WorkingDirectory(true, selected.Path)
-            : selected.State == 2 ? new WorkingDirectory(false, null)
-            : new WorkingDirectory(true, null);
-    }
+    private static ScopeValue ResolveScope(ScopeValue step, ScopeValue job, ScopeValue root) =>
+        !step.IsAbsent ? step : !job.IsAbsent ? job : !root.IsAbsent ? root : ScopeValue.Absent;
 
     private void ProcessSequenceItem(string content, int dashColumn)
     {
@@ -541,17 +606,27 @@ private sealed class WorkflowParser(byte[] bytes)
             _stepRun = ParseRunValue(value, column, lineNo);
             return;
         }
-        if (mapping.Role == "step" && key == "working-directory")
+        if (mapping.Role == "step" && key is "working-directory" or "shell")
         {
-            _stepWd = ClassifyWorkingDirectory(value, column);
+            var scope = ClassifyLiteralScope(value, column);
+            if (key == "working-directory") _stepWd = scope;
+            else _stepShell = scope;
             return;
         }
         if (mapping.Role is "defaults-run-root" or "defaults-run-job")
         {
-            if (key != "working-directory") { ConsumeOpaqueValue(value, column); return; }
-            var scope = ClassifyWorkingDirectory(value, column);
-            if (mapping.Role == "defaults-run-root") _rootDefaultWd = scope;
-            else _jobDefaultWd = scope;
+            if (key is not ("working-directory" or "shell")) { ConsumeOpaqueValue(value, column); return; }
+            var scope = ClassifyLiteralScope(value, column);
+            if (key == "working-directory")
+            {
+                if (mapping.Role == "defaults-run-root") _rootDefaultWd = scope;
+                else _jobDefaultWds[mapping.JobId ?? "."] = scope;
+            }
+            else
+            {
+                if (mapping.Role == "defaults-run-root") _rootDefaultShell = scope;
+                else _jobDefaultShells[mapping.JobId ?? "."] = scope;
+            }
             return;
         }
         if (mapping.Role is "env-workflow" or "env-job" or "env-step")
@@ -571,14 +646,14 @@ private sealed class WorkflowParser(byte[] bytes)
         ConsumeOpaqueValue(value, column);
     }
 
-    /// A working-directory is evidence only as a literal; templated, flow, or block values
-    /// leave the directory unprovable (targets under it are not attributed).
-    private WdScope ClassifyWorkingDirectory(string value, int column)
+    /// A working-directory or shell is evidence only as a literal; templated, flow, or
+    /// block values leave the scope unprovable.
+    private ScopeValue ClassifyLiteralScope(string value, int column)
     {
-        if (IsBlockHeader(value)) { ParseBlockHeader(value); ConsumeBlock(column); return WdScope.Unknown; }
+        if (IsBlockHeader(value)) { ParseBlockHeader(value); ConsumeBlock(column); return ScopeValue.Unknown; }
         if (!value.Contains("${{", StringComparison.Ordinal) && ClassifyValue(value) is { Length: > 0 } literal)
-            return WdScope.Known(literal);
-        return WdScope.Unknown;
+            return ScopeValue.Known(literal);
+        return ScopeValue.Unknown;
     }
 
     private Dictionary<string, string> JobEnv(string? jobId)
@@ -826,6 +901,14 @@ private sealed class WorkflowParser(byte[] bytes)
 
     // ---- pack command analysis ----------------------------------------------------------------
 
+    private static bool ContainsPackCommand(RunScript script) => SplitCommands(script).Any(command =>
+    {
+        var tokens = Tokenize(command.Text);
+        return tokens.Count >= 2
+            && tokens[0].Equals("dotnet", StringComparison.OrdinalIgnoreCase)
+            && tokens[1].Equals("pack", StringComparison.OrdinalIgnoreCase);
+    });
+
     private sealed record PackOccurrence(
         string WorkflowPath, string? RawPackageId, string? RawVersion,
         string? ProjectTarget, bool TargetUnresolvable, int StartLine, int EndLine,
@@ -927,13 +1010,14 @@ private sealed class WorkflowParser(byte[] bytes)
         }
     }
 
-    /// Logical shell commands with their source line spans: line continuations joined,
-    /// then split on shell separators outside quotes and ${{ }} expressions.
+    /// Logical shell commands with their source line spans: shell comments stripped,
+    /// line continuations joined, then split on shell separators outside quotes and
+    /// ${{ }} expressions.
     private static IEnumerable<(string Text, int Start, int End)> SplitCommands(RunScript script)
     {
         if (script.Folded)
         {
-            foreach (var piece in SplitOnOperators(script.Lines[0].Text))
+            foreach (var piece in SplitOnOperators(string.Join(" ", script.Lines.Select(line => StripShellComment(line.Text)))))
                 yield return (piece, script.StartLine, script.EndLine);
             yield break;
         }
@@ -942,19 +1026,30 @@ private sealed class WorkflowParser(byte[] bytes)
         {
             var start = script.Lines[lineIndex].LineNo;
             var end = start;
-            var text = new StringBuilder(script.Lines[lineIndex].Text);
+            var text = new StringBuilder(StripShellComment(script.Lines[lineIndex].Text));
             while (EndsWithLineContinuation(text))
             {
                 text.Length -= 1;
                 lineIndex++;
                 if (lineIndex >= script.Lines.Count) break;
                 end = script.Lines[lineIndex].LineNo;
-                text.Append(' ').Append(script.Lines[lineIndex].Text.TrimStart());
+                text.Append(' ').Append(StripShellComment(script.Lines[lineIndex].Text).TrimStart());
             }
             foreach (var piece in SplitOnOperators(text.ToString()))
                 yield return (piece, start, end);
             lineIndex++;
         }
+    }
+
+    /// An unquoted '#' at a word boundary starts a shell comment that runs to end of line.
+    private static string StripShellComment(string text)
+    {
+        var cut = -1;
+        Walk(text, (index, c, previous) =>
+        {
+            if (cut < 0 && c == '#' && previous is null or ' ' or '\t') cut = index;
+        });
+        return cut < 0 ? text : text[..cut];
     }
 
     private static bool EndsWithLineContinuation(StringBuilder text)
