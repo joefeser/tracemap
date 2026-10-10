@@ -150,3 +150,13 @@ in JSON but absent from grouped HTML. The writer now displays HTML-escaped
 endpoint limitations beside each database endpoint. A new HTML assertion failed
 for all four preserved-signature controls before the change; the fix does not
 alter graph construction, terminal matching or evidence tiers.
+
+Final Windows validation of `89aa6763cb58a99d524d39c51d160f39c3589030`:
+68/68 focused cases pass with zero skips; CLI build has zero warnings/errors.
+CLI SHA-256: `cfc031c630fab11a45651114cd19bf71fe21ff637a4f478bdc70149ac0329285`.
+All six native query combinations retain the same 1/1/1 path/chain/variant
+counts, two exact DLL hops and zero framework-version candidates. The grouping
+explanation is now visible in HTML while supporting IL retains DataAdapter.Fill.
+The final preservation check covered 479 existing files, including prior outputs;
+all were unchanged. Coverage/provenance gaps remain and the private application
+is still unvalidated. No application or SQL execution was performed.
