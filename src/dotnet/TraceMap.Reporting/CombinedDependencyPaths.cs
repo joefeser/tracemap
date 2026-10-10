@@ -411,6 +411,7 @@ public static partial class CombinedDependencyPathReporter
         "projectless-publish-member-candidate",
         "compiled-il-call",
         "compiled-il-callvirt-candidate",
+        FrameworkVersionCandidateEdge,
         "projectless-vb-receiver-bridge",
         "projectless-vb-constructor-bridge",
         "interface-candidate",
@@ -4196,7 +4197,7 @@ public static partial class CombinedDependencyPathReporter
     }
 
     internal static bool CompiledBaselineAllowsEdge(string kind, bool enteredCompiled)
-        => kind is "compiled-il-call" or "compiled-il-callvirt-candidate" or "compiled-database-api-candidate"
+        => kind is "compiled-il-call" or "compiled-il-callvirt-candidate" or FrameworkVersionCandidateEdge or "compiled-database-api-candidate"
             || (!enteredCompiled && kind is "legacy-root-selection" or "compiled-source-identity"
                 or "projectless-source-pdb-identity" or "projectless-publish-member-candidate"
                 or "projectless-publish-method-candidate");
@@ -5251,6 +5252,11 @@ public static partial class CombinedDependencyPathReporter
         if (edges.Any(edge => edge.EdgeKind is "calls" or "creates" or "inherits" or "implements" or "overrides"))
         {
             notes.Add(new CombinedPathNote("StaticCodeEvidence", "Code relationship hops do not prove dynamic dispatch, runtime DI, reflection, branch feasibility, collection contents, or serializer behavior."));
+        }
+
+        if (edges.Any(edge => edge.EdgeKind == FrameworkVersionCandidateEdge))
+        {
+            notes.Add(new CombinedPathNote("FrameworkSignatureCandidate", "This route includes a unique embedded desktop framework-version signature candidate. Declaring assembly identity remains exact, but runtime binding and compatibility are unproven; argument and return-value propagation cannot cross this candidate."));
         }
 
         if (edges.Any(edge => edge.EdgeKind is "compiled-source-identity" or "projectless-source-pdb-identity" or "compiled-il-call" or "compiled-il-callvirt-candidate"))
@@ -6599,7 +6605,7 @@ public static partial class CombinedDependencyPathReporter
             // can enumerate exponentially many bridge variants without ever
             // reaching its already-admitted IL terminal. This changes scheduling,
             // not admission, evidence tiers, or the global work/path limits.
-            "compiled-il-call" or "compiled-il-callvirt-candidate"
+            "compiled-il-call" or "compiled-il-callvirt-candidate" or FrameworkVersionCandidateEdge
                 or "compiled-database-api-candidate" or "compiled-source-identity"
                 or "projectless-source-pdb-identity" or "projectless-publish-member-candidate"
                 or "projectless-publish-method-candidate" => 0,

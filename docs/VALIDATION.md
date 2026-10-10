@@ -1,5 +1,11 @@
 # TraceMap Validation Guide
 
+For mixed desktop framework signature joins, run `FrameworkSignatureCandidateTests`
+and `scripts/tests/Test-WebFormsGraphShare.ps1`. See the
+[candidate matrix](validation/framework-signature-candidates.md) for exact-match
+priority, identity refusals, ambiguity, provenance, dispatch and value-flow gaps.
+Synthetic PE coverage does not replace authentic Windows ASP.NET publishing.
+
 For generated compilation snapshot changes (PR #847), run ScanEngineTests and
 CliTests in Debug with warnings as errors. Exact generated compilation inputs
 receive a post-generation digest (4,096 files / 64 MiB maximum), are included in

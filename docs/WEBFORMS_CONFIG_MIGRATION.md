@@ -304,14 +304,20 @@ For the separate compiled call-tree baseline:
 Enter `verify-5\recovered-reports`. Output goes to a new
 `verify-5\handler-requery-compiled-fill` folder. The query allows root selection
 and one existing evidenced source-to-compiled attachment, then only
-`compiled-il-call`, `compiled-il-callvirt-candidate` and
+`compiled-il-call`, `compiled-il-callvirt-candidate`,
+`compiled-il-framework-version-candidate` and
 `compiled-database-api-candidate` edges. Source calls, receiver/constructor
 bridges and compiled-to-source return hops are excluded during traversal, not
 filtered from an already capped mixed result. All global admission competitors
 remain available; no symbol is guessed to compensate for a missing attachment.
 The root attachment keeps its original tier and can be a publish candidate;
 this is not an authenticated-build or source-line identity claim. Callvirt still
-does not prove runtime dispatch. Missing paths under this scope are gaps, not
+does not prove runtime dispatch. A framework-version candidate retains exact
+declaring assembly identity but tolerates only the documented embedded desktop
+framework 2.0/4.0 signature scopes. It remains Tier3 with an explicit binding gap;
+command argument/return propagation cannot cross it. See the
+[candidate matrix](validation/framework-signature-candidates.md).
+Missing paths under this scope are gaps, not
 proof that backend behavior is absent. The hashed query records
 `traversalScope=compiled-il-with-root-attachment`. Historical queries omit this
 optional field. Defaults and the mixed query below remain unchanged.

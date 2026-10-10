@@ -58,7 +58,7 @@ public static partial class CombinedDependencyPathReporter
             if (!TryFrameworkDatabaseApi(call.Properties.GetValueOrDefault("targetIdentity")!, out _))
                 reachableUnrecognizedFill++;
         }
-        foreach (var gap in graph.Gaps.Where(gap => gap.GapKind is "CompiledIlTargetUnavailable" or "CompiledIlTargetAmbiguous"))
+        foreach (var gap in graph.Gaps.Where(gap => gap.GapKind is "CompiledIlTargetUnavailable" or "CompiledIlTargetAmbiguous" or "CompiledIlFrameworkVersionAmbiguous"))
         {
             if (gap.CombinedFactId is null
                 || !factsByCombinedId.TryGetValue(gap.CombinedFactId, out var call)
@@ -122,6 +122,11 @@ public static partial class CombinedDependencyPathReporter
             .Select(value => "memberref|type:scope(" + value + ")type(")
             .Distinct(StringComparer.Ordinal)
             .ToArray();
+        var frameworkCandidates = methodsByMemberReference
+            .Select(pair => (Key: FrameworkSignatureCandidateKey(pair.Key), Methods: pair.Value))
+            .Where(pair => pair.Key is not null)
+            .GroupBy(pair => pair.Key!, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.SelectMany(pair => pair.Methods).ToArray(), StringComparer.Ordinal);
         var unboundReferencePrefixes = methods
             .Where(fact => fact.Properties.GetValueOrDefault("provenanceState") != "bound")
             .Select(fact => fact.Properties.GetValueOrDefault("assemblyReferenceIdentity"))
@@ -212,10 +217,26 @@ public static partial class CombinedDependencyPathReporter
             var matched = referenceKind == "methoddef"
                 ? methodsByIdentity.TryGetValue((call.SourceIndexId, targetIdentity), out var targets)
                 : methodsByMemberReference.TryGetValue(targetIdentity, out targets);
+            var frameworkCandidate = false;
+            if (!matched && referenceKind == "memberref")
+            {
+                var key = FrameworkSignatureCandidateKey(targetIdentity);
+                if (key is not null && frameworkCandidates.TryGetValue(key, out var candidates))
+                {
+                    if (candidates.Length != 1)
+                    {
+                        AddCompiledIlGap(graph, call, "CompiledIlFrameworkVersionAmbiguous",
+                            "multiple-framework-signature-candidates", candidates.Length, FrameworkVersionCandidateRuleId);
+                        continue;
+                    }
+                    targets = candidates;
+                    matched = frameworkCandidate = true;
+                }
+            }
             if (!matched
                 || targets is not { Length: 1 })
             {
-                if (referenceKind == "methoddef"
+                if (targets is { Length: > 1 } || referenceKind == "methoddef"
                     || admittedReferencePrefixes.Any(prefix => targetIdentity.StartsWith(prefix, StringComparison.Ordinal)))
                 {
                     AddCompiledIlGap(graph, call,
@@ -243,14 +264,22 @@ public static partial class CombinedDependencyPathReporter
             var artifactContext = caller.Properties.GetValueOrDefault("provenanceState") != "bound"
                 || targetProvenance != "bound";
             graph.AddEdge(new GraphEdge(
-                $"compiled-il-call:{call.CombinedFactId}", virtualCandidate ? "compiled-il-callvirt-candidate" : "compiled-il-call",
-                from.NodeId, to.NodeId, "EvidenceEdge", CompiledIlBridgeRuleId,
-                artifactContext || virtualCandidate ? EvidenceTiers.Tier3SyntaxOrTextual : EvidenceTiers.Tier2Structural,
+                $"compiled-il-call:{call.CombinedFactId}", frameworkCandidate ? FrameworkVersionCandidateEdge : virtualCandidate ? "compiled-il-callvirt-candidate" : "compiled-il-call",
+                from.NodeId, to.NodeId, "EvidenceEdge", frameworkCandidate ? FrameworkVersionCandidateRuleId : CompiledIlBridgeRuleId,
+                frameworkCandidate || artifactContext || virtualCandidate ? EvidenceTiers.Tier3SyntaxOrTextual : EvidenceTiers.Tier2Structural,
                 [call.CombinedFactId, body.CombinedFactId, caller.CombinedFactId, target.CombinedFactId],
                 [], SafePath(call.FilePath), call.StartLine, call.EndLine));
             if (artifactContext)
                 AddCompiledIlGap(graph, call, "CompiledIlArtifactContext",
-                    "exact-il-target-present-without-source-commit-binding", 1);
+                    frameworkCandidate ? "framework-signature-candidate-without-source-commit-binding" : "exact-il-target-present-without-source-commit-binding", 1);
+            if (frameworkCandidate)
+            {
+                AddCompiledIlGap(graph, call, "CompiledIlFrameworkVersionCandidate",
+                    "embedded-framework-version-difference-runtime-binding-unproven", 1, FrameworkVersionCandidateRuleId);
+                if (virtualCandidate)
+                    AddCompiledIlGap(graph, call, "CompiledIlVirtualDispatchUnproven",
+                        "framework-version-candidate-virtual-dispatch-unproven", 1, FrameworkVersionCandidateRuleId);
+            }
         }
     }
 
@@ -1044,7 +1073,14 @@ public static partial class CombinedDependencyPathReporter
         graph.Gaps.Add(new CombinedPathGap(
             $"gap:compiled-il:{fact.CombinedFactId}:{gapKind}", gapKind,
             CombinedDependencyPathClassifications.UnknownAnalysisGap,
-            "Bound compiled evidence could not be joined to one path-graph target; no edge was inferred.",
+            gapKind switch
+            {
+                "CompiledIlFrameworkVersionCandidate" => "A unique embedded framework-version signature candidate was retained; runtime binding is unproven.",
+                "CompiledIlFrameworkVersionAmbiguous" => "Multiple embedded framework-version signature candidates remain; no target edge was inferred.",
+                "CompiledIlVirtualDispatchUnproven" => "A framework-version target candidate was retained, but virtual dispatch is unproven.",
+                "CompiledIlArtifactContext" when reason.StartsWith("framework-signature-", StringComparison.Ordinal) => "The retained framework-version candidate lacks source-commit binding; compiled provenance was not upgraded.",
+                _ => "Bound compiled evidence could not be joined to one path-graph target; no edge was inferred."
+            },
             fact.SourceIndexId, fact.SourceLabel, null, fact.CombinedFactId,
             ruleId, EvidenceTiers.Tier4Unknown,
             SafePath(fact.FilePath), fact.StartLine, reason,

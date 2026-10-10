@@ -71,12 +71,14 @@ try {
         return 'other-or-unavailable'
     }
     $tiers = @('Tier1Semantic','Tier2Structural','Tier3SyntaxOrTextual','Tier4Unknown')
-    $kinds = @('calls','creates','compiled-il-call','compiled-il-callvirt-candidate','compiled-source-identity',
+    $kinds = @('calls','creates','compiled-il-call','compiled-il-callvirt-candidate','compiled-il-framework-version-candidate','compiled-source-identity',
         'compiled-database-api-candidate','symbol-reconciliation','projectless-publish-member-candidate',
         'projectless-publish-method-candidate')
     $reasons = @('same-assembly-methoddef-target-not-unique','admitted-memberref-target-not-unique',
         'target-assembly-present-without-bound-provenance','exact-il-target-present-without-source-commit-binding',
-        'command-binding-join-invalid-or-ambiguous')
+        'command-binding-join-invalid-or-ambiguous','multiple-framework-signature-candidates',
+        'embedded-framework-version-difference-runtime-binding-unproven',
+        'framework-signature-candidate-without-source-commit-binding','framework-version-candidate-virtual-dispatch-unproven')
     function TargetShape([string]$Target) {
         # Derived categories only: never copy a matched identifier or signature fragment.
         $member = 'method-or-unknown'
@@ -170,7 +172,8 @@ try {
         'IlCommandReturnCallerMismatch','IlCommandReturnCallerUnavailable','IlCommandReturnEdgeLimit',
         'IlCommandReturnEvidenceMalformed','IlCommandReturnEvidenceUnavailable','IlCommandReturnOriginUnknown',
         'IlCommandReturnTargetUnavailable','IlCommandReturnValueUnresolved','IlCommandReturnValuesDisagree',
-        'IlCommandReturnArgumentUnavailable','IlCommandReturnFrameLimit')
+        'IlCommandReturnArgumentUnavailable','IlCommandReturnFrameLimit',
+        'IlCommandFrameworkVersionBindingUnproven','IlCommandReturnFrameworkVersionBindingUnproven')
     function Project-OperandChecks($value) {
         if (!$value.PSObject.Properties['operandCheckFailures']) { return }
         $allowed = @('operand-rule','operand-tier','operand-schema','operand-state','call-shape',
@@ -197,7 +200,7 @@ try {
     function Project-Value($b, [int]$depth) {
         if ($depth -gt 4) { return [ordered]@{state='limit';gaps=@('IlCommandExpressionLimit')} }
         [ordered]@{
-            state=(Code $b.state @('method-local-constant','constant-on-encoded-call-path','unresolved-operand','unresolved-root-argument','unresolved-non-il-bridge','unresolved-call-evidence','unresolved-slot','limit','symbolic-string-composition','symbolic-argument-alternatives','symbolic-method-return'));
+            state=(Code $b.state @('method-local-constant','constant-on-encoded-call-path','unresolved-operand','unresolved-root-argument','unresolved-non-il-bridge','unresolved-framework-version-bridge','unresolved-call-evidence','unresolved-slot','limit','symbolic-string-composition','symbolic-argument-alternatives','symbolic-method-return'));
             symbolicInput=(Project-SymbolicInput $b);
             originKind=(Code $b.origin.kind @('call-result','argument-slot','argument-alternatives','constant-string-hash','constant-int32','unknown','null'));
             originBody=(Alias 'F' $b.originBodyFactId);
@@ -229,7 +232,7 @@ try {
             return
         }
         [ordered]@{endpoint=(Alias 'N' $trace.endpointNodeId);path=@($trace.pathNodeIds | ForEach-Object { Alias 'N' $_ });
-            state=(Code $value.state @('unresolved-operand','unresolved-root-argument','unresolved-non-il-bridge','unresolved-call-evidence','unresolved-slot','limit','method-local-constant','constant-on-encoded-call-path','symbolic-string-composition','symbolic-argument-alternatives','symbolic-method-return'));
+            state=(Code $value.state @('unresolved-operand','unresolved-root-argument','unresolved-non-il-bridge','unresolved-framework-version-bridge','unresolved-call-evidence','unresolved-slot','limit','method-local-constant','constant-on-encoded-call-path','symbolic-string-composition','symbolic-argument-alternatives','symbolic-method-return'));
             symbolicInput=(Project-SymbolicInput $value);
             originKind=(Code $value.origin.kind @('call-result','argument-slot','argument-alternatives','constant-string-hash','constant-int32','unknown','null','allocation-site'));
             originBody=(Alias 'F' $value.originBodyFactId);rule=(Alias 'R' $value.ruleId);
