@@ -13,6 +13,10 @@ public sealed record WebFormsHandlerRequeryReceipt(string SchemaVersion, string 
     public CombinedPathGraphObservation? GraphObservation { get; init; }
     [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
     public string? CompletedReportSha256 { get; init; }
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public string? PrimaryReport { get; init; }
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public bool? PathEnumerationPerformed { get; init; }
 }
 
 public static partial class WebFormsReviewExecutionCommand
@@ -149,7 +153,9 @@ public static partial class WebFormsReviewExecutionCommand
             failureStage = "report-projection";
             var grouped = GroupedCompiledPathHandoffBuilder.Create(paths, index.Sha256, limits, token);
             await output.WriteLineAsync("handlerStage=reports-started;no-scan;no-combine");
-            await GroupedCompiledPathReportWriter.WriteAsync(grouped, destination, limits, token);
+            // A graph-only query deliberately skips path enumeration. Never publish
+            // its empty Paths collection as a normal-looking zero-chain report.
+            if (!methodGraph) await GroupedCompiledPathReportWriter.WriteAsync(grouped, destination, limits, token);
             if (methodGraph)
             {
                 if (graphView is null) throw Fail("HANDLER_REQUERY_GRAPH_UNAVAILABLE");
@@ -166,8 +172,9 @@ public static partial class WebFormsReviewExecutionCommand
                 throw Fail("HANDLER_REQUERY_COMPLETED_REPORT_CHANGED");
             var generator = await WebFormsReviewPreflightCommand.HashAsync("generator", typeof(WebFormsReviewExecutionCommand).Assembly.Location, 67_108_864, token);
             var artifacts = new List<WebFormsReviewArtifact>();
-            foreach (var name in new[] { GroupedCompiledPathReportWriter.HtmlName, GroupedCompiledPathReportWriter.HandoffName }
-                         .Concat(methodGraph ? new[] { RetainedMethodGraphWriter.HtmlName, RetainedMethodGraphWriter.JsonName } : []))
+            foreach (var name in methodGraph
+                         ? new[] { RetainedMethodGraphWriter.HtmlName, RetainedMethodGraphWriter.JsonName }
+                         : new[] { GroupedCompiledPathReportWriter.HtmlName, GroupedCompiledPathReportWriter.HandoffName })
             {
                 var artifact = await WebFormsReviewPreflightCommand.HashAsync("report", Path.Combine(destination, name), budget.MaxOutputBytes, token);
                 artifacts.Add(new(name, artifact.Bytes, artifact.Sha256));
@@ -182,11 +189,14 @@ public static partial class WebFormsReviewExecutionCommand
                  "Independent single-handler path/work bounds are not complete coverage, historical parity, runtime SQL or authenticated-build proof.",
                  "Original checkpoints and report bundle remain unchanged. All identities and paths are private.",
                  "Graph observations count logical scratch fact payload reads and stage wall time, not physical disk I/O or runtime calls."])
-                { GraphObservation = observation, CompletedReportSha256 = completedReportSha };
+                { GraphObservation = observation, CompletedReportSha256 = completedReportSha,
+                    PrimaryReport = methodGraph ? RetainedMethodGraphWriter.HtmlName : GroupedCompiledPathReportWriter.HtmlName,
+                    PathEnumerationPerformed = !methodGraph };
             receipt = receipt with { BoundedInputSha256 = HandlerRequeryHash(receipt) };
             failureStage = "receipt";
             await File.WriteAllTextAsync(Path.Combine(destination, HandlerRequeryName), JsonSerializer.Serialize(receipt, JsonOptions), token);
             await output.WriteLineAsync($"handlerRequery.selectorCandidates={paths.Summary.SelectorCandidateCount}");
+            await output.WriteLineAsync($"handlerRequery.primaryReport={receipt.PrimaryReport};pathEnumerationPerformed={(!methodGraph).ToString().ToLowerInvariant()}");
             var safeGaps = paths.Gaps.Select(gap => (gap.GapKind, gap.Reason)).Distinct().Take(20).ToArray();
             static string SafeCode(string? value) => value is { Length: > 0 and <= 96 } &&
                 value.All(c => char.IsAsciiLetterOrDigit(c) || c is '_' or '-' or '.') ? value : "none-or-redacted";

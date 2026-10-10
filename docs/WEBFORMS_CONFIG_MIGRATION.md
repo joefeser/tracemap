@@ -1106,3 +1106,12 @@ separately from connection/evidence gaps. Expression display is bounded to 32
 nodes and depth four per value; the lossless handoff remains authoritative when
 display is limited. Constants are not expanded into SQL text or inferred table
 or procedure names, and static routes do not establish runtime execution.
+
+Graph-only handler requeries no longer write `compiled-paths.local.html` or its
+handoff. Those files previously represented an unexecuted path query as zero
+chains and could be mistaken for a normal report. The receipt now binds
+`primaryReport` and `pathEnumerationPerformed`; graph-only counts are not terminal
+path results. Use the exact `Handler report:` path printed by `wrequery.ps1`.
+Existing files are preserved, so old graph-only directories may still contain
+the misleading companion file. Normal zero-result reports explicitly warn that
+absence of retained routes is not evidence of no database dependencies.

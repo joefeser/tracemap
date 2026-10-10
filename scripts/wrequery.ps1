@@ -80,7 +80,8 @@ $bundle = [IO.Path]::GetDirectoryName([string]$status.workbenchPath)
 if ($InspectLatest) {
     $reports = @(Get-ChildItem -LiteralPath $Root -Directory | Where-Object {
         $_.Name -cmatch ('\Ahandler-requery-' + [regex]::Escape($Project) + '-[a-f0-9]{32}\z') -and
-        (Test-Path -LiteralPath (Join-Path $_.FullName 'handler-requery.local.json') -PathType Leaf)
+        (Test-Path -LiteralPath (Join-Path $_.FullName 'handler-requery.local.json') -PathType Leaf) -and
+        (Test-Path -LiteralPath (Join-Path $_.FullName 'compiled-paths.handoff.local.json') -PathType Leaf)
     } | Select-Object -First 129)
     if ($reports.Count -gt 128) { throw 'WEBFORMS_HANDLER_REPORT_SELECTION_LIMIT' }
     if ($reports.Count -eq 0) { throw 'WEBFORMS_HANDLER_REPORT_NOT_FOUND' }
@@ -97,5 +98,7 @@ if ($LASTEXITCODE -ne 0) { throw 'WEBFORMS_HANDLER_REQUERY_FAILED;originals-pres
 $report = Join-Path $destination 'compiled-paths.local.html'
 if ($MethodGraph) { $report = Join-Path $destination 'method-graph.local.html' }
 Write-Output "Handler report: $report"
+if ($MethodGraph) { Write-Output 'View: method graph only. Terminal path enumeration was not run; no compiled-paths report was generated.' }
+else { Write-Output 'View: database terminal paths. Open the exact Handler report path above, not a report from an earlier graph-only folder.' }
 if (!$MethodGraph) { Write-WebFormsTruncationSummary $destination }
 if ($Open) { Invoke-Item -LiteralPath $report }
