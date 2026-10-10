@@ -62,6 +62,36 @@ one Windows-only skip (19m37s). Smoke:
 emits exactly one ci-workflow PackageProduced fact (Contoso.Sample 0.1.0) at
 Level1SemanticAnalysis with no gaps.
 
+## Baz review cycle 1 (PR #851, head `65cbbbd5`)
+
+Baz returned five inline findings; dispositions:
+
+1. TOCTOU symlink swap between the attribute check and the open — fixed: the
+   opened path's link state is re-verified (`File.ResolveLinkTarget`) before
+   parsing; an unprovable path becomes a `ci-workflow-linked-path` gap.
+2. `working-directory` misattribution — fixed: workflow/job `defaults.run`
+   and step `working-directory` are tracked (literal-only, workspace-relative,
+   step over job over workflow). Relative pack targets resolve from the
+   effective directory; a templated directory leaves relative targets
+   unattributed (projectPath omitted, project-fallback ids gap as
+   `ci-producer-id-unevidenced`). Solution targets never ride projectPath.
+3. env declared after jobs/steps lost versions — fixed: env maps are
+   per-scope collections resolved after the whole document parses
+   (declaration order no longer matters; step > job > workflow preserved).
+4. malformed UTF-8 silently replacement-decoded — fixed: strict UTF-8
+   decode; malformed bytes are a `ci-workflow-invalid` gap with no rows.
+5. literal flag ids "bypass" target attribution — not adopted: per the
+   pinned SPEC-020 §2b contract, a literal `-p:PackageId` (+ version) is
+   complete ci-defined identity evidence on its own; the project target is
+   attribution metadata that is omitted when absent, never a reason to
+   downgrade the fact to a gap. Pinned by
+   `Literal_flag_identity_is_complete_evidence_without_a_target` and
+   documented in the rule catalog; thread answered with this rationale.
+
+Focused suite after fixes: 28/28 pass.
+
 Follow-ups for later slices: msbuild `/t:Pack` invocations, composite action
 pack steps, partial env substitution, and other CI vendors — each needs its
 own typed-gap-first design before facts.
+
+
