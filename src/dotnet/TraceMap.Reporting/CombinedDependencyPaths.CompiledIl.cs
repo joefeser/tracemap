@@ -292,7 +292,12 @@ public static partial class CombinedDependencyPathReporter
         if (memberStart < 0)
             return false;
         var declaringType = targetIdentity[..memberStart];
-        if (HasType("System.Data.Common", "DbDataAdapter") && HasMember("Fill"))
+        // Preserve the historical Fill-family selector used by -FillOnly.
+        // Native compilers may encode the inherited member on DataAdapter;
+        // the retained call fact still carries that exact declaring identity.
+        var baseAdapter = HasType("System.Data.Common", "DataAdapter")
+            && declaringType.Contains("|culture:7:neutral|publicKeyToken:16:b77a5c561934e089)", StringComparison.Ordinal);
+        if ((HasType("System.Data.Common", "DbDataAdapter") || baseAdapter) && HasMember("Fill"))
         {
             api = "DbDataAdapter.Fill";
             return true;
@@ -357,7 +362,9 @@ public static partial class CombinedDependencyPathReporter
             ConfigKey: null,
             SurfaceSubtype: api == "DbDataAdapter.Fill"
                 ? "compiled-data-adapter-fill-candidate" : "compiled-command-execute-candidate",
-            Limitations: binding is null
+            Limitations: api == "DbDataAdapter.Fill"
+                ? ["The historical DbDataAdapter.Fill surface groups encoded Fill calls declared on DbDataAdapter or DataAdapter. Original declaring identities remain in supporting IL call facts. This is a static API candidate, not provider dispatch, SQL execution, or a source-line identity claim."]
+                : binding is null
                 ? ["Static IL call to a framework database API; no SQL text, database provider dispatch, source line, or runtime execution is established."]
                 : ["Static straight-line command configuration candidate; command strings are hashed or unresolved operand origins, not a resolved SQL statement/procedure. No parameter propagation, runtime dispatch or SQL execution is established."],
             CommandBinding: binding);

@@ -84,3 +84,35 @@ script tests pass; the wizard script parses without errors. The CLI build has
 zero warnings/errors and the modern-sample CLI smoke writes all required outputs
 with 27 facts and Level1SemanticAnalysis. Full repository and authentic Windows
 publishing results are not claimed by these targeted runs.
+
+## Native validation feedback and inherited Fill control
+
+The owner-reported Windows run of `473cc541` built native CLR4 website/App_Code
+and a CLR2 provider, but C# and VB callers preserved the provider's embedded 2.0
+signature. Both DLL hops were exact: that run did **not** reproduce the version
+candidate mismatch. Its zero routes were instead traced to an encoded
+`System.Data.Common.DataAdapter.Fill` call missing from the reporting terminal
+matcher. This is a distinct defect; it must not be explained as version binding.
+
+Seven additional synthetic cases pin base-class Fill under 2.0 and 4.0, a CLR4
+caller preserving a CLR2 provider signature with no candidate edge, and wrong
+namespace/assembly/token/culture refusals. Before the terminal fix all three positive cases
+produce zero routes and the initial namespace/assembly refusals pass. The command extractor already
+recognized DataAdapter; the fix aligns reporting with that retained evidence.
+
+The existing `DbDataAdapter.Fill` surface is a historical Fill-family selector,
+now including the authentic base-class encoding. Original call facts and retained
+graph calls keep `DataAdapter` unchanged; the surface limitation explains this
+grouping. Both mixed and compiled-only queries and the existing Fill-only
+selector are tested. API reference:
+[Microsoft DataAdapter.Fill documentation](https://learn.microsoft.com/en-us/dotnet/api/system.data.common.dataadapter.fill?view=netframework-4.8.1).
+
+The Windows fixtures should be re-queried with the new binary without rebuilding
+them, changing their emitted signatures, or introducing an expected candidate.
+The original private case remains unavailable and unverified by that native run.
+
+Follow-up local validation: all 183 selected tests pass with no skips and warnings
+treated as errors, including all 63 framework/boundary cases plus
+CombinedDependencyPathTests, GroupedCompiledPathHandoffTests and
+CompiledBaselinePrewalkTests. See the
+[Windows unchanged-fixture requery prompt](../WINDOWS_BASE_FILL_REQUERY_PROMPT.md).
