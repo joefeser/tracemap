@@ -1,5 +1,21 @@
 # Claude prompt: validate the existing fix locally
 
+## Latest continuation: close the original case
+
+The owner reports that the new build passed 85 focused tests and three script checks, and a private normal requery for a different handler retained 101 chains and 211 variants. This is useful evidence, but does not establish acceptance for the original failing handler. Do not repeat those completed checks without a reason.
+
+Use the already-built fix and the original handler/review-root selection retained in this local session or its existing configuration. The owner cannot copy prompts or diagnostic material between machines. Perform the local work yourself; do not ask for more screenshots or individual alias lookups.
+
+1. Run **normal requery for the original failing dropdown-initialization handler**, not the different history-loading handler used in the successful validation, and not graph-only mode. Recover the exact original handler and review-root identities from local command history/configuration/evidence; do not guess them. Verify supported script options before executing.
+2. Confirm the receipt binds the new generator, the intended root/index, and `pathEnumerationPerformed=true`. Inspect the actual handler-to-database chains, variant counts, and output path. Do not run a full-site scan or full test suite before this focused acceptance check.
+3. If the original case succeeds, report the concrete retained route and counts, with remaining evidence limitations. Preserve the committed fix. Since pushing is unavailable here, export a Git patch of the fix and tests locally, excluding private artifacts, and report its location for later integration. Do not claim the remote contains this fix.
+4. If the original case still fails, identify the first missing/rejected connection using the local source and retained evidence. Then create a portable sanitized reproduction of the relevant page and dependent files as one coherent bundle, rather than another sliced graph export. Use one consistent private mapping across identifiers and references. Preserve signatures, overloads, inheritance, getters, control flow, string-expression shape, and the publication relationships involved in the failure. Remove secrets; do not merely rename them. Keep the mapping and originals private, outside the shareable bundle.
+5. For the sanitized build, generate fresh assemblies, hashes, and receipts. Do not reuse original receipts after transforming their inputs. Include one build command, one reproduction command, and an assertion identifying the same missing connection. Validate locally that the package reproduces the original failure, rather than an unrelated missing-dependency or zero-path result. If it does not reproduce, adjust it locally before asking the owner to transfer anything. Mark the bundle as synthetic and satisfy repository provenance requirements for derived machine-readable artifacts.
+
+The immediate completion target is the **original handler working on the new build**. The sanitized reproduction remains the requested portable regression work and becomes the immediate diagnostic fallback if that check fails; it must not delay the focused acceptance check. Record completed work and exact remaining steps so compaction does not restart the investigation.
+
+The instructions below retain the safety and validation requirements. Where they refer to tests already completed against this exact build, use that evidence rather than rerunning them automatically.
+
 Continue in the existing Windows checkout. Read `AGENTS.md` and inspect current HEAD and working-tree changes. Preserve the committed publication-member bridge fix and its tests. Do not restart diagnosis or discard existing work.
 
 You do not need to push. The owner can test this checkout directly. This prompt supersedes the push requirement in the earlier continuation prompt.
