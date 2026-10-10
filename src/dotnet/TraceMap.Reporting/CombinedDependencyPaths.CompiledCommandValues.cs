@@ -12,6 +12,7 @@ public static partial class CombinedDependencyPathReporter
     private const int MaxCompiledCommandCallArguments = 128;
     private const int MaxCommandExpressionDepth = 4;
     private const int MaxCommandExpressionNodes = 32;
+    private const int MaxCommandReturnFrames = 16;
 
     private static void ProjectCompiledCommandValues(EvidenceGraph graph, CombinedPathNode[] nodes, CombinedPathEdge[] edges)
     {
@@ -30,7 +31,8 @@ public static partial class CombinedDependencyPathReporter
             nodes[index] = nodes[index] with { CommandBinding = binding with { CommandTextFromPath = text, CommandTypeFromPath = type } };
 
             CompiledCommandPathValueBinding Resolve(CompiledCommandOperandOrigin initial, string constantKind,
-                string? initialScope = null, string? initialMethod = null, int? initialIncoming = null, bool allowComposition = true, int depth = 0)
+                string? initialScope = null, string? initialMethod = null, int? initialIncoming = null, bool allowComposition = true, int depth = 0,
+                CommandReturnFrame? initialFrame = null)
             {
                 var current = initial;
                 var scope = initialScope ?? binding.IlBodyFactId;
@@ -45,6 +47,7 @@ public static partial class CombinedDependencyPathReporter
                 var returns = new CommandReturnResolver(graph, materials, gaps, returnSteps, constantKind, allowComposition);
                 var state = "unresolved-operand";
                 var incoming = initialIncoming ?? index - 2;
+                var frame = initialFrame;
                 CompiledCommandPathValueBinding[] Expand(IEnumerable<CompiledCommandOperandOrigin> origins)
                 {
                     var expanded = new List<CompiledCommandPathValueBinding>();
@@ -52,7 +55,7 @@ public static partial class CombinedDependencyPathReporter
                     {
                         if (expressionNodes >= MaxCommandExpressionNodes)
                         { gaps.Add("IlCommandExpressionLimit"); break; }
-                        expanded.Add(Resolve(origin, constantKind, scope, methodId, incoming, true, depth + 1));
+                        expanded.Add(Resolve(origin, constantKind, scope, methodId, incoming, true, depth + 1, frame));
                     }
                     return expanded.ToArray();
                 }
@@ -65,8 +68,26 @@ public static partial class CombinedDependencyPathReporter
                     { gaps.Add("IlCommandCallerHopLimit"); state = "limit"; break; }
                     if (current.Kind == "call-result")
                     {
-                        if (!returns.Resolve(current, scope, methodId, out var returned, out var returnScope, out var returnMethod)) break;
+                        var admitted = returns.Resolve(current, scope, methodId, out var returned, out var returnScope, out var returnMethod);
                         current = returned; scope = returnScope; methodId = returnMethod;
+                        if (!admitted) break;
+                        if (returns.AdmittedFrame is { } nextFrame)
+                        {
+                            var frameCount = 0;
+                            for (var prior = frame; prior is not null; prior = prior.Parent) frameCount++;
+                            if (frameCount >= MaxCommandReturnFrames)
+                            { gaps.Add("IlCommandReturnFrameLimit"); state = "limit"; limited = true; break; }
+                            frame = nextFrame with { Parent = frame };
+                        }
+                        continue;
+                    }
+                    if (frame is not null && frame.Body == scope && frame.Method == methodId)
+                    {
+                        if (!int.TryParse(current.Identity, NumberStyles.None, CultureInfo.InvariantCulture, out var returnSlot)
+                            || returnSlot < 0 || returnSlot - (frame.HasThis ? 1 : 0) >= frame.Arguments.Length)
+                        { gaps.Add("IlCommandReturnArgumentUnavailable"); state = "unresolved-slot"; break; }
+                        current = frame.HasThis && returnSlot == 0 ? frame.Receiver! : frame.Arguments[returnSlot - (frame.HasThis ? 1 : 0)];
+                        scope = frame.CallerBody; methodId = frame.CallerMethod; frame = frame.Parent;
                         continue;
                     }
                     if (incoming < 0 || methodId is null)
@@ -121,7 +142,8 @@ public static partial class CombinedDependencyPathReporter
                     MaxReturnSites = 256, MaxProducerEdges = MaxCommandProducerEdges,
                     ExpectedConstantKind = constantKind, InitialScope = initialScope, InitialMethod = initialMethod,
                     InitialIncoming = initialIncoming, AllowComposition = allowComposition,
-                    MaxCommandExpressionDepth, MaxCommandExpressionNodes, Depth = depth, expressionNodesAtEntry,
+                    MaxCommandExpressionDepth, MaxCommandExpressionNodes, MaxCommandReturnFrames,
+                    Depth = depth, expressionNodesAtEntry, InitialFrame = initialFrame,
                     Alternatives = alternatives, OperandBindings = composition?.OperandBindings, Inputs = materials
                 });
                 return new("compiled-command-path-value.v1", CompiledCommandValueRuleId, EvidenceTiers.Tier3SyntaxOrTextual,

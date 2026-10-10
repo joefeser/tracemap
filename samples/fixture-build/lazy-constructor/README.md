@@ -114,15 +114,21 @@ not a claim about production execution or an exploitable trust boundary.
   across the DLL boundary, including nested field initialization and logging.
 - Same-name unrelated declarations are not joined.
 - The logging endpoint retains command type Text (`1`), one caller substitution,
-  a `call-result` origin, `unresolved-operand`, and explicit operand/virtual
-  dispatch gaps. A literal supplied to the same ExecuteText method resolves.
+  a returned symbolic Concat, and an explicit unresolved operand for the external
+  Replace call, plus the virtual-dispatch gap. A literal supplied to the same
+  ExecuteText method resolves.
 - The identical literal returned by `LiteralText` resolves through separately
   retained producer-return evidence, including a returned-argument wrapper.
   The regression checks its actual compiled instruction shape and literal
   equality, distinguishing constant return-value tracing from `BuildText`'s
-  runtime string composition, which remains unresolved. Missing, ambiguous,
+  runtime string composition, which remains symbolic rather than materialized. Missing, ambiguous,
   malformed or changed return facts, conflicting values, recursive producers
   and virtual return targets must remain explicit gaps.
+- The getter batch covers two-getter literal and field-backed chains, returned
+  argument wrappers, nested Concat, branch alternatives and a 16-frame limit.
+  A separate cross-DLL handler feeds two getters through conditional argument
+  normalization, Using/finally and the SQL wrapper. Field-backed instance/static
+  returns stay unknown with the exact stopping method; no heap value is guessed.
 - An independent business lookup reaches Fill with method-local constant text.
   Filtering to Fill excludes the ExecuteScalar routes; a zero unresolved count
   in that subset is not resolution of the logging command text.

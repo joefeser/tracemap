@@ -1062,3 +1062,18 @@ The wrapper builds and scans into a fresh run, queries its method graph, then
 creates the shared export and separate private alias map. It stops on a failed
 stage and never uploads anything, runs tests, or substitutes an older graph.
 For multi-project roots add `-Project <id>`. Share only the generated shared JSON.
+
+Getter-return tracing now carries up to 16 exact invocation frames, so an
+argument returned inside a getter/helper expression is substituted against that
+invocation, not an unrelated edge in the endpoint path. Identical retained return
+origins can expose bounded alternatives or supported nested Concat expressions;
+disagreeing return sites, recursive producers, missing/changed evidence and
+unknown values remain explicit gaps. Field-backed values are not inferred from
+constructors or runtime state. `IlCommandReturnOriginUnknown` identifies the
+stopping method/body after admitted return evidence, and `IlCommandReturnFrameLimit`
+labels frame exhaustion. Shared exports retain categorical reasons, aliased
+stopping methods and producer-call links without exposing names or values.
+
+The local getter matrix also composes the two-getter chain with conditional
+argument normalization, Using/finally and the separate-DLL database wrapper.
+It scans compiled fixtures only; it never executes their HTTP or SQL code.
