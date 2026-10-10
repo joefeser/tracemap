@@ -88,7 +88,32 @@ Baz returned five inline findings; dispositions:
    `Literal_flag_identity_is_complete_evidence_without_a_target` and
    documented in the rule catalog; thread answered with this rationale.
 
-Focused suite after fixes: 28/28 pass.
+## Codex review cycle 2 (PR #851, fix head `f7bc969e`)
+
+`@codex review` returned five findings (1×P1, 4×P2); all five were fixed:
+
+1. P1 — shell comments could overwrite property flags
+   (`dotnet pack -p:PackageId=Good # -p:PackageId=Bad`): fixed; command text is
+   comment-stripped (unquoted `#` at a word boundary, quotes and `${{ }}`
+   protected) before tokenization, per logical line, folded blocks included.
+2. `shell: python` (or custom/templated shells) treated as command text:
+   fixed; the effective shell is tracked (step over job defaults.run.shell
+   over workflow defaults.run.shell) and only command shells (bash, sh,
+   pwsh, powershell, cmd, or undeclared defaults) are parsed as commands;
+   pack-looking text under any other shell is a `ci-workflow-unsupported`
+   gap with no rows.
+3. `defaults.run.working-directory` declared after jobs resolved against the
+   root: fixed; working-directory scopes now resolve after the whole
+   document parses, exactly like env (the same order-independence class).
+4. Package identities grouped case-sensitively: fixed; NuGet identities now
+   group OrdinalIgnoreCase with the first deterministic occurrence supplying
+   display casing, so case-variant claims collapse or conflict as pinned.
+5. The TOCTOU fix re-resolved the path rather than the opened handle: fixed;
+   macOS/Linux now open workflows through a true `O_NOFOLLOW` descriptor
+   (the read belongs to the opened inode), with the Windows path-check
+   residual documented in the rule catalog.
+
+Focused suite after fixes: 32/32 pass.
 
 Follow-ups for later slices: msbuild `/t:Pack` invocations, composite action
 pack steps, partial env substitution, and other CI vendors — each needs its

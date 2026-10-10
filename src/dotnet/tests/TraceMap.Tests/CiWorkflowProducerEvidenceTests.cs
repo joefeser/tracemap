@@ -547,6 +547,133 @@ public sealed class CiWorkflowProducerEvidenceTests
     }
 
     [Fact]
+    public void Shell_comments_cannot_overwrite_flag_values()
+    {
+        const string workflow = """
+            jobs:
+              build:
+                steps:
+                  - run: |
+                      dotnet pack src/Core.csproj -p:PackageId=Contoso.Good # -p:PackageId=Contoso.Bad
+                  - run: >
+                      dotnet pack src/Core.csproj -p:PackageId=Contoso.FoldedGood
+                      # -p:PackageId=Contoso.FoldedBad
+                  - run: dotnet pack src/Core.csproj -p:PackageId=Contoso.Keep # see docs: run full builds
+            """;
+        using var temp = new TempDirectory();
+        WriteWorkflow(temp.Path, "pack.yml", workflow);
+        WriteProject(temp.Path, "src/Core.csproj", PureCiProject);
+
+        var result = Read(temp.Path);
+        Assert.Empty(result.Gaps);
+        Assert.Equal(3, result.Rows.Count);
+        Assert.DoesNotContain(result.Rows, row => row.Package.Contains("Bad", StringComparison.Ordinal));
+        Assert.Contains(result.Rows, row => row.Package == "Contoso.Good");
+        Assert.Contains(result.Rows, row => row.Package == "Contoso.FoldedGood");
+        Assert.Contains(result.Rows, row => row.Package == "Contoso.Keep"); // mid-word # is not a comment
+    }
+
+    [Fact]
+    public void Non_command_shells_do_not_become_producer_evidence()
+    {
+        const string workflow = """
+            jobs:
+              scripted:
+                steps:
+                  - run: |
+                      dotnet pack src/Core.csproj -p:PackageId=Contoso.Python -p:PackageVersion=1.0.0
+                    shell: python
+              powershell:
+                steps:
+                  - run: dotnet pack src/Core.csproj -p:PackageId=Contoso.Pwsh -p:PackageVersion=1.0.0
+                    shell: pwsh
+              unprovable:
+                steps:
+                  - run: dotnet pack src/Core.csproj -p:PackageId=Contoso.UnknownShell
+                    shell: ${{ matrix.shell }}
+            """;
+        using var temp = new TempDirectory();
+        WriteWorkflow(temp.Path, "pack.yml", workflow);
+        WriteProject(temp.Path, "src/Core.csproj", PureCiProject);
+
+        var result = Read(temp.Path);
+        // A command shell keeps its evidence; python and templated shells never produce facts.
+        var row = Assert.Single(result.Rows);
+        Assert.Equal("Contoso.Pwsh", row.Package);
+        Assert.Equal(2, result.Gaps.Count(gap => gap.Kind == "ci-workflow-unsupported"
+            && gap.Detail!.Contains("non-command shell", StringComparison.Ordinal)));
+    }
+
+    [Fact]
+    public void Defaults_declared_after_jobs_still_resolve_working_directories()
+    {
+        const string declaredProject = """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <PackageId>Contoso.LateDefault</PackageId>
+              </PropertyGroup>
+            </Project>
+            """;
+        const string workflow = """
+            jobs:
+              build:
+                steps:
+                  - run: dotnet pack LateDefault.csproj
+            defaults:
+              run:
+                working-directory: late
+            """;
+        using var temp = new TempDirectory();
+        WriteWorkflow(temp.Path, "pack.yml", workflow);
+        WriteProject(temp.Path, "late/LateDefault.csproj", declaredProject);
+
+        var result = Read(temp.Path);
+        var row = Assert.Single(result.Rows);
+        Assert.Equal("Contoso.LateDefault", row.Package);
+        Assert.Equal("late/LateDefault.csproj", row.ProjectPath);
+        Assert.Empty(result.Gaps);
+    }
+
+    [Fact]
+    public void Package_identities_group_case_insensitively()
+    {
+        const string upper = """
+            jobs:
+              a:
+                steps:
+                  - run: dotnet pack src/Core.csproj -p:PackageId=Contoso.Case -p:PackageVersion=1.0.0
+            """;
+        const string lower = """
+            jobs:
+              b:
+                steps:
+                  - run: dotnet pack src/Core.csproj -p:PackageId=contoso.case -p:PackageVersion=1.0.0
+            """;
+        const string lowerBumped = """
+            jobs:
+              c:
+                steps:
+                  - run: dotnet pack src/Core.csproj -p:PackageId=contoso.case -p:PackageVersion=2.0.0
+            """;
+        using var temp = new TempDirectory();
+        WriteProject(temp.Path, "src/Core.csproj", PureCiProject);
+        WriteWorkflow(temp.Path, "a-upper.yml", upper);
+        WriteWorkflow(temp.Path, "b-lower.yml", lower);
+
+        var collapsed = Read(temp.Path);
+        var row = Assert.Single(collapsed.Rows); // NuGet ids are case-insensitive: one key
+        Assert.Equal("Contoso.Case", row.Package); // deterministic display casing from the first occurrence
+        Assert.Empty(collapsed.Gaps);
+
+        WriteWorkflow(temp.Path, "c-bumped.yml", lowerBumped);
+        var conflicted = Read(temp.Path);
+        Assert.Empty(conflicted.Rows);
+        var gap = Assert.Single(conflicted.Gaps, gap => gap.Kind == "ci-producer-version-conflict");
+        Assert.Contains("1.0.0", gap.Detail!, StringComparison.Ordinal);
+        Assert.Contains("2.0.0", gap.Detail!, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Shell_pipes_subshells_and_templates_do_not_invent_pack_commands()
     {
         const string workflow = """
