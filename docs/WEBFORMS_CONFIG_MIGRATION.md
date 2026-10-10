@@ -1097,3 +1097,12 @@ explicit. Missing/ambiguous targets, virtual dispatch, malformed or mismatched
 evidence, and work/depth limits remain structural gaps; none become symbolic
 success. The local corpus covers session/cache and impersonation getters with
 exception handling through argument alternatives and cross-assembly SQL calls.
+
+The normal `compiled-paths.local.html` report now displays database endpoints and
+command-expression trees directly beneath each handler chain. Distinct retained
+endpoint bindings are labeled with their path variants, never replaced by a
+representative variant. Named symbolic method inputs show value uncertainty
+separately from connection/evidence gaps. Expression display is bounded to 32
+nodes and depth four per value; the lossless handoff remains authoritative when
+display is limited. Constants are not expanded into SQL text or inferred table
+or procedure names, and static routes do not establish runtime execution.

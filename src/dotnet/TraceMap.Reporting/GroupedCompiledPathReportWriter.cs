@@ -64,6 +64,26 @@ public static class GroupedCompiledPathReportWriter
                 var path = report.Paths[group.VariantIndexes[0]];
                 W($"<section id=\"chain-{index + 1}\"><h2>Chain {index + 1} <small>({group.VariantIndexes.Count} variants)</small></h2>");
                 W($"<p>{H(string.Join(" → ", path.Nodes.Select(Compact)))}</p>");
+                var commandEndpoints = group.VariantIndexes.Select(variant => handoff.Variants[variant].NodeReferences.LastOrDefault())
+                    .OfType<string>().Distinct(StringComparer.Ordinal)
+                    .Where(reference => handoff.Nodes[reference].SurfaceKind == "database-api" || handoff.Nodes[reference].CommandBinding is not null).ToArray();
+                if (commandEndpoints.Length > 0)
+                    W("<h3>Database operations and command inputs</h3><p>Retained static routes, not proof of execution. Constants remain hash-only; SQL text and table/procedure names are not reconstructed.</p>");
+                foreach (var reference in commandEndpoints)
+                {
+                    var endpoint = handoff.Nodes[reference];
+                    W($"<h4>{H(endpoint.SurfaceName ?? Compact(endpoint))}</h4><p>Endpoint evidence: {H(endpoint.RuleId)} / {H(endpoint.EvidenceTier)}; {H(Location(endpoint.FilePath, endpoint.StartLine, endpoint.EndLine))}. Node reference: <code>{H(reference)}</code></p>");
+                    var variants = group.VariantIndexes.Where(variant => handoff.Variants[variant].NodeReferences.LastOrDefault() == reference);
+                    W($"<p>Retained variants: {H(string.Join(", ", variants.Select(variant => handoff.Variants[variant].Path.PathId)))}</p>");
+                    foreach (var (label, value) in new[] { ("Command text expression", endpoint.CommandBinding?.CommandTextFromPath),
+                        ("Command type evidence", endpoint.CommandBinding?.CommandTypeFromPath) })
+                    {
+                        W($"<h5>{label}</h5>");
+                        if (value is null) { W("<p>Value evidence unavailable; the endpoint route is still retained.</p>"); continue; }
+                        var remaining = 32;
+                        WriteCommandValue(value, W, 0, ref remaining, label == "Command type evidence");
+                    }
+                }
                 W("<details><summary>Exact method and source identities</summary><div class=\"identities\">");
                 foreach (var reference in group.VariantIndexes.SelectMany(variant => handoff.Variants[variant].NodeReferences).Distinct(StringComparer.Ordinal))
                 {
@@ -121,6 +141,37 @@ public static class GroupedCompiledPathReportWriter
         }
         await html.FlushAsync(cancellationToken);
         return new(htmlPath, jsonPath, html.Digest(), json.Digest(), budget.Bytes);
+    }
+
+    private static void WriteCommandValue(CompiledCommandPathValueBinding value, Action<string> write, int depth, ref int remaining, bool commandType = false)
+    {
+        if (depth > 4 || remaining-- <= 0)
+        { write("<p>Expression display limit reached; consult the lossless handoff.</p>"); return; }
+        var label = value.SymbolicInput is { } input ? "Value returned by " + Compact(input.MethodIdentity)
+            : value.Composition is { } composition ? composition.Operation
+            : value.Alternatives is not null ? "Possible input alternatives (branch feasibility not proven)"
+            : value.Origin.Kind == "constant-string-hash" ? "String constant (hash retained; plaintext unavailable)"
+            : value.Origin.Kind == "constant-int32" ? commandType ? value.Origin.Identity switch
+                { "1" => "CommandType.Text", "4" => "CommandType.StoredProcedure", "512" => "CommandType.TableDirect", _ => "Unrecognized command type constant" }
+                : "Integer constant (retained evidence, not execution)"
+            : value.Origin.Kind == "argument-slot" ? "Unresolved method argument"
+            : "Unresolved value";
+        write($"<div><p><strong>{H(label)}</strong><br>State: {H(value.State)}; rule: {H(value.RuleId)}; tier: {H(value.EvidenceTier)}</p>");
+        write($"<p>Connection / evidence gaps: {H(value.Gaps.Count == 0 ? "none retained for this operand (not a completeness claim)" : string.Join(", ", value.Gaps))}</p>");
+        if (value.SymbolicInput is { } symbolic)
+            write($"<p>Value uncertainty: {H(string.Join(", ", symbolic.ValueGaps))}. Method return not evaluated; unknown runtime values do not imply a missing connection.</p><details><summary>Symbolic input evidence</summary><p>Method {H(symbolic.MethodFactId)}; producer {H(symbolic.ProducerCallFactId)}; body {H(symbolic.BodyFactId)}; return {H(symbolic.ReturnFactId)}</p></details>");
+        foreach (var limitation in value.Limitations ?? []) write($"<p>Limitation: {H(limitation)}</p>");
+        if (value.Alternatives is not null || value.Composition is not null)
+        {
+            write("<ol>");
+            foreach (var child in value.Alternatives ?? value.Composition!.OperandBindings)
+            {
+                if (remaining <= 0) { write("<li>Expression display limit reached; consult the lossless handoff.</li>"); break; }
+                write("<li>"); WriteCommandValue(child, write, depth + 1, ref remaining, commandType); write("</li>");
+            }
+            write("</ol>");
+        }
+        write($"<details><summary>Value projection provenance</summary><p>Origin body {H(value.OriginBodyFactId)}; argument hops {value.Steps.Count}; return hops {value.ReturnSteps?.Count ?? 0}<br>Generator SHA-256 {H(value.GeneratorSha256)}<br>Bounded input SHA-256 {H(value.BoundedInputSha256)}</p></details></div>");
     }
 
     private static string H(string? value) => WebUtility.HtmlEncode(value ?? "unavailable");
