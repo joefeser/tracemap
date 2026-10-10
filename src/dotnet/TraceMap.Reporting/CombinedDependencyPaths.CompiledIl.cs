@@ -595,8 +595,13 @@ public static partial class CombinedDependencyPathReporter
         var declarationsByFile = FactsOfTypes(facts, FactTypes.MethodDeclared).Where(fact => fact.RuleId == RuleIds.VisualBasicSyntaxDeclarations)
             .GroupBy(fact => (fact.SourceIndexId, fact.FilePath))
             .ToDictionary(group => group.Key, group => group.ToArray());
-        var methodIndex = new PublishMemberCandidateIndex(FactsOfTypes(facts, FactTypes.ManagedMethodDeclared)
-            .Where(fact => fact.Properties.GetValueOrDefault("provenanceState") == "bound"));
+        // The publish-receipt assembly hash (assemblyRawSha256) is the authentication
+        // gate for member-level bridging. provenanceState guards full compile-time
+        // provenance (source repo + build identity), which is separate from the
+        // publish receipt's file-hash verification. Filtering here would silently
+        // exclude all methods from assemblies loaded without a CompiledBindingReceipt,
+        // breaking the bridge for the common deploy-only publish-receipt scenario.
+        var methodIndex = new PublishMemberCandidateIndex(FactsOfTypes(facts, FactTypes.ManagedMethodDeclared));
         long candidateWork = 0;
         foreach (var source in sourceInputs)
         {

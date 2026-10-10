@@ -735,6 +735,104 @@ public sealed class LazyConstructorLoggingTests
         Assert.DoesNotContain("SELECT ", JsonSerializer.Serialize(text));
     }
 
+    [Theory]
+    [InlineData("valid")]
+    [InlineData("missing-source")]
+    [InlineData("missing-assembly")]
+    [InlineData("wrong-assembly-hash")]
+    [InlineData("mismatched-receipt")]
+    public async Task Source_handler_with_publish_member_receipt_bridge_reaches_database_api_in_both_modes(string receipt)
+    {
+        // Deployment receipt identity does not require full compiled build provenance.
+        var repo = FindRepo();
+        var configuration = new DirectoryInfo(AppContext.BaseDirectory).Parent!.Name;
+        var bin = Path.Combine(repo, "samples", "fixture-build", "lazy-constructor", "bin", configuration, "net48");
+        using var temp = new TempDirectory();
+        var scan = ScanEngine.Scan(new ScanOptions(
+            Path.Combine(repo, "samples", "messy-dotnet-workspace", "vb-lazy-constructor"),
+            Path.Combine(temp.Path, "scan"),
+            CompiledInputPaths: [Path.Combine(bin, "PublicLazy.Website.dll"), Path.Combine(bin, "PublicLazy.Framework.dll")],
+            IlBodyEvidence: true));
+        AssertScanIdentity(scan);
+        var sourceHandler = Assert.Single(scan.Facts, fact => fact.FactType == FactTypes.MethodDeclared
+            && fact.TargetSymbol == "BatchRuntimeProfile_Click");
+        var memberIdentity = sourceHandler.Properties["memberIdentity"];
+        var compiledEntry = Assert.Single(scan.Facts, fact => fact.FactType == FactTypes.ManagedMethodDeclared
+            && fact.Properties.GetValueOrDefault("metadataName") == "BatchRuntimeProfile_Click");
+        Assert.NotEqual("bound", compiledEntry.Properties.GetValueOrDefault("provenanceState"));
+        var assemblyHash = compiledEntry.Properties["rawFileSha256"];
+        // Synthetic publish receipt: the source file is bound to the published DLL hash.
+        // No page mapping is provided, so the member-level bridge must be used.
+        var boundedInputHash = new string('d', 64);
+        var generatorHash = new string('e', 64);
+        var sourceBound = sourceHandler with
+        {
+            FactId = sourceHandler.FactId + "-source-bound",
+            FactType = FactTypes.WebFormsPublishSourceBound,
+            RuleId = RuleIds.LegacyWebFormsPublishMap,
+            EvidenceTier = EvidenceTiers.Tier2Structural,
+            Properties = new Dictionary<string, string>
+            {
+                ["boundedInputSha256"] = boundedInputHash,
+                ["generatorSha256"] = generatorHash,
+                ["sourcePath"] = sourceHandler.Evidence.FilePath,
+                ["limitation"] = "Synthetic publish receipt for test; not verified publication."
+            }
+        };
+        var assemblyBound = compiledEntry with
+        {
+            FactId = compiledEntry.FactId + "-assembly-bound",
+            FactType = FactTypes.WebFormsPublishAssemblyBound,
+            RuleId = RuleIds.LegacyWebFormsPublishMap,
+            EvidenceTier = EvidenceTiers.Tier2Structural,
+            Properties = new Dictionary<string, string>
+            {
+                ["boundedInputSha256"] = boundedInputHash,
+                ["generatorSha256"] = generatorHash,
+                ["assemblyRawSha256"] = assemblyHash,
+                ["limitation"] = "Synthetic publish receipt for test; not verified publication."
+            }
+        };
+        if (receipt is "wrong-assembly-hash" or "mismatched-receipt")
+        {
+            var properties = new Dictionary<string, string>(assemblyBound.Properties);
+            properties[receipt == "wrong-assembly-hash" ? "assemblyRawSha256" : "boundedInputSha256"] = new string('f', 64);
+            assemblyBound = assemblyBound with { Properties = properties };
+        }
+        var facts = scan.Facts.ToList();
+        if (receipt != "missing-source") facts.Add(sourceBound);
+        if (receipt != "missing-assembly") facts.Add(assemblyBound);
+        var index = Path.Combine(temp.Path, "index.sqlite");
+        var combined = Path.Combine(temp.Path, "combined.sqlite");
+        SqliteIndexWriter.Write(index, scan.Manifest, facts);
+        var composition = await CombinedIndexBuilder.CombineAsync(new CombineOptions([index], combined, ["synthetic-publish-bridge"]));
+        var source = Assert.Single(composition.Sources);
+        var options = new CombinedDependencyPathOptions(combined, temp.Path, ToSurface: "database-api", MaxDepth: 20, MaxPaths: 256)
+            { CompiledOnly = false, ExactFromSymbol = true, MaxTraversalWork = 100_000, IncludeLegacyRoots = true };
+        var normal = await CombinedDependencyPathReporter.BuildSelectedSymbolsAsync(options,
+            [new(source.SourceIndexId, source.ScanId, source.CommitSha, memberIdentity)], combinedIndex: true);
+        Assert.Equal(1, normal.Summary.SelectorCandidateCount);
+        RetainedMethodGraph? graph = null;
+        await CombinedDependencyPathReporter.BuildSelectedSymbolsAsync(
+            options with { ToSurface = null, MethodGraphObserver = value => graph = value },
+            [new(source.SourceIndexId, source.ScanId, source.CommitSha, memberIdentity)], combinedIndex: true);
+        Assert.NotNull(graph);
+        if (receipt != "valid")
+        {
+            Assert.Empty(normal.Paths);
+            Assert.Empty(graph.CommandTraces);
+            return;
+        }
+        Assert.NotEmpty(normal.Paths);
+        Assert.Contains(normal.Paths, path => path.Nodes.Last().SurfaceName == "SqlCommand.ExecuteScalar");
+        Assert.NotEmpty(graph.CommandTraces);
+        var handoff = GroupedCompiledPathHandoffBuilder.Create(normal, new string('a', 64));
+        var written = await GroupedCompiledPathReportWriter.WriteAsync(handoff, Path.Combine(temp.Path, "publish-bridge-report"));
+        var html = await File.ReadAllTextAsync(written.HtmlPath);
+        Assert.Contains("Database operations and command inputs", html);
+        Assert.Contains("SqlCommand.ExecuteScalar", html);
+    }
+
     private static void AssertScanIdentity(ScanResult scan)
     {
         var sha = scan.Manifest.CommitSha;
