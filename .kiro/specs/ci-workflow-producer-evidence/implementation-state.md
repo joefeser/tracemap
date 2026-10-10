@@ -47,9 +47,20 @@ Design decisions (precedent: the deps.json slice #848):
 - Workflow YAML at any other depth (nested dirs) and other CI vendors are out
   of scope; npm publish detection is out of scope because ua is NuGet-only.
 
-Validation: focused `CiWorkflowProducerEvidenceTests` (22 cases) and the
-receipt fingerprint tests pass in Debug; full-suite status recorded below
-after the complete run.
+Validation: focused `CiWorkflowProducerEvidenceTests` (23 cases) and the
+`ScanExecutionReceiptTests` fingerprint additions pass in standard Debug
+configuration, and the CLI smoke below emits the pinned fact bytes. Full Debug
+suite (`dotnet test src/dotnet/TraceMap.sln --no-restore -warnaserror`):
+the first run reported one failure in
+`AccessMacroReportingTests.Macro_evidence_reports_hidden_static_counts...`
+(3,523 passed / 1 failed); that test passes in isolation on the same binaries
+and touches the Access evidence-docs lane with this flag off — no mechanism
+connects it to this diff, matching the one-off full-run flake recorded for the
+deps.json slice. The second full run passed clean: 3,524 passed, zero failed,
+one Windows-only skip (19m37s). Smoke:
+`dotnet run --project src/dotnet/TraceMap.Cli -- scan --repo samples/ci-workflow-producers --out <outside> --index-ci-producers`
+emits exactly one ci-workflow PackageProduced fact (Contoso.Sample 0.1.0) at
+Level1SemanticAnalysis with no gaps.
 
 Follow-ups for later slices: msbuild `/t:Pack` invocations, composite action
 pack steps, partial env substitution, and other CI vendors — each needs its
