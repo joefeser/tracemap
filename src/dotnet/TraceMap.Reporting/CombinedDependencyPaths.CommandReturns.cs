@@ -17,6 +17,9 @@ public static partial class CombinedDependencyPathReporter
     };
 
     private sealed record RetainedReturn(long Offset, string State, CompiledCommandOperandOrigin Origin);
+    private sealed record CommandReturnFrame(string Body, string Method, string CallerBody, string CallerMethod,
+        bool HasThis, CompiledCommandOperandOrigin? Receiver, CompiledCommandOperandOrigin[] Arguments,
+        string EvidenceSha256, CommandReturnFrame? Parent);
 
     private sealed class CommandReturnResolver(EvidenceGraph graph, List<object> materials,
         SortedSet<string> gaps, List<CompiledCommandReturnStep> steps, string constantKind, bool allowComposition = true)
@@ -24,16 +27,17 @@ public static partial class CombinedDependencyPathReporter
         private readonly HashSet<string> active = new(StringComparer.Ordinal);
         public int Work { get; set; }
         public CompiledStringComposition? Composition { get; private set; }
+        public CommandReturnFrame? AdmittedFrame { get; private set; }
 
         public bool Resolve(CompiledCommandOperandOrigin origin, string scope, string? method,
             out CompiledCommandOperandOrigin resolved, out string resolvedScope, out string? resolvedMethod)
         {
+            AdmittedFrame = null;
             resolved = origin; resolvedScope = scope; resolvedMethod = method;
             if (origin.Kind != "call-result") return true;
             if (++Work > MaxCompiledCommandValueHops) return Fail("IlCommandReturnWorkLimit");
             var key = scope + "/" + origin.Identity;
             if (!active.Add(key)) return Fail("IlCommandReturnCycle");
-            try
             {
                 var facts = graph.CommandFactsByCombinedId;
                 if (!facts.TryGetValue(scope, out var callerBody) || callerBody.FactType != FactTypes.ManagedIlBodyDeclared
@@ -44,9 +48,7 @@ public static partial class CombinedDependencyPathReporter
                 var calls = Related(callerBody.SourceIndexId, FactTypes.ManagedIlCallObserved, callerBody.OriginalFactId + "/" + origin.Identity);
                 if (calls.Count != 1) return Fail("IlCommandReturnProducerMissingOrAmbiguous");
                 var producer = calls[0];
-                // Only describe the current origin, not a nested return branch whose
-                // remaining returns have not been checked for agreement.
-                if (allowComposition && active.Count == 1 && constantKind == "constant-string-hash" && TryConcatArity(producer, out var arity))
+                if (allowComposition && constantKind == "constant-string-hash" && TryConcatArity(producer, out var arity))
                 {
                     var values = graph.CommandFacts is IIndexedCombinedFacts indexed
                         ? indexed.CallOperandFacts(producer.SourceIndexId, producer.OriginalFactId)
@@ -144,30 +146,25 @@ public static partial class CombinedDependencyPathReporter
                     return Fail("IlCommandReturnEvidenceUnavailable");
                 steps.Add(new(producer.CombinedFactId, targetBody.CombinedFactId, summary.CombinedFactId,
                     summary.Properties["ilGeneratorSha256"], summary.Properties["ilBoundedInputSha256"]));
-                (CompiledCommandOperandOrigin Origin, string Scope, string? Method)? common = null;
+                CompiledCommandOperandOrigin? common = null;
                 foreach (var returned in returns)
                 {
                     if (++Work > MaxCompiledCommandValueHops) return Fail("IlCommandReturnWorkLimit");
-                    if (!Resolve(returned.Origin, targetBody.CombinedFactId, callee.CombinedFactId,
-                        out var value, out var valueScope, out var valueMethod)) return false;
-                    if (value.Kind == "argument-slot" && valueScope == targetBody.CombinedFactId)
-                    {
-                        if (!int.TryParse(value.Identity, NumberStyles.None, CultureInfo.InvariantCulture, out var slot)
-                            || slot < 0 || slot - (hasThis ? 1 : 0) >= arguments!.Length)
-                            return Fail("IlCommandReturnArgumentUnavailable");
-                        value = hasThis && slot == 0 ? receiver! : arguments![slot - (hasThis ? 1 : 0)];
-                        if (!Resolve(value, scope, method, out value, out valueScope, out valueMethod)) return false;
-                    }
-                    if (value.Kind != constantKind && value.Kind != "argument-slot") return Fail("IlCommandReturnValueUnresolved");
-                    if (common is { } prior && (prior.Origin != value || value.Kind == "argument-slot"
-                        && (prior.Scope != valueScope || prior.Method != valueMethod))) return Fail("IlCommandReturnValuesDisagree");
-                    common = (value, valueScope, valueMethod);
+                    // All sites must agree before exposing a symbolic expression.
+                    // Its argument slots remain bound to this exact invocation.
+                    if (common is not null && common != returned.Origin) return Fail("IlCommandReturnValuesDisagree");
+                    common = returned.Origin;
                 }
-                resolved = common!.Value.Origin; resolvedScope = common.Value.Scope; resolvedMethod = common.Value.Method;
+                resolved = common!; resolvedScope = targetBody.CombinedFactId; resolvedMethod = callee.CombinedFactId;
+                if (resolved.Kind == "unknown") return Fail("IlCommandReturnOriginUnknown");
+                if (resolved.Kind != constantKind && resolved.Kind is not ("argument-slot" or "call-result" or "argument-alternatives"))
+                    return Fail("IlCommandReturnValueUnresolved");
+                AdmittedFrame = new(targetBody.CombinedFactId, callee.CombinedFactId, scope, method,
+                    hasThis, receiver, arguments!, Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(
+                        JsonSerializer.SerializeToUtf8Bytes(materials))), null);
                 return true;
 
             }
-            finally { active.Remove(key); }
         }
 
         private IReadOnlyList<CombinedFactRow> Related(string source, string type, string reference)

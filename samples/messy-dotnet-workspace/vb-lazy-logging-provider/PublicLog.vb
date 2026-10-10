@@ -2,6 +2,18 @@ Imports System.Data
 Imports System.Data.SqlClient
 
 Namespace PublicLazy.Framework
+    Public Class PublicInput
+        Public Shared ReadOnly Property Outer As String
+            Get
+                Return Inner
+            End Get
+        End Property
+        Private Shared ReadOnly Property Inner As String
+            Get
+                Return "public-user"
+            End Get
+        End Property
+    End Class
     Public Class ProfileData
         Public Function GetEmail(user As String) As String
             ' Deliberately unused: creating parameters does not bind them to SQL.
@@ -38,6 +50,119 @@ Namespace PublicLazy.Framework
 
         Public Sub InsertReturnedLiteral()
             ExecuteText(LiteralText())
+        End Sub
+
+        ' Analysis-only getter/return matrix. Never execute database calls.
+        Private _dynamicText As String
+        Private Shared _sharedDynamicText As String
+        Private Shared _choice As Boolean
+        Private ReadOnly Property GetterOuter As String
+            Get
+                Return GetterInner
+            End Get
+        End Property
+        Private ReadOnly Property GetterInner As String
+            Get
+                Return LiteralText()
+            End Get
+        End Property
+        Private ReadOnly Property DynamicOuter As String
+            Get
+                Return DynamicInner
+            End Get
+        End Property
+        Private ReadOnly Property DynamicInner As String
+            Get
+                Return _dynamicText
+            End Get
+        End Property
+        Private Shared ReadOnly Property SharedDynamic As String
+            Get
+                Return _sharedDynamicText
+            End Get
+        End Property
+        Private Shared Function ReturnedConcat(value As String) As String
+            Return String.Concat("public-prefix:", value)
+        End Function
+        Private Shared Function ReturnedChoice(value As String) As String
+            Dim result As String = value
+            If _choice Then result = String.Concat("public-choice:", value)
+            Return result
+        End Function
+        Public Sub InsertGetterLiteral()
+            ExecuteText(GetterOuter)
+        End Sub
+        Public Sub InsertReturnFrameLimit()
+            ExecuteText(Frame0())
+        End Sub
+        Private Shared Function Frame0() As String
+            Return Frame1()
+        End Function
+        Private Shared Function Frame1() As String
+            Return Frame2()
+        End Function
+        Private Shared Function Frame2() As String
+            Return Frame3()
+        End Function
+        Private Shared Function Frame3() As String
+            Return Frame4()
+        End Function
+        Private Shared Function Frame4() As String
+            Return Frame5()
+        End Function
+        Private Shared Function Frame5() As String
+            Return Frame6()
+        End Function
+        Private Shared Function Frame6() As String
+            Return Frame7()
+        End Function
+        Private Shared Function Frame7() As String
+            Return Frame8()
+        End Function
+        Private Shared Function Frame8() As String
+            Return Frame9()
+        End Function
+        Private Shared Function Frame9() As String
+            Return Frame10()
+        End Function
+        Private Shared Function Frame10() As String
+            Return Frame11()
+        End Function
+        Private Shared Function Frame11() As String
+            Return Frame12()
+        End Function
+        Private Shared Function Frame12() As String
+            Return Frame13()
+        End Function
+        Private Shared Function Frame13() As String
+            Return Frame14()
+        End Function
+        Private Shared Function Frame14() As String
+            Return Frame15()
+        End Function
+        Private Shared Function Frame15() As String
+            Return Frame16()
+        End Function
+        Private Shared Function Frame16() As String
+            Return Frame17()
+        End Function
+        Private Shared Function Frame17() As String
+            Return "public-frame-limit"
+        End Function
+        Public Sub InsertGetterDynamic()
+            ExecuteText(DynamicOuter)
+        End Sub
+        Public Sub InsertGetterSharedDynamic()
+            ExecuteText(SharedDynamic)
+        End Sub
+        Public Sub InsertReturnedConcat()
+            ExecuteText(ReturnedConcat(ForwardText(LiteralText())))
+        End Sub
+        Public Sub InsertReturnedChoice()
+            ExecuteText(ReturnedChoice(LiteralText()))
+        End Sub
+        Public Sub InsertReturnedConcatArgument(value As String)
+            ExecuteText(ReturnedConcat(ForwardText(value)))
         End Sub
 
         Public Sub InsertReturnedLiteralTwoHops()

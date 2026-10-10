@@ -113,6 +113,14 @@ try {
     $trace.commandText.composition.operandBindings += @{state='symbolic-argument-alternatives';
         origin=@{kind='argument-alternatives';identity="$secret-alternatives"};originBodyFactId="$secret-body";
         steps=@();gaps=@();alternatives=@($leaf,$nested)}
+    # Pin every categorical producer code, while arbitrary free text remains redacted.
+    # New codes must be explicitly allowlisted by the exporter, never copied by pattern.
+    $reporting = Join-Path $PSScriptRoot '../../src/dotnet/TraceMap.Reporting'
+    $codes = @('CombinedDependencyPaths.CommandReturns.cs','CombinedDependencyPaths.CompiledCommandValues.cs' |
+        ForEach-Object { [regex]::Matches((Get-Content (Join-Path $reporting $_) -Raw), '"(IlCommand[A-Za-z]+)"') } |
+        ForEach-Object { $_.Groups[1].Value } | Sort-Object -Unique)
+    $trace.commandText.gaps += $codes
+    $trace.commandText.originMethodIdentity = "$secret-stopping-getter"
     @{schemaVersion='retained-method-graph.v1';graph=@{nodes=$nodes;edges=$edges;
         calls=@($busyCalls)+@($focusCall);commandTraces=@($trace);cutoffs=@();roots=@("$secret-node-1")}} |
         ConvertTo-Json -Depth 48 | Set-Content -LiteralPath $inputFile
@@ -123,6 +131,8 @@ try {
     $traceResult = $traceRaw | ConvertFrom-Json -Depth 48
     $exportedTrace = $traceResult.graph.commandTraces[0]
     $choices = $exportedTrace.composition.operandBindings[1]
+    if ((($exportedTrace.gaps | Select-Object -Skip 2) -join ',') -cne ($codes -join ',') -or
+        $exportedTrace.method -cnotmatch '^S[0-9]+$') { throw 'Defined command reason or stopping method lost.' }
     if ($choices.state -cne 'symbolic-argument-alternatives' -or $choices.alternatives.Count -ne 2 -or
         $choices.alternatives[1].composition.operandBindings.Count -ne 2 -or
         $choices.alternatives[1].composition.operation -cne 'System.String.Concat') { throw 'Nested alternatives lost.' }

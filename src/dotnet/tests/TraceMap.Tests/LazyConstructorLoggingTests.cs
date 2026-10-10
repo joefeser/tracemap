@@ -45,6 +45,7 @@ public sealed class LazyConstructorLoggingTests
     [InlineData("oversized")]
     [InlineData("wrong-hash")]
     [InlineData("expression-cycle")]
+    [InlineData("getter")]
     public async Task Structured_profile_batch_traces_both_argument_alternatives_into_nested_SQL_composition(string tamper)
     {
         var repo = FindRepo();
@@ -56,7 +57,7 @@ public sealed class LazyConstructorLoggingTests
                 Path.Combine(bin, "PublicLazy.Framework.dll")], IlBodyEvidence: true));
         AssertScanIdentity(scan);
         var entry = Assert.Single(scan.Facts, fact => fact.FactType == FactTypes.ManagedMethodDeclared
-            && fact.Properties.GetValueOrDefault("metadataName") == "BatchProfile_Click");
+            && fact.Properties.GetValueOrDefault("metadataName") == (tamper == "getter" ? "BatchGetterProfile_Click" : "BatchProfile_Click"));
         var index = Path.Combine(temp.Path, "index.sqlite");
         var combined = Path.Combine(temp.Path, "combined.sqlite");
         var facts = scan.Facts.ToList();
@@ -78,7 +79,7 @@ public sealed class LazyConstructorLoggingTests
             properties["argumentOrigins"] = JsonSerializer.Serialize(origins);
             facts[facts.IndexOf(operand)] = operand with { Properties = properties };
         }
-        else if (tamper != "none")
+        else if (tamper is not ("none" or "getter"))
         {
             var call = Assert.Single(facts, fact => fact.FactType == FactTypes.ManagedIlCallObserved
                 && fact.Properties.GetValueOrDefault("targetIdentity")?.Contains("ObserveOperand", StringComparison.Ordinal) == true);
@@ -115,7 +116,7 @@ public sealed class LazyConstructorLoggingTests
             Assert.Contains(expressions, value => value.Gaps.Contains("IlCommandExpressionLimit"));
             return;
         }
-        if (tamper != "none")
+        if (tamper is not ("none" or "getter"))
         {
             Assert.Equal("unresolved-call-evidence", middle.State);
             Assert.Null(middle.Alternatives);
@@ -142,7 +143,7 @@ public sealed class LazyConstructorLoggingTests
             [new(source.SourceIndexId, source.ScanId, source.CommitSha, entry.TargetSymbol!)], combinedIndex: true);
         Assert.NotNull(graph);
         var trace = Assert.Single(graph.CommandTraces);
-        Assert.Equal(2, trace.ProducerCallFactIds.Count);
+        Assert.Equal(tamper == "getter" ? 4 : 2, trace.ProducerCallFactIds.Count);
         Assert.All(trace.ProducerCallFactIds, id => Assert.Contains(graph.Calls, call => call.FactId == id));
         await RetainedMethodGraphWriter.WriteAsync(graph, temp.Path, new string('a', 64), 16_000_000, default);
         var html = await File.ReadAllTextAsync(Path.Combine(temp.Path, RetainedMethodGraphWriter.HtmlName));
@@ -391,16 +392,21 @@ public sealed class LazyConstructorLoggingTests
             var binding = Assert.IsType<CompiledCommandConfigurationCandidate>(path.Nodes.Last().CommandBinding);
             Assert.Equal("argument-slot", binding.CommandTextOrigin.Kind);
             var text = Assert.IsType<CompiledCommandPathValueBinding>(binding.CommandTextFromPath);
-            Assert.Equal("unresolved-operand", text.State);
+            Assert.Equal("symbolic-string-composition", text.State);
             Assert.Equal("call-result", text.Origin.Kind);
             var producerBody = Assert.Single(scan.Facts, fact => fact.FactType == FactTypes.ManagedIlBodyDeclared
                 && $"{origin.SourceIndexId}:{fact.FactId}" == text.OriginBodyFactId);
             var producerCall = Assert.Single(scan.Facts, fact => fact.FactType == FactTypes.ManagedIlCallObserved
                 && fact.Properties.GetValueOrDefault("ilBodyFactId") == producerBody.FactId
                 && fact.Properties.GetValueOrDefault("ilOffset") == text.Origin.Identity);
-            Assert.Contains("|method:9:BuildText|", producerCall.Properties["targetIdentity"], StringComparison.Ordinal);
+            Assert.Contains("member:6:Concat|", producerCall.Properties["targetIdentity"], StringComparison.Ordinal);
             Assert.Single(text.Steps);
-            Assert.Contains("IlCommandOperandValueUnresolved", text.Gaps);
+            Assert.Single(text.ReturnSteps!);
+            Assert.Equal("System.String.Concat", text.Composition!.Operation);
+            var dynamicOperand = text.Composition.OperandBindings[1];
+            Assert.Equal("unresolved-operand", dynamicOperand.State);
+            Assert.Contains("IlCommandOperandValueUnresolved", dynamicOperand.Gaps);
+            Assert.Contains("IlCommandReturnTargetEdgeMissing", dynamicOperand.Gaps);
             Assert.Contains("IlCommandVirtualDispatchUnproven", text.Gaps);
             Assert.Equal("method-local-constant", binding.CommandTypeFromPath!.State);
             Assert.Equal("1", binding.CommandTypeFromPath.Origin.Identity);
@@ -587,6 +593,80 @@ public sealed class LazyConstructorLoggingTests
             }
         }
         Assert.DoesNotContain("SELECT ", JsonSerializer.Serialize(report), StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("InsertGetterLiteral", "constant-on-encoded-call-path")]
+    [InlineData("InsertReturnFrameLimit", "limit")]
+    [InlineData("InsertGetterDynamic", "unresolved-operand")]
+    [InlineData("InsertGetterSharedDynamic", "unresolved-operand")]
+    [InlineData("InsertReturnedConcat", "symbolic-string-composition")]
+    [InlineData("InsertReturnedChoice", "symbolic-argument-alternatives")]
+    [InlineData("InsertReturnedConcatArgument", "symbolic-string-composition")]
+    public async Task Getter_return_batch_keeps_invocation_scope_and_explicit_unknown_boundaries(string entryName, string expected)
+    {
+        var repo = FindRepo();
+        var configuration = new DirectoryInfo(AppContext.BaseDirectory).Parent!.Name;
+        var binary = Path.Combine(repo, "samples", "fixture-build", "lazy-constructor", "bin", configuration, "net48", "PublicLazy.Framework.dll");
+        using var temp = new TempDirectory();
+        var scan = ScanEngine.Scan(new ScanOptions(Path.Combine(repo, "samples", "messy-dotnet-workspace", "vb-lazy-constructor"),
+            Path.Combine(temp.Path, "scan"), CompiledInputPaths: [binary], IlBodyEvidence: true));
+        AssertScanIdentity(scan);
+        var entry = Assert.Single(scan.Facts, fact => fact.FactType == FactTypes.ManagedMethodDeclared
+            && fact.Properties.GetValueOrDefault("metadataName") == entryName);
+        var index = Path.Combine(temp.Path, "index.sqlite");
+        var combined = Path.Combine(temp.Path, "combined.sqlite");
+        SqliteIndexWriter.Write(index, scan.Manifest, scan.Facts);
+        var result = await CombinedIndexBuilder.CombineAsync(new CombineOptions([index], combined, ["getter-batch"]));
+        var source = Assert.Single(result.Sources);
+        var options = new CombinedDependencyPathOptions(combined, temp.Path, ToSurface: "database-api", SurfaceName: "SqlCommand.ExecuteScalar", MaxDepth: 20)
+            { CompiledOnly = true, ExactFromSymbol = true, MaxTraversalWork = 10_000 };
+        async Task<CompiledCommandPathValueBinding> Query()
+        {
+            var report = await CombinedDependencyPathReporter.BuildSelectedSymbolsAsync(options,
+                [new(source.SourceIndexId, source.ScanId, source.CommitSha, entry.TargetSymbol!)], combinedIndex: true);
+            return Assert.Single(report.Paths).Nodes.Last().CommandBinding!.CommandTextFromPath!;
+        }
+        var text = await Query();
+        Assert.Equal(expected, text.State);
+        Assert.Equal(JsonSerializer.Serialize(text), JsonSerializer.Serialize(await Query()));
+        var values = new List<CompiledCommandPathValueBinding>();
+        void Walk(CompiledCommandPathValueBinding value)
+        {
+            values.Add(value);
+            Assert.InRange(values.Count, 1, 32);
+            foreach (var child in (value.Alternatives ?? []).Concat(value.Composition?.OperandBindings ?? [])) Walk(child);
+        }
+        Walk(text);
+        if (entryName == "InsertReturnFrameLimit")
+        {
+            Assert.Contains("IlCommandReturnFrameLimit", text.Gaps);
+            Assert.InRange(text.ReturnSteps!.Count, 1, 17);
+        }
+        else if (entryName.Contains("Dynamic", StringComparison.Ordinal))
+        {
+            Assert.Contains("IlCommandReturnOriginUnknown", text.Gaps);
+            Assert.Equal("unknown", text.Origin.Kind);
+            Assert.Contains(entryName.Contains("Shared", StringComparison.Ordinal) ? "get_SharedDynamic" : "get_DynamicInner", text.OriginMethodIdentity!);
+            Assert.Equal(entryName.Contains("Shared", StringComparison.Ordinal) ? 1 : 2, text.ReturnSteps!.Count);
+        }
+        else if (entryName.EndsWith("Argument", StringComparison.Ordinal))
+        {
+            var operand = text.Composition!.OperandBindings[1];
+            Assert.Equal("unresolved-root-argument", operand.State);
+            Assert.Equal("1", operand.Origin.Identity);
+            Assert.Contains(entryName, operand.OriginMethodIdentity!);
+            Assert.Contains("IlCommandRootArgumentUnresolved", operand.Gaps);
+        }
+        else
+        {
+            Assert.DoesNotContain(values.SelectMany(value => value.Gaps), gap => gap != "IlCommandVirtualDispatchUnproven");
+            Assert.All(values.Where(value => value.Composition is null && value.Alternatives is null),
+                value => Assert.Equal("constant-string-hash", value.Origin.Kind));
+            if (entryName == "InsertReturnedChoice") Assert.Equal(2, text.Alternatives!.Count);
+        }
+        Assert.DoesNotContain("public-prefix:", JsonSerializer.Serialize(text));
+        Assert.DoesNotContain("SELECT ", JsonSerializer.Serialize(text));
     }
 
     private static void AssertScanIdentity(ScanResult scan)

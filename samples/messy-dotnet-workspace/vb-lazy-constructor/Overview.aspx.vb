@@ -15,6 +15,11 @@ Partial Public Class LazyOverview
         PublicQueries.Lookup(ProfileContext.EmployeeInfo.Region)
     End Sub
 
+    Public Sub BatchGetterProfile_Click(sender As Object, args As EventArgs)
+        Dim service As New StructuredProfileProbe()
+        service.Lookup(PublicLazy.Framework.PublicInput.Outer)
+    End Sub
+
     Public Sub BatchProfile_Click(sender As Object, args As EventArgs)
         Dim service As New StructuredProfileProbe()
         service.Lookup("public-user")

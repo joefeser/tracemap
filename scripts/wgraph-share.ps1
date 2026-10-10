@@ -165,7 +165,12 @@ try {
         'IlCommandReturnEvidenceMissingOrAmbiguous','IlCommandReturnSignatureUnsupported','IlCommandReturnProvenanceUnavailable',
         'IlCommandCallerOperandMissingOrAmbiguous','IlCommandCallerOperandProvenanceUnavailable','IlCommandReturnCycle',
         'IlCommandReturnWorkLimit','IlCommandCallerHopLimit','IlCommandCompositionValueNotMaterialized',
-        'IlCommandCompositionOperandsUnavailable','IlCommandCompositionProvenanceUnavailable','IlCommandExpressionLimit')
+        'IlCommandCompositionOperandsUnavailable','IlCommandCompositionProvenanceUnavailable','IlCommandExpressionLimit',
+        'IlCommandCallerFactJoinUnavailable','IlCommandCallerOperandMalformed','IlCommandCallerSlotUnavailable',
+        'IlCommandReturnCallerMismatch','IlCommandReturnCallerUnavailable','IlCommandReturnEdgeLimit',
+        'IlCommandReturnEvidenceMalformed','IlCommandReturnEvidenceUnavailable','IlCommandReturnOriginUnknown',
+        'IlCommandReturnTargetUnavailable','IlCommandReturnValueUnresolved','IlCommandReturnValuesDisagree',
+        'IlCommandReturnArgumentUnavailable','IlCommandReturnFrameLimit')
     function Project-OperandChecks($value) {
         if (!$value.PSObject.Properties['operandCheckFailures']) { return }
         $allowed = @('operand-rule','operand-tier','operand-schema','operand-state','call-shape',
@@ -218,6 +223,7 @@ try {
             state=(Code $value.state @('unresolved-operand','unresolved-root-argument','unresolved-non-il-bridge','unresolved-call-evidence','unresolved-slot','limit','method-local-constant','constant-on-encoded-call-path','symbolic-string-composition','symbolic-argument-alternatives'));
             originKind=(Code $value.origin.kind @('call-result','argument-slot','argument-alternatives','constant-string-hash','constant-int32','unknown','null','allocation-site'));
             originBody=(Alias 'F' $value.originBodyFactId);rule=(Alias 'R' $value.ruleId);
+            method=$(if ($value.PSObject.Properties['originMethodIdentity'] -and $value.originMethodIdentity) { Alias 'S' $value.originMethodIdentity } else { $null });
             producers=@($trace.producerCallFactIds | ForEach-Object { Alias 'F' $_ });
             missingProducerRecords=@($trace.producerCallFactIds | Where-Object { $id = $_; @($keptCalls | Where-Object { $_.factId -ceq $id }).Count -eq 0 }).Count;
             steps=@($value.steps | ForEach-Object { [ordered]@{call=(Alias 'F' $_.callFactId);operand=(Alias 'F' $_.operandFactId);

@@ -70,7 +70,7 @@ try {
     $beforeInputs = @(SourceRoster)
     $generatorSha = (Get-FileHash -LiteralPath $PSCommandPath -Algorithm SHA256).Hash.ToLowerInvariant()
     $project = Join-Path $TraceMapRoot 'src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj'
-    & dotnet test $project --filter 'FullyQualifiedName~Deep_projectless|FullyQualifiedName~Property_profile_dynamic_lookup|FullyQualifiedName~WebFormsOperatorWorkflowTests|FullyQualifiedName~WebFormsWizard' --verbosity minimal `
+    & dotnet test $project --filter 'FullyQualifiedName~Deep_projectless|FullyQualifiedName~LazyConstructorLoggingTests|FullyQualifiedName~WebFormsOperatorWorkflowTests|FullyQualifiedName~WebFormsWizard' --verbosity minimal `
         --logger 'trx;LogFileName=deep-corpus.trx' --results-directory (Join-Path $output 'tests')
     if ($LASTEXITCODE -ne 0) { throw 'DEEP_CORPUS_TEST_FAILED;outputs-preserved' }
     $trx = Join-Path $output 'tests/deep-corpus.trx'
@@ -97,7 +97,13 @@ try {
     $operatorPassed = @($rows | Where-Object {
         $_.testName -like '*WebForms_operator_source_compiled_and_separate_dll_reports*' -and $_.outcome -ceq 'Passed'
     }).Count
-    if ($passed -lt 36 -or $nativePassed -ne 1 -or $propertyPassed -ne 2 -or $returnPassed -ne 15 -or $profilePassed -ne 2 -or $operatorPassed -ne 5 -or @($rows | Where-Object { $_.outcome -notin @('Passed', 'NotExecuted') }).Count -ne 0) {
+    $getterPassed = @($rows | Where-Object {
+        $_.testName -like '*Getter_return_batch_keeps_invocation_scope*' -and $_.outcome -ceq 'Passed'
+    }).Count
+    $structuredPassed = @($rows | Where-Object {
+        $_.testName -like '*Structured_profile_batch_traces_both_argument_alternatives*' -and $_.outcome -ceq 'Passed'
+    }).Count
+    if ($passed -lt 36 -or $nativePassed -ne 1 -or $propertyPassed -ne 2 -or $returnPassed -ne 21 -or $profilePassed -ne 9 -or $operatorPassed -ne 5 -or $getterPassed -ne 7 -or $structuredPassed -ne 6 -or @($rows | Where-Object { $_.outcome -notin @('Passed', 'NotExecuted') }).Count -ne 0) {
         throw 'DEEP_CORPUS_TEST_RECEIPT_NOT_ADMITTED'
     }
     foreach ($layout in @('attached', 'separate', 'separate-dll-only', 'reversed', 'missing')) {

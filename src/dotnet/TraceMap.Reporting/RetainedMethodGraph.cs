@@ -88,6 +88,7 @@ public static partial class CombinedDependencyPathReporter
             if (text is not null) expressions.Enqueue(text);
             for (var count = 0; count < MaxCommandExpressionNodes && expressions.TryDequeue(out var expression); count++)
             {
+                producers.AddRange((expression.ReturnSteps ?? []).Select(step => step.ProducerCallFactId));
                 if (expression.Origin.Kind == "call-result" && graph.CommandFactsByCombinedId.TryGetValue(expression.OriginBodyFactId, out var body))
                     producers.AddRange(graph.CommandRelatedFacts(body.SourceIndexId, FactTypes.ManagedIlCallObserved,
                         body.OriginalFactId + "/" + expression.Origin.Identity).Take(2).Select(f => f.CombinedFactId));
