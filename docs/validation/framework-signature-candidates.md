@@ -276,3 +276,33 @@ the quiet output did not retain assertion details. Its cause is not established.
 No retry or broad suite was run. New native helper compilation was deferred;
 existing native artifacts were preserved. This is partial Windows validation,
 not a claim that all tests or private application routes are fixed.
+
+## Nested source-to-metadata type boundaries
+
+A separate synthetic fixture, `vb-nested-publish`, reproduces a nested VB class
+whose flattened dotted name was previously interpreted as a namespace plus one
+type. The reporter now uses the declaration's retained `lexicalNamespace` to
+separate the namespace from the nested names and encodes each type name using
+the same length framing as the metadata identity. The index reads all framed
+nested names; it does not flatten them into a namespace. Existing indexes with
+that namespace evidence can be requeried without source re-extraction.
+
+Before the change, both CLR2/CLR4 nested-source roots failed to reach the database
+terminal, and a namespace-lookalike decoy incorrectly produced a candidate path.
+The regression matrix requires the real nested route, rejects that decoy,
+preserves duplicate-candidate ambiguity, and refuses to invent nesting when
+namespace evidence is missing. Receipt/hash, parameter-shape and Tier3 boundaries
+remain unchanged. This is synthetic metadata evidence, not native execution.
+
+Member/assembly bridge gaps now retain the exact source declaration node ID so
+the read-only classifier can associate them with the same retained cutoff node.
+No declaration-to-callsite inference or causal/absence claim is added. Old
+handoffs are not modified; they need report regeneration to gain these node IDs.
+Missing import scopes, unsupported generic parameter syntax and the private
+route count remain separate unresolved questions.
+
+Local validation for this change: 230 focused tests passed with zero skips
+(framework signature candidates, publish-member index, combined dependency
+paths, grouped handoff and baseline prewalk). The CLI build had zero warnings
+and errors. The earlier Windows event-wiring failure is not claimed resolved
+by this reporting-only change; its test class was not rerun locally here.

@@ -152,13 +152,18 @@ public sealed class FrameworkSignatureCandidateTests
     [InlineData(4, 4, "invalid-mode-helper")]
     [InlineData(4, 4, "mode-count-helper")]
     [InlineData(4, 4, "missing-mode-helper")]
+    [InlineData(2, 2, "nested-type")]
+    [InlineData(4, 4, "nested-type")]
+    [InlineData(4, 4, "nested-namespace-decoy")]
+    [InlineData(4, 4, "nested-missing-namespace")]
+    [InlineData(4, 4, "nested-ambiguous")]
     public async Task Mixed_framework_source_to_database_path_preserves_candidate_boundary(int callerVersion, int providerVersion, string scenario)
     {
         using var temp = new TempDirectory();
         var callerPath = Path.Combine(temp.Path, "PublicWebsite.dll");
         var providerPath = Path.Combine(temp.Path, "PublicProvider.dll");
         var instanceCall = scenario is "virtual" or "nonvirtual" or "missing-flags";
-        Build(callerPath, callerVersion, true, instanceCall, scenario.EndsWith("-helper", StringComparison.Ordinal) ? "unbridged-helper" : scenario is "return-flow" or "appcode" or "preserved-base-fill" ? scenario : "valid", providerVersion);
+        Build(callerPath, callerVersion, true, instanceCall, scenario.EndsWith("-helper", StringComparison.Ordinal) ? "unbridged-helper" : scenario.StartsWith("nested-", StringComparison.Ordinal) || scenario is "return-flow" or "appcode" or "preserved-base-fill" ? scenario : "valid", providerVersion);
         Build(providerPath, providerVersion, false, instanceCall, scenario);
         var paths = new List<string> { callerPath, providerPath };
         if (scenario == "appcode")
@@ -182,11 +187,15 @@ public sealed class FrameworkSignatureCandidateTests
             }
         }
         var repo = FindRepo();
-        var scan = ScanEngine.Scan(new ScanOptions(Path.Combine(repo, "samples", "messy-dotnet-workspace", scenario.EndsWith("-helper", StringComparison.Ordinal) ? "vb-unbridged-helper" : "framework-signature-boundary"),
+        var scan = ScanEngine.Scan(new ScanOptions(Path.Combine(repo, "samples", "messy-dotnet-workspace", scenario.StartsWith("nested-", StringComparison.Ordinal) ? "vb-nested-publish" : scenario.EndsWith("-helper", StringComparison.Ordinal) ? "vb-unbridged-helper" : "framework-signature-boundary"),
             Path.Combine(temp.Path, "scan"), CompiledInputPaths: paths, IlBodyEvidence: true));
         var declaration = Assert.Single(scan.Facts, f => f.FactType == FactTypes.MethodDeclared && f.TargetSymbol == "Start");
         var compiled = Assert.Single(scan.Facts, f => f.FactType == FactTypes.ManagedMethodDeclared && f.Properties.GetValueOrDefault("metadataName") == "Start");
         var facts = scan.Facts.ToList();
+        if (scenario == "nested-missing-namespace")
+            facts = facts.Select(f => f.FactId == declaration.FactId ? f with
+                { Properties = f.Properties.Where(p => p.Key != "lexicalNamespace").ToDictionary() } : f).ToList();
+        if (scenario == "nested-ambiguous") facts.Add(compiled with { FactId = compiled.FactId + "-duplicate" });
         if (scenario.EndsWith("-helper", StringComparison.Ordinal))
         {
             var helper = Assert.Single(facts, f => f.FactType == FactTypes.MethodDeclared && f.TargetSymbol == "Helper");
@@ -232,9 +241,13 @@ public sealed class FrameworkSignatureCandidateTests
         var report = await CombinedDependencyPathReporter.BuildSelectedSymbolsAsync(options, roots, true);
         if (scenario is "missing-receipt" or "wrong-receipt" or "ambiguous" or "exact-ambiguous" or "work" or "fake-base-fill-namespace" or "fake-base-fill-assembly" or "fake-base-fill-token" or "fake-base-fill-culture"
             or "provider-version" or "provider-name" or "framework-token" or "framework-culture" or "parameter-type" or "return-type" or "ineligible-provenance"
-            or "wrong-mode-helper" or "invalid-mode-helper" or "mode-count-helper" or "missing-mode-helper")
+            or "wrong-mode-helper" or "invalid-mode-helper" or "mode-count-helper" or "missing-mode-helper"
+            or "nested-namespace-decoy" or "nested-missing-namespace" or "nested-ambiguous")
         {
             Assert.Empty(report.Paths);
+            if (scenario.StartsWith("nested-", StringComparison.Ordinal))
+                Assert.Contains(report.Gaps, gap => gap.GapKind == "ProjectlessPublishMemberAmbiguous" &&
+                    gap.Reason == (scenario == "nested-ambiguous" ? "multiple-qualified-compatible-members" : "qualified-containing-type-unmatched"));
             if (scenario.EndsWith("-helper", StringComparison.Ordinal))
                 Assert.Contains(report.Gaps, gap => gap.GapKind == "ProjectlessPublishMemberAmbiguous" && gap.Reason == "parameter-shape-unmatched");
             if (scenario == "work") Assert.True(report.Summary.Truncated);
@@ -347,7 +360,18 @@ public sealed class FrameworkSignatureCandidateTests
         if (scenario == "parameter-type") list.Name = "OtherList";
         if (scenario == "return-type") dataset.Name = "OtherData";
         var type = new TypeDefinition("", caller ? "Entry" : "Provider", TypeAttributes.Public | TypeAttributes.Class, module.TypeSystem.Object);
-        module.Types.Add(type);
+        if (caller && scenario.StartsWith("nested-", StringComparison.Ordinal) && scenario != "nested-namespace-decoy")
+        {
+            var outer = new TypeDefinition("PublicDomain", "Container", TypeAttributes.Public | TypeAttributes.Class, module.TypeSystem.Object);
+            module.Types.Add(outer);
+            type.Attributes = TypeAttributes.NestedPublic | TypeAttributes.Class;
+            outer.NestedTypes.Add(type);
+        }
+        else
+        {
+            if (caller && scenario == "nested-namespace-decoy") type.Namespace = "PublicDomain.Container";
+            module.Types.Add(type);
+        }
         if (caller)
         {
             var reference = new AssemblyNameReference(scenario == "appcode" ? "PublicAppCode" : "PublicProvider", new Version(1, 0, 0, 0));
