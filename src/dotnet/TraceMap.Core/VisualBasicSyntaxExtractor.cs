@@ -350,7 +350,9 @@ public static class VisualBasicSyntaxExtractor
                         ["bodyStartLine"] = (methodBodyLines.StartLinePosition.Line + 1).ToString(),
                         ["bodyEndLine"] = (methodBodyLines.EndLinePosition.Line + 1).ToString(),
                         ["parameterCount"] = parameterCount.ToString(),
-                        ["parameterTypes"] = string.Join(";", parameterTypes)
+                        ["parameterTypes"] = string.Join(";", parameterTypes),
+                        ["parameterPassingModes"] = string.Join(";", MethodParameters(statement).Select(parameter =>
+                            parameter.Modifiers.Any(SyntaxKind.ByRefKeyword) ? "byref" : "byval"))
                     },
                     budget))
             {

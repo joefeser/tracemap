@@ -144,13 +144,21 @@ public sealed class FrameworkSignatureCandidateTests
     [InlineData(4, 4, "fake-base-fill-assembly")]
     [InlineData(4, 4, "fake-base-fill-token")]
     [InlineData(4, 4, "fake-base-fill-culture")]
+    [InlineData(2, 2, "unbridged-helper")]
+    [InlineData(4, 4, "unbridged-helper")]
+    [InlineData(2, 2, "byref-helper")]
+    [InlineData(4, 4, "byref-helper")]
+    [InlineData(4, 4, "wrong-mode-helper")]
+    [InlineData(4, 4, "invalid-mode-helper")]
+    [InlineData(4, 4, "mode-count-helper")]
+    [InlineData(4, 4, "missing-mode-helper")]
     public async Task Mixed_framework_source_to_database_path_preserves_candidate_boundary(int callerVersion, int providerVersion, string scenario)
     {
         using var temp = new TempDirectory();
         var callerPath = Path.Combine(temp.Path, "PublicWebsite.dll");
         var providerPath = Path.Combine(temp.Path, "PublicProvider.dll");
         var instanceCall = scenario is "virtual" or "nonvirtual" or "missing-flags";
-        Build(callerPath, callerVersion, true, instanceCall, scenario is "return-flow" or "appcode" or "preserved-base-fill" ? scenario : "valid", providerVersion);
+        Build(callerPath, callerVersion, true, instanceCall, scenario.EndsWith("-helper", StringComparison.Ordinal) ? "unbridged-helper" : scenario is "return-flow" or "appcode" or "preserved-base-fill" ? scenario : "valid", providerVersion);
         Build(providerPath, providerVersion, false, instanceCall, scenario);
         var paths = new List<string> { callerPath, providerPath };
         if (scenario == "appcode")
@@ -174,11 +182,27 @@ public sealed class FrameworkSignatureCandidateTests
             }
         }
         var repo = FindRepo();
-        var scan = ScanEngine.Scan(new ScanOptions(Path.Combine(repo, "samples", "messy-dotnet-workspace", "framework-signature-boundary"),
+        var scan = ScanEngine.Scan(new ScanOptions(Path.Combine(repo, "samples", "messy-dotnet-workspace", scenario.EndsWith("-helper", StringComparison.Ordinal) ? "vb-unbridged-helper" : "framework-signature-boundary"),
             Path.Combine(temp.Path, "scan"), CompiledInputPaths: paths, IlBodyEvidence: true));
         var declaration = Assert.Single(scan.Facts, f => f.FactType == FactTypes.MethodDeclared && f.TargetSymbol == "Start");
         var compiled = Assert.Single(scan.Facts, f => f.FactType == FactTypes.ManagedMethodDeclared && f.Properties.GetValueOrDefault("metadataName") == "Start");
         var facts = scan.Facts.ToList();
+        if (scenario.EndsWith("-helper", StringComparison.Ordinal))
+        {
+            var helper = Assert.Single(facts, f => f.FactType == FactTypes.MethodDeclared && f.TargetSymbol == "Helper");
+            Assert.Equal("byref", helper.Properties["parameterPassingModes"]);
+            if (scenario != "byref-helper")
+                facts = facts.Select(f => f.FactId == helper.FactId ? f with
+                {
+                    Properties = scenario is "unbridged-helper" or "missing-mode-helper"
+                        ? f.Properties.Where(p => p.Key != "parameterPassingModes").ToDictionary()
+                        : new Dictionary<string, string>(f.Properties) { ["parameterPassingModes"] = scenario switch
+                        { "wrong-mode-helper" => "byval", "mode-count-helper" => "byref;byval", _ => "unknown" } }
+                } : f).ToList();
+            // Query the helper directly to prove the new bridge, not merely the
+            // existing compiled Start -> Helper route used by the historical case.
+            if (scenario != "unbridged-helper") declaration = helper;
+        }
         if (scenario == "missing-flags")
             facts = facts.Select(f => f.FactType == FactTypes.ManagedMethodDeclared && f.Properties.GetValueOrDefault("metadataName") == "Query"
                 ? f with { Properties = f.Properties.Where(p => p.Key != "methodDispatchFlags").ToDictionary() } : f).ToList();
@@ -207,14 +231,19 @@ public sealed class FrameworkSignatureCandidateTests
         var roots = new[] { new CombinedPathSymbolRoot(source.SourceIndexId, source.ScanId, source.CommitSha, declaration.Properties["memberIdentity"]) };
         var report = await CombinedDependencyPathReporter.BuildSelectedSymbolsAsync(options, roots, true);
         if (scenario is "missing-receipt" or "wrong-receipt" or "ambiguous" or "exact-ambiguous" or "work" or "fake-base-fill-namespace" or "fake-base-fill-assembly" or "fake-base-fill-token" or "fake-base-fill-culture"
-            or "provider-version" or "provider-name" or "framework-token" or "framework-culture" or "parameter-type" or "return-type" or "ineligible-provenance")
+            or "provider-version" or "provider-name" or "framework-token" or "framework-culture" or "parameter-type" or "return-type" or "ineligible-provenance"
+            or "wrong-mode-helper" or "invalid-mode-helper" or "mode-count-helper" or "missing-mode-helper")
         {
             Assert.Empty(report.Paths);
+            if (scenario.EndsWith("-helper", StringComparison.Ordinal))
+                Assert.Contains(report.Gaps, gap => gap.GapKind == "ProjectlessPublishMemberAmbiguous" && gap.Reason == "parameter-shape-unmatched");
             if (scenario == "work") Assert.True(report.Summary.Truncated);
             if (scenario == "ambiguous") Assert.Contains(report.Gaps, g => g.GapKind == "CompiledIlFrameworkVersionAmbiguous");
             if (scenario == "exact-ambiguous") Assert.Contains(report.Gaps, g => g.GapKind == "CompiledIlTargetAmbiguous");
             return;
         }
+        Assert.True(report.Paths.Count > 0, string.Join("\n", report.Gaps.Select(g => g.GapKind + ":" + g.Reason)) + "\n" +
+            string.Join("\n", facts.Where(f => f.FactType == FactTypes.ManagedMethodDeclared && f.Properties.GetValueOrDefault("metadataName") == "Helper").Select(f => f.Properties.GetValueOrDefault("signature"))));
         var path = Assert.Single(report.Paths);
         if (scenario == "return-flow")
         {
@@ -250,6 +279,19 @@ public sealed class FrameworkSignatureCandidateTests
         RetainedMethodGraph? graph = null;
         await CombinedDependencyPathReporter.BuildSelectedSymbolsAsync(options with { ToSurface = null, MethodGraphObserver = value => graph = value }, roots, true);
         Assert.NotNull(graph);
+        if (scenario is "unbridged-helper" or "byref-helper")
+        {
+            Assert.Contains(path.Nodes, node => node.SymbolId?.Contains("|method:6:Helper|", StringComparison.Ordinal) == true);
+            var helper = Assert.Single(scan.Facts, fact => fact.FactType == FactTypes.MethodDeclared && fact.TargetSymbol == "Helper");
+            var helperNodes = graph.Nodes.Where(node => node.SymbolId == helper.Properties["memberIdentity"]).Select(node => node.NodeId).ToHashSet();
+            if (scenario == "byref-helper")
+                Assert.Contains(graph.Edges, edge => edge.EdgeKind == "projectless-publish-member-candidate" && helperNodes.Contains(edge.FromNodeId));
+            else
+            {
+                Assert.DoesNotContain(graph.Edges, edge => edge.EdgeKind == "projectless-publish-member-candidate" && helperNodes.Contains(edge.FromNodeId));
+                Assert.Contains(report.Gaps, gap => gap.GapKind == "ProjectlessPublishMemberAmbiguous" && gap.Reason == "parameter-shape-unmatched");
+            }
+        }
         if (scenario is "base-fill" or "preserved-base-fill")
         {
             Assert.Contains(graph.Calls, c => c.EncodedTarget?.Contains("names:11:DataAdapter)|member:4:Fill|", StringComparison.Ordinal) == true);
@@ -315,6 +357,22 @@ public sealed class FrameworkSignatureCandidateTests
             var start = new MethodDefinition("Start", MethodAttributes.Public | MethodAttributes.Static, module.TypeSystem.Void);
             type.Methods.Add(start);
             var il = start.Body.GetILProcessor();
+            if (scenario == "unbridged-helper")
+            {
+                var helper = new MethodDefinition("Helper", MethodAttributes.Private | MethodAttributes.Static, dataset);
+                helper.Parameters.Add(new(new ByReferenceType(module.TypeSystem.Int32)));
+                type.Methods.Add(helper);
+                var helperIl = helper.Body.GetILProcessor();
+                helperIl.Emit(OpCodes.Ldstr, "synthetic command"); helperIl.Emit(OpCodes.Ldnull);
+                helperIl.Emit(OpCodes.Call, query); helperIl.Emit(OpCodes.Ret);
+                start.Body.InitLocals = true;
+                var id = new VariableDefinition(module.TypeSystem.Int32);
+                start.Body.Variables.Add(id);
+                il.Emit(OpCodes.Ldloca, id); il.Emit(OpCodes.Call, helper);
+                il.Emit(OpCodes.Pop); il.Emit(OpCodes.Ret);
+                assembly.Write(path);
+                return;
+            }
             if (virtualCall) il.Emit(OpCodes.Ldnull);
             il.Emit(OpCodes.Ldstr, "synthetic command"); il.Emit(OpCodes.Ldnull);
             il.Emit(virtualCall ? OpCodes.Callvirt : OpCodes.Call, query);

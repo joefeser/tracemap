@@ -741,8 +741,25 @@ public static partial class CombinedDependencyPathReporter
             return false;
         var lexicalNamespace = source.Properties.GetValueOrDefault("lexicalNamespace") ?? string.Empty;
         var importedNamespaces = source.Properties.GetValueOrDefault("importedNamespaces") ?? string.Empty;
-        return syntaxTypes.Zip(metadataTypes).All(pair =>
-            PublishParameterMatches(pair.First, pair.Second, lexicalNamespace, importedNamespaces));
+        var rawModes = source.Properties.GetValueOrDefault("parameterPassingModes");
+        var modes = rawModes is null ? null : rawModes.Length == 0 ? [] : rawModes.Split(';');
+        if (modes is not null && modes.Length != sourceCount) return false;
+        for (var index = 0; index < sourceCount; index++)
+        {
+            var metadataType = metadataTypes[index];
+            // Older indexes have no passing-mode evidence: retain the historical
+            // refusal of ByRef rather than guessing from the parameter type.
+            if (modes is not null)
+            {
+                if (modes[index] is not ("byref" or "byval")) return false;
+                var byReference = metadataType.EndsWith('&');
+                if (byReference != (modes[index] == "byref")) return false;
+                if (byReference) metadataType = metadataType[..^1];
+            }
+            if (!PublishParameterMatches(syntaxTypes[index], metadataType, lexicalNamespace, importedNamespaces))
+                return false;
+        }
+        return true;
     }
 
     private static bool TrySignatureParameters(string? signature, out string[] parameters)

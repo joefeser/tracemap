@@ -240,3 +240,29 @@ explanation is now visible in HTML while supporting IL retains DataAdapter.Fill.
 The final preservation check covered 479 existing files, including prior outputs;
 all were unchanged. Coverage/provenance gaps remain and the private application
 is still unvalidated. No application or SQL execution was performed.
+
+## Projectless helper passing modes
+
+The public `vb-unbridged-helper` fixture independently tests a source helper with
+a `ByRef Integer` parameter and retained compiled calls through a separate
+provider to `SqlCommand.ExecuteScalar`. It never executes that method or SQL.
+
+Syntax extraction now retains ordered `parameterPassingModes`; the bounded
+report projection preserves them. Publish-member matching requires a matching
+ByRef/ByVal mode before comparing the element type. Receipt hashes, qualified
+type/name matching, unique-candidate admission and Tier3 labeling are unchanged.
+Wrong, malformed, inconsistent or absent ByRef mode evidence is refused.
+
+The matrix separately proves that an already-retained compiled Start-to-helper
+route survives when the source helper cannot be bridged. Missing source bridges
+must not be described as missing IL calls. Older indexes need source
+re-extraction to gain passing-mode evidence; merely requerying them cannot add it.
+This synthetic defect is not proof of the cause of the private application's
+remaining source gaps. Alias imports and identifier-side array declarations
+remain separate unsupported-shape investigations, not guessed matches.
+
+Focused local validation: 251 tests passed (framework candidate, VB extraction,
+publish-member index, combined paths, grouped handoff and baseline prewalk
+suites), including eight helper cases. CLI build completed with zero warnings
+and errors. Authentic Windows compilation of this new helper case remains a
+separate validation gate.

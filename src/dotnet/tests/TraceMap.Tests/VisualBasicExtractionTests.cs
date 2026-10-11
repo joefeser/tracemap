@@ -527,12 +527,14 @@ public sealed class VisualBasicExtractionTests
             {
                 Assert.Equal("Alpha.Worker", declaration.Properties["qualifiedContainingType"]);
                 Assert.Equal("String", declaration.Properties["parameterTypes"]);
+                Assert.Equal("byval", declaration.Properties["parameterPassingModes"]);
                 Assert.Equal("Alpha.Worker.Save(String)", declaration.Properties["memberIdentity"]);
             },
             declaration =>
             {
                 Assert.Equal("Beta.Worker", declaration.Properties["qualifiedContainingType"]);
                 Assert.Equal("Integer", declaration.Properties["parameterTypes"]);
+                Assert.Equal("byval", declaration.Properties["parameterPassingModes"]);
                 Assert.Equal("Beta.Worker.Save(Integer)", declaration.Properties["memberIdentity"]);
             });
     }
