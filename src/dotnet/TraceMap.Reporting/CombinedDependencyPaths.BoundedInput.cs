@@ -266,7 +266,7 @@ public static partial class CombinedDependencyPathReporter
                             when fact_type = '{{FactTypes.MethodDeclared}}'
                                 and rule_id = '{{RuleIds.VisualBasicSyntaxDeclarations}}'
                                 and projection_safe then
-                            json_patch(json_object(
+                            json_patch(json_patch(json_object(
                                 'containingType', coalesce(cast(json_extract(properties_json, '$.containingType') as text), ''),
                                 'qualifiedContainingType', coalesce(cast(json_extract(properties_json, '$.qualifiedContainingType') as text), ''),
                                 'methodName', coalesce(cast(json_extract(properties_json, '$.methodName') as text), ''),
@@ -274,10 +274,12 @@ public static partial class CombinedDependencyPathReporter
                                 'memberIdentity', coalesce(cast(json_extract(properties_json, '$.memberIdentity') as text), ''),
                                 'bodyStartLine', coalesce(cast(json_extract(properties_json, '$.bodyStartLine') as text), ''),
                                 'bodyEndLine', coalesce(cast(json_extract(properties_json, '$.bodyEndLine') as text), ''),
-                                'lexicalNamespace', coalesce(cast(json_extract(properties_json, '$.lexicalNamespace') as text), ''),
                                 'importedNamespaces', coalesce(cast(json_extract(properties_json, '$.importedNamespaces') as text), ''),
                                 'parameterCount', coalesce(cast(json_extract(properties_json, '$.parameterCount') as text), ''),
                                 'parameterTypes', coalesce(cast(json_extract(properties_json, '$.parameterTypes') as text), '')),
+                                case when json_type(properties_json, '$.lexicalNamespace') is not null
+                                     then json_object('lexicalNamespace', coalesce(cast(json_extract(properties_json, '$.lexicalNamespace') as text), '|invalid|'))
+                                     else json('{}') end),
                                 case when json_type(properties_json, '$.parameterPassingModes') is not null
                                      then json_object('parameterPassingModes', coalesce(cast(json_extract(properties_json, '$.parameterPassingModes') as text), 'invalid'))
                                      else json('{}') end)

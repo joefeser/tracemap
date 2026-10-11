@@ -71,8 +71,13 @@ public static partial class CombinedDependencyPathReporter
             || !ConsumeLiteral(identity, ref position, "|names:")
             || !ReadComponent(identity, ref position, out var name)
             || ns.Contains('|', StringComparison.Ordinal) || name.Length == 0 || name.Contains('|', StringComparison.Ordinal)) return false;
+        while (position < identity.Length && char.IsAsciiDigit(identity[position]))
+        {
+            if (!ReadComponent(identity, ref position, out var nestedName)
+                || nestedName.Length == 0 || nestedName.Contains('|', StringComparison.Ordinal)) return false;
+        }
         var end = position;
-        // Generic/nested/malformed and delimiter-bearing identities are not
+        // Generic/malformed and delimiter-bearing identities are not
         // discarded: they retain the name-wide fallback/work accounting.
         if (!ConsumeLiteral(identity, ref position, "|arity:0|method:")
             || !ReadComponent(identity, ref position, out var methodName)

@@ -644,7 +644,7 @@ public static partial class CombinedDependencyPathReporter
             if (!declarationsByFile.TryGetValue((RetainedSourceIndex(source.SourceIndexId, parents), source.FilePath), out var declarations)) continue;
             foreach (var declaration in declarations)
             {
-                if (!TrySimpleTypePath(declaration.Properties.GetValueOrDefault("qualifiedContainingType"), out var typePath)) continue;
+                if (!TryPublishSourceTypePath(declaration.Properties, out var typePath)) continue;
                 candidateWork += methodIndex.CandidateWork(source.SourceIndexId,
                     declaration.Properties.GetValueOrDefault("name"), typePath);
                 if (candidateWork <= 100_000) continue;
@@ -669,12 +669,14 @@ public static partial class CombinedDependencyPathReporter
                 continue;
             foreach (var declaration in sourceDeclarations.OrderBy(fact => fact.CombinedFactId, StringComparer.Ordinal))
             {
-                var typeName = declaration.Properties.GetValueOrDefault("qualifiedContainingType");
                 var name = declaration.Properties.GetValueOrDefault("name");
                 var memberIdentity = declaration.Properties.GetValueOrDefault("memberIdentity");
-                if (!TrySimpleTypePath(typeName, out var typePath) || string.IsNullOrWhiteSpace(name)
+                if (!TryPublishSourceTypePath(declaration.Properties, out var typePath) || string.IsNullOrWhiteSpace(name)
                     || name.Equals("New", StringComparison.OrdinalIgnoreCase) || string.IsNullOrWhiteSpace(memberIdentity))
                     continue;
+                var sourceNode = graph.GetOrAddSymbolNode(declaration.SourceIndexId, declaration.SourceLabel,
+                    memberIdentity, declaration.FilePath, declaration.StartLine, declaration.EndLine,
+                    declaration.RuleId, declaration.EvidenceTier);
                 var selection = methodIndex.Select(source.SourceIndexId, name, typePath, hashes);
                 var inQualifiedType = selection.QualifiedCandidates;
                 var candidates = inQualifiedType.Where(fact =>
@@ -684,7 +686,7 @@ public static partial class CombinedDependencyPathReporter
                     AddCompiledIlGap(graph, declaration, "ProjectlessPublishMemberAmbiguous",
                         PublishMemberGapReason(selection.NamedCount, selection.BoundAssemblyCount,
                             inQualifiedType.Count, candidates.Length),
-                        candidates.Length, ProjectlessPublishCandidateRuleId);
+                        candidates.Length, ProjectlessPublishCandidateRuleId, sourceNode.NodeId);
                     continue;
                 }
                 var compiled = candidates[0];
@@ -694,12 +696,9 @@ public static partial class CombinedDependencyPathReporter
                 if (matchingAssembly.Length != 1)
                 {
                     AddCompiledIlGap(graph, declaration, "ProjectlessPublishAssemblyAmbiguous",
-                        "one-declared-published-assembly-required", matchingAssembly.Length, ProjectlessPublishCandidateRuleId);
+                        "one-declared-published-assembly-required", matchingAssembly.Length, ProjectlessPublishCandidateRuleId, sourceNode.NodeId);
                     continue;
                 }
-                var sourceNode = graph.GetOrAddSymbolNode(declaration.SourceIndexId, declaration.SourceLabel,
-                    memberIdentity, declaration.FilePath, declaration.StartLine, declaration.EndLine,
-                    declaration.RuleId, declaration.EvidenceTier);
                 var compiledNode = graph.GetOrAddSymbolNode(compiled.SourceIndexId, compiled.SourceLabel,
                     compiled.TargetSymbol!, compiled.FilePath, compiled.StartLine, compiled.EndLine,
                     compiled.RuleId, compiled.EvidenceTier);
@@ -899,6 +898,25 @@ public static partial class CombinedDependencyPathReporter
         return true;
     }
 
+    internal static bool TryPublishSourceTypePath(IReadOnlyDictionary<string, string> properties, out string typePath)
+    {
+        var qualified = properties.GetValueOrDefault("qualifiedContainingType");
+        // Legacy declarations without a retained namespace keep their historical
+        // top-level match. Do not guess a nesting boundary from dotted spelling.
+        if (!properties.TryGetValue("lexicalNamespace", out var ns))
+            return TrySimpleTypePath(qualified, out typePath);
+        typePath = string.Empty;
+        if (string.IsNullOrWhiteSpace(qualified) || ns is null) return false;
+        var prefix = ns.Length == 0 ? string.Empty : ns + ".";
+        if (!qualified.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) return false;
+        var names = qualified[prefix.Length..].Split('.');
+        if (names.Any(name => name.Length == 0 || name.Any(c => c is '+' or '`' or '|' or ':' or '(' or ')'))
+            || (ns.Length > 0 && ns.Split('.').Any(part => part.Length == 0))
+            || ns.Any(c => c is '+' or '`' or '|' or ':' or '(' or ')')) return false;
+        typePath = $"namespace:{ns.Length}:{ns}|names:" + string.Concat(names.Select(name => $"{name.Length}:{name}"));
+        return true;
+    }
+
     private static void AddProjectlessPdbIdentityEdges(EvidenceGraph graph, IReadOnlyList<CombinedFactRow> facts,
         IReadOnlyDictionary<string, CompiledAttachmentIndexLink> parents)
     {
@@ -1092,7 +1110,7 @@ public static partial class CombinedDependencyPathReporter
     }
 
     private static void AddCompiledIlGap(EvidenceGraph graph, CombinedFactRow fact,
-        string gapKind, string reason, int? candidateCount, string ruleId = CompiledIlBridgeRuleId)
+        string gapKind, string reason, int? candidateCount, string ruleId = CompiledIlBridgeRuleId, string? nodeId = null)
     {
         graph.Gaps.Add(new CombinedPathGap(
             $"gap:compiled-il:{fact.CombinedFactId}:{gapKind}", gapKind,
@@ -1105,7 +1123,7 @@ public static partial class CombinedDependencyPathReporter
                 "CompiledIlArtifactContext" when reason.StartsWith("framework-signature-", StringComparison.Ordinal) => "The retained framework-version candidate lacks source-commit binding; compiled provenance was not upgraded.",
                 _ => "Bound compiled evidence could not be joined to one path-graph target; no edge was inferred."
             },
-            fact.SourceIndexId, fact.SourceLabel, null, fact.CombinedFactId,
+            fact.SourceIndexId, fact.SourceLabel, nodeId, fact.CombinedFactId,
             ruleId, EvidenceTiers.Tier4Unknown,
             SafePath(fact.FilePath), fact.StartLine, reason,
             fact.CommitSha, fact.ExtractorVersion, "bound-compiled-il",
