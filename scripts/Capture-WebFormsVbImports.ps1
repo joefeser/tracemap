@@ -34,8 +34,18 @@ function Read-Bounded([string]$Path, [long]$Limit) {
     Assert-RegularPath $Path
     $file = Get-Item -LiteralPath $Path
     if (!$file.PSIsContainer -and ($file.Attributes -band [IO.FileAttributes]::ReparsePoint) -eq 0 -and $file.Length -le $Limit) {
-        $bytes = [IO.File]::ReadAllBytes($file.FullName)
-        if ($bytes.LongLength -le $Limit) { return ,$bytes }
+        $readStream = New-Object IO.FileStream($file.FullName, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::Read)
+        $bounded = New-Object IO.MemoryStream
+        $buffer = New-Object byte[] 65536
+        try {
+            while ($true) {
+                $remaining = $Limit - $bounded.Length
+                $read = $readStream.Read($buffer, 0, [int][Math]::Min($buffer.Length, $remaining + 1))
+                if ($read -eq 0) { return ,$bounded.ToArray() }
+                if ($read -gt $remaining) { Stop-Capture 'VB_IMPORT_CAPTURE_FILE_BOUND' }
+                $bounded.Write($buffer, 0, $read)
+            }
+        } finally { $bounded.Dispose(); $readStream.Dispose() }
     }
     Stop-Capture 'VB_IMPORT_CAPTURE_FILE_BOUND'
 }
@@ -67,8 +77,10 @@ try {
         $directory = $queue.Dequeue()
         $directoryItem = Get-Item -LiteralPath $directory
         if ($directoryItem.Attributes -band [IO.FileAttributes]::ReparsePoint) { Stop-Capture 'VB_IMPORT_CAPTURE_REPARSE_REFUSED' }
-        foreach ($entry in Get-ChildItem -LiteralPath $directory -Force) {
+        $iterator = [IO.Directory]::EnumerateFileSystemEntries($directory).GetEnumerator()
+        try { while ($iterator.MoveNext()) {
             if (++$entries -gt 4096) { Stop-Capture 'VB_IMPORT_CAPTURE_SCOPE_BOUND' }
+            $entry = Get-Item -LiteralPath $iterator.Current -Force
             if ($entry.Attributes -band [IO.FileAttributes]::ReparsePoint) { Stop-Capture 'VB_IMPORT_CAPTURE_REPARSE_REFUSED' }
             if ($entry.PSIsContainer) { $queue.Enqueue($entry.FullName) }
             elseif ($entry.Extension -ieq '.vb') {
@@ -78,7 +90,7 @@ try {
                 if ($sourcePaths.Count -gt 256) { Stop-Capture 'VB_IMPORT_CAPTURE_SOURCE_BOUND' }
             }
             elseif ($entry.Name -ieq 'web.config') { Stop-Capture 'VB_IMPORT_CAPTURE_NESTED_CONFIGURATION_REFUSED' }
-        }
+        } } finally { ([IDisposable]$iterator).Dispose() }
     }
     if ($subset.Count -gt 0 -and $sourcePaths.Count -ne $subset.Count) { Stop-Capture 'VB_IMPORT_CAPTURE_SOURCE_SCOPE_INVALID' }
     if ($sourcePaths.Count -eq 0) { Stop-Capture 'VB_IMPORT_CAPTURE_SOURCE_UNAVAILABLE' }
