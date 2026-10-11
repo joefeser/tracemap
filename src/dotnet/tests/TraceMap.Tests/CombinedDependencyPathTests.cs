@@ -332,6 +332,53 @@ public sealed class CombinedDependencyPathTests
         Assert.All(result.Report.Gaps.Where(gap => gap.CutoffCause is not null), gap => Assert.Equal("depth", gap.Reason));
     }
 
+    [Theory]
+    [InlineData(2, false)]
+    [InlineData(4, false)]
+    [InlineData(8, false)]
+    [InlineData(2, true)]
+    [InlineData(4, true)]
+    [InlineData(8, true)]
+    public async Task Depth_uncertainty_preserves_short_variants_and_separates_terminal_inventory(int depth, bool inventory)
+    {
+        using var temp = new TempDirectory();
+        var manifest = Manifest("server", "depth-inventory-controls") with { CommitSha = new string('a', 40) };
+        var index = Path.Combine(temp.Path, "index.sqlite");
+        var combined = Path.Combine(temp.Path, "combined.sqlite");
+        var facts = new List<CodeFact>
+        {
+            CallFact(manifest, "Root.Start()", "Short.Query()", "Root.cs", 1),
+            CallFact(manifest, "Root.Start()", "Short.Query()", "Root.cs", 2),
+            QueryPatternFact(manifest, "Short.Query()", "Short.cs", 1),
+            CallFact(manifest, "Root.Start()", "Long.M0()", "Root.cs", 3),
+            CallFact(manifest, "Root.Start()", "Unknown.Leaf()", "Root.cs", 4),
+            QueryPatternFact(manifest, "Long.M4()", "Long.cs", 10)
+        };
+        for (var i = 0; i < 4; i++)
+            facts.Add(CallFact(manifest, $"Long.M{i}()", $"Long.M{i + 1}()", "Long.cs", i + 1));
+        SqliteIndexWriter.Write(index, manifest, facts);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([index], combined, ["server"]));
+        var options = new CombinedDependencyPathOptions(combined, temp.Path, FromSymbol: "Root.Start()",
+            ToSurface: "sql-query", IncludeLegacyRoots: true, MaxDepth: depth, MaxPaths: 100, MaxFrontier: 100)
+            { ExactFromSymbol = true, MaxTraversalWork = 4096, InventoryDistinctTerminals = inventory };
+        var report = await CombinedDependencyPathReporter.BuildReportAsync(options);
+        Assert.Equal(2, report.Paths.Count(path => path.Nodes.Any(node => node.SymbolId == "Short.Query()")));
+        Assert.Equal(inventory || depth >= 6,
+            report.Paths.Any(path => path.Nodes.Any(node => node.SymbolId == "Long.M4()")));
+        Assert.DoesNotContain(report.Paths, path => path.Nodes.Any(node => node.SymbolId == "Unknown.Leaf()"));
+        Assert.DoesNotContain(report.Gaps, gap => gap.GapKind == "TruncatedByLimit" && gap.Reason == "work");
+        Assert.InRange(report.Summary.TraversalWorkUnits!.Value, 1, 4096);
+        if (!inventory)
+        {
+            Assert.True(report.Summary.Truncated);
+            Assert.Contains(report.Gaps, gap => gap.CutoffCause == "terminal-route-not-found-within-depth-bound");
+        }
+        var replay = await CombinedDependencyPathReporter.BuildReportAsync(options);
+        Assert.Equal(JsonSerializer.Serialize(report.Paths), JsonSerializer.Serialize(replay.Paths));
+        Assert.Equal(JsonSerializer.Serialize(report.Gaps), JsonSerializer.Serialize(replay.Gaps));
+        Assert.Equal(report.Summary.TraversalWorkUnits, replay.Summary.TraversalWorkUnits);
+    }
+
     [Fact]
     public async Task Legacy_terminal_prewalk_retains_shortest_witness_beyond_display_depth()
     {
