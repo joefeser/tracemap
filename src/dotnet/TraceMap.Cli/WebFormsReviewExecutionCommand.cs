@@ -108,7 +108,7 @@ public static partial class WebFormsReviewExecutionCommand
                 {
                     phase = "reports-resume";
                     return await ExecuteReportsAsync(root, plan, preflightSha, runtimeRoot, runtimeSha, history,
-                        reportRunner, output, cancellationToken);
+                        reportRunner, output, cancellationToken, sourceExtractedThisInvocation: false);
                 }
                 await output.WriteLineAsync($"webFormsExecution={Completed};retainedSnapshot=true;sourceRescanned=false");
                 await output.WriteLineAsync($"webFormsScan={OwnedPath(root, history.ScanCheckpoint.Attempt + "/scan")}");
@@ -175,7 +175,7 @@ public static partial class WebFormsReviewExecutionCommand
                 {
                     phase = "reports";
                     return await ExecuteReportsAsync(root, plan, preflightSha, runtimeRoot, runtimeSha, history,
-                        reportRunner, output, cancellationToken);
+                        reportRunner, output, cancellationToken, sourceExtractedThisInvocation: !attach);
                 }
                 await output.WriteLineAsync($"webFormsExecution={Completed};facts={checkedScan.Facts};reviewOnly=true");
                 await output.WriteLineAsync($"webFormsScan={scanPath}");

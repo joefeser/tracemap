@@ -822,7 +822,11 @@ public sealed class WebFormsReviewExecutionTests
         fixture.AddPublicEventFixture(sourceFolder);
         await fixture.Preflight();
         Assert.Equal(0, await TraceMapCommand.RunAsync(["webforms-review", "run", "--run", fixture.Run], fixture.Output, fixture.Error));
+        Assert.Contains("reviewOnly=true;sourceRescanned=true", fixture.Output.ToString(), StringComparison.Ordinal);
+        Assert.Contains("sourceExtractionScope=current-invocation;reportPhaseSourceRescanned=false;scanOperation=fresh;scanCheckpointSha256=", fixture.Output.ToString(), StringComparison.Ordinal);
+        fixture.Output.GetStringBuilder().Clear();
         Assert.Equal(0, await TraceMapCommand.RunAsync(["webforms-review", "resume", "--run", fixture.Run], fixture.Output, fixture.Error));
+        Assert.DoesNotContain("reviewOnly=true;sourceRescanned=true", fixture.Output.ToString(), StringComparison.Ordinal);
         Assert.Equal("reports-completed-review-only", fixture.LastCheckpoint().State);
         Assert.Equal(4, fixture.LastCheckpoint().Sequence);
         var checkpoint = fixture.LastCheckpoint();
@@ -832,6 +836,7 @@ public sealed class WebFormsReviewExecutionTests
         Assert.True(File.Exists(Path.Combine(report, "compiled", "compiled-paths.handoff.local.json")));
         Assert.DoesNotContain("UnifiedReportsPending", checkpoint.Gaps);
         Assert.Equal(Hash(Path.Combine(fixture.Run, "checkpoints", "0002.json")), checkpoint.Reports.ScanCheckpointSha256);
+        Assert.Contains("scanCheckpointSha256=" + checkpoint.Reports.ScanCheckpointSha256, fixture.Output.ToString(), StringComparison.Ordinal);
         Assert.Contains("sourceRescanned=false", fixture.Output.ToString(), StringComparison.Ordinal);
         var handoff = JsonSerializer.Deserialize<NativeWebFormsReviewHandoff>(File.ReadAllText(Path.Combine(report, "handoff.local.json")), JsonOptions)!;
         Assert.NotEmpty(handoff.Packet.EventChains);
@@ -930,6 +935,7 @@ public sealed class WebFormsReviewExecutionTests
         var markerHash = Hash(marker!);
         Assert.Equal(0, await fixture.ExecuteReports("resume", WebFormsReviewReportExecution.WriteAsync));
         var complete = fixture.LastCheckpoint();
+        Assert.Contains("reviewOnly=true;sourceRescanned=false", fixture.Output.ToString(), StringComparison.Ordinal);
         Assert.Equal("reports-completed-review-only", complete.State);
         Assert.Equal(6, complete.Sequence);
         Assert.Equal(scan.Attempt, complete.Attempt);
@@ -1006,9 +1012,10 @@ public sealed class WebFormsReviewExecutionTests
         using var fixture = new Fixture();
         var parent = await fixture.PreflightAttachment();
         var parentHash = Hash(Path.Combine(parent, "index.sqlite"));
-        Assert.Equal(0, await fixture.Execute("run", (_, _, _, _) => throw new InvalidOperationException("must not source scan")));
-        Assert.Equal(0, await fixture.ExecuteReports("resume", WebFormsReviewReportExecution.WriteAsync));
+        Assert.Equal(0, await fixture.ExecuteReports("run", WebFormsReviewReportExecution.WriteAsync));
         var checkpoint = fixture.LastCheckpoint();
+        Assert.Contains("reportPhaseSourceRescanned=false;scanOperation=attach;scanCheckpointSha256=", fixture.Output.ToString(), StringComparison.Ordinal);
+        Assert.DoesNotContain("reviewOnly=true;sourceRescanned=true", fixture.Output.ToString(), StringComparison.Ordinal);
         Assert.Equal("reports-completed-review-only", checkpoint.State);
         Assert.Equal(parentHash, Hash(Path.Combine(parent, "index.sqlite")));
         var handoff = JsonSerializer.Deserialize<NativeWebFormsReviewHandoff>(File.ReadAllText(Path.Combine(fixture.Run,

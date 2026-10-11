@@ -58,7 +58,8 @@ public static partial class WebFormsReviewExecutionCommand
     }
 
     private static async Task<int> ExecuteReportsAsync(string root, WebFormsReviewPreflightManifest plan, string preflightSha,
-        string runtimeRoot, string runtimeSha, History history, WebFormsReviewReportRunner runner, TextWriter output, CancellationToken token)
+        string runtimeRoot, string runtimeSha, History history, WebFormsReviewReportRunner runner, TextWriter output, CancellationToken token,
+        bool sourceExtractedThisInvocation)
     {
         var scan = history.ScanCheckpoint ?? throw Fail("REPORT_SCAN_ANCHOR_UNAVAILABLE");
         if (history.Checkpoint?.State == WebFormsReviewReportExecution.Completed)
@@ -133,7 +134,10 @@ public static partial class WebFormsReviewExecutionCommand
         }
         async Task PrintAsync(WebFormsReviewCheckpoint checkpoint)
         {
-            await output.WriteLineAsync($"webFormsExecution={WebFormsReviewReportExecution.Completed};reviewOnly=true;sourceRescanned=false");
+            // Reports always consume checkpointed scan artifacts, including when
+            // that checkpoint was freshly produced earlier in this invocation.
+            await output.WriteLineAsync($"webFormsExecution={WebFormsReviewReportExecution.Completed};reviewOnly=true;sourceRescanned={sourceExtractedThisInvocation.ToString().ToLowerInvariant()}");
+            await output.WriteLineAsync($"sourceExtractionScope=current-invocation;reportPhaseSourceRescanned=false;scanOperation={plan.Configuration.Operation};scanCheckpointSha256={checkpoint.Reports!.ScanCheckpointSha256}");
             await output.WriteLineAsync($"webFormsWorkbench={OwnedPath(root, checkpoint.Reports!.ReportAttempt + "/index.html")}");
             await output.WriteLineAsync($"webFormsHandoff={OwnedPath(root, checkpoint.Reports.ReportAttempt + "/" + WebFormsReviewReportExecution.HandoffName)}");
         }
