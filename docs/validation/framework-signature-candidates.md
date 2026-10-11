@@ -162,6 +162,37 @@ handoff. It never infers work exhaustion from truncation alone. Synthetic script
 tests cover all five reasons and unknown historical measurements. No traversal
 algorithm, evidence admission or safety limit was changed without a reproducer.
 
+The follow-up owner-supplied diagnosis verified the handoff against its receipt:
+10,535 measured work units out of a configured 2,000,000, with zero work/path/
+frontier cutoffs. Its 248 retained gaps consist of 225 bounded terminal-route
+uncertainties and 23 immediate publish-member identity round trips. This corrects
+the earlier work-exhaustion interpretation; increasing the work budget would not
+address these recorded causes. Counts are gap records, not counts of missing paths.
+
+### Depth and identity regression build-out
+
+Six public synthetic pipeline cases exercise depths 2, 4 and 8, each with ordinary
+enumeration and distinct-terminal inventory. The graph contains two separately
+evidenced short routes, a deeper terminal and an unresolved leaf. Assertions pin:
+
+- both short evidence variants survive at every depth;
+- ordinary enumeration admits the deep route only when its depth permits it;
+- terminal inventory retains a deeper witness separately from route completeness;
+- an unresolved leaf never becomes a terminal route;
+- work remains bounded, without falsely reporting a work cutoff;
+- repeated queries reproduce paths, gaps and work counts deterministically.
+
+The existing real-scanner synthetic publication-receipt fixture additionally
+asserts that both directions of the publish-member identity link remain in the
+retained graph, the immediate return is labeled as a candidate identity cycle
+(not application recursion), terminal paths still exist, and no retained path
+repeats a node. Its four invalid-receipt controls remain closed.
+
+These cases pass against the existing traversal implementation. They reproduce
+the reported categories but do not demonstrate a traversal defect or prove that
+every private branch is covered. No algorithm change or warning suppression is
+justified by these results. Private source/assemblies are not part of the tests.
+
 That run also exposed a presentation omission: endpoint limitations were retained
 in JSON but absent from grouped HTML. The writer now displays HTML-escaped
 endpoint limitations beside each database endpoint. A new HTML assertion failed

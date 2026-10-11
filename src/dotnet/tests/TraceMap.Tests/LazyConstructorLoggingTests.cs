@@ -826,6 +826,19 @@ public sealed class LazyConstructorLoggingTests
         Assert.NotEmpty(normal.Paths);
         Assert.Contains(normal.Paths, path => path.Nodes.Last().SurfaceName == "SqlCommand.ExecuteScalar");
         Assert.NotEmpty(graph.CommandTraces);
+        var identityEdges = graph.Edges.Where(edge => edge.EdgeKind == "projectless-publish-member-candidate").ToArray();
+        Assert.Contains(identityEdges, edge => identityEdges.Any(reverse =>
+            reverse.FromNodeId == edge.ToNodeId && reverse.ToNodeId == edge.FromNodeId));
+        var roundtrips = normal.Gaps.Where(gap => gap.CutoffCause == "candidate-identity-roundtrip").ToArray();
+        Assert.NotEmpty(roundtrips);
+        Assert.All(roundtrips, gap =>
+        {
+            Assert.Equal("cycle", gap.Reason);
+            Assert.Contains("not evidence of application recursion", gap.Message);
+        });
+        Assert.All(normal.Paths, path => Assert.Equal(path.Nodes.Count,
+            path.Nodes.Select(node => node.NodeId).Distinct(StringComparer.Ordinal).Count()));
+        Assert.DoesNotContain(normal.Gaps, gap => gap.GapKind == "TruncatedByLimit" && gap.Reason == "work");
         var handoff = GroupedCompiledPathHandoffBuilder.Create(normal, new string('a', 64));
         var written = await GroupedCompiledPathReportWriter.WriteAsync(handoff, Path.Combine(temp.Path, "publish-bridge-report"));
         var html = await File.ReadAllTextAsync(written.HtmlPath);
