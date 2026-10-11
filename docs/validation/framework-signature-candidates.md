@@ -347,3 +347,7 @@ regressions. This does not resolve the earlier Windows event-wiring failure or
 establish additional private routes without the owner-side comparison.
 After the extractor-version update, the 111 generic/framework candidate tests
 were rerun successfully; the CLI build completed with zero warnings/errors.
+The keyword/escaped-identifier follow-up additionally verifies that a method
+variable named `[Integer]` cannot capture a predefined `Integer` type, and that
+`!!0` never substitutes for containing-type `!0`. All 112 generic/framework
+candidate tests passed after that follow-up.
