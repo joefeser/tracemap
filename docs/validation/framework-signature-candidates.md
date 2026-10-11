@@ -193,6 +193,15 @@ the reported categories but do not demonstrate a traversal defect or prove that
 every private branch is covered. No algorithm change or warning suppression is
 justified by these results. Private source/assemblies are not part of the tests.
 
+Validation at `f036a7237c4772a83eac9a339fb1047b94b1f1ad`: local selected
+regressions passed 199/199 (zero skips). Windows focused depth/publication/
+roundtrip tests passed 14/14, and the wizard requery script passed. The initial
+Windows test command exited 1 despite passing tests because MSBuild reported
+MSB3491 for a generated assembly-attributes file. One retry with `-m:1
+/p:BuildInParallel=false` completed with exit 0; the underlying build-error cause
+is not established. Native and private artifacts were untouched. No full-suite,
+application-execution or SQL-execution claim is made.
+
 That run also exposed a presentation omission: endpoint limitations were retained
 in JSON but absent from grouped HTML. The writer now displays HTML-escaped
 endpoint limitations beside each database endpoint. A new HTML assertion failed
