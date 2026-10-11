@@ -60,6 +60,18 @@ function Write-WebFormsTruncationSummary([string]$Directory) {
         if ($valueText.Length -gt 256) { return $valueText.Substring(0,256) + '…' }
         return $valueText
     }
+    $summary = if ($handoff.header.PSObject.Properties['summary']) { $handoff.header.summary } else { $null }
+    $query = if ($handoff.header.PSObject.Properties['query']) { $handoff.header.query } else { $null }
+    $work = if ($null -ne $summary -and $summary.PSObject.Properties['traversalWorkUnits']) { $summary.traversalWorkUnits } else { $null }
+    $workLimit = if ($null -ne $query -and $query.PSObject.Properties['maxTraversalWork']) { $query.maxTraversalWork } else { $null }
+    Write-Output "Traversal work: measured=$(Short-Text $work); configuredLimit=$(Short-Text $workLimit). Work count alone does not identify the cutoff reason."
+    foreach ($reason in @('work', 'depth', 'cycle', 'path', 'frontier')) {
+        $count = @($gaps | Where-Object { $_.reason -ceq $reason }).Count
+        Write-Output "  cutoffReason=${reason}; retainedGaps=$count"
+    }
+    if (@($gaps | Where-Object { $_.reason -ceq 'work' }).Count -eq 0) {
+        Write-Output 'No work-limit cutoff is recorded in this handoff. Truncation alone is not evidence of work-budget exhaustion.'
+    }
     $groups = @($gaps | Group-Object {
         $reason = $_.reason
         $cause = if ($_.PSObject.Properties['cutoffCause']) { $_.cutoffCause } else { $null }

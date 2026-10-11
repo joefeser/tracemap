@@ -145,6 +145,23 @@ candidate edges and no traversal truncation. All 48 original fixture/input files
 were verified unchanged. Reduced coverage and unbound source provenance remain;
 these results are not a private-application or runtime validation.
 
+### Private acceptance and remaining traversal diagnosis
+
+The owner subsequently supplied a sanitized private-application validation
+summary: the original selected handler retained 28 grouped chains and 116
+variants, including Fill and ExecuteScalar, using the unchanged retained index.
+The summary reported exact DLL hops, no framework-version candidate edges and
+visible HTML endpoint explanations. This is owner-supplied acceptance evidence,
+not an independently inspected private artifact or complete-coverage claim.
+
+The result remained truncated. The reported work-limit diagnosis has not been
+independently established from its retained cutoff reasons. The PowerShell
+summary now prints the measured work and configured budget when retained, plus
+explicit work/depth/cycle/path/frontier gap counts from the receipt-hash-checked
+handoff. It never infers work exhaustion from truncation alone. Synthetic script
+tests cover all five reasons and unknown historical measurements. No traversal
+algorithm, evidence admission or safety limit was changed without a reproducer.
+
 That run also exposed a presentation omission: endpoint limitations were retained
 in JSON but absent from grouped HTML. The writer now displays HTML-escaped
 endpoint limitations beside each database endpoint. A new HTML assertion failed

@@ -8,6 +8,9 @@ $global:WizardRequeryState = 'reports-completed-review-only'
 $global:WizardRequeryExit = 0
 $global:WizardRequeryOriginalReader = $true
 $global:WizardRequeryCause = $null
+$global:WizardRequeryReason = 'depth'
+$global:WizardRequeryWork = $null
+$global:WizardRequeryWorkLimit = $null
 $global:WizardRequeryWorkbench = Join-Path $temporary 'reports/index.html'
 function global:dotnet {
     $global:WizardRequeryCalls.Add(@($args))
@@ -28,8 +31,9 @@ function global:dotnet {
                 return
             }
             $handoffPath = Join-Path $destination 'compiled-paths.handoff.local.json'
-            @{schemaVersion='webforms-compiled-grouped-handoff.v1';header=@{gaps=@(
-                @{gapKind='TruncatedByLimit';reason='depth';cutoffCause=$global:WizardRequeryCause;filePath='synthetic/Page.vb';startLine=12;
+            @{schemaVersion='webforms-compiled-grouped-handoff.v1';header=@{
+                summary=@{traversalWorkUnits=$global:WizardRequeryWork};query=@{maxTraversalWork=$global:WizardRequeryWorkLimit};gaps=@(
+                @{gapKind='TruncatedByLimit';reason=$global:WizardRequeryReason;cutoffCause=$global:WizardRequeryCause;filePath='synthetic/Page.vb';startLine=12;
                   nodeId='node-1';ruleId='synthetic.rule';evidenceTier='Tier4Unknown';message='Depth limit reached.'})};
                 variants=@(@{nodeReferences=@('endpoint')}); nodes=@{endpoint=@{
                     nodeId='endpoint-id';surfaceKind='database-api';surfaceName='SqlCommand.ExecuteScalar';
@@ -85,6 +89,20 @@ try {
     $display = @(& $helper $temporary -Handler Page_Load)
     if (($display -join "`n") -notmatch 'bounded terminal-route uncertainty: 1 retained gaps') { throw 'Bounded uncertainty not separated.' }
     $global:WizardRequeryCause = $null
+    foreach ($reason in @('work', 'depth', 'cycle', 'path', 'frontier')) {
+        $global:WizardRequeryReason = $reason
+        $global:WizardRequeryWork = 37
+        $global:WizardRequeryWorkLimit = 100
+        $display = @(& $helper $temporary -Handler Page_Load) -join "`n"
+        if (!$display.Contains("cutoffReason=${reason}; retainedGaps=1") -or
+            !$display.Contains('Traversal work: measured=37; configuredLimit=100')) { throw 'Missing actual work/cutoff evidence.' }
+        if ($display.Contains('No work-limit cutoff is recorded') -eq ($reason -eq 'work')) { throw 'Work exhaustion inferred from the wrong evidence.' }
+    }
+    $global:WizardRequeryReason = 'depth'
+    $global:WizardRequeryWork = $null
+    $global:WizardRequeryWorkLimit = $null
+    $display = @(& $helper $temporary -Handler Page_Load) -join "`n"
+    if (!$display.Contains('measured=unavailable; configuredLimit=unavailable')) { throw 'Unrecorded work must remain unknown.' }
     $graphDisplay = @(& $helper $temporary -Handler Page_Load -MethodGraph)
     $graphCall = $global:WizardRequeryCalls[$global:WizardRequeryCalls.Count - 1]
     if ($graphCall[-2] -ne '--view' -or $graphCall[-1] -ne 'method-graph' -or
@@ -131,6 +149,6 @@ try {
     Write-Output 'Web Forms wizard requery helper tests passed.'
 } finally {
     Remove-Item Function:\dotnet
-    Remove-Variable WizardRequeryCalls,WizardRequeryState,WizardRequeryExit,WizardRequeryWorkbench,WizardRequeryOriginalReader,WizardRequeryCause -Scope Global
+    Remove-Variable WizardRequeryCalls,WizardRequeryState,WizardRequeryExit,WizardRequeryWorkbench,WizardRequeryOriginalReader,WizardRequeryCause,WizardRequeryReason,WizardRequeryWork,WizardRequeryWorkLimit -Scope Global
     [IO.Directory]::Delete($temporary, $true)
 }
