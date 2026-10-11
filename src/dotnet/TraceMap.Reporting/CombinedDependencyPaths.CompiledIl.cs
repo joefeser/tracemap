@@ -749,6 +749,11 @@ public static partial class CombinedDependencyPathReporter
             return false;
         var lexicalNamespace = source.Properties.GetValueOrDefault("lexicalNamespace") ?? string.Empty;
         var importedNamespaces = source.Properties.GetValueOrDefault("importedNamespaces") ?? string.Empty;
+        if (source.Properties.GetValueOrDefault("configuredImportsKind") == "root-web-config-framework-vb-imports"
+            && source.Properties.GetValueOrDefault("configuredImportsSha256") is { Length: 64 } importHash
+            && importHash.All(Uri.IsHexDigit)
+            && !string.IsNullOrEmpty(source.Properties.GetValueOrDefault("configuredImportsSource")))
+            importedNamespaces += ";" + source.Properties.GetValueOrDefault("configuredImportedNamespaces");
         var signature = compiled.Properties.GetValueOrDefault("signature") ?? string.Empty;
         var arityEnd = signature.IndexOf('|');
         if (!signature.StartsWith("arity:", StringComparison.Ordinal) || arityEnd < 6

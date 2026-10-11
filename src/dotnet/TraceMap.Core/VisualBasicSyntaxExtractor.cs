@@ -24,7 +24,9 @@ public static class VisualBasicSyntaxExtractor
         IReadOnlyList<ProtectedSourceSpan>? protectedSourceSpans = null)
     {
         var facts = new List<CodeFact>();
-        foreach (var file in inventory
+        var files = inventory.ToArray();
+        var configuredImports = VisualBasicConfiguredImports.Read(repoPath, files);
+        foreach (var file in files
             .Where(item => FileInventory.IsVisualBasicKind(item.Kind))
             .OrderBy(item => item.RelativePath, StringComparer.Ordinal))
         {
@@ -88,8 +90,27 @@ public static class VisualBasicSyntaxExtractor
                 .ToArray() ?? [];
             var budget = new FactBudget(MaxFactsPerFile);
             facts.Add(CreateSemanticUnavailableGap(manifest, file.RelativePath));
+            var declarationStart = facts.Count;
             TryRunPhase(manifest, facts, file.RelativePath, RuleIds.VisualBasicSyntaxDeclarations, "declarations",
                 () => AddDeclarationFacts(manifest, facts, file.RelativePath, root, budget));
+            if (configuredImports?.Applies(file.RelativePath, files, root) == true)
+            {
+                for (var index = declarationStart; index < facts.Count; index++)
+                {
+                    if (facts[index].FactType != FactTypes.MethodDeclared) continue;
+                    var fact = facts[index];
+                    var properties = new SortedDictionary<string, string>(fact.Properties.ToDictionary(), StringComparer.Ordinal)
+                    {
+                        ["configuredImportedNamespaces"] = configuredImports.Namespaces,
+                        ["configuredImportsSource"] = configuredImports.Path,
+                        ["configuredImportsSha256"] = configuredImports.Sha256,
+                        ["configuredImportsKind"] = "root-web-config-framework-vb-imports",
+                        ["configuredImportsLimitation"] = "Explicit root configuration imports only; inherited defaults and provider execution are not verified."
+                    };
+                    facts[index] = FactFactory.Create(manifest, fact.FactType, fact.RuleId, fact.EvidenceTier,
+                        fact.Evidence, fact.ProjectPath, fact.SourceSymbol, fact.TargetSymbol, fact.ContractElement, properties);
+                }
+            }
             TryRunPhase(manifest, facts, file.RelativePath, RuleIds.VisualBasicSyntaxEventWiring, "event-composition",
                 () => AddEventCompositionFacts(manifest, facts, file.RelativePath, root, budget));
             // Call-path evidence is more useful than isolated member names when
