@@ -1292,6 +1292,26 @@ public sealed class WebFormsReviewExecutionTests
         Assert.DoesNotContain(evidence, fixture.Error.ToString(), StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task Effective_vb_context_is_forwarded_and_resume_rechecks_its_hash()
+    {
+        using var fixture = new Fixture();
+        var context = Path.Combine(fixture.Published, "effective-imports.json");
+        // Invalid context intentionally pins sanitized partial-analysis behavior.
+        File.WriteAllText(context, "{}");
+        fixture.Config = fixture.Config with { VbImportContextRelativePath = "effective-imports.json" };
+        await fixture.Preflight();
+        Assert.Equal(0, await fixture.Execute("run", async (args, output, error, token) =>
+        {
+            Assert.Equal(context, args[Array.IndexOf(args, "--webforms-vb-import-context") + 1]);
+            return await Scan(args, output, error, token);
+        }));
+        File.AppendAllText(context, " ");
+        Assert.Equal(1, await fixture.Execute("resume", (_, _, _, _) => throw new InvalidOperationException("must not rescan")));
+        Assert.ThrowsAny<Exception>(() => WebFormsReviewPreflightCommand.ValidateConfig(fixture.Config with
+            { Operation = "attach", ParentScanRoot = fixture.Source }));
+    }
+
     private static Task<int> Scan(string[] args, TextWriter output, TextWriter error, CancellationToken token) =>
         TraceMapCommand.RunAsync(["scan", .. args], output, error, token);
     private static string Hash(string path) { using var stream = File.OpenRead(path); return Convert.ToHexString(SHA256.HashData(stream)).ToLowerInvariant(); }

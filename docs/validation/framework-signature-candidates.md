@@ -408,3 +408,64 @@ Windows CLI SHA-256:
 TRX files were retained on Windows; native artifacts were untouched. No private
 access, application/SQL execution or retries. Optional authentic compilation was
 deferred, so these results do not establish a private chain-count increase.
+
+## Inherited effective VB imports (2026-10-11)
+
+The opt-in `--webforms-vb-import-context <local-json>` scan input accepts a
+`webforms-vb-import-context.v1` capture from
+`scripts/Capture-WebFormsVbImports.ps1`. Run the capture in Windows PowerShell
+5.1, not PowerShell 7. It evaluates a **standalone mapped `/` application** using
+the selected process architecture's framework machine.config, framework root
+Web.config and optional application Web.config. It does not discover IIS parent
+sites or establish the environment that produced previously published DLLs.
+
+The framework's mapped pages configuration supplies inherited namespaces and
+add/remove/clear behavior. CodeDOM provider declarations are resolved across the
+captured chain using the trusted framework handler rather than PowerShell's host
+configuration. Custom providers and relevant section overrides are refused
+without loading application/provider code. No application compilation, method
+execution or SQL occurs. Framework-handler internals are version-sensitive;
+unsupported layouts fail closed rather than falling back to host settings.
+
+Example from a Windows PowerShell 5.1 prompt, with an existing local evidence
+directory outside the source tree:
+
+```powershell
+.\scripts\Capture-WebFormsVbImports.ps1 -SourceRoot 'C:\public-fixture' `
+    -Out 'C:\local-evidence\vb-imports.local.json' `
+    -SourceFile @('App_Code/PublicHelper.vb')
+```
+
+For the existing native Web Forms review workflow, set the optional
+`vbImportContextRelativePath` relative to `receiptRoot` (or the published root if
+no receipt root is configured) in a **new fresh-run configuration**. Preflight
+hashes this input; fresh execution forwards it to scanning; resume checks its
+hash. Attach-only runs refuse the option because retained source facts cannot
+be enriched without re-extraction. Keep original configurations and reports.
+
+The local-only envelope hashes the exact UTF-8 payload string and records the
+capture script SHA-256. The payload contains the source commit/root identity,
+source-file hashes, configuration/provider paths and hashes, runtime/architecture,
+the admitted namespace set and mapping/evidence kinds. It contains no source
+text, raw config contents or compiler command lines. These are observer
+assertions, not signed attestations. Never export this private-path-bearing
+receipt through public artifacts.
+
+The scanner rechecks current file hashes and source inventory membership before
+enriching only the listed App_Code declarations. Stale, escaped, linked,
+malformed, duplicate-key or over-budget contexts become sanitized Tier4 gaps.
+Receipt limit: 1 MiB; configurations: 16 at 2 MiB each; provider: 64 MiB;
+sources: 256 / 64 MiB aggregate; imports: 128 names / 512 characters each.
+No aliases or containing-type generic inference are added. Explicit effective
+imports supersede the partial root-config subset, rather than resurrecting a
+namespace removed by the effective configuration.
+
+Recovered bridges remain Tier3 candidates. `ProjectlessPublishImportsNotBuildBound`
+and a prominent HTML notice explicitly withhold historical-build/IIS/runtime
+claims. Existing publication source/assembly hash gates still apply. Fresh source
+extraction also records method-generic ordinals and ByRef modes; do not rewrite
+old index facts or claim a same-index comparison after re-extraction.
+
+Local focused regression: 333 passed, zero failures/skips (20 seconds), followed
+by 119 mapping/chain checks (16 seconds). The separate inherited-capture script
+tests run on Windows; integrated actual-capture ingestion is an additional gate.

@@ -281,6 +281,12 @@ public static partial class CombinedDependencyPathReporter
                                 'configuredImportsSha256', coalesce(cast(json_extract(properties_json, '$.configuredImportsSha256') as text), ''),
                                 'configuredImportsKind', coalesce(cast(json_extract(properties_json, '$.configuredImportsKind') as text), ''),
                                 'configuredImportsLimitation', coalesce(cast(json_extract(properties_json, '$.configuredImportsLimitation') as text), ''),
+                                'effectiveImportedNamespaces', coalesce(cast(json_extract(properties_json, '$.effectiveImportedNamespaces') as text), ''),
+                                'effectiveImportsReceiptSha256', coalesce(cast(json_extract(properties_json, '$.effectiveImportsReceiptSha256') as text), ''),
+                                'effectiveImportsGeneratorSha256', coalesce(cast(json_extract(properties_json, '$.effectiveImportsGeneratorSha256') as text), ''),
+                                'effectiveImportsInputSha256', coalesce(cast(json_extract(properties_json, '$.effectiveImportsInputSha256') as text), ''),
+                                'effectiveImportsKind', coalesce(cast(json_extract(properties_json, '$.effectiveImportsKind') as text), ''),
+                                'effectiveImportsLimitation', coalesce(cast(json_extract(properties_json, '$.effectiveImportsLimitation') as text), ''),
                                 'parameterTypes', coalesce(cast(json_extract(properties_json, '$.parameterTypes') as text), '')),
                                 case when json_type(properties_json, '$.lexicalNamespace') is not null
                                      then json_object('lexicalNamespace', coalesce(cast(json_extract(properties_json, '$.lexicalNamespace') as text), '|invalid|'))

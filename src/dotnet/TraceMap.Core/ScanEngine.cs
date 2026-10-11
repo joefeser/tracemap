@@ -1193,7 +1193,8 @@ public static class ScanEngine
         facts.AddRange(CSharpSemanticExtractor.MaterializeFacts(manifest, migrationSyntaxFallback.Gaps));
         progress?.StartStage(ScanProgressReporter.ScanOperation, ScanProgressStages.SyntaxFallback);
         facts.AddRange(CSharpSyntaxExtractor.Extract(repoPath, manifest, inventory, protectedSourceSpans));
-        facts.AddRange(VisualBasicSyntaxExtractor.Extract(repoPath, manifest, inventory, semanticallyAnalyzedFiles, protectedSourceSpans));
+        facts.AddRange(VisualBasicSyntaxExtractor.Extract(repoPath, manifest, inventory, semanticallyAnalyzedFiles, protectedSourceSpans,
+            options.WebFormsVbImportContextPath));
         progress?.FinishStage(ScanProgressReporter.ScanOperation, ScanProgressStages.SyntaxFallback, "completed");
         cancellationToken.ThrowIfCancellationRequested();
         var materializedSemanticFacts = CSharpSemanticExtractor.MaterializeFacts(manifest, semanticResult.Facts);
