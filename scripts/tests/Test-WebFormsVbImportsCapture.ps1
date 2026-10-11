@@ -75,6 +75,9 @@ try {
     Invoke-Capture 'ambiguous-aliases' $false 'VB_IMPORT_CAPTURE_PROVIDER_AMBIGUOUS'
     Set-PublicConfig '<configuration><configSections><sectionGroup name="system.web"><section name="pages" type="Public.CustomSection, Public.Unavailable"/></sectionGroup></configSections></configuration>'
     Invoke-Capture 'section-handler' $false 'VB_IMPORT_CAPTURE_SECTION_REDEFINITION_REFUSED'
+    Set-PublicConfig '<configuration><configSections><section name="publicVendor" type="Public.CustomSection, Public.Unavailable"/></configSections><publicVendor value="Public.Secret"/></configuration>'
+    $unrelated = Invoke-Capture 'unrelated-section-not-evaluated' $true
+    Assert-True ('System.Web.UI' -cin $unrelated.namespaces) 'UNRELATED_SECTION_BLOCKED'
     Set-PublicConfig '<configuration><location path="Public"><system.web><pages><namespaces><add namespace="Public.Secret"/></namespaces></pages></system.web></location></configuration>'
     Invoke-Capture 'location' $false 'VB_IMPORT_CAPTURE_LOCATION_REFUSED'
     Set-PublicConfig '<configuration><system.web><pages configSource="Public.Unavailable"/></system.web></configuration>'

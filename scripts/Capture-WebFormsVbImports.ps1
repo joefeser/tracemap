@@ -109,7 +109,7 @@ try {
         $document.XmlResolver = $null
         try { $document.Load($reader) } finally { $reader.Dispose(); $stream.Dispose() }
         # The application cannot supply handlers for sections we evaluate.
-        if ($path -eq $siteConfig -and $document.SelectNodes('/configuration/configSections').Count -gt 0) {
+        if ($path -eq $siteConfig -and $document.SelectNodes('/configuration/configSections/section[@name="system.codedom"] | /configuration/configSections/sectionGroup[@name="system.web"]/section[@name="pages" or @name="compilation"] | /configuration/configSections/sectionGroup[@name="system.web"][@type]').Count -gt 0) {
             Stop-Capture 'VB_IMPORT_CAPTURE_SECTION_REDEFINITION_REFUSED'
         }
         foreach ($declaration in $document.SelectNodes('/configuration/configSections/section[@name="system.codedom"] | /configuration/configSections/sectionGroup[@name="system.web"]/section[@name="pages" or @name="compilation"]')) {
