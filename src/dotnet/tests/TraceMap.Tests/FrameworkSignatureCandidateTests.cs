@@ -157,13 +157,23 @@ public sealed class FrameworkSignatureCandidateTests
     [InlineData(4, 4, "nested-namespace-decoy")]
     [InlineData(4, 4, "nested-missing-namespace")]
     [InlineData(4, 4, "nested-ambiguous")]
+    [InlineData(2, 2, "generic-parameter")]
+    [InlineData(4, 4, "generic-parameter")]
+    [InlineData(4, 4, "generic-wrong-argument")]
+    [InlineData(4, 4, "generic-missing-import")]
+    [InlineData(2, 2, "generic-method")]
+    [InlineData(4, 4, "generic-method")]
+    [InlineData(4, 4, "generic-method-wrong-ordinal")]
+    [InlineData(4, 4, "generic-method-missing-evidence")]
+    [InlineData(4, 4, "generic-method-duplicate-name")]
+    [InlineData(4, 4, "generic-method-source-collision")]
     public async Task Mixed_framework_source_to_database_path_preserves_candidate_boundary(int callerVersion, int providerVersion, string scenario)
     {
         using var temp = new TempDirectory();
         var callerPath = Path.Combine(temp.Path, "PublicWebsite.dll");
         var providerPath = Path.Combine(temp.Path, "PublicProvider.dll");
         var instanceCall = scenario is "virtual" or "nonvirtual" or "missing-flags";
-        Build(callerPath, callerVersion, true, instanceCall, scenario.EndsWith("-helper", StringComparison.Ordinal) ? "unbridged-helper" : scenario.StartsWith("nested-", StringComparison.Ordinal) || scenario is "return-flow" or "appcode" or "preserved-base-fill" ? scenario : "valid", providerVersion);
+        Build(callerPath, callerVersion, true, instanceCall, scenario.EndsWith("-helper", StringComparison.Ordinal) ? "unbridged-helper" : scenario.StartsWith("nested-", StringComparison.Ordinal) || scenario.StartsWith("generic-", StringComparison.Ordinal) || scenario is "return-flow" or "appcode" or "preserved-base-fill" ? scenario : "valid", providerVersion);
         Build(providerPath, providerVersion, false, instanceCall, scenario);
         var paths = new List<string> { callerPath, providerPath };
         if (scenario == "appcode")
@@ -187,11 +197,25 @@ public sealed class FrameworkSignatureCandidateTests
             }
         }
         var repo = FindRepo();
-        var scan = ScanEngine.Scan(new ScanOptions(Path.Combine(repo, "samples", "messy-dotnet-workspace", scenario.StartsWith("nested-", StringComparison.Ordinal) ? "vb-nested-publish" : scenario.EndsWith("-helper", StringComparison.Ordinal) ? "vb-unbridged-helper" : "framework-signature-boundary"),
+        var scan = ScanEngine.Scan(new ScanOptions(Path.Combine(repo, "samples", "messy-dotnet-workspace", scenario.StartsWith("generic-method", StringComparison.Ordinal) ? "vb-generic-method-publish" : scenario.StartsWith("generic-", StringComparison.Ordinal) ? "vb-generic-publish" : scenario.StartsWith("nested-", StringComparison.Ordinal) ? "vb-nested-publish" : scenario.EndsWith("-helper", StringComparison.Ordinal) ? "vb-unbridged-helper" : "framework-signature-boundary"),
             Path.Combine(temp.Path, "scan"), CompiledInputPaths: paths, IlBodyEvidence: true));
         var declaration = Assert.Single(scan.Facts, f => f.FactType == FactTypes.MethodDeclared && f.TargetSymbol == "Start");
         var compiled = Assert.Single(scan.Facts, f => f.FactType == FactTypes.ManagedMethodDeclared && f.Properties.GetValueOrDefault("metadataName") == "Start");
         var facts = scan.Facts.ToList();
+        if (scenario.StartsWith("generic-method", StringComparison.Ordinal))
+        {
+            Assert.Equal("TLeft;TRight", declaration.Properties["methodTypeParameters"]);
+            if (scenario == "generic-method-source-collision") facts.Add(declaration with { FactId = declaration.FactId + "-duplicate-source" });
+            if (scenario == "generic-method-missing-evidence")
+                facts = facts.Select(f => f.FactId == declaration.FactId ? f with
+                    { Properties = f.Properties.Where(p => p.Key != "methodTypeParameters").ToDictionary() } : f).ToList();
+            if (scenario == "generic-method-duplicate-name")
+                facts = facts.Select(f => f.FactId == declaration.FactId ? f with
+                    { Properties = new Dictionary<string, string>(f.Properties) { ["methodTypeParameters"] = "TLeft;tleft" } } : f).ToList();
+        }
+        if (scenario == "generic-missing-import")
+            facts = facts.Select(f => f.FactId == declaration.FactId ? f with
+                { Properties = new Dictionary<string, string>(f.Properties) { ["importedNamespaces"] = "" } } : f).ToList();
         if (scenario == "nested-missing-namespace")
             facts = facts.Select(f => f.FactId == declaration.FactId ? f with
                 { Properties = f.Properties.Where(p => p.Key != "lexicalNamespace").ToDictionary() } : f).ToList();
@@ -242,9 +266,13 @@ public sealed class FrameworkSignatureCandidateTests
         if (scenario is "missing-receipt" or "wrong-receipt" or "ambiguous" or "exact-ambiguous" or "work" or "fake-base-fill-namespace" or "fake-base-fill-assembly" or "fake-base-fill-token" or "fake-base-fill-culture"
             or "provider-version" or "provider-name" or "framework-token" or "framework-culture" or "parameter-type" or "return-type" or "ineligible-provenance"
             or "wrong-mode-helper" or "invalid-mode-helper" or "mode-count-helper" or "missing-mode-helper"
-            or "nested-namespace-decoy" or "nested-missing-namespace" or "nested-ambiguous")
+            or "nested-namespace-decoy" or "nested-missing-namespace" or "nested-ambiguous"
+            or "generic-wrong-argument" or "generic-missing-import" or "generic-method-wrong-ordinal"
+            or "generic-method-missing-evidence" or "generic-method-duplicate-name" or "generic-method-source-collision")
         {
             Assert.Empty(report.Paths);
+            if (scenario == "generic-method-source-collision")
+                Assert.Contains(report.Gaps, gap => gap.Reason == "source-member-identity-ambiguous");
             if (scenario.StartsWith("nested-", StringComparison.Ordinal))
                 Assert.Contains(report.Gaps, gap => gap.GapKind == "ProjectlessPublishMemberAmbiguous" &&
                     gap.Reason == (scenario == "nested-ambiguous" ? "multiple-qualified-compatible-members" : "qualified-containing-type-unmatched"));
@@ -379,6 +407,24 @@ public sealed class FrameworkSignatureCandidateTests
             var query = new MethodReference("Query", scenario == "return-flow" ? module.TypeSystem.String : dataset, new TypeReference("", "Provider", module, reference)) { HasThis = virtualCall };
             query.Parameters.Add(new(module.TypeSystem.String)); query.Parameters.Add(new(list));
             var start = new MethodDefinition("Start", MethodAttributes.Public | MethodAttributes.Static, module.TypeSystem.Void);
+            if (scenario.StartsWith("generic-", StringComparison.Ordinal))
+            {
+                var dictionary = new GenericInstanceType(new TypeReference("System.Collections.Generic", "Dictionary`2", module, core));
+                if (scenario.StartsWith("generic-method", StringComparison.Ordinal))
+                {
+                    var left = new GenericParameter("TLeft", start);
+                    var right = new GenericParameter("TRight", start);
+                    start.GenericParameters.Add(left); start.GenericParameters.Add(right);
+                    dictionary.GenericArguments.Add(scenario == "generic-method-wrong-ordinal" ? left : right);
+                    dictionary.GenericArguments.Add(scenario == "generic-method-wrong-ordinal" ? right : left);
+                }
+                else
+                {
+                    dictionary.GenericArguments.Add(module.TypeSystem.String);
+                    dictionary.GenericArguments.Add(scenario == "generic-wrong-argument" ? module.TypeSystem.String : module.TypeSystem.Int32);
+                }
+                start.Parameters.Add(new(dictionary));
+            }
             type.Methods.Add(start);
             var il = start.Body.GetILProcessor();
             if (scenario == "unbridged-helper")

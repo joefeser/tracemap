@@ -667,6 +667,9 @@ public static partial class CombinedDependencyPathReporter
 
             if (!declarationsByFile.TryGetValue((RetainedSourceIndex(source.SourceIndexId, parents), source.FilePath), out var sourceDeclarations))
                 continue;
+            var sourceIdentityCounts = sourceDeclarations
+                .GroupBy(declaration => declaration.Properties.GetValueOrDefault("memberIdentity") ?? string.Empty, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(group => group.Key, group => group.Count(), StringComparer.OrdinalIgnoreCase);
             foreach (var declaration in sourceDeclarations.OrderBy(fact => fact.CombinedFactId, StringComparer.Ordinal))
             {
                 var name = declaration.Properties.GetValueOrDefault("name");
@@ -677,6 +680,12 @@ public static partial class CombinedDependencyPathReporter
                 var sourceNode = graph.GetOrAddSymbolNode(declaration.SourceIndexId, declaration.SourceLabel,
                     memberIdentity, declaration.FilePath, declaration.StartLine, declaration.EndLine,
                     declaration.RuleId, declaration.EvidenceTier);
+                if (sourceIdentityCounts[memberIdentity] != 1)
+                {
+                    AddCompiledIlGap(graph, declaration, "ProjectlessPublishMemberAmbiguous",
+                        "source-member-identity-ambiguous", sourceIdentityCounts[memberIdentity], ProjectlessPublishCandidateRuleId, sourceNode.NodeId);
+                    continue;
+                }
                 var selection = methodIndex.Select(source.SourceIndexId, name, typePath, hashes);
                 var inQualifiedType = selection.QualifiedCandidates;
                 var candidates = inQualifiedType.Where(fact =>
@@ -740,6 +749,24 @@ public static partial class CombinedDependencyPathReporter
             return false;
         var lexicalNamespace = source.Properties.GetValueOrDefault("lexicalNamespace") ?? string.Empty;
         var importedNamespaces = source.Properties.GetValueOrDefault("importedNamespaces") ?? string.Empty;
+        var signature = compiled.Properties.GetValueOrDefault("signature") ?? string.Empty;
+        var arityEnd = signature.IndexOf('|');
+        if (!signature.StartsWith("arity:", StringComparison.Ordinal) || arityEnd < 6
+            || !int.TryParse(signature.AsSpan(6, arityEnd - 6), out var methodArity)
+            || methodArity is < 0 or > 32) return false;
+        var rawTypeParameters = source.Properties.GetValueOrDefault("methodTypeParameters");
+        var typeParameters = string.IsNullOrEmpty(rawTypeParameters) ? [] : rawTypeParameters.Split(';');
+        // Generic method variables require source declaration ordinal evidence.
+        // Missing evidence does not mean that a parameter spelled T is !!0.
+        if (methodArity != typeParameters.Length) return false;
+        var bindings = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        for (var index = 0; index < typeParameters.Length; index++)
+        {
+            var name = typeParameters[index];
+            if (name.Length == 0 || !(char.IsLetter(name[0]) || name[0] == '_')
+                || name.Any(c => !(char.IsLetterOrDigit(c) || c == '_'))
+                || !bindings.TryAdd(name, "!!" + index)) return false;
+        }
         var rawModes = source.Properties.GetValueOrDefault("parameterPassingModes");
         var modes = rawModes is null ? null : rawModes.Length == 0 ? [] : rawModes.Split(';');
         if (modes is not null && modes.Length != sourceCount) return false;
@@ -755,7 +782,7 @@ public static partial class CombinedDependencyPathReporter
                 if (byReference != (modes[index] == "byref")) return false;
                 if (byReference) metadataType = metadataType[..^1];
             }
-            if (!PublishParameterMatches(syntaxTypes[index], metadataType, lexicalNamespace, importedNamespaces))
+            if (!PublishParameterMatchesCore(syntaxTypes[index], metadataType, lexicalNamespace, importedNamespaces, 0, bindings))
                 return false;
         }
         return true;
@@ -769,18 +796,21 @@ public static partial class CombinedDependencyPathReporter
         if (open < 0) return false;
         var start = open + 2;
         var depth = 1;
+        var genericDepth = 0;
         var parts = new List<string>();
         for (var index = start; index < signature.Length; index++)
         {
             if (signature[index] == '(') depth++;
             else if (signature[index] == ')' && --depth == 0)
             {
-                if (!signature.AsSpan(index).StartsWith(")->", StringComparison.Ordinal)) return false;
+                if (genericDepth != 0 || !signature.AsSpan(index).StartsWith(")->", StringComparison.Ordinal)) return false;
                 if (index > start) parts.Add(signature[start..index]);
                 parameters = parts.ToArray();
                 return true;
             }
-            else if (signature[index] == ',' && depth == 1)
+            else if (signature[index] == '<' && depth == 1) genericDepth++;
+            else if (signature[index] == '>' && depth == 1 && --genericDepth < 0) return false;
+            else if (signature[index] == ',' && depth == 1 && genericDepth == 0)
             {
                 if (index == start) return false;
                 parts.Add(signature[start..index]);
@@ -793,7 +823,12 @@ public static partial class CombinedDependencyPathReporter
 
     internal static bool PublishParameterMatches(string syntaxType, string metadataType,
         string lexicalNamespace = "", string importedNamespaces = "")
+        => PublishParameterMatchesCore(syntaxType, metadataType, lexicalNamespace, importedNamespaces, 0);
+
+    private static bool PublishParameterMatchesCore(string syntaxType, string metadataType,
+        string lexicalNamespace, string importedNamespaces, int nesting, IReadOnlyDictionary<string, string>? methodBindings = null)
     {
+        if (nesting > 16 || syntaxType.Length > 16_384 || metadataType.Length > 16_384) return false;
         var syntax = syntaxType.Trim();
         var array = syntax.EndsWith("()", StringComparison.Ordinal);
         if (array) syntax = syntax[..^2];
@@ -825,6 +860,10 @@ public static partial class CombinedDependencyPathReporter
             value = value[..^2];
         }
         else if (value.EndsWith("[]", StringComparison.Ordinal)) return false;
+        if (methodBindings is not null && methodBindings.TryGetValue(syntax, out var variable))
+            return value == variable;
+        if (syntax.Contains('('))
+            return PublishGenericParameterMatches(syntax, value, lexicalNamespace, importedNamespaces, nesting, methodBindings);
         if (!value.StartsWith("type(", StringComparison.Ordinal)
             && !value.StartsWith("scope(", StringComparison.Ordinal)) return false;
         var marker = value.LastIndexOf("type(namespace:", StringComparison.Ordinal);

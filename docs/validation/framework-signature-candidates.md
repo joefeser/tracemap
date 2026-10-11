@@ -313,3 +313,37 @@ skips, confirmed from retained TRX. Serial CLI build had zero warnings/errors;
 CLI SHA-256 was `c30c039e8c85b836c9700ab00755becdf6d43d0e5edbd2e8a0cf87fc96c86a80`.
 The command completed in 2m06s. New native fixture compilation remains deferred;
 existing native artifacts were untouched. No private application or SQL ran.
+
+## Generic source parameter matching
+
+The independent `vb-generic-publish` fixture adds a source method parameter of
+`Dictionary(Of String, Integer)` with matching compiled metadata and a retained
+database-terminal route. CLR2 and CLR4 cases cover the actual scan/index/report
+pipeline. Closed generic definitions, arity and ordered arguments are compared
+recursively using the existing namespace admission rules. Nested closed generics
+and vector arguments are covered. Method signature splitting now distinguishes
+commas inside generic arguments from commas between method parameters.
+
+Wrong argument types, missing import scope, malformed metadata, wrong arity and
+excess nesting fail closed. No default ASP.NET imports or namespace guesses are
+added. Method variables such as `List(Of T)` require the newly retained ordered
+`methodTypeParameters` field and matching metadata method arity/ordinal. The
+`vb-generic-method-publish` fixture tests two variables deliberately used in
+reversed order, including wrong-ordinal, duplicate-name and missing-field refusals.
+Containing-type variables (`!0`) remain unsupported. This is not a
+claim to fix all parameter-shape gaps reported by the private application.
+Existing retained parameterTypes/importedNamespaces can be requeried; no new
+source field is required for these closed generic shapes.
+Older indexes require targeted source re-extraction for method-generic variable
+evidence; requery alone cannot manufacture the names or ordinal mapping.
+Duplicate retained source identities in one file fail closed before member
+bridging, including collisions between generic overload declarations. The source
+identity schema is not rewritten by this change.
+
+The additive method generic evidence is emitted by `vb-syntax/0.3.24`. Local
+focused validation passed 309 tests, including VB extraction, generic positive
+and refusal cases, publish-member indexing, combined paths and handoff/prewalk
+regressions. This does not resolve the earlier Windows event-wiring failure or
+establish additional private routes without the owner-side comparison.
+After the extractor-version update, the 111 generic/framework candidate tests
+were rerun successfully; the CLI build completed with zero warnings/errors.

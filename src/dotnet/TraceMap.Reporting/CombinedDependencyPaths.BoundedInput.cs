@@ -266,7 +266,7 @@ public static partial class CombinedDependencyPathReporter
                             when fact_type = '{{FactTypes.MethodDeclared}}'
                                 and rule_id = '{{RuleIds.VisualBasicSyntaxDeclarations}}'
                                 and projection_safe then
-                            json_patch(json_patch(json_object(
+                            json_patch(json_patch(json_patch(json_object(
                                 'containingType', coalesce(cast(json_extract(properties_json, '$.containingType') as text), ''),
                                 'qualifiedContainingType', coalesce(cast(json_extract(properties_json, '$.qualifiedContainingType') as text), ''),
                                 'methodName', coalesce(cast(json_extract(properties_json, '$.methodName') as text), ''),
@@ -282,6 +282,9 @@ public static partial class CombinedDependencyPathReporter
                                      else json('{}') end),
                                 case when json_type(properties_json, '$.parameterPassingModes') is not null
                                      then json_object('parameterPassingModes', coalesce(cast(json_extract(properties_json, '$.parameterPassingModes') as text), 'invalid'))
+                                     else json('{}') end),
+                                case when json_type(properties_json, '$.methodTypeParameters') is not null
+                                     then json_object('methodTypeParameters', coalesce(cast(json_extract(properties_json, '$.methodTypeParameters') as text), '|invalid|'))
                                      else json('{}') end)
                             when fact_type = '{{FactTypes.FieldDeclared}}'
                                 and rule_id = '{{RuleIds.VisualBasicSyntaxDeclarations}}'
