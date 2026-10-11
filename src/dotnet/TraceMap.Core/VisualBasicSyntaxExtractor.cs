@@ -351,6 +351,9 @@ public static class VisualBasicSyntaxExtractor
                         ["bodyEndLine"] = (methodBodyLines.EndLinePosition.Line + 1).ToString(),
                         ["parameterCount"] = parameterCount.ToString(),
                         ["parameterTypes"] = string.Join(";", parameterTypes),
+                        ["methodTypeParameters"] = statement is MethodStatementSyntax genericMethod
+                            ? string.Join(";", genericMethod.TypeParameterList?.Parameters.Select(parameter => parameter.Identifier.ValueText) ?? [])
+                            : string.Empty,
                         ["parameterPassingModes"] = string.Join(";", MethodParameters(statement).Select(parameter =>
                             parameter.Modifiers.Any(SyntaxKind.ByRefKeyword) ? "byref" : "byval"))
                     },
