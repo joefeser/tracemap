@@ -59,6 +59,17 @@ public sealed class PublishGenericParameterTests
     }
 
     [Fact]
+    public void Generic_variable_binding_does_not_capture_predefined_types()
+    {
+        var bindings = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["Integer"] = "!!0" };
+        Assert.False(CombinedDependencyPathReporter.PublishParameterMatches("Integer", "!!0", methodBindings: bindings));
+        Assert.True(CombinedDependencyPathReporter.PublishParameterMatches("Integer", Integer, methodBindings: bindings));
+        Assert.True(CombinedDependencyPathReporter.PublishParameterMatches("[Integer]", "!!0", methodBindings: bindings));
+        Assert.False(CombinedDependencyPathReporter.PublishParameterMatches("[Integer]", "!0", methodBindings: bindings));
+        Assert.False(CombinedDependencyPathReporter.PublishParameterMatches("Global.Integer", "!!0", methodBindings: bindings));
+    }
+
+    [Fact]
     public void Deep_generic_nesting_is_bounded()
     {
         var syntax = "Integer";

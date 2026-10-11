@@ -822,8 +822,8 @@ public static partial class CombinedDependencyPathReporter
     }
 
     internal static bool PublishParameterMatches(string syntaxType, string metadataType,
-        string lexicalNamespace = "", string importedNamespaces = "")
-        => PublishParameterMatchesCore(syntaxType, metadataType, lexicalNamespace, importedNamespaces, 0);
+        string lexicalNamespace = "", string importedNamespaces = "", IReadOnlyDictionary<string, string>? methodBindings = null)
+        => PublishParameterMatchesCore(syntaxType, metadataType, lexicalNamespace, importedNamespaces, 0, methodBindings);
 
     private static bool PublishParameterMatchesCore(string syntaxType, string metadataType,
         string lexicalNamespace, string importedNamespaces, int nesting, IReadOnlyDictionary<string, string>? methodBindings = null)
@@ -860,8 +860,15 @@ public static partial class CombinedDependencyPathReporter
             value = value[..^2];
         }
         else if (value.EndsWith("[]", StringComparison.Ordinal)) return false;
-        if (methodBindings is not null && methodBindings.TryGetValue(syntax, out var variable))
-            return value == variable;
+        if (methodBindings is { Count: > 0 })
+        {
+            // VB keywords are predefined types, not identifiers. An escaped
+            // variable such as [Integer] must not capture an ordinary Integer.
+            var variableSyntax = Microsoft.CodeAnalysis.VisualBasic.SyntaxFactory.ParseTypeName(syntax);
+            if (!variableSyntax.ContainsDiagnostics
+                && variableSyntax is Microsoft.CodeAnalysis.VisualBasic.Syntax.IdentifierNameSyntax identifier
+                && methodBindings.TryGetValue(identifier.Identifier.ValueText, out var variable)) return value == variable;
+        }
         if (syntax.Contains('('))
             return PublishGenericParameterMatches(syntax, value, lexicalNamespace, importedNamespaces, nesting, methodBindings);
         if (!value.StartsWith("type(", StringComparison.Ordinal)
