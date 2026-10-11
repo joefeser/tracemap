@@ -106,7 +106,7 @@ internal sealed record VisualBasicConfiguredImports(string Namespaces, string Pa
                     if (imports.Count > 128) return null;
                 }
             }
-            if (imports.Count == 0) return null;
+            if (imports.Count is 0 or > 128) return null;
             return new(string.Join(';', imports.Distinct(StringComparer.OrdinalIgnoreCase).Order(StringComparer.Ordinal)),
                 path, Convert.ToHexStringLower(SHA256.HashData(bytes.AsSpan(0, length))));
         }

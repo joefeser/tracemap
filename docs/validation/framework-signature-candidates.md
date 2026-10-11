@@ -393,3 +393,8 @@ private 57-chain/238-variant comparison remain separate acceptance checks.
 
 Local focused regression: 291 passed, zero failures/skips (14 seconds). CLI
 build: zero warnings/errors. No private inputs or application/SQL execution.
+The VB extraction smoke slice also passed 33/33. A real CLI scan of the public
+fixture completed with 31 facts at Level3SyntaxAnalysis and retained separate
+source/configured imports and the configuration hash. The follow-up aggregate
+import-count boundary passed 24/24 configured-import tests; explicit VB auto-import
+counts toward the same 128-entry cap. Native compilation remains deferred.
