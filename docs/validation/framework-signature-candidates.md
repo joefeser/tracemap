@@ -469,3 +469,20 @@ old index facts or claim a same-index comparison after re-extraction.
 Local focused regression: 333 passed, zero failures/skips (20 seconds), followed
 by 119 mapping/chain checks (16 seconds). The separate inherited-capture script
 tests run on Windows; integrated actual-capture ingestion is an additional gate.
+
+Final local validation at `ee1e6227`: CLI build completed with zero warnings and
+errors. The context, framework-signature, scan-receipt and complete native review
+execution test classes passed 274/274, zero failures/skips (4 minutes 23 seconds).
+This includes fresh-scan forwarding, stale context rejection and resume integrity.
+
+Windows validation at the same implementation commit passed 120/120 focused
+context/signature tests with zero failures/skips and a zero-warning/error CLI
+build. CLI SHA-256:
+`3c1f69b8784bb29a7743649dcb226184324764badcaf4ef44ee292b27d61199c`.
+Actual Windows PowerShell 5.1 capture of a committed public synthetic site with
+no local provider declaration and no source Imports was accepted by the CLI:
+System.Collections.Generic and matching receipt/generator/input hashes appeared
+on the method fact with no rejection. Mutating synthetic source/configuration
+produced exactly one sanitized rejection and no admitted context imports.
+No application compilation/execution, SQL or private inputs were involved.
+Private route gains beyond the 57-chain/238-variant baseline remain unverified.
