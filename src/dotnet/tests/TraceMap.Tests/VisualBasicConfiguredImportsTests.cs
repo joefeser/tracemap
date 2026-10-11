@@ -36,6 +36,7 @@ public sealed class VisualBasicConfiguredImportsTests
     [InlineData("pages-clear-add", true)]
     [InlineData("pages-external", false)]
     [InlineData("legacy-provider-override", false)]
+    [InlineData("import-limit", false)]
     public void Configured_imports_are_scope_bound_and_hash_backed(string scenario, bool admitted)
     {
         using var temp = new TempDirectory();
@@ -68,6 +69,12 @@ public sealed class VisualBasicConfiguredImportsTests
             case "dtd": config = "<!DOCTYPE configuration [<!ENTITY x 'value'>]>" + config; break;
             case "oversized": config += new string(' ', 256 * 1024); break;
             case "legacy-provider-override": config = config.Replace("</configuration>", "<system.web><compilation><compilers /></compilation></system.web></configuration>"); break;
+            case "import-limit":
+                config = config.Replace("/imports:System,System.Web.UI,System.Collections.Generic", "").Replace("</configuration>",
+                    "<system.web><pages><namespaces autoImportVBNamespace=\"true\">" +
+                    string.Concat(Enumerable.Range(0, 128).Select(i => $"<add namespace=\"Synthetic.N{i}\" />")) +
+                    "</namespaces></pages></system.web></configuration>");
+                break;
         }
         Directory.CreateDirectory(Path.GetDirectoryName(Path.Combine(temp.Path, sourcePath))!);
         File.WriteAllText(Path.Combine(temp.Path, sourcePath), source);
