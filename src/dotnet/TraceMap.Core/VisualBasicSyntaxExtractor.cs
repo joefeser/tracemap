@@ -21,11 +21,28 @@ public static class VisualBasicSyntaxExtractor
         ScanManifest manifest,
         IEnumerable<FileInventoryItem> inventory,
         IReadOnlySet<string>? semanticallyAnalyzedFiles,
-        IReadOnlyList<ProtectedSourceSpan>? protectedSourceSpans = null)
+        IReadOnlyList<ProtectedSourceSpan>? protectedSourceSpans = null,
+        string? webFormsVbImportContextPath = null)
     {
         var facts = new List<CodeFact>();
         var files = inventory.ToArray();
         var configuredImports = VisualBasicConfiguredImports.Read(repoPath, files);
+        WebFormsVbImportContext? effectiveImports = null;
+        if (!string.IsNullOrWhiteSpace(webFormsVbImportContextPath))
+        {
+            try { effectiveImports = WebFormsVbImportContext.Read(repoPath, manifest.CommitSha, webFormsVbImportContextPath, files); }
+            catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException or System.Text.Json.JsonException
+                or InvalidOperationException or KeyNotFoundException or ArgumentException)
+            {
+                facts.Add(FactFactory.Create(manifest, FactTypes.AnalysisGap, RuleIds.VisualBasicSyntaxDeclarations,
+                    EvidenceTiers.Tier4Unknown, new EvidenceSpan(".", 1, 1, null, "VisualBasicSyntaxExtractor", ScannerVersions.VisualBasicSyntaxExtractor),
+                    properties: new Dictionary<string, string>
+                    {
+                        ["gapKind"] = "WebFormsVbImportContextRejected",
+                        ["message"] = "Effective VB import context is invalid, stale, unavailable or outside its bounded source scope; no context imports were admitted."
+                    }));
+            }
+        }
         foreach (var file in files
             .Where(item => FileInventory.IsVisualBasicKind(item.Kind))
             .OrderBy(item => item.RelativePath, StringComparer.Ordinal))
@@ -106,6 +123,26 @@ public static class VisualBasicSyntaxExtractor
                         ["configuredImportsSha256"] = configuredImports.Sha256,
                         ["configuredImportsKind"] = "root-web-config-framework-vb-imports",
                         ["configuredImportsLimitation"] = "Explicit root configuration imports only; inherited defaults and provider execution are not verified."
+                    };
+                    facts[index] = FactFactory.Create(manifest, fact.FactType, fact.RuleId, fact.EvidenceTier,
+                        fact.Evidence, fact.ProjectPath, fact.SourceSymbol, fact.TargetSymbol, fact.ContractElement, properties);
+                }
+            }
+            if (effectiveImports?.SourcePaths.Contains(file.RelativePath) == true
+                && !root.Imports.SelectMany(i => i.ImportsClauses).Any(c => c is not SimpleImportsClauseSyntax { Alias: null }))
+            {
+                for (var index = declarationStart; index < facts.Count; index++)
+                {
+                    var fact = facts[index];
+                    if (fact.FactType != FactTypes.MethodDeclared) continue;
+                    var properties = new SortedDictionary<string, string>(fact.Properties.ToDictionary(), StringComparer.Ordinal)
+                    {
+                        ["effectiveImportedNamespaces"] = effectiveImports.Namespaces,
+                        ["effectiveImportsReceiptSha256"] = effectiveImports.ReceiptSha256,
+                        ["effectiveImportsGeneratorSha256"] = effectiveImports.GeneratorSha256,
+                        ["effectiveImportsInputSha256"] = effectiveImports.InputSha256,
+                        ["effectiveImportsKind"] = WebFormsVbImportContext.Kind,
+                        ["effectiveImportsLimitation"] = "Current standalone-root mapping source/configuration/provider bytes verified; no IIS-parent or published-build proof."
                     };
                     facts[index] = FactFactory.Create(manifest, fact.FactType, fact.RuleId, fact.EvidenceTier,
                         fact.Evidence, fact.ProjectPath, fact.SourceSymbol, fact.TargetSymbol, fact.ContractElement, properties);

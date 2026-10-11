@@ -4912,6 +4912,7 @@ rules:
     limitations:
       - Method parameterPassingModes records explicit ByRef or the VB default ByVal in declaration order. This is syntax evidence only; existing member identity spelling is unchanged and no parameter value propagation is inferred.
       - Method methodTypeParameters records method generic variable names in declaration order, not generic constraints or containing-type parameter bindings. This additive syntax evidence does not rewrite member identities or prove compiler binding.
+      - Explicit local webforms-vb-import-context.v1 input can supply effective imports for its exact inventoried App_Code source subset. The scanner checks commit/root identity, source/configuration/provider bytes, payload digest and generator digest presence. The receipt is observer evidence, not authenticated historical build provenance; signatures remain Tier3 candidates with ProjectlessPublishImportsNotBuildBound and an HTML warning. No provider or application assembly is loaded by the scanner. Invalid, stale, linked, escaped, malformed or oversized inputs produce a sanitized WebFormsVbImportContextRejected gap. Configured root imports are not added on top of an admitted effective set. Aliased source imports withhold enrichment.
       - App_Code method declarations may retain configuredImportedNamespaces from an inventoried scan-root Web.config explicitly selecting the framework VBCodeProvider in System. Explicit application pages/namespaces additions (with local clear/remove processing) and compilerOptions /imports are retained separately from source Imports, with configuration path, SHA-256, kind and limitation. No inherited machine defaults, aliases, external config, location scopes, nested App_Code config, custom providers, legacy compilation compiler overrides or project evaluation are inferred. Configuration reads are bounded to 256 KiB, compiler options to 16384 characters and imports to 128 names. Missing enrichment is not absence of effective compiler imports; re-extraction is required for old indexes.
       - Syntax-only names are text evidence; they are never compiler-resolved targets and never join to semantic symbols by identity.
       - A parser or bounded extraction-phase failure is retained as a category-only Tier4 gap at line 1 for the affected file. Other files and phases continue, but missing phase evidence is not evidence of absence and the gap does not establish root cause.
@@ -7558,6 +7559,20 @@ rules:
       - Identity gaps are unknowns, not proof that a relationship, member, protocol conformance, override, or runtime behavior is absent.
       - Candidate names and unsupported syntax are rendered only as safe labels, counts, hashes, rule IDs, and repo-relative spans; raw source snippets, URLs, local paths, secrets, and private labels must not be emitted.
       - Stable gap kinds include `swift-module-identity-unknown`, `swift-duplicate-symbol-identity`, `swift-unresolved-external-symbol`, `swift-ambiguous-symbol-identity`, `swift-module-context-unavailable`, `swift-extension-membership-syntax-only`, `swift-relationship-kind-unsupported`, and `swift-override-target-unresolved`.
+
+  - id: webforms.vb-import-context.current-environment.v1
+    name: Local standalone ASP.NET effective VB import context
+    description: Captures bounded current source, framework configuration and provider identities for opt-in syntax candidate matching.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - Local-only webforms-vb-import-context.v1 receipt
+    limitations:
+      - This is current-environment evidence, not authenticated publication, historical compilation or runtime execution proof.
+      - The mapped standalone root does not discover IIS parent configuration; unsupported providers, overrides and import aliases are refused.
+      - Receipt paths and identities are private local evidence and must not be exported or committed.
+      - Generator SHA-256 and exact payload SHA-256 accompany the receipt; source, configuration and provider bytes are rechecked before scanner enrichment.
+      - Capture is bounded to 256 source files, 64 MiB source bytes, 4096 directory entries, 128 namespaces and 2 MiB per configuration file.
+      - Existing publication admission remains required; accepted import evidence only supports uncertain Tier3 candidates and is prominently labeled in HTML.
 
   - id: workflow.webforms.gap-classification.v1
     name: Retained Web Forms cutoff evidence associations

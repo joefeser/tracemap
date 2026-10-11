@@ -174,6 +174,11 @@ public sealed class FrameworkSignatureCandidateTests
     [InlineData(4, 4, "generic-configured-ambiguous")]
     [InlineData(2, 2, "generic-configured-events")]
     [InlineData(4, 4, "generic-configured-events")]
+    [InlineData(2, 2, "generic-effective")]
+    [InlineData(4, 4, "generic-effective")]
+    [InlineData(4, 4, "generic-effective-no-context")]
+    [InlineData(4, 4, "generic-effective-wrong-commit")]
+    [InlineData(4, 4, "generic-effective-missing-proof")]
     public async Task Mixed_framework_source_to_database_path_preserves_candidate_boundary(int callerVersion, int providerVersion, string scenario)
     {
         using var temp = new TempDirectory();
@@ -204,14 +209,30 @@ public sealed class FrameworkSignatureCandidateTests
             }
         }
         var repo = FindRepo();
-        var scan = ScanEngine.Scan(new ScanOptions(Path.Combine(repo, "samples", "messy-dotnet-workspace", scenario.StartsWith("generic-configured", StringComparison.Ordinal) ? "vb-configured-imports" : scenario.StartsWith("generic-method", StringComparison.Ordinal) ? "vb-generic-method-publish" : scenario.StartsWith("generic-", StringComparison.Ordinal) ? "vb-generic-publish" : scenario.StartsWith("nested-", StringComparison.Ordinal) ? "vb-nested-publish" : scenario.EndsWith("-helper", StringComparison.Ordinal) ? "vb-unbridged-helper" : "framework-signature-boundary"),
-            Path.Combine(temp.Path, "scan"), CompiledInputPaths: paths, IlBodyEvidence: true));
+        var fixture = Path.Combine(repo, "samples", "messy-dotnet-workspace", scenario.StartsWith("generic-effective", StringComparison.Ordinal) ? "vb-effective-imports" : scenario.StartsWith("generic-configured", StringComparison.Ordinal) ? "vb-configured-imports" : scenario.StartsWith("generic-method", StringComparison.Ordinal) ? "vb-generic-method-publish" : scenario.StartsWith("generic-", StringComparison.Ordinal) ? "vb-generic-publish" : scenario.StartsWith("nested-", StringComparison.Ordinal) ? "vb-nested-publish" : scenario.EndsWith("-helper", StringComparison.Ordinal) ? "vb-unbridged-helper" : "framework-signature-boundary");
+        string? context = null;
+        if (scenario.StartsWith("generic-effective", StringComparison.Ordinal) && scenario != "generic-effective-no-context")
+            context = WebFormsVbImportContextTests.WriteContext(fixture, GitMetadataProvider.Detect(fixture).CommitSha,
+                Path.Combine(WebFormsVbImportContextTests.RealTempPath(temp.Path), "environment"), ["App_Code/Entry.vb"],
+                scenario == "generic-effective-wrong-commit" ? "wrong-commit" : "valid");
+        var scan = ScanEngine.Scan(new ScanOptions(fixture,
+            Path.Combine(temp.Path, "scan"), CompiledInputPaths: paths, IlBodyEvidence: true) { WebFormsVbImportContextPath = context });
         var rootName = scenario == "generic-configured-events" ? "Handle" : "Start";
         var declaration = Assert.Single(scan.Facts, f => f.FactType == FactTypes.MethodDeclared && f.TargetSymbol == rootName);
         var compiledStarts = scan.Facts.Where(f => f.FactType == FactTypes.ManagedMethodDeclared && f.Properties.GetValueOrDefault("metadataName") == rootName).ToArray();
         Assert.Equal(scenario == "generic-configured-ambiguous" ? 2 : 1, compiledStarts.Length);
         var compiled = compiledStarts[0];
         var facts = scan.Facts.ToList();
+        if (scenario.StartsWith("generic-effective", StringComparison.Ordinal))
+        {
+            Assert.Equal("", declaration.Properties["importedNamespaces"]);
+            Assert.False(declaration.Properties.ContainsKey("configuredImportedNamespaces"));
+            if (scenario is "generic-effective" or "generic-effective-missing-proof")
+                Assert.Equal("current-environment-not-build-proof", declaration.Properties["effectiveImportsKind"]);
+            if (scenario == "generic-effective-missing-proof")
+                facts = facts.Select(f => f.FactId == declaration.FactId ? f with
+                { Properties = new Dictionary<string, string>(f.Properties) { ["effectiveImportsInputSha256"] = "" } } : f).ToList();
+        }
         if (scenario.StartsWith("generic-configured", StringComparison.Ordinal))
         {
             Assert.Equal("", declaration.Properties["importedNamespaces"]);
@@ -288,7 +309,8 @@ public sealed class FrameworkSignatureCandidateTests
             or "nested-namespace-decoy" or "nested-missing-namespace" or "nested-ambiguous"
             or "generic-wrong-argument" or "generic-missing-import" or "generic-method-wrong-ordinal"
             or "generic-method-missing-evidence" or "generic-method-duplicate-name" or "generic-method-source-collision"
-            or "generic-configured-missing-proof" or "generic-configured-wrong-kind" or "generic-configured-ambiguous")
+            or "generic-configured-missing-proof" or "generic-configured-wrong-kind" or "generic-configured-ambiguous"
+            or "generic-effective-no-context" or "generic-effective-wrong-commit" or "generic-effective-missing-proof")
         {
             Assert.Empty(report.Paths);
             if (scenario == "generic-configured-ambiguous")
@@ -308,6 +330,8 @@ public sealed class FrameworkSignatureCandidateTests
         Assert.True(report.Paths.Count > 0, string.Join("\n", report.Gaps.Select(g => g.GapKind + ":" + g.Reason)) + "\n" +
             string.Join("\n", facts.Where(f => f.FactType == FactTypes.ManagedMethodDeclared && f.Properties.GetValueOrDefault("metadataName") == "Helper").Select(f => f.Properties.GetValueOrDefault("signature"))));
         var path = Assert.Single(report.Paths);
+        if (scenario == "generic-effective")
+            Assert.Contains(report.Gaps, gap => gap.GapKind == "ProjectlessPublishImportsNotBuildBound");
         if (scenario == "return-flow")
         {
             Assert.Contains("IlCommandReturnFrameworkVersionBindingUnproven", path.Nodes.Last().CommandBinding!.CommandTextFromPath!.Gaps);
@@ -375,6 +399,7 @@ public sealed class FrameworkSignatureCandidateTests
         var written = await GroupedCompiledPathReportWriter.WriteAsync(handoff, Path.Combine(temp.Path, "report"));
         var html = await File.ReadAllTextAsync(written.HtmlPath);
         Assert.Contains(endpoint, html);
+        if (scenario == "generic-effective") Assert.Contains("Effective VB imports describe the current environment, not the published build", html);
         if (scenario is "base-fill" or "preserved-base-fill")
             Assert.Contains("historical DbDataAdapter.Fill surface groups", html);
         if (candidate) Assert.Contains("Framework-version candidate routes are present (Tier3)", html);

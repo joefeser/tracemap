@@ -2,6 +2,16 @@
 
 Operator examples use generic site, page, and handler names. Historical receipts remain bound to their recorded input bytes; genericized examples do not establish a fresh platform validation result.
 
+For effective inherited ASP.NET VB imports, run `WebFormsVbImportContextTests`,
+`VisualBasicConfiguredImportsTests`, `FrameworkSignatureCandidateTests`,
+`ScanExecutionReceiptTests`, and the focused
+`Effective_vb_context_is_forwarded_and_resume_rechecks_its_hash` workflow test.
+Run `scripts/tests/Test-WebFormsVbImportsCapture.ps1` under .NET Framework PowerShell
+for the actual mapped-configuration capture boundary. A valid context
+is current-environment observer evidence, not authenticated historical build
+proof. See the effective-import section in
+`docs/validation/framework-signature-candidates.md` for limitations and results.
+
 For mixed desktop framework signature joins, run `FrameworkSignatureCandidateTests`
 and `scripts/tests/Test-WebFormsGraphShare.ps1`. See the
 [candidate matrix](validation/framework-signature-candidates.md) for exact-match

@@ -436,7 +436,10 @@ public static class TraceMapCommand
             ExactSourceMaxBytes: ParsePositiveLong(values, "--exact-source-max-bytes", 67_108_864),
             WebFormsPublishedRootPath: values.GetValueOrDefault("--webforms-published-root"),
             WebFormsPublishSourceRelativeBase: values.GetValueOrDefault("--webforms-publish-source-base"))
-        { IndexDepsJson = values.HasFlag("--index-deps-json") };
+        {
+            IndexDepsJson = values.HasFlag("--index-deps-json"),
+            WebFormsVbImportContextPath = values.GetValueOrDefault("--webforms-vb-import-context")
+        };
         var receiptRecorder = new ScanReceiptRecorder(
             scanOptions,
             sqlValidationSummaryPaths.Append(sqlValidationAsOf?.ToString("O") ?? string.Empty));
@@ -2937,6 +2940,9 @@ public static class TraceMapCommand
                                        Optional compiled-input-binding-set.v1 receipt. Repeatable.
               --webforms-publish-receipt <path>
                                        Explicit local-only webforms-publish-binding.v1 receipt. Never discovered.
+              --webforms-vb-import-context <path>
+                Local Windows effective VB imports capture; source/config/provider hashes are rechecked.
+                Current environment evidence only, not historical build proof. Requires re-extraction.
               --webforms-published-root <absolute-path>
                                        Optional explicit published-file root, independent of receipt location. Hash checked, never written.
               --webforms-publish-source-base <repo-relative-folder>

@@ -68,7 +68,8 @@ public sealed record WebFormsReviewConfig(
     string[]? PublishSourceRelativePaths = null,
     WebFormsReviewConfigProvenance? PreparationProvenance = null,
     string? PublishSourceRelativeBase = null,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] WebFormsReviewConfigProvenance? WizardProvenance = null);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] WebFormsReviewConfigProvenance? WizardProvenance = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? VbImportContextRelativePath = null);
 
 public sealed record WebFormsReviewConfigProvenance(string RuleId, string GeneratorSha256, string BoundedInputSha256);
 
@@ -265,6 +266,11 @@ public static partial class WebFormsReviewPreflightCommand
             }
         }
         var receiptHashes = new List<string>();
+        if (config.VbImportContextRelativePath is not null)
+        {
+            await Add("vb-import-context", Child(receiptRoot, config.VbImportContextRelativePath), 1_048_576);
+            gaps.Add("EffectiveVbImportContextValidationDeferred");
+        }
         foreach (var receiptPath in config.BindingReceipts.Order(StringComparer.Ordinal))
         {
             var input = await Add("binding-receipt", Child(receiptRoot, receiptPath), 1_048_576);
@@ -344,6 +350,8 @@ public static partial class WebFormsReviewPreflightCommand
 
     internal static void ValidateConfig(WebFormsReviewConfig config)
     {
+        if (config.VbImportContextRelativePath is not null && config.Operation != "fresh")
+            throw Fail("VB_IMPORT_CONTEXT_REQUIRES_SOURCE_EXTRACTION");
         if (config.WizardProvenance is { } wizard && (wizard.RuleId != "workflow.webforms.wizard-native-config.v1"
             || !IsHex(wizard.GeneratorSha256, 64) || !IsHex(wizard.BoundedInputSha256, 64))) throw Fail("CONFIG_INVALID");
         if (config.SchemaVersion != ConfigSchema || config.Operation is not ("fresh" or "attach") ||

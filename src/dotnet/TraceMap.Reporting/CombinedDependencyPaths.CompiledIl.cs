@@ -699,6 +699,10 @@ public static partial class CombinedDependencyPathReporter
                     continue;
                 }
                 var compiled = candidates[0];
+                if (HasEffectiveImportEvidence(declaration))
+                    AddCompiledIlGap(graph, declaration, "ProjectlessPublishImportsNotBuildBound",
+                        "effective-imports-describe-current-environment-not-published-build", null,
+                        ProjectlessPublishCandidateRuleId, sourceNode.NodeId);
                 var matchingAssembly = boundAssemblies.Where(assembly =>
                     assembly.Properties.GetValueOrDefault("assemblyRawSha256") == compiled.Properties.GetValueOrDefault("rawFileSha256"))
                     .ToArray();
@@ -738,6 +742,11 @@ public static partial class CombinedDependencyPathReporter
         return "multiple-qualified-compatible-members";
     }
 
+    private static bool HasEffectiveImportEvidence(CombinedFactRow source) =>
+        source.Properties.GetValueOrDefault("effectiveImportsKind") == "current-environment-not-build-proof"
+        && new[] { "effectiveImportsReceiptSha256", "effectiveImportsGeneratorSha256", "effectiveImportsInputSha256" }
+            .All(key => source.Properties.GetValueOrDefault(key) is { Length: 64 } hash && hash.All(Uri.IsHexDigit));
+
     private static bool PublishCandidateSignatureMatches(CombinedFactRow source, CombinedFactRow compiled)
     {
         var rawSyntaxTypes = source.Properties.GetValueOrDefault("parameterTypes");
@@ -749,7 +758,10 @@ public static partial class CombinedDependencyPathReporter
             return false;
         var lexicalNamespace = source.Properties.GetValueOrDefault("lexicalNamespace") ?? string.Empty;
         var importedNamespaces = source.Properties.GetValueOrDefault("importedNamespaces") ?? string.Empty;
-        if (source.Properties.GetValueOrDefault("configuredImportsKind") == "root-web-config-framework-vb-imports"
+        if (HasEffectiveImportEvidence(source))
+            importedNamespaces += ";" + source.Properties.GetValueOrDefault("effectiveImportedNamespaces");
+        if (!HasEffectiveImportEvidence(source)
+            && source.Properties.GetValueOrDefault("configuredImportsKind") == "root-web-config-framework-vb-imports"
             && source.Properties.GetValueOrDefault("configuredImportsSha256") is { Length: 64 } importHash
             && importHash.All(Uri.IsHexDigit)
             && !string.IsNullOrEmpty(source.Properties.GetValueOrDefault("configuredImportsSource")))
