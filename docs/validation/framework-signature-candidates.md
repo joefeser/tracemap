@@ -362,3 +362,34 @@ Windows also validated the keyword follow-up
 `8166c4d2b45f4400bdf0c0bd6e1763b09a7fe666`: serial CLI build was clean and all
 21 PublishGenericParameterTests passed with zero failures/skips, including the
 predefined-type regression. No larger suite or native execution was repeated.
+## Explicit configured VB imports (2026-10-11)
+
+`vb-syntax/0.3.25` retains an explicit subset of ASP.NET VB compilation imports
+separately from source Imports. The scan-root Web.config must be inventoried and
+must explicitly identify the framework VBCodeProvider in System. App_Code method
+declarations retain namespace names, config path, exact config-byte SHA-256, kind
+and limitation. Fact identities include these properties. Bounded reporting
+retains them and uses them only when kind/path/hash evidence is present.
+
+Microsoft's [AssemblyBuilder reference source](https://github.com/microsoft/referencesource/blob/main/System.Web/Compilation/AssemblyBuilder.cs)
+shows application pages/namespaces becoming global VB /imports through
+AddVBGlobalNamespaceImports, including App_Code compilation. Local clear/remove
+operations apply to the retained explicit collection; explicit compilerOptions
+imports are then added. No inherited default namespaces are fabricated.
+
+The scope is deliberately partial: no external config, location overrides,
+nested App_Code config, source/config aliases, arbitrary providers, legacy
+compilation/compilers overrides, or MSBuild project evaluation. A missing root
+provider declaration is not proof of the default provider. These boundaries
+withhold enrichment; existing analysis/bridge gaps remain. Codebehind files are
+not enriched by this App_Code-only implementation. Old indexes require source
+and configuration re-extraction; changing the reader alone cannot add evidence.
+
+Focused tests include collections, event/control signatures, CLR2/CLR4 synthetic
+PEs, conflicting imported overloads, missing provenance, collection clearing and
+removal, malformed/oversized XML and unsupported configuration. These are public
+synthetic tests, not a new private route-count claim. Native compilation and the
+private 57-chain/238-variant comparison remain separate acceptance checks.
+
+Local focused regression: 291 passed, zero failures/skips (14 seconds). CLI
+build: zero warnings/errors. No private inputs or application/SQL execution.

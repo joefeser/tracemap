@@ -167,6 +167,13 @@ public sealed class FrameworkSignatureCandidateTests
     [InlineData(4, 4, "generic-method-missing-evidence")]
     [InlineData(4, 4, "generic-method-duplicate-name")]
     [InlineData(4, 4, "generic-method-source-collision")]
+    [InlineData(2, 2, "generic-configured")]
+    [InlineData(4, 4, "generic-configured")]
+    [InlineData(4, 4, "generic-configured-missing-proof")]
+    [InlineData(4, 4, "generic-configured-wrong-kind")]
+    [InlineData(4, 4, "generic-configured-ambiguous")]
+    [InlineData(2, 2, "generic-configured-events")]
+    [InlineData(4, 4, "generic-configured-events")]
     public async Task Mixed_framework_source_to_database_path_preserves_candidate_boundary(int callerVersion, int providerVersion, string scenario)
     {
         using var temp = new TempDirectory();
@@ -197,11 +204,23 @@ public sealed class FrameworkSignatureCandidateTests
             }
         }
         var repo = FindRepo();
-        var scan = ScanEngine.Scan(new ScanOptions(Path.Combine(repo, "samples", "messy-dotnet-workspace", scenario.StartsWith("generic-method", StringComparison.Ordinal) ? "vb-generic-method-publish" : scenario.StartsWith("generic-", StringComparison.Ordinal) ? "vb-generic-publish" : scenario.StartsWith("nested-", StringComparison.Ordinal) ? "vb-nested-publish" : scenario.EndsWith("-helper", StringComparison.Ordinal) ? "vb-unbridged-helper" : "framework-signature-boundary"),
+        var scan = ScanEngine.Scan(new ScanOptions(Path.Combine(repo, "samples", "messy-dotnet-workspace", scenario.StartsWith("generic-configured", StringComparison.Ordinal) ? "vb-configured-imports" : scenario.StartsWith("generic-method", StringComparison.Ordinal) ? "vb-generic-method-publish" : scenario.StartsWith("generic-", StringComparison.Ordinal) ? "vb-generic-publish" : scenario.StartsWith("nested-", StringComparison.Ordinal) ? "vb-nested-publish" : scenario.EndsWith("-helper", StringComparison.Ordinal) ? "vb-unbridged-helper" : "framework-signature-boundary"),
             Path.Combine(temp.Path, "scan"), CompiledInputPaths: paths, IlBodyEvidence: true));
-        var declaration = Assert.Single(scan.Facts, f => f.FactType == FactTypes.MethodDeclared && f.TargetSymbol == "Start");
-        var compiled = Assert.Single(scan.Facts, f => f.FactType == FactTypes.ManagedMethodDeclared && f.Properties.GetValueOrDefault("metadataName") == "Start");
+        var rootName = scenario == "generic-configured-events" ? "Handle" : "Start";
+        var declaration = Assert.Single(scan.Facts, f => f.FactType == FactTypes.MethodDeclared && f.TargetSymbol == rootName);
+        var compiledStarts = scan.Facts.Where(f => f.FactType == FactTypes.ManagedMethodDeclared && f.Properties.GetValueOrDefault("metadataName") == rootName).ToArray();
+        Assert.Equal(scenario == "generic-configured-ambiguous" ? 2 : 1, compiledStarts.Length);
+        var compiled = compiledStarts[0];
         var facts = scan.Facts.ToList();
+        if (scenario.StartsWith("generic-configured", StringComparison.Ordinal))
+        {
+            Assert.Equal("", declaration.Properties["importedNamespaces"]);
+            Assert.Contains("System.Collections.Generic", declaration.Properties["configuredImportedNamespaces"]);
+            if (scenario is "generic-configured-missing-proof" or "generic-configured-wrong-kind")
+                facts = facts.Select(f => f.FactId == declaration.FactId ? f with
+                { Properties = new Dictionary<string, string>(f.Properties)
+                    { [scenario == "generic-configured-missing-proof" ? "configuredImportsSha256" : "configuredImportsKind"] = "" } } : f).ToList();
+        }
         if (scenario.StartsWith("generic-method", StringComparison.Ordinal))
         {
             Assert.Equal("TLeft;TRight", declaration.Properties["methodTypeParameters"]);
@@ -268,9 +287,12 @@ public sealed class FrameworkSignatureCandidateTests
             or "wrong-mode-helper" or "invalid-mode-helper" or "mode-count-helper" or "missing-mode-helper"
             or "nested-namespace-decoy" or "nested-missing-namespace" or "nested-ambiguous"
             or "generic-wrong-argument" or "generic-missing-import" or "generic-method-wrong-ordinal"
-            or "generic-method-missing-evidence" or "generic-method-duplicate-name" or "generic-method-source-collision")
+            or "generic-method-missing-evidence" or "generic-method-duplicate-name" or "generic-method-source-collision"
+            or "generic-configured-missing-proof" or "generic-configured-wrong-kind" or "generic-configured-ambiguous")
         {
             Assert.Empty(report.Paths);
+            if (scenario == "generic-configured-ambiguous")
+                Assert.Contains(report.Gaps, gap => gap.Reason == "multiple-qualified-compatible-members");
             if (scenario == "generic-method-source-collision")
                 Assert.Contains(report.Gaps, gap => gap.Reason == "source-member-identity-ambiguous");
             if (scenario.StartsWith("nested-", StringComparison.Ordinal))
@@ -407,7 +429,17 @@ public sealed class FrameworkSignatureCandidateTests
             var query = new MethodReference("Query", scenario == "return-flow" ? module.TypeSystem.String : dataset, new TypeReference("", "Provider", module, reference)) { HasThis = virtualCall };
             query.Parameters.Add(new(module.TypeSystem.String)); query.Parameters.Add(new(list));
             var start = new MethodDefinition("Start", MethodAttributes.Public | MethodAttributes.Static, module.TypeSystem.Void);
-            if (scenario.StartsWith("generic-", StringComparison.Ordinal))
+            if (scenario == "generic-configured-events")
+            {
+                type.Name = "Events";
+                start.Name = "Handle";
+                start.Parameters.Add(new(module.TypeSystem.Object));
+                start.Parameters.Add(new(new TypeReference("System", "EventArgs", module, core)));
+                var web = new AssemblyNameReference("System.Web", new Version(version, 0, 0, 0)) { PublicKeyToken = Convert.FromHexString("b03f5f7f11d50a3a") };
+                module.AssemblyReferences.Add(web);
+                start.Parameters.Add(new(new TypeReference("System.Web.UI", "Control", module, web)));
+            }
+            else if (scenario.StartsWith("generic-", StringComparison.Ordinal))
             {
                 var dictionary = new GenericInstanceType(new TypeReference("System.Collections.Generic", "Dictionary`2", module, core));
                 if (scenario.StartsWith("generic-method", StringComparison.Ordinal))
@@ -424,6 +456,16 @@ public sealed class FrameworkSignatureCandidateTests
                     dictionary.GenericArguments.Add(scenario == "generic-wrong-argument" ? module.TypeSystem.String : module.TypeSystem.Int32);
                 }
                 start.Parameters.Add(new(dictionary));
+                if (scenario == "generic-configured-ambiguous")
+                {
+                    var other = new GenericInstanceType(new TypeReference("Other", "Dictionary`2", module, core));
+                    other.GenericArguments.Add(module.TypeSystem.String);
+                    other.GenericArguments.Add(module.TypeSystem.Int32);
+                    var overload = new MethodDefinition("Start", MethodAttributes.Public | MethodAttributes.Static, module.TypeSystem.Void);
+                    overload.Parameters.Add(new(other));
+                    overload.Body.GetILProcessor().Emit(OpCodes.Ret);
+                    type.Methods.Add(overload);
+                }
             }
             type.Methods.Add(start);
             var il = start.Body.GetILProcessor();
