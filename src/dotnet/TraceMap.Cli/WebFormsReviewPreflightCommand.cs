@@ -119,7 +119,7 @@ public static partial class WebFormsReviewPreflightCommand
         node-limit report outputs without scanning or changing the original run.
         query-recovery --bundle <bundle> accepts the same bounded query options.
         query-recovery --bundle <bundle> --handler <method-name> counts retained handler paths only.
-        requery-handler --run <retained-run> --bundle <completed-report-or-recovery-bundle> --handler <method-name> --out <new-folder> [--surface-name DbDataAdapter.Fill] [--traversal-scope compiled-il]
+        requery-handler --run <retained-run> --bundle <completed-report-or-recovery-bundle> --handler <method-name> --out <new-folder> [--surface-name DbDataAdapter.Fill] [--traversal-scope compiled-il] [--max-depth <1..64>]
           builds a separate single-root report from the verified retained combined index; no scan or combine.
         migration-review --config <native-config> --handler <method-name> --out <new-handoff-root> [--attest-exact-source-commit <sha>]
         migration-review --config <migration-draft> --handler <method-name> --out <new-handoff-root> --proof-root <retained-proof> --published-root <original-publish> --source-base <repo-relative-website-folder>

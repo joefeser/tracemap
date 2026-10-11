@@ -30,16 +30,20 @@ public static partial class WebFormsReviewExecutionCommand
         var failureStage = "arguments";
         try
         {
-            if (args.Length is not (9 or 11 or 13) || args[0] != "requery-handler" || args[1] != "--run" ||
+            if (args.Length < 9 || args.Length > 17 || args.Length % 2 != 1 || args[0] != "requery-handler" || args[1] != "--run" ||
                 args[3] != "--bundle" || args[5] != "--handler" || args[7] != "--out") throw Fail("HANDLER_REQUERY_ARGUMENT_INVALID");
             string? surfaceName = null;
             var compiledOnly = false;
             var methodGraph = false;
+            int? maxDepth = null;
             for (var i = 9; i < args.Length; i += 2)
             {
                 if (args[i] == "--surface-name" && args[i + 1] == "DbDataAdapter.Fill" && surfaceName is null) surfaceName = args[i + 1];
                 else if (args[i] == "--traversal-scope" && args[i + 1] == "compiled-il" && !compiledOnly) compiledOnly = true;
                 else if (args[i] == "--view" && args[i + 1] == "method-graph" && !methodGraph) methodGraph = true;
+                else if (args[i] == "--max-depth" && maxDepth is null &&
+                    int.TryParse(args[i + 1], System.Globalization.NumberStyles.None,
+                        System.Globalization.CultureInfo.InvariantCulture, out var depth) && depth is >= 1 and <= 64) maxDepth = depth;
                 else throw Fail("HANDLER_REQUERY_SURFACE_OR_SCOPE_INVALID");
             }
             var run = WebFormsReviewPreflightCommand.PhysicalPath(args[2]);
@@ -128,10 +132,11 @@ public static partial class WebFormsReviewExecutionCommand
             WebFormsReviewPreflightCommand.ValidateReportBudgets(budget);
             RetainedMethodGraph? graphView = null;
             var options = new CombinedDependencyPathOptions(indexPath, destination, ToSurface: methodGraph ? null : "database-api", SurfaceName: surfaceName, IncludeLegacyRoots: true,
-                MaxDepth: config.Budgets.GraphMaxDepth, MaxPaths: config.Budgets.GraphMaxPaths, MaxFrontier: budget.MaxFrontier)
+                MaxDepth: maxDepth ?? config.Budgets.GraphMaxDepth, MaxPaths: config.Budgets.GraphMaxPaths, MaxFrontier: budget.MaxFrontier)
             { ExactFromSymbol = true, CompiledOnly = compiledOnly, MaxTraversalWork = checked((int)config.Budgets.GraphMaxWork),
                 MethodGraphObserver = methodGraph ? graph => graphView = graph : null };
             await output.WriteLineAsync($"handlerStage=graph-started;maxPaths={options.MaxPaths};maxWork={options.MaxTraversalWork};single-root=true");
+            await output.WriteLineAsync($"handlerQuery.maxDepth={options.MaxDepth};originalMaxDepth={config.Budgets.GraphMaxDepth};depthOverride={(maxDepth is not null).ToString().ToLowerInvariant()};other-bounds-unchanged=true");
             await output.WriteLineAsync($"handlerQuery.terminalScope={(methodGraph ? "unfiltered-all-outgoing" : surfaceName is null ? "all-database-api" : "DbDataAdapter.Fill")};mixed-source-and-compiled={(compiledOnly ? "false" : "true")}");
             await output.WriteLineAsync($"handlerQuery.traversalScope={(compiledOnly ? "compiled-il-with-root-attachment" : "mixed")};root-attachment-not-il-proof=true");
             CombinedPathGraphObservation? observation = null;
