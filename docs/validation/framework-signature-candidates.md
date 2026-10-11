@@ -398,3 +398,13 @@ fixture completed with 31 facts at Level3SyntaxAnalysis and retained separate
 source/configured imports and the configuration hash. The follow-up aggregate
 import-count boundary passed 24/24 configured-import tests; explicit VB auto-import
 counts toward the same 128-entry cap. Native compilation remains deferred.
+
+Windows validation on `3766355be5b52aca718e5d77a9fe71b531897d64`: 142 focused tests
+passed with zero failures/skips. Final code
+`5f22248fe6b318bed3c358f255549a6b07ae127a`: 24 configured-import tests passed,
+zero failures/skips. Both serial CLI builds had zero warnings/errors. Final
+Windows CLI SHA-256:
+`773dd01d396235d581ba46ce29103700095e3cde9b2a02c7443aafbfe4c46222`.
+TRX files were retained on Windows; native artifacts were untouched. No private
+access, application/SQL execution or retries. Optional authentic compilation was
+deferred, so these results do not establish a private chain-count increase.
