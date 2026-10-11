@@ -266,3 +266,13 @@ publish-member index, combined paths, grouped handoff and baseline prewalk
 suites), including eight helper cases. CLI build completed with zero warnings
 and errors. Authentic Windows compilation of this new helper case remains a
 separate validation gate.
+
+Windows validation of `b058b3c1e2466afc4cc4f9a83e985c489af30158`: serial CLI
+build passed with zero warnings/errors. The requested framework candidate, VB
+extraction and publish-member index classes returned 124 passes and one failure,
+zero skips, in 3m29s. The failure was
+`VisualBasicExtractionTests.Vb_scans_never_promote_event_wiring_to_resolved_edges`;
+the quiet output did not retain assertion details. Its cause is not established.
+No retry or broad suite was run. New native helper compilation was deferred;
+existing native artifacts were preserved. This is partial Windows validation,
+not a claim that all tests or private application routes are fixed.
