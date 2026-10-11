@@ -7552,6 +7552,20 @@ rules:
       - Candidate names and unsupported syntax are rendered only as safe labels, counts, hashes, rule IDs, and repo-relative spans; raw source snippets, URLs, local paths, secrets, and private labels must not be emitted.
       - Stable gap kinds include `swift-module-identity-unknown`, `swift-duplicate-symbol-identity`, `swift-unresolved-external-symbol`, `swift-ambiguous-symbol-identity`, `swift-module-context-unavailable`, `swift-extension-membership-syntax-only`, `swift-relationship-kind-unsupported`, and `swift-override-target-unresolved`.
 
+  - id: workflow.webforms.gap-classification.v1
+    name: Retained Web Forms cutoff evidence associations
+    description: Produces aggregate console counts of bounded terminal uncertainty and immediate publish identity round trips from a receipt-hash-checked grouped handoff.
+    evidenceTier: Tier4Unknown
+    emits:
+      - Read-only console summary
+    limitations:
+      - Exact-node co-occurrence of a retained ruled gap is an association, not a proven cause of a missing terminal route.
+      - Categories overlap; gap record counts and unique node counts are not missing path counts.
+      - Unknown or unassociated nodes are not evidence of no database dependency, and no absence category is emitted.
+      - Input is bounded to a 4 MiB receipt, 64 MiB handoff and 200000 gap records; receipt artifact hashing is integrity checking, not authenticity or runtime proof.
+      - No graph traversal or source analysis is performed; this does not find downstream missing edges or establish complete coverage.
+      - No private identities, source paths, SQL or input hashes are printed, and no machine-readable artifact is written.
+
   - id: swift.syntax.analysis-gap.v1
     name: SwiftSyntax parser and syntax coverage gap
     description: Emits gaps for unreadable Swift files, unavailable module context, parser limitations, unsupported call shapes, optional chaining, macros, generated code, Objective-C bridging, and dynamic syntax that v0 cannot resolve.
