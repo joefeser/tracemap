@@ -486,3 +486,22 @@ on the method fact with no rejection. Mutating synthetic source/configuration
 produced exactly one sanitized rejection and no admitted context imports.
 No application compilation/execution, SQL or private inputs were involved.
 Private route gains beyond the 57-chain/238-variant baseline remain unverified.
+
+### Extraction status scope correction
+
+The report completion console previously always printed `sourceRescanned=false`,
+including after a fresh scan in the same invocation. It described report-phase
+behavior but could be misread as evidence that no extraction occurred. Completion
+now reports actual current-invocation source extraction, separately labels
+`reportPhaseSourceRescanned=false`, and prints the configured scan operation and
+hash-linked scan checkpoint anchor. Completed resume and attachment remain false;
+fresh scan plus report is true. This changes console diagnostics only, not
+checkpoint schemas, extraction, bridge admission or traversal semantics.
+
+The targeted CLI fresh/resume, failed-report recovery and attachment regression
+checks pass (six cases). Verify historical runs using their original scan
+checkpoint and facts, not the old ambiguous console flag. New method nodes are
+not automatically new bridge edges; equal route-count distributions are not
+route-identity equivalence. The final work-machine prompt requests at most three
+read-only cutoff inspections and one concrete missing-edge witness, without a
+new scan or a claim that the remaining 221 nodes all represent missing DB paths.
