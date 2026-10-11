@@ -306,3 +306,10 @@ Local validation for this change: 230 focused tests passed with zero skips
 paths, grouped handoff and baseline prewalk). The CLI build had zero warnings
 and errors. The earlier Windows event-wiring failure is not claimed resolved
 by this reporting-only change; its test class was not rerun locally here.
+
+Windows validation of `e0cf7889614689a73b57c7ef4c9a2cca640e63be`: the framework
+candidate and publish-member index classes passed 104/104 with zero failures or
+skips, confirmed from retained TRX. Serial CLI build had zero warnings/errors;
+CLI SHA-256 was `c30c039e8c85b836c9700ab00755becdf6d43d0e5edbd2e8a0cf87fc96c86a80`.
+The command completed in 2m06s. New native fixture compilation remains deferred;
+existing native artifacts were untouched. No private application or SQL ran.
