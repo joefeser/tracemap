@@ -202,6 +202,23 @@ MSB3491 for a generated assembly-attributes file. One retry with `-m:1
 is not established. Native and private artifacts were untouched. No full-suite,
 application-execution or SQL-execution claim is made.
 
+### Explicit deeper retained queries
+
+The handler-requery CLI now accepts `--max-depth 1..64`, exposed by
+`wrequery.ps1 -MaxDepth`. Omission retains the original plan's depth; all other
+budgets remain unchanged. The effective depth is in the new receipt's existing
+hash-bound query and the original manifest/checkpoints are not edited. Completed
+and recovery contexts are tested; invalid/duplicate values are refused before
+output creation. PowerShell inspection-only mode rejects a depth override.
+
+Local validation: 201 selected tests pass with zero skips, plus the wizard
+PowerShell script tests. Depth hash mutation, depths 1/32/48/64, compiled-only and
+graph-mode combinations, and byte-for-byte original artifact preservation are
+covered. The deeper synthetic route tests distinguish route enumeration from
+terminal inventory; private additional chain counts remain unmeasured.
+Use [the staged work-Opus prompt](../CLAUDE_DEEPER_HANDLER_REQUERY_PROMPT.md) for
+fresh private depth-32 and depth-48 queries without rescanning.
+
 That run also exposed a presentation omission: endpoint limitations were retained
 in JSON but absent from grouped HTML. The writer now displays HTML-escaped
 endpoint limitations beside each database endpoint. A new HTML assertion failed

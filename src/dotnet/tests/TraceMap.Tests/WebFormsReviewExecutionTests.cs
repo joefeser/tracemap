@@ -1223,6 +1223,35 @@ public sealed class WebFormsReviewExecutionTests
     }
 
     [Theory]
+    [InlineData(32)]
+    [InlineData(48)]
+    public async Task Completed_handler_requery_depth_override_preserves_original_artifacts(int depth)
+    {
+        using var fixture = new Fixture();
+        fixture.AddPublicEventFixture();
+        await fixture.Preflight();
+        Assert.Equal(0, await fixture.Execute("run", Scan));
+        Assert.Equal(0, await fixture.ExecuteReports("resume", WebFormsReviewReportExecution.WriteAsync));
+        var checkpoint = fixture.LastCheckpoint();
+        var bundle = Path.Combine(fixture.Run, checkpoint.Reports!.ReportAttempt);
+        var before = Directory.GetFiles(fixture.Run, "*", SearchOption.AllDirectories).ToDictionary(path => path, Hash);
+        var destination = Path.Combine(fixture.Root, "deeper-completed-query");
+        using var error = new StringWriter();
+        var result = await TraceMapCommand.RunAsync(["webforms-review", "requery-handler", "--run", fixture.Run,
+            "--bundle", bundle, "--handler", "Names_Init", "--out", destination,
+            "--max-depth", depth.ToString(System.Globalization.CultureInfo.InvariantCulture)], TextWriter.Null, error);
+        Assert.True(result == 0, error.ToString());
+        var receipt = JsonSerializer.Deserialize<WebFormsHandlerRequeryReceipt>(File.ReadAllText(Path.Combine(destination,
+            WebFormsReviewExecutionCommand.HandlerRequeryName)), JsonOptions)!;
+        Assert.Equal(depth, receipt.Query.MaxDepth);
+        Assert.NotNull(receipt.CompletedReportSha256);
+        Assert.True(receipt.PathEnumerationPerformed);
+        Assert.Equal(WebFormsReviewExecutionCommand.HandlerRequeryHash(receipt), receipt.BoundedInputSha256);
+        Assert.Equal(before.Count, Directory.GetFiles(fixture.Run, "*", SearchOption.AllDirectories).Length);
+        foreach (var (path, hash) in before) Assert.Equal(hash, Hash(path));
+    }
+
+    [Theory]
     [InlineData("unchanged")]
     [InlineData("changed")]
     [InlineData("missing")]
@@ -1321,12 +1350,37 @@ public sealed class WebFormsReviewExecutionTests
             Assert.Equal(TraceMap.Reporting.GroupedCompiledPathReportWriter.HtmlName, handlerReceipt.PrimaryReport);
             Assert.Equal(handlerReceipt.CombinedIndexSha256, handlerReceipt.GraphObservation.InputSha256);
             Assert.Contains("no-scan;no-combine", requeryOutput.ToString());
+            foreach (var depth in new[] { 1, 32, 48, 64 })
+            {
+                var deeperFolder = Path.Combine(fixture.Root, $"handler-depth-{depth}");
+                Assert.Equal(0, await TraceMapCommand.RunAsync(["webforms-review", "requery-handler", "--run", fixture.Run,
+                    "--bundle", target, "--handler", "Names_Init", "--out", deeperFolder,
+                    "--max-depth", depth.ToString(System.Globalization.CultureInfo.InvariantCulture)], requeryOutput, error));
+                var deeper = JsonSerializer.Deserialize<WebFormsHandlerRequeryReceipt>(File.ReadAllText(Path.Combine(deeperFolder,
+                    WebFormsReviewExecutionCommand.HandlerRequeryName)), JsonOptions)!;
+                Assert.Equal(depth, deeper.Query.MaxDepth);
+                Assert.Equal(handlerReceipt.Query.MaxTraversalWork, deeper.Query.MaxTraversalWork);
+                Assert.Equal(handlerReceipt.Query.MaxPaths, deeper.Query.MaxPaths);
+                Assert.Equal(handlerReceipt.Query.MaxFrontier, deeper.Query.MaxFrontier);
+                Assert.Equal(handlerReceipt.CombinedIndexSha256, deeper.CombinedIndexSha256);
+                Assert.Equal(WebFormsReviewExecutionCommand.HandlerRequeryHash(deeper), deeper.BoundedInputSha256);
+                Assert.NotEqual(deeper.BoundedInputSha256,
+                    WebFormsReviewExecutionCommand.HandlerRequeryHash(deeper with { Query = deeper.Query with { MaxDepth = depth == 1 ? 2 : 1 } }));
+            }
+            foreach (var value in new[] { "0", "65", "-1", "abc", "2147483648" })
+            {
+                var invalidFolder = Path.Combine(fixture.Root, "invalid-depth");
+                Assert.Equal(1, await TraceMapCommand.RunAsync(["webforms-review", "requery-handler", "--run", fixture.Run,
+                    "--bundle", target, "--handler", "Names_Init", "--out", invalidFolder, "--max-depth", value], TextWriter.Null, error));
+                Assert.False(Directory.Exists(invalidFolder));
+            }
             var graphFolder = Path.Combine(fixture.Root, "handler-method-graph");
             Assert.Equal(0, await TraceMapCommand.RunAsync(["webforms-review", "requery-handler", "--run", fixture.Run,
-                "--bundle", target, "--handler", "Names_Init", "--out", graphFolder, "--view", "method-graph"], requeryOutput, error));
+                "--bundle", target, "--handler", "Names_Init", "--out", graphFolder, "--view", "method-graph", "--max-depth", "32"], requeryOutput, error));
             var graphReceipt = JsonSerializer.Deserialize<WebFormsHandlerRequeryReceipt>(File.ReadAllText(Path.Combine(graphFolder,
                 WebFormsReviewExecutionCommand.HandlerRequeryName)), JsonOptions)!;
             Assert.Equal("unfiltered-retained-outgoing", graphReceipt.Query.TraversalScope);
+            Assert.Equal(32, graphReceipt.Query.MaxDepth);
             Assert.Null(graphReceipt.Query.ToSurface);
             Assert.False(graphReceipt.PathEnumerationPerformed);
             Assert.Equal(TraceMap.Reporting.RetainedMethodGraphWriter.HtmlName, graphReceipt.PrimaryReport);
@@ -1350,14 +1404,19 @@ public sealed class WebFormsReviewExecutionTests
             using var compiledOutput = new StringWriter();
             Assert.Equal(0, await TraceMapCommand.RunAsync(["webforms-review", "requery-handler", "--run", fixture.Run,
                 "--bundle", target, "--handler", "Names_Init", "--out", compiledFolder, "--surface-name", "DbDataAdapter.Fill",
-                "--traversal-scope", "compiled-il"], compiledOutput, error));
+                "--traversal-scope", "compiled-il", "--max-depth", "48"], compiledOutput, error));
             var compiledReceipt = JsonSerializer.Deserialize<WebFormsHandlerRequeryReceipt>(File.ReadAllText(Path.Combine(compiledFolder,
                 WebFormsReviewExecutionCommand.HandlerRequeryName)), JsonOptions)!;
             Assert.Equal("compiled-il-with-root-attachment", compiledReceipt.Query.TraversalScope);
+            Assert.Equal(48, compiledReceipt.Query.MaxDepth);
             Assert.Equal(WebFormsReviewExecutionCommand.HandlerRequeryHash(compiledReceipt), compiledReceipt.BoundedInputSha256);
             Assert.Equal(handlerReceipt.CombinedIndexSha256, compiledReceipt.CombinedIndexSha256);
             Assert.NotEqual(compiledReceipt.BoundedInputSha256, fillReceipt.BoundedInputSha256);
             var badScope = Path.Combine(fixture.Root, "bad-scope");
+            Assert.Equal(1, await TraceMapCommand.RunAsync(["webforms-review", "requery-handler", "--run", fixture.Run,
+                "--bundle", target, "--handler", "Names_Init", "--out", badScope,
+                "--max-depth", "32", "--max-depth", "48"], TextWriter.Null, error));
+            Assert.False(Directory.Exists(badScope));
             Assert.Equal(1, await TraceMapCommand.RunAsync(["webforms-review", "requery-handler", "--run", fixture.Run,
                 "--bundle", target, "--handler", "Names_Init", "--out", badScope, "--surface-name", "Wrong"], TextWriter.Null, error));
             Assert.False(Directory.Exists(badScope));

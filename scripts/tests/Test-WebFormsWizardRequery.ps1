@@ -109,6 +109,14 @@ try {
         ($graphDisplay -join "`n") -notmatch 'method-graph.local.html' -or
         ($graphDisplay -join "`n") -notmatch 'Terminal path enumeration was not run') { throw 'Graph mode was not forwarded or labeled.' }
     Expect-Failure { & $helper $temporary -MethodGraph -InspectLatest } 'cannot be combined'
+    foreach ($depth in @(1, 32, 48, 64)) {
+        & $helper $temporary -Handler Page_Load -MaxDepth $depth | Out-Null
+        $depthCall = $global:WizardRequeryCalls[$global:WizardRequeryCalls.Count - 1]
+        if ($depthCall[-2] -ne '--max-depth' -or $depthCall[-1] -ne [string]$depth) { throw 'Depth override not forwarded.' }
+    }
+    Expect-Failure { & $helper $temporary -Handler Page_Load -MaxDepth 0 } 'MaxDepth'
+    Expect-Failure { & $helper $temporary -Handler Page_Load -MaxDepth 65 } 'MaxDepth'
+    Expect-Failure { & $helper $temporary -MaxDepth 32 -InspectLatest } 'cannot be combined'
     $beforeInspect = $global:WizardRequeryCalls.Count
     $inspection = @(& $helper $temporary -InspectLatest)
     if ($global:WizardRequeryCalls.Count -ne $beforeInspect + 1 -or

@@ -64,6 +64,8 @@ function Write-WebFormsTruncationSummary([string]$Directory) {
     $query = if ($handoff.header.PSObject.Properties['query']) { $handoff.header.query } else { $null }
     $work = if ($null -ne $summary -and $summary.PSObject.Properties['traversalWorkUnits']) { $summary.traversalWorkUnits } else { $null }
     $workLimit = if ($null -ne $query -and $query.PSObject.Properties['maxTraversalWork']) { $query.maxTraversalWork } else { $null }
+    $depthLimit = if ($null -ne $query -and $query.PSObject.Properties['maxDepth']) { $query.maxDepth } else { $null }
+    Write-Output "Traversal depth: configuredLimit=$(Short-Text $depthLimit). Deeper bounded queries are not complete-coverage proof."
     Write-Output "Traversal work: measured=$(Short-Text $work); configuredLimit=$(Short-Text $workLimit). Work count alone does not identify the cutoff reason."
     foreach ($reason in @('work', 'depth', 'cycle', 'path', 'frontier')) {
         $count = @($gaps | Where-Object { $_.reason -ceq $reason }).Count

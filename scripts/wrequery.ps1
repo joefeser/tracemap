@@ -7,10 +7,12 @@ param(
     [switch]$AllowUpdatedReader,
     [switch]$InspectLatest,
     [switch]$MethodGraph,
-    [switch]$LatestRefresh
+    [switch]$LatestRefresh,
+    [ValidateRange(1,64)][int]$MaxDepth
 )
 Set-StrictMode -Version Latest
 if ($MethodGraph -and $InspectLatest) { throw 'MethodGraph and InspectLatest cannot be combined.' }
+if ($PSBoundParameters.ContainsKey('MaxDepth') -and $InspectLatest) { throw 'MaxDepth and InspectLatest cannot be combined.' }
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'WebFormsRequeryDiagnostics.ps1')
 function Read-Locator([string]$Path, [string]$Schema) {
@@ -93,6 +95,7 @@ if ($InspectLatest) {
 $destination = Join-Path $Root ("handler-requery-$Project-" + [guid]::NewGuid().ToString('N'))
 $extra = @()
 if ($MethodGraph) { $extra = @('--view', 'method-graph') }
+if ($PSBoundParameters.ContainsKey('MaxDepth')) { $extra += @('--max-depth', $MaxDepth.ToString([Globalization.CultureInfo]::InvariantCulture)) }
 & dotnet $cli webforms-review requery-handler --run $run --bundle $bundle --handler $Handler --out $destination @extra
 if ($LASTEXITCODE -ne 0) { throw 'WEBFORMS_HANDLER_REQUERY_FAILED;originals-preserved;partial-output-preserved' }
 $report = Join-Path $destination 'compiled-paths.local.html'

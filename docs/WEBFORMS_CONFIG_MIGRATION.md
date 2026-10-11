@@ -676,7 +676,16 @@ This **does** repeat bounded global graph construction and a single-handler
 traversal; it does **not** scan source, collect DLLs, rebuild the website, combine
 indexes, or rewrite original checkpoints. All global overload/dispatch
 competitors remain admitted. Depth, path, work, frontier, graph-input, graph
-storage, and projection bounds come from the retained plan. Path/work capacity
+storage, and projection bounds come from the retained plan by default. A new
+single-handler query may explicitly override depth with native `--max-depth N`
+or `wrequery.ps1 -MaxDepth N` (1 through 64). This does not modify the retained
+plan: the effective depth is stored in the new receipt's hash-bound `query`, and
+console output shows both original and effective depth. Other bounds stay
+unchanged. `-MaxDepth` cannot be combined with read-only `-InspectLatest`.
+Use staged depths such as 32 then 48 to inspect longer paths; deeper queries
+remain bounded and may exhaust other limits. Never infer complete coverage from
+unchanged counts, and do not treat identity round trips as missing recursive
+routes. Every requery writes a fresh folder. Path/work capacity
 is independent for this one-root comparison, not silently raised for the
 seven-root report. The legacy `wpath.ps1` also called the C# path reporter; it
 selected one exact handler. Synthetic regression fixtures pin equivalent
