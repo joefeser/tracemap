@@ -219,6 +219,12 @@ terminal inventory; private additional chain counts remain unmeasured.
 Use [the staged work-Opus prompt](../CLAUDE_DEEPER_HANDLER_REQUERY_PROMPT.md) for
 fresh private depth-32 and depth-48 queries without rescanning.
 
+Windows validation at `cec30f14fb782e2c714b375662cbc3e4db6cf147` passed:
+sequential CLI build with zero warnings/errors, 13/13 focused depth/recovery
+tests with zero skips, and the wizard PowerShell script after tests completed.
+Existing fixtures and outputs were untouched. This validates the override
+workflow, not additional private chains; the staged private requery is next.
+
 That run also exposed a presentation omission: endpoint limitations were retained
 in JSON but absent from grouped HTML. The writer now displays HTML-escaped
 endpoint limitations beside each database endpoint. A new HTML assertion failed
