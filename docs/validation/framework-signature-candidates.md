@@ -351,3 +351,14 @@ The keyword/escaped-identifier follow-up additionally verifies that a method
 variable named `[Integer]` cannot capture a predefined `Integer` type, and that
 `!!0` never substitutes for containing-type `!0`. All 112 generic/framework
 candidate tests passed after that follow-up.
+
+Windows validation of `c8984c35f4c950bb8677b9a677eb4d3300c86f31` passed 134/134
+generic, framework candidate and publish-member index tests, with zero skips,
+in 2m18s. Serial CLI build had zero warnings/errors; its SHA-256 was
+`fe272a4fdca77ccbc58f42ae46aacdcc4e1a33e68f7bc67fdd239b2c7b4bd838`.
+TRX counts were verified. Native new-case compilation was deferred, existing
+native artifacts remained unchanged, and no private application or SQL ran.
+Windows also validated the keyword follow-up
+`8166c4d2b45f4400bdf0c0bd6e1763b09a7fe666`: serial CLI build was clean and all
+21 PublishGenericParameterTests passed with zero failures/skips, including the
+predefined-type regression. No larger suite or native execution was repeated.
