@@ -2,6 +2,14 @@
 
 Operator examples use generic site, page, and handler names. Historical receipts remain bound to their recorded input bytes; genericized examples do not establish a fresh platform validation result.
 
+For the first backend extraction report projection, run
+`BackendExtractionSampleTests`, `GroupedCompiledPathHandoffTests`,
+`ConstructedGenericSampleTests`, `FrameworkSignatureCandidateTests`,
+`LazyConstructorLoggingTests` and `CompiledTwoHopCutoffTests`.
+See [backend extraction scope and trial instructions](BACKEND_EXTRACTION_INVENTORY.md).
+The synthetic library is scanned, never executed; retained-query coverage is not
+a full-site database/HTTP inventory.
+
 For effective inherited ASP.NET VB imports, run `WebFormsVbImportContextTests`,
 `VisualBasicConfiguredImportsTests`, `FrameworkSignatureCandidateTests`,
 `ScanExecutionReceiptTests`, and the focused

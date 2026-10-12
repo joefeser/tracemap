@@ -37,7 +37,11 @@ public sealed record GroupedCompiledPathHandoff(
     IReadOnlyList<string> InventoryEdgeReferences,
     IReadOnlyList<GroupedCompiledPathVariant> Variants,
     IReadOnlyList<CompiledMethodChainGroup> Chains,
-    string Limitation);
+    string Limitation)
+{
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public BackendExtractionInventory? BackendExtraction { get; init; }
+}
 
 public static class GroupedCompiledPathHandoffBuilder
 {
@@ -106,6 +110,7 @@ public static class GroupedCompiledPathHandoffBuilder
             InputHash(inputIndexSha256, reportHash, generatorHash, limits, cancellationToken),
             inputIndexSha256, reportHash, limits, header, nodes, edges, inventoryNodes, inventoryEdges,
             variants, groups.Select(group => new CompiledMethodChainGroup(group.Key, group.Value)).ToArray(), Limitation);
+        result = result with { BackendExtraction = BackendExtractionInventoryBuilder.Create(result) };
         _ = HashJson(result, limits.MaxOutputBytes, cancellationToken);
         return result;
     }
@@ -177,6 +182,10 @@ public static class GroupedCompiledPathHandoffBuilder
             .Select(group => new CompiledMethodChainGroup(group.Key, group.Select(item => item.Index).ToArray())).ToArray();
         if (HashJson(expectedGroups, handoff.Limits.MaxOutputBytes, cancellationToken) !=
             HashJson(handoff.Chains, handoff.Limits.MaxOutputBytes, cancellationToken)) throw Invalid("CHAIN_INDEX");
+        if (handoff.BackendExtraction is not null &&
+            HashJson(handoff.BackendExtraction, handoff.Limits.MaxOutputBytes, cancellationToken) !=
+            HashJson(BackendExtractionInventoryBuilder.Create(handoff), handoff.Limits.MaxOutputBytes, cancellationToken))
+            throw Invalid("BACKEND_EXTRACTION");
         return report;
     }
 
