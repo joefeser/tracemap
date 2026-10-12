@@ -4604,3 +4604,5 @@ methods or make network calls. net48/other-framework overload parity, pinned OSS
 source smokes, non-.NET adapters, private Windows acceptance and runtime behavior
 are explicitly deferred for this bounded C#/VB API slice; no broad language-adapter
 or full migration acceptance follows from this fixture.
+
+Legacy HTTP compatibility: use [the public reference matrix](../samples/outbound-http-coverage/LEGACY-COMPATIBILITY.md) and its per-TFM overload inventories. Record application project TFM, TargetFrameworkAttribute and exact referenced assembly/member identities separately. System 2.0.0.0 does not identify an application's TFM. Missing TFM stays unknown. Package-added/backported APIs, other profiles and private application parity remain unvalidated. Run the public static-only smoke with `python3 scripts/validation/http-coverage-smoke.py --output <public-temporary-output>`; Windows CI results must bind an actual run and commit. Never execute fixture methods.

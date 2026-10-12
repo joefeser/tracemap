@@ -32,6 +32,16 @@
     <ProjectReference Include="../../../../samples/compiled-dotnet-evidence/constructed-generics/caller/ConstructedGenerics.Caller.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="../../../../samples/backend-extraction/BackendExtraction.Sample.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="../../../../samples/outbound-http-coverage/csharp/HttpMatrix.CSharp.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="../../../../samples/outbound-http-coverage/legacy/net20/csharp/HttpLegacy.csproj" ReferenceOutputAssembly="false" SkipGetTargetFrameworkProperties="true" />
+    <ProjectReference Include="../../../../samples/outbound-http-coverage/legacy/net20/vb/HttpLegacy.vbproj" ReferenceOutputAssembly="false" SkipGetTargetFrameworkProperties="true" />
+    <ProjectReference Include="../../../../samples/outbound-http-coverage/legacy/net35/csharp/HttpLegacy.csproj" ReferenceOutputAssembly="false" SkipGetTargetFrameworkProperties="true" />
+    <ProjectReference Include="../../../../samples/outbound-http-coverage/legacy/net35/vb/HttpLegacy.vbproj" ReferenceOutputAssembly="false" SkipGetTargetFrameworkProperties="true" />
+    <ProjectReference Include="../../../../samples/outbound-http-coverage/legacy/net40/csharp/HttpLegacy.csproj" ReferenceOutputAssembly="false" SkipGetTargetFrameworkProperties="true" />
+    <ProjectReference Include="../../../../samples/outbound-http-coverage/legacy/net40/vb/HttpLegacy.vbproj" ReferenceOutputAssembly="false" SkipGetTargetFrameworkProperties="true" />
+    <ProjectReference Include="../../../../samples/outbound-http-coverage/legacy/net45/csharp/HttpLegacy.csproj" ReferenceOutputAssembly="false" SkipGetTargetFrameworkProperties="true" />
+    <ProjectReference Include="../../../../samples/outbound-http-coverage/legacy/net45/vb/HttpLegacy.vbproj" ReferenceOutputAssembly="false" SkipGetTargetFrameworkProperties="true" />
+    <ProjectReference Include="../../../../samples/outbound-http-coverage/legacy/net48/csharp/HttpLegacy.csproj" ReferenceOutputAssembly="false" SkipGetTargetFrameworkProperties="true" />
+    <ProjectReference Include="../../../../samples/outbound-http-coverage/legacy/net48/vb/HttpLegacy.vbproj" ReferenceOutputAssembly="false" SkipGetTargetFrameworkProperties="true" />
     <ProjectReference Include="../../../../samples/outbound-http-coverage/vb/HttpMatrix.VB.vbproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="../../../../samples/fixture-build/lazy-constructor/LazyWebsite.vbproj" ReferenceOutputAssembly="false" SkipGetTargetFrameworkProperties="true" />
   </ItemGroup>

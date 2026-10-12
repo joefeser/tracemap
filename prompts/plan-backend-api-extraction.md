@@ -41,3 +41,5 @@ protocol claim, content-only reads into outbound requests, or UNKNOWN verbs and
 destinations into proposed extracted contracts. Wrapper specialization and mutable
 request state remain unresolved. Absence never means unused; static evidence never
 proves runtime execution. Request authorized contracts for these gaps.
+
+Legacy HTTP compatibility: use [the public reference matrix](../samples/outbound-http-coverage/LEGACY-COMPATIBILITY.md) and its per-TFM overload inventories. Record application project TFM, TargetFrameworkAttribute and exact referenced assembly/member identities separately. System 2.0.0.0 does not identify an application's TFM. Missing TFM stays unknown. Package-added/backported APIs, other profiles and private application parity remain unvalidated. Run the public static-only smoke with `python3 scripts/validation/http-coverage-smoke.py --output <public-temporary-output>`; Windows CI results must bind an actual run and commit. Never execute fixture methods.

@@ -108,3 +108,27 @@ The follow-up documentation-only commit records this receipt. Rebuild and rerun
 the 82 focused tests plus twelve CLI outputs on that final head; no repeat of the
 full suite is required for documentation-only changes. The full-suite claim is
 explicitly bound to the implementation commit above, not to a later commit.
+
+## Legacy reference compatibility extension
+
+Current origin/dev `278bb821fe41aca8221d2193d15abaa7b92c6e64` (inventory #862)
+merged cleanly into this isolated branch in merge commit
+`922fc0b182e9d39d9e41f4971ecef625af3434a6`. The historical no-integration
+receipt above remains bound to its original head; this extension supersedes that
+integration gap. No dev checkout/debugging lane was modified.
+
+Public reference-built C#/VB net20/net35/net40 fixtures each enumerate 57 overloads;
+net45/net48 enumerate 116 each, alongside 166 net10.0 overloads. All ten legacy
+projects compile on macOS with zero warnings/errors, and ten legacy tests passed
+(39s): every overload through semantic facts/SQLite/handoff/HTML, independently
+decoded emitted IL signatures, signed assembly identities, TFM metadata and separate
+projectless/compiled-only limits. System 2.0.0.0 is shared by net20 and net35 and
+does not establish application TFM; missing binary TFM remains unknown. C# legacy
+SendAsync may emit a HttpMessageInvoker base-slot reference, retained as emitted.
+Trusted framework checks have not changed.
+
+Windows public compatibility CI is configured; observed run/head and broader
+local regression/native CLI receipt are pending. Admitted application framework
+evidence has not been identified; a path/admission reference was requested. This
+application-specific prerequisite remains open, with no inferred TFM/private
+application compatibility claim. See the legacy compatibility matrix for details.

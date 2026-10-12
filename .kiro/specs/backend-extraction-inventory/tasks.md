@@ -24,3 +24,11 @@
 - [x] Document rule limitations, mode matrix, migration missing inputs and validation/deferred targets.
 - [x] Complete implementation-head regression/full suite, native CLI repeats and artifact validation; record results.
 - [x] Push scoped implementation branch for testing; no merge/ACK/lane-policy changes.
+
+## Legacy HTTP compatibility follow-up
+- [x] Merge current dev into the isolated HTTP branch and preserve unrelated lanes.
+- [x] Add C#/VB reference-built net20/net35/net40/net45/net48 matrices alongside net10.0; retain strict identities and original IL signatures.
+- [x] Separate semantic, projectless and compiled-only coverage and add native CLI/static-report validation.
+- [x] Add Windows public compatibility CI and distinguish configured from observed results.
+- [ ] Identify and inspect admitted application TFM/reference identity evidence; record application-specific compatibility without private artifacts.
+- [ ] Record observed Windows CI result and issue #861 handoff.
