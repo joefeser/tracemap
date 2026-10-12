@@ -32,3 +32,12 @@ production code or change the application until the owner approves a slice.
 
 Keep private identifiers/source/SQL in the authorized private assessment only.
 No private artifacts belong in public issues, PRs, fixtures or shared projections.
+
+For outbound HTTP, read the mode coverage limits. Signed semantic framework calls,
+unresolved name-only candidates and compiled-only IL observations are different
+evidence. Request/convenience/JSON, WebClient and WebRequest coverage depends on
+target-framework references. Do not turn WebClient address evidence into an HTTP
+protocol claim, content-only reads into outbound requests, or UNKNOWN verbs and
+destinations into proposed extracted contracts. Wrapper specialization and mutable
+request state remain unresolved. Absence never means unused; static evidence never
+proves runtime execution. Request authorized contracts for these gaps.

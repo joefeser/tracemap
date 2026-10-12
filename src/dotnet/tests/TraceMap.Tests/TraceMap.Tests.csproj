@@ -31,6 +31,8 @@
     <ProjectReference Include="../../../../samples/fixture-build/deep-projectless/DeepWebsite.vbproj" ReferenceOutputAssembly="false" SkipGetTargetFrameworkProperties="true" />
     <ProjectReference Include="../../../../samples/compiled-dotnet-evidence/constructed-generics/caller/ConstructedGenerics.Caller.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="../../../../samples/backend-extraction/BackendExtraction.Sample.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="../../../../samples/outbound-http-coverage/csharp/HttpMatrix.CSharp.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="../../../../samples/outbound-http-coverage/vb/HttpMatrix.VB.vbproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="../../../../samples/fixture-build/lazy-constructor/LazyWebsite.vbproj" ReferenceOutputAssembly="false" SkipGetTargetFrameworkProperties="true" />
   </ItemGroup>
 

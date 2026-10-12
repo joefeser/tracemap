@@ -177,7 +177,9 @@ public sealed record CombinedPathNode(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     IReadOnlyList<string>? Limitations = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    CompiledCommandConfigurationCandidate? CommandBinding = null);
+    CompiledCommandConfigurationCandidate? CommandBinding = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    OutboundHttpCallEvidence? HttpCallEvidence = null);
 
 public sealed record CompiledCommandOperandOrigin(string Kind, string Identity);
 public sealed record CompiledCommandConfigurationCandidate(
@@ -6194,7 +6196,8 @@ public static partial class CombinedDependencyPathReporter
             surface.ConfigKey,
             surface.OperationDirection,
             surface.SurfaceSubtype,
-            Limitations: surface.SurfaceKind == "legacy-data" ? surface.LegacyDataLimitations : null);
+            Limitations: surface.SurfaceKind == "legacy-data" ? surface.LegacyDataLimitations : null,
+            HttpCallEvidence: surface.HttpCallEvidence);
     }
 
     private static bool IsMessageSurfaceKind(string? surfaceKind)
@@ -7179,7 +7182,8 @@ public static partial class CombinedDependencyPathReporter
         string? SurfaceSubtype = null,
         IReadOnlyList<string>? Limitations = null,
         [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-        CompiledCommandConfigurationCandidate? CommandBinding = null)
+        CompiledCommandConfigurationCandidate? CommandBinding = null,
+        OutboundHttpCallEvidence? HttpCallEvidence = null)
     {
         public CombinedPathNode ToReportNode()
         {
@@ -7214,7 +7218,8 @@ public static partial class CombinedDependencyPathReporter
                 OperationDirection,
                 SurfaceSubtype,
                 Limitations,
-                CommandBinding);
+                CommandBinding,
+                HttpCallEvidence);
         }
     }
 

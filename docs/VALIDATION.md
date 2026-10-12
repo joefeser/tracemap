@@ -4587,3 +4587,20 @@ hashes. These are static definition checks, not workflow execution proof.
 Discovery regressions must prove lazy enumeration stops at the candidate/entry
 bound, overflow produces one deterministic gap and no rows, and embedded quoted
 or escaped shell operators cannot truncate an unsafe PackageId into a safe one.
+
+
+## Outbound HTTP coverage follow-up (#861)
+
+Run `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter
+FullyQualifiedName~OutboundHttpCoverageTests -warnaserror` and the surrounding
+IntegrationExtractor, VisualBasicExternalBoundary, BackendExtractionSample and
+GroupedCompiledPathHandoff tests, followed by the full .NET solution suite.
+The [public matrix](../samples/outbound-http-coverage/README.md) compiles 166
+net10.0 overloads per language. Native CLI scans of both projects must retain
+semantic callsites and their report projections. Separately scan projectless copies
+and empty source roots with compiled DLL inputs plus `--il-body-evidence`.
+Validate artifacts and compare repeated facts/report output. Never execute fixture
+methods or make network calls. net48/other-framework overload parity, pinned OSS
+source smokes, non-.NET adapters, private Windows acceptance and runtime behavior
+are explicitly deferred for this bounded C#/VB API slice; no broad language-adapter
+or full migration acceptance follows from this fixture.
