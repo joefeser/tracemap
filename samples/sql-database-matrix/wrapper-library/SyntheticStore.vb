@@ -3,6 +3,10 @@ Imports System.Data
 ' Compile and scan only. No real connection strings or database execution.
 Public Class SyntheticStore
     Public Sub ExecuteProcedure(procedureName As String)
+        ExecuteProcedure(procedureName, New Object() {})
+    End Sub
+
+    Public Sub ExecuteProcedure(procedureName As String, arguments As Object())
         Dim command As New SqlClient.SqlCommand(procedureName)
         command.CommandType = CommandType.StoredProcedure
         command.ExecuteNonQuery()

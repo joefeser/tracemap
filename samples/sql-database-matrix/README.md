@@ -61,3 +61,29 @@ Run `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter
 FullyQualifiedName~ProjectlessSqlReportingTests -warnaserror`. Reports display
 candidate rule/tier/availability, include an empty-coverage warning, and disclose
 the total/omitted count when the 50-row display cap is reached.
+
+## Compiled caller plus separate wrapper
+
+`wrapper-build/SyntheticWebsite.vbproj` is a public net472 compilation harness for
+the website source, referencing the separate SyntheticStore assembly. It is not an
+ASP.NET publishing receipt or proof of production source/binary correspondence.
+The procedure path delegates through two overloads before ExecuteNonQuery; the
+text path carries a symbolic string composition to ExecuteScalar. Build only;
+never invoke these methods or connect to a database.
+
+`SqlWrapperRouteTests` verifies both complete routes, constant/hash and symbolic
+argument states, grouped inventory, and caller-only/provider-only/source-only
+missing-input controls. Existing compiled resolution supports this fixture; this
+is new acceptance coverage, not a newly implemented generic resolver.
+
+For an existing closed scan/index, `scripts/sql-wrapper-report.py` creates a
+local-only selected-root SQL report. See
+[the work-machine procedure](../../prompts/produce-sql-wrapper-inventory.md).
+The helper retains failed/unmatched selections, links native path evidence,
+records generator/component/input hashes, and preserves coverage warnings. It
+does not extract readable SQL, enumerate all callers, or execute database calls.
+
+```text
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter FullyQualifiedName~SqlWrapperRouteTests -warnaserror
+python3 scripts/validation/test_sql_wrapper_report.py
+```

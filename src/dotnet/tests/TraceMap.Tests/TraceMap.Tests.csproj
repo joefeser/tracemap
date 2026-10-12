@@ -97,5 +97,6 @@
 
   <ItemGroup>
     <ProjectReference Include="../../../../samples/sql-database-matrix/wrapper-library/SyntheticStore.vbproj" ReferenceOutputAssembly="false" SkipGetTargetFrameworkProperties="true" />
+    <ProjectReference Include="../../../../samples/sql-database-matrix/wrapper-build/SyntheticWebsite.vbproj" ReferenceOutputAssembly="false" SkipGetTargetFrameworkProperties="true" />
   </ItemGroup>
 </Project>

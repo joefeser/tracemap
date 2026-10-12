@@ -21,6 +21,7 @@ published from the normal development environment first.
 - `run-focused-webforms-monorepo-scan.md`
 - `run-focused-webforms-one-repo-windows.md`
 - `guided-corporate-claude-launcher-setup.md`
+- `produce-sql-wrapper-inventory.md` — SQL-only selected-caller report using existing admitted evidence; local output, no private contribution.
 
 ## Authorized agent-review prompt
 

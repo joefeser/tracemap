@@ -1,0 +1,134 @@
+"""Public synthetic guards for the local selected-root SQL report."""
+import argparse
+import importlib.util
+import json
+import pathlib
+import subprocess
+import tempfile
+import unittest
+from unittest.mock import patch
+
+SPEC = importlib.util.spec_from_file_location('sql_wrapper_report', pathlib.Path(__file__).parents[1] / 'sql-wrapper-report.py')
+REPORT = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(REPORT)
+
+
+def native(selector, paths=None):
+    return {'query': {'fromSymbol': selector, 'exactFromSymbol': True, 'toSurface': 'database-api'},
+            'summary': {'selectorCandidateCount': 1, 'truncated': False},
+            'reportCoverage': 'partial', 'paths': paths or [], 'gaps': [],
+            'coverageWarnings': ['Not runtime proof'], 'limitations': []}
+
+
+class SqlWrapperReportTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.root = pathlib.Path(self.temp.name)
+        self.index = self.root / 'index.sqlite'
+        self.index.write_bytes(b'synthetic index')
+        self.cli = self.root / 'tracemap.dll'
+        self.cli.write_bytes(b'synthetic tool')
+        self.args = argparse.Namespace(index=self.index, cli=self.cli, root=['First', 'Second'], out=self.root / 'report')
+
+    def runner(self, command, **kwargs):
+        folder = pathlib.Path(command[command.index('--out') + 1])
+        folder.mkdir(parents=True)
+        selector = command[command.index('--from-symbol') + 1]
+        (folder / 'paths-report.json').write_text(json.dumps(native(selector)), encoding='utf-8')
+        return subprocess.CompletedProcess(command, 0)
+
+    def test_unmatched_roots_retained_in_order_not_unused(self):
+        with patch.object(REPORT.subprocess, 'run', side_effect=self.runner):
+            self.assertEqual(0, REPORT.run(self.args))
+        text = (self.args.out / 'sql-wrapper-inventory.local.md').read_text()
+        self.assertLess(text.index('Caller selector: First'), text.index('Caller selector: Second'))
+        self.assertEqual(2, text.count('No retained SQL route'))
+        self.assertIn('No-path never means unused', text)
+        self.assertIn('Input index SHA-256', text)
+
+    def test_failure_and_timeout_are_not_empty(self):
+        for outcome in [subprocess.CompletedProcess([], 1), subprocess.TimeoutExpired([], 120)]:
+            self.args.out = self.root / ('timeout' if isinstance(outcome, Exception) else 'failed')
+            with patch.object(REPORT.subprocess, 'run', side_effect=outcome if isinstance(outcome, Exception) else None, return_value=outcome):
+                self.assertEqual(2, REPORT.run(self.args))
+            text = (self.args.out / 'sql-wrapper-inventory.local.md').read_text()
+            self.assertEqual(2, text.count('QUERY FAILED'))
+            self.assertNotIn('No retained SQL route', text)
+
+    def test_query_identity_mismatch_rejected(self):
+        def wrong(command, **kwargs):
+            result = self.runner(command, **kwargs)
+            path = pathlib.Path(command[command.index('--out') + 1]) / 'paths-report.json'
+            path.write_text(json.dumps(native('wrong')))
+            return result
+        with patch.object(REPORT.subprocess, 'run', side_effect=wrong):
+            self.assertEqual(2, REPORT.run(self.args))
+
+    def test_input_change_refuses_consolidated_report(self):
+        def changed(command, **kwargs):
+            self.index.write_bytes(b'changed')
+            return self.runner(command, **kwargs)
+        with patch.object(REPORT.subprocess, 'run', side_effect=changed):
+            with self.assertRaises(ValueError):
+                REPORT.run(self.args)
+        self.assertFalse((self.args.out / 'sql-wrapper-inventory.local.md').exists())
+
+    def test_bounds_duplicates_and_sidecars(self):
+        for roots in [[], ['a'] * 2, [str(i) for i in range(33)], ['x' * 8193]]:
+            self.args.root = roots
+            with self.assertRaises(ValueError):
+                REPORT.run(self.args)
+        self.args.root = ['a']
+        pathlib.Path(str(self.index) + '-wal').touch()
+        with self.assertRaises(ValueError):
+            REPORT.run(self.args)
+
+    def test_existing_output_refused(self):
+        self.args.out.mkdir()
+        with self.assertRaises(FileExistsError):
+            REPORT.run(self.args)
+
+    def test_empty_path_nodes_are_invalid_not_an_empty_query(self):
+        def malformed(command, **kwargs):
+            result = self.runner(command, **kwargs)
+            folder = pathlib.Path(command[command.index('--out') + 1])
+            selector = command[command.index('--from-symbol') + 1]
+            (folder / 'paths-report.json').write_text(json.dumps(native(selector, [{'nodes': []}])))
+            return result
+        with patch.object(REPORT.subprocess, 'run', side_effect=malformed):
+            self.assertEqual(2, REPORT.run(self.args))
+
+    def test_added_tool_component_refuses_report(self):
+        def changed(command, **kwargs):
+            (self.cli.parent / 'new.dll').write_bytes(b'changed tool set')
+            return self.runner(command, **kwargs)
+        with patch.object(REPORT.subprocess, 'run', side_effect=changed):
+            with self.assertRaises(ValueError):
+                REPORT.run(self.args)
+        self.assertFalse((self.args.out / 'sql-wrapper-inventory.local.md').exists())
+
+    def test_repeated_output_is_deterministic(self):
+        with patch.object(REPORT.subprocess, 'run', side_effect=self.runner):
+            REPORT.run(self.args)
+            first = (self.args.out / 'sql-wrapper-inventory.local.md').read_bytes()
+            self.args.out = self.root / 'repeat'
+            REPORT.run(self.args)
+        self.assertEqual(first, (self.args.out / 'sql-wrapper-inventory.local.md').read_bytes())
+
+    def test_render_escapes_and_preserves_gap_identity_not_raw_sql(self):
+        report = native('Root', [{'classification': 'candidate', 'nodes': [
+            {'displayName': '<Caller>|x'}, {'surfaceName': 'SqlCommand.ExecuteNonQuery', 'commandBinding': {
+                'commandTextFromPath': {'state': 'constant-on-encoded-call-path', 'origin': {'identity': 'SECRET_SQL'}},
+                'commandTypeFromPath': {'state': 'constant-on-encoded-call-path', 'origin': {'kind': 'constant-int32', 'identity': '4'}}}}]}])
+        report['gaps'] = [{'gapKind': 'Boundary', 'reason': 'missing', 'message': 'Not bound',
+                           'ruleId': 'public.rule.v1', 'evidenceTier': 'Tier4Unknown', 'nodeId': 'node-1', 'combinedFactId': 'fact-1'}]
+        rendered = '\n'.join(REPORT.render_root(1, 'Root', report))
+        self.assertIn('&lt;Caller&gt;&#124;x', rendered)
+        self.assertIn('node-1 / fact-1', rendered)
+        self.assertIn('StoredProcedure', rendered)
+        self.assertNotIn('SECRET_SQL', rendered)
+
+
+if __name__ == '__main__':
+    unittest.main()

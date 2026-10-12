@@ -481,3 +481,39 @@ Private assessment attachments are not imported into the repository.
 Local warning-as-error validation passed 56 tests across
 VisualBasicExtractionTests and VisualBasicWebFormsCompositionTests, zero failures
 or skips. Whitespace and private-path guards passed. Windows rerun remains pending.
+
+### SQL external-wrapper delivery
+
+Personal Windows correction receipt at `9546796be294dd06735583c2b9e947728d3f541e`:
+SDK 10.0.302/reference pack 10.0.10, warning-as-error build, 151 tests passed,
+zero failures/skips. This closes the previous event-wiring assertion failure.
+The older 96-output SQL smoke is still bound to e1932ae0, not this later head.
+
+Independent net472 SyntheticWebsite compilation harness now admits compiled
+application callers alongside a separate SyntheticStore wrapper DLL. Five
+regression cases cover both procedure/text routes and caller-only, provider-only,
+source-only controls. Procedure forwarding spans two overloads; the preserved
+constant is hash-only, while the text case is a symbolic composition. These tests
+exercise existing compiled resolution, not a new resolver implementation. They do
+not prove private application coverage, ASP.NET publishing, event wiring, source
+binding or runtime execution. Fixture methods are never executed.
+
+`scripts/sql-wrapper-report.py` consumes a closed existing index and up to 32
+exact caller selections. It retains unmatched and failed selections separately,
+ordered routes, edge rules/tiers, command availability and native restrictions.
+It records script/component/index/selector hashes and links native path JSON;
+it introduces no new machine-readable schema and is local-only. It does not
+discover every caller or recover readable SQL/procedure contracts. The new
+`prompts/produce-sql-wrapper-inventory.md` is SQL-only and forbids private artifact
+or patch export. Missing compiled application evidence is a blocker to caller
+proof, not something a wrapper DLL alone can resolve.
+
+Local validation: ten Python report guards, eight matrix oracle guards, and
+native CLI scan/report with procedure, dynamic-text and unmatched selections
+passed. The native report had three selections, two retained routes, one unmatched
+selection and zero failed queries. Warning-as-error focused .NET validation passed
+43 tests across SqlWrapperRouteTests, ProjectlessSqlReportingTests,
+SqlDatabaseMatrixTests and DatabaseCommandStateTests, zero failures/skips.
+Full-solution and new Windows fixture execution are not yet claimed. CI now runs
+the wrapper/projectless cases and helper guards on Windows and watches the helper
+and prompt paths. No scanner/resolver runtime code changed in this increment.

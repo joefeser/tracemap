@@ -4621,6 +4621,13 @@ The legacy HTTP fixture TFMs are **representative test targets, not confirmed ap
 
 ## SQL/database migration matrix (#864)
 
+The separate compiled-caller/wrapper acceptance suite is `SqlWrapperRouteTests`.
+Run `python3 scripts/validation/test_sql_wrapper_report.py` for local report
+failure/bounds/provenance guards. The helper consumes an existing closed index
+and exact caller selectors; it does not execute application methods or SQL.
+See `prompts/produce-sql-wrapper-inventory.md` for the SQL-only work-machine
+workflow and explicit missing-input/partial-coverage delivery requirements.
+
 Projectless correction: also run `ProjectlessSqlReportingTests` and
 `MarkdownReportWriterTests`. Independently authored fixtures cover imported
 relative qualification, unrelated same-named types, alias/shadow refusal,

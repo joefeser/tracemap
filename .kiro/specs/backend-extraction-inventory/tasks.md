@@ -70,4 +70,9 @@
 - [x] Display operation candidates with empty-coverage warnings and explicit truncation counts in scan reports.
 - [x] Add public projectless website and separate wrapper-library inputs for source-only, combined-source and admitted-IL modes.
 - [x] Validate the correction with SQL matrix, surrounding regressions and native scan/report checks.
-- [ ] Obtain a new exact-head Windows platform receipt for the correction; previous SQL Windows receipts do not cover these changes.
+- [x] Obtain a new exact-head Windows platform receipt for the correction: 9546796b, 151 passed, zero failed/skipped.
+
+### SQL external-wrapper delivery
+- [x] Add independent compiled caller + separate overloaded wrapper fixtures and missing-input controls.
+- [x] Add bounded local selected-root SQL reporting and SQL-only work-machine procedure.
+- [ ] Complete helper/native validation and push the delivery increment.
