@@ -31,4 +31,4 @@
 - [x] Separate semantic, projectless and compiled-only coverage and add native CLI/static-report validation.
 - [x] Add Windows public compatibility CI and distinguish configured from observed results.
 - [ ] Identify and inspect admitted application TFM/reference identity evidence; record application-specific compatibility without private artifacts.
-- [ ] Record observed Windows CI result and issue #861 handoff.
+- [x] Record observed Windows CI result and issue #861 handoff.
