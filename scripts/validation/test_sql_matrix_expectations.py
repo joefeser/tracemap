@@ -36,7 +36,7 @@ class SqlOracleGuards(unittest.TestCase):
         with self.assertRaises(AssertionError):assert_compiled_cases([fact,fact],self.cases)
     def test_workflow_covers_producers_consumers(self):
         text=(ROOT/'.github/workflows/sql-database-compatibility.yml').read_text()
-        for path in ['src/dotnet/**','samples/sql-database-matrix/**','scripts/diagnostics/SqlReferenceMatrix/**','scripts/validation/*sql*','rules/**','prompts/plan-backend-api-extraction.md']:
+        for path in ['src/dotnet/**','samples/sql-database-matrix/**','scripts/diagnostics/SqlReferenceMatrix/**','scripts/validation/*sql*','scripts/validate-adapter-artifacts.py','scripts/test_validate_adapter_artifacts.py','rules/**','prompts/plan-backend-api-extraction.md']:
             self.assertEqual(2,text.count("'"+path+"'"))
         self.assertIn('windows-latest',text)
         self.assertIn('test_sql_matrix_expectations.py',text)

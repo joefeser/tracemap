@@ -6,7 +6,7 @@ public sealed record DatabaseCallEvidence(string MethodName, string OperationKin
     string ParameterEvidence, string TransactionEvidence, string ConnectionEvidence, string DispatchBoundary,
     string CoverageLabel, string Limitations,
     string? OriginalSignature = null, string? ProviderAssemblyIdentity = null,
-    string? ParameterDirectionKinds = null, string? ParameterTypeKinds = null, string CommandStateCoverage = "unavailable")
+    string? ParameterDirectionKinds = null, string? ParameterTypeKinds = null, string CommandStateCoverage = "unavailable", string? ParameterTypeNames = null)
 {
     internal static DatabaseCallEvidence FromProperties(IReadOnlyDictionary<string,string> p)
     {
@@ -25,7 +25,14 @@ public sealed record DatabaseCallEvidence(string MethodName, string OperationKin
             Signature(p.GetValueOrDefault("originalSignature"),method), Assembly(p.GetValueOrDefault("providerAssemblyIdentity")),
             Value("parameterDirectionKinds", "Input", "Output", "InputOutput", "ReturnValue"),
             Value("parameterTypeKinds", "enum-argument-witness", "enum-assignment-witness"),
-            Value("commandStateCoverage", "bounded-local-straight-line", "local-work-limit"));
+            Value("commandStateCoverage", "bounded-local-straight-line", "local-work-limit"), ParameterType(p.GetValueOrDefault("parameterTypeNames")));
+    }
+    private static string? ParameterType(string? value)
+    {
+        if (value is null) return null;
+        var parts = value.Split('.');
+        return parts.Length == 2 && (parts[0] == "SqlDbType" && Enum.GetNames<System.Data.SqlDbType>().Contains(parts[1],StringComparer.Ordinal)
+            || parts[0] == "DbType" && Enum.GetNames<System.Data.DbType>().Contains(parts[1],StringComparer.Ordinal)) ? value : null;
     }
     private static string? Signature(string? value, string method)
     {

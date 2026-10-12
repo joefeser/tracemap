@@ -334,3 +334,19 @@ runs found fixture warnings, language signature/base-slot differences and VB sha
 initializer state boundaries; these were corrected and are not acceptance receipts.
 Final local/native and public Windows acceptance is pending the code-head commit.
 Full-suite, other-provider, private application and whole-site acceptance is not claimed.
+
+First accepted implementation head `5efea3d33dc72da03d2f8f85130476d755ded04d`:
+warning-as-error build (zero warnings/errors), 406 scoped local tests (zero failures/
+skips, 3m22s), seven oracle guards, seven artifact-validator tests and all 96 native
+CLI outputs passed. facts.ndjson/report.md were byte-identical within every pair.
+Private Path Guard passed locally/remotely. Windows run 38306629860 is running.
+This is an exact-head scoped receipt, not a full-suite claim.
+
+Final retention supplement: compiled terminals now embed the original encoded API
+operand, raw-binary hash, IL generator/bounded-input hashes and bound/unbound state.
+An 8,192-character signature cap is explicit; the API path remains present when
+signature display is truncated. Source metadata now includes positive connection
+constructor/assignment witnesses and safe public enum parameter type names. Added
+named controls in every framework/language and per-case compiled-handoff identity/
+provenance assertions. Eleven focused command-state/privacy/failed-load tests pass.
+Final supplemented-head regression/native/Windows receipts remain pending.

@@ -397,7 +397,8 @@ public static partial class CombinedDependencyPathReporter
                 : binding is null
                 ? ["Static IL call to a framework database API; no SQL text, database provider dispatch, source line, or runtime execution is established."]
                 : ["Static straight-line command configuration candidate; command strings are hashed or unresolved operand origins, not a resolved SQL statement/procedure. No parameter propagation, runtime dispatch or SQL execution is established."],
-            CommandBinding: binding);
+            CommandBinding: binding,
+            CompiledDatabaseApiEvidence: CompiledDatabaseApiEvidence.Create(call,caller));
         graph.AddNode(terminal);
         graph.AddEdge(new GraphEdge(
             $"compiled-database-api:{call.CombinedFactId}", "compiled-database-api-candidate",

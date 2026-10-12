@@ -72,6 +72,7 @@ internal static class DatabaseOperationApi
             instance = instance is IConversionOperation conversion ? conversion.Operand : ((IParenthesizedOperation)instance).Operand;
         if (instance is IObjectCreationOperation creation)
         {
+            if (creation.Arguments.Any(a => a.Parameter?.Name == "connection")) properties["connectionEvidence"] = "constructor-argument-witness";
             var text = creation.Arguments.FirstOrDefault(a => a.Parameter?.Name is "commandText" or "cmdText");
             if (text?.Value.ConstantValue is { HasValue:true, Value:string value })
             {

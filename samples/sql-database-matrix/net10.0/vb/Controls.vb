@@ -105,6 +105,13 @@ Public Class SqlControls
         aliasCommand.CommandText = "DifferentPublicStatement"
         command.ExecuteScalar()
     End Sub
+    Public Sub ControlConnectionAssignment(command As CommandAlias, connection As System.Data.SqlClient.SqlConnection)
+        command.Connection = connection
+        command.ExecuteScalar()
+    End Sub
+    Public Sub ControlConnectionConstructor(connection As System.Data.SqlClient.SqlConnection)
+        Call (New CommandAlias(Statement, connection)).ExecuteScalar()
+    End Sub
     Public Class FakeCommand
         Public Function ExecuteScalar() As Object
             Return Nothing

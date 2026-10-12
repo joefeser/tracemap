@@ -22,6 +22,9 @@ public sealed class DatabaseCommandStateTests
         Assert.Equal("Text",Call("ControlText").Properties["commandTypeEvidence"]);
         Assert.Equal("InputOutput",Call("ControlParameters").Properties["parameterDirectionKinds"]);
         Assert.Equal("enum-argument-witness",Call("ControlParameters").Properties["parameterTypeKinds"]);
+        Assert.Equal("local-assignment-witness",Call("ControlConnectionAssignment").Properties["connectionEvidence"]);
+        Assert.Equal("constructor-argument-witness",Call("ControlConnectionConstructor").Properties["connectionEvidence"]);
+        Assert.Equal("SqlDbType.Int",Call("ControlParameters").Properties["parameterTypeNames"]);
         Assert.Equal("local-assignment-witness",Call("ControlTransaction").Properties["transactionEvidence"]);
         foreach (var boundary in new[] { "ControlBranch", "ControlUnknownCall", "ControlNestedAssignment", "ControlAliasEscape" })
             Assert.True(Call(boundary).Properties["commandTextAvailability"] == "unavailable", boundary + ": " + Call(boundary).Properties["commandTextAvailability"]);
