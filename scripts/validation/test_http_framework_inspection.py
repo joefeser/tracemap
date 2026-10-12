@@ -37,7 +37,7 @@ class InspectionTests(unittest.TestCase):
             folder = pathlib.Path(tmp)
             project = folder / "private-name.csproj"
             config = folder / "Web.config"
-            project.write_text('<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003"><PropertyGroup Condition="DO_NOT_SHARE_TEST_SECRET"><TargetFrameworkVersion>v3.5</TargetFrameworkVersion><TargetFramework>$(DO_NOT_SHARE_TEST_SECRET)</TargetFramework></PropertyGroup><Import Project="/private/synthetic-identity" /></Project>')
+            project.write_text('<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003"><PropertyGroup Condition="DO_NOT_SHARE_TEST_SECRET"><TargetFrameworkVersion>v3.5</TargetFrameworkVersion><TargetFramework>$(DO_NOT_SHARE_TEST_SECRET)</TargetFramework></PropertyGroup><ItemGroup><Reference Include="Synthetic"><TargetFramework>net20</TargetFramework></Reference></ItemGroup><Import Project="/private/synthetic-identity" /></Project>')
             config.write_text('<configuration><connectionStrings><add connectionString="DO_NOT_SHARE_TEST_SECRET" /></connectionStrings><system.web><compilation targetFramework="3.5"/><httpRuntime targetFramework="4.8"/></system.web></configuration>')
             binary = self.binary("net48", "vb")
             before = {path: hashlib.sha256(path.read_bytes()).digest() for path in [project, config, binary]}
@@ -51,6 +51,7 @@ class InspectionTests(unittest.TestCase):
             self.assertIn("No effective/application TFM is selected", report)
             self.assertIn("Multiple distinct literal framework strings", report)
             self.assertIn("No value wins automatically", report)
+            self.assertNotIn("net20", report)
             self.assertIn("UploadString", report)
             self.assertIn("System, Version=4.0.0.0", report)
             for excluded in ["DO_NOT_SHARE_TEST_SECRET", "private-name", "synthetic-identity", str(folder), "connectionString="]:
@@ -112,7 +113,7 @@ class InspectionTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             folder = pathlib.Path(tmp)
             source = folder / "input.csproj"
-            source.write_text('<Project><TargetFrameworks>net48;net10.0</TargetFrameworks></Project>')
+            source.write_text('<Project><PropertyGroup><TargetFrameworks>net48;net10.0</TargetFrameworks></PropertyGroup></Project>')
             before = source.read_bytes()
             error = self.collect(folder, ["--project", str(source)], success=False, out=source)
             self.assertEqual(before, source.read_bytes())

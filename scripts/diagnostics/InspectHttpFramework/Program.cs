@@ -89,16 +89,18 @@ for (var i = 0; i < selected.Count; i++)
             using var reader = XmlReader.Create(new MemoryStream(bytes), new XmlReaderSettings { DtdProcessing = DtdProcessing.Prohibit, XmlResolver = null, MaxCharactersInDocument = MaxXml });
             var xml = XDocument.Load(reader, LoadOptions.SetLineInfo);
             var found = 0;
+            if (xml.Root?.Name.LocalName != (input.Kind == "project" ? "Project" : "configuration"))
+            { Gap("unexpected XML root; requested evidence source not recognized"); continue; }
             if (input.Kind == "project")
             {
-                foreach (var element in xml.Descendants().Where(element => element.Name.LocalName is "TargetFramework" or "TargetFrameworks" or "TargetFrameworkVersion"))
+                foreach (var element in xml.Descendants().Where(element => element.Parent?.Name.LocalName == "PropertyGroup" && element.Name.LocalName is "TargetFramework" or "TargetFrameworks" or "TargetFrameworkVersion"))
                 {
                     declarations.Add(SafeTfm(element.Value));
                     var conditional = element.AncestorsAndSelf().Any(parent => parent.Attribute("Condition") is not null);
                     lines.Add($"- Project {element.Name.LocalName}; line {((IXmlLineInfo)element).LineNumber}; conditional={conditional}: {SafeTfm(element.Value)}"); found++;
                 }
                 foreach (var field in new[] { "TargetFramework", "TargetFrameworks", "TargetFrameworkVersion" })
-                    if (!xml.Descendants().Any(element => element.Name.LocalName == field)) lines.Add($"- Project {field}: MISSING (selected XML only; imports not evaluated).");
+                    if (!xml.Descendants().Any(element => element.Parent?.Name.LocalName == "PropertyGroup" && element.Name.LocalName == field)) lines.Add($"- Project {field}: MISSING (selected XML only; imports not evaluated).");
                 lines.Add($"Project import declarations: {xml.Descendants().Count(element => element.Name.LocalName == "Import")} (not evaluated). SDK/implicit imports not evaluated.");
             }
             else
