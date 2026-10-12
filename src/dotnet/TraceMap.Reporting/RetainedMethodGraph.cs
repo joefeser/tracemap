@@ -177,7 +177,13 @@ public static class RetainedMethodGraphWriter
             if (!expanded.Add(id)) { html.Append(" — back-reference</li>"); return; }
             if (depth >= 64) { html.Append(" — display depth bound; follow node link</li>"); return; }
             html.Append("<details><summary>Calls and candidate connections</summary><ul>");
-            foreach (var edge in outgoing[id]) { html.Append($"<li>{E(edge.EdgeKind)}</li>"); Tree(edge.ToNodeId, depth + 1); }
+            foreach (var edge in outgoing[id])
+            {
+                html.Append($"<li>{E(edge.EdgeKind)} — {E(edge.RuleId)}");
+                foreach (var limitation in edge.Limitations ?? CompiledEdgeLimitations.ForRule(edge.RuleId) ?? [])
+                    html.Append($"<p>Limitation: {E(limitation)}</p>");
+                html.Append("</li>"); Tree(edge.ToNodeId, depth + 1);
+            }
             foreach (var call in callsByNode[id].Where(c => c.State != "retained-target-edge"))
                 html.Append($"<li>UNRESOLVED METHOD TARGET: {E(call.EncodedTarget)} — {E(call.Opcode)} at IL {E(call.Offset)}</li>");
             html.Append("</ul></details></li>");
@@ -190,7 +196,11 @@ public static class RetainedMethodGraphWriter
         {
             html.Append($"<section id='{ids[node.NodeId]}'><h2>{E(Label(node))}</h2><p>{E(node.FilePath)}:{node.StartLine}</p><details><summary>Exact identity and retained metadata</summary><pre>{E(JsonSerializer.Serialize(node, options))}</pre></details><h3>Outgoing connections</h3><ul>");
             foreach (var edge in outgoing[node.NodeId])
+            {
                 html.Append($"<li>{E(edge.EdgeKind)} → <a href='#{ids[edge.ToNodeId]}'>{E(Label(nodes[edge.ToNodeId]))}</a><details><summary>Evidence</summary><pre>{E(JsonSerializer.Serialize(edge, options))}</pre></details></li>");
+                foreach (var limitation in edge.Limitations ?? CompiledEdgeLimitations.ForRule(edge.RuleId) ?? [])
+                    html.Append($"<li>Transition {E(edge.EdgeId)} limitation: {E(limitation)}</li>");
+            }
             html.Append("</ul><details open><summary>Encoded calls — including unresolved targets</summary>");
             foreach (var call in callsByNode[node.NodeId])
                 html.Append($"<pre>{E(JsonSerializer.Serialize(call, options))}</pre>");
