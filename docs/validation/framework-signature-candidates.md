@@ -114,8 +114,8 @@ The original private case remains unavailable and unverified by that native run.
 Follow-up local validation: all 183 selected tests pass with no skips and warnings
 treated as errors, including all 63 framework/boundary cases plus
 CombinedDependencyPathTests, GroupedCompiledPathHandoffTests and
-CompiledBaselinePrewalkTests. See the
-[Windows unchanged-fixture requery prompt](../WINDOWS_BASE_FILL_REQUERY_PROMPT.md).
+CompiledBaselinePrewalkTests. Temporary Windows execution prompts have been
+removed; the fixture and validation evidence remain documented here.
 
 ### Bidirectional inherited-terminal matrix
 
@@ -216,8 +216,8 @@ PowerShell script tests. Depth hash mutation, depths 1/32/48/64, compiled-only a
 graph-mode combinations, and byte-for-byte original artifact preservation are
 covered. The deeper synthetic route tests distinguish route enumeration from
 terminal inventory; private additional chain counts remain unmeasured.
-Use [the staged work-Opus prompt](../CLAUDE_DEEPER_HANDLER_REQUERY_PROMPT.md) for
-fresh private depth-32 and depth-48 queries without rescanning.
+The retained-index requery workflow supports depth-32 and depth-48 comparisons
+without rescanning; temporary operator prompts have been removed.
 
 Windows validation at `cec30f14fb782e2c714b375662cbc3e4db6cf147` passed:
 sequential CLI build with zero warnings/errors, 13/13 focused depth/recovery
