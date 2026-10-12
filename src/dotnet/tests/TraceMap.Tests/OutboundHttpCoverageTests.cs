@@ -105,7 +105,7 @@ public sealed class OutboundHttpCoverageTests
             Assert.Contains(handoff.Nodes.Values, node => node.HttpCallEvidence is { } evidence
                 && evidence.MethodFamily == family && evidence.MethodName == positive.Properties["methodName"]
                 && evidence.DestinationAvailability == positive.Properties["urlKind"] && node.HttpMethod == positive.Properties["httpMethod"]);
-            Assert.Contains("compiled-only", handoff.HttpCoverageLimitations);
+            Assert.Contains("compiled-only", handoff.HttpCoverageLimitations, StringComparison.OrdinalIgnoreCase);
             GroupedCompiledPathHandoffBuilder.Restore(handoff with { HttpCoverageLimitations = null });
             Assert.Throws<InvalidDataException>(() => GroupedCompiledPathHandoffBuilder.Restore(handoff with { HttpCoverageLimitations = "altered" }));
             Assert.Matches("^[0-9a-f]{64}$", handoff.GeneratorSha256);
@@ -129,10 +129,11 @@ public sealed class OutboundHttpCoverageTests
         foreach (var file in Directory.GetFiles(Sample(language), "*" + extension)) File.Copy(file, Path.Combine(root, Path.GetFileName(file)));
         var scan = ScanEngine.Scan(new ScanOptions(root, Path.Combine(temp.Path, "scan")));
         var calls = scan.Facts.Where(f => f.FactType == FactTypes.HttpCallDetected).ToArray();
-        if (language == "vb") Assert.Empty(calls);
-        else
         {
             Assert.True(calls.Length >= 166);
+            if (language == "vb")
+                for (var i = 0; i < 166; i++)
+                    Assert.Contains(calls, fact => fact.SourceSymbol?.Contains($"Case{i:D3}", StringComparison.Ordinal) == true);
             Assert.All(calls, f => { Assert.Equal("unresolved", f.Properties["methodFamily"]); Assert.Equal("UNKNOWN", f.Properties["httpMethod"]); Assert.Equal(EvidenceTiers.Tier3SyntaxOrTextual, f.EvidenceTier); });
         }
         await MarkdownReportWriter.WriteAsync(Path.Combine(temp.Path, "report.md"), scan);

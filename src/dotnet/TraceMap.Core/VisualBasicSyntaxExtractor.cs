@@ -11,7 +11,7 @@ namespace TraceMap.Core;
 // with text names only (never compiler-resolved targets, never symbol-ID
 // joins), one Tier4 gap per fallback file, bounded deterministic parse
 // diagnostics, and a deterministic per-file fact budget.
-public static class VisualBasicSyntaxExtractor
+public static partial class VisualBasicSyntaxExtractor
 {
     private const int MaxFactsPerFile = 5000;
     private const int MaxParseDiagnosticGapsPerFile = 20;
@@ -117,10 +117,10 @@ public static class VisualBasicSyntaxExtractor
                 new EvidenceSpan(file.RelativePath, 1, 1, null, "VisualBasicSyntaxExtractor", ScannerVersions.VisualBasicSyntaxExtractor),
                 properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
                 {
-                    ["gapKind"] = "VisualBasicHttpAnalysisUnsupportedWithoutSemantics",
+                    ["gapKind"] = "VisualBasicHttpAnalysisPartialWithoutSemantics",
                     ["coverageEffect"] = "reduces-http-coverage",
                     ["spanKind"] = "file-level-coverage-not-callsite",
-                    ["message"] = "HTTP API classification is unsupported for this Visual Basic file without semantic analysis. Zero detected HTTP calls does not establish absence or non-use of HTTP operations.",
+                    ["message"] = "Bounded explicit-receiver HTTP syntax candidates are available, but framework identity, overloads, inferred receivers and late binding remain unproven. Zero detected HTTP calls does not establish absence or non-use of HTTP operations.",
                     ["sanitization"] = "category-only"
                 }));
             var declarationStart = facts.Count;
@@ -1193,6 +1193,12 @@ public static class VisualBasicSyntaxExtractor
                     properties,
                     budget,
                     sourceSymbol: containingMember))
+        {
+            return false;
+        }
+
+        if (!TryAddHttpCandidate(manifest, facts, filePath, root, invocation, invocationName,
+                containingMember, properties.GetValueOrDefault("receiverType"), budget))
         {
             return false;
         }

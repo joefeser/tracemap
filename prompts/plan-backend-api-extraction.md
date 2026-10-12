@@ -42,8 +42,9 @@ destinations into proposed extracted contracts. Wrapper specialization and mutab
 request state remain unresolved. Absence never means unused; static evidence never
 proves runtime execution. Request authorized contracts for these gaps.
 
-`vb.syntax.http-coverage-gap.v1` means file-level HTTP analysis is unsupported
-without VB semantics. It does not identify a call or prove absence. Preserve that
+`vb.syntax.http-coverage-gap.v1` means file-level HTTP analysis is partial
+without VB semantics. `vb.syntax.http-candidate.v1` supplies bounded explicit-receiver
+Tier3 candidates, not compiler-resolved framework calls. The gap does not identify a call or prove absence. Preserve that
 limitation in migration plans even when the operation inventory is empty.
 The work machine cannot contribute public code or patches. Keep private
 validation local; any feedback requires workplace approval, not merely sanitization.

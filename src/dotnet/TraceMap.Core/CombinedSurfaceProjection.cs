@@ -256,7 +256,7 @@ public static class CombinedSurfaceProjection
             safeMetadataHash,
             stableMessageSurfaceKey,
             SurfaceSubtype: isFrameworkDataAdapterFill ? "data-adapter-fill" : null,
-            HttpCallEvidence: fact.FactType == FactTypes.HttpCallDetected && fact.RuleId == RuleIds.HttpClientInvocation
+            HttpCallEvidence: fact.FactType == FactTypes.HttpCallDetected && fact.RuleId is RuleIds.HttpClientInvocation or RuleIds.VisualBasicSyntaxHttpCandidate
                 ? OutboundHttpCallEvidence.FromProperties(fact.Properties) : null);
     }
 

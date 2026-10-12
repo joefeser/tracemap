@@ -25,6 +25,18 @@ internal static class OutboundHttpApi
     internal static bool IsCandidate(string name, bool ignoreCase = false) => ignoreCase
         ? Candidates.Any(candidate => candidate.Equals(name, StringComparison.OrdinalIgnoreCase)) : Candidates.Contains(name);
 
+    internal static bool IsSyntaxCandidate(string type, string method) =>
+        type.Equals("System.Net.Http.HttpClient", StringComparison.OrdinalIgnoreCase)
+            && Client.Concat(Json).Contains(method, StringComparer.OrdinalIgnoreCase)
+        || type.Equals("System.Net.Http.Json.HttpClientJsonExtensions", StringComparison.OrdinalIgnoreCase)
+            && Json.Contains(method, StringComparer.OrdinalIgnoreCase)
+        || type.Equals("System.Net.WebClient", StringComparison.OrdinalIgnoreCase)
+            && Web.Contains(method, StringComparer.OrdinalIgnoreCase)
+        || (type.Equals("System.Net.WebRequest", StringComparison.OrdinalIgnoreCase)
+            || type.Equals("System.Net.HttpWebRequest", StringComparison.OrdinalIgnoreCase))
+            && new[] { "GetResponse", "GetResponseAsync", "BeginGetResponse", "EndGetResponse" }
+                .Contains(method, StringComparer.OrdinalIgnoreCase);
+
     private static bool Trusted(IAssemblySymbol assembly, string name, string token) => assembly.Identity.Name == name
         && Convert.ToHexString(assembly.Identity.PublicKeyToken.ToArray()).Equals(token, StringComparison.OrdinalIgnoreCase);
     private static string TypeName(ITypeSymbol type) => type.ContainingNamespace.ToDisplayString() + "." + type.Name;

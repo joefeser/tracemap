@@ -238,3 +238,29 @@ Offline handoff validation receipt:
 - Application compatibility remains deferred/pending work-machine validation,
   explicitly not a blocker for this public branch. No hostname/artifact request.
 The final receipt-only commit changes no executable/sample/script/test code.
+
+## Projectless VB HTTP implementation (2026-10-12)
+
+User-required follow-up on `codex/outbound-http-coverage-861`: warning-only
+projectless VB support was insufficient. The syntax extractor now emits bounded
+Tier3 explicit-receiver HTTP candidates under `vb.syntax.http-candidate.v1`.
+Parameters, explicit locals/fields, inline construction, qualified names and
+file-local type/namespace import aliases are supported. Same-file type shadows,
+unrelated receiver types and content-only JSON reads are excluded.
+
+Candidates keep family unresolved, verb UNKNOWN and destination unavailable.
+The per-file Tier4 gap now describes partial coverage. Variable aliases, inferred
+factory returns, late binding, With receivers and cross-file imports remain
+limitations, not clean absence. Semantic and compiled-only behavior is unchanged.
+The report projection and migration prompt preserve those distinctions. The
+synthetic projectless Website proves a wrapper-to-candidate route and an
+outbound-http candidate-query-path inventory row plus HTML output.
+
+Local validation: 52 HTTP/capability tests and 103 adjacent VB regressions passed;
+six collector guards and private-path guard passed; all 96 native CLI outputs
+passed deterministic facts/report and artifact validation, including each VB
+matrix overload and HTTP path projection. No fixture method was executed.
+The earlier broad full-suite run was stopped before rebuilding after 24 minutes
+without a final result; it is not claimed as passing. Current implementation
+Windows CI validation is pending push. No private work-machine input or patch
+was consumed; public synthetic fixtures only.
