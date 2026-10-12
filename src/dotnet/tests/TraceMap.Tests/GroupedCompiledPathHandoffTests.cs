@@ -147,12 +147,14 @@ public sealed class GroupedCompiledPathHandoffTests
             var report = Report() with { CoverageWarnings = ["<script>alert('public fixture')</script>"] };
             report = report with { Gaps = [report.Gaps[0] with
             {
-                Reason = "depth", CutoffWitness = new(report.Paths[0].Nodes, report.Paths[0].Edges, false, true)
+                Reason = "depth", CutoffTraversalDepth = 0, CutoffMaxDepth = 48,
+                CutoffWitness = new(report.Paths[0].Nodes, report.Paths[0].Edges, false, true)
             }] };
             var packet = GroupedCompiledPathHandoffBuilder.Create(report, IndexHash);
             var result = await GroupedCompiledPathReportWriter.WriteAsync(packet, folder);
             var html = await File.ReadAllTextAsync(result.HtmlPath);
             Assert.Contains("Sampled root-to-cutoff prefixes", html);
+            Assert.Contains("0 edges traversed on this prefix; configured depth 48", html);
             Assert.Contains("final candidate edge not traversed: True", html);
             Assert.Contains("compiled-il.v1", html);
             Assert.Equal(JsonSerializer.Serialize(report), JsonSerializer.Serialize(GroupedCompiledPathHandoffBuilder.Restore(packet)));

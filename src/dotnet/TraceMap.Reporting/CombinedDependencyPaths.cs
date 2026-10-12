@@ -324,6 +324,11 @@ public sealed record CombinedPathGap(
     public CombinedCutoffWitness? CutoffWitness { get; init; }
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? CutoffCause { get; init; }
+    // Path-local evaluation depth, not a node's shortest/discovery depth.
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? CutoffTraversalDepth { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? CutoffMaxDepth { get; init; }
     [JsonIgnore]
     public IReadOnlyList<string> EffectiveSupportingFactIds => SupportingFactIds is { Count: > 0 }
         ? SupportingFactIds
@@ -4284,6 +4289,8 @@ public static partial class CombinedDependencyPathReporter
             var gap = TruncatedGap(reason, rejectedEdge?.ToNodeId ?? state.NodeIds[^1], graph) with
             {
                 CutoffCause = cause,
+                CutoffTraversalDepth = state.EdgeIds.Count,
+                CutoffMaxDepth = maxDepth,
                 Message = CutoffDiagnosticMessage(cause) ?? "Traversal cutoff; coverage remains partial."
             };
             if (witnessCounts.GetValueOrDefault(reason) >= 3 || !witnessedCutoffs.Add(gap.GapId)) return gap;
@@ -5179,7 +5186,7 @@ public static partial class CombinedDependencyPathReporter
 
     internal static string? CutoffDiagnosticMessage(string? cause) => cause switch
     {
-        "terminal-route-not-found-within-depth-bound" => "No terminal route was found within the reverse-search depth bound. Longer routes or missing evidence remain possible. The candidate edge was not traversed.",
+        "terminal-route-not-found-within-depth-bound" => "Reverse terminal filtering found no route within its search bound; this does not establish forward depth exhaustion. The candidate edge was not traversed. Its target or downstream edges may still exist in the full evidence graph. Longer routes, missing evidence, or a branch without a supported terminal remain possible.",
         "terminal-distance-exceeds-remaining-depth" => "The known terminal distance exceeds the remaining path depth. The candidate edge was not traversed.",
         "candidate-identity-roundtrip" => "An immediate return across a publish-member identity candidate was skipped. This is not evidence of application recursion.",
         "depth-limit-reached" => "Traversal reached the configured edge-depth limit. Coverage remains partial.",
