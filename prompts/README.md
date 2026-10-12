@@ -39,3 +39,13 @@ argument-forwarding contract. It does not ask for launcher source, corporate
 configuration, or secrets. Use its result before adding a launcher override to
 the TraceMap PowerShell handoff. A verified launcher can then be supplied with
 `Start-FocusedWebFormsClaudeReview.ps1 -ClaudeLauncherPath`.
+
+
+## SQL report comparison
+
+[`assess-sql-migration-report-improvement.md`](assess-sql-migration-report-improvement.md)
+is an application-neutral local comparison of the pinned HTTP baseline and SQL
+implementation. Supply the authorized application separately. It uses independently
+named controls, separates evidence from planning judgments, and requests only
+workplace-approved manually sanitized feedback. It does not authorize private
+artifact/code transfer, database execution or application changes.

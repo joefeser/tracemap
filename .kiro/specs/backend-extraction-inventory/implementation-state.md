@@ -409,3 +409,11 @@ validation and remaining gaps. This final commit changes only task/state receipt
 documentation; executable acceptance remains bound to `6448790c`. Primary checkout
 and existing HTTP worktree preserved. No PR opened, merge performed, ACK used or
 lane policy changed. Parent #861 full-index/private-contract tasks stay open.
+
+
+Follow-up: added `prompts/assess-sql-migration-report-improvement.md` and prompt
+index entry for an application-neutral, authorized local baseline/new SQL report
+comparison. Public executable heads remain pinned to `6cb75325` / `6448790c`.
+No application identity or private evidence is included. This is a prose-only
+prompt update, checked with private-path and whitespace guards; executable tests
+were not rerun. No private trial or returned feedback is claimed.
