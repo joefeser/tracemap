@@ -11,10 +11,20 @@ projects suppress only SYSLIB0014 because obsolete WebClient/WebRequest APIs are
 intentional evidence inputs. Controls cover inherited framework members, wrappers,
 dynamic destinations/verbs, request variables, content-only reads and same-named fakes.
 
+The native CLI smoke cross-checks every `OVERLOADS.md` case identity against the
+corresponding `Matrix.cs`/`Matrix.vb` declaration roster. Each case must emit its
+expected evidence; compiled checks inspect every declared case rather than a
+numeric range. `CONTROL-EXPECTATIONS.json` is a hand-authored test oracle naming
+each control's expected semantic and language-specific fallback counts. It is
+not generated from scanner results. New, missing or duplicate case/control
+declarations fail the oracle check until the independent expectations agree.
+Run `python3 scripts/validation/test_http_matrix_expectations.py` for mutation
+guards covering the oracle and workflow path triggers.
+
 | Input mode | C# | VB | Meaning |
 |---|---|---|---|
 | Resolved semantic framework API | All 166 fixture overloads | All 166 fixture overloads | Tier1 callsite/signature evidence, never execution |
-| Projectless / syntax fallback | Expanded exact name set, unresolved Tier3 candidates | No HTTP API classification | No framework/overload parity claim; fakes can be candidates |
+| Projectless / syntax fallback | Expanded exact name set, unresolved Tier3 candidates | Bounded explicit-receiver Tier3 candidates | No framework/overload parity claim; coverage remains partial |
 | Compiled-only + IL body evidence | Retained original IL calls | Retained original IL calls | No HttpCallDetected/report operation classification |
 | Inline trusted HttpRequestMessage | Standard HttpMethod property and constant URI hash | Same | Request state held in variables is not followed |
 | Dynamic URI / request variable | Call retained; destination unavailable | Same | No interprocedural/request-state reconstruction |
