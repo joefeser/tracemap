@@ -600,3 +600,9 @@ Configured compiler identities admit the existing `VBCodeProvider, System`
 short form or the complete Framework 4 identity (version 4.0.0.0, neutral culture,
 token b77a5c561934e089); partial, duplicate, unknown or mismatched qualifiers are
 not enriched. This is static configuration evidence, not runtime provider loading.
+
+Run IDs use the native GUID `N` contract: 32 hexadecimal digits, case-insensitive
+identity comparison. SHA-256 fields remain lowercase and case-sensitive. Legacy
+grouped receipts may omit `reportVariant`, but must retain run/preflight/checkpoint/
+index identities for status-bound latest inspection. These identity fields existed
+in the original receipt producer (`74d2e417`); stripping them is not a legacy format.

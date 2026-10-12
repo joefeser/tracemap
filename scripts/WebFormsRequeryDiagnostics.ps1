@@ -117,10 +117,13 @@ function Write-WebFormsTruncationSummaryCore([string]$Directory, $VerifiedStatus
             @('sourceCheckpointSha256','checkpointSha256'), @('combinedIndexSha256','combinedIndexSha256'))) {
             $offered = $receipt.PSObject.Properties[$pair[0]]
             $trusted = $VerifiedStatus.PSObject.Properties[$pair[1]]
-            $pattern = if ($pair[0] -ceq 'runId') { '\A[a-f0-9]{32}\z' } else { '\A[a-f0-9]{64}\z' }
+            $isRunId = $pair[0] -ceq 'runId'
+            $pattern = if ($isRunId) { '\A[a-fA-F0-9]{32}\z' } else { '\A[a-f0-9]{64}\z' }
             if ($null -eq $offered -or $null -eq $trusted -or $offered.Value -isnot [string] -or
                 $trusted.Value -isnot [string] -or $trusted.Value -cnotmatch $pattern -or
-                $offered.Value -cne $trusted.Value) { throw 'WEBFORMS_HANDLER_SUMMARY_RUN_MISMATCH' }
+                $offered.Value -cnotmatch $pattern) { throw 'WEBFORMS_HANDLER_SUMMARY_RUN_MISMATCH' }
+            $comparison = if ($isRunId) { [StringComparison]::OrdinalIgnoreCase } else { [StringComparison]::Ordinal }
+            if (![string]::Equals($offered.Value, $trusted.Value, $comparison)) { throw 'WEBFORMS_HANDLER_SUMMARY_RUN_MISMATCH' }
         }
     }
     $artifactName = if ($variant -ceq 'method-graph') { 'method-graph.local.json' } else { 'compiled-paths.handoff.local.json' }
