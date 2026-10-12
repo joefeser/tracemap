@@ -56,7 +56,9 @@ for tfm, count in [("net20", 57), ("net35", 57), ("net40", 57), ("net45", 116), 
             facts = [json.loads(line) for line in (pairs[0] / "facts.ndjson").read_text().splitlines()]
             tiers = collections.Counter(fact["evidenceTier"] for fact in facts if fact["factType"] == "HttpCallDetected")
             if mode == "semantic":
-                assert tiers == {"Tier1Semantic": count + (5 if tfm == "net10.0" else 0)}, (prefix, tiers)
+                assert tiers["Tier1Semantic"] == count + (5 if tfm == "net10.0" else 0), (prefix, tiers)
+                assert set(tiers) <= {"Tier1Semantic", "Tier3SyntaxOrTextual"}, (prefix, tiers)
+                assert all(fact["properties"].get("methodFamily") == "unresolved" for fact in facts if fact["factType"] == "HttpCallDetected" and fact["evidenceTier"] == "Tier3SyntaxOrTextual"), prefix
                 run(cli + ["paths", "--index", str(pairs[0] / "index.sqlite"), "--out", str(args.output / (prefix + "-paths")), "--from-symbol", "Case000", "--to-surface", "http-client", "--format", "json"])
                 report = json.loads((args.output / (prefix + "-paths/paths-report.json")).read_text())
                 assert "bounded-static-http-call" in json.dumps(report), prefix

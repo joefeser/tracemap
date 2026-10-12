@@ -33,6 +33,8 @@ covered where present. No package is added to manufacture an absent API.
 | Projectless/syntax fallback | Tested unresolved Tier3 name candidates; no framework/signature support claim | Tested absence of HTTP API classification; unsupported |
 | Compiled-only + IL | Tested original assembly/signature/IL facts and scan report; HTTP operation classification unsupported | Same |
 
+Native scans can retain unresolved syntax candidates alongside Tier1 semantic calls. These are separate evidence rows, not extra supported overloads; they must not be counted as additional semantic coverage.
+
 Framework identity is kept separate from application target framework:
 
 - Legacy WebClient/WebRequest declarations resolve to `System`, token
