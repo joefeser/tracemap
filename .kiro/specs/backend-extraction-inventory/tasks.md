@@ -19,7 +19,7 @@
 - [x] Inspect dev and inventory branch, record dependency/base and create isolated worktree/branch.
 - [x] Add compiler-built public C#/VB net10.0 projects and explicit 166-overload matrix.
 - [x] Share bounded signed-framework/signature classifier; close convenience/JSON/WebClient/response gaps.
-- [x] Distinguish semantic calls, C# unresolved syntax candidates, unsupported VB projectless and compiled-only IL evidence.
+- [x] Distinguish semantic calls, C# unresolved name candidates, VB projectless explicit-receiver candidates and compiled-only IL evidence.
 - [x] Retain family, callsite, verb, destination availability and coverage limits through facts and report projection.
 - [x] Document rule limitations, mode matrix, migration missing inputs and validation/deferred targets.
 - [x] Complete implementation-head regression/full suite, native CLI repeats and artifact validation; record results.
@@ -43,3 +43,9 @@
 - [x] Provide bounded read-only XML/metadata collector and exact local commands; no application evaluation/execution, assembly resolution or upload.
 - [x] Provide sanitized manual return template preserving missing/conditional/conflicting sources and excluding private paths/artifacts/input hashes.
 - [x] Add public read-only/privacy/missing-TFM regression guards and Windows CI step.
+
+## Required projectless VB HTTP support
+- [x] Add bounded explicit-receiver HTTP candidates for projectless VB, including file-local imports and aliases; preserve Tier3 and partial-coverage gaps.
+- [x] Carry candidates into grouped reports and backend extraction inventory without semantic or runtime claims.
+- [x] Add positive and negative synthetic receiver tests and per-overload projectless matrix assertions.
+- [ ] Complete current-head local regression/native CLI validation and Windows validation receipt.

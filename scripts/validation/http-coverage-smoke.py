@@ -67,9 +67,15 @@ for tfm, count in [("net20", 57), ("net35", 57), ("net40", 57), ("net45", 116), 
                 for index in range(count):
                     assert any(fact["factType"] == "ManagedIlCallObserved" and f"method:7:Case{index:03}|" in (fact.get("targetSymbol") or "") for fact in facts), (prefix, index)
             elif language == "vb":
-                assert not tiers, (prefix, tiers)
+                assert tiers.get("Tier3SyntaxOrTextual", 0) >= count, (prefix, tiers)
+                assert set(tiers) == {"Tier3SyntaxOrTextual"}, (prefix, tiers)
                 assert any(fact["ruleId"] == "vb.syntax.http-coverage-gap.v1" and fact["factType"] == "AnalysisGap" for fact in facts), prefix
-                assert "VisualBasicHttpAnalysisUnsupportedWithoutSemantics" in (pairs[0] / "report.md").read_text(encoding="utf-8"), prefix
+                assert "VisualBasicHttpAnalysisPartialWithoutSemantics" in (pairs[0] / "report.md").read_text(encoding="utf-8"), prefix
+                for index in range(count):
+                    assert any(fact["factType"] == "HttpCallDetected" and f"Case{index:03}" in (fact.get("sourceSymbol") or "") for fact in facts), (prefix, index)
+                run(cli + ["paths", "--index", str(pairs[0] / "index.sqlite"), "--out", str(args.output / (prefix + "-paths")), "--from-symbol", "Case000", "--to-surface", "http-client", "--format", "json"])
+                report = json.loads((args.output / (prefix + "-paths/paths-report.json")).read_text(encoding="utf-8"))
+                assert "reduced-explicit-receiver-candidate" in json.dumps(report), prefix
             else:
                 assert tiers == {"Tier3SyntaxOrTextual": count + (10 if tfm == "net10.0" else 0)}, (prefix, tiers)
             print(prefix, dict(tiers), "deterministic facts/report", flush=True)

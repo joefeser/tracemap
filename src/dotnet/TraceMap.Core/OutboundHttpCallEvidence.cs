@@ -10,10 +10,12 @@ public sealed record OutboundHttpCallEvidence(string MethodFamily, string Method
             && allowed.Contains(value, StringComparer.Ordinal) ? value : "unavailable";
         var method = properties.GetValueOrDefault("methodName", string.Empty);
         return new(Bounded("methodFamily", "HttpClient", "JsonHttpExtension", "WebClient", "WebRequest", "unresolved"),
-            OutboundHttpApi.IsCandidate(method) ? method : "unavailable",
+            OutboundHttpApi.IsCandidate(method, ignoreCase: true) ? method : "unavailable",
             Bounded("urlKind", "compile-time-constant-path", "compile-time-constant-hash", "unavailable"),
             Bounded("protocolKind", "unproven-address-protocol", "framework-http-api"),
-            Bounded("coverageLabel", "bounded-static-http-call", "reduced-name-only-candidate"),
-            OutboundHttpApi.Limitations);
+            Bounded("coverageLabel", "bounded-static-http-call", "reduced-name-only-candidate", "reduced-explicit-receiver-candidate"),
+            properties.GetValueOrDefault("coverageLabel") == "reduced-explicit-receiver-candidate"
+                ? "Explicit receiver syntax candidate only; framework assembly, overload, dispatch and completeness are unproven. No runtime use or destination is established."
+                : OutboundHttpApi.Limitations);
     }
 }

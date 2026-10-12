@@ -34,7 +34,7 @@ covered where present. No package is added to manufacture an absent API.
 | Evidence mode (each listed framework) | C# | VB |
 |---|---|---|
 | Semantic, compiler-resolved trusted API | Tested per-overload Tier1 facts and retained operation/report projection | Same |
-| Projectless/syntax fallback | Tested unresolved Tier3 name candidates; no framework/signature support claim | HTTP classification unsupported; explicit file-level Tier4 gap, never a clean zero |
+| Projectless/syntax fallback | Tested unresolved Tier3 name candidates; no framework/signature support claim | Bounded explicit-receiver Tier3 candidates with file-local imports/aliases; partial-coverage Tier4 gap |
 | Compiled-only + IL | Tested original assembly/signature/IL facts and scan report; HTTP operation classification unsupported | Same |
 
 Native scans can retain unresolved syntax candidates alongside Tier1 semantic calls. These are separate evidence rows, not extra supported overloads; they must not be counted as additional semantic coverage.
@@ -78,9 +78,9 @@ feedback requires workplace approval; sanitization alone is not authorization.
 
 The net472 `website-projectless` fixture has only VB App_Code source and Web.config,
 not a project or application binary. Its configuration is not evaluated and does
-not establish an effective runtime. Its test verifies the explicit
-`VisualBasicHttpAnalysisUnsupportedWithoutSemantics` gap in facts and Markdown;
-zero HTTP operation facts remain an unsupported mode, not successful detection.
+not establish an effective runtime. Its test verifies a syntax HTTP candidate plus
+the `VisualBasicHttpAnalysisPartialWithoutSemantics` gap in facts and Markdown.
+Candidates do not prove framework identity, runtime use or complete coverage.
 
 Local macOS compilation/static extraction is supported using the reference package;
 Windows validation runs in `.github/workflows/outbound-http-compatibility.yml` and

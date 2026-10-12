@@ -109,14 +109,16 @@ public static class MarkdownReportWriter
         lines.AddRange(manifest.Projects.Count == 0 ? ["- None found."] : manifest.Projects.Select(path => $"- `{path}`"));
 
         lines.AddRange(["", "## Outbound HTTP coverage limits", "",
-            "C#/VB semantic coverage is bounded to resolved signed framework APIs. Name-only C# fallback rows are unresolved candidates, including possible same-named fakes. VB projectless fallback does not establish HTTP API calls. Compiled-only inputs retain IL call evidence, not HTTP operation or destination classification.",
+            "C#/VB semantic coverage is bounded to resolved signed framework APIs. Name-only C# fallback rows are unresolved candidates, including possible same-named fakes. VB projectless fallback provides bounded explicit-receiver syntax candidates, not resolved framework calls. Compiled-only inputs retain IL call evidence, not HTTP operation or destination classification.",
             "Dynamic destinations, request variables, wrapper specialization, WebRequest mutable verbs and WebClient address protocols remain unresolved. Content-only JSON reads are not outbound calls. Missing references, unavailable target-framework overloads and calls outside retained query scope may be absent. Absence never means unused; static evidence never proves runtime execution."]);
 
         AddFactSection(
             lines,
             "HTTP analysis gaps",
             result.Facts.Where(fact => fact.RuleId == RuleIds.VisualBasicHttpCoverageGap),
-            fact => $"- `VisualBasicHttpAnalysisUnsupportedWithoutSemantics` ({fact.EvidenceTier}, rule `{fact.RuleId}`) at `{fact.Evidence.FilePath}:{fact.Evidence.StartLine}`: file-level unsupported HTTP classification, not a detected call. Zero HTTP facts does not establish absence or non-use.");
+            fact => fact.Properties.GetValueOrDefault("gapKind") == "VisualBasicHttpAnalysisUnsupportedWithoutSemantics"
+                ? $"- `VisualBasicHttpAnalysisUnsupportedWithoutSemantics` ({fact.EvidenceTier}, rule `{fact.RuleId}`) at `{fact.Evidence.FilePath}:{fact.Evidence.StartLine}`: this retained scan did not support VB HTTP candidates. Zero HTTP facts does not establish absence or non-use."
+                : $"- `VisualBasicHttpAnalysisPartialWithoutSemantics` ({fact.EvidenceTier}, rule `{fact.RuleId}`) at `{fact.Evidence.FilePath}:{fact.Evidence.StartLine}`: bounded syntax candidates only; framework identity and completeness are unproven. Zero HTTP facts does not establish absence or non-use.");
 
         AddFactSection(
             lines,

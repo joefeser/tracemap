@@ -9,7 +9,7 @@ namespace TraceMap.Tests;
 public sealed class OutboundHttpLegacyCoverageTests
 {
     [Fact]
-    public async Task Projectless_vb_website_reports_http_coverage_gap_without_claiming_calls()
+    public async Task Projectless_vb_website_reports_candidates_and_partial_coverage()
     {
         var repo = new DirectoryInfo(AppContext.BaseDirectory);
         while (repo is not null && !File.Exists(Path.Combine(repo.FullName, "AGENTS.md"))) repo = repo.Parent;
@@ -17,7 +17,9 @@ public sealed class OutboundHttpLegacyCoverageTests
         var sample = Path.Combine(repo.FullName, "samples/outbound-http-coverage/legacy/net472/website-projectless");
         using var temp = new TempDirectory();
         var result = ScanEngine.Scan(new ScanOptions(sample, Path.Combine(temp.Path, "out")));
-        Assert.DoesNotContain(result.Facts, fact => fact.FactType == FactTypes.HttpCallDetected);
+        var candidate = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.HttpCallDetected);
+        Assert.Equal(EvidenceTiers.Tier3SyntaxOrTextual, candidate.EvidenceTier);
+        Assert.Equal("unresolved", candidate.Properties["methodFamily"]);
         var gap = Assert.Single(result.Facts, fact => fact.RuleId == RuleIds.VisualBasicHttpCoverageGap);
         Assert.Equal("App_Code/RemoteExample.vb", gap.Evidence.FilePath);
         Assert.Equal("file-level-coverage-not-callsite", gap.Properties["spanKind"]);
@@ -25,7 +27,20 @@ public sealed class OutboundHttpLegacyCoverageTests
         Assert.Equal(EvidenceTiers.Tier4Unknown, gap.EvidenceTier);
         var report = Path.Combine(temp.Path, "report.md");
         await MarkdownReportWriter.WriteAsync(report, result);
-        Assert.Contains("VisualBasicHttpAnalysisUnsupportedWithoutSemantics", await File.ReadAllTextAsync(report));
+        Assert.Contains("VisualBasicHttpAnalysisPartialWithoutSemantics", await File.ReadAllTextAsync(report));
+        var index = Path.Combine(temp.Path, "index.sqlite");
+        SqliteIndexWriter.Write(index, result.Manifest, result.Facts);
+        var paths = await CombinedDependencyPathReporter.BuildReportAsync(new(index, temp.Path,
+            FromSymbol: "RemoteExample.Run", ToSurface: "http-client"));
+        var handoff = GroupedCompiledPathHandoffBuilder.Create(paths,
+            Convert.ToHexStringLower(SHA256.HashData(await File.ReadAllBytesAsync(index))));
+        Assert.Contains(handoff.Nodes.Values, node => node.HttpCallEvidence is
+            { CoverageLabel: "reduced-explicit-receiver-candidate", MethodFamily: "unresolved" });
+        Assert.NotNull(handoff.BackendExtraction);
+        Assert.Contains(handoff.BackendExtraction.Operations, operation => operation.Family == "outbound-http"
+            && operation.ConnectionState == "candidate-query-path");
+        var outputs = await GroupedCompiledPathReportWriter.WriteAsync(handoff, Path.Combine(temp.Path, "grouped"));
+        Assert.Contains("reduced-explicit-receiver-candidate", await File.ReadAllTextAsync(outputs.HtmlPath));
         // A coverage warning applies even when no HTTP-looking names exist: it
         // describes unsupported analysis, never claims a hidden HTTP call.
         var empty = Path.Combine(temp.Path, "plain"); Directory.CreateDirectory(empty);
@@ -116,7 +131,8 @@ public sealed class OutboundHttpLegacyCoverageTests
         var candidates = projectless.Facts.Where(fact => fact.FactType == FactTypes.HttpCallDetected).ToArray();
         if (language == "vb")
         {
-            Assert.Empty(candidates);
+            Assert.Equal(count, candidates.Length);
+            Assert.All(candidates, candidate => Assert.Equal(EvidenceTiers.Tier3SyntaxOrTextual, candidate.EvidenceTier));
             Assert.Contains(projectless.Facts, fact => fact.RuleId == RuleIds.VisualBasicHttpCoverageGap
                 && fact.EvidenceTier == EvidenceTiers.Tier4Unknown);
         }

@@ -5175,7 +5175,7 @@ rules:
       - Compiler-built C# and VB representative fixtures pin net10.0 (166), net20/net35/net40 (57 each) and net45/net48 (116 each) overloads; these are not confirmed application targets. See samples/outbound-http-coverage/LEGACY-COMPATIBILITY.md for API availability and independent evidence-mode limits; other TFMs, profiles and package-added APIs remain unvalidated.
       - Referenced assembly versions do not identify application TFMs. net20 and net35 both reference System 2.0.0.0; absent TargetFrameworkAttribute remains unknown. Application-specific admitted framework matching needs separate evidence.
       - Constant standard explicit WebClient verbs are retained; dynamic/custom verbs, request-variable Send calls and mutable WebRequest verbs remain UNKNOWN. WebClient address recognition does not establish HTTP protocol.
-      - Compiled-only IL observations are not HTTP operation classification; VB projectless fallback has no HTTP API classification. C# name-only candidates carry unresolved family, unknown verb and reduced coverage, including possible fake or content-only matches.
+      - Compiled-only IL observations are not HTTP operation classification. VB projectless explicit-receiver candidates use vb.syntax.http-candidate.v1. C# name-only candidates carry unresolved family, unknown verb and reduced coverage, including possible fake or content-only matches.
       - Syntax fallback matches common method names and may include unrelated methods with the same name.
       - URL may not be fully resolvable if built dynamically or loaded from runtime configuration.
       - C# destinations retain constant hashes only; Visual Basic preserves normalized paths and hashes, never hosts, query values, request bodies, credentials, headers, or responses.
@@ -7637,8 +7637,19 @@ rules:
       - Parser and syntax gaps are unknowns, not clean absence of declarations, calls, relationships, navigation, or runtime behavior.
       - Diagnostic text and raw source expressions must be omitted or hashed; no raw snippets, URLs, local paths, secrets, or private labels should be emitted.
 
+  - id: vb.syntax.http-candidate.v1
+    name: Visual Basic explicit receiver HTTP syntax candidate
+    description: Recognizes bounded HTTP method names on explicit parameter, local, field or inline-created receiver types and file-local import aliases without a project.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - HttpCallDetected
+    limitations:
+      - Receiver type text and imports are syntax evidence only, not framework assembly or overload proof. Same-file type shadows are rejected; cross-file shadows and ambiguous imports remain unproven.
+      - Inferred factory returns, variable aliases, late binding, With receivers and project-level imports may be omitted. A missing candidate never means unused.
+      - No request destination, payload, credentials, runtime execution or success is inferred. Family remains unresolved and verb UNKNOWN.
+
   - id: vb.syntax.http-coverage-gap.v1
-    name: Visual Basic HTTP classification unavailable without semantics
+    name: Visual Basic HTTP classification partial without semantics
     description: Emits a file-level unknown HTTP coverage gap for each readable non-generated Visual Basic source processed by syntax fallback.
     evidenceTier: Tier4Unknown
     emits:
@@ -7646,7 +7657,7 @@ rules:
     limitations:
       - This is a coverage warning, not a detected HTTP call or inferred API identity. Files with no HTTP calls receive the same warning because this analysis mode cannot establish their absence.
       - Semantic files are excluded. Unreadable, generated or unparseable files retain their existing skip or failure behavior; this rule does not claim to inspect them.
-      - No destination, request body, credentials or runtime use is inferred. Projectless VB HTTP operation extraction remains unsupported.
+      - No destination, request body, credentials or runtime use is inferred. Explicit-receiver syntax candidates are available under vb.syntax.http-candidate.v1; compiler-resolved classification and complete coverage remain unavailable.
 
   - id: workflow.backend-extraction.retained-report.v1
     name: Retained-query backend extraction inventory
