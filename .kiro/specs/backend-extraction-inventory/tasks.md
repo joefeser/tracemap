@@ -61,6 +61,6 @@
 - [x] Add conservative straight-line command/parameter/transaction/connection witnesses and mutation/reset controls; no raw SQL/credential capture.
 - [x] Add independent named-control oracle and mutation guards; broaden relevant Windows CI triggers.
 - [x] Update rule limitations, matrix docs and migration agent prompt.
-- [ ] Finish final-head local scoped regressions and deterministic native CLI/report validation.
-- [ ] Observe public Windows exact-head fixture validation.
-- [ ] Push final branch and record #864 commits, validation, matrix and remaining gaps; no PR/merge/ACK/lane-policy changes.
+- [x] Finish final-head local scoped regressions and deterministic native CLI/report validation.
+- [x] Observe public Windows exact-head fixture validation.
+- [x] Push final branch and record #864 commits, validation, matrix and remaining gaps; no PR/merge/ACK/lane-policy changes.

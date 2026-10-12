@@ -350,3 +350,62 @@ constructor/assignment witnesses and safe public enum parameter type names. Adde
 named controls in every framework/language and per-case compiled-handoff identity/
 provenance assertions. Eleven focused command-state/privacy/failed-load tests pass.
 Final supplemented-head regression/native/Windows receipts remain pending.
+
+
+## Final SQL local acceptance receipt
+
+Frozen executable head: `6448790cba9c5d0b0681f90c69befab141a923a0`.
+This supersedes earlier SQL pending receipts. The final fixes retain original
+compiled operand/provenance, reject unexpected candidate tiers in the independent
+oracle, and classify XML reader/adapter schema paths as SQL query surfaces.
+
+- Warning-as-error .NET build: zero warnings/errors (12.39s).
+- Scoped .NET regressions: 406 passed, zero failures/skips (3m44s), covering SQL
+  matrix/state, VB extractors, integration extractors, grouped compiled handoffs,
+  backend inventory, compiled paths, framework signatures and generic boundaries.
+- Independent Python oracle/workflow mutation guards: eight passed.
+- Artifact-validator regressions: seven passed (existing unclosed-SQLite-resource
+  warning in the validator test; no failed assertion).
+- Native CLI: all 96 outputs (eight TFMs x two languages x three modes x two
+  repeats) validated, including individual cases/controls, byte-identical
+  facts.ndjson/report.md and scan artifact conformance. No fixture methods ran.
+- Separate native projectless VB App_Code scan/path/report retained
+  `PublicFeature.Entry(DbCommand) -> Wrapper(DbCommand) -> ExecuteScalar`,
+  NeedsReview/Tier3, reduced coverage and untruncated. This is a candidate query
+  connection, not verified ASP.NET event binding or runtime use.
+- Separately authored public config-only negative fixture produced zero database
+  operation candidates and zero SQL query paths; scan artifacts validated.
+- Private path and whitespace guards passed; public remote Private Path Guard
+  passed on this executable head.
+
+Scoped .NET command after the warning-as-error build:
+
+```sh
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-build --no-restore --filter 'FullyQualifiedName~SqlDatabaseMatrixTests|FullyQualifiedName~DatabaseCommandStateTests|FullyQualifiedName~VisualBasic|FullyQualifiedName~IntegrationExtractor|FullyQualifiedName~GroupedCompiledPathHandoff|FullyQualifiedName~BackendExtractionSample|FullyQualifiedName~CompiledTwoHop|FullyQualifiedName~FrameworkSignatureCandidate|FullyQualifiedName~ConstructedGeneric|FullyQualifiedName~LazyConstructor' --logger 'console;verbosity=normal'
+```
+
+Other acceptance commands:
+`python3 scripts/validation/test_sql_matrix_expectations.py`,
+`python3 scripts/test_validate_adapter_artifacts.py`,
+`python3 scripts/validation/sql-coverage-smoke.py --output <temporary-output>`,
+`bash scripts/check-private-paths.sh` and `git diff --check`.
+Public Windows [run 38308628487](https://github.com/joefeser/tracemap/actions/runs/38308628487)
+succeeded on the frozen executable head: 181 scoped .NET tests (zero failures/skips),
+eight oracle/workflow guards and all 96 deterministic native CLI outputs. Remote
+Private Path Guard run 38308628263 also succeeded. Windows CI provided public
+Windows acceptance; the personal Windows and private work machines were not used.
+Superseded Windows runs 38306629860, 38307346982 and 38308013821 were canceled;
+they are not acceptance evidence.
+
+Full-suite, other-provider/ORM parity, full-index/whole-site discovery, private
+application compatibility and readable private SQL/procedure capture remain
+unverified or deferred as documented. No database connection, SQL execution,
+private work-machine contribution, PR, merge, ACK or lane-policy change.
+
+
+Delivery: branch pushed and [issue #864 receipt](https://github.com/joefeser/tracemap/issues/864#issuecomment-6132878782)
+published with exact executable commits, matrix coverage, public Windows/local
+validation and remaining gaps. This final commit changes only task/state receipt
+documentation; executable acceptance remains bound to `6448790c`. Primary checkout
+and existing HTTP worktree preserved. No PR opened, merge performed, ACK used or
+lane policy changed. Parent #861 full-index/private-contract tasks stay open.
