@@ -13,6 +13,57 @@ const shaA = "a".repeat(64);
 const shaB = "b".repeat(64);
 
 describe("Base44 source-bound static evidence", () => {
+  it("records a bound direct logUserInApp call and a standalone frontend fetch", async () => {
+    const repo = await fixtureRepo();
+    await fs.writeFile(path.join(repo, "src/direct-log.ts"), `import { base44 } from "@base44/sdk";
+export const track = () => base44.logUserInApp("Home");
+`);
+    await fs.writeFile(path.join(repo, "src/local-asset-fetch.ts"), `export const readAsset = (filePath: string) => fetch(\`/\${filePath}.js\`);
+`);
+    const out = await fs.mkdtemp(path.join(os.tmpdir(), "tracemap-direct-log-fetch-"));
+    const { packet } = await buildBase44Evidence(options(repo, out));
+    expect(packet.facts).toContainEqual(expect.objectContaining({
+      factType: FactTypes.Base44SdkPrimitive,
+      evidence: expect.objectContaining({ filePath: "src/direct-log.ts" }),
+      properties: expect.objectContaining({ capability: "logUserInApp" })
+    }));
+    expect(packet.facts).toContainEqual(expect.objectContaining({
+      factType: FactTypes.Base44HttpTarget,
+      evidenceTier: "Tier4Unknown",
+      evidence: expect.objectContaining({ filePath: "src/local-asset-fetch.ts" }),
+      properties: expect.objectContaining({ targetKind: "dynamic" })
+    }));
+  });
+
+  it("recognizes top-level functions/<name>.ts handlers without promoting nested helpers", async () => {
+    const repo = await fixtureRepo();
+    await fs.mkdir(path.join(repo, "functions/helpers"), { recursive: true });
+    await fs.writeFile(path.join(repo, "functions/priceQuote.ts"), `import { createClientFromRequest } from "npm:@base44/sdk@0.8.4";
+Deno.serve(async (request) => {
+  const base44 = createClientFromRequest(request);
+  return Response.json(await base44.entities.Quote.list());
+});
+`);
+    await fs.writeFile(path.join(repo, "functions/helpers/format.ts"), "export const format = (value: number) => String(value);\n");
+    const out = await fs.mkdtemp(path.join(os.tmpdir(), "tracemap-root-functions-"));
+    const { packet } = await buildBase44Evidence(options(repo, out));
+    const surfaces = packet.facts.filter((fact) => fact.factType === FactTypes.Base44FunctionSurface
+      && fact.evidence.filePath.startsWith("functions/"));
+    expect(surfaces).toHaveLength(1);
+    expect(surfaces[0]).toEqual(expect.objectContaining({
+      targetSymbol: "priceQuote",
+      evidenceTier: "Tier2Structural",
+      properties: expect.objectContaining({ functionName: "priceQuote", handlerKind: "deno-serve" })
+    }));
+    expect(packet.facts).toContainEqual(expect.objectContaining({
+      factType: FactTypes.Base44CustomerBoundary,
+      evidence: expect.objectContaining({ filePath: "functions/priceQuote.ts" }),
+      properties: expect.objectContaining({ logicOwnership: "customer-authored", surfaceKind: "function" })
+    }));
+    expect(packet.facts.some((fact) => fact.factType === FactTypes.Base44FunctionSurface
+      && fact.evidence.filePath === "functions/helpers/format.ts")).toBe(false);
+  });
+
   it("expands finite source-derived entity selectors without erasing the source call identity", async () => {
     const repo = await fixtureRepo();
     await fs.writeFile(path.join(repo, "src/dynamic-entities.ts"), `import { base44 } from "@base44/sdk";
