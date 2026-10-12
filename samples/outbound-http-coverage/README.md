@@ -23,7 +23,7 @@ dynamic destinations/verbs, request variables, content-only reads and same-named
 | WebClient file/relative/dynamic address | API call retained; protocol unproven | Same | Recognition does not prove HTTP protocol |
 | User wrapper / overridden method | Framework call inside resolved body only | Same | Wrapper call is not itself a framework operation |
 | Fake API / content ReadFromJsonAsync | No semantic outbound call | Same | Name-only fallback may retain an unresolved candidate |
-| net48 / other TFMs | Not compiler-validated by this fixture | Same | Signed legacy System identity admitted; overload availability depends on references; no parity claim |
+| Legacy Framework 2.0 / 3.5 / 4.0 / 4.5 / 4.8 | Separate reference-built fixtures | Same | See [legacy compatibility matrix](LEGACY-COMPATIBILITY.md); no cross-framework overload parity inference |
 
 The existing retained-query inventory is not full-index discovery. Reports state
 mode limitations even when zero HTTP surfaces are retained. Absence never means

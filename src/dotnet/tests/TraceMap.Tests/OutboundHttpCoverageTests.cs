@@ -40,6 +40,8 @@ public sealed class OutboundHttpCoverageTests
 
     [Theory]
     [InlineData("System.Net.Http", "System.Net.Http", "HttpClient", "GetStringAsync")]
+    [InlineData("System", "System.Net", "WebClient", "UploadString")]
+    [InlineData("System", "System.Net", "WebRequest", "GetResponse")]
     [InlineData("System.Net.WebClient", "System.Net", "WebClient", "UploadString")]
     [InlineData("System.Net.Requests", "System.Net", "WebRequest", "GetResponse")]
     [InlineData("System.Net.Http.Json", "System.Net.Http.Json", "HttpClientJsonExtensions", "GetFromJsonAsync")]
