@@ -48,4 +48,4 @@
 - [x] Add bounded explicit-receiver HTTP candidates for projectless VB, including file-local imports and aliases; preserve Tier3 and partial-coverage gaps.
 - [x] Carry candidates into grouped reports and backend extraction inventory without semantic or runtime claims.
 - [x] Add positive and negative synthetic receiver tests and per-overload projectless matrix assertions.
-- [ ] Complete current-head local regression/native CLI validation and Windows validation receipt.
+- [x] Complete current-head local regression/native CLI validation and Windows validation receipt (code head 68820989, Windows run 38299653713).

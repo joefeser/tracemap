@@ -262,5 +262,18 @@ passed deterministic facts/report and artifact validation, including each VB
 matrix overload and HTTP path projection. No fixture method was executed.
 The earlier broad full-suite run was stopped before rebuilding after 24 minutes
 without a final result; it is not claimed as passing. Current implementation
-Windows CI validation is pending push. No private work-machine input or patch
+Windows CI validation completed successfully (receipt below). No private work-machine input or patch
 was consumed; public synthetic fixtures only.
+
+Final projectless VB HTTP receipt:
+- Code head: `68820989cb1f5dccb41ebe31decd4ed23c67ed6b`, pushed to origin.
+- Exact-code-head local repeat: 155 targeted tests passed; all 96 native CLI
+  outputs passed deterministic comparison and artifact validation. Final focused
+  warning-as-error build/tests passed (16 tests).
+- Windows [run 38299653713](https://github.com/joefeser/tracemap/actions/runs/38299653713)
+  passed on that exact code head: 42 HTTP tests, six collector guards and all
+  96 native CLI outputs. The remote Private Path Guard also passed.
+- Personal Windows access was not required; public Windows CI supplied the
+  Windows acceptance result. The private work machine was not used.
+- This receipt update changes only task/state documentation. No PR opened,
+  merge performed, ACK invoked or lane policy changed.
