@@ -5,18 +5,15 @@ on:
     paths:
       - 'samples/outbound-http-coverage/**'
       - 'src/dotnet/**'
-      - 'scripts/validation/http-coverage-smoke.py'
+      - 'scripts/validation/*http*'
       - 'scripts/diagnostics/InspectHttpFramework/**'
       - 'scripts/validation/test_http_framework_inspection.py'
       - '.github/workflows/outbound-http-compatibility.yml'
   pull_request:
     paths:
       - 'samples/outbound-http-coverage/**'
-      - 'src/dotnet/TraceMap.Core/OutboundHttpApi.cs'
-      - 'src/dotnet/TraceMap.Core/VisualBasicSyntaxExtractor*'
-      - 'src/dotnet/tests/TraceMap.Tests/ProjectlessVisualBasicHttpTests.cs'
-      - 'src/dotnet/tests/TraceMap.Tests/OutboundHttp*'
-      - 'scripts/validation/http-coverage-smoke.py'
+      - 'src/dotnet/**'
+      - 'scripts/validation/*http*'
       - 'scripts/diagnostics/InspectHttpFramework/**'
       - 'scripts/validation/test_http_framework_inspection.py'
       - '.github/workflows/outbound-http-compatibility.yml'
@@ -38,6 +35,8 @@ jobs:
           python-version: '3.12'
       - name: Build and verify public reference signatures, IL and retained reports
         run: dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter "FullyQualifiedName~OutboundHttpCoverageTests|FullyQualifiedName~OutboundHttpLegacyCoverageTests|FullyQualifiedName~ProjectlessVisualBasicHttpTests" -warnaserror
+      - name: Validate independent HTTP matrix oracle guards
+        run: python scripts/validation/test_http_matrix_expectations.py
       - name: Read-only work-machine collector public guards
         run: python scripts/validation/test_http_framework_inspection.py
       - name: Native CLI compatibility smoke (never execute fixture methods)

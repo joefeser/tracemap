@@ -277,3 +277,18 @@ Final projectless VB HTTP receipt:
   Windows acceptance result. The private work machine was not used.
 - This receipt update changes only task/state documentation. No PR opened,
   merge performed, ACK invoked or lane policy changed.
+
+## PR 863 Baz validation follow-up
+
+Both confirmed validation weaknesses are patched without extractor changes:
+- PR workflow triggers now cover `src/dotnet/**`, including semantic producers,
+  projections, handoffs and report writers. HTTP oracle scripts also trigger it.
+- Native CLI expectations cross-check `OVERLOADS.md` identities with source
+  declaration rosters and verify each case, not hardcoded count/range offsets.
+  A hand-authored per-control/per-mode oracle pins positive and negative controls;
+  expected results are never derived from scanner output. Required controls,
+  duplicate cases, unlisted controls and unmapped/missing/extra results fail closed.
+- Eight oracle/workflow mutation guards pass, and all 96 native CLI outputs pass
+  deterministic artifact validation with the stronger assertions. Private path
+  and whitespace guards pass. New-head hosted CI/reviews remain pending push;
+  earlier Windows receipts are historical, not a new-head result.

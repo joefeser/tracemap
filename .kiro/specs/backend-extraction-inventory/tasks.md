@@ -49,3 +49,4 @@
 - [x] Carry candidates into grouped reports and backend extraction inventory without semantic or runtime claims.
 - [x] Add positive and negative synthetic receiver tests and per-overload projectless matrix assertions.
 - [x] Complete current-head local regression/native CLI validation and Windows validation receipt (code head 68820989, Windows run 38299653713).
+- [x] Patch PR 863 Baz findings: broad HTTP workflow triggers, independent per-case/control smoke oracle and mutation guards; rerun 96-output native matrix.
