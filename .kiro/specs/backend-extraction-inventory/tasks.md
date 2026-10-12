@@ -22,5 +22,5 @@
 - [x] Distinguish semantic calls, C# unresolved syntax candidates, unsupported VB projectless and compiled-only IL evidence.
 - [x] Retain family, callsite, verb, destination availability and coverage limits through facts and report projection.
 - [x] Document rule limitations, mode matrix, migration missing inputs and validation/deferred targets.
-- [ ] Complete final-head regression/full suite, native CLI repeats and artifact validation; record results.
-- [ ] Push scoped implementation branch for testing; no merge/ACK/lane-policy changes.
+- [x] Complete implementation-head regression/full suite, native CLI repeats and artifact validation; record results.
+- [x] Push scoped implementation branch for testing; no merge/ACK/lane-policy changes.
