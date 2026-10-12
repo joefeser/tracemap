@@ -5,6 +5,7 @@ $temporary = Join-Path ([IO.Path]::GetTempPath()) ('wizard-requery-test-' + [gui
 [IO.Directory]::CreateDirectory((Join-Path $temporary 'sample')) | Out-Null
 $global:WizardRequeryCalls = [Collections.Generic.List[object]]::new()
 $global:WizardRequeryState = 'reports-completed-review-only'
+$global:WizardRunId = 'a' * 32
 $global:WizardRequeryExit = 0
 $global:WizardRequeryOriginalReader = $true
 $global:WizardRequeryCause = $null
@@ -17,7 +18,7 @@ function global:dotnet {
     $global:LASTEXITCODE = 0
     if ($args -contains 'status') {
         @{ schemaVersion='webforms-review-status.v1'; state=$global:WizardRequeryState;
-           runId=('a'*32);preflightSha256=('b'*64);checkpointSha256=('c'*64);combinedIndexSha256=('d'*64);
+           runId=$global:WizardRunId;preflightSha256=('b'*64);checkpointSha256=('c'*64);combinedIndexSha256=('d'*64);
            readerMatchesOriginalGenerator=$global:WizardRequeryOriginalReader; retainedArtifactsVerified=$true;
            workbenchPath=$global:WizardRequeryWorkbench } | ConvertTo-Json -Compress
     } elseif ($args -contains 'requery-handler') {
@@ -124,6 +125,28 @@ try {
     $graphDirectory = $graphCall[10]
     $graphReceiptPath = Join-Path $graphDirectory 'handler-requery.local.json'
     $validReceipt = Get-Content $graphReceiptPath -Raw
+    foreach ($statusRunId in @(('a'*32), ('A'*32))) {
+        $global:WizardRunId = $statusRunId
+        foreach ($receiptRunId in @(('a'*32), ('A'*32), ('aA'*16))) {
+            $cased = $validReceipt | ConvertFrom-Json
+            $cased.runId = $receiptRunId
+            $cased | ConvertTo-Json -Depth 8 | Set-Content $graphReceiptPath
+            & $helper $temporary -InspectLatest | Out-Null
+        }
+    }
+    $global:WizardRunId = 'a' * 32
+    foreach ($invalid in @(('a'*31), ('g'*32), ' aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa')) {
+        $bad = $validReceipt | ConvertFrom-Json
+        $bad.runId = $invalid
+        $bad | ConvertTo-Json -Depth 8 | Set-Content $graphReceiptPath
+        Expect-Failure { & $helper $temporary -InspectLatest } 'SUMMARY_RUN_MISMATCH'
+    }
+    foreach ($field in @('sourcePreflightSha256','sourceCheckpointSha256','combinedIndexSha256')) {
+        $bad = $validReceipt | ConvertFrom-Json
+        $bad.$field = $bad.$field.ToUpperInvariant()
+        $bad | ConvertTo-Json -Depth 8 | Set-Content $graphReceiptPath
+        Expect-Failure { & $helper $temporary -InspectLatest } 'SUMMARY_RUN_MISMATCH'
+    }
     foreach ($field in @('runId','sourcePreflightSha256','sourceCheckpointSha256','combinedIndexSha256')) {
         $bad = $validReceipt | ConvertFrom-Json
         $bad.$field = 'e' * $bad.$field.Length
@@ -179,6 +202,16 @@ try {
     $groupedReceiptPath = Join-Path $groupedDirectory 'handler-requery.local.json'
     $groupedPath = Join-Path $groupedDirectory 'compiled-paths.handoff.local.json'
     $groupedReceipt = Get-Content $groupedReceiptPath -Raw
+    # Legacy grouped receipts omit reportVariant, not their original run identities.
+    $legacy = $groupedReceipt | ConvertFrom-Json
+    if ($legacy.PSObject.Properties['reportVariant']) { throw 'Fixture must exercise legacy grouped receipt admission.' }
+    foreach ($field in @('runId','sourcePreflightSha256','sourceCheckpointSha256','combinedIndexSha256')) {
+        $stripped = $groupedReceipt | ConvertFrom-Json
+        $stripped.PSObject.Properties.Remove($field)
+        $stripped | ConvertTo-Json -Depth 8 | Set-Content $groupedReceiptPath
+        Expect-Failure { & $helper $temporary -InspectLatest } 'SUMMARY_RUN_MISMATCH'
+    }
+    Set-Content $groupedReceiptPath $groupedReceipt
     $groupedJson = Get-Content $groupedPath -Raw
     $wrongIndex = $groupedJson | ConvertFrom-Json -Depth 32
     $wrongIndex.inputIndexSha256 = 'e' * 64
@@ -226,6 +259,6 @@ try {
     Write-Output 'Web Forms wizard requery helper tests passed.'
 } finally {
     Remove-Item Function:\dotnet
-    Remove-Variable WizardRequeryCalls,WizardRequeryState,WizardRequeryExit,WizardRequeryWorkbench,WizardRequeryOriginalReader,WizardRequeryCause,WizardRequeryReason,WizardRequeryWork,WizardRequeryWorkLimit -Scope Global
+    Remove-Variable WizardRequeryCalls,WizardRequeryState,WizardRequeryExit,WizardRequeryWorkbench,WizardRequeryOriginalReader,WizardRequeryCause,WizardRequeryReason,WizardRequeryWork,WizardRequeryWorkLimit,WizardRunId -Scope Global
     [IO.Directory]::Delete($temporary, $true)
 }
