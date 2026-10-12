@@ -44,6 +44,8 @@ def caller(symbol):
 def assert_calls(facts, mode, cases, controls):
     tier = 'Tier1Semantic' if mode == 'semantic' else 'Tier3SyntaxOrTextual'
     observed = collections.Counter()
+    tiers = {f['evidenceTier'] for f in facts if f['factType'] == 'DatabaseOperationCandidate'}
+    assert tiers <= {tier}, (mode, tiers)
     for f in facts:
         if f['factType'] != 'DatabaseOperationCandidate' or f['evidenceTier'] != tier:
             continue

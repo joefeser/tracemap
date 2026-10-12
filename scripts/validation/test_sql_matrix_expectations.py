@@ -19,6 +19,9 @@ class SqlOracleGuards(unittest.TestCase):
     def test_named_negative(self):
         extra=copy.deepcopy(self.facts[0]);extra['sourceSymbol']='Controls.ControlFake()'
         with self.assertRaises(AssertionError): assert_calls(self.facts+[extra],'semantic',self.cases,self.controls)
+    def test_extra_candidate_in_wrong_tier_cannot_be_hidden(self):
+        extra=copy.deepcopy(self.facts[0]);extra['evidenceTier']='Tier3SyntaxOrTextual'
+        with self.assertRaises(AssertionError): assert_calls(self.facts+[extra],'semantic',self.cases,self.controls)
     def test_wrong_overload_member(self):
         facts=copy.deepcopy(self.facts);facts[0]['properties']['methodName']='ExecuteReader'
         with self.assertRaises(AssertionError): assert_calls(facts,'semantic',self.cases,self.controls)
