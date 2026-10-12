@@ -69,11 +69,14 @@ public static class GroupedCompiledPathReportWriter
             W($"<p>Query surface: {H(backend.QuerySurface)}. This filter bounds inventory coverage.</p>");
             W($"<p>Rule {H(backend.RuleId)}; coverage {H(backend.Coverage)}; truncated {backend.Truncated}; retained gaps {backend.RetainedGapCount}. {backend.Operations.Count} evidence records (not distinct business operations).</p>");
             W($"<p>{H(handoff.HttpCoverageLimitations ?? GroupedCompiledPathHandoffBuilder.HttpCoverageLimitations)}</p>");
+            if (handoff.DatabaseCoverageLimitations is { } sqlLimits) W($"<p>{H(sqlLimits)}</p>");
             foreach (var limitation in backend.Limitations) W($"<p>{H(limitation)}</p>");
             foreach (var operation in backend.Operations)
             {
                 var node = handoff.Nodes[operation.NodeReference];
                 W($"<details><summary>{H(operation.Family)}: {H(Compact(node))} — {H(operation.ConnectionState)}</summary><p>Evidence {H(node.RuleId)} / {H(node.EvidenceTier)}; {H(Location(node.FilePath, node.StartLine, node.EndLine))}</p><p>Node reference: {H(operation.NodeReference)}; human decision: {H(operation.HumanDecision)}</p>");
+                if (node.DatabaseCallEvidence is { } database)
+                    W($"<p>Database operation: {H(database.MethodName)}; {H(database.OperationKind)}; command: {H(database.CommandTextAvailability)}; command type: {H(database.CommandTypeEvidence)}; state coverage: {H(database.CommandStateCoverage)}; parameters: {H(database.ParameterEvidence)} / {H(database.ParameterDirectionKinds)} / {H(database.ParameterTypeKinds)}; transaction: {H(database.TransactionEvidence)}; connection: {H(database.ConnectionEvidence)}; signature: {H(database.OriginalSignature)}; provider reference: {H(database.ProviderAssemblyIdentity)}; {H(database.Limitations)}</p>");
                 if (node.HttpCallEvidence is { } http)
                     W($"<p>API family {H(http.MethodFamily)}; method {H(http.MethodName)}; verb {H(node.HttpMethod ?? "UNKNOWN")}; destination {H(http.DestinationAvailability)}; protocol {H(http.ProtocolKind)}; coverage {H(http.CoverageLabel)}. {H(http.Limitations)}</p>");
                 W($"<p>Query roots: {H(string.Join(", ", operation.QueryRootReferences))}. Ordered variant indexes (zero-based): {H(string.Join(", ", operation.VariantIndexes))}. Candidate variant indexes: {H(string.Join(", ", operation.CandidateVariantIndexes))}.</p><p>Review obligations: {H(string.Join(", ", operation.ContractReviewObligations))}</p></details>");

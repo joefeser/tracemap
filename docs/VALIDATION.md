@@ -4618,3 +4618,16 @@ or full migration acceptance follows from this fixture.
 Legacy HTTP compatibility: use [the public reference matrix](../samples/outbound-http-coverage/LEGACY-COMPATIBILITY.md) and its per-TFM overload inventories. Record application project TFM, TargetFrameworkAttribute and exact referenced assembly/member identities separately. System 2.0.0.0 does not identify an application's TFM. Missing TFM stays unknown. Package-added/backported APIs, other profiles and private application parity remain unvalidated. Run the public static-only smoke with `python3 scripts/validation/http-coverage-smoke.py --output <public-temporary-output>`; Windows CI results must bind an actual run and commit. Never execute fixture methods.
 
 The legacy HTTP fixture TFMs are **representative test targets, not confirmed application targets**. Application-specific compatibility is **pending work-machine validation**, a deferred check that does not block this public branch. Use [InspectHttpFramework](../scripts/diagnostics/InspectHttpFramework/README.md) for read-only XML/metadata collection and its [sanitized return template](../scripts/diagnostics/InspectHttpFramework/SANITIZED-SUMMARY.md). Keep project/config declarations, binary attributes and encoded reference signatures separate; no value wins automatically. Keep the local report, private input hashes, paths and artifacts on the work machine. Public guards: `python3 scripts/validation/test_http_framework_inspection.py`.
+
+## SQL/database migration matrix (#864)
+
+Use [the SQL matrix](validation/SQL_DATABASE_MATRIX.md) and public samples under
+samples/sql-database-matrix. Run SqlDatabaseMatrixTests and DatabaseCommandStateTests,
+then adjacent VisualBasicExternalBoundary, IntegrationExtractor, BackendExtractionSample,
+GroupedCompiledPathHandoff and compiled-path regressions. Run the independent oracle
+mutation guards and sql-coverage-smoke.py for 96 native scan outputs across eight
+TFMs, both languages and three modes, with deterministic repeats and artifact validation.
+Require an observed public Windows SQL database compatibility CI receipt at the exact
+code head. Compile/scan only; never execute fixture methods or connect to databases.
+Other providers, full-index migration discovery, private contract capture and private
+application compatibility remain separate, explicitly partial/unavailable checks.

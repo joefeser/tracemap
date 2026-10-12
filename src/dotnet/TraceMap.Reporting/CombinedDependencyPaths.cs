@@ -179,7 +179,9 @@ public sealed record CombinedPathNode(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     CompiledCommandConfigurationCandidate? CommandBinding = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    OutboundHttpCallEvidence? HttpCallEvidence = null);
+    OutboundHttpCallEvidence? HttpCallEvidence = null,
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    DatabaseCallEvidence? DatabaseCallEvidence = null);
 
 public sealed record CompiledCommandOperandOrigin(string Kind, string Identity);
 public sealed record CompiledCommandConfigurationCandidate(
@@ -6197,7 +6199,7 @@ public static partial class CombinedDependencyPathReporter
             surface.OperationDirection,
             surface.SurfaceSubtype,
             Limitations: surface.SurfaceKind == "legacy-data" ? surface.LegacyDataLimitations : null,
-            HttpCallEvidence: surface.HttpCallEvidence);
+            HttpCallEvidence: surface.HttpCallEvidence, DatabaseCallEvidence: surface.DatabaseCallEvidence);
     }
 
     private static bool IsMessageSurfaceKind(string? surfaceKind)
@@ -7183,7 +7185,9 @@ public static partial class CombinedDependencyPathReporter
         IReadOnlyList<string>? Limitations = null,
         [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         CompiledCommandConfigurationCandidate? CommandBinding = null,
-        OutboundHttpCallEvidence? HttpCallEvidence = null)
+        OutboundHttpCallEvidence? HttpCallEvidence = null,
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+        DatabaseCallEvidence? DatabaseCallEvidence = null)
     {
         public CombinedPathNode ToReportNode()
         {
@@ -7219,7 +7223,7 @@ public static partial class CombinedDependencyPathReporter
                 SurfaceSubtype,
                 Limitations,
                 CommandBinding,
-                HttpCallEvidence);
+                HttpCallEvidence, DatabaseCallEvidence);
         }
     }
 

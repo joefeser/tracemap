@@ -52,3 +52,30 @@ validation local; any feedback requires workplace approval, not merely sanitizat
 Legacy HTTP compatibility: use [the public reference matrix](../samples/outbound-http-coverage/LEGACY-COMPATIBILITY.md) and its per-TFM overload inventories. Record application project TFM, TargetFrameworkAttribute and exact referenced assembly/member identities separately. System 2.0.0.0 does not identify an application's TFM. Missing TFM stays unknown. Package-added/backported APIs, other profiles and private application parity remain unvalidated. Run the public static-only smoke with `python3 scripts/validation/http-coverage-smoke.py --output <public-temporary-output>`; Windows CI results must bind an actual run and commit. Never execute fixture methods.
 
 The legacy HTTP fixture TFMs are **representative test targets, not confirmed application targets**. Application-specific compatibility is **pending work-machine validation**, a deferred check that does not block this public branch. Use [InspectHttpFramework](../scripts/diagnostics/InspectHttpFramework/README.md) for read-only XML/metadata collection and its [sanitized return template](../scripts/diagnostics/InspectHttpFramework/SANITIZED-SUMMARY.md). Keep project/config declarations, binary attributes and encoded reference signatures separate; no value wins automatically. Keep the local report, private input hashes, paths and artifacts on the work machine. Public guards: `python3 scripts/validation/test_http_framework_inspection.py`.
+
+For SQL/database evidence, read [the SQL matrix](../docs/validation/SQL_DATABASE_MATRIX.md)
+and each retained DatabaseCallEvidence record. Compiler-resolved source calls,
+explicit syntax candidates (including projectless VB App_Code) and original
+compiled-only IL API candidates are separate. Keep XML readers, APM Begin/End,
+async/cancellation, adapter Fill/FillSchema/Update and bulk-write boundaries
+separate. Open/Close is not command execution. Preserve rule/tier, callsite,
+provider/reference identity, original source signature and original IL slot,
+coverage/truncation and generator/bounded-input hashes. Do not infer an app TFM
+from an assembly version.
+
+Hash-only constant commands are unavailable as readable SQL; dynamic/unavailable
+commands are not empty commands. CommandType.StoredProcedure never supplies a
+procedure body. Local command state witnesses are bounded to supported straight-
+line statements; aliases, branches, reassignment, unknown calls, field state,
+factory concrete returns, generic wrappers and dispatch need review. Parameter
+direction/type witnesses exclude values; transaction/connection witnesses exclude
+credentials and do not prove outcome or database identity. Request separately
+authorized private readable contracts, procedure definitions/dependencies and
+parameter/result/transaction/auth inputs when needed. Do not reconstruct SQL from
+a hash or invoke fixture/application database methods.
+
+The supplied migration inventory is a retained-query projection, not full-index
+or full-site discovery. A found-not-connected operation is not unused. Candidate
+query roots are not verified entry points or runtime use. ODBC/OleDb/ORM and other
+provider gaps remain explicit; no complete-provider claim or automatic retain/
+retire/replace decision follows from the matrix.

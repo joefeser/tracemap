@@ -162,7 +162,9 @@ public sealed record CombinedDependencySurfaceRow(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     string? SurfaceSubtype = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    OutboundHttpCallEvidence? HttpCallEvidence = null);
+    OutboundHttpCallEvidence? HttpCallEvidence = null,
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    DatabaseCallEvidence? DatabaseCallEvidence = null);
 
 public sealed record CombinedDependencyEdgeRow(
     string EdgeKind,
@@ -1065,7 +1067,7 @@ public static class CombinedDependencyReporter
             surface.LegacyDataClaimLevelContextId,
             surface.LegacyDataExtractorVersion,
             surface.SurfaceSubtype,
-            surface.HttpCallEvidence);
+            surface.HttpCallEvidence, surface.DatabaseCallEvidence);
     }
 
     private static IReadOnlyList<CombinedNeedsReviewRow> BuildNeedsReview(IReadOnlyList<CombinedEndpointFinding> endpointFindings, IReadOnlyList<CombinedFactRow> facts)
