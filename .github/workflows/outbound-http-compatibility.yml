@@ -6,6 +6,8 @@ on:
       - 'samples/outbound-http-coverage/**'
       - 'src/dotnet/**'
       - 'scripts/validation/http-coverage-smoke.py'
+      - 'scripts/diagnostics/InspectHttpFramework/**'
+      - 'scripts/validation/test_http_framework_inspection.py'
       - '.github/workflows/outbound-http-compatibility.yml'
   pull_request:
     paths:
@@ -13,6 +15,8 @@ on:
       - 'src/dotnet/TraceMap.Core/OutboundHttpApi.cs'
       - 'src/dotnet/tests/TraceMap.Tests/OutboundHttp*'
       - 'scripts/validation/http-coverage-smoke.py'
+      - 'scripts/diagnostics/InspectHttpFramework/**'
+      - 'scripts/validation/test_http_framework_inspection.py'
       - '.github/workflows/outbound-http-compatibility.yml'
   workflow_dispatch:
 permissions:
@@ -32,6 +36,8 @@ jobs:
           python-version: '3.12'
       - name: Build and verify public reference signatures, IL and retained reports
         run: dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter "FullyQualifiedName~OutboundHttpCoverageTests|FullyQualifiedName~OutboundHttpLegacyCoverageTests" -warnaserror
+      - name: Read-only work-machine collector public guards
+        run: python scripts/validation/test_http_framework_inspection.py
       - name: Native CLI compatibility smoke (never execute fixture methods)
         shell: pwsh
         run: python scripts/validation/http-coverage-smoke.py --output "$env:RUNNER_TEMP/http-coverage"

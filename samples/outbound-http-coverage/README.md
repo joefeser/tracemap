@@ -40,3 +40,9 @@ dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter Fully
 dotnet run --project src/dotnet/TraceMap.Cli -- scan --repo samples/outbound-http-coverage/csharp --out /tmp/http-csharp
 dotnet run --project src/dotnet/TraceMap.Cli -- scan --repo samples/outbound-http-coverage/vb --out /tmp/http-vb
 ```
+
+Legacy TFMs are representative test targets, not confirmed application targets.
+Application-specific compatibility is pending work-machine validation and does not
+block this branch. Use the [offline read-only inspection tool](../../scripts/diagnostics/InspectHttpFramework/README.md)
+and its sanitized manual return template; keep application artifacts/local reports
+on the work machine.
