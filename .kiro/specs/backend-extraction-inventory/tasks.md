@@ -34,6 +34,11 @@
 - [x] Record observed Windows CI result and issue #861 handoff.
 
 ## Offline work-machine compatibility handoff
+- [x] Withdraw patch-transfer instructions; keep public implementation independent of work-machine contributions.
+- [x] Generate representative net452/net472 C#/VB fixtures from public reference metadata on the authorized machine.
+- [x] Emit and test an explicit file-level HTTP coverage gap for VB syntax fallback, including the net472 Website shape.
+- [x] Validate the extended matrix locally: 74 tests, six collector guards, 96 native CLI outputs and artifact conformance.
+- [ ] Validate the extended matrix on public Windows CI at the pushed head.
 - [x] Label legacy targets representative and application compatibility pending work-machine validation; remove branch-blocking evidence requests.
 - [x] Provide bounded read-only XML/metadata collector and exact local commands; no application evaluation/execution, assembly resolution or upload.
 - [x] Provide sanitized manual return template preserving missing/conditional/conflicting sources and excluding private paths/artifacts/input hashes.

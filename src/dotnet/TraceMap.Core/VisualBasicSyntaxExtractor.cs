@@ -112,6 +112,17 @@ public static class VisualBasicSyntaxExtractor
                 .ToArray() ?? [];
             var budget = new FactBudget(MaxFactsPerFile);
             facts.Add(CreateSemanticUnavailableGap(manifest, file.RelativePath));
+            facts.Add(FactFactory.Create(manifest, FactTypes.AnalysisGap, RuleIds.VisualBasicHttpCoverageGap,
+                EvidenceTiers.Tier4Unknown,
+                new EvidenceSpan(file.RelativePath, 1, 1, null, "VisualBasicSyntaxExtractor", ScannerVersions.VisualBasicSyntaxExtractor),
+                properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["gapKind"] = "VisualBasicHttpAnalysisUnsupportedWithoutSemantics",
+                    ["coverageEffect"] = "reduces-http-coverage",
+                    ["spanKind"] = "file-level-coverage-not-callsite",
+                    ["message"] = "HTTP API classification is unsupported for this Visual Basic file without semantic analysis. Zero detected HTTP calls does not establish absence or non-use of HTTP operations.",
+                    ["sanitization"] = "category-only"
+                }));
             var declarationStart = facts.Count;
             TryRunPhase(manifest, facts, file.RelativePath, RuleIds.VisualBasicSyntaxDeclarations, "declarations",
                 () => AddDeclarationFacts(manifest, facts, file.RelativePath, root, budget));

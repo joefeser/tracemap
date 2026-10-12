@@ -16,6 +16,8 @@ identity and parameter/return signature for every compiled case.
 | .NET Framework 3.5 | Tested: 51 overloads | Tested: 3 / 3 | Unavailable in selected framework references | Unavailable in selected framework references |
 | .NET Framework 4.0 | Tested: 51 overloads | Tested: 3 / 3 | Unavailable in selected framework references | Unavailable in selected framework references |
 | .NET Framework 4.5 | Tested: 79 overloads | Tested: 4 / 3 | Tested: 30 overloads | Unavailable in selected framework references |
+| .NET Framework 4.5.2 | 79 reference overloads; validation recorded in implementation state | 4 / 3 reference overloads | 30 reference overloads | Unavailable in selected framework references |
+| .NET Framework 4.7.2 | 79 reference overloads; validation recorded in implementation state | 4 / 3 reference overloads | 30 reference overloads | Unavailable in selected framework references |
 | .NET Framework 4.8 | Tested: 79 overloads | Tested: 4 / 3 | Tested: 30 overloads | Unavailable in selected framework references |
 | .NET 10 | Tested: 79 overloads | Tested: 4 / 3 | Tested: 44 overloads | Tested: 36 overloads |
 | Other TFMs, profiles, package-added/backported HttpClient or JSON | Not yet validated | Not yet validated | Not yet validated | Not yet validated |
@@ -32,7 +34,7 @@ covered where present. No package is added to manufacture an absent API.
 | Evidence mode (each listed framework) | C# | VB |
 |---|---|---|
 | Semantic, compiler-resolved trusted API | Tested per-overload Tier1 facts and retained operation/report projection | Same |
-| Projectless/syntax fallback | Tested unresolved Tier3 name candidates; no framework/signature support claim | Tested absence of HTTP API classification; unsupported |
+| Projectless/syntax fallback | Tested unresolved Tier3 name candidates; no framework/signature support claim | HTTP classification unsupported; explicit file-level Tier4 gap, never a clean zero |
 | Compiled-only + IL | Tested original assembly/signature/IL facts and scan report; HTTP operation classification unsupported | Same |
 
 Native scans can retain unresolved syntax candidates alongside Tier1 semantic calls. These are separate evidence rows, not extra supported overloads; they must not be counted as additional semantic coverage.
@@ -43,8 +45,8 @@ Framework identity is kept separate from application target framework:
   `b77a5c561934e089`. Both net20 and net35 reference **System 2.0.0.0**; net40,
   net45 and net48 reference **System 4.0.0.0**. Neither version uniquely identifies
   the application's target framework.
-- Framework HttpClient resolves to `System.Net.Http`, version 4.0.0.0, token
-  `b03f5f7f11d50a3a` in the selected net45/net48 references. The trusted identity
+- Framework HttpClient resolves to `System.Net.Http`, version 4.0.0.0 in net45/net452
+  and 4.2.0.0 in net472/net48, token `b03f5f7f11d50a3a`, in the selected references. The trusted identity
   checks remain unchanged. Unsigned lookalikes with the exact legacy `System`
   name are rejected as well as modern lookalikes.
 - net20/net35 emitted assemblies lack TargetFrameworkAttribute; compiled extraction
@@ -69,6 +71,16 @@ public validation receipts. Application-specific framework matching is not yet
 validated until work-machine inspection and reconciliation are completed.
 Use the [read-only local collector and exact commands](../../scripts/diagnostics/InspectHttpFramework/README.md) and [sanitized return template](../../scripts/diagnostics/InspectHttpFramework/SANITIZED-SUMMARY.md).
 Keep the local report, private input hashes and application artifacts on that machine.
+The work machine cannot contribute to this repository, including patches. Public
+fixtures are independently generated from public reference metadata on the authorized
+machine. No work-machine code or patch was consumed. Any sharing of validation
+feedback requires workplace approval; sanitization alone is not authorization.
+
+The net472 `website-projectless` fixture has only VB App_Code source and Web.config,
+not a project or application binary. Its configuration is not evaluated and does
+not establish an effective runtime. Its test verifies the explicit
+`VisualBasicHttpAnalysisUnsupportedWithoutSemantics` gap in facts and Markdown;
+zero HTTP operation facts remain an unsupported mode, not successful detection.
 
 Local macOS compilation/static extraction is supported using the reference package;
 Windows validation runs in `.github/workflows/outbound-http-compatibility.yml` and

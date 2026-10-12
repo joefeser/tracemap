@@ -13,7 +13,8 @@ the application, follows project imports/external config, loads application asse
 resolves dependencies, reads symbols, or executes fixture/application methods.
 Only explicitly selected project/config/binary files are read. It writes one new
 local Markdown file and refuses to overwrite an existing file. Keep that file on
-the work machine; return only a manually reviewed sanitized summary.
+the work machine. Any feedback requires workplace approval; sanitization alone
+does not authorize sharing.
 
 PowerShell example (replace the placeholder paths locally; never send them back):
 
@@ -86,4 +87,12 @@ Generator/dependency hashes identify the inspector that produced it.
 Missing, conditional, differing or conflicting values require human reconciliation
 on the work machine. Do not choose the newest version, majority value, or assembly
 version as application TFM. Source declarations and a binary can come from different
-builds. Use [SANITIZED-SUMMARY.md](SANITIZED-SUMMARY.md) for the return handoff.
+builds. [SANITIZED-SUMMARY.md](SANITIZED-SUMMARY.md) is a local organization aid,
+not permission to return or publish evidence.
+
+## Work-machine publication boundary
+
+This collector is for local inspection only. The work machine cannot contribute
+code or patches to this public repository. Keep results private; any feedback
+requires workplace approval. Sanitization is not permission to publish. See
+[the corrected boundary](WORK-MACHINE-TRANSFER-PROMPT.md).

@@ -22,7 +22,7 @@ def run(command):
     if result.returncode:
         raise RuntimeError(result.stdout + result.stderr)
 
-for tfm, count in [("net20", 57), ("net35", 57), ("net40", 57), ("net45", 116), ("net48", 116), ("net10.0", 166)]:
+for tfm, count in [("net20", 57), ("net35", 57), ("net40", 57), ("net45", 116), ("net452", 116), ("net472", 116), ("net48", 116), ("net10.0", 166)]:
     for language, extension in [("csharp", ".cs"), ("vb", ".vb")]:
         sample = root / "samples/outbound-http-coverage"
         sample = sample / language if tfm == "net10.0" else sample / "legacy" / tfm / language
@@ -68,6 +68,8 @@ for tfm, count in [("net20", 57), ("net35", 57), ("net40", 57), ("net45", 116), 
                     assert any(fact["factType"] == "ManagedIlCallObserved" and f"method:7:Case{index:03}|" in (fact.get("targetSymbol") or "") for fact in facts), (prefix, index)
             elif language == "vb":
                 assert not tiers, (prefix, tiers)
+                assert any(fact["ruleId"] == "vb.syntax.http-coverage-gap.v1" and fact["factType"] == "AnalysisGap" for fact in facts), prefix
+                assert "VisualBasicHttpAnalysisUnsupportedWithoutSemantics" in (pairs[0] / "report.md").read_text(encoding="utf-8"), prefix
             else:
                 assert tiers == {"Tier3SyntaxOrTextual": count + (10 if tfm == "net10.0" else 0)}, (prefix, tiers)
             print(prefix, dict(tiers), "deterministic facts/report", flush=True)

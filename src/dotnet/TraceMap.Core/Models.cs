@@ -499,6 +499,7 @@ public static class RuleIds
     public const string VisualBasicSemanticConfigBinding = "vb.semantic.config-binding.v1";
     public const string VisualBasicSemanticExternalBoundary = "vb.semantic.external-boundary.v1";
     public const string VisualBasicSyntaxDeclarations = "vb.syntax.declarations.v1";
+    public const string VisualBasicHttpCoverageGap = "vb.syntax.http-coverage-gap.v1";
     public const string VisualBasicSyntaxMemberAccess = "vb.syntax.memberaccess.v1";
     public const string VisualBasicSyntaxInvocation = "vb.syntax.invocation.v1";
     public const string VisualBasicSyntaxCallGraph = "vb.syntax.callgraph.v1";
@@ -702,7 +703,7 @@ public static class ScannerVersions
     public const string CSharpIntegrationSyntaxExtractor = "csharp-integration-syntax/0.3.1";
     public const string CSharpSemanticExtractor = "csharp-semantic/0.21.3";
     public const string VisualBasicSemanticExtractor = "vb-semantic/0.8.8";
-    public const string VisualBasicSyntaxExtractor = "vb-syntax/0.3.28";
+    public const string VisualBasicSyntaxExtractor = "vb-syntax/0.3.29";
     public const string CSharpPropertyMappingExtractor = "csharp-property-mapping/0.1.0";
     public const string FrameworkMigrationEvidenceExtractor = "framework-migration/0.1.0";
     public const string FrameworkMigrationSyntaxFallbackExtractor = "framework-migration-syntax-fallback/0.1.0";

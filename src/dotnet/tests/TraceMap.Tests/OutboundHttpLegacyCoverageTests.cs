@@ -8,6 +8,33 @@ namespace TraceMap.Tests;
 
 public sealed class OutboundHttpLegacyCoverageTests
 {
+    [Fact]
+    public async Task Projectless_vb_website_reports_http_coverage_gap_without_claiming_calls()
+    {
+        var repo = new DirectoryInfo(AppContext.BaseDirectory);
+        while (repo is not null && !File.Exists(Path.Combine(repo.FullName, "AGENTS.md"))) repo = repo.Parent;
+        Assert.NotNull(repo);
+        var sample = Path.Combine(repo.FullName, "samples/outbound-http-coverage/legacy/net472/website-projectless");
+        using var temp = new TempDirectory();
+        var result = ScanEngine.Scan(new ScanOptions(sample, Path.Combine(temp.Path, "out")));
+        Assert.DoesNotContain(result.Facts, fact => fact.FactType == FactTypes.HttpCallDetected);
+        var gap = Assert.Single(result.Facts, fact => fact.RuleId == RuleIds.VisualBasicHttpCoverageGap);
+        Assert.Equal("App_Code/RemoteExample.vb", gap.Evidence.FilePath);
+        Assert.Equal("file-level-coverage-not-callsite", gap.Properties["spanKind"]);
+        Assert.Equal("reduces-http-coverage", gap.Properties["coverageEffect"]);
+        Assert.Equal(EvidenceTiers.Tier4Unknown, gap.EvidenceTier);
+        var report = Path.Combine(temp.Path, "report.md");
+        await MarkdownReportWriter.WriteAsync(report, result);
+        Assert.Contains("VisualBasicHttpAnalysisUnsupportedWithoutSemantics", await File.ReadAllTextAsync(report));
+        // A coverage warning applies even when no HTTP-looking names exist: it
+        // describes unsupported analysis, never claims a hidden HTTP call.
+        var empty = Path.Combine(temp.Path, "plain"); Directory.CreateDirectory(empty);
+        await File.WriteAllTextAsync(Path.Combine(empty, "Plain.vb"), "Public Class Plain\nEnd Class");
+        var plain = ScanEngine.Scan(new ScanOptions(empty, Path.Combine(temp.Path, "plain-out")));
+        Assert.Single(plain.Facts, fact => fact.RuleId == RuleIds.VisualBasicHttpCoverageGap);
+        Assert.DoesNotContain(plain.Facts, fact => fact.FactType == FactTypes.HttpCallDetected);
+    }
+
     [Theory]
     [InlineData("net20", "csharp", 57, "2.0.0.0")]
     [InlineData("net20", "vb", 57, "2.0.0.0")]
@@ -19,6 +46,10 @@ public sealed class OutboundHttpLegacyCoverageTests
     [InlineData("net45", "vb", 116, "4.0.0.0")]
     [InlineData("net48", "csharp", 116, "4.0.0.0")]
     [InlineData("net48", "vb", 116, "4.0.0.0")]
+    [InlineData("net452", "csharp", 116, "4.0.0.0")]
+    [InlineData("net452", "vb", 116, "4.0.0.0")]
+    [InlineData("net472", "csharp", 116, "4.0.0.0")]
+    [InlineData("net472", "vb", 116, "4.0.0.0")]
     public async Task Legacy_reference_overloads_preserve_identity_signatures_and_mode_limits(string tfm, string language, int count, string systemVersion)
     {
         var repo = new DirectoryInfo(AppContext.BaseDirectory);
@@ -31,16 +62,17 @@ public sealed class OutboundHttpLegacyCoverageTests
         var system = Assert.Single(module.AssemblyReferences, reference => reference.Name == "System");
         Assert.Equal(systemVersion, system.Version.ToString());
         Assert.Equal("b77a5c561934e089", Convert.ToHexStringLower(system.PublicKeyToken));
-        Assert.Equal(tfm is "net45" or "net48", module.AssemblyReferences.Any(reference => reference.Name == "System.Net.Http"));
+        Assert.Equal(tfm is "net45" or "net452" or "net472" or "net48", module.AssemblyReferences.Any(reference => reference.Name == "System.Net.Http"));
         // The same System 2.0 identity occurs under both net20 and net35. It is not a TFM.
         var frameworkAttribute = module.Assembly.CustomAttributes.FirstOrDefault(attribute => attribute.AttributeType.FullName == "System.Runtime.Versioning.TargetFrameworkAttribute");
-        var expectedFramework = tfm is "net20" or "net35" ? null : $".NETFramework,Version=v{tfm[3]}.{tfm[4]}";
+        var expectedFramework = tfm is "net20" or "net35" ? null : ".NETFramework,Version=v" + string.Join(".", tfm[3..].ToCharArray());
         Assert.Equal(expectedFramework, frameworkAttribute?.ConstructorArguments[0].Value);
         using var temp = new TempDirectory();
         var semantic = ScanEngine.Scan(new ScanOptions(sample, Path.Combine(temp.Path, "semantic")));
         Assert.Equal("Succeeded", semantic.Manifest.BuildStatus);
         var calls = semantic.Facts.Where(fact => fact.FactType == FactTypes.HttpCallDetected && fact.EvidenceTier == EvidenceTiers.Tier1Semantic).ToArray();
         Assert.Equal(count, calls.Length);
+        Assert.DoesNotContain(semantic.Facts, fact => fact.RuleId == RuleIds.VisualBasicHttpCoverageGap);
         var index = Path.Combine(temp.Path, "index.sqlite");
         SqliteIndexWriter.Write(index, semantic.Manifest, semantic.Facts);
         var hash = Convert.ToHexStringLower(SHA256.HashData(await File.ReadAllBytesAsync(index)));
@@ -82,7 +114,12 @@ public sealed class OutboundHttpLegacyCoverageTests
         File.Copy(Path.Combine(sample, language == "vb" ? "Matrix.vb" : "Matrix.cs"), Path.Combine(projectlessRoot, language == "vb" ? "Matrix.vb" : "Matrix.cs"));
         var projectless = ScanEngine.Scan(new ScanOptions(projectlessRoot, Path.Combine(temp.Path, "fallback")));
         var candidates = projectless.Facts.Where(fact => fact.FactType == FactTypes.HttpCallDetected).ToArray();
-        if (language == "vb") Assert.Empty(candidates);
+        if (language == "vb")
+        {
+            Assert.Empty(candidates);
+            Assert.Contains(projectless.Facts, fact => fact.RuleId == RuleIds.VisualBasicHttpCoverageGap
+                && fact.EvidenceTier == EvidenceTiers.Tier4Unknown);
+        }
         else
         {
             Assert.Equal(count, candidates.Length);
