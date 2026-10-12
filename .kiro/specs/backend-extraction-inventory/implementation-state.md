@@ -525,3 +525,14 @@ unproven caller relevance; neither label claims blockage. A regression guard pin
 associated provenance warnings and unrelated gaps. Native replay of this change
 passed. The complete five-case route suite also passed after adding explicit
 ordered-edge adjacency assertions. No private application evidence was imported.
+
+Supplemental personal-Windows acceptance (SDK 10.0.302/reference pack 10.0.10):
+`d00bc224c45e515eef4c6800f70d23c9ba2f5f13` passed all five warning-as-error
+wrapper-route tests and ten helper guards. Native public scan/report retained two
+routes, one unmatched selection and zero failed queries, preserving hash-only
+procedure and symbolic dynamic-text states. Reporting follow-up
+`4ffb26cfe6c09a0420d233675c39f8cdce76df1d` passed eleven guards and a fresh
+report from that same unchanged index/CLI, with the same counts and both gap
+association labels verified. No private inputs, fixture methods or database
+connections were used. This receipt closes the bounded reporting delivery, not
+private-site acceptance, full caller discovery or readable SQL contract recovery.
