@@ -7575,6 +7575,18 @@ rules:
       - Capture is bounded to 256 source files, 64 MiB source bytes, 4096 directory entries, 128 namespaces and 2 MiB per configuration file.
       - Existing publication admission remains required; accepted import evidence only supports uncertain Tier3 candidates and is prominently labeled in HTML.
 
+  - id: workflow.webforms.retained-handler-requery.v1
+    name: Retained Web Forms exact-root requery
+    description: Rebuilds bounded static graph and path views over a checkpoint-verified combined index without scanning source or combining indexes.
+    evidenceTier: Tier4Unknown for selection gaps; otherwise inherits weakest path evidence
+    emits:
+      - Local-only webforms-handler-requery.v1 receipt
+    limitations:
+      - Handler selection is limited to original report roots. Opt-in compiled-root input instead requires exactly one retained ManagedMethodDeclared fact matching source-index, scan, commit and full symbol identity.
+      - Compiled-root input is bounded to 16 KiB and rejects duplicate JSON keys. The canonical selected root and selection kind are bound into the receipt digest; input is a query request, not proof of root reachability from another handler.
+      - Compiled-root path queries use compiled IL traversal. An explicit method-graph view remains an unfiltered bounded evidence view, not a terminal-path or runtime execution claim.
+      - Both modes preserve original checkpoints and verify index hashes before and after querying. No historical build, runtime SQL, completeness or parity claim is made.
+
   - id: workflow.webforms.gap-classification.v1
     name: Retained Web Forms cutoff evidence associations
     description: Produces aggregate console counts of bounded terminal uncertainty and immediate publish identity round trips from a receipt-hash-checked grouped handoff.
