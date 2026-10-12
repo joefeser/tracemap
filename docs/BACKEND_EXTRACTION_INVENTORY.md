@@ -20,15 +20,23 @@ or edit old artifacts to add fields. Standard report/updated-reader admission
 still applies; report any refusal rather than bypassing identity checks.
 
 Open `compiled-paths.local.html`: the new **Backend extraction inventory** section
-lists retained database and HTTP evidence. The companion
+lists backend evidence retained by that query. Native Web Forms producers use a
+`database-api` filter: their inventory is database-filtered, **not HTTP coverage**;
+HTTP-only handlers can be excluded upstream. Incidental HTTP records do not
+establish an HTTP inventory. The companion
 `compiled-paths.handoff.local.json` contains `backendExtraction` and its rule,
-scope, coverage, truncation, retained-gap count and operation records.
+scope, querySurface, coverage, truncation, retained-gap count and operation records.
 
 Each record references the full node evidence, zero-based ordered variant
 indexes, query-root node references and candidate-variant indexes. The rule/tier,
 source/scan/commit, source or compiled location, command-binding fields and
 supporting evidence remain in the existing node/edge/path records. Different
 evidence records are not collapsed merely because labels match.
+
+Candidate detection preserves path classification, candidate edges, ambiguous
+candidate counts and reduced evidence tiers. Operations with both retained and
+candidate variants use `mixed-retained-and-candidate-query-paths`; inspect the
+candidate indexes rather than treating every associated variant as retained.
 
 `found-not-connected-in-supplied-query` is not "unused". Query roots are not
 automatically verified events. Rows do not count unique procedures or business

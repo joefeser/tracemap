@@ -64,10 +64,52 @@ public sealed class GroupedCompiledPathHandoffTests
         using var folder = new TempDirectory();
         var output = await GroupedCompiledPathReportWriter.WriteAsync(handoff, folder.Path);
         Assert.Contains("Downstream generic IL is not specialized", await File.ReadAllTextAsync(output.HtmlPath));
-        var graph = new RetainedMethodGraph([edge.FromNodeId], report.Paths[0].Nodes, [edge], [], [], [], 1, 8, 100, 1000);
+        var graph = new RetainedMethodGraph([edge.FromNodeId], report.Paths[0].Nodes, [edge with { Limitations = null }], [], [], [], 1, 8, 100, 1000);
         await RetainedMethodGraphWriter.WriteAsync(graph, folder.Path, IndexHash, 1_000_000, default);
         Assert.Contains("Downstream generic IL is not specialized", await File.ReadAllTextAsync(Path.Combine(folder.Path, RetainedMethodGraphWriter.HtmlName)));
         Assert.Contains("Downstream generic IL is not specialized", await File.ReadAllTextAsync(Path.Combine(folder.Path, RetainedMethodGraphWriter.JsonName)));
+        using var json = JsonDocument.Parse(await File.ReadAllTextAsync(Path.Combine(folder.Path, RetainedMethodGraphWriter.JsonName)));
+        Assert.Equal(2, json.RootElement.GetProperty("graph").GetProperty("edges")[0].GetProperty("limitations").GetArrayLength());
+    }
+
+    [Theory]
+    [InlineData("NeedsReviewStaticPath", "compiled-il-call", "Matched", 1)]
+    [InlineData("StrongStaticPath", "interface-candidate", "Matched", 1)]
+    [InlineData("StrongStaticPath", "compiled-il-call", "UnknownAnalysisGap", 1)]
+    [InlineData("StrongStaticPath", "compiled-il-call", "Matched", 2)]
+    public void Backend_candidates_preserve_classifications_edges_and_mixed_variants(
+        string classification, string kind, string edgeClassification, int candidateCount)
+    {
+        var report = Report();
+        var node = report.Paths[0].Nodes[0] with { SurfaceKind = "database-api", EvidenceTier = "Tier1Semantic" };
+        var edge = report.Paths[0].Edges[0] with { EdgeKind = "compiled-il-call", Classification = "Matched", EvidenceTier = "Tier1Semantic" };
+        var retained = report.Paths[0] with { Classification = "StrongStaticPath", Nodes = [node], Edges = [edge] };
+        var candidate = retained with { PathId = "candidate", Classification = classification,
+            Edges = [edge with { EdgeKind = kind, Classification = edgeClassification, CandidateCount = candidateCount }] };
+        report = report with { Paths = [retained, candidate], Inventory = report.Inventory with { EvidenceNodes = [], EvidenceEdges = [] } };
+        var inventory = GroupedCompiledPathHandoffBuilder.Create(report, IndexHash).BackendExtraction!;
+        var operation = Assert.Single(inventory.Operations);
+        Assert.Equal("mixed-retained-and-candidate-query-paths", operation.ConnectionState);
+        Assert.Equal(new[] { 1 }, operation.CandidateVariantIndexes);
+        var onlyCandidate = GroupedCompiledPathHandoffBuilder.Create(report with { Paths = [candidate] }, IndexHash).BackendExtraction!;
+        Assert.Equal("candidate-query-path", Assert.Single(onlyCandidate.Operations).ConnectionState);
+        var onlyRetained = GroupedCompiledPathHandoffBuilder.Create(report with { Paths = [retained] }, IndexHash).BackendExtraction!;
+        Assert.Equal("retained-query-path", Assert.Single(onlyRetained.Operations).ConnectionState);
+    }
+
+    [Fact]
+    public async Task Database_filtered_inventory_explicitly_excludes_http_coverage()
+    {
+        var report = Report();
+        report = report with { Query = report.Query with { ToSurface = "database-api" }, Paths = [],
+            Inventory = report.Inventory with { EvidenceNodes = [], EvidenceEdges = [] } };
+        var handoff = GroupedCompiledPathHandoffBuilder.Create(report, IndexHash);
+        Assert.Equal("database-api", handoff.BackendExtraction!.QuerySurface);
+        Assert.Contains(handoff.BackendExtraction.Limitations, text => text.Contains("HTTP coverage is not assessed"));
+        using var folder = new TempDirectory();
+        var output = await GroupedCompiledPathReportWriter.WriteAsync(handoff, folder.Path);
+        Assert.Contains("HTTP coverage is not assessed", await File.ReadAllTextAsync(output.HtmlPath));
+        Assert.Contains("database-api", JsonSerializer.Serialize(handoff.BackendExtraction));
     }
 
     [Fact]

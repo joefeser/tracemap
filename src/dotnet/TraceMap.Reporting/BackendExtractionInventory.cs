@@ -8,7 +8,10 @@ public sealed record BackendExtractionOperation(string NodeReference, string Fam
 
 public sealed record BackendExtractionInventory(string RuleId, string Scope,
     string Coverage, bool Truncated, int RetainedGapCount,
-    IReadOnlyList<BackendExtractionOperation> Operations, IReadOnlyList<string> Limitations);
+    IReadOnlyList<BackendExtractionOperation> Operations, IReadOnlyList<string> Limitations)
+{
+    public string QuerySurface { get; init; } = "unspecified";
+}
 
 public static class BackendExtractionInventoryBuilder
 {
@@ -20,7 +23,8 @@ public static class BackendExtractionInventoryBuilder
     {
         var connections = new Dictionary<string, List<int>>(StringComparer.Ordinal);
         var candidateVariants = handoff.Variants.Select(variant =>
-            variant.EdgeReferences.Any(edge => handoff.Edges[edge].EvidenceTier is not ("Tier1Semantic" or "Tier2Structural"))
+            RequiresReview(variant.Path.Classification)
+            || variant.EdgeReferences.Any(reference => IsCandidate(handoff.Edges[reference]))
             || variant.NodeReferences.Any(node => handoff.Nodes[node].EvidenceTier is not ("Tier1Semantic" or "Tier2Structural"))).ToArray();
         for (var index = 0; index < handoff.Variants.Count; index++)
             foreach (var reference in handoff.Variants[index].NodeReferences.Distinct(StringComparer.Ordinal))
@@ -46,17 +50,33 @@ public static class BackendExtractionInventoryBuilder
                 : "retained-query-path";
             var candidates = variants.Where(index => candidateVariants[index]).ToArray();
             if (variants.Count > 0 && candidates.Length == variants.Count) state = "candidate-query-path";
+            else if (candidates.Length > 0) state = "mixed-retained-and-candidate-query-paths";
             var missing = family == "database"
                 ? new[] { "authorized-readable-command-or-procedure-contract", "parameter-and-result-contract", "transaction-and-authorization-context" }
                 : new[] { "authorized-destination-and-http-contract", "request-and-response-contract", "authentication-and-error-contract" };
             operations.Add(new(reference, family, state, variants.ToArray(), roots, "undecided", missing, candidates));
         }
+        var surface = handoff.Header.Query.ToSurface ?? "unspecified";
         return new(Rule, "retained-query-report-not-full-index", handoff.Header.ReportCoverage,
             handoff.Header.Summary.Truncated, handoff.Header.Gaps.Count, operations,
-            ["Only database-api, sql-query and http-client surfaces retained by the supplied report are listed. Other provider/service families and operations outside this query may be absent.",
+            [surface is "database-api" or "sql-query"
+                ? "Database-filtered query: HTTP coverage is not assessed. HTTP-only handlers may be excluded upstream; incidental retained HTTP records do not establish HTTP inventory coverage."
+                : "Query surface: " + surface + ". Only supplied retained evidence is assessed; other surface families may be excluded upstream.",
+             "Only database-api, sql-query and http-client surfaces retained by the supplied report are listed. Other provider/service families and operations outside this query may be absent.",
              "Rows are distinct evidence records, not a count of unique business operations or procedures. Query roots are not verified UI entry points; inspect each ordered variant and its tiers.",
              "Found without a retained path does not mean unused. Connection evidence does not decide retain, retire or replace; human decisions remain undecided.",
              "Readable SQL, procedure definitions, secrets and HTTP payloads are not reconstructed. Missing-input categories are review obligations, not claims that such data is absent from the application.",
-             "Generator and bounded-input identities are inherited from the containing grouped handoff; this projection does not authenticate the original index or prove complete migration coverage."]);
+             "Generator and bounded-input identities are inherited from the containing grouped handoff; this projection does not authenticate the original index or prove complete migration coverage."])
+        { QuerySurface = surface };
     }
+
+    private static bool RequiresReview(string classification) => classification is not
+        (CombinedDependencyPathClassifications.StrongStaticPath or CombinedDependencyPathClassifications.ProbableStaticPath);
+
+    private static bool IsCandidate(CombinedPathEdge edge) =>
+        edge.EvidenceTier is not ("Tier1Semantic" or "Tier2Structural")
+        || edge.EdgeKind.Contains("candidate", StringComparison.Ordinal)
+        || edge.CandidateCount > 1
+        || edge.Classification is "NeedsReviewPath" or "NeedsReviewStaticPath" or "UnknownAnalysisGap" or "AnalysisGap" or "ReducedCoverage"
+        || RequiresReview(CombinedDependencyPathReporter.Classify([edge]));
 }

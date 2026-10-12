@@ -7640,6 +7640,7 @@ rules:
     limitations:
       - This is retained-query evidence, not independent full-index discovery or a complete application inventory. Unsupported service families and operations outside the query may be absent.
       - Full node-record references preserve distinct evidence and command bindings; rows do not count unique business operations or stored procedures.
-      - Query roots are not verified UI events. Paths containing Tier3 or Tier4 evidence remain candidate variants. No retained path does not mean unused.
+      - Query roots are not verified UI events. Review-needed classifications, candidate edges, ambiguous candidate counts and Tier3 or Tier4 evidence remain candidate variants. Mixed retained/candidate operations are labeled explicitly. No retained path does not mean unused.
+      - QuerySurface preserves the supplied terminal filter. Native database-api queries do not assess HTTP coverage; HTTP-only handlers may be excluded upstream even if incidental HTTP records remain.
       - Human decisions default undecided. SQL text, procedure bodies, HTTP payloads, credentials and API proposals are not inferred.
       - Generator and bounded-input hashes belong to the containing grouped handoff. They bind the projection input, not original build authenticity or runtime behavior.

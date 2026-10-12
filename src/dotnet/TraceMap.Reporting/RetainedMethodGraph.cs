@@ -148,6 +148,8 @@ public static class RetainedMethodGraphWriter
         var options = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
         var generator = Convert.ToHexStringLower(SHA256.HashData(await File.ReadAllBytesAsync(typeof(RetainedMethodGraphWriter).Assembly.Location, token)));
         var input = Convert.ToHexStringLower(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(new { indexSha256, graph }, options)));
+        graph = graph with { Edges = graph.Edges.Select(edge => edge with
+            { Limitations = edge.Limitations ?? CompiledEdgeLimitations.ForRule(edge.RuleId) }).ToArray() };
         var bytes = JsonSerializer.SerializeToUtf8Bytes(new { schemaVersion = "retained-method-graph.v1", ruleId = "combined.graph.retained-outgoing.v1",
             visibility = "local-only", generatorSha256 = generator, boundedInputSha256 = input, indexSha256,
             limitations = new[] { "Retained static evidence only; not runtime completeness. No terminal filtering. Missing target edges do not prove missing behavior.",
