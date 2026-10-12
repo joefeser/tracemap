@@ -4046,6 +4046,7 @@ rules:
       - TruncatedByLimit path gap
       - GraphInputLimitReached path gap
     limitations:
+      - CutoffTraversalDepth and CutoffMaxDepth, when retained, describe one path-local cutoff evaluation before any rejected candidate edge. They are not shortest or first-discovery depths and do not enumerate all visits. Historical absence is unknown. Reverse terminal filtering can prune a branch before the forward depth limit is reached; filtered report absence is not full evidence-graph absence or proof of missing IL extraction.
       - New path summaries retain the deterministic traversal work counter, including terminal inventory and witness search, shared across all roots in one search query. It is not graph-admission work, elapsed time, memory, runtime calls or per-root capacity. Historical summaries may omit this optional counter; absence is unknown, not zero. Selector misses may correctly record zero traversal without asserting a complete graph.
       - Truncation means the returned path set is intentionally partial and must not be treated as complete dependency coverage.
       - The triggering evidence span is best-effort and may point to the nearest traversed node rather than the omitted dependency.

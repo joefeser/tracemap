@@ -129,6 +129,8 @@ public static class GroupedCompiledPathReportWriter
             foreach (var gap in report.Gaps.Where(gap => gap.CutoffWitness is not null).Take(6))
             {
                 var witness = gap.CutoffWitness!;
+                if (gap.CutoffTraversalDepth is { } evaluatedDepth && gap.CutoffMaxDepth is { } depthLimit)
+                    W($"<p>Cutoff evaluation: {evaluatedDepth} edges traversed on this prefix; configured depth {depthLimit}. This is not the node's shortest or first-discovery depth.</p>");
                 W($"<details><summary>{H(gap.Reason)} / {H(gap.CutoffCause)}: {H(Location(gap.FilePath, gap.StartLine, gap.EndLine))}</summary><p>{H(gap.Message)}</p><p>Prefix truncated: {witness.PrefixTruncated}; final candidate edge not traversed: {witness.LastEdgeNotTraversed}</p><ol>");
                 for (var i = 0; i < witness.Edges.Count; i++)
                 {

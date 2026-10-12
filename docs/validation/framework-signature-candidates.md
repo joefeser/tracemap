@@ -505,3 +505,34 @@ not automatically new bridge edges; equal route-count distributions are not
 route-identity equivalence. The final work-machine prompt requests at most three
 read-only cutoff inspections and one concrete missing-edge witness, without a
 new scan or a claim that the remaining 221 nodes all represent missing DB paths.
+
+### Two-hop compiled cutoff controls
+
+`CompiledTwoHopCutoffTests` creates public synthetic caller/provider DLLs using
+Cecil, extracts their actual IL, and checks the retained instruction and full
+graph separately from terminal-filtered paths. The provider contains
+Outer.Open(String) -> Inner.Open() via callvirt to a nonvirtual instance method.
+One variant calls SqlCommand.ExecuteScalar downstream; the other only calls
+SqlConnection.Open. A separate short database branch keeps the root reachable
+to the reverse terminal filter. The DLLs are metadata fixtures, never executed;
+null receivers deliberately avoid constructing or using a database connection.
+
+Both provider edges are admitted in the full graph. The query variant retains
+its long route at depth 3 and 48, but not at depth 2. The connection-only variant
+does not invent a database terminal. Reverse filtering can reject that branch
+at path depth 0 even with a configured depth of 48. This topology does not
+reproduce a lost-edge traversal defect. It proves filtered handoff absence is
+insufficient evidence for one.
+
+New cutoff diagnostics retain optional `cutoffTraversalDepth` and
+`cutoffMaxDepth`; the former counts traversed prefix edges before a rejected
+edge, not target discovery depth. Grouped HTML displays those values on sampled
+witnesses, and reverse-filter prose explicitly distinguishes forward exhaustion
+from terminal filtering. No traversal budget, edge-admission rule, terminal
+definition or completeness claim is changed. Private downstream behavior remains
+unknown until the inner method's independently rooted retained evidence is read.
+
+Validation: 132/132 focused two-hop, compiled-baseline, combined-path and grouped
+handoff tests passed with zero failures/skips (2 seconds). The six two-hop cases
+cover both terminal outcomes at depths 2, 3 and 48; grouped handoff JSON roundtrip
+and HTML checks preserve and display the new depth evidence.
