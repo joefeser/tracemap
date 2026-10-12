@@ -2499,6 +2499,7 @@ public static class VisualBasicSemanticExtractor
                         method),
                     enclosing?.ContainingAssembly,
                     method.ContainingAssembly);
+                OutboundHttpApi.AddCallProperties(properties, model.GetOperation(invocation) as IInvocationOperation, family, httpMethod);
                 if (TryGetHttpUriArgument(invocation, model, out var uriText))
                 {
                     var normalized = EndpointRouteNormalizer.Normalize(uriText);
@@ -2507,7 +2508,7 @@ public static class VisualBasicSemanticExtractor
                     properties["urlKind"] = "compile-time-constant-path";
                     properties["urlHash"] = FactFactory.Hash(uriText, 32);
                 }
-                else
+                else if (properties["urlKind"] == "unavailable")
                 {
                     AddExternalGap(invocation, "VisualBasicHttpDestinationUnavailable", "A compiler-resolved Visual Basic HTTP call had no compile-time constant destination; no host or route identity was claimed.");
                 }
@@ -2641,46 +2642,8 @@ public static class VisualBasicSemanticExtractor
             properties: properties));
     }
 
-    private static bool TryClassifyHttpOperation(IMethodSymbol method, out string family, out string httpMethod)
-    {
-        family = string.Empty;
-        httpMethod = "UNKNOWN";
-        var type = GetMetadataName(method.ContainingType.OriginalDefinition);
-        if (type == "System.Net.Http.HttpClient"
-            && IsTrustedAssembly(method.ContainingAssembly, "System.Net.Http", "b03f5f7f11d50a3a"))
-        {
-            family = "HttpClient";
-            httpMethod = method.Name.StartsWith("Get", StringComparison.Ordinal) ? "GET"
-                : method.Name.StartsWith("Post", StringComparison.Ordinal) ? "POST"
-                : method.Name.StartsWith("Put", StringComparison.Ordinal) ? "PUT"
-                : method.Name.StartsWith("Delete", StringComparison.Ordinal) ? "DELETE"
-                : method.Name.StartsWith("Patch", StringComparison.Ordinal) ? "PATCH" : "UNKNOWN";
-            return method.Name is "GetAsync" or "GetStringAsync" or "GetByteArrayAsync" or "GetStreamAsync"
-                or "PostAsync" or "PutAsync" or "DeleteAsync" or "PatchAsync" or "SendAsync" or "Send";
-        }
-
-        if (IsTrustedWebRequestType(method.ContainingType)
-            && method.Name is "GetResponse" or "GetResponseAsync")
-        {
-            family = "WebRequest";
-            return true;
-        }
-
-        if (type == "System.Net.WebClient"
-            && IsRecognizedWebClientAssembly(method.ContainingAssembly)
-            && (method.Name.StartsWith("Download", StringComparison.Ordinal)
-                || method.Name.StartsWith("Upload", StringComparison.Ordinal)
-                || method.Name.StartsWith("OpenRead", StringComparison.Ordinal)
-                || method.Name.StartsWith("OpenWrite", StringComparison.Ordinal)))
-        {
-            family = "WebClient";
-            httpMethod = method.Name.StartsWith("Download", StringComparison.Ordinal) || method.Name.StartsWith("OpenRead", StringComparison.Ordinal)
-                ? "GET" : "UNKNOWN";
-            return true;
-        }
-
-        return false;
-    }
+    private static bool TryClassifyHttpOperation(IMethodSymbol method, out string family, out string httpMethod) =>
+        OutboundHttpApi.TryClassify(method, out family, out httpMethod);
 
     private static bool TryGetHttpUriArgument(InvocationExpressionSyntax invocation, SemanticModel model, out string value)
     {
@@ -2959,8 +2922,7 @@ public static class VisualBasicSemanticExtractor
     }
 
     private static bool IsPotentialExternalOperationName(string name) =>
-        new[] { "GetAsync", "PostAsync", "PutAsync", "DeleteAsync", "SendAsync", "GetResponse", "GetResponseAsync", "DownloadString", "UploadString" }
-            .Contains(name, StringComparer.OrdinalIgnoreCase);
+        OutboundHttpApi.IsCandidate(name, ignoreCase: true);
 
     private static bool TryClassifyAdoNetOperation(IMethodSymbol method, out string operationKind, out string resultKind)
     {

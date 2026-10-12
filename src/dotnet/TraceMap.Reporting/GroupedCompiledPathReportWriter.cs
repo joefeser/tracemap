@@ -68,11 +68,14 @@ public static class GroupedCompiledPathReportWriter
             W("<section><h2>Backend extraction inventory</h2><p>Retained query evidence — not a whole-site inventory. Human retain/retire decisions are undecided.</p>");
             W($"<p>Query surface: {H(backend.QuerySurface)}. This filter bounds inventory coverage.</p>");
             W($"<p>Rule {H(backend.RuleId)}; coverage {H(backend.Coverage)}; truncated {backend.Truncated}; retained gaps {backend.RetainedGapCount}. {backend.Operations.Count} evidence records (not distinct business operations).</p>");
+            W($"<p>{H(handoff.HttpCoverageLimitations ?? GroupedCompiledPathHandoffBuilder.HttpCoverageLimitations)}</p>");
             foreach (var limitation in backend.Limitations) W($"<p>{H(limitation)}</p>");
             foreach (var operation in backend.Operations)
             {
                 var node = handoff.Nodes[operation.NodeReference];
                 W($"<details><summary>{H(operation.Family)}: {H(Compact(node))} — {H(operation.ConnectionState)}</summary><p>Evidence {H(node.RuleId)} / {H(node.EvidenceTier)}; {H(Location(node.FilePath, node.StartLine, node.EndLine))}</p><p>Node reference: {H(operation.NodeReference)}; human decision: {H(operation.HumanDecision)}</p>");
+                if (node.HttpCallEvidence is { } http)
+                    W($"<p>API family {H(http.MethodFamily)}; method {H(http.MethodName)}; verb {H(node.HttpMethod ?? "UNKNOWN")}; destination {H(http.DestinationAvailability)}; protocol {H(http.ProtocolKind)}; coverage {H(http.CoverageLabel)}. {H(http.Limitations)}</p>");
                 W($"<p>Query roots: {H(string.Join(", ", operation.QueryRootReferences))}. Ordered variant indexes (zero-based): {H(string.Join(", ", operation.VariantIndexes))}. Candidate variant indexes: {H(string.Join(", ", operation.CandidateVariantIndexes))}.</p><p>Review obligations: {H(string.Join(", ", operation.ContractReviewObligations))}</p></details>");
             }
             W("</section>");
