@@ -169,3 +169,30 @@ inferred from an assembly version and no private artifacts were included.
 Subsequent receipt commits change documentation only; executable/sample/script/test
 validation above is bound to the recorded code head. Origin/dev was re-fetched and
 remains `278bb821fe41aca8221d2193d15abaa7b92c6e64`, an ancestor of this branch.
+
+## Owner-directed offline validation handoff
+
+The admitted application evidence is on a separate work machine inaccessible from
+this session. Owner instructed that this does not block this branch. Legacy fixture
+TFMs are now explicitly representative test targets, not confirmed application
+targets. Application-specific compatibility is pending work-machine validation.
+No further hostname/private-artifact request is required for public branch delivery.
+
+New standalone InspectHttpFramework public tool reads only explicit bounded local
+XML/binary selections. It records project TFM fields, Web.config compilation and
+httpRuntime fields, binary TFA, public framework AssemblyRefs and HTTP MemberRefs
+as separate local structural evidence. It never evaluates imports, builds the app,
+loads application assemblies, resolves dependencies, executes methods or uploads.
+DTD/entity resolution is prohibited; errors/gaps and multiple/conditional/unresolved
+values remain explicit. No application TFM is inferred from assembly versions.
+Output is private/local Markdown, with exact generator/dependency hashes and a
+bounded-input hash; inputs are read-only and existing outputs cannot be overwritten.
+No private paths/snippets/app types/arbitrary values are retained; private input
+hashes remain local. A manual sanitized summary template is the only return handoff.
+Public guard validation and Windows receipt follow in the delivery notes.
+
+Local collector guards passed: six synthetic tests covering separate/conflicting/
+conditional declarations, unknown net20/net35 binary TFM with System 2.0.0.0,
+modern HTTP/JSON signatures, blocked XML DTDs, malformed/missing inputs, size
+refusal and non-overwrite/read-only behavior. Public source-only collector build
+passed warning-as-error. No private work-machine input was inspected here.

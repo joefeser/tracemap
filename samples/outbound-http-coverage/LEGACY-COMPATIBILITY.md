@@ -1,4 +1,6 @@
-# Legacy framework compatibility (#861)
+# Representative legacy framework compatibility (#861)
+
+The legacy targets below are **representative test targets, not confirmed application targets**. Application-specific framework compatibility is **pending work-machine validation** and does not block this public branch.
 
 These public synthetic libraries are compiled and statically scanned. Their methods
 are never executed. Framework API availability is established from the selected
@@ -8,7 +10,7 @@ grouped handoffs and HTML. This is not an execution or runtime compatibility tes
 Each framework directory has an OVERLOADS.md with the exact declaring assembly
 identity and parameter/return signature for every compiled case.
 
-| Selected target / reference set | WebClient | WebRequest / HttpWebRequest | HttpClient | JSON HTTP extensions |
+| Representative target / reference set | WebClient | WebRequest / HttpWebRequest | HttpClient | JSON HTTP extensions |
 |---|---|---|---|---|
 | .NET Framework 2.0 | Tested: 51 overloads | Tested: 3 / 3 | Unavailable in selected framework references | Unavailable in selected framework references |
 | .NET Framework 3.5 | Tested: 51 overloads | Tested: 3 / 3 | Unavailable in selected framework references | Unavailable in selected framework references |
@@ -56,13 +58,17 @@ Framework identity is kept separate from application target framework:
   destinations/verbs, content reads and HttpRequestMessage state. Legacy fixtures
   verify available signed signatures; they do not add interprocedural state tracking.
 
-Admitted application evidence remains a separate prerequisite: inspect its project
+Admitted application evidence remains on a separate, inaccessible work machine.
+Its inspection is a deferred compatibility stage, not a prerequisite for this public
+branch. Inspect its project
 TFM/configuration and retained TargetFrameworkAttribute, AssemblyRef and exact
 MemberRef signatures independently. A missing TFM stays unknown. This public
 fixture matrix must never be substituted for the application's recorded TFM or
 admission receipt. Do not include private paths, types, endpoints or artifacts in
 public validation receipts. Application-specific framework matching is not yet
-validated until the selected admitted evidence is identified and inspected.
+validated until work-machine inspection and reconciliation are completed.
+Use the [read-only local collector and exact commands](../../scripts/diagnostics/InspectHttpFramework/README.md) and [sanitized return template](../../scripts/diagnostics/InspectHttpFramework/SANITIZED-SUMMARY.md).
+Keep the local report, private input hashes and application artifacts on that machine.
 
 Local macOS compilation/static extraction is supported using the reference package;
 Windows validation runs in `.github/workflows/outbound-http-compatibility.yml` and

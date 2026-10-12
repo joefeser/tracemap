@@ -30,5 +30,11 @@
 - [x] Add C#/VB reference-built net20/net35/net40/net45/net48 matrices alongside net10.0; retain strict identities and original IL signatures.
 - [x] Separate semantic, projectless and compiled-only coverage and add native CLI/static-report validation.
 - [x] Add Windows public compatibility CI and distinguish configured from observed results.
-- [ ] Identify and inspect admitted application TFM/reference identity evidence; record application-specific compatibility without private artifacts.
+- [ ] Deferred work-machine validation: inspect admitted application TFM/reference identities locally; representative fixtures do not establish application targets. This does not block the public branch.
 - [x] Record observed Windows CI result and issue #861 handoff.
+
+## Offline work-machine compatibility handoff
+- [x] Label legacy targets representative and application compatibility pending work-machine validation; remove branch-blocking evidence requests.
+- [x] Provide bounded read-only XML/metadata collector and exact local commands; no application evaluation/execution, assembly resolution or upload.
+- [x] Provide sanitized manual return template preserving missing/conditional/conflicting sources and excluding private paths/artifacts/input hashes.
+- [x] Add public read-only/privacy/missing-TFM regression guards and Windows CI step.
