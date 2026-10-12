@@ -122,6 +122,18 @@ public static partial class CombinedDependencyPathReporter
             .Select(value => "memberref|type:scope(" + value + ")type(")
             .Distinct(StringComparer.Ordinal)
             .ToArray();
+        var genericMethods = methods
+            .Where(fact => fact.Properties.GetValueOrDefault("provenanceState") is "bound" or "unbound")
+            .Select(fact =>
+            {
+                var reference = ExpectedMemberReference(fact, true, out var arity);
+                return (Fact: fact, Reference: reference, Arity: arity);
+            })
+            .Where(item => item.Reference is not null && item.Arity > 0)
+            .Select(item => (item.Fact, item.Arity, Reference: item.Reference!, Head: GenericMemberHead(item.Reference!)))
+            .Where(item => item.Head is not null)
+            .GroupBy(item => item.Head!, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.Ordinal);
         var frameworkCandidates = methodsByMemberReference
             .Select(pair => (Key: FrameworkSignatureCandidateKey(pair.Key), Methods: pair.Value))
             .Where(pair => pair.Key is not null)
@@ -218,6 +230,23 @@ public static partial class CombinedDependencyPathReporter
                 ? methodsByIdentity.TryGetValue((call.SourceIndexId, targetIdentity), out var targets)
                 : methodsByMemberReference.TryGetValue(targetIdentity, out targets);
             var frameworkCandidate = false;
+            var constructedGeneric = false;
+            if (!matched && referenceKind == "memberref"
+                && ParseConstructedMember(targetIdentity) is { } constructed
+                && genericMethods.TryGetValue(constructed.Head, out var genericCandidates))
+            {
+                // Do not trim a candidate set and then claim uniqueness.
+                if (genericCandidates.Length > 64)
+                {
+                    AddCompiledIlGap(graph, call, "CompiledIlTargetUnavailable", "constructed-generic-candidate-limit", genericCandidates.Length);
+                    continue;
+                }
+                targets = genericCandidates.Where(candidate =>
+                    ConstructedMemberMatches(candidate.Reference, candidate.Arity, constructed))
+                    .Select(candidate => candidate.Fact).ToArray();
+                matched = targets.Length != 0;
+                constructedGeneric = targets.Length == 1;
+            }
             if (!matched && referenceKind == "memberref")
             {
                 var key = FrameworkSignatureCandidateKey(targetIdentity);
@@ -265,7 +294,7 @@ public static partial class CombinedDependencyPathReporter
                 || targetProvenance != "bound";
             graph.AddEdge(new GraphEdge(
                 $"compiled-il-call:{call.CombinedFactId}", frameworkCandidate ? FrameworkVersionCandidateEdge : virtualCandidate ? "compiled-il-callvirt-candidate" : "compiled-il-call",
-                from.NodeId, to.NodeId, "EvidenceEdge", frameworkCandidate ? FrameworkVersionCandidateRuleId : CompiledIlBridgeRuleId,
+                from.NodeId, to.NodeId, "EvidenceEdge", frameworkCandidate ? FrameworkVersionCandidateRuleId : constructedGeneric ? ConstructedGenericRuleId : CompiledIlBridgeRuleId,
                 frameworkCandidate || artifactContext || virtualCandidate ? EvidenceTiers.Tier3SyntaxOrTextual : EvidenceTiers.Tier2Structural,
                 [call.CombinedFactId, body.CombinedFactId, caller.CombinedFactId, target.CombinedFactId],
                 [], SafePath(call.FilePath), call.StartLine, call.EndLine));
@@ -1110,8 +1139,11 @@ public static partial class CombinedDependencyPathReporter
         return true;
     }
 
-    private static string? ExpectedMemberReference(CombinedFactRow method)
+    private static string? ExpectedMemberReference(CombinedFactRow method) => ExpectedMemberReference(method, false, out _);
+
+    private static string? ExpectedMemberReference(CombinedFactRow method, bool allowGeneric, out int typeArity)
     {
+        typeArity = 0;
         var assemblyIdentity = method.Properties.GetValueOrDefault("assemblyIdentity");
         var assemblyReference = method.Properties.GetValueOrDefault("assemblyReferenceIdentity");
         var name = method.Properties.GetValueOrDefault("metadataName");
@@ -1142,7 +1174,9 @@ public static partial class CombinedDependencyPathReporter
         if (!ConsumeLiteral(identity, ref position, "|arity:")) return null;
         var arityStart = position;
         while (position < identity.Length && char.IsAsciiDigit(identity[position])) position++;
-        if (position == arityStart || identity[arityStart..position] != "0") return null;
+        if (position == arityStart || !int.TryParse(identity.AsSpan(arityStart, position - arityStart),
+                System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out typeArity)
+            || (!allowGeneric && typeArity != 0)) return null;
         var kind = name is ".ctor" or ".cctor" ? "|constructor:" : "|method:";
         if (!ConsumeLiteral(identity, ref position, kind)
             || !ConsumeComponent(identity, ref position)

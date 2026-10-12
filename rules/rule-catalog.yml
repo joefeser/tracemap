@@ -7601,6 +7601,21 @@ rules:
       - No graph traversal or source analysis is performed; this does not find downstream missing edges or establish complete coverage.
       - No private identities, source paths, SQL or input hashes are printed, and no machine-readable artifact is written.
 
+  - id: combined.paths.constructed-generic-member.v1
+    name: Closed constructed generic declaring-type member resolution
+    description: Joins a retained member reference to one generic method declaration using exact assembly and framed type/member identity, definition-relative signature slots and closed type-argument substitution.
+    evidenceTier: Tier2Structural
+    emits:
+      - compiled-il-call
+      - compiled-il-callvirt-candidate
+    limitations:
+      - Unbound artifact provenance or unproven virtual dispatch retains Tier3SyntaxOrTextual and existing coverage annotations; resolution is not source binding or runtime dispatch proof.
+      - Only non-generic default-calling-convention methods on closed generic declaring types are supported, with named types, nested constructed arguments, SZ arrays and ByRef signatures.
+      - Open arguments, method generic parameters, explicit-this, varargs, pointers, shaped arrays, modifiers and function pointers abstain.
+      - Exact declaring assembly versions and raw definition-relative parameter ordinals are retained; no version unification, name-only match or deduplication across provenance is performed.
+      - Parsing is bounded to 65536 characters, 256 type visits, 32 nesting levels, 32 owner arguments and 64 candidate declarations per owner/member key; candidate overflow admits no edge.
+      - The edge targets the retained generic definition, not a synthesized specialized body. It does not specialize downstream generic IL or prove body availability, complete coverage or additional database paths.
+
   - id: swift.syntax.analysis-gap.v1
     name: SwiftSyntax parser and syntax coverage gap
     description: Emits gaps for unreadable Swift files, unavailable module context, parser limitations, unsupported call shapes, optional chaining, macros, generated code, Objective-C bridging, and dynamic syntax that v0 cannot resolve.

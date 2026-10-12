@@ -16,7 +16,9 @@ dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter Fully
 The test project's build-only reference builds both projects in its selected
 configuration. Generated binaries remain ignored. The tests run the real scanner,
 write its normal index, combine it and inspect graph admission. They also inspect
-compiler-produced MemberRefs with Mono.Cecil; no synthetic facts are substituted.
+compiler-produced MemberRefs with Mono.Cecil. The duplicate-candidate negative
+control deliberately adds a second declaration fact after native extraction;
+the four positive cases use only native extracted facts.
 
 ## Cases and evidence boundary
 
@@ -28,41 +30,43 @@ compiler-produced MemberRefs with Mono.Cecil; no synthetic facts are substituted
 | CopyText | Container.Slot<string>.Copy(ref string, string[]) | ByRef and array wrappers over type parameter |
 | ReadPlain | PlainProvider.Current | Non-generic positive admission control |
 
-At the characterization baseline, provider generic definitions and bodies are
-retained, and caller MemberRefs carry constructed declaring types. The generic
-calls have no `compiled-il-call` edge and have callsite-correlated
-`target-assembly-present-without-bound-provenance` gaps under
-`combined.paths.compiled-il-bridge.v1`; the plain call has an edge. Inputs are
-unbound compiled artifacts, not authenticated source/build bindings. A generic
-gap is not evidence of a missing DLL, ambiguous dispatch or a database route.
+The four native generic calls now have exact `compiled-il-call` edges to their
+respective definition nodes under `combined.paths.constructed-generic-member.v1`.
+The plain control still resolves. A duplicated matching declaration admits no
+edge and retains an ambiguity gap with candidate count two. Inputs are unbound
+compiled artifacts: successful resolution preserves `CompiledIlArtifactContext`
+and does not claim authenticated source/build binding.
 
 ## Keep the production fix reviewable
 
-This sample commit changes no production resolver behavior. The tests explicitly
-characterize today's limitation; they are not a requirement to preserve it.
-In the implementation commit, replace gap assertions with exact expected edges,
-while retaining metadata-shape assertions and the non-generic control. Do not
-delete the cases, skip them, or loosen them to accept either a gap or an edge.
+The sample-only baseline is commit 89d8807b. The implementation replaces its
+expected-gap assertions with exact expected edges, retaining metadata-shape
+assertions and the non-generic control. Do not loosen them to accept either a
+gap or an edge. The new parser is isolated from framework-version matching.
 
-The future fix must preserve complete assembly/type identity and generic
-parameter ownership, substitute declaring-type arguments through signatures,
-and require one evidenced target. Do not collapse different constructed types
-or methods by short names or strip generic arity/ByRef/array markers.
-Keep artifact provenance warnings distinct from target-resolution failures.
+The resolver preserves complete assembly/type identity and definition-relative
+parameter ordinals, validates closed declaring-type substitution through return
+and parameter signatures, and requires one evidenced target. Equal concrete
+arguments do not make different !n ordinals interchangeable. Graph nodes remain
+generic definitions; no instantiated downstream body is invented.
 
-Before claiming broad generic support, add negative tests for duplicate candidate
-provenance, missing definitions/bodies, wrong arity, nested generic outer types,
-method generic parameters versus type parameters, and unsupported signatures.
-Those cases are not covered by these four characterization cases. No claim of
-runtime dispatch, ECMA conformance, complete graph coverage or recovered database
-chains follows from this sample.
+Signature tests cover mismatched assemblies/versions, arity, ByRef/array wrappers,
+type-parameter ordinals (including repeated arguments), nested owners and framed
+delimiter-bearing names. Unsupported signatures and open/method type parameters
+abstain. No claim of runtime dispatch, ECMA conformance, complete graph coverage
+or recovered database chains follows from these cases. Full generic method
+instantiation and specialization of downstream body calls remain out of scope.
 
-## Validation of the sample-only change
+## Validation
 
 - Standalone caller/provider build: zero warnings and errors.
-- Focused characterization suite: 4 passed, zero failed or skipped.
-- CLI scan with both compiled inputs and `--il-body-evidence`: completed,
-  127 facts, `Level1SemanticAnalysisReduced`. This is explicitly reduced analysis,
-  not a clean semantic-coverage claim; the graph tests check the compiled facts.
-- No production resolver or rule behavior changed. Full suite and language
-  adapter pinned smoke checks were not run for this fixture-only change.
+- The initial 127-fact CLI smoke had missing compiled inputs because its paths
+  were relative to the sample scan root. Corrected smoke with absolute DLL paths:
+  225 facts, `Level1SemanticAnalysisReduced`, with retained IL calls. The native
+  graph tests always used absolute paths and exercised real compiled inputs.
+- Focused tests include native unique/duplicate admission and parser boundaries;
+  run the filter `FullyQualifiedName~ConstructedGeneric` for both test classes.
+- Combined focused run with framework-signature candidates and two-hop controls:
+  131 passed, zero failed or skipped. CLI build: zero warnings/errors.
+- Full suite and language-adapter pinned smoke checks are deferred; no language
+  extractor changed. This is reporting-layer resolution, not full semantic coverage.
