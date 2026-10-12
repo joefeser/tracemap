@@ -80,7 +80,7 @@ public sealed class SqlDatabaseMatrixTests
             Assert.EndsWith("|" + signature,il.Properties["targetIdentity"],StringComparison.Ordinal);
             Assert.Matches("^[0-9a-f]{64}$",il.Properties["ilGeneratorSha256"]);
             Assert.Matches("^[0-9a-f]{64}$",il.Properties["ilBoundedInputSha256"]);
-            var surface = call.Properties["operationKind"] is "select-candidate" or "scalar-candidate" or "data-adapter-fill" ? "sql-query" : "sql-persistence";
+            var surface = call.Properties["operationKind"] is "select-candidate" or "scalar-candidate" or "data-adapter-fill" or "xml-reader-candidate" or "data-adapter-schema" ? "sql-query" : "sql-persistence";
             var paths = await CombinedDependencyPathReporter.BuildReportAsync(new(index,temp.Path,FromSymbol:call.SourceSymbol,ToSurface:surface));
             var handoff = GroupedCompiledPathHandoffBuilder.Create(paths,hash);
             Assert.Contains(handoff.Nodes.Values,n => n.DatabaseCallEvidence?.MethodName == emitted.Name);

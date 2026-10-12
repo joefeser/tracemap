@@ -323,7 +323,7 @@ public static class CombinedSurfaceProjection
         }
 
         if (fact.FactType == FactTypes.DatabaseOperationCandidate
-            && FirstValue(fact.Properties, "operationKind") is "data-adapter-fill" or "select-candidate" or "scalar-candidate")
+            && FirstValue(fact.Properties, "operationKind") is "data-adapter-fill" or "select-candidate" or "scalar-candidate" or "xml-reader-candidate" or "data-adapter-schema")
         {
             return "sql-query";
         }
