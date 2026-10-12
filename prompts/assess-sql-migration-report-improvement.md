@@ -16,7 +16,8 @@ approval; sanitization alone does not authorize disclosure.
 
 Compare these exact public TraceMap executable commits:
 - Baseline: 6cb7532528d687a2fc20ca1135db130b244549da
-- SQL implementation: 6448790cba9c5d0b0681f90c69befab141a923a0
+- SQL implementation with projectless correction: e1932ae006a29e9aceb9eb86e6a8156cf7717df4
+- Optional intermediate SQL implementation for isolating the correction: 6448790cba9c5d0b0681f90c69befab141a923a0
 - Public implementation branch: codex/sql-database-matrix-864
 
 Verify each tool checkout/commit locally. Keep the authorized application inputs
@@ -27,6 +28,14 @@ do not guess flags or create diagnostic code, parsers or one-off pipelines. Use
 only approved tools already present or committed in the relevant TraceMap head.
 If a needed committed capability or tool is unavailable, record
 `diagnostic-capability=missing` and its name; do not replace it with ad hoc tooling.
+
+Assessment only: do not implement fixes, edit TraceMap or its fixtures, start an
+implementation subagent, create patches, commit, or push from this machine. If a
+defect is observed, stop at an abstract reproduction requirement for independent
+public development. Existing local tool modifications must not be discarded or
+silently included: use an approved clean pinned tool checkout, or report blocked.
+Any public Windows validation result must be checked for its exact commit; the
+presence of this prompt does not establish Windows acceptance.
 
 Read docs/validation/SQL_DATABASE_MATRIX.md from the SQL implementation. Record
 actual application TFM declarations and public provider/reference versions
@@ -43,6 +52,8 @@ reading scanner results. Include these controls where available:
 3. Command reuse/reassignment or parameter/transaction handling.
 4. An operation without a known entry connection.
 5. A negative control such as Open/Close or a content-only match.
+6. An explicitly typed relative-qualified VB receiver such as a framework
+   namespace-qualified command, if present. Keep actual private names local.
 Mark absent or unavailable controls explicitly; do not replace them silently.
 
 Inspect facts, SQLite, paths, grouped HTML/JSON and the backend migration inventory
@@ -59,6 +70,13 @@ using committed tooling and report readers. Compare each named control individua
 - Are unresolved boundaries visible without treating disconnected operations as
   unused? A selected query root is not proof of application entry-point wiring.
 - Are findings duplicated, misleading, dropped or stated with excessive confidence?
+- Does report.md show Database Operation Candidates separately, including each
+  rule/tier, unavailable SQL content, empty-coverage warnings and display totals?
+  More than 50 candidates must disclose the omitted count, not silently disappear.
+- For application-only source versus source with an already authorized wrapper
+  body, distinguish missing wrapper evidence from operation candidates inside the
+  body. Do not assume procedure/SQL arguments propagate across the call boundary.
+  Do not acquire new binaries or broaden input scope just to make a route pass.
 
 Use prompts/plan-backend-api-extraction.md to assess the same candidate migration
 slice with each version. Explain which additional planning questions the new
