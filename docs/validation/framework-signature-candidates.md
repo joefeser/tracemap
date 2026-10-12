@@ -573,8 +573,10 @@ Managed metadata schema changes including dispatch flags use extractor version
 `managed-metadata/0.1.4+cecil-0.11.6`.
 
 Effective VB import receipts are admitted only against the installed Windows
-.NET Framework 4 `System` provider in the OS GAC, including its canonical path,
-metadata identity/type, and current bytes. Receipt-supplied assemblies are never
+.NET Framework 4 `System` provider in the OS GAC, including its metadata
+identity/type and current bytes. Captured providers at other safe locations must
+match those independently validated bytes exactly; path equality is not identity.
+Receipt-supplied assemblies are never
 loaded. Other installations/platforms fail closed; the cross-platform synthetic
 tests use an independently supplied test trust anchor, not production admission.
 This assumes the OS installation is trusted and still does not authenticate the
@@ -588,3 +590,13 @@ graph bounds without inventing path counts. Gap classification deliberately
 refuses graph-only input with `WEBFORMS_GAP_CLASSIFICATION_REQUIRES_GROUPED_PATHS`.
 Legacy grouped receipts remain readable; graph receipts without a discriminator
 must be regenerated. JSON diagnostics reject malformed types before projection.
+
+Latest-report inspection binds receipt run/preflight/checkpoint/index identities
+to verified native status and authenticates the canonical artifact, including its
+index identity, before summarizing it. A stale newest candidate fails closed; it
+does not silently select an older report. Over-limit artifacts remain untouched
+and yield bounded-unavailable output, not a claim that their content was inspected.
+Configured compiler identities admit the existing `VBCodeProvider, System`
+short form or the complete Framework 4 identity (version 4.0.0.0, neutral culture,
+token b77a5c561934e089); partial, duplicate, unknown or mismatched qualifiers are
+not enriched. This is static configuration evidence, not runtime provider loading.

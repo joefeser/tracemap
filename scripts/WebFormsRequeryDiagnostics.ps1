@@ -80,18 +80,19 @@ function Get-WebFormsVerifiedStatus([string]$Cli, [string]$Run) {
     throw 'WEBFORMS_HANDLER_STATUS_FAILED; native verification failed; originals preserved'
 }
 
-function Write-WebFormsTruncationSummary([string]$Directory) {
-    try { Write-WebFormsTruncationSummaryCore $Directory }
+function Write-WebFormsTruncationSummary([string]$Directory, $VerifiedStatus = $null) {
+    try { Write-WebFormsTruncationSummaryCore $Directory $VerifiedStatus }
     catch {
         if ($_.Exception.Message -cmatch '\AWEBFORMS_HANDLER_[A-Z_]+\z') { throw }
         throw 'WEBFORMS_HANDLER_SUMMARY_METADATA_INVALID'
     }
 }
-function Write-WebFormsTruncationSummaryCore([string]$Directory) {
+function Write-WebFormsTruncationSummaryCore([string]$Directory, $VerifiedStatus = $null) {
     $receiptPath = Join-Path $Directory 'handler-requery.local.json'
     $handoffPath = Join-Path $Directory 'compiled-paths.handoff.local.json'
     # This is a bounded console projection, not a new evidence artifact.
     if ((Get-Item -LiteralPath $receiptPath).Length -gt 4194304) {
+        if ($null -ne $VerifiedStatus) { throw 'WEBFORMS_HANDLER_SUMMARY_RECEIPT_LIMIT' }
         Write-Output 'Truncation details unavailable: summary input exceeds its 64 MiB handoff / 4 MiB receipt bound. Reports preserved.'
         return
     }
@@ -111,9 +112,24 @@ function Write-WebFormsTruncationSummaryCore([string]$Directory) {
     }
     $receipt = [Text.Encoding]::UTF8.GetString((Read-SummaryBytes $receiptPath 4194304)).TrimStart([char]0xFEFF) | ConvertFrom-Json
     $variant = Assert-WebFormsReceipt $receipt 'WEBFORMS_HANDLER_SUMMARY_RECEIPT_INVALID'
+    if ($null -ne $VerifiedStatus) {
+        foreach ($pair in @(@('runId','runId'), @('sourcePreflightSha256','preflightSha256'),
+            @('sourceCheckpointSha256','checkpointSha256'), @('combinedIndexSha256','combinedIndexSha256'))) {
+            $offered = $receipt.PSObject.Properties[$pair[0]]
+            $trusted = $VerifiedStatus.PSObject.Properties[$pair[1]]
+            $pattern = if ($pair[0] -ceq 'runId') { '\A[a-f0-9]{32}\z' } else { '\A[a-f0-9]{64}\z' }
+            if ($null -eq $offered -or $null -eq $trusted -or $offered.Value -isnot [string] -or
+                $trusted.Value -isnot [string] -or $trusted.Value -cnotmatch $pattern -or
+                $offered.Value -cne $trusted.Value) { throw 'WEBFORMS_HANDLER_SUMMARY_RUN_MISMATCH' }
+        }
+    }
     $artifactName = if ($variant -ceq 'method-graph') { 'method-graph.local.json' } else { 'compiled-paths.handoff.local.json' }
     $handoffPath = Join-Path $Directory $artifactName
     $artifact = @($receipt.artifacts | Where-Object { $_.relativePath -ceq $artifactName })
+    if ((Get-Item -LiteralPath $handoffPath).Length -gt 67108864) {
+        Write-Output 'Truncation details unavailable: summary input exceeds its 64 MiB handoff / 4 MiB receipt bound. Reports preserved.'
+        return
+    }
     $bytes = Read-SummaryBytes $handoffPath 67108864
     $sha = [Security.Cryptography.SHA256]::Create()
     try { $hash = [BitConverter]::ToString($sha.ComputeHash($bytes)).Replace('-', '').ToLowerInvariant() }
@@ -122,6 +138,12 @@ function Write-WebFormsTruncationSummaryCore([string]$Directory) {
         throw 'WEBFORMS_HANDLER_SUMMARY_HANDOFF_CHANGED'
     }
     $handoff = [Text.Encoding]::UTF8.GetString($bytes).TrimStart([char]0xFEFF) | ConvertFrom-Json
+    if ($null -ne $VerifiedStatus) {
+        $indexField = if ($variant -ceq 'method-graph') { 'indexSha256' } else { 'inputIndexSha256' }
+        $index = $handoff.PSObject.Properties[$indexField]
+        if ($null -eq $index -or $index.Value -isnot [string] -or
+            $index.Value -cne $VerifiedStatus.combinedIndexSha256) { throw 'WEBFORMS_HANDLER_SUMMARY_RUN_MISMATCH' }
+    }
     Assert-WebFormsSummaryTree $handoff 'WEBFORMS_HANDLER_SUMMARY_METADATA_INVALID'
     if ($variant -ceq 'method-graph') {
         if ($handoff.schemaVersion -isnot [string] -or $handoff.schemaVersion -cne 'retained-method-graph.v1' -or $handoff.graph -isnot [pscustomobject] -or

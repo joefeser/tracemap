@@ -34,5 +34,15 @@ try {
         }
         if (!$rejected) { throw 'Malformed metadata was accepted.' }
     }
+    $large = Join-Path $temp 'compiled-paths.handoff.local.json'
+    $stream = [IO.File]::Create($large)
+    try { $stream.SetLength(67108865) } finally { $stream.Dispose() }
+    @{schemaVersion='webforms-handler-requery.v1';truncated=$true;artifacts=@(@{
+        relativePath='compiled-paths.handoff.local.json';bytes=(Get-Item $large).Length;
+        sha256=(Get-FileHash $large).Hash.ToLowerInvariant()})} | ConvertTo-Json -Depth 8 |
+        Set-Content (Join-Path $temp 'handler-requery.local.json')
+    $summary = @(Write-WebFormsTruncationSummary $temp) -join "`n"
+    if (!$summary.Contains('summary input exceeds its 64 MiB handoff / 4 MiB receipt bound. Reports preserved.') -or
+        (Get-Item $large).Length -ne 67108865) { throw 'Oversized handoff was not preserved with bounded-unavailable output.' }
     Write-Output 'Web Forms diagnostic input type tests passed.'
 } finally { [IO.Directory]::Delete($temp, $true) }

@@ -31,6 +31,7 @@ public sealed record WebFormsReviewStatus(
     public string Operation { get; init; } = "";
     public string PageMode { get; init; } = "";
     public string SourceCommitSha { get; init; } = "";
+    public string? CombinedIndexSha256 { get; init; }
     [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
     public WebFormsReviewToolDistribution? OriginalTool { get; init; }
 }
@@ -224,7 +225,10 @@ public static partial class WebFormsReviewExecutionCommand
                  "Only bounded indexed summaries were retrieved; no whole handoff, source snippets, scanning, repair, cleanup or LLM calls occurred.",
                  "Private paths and hashes are local integrity commitments. This response is not a shareable projection or deletion approval."])
             { Operation = plan.Configuration.Operation, PageMode = plan.Configuration.PageMode, SourceCommitSha = plan.Configuration.SourceCommitSha,
-                OriginalTool = checkpoint?.ToolDistribution };
+                OriginalTool = checkpoint?.ToolDistribution,
+                CombinedIndexSha256 = checkpoint?.State == WebFormsReviewReportExecution.Completed
+                    ? checkpoint.Artifacts.Single(item => item.RelativePath == checkpoint.Reports!.ReportAttempt + "/combined.sqlite").Sha256
+                    : null };
             status = status with { BoundedInputSha256 = Digest(JsonSerializer.SerializeToUtf8Bytes(status, JsonOptions)) };
             var rechecked = await ReadHistoryAsync(root, plan, preflight, runtime, token);
             if (rechecked.Sha256 != history.Sha256 || rechecked.Sequence != history.Sequence ||

@@ -47,9 +47,12 @@ internal sealed record WebFormsVbImportContext(string Namespaces, string Receipt
             Require(Text(root, "providerType") == "Microsoft.VisualBasic.VBCodeProvider");
             var trustedProvider = Path.GetFullPath(resolveProvider());
             var offeredProvider = Text(root, "providerAssemblyPath");
-            Require(Path.IsPathFullyQualified(offeredProvider) && string.Equals(Path.GetFullPath(offeredProvider), trustedProvider,
-                OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal));
-            VerifyFile(trustedProvider, Text(root, "providerAssemblySha256"), 64 * 1024 * 1024);
+            Require(Path.IsPathFullyQualified(offeredProvider));
+            // Location is a locator, not identity: a safe byte-identical copy
+            // of the independently validated OS provider is equivalent.
+            var providerHash = Hash(ReadBounded(trustedProvider, 64 * 1024 * 1024));
+            Require(Text(root, "providerAssemblySha256") == providerHash);
+            VerifyFile(Path.GetFullPath(offeredProvider), providerHash, 64 * 1024 * 1024);
             scope = "configuration"; category = "stale";
             var configs = Array(root, "configurationFiles", 1, 16);
             var configPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);

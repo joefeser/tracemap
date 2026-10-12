@@ -50,10 +50,7 @@ internal sealed record VisualBasicConfiguredImports(string Namespaces, string Pa
             var compiler = compilers[0];
             // Custom providers can reinterpret compilerOptions. Admit only the
             // framework VB provider, not a name-similar third-party type.
-            var providerParts = ((string?)compiler.Attribute("type") ?? "").Split(',');
-            var provider = providerParts[0].Trim();
-            if (provider != "Microsoft.VisualBasic.VBCodeProvider"
-                || providerParts.Length < 2 || providerParts[1].Trim() != "System"
+            if (!IsSupportedProvider((string?)compiler.Attribute("type") ?? "")
                 || compiler.Elements().Any(e => e.Name != "providerOption"
                     || (string?)e.Attribute("name") != "CompilerVersion")) return null;
             var webSections = root.Elements("system.web").ToArray();
@@ -114,6 +111,32 @@ internal sealed record VisualBasicConfiguredImports(string Namespaces, string Pa
         {
             return null;
         }
+    }
+
+    internal static bool IsSupportedProvider(string value)
+    {
+        var parts = value.Split(',').Select(part => part.Trim()).ToArray();
+        if (parts.Length < 2 || parts[0] != "Microsoft.VisualBasic.VBCodeProvider" || parts[1] != "System") return false;
+        if (parts.Length == 2) return true; // Explicitly supported unqualified framework short form.
+        // The qualified lane supports the complete Framework 4 identity only.
+        // Reject partial, duplicate and unknown qualifiers before AssemblyName
+        // parsing, which can otherwise normalize away those distinctions.
+        if (parts.Length != 5) return false;
+        var keys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var part in parts.Skip(2))
+        {
+            var pair = part.Split('=');
+            if (pair.Length != 2 || string.IsNullOrWhiteSpace(pair[1]) || !keys.Add(pair[0].Trim())
+                || !new[] { "Version", "Culture", "PublicKeyToken" }.Contains(pair[0].Trim(), StringComparer.OrdinalIgnoreCase)) return false;
+        }
+        try
+        {
+            var assembly = new System.Reflection.AssemblyName(string.Join(",", parts.Skip(1)));
+            return assembly.Name == "System" && assembly.Version == new Version(4, 0, 0, 0)
+                && string.IsNullOrEmpty(assembly.CultureName)
+                && Convert.ToHexStringLower(assembly.GetPublicKeyToken() ?? []) == "b77a5c561934e089";
+        }
+        catch (Exception ex) when (ex is ArgumentException or FileLoadException) { return false; }
     }
 
     private static bool IsNamespace(string? name) => !string.IsNullOrEmpty(name) && name.Length <= 512
