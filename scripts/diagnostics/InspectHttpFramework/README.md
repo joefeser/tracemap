@@ -57,7 +57,7 @@ Self-contained deployment is an alternative, not a claim of work-machine validat
 
 The local report keeps these sources separate:
 
-- Project TargetFramework, TargetFrameworks and TargetFrameworkVersion, with input
+- Project PropertyGroup TargetFramework, TargetFrameworks and TargetFrameworkVersion, with input
   alias, XML line and conditional flag. Conditions/property expressions/imports are
   not evaluated. Invalid/arbitrary values are suppressed. Multiple literal values
   stay visible; multi-targeting is not automatically treated as a conflict.
