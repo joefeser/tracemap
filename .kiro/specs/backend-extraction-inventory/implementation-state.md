@@ -67,7 +67,7 @@ HTTP operation classification. New optional HttpCallEvidence carries only bounde
 privacy-safe API metadata through surface/path/grouped reports. Existing generator/
 bounded-input hashes bind those reports. No new standalone machine-readable matrix.
 
-Final validation is in progress. net48/other-framework overload parity, pinned OSS
+Implementation validation completed at `4d52ca6a1c862622d69f95e975ffd650f9f6bae4`. net48/other-framework overload parity, pinned OSS
 smokes, non-.NET adapters, private Windows/site and runtime behavior are deferred.
 Full-index discovery, private readable contract capture and owner decision receipts
 remain open. The convenience gap recorded above describes the first delivery,
@@ -79,3 +79,32 @@ HttpCoverageLimitations; older handoffs may omit it. Nullable HttpCallEvidence i
 omitted when absent, preserving old node hashes. Altered coverage metadata is
 rejected. Report projection admits only bounded metadata values, never arbitrary
 property strings or new private destination hashes.
+
+
+Validation receipt for the implementation commit:
+- Warning-as-error solution build succeeded with zero warnings/errors.
+- 82 focused API, integration, VB external-boundary, retained-handoff, projection,
+  sample and Razor version regressions passed.
+- Full solution suite passed: 3,900 passed, one gated Windows ASP.NET corpus skip,
+  zero failures (21m02s). Binaries remained unchanged during this accepted run;
+  earlier interrupted/invalidated exploratory runs are not acceptance evidence.
+- Twelve native CLI outputs (both languages x three modes x two repeats) validated
+  with scripts/validate-adapter-artifacts.py. Facts and report.md were byte-identical
+  within each pair. Semantic outputs retain 171 Tier1 HTTP callsites per language
+  (166 overloads + five controls); C# projectless retains 176 unresolved Tier3
+  candidates; VB projectless and both compiled-only outputs classify no HTTP calls.
+  All 166 compiled Case methods retain original IL call observations per language.
+- Seven artifact-validator tests passed; whitespace checks passed.
+- GitHub Private Path Guard passed on the implementation commit.
+- No fixture method was executed; no application HTTP/DB calls or private artifacts.
+
+The implementation branch is pushed for testing. The later inventory/debugging
+commit `022e1c722195033e1975226daee5e76f894115af` advanced independently after
+isolation and was not integrated. The HTTP branch depends on recorded inventory
+`d55eb44b`; integration with the newer reporting changes needs its own validation.
+No merge, ACK, lane-policy change or whole-site completeness claim.
+
+The follow-up documentation-only commit records this receipt. Rebuild and rerun
+the 82 focused tests plus twelve CLI outputs on that final head; no repeat of the
+full suite is required for documentation-only changes. The full-suite claim is
+explicitly bound to the implementation commit above, not to a later commit.

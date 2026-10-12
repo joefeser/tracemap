@@ -98,3 +98,13 @@ omit operations; absence never means unused, and static evidence never proves
 runtime execution. The containing report still supplies generator/bounded-input
 hashes, retained references and privacy projection. Full-index discovery, private
 contract capture and owner decisions remain separate tasks.
+
+
+New grouped JSON includes optional `httpCoverageLimitations`; retained HTTP nodes
+include optional `httpCallEvidence` with API family/name, destination availability,
+protocol and coverage labels. Verbs, callsite locations, rule/tier and retained
+fact references remain in the node record. These additions capture no raw URL,
+body or new private hashes. Existing nullable fields are omitted when absent;
+legacy handoffs may omit the new coverage field. Review original retained facts
+for resolved overload signatures. See the spec implementation state for validation
+at the exact implementation commit and the independently advanced dependency.
