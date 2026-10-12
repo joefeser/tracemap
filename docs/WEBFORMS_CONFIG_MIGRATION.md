@@ -4,6 +4,123 @@ For a new migration-review handoff, use the [consolidated native workflow](#cons
 below. It creates one output folder for the reviewer. The diagnostic commands in
 the intervening sections remain available for investigating historical runs.
 
+## Query one handler from a completed wizard configuration
+
+Member-level source-to-published-method candidate bridges use the admitted publish
+receipt's assembly hash, qualified type, and compatible unique method signature.
+They do not require a separate full build-binding receipt (`provenanceState=bound`).
+Missing or mismatched publication bindings still withhold the bridge. These remain
+Tier3 candidate connections, not full source/build provenance or runtime proof;
+existing provenance, dispatch, and traversal-limit gaps still apply.
+
+From the TraceMap checkout, using its existing Debug build:
+
+```powershell
+.\scripts\wrequery.ps1 C:\work\website-review
+```
+
+Enter the handler method name when prompted. Alternatively supply `-Handler Page_Load`.
+For a configuration containing multiple projects, supply `-Project <saved-project-id>`.
+Optional `-Open` opens the generated HTML report.
+
+The helper reads the saved project/run locator, checks the referenced project file
+hash, and asks native status to verify the completed retained reports and original
+reader identity. Native requery performs artifact admission; the helper does not
+replace full wizard configuration validation. It uses the verified report location
+automatically and writes a fresh `handler-requery-<project>-<unique-id>` directory
+under the configuration root. It does not rebuild, scan, combine, change budgets,
+or overwrite the original run. This is a bounded new traversal of retained evidence,
+not runtime proof or complete-path proof. Existing truncation and coverage limits
+still apply. If the Debug CLI is missing, run the normal solution build first.
+
+Helper regression checks: `pwsh -NoProfile -File scripts/tests/Test-WebFormsWizardRequery.ps1`
+(after building the CLI).
+
+The helper prints retained truncation counts and up to three location/node/rule
+examples per reason (at most ten reasons, 256 characters per field). Missing
+locations are explicitly unavailable, not inferred. The console projection checks
+the handoff bytes against the newly written requery receipt and refuses changed
+bytes; it is not a new evidence artifact or independent receipt authentication.
+Its read bound is 64 MiB for the handoff and 4 MiB for the receipt; larger reports
+remain preserved with an explicit summary-unavailable message.
+
+For the known Windows drive-letter casing failure, status may retry once using
+the alternate drive-letter case, only after `WEBFORMS_EXECUTION_CHECKPOINT_INVALID`.
+The successful spelling is passed to requery. All native verification remains
+required; no checkpoint hashes are rewritten and other integrity failures do not
+trigger a retry. This handles drive-letter casing, not arbitrary folder-case changes.
+Additional synthetic checks: `pwsh -NoProfile -File scripts/tests/Test-WebFormsRequeryDiagnostics.ps1`.
+
+New queries from the updated build retain up to three sampled root-to-cutoff
+prefixes per depth/cycle reason, each capped at 64 edges. The existing
+`combined.paths.truncation-gap.v1` gap keeps its classification and limitations;
+its optional `cutoffWitness` carries ordered node/edge evidence, covered by the
+existing report input and generator hashes. The grouped HTML exposes these under
+**Sampled root-to-cutoff prefixes**, including edge kind, rule, tier, and location.
+The console helper prints retained edge samples too. A rejected final edge is
+explicitly marked not traversed, and a shortened prefix is labeled truncated.
+Samples do not enumerate all cutoff routes, prove terminal reachability, or
+change path/depth/work budgets. Legacy handoffs without witnesses remain readable;
+their missing history cannot be reconstructed from the gap's node alone.
+
+This diagnostic requires a new CLI build, unlike the earlier script-only fix.
+When querying an older retained run with that updated build, explicitly pass
+`-AllowUpdatedReader` to `wrequery.ps1`. Native artifact verification remains
+mandatory; original producer identity is not rewritten, and the separate new
+query retains its own generator provenance. Without the switch, the helper still
+requires the original reader identity. Do not repair or rescan the original run
+just to obtain these diagnostic samples.
+
+Cutoff gaps now also retain an optional `cutoffCause`, without changing the
+existing conservative `depth` / `cycle` reasons or traversal decisions:
+
+- `depth-limit-reached`: enumeration reached its configured edge-depth cap.
+- `terminal-distance-exceeds-remaining-depth`: reverse-graph distance is known
+  but cannot fit within the remaining depth.
+- `terminal-route-not-found-within-depth-bound`: the reverse search found no
+  route within its own depth bound. This does not prove a terminal is unreachable;
+  longer routes or missing graph evidence remain possible.
+- `candidate-identity-roundtrip`: an immediate reverse pair of publish-member
+  candidate edges. It remains a retained cycle gap, not application recursion proof.
+- `repeated-node-cycle`: another repeated-node cutoff, also not runtime recursion proof.
+
+The console reports retained gap counts by cause; legacy reports explicitly lack
+this detail. No alias edge is silently removed, no partial result becomes complete,
+and none of these labels authorizes increasing every query budget.
+
+Console and HTML summaries separate identity round trips from bounded terminal-route
+uncertainty and other/legacy cutoffs. This is presentation only: stored depth/cycle
+reasons, gap counts, and partial coverage are preserved. Known cutoff messages are
+regenerated from fixed scanner-owned cause templates after privacy projection;
+arbitrary incoming messages and source-derived fields still pass through redaction.
+
+To inspect the newest completed handler report without another graph traversal:
+
+```powershell
+.\scripts\wrequery.ps1 C:\work\website-review -AllowUpdatedReader -InspectLatest
+```
+
+Selection is scoped to the saved project (use `-Project` if needed), ordered by
+directory modification time and name, bounded to 128 completed report folders,
+and explicitly **not filtered by handler**. The selected path is printed. Native
+status still verifies the saved run, and report bytes are checked against their
+local requery receipt; this is not independent authentication of that receipt.
+No new report is written and no source scan, combine, or graph traversal occurs.
+
+Both inspection and new requery summaries now show up to 20 distinct retained
+database endpoint records, counts of variants ending at each record, text/type
+binding states, origin kinds, last retained argument-hop identities, return-step
+counts, and up to eight value-resolution gaps per binding. Missing binding fields
+are unavailable, not resolved. SQL literals and command values are not printed;
+even a hash-only constant does not identify SQL text or a stored procedure.
+
+Return-target failures retain the legacy `IlCommandReturnTargetMissingOrAmbiguous`
+code and now additionally distinguish missing/ambiguous admitted call edges from
+missing/ambiguous target method evidence. These are evidence-admission diagnoses,
+not claims that a method is absent from the application. The synthetic compiled
+acceptance matrix is documented in `samples/fixture-build/lazy-constructor/README.md`
+and replayed by `scripts/wlocal.ps1`; virtual dispatch remains explicitly unproven.
+
 ## Mixed-query traversal repair: work-machine validation
 
 For a successful saved verification run, inspect unresolved command bindings
@@ -187,14 +304,20 @@ For the separate compiled call-tree baseline:
 Enter `verify-5\recovered-reports`. Output goes to a new
 `verify-5\handler-requery-compiled-fill` folder. The query allows root selection
 and one existing evidenced source-to-compiled attachment, then only
-`compiled-il-call`, `compiled-il-callvirt-candidate` and
+`compiled-il-call`, `compiled-il-callvirt-candidate`,
+`compiled-il-framework-version-candidate` and
 `compiled-database-api-candidate` edges. Source calls, receiver/constructor
 bridges and compiled-to-source return hops are excluded during traversal, not
 filtered from an already capped mixed result. All global admission competitors
 remain available; no symbol is guessed to compensate for a missing attachment.
 The root attachment keeps its original tier and can be a publish candidate;
 this is not an authenticated-build or source-line identity claim. Callvirt still
-does not prove runtime dispatch. Missing paths under this scope are gaps, not
+does not prove runtime dispatch. A framework-version candidate retains exact
+declaring assembly identity but tolerates only the documented embedded desktop
+framework 2.0/4.0 signature scopes. It remains Tier3 with an explicit binding gap;
+command argument/return propagation cannot cross it. See the
+[candidate matrix](validation/framework-signature-candidates.md).
+Missing paths under this scope are gaps, not
 proof that backend behavior is absent. The hashed query records
 `traversalScope=compiled-il-with-root-attachment`. Historical queries omit this
 optional field. Defaults and the mixed query below remain unchanged.
@@ -553,7 +676,16 @@ This **does** repeat bounded global graph construction and a single-handler
 traversal; it does **not** scan source, collect DLLs, rebuild the website, combine
 indexes, or rewrite original checkpoints. All global overload/dispatch
 competitors remain admitted. Depth, path, work, frontier, graph-input, graph
-storage, and projection bounds come from the retained plan. Path/work capacity
+storage, and projection bounds come from the retained plan by default. A new
+single-handler query may explicitly override depth with native `--max-depth N`
+or `wrequery.ps1 -MaxDepth N` (1 through 64). This does not modify the retained
+plan: the effective depth is stored in the new receipt's hash-bound `query`, and
+console output shows both original and effective depth. Other bounds stay
+unchanged. `-MaxDepth` cannot be combined with read-only `-InspectLatest`.
+Use staged depths such as 32 then 48 to inspect longer paths; deeper queries
+remain bounded and may exhaust other limits. Never infer complete coverage from
+unchanged counts, and do not treat identity round trips as missing recursive
+routes. Every requery writes a fresh folder. Path/work capacity
 is independent for this one-root comparison, not silently raised for the
 seven-root report. The legacy `wpath.ps1` also called the C# path reporter; it
 selected one exact handler. Synthetic regression fixtures pin equivalent
@@ -705,3 +837,303 @@ not revalidate every retained raw artifact or the external source/publish inputs
 Hashes establish local integrity, not authenticity. The query remains subject
 to the native 2,048-node/128-KiB response bounds. SQL parameter values and runtime
 behavior remain unverified unless supported by separately identified evidence.
+# Unfiltered retained method graph
+
+After building the updated reader, inspect the outgoing graph independently of database-reaching paths:
+
+```powershell
+.\scripts\wrequery.ps1 C:\work\synthetic-review -Handler Names_Init -AllowUpdatedReader -MethodGraph -Open
+```
+
+This reuses the verified saved run and writes `method-graph.local.html` and
+`method-graph.local.json` in a new handler report folder. It does not scan, combine,
+execute the application, or modify original artifacts. Native equivalent: append
+`--view method-graph` to `webforms-review requery-handler`.
+
+Rule `combined.graph.retained-outgoing.v1` projects all admitted outgoing edge kinds,
+without database-terminal filtering or reverse-terminal pruning. Unique-node breadth-first
+expansion preserves shared targets and cycles as linked back-references. The expandable
+tree includes source/compiled identity candidates without treating them as runtime calls.
+Encoded IL targets, caller/body/call IDs, offsets, opcode, evidence rule/tier and retained
+gap reasons remain visible even when no method-target edge was admitted. An absent edge
+does not establish absent behavior; framework or unbound targets may lack declarations.
+
+Limits remain explicit: inherited graph admission, depth and work limits; MaxFrontier
+bounds nodes, edges, encoded calls and gap records separately; output-byte limits refuse
+oversized artifacts. The tree display has a 64-level bound; node links expose the remaining
+retained adjacency. No raw source or SQL literals are included. The JSON binds the reporting
+generator SHA-256 and bounded input, and the native receipt hashes both graph artifacts.
+This is partial static evidence, not an exhaustive runtime call graph. Inspect a missing
+connection by finding the caller, then its encoded target and retained gap reasons; use
+that actual shape to build a regression fixture before changing resolution rules.
+
+### Small aliased diagnostic export
+
+Do not share the private graph directly. `scripts/wgraph-share.ps1` reads the latest
+method graph beneath a review root (or an explicit `-GraphPath`) without rebuilding
+or traversing the retained index:
+
+```powershell
+.\scripts\wgraph-share.ps1 C:\work\synthetic-review -Method Lookup
+```
+
+The private literal selector is used only locally. Between one and sixteen matching
+source/compiled nodes are allowed. The three-hop caller/callee neighborhood is bounded
+to 120 nodes, 240 edges, 120 call records and 256 KiB output. A new `graph-share-*.json`
+is created; existing files are never overwritten. Input is limited to 16 MiB and
+50,000 records per primary collection. No customer scan or tests run.
+
+Rule `diagnostics.graph.aliased-slice.v3` emits an allowlisted projection, not a redacted
+copy: sequential aliases replace names, paths, rules, source IDs, node IDs, fact IDs and
+encoded targets. No reverse map is written unless `-PrivateMap` is explicitly selected;
+that map is separate and private. Only fixed technical edge/state/reason/tier
+categories pass through. Unknown codes become `other-or-unavailable`. Free-form gaps,
+private digests, raw SQL, line numbers and offsets are omitted. The generator digest
+hashes this exporter; the bounded-input digest hashes only the projected `graph` object
+serialized compactly with PowerShell `ConvertTo-Json -Depth 20 -Compress` and UTF-8.
+
+This is an unauthenticated diagnostic view, not a replacement for original evidence.
+Truncation and original cutoff presence are explicit. Aliases are consistent within
+an export, not stable across exports. Equality of target aliases is encoded-string
+equality only. Topology remains visible and may itself be sensitive: review the small
+file and follow organizational sharing policy before sending it.
+
+Version 2 prioritizes all focus callers before round-robin selection from other callers,
+for both edges and encoded calls. `callerCoverage` reports available, exported and omitted
+calls and outgoing edges per selected node, including outgoing edges excluded by the node
+slice. `focusRecordsComplete` is relative to records in the input graph, never a claim of
+complete scanning, resolution or runtime coverage. If focus records exceed the caps, it
+is false; caps are not silently raised. Sanitized target-shape hints expose only fixed
+categories for reference kind, getter/setter/constructor shape and primitive return shape.
+They are syntactic hints, not verified framework identity or dispatch resolution. Names
+and signature fragments remain excluded. Older aliases need not match the new export.
+
+Synthetic regression: `pwsh -NoProfile -File scripts/tests/Test-WebFormsGraphShare.ps1`.
+
+Version 3 adds `commandTraces`. Regenerate the private graph with the updated CLI
+and `wrequery.ps1 -MethodGraph` before exporting; existing source scans and the retained
+index are reused. Older graphs without this field are explicitly refused rather than
+silently exporting an empty diagnostic. The reader chooses one shortest retained
+root-to-endpoint witness (up to 64 endpoints), runs the existing provenance-checked
+command-value resolver unchanged, and joins its stopped `call-result` origin by exact
+body identity and IL offset to the retained producer call facts. These are candidate
+static value flows, not runtime execution or exhaustive path variants.
+
+The share exporter retains up to 16 focus-containing traces, with aliased endpoint/path,
+argument-forwarding steps, return steps, origin kind/body, exact producer fact aliases
+and allowlisted failure reasons. Producer call records take priority over other calls;
+missing records are counted. Origin values, offsets and input provenance digests are not
+shared. Trace aliases and call/edge aliases use the same maps. Empty producer lists and
+unknown failure reasons remain unknown, never guessed. A shortest witness can stop at
+a non-IL bridge even when another witness could continue; its explicit gap is not proof
+that every route fails. Producer aliases identify the retained unresolved origin; if
+return resolution fails inside a nested producer, the gap can describe that deeper
+failure rather than the outer origin call. The existing 256 KiB share-output limit
+still applies.
+
+### Private alias lookup
+
+Opt in with `wgraph-share.ps1 <review-root> -Method <private-method> -PrivateMap`.
+The shared JSON is unchanged by this switch. A separate, explicitly private map is
+written under `<review-root>/private-graph-maps/`, bound to the exact shared bytes by
+SHA-256 and carrying its own generator/bounded-input hashes. Never upload that folder
+or map. Both outputs use create-new semantics; failures can leave partial outputs,
+which must not be treated as complete exports.
+
+Run `wgraph-alias.ps1 <review-root> T1` to inspect the latest private map, or pass an
+exact map file instead of the root. The helper validates the map content hash and
+prints the associated share filename/hash before displaying the original identifier.
+This is a local integrity check, not authentication. Always use aliases from that same
+export. A previous sanitized export cannot be reversed without its private graph/map.
+The mapping fixes diagnostic identity visibility; it does not invent missing call
+edges or claim that an unknown external method has been resolved.
+
+### Framework string composition
+
+Rule `combined.paths.framework-string-composition.v1` recognizes only direct
+`call` member references to the two- and three-string `System.String.Concat`
+overloads in `mscorlib, Version=4.0.0.0, Culture=neutral,
+PublicKeyToken=b77a5c561934e089`. Exact retained call/body/operand provenance and
+ordered operand evidence are required. The command binding reports
+`symbolic-string-composition` with the producer, operand fact, body, and ordered
+origins at Tier3SyntaxOrTextual. New reports classify non-materialization under
+`limitations: ["SymbolicStringValueNotMaterialized"]`, not as a missing-evidence
+gap. Ordered `operandBindings` trace each operand backwards along that retained
+path, preserving exact hop facts and the final method identity. Each operand has
+the existing 64-work bound. Nested composition and scalar alternatives share a
+32-node expression budget and four-level depth bound per command property;
+each concatenation has at most three operands and each alternative set at most
+four members. Exhaustion emits `IlCommandExpressionLimit`. A root argument, non-IL bridge, missing evidence,
+or uncertain dispatch remains an explicit operand-level gap. The private HTML
+shows a readable route, expression and operand summaries above exact evidence.
+Parameter names are not retained in these scans: labels use IL argument slots
+(slot zero is the receiver for instance methods), never inferred source names.
+The share exports only aliased method/fact identities, bounded slots, allowlisted
+states/gaps and hop links; it never exports constant identities or SQL text.
+When argument forwarding fails `IlCommandCallerOperandProvenanceUnavailable`,
+`operandCheckFailures` names all failed predicates: rule, tier, schema, operand
+state, supported call shape, body/offset links, required body hash presence, and
+binary/generator/input equality. These are categorical check names, never hash
+values or source text. The diagnostic carries the exact edge/call/operand/body
+references under `combined.paths.compiled-command-value.v1` at Tier4Unknown.
+It does not relax any admission check. It covers the forwarding provenance gate,
+not every possible return-resolution failure. Shared output allows one failure
+record per operand and at most 17 fixed check categories, with aliased references.
+Each failure also includes the allowlisted retained `operandState` and the body's
+exception-region count (when valid). This distinguishes `stack-unavailable`,
+`exception-flow-unavailable`, and `call-shape-unavailable` without exposing IL,
+offsets, literals or hashes. An exception-region count is context, not proof that
+exception handling caused the failure. Unknown state strings are never copied
+into the diagnostic. These are existing retained facts; no rescan is required.
+This is a bounded intrinsic projection, not an admitted callee-body edge.
+
+No SQL text is reconstructed, and string hashes are never concatenated into a
+value. Unknown operands and downstream virtual-dispatch gaps remain unknown.
+Unsupported return computations, other assemblies/overloads, and virtual calls are not
+promoted by this rule. Malformed operands or mismatched provenance fail closed.
+The shared graph exports only the allowlisted operation, aliased fact references,
+and ordered operand kinds, never operand identities or literals. Rebuild the CLI
+and regenerate the method graph from the retained run to obtain this projection;
+no application execution or source rescan is required.
+
+### Non-virtual targets encoded with callvirt
+
+For a completed wizard project, run `scripts/wrefresh.ps1 <configuration-root>`
+(with `-Project <id>` for multi-project roots). It builds the CLI, locates the old
+run's prepared configuration and receipts, and calls native `start` with a unique
+`refresh-<project>-<id>` output folder. Native admission still verifies the inputs;
+the helper never supplies a new source attestation. It preserves the old run and
+wizard configuration, stops on build/start failure, and runs no test suite.
+The printed fresh review root is separate from the wizard's original run locator.
+Use `wrequery.ps1 <configuration-root> -LatestRefresh -MethodGraph` to query
+the newest project-specific refresh. Native status must verify that exact run;
+a failed/incomplete latest refresh never falls back to old evidence. The new
+handler report remains under the configuration root for `wgraph-share.ps1`.
+Helper checks: `pwsh -NoProfile -File scripts/tests/Test-WebFormsRefresh.ps1`.
+
+`dotnet.compiled.member.v1` retains `methodDispatchFlags` from both Mono.Cecil
+and System.Reflection.Metadata; disagreement excludes the method fact.
+`combined.paths.compiled-il-bridge.v1` classifies a uniquely matched `callvirt`
+target as `compiled-il-call` only when retained flags establish a non-virtual,
+non-static, non-abstract instance method. The instruction can supply a null check
+without virtual dispatch. Genuine virtual methods (including final overrides),
+missing/malformed flags, and ambiguous targets remain conservative. Artifact/source
+binding gaps and runtime non-claims are unchanged.
+
+Older retained scans lack these flags and must be freshly scanned with the updated
+extractor to benefit; rebuilding/requerying alone cannot manufacture missing
+metadata evidence. The fresh scan should use a separate run, preserving the old one.
+
+### VB delegate construction and later command operands
+
+The `dotnet.compiled.il-values.v1` bounded extractor now models the stack effects of `ldftn` (push one
+unknown pointer) and `ldvirtftn` (consume one receiver, push one unknown pointer).
+These instructions commonly precede LINQ delegate constructors. They are not calls
+to the referenced method. Previously, an unsupported pointer load invalidated the
+normal-flow stack and made later helper-call operands `stack-unavailable`.
+
+This change retains no pointer value, delegate invocation target, or runtime dispatch
+claim. Indirect `calli` remains unsupported; stack underflow still fails closed.
+Equality-only joins and exception/finally limitations are unchanged. In particular,
+a conditionally rewritten argument cannot be relabeled as the original input slot.
+
+The compile-only `StructuredProfileProbe` public VB fixture includes a rewritten
+argument, date/value-type calls, a nested `Using`, two LINQ delegates, and enclosing
+`Catch`/`Finally` (three exception regions). Its later helper call must retain valid
+stack shape while retaining both the original slot and rewritten call-result as
+bounded alternatives. The integrated test follows both through SQL composition
+and the separate provider to the scalar database API. No fixture network
+or application code is executed. Tests pin the compiled pointer instructions and
+exception regions, not only handwritten IL.
+
+This is an extractor change: run `wrefresh.ps1` to create new evidence, then query
+with `wrequery.ps1 -LatestRefresh -MethodGraph` and export with `wgraph-share.ps1`.
+Requerying an older scan cannot repair its retained operand state. The public
+regression does not establish private Windows application acceptance.
+
+### Batched argument tracing and one-command validation
+
+`dotnet.compiled.il-values.v1` now keeps up to four canonical scalar origin
+alternatives at stack, local and argument joins. Unknown and unsupported origins,
+including addresses and differing heap allocations, absorb the join; exceeding
+four members or 768 encoded characters produces unknown. Loops cannot grow an
+unbounded expression. These are possibilities, not branch predicates or runtime
+values. Equality remains exact for identical origins.
+
+Complete independently decoded handler/filter ranges permit a narrow `leave`
+summary: preserve an argument only if it has no address exposure anywhere and no
+write in any handler/filter. Unsafe handler memory operations disable preservation.
+Locals are still discarded. Catch/filter entry seeds stay unknown; exception
+dispatch and finally continuation paths are not reconstructed. The scan carries
+updated extractor/version/budget hashes; older scans cannot gain these origins.
+
+The report and private HTML expose `symbolic-argument-alternatives` and nested
+compositions. Each child has its own exact evidence/provenance links. The shared
+export retains only bounded tree structure, aliases and technical categories;
+it never exports the encoded origin alternatives, string hashes or SQL literals.
+Malformed/nested alternative encodings and mismatched provenance fail closed.
+
+After pulling this branch, run:
+
+```powershell
+.\scripts\wgraph-refresh.ps1 C:\path\to\wizard-root
+```
+
+Enter the handler and focus method when prompted, or pass `-Handler` and `-Method`.
+The wrapper builds and scans into a fresh run, queries its method graph, then
+creates the shared export and separate private alias map. It stops on a failed
+stage and never uploads anything, runs tests, or substitutes an older graph.
+For multi-project roots add `-Project <id>`. Share only the generated shared JSON.
+
+Getter-return tracing now carries up to 16 exact invocation frames, so an
+argument returned inside a getter/helper expression is substituted against that
+invocation, not an unrelated edge in the endpoint path. Identical retained return
+origins can expose bounded alternatives or supported nested Concat expressions;
+disagreeing return sites, recursive producers, missing/changed evidence and
+unknown values remain explicit gaps. Field-backed values are not inferred from
+constructors or runtime state. `IlCommandReturnOriginUnknown` identifies the
+stopping method/body after admitted return evidence, and `IlCommandReturnFrameLimit`
+labels frame exhaustion. Shared exports retain categorical reasons, aliased
+stopping methods and producer-call links without exposing names or values.
+
+The local getter matrix also composes the two-getter chain with conditional
+argument normalization, Using/finally and the separate-DLL database wrapper.
+It scans compiled fixtures only; it never executes their HTTP or SQL code.
+
+## Symbolic method inputs
+
+The `combined.paths.compiled-command-value.v1` projection retains a
+`symbolic-method-return` boundary when an exact nonvirtual invocation, unique
+method/body, and provenance-checked return summary are admitted but the return
+value is unknown or its retained return sites disagree. The optional
+`symbolicInput` records the method, producer call, body, return fact, and separate
+`valueGaps`. Its parent binding hashes the bounded evidence and identifies the
+exact reporting generator. Share exports alias these identities and hash only
+their privacy projection.
+
+This preserves an input to a supported SQL string expression without requiring
+the employee/session/cache value to become a constant. It does not evaluate heap
+state, materialize SQL, prove branch feasibility, parameterization, runtime
+execution, or all-path completeness. `MethodReturnValueNotEvaluated` remains
+explicit. Missing/ambiguous targets, virtual dispatch, malformed or mismatched
+evidence, and work/depth limits remain structural gaps; none become symbolic
+success. The local corpus covers session/cache and impersonation getters with
+exception handling through argument alternatives and cross-assembly SQL calls.
+
+The normal `compiled-paths.local.html` report now displays database endpoints and
+command-expression trees directly beneath each handler chain. Distinct retained
+endpoint bindings are labeled with their path variants, never replaced by a
+representative variant. Named symbolic method inputs show value uncertainty
+separately from connection/evidence gaps. Expression display is bounded to 32
+nodes and depth four per value; the lossless handoff remains authoritative when
+display is limited. Constants are not expanded into SQL text or inferred table
+or procedure names, and static routes do not establish runtime execution.
+
+Graph-only handler requeries no longer write `compiled-paths.local.html` or its
+handoff. Those files previously represented an unexecuted path query as zero
+chains and could be mistaken for a normal report. The receipt now binds
+`primaryReport` and `pathEnumerationPerformed`; graph-only counts are not terminal
+path results. Use the exact `Handler report:` path printed by `wrequery.ps1`.
+Existing files are preserved, so old graph-only directories may still contain
+the misleading companion file. Normal zero-result reports explicitly warn that
+absence of retained routes is not evidence of no database dependencies.

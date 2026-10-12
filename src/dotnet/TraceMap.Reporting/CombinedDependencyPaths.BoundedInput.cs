@@ -266,7 +266,7 @@ public static partial class CombinedDependencyPathReporter
                             when fact_type = '{{FactTypes.MethodDeclared}}'
                                 and rule_id = '{{RuleIds.VisualBasicSyntaxDeclarations}}'
                                 and projection_safe then
-                            json_object(
+                            json_patch(json_patch(json_patch(json_object(
                                 'containingType', coalesce(cast(json_extract(properties_json, '$.containingType') as text), ''),
                                 'qualifiedContainingType', coalesce(cast(json_extract(properties_json, '$.qualifiedContainingType') as text), ''),
                                 'methodName', coalesce(cast(json_extract(properties_json, '$.methodName') as text), ''),
@@ -274,10 +274,29 @@ public static partial class CombinedDependencyPathReporter
                                 'memberIdentity', coalesce(cast(json_extract(properties_json, '$.memberIdentity') as text), ''),
                                 'bodyStartLine', coalesce(cast(json_extract(properties_json, '$.bodyStartLine') as text), ''),
                                 'bodyEndLine', coalesce(cast(json_extract(properties_json, '$.bodyEndLine') as text), ''),
-                                'lexicalNamespace', coalesce(cast(json_extract(properties_json, '$.lexicalNamespace') as text), ''),
                                 'importedNamespaces', coalesce(cast(json_extract(properties_json, '$.importedNamespaces') as text), ''),
                                 'parameterCount', coalesce(cast(json_extract(properties_json, '$.parameterCount') as text), ''),
-                                'parameterTypes', coalesce(cast(json_extract(properties_json, '$.parameterTypes') as text), ''))
+                                'configuredImportedNamespaces', coalesce(cast(json_extract(properties_json, '$.configuredImportedNamespaces') as text), ''),
+                                'configuredImportsSource', coalesce(cast(json_extract(properties_json, '$.configuredImportsSource') as text), ''),
+                                'configuredImportsSha256', coalesce(cast(json_extract(properties_json, '$.configuredImportsSha256') as text), ''),
+                                'configuredImportsKind', coalesce(cast(json_extract(properties_json, '$.configuredImportsKind') as text), ''),
+                                'configuredImportsLimitation', coalesce(cast(json_extract(properties_json, '$.configuredImportsLimitation') as text), ''),
+                                'effectiveImportedNamespaces', coalesce(cast(json_extract(properties_json, '$.effectiveImportedNamespaces') as text), ''),
+                                'effectiveImportsReceiptSha256', coalesce(cast(json_extract(properties_json, '$.effectiveImportsReceiptSha256') as text), ''),
+                                'effectiveImportsGeneratorSha256', coalesce(cast(json_extract(properties_json, '$.effectiveImportsGeneratorSha256') as text), ''),
+                                'effectiveImportsInputSha256', coalesce(cast(json_extract(properties_json, '$.effectiveImportsInputSha256') as text), ''),
+                                'effectiveImportsKind', coalesce(cast(json_extract(properties_json, '$.effectiveImportsKind') as text), ''),
+                                'effectiveImportsLimitation', coalesce(cast(json_extract(properties_json, '$.effectiveImportsLimitation') as text), ''),
+                                'parameterTypes', coalesce(cast(json_extract(properties_json, '$.parameterTypes') as text), '')),
+                                case when json_type(properties_json, '$.lexicalNamespace') is not null
+                                     then json_object('lexicalNamespace', coalesce(cast(json_extract(properties_json, '$.lexicalNamespace') as text), '|invalid|'))
+                                     else json('{}') end),
+                                case when json_type(properties_json, '$.parameterPassingModes') is not null
+                                     then json_object('parameterPassingModes', coalesce(cast(json_extract(properties_json, '$.parameterPassingModes') as text), 'invalid'))
+                                     else json('{}') end),
+                                case when json_type(properties_json, '$.methodTypeParameters') is not null
+                                     then json_object('methodTypeParameters', coalesce(cast(json_extract(properties_json, '$.methodTypeParameters') as text), '|invalid|'))
+                                     else json('{}') end)
                             when fact_type = '{{FactTypes.FieldDeclared}}'
                                 and rule_id = '{{RuleIds.VisualBasicSyntaxDeclarations}}'
                                 and projection_safe then

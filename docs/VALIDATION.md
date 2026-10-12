@@ -1,5 +1,21 @@
 # TraceMap Validation Guide
 
+For effective inherited ASP.NET VB imports, run `WebFormsVbImportContextTests`,
+`VisualBasicConfiguredImportsTests`, `FrameworkSignatureCandidateTests`,
+`ScanExecutionReceiptTests`, and the focused
+`Effective_vb_context_is_forwarded_and_resume_rechecks_its_hash` workflow test.
+Run `scripts/tests/Test-WebFormsVbImportsCapture.ps1` under .NET Framework PowerShell
+for the actual mapped-configuration capture boundary. A valid context
+is current-environment observer evidence, not authenticated historical build
+proof. See the effective-import section in
+`docs/validation/framework-signature-candidates.md` for limitations and results.
+
+For mixed desktop framework signature joins, run `FrameworkSignatureCandidateTests`
+and `scripts/tests/Test-WebFormsGraphShare.ps1`. See the
+[candidate matrix](validation/framework-signature-candidates.md) for exact-match
+priority, identity refusals, ambiguity, provenance, dispatch and value-flow gaps.
+Synthetic PE coverage does not replace authentic Windows ASP.NET publishing.
+
 For generated compilation snapshot changes (PR #847), run ScanEngineTests and
 CliTests in Debug with warnings as errors. Exact generated compilation inputs
 receive a post-generation digest (4,096 files / 64 MiB maximum), are included in
@@ -16,8 +32,9 @@ run `./scripts/wlocal.ps1` in PowerShell 7. It builds public fixture projects,
 scans and combines independent inputs, generates reports, and asserts attached,
 separate and missing-provider behavior plus cap/Fill/repeatability boundaries.
 See the [local replay and artifact map](../samples/fixture-build/lazy-constructor/README.md).
-The current gate requires at least 32 local passes, including five operator
-layouts, and separately requires authentic Windows publishing when requested.
+The current gate requires 21 command-return cases, sixteen profile cases, seven getter-return
+cases, seven structured argument cases and five operator layouts (plus the native and
+property corpus checks), and separately requires authentic Windows publishing when requested.
 Historical validation counts below describe their named older heads.
 
 For deep projectless cross-DLL command evidence, run:

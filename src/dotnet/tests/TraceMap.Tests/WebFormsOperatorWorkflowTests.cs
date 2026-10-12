@@ -98,7 +98,7 @@ public sealed class WebFormsOperatorWorkflowTests
         var execute = ordered.FindIndex(node => Method(node, "ExecuteSql"));
         Assert.True(getter >= 0 && constructor > getter && profile > constructor && email > profile && execute > email);
         Assert.Equal("SqlCommand.ExecuteScalar", dynamic.Nodes.Last().SurfaceName);
-        Assert.Equal("unresolved-operand", dynamic.Nodes.Last().CommandBinding!.CommandTextFromPath!.State);
+        Assert.Equal("symbolic-string-composition", dynamic.Nodes.Last().CommandBinding!.CommandTextFromPath!.State);
         Assert.Equal("1", dynamic.Nodes.Last().CommandBinding!.CommandTypeFromPath!.Origin.Identity);
         var audit = Assert.Single(all.Paths, path => path.Nodes.Any(node => Method(node, "WriteAudit")));
         Assert.Equal("4", audit.Nodes.Last().CommandBinding!.CommandTypeFromPath!.Origin.Identity);

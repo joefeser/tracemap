@@ -32,6 +32,8 @@ public sealed record CombinedDependencyPathOptions(
     internal IReadOnlySet<string>? StartingFactIds { get; init; }
     public bool ExactFromSymbol { get; init; }
     public bool CompiledOnly { get; init; }
+    [JsonIgnore]
+    public Action<RetainedMethodGraph>? MethodGraphObserver { get; init; }
     internal IReadOnlyList<CombinedPathSymbolRoot>? SymbolRoots { get; init; }
     // Deterministic work bound, including nonterminal/cyclic exploration.
     public int MaxTraversalWork { get; init; } = 100_000;
@@ -204,7 +206,38 @@ public sealed record CompiledCommandPathValueBinding(string Schema, string RuleI
     string GeneratorSha256, string BoundedInputSha256, string ArtifactVisibility = "local-only")
 {
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public CompiledStringComposition? Composition { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<CompiledCommandPathValueBinding>? Alternatives { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? OriginMethodIdentity { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<string>? Limitations { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<CompiledOperandCheckFailure>? OperandCheckFailures { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public IReadOnlyList<CompiledCommandReturnStep>? ReturnSteps { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public CompiledSymbolicMethodInput? SymbolicInput { get; init; }
+}
+
+public sealed record CompiledSymbolicMethodInput(string MethodFactId, string MethodIdentity,
+    string ProducerCallFactId, string BodyFactId, string ReturnFactId,
+    IReadOnlyList<string> ValueGaps);
+
+public sealed record CompiledOperandCheckFailure(string RuleId, string EvidenceTier,
+    string EdgeId, string CallFactId, string OperandFactId, string BodyFactId,
+    IReadOnlyList<string> FailedChecks)
+{
+    public string OperandState { get; init; } = "unavailable";
+    public int? ExceptionRegionCount { get; init; }
+}
+
+public sealed record CompiledStringComposition(string RuleId, string EvidenceTier, string Operation,
+    string ProducerCallFactId, string OperandFactId, string BodyFactId,
+    IReadOnlyList<CompiledCommandOperandOrigin> Operands)
+{
+    public IReadOnlyList<CompiledCommandPathValueBinding> OperandBindings { get; init; } = [];
 }
 
 public sealed record CompiledCommandReturnStep(string ProducerCallFactId, string CalleeBodyFactId,
@@ -248,6 +281,10 @@ public sealed record CombinedPathEdge(
 
 public sealed record CombinedPathNote(string Code, string Message);
 
+// A sampled traversal prefix, never a terminal path or runtime claim.
+public sealed record CombinedCutoffWitness(IReadOnlyList<CombinedPathNode> Nodes,
+    IReadOnlyList<CombinedPathEdge> Edges, bool PrefixTruncated, bool LastEdgeNotTraversed);
+
 public sealed record CombinedPathGap(
     string GapId,
     string GapKind,
@@ -283,6 +320,15 @@ public sealed record CombinedPathGap(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     int? RegistrationEvidenceCount = null)
 {
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public CombinedCutoffWitness? CutoffWitness { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? CutoffCause { get; init; }
+    // Path-local evaluation depth, not a node's shortest/discovery depth.
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? CutoffTraversalDepth { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? CutoffMaxDepth { get; init; }
     [JsonIgnore]
     public IReadOnlyList<string> EffectiveSupportingFactIds => SupportingFactIds is { Count: > 0 }
         ? SupportingFactIds
@@ -370,6 +416,7 @@ public static partial class CombinedDependencyPathReporter
         "projectless-publish-member-candidate",
         "compiled-il-call",
         "compiled-il-callvirt-candidate",
+        FrameworkVersionCandidateEdge,
         "projectless-vb-receiver-bridge",
         "projectless-vb-constructor-bridge",
         "interface-candidate",
@@ -606,6 +653,7 @@ public static partial class CombinedDependencyPathReporter
         var paths = new List<CombinedPath>();
         var truncated = false;
         SearchResult? search = null;
+        RetainedMethodGraph? methodGraph = null;
 
         if (resolvedStarts.TotalMatchCount > startNodes.Count)
         {
@@ -626,7 +674,13 @@ public static partial class CombinedDependencyPathReporter
             truncated = true;
         }
 
-        if (startNodes.Count == 0)
+        if (options.MethodGraphObserver is not null)
+        {
+            methodGraph = BuildMethodGraph(graph, read, startNodes, options);
+            truncated |= methodGraph.Cutoffs.Count != 0;
+            options.MethodGraphObserver(methodGraph);
+        }
+        else if (startNodes.Count == 0)
         {
             gaps.Add(CreateSelectorGap(read, options, sourceFilter));
         }
@@ -787,11 +841,11 @@ public static partial class CombinedDependencyPathReporter
                 options.MaxDepth,
                 options.MaxPaths,
                 options.MaxFrontier,
-                Algorithm,
+                methodGraph is not null ? "unique-node-breadth-first-outgoing" : Algorithm,
                 AlgorithmVersion,
                 CombinedReportHelpers.NormalizeMessageDirection(options.MessageDirection, "paths"),
                 options.MaxTraversalWork,
-                options.ExactFromSymbol) { SymbolRoots = options.SymbolRoots, TraversalScope = options.CompiledOnly ? "compiled-il-with-root-attachment" : null },
+                options.ExactFromSymbol) { SymbolRoots = options.SymbolRoots, TraversalScope = methodGraph is not null ? "unfiltered-retained-outgoing" : options.CompiledOnly ? "compiled-il-with-root-attachment" : null },
             read.Sources.Select(source => legacyMode ? SanitizeSource(source) : source).OrderBy(source => source.Label, StringComparer.Ordinal).ThenBy(source => source.SourceIndexId, StringComparer.Ordinal).ToArray(),
             new CombinedPathSummary(
                 read.Sources.Count,
@@ -800,7 +854,7 @@ public static partial class CombinedDependencyPathReporter
                 sortedPaths.Length,
                 sortedGaps.Length,
                 selectorCandidateCount,
-                truncated) { TraversalWorkUnits = search?.Work ?? 0 },
+                truncated) { TraversalWorkUnits = methodGraph?.Work ?? search?.Work ?? 0 },
             sortedPaths,
             sortedGaps,
             new CombinedPathInventory(
@@ -4148,10 +4202,15 @@ public static partial class CombinedDependencyPathReporter
     }
 
     internal static bool CompiledBaselineAllowsEdge(string kind, bool enteredCompiled)
-        => kind is "compiled-il-call" or "compiled-il-callvirt-candidate" or "compiled-database-api-candidate"
+        => kind is "compiled-il-call" or "compiled-il-callvirt-candidate" or FrameworkVersionCandidateEdge or "compiled-database-api-candidate"
             || (!enteredCompiled && kind is "legacy-root-selection" or "compiled-source-identity"
                 or "projectless-source-pdb-identity" or "projectless-publish-member-candidate"
                 or "projectless-publish-method-candidate");
+
+    internal static bool IsPublishIdentityRoundtrip(string previousKind, string previousFrom, string previousTo,
+        string nextKind, string nextFrom, string nextTo) =>
+        previousKind == "projectless-publish-member-candidate" && nextKind == previousKind &&
+        previousFrom == nextTo && previousTo == nextFrom;
 
     private static (Dictionary<string, int>? Distances, int Work) FindTerminalDistances(
         EvidenceGraph graph, IReadOnlySet<string> terminals, int maxDepth, int maxStates, int maxWork)
@@ -4222,6 +4281,27 @@ public static partial class CombinedDependencyPathReporter
 
         var paths = new List<CombinedPath>();
         var gaps = new List<CombinedPathGap>();
+        var witnessedCutoffs = new HashSet<string>(StringComparer.Ordinal);
+        var witnessCounts = new Dictionary<string, int>(StringComparer.Ordinal);
+        CombinedPathGap Cutoff(string reason, PathState state, GraphEdge? rejectedEdge = null, string? cause = null)
+        {
+            cause ??= reason == "depth" ? "depth-limit-reached" : "repeated-node-cycle";
+            var gap = TruncatedGap(reason, rejectedEdge?.ToNodeId ?? state.NodeIds[^1], graph) with
+            {
+                CutoffCause = cause,
+                CutoffTraversalDepth = state.EdgeIds.Count,
+                CutoffMaxDepth = maxDepth,
+                Message = CutoffDiagnosticMessage(cause) ?? "Traversal cutoff; coverage remains partial."
+            };
+            if (witnessCounts.GetValueOrDefault(reason) >= 3 || !witnessedCutoffs.Add(gap.GapId)) return gap;
+            witnessCounts[reason] = witnessCounts.GetValueOrDefault(reason) + 1;
+            var nodeIds = rejectedEdge is null ? state.NodeIds.ToArray() : state.NodeIds.Append(rejectedEdge.ToNodeId).ToArray();
+            var edgeIds = rejectedEdge is null ? state.EdgeIds.ToArray() : state.EdgeIds.Append(rejectedEdge.EdgeId).ToArray();
+            return gap with { CutoffWitness = new(
+                nodeIds.Take(65).Select(id => graph.Nodes[id].ToReportNode()).ToArray(),
+                edgeIds.Take(64).Select(id => graph.EdgesById[id].ToReportEdge()).ToArray(),
+                edgeIds.Length > 64, rejectedEdge is not null) };
+        }
         var reachedNodeIds = starts.Select(node => node.NodeId).ToHashSet(StringComparer.Ordinal);
         // Terminal inventory answers which supported terminals are reachable;
         // ordinary enumeration still retains bounded, distinct route detail.
@@ -4400,7 +4480,7 @@ public static partial class CombinedDependencyPathReporter
                 truncated = true;
                 RecordNodeShape(traversal[state.RootNodeId], currentNodeId, frontier: true);
                 traversal[state.RootNodeId].MarkTruncated("depth");
-                gaps.Add(TruncatedGap("depth", currentNodeId, graph));
+                gaps.Add(Cutoff("depth", state));
                 YieldLegacyRoot(state.RootNodeId);
                 continue;
             }
@@ -4454,7 +4534,8 @@ public static partial class CombinedDependencyPathReporter
                     truncated = true;
                     traversal[state.RootNodeId].MarkTruncated("depth");
                     RecordNodeShape(traversal[state.RootNodeId], edge.ToNodeId, frontier: true);
-                    gaps.Add(TruncatedGap("depth", edge.ToNodeId, graph));
+                    gaps.Add(Cutoff("depth", state, edge, terminalDistances.ContainsKey(edge.ToNodeId)
+                        ? "terminal-distance-exceeds-remaining-depth" : "terminal-route-not-found-within-depth-bound"));
                     continue;
                 }
                 if (IsDispatchCandidateCrossHop(graph, state, edge))
@@ -4475,7 +4556,10 @@ public static partial class CombinedDependencyPathReporter
                     {
                         truncated = true;
                         traversal[state.RootNodeId].MarkTruncated("cycle");
-                        gaps.Add(TruncatedGap("cycle", edge.ToNodeId, graph));
+                        var prior = state.EdgeIds.Count > 0 ? graph.EdgesById[state.EdgeIds[^1]] : null;
+                        var identityRoundtrip = prior is not null && IsPublishIdentityRoundtrip(
+                            prior.EdgeKind, prior.FromNodeId, prior.ToNodeId, edge.EdgeKind, edge.FromNodeId, edge.ToNodeId);
+                        gaps.Add(Cutoff("cycle", state, edge, identityRoundtrip ? "candidate-identity-roundtrip" : "repeated-node-cycle"));
                     }
                     continue;
                 }
@@ -5100,14 +5184,32 @@ public static partial class CombinedDependencyPathReporter
         return edge with { FilePath = edge.FilePath is null ? null : SafePath(edge.FilePath) };
     }
 
-    private static CombinedPathGap SanitizeGap(CombinedPathGap gap)
+    internal static string? CutoffDiagnosticMessage(string? cause) => cause switch
+    {
+        "terminal-route-not-found-within-depth-bound" => "Reverse terminal filtering found no route within its search bound; this does not establish forward depth exhaustion. The candidate edge was not traversed. Its target or downstream edges may still exist in the full evidence graph. Longer routes, missing evidence, or a branch without a supported terminal remain possible.",
+        "terminal-distance-exceeds-remaining-depth" => "The known terminal distance exceeds the remaining path depth. The candidate edge was not traversed.",
+        "candidate-identity-roundtrip" => "An immediate return across a publish-member identity candidate was skipped. This is not evidence of application recursion.",
+        "depth-limit-reached" => "Traversal reached the configured edge-depth limit. Coverage remains partial.",
+        "repeated-node-cycle" => "Traversal skipped a repeated node. This static cycle is not proof of runtime recursion.",
+        _ => null
+    };
+
+    internal static CombinedPathGap SanitizeGap(CombinedPathGap gap)
     {
         return gap with
         {
             Classification = NormalizeClassification(gap.Classification, legacyMode: true),
             SourceLabel = gap.SourceLabel is null ? null : SafeSourceLabel(gap.SourceLabel),
-            Message = SafeDisplay(gap.Message) ?? "redacted",
-            FilePath = gap.FilePath is null ? null : SafePath(gap.FilePath)
+            // Regenerate only fixed scanner-owned prose. Never exempt the
+            // incoming message or any source-derived field from redaction.
+            Message = (gap.GapKind == "TruncatedByLimit" && gap.RuleId == TruncationGapRuleId
+                ? CutoffDiagnosticMessage(gap.CutoffCause) : null) ?? SafeDisplay(gap.Message) ?? "redacted",
+            FilePath = gap.FilePath is null ? null : SafePath(gap.FilePath),
+            CutoffWitness = gap.CutoffWitness is not { } witness ? null : witness with
+            {
+                Nodes = witness.Nodes.Select(SanitizeNode).ToArray(),
+                Edges = witness.Edges.Select(SanitizeEdge).ToArray()
+            }
         };
     }
 
@@ -5157,6 +5259,11 @@ public static partial class CombinedDependencyPathReporter
         if (edges.Any(edge => edge.EdgeKind is "calls" or "creates" or "inherits" or "implements" or "overrides"))
         {
             notes.Add(new CombinedPathNote("StaticCodeEvidence", "Code relationship hops do not prove dynamic dispatch, runtime DI, reflection, branch feasibility, collection contents, or serializer behavior."));
+        }
+
+        if (edges.Any(edge => edge.EdgeKind == FrameworkVersionCandidateEdge))
+        {
+            notes.Add(new CombinedPathNote("FrameworkSignatureCandidate", "This route includes a unique embedded desktop framework-version signature candidate. Declaring assembly identity remains exact, but runtime binding and compatibility are unproven; argument and return-value propagation cannot cross this candidate."));
         }
 
         if (edges.Any(edge => edge.EdgeKind is "compiled-source-identity" or "projectless-source-pdb-identity" or "compiled-il-call" or "compiled-il-callvirt-candidate"))
@@ -6505,7 +6612,7 @@ public static partial class CombinedDependencyPathReporter
             // can enumerate exponentially many bridge variants without ever
             // reaching its already-admitted IL terminal. This changes scheduling,
             // not admission, evidence tiers, or the global work/path limits.
-            "compiled-il-call" or "compiled-il-callvirt-candidate"
+            "compiled-il-call" or "compiled-il-callvirt-candidate" or FrameworkVersionCandidateEdge
                 or "compiled-database-api-candidate" or "compiled-source-identity"
                 or "projectless-source-pdb-identity" or "projectless-publish-member-candidate"
                 or "projectless-publish-method-candidate" => 0,

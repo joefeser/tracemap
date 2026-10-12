@@ -68,7 +68,8 @@ public sealed record WebFormsReviewConfig(
     string[]? PublishSourceRelativePaths = null,
     WebFormsReviewConfigProvenance? PreparationProvenance = null,
     string? PublishSourceRelativeBase = null,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] WebFormsReviewConfigProvenance? WizardProvenance = null);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] WebFormsReviewConfigProvenance? WizardProvenance = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? VbImportContextRelativePath = null);
 
 public sealed record WebFormsReviewConfigProvenance(string RuleId, string GeneratorSha256, string BoundedInputSha256);
 
@@ -119,7 +120,10 @@ public static partial class WebFormsReviewPreflightCommand
         node-limit report outputs without scanning or changing the original run.
         query-recovery --bundle <bundle> accepts the same bounded query options.
         query-recovery --bundle <bundle> --handler <method-name> counts retained handler paths only.
-        requery-handler --run <retained-run> --bundle <completed-report-or-recovery-bundle> --handler <method-name> --out <new-folder> [--surface-name DbDataAdapter.Fill] [--traversal-scope compiled-il]
+        requery-handler --run <retained-run> --bundle <completed-report-or-recovery-bundle> --handler <method-name> --out <new-folder> [--surface-name DbDataAdapter.Fill] [--traversal-scope compiled-il] [--max-depth <1..64>]
+        Substitute --compiled-root <local-root.json> for --handler to select one exact retained compiled method
+        by sourceIndexId, scanId, commitSha and symbolId, even when absent from the original report roots.
+        Compiled-root path queries use compiled-il traversal; original inputs are not rescanned.
           builds a separate single-root report from the verified retained combined index; no scan or combine.
         migration-review --config <native-config> --handler <method-name> --out <new-handoff-root> [--attest-exact-source-commit <sha>]
         migration-review --config <migration-draft> --handler <method-name> --out <new-handoff-root> --proof-root <retained-proof> --published-root <original-publish> --source-base <repo-relative-website-folder>
@@ -265,6 +269,11 @@ public static partial class WebFormsReviewPreflightCommand
             }
         }
         var receiptHashes = new List<string>();
+        if (config.VbImportContextRelativePath is not null)
+        {
+            await Add("vb-import-context", Child(receiptRoot, config.VbImportContextRelativePath), 1_048_576);
+            gaps.Add("EffectiveVbImportContextValidationDeferred");
+        }
         foreach (var receiptPath in config.BindingReceipts.Order(StringComparer.Ordinal))
         {
             var input = await Add("binding-receipt", Child(receiptRoot, receiptPath), 1_048_576);
@@ -344,6 +353,8 @@ public static partial class WebFormsReviewPreflightCommand
 
     internal static void ValidateConfig(WebFormsReviewConfig config)
     {
+        if (config.VbImportContextRelativePath is not null && config.Operation != "fresh")
+            throw Fail("VB_IMPORT_CONTEXT_REQUIRES_SOURCE_EXTRACTION");
         if (config.WizardProvenance is { } wizard && (wizard.RuleId != "workflow.webforms.wizard-native-config.v1"
             || !IsHex(wizard.GeneratorSha256, 64) || !IsHex(wizard.BoundedInputSha256, 64))) throw Fail("CONFIG_INVALID");
         if (config.SchemaVersion != ConfigSchema || config.Operation is not ("fresh" or "attach") ||

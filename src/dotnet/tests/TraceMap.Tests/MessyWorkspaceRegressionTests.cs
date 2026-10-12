@@ -815,14 +815,22 @@ public sealed class MessyWorkspaceRegressionTests
             "cross-assembly MemberRef did not join to one admitted declaration; memberref="
                 + memberReference.Properties.GetValueOrDefault("targetIdentity")
                 + "; declaration=" + declaration.TargetSymbol);
+        var gateway = Assert.Single(scan.Facts, fact => fact.FactType == FactTypes.ManagedMethodDeclared
+            && fact.TargetSymbol?.Contains("ProcedureGateway", StringComparison.Ordinal) == true
+            && fact.Properties.GetValueOrDefault("metadataName") == "ExecuteProcedure");
+        Assert.True(int.TryParse(gateway.Properties["methodDispatchFlags"], out var gatewayFlags));
+        Assert.Equal(0, gatewayFlags & (int)(System.Reflection.MethodAttributes.Virtual | System.Reflection.MethodAttributes.Static));
+        Assert.Contains(scan.Facts, fact => fact.FactType == FactTypes.ManagedIlCallObserved
+            && fact.Properties.GetValueOrDefault("opcode") == "callvirt"
+            && fact.Properties.GetValueOrDefault("targetIdentity") == gateway.TargetSymbol);
         Require("MW-CROSSLANGUAGE-001", "reconciliation",
-            graph.Edges.Any(edge => edge.EdgeKind == "compiled-il-callvirt-candidate"
-                && edge.EvidenceTier == EvidenceTiers.Tier3SyntaxOrTextual
+            graph.Edges.Any(edge => edge.EdgeKind == "compiled-il-call"
+                && edge.EvidenceTier == EvidenceTiers.Tier2Structural
                 && nodes[edge.FromNodeId].DisplayName.Contains("DataAccess", StringComparison.Ordinal)
                 && nodes[edge.FromNodeId].DisplayName.Contains("SelectNames", StringComparison.Ordinal)
                 && nodes[edge.ToNodeId].DisplayName.Contains("ProcedureGateway", StringComparison.Ordinal)
                 && nodes[edge.ToNodeId].DisplayName.Contains("ExecuteProcedure", StringComparison.Ordinal)),
-            "the inherited Open-initialized field callvirt must remain a review-tier compiled candidate");
+            "the encoded callvirt must join its metadata-proven nonvirtual target without claiming runtime field initialization");
 
         // This portion also runs on macOS: two independent bound scans must
         // retain the same exact cross-assembly MemberRef after index combine.

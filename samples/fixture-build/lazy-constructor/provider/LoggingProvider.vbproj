@@ -8,5 +8,6 @@
   <ItemGroup>
     <Compile Include="../../../messy-dotnet-workspace/vb-lazy-logging-provider/PublicLog.vb" />
     <Reference Include="System.Data" />
+    <Reference Include="System.Web" />
   </ItemGroup>
 </Project>

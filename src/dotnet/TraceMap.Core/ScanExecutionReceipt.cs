@@ -160,6 +160,12 @@ public sealed class ScanReceiptRecorder
                 depsJsonLimits = options.IndexDepsJson ? options.DepsJsonLimits ?? new DepsJsonLimits() : null,
                 indexCiProducers = options.IndexCiProducers
             }));
+        if (!string.IsNullOrWhiteSpace(options.WebFormsVbImportContextPath))
+            scopeFingerprint = Hash(JsonSerializer.Serialize(new
+            {
+                baseScopeSha256 = scopeFingerprint,
+                webFormsVbImportContextPath = options.WebFormsVbImportContextPath.Trim()
+            }));
     }
 
     public bool CanWriteAuthoritativeReceipt => repositoryIdentityHash is not null && commitSha is not null && runId is not null;

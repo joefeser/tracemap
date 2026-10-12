@@ -1,6 +1,8 @@
 using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text.Json;
+using Microsoft.Data.Sqlite;
+using TraceMap.Reporting;
 using TraceMap.Cli;
 using TraceMap.Core;
 
@@ -273,6 +275,8 @@ public sealed class WebFormsReviewExecutionTests
         Assert.All(status.Phases.Where(phase => phase.Name != "reports"), phase => Assert.Null(phase.WorkUnitsUsed));
         var complete = checkpoint.State == "reports-completed-review-only";
         Assert.Equal(complete, status.WorkbenchPath is not null);
+        Assert.Equal(complete ? checkpoint.Artifacts.Single(item => item.RelativePath == checkpoint.Reports!.ReportAttempt + "/combined.sqlite").Sha256 : null,
+            status.CombinedIndexSha256);
         Assert.Contains(status.NextActions, action => action.Arguments.FirstOrDefault() == (complete ? "query" : "resume"));
         if (complete)
         {
@@ -822,7 +826,11 @@ public sealed class WebFormsReviewExecutionTests
         fixture.AddPublicEventFixture(sourceFolder);
         await fixture.Preflight();
         Assert.Equal(0, await TraceMapCommand.RunAsync(["webforms-review", "run", "--run", fixture.Run], fixture.Output, fixture.Error));
+        Assert.Contains("reviewOnly=true;sourceRescanned=true", fixture.Output.ToString(), StringComparison.Ordinal);
+        Assert.Contains("sourceExtractionScope=current-invocation;reportPhaseSourceRescanned=false;scanOperation=fresh;scanCheckpointSha256=", fixture.Output.ToString(), StringComparison.Ordinal);
+        fixture.Output.GetStringBuilder().Clear();
         Assert.Equal(0, await TraceMapCommand.RunAsync(["webforms-review", "resume", "--run", fixture.Run], fixture.Output, fixture.Error));
+        Assert.DoesNotContain("reviewOnly=true;sourceRescanned=true", fixture.Output.ToString(), StringComparison.Ordinal);
         Assert.Equal("reports-completed-review-only", fixture.LastCheckpoint().State);
         Assert.Equal(4, fixture.LastCheckpoint().Sequence);
         var checkpoint = fixture.LastCheckpoint();
@@ -832,6 +840,7 @@ public sealed class WebFormsReviewExecutionTests
         Assert.True(File.Exists(Path.Combine(report, "compiled", "compiled-paths.handoff.local.json")));
         Assert.DoesNotContain("UnifiedReportsPending", checkpoint.Gaps);
         Assert.Equal(Hash(Path.Combine(fixture.Run, "checkpoints", "0002.json")), checkpoint.Reports.ScanCheckpointSha256);
+        Assert.Contains("scanCheckpointSha256=" + checkpoint.Reports.ScanCheckpointSha256, fixture.Output.ToString(), StringComparison.Ordinal);
         Assert.Contains("sourceRescanned=false", fixture.Output.ToString(), StringComparison.Ordinal);
         var handoff = JsonSerializer.Deserialize<NativeWebFormsReviewHandoff>(File.ReadAllText(Path.Combine(report, "handoff.local.json")), JsonOptions)!;
         Assert.NotEmpty(handoff.Packet.EventChains);
@@ -930,6 +939,7 @@ public sealed class WebFormsReviewExecutionTests
         var markerHash = Hash(marker!);
         Assert.Equal(0, await fixture.ExecuteReports("resume", WebFormsReviewReportExecution.WriteAsync));
         var complete = fixture.LastCheckpoint();
+        Assert.Contains("reviewOnly=true;sourceRescanned=false", fixture.Output.ToString(), StringComparison.Ordinal);
         Assert.Equal("reports-completed-review-only", complete.State);
         Assert.Equal(6, complete.Sequence);
         Assert.Equal(scan.Attempt, complete.Attempt);
@@ -1006,9 +1016,10 @@ public sealed class WebFormsReviewExecutionTests
         using var fixture = new Fixture();
         var parent = await fixture.PreflightAttachment();
         var parentHash = Hash(Path.Combine(parent, "index.sqlite"));
-        Assert.Equal(0, await fixture.Execute("run", (_, _, _, _) => throw new InvalidOperationException("must not source scan")));
-        Assert.Equal(0, await fixture.ExecuteReports("resume", WebFormsReviewReportExecution.WriteAsync));
+        Assert.Equal(0, await fixture.ExecuteReports("run", WebFormsReviewReportExecution.WriteAsync));
         var checkpoint = fixture.LastCheckpoint();
+        Assert.Contains("reportPhaseSourceRescanned=false;scanOperation=attach;scanCheckpointSha256=", fixture.Output.ToString(), StringComparison.Ordinal);
+        Assert.DoesNotContain("reviewOnly=true;sourceRescanned=true", fixture.Output.ToString(), StringComparison.Ordinal);
         Assert.Equal("reports-completed-review-only", checkpoint.State);
         Assert.Equal(parentHash, Hash(Path.Combine(parent, "index.sqlite")));
         var handoff = JsonSerializer.Deserialize<NativeWebFormsReviewHandoff>(File.ReadAllText(Path.Combine(fixture.Run,
@@ -1223,6 +1234,85 @@ public sealed class WebFormsReviewExecutionTests
     }
 
     [Theory]
+    [InlineData("valid")]
+    [InlineData("wrong-scan")]
+    [InlineData("wrong-symbol")]
+    [InlineData("duplicate-json")]
+    public async Task Exact_compiled_root_requery_does_not_require_original_handler_membership(string scenario)
+    {
+        using var fixture = new Fixture();
+        fixture.AddPublicEventFixture();
+        await fixture.Preflight();
+        Assert.Equal(0, await fixture.Execute("run", Scan));
+        Assert.Equal(0, await fixture.ExecuteReports("resume", WebFormsReviewReportExecution.WriteAsync));
+        var bundle = Path.Combine(fixture.Run, fixture.LastCheckpoint().Reports!.ReportAttempt);
+        CombinedPathSymbolRoot root;
+        using (var connection = new SqliteConnection(new SqliteConnectionStringBuilder
+            { DataSource = Path.Combine(bundle, "combined.sqlite"), Mode = SqliteOpenMode.ReadOnly, Pooling = false }.ToString()))
+        {
+            connection.Open();
+            using var command = connection.CreateCommand();
+            command.CommandText = "SELECT s.source_index_id,s.scan_id,s.commit_sha,f.target_symbol FROM combined_facts f JOIN index_sources s ON s.source_index_id=f.source_index_id WHERE f.fact_type='ManagedMethodDeclared' ORDER BY f.target_symbol LIMIT 1";
+            using var reader = command.ExecuteReader();
+            Assert.True(reader.Read());
+            root = new(reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.GetString(3));
+        }
+        if (scenario == "wrong-scan") root = root with { ScanId = "missing" };
+        if (scenario == "wrong-symbol") root = root with { SymbolId = "missing" };
+        var selector = Path.Combine(fixture.Root, "compiled-root.local.json");
+        var json = JsonSerializer.Serialize(root, JsonOptions);
+        if (scenario == "duplicate-json") json = json.Replace("\"scanId\":", "\"scanId\":\"other\",\"scanId\":", StringComparison.Ordinal);
+        File.WriteAllText(selector, json);
+        var before = Directory.GetFiles(fixture.Run, "*", SearchOption.AllDirectories).ToDictionary(path => path, Hash);
+        var destination = Path.Combine(fixture.Root, "compiled-query");
+        using var error = new StringWriter();
+        var result = await TraceMapCommand.RunAsync(["webforms-review", "requery-handler", "--run", fixture.Run,
+            "--bundle", bundle, "--compiled-root", selector, "--out", destination], TextWriter.Null, error);
+        Assert.True(result == (scenario == "valid" ? 0 : 1), error.ToString());
+        if (scenario == "valid")
+        {
+            var receipt = JsonSerializer.Deserialize<WebFormsHandlerRequeryReceipt>(File.ReadAllText(Path.Combine(destination,
+                WebFormsReviewExecutionCommand.HandlerRequeryName)), JsonOptions)!;
+            Assert.Equal(root, receipt.Root);
+            Assert.Equal("exact-compiled-method", receipt.RootSelectionKind);
+            Assert.Equal("compiled-il-with-root-attachment", receipt.Query.TraversalScope);
+            Assert.Equal("single-compiled-method-retained-static-review-not-parity", receipt.ClaimLevel);
+            Assert.Equal(WebFormsReviewExecutionCommand.HandlerRequeryHash(receipt), receipt.BoundedInputSha256);
+        }
+        else Assert.False(Directory.Exists(destination));
+        Assert.Equal(before, Directory.GetFiles(fixture.Run, "*", SearchOption.AllDirectories).ToDictionary(path => path, Hash));
+    }
+
+    [Theory]
+    [InlineData(32)]
+    [InlineData(48)]
+    public async Task Completed_handler_requery_depth_override_preserves_original_artifacts(int depth)
+    {
+        using var fixture = new Fixture();
+        fixture.AddPublicEventFixture();
+        await fixture.Preflight();
+        Assert.Equal(0, await fixture.Execute("run", Scan));
+        Assert.Equal(0, await fixture.ExecuteReports("resume", WebFormsReviewReportExecution.WriteAsync));
+        var checkpoint = fixture.LastCheckpoint();
+        var bundle = Path.Combine(fixture.Run, checkpoint.Reports!.ReportAttempt);
+        var before = Directory.GetFiles(fixture.Run, "*", SearchOption.AllDirectories).ToDictionary(path => path, Hash);
+        var destination = Path.Combine(fixture.Root, "deeper-completed-query");
+        using var error = new StringWriter();
+        var result = await TraceMapCommand.RunAsync(["webforms-review", "requery-handler", "--run", fixture.Run,
+            "--bundle", bundle, "--handler", "Names_Init", "--out", destination,
+            "--max-depth", depth.ToString(System.Globalization.CultureInfo.InvariantCulture)], TextWriter.Null, error);
+        Assert.True(result == 0, error.ToString());
+        var receipt = JsonSerializer.Deserialize<WebFormsHandlerRequeryReceipt>(File.ReadAllText(Path.Combine(destination,
+            WebFormsReviewExecutionCommand.HandlerRequeryName)), JsonOptions)!;
+        Assert.Equal(depth, receipt.Query.MaxDepth);
+        Assert.NotNull(receipt.CompletedReportSha256);
+        Assert.True(receipt.PathEnumerationPerformed);
+        Assert.Equal(WebFormsReviewExecutionCommand.HandlerRequeryHash(receipt), receipt.BoundedInputSha256);
+        Assert.Equal(before.Count, Directory.GetFiles(fixture.Run, "*", SearchOption.AllDirectories).Length);
+        foreach (var (path, hash) in before) Assert.Equal(hash, Hash(path));
+    }
+
+    [Theory]
     [InlineData("unchanged")]
     [InlineData("changed")]
     [InlineData("missing")]
@@ -1261,6 +1351,26 @@ public sealed class WebFormsReviewExecutionTests
             (_, _, _, _) => throw new InvalidOperationException("must not rescan")));
         Assert.Equal(2, Directory.GetFiles(Path.Combine(fixture.Run, "checkpoints"), "*.json").Length);
         Assert.DoesNotContain(evidence, fixture.Error.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Effective_vb_context_is_forwarded_and_resume_rechecks_its_hash()
+    {
+        using var fixture = new Fixture();
+        var context = Path.Combine(fixture.Published, "effective-imports.json");
+        // Invalid context intentionally pins sanitized partial-analysis behavior.
+        File.WriteAllText(context, "{}");
+        fixture.Config = fixture.Config with { VbImportContextRelativePath = "effective-imports.json" };
+        await fixture.Preflight();
+        Assert.Equal(0, await fixture.Execute("run", async (args, output, error, token) =>
+        {
+            Assert.Equal(context, args[Array.IndexOf(args, "--webforms-vb-import-context") + 1]);
+            return await Scan(args, output, error, token);
+        }));
+        File.AppendAllText(context, " ");
+        Assert.Equal(1, await fixture.Execute("resume", (_, _, _, _) => throw new InvalidOperationException("must not rescan")));
+        Assert.ThrowsAny<Exception>(() => WebFormsReviewPreflightCommand.ValidateConfig(fixture.Config with
+            { Operation = "attach", ParentScanRoot = fixture.Source }));
     }
 
     private static Task<int> Scan(string[] args, TextWriter output, TextWriter error, CancellationToken token) =>
@@ -1317,8 +1427,53 @@ public sealed class WebFormsReviewExecutionTests
             Assert.True(handlerReceipt.Query.ExactFromSymbol);
             Assert.Single(handlerReceipt.Query.SymbolRoots!);
             Assert.NotNull(handlerReceipt.GraphObservation);
+            Assert.True(handlerReceipt.PathEnumerationPerformed);
+            Assert.Equal(TraceMap.Reporting.GroupedCompiledPathReportWriter.HtmlName, handlerReceipt.PrimaryReport);
             Assert.Equal(handlerReceipt.CombinedIndexSha256, handlerReceipt.GraphObservation.InputSha256);
             Assert.Contains("no-scan;no-combine", requeryOutput.ToString());
+            foreach (var depth in new[] { 1, 32, 48, 64 })
+            {
+                var deeperFolder = Path.Combine(fixture.Root, $"handler-depth-{depth}");
+                Assert.Equal(0, await TraceMapCommand.RunAsync(["webforms-review", "requery-handler", "--run", fixture.Run,
+                    "--bundle", target, "--handler", "Names_Init", "--out", deeperFolder,
+                    "--max-depth", depth.ToString(System.Globalization.CultureInfo.InvariantCulture)], requeryOutput, error));
+                var deeper = JsonSerializer.Deserialize<WebFormsHandlerRequeryReceipt>(File.ReadAllText(Path.Combine(deeperFolder,
+                    WebFormsReviewExecutionCommand.HandlerRequeryName)), JsonOptions)!;
+                Assert.Equal(depth, deeper.Query.MaxDepth);
+                Assert.Equal(handlerReceipt.Query.MaxTraversalWork, deeper.Query.MaxTraversalWork);
+                Assert.Equal(handlerReceipt.Query.MaxPaths, deeper.Query.MaxPaths);
+                Assert.Equal(handlerReceipt.Query.MaxFrontier, deeper.Query.MaxFrontier);
+                Assert.Equal(handlerReceipt.CombinedIndexSha256, deeper.CombinedIndexSha256);
+                Assert.Equal(WebFormsReviewExecutionCommand.HandlerRequeryHash(deeper), deeper.BoundedInputSha256);
+                Assert.NotEqual(deeper.BoundedInputSha256,
+                    WebFormsReviewExecutionCommand.HandlerRequeryHash(deeper with { Query = deeper.Query with { MaxDepth = depth == 1 ? 2 : 1 } }));
+            }
+            foreach (var value in new[] { "0", "65", "-1", "abc", "2147483648" })
+            {
+                var invalidFolder = Path.Combine(fixture.Root, "invalid-depth");
+                Assert.Equal(1, await TraceMapCommand.RunAsync(["webforms-review", "requery-handler", "--run", fixture.Run,
+                    "--bundle", target, "--handler", "Names_Init", "--out", invalidFolder, "--max-depth", value], TextWriter.Null, error));
+                Assert.False(Directory.Exists(invalidFolder));
+            }
+            var graphFolder = Path.Combine(fixture.Root, "handler-method-graph");
+            Assert.Equal(0, await TraceMapCommand.RunAsync(["webforms-review", "requery-handler", "--run", fixture.Run,
+                "--bundle", target, "--handler", "Names_Init", "--out", graphFolder, "--view", "method-graph", "--max-depth", "32"], requeryOutput, error));
+            var graphReceipt = JsonSerializer.Deserialize<WebFormsHandlerRequeryReceipt>(File.ReadAllText(Path.Combine(graphFolder,
+                WebFormsReviewExecutionCommand.HandlerRequeryName)), JsonOptions)!;
+            Assert.Equal("unfiltered-retained-outgoing", graphReceipt.Query.TraversalScope);
+            Assert.Equal(32, graphReceipt.Query.MaxDepth);
+            Assert.Null(graphReceipt.Query.ToSurface);
+            Assert.False(graphReceipt.PathEnumerationPerformed);
+            Assert.Equal("method-graph", graphReceipt.ReportVariant);
+            Assert.Equal(0, graphReceipt.ExactChains);
+            Assert.Equal(0, graphReceipt.EvidenceVariants);
+            Assert.Equal(TraceMap.Reporting.RetainedMethodGraphWriter.HtmlName, graphReceipt.PrimaryReport);
+            Assert.False(File.Exists(Path.Combine(graphFolder, TraceMap.Reporting.GroupedCompiledPathReportWriter.HtmlName)));
+            Assert.False(File.Exists(Path.Combine(graphFolder, TraceMap.Reporting.GroupedCompiledPathReportWriter.HandoffName)));
+            Assert.DoesNotContain(graphReceipt.Artifacts, artifact => artifact.RelativePath.StartsWith("compiled-paths.", StringComparison.Ordinal));
+            Assert.Equal(WebFormsReviewExecutionCommand.HandlerRequeryHash(graphReceipt), graphReceipt.BoundedInputSha256);
+            Assert.Contains(graphReceipt.Artifacts, artifact => artifact.RelativePath == TraceMap.Reporting.RetainedMethodGraphWriter.JsonName);
+            Assert.Contains("Call graph tree", File.ReadAllText(Path.Combine(graphFolder, TraceMap.Reporting.RetainedMethodGraphWriter.HtmlName)));
             var fillFolder = Path.Combine(fixture.Root, "handler-fill-query");
             using var fillOutput = new StringWriter();
             Assert.Equal(0, await TraceMapCommand.RunAsync(["webforms-review", "requery-handler", "--run", fixture.Run,
@@ -1333,14 +1488,19 @@ public sealed class WebFormsReviewExecutionTests
             using var compiledOutput = new StringWriter();
             Assert.Equal(0, await TraceMapCommand.RunAsync(["webforms-review", "requery-handler", "--run", fixture.Run,
                 "--bundle", target, "--handler", "Names_Init", "--out", compiledFolder, "--surface-name", "DbDataAdapter.Fill",
-                "--traversal-scope", "compiled-il"], compiledOutput, error));
+                "--traversal-scope", "compiled-il", "--max-depth", "48"], compiledOutput, error));
             var compiledReceipt = JsonSerializer.Deserialize<WebFormsHandlerRequeryReceipt>(File.ReadAllText(Path.Combine(compiledFolder,
                 WebFormsReviewExecutionCommand.HandlerRequeryName)), JsonOptions)!;
             Assert.Equal("compiled-il-with-root-attachment", compiledReceipt.Query.TraversalScope);
+            Assert.Equal(48, compiledReceipt.Query.MaxDepth);
             Assert.Equal(WebFormsReviewExecutionCommand.HandlerRequeryHash(compiledReceipt), compiledReceipt.BoundedInputSha256);
             Assert.Equal(handlerReceipt.CombinedIndexSha256, compiledReceipt.CombinedIndexSha256);
             Assert.NotEqual(compiledReceipt.BoundedInputSha256, fillReceipt.BoundedInputSha256);
             var badScope = Path.Combine(fixture.Root, "bad-scope");
+            Assert.Equal(1, await TraceMapCommand.RunAsync(["webforms-review", "requery-handler", "--run", fixture.Run,
+                "--bundle", target, "--handler", "Names_Init", "--out", badScope,
+                "--max-depth", "32", "--max-depth", "48"], TextWriter.Null, error));
+            Assert.False(Directory.Exists(badScope));
             Assert.Equal(1, await TraceMapCommand.RunAsync(["webforms-review", "requery-handler", "--run", fixture.Run,
                 "--bundle", target, "--handler", "Names_Init", "--out", badScope, "--surface-name", "Wrong"], TextWriter.Null, error));
             Assert.False(Directory.Exists(badScope));

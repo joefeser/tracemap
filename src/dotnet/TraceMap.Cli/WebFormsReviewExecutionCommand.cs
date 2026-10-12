@@ -108,7 +108,7 @@ public static partial class WebFormsReviewExecutionCommand
                 {
                     phase = "reports-resume";
                     return await ExecuteReportsAsync(root, plan, preflightSha, runtimeRoot, runtimeSha, history,
-                        reportRunner, output, cancellationToken);
+                        reportRunner, output, cancellationToken, sourceExtractedThisInvocation: false);
                 }
                 await output.WriteLineAsync($"webFormsExecution={Completed};retainedSnapshot=true;sourceRescanned=false");
                 await output.WriteLineAsync($"webFormsScan={OwnedPath(root, history.ScanCheckpoint.Attempt + "/scan")}");
@@ -175,7 +175,7 @@ public static partial class WebFormsReviewExecutionCommand
                 {
                     phase = "reports";
                     return await ExecuteReportsAsync(root, plan, preflightSha, runtimeRoot, runtimeSha, history,
-                        reportRunner, output, cancellationToken);
+                        reportRunner, output, cancellationToken, sourceExtractedThisInvocation: !attach);
                 }
                 await output.WriteLineAsync($"webFormsExecution={Completed};facts={checkedScan.Facts};reviewOnly=true");
                 await output.WriteLineAsync($"webFormsScan={scanPath}");
@@ -253,6 +253,8 @@ public static partial class WebFormsReviewExecutionCommand
             ("binding-receipt", "--compiled-binding-receipt"), ("pdb", "--pdb-input") })
             foreach (var input in plan.Inputs.Where(input => input.Role == role).OrderBy(input => input.Path, StringComparer.Ordinal)) Add(option, input.Path);
         var publishReceipt = plan.Inputs.SingleOrDefault(input => input.Role == "publish-receipt");
+        var importContext = plan.Inputs.SingleOrDefault(input => input.Role == "vb-import-context");
+        if (importContext is not null) Add("--webforms-vb-import-context", importContext.Path);
         if (publishReceipt is not null)
         { Add("--webforms-publish-receipt", publishReceipt.Path); Add("--webforms-published-root", config.PublishedRoot); }
         if (config.PublishSourceRelativeBase is not null) Add("--webforms-publish-source-base", config.PublishSourceRelativeBase);

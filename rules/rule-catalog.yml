@@ -243,10 +243,11 @@ rules:
     limitations:
       - Bounded method-local origin candidates only, not command binding or SQL evidence. Argument slots are not concrete values and allocation or call-site origins are not runtime objects.
       - Literal strings retain only length and SHA-256 of exact UTF-16 code units, never raw text. No SQL statement or stored procedure is inferred from a method name or string hash.
-      - Normal branches and loops use a bounded fixed point retaining an origin only when all reached predecessor states agree, including protected blocks with known exception entries. Handler/filter roots start with unknown pre-exception locals; potentially modified arguments are unknown too. Leave discards state across unmodelled finally effects. Exception dispatch, finally continuations and branch feasibility are not established. Without known entries, exception bodies remain in the reduced local lane.
+      - Normal branches and loops use a bounded fixed point retaining at most four flat scalar origin alternatives (768 encoded characters). Unknown, unsupported or overflowing joins remain unknown; no branch condition or feasibility is inferred. Handler/filter roots start with unknown pre-exception locals and modified arguments. Leave discards locals; scalar arguments survive only with complete handler/filter ranges, no address exposure anywhere and no argument write in any handler/filter. Unsafe handler memory operations prevent preservation. Exception dispatch and finally continuations remain unmodelled. Without known entries, exception bodies remain in the reduced local lane.
       - Normal-flow analysis admits at most 20000 instructions, 256 tracked slots (including exposed-slot markers), 256 exposure origins per instruction, 1024 declared exception entries and 200000 work units per body. Handler seeding, origin retention and successor cloning/merging are work-charged. Actual fixed-point work is charged to a separate aggregate value-derivation budget per reader equal to policy MaxTotalWorkUnits, not the raw body/call admission budget. Unsupported operations, byref returns, stack failures and reader or work-limit disagreement withhold origins explicitly.
       - Field/array/indirect operations, checked arithmetic, boxing and address-taking retain bounded stack shape without proving heap values. Stores, indirect reads/writes and address calls expose affected origins; exposed slots remain exposure-capable on later writes. Internal address identities are bounded to 1024 characters and 64 nested steps, with unavailable addresses invalidating configuration. Known byref call shapes preserve non-byref scalar operands, but byref arguments and addresses are exported as unknown. Consumers must invalidate command state across unknown effects; heap contents, field values, interprocedural effects, virtual dispatch and execution are not established by this rule.
       - Body and call evidence can remain admitted while value coverage is partial. Value facts carry the exact IL generator and bounded-input hashes and cannot upgrade source or runtime coverage.
+      - Function-pointer loads ldftn and ldvirtftn retain only their bounded stack effect with an unknown pointer value. Loading a pointer is not invoking a method; delegate target execution and virtual dispatch are not inferred. Indirect calli remains unsupported and pointer receiver underflow remains a stack failure.
       - Return summaries retain at most 256 reached return sites per body. Missing flow, reader disagreement and limits emit unavailable summaries, never empty success. A single valid stack operand is a candidate only; consumers must verify non-byref return signatures, exact callee identity and all relevant return sites. Void or invalid stacks have unavailable operands. Internal addresses are projected to unknown. Legacy facts without return summaries do not establish return values.
 
   - id: dotnet.compiled.il-command-binding.v1
@@ -273,7 +274,7 @@ rules:
     limitations:
       - This local-only derived candidate is not SQL execution, procedure identity, provider dispatch, runtime object identity or handler parity. It does not upgrade the underlying command configuration or path coverage.
       - Only encoded compiled IL calls are followed. Source-only and projectless candidate bridges stop substitution explicitly. Encoded callvirt targets retain an explicit virtual-dispatch gap even when a constant origin is recovered.
-      - Static and instance argument slots are mapped separately; missing, malformed, ambiguous, changed-provenance and unavailable slots stop substitution. Root arguments remain unresolved. Producer returns require an exact nonvirtual encoded call, one callee body, one provenance-matched return summary and a String or Int32 return signature. All retained return sites must agree after bounded substitution. No string composition, heap values, external method execution or virtual return target is evaluated.
+      - Static and instance argument slots are mapped separately; missing, malformed, ambiguous, changed-provenance and unavailable slots stop substitution. Root arguments remain unresolved. Producer returns require an exact nonvirtual encoded call, one callee body, one provenance-matched return summary and a String or Int32 return signature. All retained return sites must have the same origin before a symbolic result is exposed. Up to 16 invocation frames bind returned argument slots to their exact caller while bounded alternatives and supported Concat expressions are traversed. Unknown return origins identify the stopping getter or helper and remain gaps. No string value, heap value, external method execution or virtual return target is evaluated.
       - ReturnSteps carry producer-call, callee-body and return-summary identities separately from caller steps; a producer is not inserted as a call-stack parent. Legacy facts without return summaries stay unresolved. The existing constant-on-encoded-call-path state may include these explicitly retained return steps and is still a static candidate, not runtime proof.
       - Strings retain only exact UTF-16 length and hash. A shared 64-unit bound charges caller substitutions, producer visits and return sites; recursion cycles stop explicitly. At most 256 outgoing producer edges, 256 return sites, 128 arguments per call and two competing fact records per indexed lookup are admitted. Existing query path and output bounds remain in force.
       - Each derived value retains the exact reporting assembly SHA-256 and SHA-256 of its bounded consumed projection, including rejected operand candidates, inspected edge identities and exact native fact provenance. Oversized selected properties are represented by length and digest. The artifact is local-only, not a shareable privacy projection.
@@ -3924,11 +3925,30 @@ rules:
       - CompiledIlTargetAmbiguous gap
       - CompiledIlCommandBindingUnavailable gap
     limitations:
+      - The historical DbDataAdapter.Fill surface also groups Fill calls encoded on System.Data.Common.DataAdapter in neutral, b77a5c561934e089 System.Data. This preserves Fill-only selectors, not exact declaring-type equivalence; supporting IL call facts retain the original declaring identity. It does not prove provider dispatch or SQL execution.
       - Requires a validated bound source-to-metadata reconciliation for source entry, an exact source symbol ID on one uniquely displayed Tier1 call source, admitted dual-reader IL body/call facts, exact fact-ID joins, and one unique MethodDef or assembly-scoped MemberRef target; no binary discovery or guessed source-to-binary identity occurs in this graph layer. A source method without a retained Tier1 call source cannot enter through this first slice.
       - A call/newobj edge records a static encoded target, not execution or branch feasibility. A callvirt operand produces only a Tier3 review candidate because actual virtual dispatch may select an override; it does not prove runtime target, reflection, dependency-injection binding, or a database operation.
-      - MemberRef joins require an admitted bound assembly with the complete encoded assembly-reference identity, non-generic type path, member name, and signature, plus exactly one matching declaration across all combined sources. Unadmitted references, generic type specifications, MethodSpec, calli, constrained type, and unresolved targets are not promoted to graph edges. Missing or ambiguous joins never prove absence or complete reachability.
+      - This rule's direct MemberRef join uses the complete encoded assembly-reference identity, non-generic type path, member name, and signature, plus exactly one matching declaration across all combined sources. Supported closed generic declaring types use the separate combined.paths.constructed-generic-member.v1 rule. MethodSpec, calli, unsupported type specifications and unresolved targets are not promoted by this join. Missing or ambiguous joins never prove absence or complete reachability.
+      - CompiledIlArtifactContext accompanies an already retained edge when caller or target lacks source-commit binding; its message must not claim no edge was inferred. It is a provenance limitation, not a failed target match or specifically a failed PDB join. Its gap kind, reason and Tier4Unknown annotation do not upgrade the edge's evidence tier.
       - The graph overlay does not rewrite source facts, the combined database schema, or existing source-only path evidence.
       - Optional command configuration is retained only from one il-command-binding.v1 fact with exact same-source body/call/configuration fact joins and matching raw-file, IL generator and bounded-input hashes. It remains Tier3 static configuration, not SQL/procedure identity or execution; malformed, missing, differently bound or competing candidates leave the API path intact and produce a binding gap. Caller argument substitution and parameter propagation are separate requirements.
+
+  - id: combined.paths.framework-signature-candidate.v1
+    name: Embedded desktop framework signature version candidate
+    description: After an exact MemberRef lookup finds no target, compares length-framed signatures with selected embedded desktop framework versions normalized and emits a review edge only for one candidate.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - compiled-il-framework-version-candidate path edge
+      - CompiledIlFrameworkVersionCandidate gap
+      - CompiledIlFrameworkVersionAmbiguous gap
+      - CompiledIlVirtualDispatchUnproven gap
+    limitations:
+      - Declaring assembly identity remains exact, including version, name, culture and public key token. Only parameter and return type scopes for mscorlib, System and System.Data with neutral culture, token b77a5c561934e089 and version 2.0.0.0 or 4.0.0.0 are compared tolerantly. Other names, versions and signature structure remain exact.
+      - Exact matches take precedence, including exact ambiguity. Multiple normalized targets remain a gap; no first candidate is selected. MethodDef lookup is unchanged.
+      - This is not CLR binding policy, a binding redirect, type forwarding, deployment proof or runtime compatibility. Both directions are static review candidates only. Original identities, source and compiled provenance are retained unchanged.
+      - Existing input admission, publish receipt and source entry gates remain independent. The candidate does not upgrade unbound compiled provenance. Virtual dispatch uncertainty remains separately visible.
+      - Command argument and return value propagation cannot use this candidate as a proven binding. Paths retain an explicit framework-version uncertainty gap.
+      - Parsing is bounded to 65536 characters, 256 type nodes and nesting depth 32. Unsupported shaped arrays, function pointers and malformed identities receive no tolerant match. Existing extractor and traversal limits still apply; missing candidates do not establish absence.
 
   - id: combined.paths.projectless-pdb-identity.v1
     name: Exact projectless source-to-PDB method path entry
@@ -3964,7 +3984,11 @@ rules:
       - The graph overlay does not promote source syntax to Roslyn semantic evidence or rewrite source facts.
       - Other source methods named by the verified receipt may join a uniquely admitted method with the complete qualified type path and compatible parameter shapes. VB page, handler, containing-type, method, and parameter spelling is matched case-insensitively; intrinsic aliases, including unsigned integers and SByte, use their defined System type, while unqualified non-intrinsic names must match a retained lexical namespace or explicit non-aliased Imports scope. Unscoped names, case-equivalent ambiguous overloads, and ambiguous assembly identities fail closed. Both directions are candidate edges so a compiled IL walk can re-enter retained source evidence, not an exact method-location claim.
       - The member-candidate pass preflights its bounded source/member comparison work before emitting any of its edges; work-limit exhaustion withholds the pass and emits a Tier4 gap.
-      - The unchanged 100000 comparison cap counts safely length-framed qualified-type candidates and every opaque name-matched fallback, not unrelated declaring types. Global admitted source/name and receipt-bound assembly counts remain available for gap reasons; same-type overloads, duplicate rows and assembly competitors are never deduplicated. Generic, nested, malformed or delimiter-bearing identities keep the historical name-wide fallback and may still exhaust the cap.
+      - Multiple declarations in one source file with the same case-insensitive retained memberIdentity emit source-member-identity-ambiguous and withhold their member bridges. Generic arity or passing-mode evidence must not silently connect distinct overloads through one collapsed source node.
+      - VB ByRef member parameters require explicit retained parameterPassingModes evidence matching the metadata reference suffix. ByVal and ByRef are not interchangeable; malformed or inconsistent mode lists fail closed. Older indexes without modes keep the historical ByRef refusal and require source re-extraction to gain this evidence. Receipt, unique candidate, type and assembly-hash requirements remain unchanged; this does not resolve syntax receiver types or establish runtime dispatch.
+      - VB generic parameter types are compared recursively by qualified generic definition, arity and ordered type arguments, with at most 16 nested matching levels, 32 arguments per generic type and 16384 characters per type. Retained imports or explicit qualification remain required for unqualified generic definitions and argument types. Method generic variables require retained methodTypeParameters in declaration order and matching metadata method arity and !!ordinal. Missing evidence, duplicate names, containing-type variables, missing imports, unsupported shapes and malformed signatures are refused. This does not add implicit framework namespaces or infer compiler binding; source-to-compiled evidence remains Tier3.
+      - The unchanged 100000 comparison cap counts safely length-framed qualified-type candidates and every opaque name-matched fallback, not unrelated declaring types. Global admitted source/name and receipt-bound assembly counts remain available for gap reasons; same-type overloads, duplicate rows and assembly competitors are never deduplicated. Valid nested type names are separately length-framed and indexed; generic, malformed or delimiter-bearing identities retain conservative matching and may still exhaust the cap.
+      - When lexicalNamespace is retained on a VB source declaration, the remaining qualifiedContainingType segments are nested type names, not additional namespace segments. Missing namespace evidence keeps historical top-level matching; no nesting boundary is guessed. A namespace lookalike cannot substitute for the retained nested type path. Member and assembly admission gaps carry the source declaration node ID for exact-node association, which does not establish that the gap caused a cutoff or that a database route exists.
       - Published-page joins build complete typed source/file inventories once instead of re-decoding every admitted fact per map and handler. Mapless generated-type uniqueness retains unbound competitors, and duplicate pages, receipt bindings, handler declarations and bound metadata methods remain ambiguous. Qualified method selection retains opaque fallback rows and the original final receipt/hash/type/name/span predicates. Type-specific managed allocation and representative resource acceptance remain separate limits.
       - A compiled-only attachment may use retained pages, handlers and method declarations from its explicitly validated parent index. Publish/metadata/IL facts remain in the attachment namespace, supporting fact IDs are unchanged, and cross-index edges record the admitted link digest. This does not create Tier1 source identity or upgrade page verdicts.
 
@@ -4023,6 +4047,7 @@ rules:
       - TruncatedByLimit path gap
       - GraphInputLimitReached path gap
     limitations:
+      - CutoffTraversalDepth and CutoffMaxDepth, when retained, describe one path-local cutoff evaluation before any rejected candidate edge. They are not shortest or first-discovery depths and do not enumerate all visits. Historical absence is unknown. Reverse terminal filtering can prune a branch before the forward depth limit is reached; filtered report absence is not full evidence-graph absence or proof of missing IL extraction.
       - New path summaries retain the deterministic traversal work counter, including terminal inventory and witness search, shared across all roots in one search query. It is not graph-admission work, elapsed time, memory, runtime calls or per-root capacity. Historical summaries may omit this optional counter; absence is unknown, not zero. Selector misses may correctly record zero traversal without asserting a complete graph.
       - Truncation means the returned path set is intentionally partial and must not be treated as complete dependency coverage.
       - The triggering evidence span is best-effort and may point to the nearest traversed node rather than the omitted dependency.
@@ -4891,6 +4916,10 @@ rules:
       - EventDeclared
       - AnalysisGap
     limitations:
+      - Method parameterPassingModes records explicit ByRef or the VB default ByVal in declaration order. This is syntax evidence only; existing member identity spelling is unchanged and no parameter value propagation is inferred.
+      - Method methodTypeParameters records method generic variable names in declaration order, not generic constraints or containing-type parameter bindings. This additive syntax evidence does not rewrite member identities or prove compiler binding.
+      - Explicit local webforms-vb-import-context.v1 input can supply effective imports for its exact inventoried App_Code source subset. The scanner checks commit/root identity, source/configuration/provider bytes, payload digest and generator digest presence. The receipt is observer evidence, not authenticated historical build provenance; signatures remain Tier3 candidates with ProjectlessPublishImportsNotBuildBound and an HTML warning. No provider or application assembly is loaded by the scanner. Invalid, stale, linked, escaped, malformed or oversized inputs produce a sanitized WebFormsVbImportContextRejected gap. Configured root imports are not added on top of an admitted effective set. Aliased source imports withhold enrichment.
+      - App_Code method declarations may retain configuredImportedNamespaces from an inventoried scan-root Web.config explicitly selecting the framework VBCodeProvider in System. Explicit application pages/namespaces additions (with local clear/remove processing) and compilerOptions /imports are retained separately from source Imports, with configuration path, SHA-256, kind and limitation. No inherited machine defaults, aliases, external config, location scopes, nested App_Code config, custom providers, legacy compilation compiler overrides or project evaluation are inferred. Configuration reads are bounded to 256 KiB, compiler options to 16384 characters and imports to 128 names. Missing enrichment is not absence of effective compiler imports; re-extraction is required for old indexes.
       - Syntax-only names are text evidence; they are never compiler-resolved targets and never join to semantic symbols by identity.
       - A parser or bounded extraction-phase failure is retained as a category-only Tier4 gap at line 1 for the affected file. Other files and phases continue, but missing phase evidence is not evidence of absence and the gap does not establish root cause.
       - Designer, generated, and auto-generated-header files are skipped; unreadable files and parse errors emit bounded Tier4 gap rows with diagnostic codes and message hashes only, never raw message text.
@@ -7536,6 +7565,61 @@ rules:
       - Identity gaps are unknowns, not proof that a relationship, member, protocol conformance, override, or runtime behavior is absent.
       - Candidate names and unsupported syntax are rendered only as safe labels, counts, hashes, rule IDs, and repo-relative spans; raw source snippets, URLs, local paths, secrets, and private labels must not be emitted.
       - Stable gap kinds include `swift-module-identity-unknown`, `swift-duplicate-symbol-identity`, `swift-unresolved-external-symbol`, `swift-ambiguous-symbol-identity`, `swift-module-context-unavailable`, `swift-extension-membership-syntax-only`, `swift-relationship-kind-unsupported`, and `swift-override-target-unresolved`.
+
+  - id: webforms.vb-import-context.current-environment.v1
+    name: Local standalone ASP.NET effective VB import context
+    description: Captures bounded current source, framework configuration and provider identities for opt-in syntax candidate matching.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - Local-only webforms-vb-import-context.v1 receipt
+    limitations:
+      - This is current-environment evidence, not authenticated publication, historical compilation or runtime execution proof.
+      - The mapped standalone root does not discover IIS parent configuration; unsupported providers, overrides and import aliases are refused.
+      - Receipt paths and identities are private local evidence and must not be exported or committed.
+      - Generator SHA-256 and exact payload SHA-256 accompany the receipt; source, configuration and provider bytes are rechecked before scanner enrichment.
+      - Capture is bounded to 256 source files, 64 MiB source bytes, 4096 directory entries, 128 namespaces and 2 MiB per configuration file.
+      - Existing publication admission remains required; accepted import evidence only supports uncertain Tier3 candidates and is prominently labeled in HTML.
+
+  - id: workflow.webforms.retained-handler-requery.v1
+    name: Retained Web Forms exact-root requery
+    description: Rebuilds bounded static graph and path views over a checkpoint-verified combined index without scanning source or combining indexes.
+    evidenceTier: Tier4Unknown for selection gaps; otherwise inherits weakest path evidence
+    emits:
+      - Local-only webforms-handler-requery.v1 receipt
+    limitations:
+      - Handler selection is limited to original report roots. Opt-in compiled-root input instead requires exactly one retained ManagedMethodDeclared fact matching source-index, scan, commit and full symbol identity.
+      - Compiled-root input is bounded to 16 KiB and rejects duplicate JSON keys. The canonical selected root and selection kind are bound into the receipt digest; input is a query request, not proof of root reachability from another handler.
+      - Compiled-root path queries use compiled IL traversal. An explicit method-graph view remains an unfiltered bounded evidence view, not a terminal-path or runtime execution claim.
+      - Both modes preserve original checkpoints and verify index hashes before and after querying. No historical build, runtime SQL, completeness or parity claim is made.
+
+  - id: workflow.webforms.gap-classification.v1
+    name: Retained Web Forms cutoff evidence associations
+    description: Produces aggregate console counts of bounded terminal uncertainty and immediate publish identity round trips from a receipt-hash-checked grouped handoff.
+    evidenceTier: Tier4Unknown
+    emits:
+      - Read-only console summary
+    limitations:
+      - Exact-node co-occurrence of a retained ruled gap is an association, not a proven cause of a missing terminal route.
+      - Categories overlap; gap record counts and unique node counts are not missing path counts.
+      - Unknown or unassociated nodes are not evidence of no database dependency, and no absence category is emitted.
+      - Input is bounded to a 4 MiB receipt, 64 MiB handoff and 200000 gap records; receipt artifact hashing is integrity checking, not authenticity or runtime proof.
+      - No graph traversal or source analysis is performed; this does not find downstream missing edges or establish complete coverage.
+      - No private identities, source paths, SQL or input hashes are printed, and no machine-readable artifact is written.
+
+  - id: combined.paths.constructed-generic-member.v1
+    name: Closed constructed generic declaring-type member resolution
+    description: Joins a retained member reference to one generic method declaration using exact assembly and framed type/member identity, definition-relative signature slots and closed type-argument substitution.
+    evidenceTier: Tier2Structural
+    emits:
+      - compiled-il-call
+      - compiled-il-callvirt-candidate
+    limitations:
+      - Unbound artifact provenance or unproven virtual dispatch retains Tier3SyntaxOrTextual and existing coverage annotations; resolution is not source binding or runtime dispatch proof.
+      - Only non-generic default-calling-convention methods on closed generic declaring types are supported, with named types, nested constructed arguments, SZ arrays and ByRef signatures.
+      - Open arguments, method generic parameters, explicit-this, varargs, pointers, shaped arrays, modifiers and function pointers abstain.
+      - Exact declaring assembly versions and raw definition-relative parameter ordinals are retained; no version unification, name-only match or deduplication across provenance is performed.
+      - Parsing is bounded to 65536 characters, 256 type visits, 32 nesting levels, 32 owner arguments and 64 candidate declarations per owner/member key; candidate overflow admits no edge.
+      - The edge targets the retained generic definition, not a synthesized specialized body. It does not specialize downstream generic IL or prove body availability, complete coverage or additional database paths.
 
   - id: swift.syntax.analysis-gap.v1
     name: SwiftSyntax parser and syntax coverage gap
