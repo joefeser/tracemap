@@ -7630,3 +7630,16 @@ rules:
     limitations:
       - Parser and syntax gaps are unknowns, not clean absence of declarations, calls, relationships, navigation, or runtime behavior.
       - Diagnostic text and raw source expressions must be omitted or hashed; no raw snippets, URLs, local paths, secrets, or private labels should be emitted.
+
+  - id: workflow.backend-extraction.retained-report.v1
+    name: Retained-query backend extraction inventory
+    description: Projects database-api, sql-query and http-client evidence records and their ordered query-path references from an admitted grouped report for human migration planning.
+    evidenceTier: Tier2Structural
+    emits:
+      - backendExtraction
+    limitations:
+      - This is retained-query evidence, not independent full-index discovery or a complete application inventory. Unsupported service families and operations outside the query may be absent.
+      - Full node-record references preserve distinct evidence and command bindings; rows do not count unique business operations or stored procedures.
+      - Query roots are not verified UI events. Paths containing Tier3 or Tier4 evidence remain candidate variants. No retained path does not mean unused.
+      - Human decisions default undecided. SQL text, procedure bodies, HTTP payloads, credentials and API proposals are not inferred.
+      - Generator and bounded-input hashes belong to the containing grouped handoff. They bind the projection input, not original build authenticity or runtime behavior.

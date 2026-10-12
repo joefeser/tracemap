@@ -74,6 +74,7 @@ public sealed class ConstructedGenericSampleTests
             var edge = Assert.Single(graph.Edges, e => e.FromNodeId == node.NodeId && e.EdgeKind == "compiled-il-call");
             Assert.Equal(targetNode.NodeId, edge.ToNodeId);
             Assert.Equal("combined.paths.constructed-generic-member.v1", edge.RuleId);
+            Assert.Contains("Downstream generic IL is not specialized", string.Join(" ", edge.Limitations!));
             var provenance = Assert.Single(graph.Gaps, g => g.CombinedFactId == node.SourceIndexId + ":" + call.FactId
                 && g.GapKind == "CompiledIlArtifactContext");
             Assert.Contains("A compiled target edge was retained", provenance.Message, StringComparison.Ordinal);

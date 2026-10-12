@@ -277,6 +277,8 @@ public sealed record CombinedPathEdge(
 {
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? CompiledAttachmentLinkSha256 { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<string>? Limitations { get; init; }
 }
 
 public sealed record CombinedPathNote(string Code, string Message);
@@ -6387,6 +6389,10 @@ public static partial class CombinedDependencyPathReporter
                     builder.AppendLine($"| {index} | {Cell(node.SourceLabel)} | {Cell($"{node.NodeKind} {node.DisplayName}")} | {Cell(Evidence(node.RuleId, node.EvidenceTier, node.FilePath, node.StartLine))} | {Cell(boundary + (edge?.EdgeKind ?? "start"))} |");
                 }
 
+                builder.AppendLine();
+                foreach (var edge in path.Edges)
+                    foreach (var limitation in edge.Limitations ?? CompiledEdgeLimitations.ForRule(edge.RuleId) ?? [])
+                        builder.AppendLine($"- Transition `{Cell(edge.EdgeId)}` / `{Cell(edge.RuleId)}` limitation: {Cell(limitation)}");
                 AppendPathNotes(builder, path.Notes);
                 builder.AppendLine();
             }
@@ -7253,7 +7259,8 @@ public static partial class CombinedDependencyPathReporter
                 CandidateState: CandidateState,
                 CandidateBridgeKind: CandidateBridgeKind,
                 SupportingRelationshipIds: SupportingRelationshipIds?.OrderBy(value => value, StringComparer.Ordinal).ToArray())
-            { CompiledAttachmentLinkSha256 = CompiledAttachmentLinkSha256 };
+            { CompiledAttachmentLinkSha256 = CompiledAttachmentLinkSha256,
+                Limitations = CompiledEdgeLimitations.ForRule(RuleId) };
         }
     }
 }

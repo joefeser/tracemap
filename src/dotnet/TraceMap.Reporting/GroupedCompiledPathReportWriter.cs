@@ -64,6 +64,17 @@ public static class GroupedCompiledPathReportWriter
                 W($"<li><a href=\"#chain-{index + 1}\">Chain {index + 1}: {H(path.Nodes.FirstOrDefault() is { } first ? Compact(first) : path.StartNodeId)}</a> — {group.VariantIndexes.Count} variants</li>");
             }
             W("</ul></nav>");
+            var backend = handoff.BackendExtraction ?? BackendExtractionInventoryBuilder.Create(handoff);
+            W("<section><h2>Backend extraction inventory</h2><p>Retained query evidence — not a whole-site inventory. Human retain/retire decisions are undecided.</p>");
+            W($"<p>Rule {H(backend.RuleId)}; coverage {H(backend.Coverage)}; truncated {backend.Truncated}; retained gaps {backend.RetainedGapCount}. {backend.Operations.Count} evidence records (not distinct business operations).</p>");
+            foreach (var limitation in backend.Limitations) W($"<p>{H(limitation)}</p>");
+            foreach (var operation in backend.Operations)
+            {
+                var node = handoff.Nodes[operation.NodeReference];
+                W($"<details><summary>{H(operation.Family)}: {H(Compact(node))} — {H(operation.ConnectionState)}</summary><p>Evidence {H(node.RuleId)} / {H(node.EvidenceTier)}; {H(Location(node.FilePath, node.StartLine, node.EndLine))}</p><p>Node reference: {H(operation.NodeReference)}; human decision: {H(operation.HumanDecision)}</p>");
+                W($"<p>Query roots: {H(string.Join(", ", operation.QueryRootReferences))}. Ordered variant indexes (zero-based): {H(string.Join(", ", operation.VariantIndexes))}. Candidate variant indexes: {H(string.Join(", ", operation.CandidateVariantIndexes))}.</p><p>Review obligations: {H(string.Join(", ", operation.ContractReviewObligations))}</p></details>");
+            }
+            W("</section>");
             for (var index = 0; index < handoff.Chains.Count; index++)
             {
                 var group = handoff.Chains[index];
@@ -105,6 +116,8 @@ public static class GroupedCompiledPathReportWriter
                 foreach (var reference in evidence)
                 {
                     var edge = handoff.Edges[reference];
+                    foreach (var limitation in edge.Limitations ?? CompiledEdgeLimitations.ForRule(edge.RuleId) ?? [])
+                        W($"<tr><td colspan=\"3\">Transition {H(reference)} limitation: {H(limitation)}</td></tr>");
                     W($"<tr><td data-label=\"Transition / evidence\" id=\"e-{index + 1}-{reference[5..]}\">{H(edge.EdgeKind)}<br><small>{H(edge.FromNodeId)} → {H(edge.ToNodeId)}</small><details><summary>Exact evidence references</summary><code>{H(reference)}</code><br>edge {H(edge.EdgeId)}<br>facts {H(string.Join(", ", edge.SupportingFactIds))}<br>combined edges {H(string.Join(", ", edge.SupportingCombinedEdgeIds))}<br>attachment link {H(edge.CompiledAttachmentLinkSha256)}</details></td><td data-label=\"Rule / tier\">{H(edge.RuleId)}<br>{H(edge.EvidenceTier)}<br>{H(edge.Classification)}</td><td data-label=\"Evidence location\">{H(Location(edge.FilePath, edge.StartLine, edge.EndLine))}</td></tr>");
                 }
                 W("</tbody></table></details>");

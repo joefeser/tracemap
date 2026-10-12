@@ -10,6 +10,67 @@ public sealed class GroupedCompiledPathHandoffTests
     private static readonly string IndexHash = new('a', 64);
 
     [Fact]
+    public async Task Backend_inventory_preserves_unconnected_operations_candidates_and_limits()
+    {
+        var report = Report();
+        var database = report.Paths[0].Nodes[0] with { SurfaceKind = "database-api", SurfaceName = "ExecuteScalar" };
+        var http = database with { NodeId = "http", SurfaceKind = "http-client", DisplayName = "<script>client</script>" };
+        report = report with
+        {
+            Paths = [report.Paths[0] with { Nodes = [database] }, report.Paths[0] with { PathId = "second", Nodes = [database] }],
+            Inventory = report.Inventory with { EvidenceNodes = [http, database], EvidenceEdges = [] }
+        };
+        var handoff = GroupedCompiledPathHandoffBuilder.Create(report, IndexHash);
+        var inventory = Assert.IsType<BackendExtractionInventory>(handoff.BackendExtraction);
+        Assert.Equal("retained-query-report-not-full-index", inventory.Scope);
+        Assert.True(inventory.Truncated);
+        Assert.Equal(report.Gaps.Count, inventory.RetainedGapCount);
+        Assert.Equal(2, inventory.Operations.Count);
+        var sql = Assert.Single(inventory.Operations, operation => operation.Family == "database");
+        Assert.Equal(new[] { 0, 1 }, sql.VariantIndexes);
+        Assert.Equal(new[] { 0, 1 }, sql.CandidateVariantIndexes);
+        Assert.Equal("candidate-query-path", sql.ConnectionState);
+        Assert.Single(sql.QueryRootReferences);
+        var remote = Assert.Single(inventory.Operations, operation => operation.Family == "outbound-http");
+        Assert.Empty(remote.VariantIndexes);
+        Assert.Equal("found-not-connected-in-supplied-query", remote.ConnectionState);
+        Assert.All(inventory.Operations, operation => Assert.Equal("undecided", operation.HumanDecision));
+        Assert.Equal(JsonSerializer.Serialize(report), JsonSerializer.Serialize(GroupedCompiledPathHandoffBuilder.Restore(handoff)));
+        var changed = handoff with { BackendExtraction = inventory with { Operations = [] } };
+        Assert.Contains("BACKEND_EXTRACTION", Assert.Throws<InvalidDataException>(() => GroupedCompiledPathHandoffBuilder.Restore(changed)).Message);
+        // Older handoffs remain readable; their absent projection does not change the original report hash.
+        GroupedCompiledPathHandoffBuilder.Restore(handoff with { BackendExtraction = null });
+        using var folder = new TempDirectory();
+        var output = await GroupedCompiledPathReportWriter.WriteAsync(handoff, folder.Path);
+        var html = await File.ReadAllTextAsync(output.HtmlPath);
+        Assert.Contains("Backend extraction inventory", html);
+        Assert.Contains("not a whole-site inventory", html);
+        Assert.Contains("&lt;script&gt;client&lt;/script&gt;", html);
+        Assert.DoesNotContain("<script>", html);
+        Assert.Contains("found-not-connected-in-supplied-query", html);
+    }
+
+    [Fact]
+    public async Task Constructed_generic_edge_limitations_survive_json_and_render_beside_transition()
+    {
+        const string rule = "combined.paths.constructed-generic-member.v1";
+        var report = Report();
+        var edge = report.Paths[0].Edges[0] with { RuleId = rule, Limitations = CompiledEdgeLimitations.ForRule(rule) };
+        report = report with { Paths = [report.Paths[0] with { Edges = [edge] }] };
+        var handoff = GroupedCompiledPathHandoffBuilder.Create(report, IndexHash);
+        var restored = GroupedCompiledPathHandoffBuilder.Restore(JsonSerializer.Deserialize<GroupedCompiledPathHandoff>(JsonSerializer.Serialize(handoff))!);
+        Assert.Contains("Downstream generic IL is not specialized", string.Join(" ", restored.Paths[0].Edges[0].Limitations!));
+        Assert.Null(CompiledEdgeLimitations.ForRule("unrecognized.v1"));
+        using var folder = new TempDirectory();
+        var output = await GroupedCompiledPathReportWriter.WriteAsync(handoff, folder.Path);
+        Assert.Contains("Downstream generic IL is not specialized", await File.ReadAllTextAsync(output.HtmlPath));
+        var graph = new RetainedMethodGraph([edge.FromNodeId], report.Paths[0].Nodes, [edge], [], [], [], 1, 8, 100, 1000);
+        await RetainedMethodGraphWriter.WriteAsync(graph, folder.Path, IndexHash, 1_000_000, default);
+        Assert.Contains("Downstream generic IL is not specialized", await File.ReadAllTextAsync(Path.Combine(folder.Path, RetainedMethodGraphWriter.HtmlName)));
+        Assert.Contains("Downstream generic IL is not specialized", await File.ReadAllTextAsync(Path.Combine(folder.Path, RetainedMethodGraphWriter.JsonName)));
+    }
+
+    [Fact]
     public void Exact_chains_group_without_losing_variants_overloads_or_source_identity()
     {
         var report = Report();
