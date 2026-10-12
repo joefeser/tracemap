@@ -196,3 +196,21 @@ conditional declarations, unknown net20/net35 binary TFM with System 2.0.0.0,
 modern HTTP/JSON signatures, blocked XML DTDs, malformed/missing inputs, size
 refusal and non-overwrite/read-only behavior. Public source-only collector build
 passed warning-as-error. No private work-machine input was inspected here.
+
+Offline handoff validation receipt:
+- Collector/property-scope code head: `3f4e607ca8ee84bfedec6f037de7fcd07e0b468e`.
+  Six local collector guards passed on this exact head; build uses warning-as-error.
+  Guards also reject same-named ItemGroup metadata as project TFM properties.
+- Unchanged HTTP matrix rerun at `6a8431c7ba2b20c3e4681fb4a06e58c2c245cbac`:
+  24 local HTTP tests passed and all 72 local CLI outputs validated deterministically.
+- Windows [run 38288325932](https://github.com/joefeser/tracemap/actions/runs/38288325932)
+  passed on exact corrected head `3f4e607c`: 24 HTTP tests, six collector guards,
+  all 72 native CLI outputs. Earlier run 38287840200 also completed successfully;
+  the corrected head/run above is the final code acceptance receipt.
+- Private Path Guard passed on the corrected code head. Origin/dev remains
+  `278bb821fe41aca8221d2193d15abaa7b92c6e64`, already merged and an ancestor.
+- Public collector commands/template are ready. No private application evidence
+  was accessed here; no application or fixture method was executed.
+- Application compatibility remains deferred/pending work-machine validation,
+  explicitly not a blocker for this public branch. No hostname/artifact request.
+The final receipt-only commit changes no executable/sample/script/test code.
