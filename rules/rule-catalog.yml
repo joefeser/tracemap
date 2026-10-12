@@ -4980,6 +4980,7 @@ rules:
     emits:
       - DatabaseOperationCandidate
     limitations:
+      - Qualified relative type names are expanded only through file-local namespace imports; arbitrary namespace prefixes are never discarded. Alias ownership and same-file prefix shadows are preserved. Cross-file shadows and ambiguous namespace resolution remain unproven syntax evidence.
       - Explicit parameters, locals, fields, inline construction and file-local type/namespace import aliases are candidates, not signed framework or overload proof. Same-file short-name type shadows are refused.
       - Validated names cover DbCommand/IDbCommand, DataAdapter/DbDataAdapter/IDataAdapter, System.Data.SqlClient and Microsoft.Data.SqlClient public command, adapter and bulk APIs in the SQL matrix. Other provider syntax is not matrix-validated.
       - XML, async/token and Begin/End command forms, Fill/FillSchema/Update and WriteToServer boundaries retain separate operation kinds. Open/Close is not SQL execution; bulk is a separately labeled boundary.

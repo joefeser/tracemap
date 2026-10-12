@@ -20,6 +20,24 @@ public static class MarkdownReportWriter
 
     public static string Build(ScanResult result) => Build(result, null);
 
+    private static void AddDatabaseOperationCandidates(List<string> lines, ScanResult result)
+    {
+        var candidates = result.Facts.Where(f => f.FactType == FactTypes.DatabaseOperationCandidate)
+            .OrderBy(f => f.Evidence.FilePath, StringComparer.Ordinal)
+            .ThenBy(f => f.Evidence.StartLine).ThenBy(f => f.FactId, StringComparer.Ordinal).ToArray();
+        lines.AddRange(["", "## Database Operation Candidates", "",
+            "Static candidates only; tiers and rules identify the available evidence. Syntax-only coverage does not establish compiler/provider identity. Runtime use, database identity and effects are not proven.",
+            "Wrapper calls without a retained target-to-database path remain unresolved; this section is not a complete database inventory. SQL/procedure text, parameters and connection association require separate witnesses.", ""]);
+        if (candidates.Length == 0)
+        {
+            lines.Add("No operation candidates detected in the available evidence; partial or unsupported coverage does not establish absence of database calls.");
+            return;
+        }
+        lines.Add($"Showing {Math.Min(candidates.Length, 50)} of {candidates.Length} candidates; {Math.Max(0, candidates.Length - 50)} omitted from this display. Full retained facts remain in facts.ndjson and index.sqlite.");
+        foreach (var fact in candidates.Take(50))
+            lines.Add($"- `{fact.Properties.GetValueOrDefault("methodName", "unavailable")}` on `{fact.Properties.GetValueOrDefault("receiverType", "unavailable")}` ({fact.EvidenceTier}, rule `{fact.RuleId}`) at `{fact.Evidence.FilePath}:{fact.Evidence.StartLine}`; operation `{fact.Properties.GetValueOrDefault("operationKind", "unavailable")}`, SQL text `{fact.Properties.GetValueOrDefault("commandTextAvailability", "unavailable")}`, coverage `{fact.Properties.GetValueOrDefault("coverageLabel", "unavailable")}`");
+    }
+
     public static string Build(ScanResult result, SqlRunbookPacket? sqlRunbookPacket)
     {
         var manifest = result.Manifest;
@@ -137,6 +155,8 @@ public static class MarkdownReportWriter
                 or FactTypes.SqlTextUsed),
             fact => $"- `{fact.FactType}` `{DisplayFactName(fact)}` ({fact.EvidenceTier}) at `{fact.Evidence.FilePath}:{fact.Evidence.StartLine}`");
 
+        lines.Add("The Database Calls section lists selected fact families, not all operation candidates. Empty results do not prove absence; see Database Operation Candidates below and Analysis Coverage above.");
+        AddDatabaseOperationCandidates(lines, result);
         AddSqlExecutionContext(lines, result);
         AddSqlProtectedMaterial(lines, result);
         AddPostgresArchiveLinks(lines, result);

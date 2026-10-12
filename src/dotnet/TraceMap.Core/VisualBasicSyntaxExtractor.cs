@@ -633,6 +633,14 @@ public static partial class VisualBasicSyntaxExtractor
         if (ResolveHttpTypeNames(root,type).Any(name => DatabaseOperationApi.IsSyntaxType(name,method))) return true;
         var first = type.Replace("Global.","",StringComparison.OrdinalIgnoreCase).Split('.')[0];
         if (root.DescendantNodes().OfType<TypeBlockSyntax>().Any(t => t.BlockStatement.Identifier.ValueText.Equals(first,StringComparison.OrdinalIgnoreCase))) return false;
+        var imports = root.Imports.SelectMany(statement => statement.ImportsClauses)
+            .OfType<SimpleImportsClauseSyntax>().ToArray();
+        // A namespace alias owns its prefix. Never discard arbitrary qualification.
+        if (imports.Any(clause => clause.Alias?.Identifier.ValueText.Equals(first,
+                StringComparison.OrdinalIgnoreCase) == true)) return false;
+        if (!type.StartsWith("Global.", StringComparison.OrdinalIgnoreCase)
+            && imports.Where(clause => clause.Alias is null).Any(clause =>
+                DatabaseOperationApi.IsSyntaxType(StripGlobal(clause.Name.ToString()) + "." + type, method))) return true;
         // Preserve historical reduced candidates for explicitly typed common-provider
         // names. They remain unresolved syntax, not provider/API availability proof.
         var kind = DatabaseOperationApi.Kind(method);
