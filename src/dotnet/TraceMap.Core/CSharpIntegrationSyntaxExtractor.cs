@@ -7,23 +7,6 @@ namespace TraceMap.Core;
 
 public static class CSharpIntegrationSyntaxExtractor
 {
-    private static readonly HashSet<string> HttpClientMethods = new(StringComparer.Ordinal)
-    {
-        "GetAsync",
-        "PostAsync",
-        "PutAsync",
-        "DeleteAsync",
-        "SendAsync"
-    };
-
-    private static readonly HashSet<string> JsonHttpMethods = new(StringComparer.Ordinal)
-    {
-        "GetFromJsonAsync",
-        "ReadFromJsonAsync",
-        "PostAsJsonAsync",
-        "PutAsJsonAsync"
-    };
-
     private static readonly HashSet<string> DbSaveMethods = new(StringComparer.Ordinal)
     {
         "SaveChanges",
@@ -271,7 +254,7 @@ public static class CSharpIntegrationSyntaxExtractor
                         ["operationKind"] = operationKind
                     }));
             }
-            if (HttpClientMethods.Contains(invocationName) || JsonHttpMethods.Contains(invocationName))
+            if (OutboundHttpApi.IsCandidate(invocationName))
             {
                 facts.Add(FactFactory.Create(
                     manifest,
@@ -285,7 +268,12 @@ public static class CSharpIntegrationSyntaxExtractor
                     properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
                     {
                         ["methodName"] = invocationName,
-                        ["methodFamily"] = HttpClientMethods.Contains(invocationName) ? "HttpClient" : "JsonHttpExtension",
+                        ["methodFamily"] = "unresolved",
+                        ["classification"] = "SyntaxFallbackHttpCandidate",
+                        ["coverageLabel"] = "reduced-name-only-candidate",
+                        ["httpMethod"] = "UNKNOWN",
+                        ["urlKind"] = "unavailable",
+                        ["limitations"] = "Name-only candidate; framework identity, signature and outbound behavior are unproven. Same-named fakes and content-only JSON reads may be included. " + OutboundHttpApi.Limitations,
                         ["receiverName"] = receiverName ?? string.Empty
                     }));
             }

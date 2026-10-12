@@ -13,3 +13,14 @@
 - [ ] Wire migration-specific launcher to admitted inventory/private selections.
 - [ ] End-to-end synthetic DB and HTTP migration handoff acceptance.
 - [ ] Owner's private site trial; report missing evidence without inferred completeness.
+
+## Outbound HTTP follow-up (#861 comment 6128184589)
+
+- [x] Inspect dev and inventory branch, record dependency/base and create isolated worktree/branch.
+- [x] Add compiler-built public C#/VB net10.0 projects and explicit 166-overload matrix.
+- [x] Share bounded signed-framework/signature classifier; close convenience/JSON/WebClient/response gaps.
+- [x] Distinguish semantic calls, C# unresolved syntax candidates, unsupported VB projectless and compiled-only IL evidence.
+- [x] Retain family, callsite, verb, destination availability and coverage limits through facts and report projection.
+- [x] Document rule limitations, mode matrix, migration missing inputs and validation/deferred targets.
+- [ ] Complete final-head regression/full suite, native CLI repeats and artifact validation; record results.
+- [ ] Push scoped implementation branch for testing; no merge/ACK/lane-policy changes.

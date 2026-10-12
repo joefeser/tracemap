@@ -5169,11 +5169,16 @@ rules:
       - HttpCallDetected
       - HttpClientCreated
     limitations:
-      - Tier1 requires Roslyn symbol binding to known HTTP APIs.
+      - C# and VB Tier1 require exact framework declaring-type, signed assembly identity, resolved signature and bounded method-family recognition. Inherited framework members retain their framework target; user overrides and wrappers are not promoted to framework operations.
+      - HttpClient request, convenience and HttpClientJsonExtensions outbound methods are recognized, including Send/SendAsync and JSON streaming/Patch methods. HttpContent ReadFromJsonAsync is a content read, not a semantic outbound call.
+      - WebClient recognizes exact DownloadString/Data/File, UploadString/Data/File/Values and OpenRead/Write names with synchronous, Async and TaskAsync forms available in the resolved framework. WebRequest/HttpWebRequest GetResponse/GetResponseAsync/BeginGetResponse/EndGetResponse are bounded response evidence.
+      - Compiler-built C# and VB net10.0 fixtures pin 166 overloads each; net48 and other target-framework availability are not compiler-validated by this matrix. See samples/outbound-http-coverage/OVERLOADS.md.
+      - Constant standard explicit WebClient verbs are retained; dynamic/custom verbs, request-variable Send calls and mutable WebRequest verbs remain UNKNOWN. WebClient address recognition does not establish HTTP protocol.
+      - Compiled-only IL observations are not HTTP operation classification; VB projectless fallback has no HTTP API classification. C# name-only candidates carry unresolved family, unknown verb and reduced coverage, including possible fake or content-only matches.
       - Syntax fallback matches common method names and may include unrelated methods with the same name.
       - URL may not be fully resolvable if built dynamically or loaded from runtime configuration.
-      - Visual Basic Tier1 support is bounded to compiler-resolved HttpClient request methods, WebRequest GetResponse methods, and WebClient download/upload/open methods. Static destinations retain normalized paths and hashes, never hosts, query values, request bodies, credentials, headers, or responses.
-      - A resolved API call with a dynamic destination retains the call shape plus a producer-local gap; an unresolved name-only call retains only a gap.
+      - C# destinations retain constant hashes only; Visual Basic preserves normalized paths and hashes, never hosts, query values, request bodies, credentials, headers, or responses.
+      - Dynamic destinations retain unavailable labels; Visual Basic also emits a producer-local gap. No runtime use, execution, dispatch, response contract or complete migration coverage is proven. Absence never means unused.
 
   - id: database.ef.v1
     name: Entity Framework style database surface
