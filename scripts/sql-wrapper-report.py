@@ -51,12 +51,16 @@ def render_root(ordinal, selector, report):
         for node in path['nodes']:
             lines += ['- Node ' + cell(node.get('nodeId')) + ': ' + cell(limit) for limit in node.get('limitations', [])]
         lines += ['- ' + cell((str(note.get('code')) + ': ' + str(note.get('message'))) if isinstance(note, dict) else note) for note in path.get('notes', [])]
-    lines += ['', '### Stopping gaps and coverage warnings', '',
-              '| Gap | Reason / message | Rule / tier | Node / fact evidence |', '| --- | --- | --- | --- |']
+    path_nodes = {node.get('nodeId') for path in paths for node in path['nodes']} - {None}
+    path_facts = {fact for path in paths for fact in path.get('supportingFactIds', [])}
+    lines += ['', '### Retained gaps and coverage warnings', '',
+              'Native gaps can be graph-wide. A retained-path association is not proof of a blocking edge; provenance warnings can coexist with a retained route. Unassociated gaps must not be attributed to this caller without further evidence.', '',
+              '| Gap | Association | Reason / message | Rule / tier | Node / fact evidence |', '| --- | --- | --- | --- | --- |']
     for gap in report['gaps']:
-        lines.append(f"| {cell(gap.get('gapKind'))} | {cell(gap.get('reason'))}: {cell(gap.get('message'))} | {cell(gap.get('ruleId'))} / {cell(gap.get('evidenceTier'))} | {cell(gap.get('nodeId'))} / {cell(gap.get('combinedFactId'))} |")
+        association = 'retained path node/fact' if gap.get('nodeId') in path_nodes or gap.get('combinedFactId') in path_facts else 'not associated with a retained path; caller relevance unproven'
+        lines.append(f"| {cell(gap.get('gapKind'))} | {association} | {cell(gap.get('reason'))}: {cell(gap.get('message'))} | {cell(gap.get('ruleId'))} / {cell(gap.get('evidenceTier'))} | {cell(gap.get('nodeId'))} / {cell(gap.get('combinedFactId'))} |")
     if not report['gaps']:
-        lines.append('| — | No retained gap in this bounded query; not a completeness proof | — | — |')
+        lines.append('| — | — | No retained gap in this bounded query; not a completeness proof | — | — |')
     for warning in report.get('coverageWarnings', []) + report.get('limitations', []):
         lines.append('- ' + cell(warning))
     return lines + ['']

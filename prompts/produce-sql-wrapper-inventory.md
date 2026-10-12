@@ -52,6 +52,9 @@ of reporting “no database calls.” Do not claim full-site coverage or runtime
    parameter/connection/transaction evidence or unavailable; truncation and
    unresolved dispatch. Inspect detailed command bindings in the native evidence.
    Hash-only constant evidence is not an extracted readable procedure contract.
+   Graph-wide gaps are not automatically caller-specific stopping boundaries.
+   Check the retained node/fact association before attributing any gap; even an
+   associated provenance warning need not block a retained edge.
    Do not substitute a method name for a procedure name or evaluate dynamic SQL.
 7. Keep source-only scan candidates and compiled routes distinct. A combined
    report is not proof that binaries match current source, a human uses an event,

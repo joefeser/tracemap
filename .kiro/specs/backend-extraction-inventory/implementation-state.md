@@ -508,7 +508,7 @@ discover every caller or recover readable SQL/procedure contracts. The new
 or patch export. Missing compiled application evidence is a blocker to caller
 proof, not something a wrapper DLL alone can resolve.
 
-Local validation: ten Python report guards, eight matrix oracle guards, and
+Local validation: eleven Python report guards, eight matrix oracle guards, and
 native CLI scan/report with procedure, dynamic-text and unmatched selections
 passed. The native report had three selections, two retained routes, one unmatched
 selection and zero failed queries. Warning-as-error focused .NET validation passed
@@ -517,3 +517,11 @@ SqlDatabaseMatrixTests and DatabaseCommandStateTests, zero failures/skips.
 Full-solution and new Windows fixture execution are not yet claimed. CI now runs
 the wrapper/projectless cases and helper guards on Windows and watches the helper
 and prompt paths. No scanner/resolver runtime code changed in this increment.
+
+Implementation/fixture delivery was pushed as `d00bc224`. Final report review
+identified graph-wide native gaps that must not be called caller-specific stopping
+gaps. The helper now labels retained-path node/fact association separately from
+unproven caller relevance; neither label claims blockage. A regression guard pins
+associated provenance warnings and unrelated gaps. Native replay of this change
+passed. The complete five-case route suite also passed after adding explicit
+ordered-edge adjacency assertions. No private application evidence was imported.

@@ -128,6 +128,15 @@ class SqlWrapperReportTests(unittest.TestCase):
         self.assertIn('node-1 / fact-1', rendered)
         self.assertIn('StoredProcedure', rendered)
         self.assertNotIn('SECRET_SQL', rendered)
+        self.assertIn('caller relevance unproven', rendered)
+        self.assertIn('not proof of a blocking edge', rendered)
+
+    def test_gap_association_does_not_claim_blockage(self):
+        report = native('Root', [{'nodes': [{'nodeId': 'n1', 'surfaceName': 'SqlCommand.ExecuteScalar'}], 'supportingFactIds': ['f1']}])
+        report['gaps'] = [{'nodeId': 'n1', 'gapKind': 'ProvenanceWarning'}, {'combinedFactId': 'f1'}, {'nodeId': 'unrelated'}]
+        rendered = '\n'.join(REPORT.render_root(1, 'Root', report))
+        self.assertEqual(2, rendered.count('| retained path node/fact |'))
+        self.assertEqual(1, rendered.count('| not associated with a retained path; caller relevance unproven |'))
 
 
 if __name__ == '__main__':
