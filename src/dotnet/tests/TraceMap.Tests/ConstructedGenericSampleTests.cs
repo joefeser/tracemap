@@ -74,8 +74,12 @@ public sealed class ConstructedGenericSampleTests
             var edge = Assert.Single(graph.Edges, e => e.FromNodeId == node.NodeId && e.EdgeKind == "compiled-il-call");
             Assert.Equal(targetNode.NodeId, edge.ToNodeId);
             Assert.Equal("combined.paths.constructed-generic-member.v1", edge.RuleId);
-            Assert.Contains(graph.Gaps, g => g.CombinedFactId == node.SourceIndexId + ":" + call.FactId
+            var provenance = Assert.Single(graph.Gaps, g => g.CombinedFactId == node.SourceIndexId + ":" + call.FactId
                 && g.GapKind == "CompiledIlArtifactContext");
+            Assert.Contains("A compiled target edge was retained", provenance.Message, StringComparison.Ordinal);
+            Assert.DoesNotContain("no edge was inferred", provenance.Message, StringComparison.Ordinal);
+            Assert.Equal("exact-il-target-present-without-source-commit-binding", provenance.Reason);
+            Assert.Equal(EvidenceTiers.Tier4Unknown, provenance.EvidenceTier);
             Assert.DoesNotContain(graph.Gaps, g => g.CombinedFactId == node.SourceIndexId + ":" + call.FactId
                 && g.GapKind == "CompiledIlTargetUnavailable");
         }
@@ -83,6 +87,10 @@ public sealed class ConstructedGenericSampleTests
             && f.Properties.GetValueOrDefault("metadataName") == "ReadPlain");
         var plainNode = Assert.Single(graph.Nodes, n => n.SymbolId == plain.TargetSymbol);
         Assert.Contains(graph.Edges, e => e.FromNodeId == plainNode.NodeId && e.EdgeKind == "compiled-il-call");
+        Assert.All(graph.Gaps.Where(g => g.GapKind == "CompiledIlArtifactContext"), g =>
+            Assert.Contains("A compiled target edge was retained", g.Message, StringComparison.Ordinal));
+        Assert.All(graph.Gaps.Where(g => g.GapKind is "CompiledIlTargetUnavailable" or "CompiledIlTargetAmbiguous"), g =>
+            Assert.Contains("no edge was inferred", g.Message, StringComparison.Ordinal));
     }
 
     private static (string Root, string Caller, string Provider) Sample()

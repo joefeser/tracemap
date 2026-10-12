@@ -1218,6 +1218,7 @@ public static partial class CombinedDependencyPathReporter
                 "CompiledIlFrameworkVersionAmbiguous" => "Multiple embedded framework-version signature candidates remain; no target edge was inferred.",
                 "CompiledIlVirtualDispatchUnproven" => "A framework-version target candidate was retained, but virtual dispatch is unproven.",
                 "CompiledIlArtifactContext" when reason.StartsWith("framework-signature-", StringComparison.Ordinal) => "The retained framework-version candidate lacks source-commit binding; compiled provenance was not upgraded.",
+                "CompiledIlArtifactContext" => "A compiled target edge was retained, but the caller or target lacks source-commit binding; compiled provenance was not upgraded. This annotation does not indicate target-resolution failure.",
                 _ => "Bound compiled evidence could not be joined to one path-graph target; no edge was inferred."
             },
             fact.SourceIndexId, fact.SourceLabel, nodeId, fact.CombinedFactId,
