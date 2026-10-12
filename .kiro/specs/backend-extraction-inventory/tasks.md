@@ -50,3 +50,17 @@
 - [x] Add positive and negative synthetic receiver tests and per-overload projectless matrix assertions.
 - [x] Complete current-head local regression/native CLI validation and Windows validation receipt (code head 68820989, Windows run 38299653713).
 - [x] Patch PR 863 Baz findings: broad HTTP workflow triggers, independent per-case/control smoke oracle and mutation guards; rerun 96-output native matrix.
+
+## SQL/database matrix (#864)
+- [x] Fetch origin, verify HTTP #863 ancestor, read instructions/spec/state, isolate SQL branch from current dev.
+- [x] Publish pre-implementation extraction/report matrix and pin public provider/reference denominator.
+- [x] Enumerate eight representative TFM public command/adapter/bulk overload inventories and compiler-built C#/VB cases.
+- [x] Share signed source API classification; add XML/APM/async/token, adapter schema/update, interface and separately labeled bulk boundaries.
+- [x] Support explicit projectless C#/VB database syntax candidates and a VB App_Code wrapper-to-inventory route.
+- [x] Retain bounded API/availability metadata through facts, SQLite, paths and grouped migration reports; preserve old handoff readability.
+- [x] Add conservative straight-line command/parameter/transaction/connection witnesses and mutation/reset controls; no raw SQL/credential capture.
+- [x] Add independent named-control oracle and mutation guards; broaden relevant Windows CI triggers.
+- [x] Update rule limitations, matrix docs and migration agent prompt.
+- [ ] Finish final-head local scoped regressions and deterministic native CLI/report validation.
+- [ ] Observe public Windows exact-head fixture validation.
+- [ ] Push final branch and record #864 commits, validation, matrix and remaining gaps; no PR/merge/ACK/lane-policy changes.

@@ -38,6 +38,7 @@ public static class BackendExtractionInventoryBuilder
             var family = node.SurfaceKind switch
             {
                 "database-api" or "sql-query" => "database",
+                "sql-persistence" when handoff.DatabaseCoverageLimitations is not null => "database",
                 "http-client" => "outbound-http",
                 _ => null
             };

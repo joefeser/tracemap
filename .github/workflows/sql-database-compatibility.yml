@@ -1,0 +1,30 @@
+name: SQL database public compatibility
+on:
+  push:
+    branches: [codex/sql-database-matrix-864]
+    paths: ['src/dotnet/**', 'samples/sql-database-matrix/**', 'scripts/diagnostics/SqlReferenceMatrix/**', 'scripts/validation/*sql*', 'rules/**', 'prompts/plan-backend-api-extraction.md', 'docs/validation/SQL_DATABASE_MATRIX.md', '.github/workflows/sql-database-compatibility.yml']
+  pull_request:
+    paths: ['src/dotnet/**', 'samples/sql-database-matrix/**', 'scripts/diagnostics/SqlReferenceMatrix/**', 'scripts/validation/*sql*', 'rules/**', 'prompts/plan-backend-api-extraction.md', 'docs/validation/SQL_DATABASE_MATRIX.md', '.github/workflows/sql-database-compatibility.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  public-static-validation:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.302
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile public fixtures and validate each source, IL and report case
+        run: dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter "FullyQualifiedName~SqlDatabaseMatrixTests|FullyQualifiedName~DatabaseCommandStateTests|FullyQualifiedName~GroupedCompiledPathHandoffTests|FullyQualifiedName~BackendExtractionSampleTests|FullyQualifiedName~VisualBasicExternalBoundaryTests" -warnaserror
+      - name: Independent named oracle mutation guards
+        run: python scripts/validation/test_sql_matrix_expectations.py
+      - name: Deterministic native CLI matrix (no fixture execution)
+        shell: pwsh
+        run: python scripts/validation/sql-coverage-smoke.py --output "$env:RUNNER_TEMP/sql-matrix"

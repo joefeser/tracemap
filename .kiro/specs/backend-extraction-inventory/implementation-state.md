@@ -292,3 +292,45 @@ Both confirmed validation weaknesses are patched without extractor changes:
   deterministic artifact validation with the stronger assertions. Private path
   and whitespace guards pass. New-head hosted CI/reviews remain pending push;
   earlier Windows receipts are historical, not a new-head result.
+
+## SQL/database issue #864 implementation lane (2026-10-12)
+
+Branch `codex/sql-database-matrix-864`, isolated from origin/dev
+`6cb7532528d687a2fc20ca1135db130b244549da` (HTTP #863 merge). Primary checkout
+and existing HTTP worktree preserved. Initial matrix published on #864 in comment
+6131964679, documentation commit `64b53620`. No ACK, merge or lane-policy change.
+
+Public metadata-only inventories: 46 declared overloads each net20/net35/net40,
+70 each net45/net452, 112 each net472/net48/net10.0, in both C# and VB. Pin classic
+references to Microsoft.NETFramework.ReferenceAssemblies 1.0.3; modern System SQL
+provider 4.9.0 and Microsoft provider 6.1.1; SDK 10.0.302/reference pack 10.0.10.
+Selected Microsoft provider is unavailable below net462; absent task/token forms
+on old targets are unavailable, not skipped positive cells. All inherited members
+are represented at declaring bases. VB GetObjectValue helpers and emitted base
+slots remain original IL, distinct from source API declaration identities.
+
+Implemented bounded SQL command/XML/APM/async/token, adapter Fill/FillSchema/Update,
+IDbCommand/DbCommand and separate bulk operation classification. Source, explicit
+syntax and compiled-only API terminals remain separate tiers/modes. Optional
+DatabaseCallEvidence carries privacy-bounded availability/API metadata through
+report projection; grouped handoffs have an optional validated SQL coverage marker.
+Older handoffs omit it and retain their historical inventory reconstruction.
+New handoffs include sql-persistence operation records, including bulk boundaries.
+
+Command state is a local straight-line witness, not runtime state: hashes or
+explicit dynamic/unavailable values, Text/StoredProcedure, parameter direction/type
+without values, transaction/connection assignments without credentials. Branches,
+unknown calls, conditional expressions, reassignment and alias escape reset state;
+fields/cross-method state and inferred concrete factory returns remain unavailable.
+The matrix/README and migration prompt record provider/ORM/late-binding/generic/
+full-index/private-contract limitations. No method/database connection is invoked.
+
+Per-cell tests independently cross-check compiler declarations/public inventories,
+Cecil original IL, named controls and every applicable source/syntax/compiled path,
+SQLite and grouped HTML/JSON/inventory. The public projectless VB App_Code proof is
+Entry -> Wrapper -> ExecuteScalar, a candidate query route, not a verified page event.
+Seven independent native-oracle/workflow mutation guards passed. Earlier exploratory
+runs found fixture warnings, language signature/base-slot differences and VB shared
+initializer state boundaries; these were corrected and are not acceptance receipts.
+Final local/native and public Windows acceptance is pending the code-head commit.
+Full-suite, other-provider, private application and whole-site acceptance is not claimed.

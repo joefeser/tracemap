@@ -3925,6 +3925,7 @@ rules:
       - CompiledIlTargetAmbiguous gap
       - CompiledIlCommandBindingUnavailable gap
     limitations:
+      - SQL matrix terminals retain original signed System.Data/System.Data.Common/System.Data.SqlClient/Microsoft.Data.SqlClient MemberRefs as Tier3 compiled-only API candidates, including XML/APM/async/token, adapter schema/update and separate bulk boundaries. They are not source semantic operations; optional straight-line IL command binding remains limited to its documented forms. Original IL signatures and generator/bounded-input provenance remain in supporting facts.
       - The historical DbDataAdapter.Fill surface also groups Fill calls encoded on System.Data.Common.DataAdapter in neutral, b77a5c561934e089 System.Data. This preserves Fill-only selectors, not exact declaring-type equivalence; supporting IL call facts retain the original declaring identity. It does not prove provider dispatch or SQL execution.
       - Requires a validated bound source-to-metadata reconciliation for source entry, an exact source symbol ID on one uniquely displayed Tier1 call source, admitted dual-reader IL body/call facts, exact fact-ID joins, and one unique MethodDef or assembly-scoped MemberRef target; no binary discovery or guessed source-to-binary identity occurs in this graph layer. A source method without a retained Tier1 call source cannot enter through this first slice.
       - A call/newobj edge records a static encoded target, not execution or branch feasibility. A callvirt operand produces only a Tier3 review candidate because actual virtual dispatch may select an override; it does not prove runtime target, reflection, dependency-injection binding, or a database operation.
@@ -4974,15 +4975,16 @@ rules:
 
   - id: vb.syntax.database-operation.v1
     name: Visual Basic syntax database operation
-    description: Bounded syntax-only database-operation candidates where a Visual Basic `Fill`, `ExecuteScalar[Async]`, `ExecuteReader[Async]`, or `ExecuteNonQuery[Async]` invocation has a receiver declared with an explicit supported ADO.NET adapter or command type.
+    description: Bounded explicit-receiver SQL command, adapter and bulk API syntax candidates, including projectless App_Code Web Sites.
     evidenceTier: Tier3SyntaxOrTextual
     emits:
       - DatabaseOperationCandidate
     limitations:
-      - The receiver type is explicit source syntax, not a compiler-resolved type; aliases, provider identity, and successful binding are not established. Lexical parameters and preceding locals shadow fields; inherited fields require one bounded, unique syntax-only base-type chain.
-      - Adapter recognition is limited to `DbDataAdapter`, `SqlDataAdapter`, `OleDbDataAdapter`, and `OdbcDataAdapter`. Command recognition is limited to the allowlisted `DbCommand`/`IDbCommand` and common SQL, OLE DB, ODBC, Oracle, SQLite, DB2, PostgreSQL, and MySQL command type names; name-only calls and custom receiver types are not classified.
-      - The fact does not retain or infer SQL text, connection identity, table identity, runtime reachability, branch feasibility, or successful execution.
-      - Emission is bounded by the Visual Basic syntax fallback per-file fact budget and remains reduced syntax coverage.
+      - Explicit parameters, locals, fields, inline construction and file-local type/namespace import aliases are candidates, not signed framework or overload proof. Same-file short-name type shadows are refused.
+      - Validated names cover DbCommand/IDbCommand, DataAdapter/DbDataAdapter/IDataAdapter, System.Data.SqlClient and Microsoft.Data.SqlClient public command, adapter and bulk APIs in the SQL matrix. Other provider syntax is not matrix-validated.
+      - XML, async/token and Begin/End command forms, Fill/FillSchema/Update and WriteToServer boundaries retain separate operation kinds. Open/Close is not SQL execution; bulk is a separately labeled boundary.
+      - No SQL, procedure name, connection string or credential is captured. Mutable command text/type/parameters/transactions, variable aliases, inferred factory return types, late binding, generic body specialization and cross-file imports remain unproven without additional witnesses.
+      - Emission uses the per-file VB fact budget and source evidence spans; partial syntax coverage never proves absence or unused code.
 
   - id: build.environment.target-framework.v1
     name: Build environment target framework diagnostics
@@ -5213,11 +5215,14 @@ rules:
       - Dapper and command targets use the existing bounded constant SQL-shape projection. One- or two-part unquoted table identities are retained; unsafe, quoted, or multipart identities remain gaps rather than being matched after qualifier loss.
       - Raw SQL, command text, parameter values, and connection material are not retained on operation facts.
       - ADO.NET and Npgsql v0 table projection is limited to inline constant command construction; command variables, helper-returned commands, stored-procedure indirection, repository abstractions, DI dispatch, reflection, and branch feasibility remain reduced coverage.
-      - Visual Basic compiler-backed evidence recognizes DbCommand ExecuteReader/ExecuteScalar/ExecuteNonQuery families and DbDataAdapter Fill only when the matching base type resolves from the expected strong-named System.Data.Common or classic System.Data assembly. Boundary-only candidates do not identify tables, returned rows, command text, or runtime effects.
+      - Shared C#/VB SQL matrix classification requires signed public declaration identity in System.Data, System.Data.Common, System.Data.SqlClient or Microsoft.Data.SqlClient. The preexisting signed Microsoft.Data.Sqlite command subset is preserved outside matrix-wide acceptance. Overrides retain their resolved signature separately from original emitted IL slots. DbCommand/IDbCommand and factory/abstract dispatch remain explicit boundaries.
+      - The SQL matrix enumerates public metadata command sync/async/token/XML/APM forms, adapter Fill/FillSchema/Update and separate bulk-write boundaries. Original API signatures, provider assembly identities and availability metadata survive the bounded report projection. Open/Close never becomes SQL execution.
+      - Bounded local straight-line command text/type, parameter direction/type, transaction and connection witnesses do not establish runtime state. Reassignment, branches and unknown calls reset supported local state; fields, alias escape, cross-method flow and parameter propagation remain unresolved. Raw SQL/procedure names and parameter/connection values are excluded; only availability and command fingerprints are retained.
       - Visual Basic late-bound or unresolved Fill/Execute-like calls emit bounded gaps and never become database-operation candidates.
       - Save and transaction boundaries do not identify the tracked changes, affected tables, isolation, scope, commit, rollback, or atomicity.
       - Recognizable calls without semantic binding and candidates without one bounded target emit explicit Tier4 gaps rather than guessed operations.
-      - When a C# file has no semantic model, name-only syntax fallback emits Tier4 gaps and does not claim framework or target identity.
+      - Failed/projectless C# also emits Tier3 explicit-receiver API syntax candidates with file-local imports/aliases and same-file shadow refusals. Name-only fallback stays Tier4; neither proves signed provider identity or overload resolution.
+      - Representative framework and pinned provider availability, supported/partial/unavailable cells, independent named controls and exact validation receipts are documented in docs/validation/SQL_DATABASE_MATRIX.md. ODBC/OleDb, ORM and other providers have no universal coverage claim.
 
   - id: database.framework-migration.declaration.v1
     name: Framework migration declaration

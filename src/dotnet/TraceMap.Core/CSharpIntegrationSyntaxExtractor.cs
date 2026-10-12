@@ -232,6 +232,20 @@ public static class CSharpIntegrationSyntaxExtractor
             }
             var invocationName = GetInvocationName(invocation.Expression);
             var receiverName = GetReceiver(invocation.Expression);
+            if (!semanticAnalysisAvailable && DatabaseOperationApi.Kind(invocationName).Length > 0
+                && CSharpDatabaseSyntax.ReceiverType(root, invocation) is { } databaseType)
+                facts.Add(FactFactory.Create(manifest, FactTypes.DatabaseOperationCandidate,
+                    RuleIds.DatabaseOperationCallPattern, EvidenceTiers.Tier3SyntaxOrTextual,
+                    ToEvidenceSpan(filePath, invocation),
+                    sourceSymbol: invocation.Ancestors().OfType<BaseMethodDeclarationSyntax>().FirstOrDefault() is MethodDeclarationSyntax caller
+                        ? string.Join(".", caller.Ancestors().OfType<TypeDeclarationSyntax>().Reverse().Select(t => t.Identifier.ValueText).Append(caller.Identifier.ValueText)) : null,
+                    targetSymbol: databaseType + "." + invocationName, contractElement: DatabaseOperationApi.Kind(invocationName),
+                    properties: new SortedDictionary<string,string>(StringComparer.Ordinal)
+                    {
+                        ["methodName"] = invocationName, ["operationKind"] = DatabaseOperationApi.Kind(invocationName),
+                        ["receiverType"] = databaseType, ["coverageLabel"] = "reduced",
+                        ["commandTextAvailability"] = "unavailable", ["limitations"] = DatabaseOperationApi.Limitations
+                    }));
             if (!semanticAnalysisAvailable
                 && DatabaseOperationFallbackKinds.TryGetValue(invocationName, out var operationKind))
             {
