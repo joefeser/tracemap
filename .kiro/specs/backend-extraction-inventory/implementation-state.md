@@ -17,9 +17,12 @@ the silent-reporting defect is fixed, not the entire extraction capability.
 
 Local validation: solution build passed with zero warnings/errors; six collector
 guard tests, 74 HTTP/VB/capability tests, private-path guard and all 96 deterministic
-native CLI outputs/artifact conformance checks passed. Public Windows CI will validate
-the pushed commit; no private work-machine access is needed. Full-suite/pinned
-OSS smoke and application-specific acceptance are not claimed for this patch.
+native CLI outputs/artifact conformance checks passed. Public Windows CI run
+[38296179466](https://github.com/joefeser/tracemap/actions/runs/38296179466) passed
+at implementation head dfc4ebd2d32c7f4715d61fdc04e4a91975f98f7e: 29 HTTP tests,
+six collector guards and 96 CLI outputs. No private work-machine access was needed.
+The full local regression suite is running; pinned OSS smoke and application-specific
+acceptance are not claimed for this patch.
 
 Branch: `codex/backend-extraction-inventory`, based on `origin/dev` 0d3107cc.
 Issue: #861. Phase one is a retained-query projection, not full-index discovery.
