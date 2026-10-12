@@ -121,6 +121,9 @@ public static partial class WebFormsReviewPreflightCommand
         query-recovery --bundle <bundle> accepts the same bounded query options.
         query-recovery --bundle <bundle> --handler <method-name> counts retained handler paths only.
         requery-handler --run <retained-run> --bundle <completed-report-or-recovery-bundle> --handler <method-name> --out <new-folder> [--surface-name DbDataAdapter.Fill] [--traversal-scope compiled-il] [--max-depth <1..64>]
+        Substitute --compiled-root <local-root.json> for --handler to select one exact retained compiled method
+        by sourceIndexId, scanId, commitSha and symbolId, even when absent from the original report roots.
+        Compiled-root path queries use compiled-il traversal; original inputs are not rescanned.
           builds a separate single-root report from the verified retained combined index; no scan or combine.
         migration-review --config <native-config> --handler <method-name> --out <new-handoff-root> [--attest-exact-source-commit <sha>]
         migration-review --config <migration-draft> --handler <method-name> --out <new-handoff-root> --proof-root <retained-proof> --published-root <original-publish> --source-base <repo-relative-website-folder>

@@ -1,6 +1,8 @@
 using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text.Json;
+using Microsoft.Data.Sqlite;
+using TraceMap.Reporting;
 using TraceMap.Cli;
 using TraceMap.Core;
 
@@ -1226,6 +1228,56 @@ public sealed class WebFormsReviewExecutionTests
         Assert.Equal(1, await TraceMapCommand.RunAsync(["webforms-review", "recover-reports", "--run", fixture.Run, "--out", target], output, error));
         Assert.Contains("WEBFORMS_EXECUTION_RECOVERY_NODE_BUDGET_EXHAUSTED", error.ToString());
         Assert.False(Directory.Exists(target));
+        Assert.Equal(before, Directory.GetFiles(fixture.Run, "*", SearchOption.AllDirectories).ToDictionary(path => path, Hash));
+    }
+
+    [Theory]
+    [InlineData("valid")]
+    [InlineData("wrong-scan")]
+    [InlineData("wrong-symbol")]
+    [InlineData("duplicate-json")]
+    public async Task Exact_compiled_root_requery_does_not_require_original_handler_membership(string scenario)
+    {
+        using var fixture = new Fixture();
+        fixture.AddPublicEventFixture();
+        await fixture.Preflight();
+        Assert.Equal(0, await fixture.Execute("run", Scan));
+        Assert.Equal(0, await fixture.ExecuteReports("resume", WebFormsReviewReportExecution.WriteAsync));
+        var bundle = Path.Combine(fixture.Run, fixture.LastCheckpoint().Reports!.ReportAttempt);
+        CombinedPathSymbolRoot root;
+        using (var connection = new SqliteConnection(new SqliteConnectionStringBuilder
+            { DataSource = Path.Combine(bundle, "combined.sqlite"), Mode = SqliteOpenMode.ReadOnly, Pooling = false }.ToString()))
+        {
+            connection.Open();
+            using var command = connection.CreateCommand();
+            command.CommandText = "SELECT s.source_index_id,s.scan_id,s.commit_sha,f.target_symbol FROM combined_facts f JOIN index_sources s ON s.source_index_id=f.source_index_id WHERE f.fact_type='ManagedMethodDeclared' ORDER BY f.target_symbol LIMIT 1";
+            using var reader = command.ExecuteReader();
+            Assert.True(reader.Read());
+            root = new(reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.GetString(3));
+        }
+        if (scenario == "wrong-scan") root = root with { ScanId = "missing" };
+        if (scenario == "wrong-symbol") root = root with { SymbolId = "missing" };
+        var selector = Path.Combine(fixture.Root, "compiled-root.local.json");
+        var json = JsonSerializer.Serialize(root, JsonOptions);
+        if (scenario == "duplicate-json") json = json.Replace("\"scanId\":", "\"scanId\":\"other\",\"scanId\":", StringComparison.Ordinal);
+        File.WriteAllText(selector, json);
+        var before = Directory.GetFiles(fixture.Run, "*", SearchOption.AllDirectories).ToDictionary(path => path, Hash);
+        var destination = Path.Combine(fixture.Root, "compiled-query");
+        using var error = new StringWriter();
+        var result = await TraceMapCommand.RunAsync(["webforms-review", "requery-handler", "--run", fixture.Run,
+            "--bundle", bundle, "--compiled-root", selector, "--out", destination], TextWriter.Null, error);
+        Assert.True(result == (scenario == "valid" ? 0 : 1), error.ToString());
+        if (scenario == "valid")
+        {
+            var receipt = JsonSerializer.Deserialize<WebFormsHandlerRequeryReceipt>(File.ReadAllText(Path.Combine(destination,
+                WebFormsReviewExecutionCommand.HandlerRequeryName)), JsonOptions)!;
+            Assert.Equal(root, receipt.Root);
+            Assert.Equal("exact-compiled-method", receipt.RootSelectionKind);
+            Assert.Equal("compiled-il-with-root-attachment", receipt.Query.TraversalScope);
+            Assert.Equal("single-compiled-method-retained-static-review-not-parity", receipt.ClaimLevel);
+            Assert.Equal(WebFormsReviewExecutionCommand.HandlerRequeryHash(receipt), receipt.BoundedInputSha256);
+        }
+        else Assert.False(Directory.Exists(destination));
         Assert.Equal(before, Directory.GetFiles(fixture.Run, "*", SearchOption.AllDirectories).ToDictionary(path => path, Hash));
     }
 

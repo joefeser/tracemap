@@ -536,3 +536,29 @@ Validation: 132/132 focused two-hop, compiled-baseline, combined-path and groupe
 handoff tests passed with zero failures/skips (2 seconds). The six two-hop cases
 cover both terminal outcomes at depths 2, 3 and 48; grouped handoff JSON roundtrip
 and HTML checks preserve and display the new depth evidence.
+
+### Exact retained compiled-root requery
+
+The native requery now accepts `--compiled-root <local-root.json>` in place of
+`--handler`. The query request contains exact sourceIndexId, scanId, commitSha and
+symbolId fields. After existing checkpoint and index verification, selection
+requires exactly one ManagedMethodDeclared row in that source context. It does
+not depend on original handler-root or terminal-filtered handoff membership.
+Requests are bounded to 16 KiB, duplicate keys are rejected, and mismatches fail
+before an output bundle is produced. Path queries default to compiled IL scope.
+The existing optional method-graph mode remains mixed retained graph evidence,
+not a compiled-only path claim.
+
+The canonical root, `rootSelectionKind=exact-compiled-method`, query scope and
+generator/index identities are bound into the local requery receipt. Original
+artifacts are unchanged. This fixes a diagnostic selection limitation, not a
+demonstrated cross-assembly resolver defect or original-handler reachability.
+
+Validation: 18 focused cases passed, zero failures/skips (23 seconds): exact
+compiled selection, wrong scan/symbol and duplicate JSON refusals, original
+handler depth queries, and 12 actual-IL two-DLL cases. The latter include both
+the original two-hop shape and cross-assembly String/ByRef ArrayList calls
+forwarding to String/ByRef parameter-array calls, with query and connection-only
+outcomes at depths 2, 3 and 48. The retained compiled chain is admitted in these
+public synthetic controls; private edge resolution remains to be checked using
+the new exact selector. No private source or DLL was used or executed.
