@@ -1,3 +1,4 @@
+using Microsoft.CodeAnalysis.Operations;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -51,23 +52,6 @@ public static class CSharpSemanticExtractor
         INamedTypeSymbol? DelegateType,
         INamedTypeSymbol? ExpressionTreeType,
         ITypeSymbol TargetType);
-
-    private static readonly HashSet<string> HttpClientMethods = new(StringComparer.Ordinal)
-    {
-        "GetAsync",
-        "PostAsync",
-        "PutAsync",
-        "DeleteAsync",
-        "SendAsync"
-    };
-
-    private static readonly HashSet<string> JsonHttpMethods = new(StringComparer.Ordinal)
-    {
-        "GetFromJsonAsync",
-        "ReadFromJsonAsync",
-        "PostAsJsonAsync",
-        "PutAsJsonAsync"
-    };
 
     private static readonly HashSet<string> DbSaveMethods = new(StringComparer.Ordinal)
     {
@@ -3816,47 +3800,19 @@ public static class CSharpSemanticExtractor
             var methodName = method.Name;
             var containingType = method.ContainingType?.ToDisplayString(SymbolFormat) ?? string.Empty;
             AddDatabaseOperationCandidateFact(projectPath, filePath, invocation, model, method, facts);
-            if (IsHttpClientCall(method))
+            if (OutboundHttpApi.TryClassify(method, out var httpFamily, out var httpVerb))
             {
                 var properties = new SortedDictionary<string, string>(StringComparer.Ordinal)
                 {
                     ["containingType"] = containingType,
-                    ["methodFamily"] = "HttpClient",
                     ["methodName"] = methodName
                 };
+                OutboundHttpApi.AddCallProperties(properties, model.GetOperation(invocation) as IInvocationOperation, httpFamily, httpVerb);
                 AddSymbolProperties(properties, "source", model.GetEnclosingSymbol(invocation.SpanStart));
                 AddSymbolProperties(properties, "target", method);
-                facts.Add(CreateSemanticFact(
-                    FactTypes.HttpCallDetected,
-                    RuleIds.HttpClientInvocation,
-                    projectPath,
-                    filePath,
-                    invocation,
-                    sourceSymbol: GetEnclosingSymbol(model, invocation),
-                    targetSymbol: method.ToDisplayString(SymbolFormat),
-                    contractElement: methodName,
-                    properties: properties));
-            }
-            else if (IsJsonHttpCall(method))
-            {
-                var properties = new SortedDictionary<string, string>(StringComparer.Ordinal)
-                {
-                    ["containingType"] = containingType,
-                    ["methodFamily"] = "JsonHttpExtension",
-                    ["methodName"] = methodName
-                };
-                AddSymbolProperties(properties, "source", model.GetEnclosingSymbol(invocation.SpanStart));
-                AddSymbolProperties(properties, "target", method);
-                facts.Add(CreateSemanticFact(
-                    FactTypes.HttpCallDetected,
-                    RuleIds.HttpClientInvocation,
-                    projectPath,
-                    filePath,
-                    invocation,
-                    sourceSymbol: GetEnclosingSymbol(model, invocation),
-                    targetSymbol: method.ToDisplayString(SymbolFormat),
-                    contractElement: methodName,
-                    properties: properties));
+                facts.Add(CreateSemanticFact(FactTypes.HttpCallDetected, RuleIds.HttpClientInvocation,
+                    projectPath, filePath, invocation, sourceSymbol: GetEnclosingSymbol(model, invocation),
+                    targetSymbol: method.ToDisplayString(SymbolFormat), contractElement: methodName, properties: properties));
             }
 
             if (IsHttpClientFactoryCreateClient(method) && TryGetLiteralArgument(invocation, 0, out var clientName))
@@ -4854,20 +4810,6 @@ public static class CSharpSemanticExtractor
         }
 
         return null;
-    }
-
-    private static bool IsHttpClientCall(IMethodSymbol method)
-    {
-        return HttpClientMethods.Contains(method.Name)
-            && method.ContainingType is not null
-            && IsKnownType(method.ContainingType, "System.Net.Http.HttpClient");
-    }
-
-    private static bool IsJsonHttpCall(IMethodSymbol method)
-    {
-        return JsonHttpMethods.Contains(method.Name)
-            && method.ContainingType is not null
-            && GetNamespaceName(method.ContainingType).Equals("System.Net.Http.Json", StringComparison.Ordinal);
     }
 
     private static bool IsHttpClientFactoryCreateClient(IMethodSymbol method)

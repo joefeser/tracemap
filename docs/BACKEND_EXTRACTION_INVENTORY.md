@@ -68,7 +68,7 @@ call, unconnected query, literal/dynamic HTTP targets and a text-only decoy.
 Native scanner/report tests consume it without calling any method. Existing
 compiler-built constructed-generic fixtures cover positive/negative resolution.
 
-The initial discovery spike found no HTTP surface for `HttpClient.GetStringAsync`
+The first-slice discovery spike found no HTTP surface for `HttpClient.GetStringAsync`
 in a semantic+IL scan. The positive HTTP fixture uses supported `GetAsync`.
 Convenience API coverage and unsupported-family accounting are recorded in #861;
 the missing surface is not a statement that the application makes no HTTP call.
@@ -77,3 +77,38 @@ Full-index discovery, private opt-in command/contract capture, entry-point
 binding, owner-decision receipts and end-to-end API migration acceptance remain
 open. No language extractor was changed by this slice; authentic Windows/private
 site acceptance and the full repository suite are separate validation gates.
+
+
+## Outbound HTTP follow-up
+
+The separate `codex/outbound-http-coverage-861` branch depends on inventory commit
+`d55eb44b3d4781d2adeffa11a6d42a8ca90e7ea5`, whose base dev commit is
+`0d3107cc4e7edb9fca20928f43e6604a4ff2b992`. It closes bounded source HTTP gaps;
+see [the mode matrix](../samples/outbound-http-coverage/README.md) and
+[every net10.0 overload](../samples/outbound-http-coverage/OVERLOADS.md).
+The earlier convenience-method gap is resolved on this follow-up branch.
+
+Migration consumers must distinguish signed semantic calls from name-only C#
+candidates and compiled IL observations. VB projectless input and compiled-only
+input do not establish HTTP operation classification. Request variables, mutable
+WebRequest verbs, wrapper specialization and dynamic destinations require supplied
+contracts. WebClient addresses may use other protocols. Content-only JSON reads
+are not outbound evidence. Missing or unsupported input and query filtering can
+omit operations; absence never means unused, and static evidence never proves
+runtime execution. The containing report still supplies generator/bounded-input
+hashes, retained references and privacy projection. Full-index discovery, private
+contract capture and owner decisions remain separate tasks.
+
+
+New grouped JSON includes optional `httpCoverageLimitations`; retained HTTP nodes
+include optional `httpCallEvidence` with API family/name, destination availability,
+protocol and coverage labels. Verbs, callsite locations, rule/tier and retained
+fact references remain in the node record. These additions capture no raw URL,
+body or new private hashes. Existing nullable fields are omitted when absent;
+legacy handoffs may omit the new coverage field. Review original retained facts
+for resolved overload signatures. See the spec implementation state for validation
+at the exact implementation commit and the independently advanced dependency.
+
+Legacy HTTP compatibility: use [the public reference matrix](../samples/outbound-http-coverage/LEGACY-COMPATIBILITY.md) and its per-TFM overload inventories. Record application project TFM, TargetFrameworkAttribute and exact referenced assembly/member identities separately. System 2.0.0.0 does not identify an application's TFM. Missing TFM stays unknown. Package-added/backported APIs, other profiles and private application parity remain unvalidated. Run the public static-only smoke with `python3 scripts/validation/http-coverage-smoke.py --output <public-temporary-output>`; Windows CI results must bind an actual run and commit. Never execute fixture methods.
+
+The legacy HTTP fixture TFMs are **representative test targets, not confirmed application targets**. Application-specific compatibility is **pending work-machine validation**, a deferred check that does not block this public branch. Use [InspectHttpFramework](../scripts/diagnostics/InspectHttpFramework/README.md) for read-only XML/metadata collection and its [sanitized return template](../scripts/diagnostics/InspectHttpFramework/SANITIZED-SUMMARY.md). Keep project/config declarations, binary attributes and encoded reference signatures separate; no value wins automatically. Keep the local report, private input hashes, paths and artifacts on the work machine. Public guards: `python3 scripts/validation/test_http_framework_inspection.py`.

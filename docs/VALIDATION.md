@@ -144,6 +144,16 @@ does not make the historical corpus a public CI dependency.
 
 ## Required Matrix
 
+For HTTP legacy compatibility, run `OutboundHttpCoverageTests` and
+`OutboundHttpLegacyCoverageTests` plus `scripts/validation/http-coverage-smoke.py`.
+The representative net452/net472 C#/VB matrices are generated from public
+reference metadata, not work-machine contributions. The projectless net472 VB
+Website control must emit a Tier3 `vb.syntax.http-candidate.v1` HTTP candidate,
+retain it through path/inventory reports, and emit `vb.syntax.http-coverage-gap.v1`
+with its partial-coverage message in Markdown; zero HTTP facts is not clean absence.
+Public Windows results must identify the tested commit/run. Private application
+validation and pinned OSS smokes remain separately reported gates.
+
 Every language adapter should have:
 
 | Check | Purpose |
@@ -4587,3 +4597,24 @@ hashes. These are static definition checks, not workflow execution proof.
 Discovery regressions must prove lazy enumeration stops at the candidate/entry
 bound, overflow produces one deterministic gap and no rows, and embedded quoted
 or escaped shell operators cannot truncate an unsafe PackageId into a safe one.
+
+
+## Outbound HTTP coverage follow-up (#861)
+
+Run `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter
+FullyQualifiedName~OutboundHttpCoverageTests -warnaserror` and the surrounding
+IntegrationExtractor, VisualBasicExternalBoundary, BackendExtractionSample and
+GroupedCompiledPathHandoff tests, followed by the full .NET solution suite.
+The [public matrix](../samples/outbound-http-coverage/README.md) compiles 166
+net10.0 overloads per language. Native CLI scans of both projects must retain
+semantic callsites and their report projections. Separately scan projectless copies
+and empty source roots with compiled DLL inputs plus `--il-body-evidence`.
+Validate artifacts and compare repeated facts/report output. Never execute fixture
+methods or make network calls. net48/other-framework overload parity, pinned OSS
+source smokes, non-.NET adapters, private Windows acceptance and runtime behavior
+are explicitly deferred for this bounded C#/VB API slice; no broad language-adapter
+or full migration acceptance follows from this fixture.
+
+Legacy HTTP compatibility: use [the public reference matrix](../samples/outbound-http-coverage/LEGACY-COMPATIBILITY.md) and its per-TFM overload inventories. Record application project TFM, TargetFrameworkAttribute and exact referenced assembly/member identities separately. System 2.0.0.0 does not identify an application's TFM. Missing TFM stays unknown. Package-added/backported APIs, other profiles and private application parity remain unvalidated. Run the public static-only smoke with `python3 scripts/validation/http-coverage-smoke.py --output <public-temporary-output>`; Windows CI results must bind an actual run and commit. Never execute fixture methods.
+
+The legacy HTTP fixture TFMs are **representative test targets, not confirmed application targets**. Application-specific compatibility is **pending work-machine validation**, a deferred check that does not block this public branch. Use [InspectHttpFramework](../scripts/diagnostics/InspectHttpFramework/README.md) for read-only XML/metadata collection and its [sanitized return template](../scripts/diagnostics/InspectHttpFramework/SANITIZED-SUMMARY.md). Keep project/config declarations, binary attributes and encoded reference signatures separate; no value wins automatically. Keep the local report, private input hashes, paths and artifacts on the work machine. Public guards: `python3 scripts/validation/test_http_framework_inspection.py`.

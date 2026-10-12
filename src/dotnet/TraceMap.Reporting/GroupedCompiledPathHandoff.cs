@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace TraceMap.Reporting;
 
@@ -41,10 +42,13 @@ public sealed record GroupedCompiledPathHandoff(
 {
     [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
     public BackendExtractionInventory? BackendExtraction { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? HttpCoverageLimitations { get; init; }
 }
 
 public static class GroupedCompiledPathHandoffBuilder
 {
+    public const string HttpCoverageLimitations = "Rule http.client.invocation.v1: bounded C#/VB signed-framework semantic calls; C# unresolved name-only fallback candidates may include same-named fakes. Rule vb.syntax.http-candidate.v1: projectless VB explicit-receiver syntax candidates, not framework or overload proof; inferred receivers, late binding and cross-file imports may be omitted. Compiled-only IL observations do not classify HTTP operations. Content-only JSON reads are not outbound calls. Dynamic destinations, mutable request verbs, wrapper specialization, missing references and framework availability require review. WebClient addresses do not prove HTTP protocol. Absence never means unused; static evidence never proves runtime execution.";
     public const string Schema = "webforms-compiled-grouped-handoff.v1";
     public const string Rule = "workflow.webforms.compiled-grouped-handoff.v1";
     private const string Limitation = "Local review-only static evidence. Exact method/source identities are grouped, not execution routes; every evidence variant remains indexed. No runtime SQL, page activation, source-line identity or complete-site claim. Input index admission belongs to the caller. Bounds apply to this projection, not upstream graph memory.";
@@ -110,7 +114,7 @@ public static class GroupedCompiledPathHandoffBuilder
             InputHash(inputIndexSha256, reportHash, generatorHash, limits, cancellationToken),
             inputIndexSha256, reportHash, limits, header, nodes, edges, inventoryNodes, inventoryEdges,
             variants, groups.Select(group => new CompiledMethodChainGroup(group.Key, group.Value)).ToArray(), Limitation);
-        result = result with { BackendExtraction = BackendExtractionInventoryBuilder.Create(result) };
+        result = result with { BackendExtraction = BackendExtractionInventoryBuilder.Create(result), HttpCoverageLimitations = HttpCoverageLimitations };
         _ = HashJson(result, limits.MaxOutputBytes, cancellationToken);
         return result;
     }
@@ -182,6 +186,8 @@ public static class GroupedCompiledPathHandoffBuilder
             .Select(group => new CompiledMethodChainGroup(group.Key, group.Select(item => item.Index).ToArray())).ToArray();
         if (HashJson(expectedGroups, handoff.Limits.MaxOutputBytes, cancellationToken) !=
             HashJson(handoff.Chains, handoff.Limits.MaxOutputBytes, cancellationToken)) throw Invalid("CHAIN_INDEX");
+        if (handoff.HttpCoverageLimitations is not null && handoff.HttpCoverageLimitations != HttpCoverageLimitations)
+            throw Invalid("HTTP_COVERAGE_LIMITATIONS");
         if (handoff.BackendExtraction is not null &&
             HashJson(handoff.BackendExtraction, handoff.Limits.MaxOutputBytes, cancellationToken) !=
             HashJson(BackendExtractionInventoryBuilder.Create(handoff), handoff.Limits.MaxOutputBytes, cancellationToken))
