@@ -11,6 +11,50 @@ public sealed class ScanExecutionReceiptTests
     private const string CommitSha = "0123456789abcdef0123456789abcdef01234567";
 
     [Fact]
+    public void Effective_import_context_opt_in_is_part_of_authorized_scope()
+    {
+        string Fingerprint(string? context)
+        {
+            var recorder = new ScanReceiptRecorder(new ScanOptions("synthetic", "output") { WebFormsVbImportContextPath = context });
+            recorder.Bind(new GitMetadata("synthetic", null, "main", CommitSha, []));
+            return recorder.CreateReceipt().AuthorizedScopeFingerprint;
+        }
+        Assert.Equal(Fingerprint(null), Fingerprint(""));
+        Assert.NotEqual(Fingerprint(null), Fingerprint("context.json"));
+        Assert.NotEqual(Fingerprint("context.json"), Fingerprint("other.json"));
+    }
+
+    [Fact]
+    public void Authorized_scope_keeps_all_ci_deps_and_import_context_combinations_distinct()
+    {
+        string Fingerprint(ScanOptions options)
+        {
+            var recorder = new ScanReceiptRecorder(options);
+            recorder.Bind(new GitMetadata("synthetic", null, "main", CommitSha, []));
+            return recorder.CreateReceipt().AuthorizedScopeFingerprint;
+        }
+
+        var fingerprints = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var ci in new[] { false, true })
+        foreach (var deps in new[] { false, true })
+        foreach (var context in new string?[] { null, "context.json" })
+        {
+            var options = new ScanOptions("synthetic", "output")
+            {
+                IndexCiProducers = ci,
+                IndexDepsJson = deps,
+                WebFormsVbImportContextPath = context
+            };
+            Assert.True(fingerprints.Add(Fingerprint(options)));
+            Assert.Equal(Fingerprint(options), Fingerprint(options with
+            {
+                WebFormsVbImportContextPath = context is null ? " " : " context.json "
+            }));
+        }
+        Assert.Equal(8, fingerprints.Count);
+    }
+
+    [Fact]
     public void Disabled_deps_preserves_legacy_v1_scope_fingerprint()
     {
         var options = new ScanOptions("synthetic", "output");

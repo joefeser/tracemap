@@ -356,7 +356,9 @@ public static class ManagedMetadataExtractor
                 // Optional markers are consumed by source reconciliation even
                 // though they are not part of a CLR member signature identity.
                 || !string.Equals(leftValue.Properties.GetValueOrDefault("optionalParameterOrdinals"),
-                    rightValue.Properties.GetValueOrDefault("optionalParameterOrdinals"), StringComparison.Ordinal))
+                    rightValue.Properties.GetValueOrDefault("optionalParameterOrdinals"), StringComparison.Ordinal)
+                || !string.Equals(leftValue.Properties.GetValueOrDefault("methodDispatchFlags"),
+                    rightValue.Properties.GetValueOrDefault("methodDispatchFlags"), StringComparison.Ordinal))
             .Select(key => new ReaderDisagreement(
                 key,
                 left.GetValueOrDefault(key)?.Identity,
@@ -1254,6 +1256,7 @@ public static class ManagedMetadataExtractor
     private static IReadOnlyDictionary<string, string> MethodProperties(Mono.Cecil.MethodDefinition method, string signature)
     {
         var result = CopyProperties(MemberProperties(method, method.GenericParameters.Count, IsCompilerGenerated(method), signature));
+        result["methodDispatchFlags"] = ((int)method.Attributes).ToString(CultureInfo.InvariantCulture);
         result["optionalParameterOrdinals"] = string.Join(",", method.Parameters
             .Select((parameter, ordinal) => (parameter, ordinal))
             .Where(item => item.parameter.IsOptional)
@@ -1278,6 +1281,7 @@ public static class ManagedMetadataExtractor
         string signature)
     {
         var result = CopyProperties(MemberProperties(name, method.GetGenericParameters().Count, false, signature));
+        result["methodDispatchFlags"] = ((int)method.Attributes).ToString(CultureInfo.InvariantCulture);
         result["optionalParameterOrdinals"] = string.Join(",", method.GetParameters()
             .Select(handle => reader.GetParameter(handle))
             .Where(parameter => parameter.SequenceNumber > 0 && (parameter.Attributes & System.Reflection.ParameterAttributes.Optional) != 0)

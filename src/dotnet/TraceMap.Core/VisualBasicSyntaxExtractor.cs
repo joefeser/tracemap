@@ -21,10 +21,34 @@ public static class VisualBasicSyntaxExtractor
         ScanManifest manifest,
         IEnumerable<FileInventoryItem> inventory,
         IReadOnlySet<string>? semanticallyAnalyzedFiles,
-        IReadOnlyList<ProtectedSourceSpan>? protectedSourceSpans = null)
+        IReadOnlyList<ProtectedSourceSpan>? protectedSourceSpans = null,
+        string? webFormsVbImportContextPath = null)
     {
         var facts = new List<CodeFact>();
-        foreach (var file in inventory
+        var files = inventory.ToArray();
+        var configuredImports = VisualBasicConfiguredImports.Read(repoPath, files);
+        WebFormsVbImportContext? effectiveImports = null;
+        if (!string.IsNullOrWhiteSpace(webFormsVbImportContextPath))
+        {
+            try { effectiveImports = WebFormsVbImportContext.Read(repoPath, manifest.CommitSha, webFormsVbImportContextPath, files); }
+            catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException or System.Text.Json.JsonException
+                or InvalidOperationException or KeyNotFoundException or ArgumentException)
+            {
+                var rejected = ex as ImportContextRejectedException;
+                facts.Add(FactFactory.Create(manifest, FactTypes.AnalysisGap, RuleIds.VisualBasicSyntaxDeclarations,
+                    EvidenceTiers.Tier4Unknown, new EvidenceSpan(".", 1, 1, null, "VisualBasicSyntaxExtractor", ScannerVersions.VisualBasicSyntaxExtractor),
+                    properties: new Dictionary<string, string>
+                    {
+                        ["gapKind"] = "WebFormsVbImportContextRejected",
+                        ["receiptSha256"] = rejected?.ReceiptSha256 ?? "unavailable",
+                        ["inspectedScope"] = rejected?.Scope ?? "receipt",
+                        ["rejectionCategory"] = rejected?.Category ?? "unavailable",
+                        ["spanKind"] = "scan-level-external-receipt-no-source-span",
+                        ["message"] = "Effective VB import context is invalid, stale, unavailable or outside its bounded source scope; no context imports were admitted."
+                    }));
+            }
+        }
+        foreach (var file in files
             .Where(item => FileInventory.IsVisualBasicKind(item.Kind))
             .OrderBy(item => item.RelativePath, StringComparer.Ordinal))
         {
@@ -88,8 +112,47 @@ public static class VisualBasicSyntaxExtractor
                 .ToArray() ?? [];
             var budget = new FactBudget(MaxFactsPerFile);
             facts.Add(CreateSemanticUnavailableGap(manifest, file.RelativePath));
+            var declarationStart = facts.Count;
             TryRunPhase(manifest, facts, file.RelativePath, RuleIds.VisualBasicSyntaxDeclarations, "declarations",
                 () => AddDeclarationFacts(manifest, facts, file.RelativePath, root, budget));
+            if (configuredImports?.Applies(file.RelativePath, files, root) == true)
+            {
+                for (var index = declarationStart; index < facts.Count; index++)
+                {
+                    if (facts[index].FactType != FactTypes.MethodDeclared) continue;
+                    var fact = facts[index];
+                    var properties = new SortedDictionary<string, string>(fact.Properties.ToDictionary(), StringComparer.Ordinal)
+                    {
+                        ["configuredImportedNamespaces"] = configuredImports.Namespaces,
+                        ["configuredImportsSource"] = configuredImports.Path,
+                        ["configuredImportsSha256"] = configuredImports.Sha256,
+                        ["configuredImportsKind"] = "root-web-config-framework-vb-imports",
+                        ["configuredImportsLimitation"] = "Explicit root configuration imports only; inherited defaults and provider execution are not verified."
+                    };
+                    facts[index] = FactFactory.Create(manifest, fact.FactType, fact.RuleId, fact.EvidenceTier,
+                        fact.Evidence, fact.ProjectPath, fact.SourceSymbol, fact.TargetSymbol, fact.ContractElement, properties);
+                }
+            }
+            if (effectiveImports?.SourcePaths.Contains(file.RelativePath) == true
+                && !root.Imports.SelectMany(i => i.ImportsClauses).Any(c => c is not SimpleImportsClauseSyntax { Alias: null }))
+            {
+                for (var index = declarationStart; index < facts.Count; index++)
+                {
+                    var fact = facts[index];
+                    if (fact.FactType != FactTypes.MethodDeclared) continue;
+                    var properties = new SortedDictionary<string, string>(fact.Properties.ToDictionary(), StringComparer.Ordinal)
+                    {
+                        ["effectiveImportedNamespaces"] = effectiveImports.Namespaces,
+                        ["effectiveImportsReceiptSha256"] = effectiveImports.ReceiptSha256,
+                        ["effectiveImportsGeneratorSha256"] = effectiveImports.GeneratorSha256,
+                        ["effectiveImportsInputSha256"] = effectiveImports.InputSha256,
+                        ["effectiveImportsKind"] = WebFormsVbImportContext.Kind,
+                        ["effectiveImportsLimitation"] = "Current standalone-root mapping source/configuration/provider bytes verified; no IIS-parent or published-build proof."
+                    };
+                    facts[index] = FactFactory.Create(manifest, fact.FactType, fact.RuleId, fact.EvidenceTier,
+                        fact.Evidence, fact.ProjectPath, fact.SourceSymbol, fact.TargetSymbol, fact.ContractElement, properties);
+                }
+            }
             TryRunPhase(manifest, facts, file.RelativePath, RuleIds.VisualBasicSyntaxEventWiring, "event-composition",
                 () => AddEventCompositionFacts(manifest, facts, file.RelativePath, root, budget));
             // Call-path evidence is more useful than isolated member names when
@@ -350,7 +413,12 @@ public static class VisualBasicSyntaxExtractor
                         ["bodyStartLine"] = (methodBodyLines.StartLinePosition.Line + 1).ToString(),
                         ["bodyEndLine"] = (methodBodyLines.EndLinePosition.Line + 1).ToString(),
                         ["parameterCount"] = parameterCount.ToString(),
-                        ["parameterTypes"] = string.Join(";", parameterTypes)
+                        ["parameterTypes"] = string.Join(";", parameterTypes),
+                        ["methodTypeParameters"] = statement is MethodStatementSyntax genericMethod
+                            ? string.Join(";", genericMethod.TypeParameterList?.Parameters.Select(parameter => parameter.Identifier.ValueText) ?? [])
+                            : string.Empty,
+                        ["parameterPassingModes"] = string.Join(";", MethodParameters(statement).Select(parameter =>
+                            parameter.Modifiers.Any(SyntaxKind.ByRefKeyword) ? "byref" : "byval"))
                     },
                     budget))
             {

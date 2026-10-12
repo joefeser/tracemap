@@ -1,0 +1,217 @@
+#Requires -Version 7.0
+Set-StrictMode -Version Latest
+$ErrorActionPreference = 'Stop'
+$temp = Join-Path ([IO.Path]::GetTempPath()) ('graph-share-test-' + [guid]::NewGuid().ToString('N'))
+[void][IO.Directory]::CreateDirectory($temp)
+try {
+    $helper = Join-Path $PSScriptRoot '../wgraph-share.ps1'
+    $inputFile = Join-Path $temp 'private.json'
+    $outputFile = Join-Path $temp 'safe.json'
+    $secret = 'CUSTOMER_SECRET'
+    $nodes = @(1..150 | ForEach-Object { @{nodeId="$secret-node-$_";symbolId="$secret.Method$_";
+        displayName="$secret.Method$_";sourceIndexId="$secret-source";filePath="C:\$secret\file.vb";
+        ruleId="$secret-rule";evidenceTier='Tier3SyntaxOrTextual';nodeKind='Method'} })
+    $edges = @(1..149 | ForEach-Object { @{edgeId="$secret-edge-$_";fromNodeId="$secret-node-$_";
+        toNodeId=($secret + '-node-' + ($_+1));edgeKind='compiled-il-call';ruleId="$secret-rule";
+        evidenceTier='Tier3SyntaxOrTextual';supportingFactIds=@("$secret-fact")} })
+    $edges[0].edgeKind = 'compiled-il-framework-version-candidate'
+    $calls = @(@{callerNodeId="$secret-node-1";factId="$secret-fact";bodyFactId="$secret-body";
+        offset="$secret-offset";opcode='callvirt';encodedTarget="$secret-target";ruleId="$secret-rule";
+        evidenceTier='Tier3SyntaxOrTextual';state='no-admitted-method-target-edge';
+        gapReasons=@('admitted-memberref-target-not-unique','embedded-framework-version-difference-runtime-binding-unproven',"$secret-free-text")})
+    @{schemaVersion='retained-method-graph.v1';indexSha256="$secret-hash";
+      graph=@{nodes=$nodes;edges=$edges;calls=$calls;commandTraces=@();cutoffs=@("$secret-cutoff");roots=@("$secret-node-1")}} |
+        ConvertTo-Json -Depth 20 | Set-Content -LiteralPath $inputFile
+    $before = (Get-FileHash $inputFile).Hash
+    & $helper $temp -GraphPath $inputFile -Method "$secret.Method1" -OutputPath $outputFile | Out-Null
+    # Broad substring above deliberately matches too many; use an exact terminal suffix below.
+} catch {
+    if ($_.Exception.Message -notlike 'GRAPH_SHARE_FAILED:*') { throw }
+}
+try {
+    $nodes[0].symbolId = "$secret.Focus()"; $nodes[0].displayName = "$secret.Focus()"
+    @{schemaVersion='retained-method-graph.v1';indexSha256="$secret-hash";
+      graph=@{nodes=$nodes;edges=$edges;calls=$calls;commandTraces=@();cutoffs=@("$secret-cutoff");roots=@("$secret-node-1")}} |
+        ConvertTo-Json -Depth 20 | Set-Content -LiteralPath $inputFile
+    $before = (Get-FileHash $inputFile).Hash
+    & $helper $temp -GraphPath $inputFile -Method 'Focus()' -OutputPath $outputFile | Out-Null
+    $raw = Get-Content -LiteralPath $outputFile -Raw
+    if ($raw.Contains($secret) -or $raw.Contains('C:\')) { throw 'Private marker leaked.' }
+    $result = $raw | ConvertFrom-Json -Depth 24
+    if (!$raw.Contains('compiled-il-framework-version-candidate') -or
+        !$raw.Contains('embedded-framework-version-difference-runtime-binding-unproven')) { throw 'Framework candidate uncertainty was lost.' }
+    if (!$result.graph.sliceLimited -or !$result.graph.sourceHadCutoffs -or $result.graph.nodes.Count -ne 4) { throw "Bounds not retained: limited=$($result.graph.sliceLimited), cutoffs=$($result.graph.sourceHadCutoffs), nodes=$($result.graph.nodes.Count)" }
+    if ($result.graph.calls[0].fact -cne $result.graph.edges[0].facts[0]) { throw 'Fact aliases lost identity.' }
+    if ($result.graph.calls[0].reasons -cnotcontains 'other-or-unavailable') { throw 'Unknown reason not suppressed.' }
+    $projection = [Text.Encoding]::UTF8.GetBytes(($result.graph | ConvertTo-Json -Depth 20 -Compress))
+    $digest = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($projection)).ToLowerInvariant()
+    if ($result.boundedInputSha256 -cne $digest) { throw 'Projected-input hash mismatch.' }
+    if ($result.generatorSha256 -ine (Get-FileHash $helper).Hash) { throw 'Generator hash mismatch.' }
+    if ((Get-FileHash $inputFile).Hash -cne $before) { throw 'Private graph changed.' }
+    $again = Join-Path $temp 'again.json'
+    & $helper $temp -GraphPath $inputFile -Method 'Focus()' -OutputPath $again | Out-Null
+    if ((Get-FileHash $outputFile).Hash -cne (Get-FileHash $again).Hash) { throw 'Nondeterministic export.' }
+    $renamedInput = Join-Path $temp 'renamed-private.json'
+    (Get-Content -LiteralPath $inputFile -Raw).Replace($secret,'DIFFERENT_PRIVATE_NAME') | Set-Content -LiteralPath $renamedInput
+    $renamedOutput = Join-Path $temp 'renamed-safe.json'
+    & $helper $temp -GraphPath $renamedInput -Method 'Focus()' -OutputPath $renamedOutput | Out-Null
+    if ((Get-FileHash $outputFile).Hash -cne (Get-FileHash $renamedOutput).Hash) { throw 'Private names influenced shared hashes or aliases.' }
+    $failed = $false
+    try { & $helper $temp -GraphPath $inputFile -Method 'Focus()' -OutputPath $again | Out-Null } catch { $failed = $true }
+    if (!$failed) { throw 'Overwrote an existing export.' }
+    $reportFolder = Join-Path $temp ('handler-requery-sample-' + ('a' * 32))
+    [void][IO.Directory]::CreateDirectory($reportFolder)
+    Copy-Item -LiteralPath $inputFile -Destination (Join-Path $reportFolder 'method-graph.local.json')
+    $selectedOutput = Join-Path $temp 'selected.json'
+    & $helper $temp -Method 'Focus()' -OutputPath $selectedOutput | Out-Null
+    if ((Get-FileHash $outputFile).Hash -cne (Get-FileHash $selectedOutput).Hash) { throw 'Latest graph selection changed projection.' }
+    # A busy neighbor sorts before the focus: focus call records must still survive.
+    $busyCalls = @(1..150 | ForEach-Object { @{callerNodeId="$secret-node-2";factId="$secret-busy-$_";
+        bodyFactId="$secret-body2";encodedTarget="$secret-target-$_";opcode='call';ruleId="$secret-rule";
+        evidenceTier='Tier2Structural';state='no-admitted-method-target-edge';gapReasons=@()} })
+    $focusCall = $calls[0].Clone()
+    $focusCall.encodedTarget = 'memberref|type:PRIVATE|member:10:get_Secret|->type(namespace:6:System|names:6:String)'
+    @{schemaVersion='retained-method-graph.v1';graph=@{nodes=$nodes;edges=$edges;
+        calls=@($busyCalls)+@($focusCall);commandTraces=@();cutoffs=@();roots=@("$secret-node-1")}} |
+        ConvertTo-Json -Depth 20 | Set-Content -LiteralPath $inputFile
+    $priorityOutput = Join-Path $temp 'priority.json'
+    & $helper $temp -GraphPath $inputFile -Method 'Focus()' -OutputPath $priorityOutput | Out-Null
+    $priority = Get-Content -LiteralPath $priorityOutput -Raw | ConvertFrom-Json -Depth 24
+    if ($priority.schemaVersion -cne 'aliased-method-graph.v3' -or !$priority.graph.focusRecordsComplete) { throw 'Focus coverage not complete.' }
+    $focusId = @($priority.graph.nodes | Where-Object focus)[0].id
+    if ($priority.graph.calls[0].caller -cne $focusId) { throw 'Busy neighbor starved focus.' }
+    if ($priority.graph.calls[0].targetShape.member -cne 'property-getter' -or
+        $priority.graph.calls[0].targetShape.returns -cne 'string') { throw 'Safe target shape missing.' }
+    if ((Get-Content $priorityOutput -Raw).Contains('PRIVATE')) { throw 'Target name leaked.' }
+    $coverage = @($priority.graph.callerCoverage | Where-Object { $_.availableCalls -eq 150 })[0]
+    if ($coverage.exportedCalls -ne 119 -or $coverage.omittedCalls -ne 31) { throw 'Caller omissions incorrect.' }
+    foreach ($call in $busyCalls) { $call.callerNodeId = "$secret-node-1" }
+    @{schemaVersion='retained-method-graph.v1';graph=@{nodes=$nodes;edges=$edges;
+        calls=@($busyCalls)+@($focusCall);commandTraces=@();cutoffs=@();roots=@("$secret-node-1")}} |
+        ConvertTo-Json -Depth 20 | Set-Content -LiteralPath $inputFile
+    $overflowOutput = Join-Path $temp 'focus-overflow.json'
+    & $helper $temp -GraphPath $inputFile -Method 'Focus()' -OutputPath $overflowOutput | Out-Null
+    $overflow = Get-Content -LiteralPath $overflowOutput -Raw | ConvertFrom-Json -Depth 24
+    if ($overflow.graph.focusRecordsComplete -or $overflow.graph.calls.Count -ne 120 -or
+        @($overflow.graph.callerCoverage | Where-Object focus)[0].omittedCalls -ne 31) { throw 'Focus overflow concealed.' }
+    $trace = @{endpointNodeId="$secret-node-2";pathNodeIds=@("$secret-node-1","$secret-node-2");
+        producerCallFactIds=@("$secret-fact");commandText=@{state='symbolic-string-composition';origin=@{kind='call-result';identity="$secret-offset"};
+        composition=@{operation='System.String.Concat';producerCallFactId="$secret-fact";operandFactId="$secret-operand";bodyFactId="$secret-body";
+            operands=@(@{kind='constant-string-hash';identity="$secret-literal"},@{kind='argument-slot';identity="$secret-slot"},@{kind="$secret-kind";identity="$secret-other"});
+            operandBindings=@(@{state='unresolved-root-argument';origin=@{kind='argument-slot';identity='1'};
+                originBodyFactId="$secret-body";originMethodIdentity="$secret-method";steps=@();gaps=@('IlCommandRootArgumentUnresolved',"$secret-gap");
+                operandCheckFailures=@(@{edgeId="$secret-edge";callFactId="$secret-fact";operandFactId="$secret-operand";bodyFactId="$secret-body";
+                    operandState='stack-unavailable';exceptionRegionCount=2;
+                    privateHash="$secret-hash";failedChecks=@('operand-state',"$secret-check")})})};
+        limitations=@('SymbolicStringValueNotMaterialized',"$secret-limitation");
+        originBodyFactId="$secret-body";ruleId="$secret-rule";gaps=@('IlCommandReturnTargetEdgeMissing',"$secret-gap");
+        steps=@(@{callFactId="$secret-step";operandFactId="$secret-operand";callerBodyFactId="$secret-body";
+            callerMethodFactId="$secret-method";targetMethodFactId="$secret-method2"})}}
+    $leaf = @{state='method-local-constant';origin=@{kind='constant-string-hash';identity="$secret-value"};
+        originBodyFactId="$secret-body";steps=@();gaps=@()}
+    $nested = @{state='symbolic-string-composition';origin=@{kind='call-result';identity="$secret-offset"};
+        originBodyFactId="$secret-body";steps=@();gaps=@();composition=@{
+            operation='System.String.Concat';producerCallFactId="$secret-fact";operandFactId="$secret-operand";bodyFactId="$secret-body";
+            operands=@($leaf.origin,$leaf.origin);operandBindings=@($leaf,$leaf)}}
+    $trace.commandText.composition.operandBindings += @{state='symbolic-argument-alternatives';
+        origin=@{kind='argument-alternatives';identity="$secret-alternatives"};originBodyFactId="$secret-body";
+        steps=@();gaps=@();alternatives=@($leaf,$nested)}
+    $symbolic = @{state='symbolic-method-return';origin=@{kind='call-result';identity="$secret-offset"};
+        originBodyFactId="$secret-body";steps=@();gaps=@();symbolicInput=@{
+            methodFactId="$secret-method-fact";methodIdentity="$secret-runtime-getter";
+            producerCallFactId="$secret-fact";bodyFactId="$secret-return-body";returnFactId="$secret-return-fact";
+            valueGaps=@('IlCommandReturnOriginUnknown',"$secret-free-text");privateValue="$secret-runtime-value"}}
+    $trace.commandText.composition.operandBindings += $symbolic
+    # Pin every categorical producer code, while arbitrary free text remains redacted.
+    # New codes must be explicitly allowlisted by the exporter, never copied by pattern.
+    $reporting = Join-Path $PSScriptRoot '../../src/dotnet/TraceMap.Reporting'
+    $codes = @('CombinedDependencyPaths.CommandReturns.cs','CombinedDependencyPaths.CompiledCommandValues.cs' |
+        ForEach-Object { [regex]::Matches((Get-Content (Join-Path $reporting $_) -Raw), '"(IlCommand[A-Za-z]+)"') } |
+        ForEach-Object { $_.Groups[1].Value } | Sort-Object -Unique)
+    $trace.commandText.gaps += $codes
+    $trace.commandText.originMethodIdentity = "$secret-stopping-getter"
+    @{schemaVersion='retained-method-graph.v1';graph=@{nodes=$nodes;edges=$edges;
+        calls=@($busyCalls)+@($focusCall);commandTraces=@($trace);cutoffs=@();roots=@("$secret-node-1")}} |
+        ConvertTo-Json -Depth 48 | Set-Content -LiteralPath $inputFile
+    $traceOutput = Join-Path $temp 'trace.json'
+    & $helper $temp -GraphPath $inputFile -Method 'Focus()' -OutputPath $traceOutput | Out-Null
+    $traceRaw = Get-Content -LiteralPath $traceOutput -Raw
+    if ($traceRaw.Contains($secret)) { throw 'Private trace content leaked.' }
+    $traceResult = $traceRaw | ConvertFrom-Json -Depth 48
+    $exportedTrace = $traceResult.graph.commandTraces[0]
+    $choices = $exportedTrace.composition.operandBindings[1]
+    $inputBoundary = $exportedTrace.composition.operandBindings[2]
+    if ($inputBoundary.state -cne 'symbolic-method-return' -or $inputBoundary.gaps.Count -ne 0 -or
+        $inputBoundary.symbolicInput.method -cnotmatch '^S[0-9]+$' -or
+        $inputBoundary.symbolicInput.producer -cne $exportedTrace.producers[0] -or
+        $inputBoundary.symbolicInput.limitation -cne 'MethodReturnValueNotEvaluated' -or
+        ($inputBoundary.symbolicInput.valueGaps -join ',') -cne 'IlCommandReturnOriginUnknown,other-or-unavailable') {
+        throw 'Symbolic input lost provenance, uncertainty separation, or privacy.'
+    }
+    if ((($exportedTrace.gaps | Select-Object -Skip 2) -join ',') -cne ($codes -join ',') -or
+        $exportedTrace.method -cnotmatch '^S[0-9]+$') { throw 'Defined command reason or stopping method lost.' }
+    if ($choices.state -cne 'symbolic-argument-alternatives' -or $choices.alternatives.Count -ne 2 -or
+        $choices.alternatives[1].composition.operandBindings.Count -ne 2 -or
+        $choices.alternatives[1].composition.operation -cne 'System.String.Concat') { throw 'Nested alternatives lost.' }
+    if ($exportedTrace.state -cne 'symbolic-string-composition' -or
+        $exportedTrace.composition.operation -cne 'System.String.Concat' -or
+        $exportedTrace.composition.producer -cne $exportedTrace.producers[0] -or
+        ($exportedTrace.composition.operandKinds -join ',') -cne 'constant-string-hash,argument-slot,other-or-unavailable') {
+        throw 'Symbolic composition lost linkage or allowlisting.'
+    }
+    if ($exportedTrace.composition.operandBindings[0].argumentSlot -ne 1 -or
+        $exportedTrace.composition.operandBindings[0].method -cnotmatch '^S[0-9]+$' -or
+        $exportedTrace.limitations[0] -cne 'SymbolicStringValueNotMaterialized' -or
+        $exportedTrace.limitations[1] -cne 'other-or-unavailable') { throw 'Operand trace projection failed.' }
+    $failure = $exportedTrace.composition.operandBindings[0].operandCheckFailures[0]
+    if ($failure.call -cne $exportedTrace.producers[0] -or
+        $failure.operandState -cne 'stack-unavailable' -or $failure.exceptionRegionCount -ne 2 -or
+        ($failure.failedChecks -join ',') -cne 'operand-state,other-or-unavailable') { throw 'Operand checks lost linkage or privacy.' }
+    if ($exportedTrace.missingProducerRecords -ne 0 -or
+        $exportedTrace.producers[0] -cne $traceResult.graph.calls[0].fact -or
+        $exportedTrace.originBody -cne $traceResult.graph.calls[0].body -or
+        $exportedTrace.gaps[0] -cne 'IlCommandReturnTargetEdgeMissing' -or
+        $exportedTrace.gaps[1] -cne 'other-or-unavailable') { throw 'Producer trace lost linkage or privacy.' }
+    $mappedOutput = Join-Path $temp 'mapped.json'
+    & $helper $temp -GraphPath $inputFile -Method 'Focus()' -OutputPath $mappedOutput -PrivateMap | Out-Null
+    if ((Get-Content -LiteralPath $mappedOutput -Raw) -cne $traceRaw) { throw 'Private map changed shared artifact.' }
+    $mapPath = Join-Path $temp 'private-graph-maps/mapped.aliases.private.json'
+    $mapDocument = Get-Content -LiteralPath $mapPath -Raw | ConvertFrom-Json -Depth 16
+    if ($mapDocument.mapping.shareSha256 -ine (Get-FileHash $mappedOutput).Hash) { throw 'Map not tied to exact share.' }
+    $targetAlias = $traceResult.graph.calls[0].target
+    $lookupHelper = Join-Path $PSScriptRoot '../wgraph-alias.ps1'
+    $lookup = @(& $lookupHelper $mapPath $targetAlias)
+    $rootLookup = @(& $lookupHelper $temp $targetAlias)
+    if (($rootLookup -join "`n") -cne ($lookup -join "`n")) { throw 'Latest private map lookup differs.' }
+    if (($lookup -join "`n") -notlike "*$($focusCall.encodedTarget)*") { throw 'Alias does not resolve to actual target.' }
+    $mapDocument.mapping.aliases.$targetAlias = 'tampered'
+    $mapDocument | ConvertTo-Json -Depth 16 | Set-Content -LiteralPath $mapPath
+    $failed = $false
+    try { & $lookupHelper $mapPath $targetAlias | Out-Null } catch { $failed = $true }
+    if (!$failed) { throw 'Changed map was accepted.' }
+    $validInput = Get-Content -LiteralPath $inputFile -Raw
+    foreach ($mutation in @(
+        { param($g) $g.nodes = $g.nodes[0] },
+        { param($g) $g.edges = 'scalar' },
+        { param($g) $g.calls = $null },
+        { param($g) $g.nodes[0].nodeId = 42 },
+        { param($g) $g.calls[0].factId = '' },
+        { param($g) $g.calls[0].encodedTarget = @('target') },
+        { param($g) $g.calls[0].gapReasons = @(@{private='malformed'}) },
+        { param($g) $g.commandTraces = $g.commandTraces[0] },
+        { param($g) $g.commandTraces[0].pathNodeIds = 'scalar' },
+        { param($g) $g.commandTraces[0].producerCallFactIds = @(42) },
+        { param($g) $g.commandTraces[0].commandText = 'scalar' },
+        { param($g) $g.commandTraces[0].commandText.steps = @('scalar') }
+    )) {
+        $bad = $validInput | ConvertFrom-Json -Depth 64
+        & $mutation $bad.graph
+        $bad | ConvertTo-Json -Depth 64 | Set-Content -LiteralPath $inputFile
+        $badOutput = Join-Path $temp ('invalid-' + [guid]::NewGuid().ToString('N') + '.json')
+        $rejected = $false
+        try { & $helper $temp -GraphPath $inputFile -Method 'Focus()' -OutputPath $badOutput | Out-Null }
+        catch { if ($_.Exception.Message -notlike 'GRAPH_SHARE_FAILED:*') { throw }; $rejected = $true }
+        if (!$rejected -or (Test-Path $badOutput)) { throw 'Malformed input escaped boundary validation.' }
+    }
+    Write-Output 'Aliased graph exporter and private lookup tests passed.'
+} finally { Remove-Item -LiteralPath $temp -Recurse -Force }

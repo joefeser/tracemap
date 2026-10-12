@@ -5,6 +5,17 @@ namespace TraceMap.Reporting;
 
 public static partial class CombinedDependencyPathReporter
 {
+    private static bool HasNonVirtualInstanceTarget(CombinedFactRow target)
+    {
+        // callvirt also supplies a null check for ordinary instance methods.
+        // Absent/invalid flags (including older retained scans) prove nothing.
+        if (!ushort.TryParse(target.Properties.GetValueOrDefault("methodDispatchFlags"),
+            System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var flags)) return false;
+        const System.Reflection.MethodAttributes excluded = System.Reflection.MethodAttributes.Virtual
+            | System.Reflection.MethodAttributes.Static | System.Reflection.MethodAttributes.Abstract;
+        return ((System.Reflection.MethodAttributes)flags & excluded) == 0;
+    }
+
     private const string CompiledIlBridgeRuleId = "combined.paths.compiled-il-bridge.v1";
     private const string ProjectlessPdbIdentityRuleId = "combined.paths.projectless-pdb-identity.v1";
     private const string ProjectlessPublishCandidateRuleId = "combined.paths.projectless-publish-candidate.v1";
@@ -47,7 +58,7 @@ public static partial class CombinedDependencyPathReporter
             if (!TryFrameworkDatabaseApi(call.Properties.GetValueOrDefault("targetIdentity")!, out _))
                 reachableUnrecognizedFill++;
         }
-        foreach (var gap in graph.Gaps.Where(gap => gap.GapKind is "CompiledIlTargetUnavailable" or "CompiledIlTargetAmbiguous"))
+        foreach (var gap in graph.Gaps.Where(gap => gap.GapKind is "CompiledIlTargetUnavailable" or "CompiledIlTargetAmbiguous" or "CompiledIlFrameworkVersionAmbiguous"))
         {
             if (gap.CombinedFactId is null
                 || !factsByCombinedId.TryGetValue(gap.CombinedFactId, out var call)
@@ -111,6 +122,23 @@ public static partial class CombinedDependencyPathReporter
             .Select(value => "memberref|type:scope(" + value + ")type(")
             .Distinct(StringComparer.Ordinal)
             .ToArray();
+        var genericMethods = methods
+            .Where(fact => fact.Properties.GetValueOrDefault("provenanceState") is "bound" or "unbound")
+            .Select(fact =>
+            {
+                var reference = ExpectedMemberReference(fact, true, out var arity);
+                return (Fact: fact, Reference: reference, Arity: arity);
+            })
+            .Where(item => item.Reference is not null && item.Arity > 0)
+            .Select(item => (item.Fact, item.Arity, Reference: item.Reference!, Head: GenericMemberHead(item.Reference!)))
+            .Where(item => item.Head is not null)
+            .GroupBy(item => item.Head!, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.Ordinal);
+        var frameworkCandidates = methodsByMemberReference
+            .Select(pair => (Key: FrameworkSignatureCandidateKey(pair.Key), Methods: pair.Value))
+            .Where(pair => pair.Key is not null)
+            .GroupBy(pair => pair.Key!, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.SelectMany(pair => pair.Methods).ToArray(), StringComparer.Ordinal);
         var unboundReferencePrefixes = methods
             .Where(fact => fact.Properties.GetValueOrDefault("provenanceState") != "bound")
             .Select(fact => fact.Properties.GetValueOrDefault("assemblyReferenceIdentity"))
@@ -188,6 +216,8 @@ public static partial class CombinedDependencyPathReporter
                 || call.Properties.GetValueOrDefault("rawFileSha256") != body.Properties.GetValueOrDefault("rawFileSha256"))
                 continue;
 
+            var from = graph.GetOrAddSymbolNode(caller.SourceIndexId, caller.SourceLabel, caller.TargetSymbol!,
+                caller.FilePath, caller.StartLine, caller.EndLine, caller.RuleId, caller.EvidenceTier);
             var targetIdentity = call.Properties.GetValueOrDefault("targetIdentity") ?? string.Empty;
             if (referenceKind == "memberref" && TryFrameworkDatabaseApi(targetIdentity, out var api))
             {
@@ -195,27 +225,60 @@ public static partial class CombinedDependencyPathReporter
                 var binding = commandCandidates is { Length: 1 }
                     ? ReadCompiledCommandBinding(commandCandidates[0], call, body, caller, factsByOriginalId) : null;
                 if (commandCandidates is { Length: > 0 } && binding is null)
-                    AddCompiledIlGap(graph, call, "CompiledIlCommandBindingUnavailable", "command-binding-join-invalid-or-ambiguous", commandCandidates.Length);
+                    AddCompiledIlGap(graph, call, "CompiledIlCommandBindingUnavailable", "command-binding-join-invalid-or-ambiguous", commandCandidates.Length, nodeId: from.NodeId);
                 AddCompiledDatabaseApiCandidate(graph, call, body, caller, api, binding);
             }
             var matched = referenceKind == "methoddef"
                 ? methodsByIdentity.TryGetValue((call.SourceIndexId, targetIdentity), out var targets)
                 : methodsByMemberReference.TryGetValue(targetIdentity, out targets);
+            var frameworkCandidate = false;
+            var constructedGeneric = false;
+            if (!matched && referenceKind == "memberref"
+                && ParseConstructedMember(targetIdentity) is { } constructed
+                && genericMethods.TryGetValue(constructed.Head, out var genericCandidates))
+            {
+                // Do not trim a candidate set and then claim uniqueness.
+                if (genericCandidates.Length > 64)
+                {
+                    AddCompiledIlGap(graph, call, "CompiledIlTargetUnavailable", "constructed-generic-candidate-limit", genericCandidates.Length, nodeId: from.NodeId);
+                    continue;
+                }
+                targets = genericCandidates.Where(candidate =>
+                    ConstructedMemberMatches(candidate.Reference, candidate.Arity, constructed))
+                    .Select(candidate => candidate.Fact).ToArray();
+                matched = targets.Length != 0;
+                constructedGeneric = targets.Length == 1;
+            }
+            if (!matched && referenceKind == "memberref")
+            {
+                var key = FrameworkSignatureCandidateKey(targetIdentity);
+                if (key is not null && frameworkCandidates.TryGetValue(key, out var candidates))
+                {
+                    if (candidates.Length != 1)
+                    {
+                        AddCompiledIlGap(graph, call, "CompiledIlFrameworkVersionAmbiguous",
+                            "multiple-framework-signature-candidates", candidates.Length, FrameworkVersionCandidateRuleId, from.NodeId);
+                        continue;
+                    }
+                    targets = candidates;
+                    matched = frameworkCandidate = true;
+                }
+            }
             if (!matched
                 || targets is not { Length: 1 })
             {
-                if (referenceKind == "methoddef"
+                if (targets is { Length: > 1 } || referenceKind == "methoddef"
                     || admittedReferencePrefixes.Any(prefix => targetIdentity.StartsWith(prefix, StringComparison.Ordinal)))
                 {
                     AddCompiledIlGap(graph, call,
                         targets is { Length: > 1 } ? "CompiledIlTargetAmbiguous" : "CompiledIlTargetUnavailable",
                         referenceKind == "methoddef" ? "same-assembly-methoddef-target-not-unique" : "admitted-memberref-target-not-unique",
-                        targets?.Length);
+                        targets?.Length, nodeId: from.NodeId);
                 }
                 else if (unboundReferencePrefixes.Any(prefix => targetIdentity.StartsWith(prefix, StringComparison.Ordinal)))
                 {
                     AddCompiledIlGap(graph, call, "CompiledIlTargetUnavailable",
-                        "target-assembly-present-without-bound-provenance", null);
+                        "target-assembly-present-without-bound-provenance", null, nodeId: from.NodeId);
                 }
                 continue;
             }
@@ -224,22 +287,28 @@ public static partial class CombinedDependencyPathReporter
             var targetProvenance = target.Properties.GetValueOrDefault("provenanceState");
             if (targetProvenance is not ("bound" or "unbound"))
                 continue;
-            var from = graph.GetOrAddSymbolNode(caller.SourceIndexId, caller.SourceLabel, caller.TargetSymbol!,
-                caller.FilePath, caller.StartLine, caller.EndLine, caller.RuleId, caller.EvidenceTier);
             var to = graph.GetOrAddSymbolNode(target.SourceIndexId, target.SourceLabel, target.TargetSymbol!,
                 target.FilePath, target.StartLine, target.EndLine, target.RuleId, target.EvidenceTier);
-            var virtualCandidate = opcode == "callvirt";
+            var virtualCandidate = opcode == "callvirt" && !HasNonVirtualInstanceTarget(target);
             var artifactContext = caller.Properties.GetValueOrDefault("provenanceState") != "bound"
                 || targetProvenance != "bound";
             graph.AddEdge(new GraphEdge(
-                $"compiled-il-call:{call.CombinedFactId}", virtualCandidate ? "compiled-il-callvirt-candidate" : "compiled-il-call",
-                from.NodeId, to.NodeId, "EvidenceEdge", CompiledIlBridgeRuleId,
-                artifactContext || virtualCandidate ? EvidenceTiers.Tier3SyntaxOrTextual : EvidenceTiers.Tier2Structural,
+                $"compiled-il-call:{call.CombinedFactId}", frameworkCandidate ? FrameworkVersionCandidateEdge : virtualCandidate ? "compiled-il-callvirt-candidate" : "compiled-il-call",
+                from.NodeId, to.NodeId, "EvidenceEdge", frameworkCandidate ? FrameworkVersionCandidateRuleId : constructedGeneric ? ConstructedGenericRuleId : CompiledIlBridgeRuleId,
+                frameworkCandidate || artifactContext || virtualCandidate ? EvidenceTiers.Tier3SyntaxOrTextual : EvidenceTiers.Tier2Structural,
                 [call.CombinedFactId, body.CombinedFactId, caller.CombinedFactId, target.CombinedFactId],
                 [], SafePath(call.FilePath), call.StartLine, call.EndLine));
             if (artifactContext)
                 AddCompiledIlGap(graph, call, "CompiledIlArtifactContext",
-                    "exact-il-target-present-without-source-commit-binding", 1);
+                    frameworkCandidate ? "framework-signature-candidate-without-source-commit-binding" : "exact-il-target-present-without-source-commit-binding", 1, nodeId: from.NodeId);
+            if (frameworkCandidate)
+            {
+                AddCompiledIlGap(graph, call, "CompiledIlFrameworkVersionCandidate",
+                    "embedded-framework-version-difference-runtime-binding-unproven", 1, FrameworkVersionCandidateRuleId, from.NodeId);
+                if (virtualCandidate)
+                    AddCompiledIlGap(graph, call, "CompiledIlVirtualDispatchUnproven",
+                        "framework-version-candidate-virtual-dispatch-unproven", 1, FrameworkVersionCandidateRuleId, from.NodeId);
+            }
         }
     }
 
@@ -252,7 +321,12 @@ public static partial class CombinedDependencyPathReporter
         if (memberStart < 0)
             return false;
         var declaringType = targetIdentity[..memberStart];
-        if (HasType("System.Data.Common", "DbDataAdapter") && HasMember("Fill"))
+        // Preserve the historical Fill-family selector used by -FillOnly.
+        // Native compilers may encode the inherited member on DataAdapter;
+        // the retained call fact still carries that exact declaring identity.
+        var baseAdapter = HasType("System.Data.Common", "DataAdapter")
+            && declaringType.Contains("|culture:7:neutral|publicKeyToken:16:b77a5c561934e089)", StringComparison.Ordinal);
+        if ((HasType("System.Data.Common", "DbDataAdapter") || baseAdapter) && HasMember("Fill"))
         {
             api = "DbDataAdapter.Fill";
             return true;
@@ -317,7 +391,9 @@ public static partial class CombinedDependencyPathReporter
             ConfigKey: null,
             SurfaceSubtype: api == "DbDataAdapter.Fill"
                 ? "compiled-data-adapter-fill-candidate" : "compiled-command-execute-candidate",
-            Limitations: binding is null
+            Limitations: api == "DbDataAdapter.Fill"
+                ? ["The historical DbDataAdapter.Fill surface groups encoded Fill calls declared on DbDataAdapter or DataAdapter. Original declaring identities remain in supporting IL call facts. This is a static API candidate, not provider dispatch, SQL execution, or a source-line identity claim."]
+                : binding is null
                 ? ["Static IL call to a framework database API; no SQL text, database provider dispatch, source line, or runtime execution is established."]
                 : ["Static straight-line command configuration candidate; command strings are hashed or unresolved operand origins, not a resolved SQL statement/procedure. No parameter propagation, runtime dispatch or SQL execution is established."],
             CommandBinding: binding);
@@ -383,6 +459,7 @@ public static partial class CombinedDependencyPathReporter
 
     private static bool ValidCompiledCommandOrigin(CompiledCommandOperandOrigin value)
     {
+        if (value.Kind == "argument-alternatives") return ReadCommandAlternatives(value) is not null;
         if (value.Identity is null || value.Identity.Length > 256) return false;
         if (value.Kind == "unknown") return value.Identity.Length == 0;
         if (value.Kind is "allocation-site" or "call-result" or "argument-slot" or "constant-int32")
@@ -396,6 +473,22 @@ public static partial class CombinedDependencyPathReporter
             && int.TryParse(parts[1], System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var length)
             && length >= 0 && length.ToString(System.Globalization.CultureInfo.InvariantCulture) == parts[1]
             && parts[2].Length == 64 && parts[2].All(character => character is >= '0' and <= '9' or >= 'a' and <= 'f');
+    }
+
+    private static CompiledCommandOperandOrigin[]? ReadCommandAlternatives(CompiledCommandOperandOrigin value)
+    {
+        if (value.Identity is null || value.Identity.Length > 768) return null;
+        try
+        {
+            var values = System.Text.Json.JsonSerializer.Deserialize<CompiledCommandOperandOrigin[]>(value.Identity);
+            if (values is not { Length: >= 2 and <= 4 } || values.Any(item => item is null
+                || item.Kind is not ("argument-slot" or "call-result" or "constant-string-hash" or "constant-int32" or "null")
+                || !(item.Kind == "null" && item.Identity == "" || ValidCompiledCommandOrigin(item)))) return null;
+            var canonical = values.Distinct().OrderBy(item => item.Kind, StringComparer.Ordinal)
+                .ThenBy(item => item.Identity, StringComparer.Ordinal).ToArray();
+            return System.Text.Json.JsonSerializer.Serialize(canonical) == value.Identity ? values : null;
+        }
+        catch (System.Text.Json.JsonException) { return null; }
     }
 
     private static string RetainedSourceIndex(string compiledIndex, IReadOnlyDictionary<string, CompiledAttachmentIndexLink> parents) =>
@@ -567,15 +660,20 @@ public static partial class CombinedDependencyPathReporter
         var declarationsByFile = FactsOfTypes(facts, FactTypes.MethodDeclared).Where(fact => fact.RuleId == RuleIds.VisualBasicSyntaxDeclarations)
             .GroupBy(fact => (fact.SourceIndexId, fact.FilePath))
             .ToDictionary(group => group.Key, group => group.ToArray());
-        var methodIndex = new PublishMemberCandidateIndex(FactsOfTypes(facts, FactTypes.ManagedMethodDeclared)
-            .Where(fact => fact.Properties.GetValueOrDefault("provenanceState") == "bound"));
+        // The publish-receipt assembly hash (assemblyRawSha256) is the authentication
+        // gate for member-level bridging. provenanceState guards full compile-time
+        // provenance (source repo + build identity), which is separate from the
+        // publish receipt's file-hash verification. Filtering here would silently
+        // exclude all methods from assemblies loaded without a CompiledBindingReceipt,
+        // breaking the bridge for the common deploy-only publish-receipt scenario.
+        var methodIndex = new PublishMemberCandidateIndex(FactsOfTypes(facts, FactTypes.ManagedMethodDeclared));
         long candidateWork = 0;
         foreach (var source in sourceInputs)
         {
             if (!declarationsByFile.TryGetValue((RetainedSourceIndex(source.SourceIndexId, parents), source.FilePath), out var declarations)) continue;
             foreach (var declaration in declarations)
             {
-                if (!TrySimpleTypePath(declaration.Properties.GetValueOrDefault("qualifiedContainingType"), out var typePath)) continue;
+                if (!TryPublishSourceTypePath(declaration.Properties, out var typePath)) continue;
                 candidateWork += methodIndex.CandidateWork(source.SourceIndexId,
                     declaration.Properties.GetValueOrDefault("name"), typePath);
                 if (candidateWork <= 100_000) continue;
@@ -598,14 +696,25 @@ public static partial class CombinedDependencyPathReporter
 
             if (!declarationsByFile.TryGetValue((RetainedSourceIndex(source.SourceIndexId, parents), source.FilePath), out var sourceDeclarations))
                 continue;
+            var sourceIdentityCounts = sourceDeclarations
+                .GroupBy(declaration => declaration.Properties.GetValueOrDefault("memberIdentity") ?? string.Empty, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(group => group.Key, group => group.Count(), StringComparer.OrdinalIgnoreCase);
             foreach (var declaration in sourceDeclarations.OrderBy(fact => fact.CombinedFactId, StringComparer.Ordinal))
             {
-                var typeName = declaration.Properties.GetValueOrDefault("qualifiedContainingType");
                 var name = declaration.Properties.GetValueOrDefault("name");
                 var memberIdentity = declaration.Properties.GetValueOrDefault("memberIdentity");
-                if (!TrySimpleTypePath(typeName, out var typePath) || string.IsNullOrWhiteSpace(name)
+                if (!TryPublishSourceTypePath(declaration.Properties, out var typePath) || string.IsNullOrWhiteSpace(name)
                     || name.Equals("New", StringComparison.OrdinalIgnoreCase) || string.IsNullOrWhiteSpace(memberIdentity))
                     continue;
+                var sourceNode = graph.GetOrAddSymbolNode(declaration.SourceIndexId, declaration.SourceLabel,
+                    memberIdentity, declaration.FilePath, declaration.StartLine, declaration.EndLine,
+                    declaration.RuleId, declaration.EvidenceTier);
+                if (sourceIdentityCounts[memberIdentity] != 1)
+                {
+                    AddCompiledIlGap(graph, declaration, "ProjectlessPublishMemberAmbiguous",
+                        "source-member-identity-ambiguous", sourceIdentityCounts[memberIdentity], ProjectlessPublishCandidateRuleId, sourceNode.NodeId);
+                    continue;
+                }
                 var selection = methodIndex.Select(source.SourceIndexId, name, typePath, hashes);
                 var inQualifiedType = selection.QualifiedCandidates;
                 var candidates = inQualifiedType.Where(fact =>
@@ -615,22 +724,23 @@ public static partial class CombinedDependencyPathReporter
                     AddCompiledIlGap(graph, declaration, "ProjectlessPublishMemberAmbiguous",
                         PublishMemberGapReason(selection.NamedCount, selection.BoundAssemblyCount,
                             inQualifiedType.Count, candidates.Length),
-                        candidates.Length, ProjectlessPublishCandidateRuleId);
+                        candidates.Length, ProjectlessPublishCandidateRuleId, sourceNode.NodeId);
                     continue;
                 }
                 var compiled = candidates[0];
+                if (HasEffectiveImportEvidence(declaration))
+                    AddCompiledIlGap(graph, declaration, "ProjectlessPublishImportsNotBuildBound",
+                        "effective-imports-describe-current-environment-not-published-build", null,
+                        ProjectlessPublishCandidateRuleId, sourceNode.NodeId);
                 var matchingAssembly = boundAssemblies.Where(assembly =>
                     assembly.Properties.GetValueOrDefault("assemblyRawSha256") == compiled.Properties.GetValueOrDefault("rawFileSha256"))
                     .ToArray();
                 if (matchingAssembly.Length != 1)
                 {
                     AddCompiledIlGap(graph, declaration, "ProjectlessPublishAssemblyAmbiguous",
-                        "one-declared-published-assembly-required", matchingAssembly.Length, ProjectlessPublishCandidateRuleId);
+                        "one-declared-published-assembly-required", matchingAssembly.Length, ProjectlessPublishCandidateRuleId, sourceNode.NodeId);
                     continue;
                 }
-                var sourceNode = graph.GetOrAddSymbolNode(declaration.SourceIndexId, declaration.SourceLabel,
-                    memberIdentity, declaration.FilePath, declaration.StartLine, declaration.EndLine,
-                    declaration.RuleId, declaration.EvidenceTier);
                 var compiledNode = graph.GetOrAddSymbolNode(compiled.SourceIndexId, compiled.SourceLabel,
                     compiled.TargetSymbol!, compiled.FilePath, compiled.StartLine, compiled.EndLine,
                     compiled.RuleId, compiled.EvidenceTier);
@@ -661,6 +771,11 @@ public static partial class CombinedDependencyPathReporter
         return "multiple-qualified-compatible-members";
     }
 
+    private static bool HasEffectiveImportEvidence(CombinedFactRow source) =>
+        source.Properties.GetValueOrDefault("effectiveImportsKind") == "current-environment-not-build-proof"
+        && new[] { "effectiveImportsReceiptSha256", "effectiveImportsGeneratorSha256", "effectiveImportsInputSha256" }
+            .All(key => source.Properties.GetValueOrDefault(key) is { Length: 64 } hash && hash.All(Uri.IsHexDigit));
+
     private static bool PublishCandidateSignatureMatches(CombinedFactRow source, CombinedFactRow compiled)
     {
         var rawSyntaxTypes = source.Properties.GetValueOrDefault("parameterTypes");
@@ -672,8 +787,51 @@ public static partial class CombinedDependencyPathReporter
             return false;
         var lexicalNamespace = source.Properties.GetValueOrDefault("lexicalNamespace") ?? string.Empty;
         var importedNamespaces = source.Properties.GetValueOrDefault("importedNamespaces") ?? string.Empty;
-        return syntaxTypes.Zip(metadataTypes).All(pair =>
-            PublishParameterMatches(pair.First, pair.Second, lexicalNamespace, importedNamespaces));
+        if (HasEffectiveImportEvidence(source))
+            importedNamespaces += ";" + source.Properties.GetValueOrDefault("effectiveImportedNamespaces");
+        if (!HasEffectiveImportEvidence(source)
+            && source.Properties.GetValueOrDefault("configuredImportsKind") == "root-web-config-framework-vb-imports"
+            && source.Properties.GetValueOrDefault("configuredImportsSha256") is { Length: 64 } importHash
+            && importHash.All(Uri.IsHexDigit)
+            && !string.IsNullOrEmpty(source.Properties.GetValueOrDefault("configuredImportsSource")))
+            importedNamespaces += ";" + source.Properties.GetValueOrDefault("configuredImportedNamespaces");
+        var signature = compiled.Properties.GetValueOrDefault("signature") ?? string.Empty;
+        var arityEnd = signature.IndexOf('|');
+        if (!signature.StartsWith("arity:", StringComparison.Ordinal) || arityEnd < 6
+            || !int.TryParse(signature.AsSpan(6, arityEnd - 6), out var methodArity)
+            || methodArity is < 0 or > 32) return false;
+        var rawTypeParameters = source.Properties.GetValueOrDefault("methodTypeParameters");
+        var typeParameters = string.IsNullOrEmpty(rawTypeParameters) ? [] : rawTypeParameters.Split(';');
+        // Generic method variables require source declaration ordinal evidence.
+        // Missing evidence does not mean that a parameter spelled T is !!0.
+        if (methodArity != typeParameters.Length) return false;
+        var bindings = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        for (var index = 0; index < typeParameters.Length; index++)
+        {
+            var name = typeParameters[index];
+            if (name.Length == 0 || !(char.IsLetter(name[0]) || name[0] == '_')
+                || name.Any(c => !(char.IsLetterOrDigit(c) || c == '_'))
+                || !bindings.TryAdd(name, "!!" + index)) return false;
+        }
+        var rawModes = source.Properties.GetValueOrDefault("parameterPassingModes");
+        var modes = rawModes is null ? null : rawModes.Length == 0 ? [] : rawModes.Split(';');
+        if (modes is not null && modes.Length != sourceCount) return false;
+        for (var index = 0; index < sourceCount; index++)
+        {
+            var metadataType = metadataTypes[index];
+            // Older indexes have no passing-mode evidence: retain the historical
+            // refusal of ByRef rather than guessing from the parameter type.
+            if (modes is not null)
+            {
+                if (modes[index] is not ("byref" or "byval")) return false;
+                var byReference = metadataType.EndsWith('&');
+                if (byReference != (modes[index] == "byref")) return false;
+                if (byReference) metadataType = metadataType[..^1];
+            }
+            if (!PublishParameterMatchesCore(syntaxTypes[index], metadataType, lexicalNamespace, importedNamespaces, 0, bindings))
+                return false;
+        }
+        return true;
     }
 
     private static bool TrySignatureParameters(string? signature, out string[] parameters)
@@ -684,18 +842,21 @@ public static partial class CombinedDependencyPathReporter
         if (open < 0) return false;
         var start = open + 2;
         var depth = 1;
+        var genericDepth = 0;
         var parts = new List<string>();
         for (var index = start; index < signature.Length; index++)
         {
             if (signature[index] == '(') depth++;
             else if (signature[index] == ')' && --depth == 0)
             {
-                if (!signature.AsSpan(index).StartsWith(")->", StringComparison.Ordinal)) return false;
+                if (genericDepth != 0 || !signature.AsSpan(index).StartsWith(")->", StringComparison.Ordinal)) return false;
                 if (index > start) parts.Add(signature[start..index]);
                 parameters = parts.ToArray();
                 return true;
             }
-            else if (signature[index] == ',' && depth == 1)
+            else if (signature[index] == '<' && depth == 1) genericDepth++;
+            else if (signature[index] == '>' && depth == 1 && --genericDepth < 0) return false;
+            else if (signature[index] == ',' && depth == 1 && genericDepth == 0)
             {
                 if (index == start) return false;
                 parts.Add(signature[start..index]);
@@ -707,8 +868,13 @@ public static partial class CombinedDependencyPathReporter
     }
 
     internal static bool PublishParameterMatches(string syntaxType, string metadataType,
-        string lexicalNamespace = "", string importedNamespaces = "")
+        string lexicalNamespace = "", string importedNamespaces = "", IReadOnlyDictionary<string, string>? methodBindings = null)
+        => PublishParameterMatchesCore(syntaxType, metadataType, lexicalNamespace, importedNamespaces, 0, methodBindings);
+
+    private static bool PublishParameterMatchesCore(string syntaxType, string metadataType,
+        string lexicalNamespace, string importedNamespaces, int nesting, IReadOnlyDictionary<string, string>? methodBindings = null)
     {
+        if (nesting > 16 || syntaxType.Length > 16_384 || metadataType.Length > 16_384) return false;
         var syntax = syntaxType.Trim();
         var array = syntax.EndsWith("()", StringComparison.Ordinal);
         if (array) syntax = syntax[..^2];
@@ -740,6 +906,17 @@ public static partial class CombinedDependencyPathReporter
             value = value[..^2];
         }
         else if (value.EndsWith("[]", StringComparison.Ordinal)) return false;
+        if (methodBindings is { Count: > 0 })
+        {
+            // VB keywords are predefined types, not identifiers. An escaped
+            // variable such as [Integer] must not capture an ordinary Integer.
+            var variableSyntax = Microsoft.CodeAnalysis.VisualBasic.SyntaxFactory.ParseTypeName(syntax);
+            if (!variableSyntax.ContainsDiagnostics
+                && variableSyntax is Microsoft.CodeAnalysis.VisualBasic.Syntax.IdentifierNameSyntax identifier
+                && methodBindings.TryGetValue(identifier.Identifier.ValueText, out var variable)) return value == variable;
+        }
+        if (syntax.Contains('('))
+            return PublishGenericParameterMatches(syntax, value, lexicalNamespace, importedNamespaces, nesting, methodBindings);
         if (!value.StartsWith("type(", StringComparison.Ordinal)
             && !value.StartsWith("scope(", StringComparison.Ordinal)) return false;
         var marker = value.LastIndexOf("type(namespace:", StringComparison.Ordinal);
@@ -762,10 +939,9 @@ public static partial class CombinedDependencyPathReporter
                     ? new[] { scope, namespaceCandidate }
                     : new[] { namespaceCandidate };
             })
+            .Append(expected) // Imports enrich candidates; they do not hide global types.
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray();
-        if (qualifiedScopes.Length == 0)
-            return string.Equals(expected, fullName, StringComparison.OrdinalIgnoreCase);
         return qualifiedScopes.Count(candidate =>
             string.Equals(candidate, fullName, StringComparison.OrdinalIgnoreCase)) == 1;
     }
@@ -810,6 +986,25 @@ public static partial class CombinedDependencyPathReporter
             || name.Contains('+', StringComparison.Ordinal) || name.Contains('`', StringComparison.Ordinal))
             return false;
         typePath = $"namespace:{namespaceName.Length}:{namespaceName}|names:{name.Length}:{name}";
+        return true;
+    }
+
+    internal static bool TryPublishSourceTypePath(IReadOnlyDictionary<string, string> properties, out string typePath)
+    {
+        var qualified = properties.GetValueOrDefault("qualifiedContainingType");
+        // Legacy declarations without a retained namespace keep their historical
+        // top-level match. Do not guess a nesting boundary from dotted spelling.
+        if (!properties.TryGetValue("lexicalNamespace", out var ns))
+            return TrySimpleTypePath(qualified, out typePath);
+        typePath = string.Empty;
+        if (string.IsNullOrWhiteSpace(qualified) || ns is null) return false;
+        var prefix = ns.Length == 0 ? string.Empty : ns + ".";
+        if (!qualified.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) return false;
+        var names = qualified[prefix.Length..].Split('.');
+        if (names.Any(name => name.Length == 0 || name.Any(c => c is '+' or '`' or '|' or ':' or '(' or ')'))
+            || (ns.Length > 0 && ns.Split('.').Any(part => part.Length == 0))
+            || ns.Any(c => c is '+' or '`' or '|' or ':' or '(' or ')')) return false;
+        typePath = $"namespace:{ns.Length}:{ns}|names:" + string.Concat(names.Select(name => $"{name.Length}:{name}"));
         return true;
     }
 
@@ -943,8 +1138,11 @@ public static partial class CombinedDependencyPathReporter
         return true;
     }
 
-    private static string? ExpectedMemberReference(CombinedFactRow method)
+    private static string? ExpectedMemberReference(CombinedFactRow method) => ExpectedMemberReference(method, false, out _);
+
+    private static string? ExpectedMemberReference(CombinedFactRow method, bool allowGeneric, out int typeArity)
     {
+        typeArity = 0;
         var assemblyIdentity = method.Properties.GetValueOrDefault("assemblyIdentity");
         var assemblyReference = method.Properties.GetValueOrDefault("assemblyReferenceIdentity");
         var name = method.Properties.GetValueOrDefault("metadataName");
@@ -975,7 +1173,9 @@ public static partial class CombinedDependencyPathReporter
         if (!ConsumeLiteral(identity, ref position, "|arity:")) return null;
         var arityStart = position;
         while (position < identity.Length && char.IsAsciiDigit(identity[position])) position++;
-        if (position == arityStart || identity[arityStart..position] != "0") return null;
+        if (position == arityStart || !int.TryParse(identity.AsSpan(arityStart, position - arityStart),
+                System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out typeArity)
+            || (!allowGeneric && typeArity != 0)) return null;
         var kind = name is ".ctor" or ".cctor" ? "|constructor:" : "|method:";
         if (!ConsumeLiteral(identity, ref position, kind)
             || !ConsumeComponent(identity, ref position)
@@ -1006,13 +1206,21 @@ public static partial class CombinedDependencyPathReporter
     }
 
     private static void AddCompiledIlGap(EvidenceGraph graph, CombinedFactRow fact,
-        string gapKind, string reason, int? candidateCount, string ruleId = CompiledIlBridgeRuleId)
+        string gapKind, string reason, int? candidateCount, string ruleId = CompiledIlBridgeRuleId, string? nodeId = null)
     {
         graph.Gaps.Add(new CombinedPathGap(
             $"gap:compiled-il:{fact.CombinedFactId}:{gapKind}", gapKind,
             CombinedDependencyPathClassifications.UnknownAnalysisGap,
-            "Bound compiled evidence could not be joined to one path-graph target; no edge was inferred.",
-            fact.SourceIndexId, fact.SourceLabel, null, fact.CombinedFactId,
+            gapKind switch
+            {
+                "CompiledIlFrameworkVersionCandidate" => "A unique embedded framework-version signature candidate was retained; runtime binding is unproven.",
+                "CompiledIlFrameworkVersionAmbiguous" => "Multiple embedded framework-version signature candidates remain; no target edge was inferred.",
+                "CompiledIlVirtualDispatchUnproven" => "A framework-version target candidate was retained, but virtual dispatch is unproven.",
+                "CompiledIlArtifactContext" when reason.StartsWith("framework-signature-", StringComparison.Ordinal) => "The retained framework-version candidate lacks source-commit binding; compiled provenance was not upgraded.",
+                "CompiledIlArtifactContext" => "A compiled target edge was retained, but the caller or target lacks source-commit binding; compiled provenance was not upgraded. This annotation does not indicate target-resolution failure.",
+                _ => "Bound compiled evidence could not be joined to one path-graph target; no edge was inferred."
+            },
+            fact.SourceIndexId, fact.SourceLabel, nodeId, fact.CombinedFactId,
             ruleId, EvidenceTiers.Tier4Unknown,
             SafePath(fact.FilePath), fact.StartLine, reason,
             fact.CommitSha, fact.ExtractorVersion, "bound-compiled-il",

@@ -226,6 +226,25 @@ public sealed class CombinedDependencyPathTests
         Assert.Contains(paths.Report.Gaps, gap => gap.Reason == "path" && gap.GapKind == "TruncatedByLimit");
         var depth = await CombinedDependencyPathReporter.WriteAsync(options with { MaxDepth = 2 });
         Assert.Contains(depth.Report.Gaps, gap => gap.Reason == "depth" && gap.GapKind == "TruncatedByLimit");
+        var witnesses = depth.Report.Gaps.Where(gap => gap.CutoffWitness is not null).ToArray();
+        Assert.InRange(witnesses.Length, 1, 3);
+        Assert.All(witnesses, gap =>
+        {
+            var witness = gap.CutoffWitness!;
+            Assert.NotEmpty(witness.Edges);
+            Assert.Equal(witness.Edges.Count + 1, witness.Nodes.Count);
+            Assert.Equal(gap.NodeId, witness.Nodes[^1].NodeId);
+            Assert.False(witness.PrefixTruncated);
+            for (var i = 0; i < witness.Edges.Count; i++)
+            {
+                Assert.Equal(witness.Nodes[i].NodeId, witness.Edges[i].FromNodeId);
+                Assert.Equal(witness.Nodes[i + 1].NodeId, witness.Edges[i].ToNodeId);
+                Assert.False(string.IsNullOrEmpty(witness.Edges[i].RuleId));
+                Assert.False(string.IsNullOrEmpty(witness.Edges[i].EvidenceTier));
+            }
+        });
+        var depthAgain = await CombinedDependencyPathReporter.WriteAsync(options with { MaxDepth = 2 });
+        Assert.Equal(JsonSerializer.Serialize(depth.Report), JsonSerializer.Serialize(depthAgain.Report));
         facts.Add(CallFact(manifest, "Leaf.L0()", "Root.Start()", "Graph.cs", 200));
         var cycleIndex = Path.Combine(temp.Path, "cycle.sqlite");
         var cycleCombined = Path.Combine(temp.Path, "cycle-combined.sqlite");
@@ -234,6 +253,9 @@ public sealed class CombinedDependencyPathTests
         var cycle = await CombinedDependencyPathReporter.WriteAsync(options with { IndexPath = cycleCombined });
         Assert.Equal(64, cycle.Report.Paths.Count);
         Assert.Contains(cycle.Report.Gaps, gap => gap.Reason == "cycle" && gap.GapKind == "TruncatedByLimit");
+        var cycleWitnesses = cycle.Report.Gaps.Where(gap => gap.Reason == "cycle" && gap.CutoffWitness is not null).ToArray();
+        Assert.InRange(cycleWitnesses.Length, 1, 3);
+        Assert.All(cycleWitnesses, gap => Assert.True(gap.CutoffWitness!.LastEdgeNotTraversed));
         var workOptions = options with { MaxTraversalWork = 20 };
         var workBounded = await CombinedDependencyPathReporter.WriteAsync(workOptions);
         Assert.Contains(workBounded.Report.Gaps, gap => gap.Reason == "work" && gap.GapKind == "TruncatedByLimit");
@@ -248,6 +270,113 @@ public sealed class CombinedDependencyPathTests
         var noTerminal = await CombinedDependencyPathReporter.WriteAsync(workOptions with { IndexPath = noTerminalCombined });
         Assert.Contains(noTerminal.Report.Gaps, gap => gap.Reason == "work" && gap.GapKind == "TruncatedByLimit");
         Assert.Equal(20, noTerminal.Report.Summary.TraversalWorkUnits);
+    }
+
+    [Theory]
+    [InlineData("projectless-publish-member-candidate", "b", "a", true)]
+    [InlineData("calls", "b", "a", false)]
+    [InlineData("projectless-publish-member-candidate", "b", "c", false)]
+    public void Publish_identity_roundtrip_is_only_an_immediate_candidate_reverse(string kind, string from, string to, bool expected)
+    {
+        Assert.Equal(expected, CombinedDependencyPathReporter.IsPublishIdentityRoundtrip(
+            "projectless-publish-member-candidate", "a", "b", kind, from, to));
+    }
+
+    [Theory]
+    [InlineData("terminal-route-not-found-within-depth-bound")]
+    [InlineData("terminal-distance-exceeds-remaining-depth")]
+    [InlineData("candidate-identity-roundtrip")]
+    [InlineData("depth-limit-reached")]
+    [InlineData("repeated-node-cycle")]
+    public void Cutoff_prose_is_regenerated_without_exempting_arbitrary_messages(string cause)
+    {
+        var gap = new CombinedPathGap("gap", "TruncatedByLimit", "NeedsReviewPath",
+            "SELECT private_marker FROM private_table", null, null, null, null,
+            "combined.paths.truncation-gap.v1", "Tier4Unknown", null, null, "depth") { CutoffCause = cause };
+        var sanitized = CombinedDependencyPathReporter.SanitizeGap(gap);
+        Assert.Equal(CombinedDependencyPathReporter.CutoffDiagnosticMessage(cause), sanitized.Message);
+        Assert.DoesNotContain("redacted-hash", sanitized.Message);
+        Assert.DoesNotContain("private_marker", sanitized.Message);
+        var unknown = CombinedDependencyPathReporter.SanitizeGap(gap with { CutoffCause = "unrecognized" });
+        Assert.DoesNotContain("private_marker", unknown.Message);
+        var otherRule = CombinedDependencyPathReporter.SanitizeGap(gap with { RuleId = "other.rule" });
+        Assert.DoesNotContain("private_marker", otherRule.Message);
+        Assert.NotEqual(sanitized.Message, otherRule.Message);
+    }
+
+    [Fact]
+    public async Task Reverse_pruning_distinguishes_missing_bounded_route_from_known_excess_distance()
+    {
+        using var temp = new TempDirectory();
+        var manifest = Manifest("server", "tracemap-milestone15");
+        var index = Path.Combine(temp.Path, "index.sqlite");
+        var combined = Path.Combine(temp.Path, "combined.sqlite");
+        var facts = new List<CodeFact>
+        {
+            CallFact(manifest, "Root.Start()", "Leaf.Query()", "Graph.cs", 1),
+            CallFact(manifest, "Root.Start()", "Branch.Long()", "Graph.cs", 2),
+            CallFact(manifest, "Branch.Long()", "Leaf.Query()", "Graph.cs", 3),
+            CallFact(manifest, "Root.Start()", "Branch.Unknown()", "Graph.cs", 4),
+            QueryPatternFact(manifest, "Leaf.Query()", "Graph.cs", 5)
+        };
+        SqliteIndexWriter.Write(index, manifest, facts);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([index], combined, ["server"]));
+        var result = await CombinedDependencyPathReporter.WriteAsync(new CombinedDependencyPathOptions(combined,
+            Path.Combine(temp.Path, "out"), FromSymbol: "Root.Start()", ToSurface: "sql-query",
+            View: LegacyFlowReportConstants.View, MaxDepth: 2, MaxPaths: 100, MaxFrontier: 100)
+            { MaxTraversalWork = 4096 });
+        Assert.NotEmpty(result.Report.Paths);
+        Assert.True(result.Report.Summary.Truncated);
+        Assert.Contains(result.Report.Gaps, gap => gap.CutoffCause == "terminal-route-not-found-within-depth-bound");
+        Assert.Contains(result.Report.Gaps, gap => gap.CutoffCause == "terminal-distance-exceeds-remaining-depth");
+        Assert.All(result.Report.Gaps.Where(gap => gap.CutoffCause is not null), gap => Assert.Equal("depth", gap.Reason));
+    }
+
+    [Theory]
+    [InlineData(2, false)]
+    [InlineData(4, false)]
+    [InlineData(8, false)]
+    [InlineData(2, true)]
+    [InlineData(4, true)]
+    [InlineData(8, true)]
+    public async Task Depth_uncertainty_preserves_short_variants_and_separates_terminal_inventory(int depth, bool inventory)
+    {
+        using var temp = new TempDirectory();
+        var manifest = Manifest("server", "depth-inventory-controls") with { CommitSha = new string('a', 40) };
+        var index = Path.Combine(temp.Path, "index.sqlite");
+        var combined = Path.Combine(temp.Path, "combined.sqlite");
+        var facts = new List<CodeFact>
+        {
+            CallFact(manifest, "Root.Start()", "Short.Query()", "Root.cs", 1),
+            CallFact(manifest, "Root.Start()", "Short.Query()", "Root.cs", 2),
+            QueryPatternFact(manifest, "Short.Query()", "Short.cs", 1),
+            CallFact(manifest, "Root.Start()", "Long.M0()", "Root.cs", 3),
+            CallFact(manifest, "Root.Start()", "Unknown.Leaf()", "Root.cs", 4),
+            QueryPatternFact(manifest, "Long.M4()", "Long.cs", 10)
+        };
+        for (var i = 0; i < 4; i++)
+            facts.Add(CallFact(manifest, $"Long.M{i}()", $"Long.M{i + 1}()", "Long.cs", i + 1));
+        SqliteIndexWriter.Write(index, manifest, facts);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([index], combined, ["server"]));
+        var options = new CombinedDependencyPathOptions(combined, temp.Path, FromSymbol: "Root.Start()",
+            ToSurface: "sql-query", IncludeLegacyRoots: true, MaxDepth: depth, MaxPaths: 100, MaxFrontier: 100)
+            { ExactFromSymbol = true, MaxTraversalWork = 4096, InventoryDistinctTerminals = inventory };
+        var report = await CombinedDependencyPathReporter.BuildReportAsync(options);
+        Assert.Equal(2, report.Paths.Count(path => path.Nodes.Any(node => node.SymbolId == "Short.Query()")));
+        Assert.Equal(inventory || depth >= 6,
+            report.Paths.Any(path => path.Nodes.Any(node => node.SymbolId == "Long.M4()")));
+        Assert.DoesNotContain(report.Paths, path => path.Nodes.Any(node => node.SymbolId == "Unknown.Leaf()"));
+        Assert.DoesNotContain(report.Gaps, gap => gap.GapKind == "TruncatedByLimit" && gap.Reason == "work");
+        Assert.InRange(report.Summary.TraversalWorkUnits!.Value, 1, 4096);
+        if (!inventory)
+        {
+            Assert.True(report.Summary.Truncated);
+            Assert.Contains(report.Gaps, gap => gap.CutoffCause == "terminal-route-not-found-within-depth-bound");
+        }
+        var replay = await CombinedDependencyPathReporter.BuildReportAsync(options);
+        Assert.Equal(JsonSerializer.Serialize(report.Paths), JsonSerializer.Serialize(replay.Paths));
+        Assert.Equal(JsonSerializer.Serialize(report.Gaps), JsonSerializer.Serialize(replay.Gaps));
+        Assert.Equal(report.Summary.TraversalWorkUnits, replay.Summary.TraversalWorkUnits);
     }
 
     [Fact]

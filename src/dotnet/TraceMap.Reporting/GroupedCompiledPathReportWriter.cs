@@ -48,8 +48,14 @@ public static class GroupedCompiledPathReportWriter
             W("<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><link rel=\"icon\" href=\"data:,\"><title>Grouped compiled method paths</title>");
             W("<style>body{font:16px/1.5 system-ui,sans-serif;max-width:1100px;margin:2rem auto;padding:0 1rem;color:#17212b;background:#f7f9fb}a{color:#12599b}section{background:white;border:1px solid #ced8e1;border-radius:6px;padding:1rem;margin:1rem 0}.notice{border-left:4px solid #a34024;padding:1rem;background:#fff4e9}table{border-collapse:collapse;width:100%;table-layout:fixed}td,th{border:1px solid #ced8e1;padding:.6rem;vertical-align:top;text-align:left;overflow-wrap:anywhere}th{background:#edf2f7}code,pre{white-space:pre-wrap;overflow-wrap:anywhere}details{margin:.5rem 0}summary{cursor:pointer}small{color:#42546a}.identities{font-size:.85rem}@media(max-width:650px){body{margin:1rem auto}thead{display:none}table,tbody,tr,td{display:block;width:auto}tr{margin:.6rem 0}td{padding:.5rem;font-size:.9rem}td+td{border-top:0}details[open]>table td:before{content:attr(data-label);display:block;font-weight:600;color:#42546a}section{padding:.6rem}}</style></head><body>");
             W("<h1>Grouped compiled method paths</h1>");
+            if (report.Gaps.Any(gap => gap.GapKind == "ProjectlessPublishImportsNotBuildBound"))
+                W("<p class=\"notice\">Effective VB imports describe the current environment, not the published build. Source/configuration/provider hashes were checked during extraction, but these settings are not proven to have produced the DLLs. Source-to-compiled bridges remain Tier3 candidates, not authenticated build or runtime binding evidence.</p>");
             W("<p class=\"notice\">LOCAL ONLY — review-only static candidates, not runtime execution or proof that SQL ran. Grouping is a display/index operation; no evidence variant was removed.</p>");
             W($"<p>{handoff.Chains.Count} exact chains · {handoff.Variants.Count} retained variants · coverage {H(report.ReportCoverage)} · truncated {H(report.Summary.Truncated.ToString())}. <a href=\"{HandoffName}\">Lossless indexed handoff JSON</a></p>");
+            if (report.Paths.Any(path => path.Edges.Any(edge => edge.EdgeKind == "compiled-il-framework-version-candidate")))
+                W("<p class=\"notice\">Framework-version candidate routes are present (Tier3). Declaring assembly identity remains exact, but embedded desktop framework type versions differ. Runtime binding and compatibility are unproven; argument and return-value propagation stop at this boundary. ‘Exact chains’ describes identity-based grouping, not exact runtime binding.</p>");
+            if (handoff.Chains.Count == 0)
+                W("<p class=\"notice\">No terminal routes were retained by this path query. This is not evidence that the handler has no database dependencies. Inspect selector, traversal and coverage gaps below; a method graph is a separate diagnostic view, not a path report.</p>");
             W("<nav aria-label=\"Method chains\"><ul>");
             for (var index = 0; index < handoff.Chains.Count; index++)
             {
@@ -64,6 +70,28 @@ public static class GroupedCompiledPathReportWriter
                 var path = report.Paths[group.VariantIndexes[0]];
                 W($"<section id=\"chain-{index + 1}\"><h2>Chain {index + 1} <small>({group.VariantIndexes.Count} variants)</small></h2>");
                 W($"<p>{H(string.Join(" → ", path.Nodes.Select(Compact)))}</p>");
+                var commandEndpoints = group.VariantIndexes.Select(variant => handoff.Variants[variant].NodeReferences.LastOrDefault())
+                    .OfType<string>().Distinct(StringComparer.Ordinal)
+                    .Where(reference => handoff.Nodes[reference].SurfaceKind == "database-api" || handoff.Nodes[reference].CommandBinding is not null).ToArray();
+                if (commandEndpoints.Length > 0)
+                    W("<h3>Database operations and command inputs</h3><p>Retained static routes, not proof of execution. Constants remain hash-only; SQL text and table/procedure names are not reconstructed.</p>");
+                foreach (var reference in commandEndpoints)
+                {
+                    var endpoint = handoff.Nodes[reference];
+                    W($"<h4>{H(endpoint.SurfaceName ?? Compact(endpoint))}</h4><p>Endpoint evidence: {H(endpoint.RuleId)} / {H(endpoint.EvidenceTier)}; {H(Location(endpoint.FilePath, endpoint.StartLine, endpoint.EndLine))}. Node reference: <code>{H(reference)}</code></p>");
+                    foreach (var limitation in endpoint.Limitations ?? [])
+                        W($"<p>Endpoint limitation: {H(limitation)}</p>");
+                    var variants = group.VariantIndexes.Where(variant => handoff.Variants[variant].NodeReferences.LastOrDefault() == reference);
+                    W($"<p>Retained variants: {H(string.Join(", ", variants.Select(variant => handoff.Variants[variant].Path.PathId)))}</p>");
+                    foreach (var (label, value) in new[] { ("Command text expression", endpoint.CommandBinding?.CommandTextFromPath),
+                        ("Command type evidence", endpoint.CommandBinding?.CommandTypeFromPath) })
+                    {
+                        W($"<h5>{label}</h5>");
+                        if (value is null) { W("<p>Value evidence unavailable; the endpoint route is still retained.</p>"); continue; }
+                        var remaining = 32;
+                        WriteCommandValue(value, W, 0, ref remaining, label == "Command type evidence");
+                    }
+                }
                 W("<details><summary>Exact method and source identities</summary><div class=\"identities\">");
                 foreach (var reference in group.VariantIndexes.SelectMany(variant => handoff.Variants[variant].NodeReferences).Distinct(StringComparer.Ordinal))
                 {
@@ -93,6 +121,27 @@ public static class GroupedCompiledPathReportWriter
                 W("</ul></details></section>");
             }
             W($"<section><h2>Coverage and retained gaps</h2><p>{report.Gaps.Count} gap records remain in the indexed handoff. Gap absence is not proof of complete coverage.</p><ul>");
+            W("</ul><h3>Sampled root-to-cutoff prefixes</h3><p>At most three witnesses per depth/cycle reason and 64 edges per witness. These are traversal diagnostics, not database paths or runtime proof. Other gaps may have no retained witness.</p>");
+            var cutoffGaps = report.Gaps.Where(gap => gap.GapKind == "TruncatedByLimit").ToArray();
+            var identityReturns = cutoffGaps.Count(gap => gap.CutoffCause == "candidate-identity-roundtrip");
+            var terminalUncertainty = cutoffGaps.Count(gap => gap.CutoffCause == "terminal-route-not-found-within-depth-bound");
+            W($"<p>Identity round trips (not application recursion): {identityReturns}. Bounded terminal-route uncertainty: {terminalUncertainty}. Other or legacy cutoffs: {cutoffGaps.Length - identityReturns - terminalUncertainty}. These are retained gap counts, not missing paths. Original depth/cycle accounting and partial coverage remain unchanged.</p>");
+            foreach (var gap in report.Gaps.Where(gap => gap.CutoffWitness is not null).Take(6))
+            {
+                var witness = gap.CutoffWitness!;
+                if (gap.CutoffTraversalDepth is { } evaluatedDepth && gap.CutoffMaxDepth is { } depthLimit)
+                    W($"<p>Cutoff evaluation: {evaluatedDepth} edges traversed on this prefix; configured depth {depthLimit}. This is not the node's shortest or first-discovery depth.</p>");
+                W($"<details><summary>{H(gap.Reason)} / {H(gap.CutoffCause)}: {H(Location(gap.FilePath, gap.StartLine, gap.EndLine))}</summary><p>{H(gap.Message)}</p><p>Prefix truncated: {witness.PrefixTruncated}; final candidate edge not traversed: {witness.LastEdgeNotTraversed}</p><ol>");
+                for (var i = 0; i < witness.Edges.Count; i++)
+                {
+                    var edge = witness.Edges[i];
+                    W($"<li>{H(edge.FromNodeId)} → {H(edge.ToNodeId)}<br>{H(edge.EdgeKind)}; rule {H(edge.RuleId)}; tier {H(edge.EvidenceTier)}; {H(Location(edge.FilePath, edge.StartLine, edge.EndLine))}</li>");
+                }
+                W("</ol><details><summary>Retained node identities</summary>");
+                foreach (var node in witness.Nodes) W($"<p>{H(node.NodeId)}: {H(Compact(node))}; {H(Location(node.FilePath, node.StartLine, node.EndLine))}</p>");
+                W("</details></details>");
+            }
+            W("<ul>");
             foreach (var warning in report.CoverageWarnings) W($"<li>{H(warning)}</li>");
             foreach (var limitation in report.Limitations) W($"<li>{H(limitation)}</li>");
             W("</ul><details><summary>Projection provenance and limits</summary>");
@@ -102,6 +151,37 @@ public static class GroupedCompiledPathReportWriter
         }
         await html.FlushAsync(cancellationToken);
         return new(htmlPath, jsonPath, html.Digest(), json.Digest(), budget.Bytes);
+    }
+
+    private static void WriteCommandValue(CompiledCommandPathValueBinding value, Action<string> write, int depth, ref int remaining, bool commandType = false)
+    {
+        if (depth > 4 || remaining-- <= 0)
+        { write("<p>Expression display limit reached; consult the lossless handoff.</p>"); return; }
+        var label = value.SymbolicInput is { } input ? "Value returned by " + Compact(input.MethodIdentity)
+            : value.Composition is { } composition ? composition.Operation
+            : value.Alternatives is not null ? "Possible input alternatives (branch feasibility not proven)"
+            : value.Origin.Kind == "constant-string-hash" ? "String constant (hash retained; plaintext unavailable)"
+            : value.Origin.Kind == "constant-int32" ? commandType ? value.Origin.Identity switch
+                { "1" => "CommandType.Text", "4" => "CommandType.StoredProcedure", "512" => "CommandType.TableDirect", _ => "Unrecognized command type constant" }
+                : "Integer constant (retained evidence, not execution)"
+            : value.Origin.Kind == "argument-slot" ? "Unresolved method argument"
+            : "Unresolved value";
+        write($"<div><p><strong>{H(label)}</strong><br>State: {H(value.State)}; rule: {H(value.RuleId)}; tier: {H(value.EvidenceTier)}</p>");
+        write($"<p>Connection / evidence gaps: {H(value.Gaps.Count == 0 ? "none retained for this operand (not a completeness claim)" : string.Join(", ", value.Gaps))}</p>");
+        if (value.SymbolicInput is { } symbolic)
+            write($"<p>Value uncertainty: {H(string.Join(", ", symbolic.ValueGaps))}. Method return not evaluated; unknown runtime values do not imply a missing connection.</p><details><summary>Symbolic input evidence</summary><p>Method {H(symbolic.MethodFactId)}; producer {H(symbolic.ProducerCallFactId)}; body {H(symbolic.BodyFactId)}; return {H(symbolic.ReturnFactId)}</p></details>");
+        foreach (var limitation in value.Limitations ?? []) write($"<p>Limitation: {H(limitation)}</p>");
+        if (value.Alternatives is not null || value.Composition is not null)
+        {
+            write("<ol>");
+            foreach (var child in value.Alternatives ?? value.Composition!.OperandBindings)
+            {
+                if (remaining <= 0) { write("<li>Expression display limit reached; consult the lossless handoff.</li>"); break; }
+                write("<li>"); WriteCommandValue(child, write, depth + 1, ref remaining, commandType); write("</li>");
+            }
+            write("</ol>");
+        }
+        write($"<details><summary>Value projection provenance</summary><p>Origin body {H(value.OriginBodyFactId)}; argument hops {value.Steps.Count}; return hops {value.ReturnSteps?.Count ?? 0}<br>Generator SHA-256 {H(value.GeneratorSha256)}<br>Bounded input SHA-256 {H(value.BoundedInputSha256)}</p></details></div>");
     }
 
     private static string H(string? value) => WebUtility.HtmlEncode(value ?? "unavailable");

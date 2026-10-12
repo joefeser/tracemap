@@ -148,6 +148,9 @@ public sealed class PublishMemberCandidateIndexTests
             Assert.DoesNotContain(edges, edge => edge.FilePath == "App_Code/Store0000.vb");
             Assert.Contains(graph.Gaps, gap => gap.GapKind == "ProjectlessPublishMemberAmbiguous"
                 && gap.FilePath == "App_Code/Store0000.vb" && gap.Reason == "multiple-qualified-compatible-members");
+            var gap = Assert.Single(graph.Gaps, gap => gap.GapKind == "ProjectlessPublishMemberAmbiguous"
+                && gap.FilePath == "App_Code/Store0000.vb");
+            Assert.Contains(graph.Nodes, node => node.NodeId == gap.NodeId && node.SymbolId == "Public.Store0000.Entry()");
         }
     }
 
@@ -180,7 +183,6 @@ public sealed class PublishMemberCandidateIndexTests
     [InlineData("header-marker")]
     [InlineData("method-marker")]
     [InlineData("signature-marker")]
-    [InlineData("nested")]
     [InlineData("malformed-length")]
     public void Opaque_or_delimiter_bearing_identity_retains_historical_matching_and_work(string mutation)
     {
@@ -197,7 +199,6 @@ public sealed class PublishMemberCandidateIndexTests
                 ("assemblyIdentity", assembly + marker + "header")),
             "method-marker" => row with { TargetSymbol = identity.Replace("|method:5:Entry", $"|method:{(marker + "Entry").Length}:{marker}Entry", StringComparison.Ordinal) },
             "signature-marker" => row with { TargetSymbol = identity + marker },
-            "nested" => row with { TargetSymbol = identity.Replace(TypePath("Other"), TypePath("Other") + "6:Nested", StringComparison.Ordinal) },
             "malformed-length" => row with { TargetSymbol = identity.Replace("names:5:Other", "names:99:Other", StringComparison.Ordinal) },
             _ => throw new InvalidOperationException()
         };
@@ -208,6 +209,37 @@ public sealed class PublishMemberCandidateIndexTests
         Assert.Equal(2, actual.NamedCount);
         Assert.Equal(2, actual.BoundAssemblyCount);
         Assert.Equal(methods.Where(method => method.TargetSymbol!.Contains(marker, StringComparison.OrdinalIgnoreCase)), actual.QualifiedCandidates);
+    }
+
+    [Fact]
+    public void Nested_type_index_preserves_framed_names_and_excludes_namespace_lookalikes()
+    {
+        var row = Method("Outer", "Entry", "hash-a");
+        var nestedPath = TypePath("Outer") + "5:Inner";
+        row = row with { TargetSymbol = row.TargetSymbol!.Replace(TypePath("Outer"), nestedPath, StringComparison.Ordinal) };
+        var lookalike = Method("Inner", "Entry", "hash-a");
+        lookalike = lookalike with { TargetSymbol = lookalike.TargetSymbol!.Replace("namespace:6:Public", "namespace:12:Public.Outer", StringComparison.Ordinal) };
+        var index = new CombinedDependencyPathReporter.PublishMemberCandidateIndex([row, row, lookalike]);
+        Assert.Equal(2, index.CandidateWork("source", "Entry", nestedPath));
+        Assert.Equal(2, index.Select("source", "Entry", nestedPath, new HashSet<string?> { "hash-a" }).QualifiedCandidates.Count);
+        Assert.Empty(index.Select("source", "Entry", nestedPath, new HashSet<string?> { "wrong-hash" }).QualifiedCandidates);
+        Assert.Single(index.Select("source", "Entry", "namespace:12:Public.Outer|names:5:Inner", new HashSet<string?> { "hash-a" }).QualifiedCandidates);
+    }
+
+    [Theory]
+    [InlineData("", "Outer.Inner", "namespace:0:|names:5:Outer5:Inner")]
+    [InlineData("Public.Domain", "Public.Domain.Outer.Inner", "namespace:13:Public.Domain|names:5:Outer5:Inner")]
+    [InlineData("Public", "Public.Outer.Middle.Inner", "namespace:6:Public|names:5:Outer6:Middle5:Inner")]
+    [InlineData("Public", "Public.Ordinary", "namespace:6:Public|names:8:Ordinary")]
+    [InlineData("Wrong", "Public.Outer.Inner", null)]
+    [InlineData("Public", "Public.Outer..Inner", null)]
+    [InlineData("Public", "Public.Outer(Of T).Inner", null)]
+    public void Source_type_path_uses_retained_namespace_boundary(string ns, string qualified, string? expected)
+    {
+        var matched = CombinedDependencyPathReporter.TryPublishSourceTypePath(new Dictionary<string, string>
+            { ["lexicalNamespace"] = ns, ["qualifiedContainingType"] = qualified }, out var path);
+        Assert.Equal(expected is not null, matched);
+        if (expected is not null) Assert.Equal(expected, path);
     }
 
     [Fact]
