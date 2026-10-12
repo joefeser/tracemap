@@ -25,6 +25,36 @@ public sealed class ScanExecutionReceiptTests
     }
 
     [Fact]
+    public void Authorized_scope_keeps_all_ci_deps_and_import_context_combinations_distinct()
+    {
+        string Fingerprint(ScanOptions options)
+        {
+            var recorder = new ScanReceiptRecorder(options);
+            recorder.Bind(new GitMetadata("synthetic", null, "main", CommitSha, []));
+            return recorder.CreateReceipt().AuthorizedScopeFingerprint;
+        }
+
+        var fingerprints = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var ci in new[] { false, true })
+        foreach (var deps in new[] { false, true })
+        foreach (var context in new string?[] { null, "context.json" })
+        {
+            var options = new ScanOptions("synthetic", "output")
+            {
+                IndexCiProducers = ci,
+                IndexDepsJson = deps,
+                WebFormsVbImportContextPath = context
+            };
+            Assert.True(fingerprints.Add(Fingerprint(options)));
+            Assert.Equal(Fingerprint(options), Fingerprint(options with
+            {
+                WebFormsVbImportContextPath = context is null ? " " : " context.json "
+            }));
+        }
+        Assert.Equal(8, fingerprints.Count);
+    }
+
+    [Fact]
     public void Disabled_deps_preserves_legacy_v1_scope_fingerprint()
     {
         var options = new ScanOptions("synthetic", "output");
@@ -69,6 +99,42 @@ public sealed class ScanExecutionReceiptTests
         }
         var marker = "deps-json:" + JsonSerializer.Serialize(new DepsJsonLimits());
         var enabled = Fingerprint(options with { IndexDepsJson = true }, ["a"]);
+        Assert.NotEqual(enabled, Fingerprint(options, ["a", marker]));
+        Assert.NotEqual(enabled, Fingerprint(options, ["a\n" + marker]));
+    }
+
+    [Fact]
+    public void Authorized_scope_binds_ci_producer_opt_in_and_keeps_lanes_distinct()
+    {
+        var options = new ScanOptions("repo", "out");
+        string Fingerprint(ScanOptions value)
+        {
+            var recorder = new ScanReceiptRecorder(value);
+            recorder.Bind(new GitMetadata("repo", null, "dev", CommitSha, []));
+            return recorder.CreateReceipt().AuthorizedScopeFingerprint;
+        }
+        var ci = options with { IndexCiProducers = true };
+        var deps = options with { IndexDepsJson = true };
+        // A disabled-lane scan can never be reused as an enabled-lane scan, in any combination.
+        Assert.NotEqual(Fingerprint(options), Fingerprint(ci));
+        Assert.NotEqual(Fingerprint(deps), Fingerprint(ci));
+        Assert.NotEqual(Fingerprint(deps), Fingerprint(deps with { IndexCiProducers = true }));
+        Assert.Equal(Fingerprint(ci), Fingerprint(ci with { IndexDepsJson = false }));
+        Assert.Equal(Fingerprint(options), Fingerprint(options with { IndexCiProducers = false }));
+    }
+
+    [Fact]
+    public void Ci_producer_scope_cannot_be_forged_by_additional_input_text()
+    {
+        var options = new ScanOptions("repo", "out");
+        string Fingerprint(ScanOptions value, string[] additional)
+        {
+            var recorder = new ScanReceiptRecorder(value, additional);
+            recorder.Bind(new GitMetadata("repo", null, "dev", CommitSha, []));
+            return recorder.CreateReceipt().AuthorizedScopeFingerprint;
+        }
+        var marker = "{\"baseScopeSha256\":\"x\",\"indexDepsJson\":false,\"depsJsonLimits\":null,\"indexCiProducers\":true}";
+        var enabled = Fingerprint(options with { IndexCiProducers = true }, ["a"]);
         Assert.NotEqual(enabled, Fingerprint(options, ["a", marker]));
         Assert.NotEqual(enabled, Fingerprint(options, ["a\n" + marker]));
     }
