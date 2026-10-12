@@ -12,6 +12,7 @@ public sealed record WebFormsHandlerRequeryReceipt(string SchemaVersion, string 
     int ExactChains, int EvidenceVariants, bool Truncated, int? TraversalWorkUnits,
     IReadOnlyList<WebFormsReviewArtifact> Artifacts, IReadOnlyList<string> Limitations)
 {
+    public string ReportVariant { get; init; } = "grouped-paths";
     public CombinedPathGraphObservation? GraphObservation { get; init; }
     [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
     public string? CompletedReportSha256 { get; init; }
@@ -235,7 +236,8 @@ public static partial class WebFormsReviewExecutionCommand
                  "Independent single-root path/work bounds are not complete coverage, historical parity, runtime SQL or authenticated-build proof.",
                  "Original checkpoints and report bundle remain unchanged. All identities and paths are private.",
                  "Graph observations count logical scratch fact payload reads and stage wall time, not physical disk I/O or runtime calls."])
-                { GraphObservation = observation, CompletedReportSha256 = completedReportSha,
+                { ReportVariant = methodGraph ? "method-graph" : "grouped-paths",
+                    GraphObservation = observation, CompletedReportSha256 = completedReportSha,
                     PrimaryReport = methodGraph ? RetainedMethodGraphWriter.HtmlName : GroupedCompiledPathReportWriter.HtmlName,
                     PathEnumerationPerformed = !methodGraph,
                     RootSelectionKind = explicitRoot is null ? null : "exact-compiled-method" };

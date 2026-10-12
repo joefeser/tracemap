@@ -562,3 +562,29 @@ forwarding to String/ByRef parameter-array calls, with query and connection-only
 outcomes at depths 2, 3 and 48. The retained compiled chain is admitted in these
 public synthetic controls; private edge resolution remains to be checked using
 the new exact selector. No private source or DLL was used or executed.
+
+## PR #860 repair boundaries
+
+Retained IL call records now carry their original span, source-index/scan/commit,
+extractor version, IL location scope, input/generator hashes, provenance state,
+and ordinal-sorted supporting fact IDs. Call-related compiled gaps identify the
+caller node; this supports same-node association, not proof of a cutoff cause.
+Managed metadata schema changes including dispatch flags use extractor version
+`managed-metadata/0.1.4+cecil-0.11.6`.
+
+Effective VB import receipts are admitted only against the installed Windows
+.NET Framework 4 `System` provider in the OS GAC, including its canonical path,
+metadata identity/type, and current bytes. Receipt-supplied assemblies are never
+loaded. Other installations/platforms fail closed; the cross-platform synthetic
+tests use an independently supplied test trust anchor, not production admission.
+This assumes the OS installation is trusted and still does not authenticate the
+captured namespace list or establish historical build provenance. Rejections
+retain a bounded receipt digest, inspected scope, and allowlisted category; the
+scan-level external-receipt gap explicitly has no source span.
+
+New requery receipts distinguish `method-graph` from `grouped-paths` with
+`reportVariant`. Graph-only inspection verifies the graph artifact and reports
+graph bounds without inventing path counts. Gap classification deliberately
+refuses graph-only input with `WEBFORMS_GAP_CLASSIFICATION_REQUIRES_GROUPED_PATHS`.
+Legacy grouped receipts remain readable; graph receipts without a discriminator
+must be regenerated. JSON diagnostics reject malformed types before projection.

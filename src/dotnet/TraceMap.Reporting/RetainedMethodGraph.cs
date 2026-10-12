@@ -16,7 +16,23 @@ public sealed record RetainedCommandTrace(string EndpointNodeId, IReadOnlyList<s
     CompiledCommandPathValueBinding? CommandText, IReadOnlyList<string> ProducerCallFactIds);
 public sealed record RetainedMethodCall(string CallerNodeId, string FactId, string BodyFactId,
     string? Offset, string? Opcode, string? EncodedTarget, string RuleId, string EvidenceTier,
-    string State, IReadOnlyList<string> GapReasons);
+    string State, IReadOnlyList<string> GapReasons)
+{
+    public string FilePath { get; init; } = "";
+    public int StartLine { get; init; }
+    public int EndLine { get; init; }
+    public string SourceIndexId { get; init; } = "";
+    public string ScanId { get; init; } = "";
+    public string CommitSha { get; init; } = "";
+    public string? ExtractorId { get; init; }
+    public string? ExtractorVersion { get; init; }
+    public string? EvidenceScope { get; init; }
+    public string? ProvenanceState { get; init; }
+    public string? GeneratorSha256 { get; init; }
+    public string? BoundedInputSha256 { get; init; }
+    public string? RawFileSha256 { get; init; }
+    public IReadOnlyList<string> SupportingFactIds { get; init; } = [];
+}
 
 public static partial class CombinedDependencyPathReporter
 {
@@ -65,7 +81,21 @@ public static partial class CombinedDependencyPathReporter
             calls.Add(new(id, call.CombinedFactId, body.CombinedFactId, call.Properties.GetValueOrDefault("ilOffset"),
                 call.Properties.GetValueOrDefault("opcode"), call.Properties.GetValueOrDefault("targetIdentity"),
                 call.RuleId, call.EvidenceTier, admitted ? "retained-target-edge" : "no-admitted-method-target-edge",
-                gapsByFact[call.CombinedFactId].Select(g => g.Reason ?? g.GapKind).Distinct().Order().ToArray()));
+                gapsByFact[call.CombinedFactId].Select(g => g.Reason ?? g.GapKind).Distinct().Order().ToArray())
+            {
+                FilePath = SafePath(call.FilePath), StartLine = call.StartLine, EndLine = call.EndLine,
+                SourceIndexId = call.SourceIndexId, ScanId = call.ScanId, CommitSha = call.CommitSha,
+                ExtractorId = call.ExtractorId, ExtractorVersion = call.ExtractorVersion,
+                EvidenceScope = call.Properties.GetValueOrDefault("evidenceLocationKind"),
+                ProvenanceState = call.Properties.GetValueOrDefault("provenanceState"),
+                GeneratorSha256 = call.Properties.GetValueOrDefault("ilGeneratorSha256"),
+                BoundedInputSha256 = call.Properties.GetValueOrDefault("ilBoundedInputSha256"),
+                RawFileSha256 = call.Properties.GetValueOrDefault("rawFileSha256"),
+                SupportingFactIds = new[] { call.CombinedFactId, body.CombinedFactId, caller.CombinedFactId }
+                    .Concat(outgoing?.Where(e => e.SupportingFactIds.Contains(call.CombinedFactId))
+                        .SelectMany(e => e.SupportingFactIds) ?? [])
+                    .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray()
+            });
         }
         var callIds = calls.Select(c => c.FactId).ToHashSet(StringComparer.Ordinal);
         var traces = new List<RetainedCommandTrace>();

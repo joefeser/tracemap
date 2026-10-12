@@ -25,8 +25,15 @@ function global:dotnet {
             $destination = $args[10]
             [IO.Directory]::CreateDirectory($destination) | Out-Null
             if ($args -contains 'method-graph') {
-                @{schemaVersion='webforms-handler-requery.v1';truncated=$false;pathEnumerationPerformed=$false;
-                    primaryReport='method-graph.local.html';artifacts=@()} | ConvertTo-Json |
+                $graphPath = Join-Path $destination 'method-graph.local.json'
+                @{schemaVersion='retained-method-graph.v1';graph=@{nodes=@();edges=@();calls=@();cutoffs=@()}} |
+                    ConvertTo-Json -Depth 5 | Set-Content $graphPath
+                $graphHtml = Join-Path $destination 'method-graph.local.html'
+                Set-Content $graphHtml '<html>synthetic graph</html>'
+                @{schemaVersion='webforms-handler-requery.v1';reportVariant='method-graph';truncated=$false;pathEnumerationPerformed=$false;
+                    exactChains=0;evidenceVariants=0;primaryReport='method-graph.local.html';artifacts=@(@{
+                        relativePath='method-graph.local.json';bytes=(Get-Item $graphPath).Length;sha256=(Get-FileHash $graphPath).Hash.ToLowerInvariant()},@{
+                        relativePath='method-graph.local.html';bytes=(Get-Item $graphHtml).Length;sha256=(Get-FileHash $graphHtml).Hash.ToLowerInvariant()})} | ConvertTo-Json -Depth 5 |
                     Set-Content (Join-Path $destination 'handler-requery.local.json')
                 return
             }
@@ -109,6 +116,30 @@ try {
         ($graphDisplay -join "`n") -notmatch 'method-graph.local.html' -or
         ($graphDisplay -join "`n") -notmatch 'Terminal path enumeration was not run') { throw 'Graph mode was not forwarded or labeled.' }
     Expect-Failure { & $helper $temporary -MethodGraph -InspectLatest } 'cannot be combined'
+    $graphInspection = @(& $helper $temporary -InspectLatest) -join "`n"
+    if (!$graphInspection.Contains('Method graph: nodes=0') -or !$graphInspection.Contains('Terminal path enumeration was not run')) { throw 'Latest graph report excluded or misinterpreted.' }
+    $graphDirectory = $graphCall[10]
+    $graphReceiptPath = Join-Path $graphDirectory 'handler-requery.local.json'
+    $validReceipt = Get-Content $graphReceiptPath -Raw
+    foreach ($mutation in @(
+        { param($r) $r.schemaVersion = @('webforms-handler-requery.v1') },
+        { param($r) $r.primaryReport = @('method-graph.local.html') },
+        { param($r) $r.reportVariant = 'unknown' },
+        { param($r) $r.exactChains = '0' },
+        { param($r) $r.pathEnumerationPerformed = 'false' },
+        { param($r) $r.artifacts = $r.artifacts[0] },
+        { param($r) $r.artifacts[0].bytes = [string]$r.artifacts[0].bytes },
+        { param($r) $r.artifacts[0].relativePath = 12 },
+        { param($r) $r.artifacts[0].sha256 = @('hash') }
+    )) {
+        $bad = $validReceipt | ConvertFrom-Json
+        & $mutation $bad
+        $bad | ConvertTo-Json -Depth 8 | Set-Content $graphReceiptPath
+        Expect-Failure { Write-WebFormsTruncationSummary $graphDirectory } 'SUMMARY_RECEIPT_INVALID'
+    }
+    Set-Content $graphReceiptPath $validReceipt
+    . (Join-Path $PSScriptRoot '../WebFormsGapClassification.ps1')
+    Expect-Failure { Read-WebFormsClassificationHandoff $graphDirectory } 'REQUIRES_GROUPED_PATHS'
     foreach ($depth in @(1, 32, 48, 64)) {
         & $helper $temporary -Handler Page_Load -MaxDepth $depth | Out-Null
         $depthCall = $global:WizardRequeryCalls[$global:WizardRequeryCalls.Count - 1]

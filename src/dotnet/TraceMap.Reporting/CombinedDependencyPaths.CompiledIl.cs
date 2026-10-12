@@ -216,6 +216,8 @@ public static partial class CombinedDependencyPathReporter
                 || call.Properties.GetValueOrDefault("rawFileSha256") != body.Properties.GetValueOrDefault("rawFileSha256"))
                 continue;
 
+            var from = graph.GetOrAddSymbolNode(caller.SourceIndexId, caller.SourceLabel, caller.TargetSymbol!,
+                caller.FilePath, caller.StartLine, caller.EndLine, caller.RuleId, caller.EvidenceTier);
             var targetIdentity = call.Properties.GetValueOrDefault("targetIdentity") ?? string.Empty;
             if (referenceKind == "memberref" && TryFrameworkDatabaseApi(targetIdentity, out var api))
             {
@@ -223,7 +225,7 @@ public static partial class CombinedDependencyPathReporter
                 var binding = commandCandidates is { Length: 1 }
                     ? ReadCompiledCommandBinding(commandCandidates[0], call, body, caller, factsByOriginalId) : null;
                 if (commandCandidates is { Length: > 0 } && binding is null)
-                    AddCompiledIlGap(graph, call, "CompiledIlCommandBindingUnavailable", "command-binding-join-invalid-or-ambiguous", commandCandidates.Length);
+                    AddCompiledIlGap(graph, call, "CompiledIlCommandBindingUnavailable", "command-binding-join-invalid-or-ambiguous", commandCandidates.Length, nodeId: from.NodeId);
                 AddCompiledDatabaseApiCandidate(graph, call, body, caller, api, binding);
             }
             var matched = referenceKind == "methoddef"
@@ -238,7 +240,7 @@ public static partial class CombinedDependencyPathReporter
                 // Do not trim a candidate set and then claim uniqueness.
                 if (genericCandidates.Length > 64)
                 {
-                    AddCompiledIlGap(graph, call, "CompiledIlTargetUnavailable", "constructed-generic-candidate-limit", genericCandidates.Length);
+                    AddCompiledIlGap(graph, call, "CompiledIlTargetUnavailable", "constructed-generic-candidate-limit", genericCandidates.Length, nodeId: from.NodeId);
                     continue;
                 }
                 targets = genericCandidates.Where(candidate =>
@@ -255,7 +257,7 @@ public static partial class CombinedDependencyPathReporter
                     if (candidates.Length != 1)
                     {
                         AddCompiledIlGap(graph, call, "CompiledIlFrameworkVersionAmbiguous",
-                            "multiple-framework-signature-candidates", candidates.Length, FrameworkVersionCandidateRuleId);
+                            "multiple-framework-signature-candidates", candidates.Length, FrameworkVersionCandidateRuleId, from.NodeId);
                         continue;
                     }
                     targets = candidates;
@@ -271,12 +273,12 @@ public static partial class CombinedDependencyPathReporter
                     AddCompiledIlGap(graph, call,
                         targets is { Length: > 1 } ? "CompiledIlTargetAmbiguous" : "CompiledIlTargetUnavailable",
                         referenceKind == "methoddef" ? "same-assembly-methoddef-target-not-unique" : "admitted-memberref-target-not-unique",
-                        targets?.Length);
+                        targets?.Length, nodeId: from.NodeId);
                 }
                 else if (unboundReferencePrefixes.Any(prefix => targetIdentity.StartsWith(prefix, StringComparison.Ordinal)))
                 {
                     AddCompiledIlGap(graph, call, "CompiledIlTargetUnavailable",
-                        "target-assembly-present-without-bound-provenance", null);
+                        "target-assembly-present-without-bound-provenance", null, nodeId: from.NodeId);
                 }
                 continue;
             }
@@ -285,8 +287,6 @@ public static partial class CombinedDependencyPathReporter
             var targetProvenance = target.Properties.GetValueOrDefault("provenanceState");
             if (targetProvenance is not ("bound" or "unbound"))
                 continue;
-            var from = graph.GetOrAddSymbolNode(caller.SourceIndexId, caller.SourceLabel, caller.TargetSymbol!,
-                caller.FilePath, caller.StartLine, caller.EndLine, caller.RuleId, caller.EvidenceTier);
             var to = graph.GetOrAddSymbolNode(target.SourceIndexId, target.SourceLabel, target.TargetSymbol!,
                 target.FilePath, target.StartLine, target.EndLine, target.RuleId, target.EvidenceTier);
             var virtualCandidate = opcode == "callvirt" && !HasNonVirtualInstanceTarget(target);
@@ -300,14 +300,14 @@ public static partial class CombinedDependencyPathReporter
                 [], SafePath(call.FilePath), call.StartLine, call.EndLine));
             if (artifactContext)
                 AddCompiledIlGap(graph, call, "CompiledIlArtifactContext",
-                    frameworkCandidate ? "framework-signature-candidate-without-source-commit-binding" : "exact-il-target-present-without-source-commit-binding", 1);
+                    frameworkCandidate ? "framework-signature-candidate-without-source-commit-binding" : "exact-il-target-present-without-source-commit-binding", 1, nodeId: from.NodeId);
             if (frameworkCandidate)
             {
                 AddCompiledIlGap(graph, call, "CompiledIlFrameworkVersionCandidate",
-                    "embedded-framework-version-difference-runtime-binding-unproven", 1, FrameworkVersionCandidateRuleId);
+                    "embedded-framework-version-difference-runtime-binding-unproven", 1, FrameworkVersionCandidateRuleId, from.NodeId);
                 if (virtualCandidate)
                     AddCompiledIlGap(graph, call, "CompiledIlVirtualDispatchUnproven",
-                        "framework-version-candidate-virtual-dispatch-unproven", 1, FrameworkVersionCandidateRuleId);
+                        "framework-version-candidate-virtual-dispatch-unproven", 1, FrameworkVersionCandidateRuleId, from.NodeId);
             }
         }
     }
@@ -939,10 +939,9 @@ public static partial class CombinedDependencyPathReporter
                     ? new[] { scope, namespaceCandidate }
                     : new[] { namespaceCandidate };
             })
+            .Append(expected) // Imports enrich candidates; they do not hide global types.
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray();
-        if (qualifiedScopes.Length == 0)
-            return string.Equals(expected, fullName, StringComparison.OrdinalIgnoreCase);
         return qualifiedScopes.Count(candidate =>
             string.Equals(candidate, fullName, StringComparison.OrdinalIgnoreCase)) == 1;
     }

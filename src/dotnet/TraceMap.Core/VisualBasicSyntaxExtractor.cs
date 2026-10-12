@@ -34,11 +34,16 @@ public static class VisualBasicSyntaxExtractor
             catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException or System.Text.Json.JsonException
                 or InvalidOperationException or KeyNotFoundException or ArgumentException)
             {
+                var rejected = ex as ImportContextRejectedException;
                 facts.Add(FactFactory.Create(manifest, FactTypes.AnalysisGap, RuleIds.VisualBasicSyntaxDeclarations,
                     EvidenceTiers.Tier4Unknown, new EvidenceSpan(".", 1, 1, null, "VisualBasicSyntaxExtractor", ScannerVersions.VisualBasicSyntaxExtractor),
                     properties: new Dictionary<string, string>
                     {
                         ["gapKind"] = "WebFormsVbImportContextRejected",
+                        ["receiptSha256"] = rejected?.ReceiptSha256 ?? "unavailable",
+                        ["inspectedScope"] = rejected?.Scope ?? "receipt",
+                        ["rejectionCategory"] = rejected?.Category ?? "unavailable",
+                        ["spanKind"] = "scan-level-external-receipt-no-source-span",
                         ["message"] = "Effective VB import context is invalid, stale, unavailable or outside its bounded source scope; no context imports were admitted."
                     }));
             }

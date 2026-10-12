@@ -14,6 +14,9 @@ namespace TraceMap.Tests;
 public sealed partial class ManagedMetadataExtractorTests
 {
     [Fact]
+    public void Dispatch_flag_schema_has_a_distinct_extractor_version()
+        => Assert.Equal("managed-metadata/0.1.4+cecil-0.11.6", ScannerVersions.ManagedMetadataExtractor);
+    [Fact]
     public void Cecil_declaring_type_cycle_has_a_bounded_failure()
     {
         using var module = ModuleDefinition.CreateModule("cycle", ModuleKind.Dll);

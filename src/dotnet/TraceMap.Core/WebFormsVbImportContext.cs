@@ -14,63 +14,111 @@ internal sealed record WebFormsVbImportContext(string Namespaces, string Receipt
 
     internal static WebFormsVbImportContext Read(string repoPath, string commitSha, string receiptPath,
         IReadOnlyList<FileInventoryItem> inventory)
+        => ReadWithTrustedProvider(repoPath, commitSha, receiptPath, inventory, ResolveFrameworkProvider);
+
+    // Test seam supplies an independently trusted provider, never a receipt field.
+    internal static WebFormsVbImportContext ReadWithTrustedProvider(string repoPath, string commitSha, string receiptPath,
+        IReadOnlyList<FileInventoryItem> inventory, Func<string> resolveProvider)
     {
-        var bytes = ReadBounded(Path.GetFullPath(receiptPath, repoPath), 1_048_576);
-        using var envelope = Parse(bytes);
-        var outer = envelope.RootElement;
-        Require(Text(outer, "schemaVersion") == Schema && Text(outer, "visibility") == "local-only");
-        var generator = Text(outer, "generatorSha256");
-        var inputHash = Text(outer, "boundedInputSha256");
-        var payload = Text(outer, "payloadJson");
-        Require(IsHash(generator) && IsHash(inputHash) && Hash(Encoding.UTF8.GetBytes(payload)) == inputHash);
-        using var document = Parse(Encoding.UTF8.GetBytes(payload));
-        var root = document.RootElement;
-        Require(Text(root, "evidenceKind") == Kind && Text(root, "mappingKind") == "standalone-root"
-            && commitSha.Length == 40 && commitSha.All(Uri.IsHexDigit)
-            && Text(root, "sourceCommitSha") == commitSha
-            && Text(root, "sourceRootPathSha256") == RootHash(repoPath)
-            && Text(root, "providerType") == "Microsoft.VisualBasic.VBCodeProvider"
-            && Version.TryParse(Text(root, "runtimeVersion"), out var runtimeVersion) && runtimeVersion.Major == 4
-            && Text(root, "processArchitecture") is "x86" or "x64");
-        VerifyFile(Text(root, "providerAssemblyPath"), Text(root, "providerAssemblySha256"), 64 * 1024 * 1024);
-        var configs = Array(root, "configurationFiles", 1, 16);
-        var configPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var item in configs)
+        string? receiptHash = null;
+        var scope = "receipt";
+        var category = "malformed";
+        try
         {
-            var path = Text(item, "path");
-            Require(Path.IsPathFullyQualified(path) && configPaths.Add(Path.GetFullPath(path)));
-            VerifyFile(path, Text(item, "sha256"), 2 * 1024 * 1024);
-        }
-        // A newly-created root config or nested App_Code config must not evade
-        // the captured chain just because it did not exist at capture time.
-        var siteConfig = Path.Combine(Path.GetFullPath(repoPath), "Web.config");
-        Require(!File.Exists(siteConfig) || configPaths.Contains(siteConfig));
-        Require(!inventory.Any(f => f.RelativePath.StartsWith("App_Code/", StringComparison.OrdinalIgnoreCase)
-            && Path.GetFileName(f.RelativePath).Equals("web.config", StringComparison.OrdinalIgnoreCase)));
-        // Config-only contexts cannot be applied across source files or roots.
-        var sources = Array(root, "sourceFiles", 1, 256);
-        var sourcePaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var inventoried = inventory.Select(f => f.RelativePath).ToHashSet(StringComparer.Ordinal);
-        long sourceBytes = 0;
-        foreach (var item in sources)
-        {
-            var path = Text(item, "path");
-            Require(path.StartsWith("App_Code/", StringComparison.OrdinalIgnoreCase)
-                && path.EndsWith(".vb", StringComparison.OrdinalIgnoreCase)
-                && !Path.IsPathRooted(path) && !path.Contains('\\') && !path.Contains(':')
-                && path.Split('/').All(p => p.Length > 0 && p is not "." and not "..")
-                && sourcePaths.Add(path) && inventoried.Contains(path));
-            var fullPath = Path.GetFullPath(Path.Combine(repoPath, path));
-            Require(fullPath.StartsWith(Path.TrimEndingDirectorySeparator(Path.GetFullPath(repoPath)) + Path.DirectorySeparatorChar,
+            var bytes = ReadBounded(Path.GetFullPath(receiptPath, repoPath), 1_048_576);
+            receiptHash = Hash(bytes);
+            using var envelope = Parse(bytes);
+            var outer = envelope.RootElement;
+            Require(Text(outer, "schemaVersion") == Schema && Text(outer, "visibility") == "local-only");
+            var generator = Text(outer, "generatorSha256");
+            var inputHash = Text(outer, "boundedInputSha256");
+            var payload = Text(outer, "payloadJson");
+            Require(IsHash(generator) && IsHash(inputHash) && Hash(Encoding.UTF8.GetBytes(payload)) == inputHash);
+            using var document = Parse(Encoding.UTF8.GetBytes(payload));
+            var root = document.RootElement;
+            category = "malformed";
+            Require(Text(root, "evidenceKind") == Kind && Text(root, "mappingKind") == "standalone-root"
+                && Version.TryParse(Text(root, "runtimeVersion"), out var runtimeVersion) && runtimeVersion.Major == 4
+                && Text(root, "processArchitecture") is "x86" or "x64");
+            category = "stale";
+            Require(commitSha.Length == 40 && commitSha.All(Uri.IsHexDigit)
+                && Text(root, "sourceCommitSha") == commitSha && Text(root, "sourceRootPathSha256") == RootHash(repoPath));
+            scope = "provider"; category = "provider-mismatch";
+            Require(Text(root, "providerType") == "Microsoft.VisualBasic.VBCodeProvider");
+            var trustedProvider = Path.GetFullPath(resolveProvider());
+            var offeredProvider = Text(root, "providerAssemblyPath");
+            Require(Path.IsPathFullyQualified(offeredProvider) && string.Equals(Path.GetFullPath(offeredProvider), trustedProvider,
                 OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal));
-            sourceBytes += VerifyFile(fullPath, Text(item, "sha256"), 64 * 1024 * 1024);
-            Require(sourceBytes <= 64 * 1024 * 1024);
+            VerifyFile(trustedProvider, Text(root, "providerAssemblySha256"), 64 * 1024 * 1024);
+            scope = "configuration"; category = "stale";
+            var configs = Array(root, "configurationFiles", 1, 16);
+            var configPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var item in configs)
+            {
+                var path = Text(item, "path");
+                Require(Path.IsPathFullyQualified(path) && configPaths.Add(Path.GetFullPath(path)));
+                VerifyFile(path, Text(item, "sha256"), 2 * 1024 * 1024);
+            }
+            // A newly-created root config or nested App_Code config must not evade
+            // the captured chain just because it did not exist at capture time.
+            var siteConfig = Path.Combine(Path.GetFullPath(repoPath), "Web.config");
+            Require(!File.Exists(siteConfig) || configPaths.Contains(siteConfig));
+            Require(!inventory.Any(f => f.RelativePath.StartsWith("App_Code/", StringComparison.OrdinalIgnoreCase)
+                && Path.GetFileName(f.RelativePath).Equals("web.config", StringComparison.OrdinalIgnoreCase)));
+            // Config-only contexts cannot be applied across source files or roots.
+            var sources = Array(root, "sourceFiles", 1, 256);
+            scope = "source"; category = "out-of-scope";
+            var sourcePaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var inventoried = inventory.Select(f => f.RelativePath).ToHashSet(StringComparer.Ordinal);
+            long sourceBytes = 0;
+            foreach (var item in sources)
+            {
+                var path = Text(item, "path");
+                category = path.Split('/').Contains("..") || Path.IsPathRooted(path) ? "escaped" : "out-of-scope";
+                Require(path.StartsWith("App_Code/", StringComparison.OrdinalIgnoreCase)
+                    && path.EndsWith(".vb", StringComparison.OrdinalIgnoreCase)
+                    && !Path.IsPathRooted(path) && !path.Contains('\\') && !path.Contains(':')
+                    && path.Split('/').All(p => p.Length > 0 && p is not "." and not "..")
+                    && sourcePaths.Add(path) && inventoried.Contains(path));
+                var fullPath = Path.GetFullPath(Path.Combine(repoPath, path));
+                Require(fullPath.StartsWith(Path.TrimEndingDirectorySeparator(Path.GetFullPath(repoPath)) + Path.DirectorySeparatorChar,
+                    OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal));
+                category = "stale";
+                sourceBytes += VerifyFile(fullPath, Text(item, "sha256"), 64 * 1024 * 1024);
+                Require(sourceBytes <= 64 * 1024 * 1024);
+            }
+            scope = "namespaces"; category = "malformed";
+            var names = Array(root, "namespaces", 1, 128).Select(e => e.GetString() ?? "").ToArray();
+            Require(names.All(n => n.Length is > 0 and <= 512 && n.Split('.').All(p => p.Length > 0
+                && (char.IsLetter(p[0]) || p[0] == '_') && p.All(c => char.IsLetterOrDigit(c) || c == '_')))
+                && names.Distinct(StringComparer.OrdinalIgnoreCase).Count() == names.Length);
+            return new(string.Join(';', names.Order(StringComparer.Ordinal)), Hash(bytes), generator, inputHash, sourcePaths);
         }
-        var names = Array(root, "namespaces", 1, 128).Select(e => e.GetString() ?? "").ToArray();
-        Require(names.All(n => n.Length is > 0 and <= 512 && n.Split('.').All(p => p.Length > 0
-            && (char.IsLetter(p[0]) || p[0] == '_') && p.All(c => char.IsLetterOrDigit(c) || c == '_')))
-            && names.Distinct(StringComparer.OrdinalIgnoreCase).Count() == names.Length);
-        return new(string.Join(';', names.Order(StringComparer.Ordinal)), Hash(bytes), generator, inputHash, sourcePaths);
+        catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException or JsonException
+            or InvalidOperationException or KeyNotFoundException or ArgumentException or BadImageFormatException)
+        {
+            throw new ImportContextRejectedException(receiptHash, scope,
+                ex is JsonException or KeyNotFoundException or InvalidOperationException ? "malformed"
+                : ex is FileNotFoundException or DirectoryNotFoundException or UnauthorizedAccessException ? "unavailable" : category);
+        }
+    }
+
+    private static string ResolveFrameworkProvider()
+    {
+        // The capture lane admits only the OS .NET Framework 4 System provider.
+        // Do not Assembly.Load an offered receipt path in the net10 scanner.
+        if (!OperatingSystem.IsWindows()) throw new InvalidDataException("Provider platform unavailable.");
+        var windows = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
+        Require(!string.IsNullOrEmpty(windows));
+        var path = Path.Combine(windows, "Microsoft.NET", "assembly", "GAC_MSIL", "System",
+            "v4.0_4.0.0.0__b77a5c561934e089", "System.dll");
+        var bytes = ReadBounded(path, 64 * 1024 * 1024);
+        using var stream = new MemoryStream(bytes, writable: false);
+        using var module = Mono.Cecil.ModuleDefinition.ReadModule(stream);
+        Require(module.Assembly.Name.Name == "System" && module.Assembly.Name.Version == new Version(4, 0, 0, 0)
+            && Convert.ToHexStringLower(module.Assembly.Name.PublicKeyToken) == "b77a5c561934e089"
+            && module.Types.Any(t => t.FullName == "Microsoft.VisualBasic.VBCodeProvider"));
+        return path;
     }
 
     internal static string RootHash(string path) => Hash(Encoding.UTF8.GetBytes(
@@ -120,4 +168,12 @@ internal sealed record WebFormsVbImportContext(string Namespaces, string Receipt
         Require(stream.ReadByte() == -1);
         return bytes;
     }
+}
+
+internal sealed class ImportContextRejectedException(string? receiptSha256, string scope, string category)
+    : IOException("VB import context rejected.")
+{
+    internal string? ReceiptSha256 { get; } = receiptSha256;
+    internal string Scope { get; } = scope;
+    internal string Category { get; } = category;
 }
