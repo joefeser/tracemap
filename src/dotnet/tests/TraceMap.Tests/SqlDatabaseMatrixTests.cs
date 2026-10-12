@@ -125,7 +125,11 @@ public sealed class SqlDatabaseMatrixTests
     {
         using var temp = new TempDirectory();
         var scan = ScanEngine.Scan(new ScanOptions(Path.Combine(Repo(),"samples/sql-database-matrix/website-projectless"),Path.Combine(temp.Path,"scan")));
-        Assert.Single(scan.Facts,f => f.FactType == FactTypes.DatabaseOperationCandidate);
+        Assert.Equal(2, scan.Facts.Count(f => f.FactType == FactTypes.DatabaseOperationCandidate));
+        Assert.DoesNotContain(scan.Facts, f => f.FactType == FactTypes.DatabaseOperationCandidate
+            && (f.SourceSymbol?.Contains(".Lifecycle", StringComparison.Ordinal) == true
+                || f.SourceSymbol?.Contains(".Unrelated", StringComparison.Ordinal) == true));
+        Assert.Contains("Showing 2 of 2 candidates", MarkdownReportWriter.Build(scan));
         var index = Path.Combine(temp.Path,"index.sqlite");SqliteIndexWriter.Write(index,scan.Manifest,scan.Facts);
         var paths = await CombinedDependencyPathReporter.BuildReportAsync(new(index,temp.Path,FromSymbol:"PublicFeature.Entry",ToSurface:"sql-query"));
         var handoff = GroupedCompiledPathHandoffBuilder.Create(paths,Convert.ToHexStringLower(SHA256.HashData(await File.ReadAllBytesAsync(index))));

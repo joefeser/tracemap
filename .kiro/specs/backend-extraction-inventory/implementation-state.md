@@ -417,3 +417,44 @@ comparison. Public executable heads remain pinned to `6cb75325` / `6448790c`.
 No application identity or private evidence is included. This is a prose-only
 prompt update, checked with private-path and whitespace guards; executable tests
 were not rerun. No private trial or returned feedback is claimed.
+
+## Independently authored projectless SQL correction (2026-10-12)
+
+Continued the clean SQL worktree from `209fcd28`. No work-machine patch, code,
+binary or artifact was imported. Public synthetic requirements were reproduced
+locally. Baseline SqlDatabaseMatrixTests passed 17/17; the reported sixteen
+failures were not reproduced in this environment.
+
+VB syntax extractor 0.4.1 expands relative qualified types using file-local
+namespace imports without discarding arbitrary qualification. Alias ownership
+and same-file prefix shadows are refused. Unrelated namespaces, alias decoys,
+Global qualification and lifecycle-only operations have explicit controls.
+Report projection now includes DatabaseOperationCandidate facts, rule/tier and
+availability, empty-coverage qualifications and a deterministic 50-row display
+with total/omitted counts. This does not alter fact admission tiers.
+
+The existing projectless sample adds direct qualified and negative controls.
+A separate synthetic projectless website passes procedure/text arguments into a
+net472 wrapper library. Tests separate application-only source (no database
+operation candidates, explicit report limitation), application plus wrapper
+source (two Tier3 candidates and Search-to-wrapper migration inventory), and
+application plus admitted wrapper IL (separate IL calls, no automatic source
+binding). Cross-method procedure/SQL argument propagation, connection identity,
+parameter contracts and runtime use remain unavailable. The generic report
+warning is not per-call unresolved-wrapper classification or full-site inventory.
+
+Local validation: warning-as-error build and 79 scoped SQL/state/VB-boundary/
+grouped-report tests passed; 49 adjacent Markdown/VB/integration/backend tests
+passed. Eight independent oracle guards and seven artifact-validator tests passed
+(the latter retains its existing unclosed SQLite ResourceWarning). All 96 native
+SQL matrix outputs passed per-case checks, artifact validation and deterministic
+facts/report repeats. Two additional native projectless CLI scans validated direct
+candidate display and application-only missing-wrapper warnings. No fixture
+method, SQL statement or connection was executed.
+
+The final report-direction wording and cap-count assertion passed a final
+warning-as-error rebuild, 19 focused tests and a validated native CLI scan.
+Full solution, pinned external OSS smokes and a new
+Windows correction receipt are deferred; older Windows receipts above apply only
+to their frozen heads. This change does not claim private application compatibility,
+complete wrapper discovery, an extracted procedure contract, PR/merge or ACK action.

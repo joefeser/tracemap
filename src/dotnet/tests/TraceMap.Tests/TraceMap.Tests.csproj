@@ -95,4 +95,7 @@
     <ProjectReference Include="..\..\..\..\samples\messy-dotnet-workspace\root-crosslanguage\csharp\CrossLanguageEntry.csproj" ReferenceOutputAssembly="false" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="../../../../samples/sql-database-matrix/wrapper-library/SyntheticStore.vbproj" ReferenceOutputAssembly="false" SkipGetTargetFrameworkProperties="true" />
+  </ItemGroup>
 </Project>

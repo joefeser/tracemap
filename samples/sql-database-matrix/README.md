@@ -36,3 +36,28 @@ a verified ASP.NET event, provider dispatch or whole-site completeness.
 
 Modern fixture compiler/reference pin: SDK 10.0.302, Microsoft.NETCore.App.Ref
 10.0.10. The native scan receipt retains exact generator and bounded input identity.
+
+## Projectless source/report regression samples
+
+`website-projectless/App_Code/QualifiedCommands.vb` adds a relative qualified
+SqlClient receiver with a System.Data import, lifecycle-only calls, and an unrelated
+same-named SqlCommand control. The qualified receiver is a Tier3 candidate, not
+signed provider proof. Arbitrary namespace suffix matches are not accepted.
+
+`wrapper-website` is a separate projectless VB website whose methods pass a
+synthetic procedure name and dynamically constructed SQL to `wrapper-library`.
+The library is independently buildable as net472, but no method may be executed.
+`ProjectlessSqlReportingTests` tests three distinct inputs: application source
+alone, application plus wrapper source (copied without a project file), and
+application source plus the separately admitted wrapper DLL with IL enabled.
+Missing wrapper source produces no database operation candidate and an explicit
+report limitation, not evidence of no database use. Wrapper source exposes two
+syntax operation candidates; argument propagation, actual procedure identity,
+SQL text, parameterization and connection association remain unavailable. DLL
+admission retains separate IL observations and does not bind application source
+calls to that DLL automatically.
+
+Run `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter
+FullyQualifiedName~ProjectlessSqlReportingTests -warnaserror`. Reports display
+candidate rule/tier/availability, include an empty-coverage warning, and disclose
+the total/omitted count when the 50-row display cap is reached.

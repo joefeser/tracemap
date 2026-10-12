@@ -64,3 +64,10 @@
 - [x] Finish final-head local scoped regressions and deterministic native CLI/report validation.
 - [x] Observe public Windows exact-head fixture validation.
 - [x] Push final branch and record #864 commits, validation, matrix and remaining gaps; no PR/merge/ACK/lane-policy changes.
+
+### Projectless SQL correction
+- [x] Independently add namespace-preserving relative-qualified VB receiver matching and alias/shadow/collision controls.
+- [x] Display operation candidates with empty-coverage warnings and explicit truncation counts in scan reports.
+- [x] Add public projectless website and separate wrapper-library inputs for source-only, combined-source and admitted-IL modes.
+- [x] Validate the correction with SQL matrix, surrounding regressions and native scan/report checks.
+- [ ] Obtain a new exact-head Windows platform receipt for the correction; previous SQL Windows receipts do not cover these changes.

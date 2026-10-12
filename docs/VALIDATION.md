@@ -4621,6 +4621,15 @@ The legacy HTTP fixture TFMs are **representative test targets, not confirmed ap
 
 ## SQL/database migration matrix (#864)
 
+Projectless correction: also run `ProjectlessSqlReportingTests` and
+`MarkdownReportWriterTests`. Independently authored fixtures cover imported
+relative qualification, unrelated same-named types, alias/shadow refusal,
+Open/Close negatives, empty and capped report output, and separate website /
+wrapper-source / admitted-wrapper-IL inputs. No fixture method executes. Source
+arguments are not propagated into a resolved procedure/SQL contract. macOS can
+compile the net472 reference fixture; an exact-head Windows run remains a
+separate platform validation gate, not implicit in a cross-platform build.
+
 Use [the SQL matrix](validation/SQL_DATABASE_MATRIX.md) and public samples under
 samples/sql-database-matrix. Run SqlDatabaseMatrixTests and DatabaseCommandStateTests,
 then adjacent VisualBasicExternalBoundary, IntegrationExtractor, BackendExtractionSample,
