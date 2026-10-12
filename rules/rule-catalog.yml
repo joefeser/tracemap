@@ -7637,6 +7637,17 @@ rules:
       - Parser and syntax gaps are unknowns, not clean absence of declarations, calls, relationships, navigation, or runtime behavior.
       - Diagnostic text and raw source expressions must be omitted or hashed; no raw snippets, URLs, local paths, secrets, or private labels should be emitted.
 
+  - id: vb.syntax.http-coverage-gap.v1
+    name: Visual Basic HTTP classification unavailable without semantics
+    description: Emits a file-level unknown HTTP coverage gap for each readable non-generated Visual Basic source processed by syntax fallback.
+    evidenceTier: Tier4Unknown
+    emits:
+      - AnalysisGap
+    limitations:
+      - This is a coverage warning, not a detected HTTP call or inferred API identity. Files with no HTTP calls receive the same warning because this analysis mode cannot establish their absence.
+      - Semantic files are excluded. Unreadable, generated or unparseable files retain their existing skip or failure behavior; this rule does not claim to inspect them.
+      - No destination, request body, credentials or runtime use is inferred. Projectless VB HTTP operation extraction remains unsupported.
+
   - id: workflow.backend-extraction.retained-report.v1
     name: Retained-query backend extraction inventory
     description: Projects database-api, sql-query and http-client evidence records and their ordered query-path references from an admitted grouped report for human migration planning.

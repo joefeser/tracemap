@@ -1,4 +1,10 @@
-# Sanitized framework compatibility summary — manual return template
+# Framework compatibility summary — local worksheet
+
+Keep this worksheet on the work machine. It is not a request for a contribution
+or transfer. Work-machine code and patches must not be contributed to this
+repository. Any feedback requires workplace approval; field-level sanitization
+does not itself authorize sharing. References below to returning values apply
+only if that separate approval exists.
 
 Application compatibility: **pending work-machine validation**.
 Public matrix targets: **representative test targets, not confirmed application targets**.

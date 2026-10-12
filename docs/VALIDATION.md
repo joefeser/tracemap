@@ -144,6 +144,15 @@ does not make the historical corpus a public CI dependency.
 
 ## Required Matrix
 
+For HTTP legacy compatibility, run `OutboundHttpCoverageTests` and
+`OutboundHttpLegacyCoverageTests` plus `scripts/validation/http-coverage-smoke.py`.
+The representative net452/net472 C#/VB matrices are generated from public
+reference metadata, not work-machine contributions. The projectless net472 VB
+Website control must emit `vb.syntax.http-coverage-gap.v1` in facts and its
+unknown-coverage message in Markdown; zero HTTP facts is not clean absence.
+Public Windows results must identify the tested commit/run. Private application
+validation and pinned OSS smokes remain separately reported gates.
+
 Every language adapter should have:
 
 | Check | Purpose |

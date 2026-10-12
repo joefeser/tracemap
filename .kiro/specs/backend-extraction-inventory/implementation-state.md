@@ -1,5 +1,26 @@
 # Implementation state
 
+## Independent compatibility completion (2026-10-12)
+
+The earlier work-machine transfer prompt is withdrawn. No work-machine patch,
+commit or implementation was imported. The authorized checkout independently
+generated net452/net472 C#/VB cases using the existing HttpReferenceMatrix tool
+and Microsoft.NETFramework.ReferenceAssemblies 1.0.3. Both sets enumerate 116
+overloads per language; generated OVERLOADS.md records exact public signatures.
+The net472 Website control is independently authored public synthetic source.
+
+VB syntax fallback now emits a per-readable-file Tier4 HTTP coverage gap, including
+files with no HTTP-looking names. This is deliberately a coverage statement,
+not HTTP call inference. Semantic files are excluded. Markdown displays these
+gaps explicitly. Projectless VB HTTP operation classification remains unsupported;
+the silent-reporting defect is fixed, not the entire extraction capability.
+
+Local validation: solution build passed with zero warnings/errors; six collector
+guard tests, 74 HTTP/VB/capability tests, private-path guard and all 96 deterministic
+native CLI outputs/artifact conformance checks passed. Public Windows CI will validate
+the pushed commit; no private work-machine access is needed. Full-suite/pinned
+OSS smoke and application-specific acceptance are not claimed for this patch.
+
 Branch: `codex/backend-extraction-inventory`, based on `origin/dev` 0d3107cc.
 Issue: #861. Phase one is a retained-query projection, not full-index discovery.
 

@@ -114,6 +114,12 @@ public static class MarkdownReportWriter
 
         AddFactSection(
             lines,
+            "HTTP analysis gaps",
+            result.Facts.Where(fact => fact.RuleId == RuleIds.VisualBasicHttpCoverageGap),
+            fact => $"- `VisualBasicHttpAnalysisUnsupportedWithoutSemantics` ({fact.EvidenceTier}, rule `{fact.RuleId}`) at `{fact.Evidence.FilePath}:{fact.Evidence.StartLine}`: file-level unsupported HTTP classification, not a detected call. Zero HTTP facts does not establish absence or non-use.");
+
+        AddFactSection(
+            lines,
             "HTTP Calls",
             result.Facts.Where(fact => fact.FactType is FactTypes.HttpCallDetected or FactTypes.HttpClientCreated),
             fact => $"- `{fact.FactType}` `{DisplayFactName(fact)}` ({fact.EvidenceTier}, rule `{fact.RuleId}`) at `{fact.Evidence.FilePath}:{fact.Evidence.StartLine}`; family `{fact.Properties.GetValueOrDefault("methodFamily", "unavailable")}`, verb `{fact.Properties.GetValueOrDefault("httpMethod", "UNKNOWN")}`, destination `{fact.Properties.GetValueOrDefault("urlKind", "unavailable")}`, coverage `{fact.Properties.GetValueOrDefault("coverageLabel", "unavailable")}`");
