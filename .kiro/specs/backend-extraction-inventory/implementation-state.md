@@ -104,7 +104,6 @@ omitted when absent, preserving old node hashes. Altered coverage metadata is
 rejected. Report projection admits only bounded metadata values, never arbitrary
 property strings or new private destination hashes.
 
-
 Validation receipt for the implementation commit:
 - Warning-as-error solution build succeeded with zero warnings/errors.
 - 82 focused API, integration, VB external-boundary, retained-handoff, projection,
@@ -351,7 +350,6 @@ named controls in every framework/language and per-case compiled-handoff identit
 provenance assertions. Eleven focused command-state/privacy/failed-load tests pass.
 Final supplemented-head regression/native/Windows receipts remain pending.
 
-
 ## Final SQL local acceptance receipt
 
 Frozen executable head: `6448790cba9c5d0b0681f90c69befab141a923a0`.
@@ -402,10 +400,14 @@ application compatibility and readable private SQL/procedure capture remain
 unverified or deferred as documented. No database connection, SQL execution,
 private work-machine contribution, PR, merge, ACK or lane-policy change.
 
-
 Delivery: branch pushed and [issue #864 receipt](https://github.com/joefeser/tracemap/issues/864#issuecomment-6132878782)
 published with exact executable commits, matrix coverage, public Windows/local
 validation and remaining gaps. This final commit changes only task/state receipt
 documentation; executable acceptance remains bound to `6448790c`. Primary checkout
 and existing HTTP worktree preserved. No PR opened, merge performed, ACK used or
 lane policy changed. Parent #861 full-index/private-contract tasks stay open.
+
+Public executable heads remain pinned to `6cb75325` / `6448790c`.
+No application identity or private evidence is included. This is a prose-only
+prompt update, checked with private-path and whitespace guards; executable tests
+were not rerun. No private trial or returned feedback is claimed.
