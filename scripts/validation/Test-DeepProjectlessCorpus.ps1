@@ -34,6 +34,7 @@ try {
         'scripts/WebFormsRequeryDiagnostics.ps1',
         'scripts/tests/Test-WebFormsWizardRequery.ps1',
         'scripts/tests/Test-WebFormsRequeryDiagnostics.ps1',
+        'scripts/tests/Test-WebFormsDiagnosticInputValidation.ps1',
         'scripts/wcompare.ps1',
         'scripts/wsqlroute.ps1',
         'scripts/tests/Test-WebFormsChainComparison.ps1',
@@ -103,7 +104,7 @@ try {
     $structuredPassed = @($rows | Where-Object {
         $_.testName -like '*Structured_profile_batch_traces_both_argument_alternatives*' -and $_.outcome -ceq 'Passed'
     }).Count
-    if ($passed -lt 36 -or $nativePassed -ne 1 -or $propertyPassed -ne 2 -or $returnPassed -ne 21 -or $profilePassed -ne 9 -or $operatorPassed -ne 5 -or $getterPassed -ne 7 -or $structuredPassed -ne 7 -or @($rows | Where-Object { $_.outcome -notin @('Passed', 'NotExecuted') }).Count -ne 0) {
+    if ($passed -lt 36 -or $nativePassed -ne 1 -or $propertyPassed -ne 2 -or $returnPassed -ne 21 -or $profilePassed -ne 16 -or $operatorPassed -ne 5 -or $getterPassed -ne 7 -or $structuredPassed -ne 7 -or @($rows | Where-Object { $_.outcome -notin @('Passed', 'NotExecuted') }).Count -ne 0) {
         throw 'DEEP_CORPUS_TEST_RECEIPT_NOT_ADMITTED'
     }
     foreach ($layout in @('attached', 'separate', 'separate-dll-only', 'reversed', 'missing')) {
@@ -123,7 +124,8 @@ try {
         }).Count -ne 1) { throw 'DEEP_CORPUS_WIZARD_ACCEPTANCE_MISSING' }
     }
     foreach ($test in @('Test-WebFormsChainComparison.ps1', 'Test-WebFormsSqlRoute.ps1', 'Test-WebFormsCapShortcut.ps1',
-        'Test-WebFormsWizardRequery.ps1', 'Test-WebFormsRequeryDiagnostics.ps1')) {
+        'Test-WebFormsWizardRequery.ps1', 'Test-WebFormsRequeryDiagnostics.ps1',
+        'Test-WebFormsDiagnosticInputValidation.ps1')) {
         & (Join-Path $TraceMapRoot ('scripts/tests/' + $test))
     }
     foreach ($layout in @('attached', 'separate', 'separate-dll-only', 'reversed')) {

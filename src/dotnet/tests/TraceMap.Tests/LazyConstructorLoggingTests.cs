@@ -62,6 +62,8 @@ public sealed class LazyConstructorLoggingTests
         var index = Path.Combine(temp.Path, "index.sqlite");
         var combined = Path.Combine(temp.Path, "combined.sqlite");
         var facts = scan.Facts.ToList();
+        string? cycleProducerId = null;
+        string? cycleProducerOffset = null;
         if (tamper == "expression-cycle")
         {
             // Synthetic retained-origin cycle: the previous loop iteration's
@@ -74,6 +76,8 @@ public sealed class LazyConstructorLoggingTests
                 .OrderBy(fact => int.Parse(fact.Properties["ilOffset"], System.Globalization.CultureInfo.InvariantCulture)).First();
             var operand = Assert.Single(facts, fact => fact.FactType == FactTypes.ManagedIlCallValuesObserved
                 && fact.Properties.GetValueOrDefault("ilCallFactId") == producer.FactId);
+            cycleProducerId = producer.FactId;
+            cycleProducerOffset = producer.Properties["ilOffset"];
             var properties = new Dictionary<string, string>(operand.Properties);
             var origins = JsonSerializer.Deserialize<IlValueOrigin[]>(properties["argumentOrigins"])!;
             origins[1] = new("call-result", producer.Properties["ilOffset"]);
@@ -106,15 +110,20 @@ public sealed class LazyConstructorLoggingTests
         var middle = text.Composition!.OperandBindings[1];
         if (tamper == "expression-cycle")
         {
-            var expressions = new List<CompiledCommandPathValueBinding>();
-            void Walk(CompiledCommandPathValueBinding value)
+            Assert.Equal("symbolic-argument-alternatives", middle.State);
+            var value = Assert.Single(middle.Alternatives!, alternative => alternative.Composition is not null);
+            var count = 0;
+            while (value.Composition is { } composition)
             {
-                expressions.Add(value);
-                Assert.True(expressions.Count <= 32);
-                foreach (var child in (value.Alternatives ?? []).Concat(value.Composition?.OperandBindings ?? [])) Walk(child);
+                Assert.True(++count <= 32);
+                Assert.Equal($"{source.SourceIndexId}:{cycleProducerId}", composition.ProducerCallFactId);
+                Assert.Equal(2, composition.OperandBindings.Count);
+                value = composition.OperandBindings[1];
+                Assert.Equal("call-result", value.Origin.Kind);
+                Assert.Equal(cycleProducerOffset, value.Origin.Identity);
             }
-            Walk(text);
-            Assert.Contains(expressions, value => value.Gaps.Contains("IlCommandExpressionLimit"));
+            Assert.True(count > 0);
+            Assert.Contains(value.Gaps, gap => gap is "IlCommandReturnCycle" or "IlCommandExpressionLimit");
             return;
         }
         if (tamper is not ("none" or "getter" or "runtime"))
@@ -212,12 +221,19 @@ public sealed class LazyConstructorLoggingTests
     [InlineData(true, "retained")]
     [InlineData(false, "retained")]
     [InlineData(true, "missing")]
+    [InlineData(false, "missing")]
     [InlineData(true, "malformed")]
+    [InlineData(false, "malformed")]
     [InlineData(true, "virtual")]
+    [InlineData(false, "virtual")]
     [InlineData(true, "operand-tampered")]
+    [InlineData(false, "operand-tampered")]
     [InlineData(true, "operand-state")]
+    [InlineData(false, "operand-state")]
     [InlineData(true, "operand-schema")]
+    [InlineData(false, "operand-schema")]
     [InlineData(true, "operand-shape")]
+    [InlineData(false, "operand-shape")]
     public async Task Property_profile_dynamic_lookup_is_distinct_from_literal_audit(bool compiledOnly, string dispatchFlags)
     {
         var repo = FindRepo();
@@ -349,6 +365,21 @@ public sealed class LazyConstructorLoggingTests
             {
                 Assert.Contains(graph.Nodes, node => node.NodeId == edge.FromNodeId);
                 Assert.Contains(graph.Nodes, node => node.NodeId == edge.ToNodeId);
+            });
+            Assert.All(graph.Calls, call =>
+            {
+                var fact = Assert.Single(scan.Facts, f => $"{source.SourceIndexId}:{f.FactId}" == call.FactId);
+                Assert.Equal(fact.Evidence.FilePath, call.FilePath);
+                Assert.Equal(fact.Evidence.StartLine, call.StartLine);
+                Assert.Equal(fact.Evidence.EndLine, call.EndLine);
+                Assert.Equal(source.CommitSha, call.CommitSha);
+                Assert.Equal(fact.Evidence.ExtractorVersion, call.ExtractorVersion);
+                Assert.Equal(fact.Properties["evidenceLocationKind"], call.EvidenceScope);
+                Assert.Equal(fact.Properties["ilGeneratorSha256"], call.GeneratorSha256);
+                Assert.Equal(fact.Properties["ilBoundedInputSha256"], call.BoundedInputSha256);
+                Assert.Contains(call.FactId, call.SupportingFactIds);
+                Assert.Contains(call.BodyFactId, call.SupportingFactIds);
+                Assert.Equal(call.SupportingFactIds.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal), call.SupportingFactIds);
             });
             var output = Path.Combine(temp.Path, "graph");
             await RetainedMethodGraphWriter.WriteAsync(graph, output, new string('a', 64), 16_000_000, default);

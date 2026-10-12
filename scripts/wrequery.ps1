@@ -83,7 +83,8 @@ if ($InspectLatest) {
     $reports = @(Get-ChildItem -LiteralPath $Root -Directory | Where-Object {
         $_.Name -cmatch ('\Ahandler-requery-' + [regex]::Escape($Project) + '-[a-f0-9]{32}\z') -and
         (Test-Path -LiteralPath (Join-Path $_.FullName 'handler-requery.local.json') -PathType Leaf) -and
-        (Test-Path -LiteralPath (Join-Path $_.FullName 'compiled-paths.handoff.local.json') -PathType Leaf)
+        ((Test-Path -LiteralPath (Join-Path $_.FullName 'compiled-paths.handoff.local.json') -PathType Leaf) -or
+         (Test-Path -LiteralPath (Join-Path $_.FullName 'method-graph.local.json') -PathType Leaf))
     } | Select-Object -First 129)
     if ($reports.Count -gt 128) { throw 'WEBFORMS_HANDLER_REPORT_SELECTION_LIMIT' }
     if ($reports.Count -eq 0) { throw 'WEBFORMS_HANDLER_REPORT_NOT_FOUND' }

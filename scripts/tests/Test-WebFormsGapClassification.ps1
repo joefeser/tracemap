@@ -57,7 +57,7 @@ try {
     $receipt = Get-Content $receiptPath -Raw | ConvertFrom-Json
     $receipt.artifacts = @($receipt.artifacts[0], $receipt.artifacts[0])
     $receipt | ConvertTo-Json -Depth 5 | Set-Content $receiptPath
-    Expect-Failure { & $entry $temp } 'WEBFORMS_GAP_CLASSIFICATION_HANDOFF_CHANGED'
+    Expect-Failure { & $entry $temp } 'WEBFORMS_GAP_CLASSIFICATION_RECEIPT_INVALID'
     Save-Fixture $handoff
     $stream = [IO.File]::OpenWrite($receiptPath)
     try { $stream.SetLength(4194305) } finally { $stream.Dispose() }

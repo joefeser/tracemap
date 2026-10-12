@@ -81,18 +81,33 @@ public sealed class WebFormsVbImportContextTests
         var context = WriteContext(root, commit, Path.Combine(directory, "context"), [path], scenario);
         var manifest = new ScanManifest("synthetic-imports", "synthetic", null, "test", commit, ScannerVersions.TraceMap,
             DateTimeOffset.UnixEpoch, "Level3SyntaxAnalysis", "NotRun", [], [], [], []);
-        var facts = VisualBasicSyntaxExtractor.Extract(root, manifest, [new(path, "VisualBasic", 100)], null,
-            webFormsVbImportContextPath: context);
-        var method = Assert.Single(facts, f => f.FactType == FactTypes.MethodDeclared);
-        Assert.Equal(admitted, method.Properties.ContainsKey("effectiveImportedNamespaces"));
-        Assert.Equal(!admitted, facts.Any(f => f.Properties.GetValueOrDefault("gapKind") == "WebFormsVbImportContextRejected"));
+        var inventory = new FileInventoryItem[] { new(path, "VisualBasic", 100) };
+        // Receipt validation uses an independent test trust anchor. Production
+        // extraction must reject this synthetic provider, even with a valid hash.
         if (admitted)
         {
-            Assert.Equal(WebFormsVbImportContext.Kind, method.Properties["effectiveImportsKind"]);
-            Assert.Equal(EvidenceTiers.Tier3SyntaxOrTextual, method.EvidenceTier);
-            Assert.Equal("", method.Properties["importedNamespaces"]);
-            Assert.Equal(WebFormsVbImportContext.Hash(File.ReadAllBytes(context)), method.Properties["effectiveImportsReceiptSha256"]);
+            var accepted = WebFormsVbImportContext.ReadWithTrustedProvider(root, commit, context, inventory,
+                () => Path.Combine(directory, "context", "System.dll"));
+            Assert.Equal(WebFormsVbImportContext.Hash(File.ReadAllBytes(context)), accepted.ReceiptSha256);
         }
+        else
+        {
+            var rejected = Assert.Throws<ImportContextRejectedException>(() => WebFormsVbImportContext.ReadWithTrustedProvider(
+                root, commit, context, inventory, () => Path.Combine(directory, "context", "System.dll")));
+            if (scenario == "escape") { Assert.Equal("escaped", rejected.Category); Assert.Equal("source", rejected.Scope); }
+            if (scenario == "stale-source") { Assert.Equal("stale", rejected.Category); Assert.Equal("source", rejected.Scope); }
+            if (scenario == "stale-config") { Assert.Equal("stale", rejected.Category); Assert.Equal("configuration", rejected.Scope); }
+            if (scenario == "custom-provider") { Assert.Equal("provider-mismatch", rejected.Category); Assert.Equal("provider", rejected.Scope); }
+            if (scenario == "duplicate-json") Assert.Equal("malformed", rejected.Category);
+        }
+        var facts = VisualBasicSyntaxExtractor.Extract(root, manifest, inventory, null,
+            webFormsVbImportContextPath: context);
+        var method = Assert.Single(facts, f => f.FactType == FactTypes.MethodDeclared);
+        Assert.False(method.Properties.ContainsKey("effectiveImportedNamespaces"));
+        var gap = Assert.Single(facts, f => f.Properties.GetValueOrDefault("gapKind") == "WebFormsVbImportContextRejected");
+        Assert.Equal(WebFormsVbImportContext.Hash(File.ReadAllBytes(context)), gap.Properties["receiptSha256"]);
+        Assert.Contains(gap.Properties["inspectedScope"], new[] { "receipt", "provider", "configuration", "source", "namespaces" });
+        Assert.DoesNotContain(directory, JsonSerializer.Serialize(gap));
     }
 
     internal static string RealTempPath(string path) => OperatingSystem.IsMacOS() && (path.StartsWith("/var/", StringComparison.Ordinal)

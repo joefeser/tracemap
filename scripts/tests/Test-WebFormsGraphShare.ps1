@@ -189,5 +189,29 @@ try {
     $failed = $false
     try { & $lookupHelper $mapPath $targetAlias | Out-Null } catch { $failed = $true }
     if (!$failed) { throw 'Changed map was accepted.' }
+    $validInput = Get-Content -LiteralPath $inputFile -Raw
+    foreach ($mutation in @(
+        { param($g) $g.nodes = $g.nodes[0] },
+        { param($g) $g.edges = 'scalar' },
+        { param($g) $g.calls = $null },
+        { param($g) $g.nodes[0].nodeId = 42 },
+        { param($g) $g.calls[0].factId = '' },
+        { param($g) $g.calls[0].encodedTarget = @('target') },
+        { param($g) $g.calls[0].gapReasons = @(@{private='malformed'}) },
+        { param($g) $g.commandTraces = $g.commandTraces[0] },
+        { param($g) $g.commandTraces[0].pathNodeIds = 'scalar' },
+        { param($g) $g.commandTraces[0].producerCallFactIds = @(42) },
+        { param($g) $g.commandTraces[0].commandText = 'scalar' },
+        { param($g) $g.commandTraces[0].commandText.steps = @('scalar') }
+    )) {
+        $bad = $validInput | ConvertFrom-Json -Depth 64
+        & $mutation $bad.graph
+        $bad | ConvertTo-Json -Depth 64 | Set-Content -LiteralPath $inputFile
+        $badOutput = Join-Path $temp ('invalid-' + [guid]::NewGuid().ToString('N') + '.json')
+        $rejected = $false
+        try { & $helper $temp -GraphPath $inputFile -Method 'Focus()' -OutputPath $badOutput | Out-Null }
+        catch { if ($_.Exception.Message -notlike 'GRAPH_SHARE_FAILED:*') { throw }; $rejected = $true }
+        if (!$rejected -or (Test-Path $badOutput)) { throw 'Malformed input escaped boundary validation.' }
+    }
     Write-Output 'Aliased graph exporter and private lookup tests passed.'
 } finally { Remove-Item -LiteralPath $temp -Recurse -Force }

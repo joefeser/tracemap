@@ -23,8 +23,51 @@ try {
     $file = Get-Item -LiteralPath $GraphPath
     if ($file.Length -gt 16777216) { throw 'input-limit' }
     $document = Get-Content -LiteralPath $GraphPath -Raw | ConvertFrom-Json -Depth 64
-    if ($document.schemaVersion -cne 'retained-method-graph.v1') { throw 'schema' }
+    if ($document.schemaVersion -isnot [string] -or $document.schemaVersion -cne 'retained-method-graph.v1') { throw 'schema' }
     $graph = $document.graph
+    function Require-Object($Value) { if ($Value -isnot [pscustomobject]) { throw 'object' } }
+    function Require-Id($Value) { if ($Value -isnot [string] -or [string]::IsNullOrWhiteSpace($Value)) { throw 'id' } }
+    function Require-Array($Value) { if ($Value -isnot [array]) { throw 'array' } }
+    # Validate the full input before selection, aliasing, or truncating any list.
+    # Even records outside the chosen slice must not pass via scalar coercion.
+    function Validate-Tree($Value, [int]$Depth = 0) {
+        if ($Depth -gt 64) { throw 'depth' }
+        if ($Value -is [array]) { foreach ($item in $Value) { Validate-Tree $item ($Depth + 1) }; return }
+        if ($Value -isnot [pscustomobject]) { return }
+        if ($Value.PSObject.Properties['origin'] -and $Value.PSObject.Properties['state']) {
+            Require-Array $Value.steps; Require-Array $Value.gaps
+            foreach ($gap in $Value.gaps) { if ($gap -isnot [string]) { throw 'gap' } }
+        }
+        foreach ($property in $Value.PSObject.Properties) {
+            $name = $property.Name; $v = $property.Value
+            if ($name -in @('nodes','edges','calls','commandTraces','pathNodeIds','producerCallFactIds','steps','gaps','cutoffs','roots','supportingFactIds','gapReasons','operands','failedChecks','valueGaps')) {
+                Require-Array $v
+            }
+            if ($name -in @('alternatives','operandBindings','returnSteps','operandCheckFailures','limitations') -and $null -ne $v) { Require-Array $v }
+            if ($name -in @('commandText','composition','symbolicInput','origin') -and $null -ne $v) { Require-Object $v }
+            if ($name -cmatch '(?:Id|Identity)$' -and $null -ne $v) { Require-Id $v }
+            if ($name -in @('encodedTarget','displayName','filePath','state','opcode','evidenceTier','nodeKind','edgeKind','kind','operation') -and
+                $null -ne $v -and $v -isnot [string]) { throw 'text' }
+            if ($name -in @('pathNodeIds','producerCallFactIds','supportingFactIds','roots')) { foreach ($id in $v) { Require-Id $id } }
+            if ($name -in @('gapReasons','failedChecks','valueGaps','limitations')) { foreach ($code in $v) { if ($code -isnot [string]) { throw 'code' } } }
+            if ($name -in @('steps','returnSteps','operandCheckFailures','operands','operandBindings','alternatives') -and $null -ne $v) {
+                foreach ($record in $v) { Require-Object $record }
+            }
+            Validate-Tree $v ($Depth + 1)
+        }
+    }
+    Require-Object $graph
+    if (!$graph.PSObject.Properties['commandTraces']) { throw 'command-traces-missing-regenerate-graph' }
+    foreach ($field in @('nodes','edges','calls','commandTraces')) { Require-Array $graph.$field }
+    foreach ($node in $graph.nodes) { Require-Object $node; Require-Id $node.nodeId }
+    foreach ($edge in $graph.edges) { Require-Object $edge; Require-Id $edge.edgeId; Require-Id $edge.fromNodeId; Require-Id $edge.toNodeId }
+    foreach ($call in $graph.calls) { Require-Object $call; Require-Id $call.factId; Require-Id $call.bodyFactId; Require-Id $call.callerNodeId }
+    foreach ($trace in $graph.commandTraces) {
+        Require-Object $trace; Require-Id $trace.endpointNodeId
+        Require-Array $trace.pathNodeIds; Require-Array $trace.producerCallFactIds
+        if ($null -ne $trace.commandText) { Require-Object $trace.commandText }
+    }
+    Validate-Tree $graph
     if (@($graph.nodes).Count -gt 50000 -or @($graph.edges).Count -gt 50000 -or @($graph.calls).Count -gt 50000) { throw 'records' }
     if (!$Method) { $Method = Read-Host 'Private method name to inspect (used locally only)' }
     if (!$Method -or $Method.Length -gt 256) { throw 'method' }

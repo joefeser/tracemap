@@ -10,6 +10,17 @@ namespace TraceMap.Tests;
 [Collection("Git metadata sensitive")]
 public sealed class FrameworkSignatureCandidateTests
 {
+    [Theory]
+    [InlineData("")]
+    [InlineData("System")]
+    [InlineData("System;Other")]
+    public void Imports_enrich_without_hiding_global_parameter_types(string imports)
+    {
+        Assert.True(CombinedDependencyPathReporter.PublishParameterMatches("Customer",
+            "type(namespace:0:|names:8:Customer)", "", imports));
+        Assert.False(CombinedDependencyPathReporter.PublishParameterMatches("Customer",
+            "type(namespace:7:Unknown|names:8:Customer)", "", imports));
+    }
     private static string C(string value) => $"{value.Length}:{value}";
     private static string Assembly(string name, string version, string token = "b77a5c561934e089", string culture = "neutral")
         => $"assembly:name:{C(name)}|version:{C(version)}|culture:{C(culture)}|publicKeyToken:{C(token)}";
@@ -223,6 +234,23 @@ public sealed class FrameworkSignatureCandidateTests
         Assert.Equal(scenario == "generic-configured-ambiguous" ? 2 : 1, compiledStarts.Length);
         var compiled = compiledStarts[0];
         var facts = scan.Facts.ToList();
+        if (scenario is "generic-effective" or "generic-effective-missing-proof")
+        {
+            // Matcher fixture, not provider admission proof: validate the
+            // synthetic receipt against a separately supplied test trust anchor.
+            var imports = WebFormsVbImportContext.ReadWithTrustedProvider(fixture, scan.Manifest.CommitSha, context!,
+                [new("App_Code/Entry.vb", "VisualBasic", 0)], () => Path.Combine(Path.GetDirectoryName(context!)!, "System.dll"));
+            var enriched = declaration with { Properties = new Dictionary<string, string>(declaration.Properties)
+            {
+                ["effectiveImportsKind"] = WebFormsVbImportContext.Kind,
+                ["effectiveImportedNamespaces"] = imports.Namespaces,
+                ["effectiveImportsReceiptSha256"] = imports.ReceiptSha256,
+                ["effectiveImportsGeneratorSha256"] = imports.GeneratorSha256,
+                ["effectiveImportsInputSha256"] = imports.InputSha256
+            } };
+            facts[facts.IndexOf(declaration)] = enriched;
+            declaration = enriched;
+        }
         if (scenario.StartsWith("generic-effective", StringComparison.Ordinal))
         {
             Assert.Equal("", declaration.Properties["importedNamespaces"]);
@@ -355,6 +383,7 @@ public sealed class FrameworkSignatureCandidateTests
         if (candidate)
         {
             var edge = Assert.Single(path.Edges, e => e.EdgeKind == "compiled-il-framework-version-candidate");
+            Assert.Contains(report.Gaps, g => g.GapKind == "CompiledIlFrameworkVersionCandidate" && g.NodeId == edge.FromNodeId);
             Assert.Equal(EvidenceTiers.Tier3SyntaxOrTextual, edge.EvidenceTier);
             Assert.Equal("NeedsReviewStaticPath", path.Classification);
             Assert.Contains(path.Notes, n => n.Code == "FrameworkSignatureCandidate");
@@ -366,6 +395,11 @@ public sealed class FrameworkSignatureCandidateTests
         RetainedMethodGraph? graph = null;
         await CombinedDependencyPathReporter.BuildSelectedSymbolsAsync(options with { ToSurface = null, MethodGraphObserver = value => graph = value }, roots, true);
         Assert.NotNull(graph);
+        foreach (var call in graph.Calls)
+        {
+            Assert.All(graph.Gaps.Where(gap => gap.CombinedFactId == call.FactId),
+                gap => Assert.Equal(call.CallerNodeId, gap.NodeId));
+        }
         if (scenario is "unbridged-helper" or "byref-helper")
         {
             Assert.Contains(path.Nodes, node => node.SymbolId?.Contains("|method:6:Helper|", StringComparison.Ordinal) == true);

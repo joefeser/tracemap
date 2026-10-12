@@ -1,4 +1,67 @@
 # Read-only helpers. No checkpoint edits or relaxed native verification.
+function Assert-WebFormsReceipt($Receipt, [string]$Code) {
+    if ($Receipt -isnot [pscustomobject] -or $Receipt.schemaVersion -isnot [string] -or $Receipt.schemaVersion -cne 'webforms-handler-requery.v1' -or
+        $Receipt.artifacts -isnot [array]) { throw $Code }
+    foreach ($item in $Receipt.artifacts) {
+        if ($item -isnot [pscustomobject] -or $item.relativePath -isnot [string] -or
+            [string]::IsNullOrWhiteSpace($item.relativePath) -or
+            $item.relativePath -cnotmatch '\A[a-zA-Z0-9][a-zA-Z0-9._/-]*\z' -or
+            @($item.relativePath.Split('/') | Where-Object { $_ -in @('', '.', '..') }).Count -ne 0 -or
+            ($item.bytes -isnot [long] -and $item.bytes -isnot [int]) -or $item.bytes -lt 0 -or
+            $item.sha256 -isnot [string] -or $item.sha256 -cnotmatch '\A[a-f0-9]{64}\z') { throw $Code }
+    }
+    # Older grouped receipts predate the discriminator. Graph receipts never
+    # fall back to grouped interpretation, even when their discriminator is absent.
+    $variant = if ($Receipt.PSObject.Properties['reportVariant']) { $Receipt.reportVariant } else { 'grouped-paths' }
+    if ($variant -isnot [string] -or $variant -cnotin @('grouped-paths','method-graph')) { throw $Code }
+    if ($Receipt.PSObject.Properties['reportVariant']) {
+        if ($Receipt.pathEnumerationPerformed -isnot [bool] -or $Receipt.primaryReport -isnot [string] -or
+            $Receipt.pathEnumerationPerformed -ne ($variant -ceq 'grouped-paths') -or
+            $Receipt.primaryReport -cne $(if ($variant -ceq 'method-graph') { 'method-graph.local.html' } else { 'compiled-paths.local.html' })) { throw $Code }
+        foreach ($field in @('exactChains','evidenceVariants')) {
+            if (($Receipt.$field -isnot [int] -and $Receipt.$field -isnot [long]) -or $Receipt.$field -lt 0) { throw $Code }
+        }
+        $expected = if ($variant -ceq 'method-graph') { @('method-graph.local.html','method-graph.local.json') }
+            else { @('compiled-paths.local.html','compiled-paths.handoff.local.json') }
+        if ($Receipt.artifacts.Count -ne 2) { throw $Code }
+        foreach ($name in $expected) { if (@($Receipt.artifacts | Where-Object relativePath -CEQ $name).Count -ne 1) { throw $Code } }
+    }
+    if ($variant -ceq 'method-graph') {
+        if ($Receipt.pathEnumerationPerformed -isnot [bool] -or $Receipt.pathEnumerationPerformed -ne $false -or
+            $Receipt.primaryReport -cne 'method-graph.local.html' -or $Receipt.exactChains -ne 0 -or $Receipt.evidenceVariants -ne 0 -or
+            @($Receipt.artifacts | Where-Object relativePath -CEQ 'method-graph.local.json').Count -ne 1 -or
+            @($Receipt.artifacts | Where-Object relativePath -CEQ 'compiled-paths.handoff.local.json').Count -ne 0) { throw $Code }
+    } elseif (($Receipt.PSObject.Properties['pathEnumerationPerformed'] -and
+        ($Receipt.pathEnumerationPerformed -isnot [bool] -or $Receipt.pathEnumerationPerformed -ne $true)) -or
+        @($Receipt.artifacts | Where-Object relativePath -CEQ 'compiled-paths.handoff.local.json').Count -ne 1) { throw $Code }
+    return $variant
+}
+
+function Assert-WebFormsSummaryTree($Value, [string]$Code, [int]$Depth = 0) {
+    if ($Depth -gt 64) { throw $Code }
+    if ($Value -is [array]) { foreach ($item in $Value) { Assert-WebFormsSummaryTree $item $Code ($Depth + 1) }; return }
+    if ($Value -isnot [pscustomobject]) { return }
+    foreach ($p in $Value.PSObject.Properties) {
+        $v = $p.Value
+        if ($null -eq $v) { continue }
+        if ($p.Name -in @('gapKind','reason','cutoffCause','filePath','nodeId','ruleId','evidenceTier','message','fromNodeId','toNodeId','edgeKind','surfaceKind','surfaceName','state','kind','opcode') -and $v -isnot [string]) { throw $Code }
+        if ($p.Name -in @('startLine','endLine','traversalWorkUnits','maxTraversalWork','maxDepth','targetArgumentSlot') -and
+            ($v -isnot [int] -and $v -isnot [long])) { throw $Code }
+        if ($p.Name -in @('prefixTruncated','lastEdgeNotTraversed') -and $v -isnot [bool]) { throw $Code }
+        if ($p.Name -in @('gaps','edges','variants','nodeReferences','steps','returnSteps','cutoffs') -and $v -isnot [array]) { throw $Code }
+        if ($p.Name -in @('edges','variants','steps','returnSteps')) {
+            foreach ($record in $v) { if ($record -isnot [pscustomobject]) { throw $Code } }
+        }
+        if ($p.Name -eq 'nodeReferences') { foreach ($id in $v) { if ($id -isnot [string] -or [string]::IsNullOrWhiteSpace($id)) { throw $Code } } }
+        if ($p.Name -in @('header','summary','query','cutoffWitness','commandBinding','commandTextFromPath','commandTypeFromPath','origin') -and $v -isnot [pscustomobject]) { throw $Code }
+        if ($p.Name -in @('commandTextFromPath','commandTypeFromPath')) {
+            if ($v.gaps -isnot [array] -or $v.steps -isnot [array] -or $v.origin -isnot [pscustomobject]) { throw $Code }
+            foreach ($gap in $v.gaps) { if ($gap -isnot [string]) { throw $Code } }
+        }
+        Assert-WebFormsSummaryTree $v $Code ($Depth + 1)
+    }
+}
+
 function Get-WebFormsVerifiedStatus([string]$Cli, [string]$Run) {
     $candidates = @($Run)
     if ($Run -cmatch '\A[A-Za-z]:[\\/]') {
@@ -18,11 +81,17 @@ function Get-WebFormsVerifiedStatus([string]$Cli, [string]$Run) {
 }
 
 function Write-WebFormsTruncationSummary([string]$Directory) {
+    try { Write-WebFormsTruncationSummaryCore $Directory }
+    catch {
+        if ($_.Exception.Message -cmatch '\AWEBFORMS_HANDLER_[A-Z_]+\z') { throw }
+        throw 'WEBFORMS_HANDLER_SUMMARY_METADATA_INVALID'
+    }
+}
+function Write-WebFormsTruncationSummaryCore([string]$Directory) {
     $receiptPath = Join-Path $Directory 'handler-requery.local.json'
     $handoffPath = Join-Path $Directory 'compiled-paths.handoff.local.json'
     # This is a bounded console projection, not a new evidence artifact.
-    if ((Get-Item -LiteralPath $receiptPath).Length -gt 4194304 -or
-        (Get-Item -LiteralPath $handoffPath).Length -gt 67108864) {
+    if ((Get-Item -LiteralPath $receiptPath).Length -gt 4194304) {
         Write-Output 'Truncation details unavailable: summary input exceeds its 64 MiB handoff / 4 MiB receipt bound. Reports preserved.'
         return
     }
@@ -41,8 +110,10 @@ function Write-WebFormsTruncationSummary([string]$Directory) {
         } finally { $stream.Dispose() }
     }
     $receipt = [Text.Encoding]::UTF8.GetString((Read-SummaryBytes $receiptPath 4194304)).TrimStart([char]0xFEFF) | ConvertFrom-Json
-    if ($receipt.schemaVersion -ne 'webforms-handler-requery.v1') { throw 'WEBFORMS_HANDLER_SUMMARY_RECEIPT_INVALID' }
-    $artifact = @($receipt.artifacts | Where-Object { $_.relativePath -ceq 'compiled-paths.handoff.local.json' })
+    $variant = Assert-WebFormsReceipt $receipt 'WEBFORMS_HANDLER_SUMMARY_RECEIPT_INVALID'
+    $artifactName = if ($variant -ceq 'method-graph') { 'method-graph.local.json' } else { 'compiled-paths.handoff.local.json' }
+    $handoffPath = Join-Path $Directory $artifactName
+    $artifact = @($receipt.artifacts | Where-Object { $_.relativePath -ceq $artifactName })
     $bytes = Read-SummaryBytes $handoffPath 67108864
     $sha = [Security.Cryptography.SHA256]::Create()
     try { $hash = [BitConverter]::ToString($sha.ComputeHash($bytes)).Replace('-', '').ToLowerInvariant() }
@@ -51,7 +122,26 @@ function Write-WebFormsTruncationSummary([string]$Directory) {
         throw 'WEBFORMS_HANDLER_SUMMARY_HANDOFF_CHANGED'
     }
     $handoff = [Text.Encoding]::UTF8.GetString($bytes).TrimStart([char]0xFEFF) | ConvertFrom-Json
-    if ($handoff.schemaVersion -ne 'webforms-compiled-grouped-handoff.v1') { throw 'WEBFORMS_HANDLER_SUMMARY_SCHEMA_INVALID' }
+    Assert-WebFormsSummaryTree $handoff 'WEBFORMS_HANDLER_SUMMARY_METADATA_INVALID'
+    if ($variant -ceq 'method-graph') {
+        if ($handoff.schemaVersion -isnot [string] -or $handoff.schemaVersion -cne 'retained-method-graph.v1' -or $handoff.graph -isnot [pscustomobject] -or
+            $handoff.graph.cutoffs -isnot [array] -or $handoff.graph.nodes -isnot [array] -or
+            $handoff.graph.edges -isnot [array] -or $handoff.graph.calls -isnot [array]) { throw 'WEBFORMS_HANDLER_SUMMARY_SCHEMA_INVALID' }
+        Write-Output "Method graph: nodes=$($handoff.graph.nodes.Count); edges=$($handoff.graph.edges.Count); calls=$($handoff.graph.calls.Count); cutoffs=$($handoff.graph.cutoffs.Count)."
+        Write-Output 'Terminal path enumeration was not run. Graph cutoffs are not grouped path counts; inspect method-graph.local.html.'
+        return
+    }
+    if ($handoff.schemaVersion -isnot [string] -or $handoff.schemaVersion -cne 'webforms-compiled-grouped-handoff.v1') { throw 'WEBFORMS_HANDLER_SUMMARY_SCHEMA_INVALID' }
+    if (($handoff.PSObject.Properties['nodes'] -and $handoff.nodes -isnot [pscustomobject]) -or
+        ($handoff.PSObject.Properties['variants'] -and $handoff.variants -isnot [array])) { throw 'WEBFORMS_HANDLER_SUMMARY_METADATA_INVALID' }
+    if ($handoff.header -isnot [pscustomobject] -or $handoff.header.gaps -isnot [array] -or
+        $receipt.truncated -isnot [bool]) { throw 'WEBFORMS_HANDLER_SUMMARY_METADATA_INVALID' }
+    foreach ($gap in $handoff.header.gaps) {
+        if ($gap -isnot [pscustomobject] -or $gap.gapKind -isnot [string]) { throw 'WEBFORMS_HANDLER_SUMMARY_METADATA_INVALID' }
+        foreach ($field in @('reason','filePath','startLine','nodeId','ruleId','evidenceTier','message')) {
+            if (!$gap.PSObject.Properties[$field]) { throw 'WEBFORMS_HANDLER_SUMMARY_METADATA_INVALID' }
+        }
+    }
     $gaps = @($handoff.header.gaps | Where-Object { $_.gapKind -ceq 'TruncatedByLimit' })
     Write-Output "Truncation: $($receipt.truncated); retained cutoff gaps: $($gaps.Count). Counts are retained gap records, not missing paths."
     function Short-Text($Value) {

@@ -1,5 +1,6 @@
 # Read-only console classification of receipt-bound retained evidence.
 # Associations are exact-node co-occurrences, not proven causes or reachability.
+. (Join-Path $PSScriptRoot 'WebFormsRequeryDiagnostics.ps1')
 function Read-WebFormsClassificationHandoff([string]$Directory) {
     function Read-BoundedBytes([string]$Path, [int]$Limit) {
         $stream = [IO.File]::Open($Path, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::Read)
@@ -16,7 +17,8 @@ function Read-WebFormsClassificationHandoff([string]$Directory) {
         } finally { $stream.Dispose() }
     }
     $receipt = [Text.Encoding]::UTF8.GetString((Read-BoundedBytes (Join-Path $Directory 'handler-requery.local.json') 4194304)).TrimStart([char]0xFEFF) | ConvertFrom-Json
-    if ($receipt.schemaVersion -cne 'webforms-handler-requery.v1') { throw 'WEBFORMS_GAP_CLASSIFICATION_RECEIPT_INVALID' }
+    $variant = Assert-WebFormsReceipt $receipt 'WEBFORMS_GAP_CLASSIFICATION_RECEIPT_INVALID'
+    if ($variant -ceq 'method-graph') { throw 'WEBFORMS_GAP_CLASSIFICATION_REQUIRES_GROUPED_PATHS' }
     $bytes = Read-BoundedBytes (Join-Path $Directory 'compiled-paths.handoff.local.json') 67108864
     $artifacts = @($receipt.artifacts | Where-Object { $_.relativePath -ceq 'compiled-paths.handoff.local.json' })
     $sha = [Security.Cryptography.SHA256]::Create()

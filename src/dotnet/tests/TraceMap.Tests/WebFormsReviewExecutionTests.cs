@@ -1462,6 +1462,9 @@ public sealed class WebFormsReviewExecutionTests
             Assert.Equal(32, graphReceipt.Query.MaxDepth);
             Assert.Null(graphReceipt.Query.ToSurface);
             Assert.False(graphReceipt.PathEnumerationPerformed);
+            Assert.Equal("method-graph", graphReceipt.ReportVariant);
+            Assert.Equal(0, graphReceipt.ExactChains);
+            Assert.Equal(0, graphReceipt.EvidenceVariants);
             Assert.Equal(TraceMap.Reporting.RetainedMethodGraphWriter.HtmlName, graphReceipt.PrimaryReport);
             Assert.False(File.Exists(Path.Combine(graphFolder, TraceMap.Reporting.GroupedCompiledPathReportWriter.HtmlName)));
             Assert.False(File.Exists(Path.Combine(graphFolder, TraceMap.Reporting.GroupedCompiledPathReportWriter.HandoffName)));
