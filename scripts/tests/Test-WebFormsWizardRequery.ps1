@@ -17,6 +17,7 @@ function global:dotnet {
     $global:LASTEXITCODE = 0
     if ($args -contains 'status') {
         @{ schemaVersion='webforms-review-status.v1'; state=$global:WizardRequeryState;
+           runId=('a'*32);preflightSha256=('b'*64);checkpointSha256=('c'*64);combinedIndexSha256=('d'*64);
            readerMatchesOriginalGenerator=$global:WizardRequeryOriginalReader; retainedArtifactsVerified=$true;
            workbenchPath=$global:WizardRequeryWorkbench } | ConvertTo-Json -Compress
     } elseif ($args -contains 'requery-handler') {
@@ -26,11 +27,12 @@ function global:dotnet {
             [IO.Directory]::CreateDirectory($destination) | Out-Null
             if ($args -contains 'method-graph') {
                 $graphPath = Join-Path $destination 'method-graph.local.json'
-                @{schemaVersion='retained-method-graph.v1';graph=@{nodes=@();edges=@();calls=@();cutoffs=@()}} |
+                @{schemaVersion='retained-method-graph.v1';indexSha256=('d'*64);graph=@{nodes=@();edges=@();calls=@();cutoffs=@()}} |
                     ConvertTo-Json -Depth 5 | Set-Content $graphPath
                 $graphHtml = Join-Path $destination 'method-graph.local.html'
                 Set-Content $graphHtml '<html>synthetic graph</html>'
                 @{schemaVersion='webforms-handler-requery.v1';reportVariant='method-graph';truncated=$false;pathEnumerationPerformed=$false;
+                    runId=('a'*32);sourcePreflightSha256=('b'*64);sourceCheckpointSha256=('c'*64);combinedIndexSha256=('d'*64);
                     exactChains=0;evidenceVariants=0;primaryReport='method-graph.local.html';artifacts=@(@{
                         relativePath='method-graph.local.json';bytes=(Get-Item $graphPath).Length;sha256=(Get-FileHash $graphPath).Hash.ToLowerInvariant()},@{
                         relativePath='method-graph.local.html';bytes=(Get-Item $graphHtml).Length;sha256=(Get-FileHash $graphHtml).Hash.ToLowerInvariant()})} | ConvertTo-Json -Depth 5 |
@@ -38,7 +40,7 @@ function global:dotnet {
                 return
             }
             $handoffPath = Join-Path $destination 'compiled-paths.handoff.local.json'
-            @{schemaVersion='webforms-compiled-grouped-handoff.v1';header=@{
+            @{schemaVersion='webforms-compiled-grouped-handoff.v1';inputIndexSha256=('d'*64);header=@{
                 summary=@{traversalWorkUnits=$global:WizardRequeryWork};query=@{maxTraversalWork=$global:WizardRequeryWorkLimit};gaps=@(
                 @{gapKind='TruncatedByLimit';reason=$global:WizardRequeryReason;cutoffCause=$global:WizardRequeryCause;filePath='synthetic/Page.vb';startLine=12;
                   nodeId='node-1';ruleId='synthetic.rule';evidenceTier='Tier4Unknown';message='Depth limit reached.'})};
@@ -49,7 +51,8 @@ function global:dotnet {
                 ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $handoffPath
             @{schemaVersion='webforms-handler-requery.v1';truncated=$true;artifacts=@(@{
                 relativePath='compiled-paths.handoff.local.json';bytes=(Get-Item $handoffPath).Length;
-                sha256=(Get-FileHash $handoffPath).Hash.ToLowerInvariant()})} |
+                sha256=(Get-FileHash $handoffPath).Hash.ToLowerInvariant()});
+                runId=('a'*32);sourcePreflightSha256=('b'*64);sourceCheckpointSha256=('c'*64);combinedIndexSha256=('d'*64)} |
                 ConvertTo-Json -Depth 8 | Set-Content (Join-Path $destination 'handler-requery.local.json')
         }
     } else { throw 'Unexpected dotnet operation (no builds or scans allowed).' }
@@ -121,6 +124,26 @@ try {
     $graphDirectory = $graphCall[10]
     $graphReceiptPath = Join-Path $graphDirectory 'handler-requery.local.json'
     $validReceipt = Get-Content $graphReceiptPath -Raw
+    foreach ($field in @('runId','sourcePreflightSha256','sourceCheckpointSha256','combinedIndexSha256')) {
+        $bad = $validReceipt | ConvertFrom-Json
+        $bad.$field = 'e' * $bad.$field.Length
+        $bad | ConvertTo-Json -Depth 8 | Set-Content $graphReceiptPath
+        Expect-Failure { & $helper $temporary -InspectLatest } 'SUMMARY_RUN_MISMATCH'
+    }
+    Set-Content $graphReceiptPath $validReceipt
+    $graphPath = Join-Path $graphDirectory 'method-graph.local.json'
+    $validGraph = Get-Content $graphPath -Raw
+    $badGraph = $validGraph | ConvertFrom-Json
+    $badGraph.indexSha256 = 'e' * 64
+    $badGraph | ConvertTo-Json -Depth 8 | Set-Content $graphPath
+    $bad = $validReceipt | ConvertFrom-Json
+    $artifact = $bad.artifacts | Where-Object relativePath -CEQ 'method-graph.local.json'
+    $artifact.bytes = (Get-Item $graphPath).Length
+    $artifact.sha256 = (Get-FileHash $graphPath).Hash.ToLowerInvariant()
+    $bad | ConvertTo-Json -Depth 8 | Set-Content $graphReceiptPath
+    Expect-Failure { & $helper $temporary -InspectLatest } 'SUMMARY_RUN_MISMATCH'
+    [IO.File]::WriteAllText($graphPath, $validGraph)
+    Set-Content $graphReceiptPath $validReceipt
     foreach ($mutation in @(
         { param($r) $r.schemaVersion = @('webforms-handler-requery.v1') },
         { param($r) $r.primaryReport = @('method-graph.local.html') },
@@ -152,6 +175,21 @@ try {
     $inspection = @(& $helper $temporary -InspectLatest)
     if ($global:WizardRequeryCalls.Count -ne $beforeInspect + 1 -or
         ($inspection -join "`n") -notmatch 'Inspecting latest completed report') { throw 'Inspection must only call status, not traverse.' }
+    $groupedDirectory = $depthCall[10]
+    $groupedReceiptPath = Join-Path $groupedDirectory 'handler-requery.local.json'
+    $groupedPath = Join-Path $groupedDirectory 'compiled-paths.handoff.local.json'
+    $groupedReceipt = Get-Content $groupedReceiptPath -Raw
+    $groupedJson = Get-Content $groupedPath -Raw
+    $wrongIndex = $groupedJson | ConvertFrom-Json -Depth 32
+    $wrongIndex.inputIndexSha256 = 'e' * 64
+    $wrongIndex | ConvertTo-Json -Depth 32 | Set-Content $groupedPath
+    $boundReceipt = $groupedReceipt | ConvertFrom-Json
+    $boundReceipt.artifacts[0].bytes = (Get-Item $groupedPath).Length
+    $boundReceipt.artifacts[0].sha256 = (Get-FileHash $groupedPath).Hash.ToLowerInvariant()
+    $boundReceipt | ConvertTo-Json -Depth 8 | Set-Content $groupedReceiptPath
+    Expect-Failure { & $helper $temporary -InspectLatest } 'SUMMARY_RUN_MISMATCH'
+    [IO.File]::WriteAllText($groupedPath, $groupedJson)
+    Set-Content $groupedReceiptPath $groupedReceipt
     $global:WizardRequeryState = 'failed'
     Expect-Failure { & $helper $temporary -Handler Page_Load } 'COMPLETED_STATE_NOT_ADMITTED'
     $global:WizardRequeryState = 'reports-completed-review-only'

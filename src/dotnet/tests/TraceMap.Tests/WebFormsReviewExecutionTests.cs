@@ -275,6 +275,8 @@ public sealed class WebFormsReviewExecutionTests
         Assert.All(status.Phases.Where(phase => phase.Name != "reports"), phase => Assert.Null(phase.WorkUnitsUsed));
         var complete = checkpoint.State == "reports-completed-review-only";
         Assert.Equal(complete, status.WorkbenchPath is not null);
+        Assert.Equal(complete ? checkpoint.Artifacts.Single(item => item.RelativePath == checkpoint.Reports!.ReportAttempt + "/combined.sqlite").Sha256 : null,
+            status.CombinedIndexSha256);
         Assert.Contains(status.NextActions, action => action.Arguments.FirstOrDefault() == (complete ? "query" : "resume"));
         if (complete)
         {

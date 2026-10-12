@@ -89,8 +89,16 @@ if ($InspectLatest) {
     if ($reports.Count -gt 128) { throw 'WEBFORMS_HANDLER_REPORT_SELECTION_LIMIT' }
     if ($reports.Count -eq 0) { throw 'WEBFORMS_HANDLER_REPORT_NOT_FOUND' }
     $latest = $reports | Sort-Object LastWriteTimeUtc,Name -Descending | Select-Object -First 1
+    # Verify the selected newest candidate before calling it a completed report.
+    # Never silently fall back to an older folder when this one is stale.
+    $summary = @(Write-WebFormsTruncationSummary $latest.FullName $status)
+    if (($summary -join "`n").StartsWith('Truncation details unavailable:', [StringComparison]::Ordinal)) {
+        Write-Output "Latest report exceeds the bounded inspection limit; artifact content was not inspected: $($latest.FullName)"
+        $summary
+        return
+    }
     Write-Output "Inspecting latest completed report for project $Project (not filtered by handler): $($latest.FullName)"
-    Write-WebFormsTruncationSummary $latest.FullName
+    $summary
     return
 }
 $destination = Join-Path $Root ("handler-requery-$Project-" + [guid]::NewGuid().ToString('N'))

@@ -6,6 +6,25 @@ namespace TraceMap.Tests;
 
 public sealed class WebFormsVbImportContextTests
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Alternate_provider_location_requires_identical_trusted_bytes(bool changed)
+    {
+        using var temp = new TempDirectory();
+        var root = RealTempPath(temp.Path);
+        Directory.CreateDirectory(Path.Combine(root, "App_Code"));
+        File.WriteAllText(Path.Combine(root, "App_Code/Entry.vb"), "Public Class Entry\nEnd Class");
+        var context = WriteContext(root, new string('a', 40), Path.Combine(root, "captured"), ["App_Code/Entry.vb"]);
+        var trusted = Path.Combine(root, "trusted.dll");
+        File.Copy(Path.Combine(root, "captured/System.dll"), trusted);
+        if (changed) File.AppendAllText(trusted, "different trusted bytes");
+        WebFormsVbImportContext Read() => WebFormsVbImportContext.ReadWithTrustedProvider(root, new string('a', 40), context,
+            [new("App_Code/Entry.vb", "VisualBasic", 0)], () => trusted);
+        if (changed) Assert.Throws<ImportContextRejectedException>(() => Read());
+        else Assert.NotEmpty(Read().Namespaces);
+    }
+
     internal static string WriteContext(string root, string commit, string directory, string[] paths,
         string scenario = "valid")
     {

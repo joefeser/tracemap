@@ -5,6 +5,27 @@ namespace TraceMap.Tests;
 
 public sealed class VisualBasicConfiguredImportsTests
 {
+    [Theory]
+    [InlineData("System", true)]
+    [InlineData("System, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089", true)]
+    [InlineData("System, PublicKeyToken=B77A5C561934E089, Culture=neutral, Version=4.0.0.0", true)]
+    [InlineData("System, Version=999.0.0.0, Culture=neutral, PublicKeyToken=null", false)]
+    [InlineData("System, Version=4.0.0.0, Culture=neutral, PublicKeyToken=null", false)]
+    [InlineData("System, Version=4.0.0.0, Culture=fr, PublicKeyToken=b77a5c561934e089", false)]
+    [InlineData("System, Version=4.0.0.0, Culture=, PublicKeyToken=b77a5c561934e089", false)]
+    [InlineData("System, Version=garbage, Culture=neutral, PublicKeyToken=b77a5c561934e089", false)]
+    [InlineData("System, Version=4.0.0.0", false)]
+    [InlineData("System, Version=4.0.0.0, Version=4.0.0.0, PublicKeyToken=b77a5c561934e089", false)]
+    [InlineData("System, Unknown=true, Culture=neutral, PublicKeyToken=b77a5c561934e089", false)]
+    [InlineData("System, Version=4.0.0.0, Culture=neutral, PublicKeyToken=not-hex", false)]
+    public void Configured_provider_requires_short_form_or_complete_supported_identity(string identity, bool admitted)
+    {
+        using var temp = new TempDirectory();
+        File.WriteAllText(Path.Combine(temp.Path, "Web.config"), Config.Replace("VBCodeProvider, System", "VBCodeProvider, " + identity));
+        var result = VisualBasicConfiguredImports.Read(temp.Path, [new("Web.config", "Config", 0)]);
+        Assert.Equal(admitted, result is not null);
+    }
+
     private const string Config = """
         <configuration><system.codedom><compilers>
           <compiler language="vb;visualbasic" extension=".vb" type="Microsoft.VisualBasic.VBCodeProvider, System"
