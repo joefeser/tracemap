@@ -21,7 +21,7 @@ internal static class DatabaseCommandState
             p["commandTextAvailability"] = "unavailable"; p.Remove("commandTextHash");
             p["commandTypeEvidence"] = "unavailable"; p["transactionEvidence"] = "separate-witness-required";
             p["connectionEvidence"] = "unavailable"; p["parameterEvidence"] = "separate-witness-required";
-            p.Remove("parameterDirectionKinds"); p.Remove("parameterTypeKinds"); witnesses.Clear();
+            p.Remove("parameterDirectionKinds"); p.Remove("parameterTypeKinds"); p.Remove("parameterTypeNames"); witnesses.Clear();
         }
         var escaped = false;
         var work = 0;
@@ -71,7 +71,15 @@ internal static class DatabaseCommandState
                     {
                         if (parameter.Property.Name == "Direction")
                             p["parameterDirectionKinds"] = (assignment.Value.ConstantValue.HasValue ? assignment.Value.ConstantValue.Value : null) switch { 1 => "Input", 2 => "Output", 3 => "InputOutput", 6 => "ReturnValue", _ => "unavailable" };
-                        if (parameter.Property.Name is "DbType" or "SqlDbType") p["parameterTypeKinds"] = "enum-assignment-witness";
+                        if (parameter.Property.Name is "DbType" or "SqlDbType")
+                        {
+                            p["parameterTypeKinds"] = "enum-assignment-witness";
+                            p.Remove("parameterTypeNames");
+                            var value = assignment.Value;
+                            while (value is IConversionOperation conversion) value = conversion.Operand;
+                            if (value is IFieldReferenceOperation field && DatabaseOperationApi.Trusted(field.Field.ContainingAssembly))
+                                p["parameterTypeNames"] = field.Field.ContainingType.Name + "." + field.Field.Name;
+                        }
                     }
                 }
                 if (operation is IVariableDeclaratorOperation variable && SymbolEqualityComparer.Default.Equals(variable.Symbol,receiver))
@@ -87,7 +95,14 @@ internal static class DatabaseCommandState
                             if (parent is IVariableDeclaratorOperation v) witnesses.Add(v.Symbol);
                         foreach (var declaration in operations.OfType<IVariableDeclarationOperation>().Where(d => d.Initializer?.Syntax.Span.Contains(invocation.Syntax.Span) == true))
                             foreach (var parameterVariable in declaration.Declarators) witnesses.Add(parameterVariable.Symbol);
-                        if (invocation.Arguments.Any(a => a.Parameter?.Type.Name is "SqlDbType" or "DbType")) p["parameterTypeKinds"] = "enum-argument-witness";
+                        foreach (var argument in invocation.Arguments.Where(a => a.Parameter?.Type.Name is "SqlDbType" or "DbType"))
+                        {
+                            p["parameterTypeKinds"] = "enum-argument-witness";
+                            var value = argument.Value;
+                            while (value is IConversionOperation conversion) value = conversion.Operand;
+                            if (value is IFieldReferenceOperation field && DatabaseOperationApi.Trusted(field.Field.ContainingAssembly))
+                                p["parameterTypeNames"] = field.Field.ContainingType.Name + "." + field.Field.Name;
+                        }
                     }
                     else if (!DatabaseOperationApi.TryClassify(invocation.TargetMethod,out _,out _)) Reset();
                 }

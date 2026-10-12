@@ -105,3 +105,13 @@ exact-head result before being reported as accepted.
 
 Modern fixture compiler/reference pin: SDK 10.0.302, Microsoft.NETCore.App.Ref
 10.0.10. The native scan receipt retains exact generator and bounded input identity.
+
+Compiled grouped terminal records also embed the original encoded API MemberRef,
+raw-binary SHA-256, IL generator/bounded-input SHA-256 and bound/unbound provenance.
+Signatures above 8,192 characters are unavailable with explicit truncation; the
+API candidate and supporting fact references remain. Source state witnesses are
+bounded to 256 statements / 1,024 operations per statement / 4,096 operations total;
+work exhaustion explicitly leaves state unavailable. Parameter metadata is a
+bounded local witness summary (including safe public enum type names), not a full
+per-parameter/result contract or argument-value propagation. Connection constructor
+and assignment controls retain evidence without database identities or credentials.

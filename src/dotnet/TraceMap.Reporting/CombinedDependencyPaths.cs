@@ -181,7 +181,9 @@ public sealed record CombinedPathNode(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     OutboundHttpCallEvidence? HttpCallEvidence = null,
     [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
-    DatabaseCallEvidence? DatabaseCallEvidence = null);
+    DatabaseCallEvidence? DatabaseCallEvidence = null,
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    CompiledDatabaseApiEvidence? CompiledDatabaseApiEvidence = null);
 
 public sealed record CompiledCommandOperandOrigin(string Kind, string Identity);
 public sealed record CompiledCommandConfigurationCandidate(
@@ -7187,7 +7189,9 @@ public static partial class CombinedDependencyPathReporter
         CompiledCommandConfigurationCandidate? CommandBinding = null,
         OutboundHttpCallEvidence? HttpCallEvidence = null,
         [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
-        DatabaseCallEvidence? DatabaseCallEvidence = null)
+        DatabaseCallEvidence? DatabaseCallEvidence = null,
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+        CompiledDatabaseApiEvidence? CompiledDatabaseApiEvidence = null)
     {
         public CombinedPathNode ToReportNode()
         {
@@ -7223,7 +7227,7 @@ public static partial class CombinedDependencyPathReporter
                 SurfaceSubtype,
                 Limitations,
                 CommandBinding,
-                HttpCallEvidence, DatabaseCallEvidence);
+                HttpCallEvidence, DatabaseCallEvidence, CompiledDatabaseApiEvidence);
         }
     }
 

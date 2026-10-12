@@ -30,5 +30,7 @@ public class SqlControls {
     public void ControlUnknownCall(CommandAlias command) { command.CommandText = Statement; System.GC.KeepAlive(command); command.ExecuteScalar(); }
     public void ControlNestedAssignment(CommandAlias command, bool condition) { System.GC.KeepAlive(condition ? (command.CommandText = Statement) : "different"); command.ExecuteScalar(); }
     public void ControlAliasEscape(CommandAlias command) { command.CommandText = Statement; var alias = command; alias.CommandText = "DifferentPublicStatement"; command.ExecuteScalar(); }
+    public void ControlConnectionAssignment(CommandAlias command, System.Data.SqlClient.SqlConnection connection) { command.Connection = connection; command.ExecuteScalar(); }
+    public void ControlConnectionConstructor(System.Data.SqlClient.SqlConnection connection) { new CommandAlias(Statement, connection).ExecuteScalar(); }
     public class FakeCommand { public object ExecuteScalar() { return null; } }
 }

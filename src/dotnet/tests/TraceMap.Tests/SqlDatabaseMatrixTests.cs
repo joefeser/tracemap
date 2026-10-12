@@ -94,7 +94,14 @@ public sealed class SqlDatabaseMatrixTests
                 var modeHandoff = GroupedCompiledPathHandoffBuilder.Create(modePaths,Convert.ToHexStringLower(SHA256.HashData(await File.ReadAllBytesAsync(modeIndex))));
                 Assert.Contains(modeHandoff.BackendExtraction!.Operations,o => o.Family == "database" && o.ConnectionState == "candidate-query-path");
                 if (mode == "syntax") Assert.Contains(modeHandoff.Nodes.Values,n => n.DatabaseCallEvidence?.MethodName == emitted.Name);
-                else Assert.Contains(modeHandoff.Nodes.Values,n => n.SurfaceKind == "database-api" && n.OperationName == emitted.Name && n.EvidenceTier == EvidenceTiers.Tier3SyntaxOrTextual);
+                else
+                {
+                    var terminal = Assert.Single(modeHandoff.Nodes.Values,n => n.SurfaceKind == "database-api" && n.OperationName == emitted.Name && n.EvidenceTier == EvidenceTiers.Tier3SyntaxOrTextual);
+                    Assert.Equal(il.Properties["targetIdentity"],terminal.CompiledDatabaseApiEvidence!.OriginalTargetIdentity);
+                    Assert.Equal(il.Properties["ilGeneratorSha256"],terminal.CompiledDatabaseApiEvidence.IlGeneratorSha256);
+                    Assert.Equal(il.Properties["ilBoundedInputSha256"],terminal.CompiledDatabaseApiEvidence.IlBoundedInputSha256);
+                    Assert.Equal("unbound",terminal.CompiledDatabaseApiEvidence.ProvenanceState);
+                }
                 var modeOutput = await GroupedCompiledPathReportWriter.WriteAsync(modeHandoff,Path.Combine(temp.Path,mode+method.Name));
                 Assert.Contains(emitted.Name,await File.ReadAllTextAsync(modeOutput.HtmlPath));
                 Assert.Equal(JsonSerializer.Serialize(modePaths),JsonSerializer.Serialize(GroupedCompiledPathHandoffBuilder.Restore(modeHandoff)));

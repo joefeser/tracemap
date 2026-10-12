@@ -98,5 +98,13 @@
   "ControlAliasEscape": {
     "semantic": 1,
     "projectless": 1
+  },
+  "ControlConnectionAssignment": {
+    "semantic": 1,
+    "projectless": 1
+  },
+  "ControlConnectionConstructor": {
+    "semantic": 1,
+    "projectless": 1
   }
 }

@@ -23,7 +23,7 @@ def load_expectations(sample, language, inventory, controls_file):
         if not body or not signature.startswith(body[1] + '.' + body[2] + '('):
             raise ValueError('Public overload and fixture declaration identity differ: ' + name)
     controls = json.loads(controls_file.read_text(encoding='utf-8'))
-    required = {'ControlLiteral','ControlConstant','ControlDynamic','ControlStoredProcedure','ControlText','ControlParameters','ControlTransaction','ControlReuse','ControlReassignment','ControlAlias','ControlField','ControlFactory','ControlInterface','ControlGeneric','ControlShared','ControlEntry','ControlWrapper','ControlUnconnected','ControlOpenClose','ControlFake','ControlContent','ControlBranch','ControlUnknownCall','ControlNestedAssignment','ControlAliasEscape'}
+    required = {'ControlLiteral','ControlConstant','ControlDynamic','ControlStoredProcedure','ControlText','ControlParameters','ControlTransaction','ControlReuse','ControlReassignment','ControlAlias','ControlField','ControlFactory','ControlInterface','ControlGeneric','ControlShared','ControlEntry','ControlWrapper','ControlUnconnected','ControlOpenClose','ControlFake','ControlContent','ControlBranch','ControlUnknownCall','ControlNestedAssignment','ControlAliasEscape','ControlConnectionAssignment','ControlConnectionConstructor'}
     if set(controls) != required:
         raise ValueError('Required independent control oracle missing/extra')
     controls_text = (sample / ('Controls' + extension)).read_text(encoding='utf-8')
