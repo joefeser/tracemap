@@ -66,6 +66,7 @@ public static class GroupedCompiledPathReportWriter
             W("</ul></nav>");
             var backend = handoff.BackendExtraction ?? BackendExtractionInventoryBuilder.Create(handoff);
             W("<section><h2>Backend extraction inventory</h2><p>Retained query evidence — not a whole-site inventory. Human retain/retire decisions are undecided.</p>");
+            W($"<p>Query surface: {H(backend.QuerySurface)}. This filter bounds inventory coverage.</p>");
             W($"<p>Rule {H(backend.RuleId)}; coverage {H(backend.Coverage)}; truncated {backend.Truncated}; retained gaps {backend.RetainedGapCount}. {backend.Operations.Count} evidence records (not distinct business operations).</p>");
             foreach (var limitation in backend.Limitations) W($"<p>{H(limitation)}</p>");
             foreach (var operation in backend.Operations)

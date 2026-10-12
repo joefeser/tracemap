@@ -17,6 +17,12 @@ HTML also explains them. Existing artifacts are not rewritten.
 No changes to ACK, lane policy, raw SQL defaults or source-sharing authority.
 Base44 stash and primary dev checkout remain untouched.
 
+PR #862 review corrections: preserve candidate path/edge classifications and
+mixed-variant state; expose querySurface and explicit HTTP-coverage exclusion
+for database-filtered producers; materialize legacy rule limitations in both
+method-graph JSON and HTML while hashing the original bounded input. HTTP
+extractor expansion remains in its separate lane.
+
 Validation so far:
 - 222 focused generic/framework/two-hop/grouped/lazy-constructor tests passed
   with warnings as errors.
