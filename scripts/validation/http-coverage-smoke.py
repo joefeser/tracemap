@@ -28,7 +28,7 @@ for tfm, count in [("net20", 57), ("net35", 57), ("net40", 57), ("net45", 116), 
         sample = sample / language if tfm == "net10.0" else sample / "legacy" / tfm / language
         name = ("HttpMatrix.CSharp" if language == "csharp" else "HttpMatrix.VB") if tfm == "net10.0" else f"HttpLegacy.{tfm}.{language}"
         for mode in ["semantic", "projectless", "compiled"]:
-            prefix = f"{tfm}-{language}-{mode}"
+            prefix = f"{tfm}-{language}-{mode}".replace(".", "-")
             repo = sample
             options = []
             if mode != "semantic":
@@ -53,14 +53,14 @@ for tfm, count in [("net20", 57), ("net35", 57), ("net40", 57), ("net45", 116), 
                 run(cli + ["scan", "--repo", str(repo), "--out", str(out)] + options)
             for artifact in ["facts.ndjson", "report.md"]:
                 assert (pairs[0] / artifact).read_bytes() == (pairs[1] / artifact).read_bytes(), (prefix, artifact)
-            facts = [json.loads(line) for line in (pairs[0] / "facts.ndjson").read_text().splitlines()]
+            facts = [json.loads(line) for line in (pairs[0] / "facts.ndjson").read_text(encoding="utf-8").splitlines()]
             tiers = collections.Counter(fact["evidenceTier"] for fact in facts if fact["factType"] == "HttpCallDetected")
             if mode == "semantic":
                 assert tiers["Tier1Semantic"] == count + (5 if tfm == "net10.0" else 0), (prefix, tiers)
                 assert set(tiers) <= {"Tier1Semantic", "Tier3SyntaxOrTextual"}, (prefix, tiers)
                 assert all(fact["properties"].get("methodFamily") == "unresolved" for fact in facts if fact["factType"] == "HttpCallDetected" and fact["evidenceTier"] == "Tier3SyntaxOrTextual"), prefix
                 run(cli + ["paths", "--index", str(pairs[0] / "index.sqlite"), "--out", str(args.output / (prefix + "-paths")), "--from-symbol", "Case000", "--to-surface", "http-client", "--format", "json"])
-                report = json.loads((args.output / (prefix + "-paths/paths-report.json")).read_text())
+                report = json.loads((args.output / (prefix + "-paths/paths-report.json")).read_text(encoding="utf-8"))
                 assert "bounded-static-http-call" in json.dumps(report), prefix
             elif mode == "compiled":
                 assert not tiers, (prefix, tiers)
