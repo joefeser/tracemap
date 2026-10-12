@@ -13,8 +13,10 @@ public sealed class ConstructedGenericSampleTests
     [InlineData("ReadNumber", "Container", "System.Int32", "get_Current")]
     [InlineData("ReadOther", "OtherContainer", "System.String", "get_Current")]
     [InlineData("CopyText", "Container", "System.String", "Copy")]
-    public async Task Native_compiler_retains_constructed_member_but_current_graph_reports_gap(
-        string entry, string container, string argument, string member)
+    [InlineData("ReadText", "Container", "System.String", "get_Current", 1)]
+    [InlineData("ReadText", "Container", "System.String", "get_Current", 64)]
+    public async Task Native_compiler_constructed_member_resolves_only_unique_definition(
+        string entry, string container, string argument, string member, int duplicates = 0)
     {
         var (root, callerPath, providerPath) = Sample();
         // Inspect real compiler metadata, not fabricated facts or executable loading.
@@ -47,17 +49,36 @@ public sealed class ConstructedGenericSampleTests
         Assert.Equal("memberref", call.Properties["referenceKind"]);
         Assert.Equal("callvirt", call.Properties["opcode"]);
         Assert.False(string.IsNullOrWhiteSpace(call.Properties["targetIdentity"]));
+        var target = Assert.Single(scan.Facts, f => f.FactType == FactTypes.ManagedMethodDeclared
+            && f.Properties.GetValueOrDefault("metadataName") == member
+            && f.TargetSymbol!.Contains($"|names:{container.Length}:{container}6:Slot`1|", StringComparison.Ordinal));
         var index = Path.Combine(temp.Path, "index.sqlite");
-        SqliteIndexWriter.Write(index, scan.Manifest, scan.Facts);
+        var facts = scan.Facts.Concat(Enumerable.Range(0, duplicates)
+            .Select(i => target with { FactId = target.FactId + "-duplicate-" + i })).ToArray();
+        SqliteIndexWriter.Write(index, scan.Manifest, facts);
         var combined = Path.Combine(temp.Path, "combined.sqlite");
         await CombinedIndexBuilder.CombineAsync(new([index], combined, ["public-generic-sample"]));
         var graph = await CombinedDependencyPathReporter.BuildGraphInventoryAsync(combined);
         var node = Assert.Single(graph.Nodes, n => n.SymbolId == declaration.TargetSymbol);
-        // Characterization, not the desired permanent resolver contract. Replace
-        // these two assertions with unique substitution-aware edges in the fix PR.
-        Assert.DoesNotContain(graph.Edges, e => e.FromNodeId == node.NodeId && e.EdgeKind == "compiled-il-call");
-        Assert.Contains(graph.Gaps, g => g.CombinedFactId == node.SourceIndexId + ":" + call.FactId
-            && g.Reason == "target-assembly-present-without-bound-provenance");
+        if (duplicates > 0)
+        {
+            Assert.DoesNotContain(graph.Edges, e => e.FromNodeId == node.NodeId && e.EdgeKind == "compiled-il-call");
+            Assert.Contains(graph.Gaps, g => g.CombinedFactId == node.SourceIndexId + ":" + call.FactId
+                && g.GapKind == (duplicates >= 64 ? "CompiledIlTargetUnavailable" : "CompiledIlTargetAmbiguous")
+                && g.CandidateCount == duplicates + 1
+                && (duplicates < 64 || g.Reason == "constructed-generic-candidate-limit"));
+        }
+        else
+        {
+            var targetNode = Assert.Single(graph.Nodes, n => n.SymbolId == target.TargetSymbol);
+            var edge = Assert.Single(graph.Edges, e => e.FromNodeId == node.NodeId && e.EdgeKind == "compiled-il-call");
+            Assert.Equal(targetNode.NodeId, edge.ToNodeId);
+            Assert.Equal("combined.paths.constructed-generic-member.v1", edge.RuleId);
+            Assert.Contains(graph.Gaps, g => g.CombinedFactId == node.SourceIndexId + ":" + call.FactId
+                && g.GapKind == "CompiledIlArtifactContext");
+            Assert.DoesNotContain(graph.Gaps, g => g.CombinedFactId == node.SourceIndexId + ":" + call.FactId
+                && g.GapKind == "CompiledIlTargetUnavailable");
+        }
         var plain = Assert.Single(scan.Facts, f => f.FactType == FactTypes.ManagedMethodDeclared
             && f.Properties.GetValueOrDefault("metadataName") == "ReadPlain");
         var plainNode = Assert.Single(graph.Nodes, n => n.SymbolId == plain.TargetSymbol);
