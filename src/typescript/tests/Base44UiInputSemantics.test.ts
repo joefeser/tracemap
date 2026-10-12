@@ -14,6 +14,14 @@ describe("Base44 React UI input semantics", () => {
     const semantics = packet.facts
       .filter((fact) => fact.factType === FactTypes.Base44UiInputSemantics)
       .map((fact) => ({ fact, value: JSON.parse(fact.properties.uiSemanticsJson) }));
+    const sourceAuthority = new Set(packet.facts
+      .filter((fact) => fact.factType === FactTypes.Base44SourceAuthority
+        && fact.properties.authorityKind === "selector-evidence-source")
+      .map((fact) => `${fact.evidence.filePath}\0${fact.properties.sourceFileSha256}`));
+    expect(semantics.length).toBeGreaterThan(0);
+    expect(semantics.every(({ fact }) => sourceAuthority.has(
+      `${fact.evidence.filePath}\0${fact.properties.sourceFileSha256}`
+    ))).toBe(true);
 
     const parsedPrice = semantics.find(({ value }) => value.controlKind === "submitted-value"
       && value.submittedEntity === "MaterialItemPriceBreak" && value.submittedField === "price");

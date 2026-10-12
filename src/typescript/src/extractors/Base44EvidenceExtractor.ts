@@ -14,7 +14,7 @@ const entityOperations = new Set(["list", "filter", "get", "create", "update", "
 const primitiveRoots = new Set([
   "auth", "entities", "functions", "integrations",
   "analytics", "appLogs", "users", "asServiceRole",
-  "Analytics", "AppLogs"
+  "Analytics", "AppLogs", "logUserInApp"
 ]);
 const base44FactoryNames = new Set(["createClient", "createClientFromRequest"]);
 const axiosMethods = new Set(["request", "get", "post", "put", "patch", "delete", "head", "options"]);
@@ -25,6 +25,10 @@ export async function extractBase44Facts(manifest: ScanManifest, inventory: read
   const migrationItems = inventory.filter((file) => !file.skipped && file.relativePath.endsWith(".sql") && isMigrationPath(file.relativePath));
   const aliasDiscovery = await buildAliasMaps(sourceItems);
   const frontendPackageAuthority = await loadFrontendPackageAuthority(inventory);
+  const projectHasBase44Authority = Boolean(frontendPackageAuthority.version)
+    || [...aliasDiscovery.sdkAuthorityRootsByFile.values()].some((roots) => roots.length > 0)
+    || sourceItems.some((item) => isFunctionEntry(item.relativePath)
+      || /(^|\/)base44\/(functions|entities)\//.test(item.relativePath));
   facts.push(...await packageAuthorityFacts(manifest, frontendPackageAuthority, inventory));
   for (const item of inventory.filter((file) => !file.skipped)) {
     if (item.relativePath.endsWith(".sql")) {
@@ -61,7 +65,7 @@ export async function extractBase44Facts(manifest: ScanManifest, inventory: read
         sourceFileSha256: hash(text, 64)
       }));
     }
-    visit(source, source, item.relativePath, text, aliases, factoryAliases, injectedParameters, base44Context, manifest, facts, sdkIdentity, aliasDiscovery.contexts);
+    visit(source, source, item.relativePath, text, aliases, factoryAliases, injectedParameters, base44Context, projectHasBase44Authority, manifest, facts, sdkIdentity, aliasDiscovery.contexts);
     if (isFunctionEntry(item.relativePath)) {
       const name = functionName(item.relativePath);
       facts.push(fact(manifest, FactTypes.Base44FunctionSurface, RuleIds.Base44FunctionSurface, source, source, item.relativePath, name, {
@@ -70,15 +74,14 @@ export async function extractBase44Facts(manifest: ScanManifest, inventory: read
         sourceFileSha256: hash(text, 64)
       }, text.includes("Deno.serve") ? EvidenceTiers.Tier2Structural : EvidenceTiers.Tier4Unknown));
     }
-    if (/base44\/(functions|entities)\//.test(item.relativePath)) {
+    if (/base44\/(functions|entities)\//.test(item.relativePath) || isFunctionEntry(item.relativePath)) {
       facts.push(fact(manifest, FactTypes.Base44CustomerBoundary, RuleIds.Base44CustomerBoundary, source, source, item.relativePath, item.relativePath, {
         logicOwnership: "customer-authored",
-        surfaceKind: item.relativePath.includes("/functions/") ? "function" : "entity",
+        surfaceKind: isFunctionEntry(item.relativePath) ? "function" : "entity",
         sourceFileSha256: hash(text, 64)
       }, EvidenceTiers.Tier2Structural));
     }
   }
-  ensureSelectorEvidenceAuthorityFacts(manifest, facts, aliasDiscovery.contexts);
   const hasBase44Signal = facts.some((candidate) => candidate.factType === FactTypes.Base44SdkImport
     || candidate.factType === FactTypes.Base44FunctionSurface
     || candidate.factType === FactTypes.Base44CustomerBoundary);
@@ -90,6 +93,7 @@ export async function extractBase44Facts(manifest: ScanManifest, inventory: read
       facts.push(...extractBase44UiInputFacts(manifest, context.source, item.relativePath, context.source.getFullText(), facts));
     }
   }
+  ensureSelectorEvidenceAuthorityFacts(manifest, facts, aliasDiscovery.contexts);
   return facts;
 }
 
@@ -121,7 +125,7 @@ function pathBasenamePreserveCase(filePath: string): string {
   return filePath.split("/").at(-1) ?? filePath;
 }
 
-function visit(node: ts.Node, source: ts.SourceFile, filePath: string, text: string, aliases: Map<string, string[]>, factoryAliases: Set<string>, injectedParameters: Map<number, string[]>, base44Context: boolean, manifest: ScanManifest, facts: CodeFact[], sdkIdentity: SdkIdentityResolution, contexts: Map<string, SourceContext>): void {
+function visit(node: ts.Node, source: ts.SourceFile, filePath: string, text: string, aliases: Map<string, string[]>, factoryAliases: Set<string>, injectedParameters: Map<number, string[]>, base44Context: boolean, projectHasBase44Authority: boolean, manifest: ScanManifest, facts: CodeFact[], sdkIdentity: SdkIdentityResolution, contexts: Map<string, SourceContext>): void {
   if (ts.isCallExpression(node)) {
     const chain = expressionChain(node.expression);
     const binding = chain ? resolveRuntimeAlias(chain[0], node, source, aliases, factoryAliases, injectedParameters, new Set()) : null;
@@ -139,7 +143,8 @@ function visit(node: ts.Node, source: ts.SourceFile, filePath: string, text: str
         sourceFileSha256: hash(text, 64)
       }, name ? EvidenceTiers.Tier3SyntaxOrTextual : EvidenceTiers.Tier4Unknown));
     }
-    if (base44Context && (chain?.at(-1) === "fetch" || (chain?.[0] === "axios" && chain.length === 2 && axiosMethods.has(chain[1])))) {
+    if ((projectHasBase44Authority && chain?.join(".") === "fetch") || (base44Context
+      && (chain?.at(-1) === "fetch" || (chain?.[0] === "axios" && chain.length === 2 && axiosMethods.has(chain[1]))))) {
       const literal = stringArgument(node.arguments[0]);
       const origin = literal ? safeOrigin(literal) : null;
       facts.push(fact(manifest, FactTypes.Base44HttpTarget, RuleIds.Base44HttpTarget, node, source, filePath, origin ? `origin-${hash(origin, 20)}` : "dynamic", {
@@ -150,7 +155,7 @@ function visit(node: ts.Node, source: ts.SourceFile, filePath: string, text: str
       }, origin ? EvidenceTiers.Tier3SyntaxOrTextual : EvidenceTiers.Tier4Unknown));
     }
   }
-  ts.forEachChild(node, (child) => visit(child, source, filePath, text, aliases, factoryAliases, injectedParameters, base44Context, manifest, facts, sdkIdentity, contexts));
+  ts.forEachChild(node, (child) => visit(child, source, filePath, text, aliases, factoryAliases, injectedParameters, base44Context, projectHasBase44Authority, manifest, facts, sdkIdentity, contexts));
 }
 
 function addSdkCall(chain: string[], node: ts.CallExpression, source: ts.SourceFile, filePath: string, text: string, manifest: ScanManifest, facts: CodeFact[], clientBindingKind: string, sdkIdentity: SdkIdentityResolution, contexts: Map<string, SourceContext>): void {
@@ -3086,6 +3091,12 @@ function ensureSelectorEvidenceAuthorityFacts(
     .map((candidate) => `${candidate.evidence.filePath}\0${candidate.properties.sourceFileSha256}`));
   const required = new Map<string, { filePath: string; sourceFileSha256: string }>();
   for (const candidate of facts) {
+    if (candidate.factType === FactTypes.Base44UiInputSemantics
+      && typeof candidate.properties.sourceFileSha256 === "string") {
+      const filePath = candidate.evidence.filePath;
+      const sourceFileSha256 = candidate.properties.sourceFileSha256;
+      required.set(`${filePath}\0${sourceFileSha256}`, { filePath, sourceFileSha256 });
+    }
     const selectorJson = candidate.properties.entitySelectorJson;
     if (!selectorJson) continue;
     try {
@@ -3175,7 +3186,8 @@ function packageVersion(value: string): string {
 }
 
 function isFunctionEntry(filePath: string): boolean {
-  return /(^|\/)base44\/functions\/[^/]+\/(entry|index)\.[jt]sx?$/.test(filePath);
+  return /(^|\/)base44\/functions\/[^/]+\/(entry|index)\.[jt]sx?$/.test(filePath)
+    || /^functions\/[^/]+\.[jt]sx?$/.test(filePath);
 }
 
 function isMigrationPath(filePath: string): boolean {
@@ -3184,7 +3196,7 @@ function isMigrationPath(filePath: string): boolean {
 
 function functionName(filePath: string): string {
   const match = filePath.match(/base44\/functions\/([^/]+)\//);
-  return match?.[1] ?? path.basename(path.dirname(filePath));
+  return match?.[1] ?? path.basename(filePath).replace(/\.[jt]sx?$/, "");
 }
 
 function safeOrigin(value: string): string | null {

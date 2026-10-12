@@ -40,6 +40,22 @@ The additive JavaScript/JSX/TypeScript/TSX `base44.*.v1` rules cover:
 - SQL migration surface hashes and statement kinds; and
 - customer-authored function/entity boundaries.
 
+Backend function-surface recognition covers both
+`base44/functions/<name>/{entry,index}.{js,jsx,ts,tsx}` and direct-root
+`functions/<name>.{js,jsx,ts,tsx}` handlers. Nested files under
+`functions/` are not promoted to callable surfaces by path alone. The fact's
+handler kind remains `unknown` unless the source contains `Deno.serve`;
+path recognition is structural evidence, not proof that the handler executes
+or that every invocation branch works in the host runtime.
+
+The extractor also records a source-bound direct `logUserInApp` SDK call.
+Bare `fetch(...)` calls in SDK-free files are recorded as HTTP targets only
+when the project has independently detected Base44 SDK/package or function
+authority; ordinary non-Base44 repositories are not classified as Base44
+merely because they call `fetch`. Dynamic targets remain `Tier4Unknown`,
+including same-origin paths assembled from runtime values. An HTTP-target
+fact is an obligation to resolve, not proof that a remote provider is used.
+
 Facts contain repository and commit identity, rule, evidence tier, extractor identity/version, relative path, a first-class line span, source-file digest, and snippet digest. Each statically derived field also carries the contributing syntax's line span and snippet digest so identifier, spread, and mutation evidence remains independently inspectable even when it is defined away from the SDK callsite. They never store source snippets, environment values, URL paths/query strings, tokens, or cookies.
 
 Extractor `base44-evidence/0.7.0` adds the producer-owned
