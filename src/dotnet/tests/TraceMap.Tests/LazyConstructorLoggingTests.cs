@@ -189,7 +189,9 @@ public sealed class LazyConstructorLoggingTests
             Assert.Equal(1, sourceNormal.Summary.SelectorCandidateCount);
             Assert.Empty(sourceNormal.Paths);
             Assert.Empty(sourceGraph!.CommandTraces);
-            Assert.Contains(sourceNormal.Gaps, gap => gap.Reason == "target-assembly-present-without-bound-provenance");
+            Assert.Contains(sourceNormal.Gaps, gap => gap.GapKind == "CompiledIlArtifactContext"
+                && gap.Reason == "exact-il-target-present-without-source-commit-binding"
+                && gap.EvidenceTier == EvidenceTiers.Tier4Unknown);
             var handoff = GroupedCompiledPathHandoffBuilder.Create(report, new string('a', 64));
             var grouped = await GroupedCompiledPathReportWriter.WriteAsync(handoff, Path.Combine(temp.Path, "normal-report"));
             var normalHtml = await File.ReadAllTextAsync(grouped.HtmlPath);
