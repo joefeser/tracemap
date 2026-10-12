@@ -458,3 +458,26 @@ Full solution, pinned external OSS smokes and a new
 Windows correction receipt are deferred; older Windows receipts above apply only
 to their frozen heads. This change does not claim private application compatibility,
 complete wrapper discovery, an extracted procedure contract, PR/merge or ACK action.
+
+### Windows event-wiring assertion correction
+
+Public personal-Windows validation reported at executable head `e1932ae0`:
+isolated SDK 10.0.302 / reference pack 10.0.10, clean CLI build, 127 focused tests
+passed and one failed, eight oracle guards passed, all 96 native SQL outputs
+passed, and the projectless candidate/negative controls passed. Overall acceptance
+was not green. The failure was the legacy event-edge exclusion assertion matching
+a legitimate VisualBasicEventBindingDeclared fact targeting a Click event.
+
+The correction is test-only: restrict the edge prohibition to CallEdge and
+SymbolRelationship facts and retain the existing event-target exclusions. A
+portable net10 synthetic Click event positively asserts its semantic declaration;
+mutating that fact into either prohibited edge kind must trigger the predicate.
+The existing Web Forms fixture can lack event-binding metadata on non-Windows
+hosts, so positive semantic coverage uses the independent fixture rather than
+assuming framework availability. No extractor or event-resolution policy changes. A new exact-head
+Windows focused-suite receipt is required; the previous failure is not waived.
+Private assessment attachments are not imported into the repository.
+
+Local warning-as-error validation passed 56 tests across
+VisualBasicExtractionTests and VisualBasicWebFormsCompositionTests, zero failures
+or skips. Whitespace and private-path guards passed. Windows rerun remains pending.

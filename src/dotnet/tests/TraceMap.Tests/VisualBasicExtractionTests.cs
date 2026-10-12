@@ -185,13 +185,9 @@ public sealed class VisualBasicExtractionTests
 
         foreach (var result in new[] { modern, webforms })
         {
-            // Handles/AddHandler/RemoveHandler/RaiseEvent must stay event-less:
-            // no resolved edge may target an event accessor or the wiring surface.
-            Assert.DoesNotContain(result.Facts, fact =>
-                fact.RuleId.StartsWith("vb.semantic.", StringComparison.Ordinal)
-                && (fact.TargetSymbol?.Contains("add_", StringComparison.Ordinal) == true
-                    || fact.TargetSymbol?.Contains(".Click", StringComparison.Ordinal) == true
-                    || fact.TargetSymbol?.Contains("Me.Init", StringComparison.Ordinal) == true));
+            // Event composition has its own declaration/raise facts. It must not
+            // become an ordinary call edge or a type/member relationship.
+            Assert.DoesNotContain(result.Facts, IsForbiddenEventEdge);
             Assert.DoesNotContain(result.Facts, fact =>
                 fact.RuleId.StartsWith("vb.semantic.", StringComparison.Ordinal)
                 && fact.FactType == FactTypes.SymbolRelationship
@@ -207,6 +203,50 @@ public sealed class VisualBasicExtractionTests
     }
 
     // ---------- Task 6: bounded per-file syntax fallback ----------
+
+    private static bool IsForbiddenEventEdge(CodeFact fact) =>
+        fact.RuleId.StartsWith("vb.semantic.", StringComparison.Ordinal)
+        && (fact.FactType is FactTypes.CallEdge or FactTypes.SymbolRelationship)
+        && (fact.TargetSymbol?.Contains("add_", StringComparison.Ordinal) == true
+            || fact.TargetSymbol?.Contains(".Click", StringComparison.Ordinal) == true
+            || fact.TargetSymbol?.Contains("Me.Init", StringComparison.Ordinal) == true);
+
+    [Fact]
+    public void Semantic_click_binding_is_a_declaration_but_edge_mutations_are_rejected()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(repo);
+        File.WriteAllText(Path.Combine(repo, "Events.vbproj"), """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup><TargetFramework>net10.0</TargetFramework><OptionStrict>On</OptionStrict></PropertyGroup>
+            </Project>
+            """);
+        File.WriteAllText(Path.Combine(repo, "Events.vb"), """
+            Imports System
+            Public Class Button
+                Public Event Click As EventHandler
+            End Class
+            Public Class Consumer
+                Private WithEvents _button As New Button()
+                Private Sub OnClick(sender As Object, e As EventArgs) Handles _button.Click
+                End Sub
+            End Class
+            """);
+        Commit(repo);
+        var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out")));
+        var binding = Assert.Single(result.Facts, fact =>
+            fact.FactType == FactTypes.VisualBasicEventBindingDeclared
+            && fact.RuleId == RuleIds.VisualBasicSemanticEventWiring
+            && fact.EvidenceTier == EvidenceTiers.Tier1Semantic
+            && fact.ContractElement == "Click");
+        Assert.Contains(".Click", binding.TargetSymbol!);
+        Assert.False(IsForbiddenEventEdge(binding));
+        Assert.DoesNotContain(result.Facts, IsForbiddenEventEdge);
+        // Prove that narrowing to edge kinds does not weaken the prohibition.
+        Assert.True(IsForbiddenEventEdge(binding with { FactType = FactTypes.CallEdge }));
+        Assert.True(IsForbiddenEventEdge(binding with { FactType = FactTypes.SymbolRelationship }));
+    }
 
     [Fact]
     public void Vb_syntax_phase_failure_becomes_a_sanitized_file_gap()
