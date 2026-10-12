@@ -132,3 +132,25 @@ local regression/native CLI receipt are pending. Admitted application framework
 evidence has not been identified; a path/admission reference was requested. This
 application-specific prerequisite remains open, with no inferred TFM/private
 application compatibility claim. See the legacy compatibility matrix for details.
+
+Corrected public validation receipt at
+`ef7d9cdd5ce9b3d6aad2c5d0b67650c8cbbaa7ce`:
+- Solution warning-as-error build: zero warnings/errors.
+- 99 scoped extractor, integration, retained-report and legacy regressions: passed
+  with zero failures/skips (1m01s). Includes integration with inventory #862.
+- 72 native CLI outputs (six TFMs x two languages x three modes x two repeats):
+  validated; facts.ndjson and report.md byte-identical within each pair. Per-TFM
+  semantic counts match the matrix; unresolved syntax candidates are separate rows
+  and are never counted as extra supported overloads.
+- Native retained path JSON contains bounded HTTP evidence for every selected
+  language/framework; all compiled Case methods retain IL observations, with no
+  invented HTTP operations. Seven artifact-validator tests passed.
+- GitHub Private Path Guard passed at this head. Windows compatibility run
+  38283440213 is still pending at receipt-writing time. Earlier CI runs were
+  cancelled after correcting smoke-script tier denominators/output-directory names;
+  they are not acceptance evidence.
+- No fixture method or application network call was executed. No private artifacts.
+
+The earlier full-suite 3900/1 receipt remains bound to its earlier implementation
+head; it is not an exact-head full-suite claim after this extension/dev merge.
+The 99 scoped regressions cover the changed extraction/reporting/integration paths.
