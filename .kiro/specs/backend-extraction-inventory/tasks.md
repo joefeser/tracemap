@@ -92,3 +92,4 @@
 - [x] Share SqlClient type resolution between parameter Add and local declaration association, with combined nested/relative-name/complex-value fixtures and alias/shadow/ambiguity controls.
 - [x] Report bounded later same-receiver execution syntax separately from instance continuity and forward execution association, with uncertainty and stop reasons.
 - [x] Retain bounded hashed parameter-value observations and constructor command-text-origin syntax with pending per-candidate migration review checks.
+- [x] Trace bounded same-block literal command-text assignments and concatenations to hash-only syntax candidates; report unsupported expressions, statements and limits explicitly.

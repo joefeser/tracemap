@@ -807,3 +807,19 @@ Warning-as-error surrounding suite: 92 passed. Native synthetic sample: 93 facts
 two value observations and two constructor-origin witnesses; remaining candidates
 retain zero observations/unavailable origin. No application or SQL execution.
 Windows and full matrix remain deferred.
+
+### 2026-10-13: bounded local command-text tracing
+
+vb-syntax/0.4.10 traces constructor first-argument identifiers backwards through
+contiguous local literal assignments and &=/+= updates, stopping at the latest
+assignment/initializer. Literal & expressions and parentheses are supported.
+Hard bounds: 64 statements, 128 expression nodes, 16384 reconstructed characters.
+Unknown expressions and intervening statements stop with a reason. Hash/location
+only; no raw SQL, runtime evaluation, StringBuilder/identifier propagation, overload
+proof or verified procedure claim. Reporting and the inspection prompt distinguish
+trace gaps from parameter extraction. Synthetic sample now exercises relative
+SqlClient naming, nested Try, local text construction and complex parameter values.
+Warning-as-error surrounding suite: 98 passed before the final parenthesized case.
+Native sample retained 93 facts with two constant syntax traces (one local variable,
+one direct literal). No application or SQL execution. Windows/full matrix deferred.
+Final warning-as-error parameter suite: 53 passed; final CLI sample rerun: 93 facts.

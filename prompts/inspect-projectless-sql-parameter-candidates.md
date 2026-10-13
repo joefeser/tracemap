@@ -1,6 +1,6 @@
 # Inspect projectless SQL parameter candidates locally
 
-Use the published scanner with vb-syntax/0.4.9 or later. This increment adds
+Use the published scanner with vb-syntax/0.4.10 or later. This increment adds
 DatabaseParameterCandidate facts for explicit SqlParameter constructors and
 typed command.Parameters.Add(name, SqlDbType) calls, not automatic
 wrapper-to-procedure argument mapping.
@@ -41,6 +41,12 @@ Inspect commandTextOriginEvidence: constructor-first-argument-syntax-only record
 only a hash/kind/location, not resolved SQL text or overload proof. Use the report's
 pending review checklist; do not mark contracts verified from these fields. Return
 only approved aggregate counts/statuses, never expression text or private hashes.
+Inspect commandTextTraceEvidence and commandTextTraceReason separately from
+parameter capture. The backward same-block trace supports literal assignments and
+literal concatenation updates within fixed limits. A resulting hash is a syntax
+candidate, not verified SQL semantics, overload selection or procedure identity.
+Unknown expressions, intervening statements and limits must remain explicit gaps.
+Report trace-supported versus unresolved counts, not a blanket unsupported-shapes=0.
 Before any scan, confirm the saved project configuration and resolved source root
 locally against the user's intended project. Do not infer the project from prior
 debugging context or scan a different registered repository. Named
