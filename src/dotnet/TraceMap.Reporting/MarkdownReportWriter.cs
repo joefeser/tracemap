@@ -166,7 +166,7 @@ public static class MarkdownReportWriter
         foreach (var parameter in parameterCandidates.Take(50))
         {
             lines.Add($"- {parameter.EvidenceTier}; rule `{parameter.RuleId}`; `{parameter.Evidence.FilePath}:{parameter.Evidence.StartLine}`; name evidence `{parameter.Properties.GetValueOrDefault("parameterNameEvidence")}`; type `{parameter.Properties.GetValueOrDefault("parameterTypeName", "unavailable")}`; direction unknown; command association `{parameter.Properties.GetValueOrDefault("commandAssociation", "unresolved")}`; execution line `{parameter.Properties.GetValueOrDefault("commandExecutionStartLine", "unavailable")}`; fact `{parameter.FactId}`.");
-            lines.Add($"  Association reason: `{parameter.Properties.GetValueOrDefault("commandAssociationReason", "unavailable-in-source-fact")}`. Parameter extraction and command association are separate coverage checks.");
+            lines.Add($"  Receiver evidence: `{parameter.Properties.GetValueOrDefault("commandReceiverAssociation", "unavailable-in-source-fact")}`; declaration line `{parameter.Properties.GetValueOrDefault("commandDeclarationStartLine", "unavailable")}`; execution evidence: `{parameter.Properties.GetValueOrDefault("commandExecutionEvidence", "unavailable-in-source-fact")}`. Association reason: `{parameter.Properties.GetValueOrDefault("commandAssociationReason", "unavailable-in-source-fact")}`. Parameter extraction, receiver association and execution are separate coverage checks; no runtime reachability or verified procedure contract is established.");
         }
         AddSqlExecutionContext(lines, result);
         AddSqlProtectedMaterial(lines, result);

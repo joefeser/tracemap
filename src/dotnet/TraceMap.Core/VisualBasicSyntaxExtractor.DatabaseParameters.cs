@@ -47,6 +47,8 @@ public static partial class VisualBasicSyntaxExtractor
             ["parameterTypeEvidence"] = "unavailable",
             ["parameterDirectionEvidence"] = "unknown",
             ["commandAssociation"] = "unresolved",
+            ["commandReceiverAssociation"] = "unresolved",
+            ["commandExecutionEvidence"] = "unresolved",
             ["commandAssociationReason"] = "constructor-only-no-command-receiver",
             ["coverageLabel"] = coverage,
             ["ruleLimitations"] = "Syntax parameter candidate only; no compiler/provider binding, overload resolution, verified command instance identity, procedure association, database declaration, direction default or runtime value is inferred. Optional straight-line local association is syntax evidence only. Names and argument expressions are hashed; source review is required."
@@ -157,6 +159,11 @@ public static partial class VisualBasicSyntaxExtractor
             break;
         }
         if (declaration is null) { properties["commandAssociationReason"] = "fresh-local-not-established"; return; }
+        // Establish the receiver at the Add site independently of later evaluation.
+        // Later calls may throw, escape or mutate state; none can erase this syntax witness.
+        properties["commandReceiverAssociation"] = "syntax-local-declaration-candidate";
+        properties["commandDeclarationStartLine"] = (declaration.GetLocation().GetLineSpan().StartLinePosition.Line + 1).ToString(System.Globalization.CultureInfo.InvariantCulture);
+        properties["commandDeclarationSpanStart"] = declaration.SpanStart.ToString(System.Globalization.CultureInfo.InvariantCulture);
         for (var i = at + 1; i < statements.Count; i++)
         {
             if (++work > 64) { properties["commandAssociationReason"] = "local-window-limit"; return; }
@@ -167,6 +174,7 @@ public static partial class VisualBasicSyntaxExtractor
                 && (execute.ArgumentList is null || execute.ArgumentList.Arguments.Count == 0))
             {
                 properties["commandAssociation"] = "syntax-local-straight-line-candidate";
+                properties["commandExecutionEvidence"] = "syntax-following-execution-candidate";
                 properties["commandDeclarationStartLine"] = (declaration.GetLocation().GetLineSpan().StartLinePosition.Line + 1).ToString(System.Globalization.CultureInfo.InvariantCulture);
                 properties["commandExecutionStartLine"] = (execute.GetLocation().GetLineSpan().StartLinePosition.Line + 1).ToString(System.Globalization.CultureInfo.InvariantCulture);
                 properties["commandExecutionSpanStart"] = execute.SpanStart.ToString(System.Globalization.CultureInfo.InvariantCulture);
