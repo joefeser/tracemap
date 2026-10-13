@@ -1132,6 +1132,7 @@ public static partial class VisualBasicSyntaxExtractor
         FactBudget budget)
     {
         var invocationName = GetInvocationName(invocation.Expression);
+        if (!AddDatabaseParameterAddCandidate(manifest, facts, filePath, root, invocation, budget)) return false;
         var containingMember = GetContainingMemberName(invocation);
         var argumentTypes = TryGetExplicitInvocationArgumentTypes(invocation);
         var receiverName = GetInvocationReceiverName(invocation.Expression) ?? string.Empty;
