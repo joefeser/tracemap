@@ -84,3 +84,4 @@
 - [x] Expand client grouped reports and local SQL inventories into evidence-linked per-operation human verification and implementation handoffs; keep all checks pending and preserve legacy machine schema.
 - [x] Preserve native application command/parameter evidence in the local inventory independently of schema catalog availability; require targeted application review before owner escalation.
 - [x] Add projectless VB SqlParameter constructor candidates with hashed arguments, explicit type-syntax witnesses, negative controls and scan-report references; no inferred command/procedure binding.
+- [x] Cache root-scoped VB declaration/import/type resolution without filtering ordinary object facts; add alias/shadow/root-isolation and synthetic scaling regression coverage.

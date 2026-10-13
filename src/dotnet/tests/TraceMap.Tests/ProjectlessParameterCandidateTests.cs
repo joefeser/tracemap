@@ -6,6 +6,20 @@ namespace TraceMap.Tests;
 
 public sealed class ProjectlessParameterCandidateTests
 {
+    [Fact]
+    public void Ordinary_creations_and_alias_parameter_call_edges_are_preserved()
+    {
+        using var temp = new TempDirectory();
+        File.WriteAllText(Path.Combine(temp.Path, "Input.vb"), "Imports P = System.Data.SqlClient.SqlParameter\nPublic Class Example\nSub Run()\nDim x = New Object()\nDim p = New P(\"@Public\", Global.System.Data.SqlDbType.Int)\nEnd Sub\nEnd Class");
+        WebFormsWizardNativeTests.InitGit(temp.Path);
+        var scan = ScanEngine.Scan(new ScanOptions(temp.Path, Path.Combine(temp.Path, "out")));
+        Assert.Single(scan.Facts, f => f.FactType == FactTypes.DatabaseParameterCandidate);
+        foreach (var type in new[] { "Object", "P" })
+        {
+            Assert.Contains(scan.Facts, f => f.FactType == FactTypes.ObjectCreated && f.TargetSymbol == type);
+            Assert.Contains(scan.Facts, f => f.FactType == FactTypes.CallEdge && f.TargetSymbol == type);
+        }
+    }
     [Theory]
     [InlineData("", "Global.System.Data.SqlClient.SqlParameter", true)]
     [InlineData("", "global.system.data.sqlclient.sqlparameter", true)]

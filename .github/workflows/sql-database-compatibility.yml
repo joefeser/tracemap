@@ -25,6 +25,8 @@ jobs:
         run: dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter "FullyQualifiedName~ProjectlessParameterCandidateTests|FullyQualifiedName~SqlDatabaseMatrixTests|FullyQualifiedName~SqlWrapperRouteTests|FullyQualifiedName~ProjectlessSqlReportingTests|FullyQualifiedName~DatabaseCommandStateTests|FullyQualifiedName~GroupedCompiledPathHandoffTests|FullyQualifiedName~BackendExtractionSampleTests|FullyQualifiedName~VisualBasicExternalBoundaryTests|FullyQualifiedName~VisualBasicDataBoundaryTests|FullyQualifiedName~FrameworkSignatureCandidateTests" -warnaserror
       - name: Independent named oracle mutation guards
         run: python scripts/validation/test_sql_matrix_expectations.py
+      - name: Cached VB lookup equivalence and scaling guards
+        run: dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-build --filter FullyQualifiedName~VisualBasicSyntaxTypeLookupTests --logger "console;verbosity=detailed"
       - name: Selected-root SQL report guards
         run: python scripts/validation/test_sql_wrapper_report.py
       - name: Large retained index admission (public padded SQLite, no graph-scale claim)
