@@ -1306,6 +1306,7 @@ public static partial class VisualBasicSyntaxExtractor
         var typeName = creation.Type.ToString();
         var containingMember = GetContainingMemberName(creation);
         var compilationUnit = creation.Ancestors().OfType<CompilationUnitSyntax>().FirstOrDefault();
+        if (compilationUnit is not null && !AddDatabaseParameterCandidate(manifest, facts, filePath, compilationUnit, creation, budget)) return false;
         var importedNamespaces = compilationUnit?.Imports
             .SelectMany(statement => statement.ImportsClauses)
             .OfType<SimpleImportsClauseSyntax>()
