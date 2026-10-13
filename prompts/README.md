@@ -1,5 +1,9 @@
 # Private exchange prompts
 
+To connect page/event evidence to retained SQL roots, use
+[Reconcile WebForms SQL entry wiring](reconcile-webforms-sql-entry-wiring.md).
+It reuses existing evidence first and keeps unresolved source-to-compiled bridges explicit.
+
 After recovery, use [Consolidate local SQL inventory](consolidate-local-sql-inventory.md)
 to combine the existing native root reports into one private evidence inventory.
 
