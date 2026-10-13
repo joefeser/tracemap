@@ -4621,6 +4621,17 @@ The legacy HTTP fixture TFMs are **representative test targets, not confirmed ap
 
 ## SQL/database migration matrix (#864)
 
+Integrated source migration acceptance: run `IntegratedMigrationReportTests`
+against `samples/migration-vertical-slice`. The public projectless VB page and
+user-control boundaries traverse an explicit backend wrapper to SQL and outbound
+HTTP; an unconnected SQL operation remains visible. Tests check ordered evidence,
+parameter grouping, broken-edge/binding negatives and deterministic fact ordering.
+Run alongside compiled `SqlWrapperRouteTests`, WebForms composition/event identity,
+and outbound HTTP tests. The report does not join historical compiled reports to
+source paths or infer deployed routes. Use
+`prompts/accept-integrated-migration-report.md` for one private focused acceptance,
+not repeated field-by-field scan requests.
+
 `VisualBasicSyntaxTypeLookupTests` compares the cached resolver against its prior
 algorithm, pins root isolation/concurrent reads and repeated immutable-result reuse,
 and prints a lookup-only synthetic timing (2000 creations, 20 imports, 500 lookups).

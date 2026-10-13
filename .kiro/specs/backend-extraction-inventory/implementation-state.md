@@ -836,3 +836,34 @@ Native synthetic scan: 94 facts; both expected text traces retained, including
 the empty-seed variable trace. No application/SQL execution or private inputs.
 Windows and full matrix acceptance remain pending; this is not completion of the
 broader entry-point-to-SQL migration handoff.
+
+### 2026-10-13: integrated source migration report and HTTP boundary delivery
+
+Branch codex/sql-database-matrix-864. IntegratedMigrationReport adds a human-readable
+section to the normal report.md; no new machine-readable artifact is introduced.
+It inventories supported source SQL and outbound HTTP facts independently of roots,
+keeps unconnected operations, reports boundary/binding and parameter denominators,
+and records ordered call/declaration fact references from WebForms source boundaries.
+Unique explicit receiver type/name/arity joins remain Tier3 candidates, never
+compiler identity or deployed URL proof. Missing/ambiguous spans and calls refuse
+association. Source reports never splice historical compiled wrapper paths; the
+existing admitted compiled handoff remains a distinct evidence layer.
+
+Public migration-vertical-slice combines a page button and user-control button,
+backend wrapper, direct SQL, outbound HTTP and an unconnected SQL operation.
+The SQL shape includes nested Try, relative SqlClient, String.Empty, concatenations,
+five parameter/value observations and transaction assignment. Expected report:
+three operation evidence groups, two with candidate entry paths, all five parameter
+witnesses grouped under one SQL call, and both entry boundaries visible.
+Tests remove call/binding evidence, introduce duplicate targets and exceed matching
+budgets to ensure explicit partial reporting without hiding the inventory.
+
+Local validation: 288 SQL/compiled-wrapper/WebForms/report regressions passed;
+22 integrated/event-identity/legacy-HTTP tests passed. Both full native matrices
+passed (96 SQL outputs and 96 HTTP outputs), with eight independent oracle guards
+for each family. No application, SQL or HTTP fixture methods were executed.
+Final focused test and exact-head Windows CI are recorded in the delivery response.
+Windows workflow now includes the integrated source acceptance and HTTP matrix.
+One private acceptance prompt: prompts/accept-integrated-migration-report.md.
+Private application-wide completeness, deployed routes, schema contracts, migration
+decisions and source/compiled identity bridges remain explicit separate gates.

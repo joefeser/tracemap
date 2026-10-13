@@ -7712,6 +7712,19 @@ rules:
       - Consolidation preserves input-scoped provenance, query, coverage, limitations and truncation. Duplicate inputs are refused; repeated paths or literals across roots are not deduplicated into unique operations. Schema contracts and migration decisions are not inferred.
       - Local output records generator, Cecil, path-report input and binary hashes; these are local identities, not a privacy projection or publication approval.
 
+  - id: workflow.migration.scan-inventory.v1
+    name: Integrated source migration inventory and WebForms boundaries
+    description: Human-readable scan-wide supported operation evidence groups, ordered candidate entry paths and parameter witnesses in report.md.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - report.md integrated migration inventory
+    limitations:
+      - Enumerates DatabaseOperationCandidate, SqlCommandDetected, DapperCallDetected, DbChangeSaved and HttpCallDetected facts, grouped by family, file, line span, source and target. These are evidence groups, not unique business operations, procedures or a complete runtime denominator. Other families and compiled-only operations remain outside this source projection.
+      - Incoming boundaries use retained WebFormsHandlerResolved and binding references. Unique method-body spans attach source evidence; exact canonical target IDs or unique explicit type/name/arity syntax can supply call hops. Every reported path remains a candidate; no method-name-only cross-type join, inferred deployed URL or runtime execution claim is made.
+      - Matching is disabled above 2000 methods or 10000 call facts. Displays at most 200 groups, 50 parameters per group and 100 unresolved boundaries of each kind. Per-group search is bounded to 4096 work units, 16 hops and eight paths, with limits reported. Cycles are not revisited within a path. Unconnected groups remain visible, not classified unused.
+      - Parameter witnesses require identical source member/file and a unique observed execution line. Ambiguous operation lines are refused. This lexical attachment does not establish runtime instance identity, argument semantics or schema contracts.
+      - Compiled wrapper reports remain separate; historical/source/compiled evidence is not spliced without an admitted identity bridge. All migration review and retain/replace/retire decisions remain pending. This adds no machine-readable derived artifact or private source snippets.
+
   - id: workflow.backend-extraction.retained-report.v1
     name: Retained-query backend extraction inventory
     description: Projects database-api, sql-query and http-client evidence records and their ordered query-path references from an admitted grouped report for human migration planning.

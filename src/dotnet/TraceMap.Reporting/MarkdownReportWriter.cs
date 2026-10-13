@@ -157,6 +157,7 @@ public static class MarkdownReportWriter
 
         lines.Add("The Database Calls section lists selected fact families, not all operation candidates. Empty results do not prove absence; see Database Operation Candidates below and Analysis Coverage above.");
         AddDatabaseOperationCandidates(lines, result);
+        IntegratedMigrationReport.Append(lines, result);
         var parameterCandidates = result.Facts.Where(f => f.FactType == FactTypes.DatabaseParameterCandidate)
             .OrderBy(f => f.Evidence.FilePath, StringComparer.Ordinal).ThenBy(f => f.Evidence.StartLine)
             .ThenBy(f => f.FactId, StringComparer.Ordinal).ToArray();
