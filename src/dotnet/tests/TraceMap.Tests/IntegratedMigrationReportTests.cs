@@ -33,6 +33,7 @@ public sealed class IntegratedMigrationReportTests
         Assert.Contains("Displayed groups with candidate entry paths: 1/1", report);
         Assert.Contains("1/1 UserControl Handles syntax candidate anchors", report);
         Assert.Contains("0/0 handler-resolution facts", report);
+        Assert.Contains("`candidate-anchor-established`: 1", report);
         Assert.Contains("hosting/route unresolved", report);
         Assert.Contains(binding.FactId, report);
         Assert.Contains(operation.FactId, report);
@@ -51,6 +52,32 @@ public sealed class IntegratedMigrationReportTests
             Report(scan.Facts.Select(f => f == binding
                 ? f with { Properties = new SortedDictionary<string, string>(f.Properties.ToDictionary(p => p.Key, p => p.Value), StringComparer.Ordinal)
                     { ["handlerName"] = "OtherHandler" } } : f)));
+        var type = Assert.Single(scan.Facts, f => f.FactType == FactTypes.TypeDeclared);
+        void CheckProperty(CodeFact fact, string key, string value, string reason)
+        {
+            var changed = fact with { Properties = fact.Properties.ToDictionary(p => p.Key, p => p.Value) };
+            ((Dictionary<string, string>)changed.Properties)[key] = value;
+            var actual = Report(scan.Facts.Select(f => f == fact ? changed : f));
+            Assert.Contains("Displayed groups with candidate entry paths: 0/1", actual);
+            Assert.Contains($"`{reason}`: 1", actual);
+            Assert.Contains($"anchor assessment `{reason}`", actual);
+        }
+        CheckProperty(binding, "handlerName", "Other", "handler-name-mismatch");
+        CheckProperty(binding, "receiverName", "", "receiver-name-missing");
+        CheckProperty(binding, "eventName", "", "event-name-missing");
+        CheckProperty(handler, "qualifiedContainingType", "", "containing-type-identity-missing");
+        CheckProperty(type, "qualifiedName", "Other", "same-file-type-declaration-missing");
+        CheckProperty(type, "baseTypes", "", "same-file-base-evidence-missing");
+        foreach (var spelling in new[] { "UserControl", "UI.UserControl", "CustomControl", "Forms.Control" })
+            CheckProperty(type, "baseTypes", spelling, "explicit-usercontrol-base-not-established");
+        Assert.Contains("`method-owner-ambiguous`: 1", Report(scan.Facts.Append(handler with { FactId = "duplicate-owner" })));
+        Assert.Contains("`method-owner-missing`: 1", Report(scan.Facts.Where(f => f != handler)));
+        Assert.Contains("`same-file-type-declaration-ambiguous`: 1", Report(scan.Facts.Append(type with { FactId = "duplicate-type" })));
+        // A split partial's base evidence must not silently become same-file identity proof.
+        Assert.Contains("`same-file-type-declaration-missing`: 1", Report(scan.Facts.Select(f => f == type
+            ? f with { Evidence = f.Evidence with { FilePath = "PublicControl.Designer.vb" } } : f)));
+        Assert.Contains("`matching-budget-exceeded-unassessed`: 1", Report(scan.Facts.Concat(
+            Enumerable.Range(0, 2001).Select(i => type with { FactId = "type-limit-" + i }))));
     }
 
     [Fact]
