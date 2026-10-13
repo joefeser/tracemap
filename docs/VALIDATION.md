@@ -4621,6 +4621,11 @@ The legacy HTTP fixture TFMs are **representative test targets, not confirmed ap
 
 ## SQL/database migration matrix (#864)
 
+`VisualBasicSyntaxTypeLookupTests` compares the cached resolver against its prior
+algorithm, pins root isolation/concurrent reads and repeated immutable-result reuse,
+and prints a lookup-only synthetic timing (2000 creations, 20 imports, 500 lookups).
+No wall-clock assertion is used. This is not a private whole-scan speed claim.
+
 Run `ProjectlessParameterCandidateTests` for VB SqlParameter constructor
 syntax witnesses: qualification/import/alias positives, shadows and unrelated
 types, hashed names, dynamic/named argument unknowns and report references.

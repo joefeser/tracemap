@@ -689,3 +689,22 @@ tests passed. CLI warning-as-error build and native projectless sample scan pass
 retaining two independent parameter candidates (one explicit type, one unknown).
 Full 96-output SQL smoke and exact-head Windows validation are deferred to CI;
 they have not been claimed for this increment. No fixture execution/database use.
+
+### Root-scoped VB type lookup performance correction
+
+Replaced per-resolution full-file declaration walks and import/alias rebuilding
+with a lazy immutable-root lookup and memoized immutable resolution arrays. Weak
+root keys prevent completed syntax trees from being retained by a global cache;
+changed import roots receive independent contexts. Concurrent reads are supported.
+No name prefilter or early return was added to ordinary object creation, so alias
+parameters and normal ObjectCreated/CallEdge evidence remain intact. Resolution
+ordering, case handling, shadowing and ambiguity semantics are unchanged.
+
+Added old/new resolver equivalence, root-isolation/concurrency, ordinary-fact
+preservation and large synthetic lookup tests. Local lookup-only measurement for
+500 repeated lookups on a 2000-creation/20-import file: original 1296.91 ms versus
+warm cached 0.02 ms (cache initialization excluded; not whole-scan performance).
+Initial 56 VB/SQL/parameter regressions passed and native CLI sample retained 67
+facts. Windows and full matrix validation remain separate pending gates.
+The second warning-as-error run passed 78 HTTP/external-boundary/configured-import/
+effective-import-context/lookup tests, including final concurrent cache guards.
