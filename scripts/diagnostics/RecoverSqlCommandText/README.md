@@ -32,7 +32,17 @@ Original native query truncation flags and reason categories are preserved in
 the output. Missing flags/reasons stay unknown; successful recovery never clears
 truncation. Conflicting flags and reasons are retained rather than normalized away.
 
-Bounds: 64 MiB report, 256 paths, 256 MiB binary, two million methods/instructions,
+Repeat `--paths` to consolidate up to 32 native reports against the same explicitly
+admitted binary. Input order is retained. Each input keeps its own hash, native
+source provenance, query, coverage, limitations and truncation diagnostics. Rows
+are keyed by input ordinal plus path ID, not deduplicated across roots or spliced
+into new routes. Empty roots remain visible. Duplicate files/content are refused.
+Repeated literals are not unique procedure counts. Parameters, connection and
+transaction evidence must be inspected in the native evidence; this projection
+does not recover them. Schema contracts and migration decisions remain undecided.
+
+Bounds: 64 MiB aggregate report bytes, 256 paths per report, 1024 total rows,
+256 MiB binary, two million methods/instructions,
 32768 UTF-16 units per literal. Overlength, symbolic, missing or nonunique matches
 remain unavailable. Hash algorithm mirrors the scanner's exact UTF-16 code-unit
 identity (including unpaired surrogates), not UTF-8 or replacement normalization.

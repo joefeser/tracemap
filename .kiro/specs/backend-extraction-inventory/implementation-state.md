@@ -604,3 +604,23 @@ limits. The work-machine prompt explicitly requires these fields in delivery and
 reuses the same retained JSON/binary, without rescanning. Warning-as-error utility
 build and all 14 native public guards passed locally, including four new truncation
 regressions. No extraction or route semantics changed; no private input used.
+
+### Consolidated local SQL evidence inventory
+
+RecoverSqlCommandText now accepts repeated native --paths inputs against one
+explicitly admitted binary. It preserves each input hash, query, native source
+provenance, coverage, limitations and truncation, plus row-level classification,
+confidence, notes and terminal limitations. Empty roots remain visible; identical
+input files/content are refused. Rows stay input/path scoped, never deduplicated
+into procedure counts or spliced into routes. Contract/schema decisions remain
+explicitly unsupplied; parameter/connection/transaction evidence is not recovered
+by this projection. No new extraction or completeness claims.
+
+Bounds are 32 reports, 64 MiB aggregate report bytes, 256 paths per report and
+1024 total rows. Existing binary/literal/work limits and disclosure consent remain.
+Local warning-as-error build passed with zero warnings/errors; 20 native recovery
+guards and 15 report-helper guards passed. A public three-root native smoke retained
+one constant match, one symbolic route and one empty root in the consolidated
+Markdown. No application methods or SQL executed. Windows revalidation of this
+increment is not yet recorded. The new consolidate-local-sql-inventory prompt
+reuses existing private inputs without another discovery/build/scan cycle.

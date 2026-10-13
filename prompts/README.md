@@ -1,5 +1,8 @@
 # Private exchange prompts
 
+After recovery, use [Consolidate local SQL inventory](consolidate-local-sql-inventory.md)
+to combine the existing native root reports into one private evidence inventory.
+
 After compiled SQL route reconciliation, use
 [Recover local SQL command literals](recover-local-sql-command-literals.md) for
 explicit local-only literal recovery and native truncation diagnostics.
