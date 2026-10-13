@@ -31,6 +31,18 @@ try
     using var report = JsonDocument.Parse(reportBytes);
     var paths = report.RootElement.GetProperty("paths");
     if (paths.GetArrayLength() > 256) throw new InvalidDataException();
+    var truncation = "unknown (native flag unavailable)";
+    if (report.RootElement.TryGetProperty("summary", out var summary)
+        && summary.ValueKind == JsonValueKind.Object && summary.TryGetProperty("truncated", out var flag))
+        truncation = flag.ValueKind switch { JsonValueKind.True => "true", JsonValueKind.False => "false", _ => truncation };
+    var reasons = new SortedSet<string>(StringComparer.Ordinal);
+    if (report.RootElement.TryGetProperty("gaps", out var gaps) && gaps.ValueKind == JsonValueKind.Array)
+        foreach (var gap in gaps.EnumerateArray())
+            if (gap.TryGetProperty("gapKind", out var gapKind) && gapKind.GetString() == "TruncatedByLimit")
+                reasons.Add(gap.TryGetProperty("reason", out var reason) && reason.ValueKind == JsonValueKind.String
+                    && !string.IsNullOrWhiteSpace(reason.GetString()) ? reason.GetString()! : "reason unavailable");
+    var reasonText = reasons.Count > 0 ? string.Join(", ", reasons)
+        : truncation == "false" ? "none recorded (not completeness proof)" : "reason unavailable in retained diagnostics";
     var rows = new List<(string Path, string State, string Identity, string Type)>();
     foreach (var path in paths.EnumerateArray())
     {
@@ -90,6 +102,9 @@ try
         $"Cecil SHA-256: {Hash(File.ReadAllBytes(typeof(AssemblyDefinition).Assembly.Location))}",
         $"Bounded path-report input SHA-256: {Hash(reportBytes)}",
         $"Explicit binary input SHA-256: {expected}",
+        $"Original query truncated: {truncation}",
+        $"Original query truncation reasons: {Cell(reasonText)}",
+        "Recovery covers only supplied retained paths. Successful literal recovery never clears original query truncation, proves complete enumeration, or upgrades historical/current-build provenance. Missing reason entries do not mean no truncation. If flag and reason entries conflict, retain both and reconcile the native evidence.",
         "Bounds: 64 MiB path report; 256 paths; 256 MiB binary; two million inspected methods/instructions; 32768 UTF-16 units per literal. Overlength literals are unavailable, not absent. Symbolic/dynamic expressions are not evaluated.", "",
         "| Path | Command type evidence | Text evidence state | Local literal / status |", "| --- | --- | --- | --- |" };
     foreach (var row in rows)

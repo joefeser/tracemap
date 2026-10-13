@@ -593,3 +593,14 @@ report and matching fixture DLL hashes remained unchanged. No private inputs or
 application/database execution. Local final ten/fifteen guards also passed.
 Private literal recovery and historical binary availability remain work-machine
 checks; this receipt is not private application acceptance.
+
+### Recovery report truncation preservation
+
+The literal-recovery Markdown now copies the original native query truncation
+flag and sorted TruncatedByLimit reasons. A true flag with no reasons stays
+truncated with reason unavailable; a missing flag stays unknown. False flags with
+reason entries preserve the conflict. Recovery success cannot clear enumeration
+limits. The work-machine prompt explicitly requires these fields in delivery and
+reuses the same retained JSON/binary, without rescanning. Warning-as-error utility
+build and all 14 native public guards passed locally, including four new truncation
+regressions. No extraction or route semantics changed; no private input used.
