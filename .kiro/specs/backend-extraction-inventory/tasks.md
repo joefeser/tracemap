@@ -81,3 +81,4 @@
 - [x] Preserve original query truncation and unknown/conflicting diagnostics in literal recovery output and prompt; pin four regression cases.
 - [x] Consolidate existing native SQL root reports into one opt-in local inventory, preserving input-scoped identity, coverage, truncation and unresolved contract fields; add bounded multi-input guards.
 - [x] Add optional bounded local procedure/parameter catalog matching, with exact-only matching, ambiguous-entry controls and synthetic coverage; no database access or inferred contracts.
+- [x] Expand client grouped reports and local SQL inventories into evidence-linked per-operation human verification and implementation handoffs; keep all checks pending and preserve legacy machine schema.

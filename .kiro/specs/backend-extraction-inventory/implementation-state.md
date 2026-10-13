@@ -640,3 +640,21 @@ missing input without another scan. Windows validation remains pending.
 Local warning-as-error diagnostic build passed with zero warnings/errors;
 29 native public-fixture diagnostic tests and 15 wrapper-report guards passed.
 No private inputs, application execution or database connections were used.
+
+### Client verification handoff
+
+Inspection found existing database extraction metadata and broad contract-review
+obligations already present in the grouped handoff. The missing delivery was an
+actionable evidence-linked checklist, not proof that all SQL was absent. Grouped
+HTML now renders per-operation tasks for entry/identity bridges, candidate paths,
+command contracts, argument/results mapping, authorization, transactions and human
+decisions. Local literal inventories render per-path private checklists, selecting
+unresolved-expression review when no constant identity is retained. Checks never
+auto-complete from a catalog or static path. Client tracker decisions remain
+separate, with reviewer, evidence and API acceptance required per slice.
+No machine schema or extraction evidence is upgraded; historical handoff validation
+remains unchanged. Source-to-compiled wiring and dynamic SQL remain genuine gaps,
+not silently fixed by reporting. Platform revalidation on Windows remains pending.
+Local validation: 35 grouped-handoff tests, 39 SQL extraction/report/sample tests,
+29 native literal-inventory guards and 15 wrapper-report guards passed. Diagnostic
+and reporting/test builds passed with warnings-as-errors. No private inputs used.

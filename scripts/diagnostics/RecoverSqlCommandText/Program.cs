@@ -189,6 +189,21 @@ try
         }
         lines.Add($"| {row.Input} / {Cell(row.Path)} | {Cell(row.Caller)} | {Cell(row.Terminal)} / {Cell(row.Evidence)} | {Cell(row.Type)} | {Cell(row.State)} | {Cell(value)} | {Cell(row.Limits)} | not established by literal projection; inspect native evidence | {Cell(contract)} |");
     }
+    lines.AddRange(new[] { "", "## Per-path human verification handoff", "",
+        "Rule: workflow.backend-extraction.retained-report.v1. These are pending review obligations, not new extracted facts or implementation approval. Keep reviewer decisions in the private client work tracker. Each input/path below refers to the evidence row above; repeated paths are not distinct business operations.", "" });
+    foreach (var row in rows)
+    {
+        lines.Add($"### Input {row.Input} / {Cell(row.Path)}");
+        lines.Add("- [ ] Verify page/event or other entry point and identity bridge to this caller; preserve historical/current-build and truncation limits.");
+        lines.Add(row.Identity.Length == 0
+            ? "- [ ] Inspect unresolved command expression at the evidenced callsite; record constant/dynamic/unknown with evidence, without guessing."
+            : "- [ ] Verify recovered command/procedure candidate against authorized local schema evidence; a literal or catalog match alone is not verification.");
+        lines.Add("- [ ] Map caller arguments to parameter names, types, directions, null/default behavior; document results, return values and affected rows.");
+        lines.Add("- [ ] Verify database/connection selection, transactions, validation, authorization and failure behavior.");
+        lines.Add("- [ ] Record reviewer and evidence references, retain/replace/retire decision, API acceptance tests and implementation approval for this slice.");
+        lines.Add("Reviewer: unassigned. Verification evidence: not supplied. Decision: undecided. Implementation acceptance: pending. Other slices need not be complete before this slice is reviewed.");
+        lines.Add("");
+    }
     using var writer = new StreamWriter(new FileStream(output, FileMode.CreateNew, FileAccess.Write, FileShare.None));
     foreach (var line in lines) writer.WriteLine(line);
     Console.WriteLine($"Local literal report written; paths={rows.Count}. Do not upload this file.");

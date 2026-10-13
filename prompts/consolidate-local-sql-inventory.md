@@ -37,6 +37,14 @@ dotnet scripts/diagnostics/RecoverSqlCommandText/bin/Debug/net10.0/RecoverSqlCom
    procedure existence, parameter contract, connection, transaction or runtime use
    is established by this utility. Do not invent these fields or label the
    inventory complete. No private database/schema collection is requested here.
+6. Use the generated per-path human verification handoff as the client task list.
+   Transfer each relevant slice's checks and evidence references to the local
+   client work tracker. Keep checks pending until a human supplies verification
+   evidence, reviewer identity and a retain/replace/retire decision. A supplied
+   catalog does not automatically complete a check. Record API acceptance tests
+   and approval per slice; do not wait for whole-application completeness or claim
+   the report itself authorizes implementation. Do not create external tickets
+   or transmit private data without separate human authorization.
 
 Return only human-approved aggregate counts: inputs processed, retained rows,
 constant-match rows, symbolic/unavailable rows, failures, and per-root truncation

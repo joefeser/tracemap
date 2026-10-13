@@ -7698,6 +7698,7 @@ rules:
     emits:
       - backendExtraction
     limitations:
+      - Human-readable reports expand each operation into pending verification tasks linked to its evidence references and path variants. Tasks are review obligations, not extracted facts or approval; reviewer decisions must be recorded separately. Catalog matches do not automatically complete checks.
       - This is retained-query evidence, not independent full-index discovery or a complete application inventory. Unsupported service families and operations outside the query may be absent.
       - Full node-record references preserve distinct evidence and command bindings; rows do not count unique business operations or stored procedures.
       - Query roots are not verified UI events. Review-needed classifications, candidate edges, ambiguous candidate counts and Tier3 or Tier4 evidence remain candidate variants. Mixed retained/candidate operations are labeled explicitly. No retained path does not mean unused.
