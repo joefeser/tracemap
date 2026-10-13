@@ -53,6 +53,8 @@ public static partial class VisualBasicSyntaxExtractor
             ["parameterTypeEvidence"] = "unavailable",
             ["parameterDirectionEvidence"] = "unknown",
             ["commandAssociation"] = "unresolved",
+            ["commandTextTraceEvidence"] = "unavailable",
+            ["commandTextTraceReason"] = "constructor-origin-not-established",
             ["commandReceiverAssociation"] = "unresolved",
             ["commandExecutionEvidence"] = "unresolved",
             ["laterExecutionSyntax"] = "not-observed",
@@ -181,6 +183,7 @@ public static partial class VisualBasicSyntaxExtractor
             properties["commandTextOriginExpressionHash"] = FactFactory.Hash(textArgument.Expression.ToString(), 64);
             properties["commandTextOriginExpressionKind"] = textArgument.Expression.Kind().ToString();
             properties["commandTextOriginStartLine"] = (textArgument.GetLocation().GetLineSpan().StartLinePosition.Line + 1).ToString(System.Globalization.CultureInfo.InvariantCulture);
+            TraceLocalCommandText(statements, statements.IndexOf(declaration), textArgument.Expression, properties);
         }
         var valueObservations = 0;
         properties["parameterValueObservationCount"] = "0";
@@ -252,5 +255,74 @@ public static partial class VisualBasicSyntaxExtractor
             return;
         }
         properties["commandAssociationReason"] = "no-following-execution";
+    }
+
+    private static void TraceLocalCommandText(SyntaxList<StatementSyntax> statements, int declarationIndex,
+        ExpressionSyntax expression, SortedDictionary<string, string> properties)
+    {
+        properties["commandTextTraceEvidence"] = "unresolved";
+        properties["commandTextTraceReason"] = "unsupported-origin-expression";
+        var nodes = 0;
+        string? Constant(ExpressionSyntax node)
+        {
+            if (++nodes > 128) return null;
+            if (node is LiteralExpressionSyntax literal && literal.Token.Value is string text)
+                return text.Length <= 16384 ? text : null;
+            if (node is ParenthesizedExpressionSyntax parenthesized) return Constant(parenthesized.Expression);
+            if (node is BinaryExpressionSyntax binary && binary.IsKind(SyntaxKind.ConcatenateExpression))
+            {
+                var left = Constant(binary.Left);
+                var right = Constant(binary.Right);
+                return left is not null && right is not null && left.Length + right.Length <= 16384 ? left + right : null;
+            }
+            return null;
+        }
+        void Complete(string text, SyntaxNode source, int count)
+        {
+            properties["commandTextTraceEvidence"] = "bounded-local-constant-syntax-candidate";
+            properties["commandTextTraceReason"] = "literal-assignment-and-concatenation-only";
+            properties["commandTextTraceHash"] = FactFactory.Hash(text, 64);
+            properties["commandTextTraceStartLine"] = (source.GetLocation().GetLineSpan().StartLinePosition.Line + 1).ToString(System.Globalization.CultureInfo.InvariantCulture);
+            properties["commandTextTraceStatementCount"] = count.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        }
+        if (expression is not IdentifierNameSyntax identifier)
+        {
+            var direct = Constant(expression);
+            if (direct is not null) Complete(direct, expression, 0);
+            return;
+        }
+        var pieces = new List<string>();
+        var length = 0;
+        for (var i = declarationIndex - 1; i >= 0; i--)
+        {
+            var count = declarationIndex - i;
+            if (count > 64) { properties["commandTextTraceReason"] = "statement-limit"; return; }
+            ExpressionSyntax? value = null;
+            var append = false;
+            if (statements[i] is AssignmentStatementSyntax assignment
+                && assignment.Left is IdentifierNameSyntax target
+                && target.Identifier.ValueText.Equals(identifier.Identifier.ValueText, StringComparison.OrdinalIgnoreCase))
+            {
+                append = assignment.IsKind(SyntaxKind.ConcatenateAssignmentStatement) || assignment.IsKind(SyntaxKind.AddAssignmentStatement);
+                if (append || assignment.IsKind(SyntaxKind.SimpleAssignmentStatement)) value = assignment.Right;
+            }
+            else if (statements[i] is LocalDeclarationStatementSyntax local && local.Declarators.Count == 1
+                && local.Declarators[0].Names.Count == 1
+                && local.Declarators[0].Names[0].Identifier.ValueText.Equals(identifier.Identifier.ValueText, StringComparison.OrdinalIgnoreCase))
+                value = local.Declarators[0].Initializer?.Value;
+            if (value is null) { properties["commandTextTraceReason"] = "intervening-or-unsupported-statement"; return; }
+            var part = Constant(value);
+            if (part is null) { properties["commandTextTraceReason"] = "nonconstant-or-expression-limit"; return; }
+            length += part.Length;
+            if (length > 16384) { properties["commandTextTraceReason"] = "text-length-limit"; return; }
+            pieces.Add(part);
+            if (!append)
+            {
+                pieces.Reverse();
+                Complete(string.Concat(pieces), statements[i], count);
+                return;
+            }
+        }
+        properties["commandTextTraceReason"] = "initial-assignment-not-found";
     }
 }

@@ -6,6 +6,26 @@ namespace TraceMap.Tests;
 
 public sealed class ProjectlessParameterCandidateTests
 {
+    [Theory]
+    [InlineData("sql &= \" WHERE PublicId = @PublicId\"", true)]
+    [InlineData("sql += \" WHERE PublicId = @PublicId\"", true)]
+    [InlineData("sql &= (\" WHERE PublicId\" & \" = @PublicId\")", true)]
+    [InlineData("sql &= context.Value", false)]
+    [InlineData("UnknownCall()", false)]
+    [InlineData("If True Then\nsql = \"other\"\nEnd If", false)]
+    public void Command_text_trace_is_bounded_constant_syntax_not_raw_sql(string middle, bool expected)
+    {
+        using var temp = new TempDirectory();
+        File.WriteAllText(Path.Combine(temp.Path, "Input.vb"), $"Imports System.Data\nPublic Class Example\nSub Run(connection As Object, context As Object)\nTry\nDim sql As String = \"SELECT PublicValue FROM PublicRows\"\n{middle}\nDim command As SqlClient.SqlCommand = New SqlClient.SqlCommand(sql, connection)\ncommand.Parameters.Add(\"@PublicId\", SqlDbType.Int)\ncommand.ExecuteNonQuery()\nCatch\nEnd Try\nEnd Sub\nEnd Class");
+        WebFormsWizardNativeTests.InitGit(temp.Path);
+        var scan = ScanEngine.Scan(new ScanOptions(temp.Path, Path.Combine(temp.Path, "out")));
+        var candidate = Assert.Single(scan.Facts, f => f.FactType == FactTypes.DatabaseParameterCandidate);
+        Assert.Equal(expected ? "bounded-local-constant-syntax-candidate" : "unresolved", candidate.Properties["commandTextTraceEvidence"]);
+        if (expected) Assert.Equal(FactFactory.Hash("SELECT PublicValue FROM PublicRows WHERE PublicId = @PublicId", 64), candidate.Properties["commandTextTraceHash"]);
+        else Assert.False(candidate.Properties.ContainsKey("commandTextTraceHash"));
+        Assert.DoesNotContain("SELECT PublicValue", JsonSerializer.Serialize(candidate));
+    }
+
     [Fact]
     public void Value_observations_preserve_repeats_and_exclude_other_or_dynamic_indexes()
     {
