@@ -582,4 +582,14 @@ beside each selection; a truncated flag without reasons stays explicitly unknown
 This exposes diagnostics without silently raising graph limits. No core extractor
 or traversal semantics changed. Local validation includes warning-as-error utility
 build, native public fixture literal recovery/negative controls, and 15 helper
-guards. Windows validation is pending for this increment.
+guards.
+
+Final native guards also cover inert Markdown rendering and explicit UTF-16
+surrogate escapes. Personal Windows validation passed at
+`9d61f97a2d9ce0a01ea7223be43a15a6d17a9bea`: utility build zero warnings/errors
+with warnings-as-errors; ten command-text guards and fifteen wrapper-report
+guards passed using SDK 10.0.302/reference pack 10.0.10. Reused public native
+report and matching fixture DLL hashes remained unchanged. No private inputs or
+application/database execution. Local final ten/fifteen guards also passed.
+Private literal recovery and historical binary availability remain work-machine
+checks; this receipt is not private application acceptance.
