@@ -794,3 +794,16 @@ Native sample: 93 facts, four later-call observations (one unknown-effects warni
 one reassignment stop; stronger execution evidence remains unresolved for the
 complex-value and reassignment cases. No fixture/SQL execution. Windows/full matrix
 validation remains deferred.
+
+### 2026-10-13: value expression and constructor origin observations
+
+vb-syntax/0.4.9 adds bounded per-parameter value assignment observations using exact
+literal index and same receiver syntax. Hash/kind/location only; repeated assignments
+remain separate, dynamic indexes and other receiver text are excluded. Constructor
+first-argument hash/kind/location is origin syntax, not overload proof or recovered SQL.
+Reports include pending value/text/schema/transaction review checks; work prompt
+keeps raw expressions and private hashes local. No identity/reachability upgrade.
+Warning-as-error surrounding suite: 92 passed. Native synthetic sample: 93 facts,
+two value observations and two constructor-origin witnesses; remaining candidates
+retain zero observations/unavailable origin. No application or SQL execution.
+Windows and full matrix remain deferred.

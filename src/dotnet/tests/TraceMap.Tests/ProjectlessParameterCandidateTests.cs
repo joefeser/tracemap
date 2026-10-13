@@ -6,6 +6,21 @@ namespace TraceMap.Tests;
 
 public sealed class ProjectlessParameterCandidateTests
 {
+    [Fact]
+    public void Value_observations_preserve_repeats_and_exclude_other_or_dynamic_indexes()
+    {
+        using var temp = new TempDirectory();
+        File.WriteAllText(Path.Combine(temp.Path, "Input.vb"), "Imports System.Data\nImports System.Data.SqlClient\nPublic Class Example\nSub Run(other As SqlCommand, key As String)\nDim command As New SqlCommand()\ncommand.Parameters.Add(\"@Public\", SqlDbType.Int)\nother.Parameters(\"@Public\").Value = 99\ncommand.Parameters(key).Value = 98\ncommand.Parameters(\"@Different\").Value = 97\ncommand.Parameters(\"@Public\").Value = 1\ncommand.Parameters(\"@Public\").Value = 2\ncommand.ExecuteNonQuery()\nEnd Sub\nEnd Class");
+        WebFormsWizardNativeTests.InitGit(temp.Path);
+        var scan = ScanEngine.Scan(new ScanOptions(temp.Path, Path.Combine(temp.Path, "out")));
+        var candidate = Assert.Single(scan.Facts, f => f.FactType == FactTypes.DatabaseParameterCandidate);
+        Assert.Equal("2", candidate.Properties["parameterValueObservationCount"]);
+        Assert.Equal(FactFactory.Hash("1", 64), candidate.Properties["parameterValueObservation0ExpressionHash"]);
+        Assert.Equal(FactFactory.Hash("2", 64), candidate.Properties["parameterValueObservation1ExpressionHash"]);
+        Assert.Equal("unavailable", candidate.Properties["commandTextOriginEvidence"]);
+        Assert.Equal("unresolved", candidate.Properties["commandExecutionEvidence"]);
+    }
+
     [Theory]
     [InlineData("command = New SqlCommand()", "command.ExecuteNonQuery()", "receiver-reassigned")]
     [InlineData("If True Then\ncommand.ExecuteNonQuery()\nEnd If", "", "unsupported-statement-boundary")]
@@ -59,6 +74,11 @@ public sealed class ProjectlessParameterCandidateTests
         var scan = ScanEngine.Scan(new ScanOptions(temp.Path, Path.Combine(temp.Path, "out")));
         var candidates = scan.Facts.Where(f => f.FactType == FactTypes.DatabaseParameterCandidate).ToArray();
         Assert.Equal(2, candidates.Length);
+        Assert.Equal(new[] { "0", "1" }, candidates.Select(c => c.Properties["parameterValueObservationCount"]).OrderBy(x => x).ToArray());
+        var observed = Assert.Single(candidates, c => c.Properties["parameterValueObservationCount"] == "1");
+        Assert.Equal(FactFactory.Hash(value, 64), observed.Properties["parameterValueObservation0ExpressionHash"]);
+        Assert.Equal("constructor-first-argument-syntax-only", observed.Properties["commandTextOriginEvidence"]);
+        Assert.DoesNotContain("PublicProcedure", JsonSerializer.Serialize(candidates));
         foreach (var candidate in candidates)
         {
             Assert.Equal("syntax-local-declaration-candidate", candidate.Properties["commandReceiverAssociation"]);

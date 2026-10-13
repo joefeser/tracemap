@@ -1,6 +1,6 @@
 # Inspect projectless SQL parameter candidates locally
 
-Use the published scanner with vb-syntax/0.4.8 or later. This increment adds
+Use the published scanner with vb-syntax/0.4.9 or later. This increment adds
 DatabaseParameterCandidate facts for explicit SqlParameter constructors and
 typed command.Parameters.Add(name, SqlDbType) calls, not automatic
 wrapper-to-procedure argument mapping.
@@ -34,6 +34,13 @@ a later call location within the bounded same-block window even across expressio
 with unknown effects. Read laterExecutionSyntaxReason and its location fields;
 never interpret this lexical observation as instance continuity, reachability or
 procedure verification. The stronger commandExecutionEvidence can remain unresolved.
+Inspect parameterValueObservationCount and the indexed expression hashes/kinds/source
+locations locally. These observations match receiver text and exact literal index,
+not runtime parameter identity; repeated assignments remain separate observations.
+Inspect commandTextOriginEvidence: constructor-first-argument-syntax-only records
+only a hash/kind/location, not resolved SQL text or overload proof. Use the report's
+pending review checklist; do not mark contracts verified from these fields. Return
+only approved aggregate counts/statuses, never expression text or private hashes.
 Before any scan, confirm the saved project configuration and resolved source root
 locally against the user's intended project. Do not infer the project from prior
 debugging context or scan a different registered repository. Named

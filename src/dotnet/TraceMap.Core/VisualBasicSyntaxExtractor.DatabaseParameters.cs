@@ -1,4 +1,5 @@
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.VisualBasic;
 using Microsoft.CodeAnalysis.VisualBasic.Syntax;
 
 namespace TraceMap.Core;
@@ -169,6 +170,20 @@ public static partial class VisualBasicSyntaxExtractor
         properties["commandReceiverAssociation"] = "syntax-local-declaration-candidate";
         properties["commandDeclarationStartLine"] = (declaration.GetLocation().GetLineSpan().StartLinePosition.Line + 1).ToString(System.Globalization.CultureInfo.InvariantCulture);
         properties["commandDeclarationSpanStart"] = declaration.SpanStart.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        var declarator = declaration.Declarators[0];
+        var constructor = declarator.AsClause is AsNewClauseSyntax clause
+            ? clause.NewExpression as ObjectCreationExpressionSyntax : declarator.Initializer?.Value as ObjectCreationExpressionSyntax;
+        properties["commandTextOriginEvidence"] = "unavailable";
+        if (constructor?.ArgumentList is { Arguments.Count: > 0 } constructorArguments
+            && constructorArguments.Arguments[0] is SimpleArgumentSyntax textArgument)
+        {
+            properties["commandTextOriginEvidence"] = "constructor-first-argument-syntax-only";
+            properties["commandTextOriginExpressionHash"] = FactFactory.Hash(textArgument.Expression.ToString(), 64);
+            properties["commandTextOriginExpressionKind"] = textArgument.Expression.Kind().ToString();
+            properties["commandTextOriginStartLine"] = (textArgument.GetLocation().GetLineSpan().StartLinePosition.Line + 1).ToString(System.Globalization.CultureInfo.InvariantCulture);
+        }
+        var valueObservations = 0;
+        properties["parameterValueObservationCount"] = "0";
         // Independent lexical observation only. Do not upgrade the execution/instance
         // association below when intervening expressions have unknown effects.
         properties["laterExecutionSyntaxReason"] = "no-call-in-bounded-same-block-window";
@@ -177,6 +192,27 @@ public static partial class VisualBasicSyntaxExtractor
         {
             if (i - at > 64) { properties["laterExecutionSyntaxReason"] = "local-window-limit"; break; }
             var candidate = statements[i];
+            if (candidate is AssignmentStatementSyntax valueAssignment
+                && valueAssignment.IsKind(Microsoft.CodeAnalysis.VisualBasic.SyntaxKind.SimpleAssignmentStatement)
+                && valueAssignment.Left is MemberAccessExpressionSyntax valueMember
+                && valueMember.Name.Identifier.ValueText.Equals("Value", StringComparison.OrdinalIgnoreCase)
+                && valueMember.Expression is InvocationExpressionSyntax indexedParameter
+                && indexedParameter.Expression is MemberAccessExpressionSyntax parameters
+                && Same(parameters.Expression) && parameters.Name.Identifier.ValueText.Equals("Parameters", StringComparison.OrdinalIgnoreCase)
+                && indexedParameter.ArgumentList is { Arguments.Count: 1 } indexArguments
+                && indexArguments.Arguments[0] is SimpleArgumentSyntax { NameColonEquals: null, Expression: LiteralExpressionSyntax indexLiteral }
+                && indexLiteral.Token.Value is string indexName
+                && add.ArgumentList?.Arguments.FirstOrDefault() is SimpleArgumentSyntax { Expression: LiteralExpressionSyntax nameLiteral }
+                && nameLiteral.Token.Value is string parameterName && indexName.Equals(parameterName, StringComparison.Ordinal))
+            {
+                var prefix = "parameterValueObservation" + valueObservations.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                properties[prefix + "ExpressionHash"] = FactFactory.Hash(valueAssignment.Right.ToString(), 64);
+                properties[prefix + "ExpressionKind"] = valueAssignment.Right.Kind().ToString();
+                properties[prefix + "StartLine"] = (valueAssignment.GetLocation().GetLineSpan().StartLinePosition.Line + 1).ToString(System.Globalization.CultureInfo.InvariantCulture);
+                properties[prefix + "SpanStart"] = valueAssignment.SpanStart.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                properties["parameterValueObservationCount"] = (++valueObservations).ToString(System.Globalization.CultureInfo.InvariantCulture);
+                properties["parameterValueEvidence"] = "same-receiver-and-exact-literal-index-syntax-only";
+            }
             if (candidate is ExpressionStatementSyntax { Expression: InvocationExpressionSyntax call }
                 && call.Expression is MemberAccessExpressionSyntax member && Same(member.Expression)
                 && new[] { "ExecuteScalar", "ExecuteNonQuery", "ExecuteReader", "ExecuteXmlReader" }.Contains(member.Name.Identifier.ValueText, StringComparer.OrdinalIgnoreCase)
