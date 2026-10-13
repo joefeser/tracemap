@@ -4973,6 +4973,18 @@ rules:
       - Creation candidates prove syntax presence only; constructor identity, executed constructor, and runtime allocation are not claimed.
       - In an otherwise semantically analyzed file, this rule is used only when the created type is known but its constructor is unresolved, and a `CallSiteSemanticResolutionUnavailable` Tier4 gap accompanies it.
 
+  - id: vb.syntax.database-parameter.v1
+    name: Projectless VB SQL parameter constructor candidate
+    description: Records explicit SqlParameter construction with source spans, argument hashes and bounded positional name/type syntax witnesses.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - DatabaseParameterCandidate
+    limitations:
+      - Only System.Data.SqlClient and Microsoft.Data.SqlClient SqlParameter type syntax is recognized. Unique file-local import/alias resolution or explicit qualification is required; same-file shadows and ambiguous imports are excluded. Other-file shadows cannot be excluded without semantics.
+      - At most 16 constructor arguments are inspected within the existing per-file fact budget. Names and expressions are hashed, never emitted as raw parameter values. Named/reordered arguments do not receive positional interpretation.
+      - Only explicit System.Data.SqlDbType enum syntax yields a type candidate. No overload/provider/compiler identity, direction default, command attachment, wrapper propagation, database declaration or runtime value is inferred.
+      - Candidate facts are independent construction evidence, not database calls or unique procedure parameters. Reports retain source/fact references for human review; absent candidates do not prove no parameters.
+
   - id: vb.syntax.database-operation.v1
     name: Visual Basic syntax database operation
     description: Bounded explicit-receiver SQL command, adapter and bulk API syntax candidates, including projectless App_Code Web Sites.

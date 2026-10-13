@@ -157,6 +157,14 @@ public static class MarkdownReportWriter
 
         lines.Add("The Database Calls section lists selected fact families, not all operation candidates. Empty results do not prove absence; see Database Operation Candidates below and Analysis Coverage above.");
         AddDatabaseOperationCandidates(lines, result);
+        var parameterCandidates = result.Facts.Where(f => f.FactType == FactTypes.DatabaseParameterCandidate)
+            .OrderBy(f => f.Evidence.FilePath, StringComparer.Ordinal).ThenBy(f => f.Evidence.StartLine)
+            .ThenBy(f => f.FactId, StringComparer.Ordinal).ToArray();
+        lines.AddRange(["", "## Database Parameter Candidates", "",
+            "Constructor syntax evidence only, not procedure contracts. Command association and direction remain unresolved; absence of candidates does not prove absence of parameters.",
+            $"Showing {Math.Min(50, parameterCandidates.Length)} of {parameterCandidates.Length}; remaining evidence stays in facts.ndjson and index.sqlite."]);
+        foreach (var parameter in parameterCandidates.Take(50))
+            lines.Add($"- {parameter.EvidenceTier}; rule `{parameter.RuleId}`; `{parameter.Evidence.FilePath}:{parameter.Evidence.StartLine}`; name evidence `{parameter.Properties.GetValueOrDefault("parameterNameEvidence")}`; type `{parameter.Properties.GetValueOrDefault("parameterTypeName", "unavailable")}`; direction unknown; command association unresolved; fact `{parameter.FactId}`.");
         AddSqlExecutionContext(lines, result);
         AddSqlProtectedMaterial(lines, result);
         AddPostgresArchiveLinks(lines, result);

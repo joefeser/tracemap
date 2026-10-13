@@ -4621,6 +4621,12 @@ The legacy HTTP fixture TFMs are **representative test targets, not confirmed ap
 
 ## SQL/database migration matrix (#864)
 
+Run `ProjectlessParameterCandidateTests` for VB SqlParameter constructor
+syntax witnesses: qualification/import/alias positives, shadows and unrelated
+types, hashed names, dynamic/named argument unknowns and report references.
+These independent construction candidates do not establish command attachment
+or wrapper argument propagation. They are not procedure parameter contracts.
+
 The separate compiled-caller/wrapper acceptance suite is `SqlWrapperRouteTests`.
 Run `python3 scripts/validation/test_sql_wrapper_report.py` for local report
 failure/bounds/provenance guards. The helper consumes an existing closed index

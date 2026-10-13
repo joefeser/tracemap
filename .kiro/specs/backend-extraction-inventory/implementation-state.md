@@ -670,3 +670,22 @@ This is a reporting/procedure correction, not a new argument-flow extractor.
 Warning-as-error diagnostic build passed; 31 native public-fixture guards passed,
 including missing-object handling and parameter evidence without a catalog.
 Windows revalidation remains pending. No private content or database access used.
+
+### Projectless VB parameter construction extraction
+
+vb-syntax/0.4.2 adds independent DatabaseParameterCandidate facts for explicit
+SqlParameter constructor syntax under vb.syntax.database-parameter.v1. Facts carry
+caller/source spans, hashed names/argument expressions and explicit SqlDbType
+syntax candidates. Unique import/alias resolution or qualification is required;
+ambiguous import sets are conservatively excluded. Named arguments and dynamic
+expressions do not receive guessed types. Direction and command attachment remain
+unknown; no wrapper/procedure parameter mapping or schema verification is claimed.
+Scan Markdown includes bounded candidate rows with fact references. Added public
+projectless fixture and nine focused positive/negative tests to Windows CI.
+
+Local warning-as-error tests passed: 73 across projectless parameter/SQL reporting,
+Markdown reporting, command state and VB extraction; eight independent SQL oracle
+tests passed. CLI warning-as-error build and native projectless sample scan passed,
+retaining two independent parameter candidates (one explicit type, one unknown).
+Full 96-output SQL smoke and exact-head Windows validation are deferred to CI;
+they have not been claimed for this increment. No fixture execution/database use.

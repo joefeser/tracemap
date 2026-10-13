@@ -1,5 +1,9 @@
 # Private exchange prompts
 
+For automatic projectless constructor evidence, use
+[Inspect projectless SQL parameter candidates](inspect-projectless-sql-parameter-candidates.md).
+This does not replace schema verification or establish wrapper argument mapping.
+
 After consolidation, use [Verify one local SQL contract](verify-one-local-sql-contract.md)
 to prepare one evidence-backed contract review or precise owner questions, without
 another scan or automatic API mapping.

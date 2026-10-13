@@ -83,3 +83,4 @@
 - [x] Add optional bounded local procedure/parameter catalog matching, with exact-only matching, ambiguous-entry controls and synthetic coverage; no database access or inferred contracts.
 - [x] Expand client grouped reports and local SQL inventories into evidence-linked per-operation human verification and implementation handoffs; keep all checks pending and preserve legacy machine schema.
 - [x] Preserve native application command/parameter evidence in the local inventory independently of schema catalog availability; require targeted application review before owner escalation.
+- [x] Add projectless VB SqlParameter constructor candidates with hashed arguments, explicit type-syntax witnesses, negative controls and scan-report references; no inferred command/procedure binding.

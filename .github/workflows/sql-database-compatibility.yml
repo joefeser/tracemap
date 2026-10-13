@@ -22,7 +22,7 @@ jobs:
         with:
           python-version: '3.12'
       - name: Compile public fixtures and validate each source, IL and report case
-        run: dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter "FullyQualifiedName~SqlDatabaseMatrixTests|FullyQualifiedName~SqlWrapperRouteTests|FullyQualifiedName~ProjectlessSqlReportingTests|FullyQualifiedName~DatabaseCommandStateTests|FullyQualifiedName~GroupedCompiledPathHandoffTests|FullyQualifiedName~BackendExtractionSampleTests|FullyQualifiedName~VisualBasicExternalBoundaryTests|FullyQualifiedName~VisualBasicDataBoundaryTests|FullyQualifiedName~FrameworkSignatureCandidateTests" -warnaserror
+        run: dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter "FullyQualifiedName~ProjectlessParameterCandidateTests|FullyQualifiedName~SqlDatabaseMatrixTests|FullyQualifiedName~SqlWrapperRouteTests|FullyQualifiedName~ProjectlessSqlReportingTests|FullyQualifiedName~DatabaseCommandStateTests|FullyQualifiedName~GroupedCompiledPathHandoffTests|FullyQualifiedName~BackendExtractionSampleTests|FullyQualifiedName~VisualBasicExternalBoundaryTests|FullyQualifiedName~VisualBasicDataBoundaryTests|FullyQualifiedName~FrameworkSignatureCandidateTests" -warnaserror
       - name: Independent named oracle mutation guards
         run: python scripts/validation/test_sql_matrix_expectations.py
       - name: Selected-root SQL report guards
