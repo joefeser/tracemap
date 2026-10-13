@@ -35,3 +35,7 @@ connect to a database, export patches, commit or upload artifacts.
 Acceptance means the integrated report accurately exposes known paths, independent
 operations and remaining gaps. It does not require all conservative fields to be
 positive, and does not approve API implementation or retire existing behavior.
+
+If a locally known entry-to-operation chain remains unconnected, use
+[the complete-chain diagnostic prompt](diagnose-integrated-entry-path-gap.md)
+against the existing scan. Accurate gap reporting is not connectivity acceptance.
