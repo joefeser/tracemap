@@ -11,8 +11,13 @@ import json
 import pathlib
 import subprocess
 
-MAX_INDEX = 512 * 1024 * 1024
+DEFAULT_INDEX_MIB = 512
+MAX_INDEX_MIB = 16384
 MAX_REPORT = 64 * 1024 * 1024
+
+
+class ReportRefusal(ValueError):
+    """Public-safe refusal text; never includes private paths or selectors."""
 
 
 def digest(path):
@@ -69,8 +74,15 @@ def render_root(ordinal, selector, report):
 def run(args):
     index = args.index.resolve(strict=True)
     cli = args.cli.resolve(strict=True)
-    if index.stat().st_size > MAX_INDEX:
-        raise ValueError('Index exceeds the 512 MiB input limit; no report generated.')
+    max_index_mib = getattr(args, 'max_index_mib', DEFAULT_INDEX_MIB)
+    timeout_seconds = getattr(args, 'query_timeout_seconds', 120)
+    if type(max_index_mib) is not int or not 1 <= max_index_mib <= MAX_INDEX_MIB:
+        raise ReportRefusal('Invalid --max-index-mib: choose an integer from 1 through 16384.')
+    if type(timeout_seconds) is not int or not 1 <= timeout_seconds <= 3600:
+        raise ReportRefusal('Invalid --query-timeout-seconds: choose an integer from 1 through 3600.')
+    index_bytes = index.stat().st_size
+    if index_bytes > max_index_mib * 1024 * 1024:
+        raise ReportRefusal(f'IndexSizeLimitExceeded: selected limit is {max_index_mib} MiB. Explicitly raise --max-index-mib (maximum 16384) to reuse the retained index; no rescan or index reduction is required by this helper.')
     if not 1 <= len(args.root) <= 32 or any(not root.strip() or len(root) > 8192 for root in args.root):
         raise ValueError('Supply 1..32 explicit root identities, each 1..8192 characters.')
     if len(set(args.root)) != len(args.root):
@@ -90,7 +102,8 @@ def run(args):
              'Readable SQL/procedure contracts, parameter values/results, connection identity and transaction scope are unavailable unless separately established in the linked evidence. This report does not reconstruct SQL or decide what to migrate.', '',
              f'- Report script SHA-256: `{digest(pathlib.Path(__file__))}`',
              f'- Input index SHA-256: `{original}`', f'- Ordered selectors SHA-256: `{selectors_hash}`',
-             '- Bounds: 32 roots maximum; 20-hop depth, 256 paths and default CLI work/frontier bounds per root; 120-second timeout per root; 64 MiB native report limit.',
+             f'- Input index bytes: {index_bytes}; selected maximum: {max_index_mib} MiB.',
+             f'- Bounds: 32 roots maximum; 20-hop depth, 256 paths and default CLI work/frontier bounds per root; {timeout_seconds}-second timeout per root; 64 MiB native report limit.',
              '- These hashes bind the local files, not historical build authenticity. Keep this report, native evidence and private identities on the authorized machine.', '']
     lines += ['Tool inventory below covers top-level managed DLLs and deps/runtimeconfig manifests, not the installed dotnet host, OS or recursively resolved native libraries.', '']
     lines += [f'- Tool component {cell(name)} SHA-256: `{sha}`' for name, sha in identities.items()]
@@ -102,7 +115,7 @@ def run(args):
                    '--format', 'json', '--from-symbol', selector, '--exact-from-symbol',
                    '--to-surface', 'database-api', '--max-depth', '20', '--max-paths', '256']
         try:
-            completed = subprocess.run(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=120, check=False)
+            completed = subprocess.run(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=timeout_seconds, check=False)
             if completed.returncode:
                 raise ValueError('native paths command failed')
             artifact = folder / 'paths-report.json'
@@ -113,10 +126,12 @@ def run(args):
                 raise ValueError('native query identity mismatch')
             lines += render_root(ordinal, selector, report)
             lines += [f'Native report SHA-256: `{digest(artifact)}`', '']
-        except (OSError, ValueError, KeyError, TypeError, IndexError, subprocess.TimeoutExpired):
+        except (OSError, ValueError, KeyError, TypeError, IndexError, subprocess.TimeoutExpired) as error:
             failures += 1
             lines += [f'## Selection {ordinal}', '', f'Caller selector: {cell(selector)}', '',
                       'QUERY FAILED OR OUTPUT INVALID — no conclusion about SQL use. Inspect the retained local output and rerun the documented native command for diagnostics. This selection is not counted as empty.', '']
+            if isinstance(error, subprocess.TimeoutExpired):
+                lines += [f'Failure category: QueryTimeout; selected timeout {timeout_seconds} seconds. A larger explicit --query-timeout-seconds may be used (maximum 3600); graph traversal bounds remain unchanged.', '']
     final_components = sorted(p for p in cli.parent.iterdir() if p.is_file() and (p.suffix == '.dll' or p.name.endswith(('.deps.json', '.runtimeconfig.json'))))
     if digest(index) != original or components != final_components or identities != {p.name: digest(p) for p in components} or any(pathlib.Path(str(index) + suffix).exists() for suffix in ['-wal', '-journal']):
         raise ValueError('Input/tool changed during reporting; no consolidated report written. Retained outputs are unaccepted.')
@@ -132,9 +147,13 @@ def main():
     parser.add_argument('--cli', type=pathlib.Path, required=True, help='Built tracemap.dll')
     parser.add_argument('--root', action='append', required=True, help='Exact retained symbol identity; repeat for each authorized caller')
     parser.add_argument('--out', type=pathlib.Path, required=True, help='New local output directory')
+    parser.add_argument('--max-index-mib', type=int, default=DEFAULT_INDEX_MIB, help='Explicit index size admission limit, 1..16384 MiB (default 512); does not change graph traversal bounds')
+    parser.add_argument('--query-timeout-seconds', type=int, default=120, help='Per-root native query timeout, 1..3600 seconds (default 120)')
     args = parser.parse_args()
     try:
         return run(args)
+    except ReportRefusal as error:
+        parser.exit(2, f'Report refused: {error}\n')
     except (OSError, ValueError) as error:
         parser.exit(2, f'Report refused: {type(error).__name__}. Check input existence, bounds, sidecars and fresh output location.\n')
 

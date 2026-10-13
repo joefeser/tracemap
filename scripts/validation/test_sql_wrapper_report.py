@@ -55,6 +55,8 @@ class SqlWrapperReportTests(unittest.TestCase):
             text = (self.args.out / 'sql-wrapper-inventory.local.md').read_text()
             self.assertEqual(2, text.count('QUERY FAILED'))
             self.assertNotIn('No retained SQL route', text)
+            if isinstance(outcome, subprocess.TimeoutExpired):
+                self.assertIn('Failure category: QueryTimeout', text)
 
     def test_query_identity_mismatch_rejected(self):
         def wrong(command, **kwargs):
@@ -87,6 +89,49 @@ class SqlWrapperReportTests(unittest.TestCase):
     def test_existing_output_refused(self):
         self.args.out.mkdir()
         with self.assertRaises(FileExistsError):
+            REPORT.run(self.args)
+
+    def test_large_index_requires_explicit_admission_and_streams_hash(self):
+        # Public sparse file: exercises real >512 MiB size and streaming hashes,
+        # without constructing a large bytes object or pretending to be SQLite.
+        with self.index.open('wb') as stream:
+            stream.truncate(768 * 1024 * 1024)
+        with patch.object(REPORT.subprocess, 'run', side_effect=self.runner) as runner:
+            with self.assertRaisesRegex(REPORT.ReportRefusal, 'IndexSizeLimitExceeded'):
+                REPORT.run(self.args)
+            runner.assert_not_called()
+            self.assertFalse(self.args.out.exists())
+            self.args.max_index_mib = 1024
+            self.args.query_timeout_seconds = 600
+            self.assertEqual(0, REPORT.run(self.args))
+            self.assertEqual(600, runner.call_args.kwargs['timeout'])
+        text = (self.args.out / 'sql-wrapper-inventory.local.md').read_text()
+        self.assertIn('selected maximum: 1024 MiB', text)
+        self.assertIn('600-second timeout', text)
+        self.assertEqual(768 * 1024 * 1024, self.index.stat().st_size)
+
+    def test_invalid_admission_limits_refused_before_output(self):
+        for value in [0, -1, 16385, True, 1.5]:
+            self.args.max_index_mib = value
+            with self.assertRaises(REPORT.ReportRefusal):
+                REPORT.run(self.args)
+        self.args.max_index_mib = 512
+        for value in [0, -1, 3601, True, 1.5]:
+            self.args.query_timeout_seconds = value
+            with self.assertRaises(REPORT.ReportRefusal):
+                REPORT.run(self.args)
+        self.assertFalse(self.args.out.exists())
+
+    def test_size_limit_is_inclusive(self):
+        with self.index.open('wb') as stream:
+            stream.truncate(1024 * 1024)
+        self.args.max_index_mib = 1
+        with patch.object(REPORT.subprocess, 'run', side_effect=self.runner):
+            self.assertEqual(0, REPORT.run(self.args))
+        with self.index.open('ab') as stream:
+            stream.write(b'x')
+        self.args.out = self.root / 'over-limit'
+        with self.assertRaises(REPORT.ReportRefusal):
             REPORT.run(self.args)
 
     def test_empty_path_nodes_are_invalid_not_an_empty_query(self):

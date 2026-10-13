@@ -76,3 +76,4 @@
 - [x] Add independent compiled caller + separate overloaded wrapper fixtures and missing-input controls.
 - [x] Add bounded local selected-root SQL reporting and SQL-only work-machine procedure.
 - [x] Complete helper/native validation and push the delivery increment (d00bc224 plus gap-scope clarification).
+- [x] Replace fixed index admission with explicit bounded size/timeout options, actionable refusal, public large-file native smoke and same-index work-machine instructions.
