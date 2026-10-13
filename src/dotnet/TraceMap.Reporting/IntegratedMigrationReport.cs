@@ -68,18 +68,42 @@ public static class IntegratedMigrationReport
         // Keep Handles evidence at its original syntax tier. A unique lexical owner
         // and explicit UserControl base spelling are required; names alone are not anchors.
         var syntaxRoots = new List<(CodeFact Boundary, Method? Method)>();
-        if (!matchingLimited)
+        var anchorReasons = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var binding in handles)
         {
-            var owner = Owner(binding);
-            if (owner is null || !owner.Name.Equals(binding.Properties.GetValueOrDefault("handlerName"), StringComparison.OrdinalIgnoreCase)
-                || string.IsNullOrWhiteSpace(binding.Properties.GetValueOrDefault("receiverName"))
-                || string.IsNullOrWhiteSpace(binding.Properties.GetValueOrDefault("eventName"))) continue;
+            if (matchingLimited) { anchorReasons[binding.FactId] = "matching-budget-exceeded-unassessed"; continue; }
+            var owners = methods.Where(m => m.Fact.Evidence.FilePath == binding.Evidence.FilePath
+                && m.Start <= binding.Evidence.StartLine && m.End >= binding.Evidence.EndLine).Take(2).ToArray();
+            if (owners.Length != 1)
+            {
+                anchorReasons[binding.FactId] = owners.Length == 0 ? "method-owner-missing" : "method-owner-ambiguous";
+                continue;
+            }
+            var owner = owners[0];
+            if (!owner.Name.Equals(binding.Properties.GetValueOrDefault("handlerName"), StringComparison.OrdinalIgnoreCase))
+            { anchorReasons[binding.FactId] = "handler-name-mismatch"; continue; }
+            if (string.IsNullOrWhiteSpace(binding.Properties.GetValueOrDefault("receiverName")))
+            { anchorReasons[binding.FactId] = "receiver-name-missing"; continue; }
+            if (string.IsNullOrWhiteSpace(binding.Properties.GetValueOrDefault("eventName")))
+            { anchorReasons[binding.FactId] = "event-name-missing"; continue; }
+            if (string.IsNullOrWhiteSpace(owner.Type))
+            { anchorReasons[binding.FactId] = "containing-type-identity-missing"; continue; }
             var declarations = types.Where(t => t.Evidence.FilePath == binding.Evidence.FilePath
                 && t.Properties.GetValueOrDefault("qualifiedName", "").Equals(owner.Type, StringComparison.OrdinalIgnoreCase)).Take(2).ToArray();
-            if (declarations.Length != 1 || !declarations[0].Properties.GetValueOrDefault("baseTypes", "").Split(';')
+            if (declarations.Length != 1)
+            {
+                anchorReasons[binding.FactId] = declarations.Length == 0
+                    ? "same-file-type-declaration-missing" : "same-file-type-declaration-ambiguous";
+                continue;
+            }
+            var bases = declarations[0].Properties.GetValueOrDefault("baseTypes", "");
+            if (string.IsNullOrWhiteSpace(bases))
+            { anchorReasons[binding.FactId] = "same-file-base-evidence-missing"; continue; }
+            if (!bases.Split(';')
                 .Any(b => b.Equals("System.Web.UI.UserControl", StringComparison.OrdinalIgnoreCase)
-                    || b.Equals("Global.System.Web.UI.UserControl", StringComparison.OrdinalIgnoreCase))) continue;
+                    || b.Equals("Global.System.Web.UI.UserControl", StringComparison.OrdinalIgnoreCase)))
+            { anchorReasons[binding.FactId] = "explicit-usercontrol-base-not-established"; continue; }
+            anchorReasons[binding.FactId] = "candidate-anchor-established";
             syntaxRoots.Add((binding, owner));
         }
         var allRoots = roots.Concat(syntaxRoots).ToArray();
@@ -91,7 +115,7 @@ public static class IntegratedMigrationReport
         lines.AddRange(["", "## Integrated migration inventory", "",
             $"Rule `{Rule}`. Scope: all supported operation facts in this scan, independent of selected query roots. {rows.Length} callsite evidence groups from {operations.Length} operation facts; {parameters.Length} parameter facts. These are not unique business operations or procedures.",
             $"Incoming WebForms: {bindings.Length} binding facts, {boundaries.Length} handler-resolution facts, {roots.Length} unique-span method attachments. Outbound HTTP is a separate operation family.",
-            $"UserControl Handles: {handles.Length} syntax binding facts retained; {syntaxRoots.Count} candidate entry anchors. These do not establish markup hosting, control identity or a deployed HTTP route.",
+            $"VB Handles: {handles.Length} syntax binding facts retained (not all are UserControls); {syntaxRoots.Count} UserControl candidate entry anchors. These do not establish markup hosting, control identity or a deployed HTTP route.",
             $"Path matching: {(matchingLimited ? "limited: method/call budget exceeded or boundary/type limit reached; calls unassessed" : $"bounded; {unresolvedCalls} calls without a unique supported method target")}. Analysis gaps in scan: {facts.Count(f => f.FactType == FactTypes.AnalysisGap)}. Missing operations and unsupported providers remain unknown.",
             "Every ordered source path below is a static candidate, not a URL, runtime reachability, compiler identity bridge or verified API contract. WebForms markup identifies a source surface, not a deployed route. No name-only cross-type or ambiguous-overload joins. Compiled wrapper paths remain in the separate admitted compiled-path report; this source projection does not splice them into its paths.",
             $"Showing {Math.Min(200, rows.Length)} of {rows.Length} callsite groups. Parameter display cap: 50 per group; path cap: 8, depth: 16, search work: 4096 per group. Any limit is reported; omitted evidence remains in scan facts."]);
@@ -156,8 +180,13 @@ public static class IntegratedMigrationReport
         lines.AddRange(["", "### Incoming boundary coverage", "",
             $"{boundaries.Count(b => connectedBoundaries.Contains(b.FactId))}/{boundaries.Length} handler-resolution facts appear in displayed operation paths. Unconnected handlers can be UI-only, unsupported or outside current evidence; no automatic retirement decision follows.",
             $"{syntaxRoots.Count(r => connectedBoundaries.Contains(r.Boundary.FactId))}/{syntaxRoots.Count} UserControl Handles syntax candidate anchors appear in displayed operation paths. Unattached or unsupported Handles facts: {handles.Length - syntaxRoots.Count}; no resolution is invented."]);
+        lines.Add("Handles anchor assessment counts (all retained Handles bindings; first failing guard only):");
+        foreach (var reason in anchorReasons.Values.GroupBy(r => r).OrderBy(g => g.Key, StringComparer.Ordinal))
+            lines.Add($"- `{reason.Key}`: {reason.Count()}.");
+        lines.Add("Handles detail display cap: 100 unresolved paths. A candidate anchor with no displayed path is a downstream connectivity/search gap, not an anchor rejection. Missing base evidence may reside in an unjoined partial declaration; unsupported spelling is not proof of a non-UserControl type.");
         foreach (var binding in handles.Where(b => !connectedBoundaries.Contains(b.FactId)).Take(100))
-            lines.Add("- Handles entry path unresolved: " + Reference(binding));
+            lines.Add("- Handles entry path unresolved: " + Reference(binding)
+                + $"; anchor assessment `{anchorReasons[binding.FactId]}`.");
         foreach (var boundary in boundaries.Where(b => !connectedBoundaries.Contains(b.FactId)).Take(100))
             lines.Add($"- Entry path unresolved: {Reference(boundary)}; source markup `{Safe(boundary.Properties.GetValueOrDefault("markupFile", "unknown"))}`.");
         var bindingIds = boundaries.Select(b => b.Properties.GetValueOrDefault("bindingFactId", "")).ToHashSet(StringComparer.Ordinal);

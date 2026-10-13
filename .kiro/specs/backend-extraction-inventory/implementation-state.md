@@ -888,3 +888,20 @@ this report-only change; extractor behavior and schemas are unchanged.
 Validation: 54 focused integrated/report/WebForms/legacy HTTP tests passed with
 warnings as errors; final integrated and compiled-wrapper run passed seven tests.
 Private rescan acceptance and exact-head Windows CI remain unverified here.
+
+### 2026-10-13: explicit Handles anchor rejection diagnostics
+
+Private acceptance returned no candidate anchors; the screenshots do not identify
+which guard failed. This change does not claim to fix that unknown identity gap.
+Report each unresolved binding's first failed guard and aggregate all assessment
+reasons, distinguishing candidate anchors with missing downstream paths and
+over-budget unassessed bindings. Correct the denominator label: all VB Handles
+facts are retained, not necessarily UserControls. Synthetic regression cases cover
+each guard, separate-file partial base evidence, short/relative/custom base names,
+and ambiguity/scale boundaries without weakening evidence requirements.
+The existing acceptance prompt now requires a verdict for the known chain and
+its exact rejection reason. No extractor/schema change; full language smoke is
+deferred for this report-only diagnostic change.
+Validation: 11 integrated/report tests passed with warnings as errors; 33 WebForms
+composition/event identity and compiled-wrapper regression tests passed. Exact-head
+Windows CI and private acceptance remain pending.

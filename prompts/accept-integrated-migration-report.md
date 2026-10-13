@@ -39,3 +39,13 @@ positive, and does not approve API implementation or retire existing behavior.
 If a locally known entry-to-operation chain remains unconnected, use
 [the complete-chain diagnostic prompt](diagnose-integrated-entry-path-gap.md)
 against the existing scan. Accurate gap reporting is not connectivity acceptance.
+
+For a previously diagnosed Handles chain, explicitly report whether that exact
+chain now appears. Read its `anchor assessment` and the aggregate Handles anchor
+assessment counts. If rejected, inspect only the first reported guard against
+local facts/source and return its generic reason plus sanitized structural shape
+(for example, base declaration in a separate partial file or an imported short
+base spelling). Do not treat accurate gap reporting as a passed connectivity fix.
+If the anchor is established but no path appears, diagnose the downstream hop or
+search limit instead. Use the existing scan after this one acceptance run; no
+repeated rescans. Keep private type names, paths, source and fact IDs local.
