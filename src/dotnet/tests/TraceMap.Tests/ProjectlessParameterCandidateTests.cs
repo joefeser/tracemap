@@ -7,6 +7,22 @@ namespace TraceMap.Tests;
 public sealed class ProjectlessParameterCandidateTests
 {
     [Theory]
+    [InlineData("command = New SqlCommand()", "command.ExecuteNonQuery()", "receiver-reassigned")]
+    [InlineData("If True Then\ncommand.ExecuteNonQuery()\nEnd If", "", "unsupported-statement-boundary")]
+    [InlineData("", "other.ExecuteNonQuery()", "no-call-in-bounded-same-block-window")]
+    public void Lexical_execution_does_not_cross_reassignment_branch_or_other_receiver(string between, string execution, string reason)
+    {
+        using var temp = new TempDirectory();
+        File.WriteAllText(Path.Combine(temp.Path, "Input.vb"), $"Imports System.Data\nImports System.Data.SqlClient\nPublic Class Example\nSub Run(other As SqlCommand)\nDim command As New SqlCommand()\ncommand.Parameters.Add(\"@Public\", SqlDbType.Int)\n{between}\n{execution}\nEnd Sub\nEnd Class");
+        WebFormsWizardNativeTests.InitGit(temp.Path);
+        var scan = ScanEngine.Scan(new ScanOptions(temp.Path, Path.Combine(temp.Path, "out")));
+        var candidate = Assert.Single(scan.Facts, f => f.FactType == FactTypes.DatabaseParameterCandidate);
+        Assert.Equal("not-observed", candidate.Properties["laterExecutionSyntax"]);
+        Assert.Equal(reason, candidate.Properties["laterExecutionSyntaxReason"]);
+        Assert.False(candidate.Properties.ContainsKey("laterExecutionSyntaxStartLine"));
+    }
+
+    [Theory]
     [InlineData("Imports System.Data", "SqlClient.SqlCommand", true)]
     [InlineData("Imports C = System.Data.SqlClient.SqlCommand", "C", true)]
     [InlineData("Imports N = Microsoft.Data.SqlClient", "N.SqlCommand", true)]
@@ -49,6 +65,9 @@ public sealed class ProjectlessParameterCandidateTests
             Assert.Equal("unresolved", candidate.Properties["commandExecutionEvidence"]);
             Assert.Equal("unresolved", candidate.Properties["commandAssociation"]);
             Assert.False(candidate.Properties.ContainsKey("commandExecutionStartLine"));
+            Assert.Equal("same-receiver-text-call-observed", candidate.Properties["laterExecutionSyntax"]);
+            Assert.Equal("intervening-expression-effects-unresolved", candidate.Properties["laterExecutionSyntaxReason"]);
+            Assert.True(int.Parse(candidate.Properties["laterExecutionSyntaxStartLine"]) > candidate.Evidence.StartLine);
             Assert.Equal(EvidenceTiers.Tier3SyntaxOrTextual, candidate.EvidenceTier);
         }
         Assert.Contains("syntax-local-declaration-candidate", MarkdownReportWriter.Build(scan));

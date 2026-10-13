@@ -54,6 +54,8 @@ public static partial class VisualBasicSyntaxExtractor
             ["commandAssociation"] = "unresolved",
             ["commandReceiverAssociation"] = "unresolved",
             ["commandExecutionEvidence"] = "unresolved",
+            ["laterExecutionSyntax"] = "not-observed",
+            ["laterExecutionSyntaxReason"] = "local-receiver-not-established",
             ["commandAssociationReason"] = "constructor-only-no-command-receiver",
             ["coverageLabel"] = coverage,
             ["ruleLimitations"] = "Syntax parameter candidate only; no compiler/provider binding, overload resolution, verified command instance identity, procedure association, database declaration, direction default or runtime value is inferred. Optional straight-line local association is syntax evidence only. Names and argument expressions are hashed; source review is required."
@@ -167,6 +169,32 @@ public static partial class VisualBasicSyntaxExtractor
         properties["commandReceiverAssociation"] = "syntax-local-declaration-candidate";
         properties["commandDeclarationStartLine"] = (declaration.GetLocation().GetLineSpan().StartLinePosition.Line + 1).ToString(System.Globalization.CultureInfo.InvariantCulture);
         properties["commandDeclarationSpanStart"] = declaration.SpanStart.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        // Independent lexical observation only. Do not upgrade the execution/instance
+        // association below when intervening expressions have unknown effects.
+        properties["laterExecutionSyntaxReason"] = "no-call-in-bounded-same-block-window";
+        var uncertain = false;
+        for (var i = at + 1; i < statements.Count; i++)
+        {
+            if (i - at > 64) { properties["laterExecutionSyntaxReason"] = "local-window-limit"; break; }
+            var candidate = statements[i];
+            if (candidate is ExpressionStatementSyntax { Expression: InvocationExpressionSyntax call }
+                && call.Expression is MemberAccessExpressionSyntax member && Same(member.Expression)
+                && new[] { "ExecuteScalar", "ExecuteNonQuery", "ExecuteReader", "ExecuteXmlReader" }.Contains(member.Name.Identifier.ValueText, StringComparer.OrdinalIgnoreCase)
+                && (call.ArgumentList is null || call.ArgumentList.Arguments.Count == 0))
+            {
+                properties["laterExecutionSyntax"] = "same-receiver-text-call-observed";
+                properties["laterExecutionSyntaxStartLine"] = (call.GetLocation().GetLineSpan().StartLinePosition.Line + 1).ToString(System.Globalization.CultureInfo.InvariantCulture);
+                properties["laterExecutionSyntaxSpanStart"] = call.SpanStart.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                properties["laterExecutionSyntaxMethod"] = member.Name.Identifier.ValueText;
+                properties["laterExecutionSyntaxReason"] = uncertain ? "intervening-expression-effects-unresolved" : "same-block-syntax-only";
+                break;
+            }
+            if (candidate is AssignmentStatementSyntax assignment && Same(assignment.Left))
+            { properties["laterExecutionSyntaxReason"] = "receiver-reassigned"; break; }
+            if (candidate is not ExpressionStatementSyntax && candidate is not AssignmentStatementSyntax)
+            { properties["laterExecutionSyntaxReason"] = "unsupported-statement-boundary"; break; }
+            if (!ParameterAdd(candidate) && !Configuration(candidate)) uncertain = true;
+        }
         for (var i = at + 1; i < statements.Count; i++)
         {
             if (++work > 64) { properties["commandAssociationReason"] = "local-window-limit"; return; }

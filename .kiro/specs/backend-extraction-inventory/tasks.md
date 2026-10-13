@@ -90,3 +90,4 @@
 - [x] Cover same-block nested command construction and parameter/transaction configuration; retain explicit reasons for unresolved association and distinguish extraction from association coverage.
 - [x] Separate Add-site local receiver witnesses from forward execution evidence; preserve receiver candidates through later unknown value evaluation without inferring execution.
 - [x] Share SqlClient type resolution between parameter Add and local declaration association, with combined nested/relative-name/complex-value fixtures and alias/shadow/ambiguity controls.
+- [x] Report bounded later same-receiver execution syntax separately from instance continuity and forward execution association, with uncertainty and stop reasons.
