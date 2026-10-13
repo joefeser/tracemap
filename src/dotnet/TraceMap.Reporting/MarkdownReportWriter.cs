@@ -164,7 +164,10 @@ public static class MarkdownReportWriter
             "Constructor or explicit command.Parameters.Add syntax evidence only, not procedure contracts. Optional straight-line local command associations are syntax candidates, not verified instance or procedure bindings. Direction remains unknown; absence of candidates does not prove absence of parameters.",
             $"Showing {Math.Min(50, parameterCandidates.Length)} of {parameterCandidates.Length}; remaining evidence stays in facts.ndjson and index.sqlite."]);
         foreach (var parameter in parameterCandidates.Take(50))
+        {
             lines.Add($"- {parameter.EvidenceTier}; rule `{parameter.RuleId}`; `{parameter.Evidence.FilePath}:{parameter.Evidence.StartLine}`; name evidence `{parameter.Properties.GetValueOrDefault("parameterNameEvidence")}`; type `{parameter.Properties.GetValueOrDefault("parameterTypeName", "unavailable")}`; direction unknown; command association `{parameter.Properties.GetValueOrDefault("commandAssociation", "unresolved")}`; execution line `{parameter.Properties.GetValueOrDefault("commandExecutionStartLine", "unavailable")}`; fact `{parameter.FactId}`.");
+            lines.Add($"  Association reason: `{parameter.Properties.GetValueOrDefault("commandAssociationReason", "unavailable-in-source-fact")}`. Parameter extraction and command association are separate coverage checks.");
+        }
         AddSqlExecutionContext(lines, result);
         AddSqlProtectedMaterial(lines, result);
         AddPostgresArchiveLinks(lines, result);
