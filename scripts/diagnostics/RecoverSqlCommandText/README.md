@@ -1,5 +1,12 @@
 # Local-only SQL literal recovery
 
+The local report preserves retained `databaseCallEvidence` and `commandBinding`
+objects from each path with node references. This exposes existing caller-side
+evidence independently of catalog availability. It does not perform new argument
+analysis or establish runtime values. Missing native objects require targeted
+source/IL inspection; they do not prove absent application behavior. Schema-owner
+questions and application-review states must remain separate.
+
 Optional `--contract-catalog <private-local.json>` enriches exact recovered
 StoredProcedure literals with operator-supplied procedure/parameter metadata.
 See `samples/sql-database-matrix/public-contract-catalog.json` for the synthetic

@@ -108,10 +108,32 @@ class CommandTextTests(unittest.TestCase):
         self.assertIn('## Per-path human verification handoff', text)
         self.assertIn('Implementation acceptance: pending', text)
         self.assertIn('Map caller arguments', text)
+        self.assertIn('## Retained application evidence', text)
+        self.assertIn('field=commandBinding', text)
+        self.assertIn('retained evidence present; field-by-field verification pending', text)
+        self.assertIn('a missing catalog does not mark application fields unavailable', text)
 
     def test_no_consent_refused_without_output(self):
         self.assertEqual(2, self.run_tool(consent=False).returncode)
         self.assertFalse(self.output.exists())
+
+    def test_missing_application_objects_require_inspection_not_absence_claim(self):
+        for node in self.report['paths'][0]['nodes']:
+            node.pop('commandBinding', None)
+            node.pop('databaseCallEvidence', None)
+        self.input.write_text(json.dumps(self.report))
+        self.assertEqual(0, self.run_tool().returncode)
+        self.assertIn('targeted source/IL inspection pending', self.output.read_text())
+
+    def test_retained_parameter_evidence_survives_without_catalog(self):
+        self.report['paths'][0]['nodes'][0]['databaseCallEvidence'] = {
+            'parameterEvidence': 'public-synthetic-parameter-witness',
+            'limitations': '![untrusted](https://example.invalid)'}
+        self.input.write_text(json.dumps(self.report))
+        self.assertEqual(0, self.run_tool().returncode)
+        text = self.output.read_text()
+        self.assertIn('public-synthetic-parameter-witness', text)
+        self.assertNotIn('![untrusted]', text)
 
     def test_wrong_binary_hash_refused_without_output(self):
         self.assertEqual(2, self.run_tool(sha='0' * 64).returncode)
