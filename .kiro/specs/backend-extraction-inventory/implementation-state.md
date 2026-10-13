@@ -867,3 +867,6 @@ Windows workflow now includes the integrated source acceptance and HTTP matrix.
 One private acceptance prompt: prompts/accept-integrated-migration-report.md.
 Private application-wide completeness, deployed routes, schema contracts, migration
 decisions and source/compiled identity bridges remain explicit separate gates.
+Final scale audit: over-budget scans skip boundary and operation method-span
+matching as well as call matching. Boundary attachment is additionally capped at
+10000 retained resolutions. Final integrated/report test run: 10 passed.
