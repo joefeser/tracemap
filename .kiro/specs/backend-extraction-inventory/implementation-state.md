@@ -768,3 +768,15 @@ Focused warning-as-error suite: 82 passed. Native synthetic sample: 93 facts,
 five receiver candidates, three following-execution candidates, two unresolved
 execution results (complex value and reassignment). No fixture or SQL execution.
 Windows and full SQL matrix validation remain deferred.
+
+### 2026-10-13: consistent relative SqlClient resolution
+
+vb-syntax/0.4.7 shares ResolveParameterCommandTypes between Add extraction and
+backward declaration matching. Relative SqlClient.SqlCommand now expands through
+Imports System.Data in both checks. No broad global resolver behavior changed.
+Combined nested/constructor-arguments/complex-value tests cover relative names,
+type and namespace aliases, Global qualification, unrelated types, same-file
+prefix shadows and competing providers. Warning-as-error focused suite: 89 passed.
+Native synthetic sample: 93 facts; all five receiver candidates retained, three
+following-execution candidates and two unresolved execution results. No SQL or
+fixture execution. Windows and full matrix checks remain deferred.

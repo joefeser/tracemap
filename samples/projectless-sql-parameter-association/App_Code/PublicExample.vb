@@ -4,7 +4,7 @@ Imports System.Data.SqlClient
 Public Class PublicExample
     Public Sub ComplexValue(context As Object, connection As SqlConnection)
         Try
-            Dim command As New SqlCommand("PublicProcedure", connection)
+            Dim command As SqlClient.SqlCommand = New SqlClient.SqlCommand("PublicProcedure", connection)
             command.Parameters.Add("@PublicId", SqlDbType.Int)
             command.Parameters("@PublicId").Value = CInt(context.Current.Value.ToString().Trim())
             command.ExecuteNonQuery()

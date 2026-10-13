@@ -1,10 +1,13 @@
 # Inspect projectless SQL parameter candidates locally
 
-Use the published scanner with vb-syntax/0.4.6 or later. This increment adds
+Use the published scanner with vb-syntax/0.4.7 or later. This increment adds
 DatabaseParameterCandidate facts for explicit SqlParameter constructors and
 typed command.Parameters.Add(name, SqlDbType) calls, not automatic
-wrapper-to-procedure argument mapping. Reuse existing
-current source-scan output if it contains this capability; otherwise run only
+wrapper-to-procedure argument mapping.
+The Add-site and declaration checks now share relative-type/import resolution,
+including SqlClient.SqlCommand with Imports System.Data. This fixes a declaration
+association inconsistency; it does not establish execution or procedure contracts.
+Reuse existing current source-scan output if it contains this capability; otherwise run only
 the previously authorized focused source scan with the documented command and
 known local paths. Do not rebuild/execute the application, access a database,
 alter private source, commit, export patches or upload private output.
