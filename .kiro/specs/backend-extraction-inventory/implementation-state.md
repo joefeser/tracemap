@@ -554,5 +554,12 @@ invalid options, timeout categorization and unchanged file size. Native CLI smok
 also passed with a valid public SQLite fixture index padded to 768 MiB: default
 refusal, explicit 1024 MiB admission, two routes, one unmatched and zero failures.
 Padding tests file-size admission, not logical graph scale or private corpus
-compatibility. No scanner/extractor changes or database execution. Windows smoke
-is pending for this correction; earlier platform receipts remain head-bound.
+compatibility. No scanner/extractor changes or database execution.
+
+Personal Windows validation passed at
+`f53129ad95ac07553b3636c021e03b3ed7f2ae9c`, SDK 10.0.302/reference pack 10.0.10:
+14 Python guards, zero-warning/error CLI and wrapper builds, and native 768 MiB
+SQLite smoke. Default admission refused; explicit 1024 MiB/600 seconds accepted
+with route counts 1/1/0 and zero failed queries. No private inputs or application,
+fixture-method or database execution. This closes platform validation of the size
+admission correction, not private historical-index compatibility or graph scale.
