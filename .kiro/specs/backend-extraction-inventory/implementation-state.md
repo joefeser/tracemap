@@ -823,3 +823,16 @@ Warning-as-error surrounding suite: 98 passed before the final parenthesized cas
 Native sample retained 93 facts with two constant syntax traces (one local variable,
 one direct literal). No application or SQL execution. Windows/full matrix deferred.
 Final warning-as-error parameter suite: 53 passed; final CLI sample rerun: 93 facts.
+
+### 2026-10-13: empty seed and replacement coverage
+
+vb-syntax/0.4.11 recognizes intrinsic String.Empty and explicit
+Global.System.String.Empty as empty syntax seeds. Arbitrary Empty members and
+escaped [String] identifiers remain unresolved. Tests cover append-only seeds,
+literal replacement after an unknown seed, and replacement after an empty seed.
+The combined nested/relative-type/complex-value public fixture now starts with
+String.Empty and appends SQL literals. Warning-as-error focused suite: 105 passed.
+Native synthetic scan: 94 facts; both expected text traces retained, including
+the empty-seed variable trace. No application/SQL execution or private inputs.
+Windows and full matrix acceptance remain pending; this is not completion of the
+broader entry-point-to-SQL migration handoff.

@@ -93,3 +93,4 @@
 - [x] Report bounded later same-receiver execution syntax separately from instance continuity and forward execution association, with uncertainty and stop reasons.
 - [x] Retain bounded hashed parameter-value observations and constructor command-text-origin syntax with pending per-candidate migration review checks.
 - [x] Trace bounded same-block literal command-text assignments and concatenations to hash-only syntax candidates; report unsupported expressions, statements and limits explicitly.
+- [x] Cover intrinsic empty-string seeds, append-only construction, replacement assignments and escaped-name/other-member negative controls in the combined nested SQL fixture.

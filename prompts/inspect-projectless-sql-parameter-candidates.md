@@ -1,6 +1,6 @@
 # Inspect projectless SQL parameter candidates locally
 
-Use the published scanner with vb-syntax/0.4.10 or later. This increment adds
+Use the published scanner with vb-syntax/0.4.11 or later. This increment adds
 DatabaseParameterCandidate facts for explicit SqlParameter constructors and
 typed command.Parameters.Add(name, SqlDbType) calls, not automatic
 wrapper-to-procedure argument mapping.
@@ -47,6 +47,10 @@ literal concatenation updates within fixed limits. A resulting hash is a syntax
 candidate, not verified SQL semantics, overload selection or procedure identity.
 Unknown expressions, intervening statements and limits must remain explicit gaps.
 Report trace-supported versus unresolved counts, not a blanket unsupported-shapes=0.
+Intrinsic String.Empty and Global.System.String.Empty are supported empty seeds.
+A later simple assignment replaces the earlier seed; unsupported earlier values
+must not prevent tracing a subsequent literal replacement. Arbitrary Empty members
+and escaped [String] identifiers are not treated as the intrinsic empty string.
 Before any scan, confirm the saved project configuration and resolved source root
 locally against the user's intended project. Do not infer the project from prior
 debugging context or scan a different registered repository. Named

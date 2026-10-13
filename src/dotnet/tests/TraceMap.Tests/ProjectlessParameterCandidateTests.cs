@@ -7,6 +7,25 @@ namespace TraceMap.Tests;
 public sealed class ProjectlessParameterCandidateTests
 {
     [Theory]
+    [InlineData("String.Empty", "sql &= \"SELECT PublicValue\"", true)]
+    [InlineData("Global.System.String.Empty", "sql += \"SELECT PublicValue\"", true)]
+    [InlineData("context.Value", "sql = \"SELECT PublicValue\"", true)]
+    [InlineData("String.Empty", "sql = \"SELECT PublicValue\"", true)]
+    [InlineData("context.Empty", "sql &= \"SELECT PublicValue\"", false)]
+    [InlineData("[String].Empty", "sql &= \"SELECT PublicValue\"", false)]
+    public void Empty_seed_and_replacement_have_distinct_trace_semantics(string seed, string update, bool expected)
+    {
+        using var temp = new TempDirectory();
+        File.WriteAllText(Path.Combine(temp.Path, "Input.vb"), $"Imports System.Data\nPublic Class Example\nSub Run(context As Object, [String] As Object)\nTry\nDim sql As String = {seed}\n{update}\nDim command As New SqlClient.SqlCommand(sql)\ncommand.Parameters.Add(\"@PublicId\", SqlDbType.Int)\ncommand.ExecuteNonQuery()\nCatch\nEnd Try\nEnd Sub\nEnd Class");
+        WebFormsWizardNativeTests.InitGit(temp.Path);
+        var scan = ScanEngine.Scan(new ScanOptions(temp.Path, Path.Combine(temp.Path, "out")));
+        var candidate = Assert.Single(scan.Facts, f => f.FactType == FactTypes.DatabaseParameterCandidate);
+        Assert.Equal(expected ? "bounded-local-constant-syntax-candidate" : "unresolved", candidate.Properties["commandTextTraceEvidence"]);
+        if (expected) Assert.Equal(FactFactory.Hash("SELECT PublicValue", 64), candidate.Properties["commandTextTraceHash"]);
+        else Assert.False(candidate.Properties.ContainsKey("commandTextTraceHash"));
+    }
+
+    [Theory]
     [InlineData("sql &= \" WHERE PublicId = @PublicId\"", true)]
     [InlineData("sql += \" WHERE PublicId = @PublicId\"", true)]
     [InlineData("sql &= (\" WHERE PublicId\" & \" = @PublicId\")", true)]

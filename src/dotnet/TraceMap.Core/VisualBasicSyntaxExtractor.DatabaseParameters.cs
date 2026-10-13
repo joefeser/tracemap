@@ -268,6 +268,13 @@ public static partial class VisualBasicSyntaxExtractor
             if (++nodes > 128) return null;
             if (node is LiteralExpressionSyntax literal && literal.Token.Value is string text)
                 return text.Length <= 16384 ? text : null;
+            // VB's intrinsic String keyword cannot be a local/type alias. Do not
+            // equate arbitrary identifiers named String (including [String]) with it.
+            if (node is MemberAccessExpressionSyntax empty
+                && empty.Name.Identifier.ValueText.Equals("Empty", StringComparison.OrdinalIgnoreCase)
+                && (empty.Expression is PredefinedTypeSyntax predefined && predefined.Keyword.IsKind(SyntaxKind.StringKeyword)
+                    || empty.Expression?.ToString().Equals("Global.System.String", StringComparison.OrdinalIgnoreCase) == true))
+                return string.Empty;
             if (node is ParenthesizedExpressionSyntax parenthesized) return Constant(parenthesized.Expression);
             if (node is BinaryExpressionSyntax binary && binary.IsKind(SyntaxKind.ConcatenateExpression))
             {

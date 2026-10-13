@@ -4,7 +4,8 @@ Imports System.Data.SqlClient
 Public Class PublicExample
     Public Sub ComplexValue(context As Object, connection As SqlConnection)
         Try
-            Dim text As String = "SELECT PublicValue FROM PublicRows"
+            Dim text As String = String.Empty
+            text += "SELECT PublicValue FROM PublicRows"
             text &= " WHERE PublicId = @PublicId"
             Dim command As SqlClient.SqlCommand = New SqlClient.SqlCommand(text, connection)
             command.Parameters.Add("@PublicId", SqlDbType.Int)
