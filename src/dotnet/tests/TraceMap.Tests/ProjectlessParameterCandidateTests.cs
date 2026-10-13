@@ -7,6 +7,35 @@ namespace TraceMap.Tests;
 public sealed class ProjectlessParameterCandidateTests
 {
     [Theory]
+    [InlineData("", "", true)]
+    [InlineData("Dim aliasCommand = command", "", false)]
+    [InlineData("command = New SqlCommand()", "", false)]
+    [InlineData("", "command = New SqlCommand()", false)]
+    [InlineData("", "UnknownCall(command)", false)]
+    [InlineData("", "If True Then\ncommand = New SqlCommand()\nEnd If", false)]
+    public void Local_command_association_is_bounded_and_stops_at_uncertainty(string before, string after, bool associated)
+    {
+        using var temp = new TempDirectory();
+        File.WriteAllText(Path.Combine(temp.Path, "Input.vb"), $"Imports System.Data\nImports System.Data.SqlClient\nPublic Class Example\nSub Run()\nDim command As New SqlCommand()\n{before}\ncommand.Parameters.Add(\"@PrivateSentinel\", SqlDbType.Int)\ncommand.Parameters.Add(\"@Second\", SqlDbType.VarChar)\n{after}\ncommand.ExecuteNonQuery()\nEnd Sub\nEnd Class");
+        WebFormsWizardNativeTests.InitGit(temp.Path);
+        var scan = ScanEngine.Scan(new ScanOptions(temp.Path, Path.Combine(temp.Path, "out")));
+        var candidates = scan.Facts.Where(f => f.FactType == FactTypes.DatabaseParameterCandidate).ToArray();
+        Assert.Equal(2, candidates.Length);
+        foreach (var candidate in candidates)
+        {
+            Assert.Equal(associated ? "syntax-local-straight-line-candidate" : "unresolved", candidate.Properties["commandAssociation"]);
+            Assert.Equal(EvidenceTiers.Tier3SyntaxOrTextual, candidate.EvidenceTier);
+            Assert.Equal("unknown", candidate.Properties["parameterDirectionEvidence"]);
+            if (associated)
+            {
+                Assert.Equal("ExecuteNonQuery", candidate.Properties["commandExecutionMethod"]);
+                Assert.True(int.Parse(candidate.Properties["commandExecutionStartLine"]) > candidate.Evidence.StartLine);
+            }
+        }
+        Assert.DoesNotContain("PrivateSentinel", JsonSerializer.Serialize(candidates));
+        Assert.Contains(associated ? "syntax-local-straight-line-candidate" : "unresolved", MarkdownReportWriter.Build(scan));
+    }
+    [Theory]
     [InlineData("Imports System.Data\nImports System.Data.SqlClient", "SqlCommand", true)]
     [InlineData("Imports System.Data", "SqlClient.SqlCommand", true)]
     [InlineData("Imports C = System.Data.SqlClient.SqlCommand\nImports System.Data", "C", true)]
