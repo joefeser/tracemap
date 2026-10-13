@@ -780,3 +780,17 @@ prefix shadows and competing providers. Warning-as-error focused suite: 89 passe
 Native synthetic sample: 93 facts; all five receiver candidates retained, three
 following-execution candidates and two unresolved execution results. No SQL or
 fixture execution. Windows and full matrix checks remain deferred.
+
+### 2026-10-13: independent later execution syntax observation
+
+vb-syntax/0.4.8 adds laterExecutionSyntax with location/method/reason fields.
+The bounded same-block lexical search tolerates unknown expression effects with
+an explicit warning, stops at receiver reassignment or structural boundaries,
+and never upgrades commandExecutionEvidence or the combined association.
+Reporting and inspection guidance distinguish lexical observation from instance
+continuity, reachability, values and contracts. Public complex-value fixture reused.
+Warning-as-error surrounding suite: 89 passed; final parameter suite: 43 passed.
+Native sample: 93 facts, four later-call observations (one unknown-effects warning),
+one reassignment stop; stronger execution evidence remains unresolved for the
+complex-value and reassignment cases. No fixture/SQL execution. Windows/full matrix
+validation remains deferred.
