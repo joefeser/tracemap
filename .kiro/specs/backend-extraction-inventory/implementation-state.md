@@ -624,3 +624,19 @@ one constant match, one symbolic route and one empty root in the consolidated
 Markdown. No application methods or SQL executed. Windows revalidation of this
 increment is not yet recorded. The new consolidate-local-sql-inventory prompt
 reuses existing private inputs without another discovery/build/scan cycle.
+
+### Optional local procedure contract candidates
+
+The diagnostic accepts an explicit local sql-contract-catalog.v1 input and records
+its digest. Unique exact recovered StoredProcedure literals can display supplied
+procedure, database label, source reference and parameter name/type/direction.
+No normalization or database guessing occurs; duplicate entries stay ambiguous,
+and text/dynamic rows are ineligible. Metadata remains operator-supplied candidate
+evidence, not verified schema or runtime bindings. Empty parameter lists do not
+prove zero parameters. The public example is independently synthetic and does not
+claim the fixture actually executes that parameter contract. The work-machine
+prompt uses only an existing authorized catalog; otherwise it identifies the
+missing input without another scan. Windows validation remains pending.
+Local warning-as-error diagnostic build passed with zero warnings/errors;
+29 native public-fixture diagnostic tests and 15 wrapper-report guards passed.
+No private inputs, application execution or database connections were used.

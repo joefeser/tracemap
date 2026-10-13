@@ -24,6 +24,14 @@ dotnet scripts/diagnostics/RecoverSqlCommandText/bin/Debug/net10.0/RecoverSqlCom
    original truncation flag and reason remains unchanged. Constant matches do
    not clear cycle/frontier limits. Review per-input native provenance and
    coverage; do not upgrade historical evidence to current-build proof.
+   If the human has already supplied an authorized local contract catalog in
+   `sql-contract-catalog.v1` format, optionally append
+   `--contract-catalog <that-local-file>` to the command. Do not query a database,
+   infer parameter types or fabricate a catalog. If no catalog exists, continue
+   without it and report `contract-input-missing` as the next concrete input needed.
+   Catalog matches are operator-supplied candidates, not verified schema or
+   connection bindings. Duplicate exact entries remain ambiguous. Keep its
+   contents and digest local, just like recovered literals.
 5. Review the local rows as migration leads. Repeated constants across roots are
    not unique procedure counts. Symbolic values stay unresolved. No schema match,
    procedure existence, parameter contract, connection, transaction or runtime use

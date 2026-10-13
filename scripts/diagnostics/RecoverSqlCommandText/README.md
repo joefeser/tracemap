@@ -1,5 +1,19 @@
 # Local-only SQL literal recovery
 
+Optional `--contract-catalog <private-local.json>` enriches exact recovered
+StoredProcedure literals with operator-supplied procedure/parameter metadata.
+See `samples/sql-database-matrix/public-contract-catalog.json` for the synthetic
+input format (not a real deployed procedure contract). Catalog metadata is not
+independently verified. Matching is ordinal and case-sensitive; no schema-prefix,
+case or database guessing occurs. Multiple exact entries remain ambiguous even
+if identical. Text/dynamic commands cannot acquire a procedure contract this way.
+Empty parameter lists mean none supplied, not proof of a zero-parameter procedure.
+Directions: Input, Output, InputOutput, ReturnValue, Unknown. The local output
+records the catalog SHA-256 and keeps migration decisions undecided. Limits:
+4 MiB catalog, 1024 entries, 256 parameters per entry, 4096 characters per field.
+Use existing authorized local schema documentation or a human-maintained catalog;
+this tool does not query a database or generate an authoritative schema export.
+
 Explicit opt-in diagnostic, not a scanner default. This reads a retained native
 `paths-report.json` and one explicitly admitted binary without loading it into
 the runtime, resolving dependencies or executing code. It matches only constant
