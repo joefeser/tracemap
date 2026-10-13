@@ -7,6 +7,41 @@ namespace TraceMap.Tests;
 public sealed class ProjectlessParameterCandidateTests
 {
     [Theory]
+    [InlineData("If True Then", "End If", "unsupported-containing-block")]
+    [InlineData("Try", "Catch\nEnd Try", "fresh-local-not-established")]
+    public void Association_does_not_cross_block_boundary_and_reports_reason(string open, string close, string reason)
+    {
+        using var temp = new TempDirectory();
+        File.WriteAllText(Path.Combine(temp.Path, "Input.vb"), $"Imports System.Data\nImports System.Data.SqlClient\nPublic Class Example\nSub Run()\nDim command As New SqlCommand()\n{open}\ncommand.Parameters.Add(\"@PublicId\", SqlDbType.Int)\ncommand.ExecuteNonQuery()\n{close}\nEnd Sub\nEnd Class");
+        WebFormsWizardNativeTests.InitGit(temp.Path);
+        var scan = ScanEngine.Scan(new ScanOptions(temp.Path, Path.Combine(temp.Path, "out")));
+        var candidate = Assert.Single(scan.Facts, f => f.FactType == FactTypes.DatabaseParameterCandidate);
+        Assert.Equal("unresolved", candidate.Properties["commandAssociation"]);
+        Assert.Equal(reason, candidate.Properties["commandAssociationReason"]);
+        Assert.Contains(reason, MarkdownReportWriter.Build(scan));
+    }
+
+    [Theory]
+    [InlineData("", true)]
+    [InlineData("command = New SqlCommand()", false)]
+    [InlineData("Dim escaped = command", false)]
+    [InlineData("UnknownCall(command)", false)]
+    [InlineData("If True Then\ncommand = New SqlCommand()\nEnd If", false)]
+    [InlineData("command.Parameters(\"@PublicId\").Value = UnknownCall(command)", false)]
+    public void Nested_configuration_retains_only_same_block_command_candidate(string intervening, bool expected)
+    {
+        using var temp = new TempDirectory();
+        File.WriteAllText(Path.Combine(temp.Path, "Input.vb"), $"Imports System.Data\nImports System.Data.SqlClient\nPublic Class Example\nSub Run(connection As SqlConnection, transaction As SqlTransaction, value As Integer)\nTry\nDim command As New SqlCommand(\"PublicProcedure\", connection)\ncommand.Parameters.Add(\"@PublicId\", SqlDbType.Int)\ncommand.Parameters(\"@PublicId\").Value = value\ncommand.Transaction = transaction\n{intervening}\ncommand.ExecuteNonQuery()\nCatch\nEnd Try\nEnd Sub\nEnd Class");
+        WebFormsWizardNativeTests.InitGit(temp.Path);
+        var scan = ScanEngine.Scan(new ScanOptions(temp.Path, Path.Combine(temp.Path, "out")));
+        var candidate = Assert.Single(scan.Facts, f => f.FactType == FactTypes.DatabaseParameterCandidate);
+        Assert.Equal(expected ? "syntax-local-straight-line-candidate" : "unresolved", candidate.Properties["commandAssociation"]);
+        Assert.False(string.IsNullOrWhiteSpace(candidate.Properties["commandAssociationReason"]));
+        Assert.Equal(EvidenceTiers.Tier3SyntaxOrTextual, candidate.EvidenceTier);
+        Assert.DoesNotContain("PublicProcedure", JsonSerializer.Serialize(candidate));
+    }
+
+    [Theory]
     [InlineData("", "", true)]
     [InlineData("Dim aliasCommand = command", "", false)]
     [InlineData("command = New SqlCommand()", "", false)]

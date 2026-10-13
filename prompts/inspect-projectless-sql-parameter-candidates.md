@@ -1,6 +1,6 @@
 # Inspect projectless SQL parameter candidates locally
 
-Use the published scanner with vb-syntax/0.4.4 or later. This increment adds
+Use the published scanner with vb-syntax/0.4.5 or later. This increment adds
 DatabaseParameterCandidate facts for explicit SqlParameter constructors and
 typed command.Parameters.Add(name, SqlDbType) calls, not automatic
 wrapper-to-procedure argument mapping. Reuse existing
@@ -16,6 +16,11 @@ syntax is a candidate; directions remain unknown. Inspect commandAssociation:
 syntax-local-straight-line-candidate links a fresh local declaration and consecutive
 parameter additions to an execution span; it is not a verified command instance
 or procedure binding. Other shapes remain unresolved. Count these states separately.
+The association now allows a single Try/Catch/Finally/Using statement list,
+bounded constructor arguments and simple parameter-value/transaction assignments.
+It never crosses block boundaries. Report commandAssociationReason for every
+unresolved candidate; distinguish unsupported association from successful parameter
+extraction. Do not claim that an unavailable execution line proves the check ran.
 Before any scan, confirm the saved project configuration and resolved source root
 locally against the user's intended project. Do not infer the project from prior
 debugging context or scan a different registered repository. Named

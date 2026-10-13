@@ -740,3 +740,17 @@ Warning-as-error focused suite: 70 passed, zero failed/skipped. Native sample
 scan: 45 facts, exactly two association candidates and one unresolved candidate.
 Fixture methods and SQL were not executed. Full SQL matrix and Windows validation
 are deferred; the private caller has not been verified against this narrow shape.
+
+### 2026-10-13: nested same-block association coverage
+
+vb-syntax/0.4.5 supports a single Try/Catch/Finally/Using statement list in addition
+to a method list. Fresh local constructor arguments permit up to three positional
+literals/non-command identifiers. Simple parameter Value and command configuration
+assignments permit similarly bounded right sides. Unknown calls, reassignment,
+aliasing, branches and cross-block declarations remain unresolved. Every parameter
+candidate now has an association reason; reports display it and explicitly separate
+parameter extraction coverage from command association. No procedure/runtime proof.
+Combined synthetic Try/constructor/Value/Transaction fixture plus negative controls:
+78 focused tests passed. Final CLI warning-as-error build: zero warnings/errors.
+Final native sample: 66 facts, three association candidates, one unresolved negative;
+all four have reasons. No application/SQL execution. Windows and full matrix deferred.

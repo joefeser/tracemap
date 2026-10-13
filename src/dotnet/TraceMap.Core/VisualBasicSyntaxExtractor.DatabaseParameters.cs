@@ -47,6 +47,7 @@ public static partial class VisualBasicSyntaxExtractor
             ["parameterTypeEvidence"] = "unavailable",
             ["parameterDirectionEvidence"] = "unknown",
             ["commandAssociation"] = "unresolved",
+            ["commandAssociationReason"] = "constructor-only-no-command-receiver",
             ["coverageLabel"] = coverage,
             ["ruleLimitations"] = "Syntax parameter candidate only; no compiler/provider binding, overload resolution, verified command instance identity, procedure association, database declaration, direction default or runtime value is inferred. Optional straight-line local association is syntax evidence only. Names and argument expressions are hashed; source review is required."
         };
@@ -86,16 +87,43 @@ public static partial class VisualBasicSyntaxExtractor
     private static void AddLocalCommandAssociation(CompilationUnitSyntax root, InvocationExpressionSyntax add,
         SortedDictionary<string, string> properties)
     {
-        // Deliberately narrow: one method body, fresh local creation and an uninterrupted
-        // sequence of literal/enum parameter additions, then execution.
+        // Stay within one lexical statement list; never cross branches or exception boundaries.
+        properties["commandAssociationReason"] = "unsupported-add-statement-shape";
         if (add.Expression is not MemberAccessExpressionSyntax { Expression: MemberAccessExpressionSyntax { Expression: IdentifierNameSyntax receiver } }
-            || add.Parent is not ExpressionStatementSyntax statement
-            || statement.Parent is not MethodBlockSyntax method) return;
-        var statements = method.Statements;
+            || add.Parent is not ExpressionStatementSyntax statement) return;
+        properties["commandAssociationReason"] = "unsupported-containing-block";
+        SyntaxList<StatementSyntax> statements;
+        switch (statement.Parent)
+        {
+            case MethodBlockSyntax method: statements = method.Statements; break;
+            case TryBlockSyntax block: statements = block.Statements; break;
+            case CatchBlockSyntax block: statements = block.Statements; break;
+            case FinallyBlockSyntax block: statements = block.Statements; break;
+            case UsingBlockSyntax block: statements = block.Statements; break;
+            default: return;
+        }
         if (statements.Count > 256) { properties["commandAssociationReason"] = "local-statement-limit"; return; }
         var at = statements.IndexOf(statement);
         var name = receiver.Identifier.ValueText;
         bool Same(ExpressionSyntax? expression) => expression is IdentifierNameSyntax id && id.Identifier.ValueText.Equals(name, StringComparison.OrdinalIgnoreCase);
+        bool Inert(ExpressionSyntax expression) => expression is LiteralExpressionSyntax
+            || expression is IdentifierNameSyntax && !Same(expression);
+        bool ConstructorArguments(ArgumentListSyntax? arguments) => arguments is null
+            || arguments.Arguments.Count <= 3 && arguments.Arguments.All(a => a is SimpleArgumentSyntax { NameColonEquals: null } simple && Inert(simple.Expression));
+        bool Configuration(StatementSyntax candidate)
+        {
+            if (candidate is not AssignmentStatementSyntax assignment
+                || !assignment.IsKind(Microsoft.CodeAnalysis.VisualBasic.SyntaxKind.SimpleAssignmentStatement)
+                || !Inert(assignment.Right) || assignment.Left is not MemberAccessExpressionSyntax member) return false;
+            if (Same(member.Expression))
+                return new[] { "Transaction", "Connection", "CommandText", "CommandTimeout" }.Contains(member.Name.Identifier.ValueText, StringComparer.OrdinalIgnoreCase);
+            return member.Name.Identifier.ValueText.Equals("Value", StringComparison.OrdinalIgnoreCase)
+                && member.Expression is InvocationExpressionSyntax index
+                && index.Expression is MemberAccessExpressionSyntax collection && Same(collection.Expression)
+                && collection.Name.Identifier.ValueText.Equals("Parameters", StringComparison.OrdinalIgnoreCase)
+                && index.ArgumentList is { Arguments.Count: 1 } arguments
+                && arguments.Arguments[0] is SimpleArgumentSyntax { NameColonEquals: null, Expression: LiteralExpressionSyntax };
+        }
         bool SafeArguments(InvocationExpressionSyntax call) => call.ArgumentList is { } list && list.Arguments.Count <= 16
             && list.Arguments.All(a => a is SimpleArgumentSyntax { NameColonEquals: null } simple
                 && (simple.Expression is LiteralExpressionSyntax || simple.Expression is MemberAccessExpressionSyntax member
@@ -105,13 +133,14 @@ public static partial class VisualBasicSyntaxExtractor
             && call.Expression is MemberAccessExpressionSyntax member && member.Name.Identifier.ValueText.Equals("Add", StringComparison.OrdinalIgnoreCase)
             && member.Expression is MemberAccessExpressionSyntax collection && collection.Name.Identifier.ValueText.Equals("Parameters", StringComparison.OrdinalIgnoreCase)
             && Same(collection.Expression) && SafeArguments(call);
+        properties["commandAssociationReason"] = "unsupported-parameter-arguments";
         if (!ParameterAdd(statement)) return;
         LocalDeclarationStatementSyntax? declaration = null;
         var work = 0;
         for (var i = at - 1; i >= 0; i--)
         {
             if (++work > 64) { properties["commandAssociationReason"] = "local-window-limit"; return; }
-            if (ParameterAdd(statements[i])) continue;
+            if (ParameterAdd(statements[i]) || Configuration(statements[i])) continue;
             if (statements[i] is LocalDeclarationStatementSyntax local && local.Declarators.Count == 1)
             {
                 var variable = local.Declarators[0];
@@ -119,7 +148,7 @@ public static partial class VisualBasicSyntaxExtractor
                     : variable.Initializer?.Value as ObjectCreationExpressionSyntax;
                 if (variable.Names.Count == 1 && variable.Names[0].Identifier.ValueText.Equals(name, StringComparison.OrdinalIgnoreCase)
                     && creation is not null && creation.Initializer is null
-                    && (creation.ArgumentList is null || creation.ArgumentList.Arguments.Count == 0)
+                    && ConstructorArguments(creation.ArgumentList)
                     && ResolveHttpTypeNames(root, creation.Type.ToString())
                         .Where(n => n.Equals("System.Data.SqlClient.SqlCommand", StringComparison.OrdinalIgnoreCase)
                             || n.Equals("Microsoft.Data.SqlClient.SqlCommand", StringComparison.OrdinalIgnoreCase))
@@ -131,7 +160,7 @@ public static partial class VisualBasicSyntaxExtractor
         for (var i = at + 1; i < statements.Count; i++)
         {
             if (++work > 64) { properties["commandAssociationReason"] = "local-window-limit"; return; }
-            if (ParameterAdd(statements[i])) continue;
+            if (ParameterAdd(statements[i]) || Configuration(statements[i])) continue;
             if (statements[i] is ExpressionStatementSyntax { Expression: InvocationExpressionSyntax execute }
                 && execute.Expression is MemberAccessExpressionSyntax member && Same(member.Expression)
                 && new[] { "ExecuteScalar", "ExecuteNonQuery", "ExecuteReader", "ExecuteXmlReader" }.Contains(member.Name.Identifier.ValueText, StringComparer.OrdinalIgnoreCase)
@@ -142,7 +171,7 @@ public static partial class VisualBasicSyntaxExtractor
                 properties["commandExecutionStartLine"] = (execute.GetLocation().GetLineSpan().StartLinePosition.Line + 1).ToString(System.Globalization.CultureInfo.InvariantCulture);
                 properties["commandExecutionSpanStart"] = execute.SpanStart.ToString(System.Globalization.CultureInfo.InvariantCulture);
                 properties["commandExecutionMethod"] = member.Name.Identifier.ValueText;
-                properties["commandAssociationReason"] = "fresh-local-consecutive-adds-and-execution";
+                properties["commandAssociationReason"] = "fresh-local-supported-configuration-and-execution";
             }
             else properties["commandAssociationReason"] = "intervening-statement-or-unsupported-execution";
             return;
