@@ -79,3 +79,4 @@
 - [x] Replace fixed index admission with explicit bounded size/timeout options, actionable refusal, public large-file native smoke and same-index work-machine instructions.
 - [x] Add explicit local-only hash-matched SQL literal recovery, native truncation reason display, public guards and post-reconciliation prompt.
 - [x] Preserve original query truncation and unknown/conflicting diagnostics in literal recovery output and prompt; pin four regression cases.
+- [x] Consolidate existing native SQL root reports into one opt-in local inventory, preserving input-scoped identity, coverage, truncation and unresolved contract fields; add bounded multi-input guards.

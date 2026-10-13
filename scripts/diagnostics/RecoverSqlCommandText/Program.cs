@@ -9,25 +9,37 @@ using Mono.Cecil.Cil;
 try
 {
     var options = new Dictionary<string, string>(StringComparer.Ordinal);
-    var allowed = new HashSet<string> { "--paths", "--assembly", "--expected-sha256", "--out" };
+    var reportPaths = new List<string>();
+    var allowed = new HashSet<string> { "--assembly", "--expected-sha256", "--out" };
     var consent = false;
     for (var i = 0; i < args.Length; i++)
     {
         if (args[i] == "--allow-local-command-text" && !consent) { consent = true; continue; }
+        if (args[i] == "--paths" && i + 1 < args.Length) { reportPaths.Add(Path.GetFullPath(args[++i])); continue; }
         if (!allowed.Contains(args[i]) || i + 1 >= args.Length || !options.TryAdd(args[i], args[++i]))
             throw new InvalidDataException();
     }
-    if (!consent || options.Count != 4) throw new InvalidDataException();
-    var reportPath = Path.GetFullPath(options["--paths"]);
+    if (!consent || options.Count != 3 || reportPaths.Count is < 1 or > 32
+        || reportPaths.Distinct(StringComparer.OrdinalIgnoreCase).Count() != reportPaths.Count) throw new InvalidDataException();
     var binaryPath = Path.GetFullPath(options["--assembly"]);
     var output = Path.GetFullPath(options["--out"]);
     var expected = options["--expected-sha256"].ToLowerInvariant();
     if (expected.Length != 64 || expected.Any(c => !Uri.IsHexDigit(c)) || File.Exists(output)
-        || new FileInfo(reportPath).Length > 64L * 1024 * 1024
+        || reportPaths.Sum(path => new FileInfo(path).Length) > 64L * 1024 * 1024
         || new FileInfo(binaryPath).Length > 256L * 1024 * 1024) throw new InvalidDataException();
-    var reportBytes = File.ReadAllBytes(reportPath);
     var binaryBytes = File.ReadAllBytes(binaryPath);
     if (Hash(binaryBytes) != expected) throw new InvalidDataException();
+    var rows = new List<(int Input, string Path, string State, string Identity, string Type, string Caller, string Terminal, string Evidence, string Limits)>();
+    var inputLines = new List<string>();
+    var inputHashes = new HashSet<string>(StringComparer.Ordinal);
+    var ordinal = 0;
+    long totalBytes = 0;
+    foreach (var reportPath in reportPaths)
+    {
+    ordinal++;
+    var reportBytes = File.ReadAllBytes(reportPath);
+    totalBytes += reportBytes.Length;
+    if (totalBytes > 64L * 1024 * 1024 || !inputHashes.Add(Hash(reportBytes))) throw new InvalidDataException();
     using var report = JsonDocument.Parse(reportBytes);
     var paths = report.RootElement.GetProperty("paths");
     if (paths.GetArrayLength() > 256) throw new InvalidDataException();
@@ -43,7 +55,18 @@ try
                     && !string.IsNullOrWhiteSpace(reason.GetString()) ? reason.GetString()! : "reason unavailable");
     var reasonText = reasons.Count > 0 ? string.Join(", ", reasons)
         : truncation == "false" ? "none recorded (not completeness proof)" : "reason unavailable in retained diagnostics";
-    var rows = new List<(string Path, string State, string Identity, string Type)>();
+    inputLines.AddRange(new[] { $"## Input {ordinal}",
+        $"Bounded path-report input SHA-256: {Hash(reportBytes)}",
+        $"Original query truncated: {truncation}",
+        $"Original query truncation reasons: {Cell(reasonText)}",
+        $"Retained path rows: {paths.GetArrayLength()} (not unique procedures or business operations).",
+        "Current-build identity: not established by this projection. Native source provenance is retained below, not upgraded.",
+        "Native source provenance: " + Cell(report.RootElement.TryGetProperty("sources", out var sources) ? sources.GetRawText() : "unavailable"),
+        "Native query: " + Cell(report.RootElement.TryGetProperty("query", out var query) ? query.GetRawText() : "unavailable"),
+        "Native coverage: " + Cell(report.RootElement.TryGetProperty("reportCoverage", out var coverage) ? coverage.ToString() : "unavailable"),
+        "Native coverage warnings: " + Cell(report.RootElement.TryGetProperty("coverageWarnings", out var warnings) ? warnings.GetRawText() : "unavailable"),
+        "Native limitations: " + Cell(report.RootElement.TryGetProperty("limitations", out var limits) ? limits.GetRawText() : "unavailable"), "" });
+    if (paths.GetArrayLength() == 0) inputLines.Add("No retained paths for this input; not evidence of no SQL use.");
     foreach (var path in paths.EnumerateArray())
     {
         var nodes = path.GetProperty("nodes");
@@ -65,7 +88,17 @@ try
                 && kind.GetProperty("origin").GetProperty("kind").GetString() == "constant-int32")
                 type = kind.GetProperty("origin").GetProperty("identity").GetString() switch { "4" => "StoredProcedure", "1" => "Text", _ => "unavailable" };
         }
-        rows.Add((path.GetProperty("pathId").GetString() ?? "unknown", state, identity, type));
+        rows.Add((ordinal, path.GetProperty("pathId").GetString() ?? "unknown", state, identity, type,
+            nodes[0].TryGetProperty("symbolId", out var caller) ? caller.ToString() : "unavailable",
+            terminal.TryGetProperty("surfaceName", out var name) ? name.ToString() : "unavailable",
+            (terminal.TryGetProperty("ruleId", out var rule) ? rule.ToString() : "unavailable") + " / "
+            + (terminal.TryGetProperty("evidenceTier", out var tier) ? tier.ToString() : "unavailable"),
+            "classification=" + (path.TryGetProperty("classification", out var classification) ? classification.ToString() : "unavailable")
+            + "; confidence=" + (path.TryGetProperty("confidence", out var confidence) ? confidence.ToString() : "unavailable")
+            + "; notes=" + (path.TryGetProperty("notes", out var notes) ? notes.GetRawText() : "unavailable")
+            + "; terminal limitations=" + (terminal.TryGetProperty("limitations", out var terminalLimits) ? terminalLimits.GetRawText() : "unavailable")));
+        if (rows.Count > 1024) throw new InvalidDataException();
+    }
     }
     var wanted = rows.Where(r => r.Identity.Length > 0).Select(r => r.Identity).ToHashSet(StringComparer.Ordinal);
     var matches = new Dictionary<string, SortedSet<string>>(StringComparer.Ordinal);
@@ -95,23 +128,24 @@ try
             }
         }
     }
-    var lines = new List<string> { "# SQL command literals — PRIVATE LOCAL OUTPUT", "",
+    var lines = new List<string> { "# Consolidated SQL evidence inventory — PRIVATE LOCAL OUTPUT", "",
         "Rule: sql.local.command-literal-match.v1; Tier3SyntaxOrTextual.", "",
         "Content match only: the report's constant hash/UTF-16 length matched an ldstr operand in the explicitly supplied binary. The expected binary SHA is operator-supplied; this tool does not independently bind the binary to the historical scan or verify source provenance. Preserve the route's original evidence tier and warnings. No execution, SQL parsing, procedure existence, current-build identity, parameter/connection/transaction proof or whole-site completeness is established.", "",
         $"Generator SHA-256: {Hash(File.ReadAllBytes(typeof(Program).Assembly.Location))}",
         $"Cecil SHA-256: {Hash(File.ReadAllBytes(typeof(AssemblyDefinition).Assembly.Location))}",
-        $"Bounded path-report input SHA-256: {Hash(reportBytes)}",
         $"Explicit binary input SHA-256: {expected}",
-        $"Original query truncated: {truncation}",
-        $"Original query truncation reasons: {Cell(reasonText)}",
         "Recovery covers only supplied retained paths. Successful literal recovery never clears original query truncation, proves complete enumeration, or upgrades historical/current-build provenance. Missing reason entries do not mean no truncation. If flag and reason entries conflict, retain both and reconcile the native evidence.",
-        "Bounds: 64 MiB path report; 256 paths; 256 MiB binary; two million inspected methods/instructions; 32768 UTF-16 units per literal. Overlength literals are unavailable, not absent. Symbolic/dynamic expressions are not evaluated.", "",
-        "| Path | Command type evidence | Text evidence state | Local literal / status |", "| --- | --- | --- | --- |" };
+        "Bounds: 32 reports, 64 MiB aggregate report bytes; 256 paths per report, 1024 total rows; 256 MiB binary; two million inspected methods/instructions; 32768 UTF-16 units per literal. Overlength literals are unavailable, not absent. Symbolic/dynamic expressions are not evaluated.", "" };
+    lines.AddRange(inputLines);
+    lines.AddRange(new[] { "## Retained SQL rows", "",
+        "Rows remain scoped by input ordinal and path ID. No cross-root deduplication or path splicing is performed. Repeated constants do not establish unique procedure counts.", "",
+        "| Input / path | Caller | Terminal / rule / tier | Command type evidence | Text evidence state | Local literal / status | Native path qualification | Parameters / connection / transaction | Schema contract / migration decision |",
+        "| --- | --- | --- | --- | --- | --- | --- | --- | --- |" });
     foreach (var row in rows)
     {
         var value = row.Identity.Length > 0 && matches.TryGetValue(row.Identity, out var values) && values.Count == 1
             ? "hash-matched literal: " + values.Single() : "unavailable: no unique admitted constant match";
-        lines.Add($"| {Cell(row.Path)} | {Cell(row.Type)} | {Cell(row.State)} | {Cell(value)} |");
+        lines.Add($"| {row.Input} / {Cell(row.Path)} | {Cell(row.Caller)} | {Cell(row.Terminal)} / {Cell(row.Evidence)} | {Cell(row.Type)} | {Cell(row.State)} | {Cell(value)} | {Cell(row.Limits)} | not established by literal projection; inspect native evidence | not supplied / undecided |");
     }
     using var writer = new StreamWriter(new FileStream(output, FileMode.CreateNew, FileAccess.Write, FileShare.None));
     foreach (var line in lines) writer.WriteLine(line);

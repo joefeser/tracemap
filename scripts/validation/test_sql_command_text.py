@@ -21,11 +21,13 @@ class CommandTextTests(unittest.TestCase):
         self.input.write_text(json.dumps(self.report), encoding='utf-8')
         self.sha = hashlib.sha256(CONFIG.assembly.read_bytes()).hexdigest()
 
-    def run_tool(self, consent=True, sha=None, assembly=None):
+    def run_tool(self, consent=True, sha=None, assembly=None, extra_reports=()):
         command = ['dotnet', str(CONFIG.tool), '--paths', str(self.input), '--assembly', str(assembly or CONFIG.assembly),
                    '--expected-sha256', sha or self.sha, '--out', str(self.output)]
         if consent:
             command += ['--allow-local-command-text']
+        for report in extra_reports:
+            command += ['--paths', str(report)]
         result = subprocess.run(command, capture_output=True, text=True, timeout=30)
         self.assertNotIn('PublicCatalog_Save', result.stdout + result.stderr)
         return result
@@ -130,6 +132,71 @@ class CommandTextTests(unittest.TestCase):
         self.assertIn('Original query truncated: false', text)
         self.assertIn('Original query truncation reasons: path', text)
         self.assertIn('retain both and reconcile', text)
+
+    def test_multiple_roots_keep_identity_truncation_and_duplicate_path_ids(self):
+        self.report['summary']['truncated'] = True
+        self.report['coverageWarnings'] = ['public-coverage-warning']
+        self.input.write_text(json.dumps(self.report))
+        second = self.folder / 'second.json'
+        self.report['summary']['truncated'] = False
+        self.report['query']['fromSymbol'] = 'another-public-root'
+        second.write_text(json.dumps(self.report))
+        self.assertEqual(0, self.run_tool(extra_reports=[second]).returncode)
+        text = self.output.read_text()
+        self.assertIn('## Input 1', text)
+        self.assertIn('## Input 2', text)
+        self.assertIn('Original query truncated: true', text)
+        self.assertIn('Original query truncated: false', text)
+        self.assertEqual(2, text.count('hash-matched literal: PublicCatalog_Save'))
+        self.assertIn('public-coverage-warning', text)
+        self.assertIn('NeedsReviewPath', text)
+        self.assertIn('BoundCompiledIlEvidence', text)
+        self.assertIn('not supplied / undecided', text)
+
+    def test_empty_root_retained_in_consolidation(self):
+        empty = self.folder / 'empty.json'
+        self.report['paths'] = []
+        empty.write_text(json.dumps(self.report))
+        self.assertEqual(0, self.run_tool(extra_reports=[empty]).returncode)
+        self.assertIn('No retained paths for this input; not evidence of no SQL use.', self.output.read_text())
+
+    def test_duplicate_file_and_duplicate_content_refused(self):
+        duplicate = self.folder / 'duplicate.json'
+        duplicate.write_bytes(self.input.read_bytes())
+        for second in [self.input, duplicate]:
+            self.assertEqual(2, self.run_tool(extra_reports=[second]).returncode)
+            self.assertFalse(self.output.exists())
+
+    def test_report_count_bound_refused(self):
+        reports = []
+        for i in range(32):
+            report = self.folder / f'root-{i}.json'
+            self.report['query']['fromSymbol'] = f'public-root-{i}'
+            report.write_text(json.dumps(self.report))
+            reports.append(report)
+        self.assertEqual(2, self.run_tool(extra_reports=reports).returncode)
+        self.assertFalse(self.output.exists())
+
+    def test_aggregate_path_bound_refused(self):
+        reports = []
+        self.report['paths'] *= 256
+        for i in range(4):
+            report = self.folder / f'root-{i}.json'
+            self.report['query']['fromSymbol'] = f'public-root-{i}'
+            report.write_text(json.dumps(self.report))
+            reports.append(report)
+        self.assertEqual(2, self.run_tool(extra_reports=reports).returncode)
+        self.assertFalse(self.output.exists())
+
+    def test_consolidated_output_deterministic(self):
+        second = self.folder / 'second.json'
+        self.report['query']['fromSymbol'] = 'another-public-root'
+        second.write_text(json.dumps(self.report))
+        self.assertEqual(0, self.run_tool(extra_reports=[second]).returncode)
+        first = self.output.read_bytes()
+        self.output.unlink()
+        self.assertEqual(0, self.run_tool(extra_reports=[second]).returncode)
+        self.assertEqual(first, self.output.read_bytes())
 
 
 if __name__ == '__main__':
