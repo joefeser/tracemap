@@ -28,6 +28,10 @@ Markdown links/images are rendered inert; surrogate UTF-16 units and NUL use
 visible Unicode escapes. This is a review representation, not executable SQL.
 Existing output is refused. No consent or incorrect binary hash produces no output.
 
+Original native query truncation flags and reason categories are preserved in
+the output. Missing flags/reasons stay unknown; successful recovery never clears
+truncation. Conflicting flags and reasons are retained rather than normalized away.
+
 Bounds: 64 MiB report, 256 paths, 256 MiB binary, two million methods/instructions,
 32768 UTF-16 units per literal. Overlength, symbolic, missing or nonunique matches
 remain unavailable. Hash algorithm mirrors the scanner's exact UTF-16 code-unit

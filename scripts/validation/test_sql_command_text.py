@@ -97,6 +97,40 @@ class CommandTextTests(unittest.TestCase):
         self.assertIn('!&#91;x&#93;', text)
         self.assertIn('\\ud83d\\ude00', text)
 
+    def test_truncated_without_reason_stays_truncated(self):
+        self.report['summary']['truncated'] = True
+        self.report['gaps'] = []
+        self.input.write_text(json.dumps(self.report))
+        self.assertEqual(0, self.run_tool().returncode)
+        text = self.output.read_text()
+        self.assertIn('Original query truncated: true', text)
+        self.assertIn('reason unavailable in retained diagnostics', text)
+        self.assertNotIn('none recorded', text)
+
+    def test_truncation_reasons_sorted_and_preserved(self):
+        self.report['summary']['truncated'] = True
+        self.report['gaps'] = [{'gapKind': 'TruncatedByLimit', 'reason': 'work'}, {'gapKind': 'TruncatedByLimit', 'reason': 'depth'}]
+        self.input.write_text(json.dumps(self.report))
+        self.assertEqual(0, self.run_tool().returncode)
+        self.assertIn('Original query truncation reasons: depth, work', self.output.read_text())
+
+    def test_missing_flag_is_unknown(self):
+        self.report.pop('summary', None)
+        self.report['gaps'] = []
+        self.input.write_text(json.dumps(self.report))
+        self.assertEqual(0, self.run_tool().returncode)
+        self.assertIn('Original query truncated: unknown', self.output.read_text())
+
+    def test_false_flag_with_reason_preserves_conflict(self):
+        self.report['summary']['truncated'] = False
+        self.report['gaps'] = [{'gapKind': 'TruncatedByLimit', 'reason': 'path'}]
+        self.input.write_text(json.dumps(self.report))
+        self.assertEqual(0, self.run_tool().returncode)
+        text = self.output.read_text()
+        self.assertIn('Original query truncated: false', text)
+        self.assertIn('Original query truncation reasons: path', text)
+        self.assertIn('retain both and reconcile', text)
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
