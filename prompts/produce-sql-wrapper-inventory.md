@@ -45,8 +45,12 @@ of reporting “no database calls.” Do not claim full-site coverage or runtime
    python scripts/sql-wrapper-report.py --cli <built-tracemap.dll> --index <closed-index.sqlite> --root <exact-caller-symbol> --root <another-exact-caller-symbol> --out <fresh-local-directory>
    ```
 
-   Maximum 32 roots per invocation, 512 MiB index, 20-hop depth and 256 paths per
-   root. If these bounds are insufficient, record the limitation; do not silently
+   Maximum 32 roots per invocation, default 512 MiB index, 20-hop depth and 256 paths per
+   root. Existing larger indices can be admitted with `--max-index-mib 1024`
+   (allowed range 1..16384); `--query-timeout-seconds 600` can explicitly extend
+   the default 120-second per-root timeout (allowed range 1..3600). Both settings
+   are recorded. Do not rescan or remove assemblies merely to satisfy the default
+   size guard. If traversal/output bounds are insufficient, record the limitation; do not silently
    claim completeness. Each selection has native path evidence. Failed queries
    cause exit 2 and remain failures, never successful empty results. Diagnose
    failures with the equivalent native `paths` command before accepting output.

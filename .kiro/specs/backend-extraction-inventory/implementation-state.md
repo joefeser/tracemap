@@ -536,3 +536,23 @@ report from that same unchanged index/CLI, with the same counts and both gap
 association labels verified. No private inputs, fixture methods or database
 connections were used. This receipt closes the bounded reporting delivery, not
 private-site acceptance, full caller discovery or readable SQL contract recovery.
+
+### Retained SQL index size admission correction
+
+The helper's fixed 512 MiB cap can reject an otherwise usable retained compiled
+index before any native query. Added explicit `--max-index-mib` (default 512,
+range 1..16384) and `--query-timeout-seconds` (default 120, range 1..3600).
+Report headers record both selected bounds and input byte size; size refusal is
+actionable and public-safe, and timeouts remain failed queries. Hashing remains
+streamed. Native graph depth/path/work limits and output-size guard are unchanged.
+The reconciliation prompt now directs reuse of the same retained index with
+explicit admission, never a reduced rescan or application rebuild to evade a cap.
+
+Fourteen Python guards passed, including an actual 768 MiB sparse file, default
+refusal before output/process creation, explicit admission, inclusive boundary,
+invalid options, timeout categorization and unchanged file size. Native CLI smoke
+also passed with a valid public SQLite fixture index padded to 768 MiB: default
+refusal, explicit 1024 MiB admission, two routes, one unmatched and zero failures.
+Padding tests file-size admission, not logical graph scale or private corpus
+compatibility. No scanner/extractor changes or database execution. Windows smoke
+is pending for this correction; earlier platform receipts remain head-bound.

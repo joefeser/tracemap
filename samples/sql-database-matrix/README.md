@@ -87,3 +87,14 @@ does not extract readable SQL, enumerate all callers, or execute database calls.
 dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter FullyQualifiedName~SqlWrapperRouteTests -warnaserror
 python3 scripts/validation/test_sql_wrapper_report.py
 ```
+
+For a retained index exceeding the default 512 MiB admission limit, explicitly
+pass `--max-index-mib 1024` (maximum 16384 MiB). Optionally pass
+`--query-timeout-seconds 600` (default 120, maximum 3600). These change admission
+and wall-clock bounds, not path depth/count or graph work limits. Do not discard
+assemblies or rescan merely to reduce file size. The local report records both.
+
+`scripts/validation/sql-wrapper-large-index-smoke.py --cli <built-tracemap.dll>
+--out <fresh-directory>` runs the public compiled fixture through a valid SQLite
+index padded to 768 MiB. It tests default refusal, explicit admission and native
+route retention. It is a file-size test, not a large logical-graph benchmark.

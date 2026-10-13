@@ -27,6 +27,9 @@ jobs:
         run: python scripts/validation/test_sql_matrix_expectations.py
       - name: Selected-root SQL report guards
         run: python scripts/validation/test_sql_wrapper_report.py
+      - name: Large retained index admission (public padded SQLite, no graph-scale claim)
+        shell: pwsh
+        run: python scripts/validation/sql-wrapper-large-index-smoke.py --cli src/dotnet/TraceMap.Cli/bin/Debug/net10.0/tracemap.dll --out "$env:RUNNER_TEMP/sql-wrapper-large-index"
       - name: Deterministic native CLI matrix (no fixture execution)
         shell: pwsh
         run: python scripts/validation/sql-coverage-smoke.py --output "$env:RUNNER_TEMP/sql-matrix"

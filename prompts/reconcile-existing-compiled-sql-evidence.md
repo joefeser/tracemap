@@ -91,6 +91,26 @@ Repeat `--root` for additional explicit callers, at most 32. Preserve the helper
 input, traversal and timeout bounds. Use the existing built CLI; if tooling is
 missing or incompatible, report that blocker rather than improvising changes.
 
+### Existing index exceeds the default size limit
+
+The default 512 MiB admission limit is configurable. For an already identified
+retained index larger than 512 MiB but no larger than 1 GiB, rerun against the
+SAME CLOSED INDEX with these explicit helper options:
+
+```text
+python scripts/sql-wrapper-report.py --cli <existing-built-tracemap.dll> --index <same-closed-retained-index.sqlite> --root <exact-compiled-caller-symbol> --out <fresh-local-directory> --max-index-mib 1024 --query-timeout-seconds 600
+```
+
+Do not produce a reduced rescan, omit assemblies, rebuild the application or
+modify the index just to meet the default limit. The helper streams its file
+hashes and records the selected limit and timeout. This does not guarantee the
+native graph fits available memory or completes within the selected timeout;
+graph depth/path/work bounds and the 64 MiB output cap remain unchanged. If it
+still fails, retain the failure category and historical handoff evidence. Do not
+infer schema incompatibility, missing SQL or absent routes from a size refusal.
+Larger indices require an explicitly chosen limit (maximum 16384 MiB), not an
+unbounded override. A timeout remains a failed query, never an empty result.
+
 If only an older compatible handoff survives:
 
 - Inspect and report its retained ordered nodes, edges and command evidence.
