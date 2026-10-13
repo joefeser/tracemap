@@ -41,7 +41,11 @@ If a locally known entry-to-operation chain remains unconnected, use
 against the existing scan. Accurate gap reporting is not connectivity acceptance.
 
 For a previously diagnosed Handles chain, explicitly report whether that exact
-chain now appears. Read its `anchor assessment` and the aggregate Handles anchor
+chain now appears as a VB Handles observed-event syntax candidate. Unknown external
+base ancestry must remain separately labeled in `framework assessment`; it must
+not turn this chain into a verified WebForms boundary or deployed HTTP route.
+Report observed-event connectivity separately from handler-resolution coverage.
+Read its `anchor assessment` and the aggregate Handles anchor
 assessment counts. If rejected, inspect only the first reported guard against
 local facts/source and return its generic reason plus sanitized structural shape
 (for example, base declaration in a separate partial file or an imported short

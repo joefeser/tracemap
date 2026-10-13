@@ -5,8 +5,11 @@ namespace TraceMap.Tests;
 
 public sealed class IntegratedMigrationReportTests
 {
-    [Fact]
-    public void UserControl_handles_helper_http_chain_preserves_syntax_tier_and_refuses_ambiguous_anchors()
+    [Theory]
+    [InlineData("System.Web.UI.UserControl", "explicit-usercontrol-base-syntax-candidate")]
+    [InlineData("UnavailableBase", "explicit-usercontrol-base-not-established")]
+    [InlineData("System.Windows.Forms.Form", "explicit-usercontrol-base-not-established")]
+    public void Handles_helper_http_chain_preserves_syntax_tier_and_refuses_ambiguous_anchors(string baseType, string frameworkReason)
     {
         using var source = new TempDirectory();
         using var output = new TempDirectory();
@@ -21,7 +24,7 @@ public sealed class IntegratedMigrationReportTests
                     client.UploadString("https://example.invalid/action", "POST", "synthetic")
                 End Sub
             End Class
-            """);
+            """.Replace("System.Web.UI.UserControl", baseType, StringComparison.Ordinal));
         var scan = ScanEngine.Scan(new ScanOptions(source.Path, output.Path));
         var binding = Assert.Single(scan.Facts, f => f.FactType == FactTypes.VisualBasicEventBindingDeclared);
         Assert.DoesNotContain(scan.Facts, f => f.FactType == FactTypes.WebFormsHandlerResolved);
@@ -31,7 +34,9 @@ public sealed class IntegratedMigrationReportTests
         string Report(IEnumerable<CodeFact> facts) => MarkdownReportWriter.Build(scan with { Facts = facts.ToArray() });
         var report = Report(scan.Facts);
         Assert.Contains("Displayed groups with candidate entry paths: 1/1", report);
-        Assert.Contains("1/1 UserControl Handles syntax candidate anchors", report);
+        Assert.Contains("1/1 VB Handles observed-event candidate anchors", report);
+        Assert.Contains($"framework assessment `{frameworkReason}`", report);
+        Assert.Contains("not necessarily WebForms entries", report);
         Assert.Contains("0/0 handler-resolution facts", report);
         Assert.Contains("`candidate-anchor-established`: 1", report);
         Assert.Contains("hosting/route unresolved", report);
@@ -67,9 +72,16 @@ public sealed class IntegratedMigrationReportTests
         CheckProperty(binding, "eventName", "", "event-name-missing");
         CheckProperty(handler, "qualifiedContainingType", "", "containing-type-identity-missing");
         CheckProperty(type, "qualifiedName", "Other", "same-file-type-declaration-missing");
-        CheckProperty(type, "baseTypes", "", "same-file-base-evidence-missing");
-        foreach (var spelling in new[] { "UserControl", "UI.UserControl", "CustomControl", "Forms.Control" })
-            CheckProperty(type, "baseTypes", spelling, "explicit-usercontrol-base-not-established");
+        foreach (var spelling in new[] { "", "UserControl", "UI.UserControl", "CustomControl", "Forms.Control" })
+        {
+            var properties = type.Properties.ToDictionary(p => p.Key, p => p.Value);
+            properties["baseTypes"] = spelling;
+            var candidate = Report(scan.Facts.Select(f => f == type ? f with { Properties = properties } : f));
+            Assert.Contains("Displayed groups with candidate entry paths: 1/1", candidate);
+            Assert.Contains("0/0 handler-resolution facts", candidate);
+            Assert.Contains(spelling.Length == 0 ? "framework assessment `same-file-base-evidence-missing`"
+                : "framework assessment `explicit-usercontrol-base-not-established`", candidate);
+        }
         Assert.Contains("`method-owner-ambiguous`: 1", Report(scan.Facts.Append(handler with { FactId = "duplicate-owner" })));
         Assert.Contains("`method-owner-missing`: 1", Report(scan.Facts.Where(f => f != handler)));
         Assert.Contains("`same-file-type-declaration-ambiguous`: 1", Report(scan.Facts.Append(type with { FactId = "duplicate-type" })));

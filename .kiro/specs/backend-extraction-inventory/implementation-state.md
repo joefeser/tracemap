@@ -905,3 +905,18 @@ deferred for this report-only diagnostic change.
 Validation: 11 integrated/report tests passed with warnings as errors; 33 WebForms
 composition/event identity and compiled-wrapper regression tests passed. Exact-head
 Windows CI and private acceptance remain pending.
+
+### 2026-10-13: external-base Handles chain projection
+
+Separate observed VB Handles event-chain anchors from framework classification.
+Unique owner/name/receiver/event and same-file type identity guards remain; missing
+or unknown base ancestry now records a framework assessment without suppressing
+the source event chain. Direct UserControl spelling stays a syntax candidate,
+not verified ancestry. Retained WebForms handler coverage remains separate.
+Full native-scan tests cover direct UserControl, unavailable external base and
+Windows Forms base through the same helper-to-UploadString path, preserving
+ambiguity negatives and deterministic output. No private code or DLL was used.
+Report-only change: no extractor/schema changes; full adapter smoke deferred.
+Private chain acceptance and exact-head Windows CI still require verification.
+Local validation: 46 integrated/report/WebForms/compiled-wrapper tests passed with
+warnings as errors; synthetic scan/report paths exercised without network calls.

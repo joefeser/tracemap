@@ -4636,8 +4636,11 @@ The same tests also scan a synthetic VB UserControl with a `Handles` button
 binding, an implicit same-class helper call and `WebClient.UploadString`. Its
 entry anchor must remain Tier3 syntax evidence, not a handler-resolution fact or
 deployed route. Missing type/call evidence, ambiguous method ownership and
-unrelated bindings must leave the operation unconnected. This fallback requires
-an explicit fully qualified UserControl base spelling; other forms remain gaps.
+unrelated bindings must leave the operation unconnected. The full-chain test also
+runs with an unavailable external base and a Windows Forms base: the event chain
+remains visible but neither is classified as a WebForms boundary. Framework
+ancestry assessment is separate from event-chain connectivity, never inferred
+from a short base name, and no DLL or application method is executed.
 
 `VisualBasicSyntaxTypeLookupTests` compares the cached resolver against its prior
 algorithm, pins root isolation/concurrent reads and repeated immutable-result reuse,
