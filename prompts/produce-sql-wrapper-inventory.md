@@ -1,5 +1,9 @@
 # Produce the local SQL wrapper inventory
 
+If earlier compiled SQL routes were reported but the current inventory is
+source-only, first follow [the compiled-evidence reconciliation prompt](reconcile-existing-compiled-sql-evidence.md).
+Do not repeat a source-only assessment in place of reconciling that evidence.
+
 Use this prompt on the authorized work machine. This is SQL-only assessment,
 not an implementation or contribution task. Keep all application names, paths,
 source, binaries, indices, SQL and reports on that machine. Do not commit, push,

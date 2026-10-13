@@ -1,5 +1,9 @@
 # Private exchange prompts
 
+For a source-only SQL result that conflicts with an earlier reported compiled
+route, use [Reconcile existing compiled SQL evidence](reconcile-existing-compiled-sql-evidence.md)
+first. It explicitly forbids another source-only assessment or application build.
+
 These prompts produce small, aggregate-only maintainer handoffs. They must be
 run locally in the private environment. Never commit source labels, repository
 identities, private commit SHAs, run IDs, paths, values, indexes, reports, SQL,
