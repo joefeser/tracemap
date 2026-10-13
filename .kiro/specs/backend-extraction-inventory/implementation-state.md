@@ -708,3 +708,20 @@ Initial 56 VB/SQL/parameter regressions passed and native CLI sample retained 67
 facts. Windows and full matrix validation remain separate pending gates.
 The second warning-as-error run passed 78 HTTP/external-boundary/configured-import/
 effective-import-context/lookup tests, including final concurrent cache guards.
+
+### Projectless collection Add parameter evidence
+
+vb-syntax/0.4.3 adds typed command.Parameters.Add candidates for a simple command
+identifier with explicit System.Data.SqlClient or Microsoft.Data.SqlClient command
+type evidence. Cached imports/aliases and relative qualification are supported;
+same-file shadows and competing supported providers are refused. Shared argument
+projection retains only hashes plus recognized enum syntax. Direction and command
+instance/procedure association remain unresolved. Existing CallEdge emission is
+preserved. With blocks, factories, collection aliases and AddWithValue remain
+outside this increment. Added public fixture and positive/negative tests; the
+existing Windows test filter includes them. No private source or SQL execution.
+Local surrounding suite passed 63 tests before the final relative-qualification
+case; final candidate suite and native CLI smoke are recorded below.
+Final warning-as-error build/candidate suite passed 18 tests. Native public sample
+scan retained three parameter candidates, including one collection Add candidate.
+Windows and full 96-output matrix validation remain pending for this increment.

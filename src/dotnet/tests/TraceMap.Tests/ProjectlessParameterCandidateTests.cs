@@ -6,6 +6,32 @@ namespace TraceMap.Tests;
 
 public sealed class ProjectlessParameterCandidateTests
 {
+    [Theory]
+    [InlineData("Imports System.Data\nImports System.Data.SqlClient", "SqlCommand", true)]
+    [InlineData("Imports System.Data", "SqlClient.SqlCommand", true)]
+    [InlineData("Imports C = System.Data.SqlClient.SqlCommand\nImports System.Data", "C", true)]
+    [InlineData("Imports N = Microsoft.Data.SqlClient\nImports System.Data", "N.SqlCommand", true)]
+    [InlineData("Imports System.Data", "Fake.SqlCommand", false)]
+    [InlineData("Imports System.Data", "Object", false)]
+    [InlineData("Imports System.Data\nImports System.Data.SqlClient\nImports Microsoft.Data.SqlClient", "SqlCommand", false)]
+    [InlineData("Imports System.Data\nImports System.Data.SqlClient\nPublic Class SqlCommand\nEnd Class", "SqlCommand", false)]
+    public void Collection_add_retains_only_explicit_command_candidates(string imports, string type, bool expected)
+    {
+        using var temp = new TempDirectory();
+        File.WriteAllText(Path.Combine(temp.Path, "Input.vb"), $"{imports}\nPublic Class Example\nSub Run(command As {type})\ncommand.Parameters.Add(\"@PrivateSentinel\", SqlDbType.VarChar)\nEnd Sub\nEnd Class");
+        WebFormsWizardNativeTests.InitGit(temp.Path);
+        var scan = ScanEngine.Scan(new ScanOptions(temp.Path, Path.Combine(temp.Path, "out")));
+        var candidates = scan.Facts.Where(f => f.FactType == FactTypes.DatabaseParameterCandidate).ToArray();
+        Assert.Equal(expected ? 1 : 0, candidates.Length);
+        if (!expected) return;
+        var candidate = Assert.Single(candidates);
+        Assert.Equal("syntax-parameter-collection-add", candidate.Properties["coverageLabel"]);
+        Assert.Equal("SqlDbType.VarChar", candidate.Properties["parameterTypeName"]);
+        Assert.Equal("unknown", candidate.Properties["parameterDirectionEvidence"]);
+        Assert.Equal("unresolved", candidate.Properties["commandAssociation"]);
+        Assert.DoesNotContain("PrivateSentinel", JsonSerializer.Serialize(candidates));
+        Assert.Contains(scan.Facts, f => f.FactType == FactTypes.CallEdge);
+    }
     [Fact]
     public void Ordinary_creations_and_alias_parameter_call_edges_are_preserved()
     {
