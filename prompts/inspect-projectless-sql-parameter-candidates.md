@@ -1,6 +1,6 @@
 # Inspect projectless SQL parameter candidates locally
 
-Use the published scanner with vb-syntax/0.4.5 or later. This increment adds
+Use the published scanner with vb-syntax/0.4.6 or later. This increment adds
 DatabaseParameterCandidate facts for explicit SqlParameter constructors and
 typed command.Parameters.Add(name, SqlDbType) calls, not automatic
 wrapper-to-procedure argument mapping. Reuse existing
@@ -21,6 +21,11 @@ bounded constructor arguments and simple parameter-value/transaction assignments
 It never crosses block boundaries. Report commandAssociationReason for every
 unresolved candidate; distinguish unsupported association from successful parameter
 extraction. Do not claim that an unavailable execution line proves the check ran.
+Count commandReceiverAssociation and commandExecutionEvidence separately. A
+syntax-local-declaration-candidate is receiver evidence at the parameter Add site;
+later complex value expressions can leave execution unresolved without erasing it.
+The legacy commandAssociation field is the combined forward-check result, not the
+receiver-only count. Do not report zero receiver associations solely from that field.
 Before any scan, confirm the saved project configuration and resolved source root
 locally against the user's intended project. Do not infer the project from prior
 debugging context or scan a different registered repository. Named

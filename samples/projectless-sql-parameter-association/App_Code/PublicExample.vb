@@ -2,6 +2,16 @@ Imports System.Data
 Imports System.Data.SqlClient
 
 Public Class PublicExample
+    Public Sub ComplexValue(context As Object, connection As SqlConnection)
+        Try
+            Dim command As New SqlCommand("PublicProcedure", connection)
+            command.Parameters.Add("@PublicId", SqlDbType.Int)
+            command.Parameters("@PublicId").Value = CInt(context.Current.Value.ToString().Trim())
+            command.ExecuteNonQuery()
+        Catch
+        End Try
+    End Sub
+
     Public Sub Nested(connection As SqlConnection, transaction As SqlTransaction, value As Integer)
         Try
             Dim command As New SqlCommand("PublicProcedure", connection)

@@ -754,3 +754,17 @@ Combined synthetic Try/constructor/Value/Transaction fixture plus negative contr
 78 focused tests passed. Final CLI warning-as-error build: zero warnings/errors.
 Final native sample: 66 facts, three association candidates, one unresolved negative;
 all four have reasons. No application/SQL execution. Windows and full matrix deferred.
+
+### 2026-10-13: separate receiver and execution evidence
+
+vb-syntax/0.4.6 retains commandReceiverAssociation and declaration spans once the
+backward local search succeeds, independently of commandExecutionEvidence. The
+existing commandAssociation property remains the combined forward-check result.
+Complex later value expressions do not erase the Add-site receiver witness and
+do not prove execution reachability. Pre-Add uncertainty still refuses association.
+Reporting and the local inspection prompt now distinguish these counts explicitly.
+Public property-chain/conversion/call controls added; no private source copied.
+Focused warning-as-error suite: 82 passed. Native synthetic sample: 93 facts,
+five receiver candidates, three following-execution candidates, two unresolved
+execution results (complex value and reassignment). No fixture or SQL execution.
+Windows and full SQL matrix validation remain deferred.

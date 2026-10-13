@@ -7,6 +7,30 @@ namespace TraceMap.Tests;
 public sealed class ProjectlessParameterCandidateTests
 {
     [Theory]
+    [InlineData("context.Current.Value")]
+    [InlineData("CInt(context.Current.Value)")]
+    [InlineData("context.Current.Value.ToString().Trim()")]
+    [InlineData("Mutate(command)")]
+    public void Complex_values_do_not_erase_receiver_or_prove_execution(string value)
+    {
+        using var temp = new TempDirectory();
+        File.WriteAllText(Path.Combine(temp.Path, "Input.vb"), $"Imports System.Data\nImports System.Data.SqlClient\nPublic Class Example\nSub Run(context As Object, connection As SqlConnection)\nTry\nDim command As New SqlCommand(\"PublicProcedure\", connection)\ncommand.Parameters.Add(\"@PublicA\", SqlDbType.Int)\ncommand.Parameters.Add(\"@PublicB\", SqlDbType.Int)\ncommand.Parameters(\"@PublicA\").Value = {value}\ncommand.ExecuteNonQuery()\nCatch\nEnd Try\nEnd Sub\nEnd Class");
+        WebFormsWizardNativeTests.InitGit(temp.Path);
+        var scan = ScanEngine.Scan(new ScanOptions(temp.Path, Path.Combine(temp.Path, "out")));
+        var candidates = scan.Facts.Where(f => f.FactType == FactTypes.DatabaseParameterCandidate).ToArray();
+        Assert.Equal(2, candidates.Length);
+        foreach (var candidate in candidates)
+        {
+            Assert.Equal("syntax-local-declaration-candidate", candidate.Properties["commandReceiverAssociation"]);
+            Assert.Equal("unresolved", candidate.Properties["commandExecutionEvidence"]);
+            Assert.Equal("unresolved", candidate.Properties["commandAssociation"]);
+            Assert.False(candidate.Properties.ContainsKey("commandExecutionStartLine"));
+            Assert.Equal(EvidenceTiers.Tier3SyntaxOrTextual, candidate.EvidenceTier);
+        }
+        Assert.Contains("syntax-local-declaration-candidate", MarkdownReportWriter.Build(scan));
+    }
+
+    [Theory]
     [InlineData("If True Then", "End If", "unsupported-containing-block")]
     [InlineData("Try", "Catch\nEnd Try", "fresh-local-not-established")]
     public void Association_does_not_cross_block_boundary_and_reports_reason(string open, string close, string reason)
@@ -59,6 +83,7 @@ public sealed class ProjectlessParameterCandidateTests
         foreach (var candidate in candidates)
         {
             Assert.Equal(associated ? "syntax-local-straight-line-candidate" : "unresolved", candidate.Properties["commandAssociation"]);
+            Assert.Equal(string.IsNullOrEmpty(before) ? "syntax-local-declaration-candidate" : "unresolved", candidate.Properties["commandReceiverAssociation"]);
             Assert.Equal(EvidenceTiers.Tier3SyntaxOrTextual, candidate.EvidenceTier);
             Assert.Equal("unknown", candidate.Properties["parameterDirectionEvidence"]);
             if (associated)
