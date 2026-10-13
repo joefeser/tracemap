@@ -17,6 +17,23 @@ public static class BackendExtractionInventoryBuilder
 {
     public const string Rule = "workflow.backend-extraction.retained-report.v1";
 
+    // Presentation-only obligations: never mutate evidence or persisted human decisions.
+    public static IReadOnlyList<string> ReviewTasks(BackendExtractionOperation operation) =>
+        [operation.VariantIndexes.Count == 0
+            ? "Locate or explicitly leave unresolved the entry-to-operation path; absence from this query does not mean unused."
+            : "Verify the page/event or other entry point and its identity bridge to the referenced query roots; do not infer a URL from a handler name.",
+         operation.CandidateVariantIndexes.Count > 0
+            ? "Review candidate variants and their unresolved hops individually; do not splice separate paths into a confirmed chain."
+            : "Review retained path limitations and current-build identity; static reachability does not prove runtime use.",
+         operation.Family == "database"
+            ? "Verify the command/procedure identity against authorized local schema evidence; inspect unresolved expressions at the referenced callsites without assuming they are constants."
+            : "Verify the destination, HTTP method and external service contract against authorized evidence.",
+         operation.Family == "database"
+            ? "Map each caller argument to parameter name, type, direction and null/default behavior; document result sets, return values and affected-row behavior."
+            : "Map request inputs, response shape, authentication and error behavior.",
+         "Verify connection/service selection, transaction boundaries, validation, authorization and failure behavior for this slice.",
+         "Record reviewer, evidence references and retain/replace/retire decision; specify API acceptance tests before approving implementation. Other slices may remain unresolved."];
+
     // References retain full node evidence, including differing callsite/command-binding variants.
     // Do not collapse records by display name or procedure hash.
     internal static BackendExtractionInventory Create(GroupedCompiledPathHandoff handoff)

@@ -81,7 +81,11 @@ public static class GroupedCompiledPathReportWriter
                     W($"<p>Compiled-only API candidate; provenance {H(il.ProvenanceState)}; signature truncated {il.SignatureTruncated}; IL generator {H(il.IlGeneratorSha256)}; bounded input {H(il.IlBoundedInputSha256)}; binary {H(il.RawFileSha256)}. Encoded API operand:</p><pre>{H(il.OriginalTargetIdentity)}</pre>");
                 if (node.HttpCallEvidence is { } http)
                     W($"<p>API family {H(http.MethodFamily)}; method {H(http.MethodName)}; verb {H(node.HttpMethod ?? "UNKNOWN")}; destination {H(http.DestinationAvailability)}; protocol {H(http.ProtocolKind)}; coverage {H(http.CoverageLabel)}. {H(http.Limitations)}</p>");
-                W($"<p>Query roots: {H(string.Join(", ", operation.QueryRootReferences))}. Ordered variant indexes (zero-based): {H(string.Join(", ", operation.VariantIndexes))}. Candidate variant indexes: {H(string.Join(", ", operation.CandidateVariantIndexes))}.</p><p>Review obligations: {H(string.Join(", ", operation.ContractReviewObligations))}</p></details>");
+                W($"<p>Query roots: {H(string.Join(", ", operation.QueryRootReferences))}. Ordered variant indexes (zero-based): {H(string.Join(", ", operation.VariantIndexes))}. Candidate variant indexes: {H(string.Join(", ", operation.CandidateVariantIndexes))}.</p><p>Review obligations: {H(string.Join(", ", operation.ContractReviewObligations))}</p>");
+                W("<h3>Human verification and implementation handoff</h3><p>All checks pending. Evidence above is an input to review, not approval. Record verification in the client work tracker; this report does not persist checkbox decisions.</p><ul>");
+                foreach (var task in BackendExtractionInventoryBuilder.ReviewTasks(operation))
+                    W($"<li>Pending: {H(task)}</li>");
+                W("</ul><p>Reviewer: unassigned; verification evidence: not supplied; implementation acceptance: pending. Truncated queries do not establish complete route coverage.</p></details>");
             }
             W("</section>");
             for (var index = 0; index < handoff.Chains.Count; index++)

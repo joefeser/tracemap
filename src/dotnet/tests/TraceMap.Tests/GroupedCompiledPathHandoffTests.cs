@@ -10,6 +10,21 @@ public sealed class GroupedCompiledPathHandoffTests
     private static readonly string IndexHash = new('a', 64);
 
     [Fact]
+    public void Review_tasks_distinguish_sql_http_and_unconnected_evidence()
+    {
+        var sql = new BackendExtractionOperation("node", "database", "retained-query-path",
+            [0], ["root"], "undecided", [], []);
+        Assert.Contains(BackendExtractionInventoryBuilder.ReviewTasks(sql), t => t.Contains("parameter name"));
+        Assert.Contains(BackendExtractionInventoryBuilder.ReviewTasks(sql), t => t.Contains("current-build identity"));
+        var http = sql with { Family = "outbound-http", VariantIndexes = [], QueryRootReferences = [] };
+        var tasks = BackendExtractionInventoryBuilder.ReviewTasks(http);
+        Assert.Contains(tasks, t => t.Contains("Locate or explicitly leave unresolved"));
+        Assert.Contains(tasks, t => t.Contains("external service contract"));
+        Assert.DoesNotContain(tasks, t => t.Contains("local schema"));
+        Assert.Equal("undecided", http.HumanDecision);
+    }
+
+    [Fact]
     public async Task Backend_inventory_preserves_unconnected_operations_candidates_and_limits()
     {
         var report = Report();
@@ -44,6 +59,11 @@ public sealed class GroupedCompiledPathHandoffTests
         var output = await GroupedCompiledPathReportWriter.WriteAsync(handoff, folder.Path);
         var html = await File.ReadAllTextAsync(output.HtmlPath);
         Assert.Contains("Backend extraction inventory", html);
+        Assert.Contains("Human verification and implementation handoff", html);
+        Assert.Contains("All checks pending", html);
+        Assert.Contains("Map each caller argument", html);
+        Assert.Contains("Locate or explicitly leave unresolved", html);
+        Assert.Contains("Review candidate variants", html);
         Assert.Contains("not a whole-site inventory", html);
         Assert.Contains("&lt;script&gt;client&lt;/script&gt;", html);
         Assert.DoesNotContain("<script>", html);

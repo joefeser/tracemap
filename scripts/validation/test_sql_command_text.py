@@ -105,6 +105,9 @@ class CommandTextTests(unittest.TestCase):
         self.assertNotIn('SELECT ItemId', text)
         self.assertIn('operator-supplied', text)
         self.assertIn(self.sha, text)
+        self.assertIn('## Per-path human verification handoff', text)
+        self.assertIn('Implementation acceptance: pending', text)
+        self.assertIn('Map caller arguments', text)
 
     def test_no_consent_refused_without_output(self):
         self.assertEqual(2, self.run_tool(consent=False).returncode)
