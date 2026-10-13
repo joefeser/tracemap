@@ -14,6 +14,16 @@
 - [ ] End-to-end synthetic DB and HTTP migration handoff acceptance.
 - [ ] Owner's private site trial; report missing evidence without inferred completeness.
 
+## Integrated source report delivery (bounded; broader compiled/private phases above remain separate)
+
+- [x] Enumerate supported SQL/outbound HTTP operation evidence across the scan, including unconnected groups and an explicit denominator.
+- [x] Join retained WebForms page/control handler evidence to ordered candidate source paths with unique explicit type/name/arity or canonical-ID matching; refuse missing/ambiguous bridges.
+- [x] Group parameter/value/text evidence under unique observed callsite lines and retain ungrouped counts; expose pending migration checks.
+- [x] Add one combined projectless VB page/control/backend/SQL/HTTP fixture with nested Try, String.Empty, five parameters, complex values and transaction assignment.
+- [x] Test determinism, broken call/binding evidence, ambiguous targets and report search limits; run SQL/HTTP native matrices.
+- [x] Add exact-head Windows integrated boundary acceptance and HTTP matrix steps; supply one focused private acceptance prompt.
+- [ ] Observe the integrated delivery's exact-head Windows CI result and private acceptance independently; do not infer either from local tests.
+
 ## Outbound HTTP follow-up (#861 comment 6128184589)
 
 - [x] Inspect dev and inventory branch, record dependency/base and create isolated worktree/branch.
