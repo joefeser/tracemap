@@ -16,6 +16,12 @@ public static class IntegratedMigrationReport
             or FactTypes.SqlCommandDetected or FactTypes.DapperCallDetected or FactTypes.DbChangeSaved
             or FactTypes.HttpCallDetected).ToArray();
         var boundaries = facts.Where(f => f.FactType == FactTypes.WebFormsHandlerResolved).ToArray();
+        var handles = facts.Where(f => f.FactType == FactTypes.VisualBasicEventBindingDeclared
+            && f.RuleId == RuleIds.VisualBasicSyntaxEventWiring
+            && f.EvidenceTier == EvidenceTiers.Tier3SyntaxOrTextual
+            && f.Properties.GetValueOrDefault("wiringKind") == "Handles"
+            && f.Properties.GetValueOrDefault("isAttach") == "True").ToArray();
+        var types = facts.Where(f => f.FactType == FactTypes.TypeDeclared).ToArray();
         var bindings = facts.Where(f => f.FactType == FactTypes.WebFormsEventBindingDeclared).ToArray();
         var parameters = facts.Where(f => f.FactType == FactTypes.DatabaseParameterCandidate).ToArray();
         var methods = facts.Where(f => f.FactType == FactTypes.MethodDeclared).Select(f => new Method(f,
@@ -32,7 +38,8 @@ public static class IntegratedMigrationReport
         var unresolvedCalls = 0;
         var calls = facts.Where(f => f.FactType == FactTypes.CallEdge).ToArray();
         // Bound the Cartesian source-only matching work; never silently call it complete.
-        var matchingLimited = methods.Length > 2000 || calls.Length > 10000 || boundaries.Length > 10000;
+        var matchingLimited = methods.Length > 2000 || calls.Length > 10000
+            || boundaries.Length + handles.Length > 10000 || types.Length > 2000;
         if (!matchingLimited)
         foreach (var call in calls)
         {
@@ -58,6 +65,24 @@ public static class IntegratedMigrationReport
         }
         var roots = matchingLimited ? Array.Empty<(CodeFact Boundary, Method? Method)>()
             : boundaries.Select(b => (Boundary: b, Method: Owner(b))).Where(p => p.Method is not null).ToArray();
+        // Keep Handles evidence at its original syntax tier. A unique lexical owner
+        // and explicit UserControl base spelling are required; names alone are not anchors.
+        var syntaxRoots = new List<(CodeFact Boundary, Method? Method)>();
+        if (!matchingLimited)
+        foreach (var binding in handles)
+        {
+            var owner = Owner(binding);
+            if (owner is null || !owner.Name.Equals(binding.Properties.GetValueOrDefault("handlerName"), StringComparison.OrdinalIgnoreCase)
+                || string.IsNullOrWhiteSpace(binding.Properties.GetValueOrDefault("receiverName"))
+                || string.IsNullOrWhiteSpace(binding.Properties.GetValueOrDefault("eventName"))) continue;
+            var declarations = types.Where(t => t.Evidence.FilePath == binding.Evidence.FilePath
+                && t.Properties.GetValueOrDefault("qualifiedName", "").Equals(owner.Type, StringComparison.OrdinalIgnoreCase)).Take(2).ToArray();
+            if (declarations.Length != 1 || !declarations[0].Properties.GetValueOrDefault("baseTypes", "").Split(';')
+                .Any(b => b.Equals("System.Web.UI.UserControl", StringComparison.OrdinalIgnoreCase)
+                    || b.Equals("Global.System.Web.UI.UserControl", StringComparison.OrdinalIgnoreCase))) continue;
+            syntaxRoots.Add((binding, owner));
+        }
+        var allRoots = roots.Concat(syntaxRoots).ToArray();
         var outgoing = hops.GroupBy(h => h.From.Fact.FactId).ToDictionary(g => g.Key, g => g.ToArray(), StringComparer.Ordinal);
         var rows = operations.GroupBy(f => (f.Evidence.FilePath, f.Evidence.StartLine, f.Evidence.EndLine,
             Family: f.FactType == FactTypes.HttpCallDetected ? "outbound-http" : "database", f.SourceSymbol, f.TargetSymbol))
@@ -66,7 +91,8 @@ public static class IntegratedMigrationReport
         lines.AddRange(["", "## Integrated migration inventory", "",
             $"Rule `{Rule}`. Scope: all supported operation facts in this scan, independent of selected query roots. {rows.Length} callsite evidence groups from {operations.Length} operation facts; {parameters.Length} parameter facts. These are not unique business operations or procedures.",
             $"Incoming WebForms: {bindings.Length} binding facts, {boundaries.Length} handler-resolution facts, {roots.Length} unique-span method attachments. Outbound HTTP is a separate operation family.",
-            $"Path matching: {(matchingLimited ? "limited: method/call budget exceeded or boundary limit reached" : "bounded")}; {unresolvedCalls} calls without a unique supported method target. Analysis gaps in scan: {facts.Count(f => f.FactType == FactTypes.AnalysisGap)}. Missing operations and unsupported providers remain unknown.",
+            $"UserControl Handles: {handles.Length} syntax binding facts retained; {syntaxRoots.Count} candidate entry anchors. These do not establish markup hosting, control identity or a deployed HTTP route.",
+            $"Path matching: {(matchingLimited ? "limited: method/call budget exceeded or boundary/type limit reached; calls unassessed" : $"bounded; {unresolvedCalls} calls without a unique supported method target")}. Analysis gaps in scan: {facts.Count(f => f.FactType == FactTypes.AnalysisGap)}. Missing operations and unsupported providers remain unknown.",
             "Every ordered source path below is a static candidate, not a URL, runtime reachability, compiler identity bridge or verified API contract. WebForms markup identifies a source surface, not a deployed route. No name-only cross-type or ambiguous-overload joins. Compiled wrapper paths remain in the separate admitted compiled-path report; this source projection does not splice them into its paths.",
             $"Showing {Math.Min(200, rows.Length)} of {rows.Length} callsite groups. Parameter display cap: 50 per group; path cap: 8, depth: 16, search work: 4096 per group. Any limit is reported; omitted evidence remains in scan facts."]);
         var connected = 0;
@@ -80,7 +106,7 @@ public static class IntegratedMigrationReport
             var work = 0;
             var limited = false;
             if (owner is not null && !matchingLimited)
-            foreach (var root in roots)
+            foreach (var root in allRoots)
             {
                 var queue = new Queue<(Method Node, List<Hop> Path, HashSet<string> Seen)>();
                 queue.Enqueue((root.Method!, [], new(StringComparer.Ordinal) { root.Method!.Fact.FactId }));
@@ -107,7 +133,10 @@ public static class IntegratedMigrationReport
             foreach (var path in paths)
             {
                 connectedBoundaries.Add(path.Boundary.FactId);
-                lines.Add($"- WebForms source `{Safe(path.Boundary.Properties.GetValueOrDefault("markupFile", "unknown"))}`; binding `{Safe(path.Boundary.Properties.GetValueOrDefault("bindingFactId", "unavailable"))}` → {Reference(path.Boundary)} → "
+                var label = path.Boundary.FactType == FactTypes.VisualBasicEventBindingDeclared
+                    ? "UserControl Handles syntax candidate (hosting/route unresolved)"
+                    : $"WebForms source `{Safe(path.Boundary.Properties.GetValueOrDefault("markupFile", "unknown"))}`; binding `{Safe(path.Boundary.Properties.GetValueOrDefault("bindingFactId", "unavailable"))}`";
+                lines.Add($"- {label} → {Reference(path.Boundary)} → "
                     + string.Join(" → ", path.Hops.Select(h => Reference(h.Call) + " ⇒ declaration " + Reference(h.To.Fact)).Append(Reference(operation))));
             }
             var uniqueOperationLine = rows.Count(r => r.Key.FilePath == group.Key.FilePath
@@ -125,7 +154,10 @@ public static class IntegratedMigrationReport
         }
         lines.Add($"Displayed groups with candidate entry paths: {connected}/{Math.Min(200, rows.Length)}. Parameter facts not displayed in a group: {parameters.Length - associated.Count}; these remain independently listed, not discarded. Zero matches never means zero application behavior.");
         lines.AddRange(["", "### Incoming boundary coverage", "",
-            $"{connectedBoundaries.Count}/{boundaries.Length} handler-resolution facts appear in displayed operation paths. Unconnected handlers can be UI-only, unsupported or outside current evidence; no automatic retirement decision follows."]);
+            $"{boundaries.Count(b => connectedBoundaries.Contains(b.FactId))}/{boundaries.Length} handler-resolution facts appear in displayed operation paths. Unconnected handlers can be UI-only, unsupported or outside current evidence; no automatic retirement decision follows.",
+            $"{syntaxRoots.Count(r => connectedBoundaries.Contains(r.Boundary.FactId))}/{syntaxRoots.Count} UserControl Handles syntax candidate anchors appear in displayed operation paths. Unattached or unsupported Handles facts: {handles.Length - syntaxRoots.Count}; no resolution is invented."]);
+        foreach (var binding in handles.Where(b => !connectedBoundaries.Contains(b.FactId)).Take(100))
+            lines.Add("- Handles entry path unresolved: " + Reference(binding));
         foreach (var boundary in boundaries.Where(b => !connectedBoundaries.Contains(b.FactId)).Take(100))
             lines.Add($"- Entry path unresolved: {Reference(boundary)}; source markup `{Safe(boundary.Properties.GetValueOrDefault("markupFile", "unknown"))}`.");
         var bindingIds = boundaries.Select(b => b.Properties.GetValueOrDefault("bindingFactId", "")).ToHashSet(StringComparer.Ordinal);

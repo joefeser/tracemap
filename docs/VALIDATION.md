@@ -4632,6 +4632,13 @@ source paths or infer deployed routes. Use
 `prompts/accept-integrated-migration-report.md` for one private focused acceptance,
 not repeated field-by-field scan requests.
 
+The same tests also scan a synthetic VB UserControl with a `Handles` button
+binding, an implicit same-class helper call and `WebClient.UploadString`. Its
+entry anchor must remain Tier3 syntax evidence, not a handler-resolution fact or
+deployed route. Missing type/call evidence, ambiguous method ownership and
+unrelated bindings must leave the operation unconnected. This fallback requires
+an explicit fully qualified UserControl base spelling; other forms remain gaps.
+
 `VisualBasicSyntaxTypeLookupTests` compares the cached resolver against its prior
 algorithm, pins root isolation/concurrent reads and repeated immutable-result reuse,
 and prints a lookup-only synthetic timing (2000 creations, 20 imports, 500 lookups).

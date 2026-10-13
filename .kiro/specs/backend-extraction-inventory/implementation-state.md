@@ -870,3 +870,21 @@ decisions and source/compiled identity bridges remain explicit separate gates.
 Final scale audit: over-budget scans skip boundary and operation method-span
 matching as well as call matching. Boundary attachment is additionally capped at
 10000 retained resolutions. Final integrated/report test run: 10 passed.
+
+### 2026-10-13: UserControl Handles entry-anchor gap
+
+The integrated source report now accepts retained VB Handles syntax bindings as
+candidate anchors only with a unique lexical method owner, matching handler name,
+and unique same-file type explicitly inheriting System.Web.UI.UserControl (or its
+Global-qualified spelling). Evidence is not promoted to handler-resolution facts;
+hosting, control identity and deployed routes remain unestablished. Aliased/short
+base types, indirect inheritance and AddHandler remain outside this fallback.
+The synthetic full-chain test covers Handles -> implicit same-class helper ->
+WebClient.UploadString, deterministic ordering, absent call/type evidence,
+ambiguous handler spans and unrelated binding locations/names. No private source
+was copied. Native scan/report generation runs inside the regression test without
+executing application or network methods. Broad SQL/HTTP smoke is deferred for
+this report-only change; extractor behavior and schemas are unchanged.
+Validation: 54 focused integrated/report/WebForms/legacy HTTP tests passed with
+warnings as errors; final integrated and compiled-wrapper run passed seven tests.
+Private rescan acceptance and exact-head Windows CI remain unverified here.

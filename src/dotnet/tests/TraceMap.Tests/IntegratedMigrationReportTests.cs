@@ -6,6 +6,54 @@ namespace TraceMap.Tests;
 public sealed class IntegratedMigrationReportTests
 {
     [Fact]
+    public void UserControl_handles_helper_http_chain_preserves_syntax_tier_and_refuses_ambiguous_anchors()
+    {
+        using var source = new TempDirectory();
+        using var output = new TempDirectory();
+        File.WriteAllText(Path.Combine(source.Path, "PublicControl.vb"), """
+            Public Class PublicControl
+                Inherits System.Web.UI.UserControl
+                Private Sub TriggerHandler(sender As Object, e As System.EventArgs) Handles actionButton.Click
+                    ProcessAction()
+                End Sub
+                Protected Sub ProcessAction()
+                    Dim client As New System.Net.WebClient()
+                    client.UploadString("https://example.invalid/action", "POST", "synthetic")
+                End Sub
+            End Class
+            """);
+        var scan = ScanEngine.Scan(new ScanOptions(source.Path, output.Path));
+        var binding = Assert.Single(scan.Facts, f => f.FactType == FactTypes.VisualBasicEventBindingDeclared);
+        Assert.DoesNotContain(scan.Facts, f => f.FactType == FactTypes.WebFormsHandlerResolved);
+        var operation = Assert.Single(scan.Facts, f => f.FactType == FactTypes.HttpCallDetected);
+        var handler = Assert.Single(scan.Facts, f => f.FactType == FactTypes.MethodDeclared
+            && f.Properties.GetValueOrDefault("name") == "TriggerHandler");
+        string Report(IEnumerable<CodeFact> facts) => MarkdownReportWriter.Build(scan with { Facts = facts.ToArray() });
+        var report = Report(scan.Facts);
+        Assert.Contains("Displayed groups with candidate entry paths: 1/1", report);
+        Assert.Contains("1/1 UserControl Handles syntax candidate anchors", report);
+        Assert.Contains("0/0 handler-resolution facts", report);
+        Assert.Contains("hosting/route unresolved", report);
+        Assert.Contains(binding.FactId, report);
+        Assert.Contains(operation.FactId, report);
+        Assert.Equal(EvidenceTiers.Tier3SyntaxOrTextual, binding.EvidenceTier);
+        Assert.Equal(report, Report(scan.Facts.Reverse()));
+        Assert.Contains("Displayed groups with candidate entry paths: 0/1",
+            Report(scan.Facts.Where(f => f.FactType != FactTypes.CallEdge)));
+        Assert.Contains("Displayed groups with candidate entry paths: 0/1",
+            Report(scan.Facts.Where(f => f.FactType != FactTypes.TypeDeclared)));
+        Assert.Contains("Displayed groups with candidate entry paths: 0/1",
+            Report(scan.Facts.Append(handler with { FactId = "ambiguous-handler" })));
+        Assert.Contains("Displayed groups with candidate entry paths: 0/1",
+            Report(scan.Facts.Select(f => f == binding
+                ? f with { Evidence = f.Evidence with { FilePath = "Unrelated.vb" } } : f)));
+        Assert.Contains("Displayed groups with candidate entry paths: 0/1",
+            Report(scan.Facts.Select(f => f == binding
+                ? f with { Properties = new SortedDictionary<string, string>(f.Properties.ToDictionary(p => p.Key, p => p.Value), StringComparer.Ordinal)
+                    { ["handlerName"] = "OtherHandler" } } : f)));
+    }
+
+    [Fact]
     public void Projectless_webforms_to_backend_sql_and_http_is_one_bounded_report()
     {
         var root = new DirectoryInfo(AppContext.BaseDirectory);
