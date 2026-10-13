@@ -563,3 +563,23 @@ SQLite smoke. Default admission refused; explicit 1024 MiB/600 seconds accepted
 with route counts 1/1/0 and zero failed queries. No private inputs or application,
 fixture-method or database execution. This closes platform validation of the size
 admission correction, not private historical-index compatibility or graph scale.
+
+### Explicit local literal recovery and truncation diagnostics
+
+Added standalone RecoverSqlCommandText diagnostic. It requires explicit local
+disclosure consent and an operator-supplied expected binary SHA, reads metadata
+without assembly execution/dependency resolution, and matches only retained
+constant database command origin hashes and exact UTF-16 lengths to ldstr operands.
+Output is private Markdown with generator/component and input hashes. It never
+changes default scanner disclosure or claims independent historical binary binding.
+Dynamic text is not evaluated, and missing/overlength/nonunique matches remain
+unknown. Rules and limits are documented under sql.local.command-literal-match.v1.
+The new work-machine prompt requires provenance reconciliation and prohibits
+private uploads, patches, application builds and SQL execution.
+
+The SQL wrapper report now displays native TruncatedByLimit reason categories
+beside each selection; a truncated flag without reasons stays explicitly unknown.
+This exposes diagnostics without silently raising graph limits. No core extractor
+or traversal semantics changed. Local validation includes warning-as-error utility
+build, native public fixture literal recovery/negative controls, and 15 helper
+guards. Windows validation is pending for this increment.

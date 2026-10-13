@@ -1,5 +1,9 @@
 # Private exchange prompts
 
+After compiled SQL route reconciliation, use
+[Recover local SQL command literals](recover-local-sql-command-literals.md) for
+explicit local-only literal recovery and native truncation diagnostics.
+
 For a source-only SQL result that conflicts with an earlier reported compiled
 route, use [Reconcile existing compiled SQL evidence](reconcile-existing-compiled-sql-evidence.md)
 first. It explicitly forbids another source-only assessment or application build.
