@@ -183,6 +183,13 @@ class SqlWrapperReportTests(unittest.TestCase):
         self.assertEqual(2, rendered.count('| retained path node/fact |'))
         self.assertEqual(1, rendered.count('| not associated with a retained path; caller relevance unproven |'))
 
+    def test_truncation_reasons_are_explicit_and_missing_is_unknown(self):
+        report = native('Root')
+        report['summary']['truncated'] = True
+        self.assertIn('unavailable in retained diagnostics', '\n'.join(REPORT.render_root(1, 'Root', report)))
+        report['gaps'] = [{'gapKind': 'TruncatedByLimit', 'reason': 'work'}, {'gapKind': 'TruncatedByLimit', 'reason': 'depth'}]
+        self.assertIn('diagnostics): depth, work', '\n'.join(REPORT.render_root(1, 'Root', report)))
+
 
 if __name__ == '__main__':
     unittest.main()

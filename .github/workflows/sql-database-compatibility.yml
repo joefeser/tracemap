@@ -2,9 +2,9 @@ name: SQL database public compatibility
 on:
   push:
     branches: [codex/sql-database-matrix-864]
-    paths: ['src/dotnet/**', 'samples/sql-database-matrix/**', 'scripts/diagnostics/SqlReferenceMatrix/**', 'scripts/validation/*sql*', 'scripts/sql-wrapper-report.py', 'scripts/validate-adapter-artifacts.py', 'scripts/test_validate_adapter_artifacts.py', 'rules/**', 'prompts/plan-backend-api-extraction.md', 'prompts/produce-sql-wrapper-inventory.md', 'docs/validation/SQL_DATABASE_MATRIX.md', '.github/workflows/sql-database-compatibility.yml']
+    paths: ['src/dotnet/**', 'samples/sql-database-matrix/**', 'scripts/diagnostics/SqlReferenceMatrix/**', 'scripts/diagnostics/RecoverSqlCommandText/**', 'scripts/validation/*sql*', 'scripts/sql-wrapper-report.py', 'scripts/validate-adapter-artifacts.py', 'scripts/test_validate_adapter_artifacts.py', 'rules/**', 'prompts/*sql*', 'prompts/plan-backend-api-extraction.md', 'docs/validation/SQL_DATABASE_MATRIX.md', '.github/workflows/sql-database-compatibility.yml']
   pull_request:
-    paths: ['src/dotnet/**', 'samples/sql-database-matrix/**', 'scripts/diagnostics/SqlReferenceMatrix/**', 'scripts/validation/*sql*', 'scripts/sql-wrapper-report.py', 'scripts/validate-adapter-artifacts.py', 'scripts/test_validate_adapter_artifacts.py', 'rules/**', 'prompts/plan-backend-api-extraction.md', 'prompts/produce-sql-wrapper-inventory.md', 'docs/validation/SQL_DATABASE_MATRIX.md', '.github/workflows/sql-database-compatibility.yml']
+    paths: ['src/dotnet/**', 'samples/sql-database-matrix/**', 'scripts/diagnostics/SqlReferenceMatrix/**', 'scripts/diagnostics/RecoverSqlCommandText/**', 'scripts/validation/*sql*', 'scripts/sql-wrapper-report.py', 'scripts/validate-adapter-artifacts.py', 'scripts/test_validate_adapter_artifacts.py', 'rules/**', 'prompts/*sql*', 'prompts/plan-backend-api-extraction.md', 'docs/validation/SQL_DATABASE_MATRIX.md', '.github/workflows/sql-database-compatibility.yml']
   workflow_dispatch:
 permissions:
   contents: read
@@ -30,6 +30,12 @@ jobs:
       - name: Large retained index admission (public padded SQLite, no graph-scale claim)
         shell: pwsh
         run: python scripts/validation/sql-wrapper-large-index-smoke.py --cli src/dotnet/TraceMap.Cli/bin/Debug/net10.0/tracemap.dll --out "$env:RUNNER_TEMP/sql-wrapper-large-index"
+      - name: Opt-in local SQL literal recovery guards
+        shell: pwsh
+        run: |
+          dotnet build scripts/diagnostics/RecoverSqlCommandText/RecoverSqlCommandText.csproj -warnaserror
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python scripts/validation/test_sql_command_text.py --tool scripts/diagnostics/RecoverSqlCommandText/bin/Debug/net10.0/RecoverSqlCommandText.dll --paths "$env:RUNNER_TEMP/sql-wrapper-large-index/accepted/root-001/paths-report.json" --assembly samples/sql-database-matrix/wrapper-build/bin/Debug/net472/SyntheticWebsite.dll
       - name: Deterministic native CLI matrix (no fixture execution)
         shell: pwsh
         run: python scripts/validation/sql-coverage-smoke.py --output "$env:RUNNER_TEMP/sql-matrix"

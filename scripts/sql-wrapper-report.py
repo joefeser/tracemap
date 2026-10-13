@@ -32,8 +32,11 @@ def cell(value):
 def render_root(ordinal, selector, report):
     summary = report['summary']
     paths = report['paths']
+    truncation = sorted({str(gap.get('reason') or 'unspecified') for gap in report['gaps'] if gap.get('gapKind') == 'TruncatedByLimit'})
+    truncation_label = ', '.join(truncation) if truncation else ('unavailable in retained diagnostics' if summary['truncated'] else 'none reported')
     lines = [f'## Selection {ordinal}', '', f'Caller selector: {cell(selector)}', '',
              f"Coverage: {cell(report['reportCoverage'])}; selector candidates: {summary['selectorCandidateCount']}; retained paths: {len(paths)}; truncated: {summary['truncated']}.",
+             f'Truncation reasons (native query diagnostics): {cell(truncation_label)}. These qualify enumeration, not whether a displayed route exists.',
              f'[Native evidence and limitations](root-{ordinal:03d}/paths-report.json)', '',
              '| Path | Ordered caller / wrapper / terminal | Classification | Command text evidence | Command type evidence | Terminal rule / tier |',
              '| --- | --- | --- | --- | --- | --- |']
