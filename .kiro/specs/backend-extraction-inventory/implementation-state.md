@@ -658,3 +658,15 @@ not silently fixed by reporting. Platform revalidation on Windows remains pendin
 Local validation: 35 grouped-handoff tests, 39 SQL extraction/report/sample tests,
 29 native literal-inventory guards and 15 wrapper-report guards passed. Diagnostic
 and reporting/test builds passed with warnings-as-errors. No private inputs used.
+
+### Separate application inspection from schema availability
+
+The local inventory now preserves bounded native databaseCallEvidence and
+commandBinding objects with node references independently of optional catalogs.
+Missing objects mean targeted application inspection is pending, not absence of
+behavior. The one-slice prompt requires caller/wrapper source or retained IL review
+before application questions are escalated; schema-owner questions remain separate.
+This is a reporting/procedure correction, not a new argument-flow extractor.
+Warning-as-error diagnostic build passed; 31 native public-fixture guards passed,
+including missing-object handling and parameter evidence without a catalog.
+Windows revalidation remains pending. No private content or database access used.

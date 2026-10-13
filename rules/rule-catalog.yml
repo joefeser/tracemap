@@ -7684,6 +7684,7 @@ rules:
     emits:
       - localMarkdownLiteralMatch
     limitations:
+      - Retained databaseCallEvidence and commandBinding objects are copied with node references for application-side review. This is not new argument analysis; object presence does not prove complete contracts, and absent objects do not prove absent application behavior. Catalog availability is independent.
       - Output is private local Markdown and may contain sensitive SQL or procedure-name candidates. It is not emitted by default scans or included in shareable artifacts.
       - Expected binary digest is operator-supplied; this diagnostic does not independently bind the binary to the report, source commit or historical build. Content matching never upgrades original route evidence.
       - Only constant command origins are matched. Symbolic expressions, missing or oversized literals remain unavailable. A match does not establish procedure existence, execution, parameter values, connections, transactions or whole-site completeness.

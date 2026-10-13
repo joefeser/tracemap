@@ -62,6 +62,7 @@ try
     }
     var rows = new List<(int Input, string Path, string State, string Identity, string Type, string Caller, string Terminal, string Evidence, string Limits)>();
     var inputLines = new List<string>();
+    var applicationLines = new List<string>();
     var inputHashes = new HashSet<string>(StringComparer.Ordinal);
     var ordinal = 0;
     long totalBytes = 0;
@@ -103,6 +104,23 @@ try
         var nodes = path.GetProperty("nodes");
         if (nodes.GetArrayLength() == 0) throw new InvalidDataException();
         var terminal = nodes[nodes.GetArrayLength() - 1];
+        applicationLines.Add($"### Input {ordinal} / {Cell(path.GetProperty("pathId").GetString() ?? "unknown")}");
+        var applicationEvidencePresent = false;
+        foreach (var node in nodes.EnumerateArray())
+        {
+            foreach (var field in new[] { "databaseCallEvidence", "commandBinding" })
+            {
+                if (!node.TryGetProperty(field, out var evidence) || evidence.ValueKind != JsonValueKind.Object) continue;
+                applicationEvidencePresent = true;
+                applicationLines.Add("Retained application evidence (not schema verification): node="
+                    + Cell(node.TryGetProperty("nodeId", out var nodeId) ? nodeId.ToString() : "unavailable")
+                    + "; field=" + field + "; evidence=" + Cell(evidence.GetRawText()));
+            }
+        }
+        applicationLines.Add(applicationEvidencePresent
+            ? "Application review: retained evidence present; field-by-field verification pending. Presence does not mean all parameters or behavior were recovered."
+            : "Application review: no supported application-evidence object retained in this path; targeted source/IL inspection pending, not proof of absent application behavior.");
+        applicationLines.Add("Schema review: independent of application evidence; a missing catalog does not mark application fields unavailable.");
         var state = "unavailable"; var identity = ""; var type = "unavailable";
         if (terminal.TryGetProperty("surfaceKind", out var surface) && surface.GetString() == "database-api"
             && terminal.TryGetProperty("commandBinding", out var binding) && binding.ValueKind == JsonValueKind.Object)
@@ -189,11 +207,15 @@ try
         }
         lines.Add($"| {row.Input} / {Cell(row.Path)} | {Cell(row.Caller)} | {Cell(row.Terminal)} / {Cell(row.Evidence)} | {Cell(row.Type)} | {Cell(row.State)} | {Cell(value)} | {Cell(row.Limits)} | not established by literal projection; inspect native evidence | {Cell(contract)} |");
     }
+    lines.AddRange(new[] { "", "## Retained application evidence", "",
+        "These are verbatim bounded native evidence objects, not new inference. Follow origin/operand references in the retained index or inspect the evidenced local callsite. Caller expressions are not runtime values or database-declared parameter contracts." });
+    lines.AddRange(applicationLines);
     lines.AddRange(new[] { "", "## Per-path human verification handoff", "",
         "Rule: workflow.backend-extraction.retained-report.v1. These are pending review obligations, not new extracted facts or implementation approval. Keep reviewer decisions in the private client work tracker. Each input/path below refers to the evidence row above; repeated paths are not distinct business operations.", "" });
     foreach (var row in rows)
     {
         lines.Add($"### Input {row.Input} / {Cell(row.Path)}");
+        lines.Add("- [ ] Application evidence: inspect retained command/parameter objects and the referenced caller or wrapper source/IL. Record observed, unresolved, not inspected or input missing separately for each field; missing schema is not an application-evidence result.");
         lines.Add("- [ ] Verify page/event or other entry point and identity bridge to this caller; preserve historical/current-build and truncation limits.");
         lines.Add(row.Identity.Length == 0
             ? "- [ ] Inspect unresolved command expression at the evidenced callsite; record constant/dynamic/unknown with evidence, without guessing."

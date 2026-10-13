@@ -19,14 +19,28 @@ overwrite human decisions or edit scanner evidence.
    order with StoredProcedure command-type evidence. Record input ordinal/path
    ID locally. If none qualifies, report that result; do not guess from symbolic
    expressions.
-2. Use known authorized local schema/documentation locations. If none was
+2. FIRST inspect the selected path's retained `databaseCallEvidence` and
+   `commandBinding` objects and their origin/operand references. Use the known
+   local source files or admitted IL identified by that evidence for a targeted,
+   read-only review of the caller and wrapper. No broad search, rescan or execution.
+   Collect caller argument expressions, parameter construction/names/types/
+   directions, connection references, transaction calls, result consumption,
+   error handling and visible validation/authorization checks where evidenced.
+   Record file/line or IL/fact references locally. Do not equate expressions with
+   runtime values or caller-side parameter setup with database declarations.
+   If source and historical binary identity cannot be joined, keep them separate.
+   Per field use: observed, unresolved, not-inspected, or input-missing. Record
+   exactly what was inspected and why any inspection could not proceed.
+3. INDEPENDENTLY use known authorized local schema/documentation locations. If none was
    supplied, ask for that location or an owner-supplied contract. Do not search
    the machine broadly or use the public synthetic catalog as application evidence.
-3. Compare the recovered literal with documented procedure identities. Record
+   Missing schema must not stop the application-side review or turn its fields
+   into unavailable/unknown without inspection.
+4. Compare the recovered literal with documented procedure identities. Record
    database/schema context separately. Unqualified names, aliases, conflicting
    definitions and multiple databases remain unresolved without identifying
    evidence. Do not choose by name similarity.
-4. Write a fresh private review document with evidence references and separate
+5. Write a fresh private review document with evidence references and separate
    supported/unresolved states for:
    - Procedure identity and documentation date/version, if available.
    - Parameter names, SQL types including size/precision, directions, defaults
@@ -54,6 +68,10 @@ into fresh private output. No new scan is needed.
 
 If evidence is insufficient, prepare a concise local request for the database or
 application owner listing precisely the unanswered fields for this slice. Do not
+send application questions to the database owner solely because schema is missing.
+Separate schema-owner questions from application-inspection gaps and human business
+decisions. Say "review attempt completed", not "slice verified", while checks remain.
+Do not
 send it automatically. This is a useful deliverable, not a reason to repeat
 discovery or block all other slices.
 
