@@ -7665,6 +7665,18 @@ rules:
       - Semantic files are excluded. Unreadable, generated or unparseable files retain their existing skip or failure behavior; this rule does not claim to inspect them.
       - No destination, request body, credentials or runtime use is inferred. Explicit-receiver syntax candidates are available under vb.syntax.http-candidate.v1; compiler-resolved classification and complete coverage remain unavailable.
 
+  - id: sql.local.contract-catalog-match.v1
+    name: Local supplied procedure contract candidate
+    description: Attaches supplied catalog metadata to an exact ordinal recovered StoredProcedure literal in private local Markdown.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - localMarkdownContractCandidate
+    limitations:
+      - Catalog contents are operator-supplied and not independently verified schema evidence. A match does not establish the connection, database identity, runtime parameter values or migration approval.
+      - Only unique exact literal matches qualify. Multiple entries remain ambiguous; no normalization, schema-prefix inference or database selection occurs. Text and dynamic commands are ineligible.
+      - Catalog input is bounded to 4 MiB, 1024 entries, 256 parameters per entry and 4096 characters per required field. Empty parameter lists mean not supplied, not zero parameters proven.
+      - Output remains opt-in private local Markdown with catalog input SHA-256 and diagnostic generator SHA-256. No database connections or code execution occur.
+
   - id: sql.local.command-literal-match.v1
     name: Explicit local SQL command literal content match
     description: Opt-in diagnostic matches a retained constant command hash and UTF-16 length to a literal operand in an explicitly supplied hash-checked binary, without executing it.

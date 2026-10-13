@@ -10,7 +10,7 @@ try
 {
     var options = new Dictionary<string, string>(StringComparer.Ordinal);
     var reportPaths = new List<string>();
-    var allowed = new HashSet<string> { "--assembly", "--expected-sha256", "--out" };
+    var allowed = new HashSet<string> { "--assembly", "--expected-sha256", "--out", "--contract-catalog" };
     var consent = false;
     for (var i = 0; i < args.Length; i++)
     {
@@ -19,7 +19,7 @@ try
         if (!allowed.Contains(args[i]) || i + 1 >= args.Length || !options.TryAdd(args[i], args[++i]))
             throw new InvalidDataException();
     }
-    if (!consent || options.Count != 3 || reportPaths.Count is < 1 or > 32
+    if (!consent || !options.ContainsKey("--assembly") || !options.ContainsKey("--expected-sha256") || !options.ContainsKey("--out") || reportPaths.Count is < 1 or > 32
         || reportPaths.Distinct(StringComparer.OrdinalIgnoreCase).Count() != reportPaths.Count) throw new InvalidDataException();
     var binaryPath = Path.GetFullPath(options["--assembly"]);
     var output = Path.GetFullPath(options["--out"]);
@@ -29,6 +29,37 @@ try
         || new FileInfo(binaryPath).Length > 256L * 1024 * 1024) throw new InvalidDataException();
     var binaryBytes = File.ReadAllBytes(binaryPath);
     if (Hash(binaryBytes) != expected) throw new InvalidDataException();
+    var contracts = new Dictionary<string, List<string>>(StringComparer.Ordinal);
+    string? catalogHash = null;
+    if (options.TryGetValue("--contract-catalog", out var catalogPath))
+    {
+        if (new FileInfo(catalogPath).Length > 4 * 1024 * 1024) throw new InvalidDataException();
+        var bytes = File.ReadAllBytes(catalogPath);
+        if (bytes.Length > 4 * 1024 * 1024) throw new InvalidDataException();
+        catalogHash = Hash(bytes);
+        using var catalog = JsonDocument.Parse(bytes);
+        var root = catalog.RootElement;
+        if (root.GetProperty("schema").GetString() != "sql-contract-catalog.v1") throw new InvalidDataException();
+        var entries = root.GetProperty("procedures");
+        if (entries.GetArrayLength() > 1024) throw new InvalidDataException();
+        foreach (var entry in entries.EnumerateArray())
+        {
+            var literal = Required(entry, "commandLiteral");
+            var description = "operator-supplied contract candidate; database=" + Required(entry, "databaseLabel")
+                + "; procedure=" + Required(entry, "procedure") + "; source=" + Required(entry, "sourceReference");
+            var parameters = entry.GetProperty("parameters");
+            if (parameters.GetArrayLength() > 256) throw new InvalidDataException();
+            foreach (var parameter in parameters.EnumerateArray())
+            {
+                var direction = Required(parameter, "direction");
+                if (direction is not ("Input" or "Output" or "InputOutput" or "ReturnValue" or "Unknown")) throw new InvalidDataException();
+                description += "; parameter=" + Required(parameter, "name") + " " + Required(parameter, "type") + " " + direction;
+            }
+            description += parameters.GetArrayLength() == 0 ? "; no parameters supplied (not proof of zero parameters)" : "";
+            if (!contracts.TryGetValue(literal, out var candidates)) contracts[literal] = candidates = new();
+            candidates.Add(description);
+        }
+    }
     var rows = new List<(int Input, string Path, string State, string Identity, string Type, string Caller, string Terminal, string Evidence, string Limits)>();
     var inputLines = new List<string>();
     var inputHashes = new HashSet<string>(StringComparer.Ordinal);
@@ -137,6 +168,8 @@ try
         "Recovery covers only supplied retained paths. Successful literal recovery never clears original query truncation, proves complete enumeration, or upgrades historical/current-build provenance. Missing reason entries do not mean no truncation. If flag and reason entries conflict, retain both and reconcile the native evidence.",
         "Bounds: 32 reports, 64 MiB aggregate report bytes; 256 paths per report, 1024 total rows; 256 MiB binary; two million inspected methods/instructions; 32768 UTF-16 units per literal. Overlength literals are unavailable, not absent. Symbolic/dynamic expressions are not evaluated.", "" };
     lines.AddRange(inputLines);
+    lines.Add("Contract catalog input SHA-256: " + (catalogHash ?? "not supplied"));
+    lines.Add("Contract rule: sql.local.contract-catalog-match.v1; Tier3SyntaxOrTextual. Exact ordinal literal matching only for StoredProcedure rows. Operator-supplied metadata is not independently verified schema, connection binding or runtime parameter evidence. Multiple matching entries stay ambiguous. Migration decisions remain undecided.");
     lines.AddRange(new[] { "## Retained SQL rows", "",
         "Rows remain scoped by input ordinal and path ID. No cross-root deduplication or path splicing is performed. Repeated constants do not establish unique procedure counts.", "",
         "| Input / path | Caller | Terminal / rule / tier | Command type evidence | Text evidence state | Local literal / status | Native path qualification | Parameters / connection / transaction | Schema contract / migration decision |",
@@ -145,7 +178,16 @@ try
     {
         var value = row.Identity.Length > 0 && matches.TryGetValue(row.Identity, out var values) && values.Count == 1
             ? "hash-matched literal: " + values.Single() : "unavailable: no unique admitted constant match";
-        lines.Add($"| {row.Input} / {Cell(row.Path)} | {Cell(row.Caller)} | {Cell(row.Terminal)} / {Cell(row.Evidence)} | {Cell(row.Type)} | {Cell(row.State)} | {Cell(value)} | {Cell(row.Limits)} | not established by literal projection; inspect native evidence | not supplied / undecided |");
+        var contract = "not supplied / undecided";
+        if (catalogHash is not null)
+        {
+            contract = "no eligible exact catalog match / undecided";
+            if (row.Type == "StoredProcedure" && matches.TryGetValue(row.Identity, out var literals) && literals.Count == 1
+                && contracts.TryGetValue(literals.Single(), out var candidates))
+                contract = candidates.Count == 1 ? candidates[0] + "; migration undecided"
+                    : $"ambiguous: {candidates.Count} catalog entries; no database selected / undecided";
+        }
+        lines.Add($"| {row.Input} / {Cell(row.Path)} | {Cell(row.Caller)} | {Cell(row.Terminal)} / {Cell(row.Evidence)} | {Cell(row.Type)} | {Cell(row.State)} | {Cell(value)} | {Cell(row.Limits)} | not established by literal projection; inspect native evidence | {Cell(contract)} |");
     }
     using var writer = new StreamWriter(new FileStream(output, FileMode.CreateNew, FileAccess.Write, FileShare.None));
     foreach (var line in lines) writer.WriteLine(line);
@@ -159,6 +201,12 @@ catch (Exception)
 }
 
 static string Hash(byte[] bytes) => Convert.ToHexStringLower(SHA256.HashData(bytes));
+static string Required(JsonElement element, string name)
+{
+    var value = element.GetProperty(name).GetString();
+    if (string.IsNullOrWhiteSpace(value) || value.Length > 4096) throw new InvalidDataException();
+    return value;
+}
 static string Cell(string value)
 {
     // Preserve UTF-16 units without UTF-8 replacement and prevent active Markdown links/images.

@@ -21,16 +21,81 @@ class CommandTextTests(unittest.TestCase):
         self.input.write_text(json.dumps(self.report), encoding='utf-8')
         self.sha = hashlib.sha256(CONFIG.assembly.read_bytes()).hexdigest()
 
-    def run_tool(self, consent=True, sha=None, assembly=None, extra_reports=()):
+    def run_tool(self, consent=True, sha=None, assembly=None, extra_reports=(), catalog=None):
         command = ['dotnet', str(CONFIG.tool), '--paths', str(self.input), '--assembly', str(assembly or CONFIG.assembly),
                    '--expected-sha256', sha or self.sha, '--out', str(self.output)]
         if consent:
             command += ['--allow-local-command-text']
         for report in extra_reports:
             command += ['--paths', str(report)]
+        if catalog:
+            command += ['--contract-catalog', str(catalog)]
         result = subprocess.run(command, capture_output=True, text=True, timeout=30)
         self.assertNotIn('PublicCatalog_Save', result.stdout + result.stderr)
         return result
+
+    def catalog(self, count=1, literal='PublicCatalog_Save', direction='Input'):
+        path = self.folder / 'catalog.json'
+        path.write_text(json.dumps({'schema': 'sql-contract-catalog.v1', 'procedures': [
+            {'commandLiteral': literal, 'databaseLabel': 'SyntheticDatabase', 'procedure': 'dbo.PublicCatalog_Save',
+             'sourceReference': 'synthetic-schema.sql', 'parameters': [
+                 {'name': '@ItemId', 'type': 'int', 'direction': direction}]} for _ in range(count)]}))
+        return path
+
+    def test_contract_exact_match_retains_parameter_metadata_and_hash(self):
+        catalog = self.catalog()
+        self.assertEqual(0, self.run_tool(catalog=catalog).returncode)
+        text = self.output.read_text()
+        self.assertIn('parameter=@ItemId int Input', text)
+        self.assertIn(hashlib.sha256(catalog.read_bytes()).hexdigest(), text)
+        self.assertIn('operator-supplied contract candidate', text)
+
+    def test_contract_duplicate_names_remain_ambiguous(self):
+        self.assertEqual(0, self.run_tool(catalog=self.catalog(count=2)).returncode)
+        self.assertIn('ambiguous: 2 catalog entries', self.output.read_text())
+        self.assertNotIn('parameter=@ItemId', self.output.read_text())
+
+    def test_contract_match_is_case_sensitive_not_fuzzy(self):
+        self.assertEqual(0, self.run_tool(catalog=self.catalog(literal='publiccatalog_save')).returncode)
+        self.assertIn('no eligible exact catalog match', self.output.read_text())
+
+    def test_contract_not_attached_to_text_command(self):
+        self.report['paths'][0]['nodes'][-1]['commandBinding']['commandTypeFromPath']['origin']['identity'] = '1'
+        self.input.write_text(json.dumps(self.report))
+        self.assertEqual(0, self.run_tool(catalog=self.catalog()).returncode)
+        self.assertIn('no eligible exact catalog match', self.output.read_text())
+
+    def test_contract_invalid_direction_refused(self):
+        self.assertEqual(2, self.run_tool(catalog=self.catalog(direction='Guess')).returncode)
+        self.assertFalse(self.output.exists())
+
+    def test_contract_markup_rendered_inert(self):
+        catalog = self.catalog()
+        data = json.loads(catalog.read_text())
+        data['procedures'][0]['sourceReference'] = '![x](https://example.invalid)'
+        catalog.write_text(json.dumps(data))
+        self.assertEqual(0, self.run_tool(catalog=catalog).returncode)
+        self.assertNotIn('![x]', self.output.read_text())
+
+    def test_contract_entry_bound_refused(self):
+        self.assertEqual(2, self.run_tool(catalog=self.catalog(count=1025)).returncode)
+        self.assertFalse(self.output.exists())
+
+    def test_contract_unknown_schema_refused(self):
+        catalog = self.catalog()
+        data = json.loads(catalog.read_text())
+        data['schema'] = 'unknown'
+        catalog.write_text(json.dumps(data))
+        self.assertEqual(2, self.run_tool(catalog=catalog).returncode)
+        self.assertFalse(self.output.exists())
+
+    def test_contract_empty_parameters_not_zero_proof(self):
+        catalog = self.catalog()
+        data = json.loads(catalog.read_text())
+        data['procedures'][0]['parameters'] = []
+        catalog.write_text(json.dumps(data))
+        self.assertEqual(0, self.run_tool(catalog=catalog).returncode)
+        self.assertIn('not proof of zero parameters', self.output.read_text())
 
     def test_native_retained_hash_recovers_only_matching_literal(self):
         self.assertEqual(0, self.run_tool().returncode)
