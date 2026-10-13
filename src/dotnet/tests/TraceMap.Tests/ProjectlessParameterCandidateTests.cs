@@ -7,6 +7,30 @@ namespace TraceMap.Tests;
 public sealed class ProjectlessParameterCandidateTests
 {
     [Theory]
+    [InlineData("Imports System.Data", "SqlClient.SqlCommand", true)]
+    [InlineData("Imports C = System.Data.SqlClient.SqlCommand", "C", true)]
+    [InlineData("Imports N = Microsoft.Data.SqlClient", "N.SqlCommand", true)]
+    [InlineData("", "Global.System.Data.SqlClient.SqlCommand", true)]
+    [InlineData("Imports System.Data", "Fake.SqlCommand", false)]
+    [InlineData("Imports System.Data.SqlClient\nImports Microsoft.Data.SqlClient", "SqlCommand", false)]
+    [InlineData("Imports System.Data\nPublic Class SqlClient\nEnd Class", "SqlClient.SqlCommand", false)]
+    public void Nested_relative_command_uses_same_resolver_for_add_and_declaration(string imports, string type, bool expected)
+    {
+        using var temp = new TempDirectory();
+        File.WriteAllText(Path.Combine(temp.Path, "Input.vb"), $"{imports}\nPublic Class Example\nSub Run(connection As Object, context As Object)\nTry\nDim command As {type} = New {type}(\"PublicProcedure\", connection)\ncommand.Parameters.Add(\"@PublicId\", Global.System.Data.SqlDbType.Int)\ncommand.Parameters(\"@PublicId\").Value = CInt(context.Current.Value.ToString().Trim())\ncommand.ExecuteNonQuery()\nCatch\nEnd Try\nEnd Sub\nEnd Class");
+        WebFormsWizardNativeTests.InitGit(temp.Path);
+        var scan = ScanEngine.Scan(new ScanOptions(temp.Path, Path.Combine(temp.Path, "out")));
+        var candidates = scan.Facts.Where(f => f.FactType == FactTypes.DatabaseParameterCandidate).ToArray();
+        Assert.Equal(expected ? 1 : 0, candidates.Length);
+        if (!expected) return;
+        var candidate = Assert.Single(candidates);
+        Assert.Equal("syntax-local-declaration-candidate", candidate.Properties["commandReceiverAssociation"]);
+        Assert.Equal("unresolved", candidate.Properties["commandExecutionEvidence"]);
+        Assert.Equal(EvidenceTiers.Tier3SyntaxOrTextual, candidate.EvidenceTier);
+        Assert.Contains("syntax-local-declaration-candidate", MarkdownReportWriter.Build(scan));
+    }
+
+    [Theory]
     [InlineData("context.Current.Value")]
     [InlineData("CInt(context.Current.Value)")]
     [InlineData("context.Current.Value.ToString().Trim()")]

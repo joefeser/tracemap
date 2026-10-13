@@ -23,16 +23,21 @@ public static partial class VisualBasicSyntaxExtractor
             || !collection.Name.Identifier.ValueText.Equals("Parameters", StringComparison.OrdinalIgnoreCase)
             || collection.Expression is not IdentifierNameSyntax receiver
             || !TryResolveExplicitReceiverType(root, invocation, receiver.Identifier.ValueText, _ => true, out var type)) return true;
+        var names = ResolveParameterCommandTypes(root, type);
+        if (names.Length != 1) return true;
+        return AddParameterEvidence(manifest, facts, filePath, root, invocation, invocation.ArgumentList,
+            names[0], "syntax-parameter-collection-add", budget);
+    }
+
+    private static string[] ResolveParameterCommandTypes(CompilationUnitSyntax root, string type)
+    {
         var resolved = ResolveHttpTypeNames(root, type);
         var dot = type.IndexOf('.');
         if (dot > 0 && !type.StartsWith("Global.", StringComparison.OrdinalIgnoreCase))
             resolved = resolved.Concat(ResolveHttpTypeNames(root, type[..dot]).Select(prefix => prefix + type[dot..]));
-        var names = resolved
+        return resolved
             .Where(n => new[] { "System.Data.SqlClient.SqlCommand", "Microsoft.Data.SqlClient.SqlCommand" }.Contains(n, StringComparer.OrdinalIgnoreCase))
             .Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
-        if (names.Length != 1) return true;
-        return AddParameterEvidence(manifest, facts, filePath, root, invocation, invocation.ArgumentList,
-            names[0], "syntax-parameter-collection-add", budget);
     }
 
     private static bool AddParameterEvidence(ScanManifest manifest, List<CodeFact> facts, string filePath,
@@ -151,10 +156,8 @@ public static partial class VisualBasicSyntaxExtractor
                 if (variable.Names.Count == 1 && variable.Names[0].Identifier.ValueText.Equals(name, StringComparison.OrdinalIgnoreCase)
                     && creation is not null && creation.Initializer is null
                     && ConstructorArguments(creation.ArgumentList)
-                    && ResolveHttpTypeNames(root, creation.Type.ToString())
-                        .Where(n => n.Equals("System.Data.SqlClient.SqlCommand", StringComparison.OrdinalIgnoreCase)
-                            || n.Equals("Microsoft.Data.SqlClient.SqlCommand", StringComparison.OrdinalIgnoreCase))
-                        .Distinct(StringComparer.OrdinalIgnoreCase).SequenceEqual(new[] { properties["syntaxOwnerType"] }, StringComparer.OrdinalIgnoreCase)) declaration = local;
+                    && ResolveParameterCommandTypes(root, creation.Type.ToString())
+                        .SequenceEqual(new[] { properties["syntaxOwnerType"] }, StringComparer.OrdinalIgnoreCase)) declaration = local;
             }
             break;
         }
