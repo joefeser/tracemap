@@ -88,6 +88,15 @@ class CommandTextTests(unittest.TestCase):
         self.assertEqual(2, self.run_tool(sha=sha, assembly=invalid).returncode)
         self.assertFalse(self.output.exists())
 
+    def test_markdown_images_and_utf16_units_render_as_inert_text(self):
+        self.report['paths'][0]['pathId'] = '![x](https://example.invalid) \U0001f600'
+        self.input.write_text(json.dumps(self.report))
+        self.assertEqual(0, self.run_tool().returncode)
+        text = self.output.read_text()
+        self.assertNotIn('![x]', text)
+        self.assertIn('!&#91;x&#93;', text)
+        self.assertIn('\\ud83d\\ude00', text)
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)

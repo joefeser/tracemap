@@ -24,6 +24,8 @@ The output is **private and local-only** and may contain sensitive command text.
 It must not be uploaded, committed or placed in a shared/public report. stdout and
 stderr never contain recovered literals. Input identities and generator/component
 hashes are recorded in the local Markdown. No machine-readable schema is added.
+Markdown links/images are rendered inert; surrogate UTF-16 units and NUL use
+visible Unicode escapes. This is a review representation, not executable SQL.
 Existing output is refused. No consent or incorrect binary hash produces no output.
 
 Bounds: 64 MiB report, 256 paths, 256 MiB binary, two million methods/instructions,

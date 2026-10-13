@@ -110,4 +110,11 @@ catch (Exception)
 }
 
 static string Hash(byte[] bytes) => Convert.ToHexStringLower(SHA256.HashData(bytes));
-static string Cell(string value) => WebUtility.HtmlEncode(value).Replace("|", "&#124;", StringComparison.Ordinal).Replace("`", "&#96;", StringComparison.Ordinal).Replace("\r", "&#13;", StringComparison.Ordinal).Replace("\n", "&#10;", StringComparison.Ordinal);
+static string Cell(string value)
+{
+    // Preserve UTF-16 units without UTF-8 replacement and prevent active Markdown links/images.
+    var escaped = string.Concat(value.Select(c => char.IsSurrogate(c) || c == '\0' ? $"\\u{(int)c:x4}" : c.ToString()));
+    return WebUtility.HtmlEncode(escaped).Replace("|", "&#124;", StringComparison.Ordinal)
+        .Replace("`", "&#96;", StringComparison.Ordinal).Replace("[", "&#91;", StringComparison.Ordinal)
+        .Replace("]", "&#93;", StringComparison.Ordinal).Replace("\r", "&#13;", StringComparison.Ordinal).Replace("\n", "&#10;", StringComparison.Ordinal);
+}
