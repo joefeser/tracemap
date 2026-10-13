@@ -1,6 +1,6 @@
 # Inspect projectless SQL parameter candidates locally
 
-Use the published scanner with vb-syntax/0.4.3 or later. This increment adds
+Use the published scanner with vb-syntax/0.4.4 or later. This increment adds
 DatabaseParameterCandidate facts for explicit SqlParameter constructors and
 typed command.Parameters.Add(name, SqlDbType) calls, not automatic
 wrapper-to-procedure argument mapping. Reuse existing
@@ -12,7 +12,13 @@ alter private source, commit, export patches or upload private output.
 Inspect the Database Parameter Candidates section of report.md and its fact IDs
 in facts.ndjson/index.sqlite. Use source spans to review parameter constructions
 at the already selected caller. Names/expressions are hashed by default. Type
-syntax is a candidate; directions and command association remain unknown. Named
+syntax is a candidate; directions remain unknown. Inspect commandAssociation:
+syntax-local-straight-line-candidate links a fresh local declaration and consecutive
+parameter additions to an execution span; it is not a verified command instance
+or procedure binding. Other shapes remain unresolved. Count these states separately.
+Before any scan, confirm the saved project configuration and resolved source root
+locally against the user's intended project. Do not infer the project from prior
+debugging context or scan a different registered repository. Named
 arguments, other providers, ambiguous imports and cross-method wrapper propagation
 are not solved by this increment. Do not rewrite application code to fit the
 extractor. Preserve source/binary historical identity boundaries.

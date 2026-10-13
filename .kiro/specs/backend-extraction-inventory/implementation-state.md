@@ -725,3 +725,18 @@ case; final candidate suite and native CLI smoke are recorded below.
 Final warning-as-error build/candidate suite passed 18 tests. Native public sample
 scan retained three parameter candidates, including one collection Add candidate.
 Windows and full 96-output matrix validation remain pending for this increment.
+
+### 2026-10-13: bounded local parameter command association
+
+vb-syntax/0.4.4 adds optional syntax-local-straight-line-candidate association:
+fresh zero-argument local command creation, consecutive literal/enum parameter
+Add calls, then direct execution. Maximum 256 method statements and 64 inspected
+statements per candidate. Intervening statements, reassignment, aliases and
+control flow stop association. Constructor-only parameters remain unresolved.
+No compiler identity, procedure association, direction or runtime claim is added.
+Reports show association status and execution line. Independent public sample
+includes two associated candidates and one reassignment-negative candidate.
+Warning-as-error focused suite: 70 passed, zero failed/skipped. Native sample
+scan: 45 facts, exactly two association candidates and one unresolved candidate.
+Fixture methods and SQL were not executed. Full SQL matrix and Windows validation
+are deferred; the private caller has not been verified against this narrow shape.

@@ -161,10 +161,10 @@ public static class MarkdownReportWriter
             .OrderBy(f => f.Evidence.FilePath, StringComparer.Ordinal).ThenBy(f => f.Evidence.StartLine)
             .ThenBy(f => f.FactId, StringComparer.Ordinal).ToArray();
         lines.AddRange(["", "## Database Parameter Candidates", "",
-            "Constructor or explicit command.Parameters.Add syntax evidence only, not procedure contracts. Command instance association and direction remain unresolved; absence of candidates does not prove absence of parameters.",
+            "Constructor or explicit command.Parameters.Add syntax evidence only, not procedure contracts. Optional straight-line local command associations are syntax candidates, not verified instance or procedure bindings. Direction remains unknown; absence of candidates does not prove absence of parameters.",
             $"Showing {Math.Min(50, parameterCandidates.Length)} of {parameterCandidates.Length}; remaining evidence stays in facts.ndjson and index.sqlite."]);
         foreach (var parameter in parameterCandidates.Take(50))
-            lines.Add($"- {parameter.EvidenceTier}; rule `{parameter.RuleId}`; `{parameter.Evidence.FilePath}:{parameter.Evidence.StartLine}`; name evidence `{parameter.Properties.GetValueOrDefault("parameterNameEvidence")}`; type `{parameter.Properties.GetValueOrDefault("parameterTypeName", "unavailable")}`; direction unknown; command association unresolved; fact `{parameter.FactId}`.");
+            lines.Add($"- {parameter.EvidenceTier}; rule `{parameter.RuleId}`; `{parameter.Evidence.FilePath}:{parameter.Evidence.StartLine}`; name evidence `{parameter.Properties.GetValueOrDefault("parameterNameEvidence")}`; type `{parameter.Properties.GetValueOrDefault("parameterTypeName", "unavailable")}`; direction unknown; command association `{parameter.Properties.GetValueOrDefault("commandAssociation", "unresolved")}`; execution line `{parameter.Properties.GetValueOrDefault("commandExecutionStartLine", "unavailable")}`; fact `{parameter.FactId}`.");
         AddSqlExecutionContext(lines, result);
         AddSqlProtectedMaterial(lines, result);
         AddPostgresArchiveLinks(lines, result);

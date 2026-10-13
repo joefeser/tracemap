@@ -86,3 +86,4 @@
 - [x] Add projectless VB SqlParameter constructor candidates with hashed arguments, explicit type-syntax witnesses, negative controls and scan-report references; no inferred command/procedure binding.
 - [x] Cache root-scoped VB declaration/import/type resolution without filtering ordinary object facts; add alias/shadow/root-isolation and synthetic scaling regression coverage.
 - [x] Add projectless typed command.Parameters.Add parameter candidates with name/argument hashes, type-syntax evidence and alias/shadow/competing-provider controls.
+- [x] Add bounded straight-line local command association candidates with declaration/execution spans, uncertainty controls and explicit syntax-only reporting.
