@@ -1,5 +1,9 @@
 # Private exchange prompts
 
+After consolidation, use [Verify one local SQL contract](verify-one-local-sql-contract.md)
+to prepare one evidence-backed contract review or precise owner questions, without
+another scan or automatic API mapping.
+
 To connect page/event evidence to retained SQL roots, use
 [Reconcile WebForms SQL entry wiring](reconcile-webforms-sql-entry-wiring.md).
 It reuses existing evidence first and keeps unresolved source-to-compiled bridges explicit.
