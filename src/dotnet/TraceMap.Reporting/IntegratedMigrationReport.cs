@@ -32,7 +32,7 @@ public static class IntegratedMigrationReport
         var unresolvedCalls = 0;
         var calls = facts.Where(f => f.FactType == FactTypes.CallEdge).ToArray();
         // Bound the Cartesian source-only matching work; never silently call it complete.
-        var matchingLimited = methods.Length > 2000 || calls.Length > 10000;
+        var matchingLimited = methods.Length > 2000 || calls.Length > 10000 || boundaries.Length > 10000;
         if (!matchingLimited)
         foreach (var call in calls)
         {
@@ -56,7 +56,8 @@ public static class IntegratedMigrationReport
             if (selected.Length == 1) hops.Add(new(from, selected[0], call));
             else unresolvedCalls++;
         }
-        var roots = boundaries.Select(b => (Boundary: b, Method: Owner(b))).Where(p => p.Method is not null).ToArray();
+        var roots = matchingLimited ? Array.Empty<(CodeFact Boundary, Method? Method)>()
+            : boundaries.Select(b => (Boundary: b, Method: Owner(b))).Where(p => p.Method is not null).ToArray();
         var outgoing = hops.GroupBy(h => h.From.Fact.FactId).ToDictionary(g => g.Key, g => g.ToArray(), StringComparer.Ordinal);
         var rows = operations.GroupBy(f => (f.Evidence.FilePath, f.Evidence.StartLine, f.Evidence.EndLine,
             Family: f.FactType == FactTypes.HttpCallDetected ? "outbound-http" : "database", f.SourceSymbol, f.TargetSymbol))
@@ -65,7 +66,7 @@ public static class IntegratedMigrationReport
         lines.AddRange(["", "## Integrated migration inventory", "",
             $"Rule `{Rule}`. Scope: all supported operation facts in this scan, independent of selected query roots. {rows.Length} callsite evidence groups from {operations.Length} operation facts; {parameters.Length} parameter facts. These are not unique business operations or procedures.",
             $"Incoming WebForms: {bindings.Length} binding facts, {boundaries.Length} handler-resolution facts, {roots.Length} unique-span method attachments. Outbound HTTP is a separate operation family.",
-            $"Path matching: {(matchingLimited ? "limited: method/call budget exceeded" : "bounded")}; {unresolvedCalls} calls without a unique supported method target. Analysis gaps in scan: {facts.Count(f => f.FactType == FactTypes.AnalysisGap)}. Missing operations and unsupported providers remain unknown.",
+            $"Path matching: {(matchingLimited ? "limited: method/call budget exceeded or boundary limit reached" : "bounded")}; {unresolvedCalls} calls without a unique supported method target. Analysis gaps in scan: {facts.Count(f => f.FactType == FactTypes.AnalysisGap)}. Missing operations and unsupported providers remain unknown.",
             "Every ordered source path below is a static candidate, not a URL, runtime reachability, compiler identity bridge or verified API contract. WebForms markup identifies a source surface, not a deployed route. No name-only cross-type or ambiguous-overload joins. Compiled wrapper paths remain in the separate admitted compiled-path report; this source projection does not splice them into its paths.",
             $"Showing {Math.Min(200, rows.Length)} of {rows.Length} callsite groups. Parameter display cap: 50 per group; path cap: 8, depth: 16, search work: 4096 per group. Any limit is reported; omitted evidence remains in scan facts."]);
         var connected = 0;
@@ -74,7 +75,7 @@ public static class IntegratedMigrationReport
         foreach (var group in rows.Take(200))
         {
             var operation = group.First();
-            var owner = Owner(operation);
+            var owner = matchingLimited ? null : Owner(operation);
             var paths = new List<(CodeFact Boundary, List<Hop> Hops)>();
             var work = 0;
             var limited = false;
