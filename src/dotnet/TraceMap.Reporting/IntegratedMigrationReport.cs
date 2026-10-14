@@ -219,16 +219,32 @@ public static class IntegratedMigrationReport
                 queue.Enqueue((owner, [], new(StringComparer.Ordinal) { owner.Fact.FactId }));
                 while (queue.Count > 0)
                 {
-                    if (++work > 4096) { limited = true; break; }
+                    if (++work > 4096)
+                    {
+                        limited = true;
+                        var frontier = queue.Peek();
+                        stops.TryAdd(frontier.Node.Fact.FactId, (frontier.Node, frontier.Path, "work-limit"));
+                        break;
+                    }
                     var item = queue.Dequeue();
                     foreach (var anchor in anchorsByMethod.GetValueOrDefault(item.Node.Fact.FactId) ?? [])
                     {
-                        if (++work > 4096 || paths.Count >= 8) { limited = true; break; }
+                        if (++work > 4096 || paths.Count >= 8)
+                        {
+                            limited = true;
+                            stops.TryAdd(item.Node.Fact.FactId, (item.Node, item.Path, work > 4096 ? "work-limit" : "path-limit"));
+                            break;
+                        }
                         paths.Add((anchor, item.Path));
                     }
                     if (work > 4096 || paths.Count >= 8)
                     {
-                        if (queue.Count > 0 || incoming.ContainsKey(item.Node.Fact.FactId)) limited = true;
+                        if (queue.Count > 0 || incoming.ContainsKey(item.Node.Fact.FactId))
+                        {
+                            limited = true;
+                            var frontier = queue.Count > 0 ? queue.Peek() : item;
+                            stops.TryAdd(frontier.Node.Fact.FactId, (frontier.Node, frontier.Path, work > 4096 ? "work-limit" : "path-limit"));
+                        }
                         break;
                     }
                     var callers = incoming.GetValueOrDefault(item.Node.Fact.FactId) ?? [];
@@ -248,10 +264,20 @@ public static class IntegratedMigrationReport
                         stops.TryAdd(item.Node.Fact.FactId, (item.Node, item.Path, "cycle-boundary"));
                     foreach (var hop in callers)
                     {
-                        if (++work > 4096) { limited = true; break; }
+                        if (++work > 4096)
+                        {
+                            limited = true;
+                            stops.TryAdd(hop.From.Fact.FactId, (hop.From, [hop, .. item.Path], "work-limit"));
+                            break;
+                        }
                         if (item.Seen.Contains(hop.From.Fact.FactId)) continue;
                         queue.Enqueue((hop.From, [hop, .. item.Path], new(item.Seen, StringComparer.Ordinal) { hop.From.Fact.FactId }));
-                        if (queue.Count >= 4096) { limited = true; break; }
+                        if (queue.Count >= 4096)
+                        {
+                            limited = true;
+                            stops.TryAdd(hop.From.Fact.FactId, (hop.From, [hop, .. item.Path], "work-limit"));
+                            break;
+                        }
                     }
                     if (work > 4096) break;
                 }
@@ -335,5 +361,5 @@ public static class IntegratedMigrationReport
 
     private static int Number(CodeFact fact, string key, int fallback) => int.TryParse(fact.Properties.GetValueOrDefault(key), out var value) ? value : fallback;
     private static string Safe(string value) => value.Replace("`", "'").Replace("\r", " ").Replace("\n", " ");
-    private static string Reference(CodeFact fact) => $"`{Safe(fact.FactId)}` ({fact.EvidenceTier}, `{Safe(fact.RuleId)}`, `{Safe(fact.Evidence.FilePath)}:{fact.Evidence.StartLine}`)";
+    private static string Reference(CodeFact fact) => $"`{Safe(fact.FactId)}` ({fact.EvidenceTier}, `{Safe(fact.RuleId)}`, `{Safe(fact.Evidence.FilePath)}:{fact.Evidence.StartLine}-{fact.Evidence.EndLine}`, commit `{Safe(fact.CommitSha)}`, extractor `{Safe(fact.Evidence.ExtractorId)}/{Safe(fact.Evidence.ExtractorVersion)}`)";
 }

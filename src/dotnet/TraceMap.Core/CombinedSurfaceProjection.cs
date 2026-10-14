@@ -92,9 +92,11 @@ public sealed record CombinedSurfaceProjectionRow(
     string? LegacyDataExtractorVersion = null,
     string? SurfaceSubtype = null,
     [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
-    OutboundHttpCallEvidence? HttpCallEvidence = null,
-    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
-    DatabaseCallEvidence? DatabaseCallEvidence = null);
+    OutboundHttpCallEvidence? HttpCallEvidence = null)
+{
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public DatabaseCallEvidence? DatabaseCallEvidence { get; init; }
+}
 
 public static class CombinedSurfaceProjection
 {
@@ -259,8 +261,8 @@ public static class CombinedSurfaceProjection
             stableMessageSurfaceKey,
             SurfaceSubtype: isFrameworkDataAdapterFill ? "data-adapter-fill" : null,
             HttpCallEvidence: fact.FactType == FactTypes.HttpCallDetected && fact.RuleId is RuleIds.HttpClientInvocation or RuleIds.VisualBasicSyntaxHttpCandidate
-                ? OutboundHttpCallEvidence.FromProperties(fact.Properties) : null,
-            DatabaseCallEvidence: fact.FactType == FactTypes.DatabaseOperationCandidate ? DatabaseCallEvidence.FromProperties(fact.Properties) : null);
+                ? OutboundHttpCallEvidence.FromProperties(fact.Properties) : null)
+        { DatabaseCallEvidence = fact.FactType == FactTypes.DatabaseOperationCandidate ? DatabaseCallEvidence.FromProperties(fact.Properties) : null };
     }
 
     private static CombinedSurfaceProjectionRow ToLegacyDataSurface(LegacyDataModelDescriptorProjectionRow descriptor)
@@ -323,7 +325,7 @@ public static class CombinedSurfaceProjection
         }
 
         if (fact.FactType == FactTypes.DatabaseOperationCandidate
-            && FirstValue(fact.Properties, "operationKind") is "data-adapter-fill" or "select-candidate" or "scalar-candidate" or "xml-reader-candidate" or "data-adapter-schema")
+            && FirstValue(fact.Properties, "operationKind") is "data-adapter-fill" or "select-candidate" or "scalar-candidate")
         {
             return "sql-query";
         }

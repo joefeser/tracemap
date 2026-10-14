@@ -26,12 +26,17 @@ def digest(path):
 
 
 def cell(value):
-    return html.escape(str(value if value is not None else 'unavailable')).replace('|', '&#124;').replace('`', '&#96;').replace('\r', ' ').replace('\n', ' ')
+    value = html.escape(str(value if value is not None else 'unavailable')).replace('|', '&#124;').replace('`', '&#96;').replace('\r', ' ').replace('\n', ' ')
+    return ''.join(f'&#{ord(character)};' if character in '\\!*_[](){}+-' else character for character in value)
 
 
 def render_root(ordinal, selector, report):
     summary = report['summary']
     paths = report['paths']
+    if not isinstance(summary, dict) or type(summary.get('truncated')) is not bool:
+        raise ValueError('invalid native truncation metadata')
+    if not isinstance(report['gaps'], list) or any(not isinstance(gap, dict) for gap in report['gaps']):
+        raise ValueError('invalid native gap metadata')
     truncation = sorted({str(gap.get('reason') or 'unspecified') for gap in report['gaps'] if gap.get('gapKind') == 'TruncatedByLimit'})
     truncation_label = ', '.join(truncation) if truncation else ('unavailable in retained diagnostics' if summary['truncated'] else 'none reported')
     lines = [f'## Selection {ordinal}', '', f'Caller selector: {cell(selector)}', '',

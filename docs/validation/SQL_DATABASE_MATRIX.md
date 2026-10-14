@@ -133,3 +133,19 @@ work exhaustion explicitly leaves state unavailable. Parameter metadata is a
 bounded local witness summary (including safe public enum type names), not a full
 per-parameter/result contract or argument-value propagation. Connection constructor
 and assignment controls retain evidence without database identities or credentials.
+
+## PR regression boundaries
+
+The SQL compatibility workflow also runs `SqlReviewRegressionTests`, report-writer
+guards, and the integrated migration corpus on PRs and relevant pushes to `dev`
+and `main`. Action dependencies are commit-pinned. Negative cases cover malformed
+handoff evidence, Markdown injection, non-Boolean truncation metadata, optimized
+Python execution, and lexical receiver shadowing.
+
+Version 1 surface buckets remain compatible: XML-reader and adapter-schema
+operations retain the `sql-persistence` bucket, alongside adapter updates and bulk
+writes. Their precise operation kind remains in `databaseCallEvidence`; the bucket
+does not claim that an XML read writes data. Database evidence is an optional init
+property on existing public projection records, preserving positional constructor
+signatures. Parameter direction and type lists are sorted distinct witnessed values
+within the bounded local block, not final runtime state for individual parameters.

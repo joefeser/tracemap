@@ -166,7 +166,12 @@ public static class GroupedCompiledPathHandoffBuilder
             used.Add(reference);
             return value;
         }
-        CombinedPathNode Node(string reference) => Resolve(reference, handoff.Nodes, usedNodes, "node");
+        CombinedPathNode Node(string reference)
+        {
+            var node = Resolve(reference, handoff.Nodes, usedNodes, "node");
+            if (node.DatabaseCallEvidence is { } evidence && !evidence.IsWellFormed()) throw Invalid("DATABASE_CALL_EVIDENCE");
+            return node;
+        }
         CombinedPathEdge Edge(string reference) => Resolve(reference, handoff.Edges, usedEdges, "edge");
         var paths = handoff.Variants.Select(variant => variant.Path with
         {

@@ -5,7 +5,7 @@ import json
 import pathlib
 import shutil
 import subprocess
-from sql_matrix_expectations import load_expectations, assert_calls, assert_compiled_cases
+from sql_matrix_expectations import load_expectations, assert_calls, assert_compiled_cases, assert_database_path_evidence
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--output',type=pathlib.Path,required=True)
@@ -51,7 +51,7 @@ for tfm in ['net20','net35','net40','net45','net452','net472','net48','net10.0']
                 surface = 'sql-query' if '.Fill(' in next(iter(cases.values())) else 'sql-persistence'
                 run(cli+['paths','--index',str(pair[0]/'index.sqlite'),'--out',str(args.output/(prefix+'-paths')),'--from-symbol',next(iter(cases)),'--to-surface',surface,'--format','json'])
                 report=json.loads((args.output/(prefix+'-paths/paths-report.json')).read_text(encoding='utf-8'))
-                assert 'databaseCallEvidence' in json.dumps(report),prefix
+                assert_database_path_evidence(report)
             print(prefix+' individual cases and controls passed',flush=True)
 run(['python' if shutil.which('python') else 'python3',str(root/'scripts/validate-adapter-artifacts.py'),*outputs])
 print(f'{len(outputs)} deterministic SQL CLI outputs validated; no methods executed.')

@@ -2,6 +2,30 @@
 import collections
 import json
 import re
+import sys
+
+if sys.flags.optimize:
+    raise RuntimeError('SQL validation requires Python assertions; optimization is unsupported.')
+
+
+def assert_database_path_evidence(report):
+    if not isinstance(report, dict) or not isinstance(report.get('paths'), list):
+        raise ValueError('Invalid paths report')
+    evidence = []
+    for path in report['paths']:
+        if not isinstance(path, dict) or not isinstance(path.get('nodes'), list):
+            raise ValueError('Invalid retained path')
+        for node in path['nodes']:
+            if not isinstance(node, dict):
+                raise ValueError('Invalid retained node')
+            if node.get('databaseCallEvidence') is not None:
+                item = node['databaseCallEvidence']
+                if not isinstance(item, dict) or any(not isinstance(item.get(key), str) or not item[key]
+                        for key in ['methodName', 'operationKind', 'coverageLabel', 'limitations']):
+                    raise ValueError('Invalid database evidence')
+                evidence.append(item)
+    if not evidence:
+        raise ValueError('No retained database evidence')
 
 
 def load_expectations(sample, language, inventory, controls_file):

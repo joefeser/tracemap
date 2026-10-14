@@ -643,7 +643,12 @@ public static partial class VisualBasicSyntaxExtractor
                 ["receiverName"] = receiverName,
                 ["receiverType"] = receiverType,
                 ["resolutionKind"] = "ExplicitSyntaxType",
-                ["resultKind"] = "unavailable",
+                ["resultKind"] = operationKind switch
+                {
+                    "select-candidate" => "data-reader", "scalar-candidate" => "scalar",
+                    "execute-candidate" => "row-count-or-none", "xml-reader-candidate" => "xml-reader",
+                    "bulk-write-boundary" => "none", _ => "unavailable"
+                },
                 ["ruleLimitations"] = "The invocation receiver has an explicit supported ADO.NET command type in Visual Basic syntax, but compiler identity, provider binding, command text, connection identity, successful execution, and runtime reachability are not established.",
                 ["sqlSourceKind"] = "vb-syntax-explicit-database-command"
             },

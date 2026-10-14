@@ -78,7 +78,7 @@ try
     var truncation = "unknown (native flag unavailable)";
     if (report.RootElement.TryGetProperty("summary", out var summary)
         && summary.ValueKind == JsonValueKind.Object && summary.TryGetProperty("truncated", out var flag))
-        truncation = flag.ValueKind switch { JsonValueKind.True => "true", JsonValueKind.False => "false", _ => truncation };
+        truncation = flag.ValueKind switch { JsonValueKind.True => "true", JsonValueKind.False => "false", _ => throw new InvalidDataException() };
     var reasons = new SortedSet<string>(StringComparer.Ordinal);
     if (report.RootElement.TryGetProperty("gaps", out var gaps) && gaps.ValueKind == JsonValueKind.Array)
         foreach (var gap in gaps.EnumerateArray())

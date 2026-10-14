@@ -82,7 +82,7 @@ public sealed class SqlDatabaseMatrixTests
             Assert.EndsWith("|" + signature,il.Properties["targetIdentity"],StringComparison.Ordinal);
             Assert.Matches("^[0-9a-f]{64}$",il.Properties["ilGeneratorSha256"]);
             Assert.Matches("^[0-9a-f]{64}$",il.Properties["ilBoundedInputSha256"]);
-            var surface = call.Properties["operationKind"] is "select-candidate" or "scalar-candidate" or "data-adapter-fill" or "xml-reader-candidate" or "data-adapter-schema" ? "sql-query" : "sql-persistence";
+            var surface = call.Properties["operationKind"] is "select-candidate" or "scalar-candidate" or "data-adapter-fill" ? "sql-query" : "sql-persistence";
             var paths = await CombinedDependencyPathReporter.BuildReportAsync(new(index,temp.Path,FromSymbol:call.SourceSymbol,ToSurface:surface));
             var handoff = GroupedCompiledPathHandoffBuilder.Create(paths,hash);
             Assert.Contains(handoff.Nodes.Values,n => n.DatabaseCallEvidence?.MethodName == emitted.Name);
@@ -99,6 +99,14 @@ public sealed class SqlDatabaseMatrixTests
                 else
                 {
                     var terminal = Assert.Single(modeHandoff.Nodes.Values,n => n.SurfaceKind == "database-api" && n.OperationName == emitted.Name && n.EvidenceTier == EvidenceTiers.Tier3SyntaxOrTextual);
+                    Assert.Equal(emitted.Name switch
+                    {
+                        "Fill" => "compiled-data-adapter-fill-candidate",
+                        "FillSchema" => "compiled-data-adapter-schema-candidate",
+                        "Update" => "compiled-data-adapter-update-candidate",
+                        "WriteToServer" or "WriteToServerAsync" => "compiled-bulk-write-boundary",
+                        _ => "compiled-command-execute-candidate"
+                    }, terminal.SurfaceSubtype);
                     Assert.Equal(il.Properties["targetIdentity"],terminal.CompiledDatabaseApiEvidence!.OriginalTargetIdentity);
                     Assert.Equal(il.Properties["ilGeneratorSha256"],terminal.CompiledDatabaseApiEvidence.IlGeneratorSha256);
                     Assert.Equal(il.Properties["ilBoundedInputSha256"],terminal.CompiledDatabaseApiEvidence.IlBoundedInputSha256);

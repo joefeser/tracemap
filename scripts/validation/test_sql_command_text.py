@@ -213,6 +213,14 @@ class CommandTextTests(unittest.TestCase):
         self.assertEqual(0, self.run_tool().returncode)
         self.assertIn('Original query truncated: unknown', self.output.read_text())
 
+    def test_present_non_boolean_flag_is_refused(self):
+        for value in [None, 'false', 0, [], {}]:
+            with self.subTest(value=value):
+                self.report['summary']['truncated'] = value
+                self.input.write_text(json.dumps(self.report))
+                self.assertEqual(2, self.run_tool().returncode)
+                self.assertFalse(self.output.exists())
+
     def test_false_flag_with_reason_preserves_conflict(self):
         self.report['summary']['truncated'] = False
         self.report['gaps'] = [{'gapKind': 'TruncatedByLimit', 'reason': 'path'}]
