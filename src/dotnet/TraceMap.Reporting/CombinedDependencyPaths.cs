@@ -179,11 +179,13 @@ public sealed record CombinedPathNode(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     CompiledCommandConfigurationCandidate? CommandBinding = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    OutboundHttpCallEvidence? HttpCallEvidence = null,
-    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
-    DatabaseCallEvidence? DatabaseCallEvidence = null,
-    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
-    CompiledDatabaseApiEvidence? CompiledDatabaseApiEvidence = null);
+    OutboundHttpCallEvidence? HttpCallEvidence = null)
+{
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public DatabaseCallEvidence? DatabaseCallEvidence { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public CompiledDatabaseApiEvidence? CompiledDatabaseApiEvidence { get; init; }
+}
 
 public sealed record CompiledCommandOperandOrigin(string Kind, string Identity);
 public sealed record CompiledCommandConfigurationCandidate(
@@ -7227,7 +7229,7 @@ public static partial class CombinedDependencyPathReporter
                 SurfaceSubtype,
                 Limitations,
                 CommandBinding,
-                HttpCallEvidence, DatabaseCallEvidence, CompiledDatabaseApiEvidence);
+                HttpCallEvidence) { DatabaseCallEvidence = DatabaseCallEvidence, CompiledDatabaseApiEvidence = CompiledDatabaseApiEvidence };
         }
     }
 

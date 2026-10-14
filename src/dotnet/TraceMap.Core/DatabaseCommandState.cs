@@ -16,6 +16,12 @@ internal static class DatabaseCommandState
         if (body.Operations.Length > 256) { p["commandStateCoverage"] = "local-work-limit"; return; }
         p["commandStateCoverage"] = "bounded-local-straight-line";
         var witnesses = new HashSet<ISymbol>(SymbolEqualityComparer.Default);
+        void Witness(string key, string value)
+        {
+            if (value == "unavailable") return;
+            p[key] = string.Join(";", p.GetValueOrDefault(key, "").Split(';', StringSplitOptions.RemoveEmptyEntries)
+                .Append(value).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal));
+        }
         void Reset()
         {
             p["commandTextAvailability"] = "unavailable"; p.Remove("commandTextHash");
@@ -70,15 +76,14 @@ internal static class DatabaseCommandState
                     else if (assignment.Target is IPropertyReferenceOperation parameter && Symbol(parameter.Instance) is { } ps && witnesses.Contains(ps))
                     {
                         if (parameter.Property.Name == "Direction")
-                            p["parameterDirectionKinds"] = (assignment.Value.ConstantValue.HasValue ? assignment.Value.ConstantValue.Value : null) switch { 1 => "Input", 2 => "Output", 3 => "InputOutput", 6 => "ReturnValue", _ => "unavailable" };
+                            Witness("parameterDirectionKinds", (assignment.Value.ConstantValue.HasValue ? assignment.Value.ConstantValue.Value : null) switch { 1 => "Input", 2 => "Output", 3 => "InputOutput", 6 => "ReturnValue", _ => "unavailable" });
                         if (parameter.Property.Name is "DbType" or "SqlDbType")
                         {
-                            p["parameterTypeKinds"] = "enum-assignment-witness";
-                            p.Remove("parameterTypeNames");
+                            Witness("parameterTypeKinds", "enum-assignment-witness");
                             var value = assignment.Value;
                             while (value is IConversionOperation conversion) value = conversion.Operand;
                             if (value is IFieldReferenceOperation field && DatabaseOperationApi.Trusted(field.Field.ContainingAssembly))
-                                p["parameterTypeNames"] = field.Field.ContainingType.Name + "." + field.Field.Name;
+                                Witness("parameterTypeNames", field.Field.ContainingType.Name + "." + field.Field.Name);
                         }
                     }
                 }
@@ -97,11 +102,11 @@ internal static class DatabaseCommandState
                             foreach (var parameterVariable in declaration.Declarators) witnesses.Add(parameterVariable.Symbol);
                         foreach (var argument in invocation.Arguments.Where(a => a.Parameter?.Type.Name is "SqlDbType" or "DbType"))
                         {
-                            p["parameterTypeKinds"] = "enum-argument-witness";
+                            Witness("parameterTypeKinds", "enum-argument-witness");
                             var value = argument.Value;
                             while (value is IConversionOperation conversion) value = conversion.Operand;
                             if (value is IFieldReferenceOperation field && DatabaseOperationApi.Trusted(field.Field.ContainingAssembly))
-                                p["parameterTypeNames"] = field.Field.ContainingType.Name + "." + field.Field.Name;
+                                Witness("parameterTypeNames", field.Field.ContainingType.Name + "." + field.Field.Name);
                         }
                     }
                     else if (!DatabaseOperationApi.TryClassify(invocation.TargetMethod,out _,out _)) Reset();

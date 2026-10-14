@@ -5230,7 +5230,7 @@ rules:
   - id: database.operation.call-pattern.v1
     name: Application database operation call pattern
     description: Classifies compiler-resolved EF/EF Core, Dapper, ADO.NET, and Npgsql calls as bounded static database-operation candidates.
-    evidenceTier: Tier1Semantic or Tier4Unknown
+    evidenceTier: Tier1Semantic, Tier3SyntaxOrTextual, or Tier4Unknown
     emits:
       - DatabaseOperationCandidate
       - AnalysisGap

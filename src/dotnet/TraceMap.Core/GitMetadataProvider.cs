@@ -4,6 +4,7 @@ namespace TraceMap.Core;
 
 public static class GitMetadataProvider
 {
+    internal static readonly TimeSpan OutputDrainTimeout = TimeSpan.FromSeconds(5);
     public static GitMetadata Detect(string repoPath)
     {
         var root = Path.GetFullPath(repoPath);
@@ -121,7 +122,11 @@ public static class GitMetadataProvider
                 return new GitResult(null, Failed: true);
             }
 
-            return CompleteGitOutput(outputTask, errorTask, allowEmpty, TimeSpan.FromSeconds(1));
+            // Use the same bounded budget as process exit. A one-second pipe
+            // continuation budget can expire on loaded two-core CI runners even
+            // after git exits successfully. Exhaustion still fails closed and
+            // is retried only once; no previous identity is reused.
+            return CompleteGitOutput(outputTask, errorTask, allowEmpty, OutputDrainTimeout);
         }
         catch
         {

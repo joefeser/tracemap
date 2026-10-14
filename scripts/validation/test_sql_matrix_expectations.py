@@ -1,20 +1,43 @@
 import copy
 import json
 import pathlib
+import re
+import subprocess
+import sys
 import tempfile
 import unittest
-from sql_matrix_expectations import load_expectations, assert_calls, assert_compiled_cases
+from sql_matrix_expectations import load_expectations, assert_calls, assert_compiled_cases, assert_database_path_evidence
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 class SqlOracleGuards(unittest.TestCase):
     def test_full_suite_ci_installs_and_checks_fixture_sdk(self):
-        sdk=json.loads((ROOT/'samples/sql-database-matrix/global.json').read_text())['sdk']
+        metadata=json.loads((ROOT/'samples/sql-database-matrix/global.json').read_text())
+        self.assertIsInstance(metadata,dict)
+        sdk=metadata.get('sdk')
+        self.assertIsInstance(sdk,dict)
+        self.assertIsInstance(sdk.get('version'),str)
+        self.assertIsInstance(sdk.get('rollForward'),str)
         self.assertEqual('disable',sdk['rollForward'])
         workflow=(ROOT/'.github/workflows/adapter-validation.yml').read_text()
         dotnet_job=workflow.split('  dotnet:',1)[1].split('  typescript:',1)[0]
-        self.assertIn('            '+sdk['version']+'\n',dotnet_job)
+        setup=re.search(r'(?m)^      - uses: actions/setup-dotnet@[^\n]+\n(?:(?!      - ).*\n)*',dotnet_job)
+        self.assertIsNotNone(setup)
+        self.assertIn('            '+sdk['version']+'\n',setup.group())
         self.assertIn('working-directory: samples/sql-database-matrix\n        run: dotnet --version',dotnet_job)
         self.assertIn('dotnet test src/dotnet/TraceMap.sln --no-build',dotnet_job)
+        self.assertLess(dotnet_job.index('run: dotnet --version'),dotnet_job.index('dotnet build'))
+
+    def test_optimized_validation_refuses_before_scanning(self):
+        result=subprocess.run([sys.executable,'-O',str(ROOT/'scripts/validation/sql-coverage-smoke.py'),'--help'],capture_output=True,text=True)
+        self.assertNotEqual(0,result.returncode)
+        self.assertIn('optimization is unsupported',result.stderr)
+
+    def test_database_evidence_requires_structure_not_tokens(self):
+        good={'methodName':'ExecuteScalar','operationKind':'scalar-candidate','coverageLabel':'reduced','limitations':'static only'}
+        assert_database_path_evidence({'paths':[{'nodes':[{'databaseCallEvidence':good}]}]})
+        for item in [None,'databaseCallEvidence',{}, {'methodName':'ExecuteScalar'}]:
+            with self.subTest(item=item), self.assertRaises(ValueError):
+                assert_database_path_evidence({'note':'databaseCallEvidence','paths':[{'nodes':[{'databaseCallEvidence':item}]}]})
 
     def setUp(self):
         self.cases={'Case000':'System.Data.Common.DbCommand.ExecuteScalar()','Case001':'System.Data.IDbCommand.ExecuteNonQuery()'}
@@ -53,5 +76,12 @@ class SqlOracleGuards(unittest.TestCase):
             self.assertEqual(2,text.count("'"+path+"'"))
         self.assertIn('windows-latest',text)
         self.assertIn('test_sql_matrix_expectations.py',text)
+        self.assertIn('branches: [dev, main, codex/sql-database-matrix-864]',text)
+        self.assertIn('FullyQualifiedName~MarkdownReportWriterTests',text)
+        self.assertIn('FullyQualifiedName~SqlReviewRegressionTests',text)
+        actions=re.findall(r'uses: (actions/[^@\s]+)@([^\s]+)',text)
+        self.assertEqual(3,len(actions))
+        for name,sha in actions:
+            self.assertRegex(sha,r'^[a-f0-9]{40}$',name)
 
 if __name__=='__main__':unittest.main()

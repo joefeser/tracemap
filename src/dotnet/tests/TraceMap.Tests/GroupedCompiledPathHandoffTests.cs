@@ -10,6 +10,21 @@ public sealed class GroupedCompiledPathHandoffTests
     private static readonly string IndexHash = new('a', 64);
 
     [Fact]
+    public void Correct_hash_does_not_admit_malformed_database_evidence()
+    {
+        var report = Report();
+        var evidence = TraceMap.Core.DatabaseCallEvidence.FromProperties(new Dictionary<string, string>
+            { ["methodName"] = "ExecuteScalar", ["operationKind"] = "scalar-candidate" });
+        foreach (var invalid in new[] { evidence with { MethodName = null! }, evidence with { OperationKind = "invented" }, evidence with { CoverageLabel = "" } })
+        {
+            var node = report.Paths[0].Nodes[0] with { DatabaseCallEvidence = invalid };
+            var changed = report with { Paths = [report.Paths[0] with { Nodes = [node] }] };
+            var handoff = GroupedCompiledPathHandoffBuilder.Create(changed, IndexHash);
+            Assert.Contains("DATABASE_CALL_EVIDENCE", Assert.Throws<InvalidDataException>(() => GroupedCompiledPathHandoffBuilder.Restore(handoff)).Message);
+        }
+    }
+
+    [Fact]
     public void Review_tasks_distinguish_sql_http_and_unconnected_evidence()
     {
         var sql = new BackendExtractionOperation("node", "database", "retained-query-path",

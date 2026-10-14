@@ -390,8 +390,14 @@ public static partial class CombinedDependencyPathReporter
             TextLength: null,
             PackageName: null,
             ConfigKey: null,
-            SurfaceSubtype: api == "DbDataAdapter.Fill"
-                ? "compiled-data-adapter-fill-candidate" : "compiled-command-execute-candidate",
+            SurfaceSubtype: api[(api.LastIndexOf('.') + 1)..] switch
+            {
+                "Fill" => "compiled-data-adapter-fill-candidate",
+                "FillSchema" => "compiled-data-adapter-schema-candidate",
+                "Update" => "compiled-data-adapter-update-candidate",
+                "WriteToServer" or "WriteToServerAsync" => "compiled-bulk-write-boundary",
+                _ => "compiled-command-execute-candidate"
+            },
             Limitations: api == "DbDataAdapter.Fill"
                 ? ["The historical DbDataAdapter.Fill surface groups encoded Fill calls declared on DbDataAdapter or DataAdapter. Original declaring identities remain in supporting IL call facts. This is a static API candidate, not provider dispatch, SQL execution, or a source-line identity claim."]
                 : binding is null

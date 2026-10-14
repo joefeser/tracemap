@@ -21,6 +21,19 @@ def native(selector, paths=None):
 
 
 class SqlWrapperReportTests(unittest.TestCase):
+    def test_markdown_controls_are_inert(self):
+        value=REPORT.cell('![remote](https://example.invalid/a) [link](https://example.invalid) \\ * _')
+        for token in ['![', '](', '\\', '*', '_']:
+            self.assertNotIn(token,value)
+
+    def test_malformed_gaps_and_truncation_refused(self):
+        for gap in [None,'bad',3,[]]:
+            report=native('First');report['gaps']=[gap]
+            with self.subTest(gap=gap), self.assertRaises(ValueError): REPORT.render_root(1,'First',report)
+        for flag in [None,'false',0,1,{}]:
+            report=native('First');report['summary']['truncated']=flag
+            with self.subTest(flag=flag), self.assertRaises(ValueError): REPORT.render_root(1,'First',report)
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
@@ -170,7 +183,7 @@ class SqlWrapperReportTests(unittest.TestCase):
                            'ruleId': 'public.rule.v1', 'evidenceTier': 'Tier4Unknown', 'nodeId': 'node-1', 'combinedFactId': 'fact-1'}]
         rendered = '\n'.join(REPORT.render_root(1, 'Root', report))
         self.assertIn('&lt;Caller&gt;&#124;x', rendered)
-        self.assertIn('node-1 / fact-1', rendered)
+        self.assertIn('node&#45;1 / fact&#45;1', rendered)
         self.assertIn('StoredProcedure', rendered)
         self.assertNotIn('SECRET_SQL', rendered)
         self.assertIn('caller relevance unproven', rendered)

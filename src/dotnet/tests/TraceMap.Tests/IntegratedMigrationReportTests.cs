@@ -42,6 +42,12 @@ public sealed class IntegratedMigrationReportTests
         Assert.Contains("hosting/route unresolved", report);
         Assert.Contains(binding.FactId, report);
         Assert.Contains(operation.FactId, report);
+        Assert.Contains($"commit `{binding.CommitSha}`", report);
+        Assert.Contains($"extractor `{binding.Evidence.ExtractorId}/{binding.Evidence.ExtractorVersion}`", report);
+        Assert.Contains($"PublicControl.vb:{binding.Evidence.StartLine}-{binding.Evidence.EndLine}", report);
+        var capped = Report(scan.Facts.Concat(Enumerable.Range(1, 9).Select(i => binding with { FactId = "extra-anchor-" + i })));
+        Assert.Contains("search limited: True", capped);
+        Assert.Contains("Caller frontier `path-limit`", capped);
         Assert.Equal(EvidenceTiers.Tier3SyntaxOrTextual, binding.EvidenceTier);
         Assert.Equal(report, Report(scan.Facts.Reverse()));
         Assert.Contains("Displayed groups with candidate entry paths: 0/1",
