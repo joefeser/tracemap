@@ -8,6 +8,43 @@ namespace TraceMap.Tests;
 
 public sealed class SqlReviewRegressionTests
 {
+    [Theory]
+    [InlineData("")]
+    [InlineData("invented")]
+    [InlineData("Input;Input")]
+    [InlineData("Output;Input")]
+    [InlineData("Input;")]
+    [InlineData("unavailable;Input")]
+    public void Restored_parameter_lists_must_be_canonical(string value)
+    {
+        var evidence = DatabaseCallEvidence.FromProperties(new Dictionary<string, string>());
+        Assert.True(evidence.IsWellFormed());
+        Assert.False((evidence with { ParameterDirectionKinds = value }).IsWellFormed());
+        Assert.False((evidence with { ParameterTypeKinds = value }).IsWellFormed());
+        Assert.True((evidence with { ParameterDirectionKinds = null, ParameterTypeKinds = null }).IsWellFormed());
+        Assert.True((evidence with { ParameterDirectionKinds = "Input;Output",
+            ParameterTypeKinds = "enum-argument-witness;enum-assignment-witness" }).IsWellFormed());
+    }
+
+    [Theory]
+    [InlineData("parameterDirectionKinds", "Input")]
+    [InlineData("parameterTypeKinds", "enum-argument-witness")]
+    [InlineData("parameterTypeNames", "DbType.String")]
+    public void Parameter_metadata_is_bounded_before_tokenization(string key, string token)
+    {
+        foreach (var raw in new[] { new string('x', 8193), string.Join(';', Enumerable.Repeat(token, 129)), token + ";" })
+        {
+            var evidence = DatabaseCallEvidence.FromProperties(new Dictionary<string, string> { [key] = raw });
+            Assert.Equal("unavailable", evidence.ParameterDirectionKinds);
+            Assert.Equal("unavailable", evidence.ParameterTypeKinds);
+            Assert.Null(evidence.ParameterTypeNames);
+            Assert.True(evidence.IsWellFormed());
+        }
+        var accepted = DatabaseCallEvidence.FromProperties(new Dictionary<string, string>
+            { [key] = string.Join(';', Enumerable.Repeat(token, 128)) });
+        Assert.Contains(token, new[] { accepted.ParameterDirectionKinds, accepted.ParameterTypeKinds, accepted.ParameterTypeNames });
+    }
+
     [Fact]
     public void Multiple_parameter_witnesses_are_unioned_not_overwritten()
     {

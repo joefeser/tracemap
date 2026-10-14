@@ -170,6 +170,7 @@ public static class GroupedCompiledPathHandoffBuilder
         {
             var node = Resolve(reference, handoff.Nodes, usedNodes, "node");
             if (node.DatabaseCallEvidence is { } evidence && !evidence.IsWellFormed()) throw Invalid("DATABASE_CALL_EVIDENCE");
+            if (node.DatabaseCallEvidence is not null && !HasDatabaseProvenance(node)) throw Invalid("DATABASE_NODE_PROVENANCE");
             return node;
         }
         CombinedPathEdge Edge(string reference) => Resolve(reference, handoff.Edges, usedEdges, "edge");
@@ -231,6 +232,16 @@ public static class GroupedCompiledPathHandoffBuilder
             limits.MaxRecords <= 0 || limits.MaxReferences <= 0) throw Invalid("LIMITS");
     }
     private static InvalidDataException Invalid(string category) => new("WEBFORMS_GROUPED_HANDOFF_" + category);
+
+    private static bool HasDatabaseProvenance(CombinedPathNode node) =>
+        !string.IsNullOrWhiteSpace(node.RuleId)
+        && !string.IsNullOrWhiteSpace(node.SourceIndexId)
+        && !string.IsNullOrWhiteSpace(node.ScanId)
+        && !string.IsNullOrWhiteSpace(node.FilePath)
+        && node.EvidenceTier is "Tier1Semantic" or "Tier2Structural" or "Tier3SyntaxOrTextual" or "Tier4Unknown"
+        && node.CommitSha is { Length: 40 or 64 } sha && sha.All(char.IsAsciiHexDigit)
+        && (node.StartLine is > 0 && node.EndLine >= node.StartLine
+            || node.StartLine == -1 && node.EndLine == -1);
 
     private sealed class HashLimitStream(long maximumBytes, CancellationToken cancellationToken) : Stream
     {
