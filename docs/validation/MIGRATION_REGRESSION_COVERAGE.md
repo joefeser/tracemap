@@ -32,6 +32,13 @@ are required. Existing negative tests must remain in place when refactoring.
 
 ## CI enforcement
 
+`scripts/validation/test_retained_gap_inventory.py` covers the offline retained
+gap summary: closed-label privacy projection, generator/projected-input hashes,
+separate unresolved-call totals, deterministic grouping, malformed/duplicate JSON,
+byte/record/time limits, linked inputs, unsafe output locations and no-overwrite.
+The dedicated retained-gap-inventory workflow runs these synthetic tests on
+Windows and Linux without building or scanning an application.
+
 The Windows test-host baseline comparison separately runs `VaultExportTests` and
 `WebFormsReviewInputValidationTests` on the pinned pre-hardening base and candidate.
 Candidate regression guards cover canonical LF Markdown hashes (with CRLF readback),

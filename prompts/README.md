@@ -1,5 +1,10 @@
 # Private exchange prompts
 
+For the next gap-planning step, use
+[Inventory retained analysis gaps](inventory-retained-analysis-gaps.md).
+It reads the existing scan once with a bounded Python utility—no build, scan or
+full test suite—and keeps unresolved calls separate from AnalysisGap facts.
+
 For public-only validation of database evidence admission, use
 [Verify evidence-admission hardening](verify-evidence-admission-hardening.md).
 It pins the implementation revision and synthetic acceptance checks; no private
