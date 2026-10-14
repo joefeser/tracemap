@@ -34,6 +34,8 @@ public sealed record CombinedDependencyPathOptions(
     public bool CompiledOnly { get; init; }
     [JsonIgnore]
     public Action<RetainedMethodGraph>? MethodGraphObserver { get; init; }
+    [JsonIgnore]
+    public Action<RetainedMethodGraph>? ZeroPathGraphObserver { get; init; }
     internal IReadOnlyList<CombinedPathSymbolRoot>? SymbolRoots { get; init; }
     // Deterministic work bound, including nonterminal/cyclic exploration.
     public int MaxTraversalWork { get; init; } = 100_000;
@@ -752,6 +754,16 @@ public static partial class CombinedDependencyPathReporter
                     gaps.Add(gap);
                 }
             }
+        }
+
+        // Keep zero-path diagnostics separate from path acceptance. Reuse the
+        // constructed graph and only the unused work allowance; never rebuild it.
+        if (options.MethodGraphObserver is null && options.ZeroPathGraphObserver is not null &&
+            search is not null && search.Paths.Count == 0 && startNodes.Count != 0 &&
+            search.Work < options.MaxTraversalWork)
+        {
+            options.ZeroPathGraphObserver(BuildMethodGraph(graph, read, startNodes,
+                options with { MaxTraversalWork = options.MaxTraversalWork - search.Work }));
         }
 
         var reportPaths = legacyMode

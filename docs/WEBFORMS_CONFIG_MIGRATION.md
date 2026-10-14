@@ -720,6 +720,15 @@ SQL execution. The failed run stays failed. The full-run repeated-I/O cause
 remains unproven; indexed typed reconciliation/gap lookups remove avoidable
 full-payload passes but are not a demonstrated explanation for that counter.
 
+When a grouped handler requery finds no terminal path and has traversal work
+remaining, it also writes `method-graph.local.json` and `method-graph.local.html`
+from the same constructed graph. The receipt's `zeroPathDiagnosticReport` names
+this separate diagnostic and binds both additional artifacts. Its unfiltered
+outgoing traversal uses only the remaining work allowance, with its own cutoffs;
+it does not change the grouped query's path count, truncation status or tiers.
+No remaining work means no diagnostic graph. Diagnostic edges are not accepted
+terminal paths, and an absent edge does not prove absent application behavior.
+
 Recovery bypasses full graph composition. A later public reproduction identified
 and fixed repeated whole-table decodes in VB bridge admission using indexed
 fact-type reads; the authentic Windows corpus stays below the unchanged logical

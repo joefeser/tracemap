@@ -1,49 +1,46 @@
-# Correct the retained-handler bundle argument; three-minute total budget
+# One retained-handler query with zero-path diagnostics
 
-Start a three-minute wall-clock timer before any work. Stop at that deadline,
-terminate only commands you started, and return the last completed step. Do not
-expand this into an investigation, full test run, scan or context-preparation run.
+Five-minute TOTAL wall-clock limit, including update/build and reading results.
+Stop at the deadline and terminate only commands you started. Use one shell
+consistently; do not execute PowerShell syntax through Bash.
 
-Record tool HEAD and reuse the already built CLI containing the
-`database-operations` selector. Do not rebuild or change the checkout. Use one
-shell consistently; do not send PowerShell timing syntax to Bash. Reuse existing
-run-002 and its retained combined index. No source, context, references, budgets,
-original reports or receipts may be changed.
+Fast-forward the clean `codex/evidence-admission-hardening` tool checkout without
+discarding unrelated changes. Record HEAD and build the CLI using the installed
+.NET 10 SDK. Security patch differences are not a failure. Do not run tests here.
 
-Read the run's latest completed checkpoint and its `reports.reportAttempt`.
-Compare the previous command's `--bundle` with the absolute path formed from the
-run directory plus `reports.reportAttempt`. The bundle must be that original
-completed report directory, NOT a previous requery output directory. Keep the
-actual private paths local.
+Reuse the existing completed run and the exact Save-handler selector from the
+successful 85-second query. Read its completed checkpoint: `--bundle` MUST be
+the run directory plus `reports.reportAttempt`, not the combined.sqlite file
+and not any prior requery output directory. Use a fresh output directory.
 
-If the bundle already matches, stop and report that fact. Do not retry, bypass
-hash checks, edit checkpoints, or attribute this error to a binary-version
-mismatch. In the current implementation,
-`HANDLER_REQUERY_COMPLETED_CONTEXT_INVALID` checks bundle-path equality and the
-completed checkpoint digest; retained requery uses the original recorded runtime
-hash, not the current binary's hash.
+Run `webforms-review requery-handler` ONCE with the same bounds and default
+grouped-path view. Omit `--view method-graph`, `--surface-name` and
+`--traversal-scope compiled-il`. Expect terminal scope `database-operations`.
+Do not scan, combine, change context/source membership, references, budgets,
+receipts, original reports or application files. Do not execute SQL or HTTP.
 
-Only if the bundle argument was wrong, run `webforms-review requery-handler` ONCE
-with the corrected `--bundle`, the same exact Save-handler selection, run and
-limits as the prior requery, and a NEW output directory. Preserve all existing
-receipt validation.
-Use its default grouped-path view: omit `--view method-graph`, `--surface-name`
-and `--traversal-scope compiled-il`. The new default must print
-`handlerQuery.terminalScope=database-operations`. It includes source `sql-query`
-and `sql-persistence` plus compiled `database-api`; evidence tiers stay unchanged.
+If paths are zero, the new receipt may name `zeroPathDiagnosticReport`. Read
+that local JSON (and its HTML if useful), not the full source tree. It is an
+unfiltered outgoing graph generated from the SAME in-memory graph with only
+unused traversal work. Its cutoff status is independent of path truncation.
+No diagnostic means the allowance was exhausted or no root was selected; stop
+and report that, without increasing limits or launching another query.
 
-Do not rescan, recombine, execute application methods, SQL or HTTP, change the
-approved roster, rerun the matrix, or inspect unrelated handlers. The local
-synthetic clean/partial/missing/ambiguous matrix is already run by the developer.
+Within the remaining time, inspect the selected handler, its Save callee and
+their retained outward connections toward App_Code/database candidates. Keep
+exact identities locally. Report one evidenced blocking boundary if available:
+caller/callee anonymized labels, source-index identity equal/different,
+edge direction/kind, rule/tier, and associated gap reason. Distinguish an absent
+retained edge from an edge present but not used by the grouped traversal. Do not
+infer a missing connection merely from Tier3 evidence. If a terminal is present
+in the unfiltered graph but no accepted path exists, report its witness edge
+kinds/tiers for a traversal reproduction; do not claim runtime reachability.
+If the graph cannot establish the boundary, say so rather than invent a cause.
 
-Return only tool HEAD, elapsed time, bundle mismatch yes/no, query exit status
-(or not run), reported terminal scope, number of paths,
-terminal-kind counts, path evidence-tier combinations, truncation status and
-whether an existing source database operation is reached. Keep all private
-identities, source, hashes and paths local. If paths remain zero or the command
-fails, return its sanitized reason and stop; do not launch another command to
-investigate. Zero does not establish missing source or compiler failure.
+Return only HEAD, elapsed time, exit status, path count, terminal scope,
+diagnostic emitted yes/no, diagnostic work/cutoffs, and the bounded finding.
+Keep private paths, symbols, source, hashes and raw artifacts local; return
+sanitized structure only. A failure ends this run. No follow-on investigations.
 
-The prior database-api-only result and this aggregate query have different
-denominators. Any increase is newly included retained evidence, not new extraction,
-an all-semantic chain, runtime execution, or proof of original-build equivalence.
+This change adds diagnostics, not a claimed fix for private database reachability.
+Zero paths remain zero paths. Partial analysis remains partial.

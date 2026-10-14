@@ -66,13 +66,16 @@ public sealed class ExplicitVisualBasicContextTests
         SqliteIndexWriter.Write(index, scan.Manifest, scan.Facts);
         var combined = Path.Combine(temp.Path, "combined.sqlite");
         await CombinedIndexBuilder.CombineAsync(new CombineOptions([index], combined, ["retained"]));
+        RetainedMethodGraph? diagnostic = null;
         var report = await CombinedDependencyPathReporter.BuildReportAsync(new(combined, Path.Combine(temp.Path, "paths"),
-            FromSymbol: root.TargetSymbol, ToSurface: "database-operations", MaxDepth: 16) { ExactFromSymbol = true });
+            FromSymbol: root.TargetSymbol, ToSurface: "database-operations", MaxDepth: 16)
+            { ExactFromSymbol = true, ZeroPathGraphObserver = graph => diagnostic = graph });
         var narrow = await CombinedDependencyPathReporter.BuildReportAsync(new(combined, Path.Combine(temp.Path, "narrow-paths"),
             FromSymbol: root.TargetSymbol, ToSurface: "database-api", MaxDepth: 16) { ExactFromSymbol = true });
         Assert.Empty(narrow.Paths); // Existing compiled-API selector retains its original meaning.
         if (scenario is "valid" or "partial")
         {
+            Assert.Null(diagnostic);
             var sourceReport = await CombinedDependencyPathReporter.BuildReportAsync(new(combined, Path.Combine(temp.Path, "source-paths"),
                 FromSymbol: root.TargetSymbol, ToSurface: "sql-persistence", MaxDepth: 16) { ExactFromSymbol = true });
             Assert.NotEmpty(sourceReport.Paths);
@@ -81,10 +84,30 @@ public sealed class ExplicitVisualBasicContextTests
                 && p.Edges.Any(e => e.EvidenceTier == EvidenceTiers.Tier2Structural)
                 && p.Edges.Any(e => e.EvidenceTier == EvidenceTiers.Tier1Semantic));
         }
-        else Assert.Empty(report.Paths);
+        else
+        {
+            Assert.Empty(report.Paths);
+            Assert.NotNull(diagnostic);
+            Assert.NotEmpty(diagnostic.Roots);
+            Assert.NotEmpty(diagnostic.Edges);
+            Assert.True(diagnostic.Work + report.Summary.TraversalWorkUnits <= 100_000);
+        }
+        RetainedMethodGraph? repeatedDiagnostic = null;
         var repeat = await CombinedDependencyPathReporter.BuildReportAsync(new(combined, Path.Combine(temp.Path, "repeat-paths"),
-            FromSymbol: root.TargetSymbol, ToSurface: "database-operations", MaxDepth: 16) { ExactFromSymbol = true });
+            FromSymbol: root.TargetSymbol, ToSurface: "database-operations", MaxDepth: 16)
+            { ExactFromSymbol = true, ZeroPathGraphObserver = graph => repeatedDiagnostic = graph });
         Assert.Equal(report.Paths.Select(p => p.PathId), repeat.Paths.Select(p => p.PathId));
+        if (diagnostic is not null)
+        {
+            Assert.NotNull(repeatedDiagnostic);
+            Assert.Equal(diagnostic.Edges.Select(e => e.EdgeId), repeatedDiagnostic.Edges.Select(e => e.EdgeId));
+            Assert.Equal(diagnostic.Cutoffs, repeatedDiagnostic.Cutoffs);
+        }
+        RetainedMethodGraph? exhausted = null;
+        await CombinedDependencyPathReporter.BuildReportAsync(new(combined, Path.Combine(temp.Path, "bounded"),
+            FromSymbol: root.TargetSymbol, ToSurface: "database-operations", MaxDepth: 16)
+            { ExactFromSymbol = true, MaxTraversalWork = 1, ZeroPathGraphObserver = graph => exhausted = graph });
+        Assert.Null(exhausted);
     }
 
     public static IEnumerable<object[]> RegistrationCases()

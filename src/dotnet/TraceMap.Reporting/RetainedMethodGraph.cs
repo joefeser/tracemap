@@ -51,7 +51,8 @@ public static partial class CombinedDependencyPathReporter
             if (!graph.Outgoing.TryGetValue(current.Id, out var outgoing)) continue;
             foreach (var edge in outgoing.OrderBy(e => e.EdgeId, StringComparer.Ordinal))
             {
-                if (++work > options.MaxTraversalWork) { cutoffs.Add("work-limit"); queue.Clear(); break; }
+                if (work >= options.MaxTraversalWork) { cutoffs.Add("work-limit"); queue.Clear(); break; }
+                work++;
                 if (current.Depth >= options.MaxDepth) { cutoffs.Add("depth-limit:" + current.Id); break; }
                 if (edges.Count >= options.MaxFrontier) { cutoffs.Add("edge-limit"); queue.Clear(); break; }
                 if (!visited.Contains(edge.ToNodeId) && visited.Count >= options.MaxFrontier)
