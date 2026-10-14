@@ -3,6 +3,18 @@
 # - deferred: documented future/planned rule that must not appear in emitted facts.
 # Existing rules without an explicit status are treated as active.
 rules:
+  - id: workflow.vb-compilation-context-preparation.v1
+    name: Local explicit VB compilation context preparation
+    description: Inventories and hashes candidate VB source and reference files in explicitly selected directories, records proposed compiler settings, and emits an explicit context only in a separate operator-approved step.
+    evidenceTier: Tier4Unknown
+    emits:
+      - LocalVisualBasicCompilationProposal
+      - LocalVisualBasicCompilationContext
+    limitations:
+      - Directory membership and supplied compiler options are proposals, not observed original compiler inputs. Current bytes and repository HEAD are observed; build authenticity, source membership, deployment correspondence and approval authenticity are not established by hashes.
+      - Outputs are local-only and contain private paths and byte hashes. They must not be uploaded or represented as privacy-projected shareable summaries. Generator SHA-256 and bounded payload SHA-256 are retained.
+      - Discovery is limited to 4096 entries per roster; links are refused. Source and reference counts and byte limits match the explicit context consumer. No application code, compiler or build is executed and no host SDK references are implicitly selected.
+      - Approval rechecks commit and file bytes. The scanner independently validates source scope, metadata identities, compiler options and binding; a prepared artifact is not a clean build or proof of runtime compatibility.
   - id: workflow.retained-gap-inventory.v1
     name: Privacy-projected retained gap inventory
     description: Counts existing AnalysisGap facts by public rule and closed reason labels, separately from an existing report's unresolved-call total.

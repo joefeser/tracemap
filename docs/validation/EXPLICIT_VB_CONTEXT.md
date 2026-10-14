@@ -3,7 +3,7 @@
 `tracemap scan --repo <repo> --out <new-output> --vb-compilation-context <json>`
 opts into an in-memory Roslyn compilation without creating a project, restoring
 packages, discovering references, or executing source/assemblies. Default scans
-are unchanged. `vb-semantic/0.10.0` labels every resulting semantic fact with
+are unchanged. `vb-semantic/0.10.1` labels every resulting semantic fact with
 `compilationContextKind=explicit-projectless-inputs`, `compilationContextSha256`
 and `originalBuildCorrespondence=not-established`. Tier1 means compiler binding
 under these supplied inputs, not equivalence to the original website build.
@@ -58,3 +58,45 @@ binding, namespaces/imports, partial compilation, exact hashes, missing/duplicat
 references, scope and schema refusals. Private framework-reference compatibility
 requires Windows acceptance with an operator-approved context. Full solution,
 non-.NET suites and pinned OSS checks remain separate/deferred.
+
+## Prepare inputs without hand-authoring hashes
+
+Use Python 3.9+ and `scripts/prepare-vb-compilation-context.py`. Preparation scans
+only explicitly selected directories, recursively, with a 4096-entry discovery
+limit per source/reference roster. It does **not** extract an original compiler
+invocation from a binlog or execute a build. Inspect existing build/configuration
+evidence first; proposed values must be reviewed where that evidence is absent.
+
+```text
+python scripts/prepare-vb-compilation-context.py draft --repo <source-root> --source-dir <selected-vb-directory> --reference-dir <selected-reference-directory> --root-namespace= --option-strict off --option-infer on --option-explicit on --import System --out <local-proposal.json>
+```
+
+The flags above illustrate an explicit proposal, not recommended settings for
+every application. Repeat source/reference directory and import flags as needed.
+Do not point reference discovery at the scanner's build output. Source files must
+stay under the repository. Review the local proposal's source roster, reference
+roster, root namespace, three Boolean compiler options, imports and single-assembly
+assumption. Directory-selected references still need scanner PE/identity checks.
+Source membership and all settings are labeled proposed even if an operator used
+build evidence to choose them; only current file bytes and HEAD are observed.
+
+After explicit human approval of that proposal:
+
+```text
+python scripts/prepare-vb-compilation-context.py approve --proposal <local-proposal.json> --operator-approved --out <local-context.json>
+```
+
+Approval verifies generator/payload hashes, current HEAD and every captured file
+hash. Both outputs use exclusive creation, must be outside the source repository,
+and are local-only. The scanner accepts the resulting provenance envelope as well
+as the original operator-authored raw context. Envelope hashes are integrity
+metadata, not cryptographic proof of approval or original-build correspondence.
+
+For governed review, put the context beneath the configured receipt root and set
+`vbCompilationContextRelativePath` in a **new** fresh/projectless review config.
+Preflight hashes the context plus every listed source/reference, checks the source
+commit and declared file hashes, and charges the existing input/byte budgets.
+Run forwards `--vb-compilation-context`; resume rechecks all those inputs and
+refuses mutation. Attach-mode use is rejected. Do not change an existing run's
+configuration or checkpoint. If the proposed roster exceeds budgets, request a
+specific budget change rather than silently increasing them.
