@@ -10,7 +10,7 @@ namespace TraceMap.Tests;
 public sealed class CompiledBaselinePrewalkTests
 {
     private const string FillMemberRef =
-        "memberref|type:scope(assembly:name:11:System.Data|version:1)type(namespace:18:System.Data.Common|names:13:DbDataAdapter)|member:4:Fill|signature:y";
+        "memberref|type:scope(assembly:name:11:System.Data|version:7:4.0.0.0|culture:7:neutral|publicKeyToken:16:b77a5c561934e089)type(namespace:18:System.Data.Common|names:13:DbDataAdapter)|member:4:Fill|signature:y";
 
     [Fact]
     public async Task Compiled_only_depth_truncation_must_not_emit_source_bridge_prewalk_witness()

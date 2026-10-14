@@ -1,6 +1,6 @@
-namespace System.Data.Common;
+namespace Recon.UntrustedLookalikes;
 
-// Public synthetic stand-in: no database or runtime SQL execution occurs.
+// Negative-control lookalike: this type must not shadow the signed framework API.
 public abstract class DbCommand
 {
     public object ExecuteReader() => null!;

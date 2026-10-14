@@ -923,14 +923,15 @@ public sealed class CSharpSemanticExtractorTests
             fact.Properties.GetValueOrDefault("frameworkFamily") == "dapper"
             && fact.Properties.GetValueOrDefault("operationKind") == "delete-candidate"
             && fact.Properties.GetValueOrDefault("tableName") == "audit.orders");
-        Assert.Contains(operations, fact =>
+        // This fixture declares its own SqlClient and Npgsql command lookalikes.
+        // Namespace spelling alone must not satisfy signed provider identity.
+        // Actual provider positives are exercised by SqlDatabaseMatrixTests.
+        Assert.DoesNotContain(operations, fact =>
             fact.Properties.GetValueOrDefault("frameworkFamily") == "ado-net"
-            && fact.Properties.GetValueOrDefault("operationKind") == "insert-candidate"
-            && fact.Properties.GetValueOrDefault("tableName") == "public.orders");
-        Assert.Contains(operations, fact =>
+            && fact.TargetSymbol?.Contains("Microsoft.Data.SqlClient.SqlCommand", StringComparison.Ordinal) == true);
+        Assert.DoesNotContain(operations, fact =>
             fact.Properties.GetValueOrDefault("frameworkFamily") == "npgsql"
-            && fact.Properties.GetValueOrDefault("operationKind") == "select-candidate"
-            && fact.Properties.GetValueOrDefault("tableName") == "public.orders");
+            && fact.TargetSymbol?.Contains("Npgsql.NpgsqlCommand", StringComparison.Ordinal) == true);
         Assert.DoesNotContain(operations, fact =>
             fact.Properties.GetValueOrDefault("entityType") == "global::OperationSample.AuditRecord"
             || fact.TargetSymbol?.Contains("OrdersContext.Update", StringComparison.Ordinal) == true);
@@ -959,19 +960,19 @@ public sealed class CSharpSemanticExtractorTests
                 || value.Contains("delete from", StringComparison.OrdinalIgnoreCase)
                 || value.Contains("insert into", StringComparison.OrdinalIgnoreCase));
         });
-        var adoNetOperation = Assert.Single(operations, fact =>
-            fact.Properties.GetValueOrDefault("frameworkFamily") == "ado-net"
-            && fact.Properties.GetValueOrDefault("operationKind") == "insert-candidate");
-        var databaseTargetId = adoNetOperation.Properties["targetSymbolId"];
+        var databaseOperation = Assert.Single(operations, fact =>
+            fact.Properties.GetValueOrDefault("frameworkFamily") == "dapper"
+            && fact.Properties.GetValueOrDefault("operationKind") == "delete-candidate");
+        var databaseTargetId = databaseOperation.Properties["targetSymbolId"];
         var defaultImpact = ReverseImpactTraversal.Analyze(
-            [adoNetOperation],
+            [databaseOperation],
             new ReverseImpactOptions(databaseTargetId, 1));
         var databaseImpact = ReverseImpactTraversal.Analyze(
-            [adoNetOperation],
+            [databaseOperation],
             new ReverseImpactOptions(databaseTargetId, 1, ["database"]));
 
         Assert.Empty(defaultImpact.Impacts);
-        Assert.Equal(adoNetOperation.FactId, Assert.Single(Assert.Single(databaseImpact.Impacts).Path).FactId);
+        Assert.Equal(databaseOperation.FactId, Assert.Single(Assert.Single(databaseImpact.Impacts).Path).FactId);
 
         var second = ScanEngine.Scan(new ScanOptions(temp.Path, Path.Combine(temp.Path, ".tracemap")));
         Assert.Equal(

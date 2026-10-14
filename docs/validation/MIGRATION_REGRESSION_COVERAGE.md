@@ -8,6 +8,7 @@ are required. Existing negative tests must remain in place when refactoring.
 | Implemented behavior / invariant | Executable acceptance | Negative or boundary control |
 | --- | --- | --- |
 | Database API families across C#, VB, source and IL | SqlDatabaseMatrixTests; sql-coverage-smoke.py; samples/sql-database-matrix | Independent named oracle, provider/type shadows, evidence-tier checks, command-state reset |
+| Existing C# and compiled traversal fixtures honor trusted API identities | CSharpSemanticExtractorTests; CompiledBaselinePrewalkTests; MessyWorkspaceRegressionTests | Source-declared provider lookalikes are rejected; positive command fixtures inherit signed framework DbCommand and throw if executed; compiled positives carry assembly identity |
 | Command state and dynamic values | DatabaseCommandStateTests | Reassignment/uncertain state never retains stale command evidence |
 | Projectless SQL visibility and reports | ProjectlessSqlReportingTests | Reduced coverage retained, no clean-absence claim |
 | Explicit Parameters.Add and parameter constructors | ProjectlessParameterCandidateTests | Dynamic/named arguments, unsupported types, ordinary object creations, alias cases |
