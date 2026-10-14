@@ -13,6 +13,12 @@ Record the actual checked-out HEAD and compare the implementation with its base,
 Later prompt-only commits do not change implementation acceptance. Preserve local
 changes; if checkout would overwrite them, stop and report the conflict.
 
+The Windows follow-up fixes canonical LF Markdown hashing, refusal of redacted
+absolute-path markers as relative evidence locations, and cleanup of read-only Git
+files in synthetic fixtures. These are validated by the Windows CI comparison,
+not by another private-work-machine full-suite run. The base is deliberately
+retained as a failing control; inspect candidate job results separately.
+
 ## Acceptance
 
 1. Persisted parameter direction and type-kind lists reject unknown, empty,

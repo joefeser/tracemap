@@ -89,6 +89,10 @@ public sealed class VaultExportTests
         Assert.Contains(first.Graph.Edges, edge => edge.EvidenceLocations is { Count: > 0 });
         Assert.True(VaultExporter.IsSelfConsistentGraphJson(await File.ReadAllTextAsync(Path.Combine(firstOut, "graph.json"))));
         Assert.True(VaultExporter.IsSelfConsistentMarkdown(await File.ReadAllTextAsync(Path.Combine(firstOut, "Start Here.md"))));
+        var markdown = await File.ReadAllTextAsync(Path.Combine(firstOut, "Start Here.md"));
+        Assert.DoesNotContain("\r", markdown);
+        Assert.True(VaultExporter.IsSelfConsistentMarkdown(markdown.ReplaceLineEndings("\r\n")));
+        Assert.False(VaultExporter.IsSelfConsistentMarkdown(markdown + "tampered\n"));
         Assert.True(VaultExporter.IsSelfConsistentMarkdown(await File.ReadAllTextAsync(Path.Combine(firstOut, "index.md"))));
         Assert.True(VaultExporter.IsSelfConsistentMarkdown(await File.ReadAllTextAsync(Path.Combine(firstOut, "endpoints", "index.md"))));
         Assert.Equal(
@@ -588,6 +592,7 @@ public sealed class VaultExportTests
     [Theory]
     [InlineData("Controllers/../TokenReviewController.cs", "local-path")]
     [InlineData("C:\\Temp\\TokenReviewController.cs", "local-path")]
+    [InlineData("absolute-path-hash:0123456789abcdef", "local-path")]
     [InlineData("\\\\server\\share\\TokenReviewController.cs", "local-path")]
     [InlineData("~/TokenReviewController.cs", "local-path")]
     [InlineData("$HOME/TokenReviewController.cs", "local-path")]
