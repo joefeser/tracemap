@@ -3027,6 +3027,7 @@ rules:
     limitations:
       - Composition facts describe static markup declarations and do not prove runtime loading, rendering, control construction, navigation, event firing, deployment, or production use.
       - Namespace-only registrations with absent Src and Assembly may join one inventoried class declaration under the selected web root's App_Code directory. UsesRegisteredAppCodeControlCandidate retains registration and source type fact IDs at Tier3; it does not infer a DLL name, source-to-binary correspondence, control ancestry, accessibility, generic constructibility, or compilation context. Exact namespace and case-insensitive final type-name matching are required. Missing facts, interfaces, duplicate/partial candidates, foreign roots and unsupported attribute values remain unresolved.
+      - Semantic class declarations use typeKind and compiler-qualified target symbols rather than syntax kind and qualifiedName. The join accepts both shapes, stripping only the compiler global qualifier and preserving containing types and root namespaces. A usable declaration from a partial compilation does not erase diagnostics or promote the registration candidate beyond Tier3.
       - Registered user-control and master-page targets are repository-relative declarations; registered assembly controls require source-project assembly evidence and an exact namespace. Only the markup type-name segment uses ordinal case-insensitive matching, while preserving the canonical source type name. Multiple candidates, including case-only collisions, remain ambiguous even if one matches the tag exactly. Missing, dynamic, unsafe, malformed, conflicting, or out-of-scope targets remain explicit analysis gaps; DLL-only controls are not resolved by this rule.
       - ContentPlaceHolderID is a declared target candidate and is not proof that the referenced master page contains a compatible runtime placeholder.
       - Raw markup, page titles, source snippets, local absolute paths, URLs, configuration values, and unsafe expressions are omitted or hashed.
@@ -3182,7 +3183,7 @@ rules:
 
   - id: legacy.webforms.inline-server-expression.v1
     name: Legacy Web Forms inline server-expression reference candidates
-    description: Emits bounded syntax candidates when a qualified identifier inside an inline render or data-binding expression has one exact longest-prefix repository type declaration, including projectless App_Code declarations.
+    description: Emits bounded syntax candidates when a qualified identifier inside an inline render or data-binding expression has one exact longest-prefix repository type declaration, including projectless App_Code declarations. Semantic declaration names have only their compiler global qualifier removed; containing types and root namespaces are preserved, and the markup candidate remains Tier3.
     evidenceTier: Tier3SyntaxOrTextual
     emits:
       - WebFormsInlineServerExpressionReferenceCandidate
