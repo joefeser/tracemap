@@ -862,16 +862,17 @@ public static class ManagedMetadataExtractor
         if (targetFramework?.Length > limits.MaxTextLength)
             throw new ManagedInputException("limit-exhausted", "ManagedInputTextLimitExceeded");
         var assemblyIdentity = AssemblyArtifactIdentity(assemblyReferenceIdentity, module.Name, targetFramework);
+        var (runtimeFloorBasis, runtimeFloor, runtimeFloorSourceVersion) = RuntimeFloor(targetFramework,
+            ReferenceVersion(module.AssemblyReferences, "mscorlib"),
+            ReferenceVersion(module.AssemblyReferences, "System.Runtime"));
         var observations = new List<MetadataObservation>();
         observations.Add(Observation("assembly", 0x20000001, FactTypes.ManagedAssemblyDeclared, RuleIds.DotNetCompiledAssembly, assemblyIdentity, "assembly",
-            new SortedDictionary<string, string>(StringComparer.Ordinal)
-            {
-                ["assemblyName"] = module.Assembly?.Name?.Name ?? "<netmodule>",
-                ["assemblyVersion"] = module.Assembly?.Name?.Version?.ToString() ?? "0.0.0.0",
-                ["culture"] = NormalizeCulture(module.Assembly?.Name?.Culture),
-                ["publicKeyToken"] = PublicKeyToken(module.Assembly?.Name?.PublicKeyToken),
-                ["publicKeyTokenState"] = module.Assembly?.Name?.PublicKeyToken is { Length: > 0 } ? "present" : "none"
-            }));
+            AssemblyProperties(
+                module.Assembly?.Name?.Name ?? "<netmodule>",
+                module.Assembly?.Name?.Version?.ToString() ?? "0.0.0.0",
+                module.Assembly?.Name?.Culture,
+                module.Assembly?.Name?.PublicKeyToken,
+                runtimeFloorBasis, runtimeFloor, runtimeFloorSourceVersion)));
         observations.Add(Observation("module", 0x00000001, FactTypes.ManagedModuleDeclared, RuleIds.DotNetCompiledAssembly,
             $"{assemblyIdentity}|mvid:{module.Mvid:D}", "module", EmptyProperties()));
         foreach (var type in allTypes.OrderBy(item => item.MetadataToken.ToUInt32()))
@@ -924,7 +925,10 @@ public static class ManagedMetadataExtractor
             targetFramework,
             observations.OrderBy(item => item.Key, StringComparer.Ordinal).ToArray(),
             references,
-            assemblyReferenceIdentity);
+            assemblyReferenceIdentity,
+            runtimeFloorBasis,
+            runtimeFloor,
+            runtimeFloorSourceVersion);
     }
 
     internal static long PreflightManagedInput(byte[] bytes, CompiledInputLimits limits, bool rejectTypeForwarders = false)
@@ -991,6 +995,16 @@ public static class ManagedMetadataExtractor
         var targetFramework = TargetFramework(reader);
         if (targetFramework?.Length > limits.MaxTextLength)
             throw new ManagedInputException("limit-exhausted", "ManagedInputTextLimitExceeded");
+        string? mscorlibReferenceVersion = null;
+        string? systemRuntimeReferenceVersion = null;
+        foreach (var handle in reader.AssemblyReferences)
+        {
+            var reference = reader.GetAssemblyReference(handle);
+            var name = reader.GetString(reference.Name);
+            if (name == "mscorlib") mscorlibReferenceVersion = reference.Version.ToString();
+            else if (name == "System.Runtime") systemRuntimeReferenceVersion = reference.Version.ToString();
+        }
+        var (runtimeFloorBasis, runtimeFloor, runtimeFloorSourceVersion) = RuntimeFloor(targetFramework, mscorlibReferenceVersion, systemRuntimeReferenceVersion);
         string assemblyIdentity;
         string assemblyName;
         string assemblyVersion;
@@ -1013,14 +1027,7 @@ public static class ManagedMetadataExtractor
         var observations = new List<MetadataObservation>
         {
             Observation("assembly", 0x20000001, FactTypes.ManagedAssemblyDeclared, RuleIds.DotNetCompiledAssembly, assemblyIdentity, "assembly",
-                new SortedDictionary<string, string>(StringComparer.Ordinal)
-                {
-                    ["assemblyName"] = assemblyName,
-                    ["assemblyVersion"] = assemblyVersion,
-                    ["culture"] = NormalizeCulture(culture),
-                    ["publicKeyToken"] = PublicKeyToken(publicKeyToken),
-                    ["publicKeyTokenState"] = publicKeyToken.Length > 0 ? "present" : "none"
-                }),
+                AssemblyProperties(assemblyName, assemblyVersion, culture, publicKeyToken, runtimeFloorBasis, runtimeFloor, runtimeFloorSourceVersion)),
             Observation("module", 0x00000001, FactTypes.ManagedModuleDeclared, RuleIds.DotNetCompiledAssembly,
                 $"{assemblyIdentity}|mvid:{moduleMvid}", "module", EmptyProperties())
         };
@@ -1084,7 +1091,7 @@ public static class ManagedMetadataExtractor
             return AssemblyReferenceIdentity(reader.GetString(reference.Name), reference.Version.ToString(), reference.Culture.IsNil ? null : reader.GetString(reference.Culture), token);
         }).OrderBy(value => value, StringComparer.Ordinal).ToArray();
         EnforceTextLimits(observations, references, limits);
-        return new MetadataReadResult(assemblyIdentity, moduleName, moduleMvid, targetFramework, observations.OrderBy(item => item.Key, StringComparer.Ordinal).ToArray(), references, assemblyReferenceIdentity);
+        return new MetadataReadResult(assemblyIdentity, moduleName, moduleMvid, targetFramework, observations.OrderBy(item => item.Key, StringComparer.Ordinal).ToArray(), references, assemblyReferenceIdentity, runtimeFloorBasis, runtimeFloor, runtimeFloorSourceVersion);
     }
 
     private static MetadataObservation Observation(string kind, int token, string factType, string ruleId, string identity, string memberKind, IReadOnlyDictionary<string, string> properties) =>
@@ -1393,6 +1400,62 @@ public static class ManagedMetadataExtractor
         return null;
     }
 
+    private static string? ReferenceVersion(IEnumerable<Mono.Cecil.AssemblyNameReference> references, string name)
+    {
+        var match = references.FirstOrDefault(reference => reference.Name == name);
+        return match?.Version?.ToString();
+    }
+
+    private static SortedDictionary<string, string> AssemblyProperties(
+        string assemblyName,
+        string assemblyVersion,
+        string? culture,
+        byte[]? publicKeyToken,
+        string runtimeFloorBasis,
+        string? runtimeFloor,
+        string? runtimeFloorSourceVersion)
+    {
+        var properties = new SortedDictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["assemblyName"] = assemblyName,
+            ["assemblyVersion"] = assemblyVersion,
+            ["culture"] = NormalizeCulture(culture),
+            ["publicKeyToken"] = PublicKeyToken(publicKeyToken),
+            ["publicKeyTokenState"] = publicKeyToken is { Length: > 0 } ? "present" : "none",
+            ["runtimeFloorBasis"] = runtimeFloorBasis
+        };
+        if (runtimeFloor is not null) properties["runtimeFloor"] = runtimeFloor;
+        if (runtimeFloorSourceVersion is not null) properties["runtimeFloorSourceVersion"] = runtimeFloorSourceVersion;
+        return properties;
+    }
+
+    /// Runtime-floor derivation for assemblies compiled before TargetFrameworkAttribute existed
+    /// (the attribute shipped with 4.0 tooling): the mscorlib entry in the assembly reference
+    /// table carries the CLR family the assembly was compiled against (1.x/2.x — where 2.x
+    /// covers 2.0/3.0/3.5 — or 4.x). The attribute wins when present; System.Runtime/netstandard
+    /// references mark the core family; anything else is explicitly unresolved, never guessed.
+    internal static (string Basis, string? Floor, string? SourceVersion) RuntimeFloor(
+        string? targetFramework,
+        string? mscorlibReferenceVersion,
+        string? systemRuntimeReferenceVersion)
+    {
+        if (!string.IsNullOrWhiteSpace(targetFramework))
+            return ("target-framework-attribute", targetFramework, null);
+        if (mscorlibReferenceVersion is not null)
+            return ("mscorlib-assembly-reference",
+                mscorlibReferenceVersion.Split('.')[0] switch
+                {
+                    "1" => "clr-1.x",
+                    "2" => "clr-2.x",
+                    "4" => "clr-4.x",
+                    _ => null
+                },
+                mscorlibReferenceVersion);
+        if (systemRuntimeReferenceVersion is not null)
+            return ("system-runtime-assembly-reference", "netcore-or-netstandard", systemRuntimeReferenceVersion);
+        return ("unresolved", null, null);
+    }
+
     private static void EnforceMetadataLimits(long typeCount, long memberCount, CompiledInputLimits limits)
     {
         if (typeCount > limits.MaxTypeCount)
@@ -1569,7 +1632,10 @@ public static class ManagedMetadataExtractor
         string? TargetFramework,
         IReadOnlyList<MetadataObservation> Observations,
         IReadOnlyList<string> AssemblyReferences,
-        string AssemblyReferenceIdentity);
+        string AssemblyReferenceIdentity,
+        string RuntimeFloorBasis,
+        string? RuntimeFloor,
+        string? RuntimeFloorSourceVersion);
 
     internal sealed record InputDescriptor(
         string FullPath,
