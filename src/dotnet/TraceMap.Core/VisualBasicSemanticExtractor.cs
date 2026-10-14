@@ -12,7 +12,7 @@ namespace TraceMap.Core;
 // sanitized workspace/compilation gaps, and honest reduced coverage when
 // loading or compilation fails. Syntax-only fallback lives in
 // VisualBasicSyntaxExtractor; the two are never merged by rule or tier.
-public static class VisualBasicSemanticExtractor
+public static partial class VisualBasicSemanticExtractor
 {
     private const int MaxCallSiteSyntaxFallbackFactsPerDocument = 2000;
     // Language-aware display format mirroring the C# extractor's shape so VB
@@ -42,6 +42,8 @@ public static class VisualBasicSemanticExtractor
         ScanProgressReporter? progress = null)
     {
         options ??= new ScanOptions(repoPath, ".");
+        if (options.VisualBasicCompilationContextPath is not null)
+            return ExtractExplicitContext(repoPath, inventory, options, cancellationToken);
         cancellationToken.ThrowIfCancellationRequested();
         var facts = new List<SemanticFactCandidate>();
         var gaps = new List<SemanticFactCandidate>();

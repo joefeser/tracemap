@@ -11,6 +11,19 @@ public sealed class ScanExecutionReceiptTests
     private const string CommitSha = "0123456789abcdef0123456789abcdef01234567";
 
     [Fact]
+    public void Explicit_vb_compilation_context_is_a_distinct_authorized_scope()
+    {
+        string Fingerprint(string? context)
+        {
+            var recorder = new ScanReceiptRecorder(new ScanOptions("synthetic", "output") { VisualBasicCompilationContextPath = context });
+            recorder.Bind(new GitMetadata("synthetic", null, "main", CommitSha, []));
+            return recorder.CreateReceipt().AuthorizedScopeFingerprint;
+        }
+        Assert.NotEqual(Fingerprint(null), Fingerprint("context.json"));
+        Assert.NotEqual(Fingerprint("context.json"), Fingerprint("other.json"));
+    }
+
+    [Fact]
     public void Effective_import_context_opt_in_is_part_of_authorized_scope()
     {
         string Fingerprint(string? context)

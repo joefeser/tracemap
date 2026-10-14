@@ -184,6 +184,7 @@ public sealed record ScanOptions(
     public DepsJsonLimits? DepsJsonLimits { get; init; }
     public string? WebFormsVbImportContextPath { get; init; }
     public bool IndexCiProducers { get; init; }
+    public string? VisualBasicCompilationContextPath { get; init; }
 }
 
 public sealed record FileInventoryItem(
@@ -705,7 +706,7 @@ public static class ScannerVersions
     public const string CSharpAspNetSyntaxRouteExtractor = "csharp-aspnet-syntax-route/0.1.0";
     public const string CSharpIntegrationSyntaxExtractor = "csharp-integration-syntax/0.4.1";
     public const string CSharpSemanticExtractor = "csharp-semantic/0.22.1";
-    public const string VisualBasicSemanticExtractor = "vb-semantic/0.9.1";
+    public const string VisualBasicSemanticExtractor = "vb-semantic/0.10.0";
     public const string VisualBasicSyntaxExtractor = "vb-syntax/0.4.17";
     public const string CSharpPropertyMappingExtractor = "csharp-property-mapping/0.1.0";
     public const string FrameworkMigrationEvidenceExtractor = "framework-migration/0.1.0";

@@ -439,7 +439,8 @@ public static class TraceMapCommand
         {
             IndexDepsJson = values.HasFlag("--index-deps-json"),
             IndexCiProducers = values.HasFlag("--index-ci-producers"),
-            WebFormsVbImportContextPath = values.GetValueOrDefault("--webforms-vb-import-context")
+            WebFormsVbImportContextPath = values.GetValueOrDefault("--webforms-vb-import-context"),
+            VisualBasicCompilationContextPath = values.GetValueOrDefault("--vb-compilation-context")
         };
         var receiptRecorder = new ScanReceiptRecorder(
             scanOptions,
@@ -2878,6 +2879,7 @@ public static class TraceMapCommand
               --include <glob>         Repeatable inventory inclusion.
               --exclude <glob>         Repeatable inventory exclusion.
               --target-framework <tfm> Semantic target-framework selection.
+              --vb-compilation-context <json> Explicit hash-bound projectless VB inputs; no reference discovery.
 
             Diagnostic options:
               --diagnostic-progress <file>

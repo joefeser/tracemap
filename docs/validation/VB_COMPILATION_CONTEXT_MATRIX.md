@@ -1,7 +1,8 @@
 # VB compilation-context gate
 
-This gate fixes a coverage/CI omission, not the absence of a private application's
-project metadata. Extractor versions and production behavior are unchanged.
+The original gate fixed a coverage/CI omission. The opt-in implementation is now
+documented in [EXPLICIT_VB_CONTEXT.md](EXPLICIT_VB_CONTEXT.md), with separate
+`ExplicitVisualBasicContextTests`. Default projectless behavior is unchanged.
 Never claim that configuration strings or a synthetic project establish the
 original application's compilation context.
 
@@ -21,16 +22,18 @@ projects; they do not establish authentic ASP.NET/.NET Framework compatibility.
 
 ## Explicit uncovered work
 
-Projectless semantic compilation is not implemented by this change. Before adding
-it, define authoritative source membership, root namespace, imports, compiler
-options, framework identity and exact reference bytes. Add positive and negative
-tests for actual conflicting DLL identities, source/binary mismatch, missing
-framework references, and partial compilations. No guessed reference set or
+Automatic reconstruction of projectless compilation is not implemented. The new
+explicit-input mode requires source membership, root namespace, imports, compiler
+options and exact reference bytes; its tests cover successful and partial binding,
+hash mismatch, duplicate reference identities and missing references. Authentic
+website assembly partitioning and source/binary correspondence remain unproven.
+No guessed reference set or
 fabricated project may silently remove the projectless notices. Existing compiled
 provenance tests remain a separate gate, not evidence of source compilation.
 
 This is a finite cross-product plus existing interaction suites, not “all possible
 VB programs.” Extend the table and executable cases when admitting a new shape.
-No private rescan is required for this test-only change. Full solution tests,
+The original test-only gate required no private rescan. Acceptance of the new
+opt-in semantic path requires an approved context and fresh scan. Full solution tests,
 non-.NET adapter suites and pinned external OSS smokes are deferred; run the public
 stacked migration CLI sample as the focused integration smoke.

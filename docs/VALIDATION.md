@@ -4748,4 +4748,6 @@ scope-legal witness at depth 8 that ordinary enumeration finds at depth 24.
 See [the executable coverage matrix](validation/VB_COMPILATION_CONTEXT_MATRIX.md)
 and `.github/workflows/vb-compilation-context-matrix.yml` for the bounded,
 cross-platform projectless/semantic/import/registration/path gate. It does not
-enable projectless semantic compilation or replace private compatibility checks.
+replace private compatibility checks. The opt-in explicit-input semantic path and
+its separate successful/refused binding tests are documented in
+[EXPLICIT_VB_CONTEXT.md](validation/EXPLICIT_VB_CONTEXT.md).

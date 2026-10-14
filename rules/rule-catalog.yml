@@ -4769,6 +4769,7 @@ rules:
     emits:
       - AnalysisGap
     limitations:
+      - Explicit projectless contexts are opt-in and hash-bound; invalid, stale, missing or conflicting inputs yield ExplicitCompilationContextRefused and retain syntax fallback. No reference discovery, original-build correspondence or runtime behavior is inferred.
       - Workspace and compiler diagnostics can be environment-specific because they depend on installed SDKs, reference assemblies, and available project references.
       - Native workspace messages are sanitized to stable categories before shareable artifacts are written; raw local paths, remotes, package sources, config values, credentials, and source-like snippets are omitted.
       - Compiler-diagnostic gaps carry a bounded Visual Basic diagnostic id (`BCxxxxx`) alongside the category; the id is a safe categorical code and never retains the raw diagnostic message.
@@ -4790,7 +4791,7 @@ rules:
       - ParameterDeclared
       - EventDeclared
     limitations:
-      - Requires project load and enough references to create a Roslyn Visual Basic compilation; when binding is reduced, absence of these facts is not absence of declarations in source.
+      - Requires project load or an explicit hash-bound projectless compilation context and enough references to create a Roslyn Visual Basic compilation; when binding is reduced, absence of these facts is not absence of declarations in source. Explicit-context facts carry compilationContextKind, compilationContextSha256 and originalBuildCorrespondence=not-established; this boundary also applies to other vb.semantic fact families emitted from that compilation.
       - Designer and generated documents (filename convention) are not analyzed for semantic facts; checked-in designer content may support bounded Web Forms composition but is not proof of a current generated runtime control.
       - Event declarations and WithEvents field/property shapes are declarations only. Compiler-resolved Handles/AddHandler/RemoveHandler/RaiseEvent evidence is governed separately by `vb.semantic.event-wiring.v1`.
       - Operator and Declare (P/Invoke) statements are not emitted as method declarations in this slice.
