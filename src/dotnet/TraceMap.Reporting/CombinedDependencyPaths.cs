@@ -4975,7 +4975,14 @@ public static partial class CombinedDependencyPathReporter
                 var nextEntered = compiledOnly && (current.CompiledBaselineEntered || edge.EdgeKind != "legacy-root-selection");
                 // Compiled-only witnesses are node-simple: a baseline-state split must
                 // never turn a walk that revisits a node into the "shortest" witness.
-                if (compiledOnly && NodeAlreadyOnWitnessChain(predecessors, current, edge.ToNodeId)) continue;
+                // The simplicity scan is charged to the same work bound as the BFS so
+                // a long forward chain cannot escape the budget with Θ(N²) scanning.
+                var chainExhausted = false;
+                if (compiledOnly
+                    && NodeAlreadyOnWitnessChain(predecessors, current, edge.ToNodeId, maxWork, ref work, out chainExhausted))
+                    continue;
+                if (chainExhausted)
+                    return new TerminalWitnessResult(null, work, true, false, current.NodeId);
                 var next = new TerminalWitnessKey(edge.ToNodeId, nextMode, nextEntered);
                 if (predecessors.ContainsKey(next)) continue;
                 if (queue.Count >= maxFrontier)
@@ -4989,15 +4996,25 @@ public static partial class CombinedDependencyPathReporter
     }
 
     /// Walks the predecessor chain of a BFS state; used to keep compiled-only
-    /// witnesses node-simple (no revisited node IDs on one witness path).
+    /// witnesses node-simple (no revisited node IDs on one witness path). Every
+    /// step is charged against the same work bound as the BFS itself.
     private static bool NodeAlreadyOnWitnessChain(
         Dictionary<TerminalWitnessKey, TerminalWitnessPredecessor?> predecessors,
         TerminalWitnessKey current,
-        string nodeId)
+        string nodeId,
+        int maxWork,
+        ref int work,
+        out bool exhausted)
     {
+        exhausted = false;
         var cursor = current;
         while (true)
         {
+            if (++work >= maxWork)
+            {
+                exhausted = true;
+                return false;
+            }
             if (string.Equals(cursor.NodeId, nodeId, StringComparison.Ordinal)) return true;
             var predecessor = predecessors[cursor];
             if (predecessor is null) return false;
