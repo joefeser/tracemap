@@ -2,11 +2,91 @@ using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text.Json;
 using TraceMap.Core;
+using TraceMap.Combine;
+using TraceMap.Reporting;
+using TraceMap.Storage;
 
 namespace TraceMap.Tests;
 
 public sealed class ExplicitVisualBasicContextTests
 {
+    [Theory]
+    [InlineData("valid")]
+    [InlineData("partial")]
+    [InlineData("missing")]
+    [InlineData("ambiguous")]
+    public async Task Syntax_page_reaches_semantic_database_body_only_through_unique_bridge(string scenario)
+    {
+        using var temp = new TempDirectory(OperatingSystem.IsMacOS() ? "/private/tmp" : null);
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(Path.Combine(repo, "App_Code"));
+        File.WriteAllText(Path.Combine(repo, "Page.aspx.vb"), """
+            Public Class Page
+                Public Sub Click()
+                    Save()
+                End Sub
+                Private Sub Save()
+                    Dim worker As New Worker()
+                    worker.Run(Nothing)
+                End Sub
+            End Class
+            """);
+        var worker = """
+            Public Class Worker
+                Public Sub Run(command As System.Data.Common.DbCommand)
+                    command.ExecuteNonQuery()
+                End Sub
+            End Class
+            """;
+        if (scenario == "missing") worker = worker.Replace("Sub Run(", "Sub Other(", StringComparison.Ordinal);
+        if (scenario == "ambiguous") worker = worker.Replace("End Class", "Public Sub Run(command As String)\nEnd Sub\nEnd Class", StringComparison.Ordinal);
+        if (scenario == "partial") worker += "\nPublic Class Broken\nInherits MissingBase\nEnd Class";
+        File.WriteAllText(Path.Combine(repo, "App_Code", "Worker.vb"), worker);
+        foreach (var args in new[] { new[] { "init" }, new[] { "add", "." }, new[] { "-c", "user.name=Synthetic", "-c", "user.email=test@example.invalid", "commit", "-m", "fixture" } })
+        {
+            using var process = Process.Start(new ProcessStartInfo("git", args) { WorkingDirectory = repo, RedirectStandardOutput = true, RedirectStandardError = true })!;
+            Assert.True(process.WaitForExit(30_000)); Assert.Equal(0, process.ExitCode);
+        }
+        static string Hash(string path) => Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(path)));
+        var context = Path.Combine(temp.Path, "context.json");
+        File.WriteAllText(context, JsonSerializer.Serialize(new
+        {
+            schemaVersion = "vb-compilation-context.v1", commitSha = GitMetadataProvider.Detect(repo).CommitSha,
+            rootNamespace = "", optionStrict = true, optionInfer = true, optionExplicit = true, imports = Array.Empty<string>(),
+            sources = new[] { new { path = "App_Code/Worker.vb", sha256 = Hash(Path.Combine(repo, "App_Code", "Worker.vb")) } },
+            references = new[] { typeof(object).Assembly.Location, typeof(System.Data.Common.DbCommand).Assembly.Location,
+                System.Reflection.Assembly.Load("System.Runtime").Location, typeof(System.ComponentModel.Component).Assembly.Location }
+                .Distinct(StringComparer.Ordinal).Select(path => new { path, sha256 = Hash(path) }).ToArray()
+        }));
+        var scan = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "scan")) { VisualBasicCompilationContextPath = context });
+        Assert.DoesNotContain(scan.Facts, f => f.Evidence.FilePath == "Page.aspx.vb" && f.EvidenceTier == EvidenceTiers.Tier1Semantic);
+        Assert.Contains(scan.Facts, f => f.FactType == FactTypes.DatabaseOperationCandidate && f.EvidenceTier == EvidenceTiers.Tier1Semantic);
+        var root = Assert.Single(scan.Facts, f => f.FactType == FactTypes.MethodDeclared && f.Properties.GetValueOrDefault("name") == "Click");
+        var index = Path.Combine(temp.Path, "index.sqlite");
+        SqliteIndexWriter.Write(index, scan.Manifest, scan.Facts);
+        var combined = Path.Combine(temp.Path, "combined.sqlite");
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([index], combined, ["retained"]));
+        var report = await CombinedDependencyPathReporter.BuildReportAsync(new(combined, Path.Combine(temp.Path, "paths"),
+            FromSymbol: root.TargetSymbol, ToSurface: "database-operations", MaxDepth: 16) { ExactFromSymbol = true });
+        var narrow = await CombinedDependencyPathReporter.BuildReportAsync(new(combined, Path.Combine(temp.Path, "narrow-paths"),
+            FromSymbol: root.TargetSymbol, ToSurface: "database-api", MaxDepth: 16) { ExactFromSymbol = true });
+        Assert.Empty(narrow.Paths); // Existing compiled-API selector retains its original meaning.
+        if (scenario is "valid" or "partial")
+        {
+            var sourceReport = await CombinedDependencyPathReporter.BuildReportAsync(new(combined, Path.Combine(temp.Path, "source-paths"),
+                FromSymbol: root.TargetSymbol, ToSurface: "sql-persistence", MaxDepth: 16) { ExactFromSymbol = true });
+            Assert.NotEmpty(sourceReport.Paths);
+            Assert.NotEmpty(report.Paths);
+            Assert.Contains(report.Paths, p => p.Edges.Any(e => e.EvidenceTier == EvidenceTiers.Tier3SyntaxOrTextual)
+                && p.Edges.Any(e => e.EvidenceTier == EvidenceTiers.Tier2Structural)
+                && p.Edges.Any(e => e.EvidenceTier == EvidenceTiers.Tier1Semantic));
+        }
+        else Assert.Empty(report.Paths);
+        var repeat = await CombinedDependencyPathReporter.BuildReportAsync(new(combined, Path.Combine(temp.Path, "repeat-paths"),
+            FromSymbol: root.TargetSymbol, ToSurface: "database-operations", MaxDepth: 16) { ExactFromSymbol = true });
+        Assert.Equal(report.Paths.Select(p => p.PathId), repeat.Paths.Select(p => p.PathId));
+    }
+
     public static IEnumerable<object[]> RegistrationCases()
     {
         foreach (var partial in new[] { false, true })

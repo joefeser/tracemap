@@ -3119,7 +3119,8 @@ public static class TraceMapCommand
               --exact-from-symbol       Require exact symbol identity for --from-symbol.
               --from-webforms-event <id>  Start from a WebForms event/root fact or selector.
               --from-source <label>      Constrain start evidence to a source label.
-              --to-surface <kind>        database-api, sql-query, sql-persistence, http-route, http-client,
+              --to-surface <kind>        database-operations (source SQL + compiled database API),
+                                          database-api, sql-query, sql-persistence, http-route, http-client,
                                           package-config, wcf-operation, asmx-service,
                                           asmx-operation, asmx-client, asmx-config,
                                           asmx-metadata, legacy-data, dependency-surface,

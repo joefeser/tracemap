@@ -131,3 +131,20 @@ next-evidence request, not a successful binding count. Run that suite alongside
 native CLI artifact repeat). Full solution and pinned external smoke runs remain
 deferred for this reporting-only correction. Use
 `prompts/diagnose-retained-vb-body-connectivity.md` for a no-scan Windows diagnosis.
+
+## Mixed source/semantic database path gate
+
+`Syntax_page_reaches_semantic_database_body_only_through_unique_bridge` scans a
+synthetic page outside the explicit context and an App_Code worker inside it.
+The page calls a local helper, which calls the semantic worker and DbCommand.
+Clean and partial compilation retain a mixed Tier3/Tier2/Tier1 path. Missing and
+ambiguous worker methods must not produce that path. The legacy `database-api`
+selector returns no source SQL terminals; `sql-persistence` does. The new
+`database-operations` paths selector includes `database-api`, `sql-query` and
+`sql-persistence` without changing their evidence. This is a query union, not a
+new terminal kind, runtime proof or original-build equivalence.
+
+Mixed WebForms review and default retained-handler requery use the union.
+Compiled-only and Fill-specific requery keep the narrow selector. Rebuild only
+the bounded retained-handler report for acceptance; do not scan or change the
+approved compilation context. Compare like selectors when reporting deltas.

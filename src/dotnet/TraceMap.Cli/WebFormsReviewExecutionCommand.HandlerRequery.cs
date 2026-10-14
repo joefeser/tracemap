@@ -173,13 +173,14 @@ public static partial class WebFormsReviewExecutionCommand
             var budget = config.Budgets.Reports ?? new();
             WebFormsReviewPreflightCommand.ValidateReportBudgets(budget);
             RetainedMethodGraph? graphView = null;
-            var options = new CombinedDependencyPathOptions(indexPath, destination, ToSurface: methodGraph ? null : "database-api", SurfaceName: surfaceName, IncludeLegacyRoots: true,
+            var terminalScope = compiledOnly || surfaceName is not null ? "database-api" : "database-operations";
+            var options = new CombinedDependencyPathOptions(indexPath, destination, ToSurface: methodGraph ? null : terminalScope, SurfaceName: surfaceName, IncludeLegacyRoots: true,
                 MaxDepth: maxDepth ?? config.Budgets.GraphMaxDepth, MaxPaths: config.Budgets.GraphMaxPaths, MaxFrontier: budget.MaxFrontier)
             { ExactFromSymbol = true, CompiledOnly = compiledOnly, MaxTraversalWork = checked((int)config.Budgets.GraphMaxWork),
                 MethodGraphObserver = methodGraph ? graph => graphView = graph : null };
             await output.WriteLineAsync($"handlerStage=graph-started;maxPaths={options.MaxPaths};maxWork={options.MaxTraversalWork};single-root=true");
             await output.WriteLineAsync($"handlerQuery.maxDepth={options.MaxDepth};originalMaxDepth={config.Budgets.GraphMaxDepth};depthOverride={(maxDepth is not null).ToString().ToLowerInvariant()};other-bounds-unchanged=true");
-            await output.WriteLineAsync($"handlerQuery.terminalScope={(methodGraph ? "unfiltered-all-outgoing" : surfaceName is null ? "all-database-api" : "DbDataAdapter.Fill")};mixed-source-and-compiled={(compiledOnly ? "false" : "true")}");
+            await output.WriteLineAsync($"handlerQuery.terminalScope={(methodGraph ? "unfiltered-all-outgoing" : surfaceName is null ? terminalScope : "DbDataAdapter.Fill")};mixed-source-and-compiled={(compiledOnly ? "false" : "true")}");
             await output.WriteLineAsync($"handlerQuery.traversalScope={(compiledOnly ? "compiled-il-with-root-attachment" : "mixed")};root-attachment-not-il-proof=true");
             CombinedPathGraphObservation? observation = null;
             failureStage = "graph";

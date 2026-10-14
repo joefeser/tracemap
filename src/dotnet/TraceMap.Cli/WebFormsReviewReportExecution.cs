@@ -93,7 +93,7 @@ internal static class WebFormsReviewReportExecution
             .Distinct().OrderBy(root => root.SymbolId, StringComparer.Ordinal).ToArray();
         var roots = allRoots.Take(budget.MaxCompiledRoots).ToArray();
         var paths = await StageAsync("PATHS", () => CombinedDependencyPathReporter.BuildSelectedSymbolsAsync(new(indexPath, reportPath,
-            ToSurface: "database-api", IncludeLegacyRoots: true, MaxDepth: config.Budgets.GraphMaxDepth,
+            ToSurface: "database-operations", IncludeLegacyRoots: true, MaxDepth: config.Budgets.GraphMaxDepth,
             MaxPaths: config.Budgets.GraphMaxPaths, MaxFrontier: budget.MaxFrontier)
             { MaxTraversalWork = checked((int)config.Budgets.GraphMaxWork) }, roots, combinedIndex: true,
             new(budget.MaxInputFacts, budget.MaxInputEdges, budget.MaxInputTextBytes)
