@@ -1032,3 +1032,25 @@ zero warnings/errors. Public property-chain sample emitted 41 facts, validated
 artifacts and 2/2 candidate operation paths. New tests are in Windows CI. Full
 solution tests and pinned native SQL/HTTP matrices are deferred for this change;
 new-head Windows and private acceptance results are not claimed.
+# 2026-10-13: stacked-chain stabilization
+
+Operator-reported private acceptance of b1dc0b88 / vb-syntax/0.4.14 confirms candidate
+entry paths for all four observed groups (two HTTP, command execution and bulk),
+with five parameters grouped under the command. This closes the diagnosed path
+joins for that bounded denominator, not application-wide coverage, runtime routes,
+framework ancestry, command execution effects or database contracts. No private
+source, paths, identifiers, binary data or artifacts are stored here.
+
+Independent stacked-migration-regression sample combines property, optional-arity,
+inline construction, nested receiver, Try scope, partially qualified SqlClient,
+String.Empty concatenation and complex value witnesses. Tests remove property,
+inline/nested calls, optional metadata and event anchors independently. A global
+short-name decoy is retained. Windows CI now includes the stacked regression.
+No production scanner/rule change or extractor-version bump is made in this step.
+
+Validation: all 20 focused stacked/property/inline/integrated/corpus tests passed
+with warnings as errors. CLI sample scan emitted 156 facts, validated artifacts,
+4/4 candidate paths and zero ungrouped parameters. Full solution/native matrices
+are deferred for this test-only stabilization. At inspection, b1dc0b88 Private Path
+Guard succeeded and SQL database public compatibility remained in progress; neither
+is substituted for exact stabilization-head CI proof.

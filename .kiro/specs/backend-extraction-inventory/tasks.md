@@ -138,3 +138,10 @@
 - [x] Add bounded unique cross-file receiver chains with member evidence in paths.
 - [x] Add public fixture and negative tests for ambiguous, indexed, array and shadowed receivers.
 - [ ] Verify private property declarations and resulting database entry paths on fresh 0.4.14 facts.
+# Stacked-chain stabilization
+
+- [x] Preserve operator-reported 0.4.14 acceptance scope without private source or identifiers.
+- [x] Add a complete public four-operation/five-parameter stacked-chain regression.
+- [x] Remove critical evidence layers independently and assert paths disappear.
+- [x] Include stacked regression in Windows compatibility CI.
+- [ ] Confirm exact stabilization-head Windows compatibility completion.

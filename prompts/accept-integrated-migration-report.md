@@ -91,3 +91,11 @@ the two HTTP chains as regressions. If unresolved, report whether a declaration 
 missing, inherited, ambiguous, untyped, indexed or outside the bounded chain rather
 than assuming the property returns a particular runtime instance. Keep source and
 identifiers local. Return all remaining frontier results together.
+
+Stabilization baseline: the operator has accepted four observed groups with candidate
+entry paths on 0.4.14. This is not an application-wide coverage claim. A test-only
+stabilization commit does not require another private rescan merely to re-prove
+unchanged extraction. Preserve the local accepted report and scan manifest as the
+baseline; rerun when production behavior, source inputs or the accepted scope changes.
+The public stacked-migration-regression sample pins the combined corrective chain
+without importing private source or artifacts.
