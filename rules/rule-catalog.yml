@@ -3,6 +3,16 @@
 # - deferred: documented future/planned rule that must not appear in emitted facts.
 # Existing rules without an explicit status are treated as active.
 rules:
+  - id: workflow.retained-gap-inventory.v1
+    name: Privacy-projected retained gap inventory
+    description: Counts existing AnalysisGap facts by public rule and closed reason labels, separately from an existing report's unresolved-call total.
+    evidenceTier: Tier4Unknown
+    limitations:
+      - Counts are occurrences in bounded retained artifacts, not unique defects or whole-application coverage.
+      - Unknown labels collapse to closed other buckets; no raw private input hashes or identities are exported.
+      - The bounded input hash covers only the privacy-projected aggregate counts; generator and public catalog hashes identify the summarizer inputs.
+      - Report count agreement is not scan identity verification; source-to-operation joins and unresolved-call reason breakdowns are unavailable.
+      - Facts, lines, bytes and processing time are bounded; failures emit no accepted summary.
   - id: workflow.webforms.wizard-state.v1
     name: Local resumable Web Forms wizard state
     description: Persists bounded project cursors and input references in exclusive, versioned, generator-and-input-hashed local configuration envelopes.
