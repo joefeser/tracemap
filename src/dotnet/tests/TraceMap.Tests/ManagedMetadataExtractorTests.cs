@@ -924,6 +924,32 @@ public sealed partial class ManagedMetadataExtractorTests
         throw new DirectoryNotFoundException("Could not locate repository root.");
     }
 
+    [Fact]
+    public void Runtime_floor_derivation_covers_the_pre_attribute_and_modern_families()
+    {
+        // 4.0+ tooling: the attribute is authoritative.
+        Assert.Equal(("target-framework-attribute", ".NETFramework,Version=v4.0", null),
+            ManagedMetadataExtractor.RuntimeFloor(".NETFramework,Version=v4.0", "4.0.0.0", null));
+        // Pre-4.0 tooling (no attribute): the mscorlib reference decides the CLR family.
+        Assert.Equal(("mscorlib-assembly-reference", "clr-1.x", "1.0.5000.0"),
+            ManagedMetadataExtractor.RuntimeFloor(null, "1.0.5000.0", null));
+        Assert.Equal(("mscorlib-assembly-reference", "clr-2.x", "2.0.0.0"),
+            ManagedMetadataExtractor.RuntimeFloor(null, "2.0.0.0", null));
+        Assert.Equal(("mscorlib-assembly-reference", "clr-2.x", "2.0.50727.5420"),
+            ManagedMetadataExtractor.RuntimeFloor(null, "2.0.50727.5420", null)); // 3.5 still compiles against mscorlib 2.x
+        Assert.Equal(("mscorlib-assembly-reference", "clr-4.x", "4.0.0.0"),
+            ManagedMetadataExtractor.RuntimeFloor(null, "4.0.0.0", null)); // rare: 4.0 reference without the attribute
+        // Unknown mscorlib majors are unresolved, never guessed.
+        Assert.Equal(("mscorlib-assembly-reference", null, "5.0.0.0"),
+            ManagedMetadataExtractor.RuntimeFloor(null, "5.0.0.0", null));
+        // Core family: no mscorlib reference at all.
+        Assert.Equal(("system-runtime-assembly-reference", "netcore-or-netstandard", "8.0.0.0"),
+            ManagedMetadataExtractor.RuntimeFloor(null, null, "8.0.0.0"));
+        // Netmodules and reference-free assemblies stay explicitly unresolved.
+        Assert.Equal(("unresolved", null, null),
+            ManagedMetadataExtractor.RuntimeFloor(null, null, null));
+    }
+
     private static string Git(string repo, params string[] arguments)
     {
         using var process = Process.Start(new ProcessStartInfo("git", arguments)
