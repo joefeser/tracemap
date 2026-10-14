@@ -57,6 +57,47 @@ class InventoryTests(unittest.TestCase):
         self.write([self.gap()])
         self.assertIsNone(self.result()["inventory"]["unresolvedCalls"]["count"])
 
+    def test_expanded_labels_are_checked_in_public_extractor_literals(self):
+        core = SCRIPT.parents[1] / "src/dotnet/TraceMap.Core"
+        source = "\n".join((core / name).read_text(encoding="utf-8") for name in (
+            "LegacyDataMetadataExtractor.cs", "LegacyWebFormsExtractor.cs",
+            "LegacyAspNetExtractor.cs", "VisualBasicSyntaxExtractor.cs"))
+        for label in inventory.EXPANDED_REASONS:
+            with self.subTest(label=label):
+                self.assertIn('"' + label + '"', source)
+
+    def test_all_expanded_labels_survive_both_property_conventions(self):
+        facts = []
+        for label in sorted(inventory.EXPANDED_REASONS):
+            facts.append(self.gap(label))
+            fact = self.gap()
+            fact["properties"] = {"classification": label}
+            facts.append(fact)
+        self.write(facts)
+        result = self.result()["inventory"]
+        self.assertEqual(len(facts), result["analysisGapFacts"])
+        self.assertEqual({"recognizedFacts": len(facts), "otherOrMissingFacts": 0}, result["reasonCoverage"])
+        self.assertEqual(inventory.EXPANDED_REASONS, {row["reason"] for row in result["gapGroups"]})
+        self.assertTrue(all(row["count"] == 2 for row in result["gapGroups"]))
+
+    def test_missing_kind_falls_back_but_unknown_kind_is_not_overridden(self):
+        facts = []
+        for kind in (None, "", "private-new-reason"):
+            fact = self.gap()
+            fact["properties"] = {"gapKind": kind, "classification": "ConfigTransformPresent"}
+            facts.append(fact)
+        self.write(facts)
+        result = self.result()["inventory"]
+        self.assertEqual({"recognizedFacts": 2, "otherOrMissingFacts": 1}, result["reasonCoverage"])
+        self.assertNotIn("private-new-reason", json.dumps(result))
+
+    def test_private_suffixes_and_identifier_shaped_values_stay_private(self):
+        self.write([self.gap("ConfigTransformPresent-private-customer"), self.gap("PrivateCustomerName")])
+        result = self.result()["inventory"]
+        self.assertEqual(2, result["reasonCoverage"]["otherOrMissingFacts"])
+        self.assertEqual(1, len(result["gapGroups"]))
+        self.assertEqual("other-or-missing-reason", result["gapGroups"][0]["reason"])
+
     def test_mismatch_and_duplicate_report_totals_rejected(self):
         self.write([self.gap()])
         for content in ("Path matching: bounded; 2 calls without a unique supported method target. Analysis gaps in scan: 0.\n",

@@ -34,6 +34,7 @@ are required. Existing negative tests must remain in place when refactoring.
 
 `scripts/validation/test_retained_gap_inventory.py` covers the offline retained
 gap summary: closed-label privacy projection, generator/projected-input hashes,
+public-extractor-backed reason labels, gapKind/classification compatibility,
 separate unresolved-call totals, deterministic grouping, malformed/duplicate JSON,
 byte/record/time limits, linked inputs, unsafe output locations and no-overwrite.
 The dedicated retained-gap-inventory workflow runs these synthetic tests on

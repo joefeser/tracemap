@@ -1,12 +1,21 @@
 # Inventory existing gaps — no build, rescan or full test suite
 
-Fetch `origin/codex/evidence-admission-hardening` and select that branch without
-overwriting local changes. Use the committed `scripts/summarize-retained-gaps.py`.
+Fetch `origin/codex/evidence-admission-hardening` and select the freshly fetched
+remote revision (not a stale local branch) without overwriting local changes.
+Use the committed `scripts/summarize-retained-gaps.py`.
 Do not create ad-hoc parsers or run application code. This is one read-only pass
 over an existing scan, not another acceptance or test run.
 
-1. Ask the operator to select the existing scan directory containing
-   `facts.ndjson` and `report.md`. Reuse the already known saved run if unambiguous;
+This revision expands the closed public reason catalog for data configuration,
+WebForms composition/handlers/lifecycle/postbacks, and VB event wiring. It reads
+both `gapKind` and the legacy `classification` field and reports `reasonCoverage`.
+The earlier `other-or-missing-reason` buckets were not proof of missing facts.
+Run once against the SAME accepted saved scan, writing a NEW summary filename.
+Reuse the operator-confirmed scan directory from this conversation; do not ask
+again unless it is missing or ambiguous. No new scan is needed for this update.
+
+1. Reuse the already confirmed scan directory containing `facts.ndjson` and
+   `report.md`. Ask the operator only if that directory is missing or ambiguous;
    do not search the entire disk or guess a new source root. Keep paths private.
 2. Confirm Python 3.9 or newer is already available. If missing, stop with
    `RETAINED_GAP_INVENTORY_TOOL_UNAVAILABLE`; do not install software.
@@ -30,6 +39,11 @@ over an existing scan, not another acceptance or test run.
    `other-or-missing-reason`; do not recover their raw values into the handoff.
    Missing report totals are unavailable, not zero. Do not add these denominators
    together or interpret occurrences as unique defects.
+6. If the earlier sanitized summary is available, compare `factsRead`,
+   `analysisGapFacts`, and `unresolvedCalls.count`; these must remain unchanged for
+   unchanged inputs. Return the new reason groups and `reasonCoverage`, not raw
+   private labels. More recognized reasons are improved summary detail, NOT
+   resolved scanner gaps. The generator and projected-input hashes may change.
 
 This first inventory does NOT reconstruct unresolved-call reasons or rank gaps by
 SQL/HTTP reachability: those require retained resolver diagnostics or evidence
