@@ -11,6 +11,7 @@ public sealed record RetainedMethodGraph(IReadOnlyList<string> Roots, IReadOnlyL
     IReadOnlyList<CombinedPathGap> Gaps, IReadOnlyList<string> Cutoffs, int Work, int MaxDepth, int MaxRecords, int MaxWork)
 {
     public IReadOnlyList<RetainedCommandTrace> CommandTraces { get; init; } = [];
+    public RetainedDatabaseTerminalAudit? SourceDatabaseAudit { get; init; }
 }
 public sealed record RetainedCommandTrace(string EndpointNodeId, IReadOnlyList<string> PathNodeIds,
     CompiledCommandPathValueBinding? CommandText, IReadOnlyList<string> ProducerCallFactIds);
@@ -135,7 +136,11 @@ public static partial class CombinedDependencyPathReporter
                 .Select(id => SanitizeNode(graph.Nodes[id].ToReportNode())).ToArray(),
             edges.OrderBy(e => e.EdgeId, StringComparer.Ordinal).ToArray(), calls.OrderBy(c => c.FactId, StringComparer.Ordinal).ToArray(),
             relevantGaps.Take(options.MaxFrontier).Select(SanitizeGap).ToArray(), cutoffs.ToArray(), work, options.MaxDepth,
-            options.MaxFrontier, options.MaxTraversalWork) { CommandTraces = traces };
+            options.MaxFrontier, options.MaxTraversalWork)
+        {
+            CommandTraces = traces,
+            SourceDatabaseAudit = AuditSourceDatabaseTerminals(graph, read, visited, Math.Min(128, options.MaxFrontier))
+        };
     }
 }
 

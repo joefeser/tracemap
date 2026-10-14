@@ -212,6 +212,8 @@ public static partial class WebFormsReviewExecutionCommand
                 if (graphView is null) throw Fail("HANDLER_REQUERY_GRAPH_UNAVAILABLE");
                 await RetainedMethodGraphWriter.WriteAsync(graphView, destination, index.Sha256, budget.MaxOutputBytes, token);
                 await output.WriteLineAsync($"methodGraph=unfiltered-retained;nodes={graphView.Nodes.Count};edges={graphView.Edges.Count};calls={graphView.Calls.Count};cutoffs={graphView.Cutoffs.Count};no-terminal-pruning");
+                if (graphView.SourceDatabaseAudit is { } audit)
+                    await output.WriteLineAsync($"sourceDatabaseAudit.operationFacts={audit.OperationFactCount};projected={audit.ProjectedOperationCount};reachableCallers={audit.ReachableOperationCallerCount};reachableTerminals={audit.ReachableOperationTerminalCount};namedCallFacts={audit.ReachableNamedCallFactCount};rowsTruncated={audit.RowsTruncated.ToString().ToLowerInvariant()};names-not-api-proof=true");
                 if (!methodGraph)
                     await output.WriteLineAsync($"handlerDiagnostic=zero-path-graph;workUnits={graphView.Work};maxWork={graphView.MaxWork};separate-from-path-result=true;no-graph-rebuild=true");
             }

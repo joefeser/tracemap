@@ -15,6 +15,10 @@ public sealed class ExplicitVisualBasicContextTests
     [InlineData("partial")]
     [InlineData("missing")]
     [InlineData("ambiguous")]
+    [InlineData("operation-absent")]
+    [InlineData("operation-other-caller")]
+    [InlineData("operation-no-caller")]
+    [InlineData("lookalike")]
     public async Task Syntax_page_reaches_semantic_database_body_only_through_unique_bridge(string scenario)
     {
         using var temp = new TempDirectory(OperatingSystem.IsMacOS() ? "/private/tmp" : null);
@@ -38,6 +42,8 @@ public sealed class ExplicitVisualBasicContextTests
                 End Sub
             End Class
             """;
+        if (scenario == "lookalike") worker = worker.Replace("System.Data.Common.DbCommand", "FakeCommand", StringComparison.Ordinal)
+            + "\nPublic Class FakeCommand\nPublic Sub ExecuteNonQuery()\nEnd Sub\nEnd Class\n";
         if (scenario == "missing") worker = worker.Replace("Sub Run(", "Sub Other(", StringComparison.Ordinal);
         if (scenario == "ambiguous") worker = worker.Replace("End Class", "Public Sub Run(command As String)\nEnd Sub\nEnd Class", StringComparison.Ordinal);
         if (scenario == "partial") worker += "\nPublic Class Broken\nInherits MissingBase\nEnd Class";
@@ -60,22 +66,43 @@ public sealed class ExplicitVisualBasicContextTests
         }));
         var scan = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "scan")) { VisualBasicCompilationContextPath = context });
         Assert.DoesNotContain(scan.Facts, f => f.Evidence.FilePath == "Page.aspx.vb" && f.EvidenceTier == EvidenceTiers.Tier1Semantic);
-        Assert.Contains(scan.Facts, f => f.FactType == FactTypes.DatabaseOperationCandidate && f.EvidenceTier == EvidenceTiers.Tier1Semantic);
+        if (scenario == "lookalike") Assert.DoesNotContain(scan.Facts, f => f.FactType == FactTypes.DatabaseOperationCandidate);
+        else Assert.Contains(scan.Facts, f => f.FactType == FactTypes.DatabaseOperationCandidate && f.EvidenceTier == EvidenceTiers.Tier1Semantic);
         var root = Assert.Single(scan.Facts, f => f.FactType == FactTypes.MethodDeclared && f.Properties.GetValueOrDefault("name") == "Click");
         var index = Path.Combine(temp.Path, "index.sqlite");
-        SqliteIndexWriter.Write(index, scan.Manifest, scan.Facts);
+        // Model retained-input omissions/identity mismatches independently of
+        // extraction. The unchanged scan above proves the source API is supported.
+        var retainedFacts = scan.Facts.Where(f => scenario != "operation-absent" || f.FactType != FactTypes.DatabaseOperationCandidate)
+            .Select(f => f.FactType == FactTypes.DatabaseOperationCandidate ? scenario switch
+            {
+                "operation-other-caller" => f with { SourceSymbol = "Unrelated.Run()" },
+                "operation-no-caller" => f with { SourceSymbol = null },
+                _ => f
+            } : f).ToArray();
+        SqliteIndexWriter.Write(index, scan.Manifest, retainedFacts);
         var combined = Path.Combine(temp.Path, "combined.sqlite");
         await CombinedIndexBuilder.CombineAsync(new CombineOptions([index], combined, ["retained"]));
         RetainedMethodGraph? diagnostic = null;
         var report = await CombinedDependencyPathReporter.BuildReportAsync(new(combined, Path.Combine(temp.Path, "paths"),
             FromSymbol: root.TargetSymbol, ToSurface: "database-operations", MaxDepth: 16)
             { ExactFromSymbol = true, ZeroPathGraphObserver = graph => diagnostic = graph });
+        RetainedMethodGraph? narrowDiagnostic = null;
         var narrow = await CombinedDependencyPathReporter.BuildReportAsync(new(combined, Path.Combine(temp.Path, "narrow-paths"),
-            FromSymbol: root.TargetSymbol, ToSurface: "database-api", MaxDepth: 16) { ExactFromSymbol = true });
+            FromSymbol: root.TargetSymbol, ToSurface: "database-api", MaxDepth: 16)
+            { ExactFromSymbol = true, ZeroPathGraphObserver = graph => narrowDiagnostic = graph });
         Assert.Empty(narrow.Paths); // Existing compiled-API selector retains its original meaning.
+        var audit = Assert.IsType<RetainedDatabaseTerminalAudit>(narrowDiagnostic!.SourceDatabaseAudit);
+        Assert.False(audit.RowsTruncated);
+        Assert.Equal(scenario is "operation-absent" or "lookalike" ? 0 : 1, audit.OperationFactCount);
+        Assert.Equal(audit.OperationFactCount, audit.ProjectedOperationCount);
         if (scenario is "valid" or "partial")
         {
             Assert.Null(diagnostic);
+            Assert.Equal(1, audit.ReachableOperationCallerCount);
+            Assert.Equal(1, audit.ReachableOperationTerminalCount);
+            Assert.Equal("operation-terminal-reached", Assert.Single(audit.Operations).State);
+            Assert.NotEmpty(audit.NamedCalls);
+            Assert.All(audit.NamedCalls, call => Assert.Single(call.OperationFactIds));
             var sourceReport = await CombinedDependencyPathReporter.BuildReportAsync(new(combined, Path.Combine(temp.Path, "source-paths"),
                 FromSymbol: root.TargetSymbol, ToSurface: "sql-persistence", MaxDepth: 16) { ExactFromSymbol = true });
             Assert.NotEmpty(sourceReport.Paths);
@@ -91,6 +118,16 @@ public sealed class ExplicitVisualBasicContextTests
             Assert.NotEmpty(diagnostic.Roots);
             Assert.NotEmpty(diagnostic.Edges);
             Assert.True(diagnostic.Work + report.Summary.TraversalWorkUnits <= 100_000);
+            Assert.Equal(0, audit.ReachableOperationTerminalCount);
+            if (scenario.StartsWith("operation-", StringComparison.Ordinal) || scenario == "lookalike")
+            {
+                Assert.NotEmpty(audit.NamedCalls);
+                Assert.All(audit.NamedCalls, call => Assert.Empty(call.OperationFactIds));
+            }
+            if (scenario == "operation-other-caller")
+                Assert.Equal("operation-caller-not-reached", Assert.Single(audit.Operations).State);
+            if (scenario == "operation-no-caller")
+                Assert.Equal("projected-terminal-without-exact-caller-edge", Assert.Single(audit.Operations).State);
         }
         RetainedMethodGraph? repeatedDiagnostic = null;
         var repeat = await CombinedDependencyPathReporter.BuildReportAsync(new(combined, Path.Combine(temp.Path, "repeat-paths"),
@@ -102,6 +139,7 @@ public sealed class ExplicitVisualBasicContextTests
             Assert.NotNull(repeatedDiagnostic);
             Assert.Equal(diagnostic.Edges.Select(e => e.EdgeId), repeatedDiagnostic.Edges.Select(e => e.EdgeId));
             Assert.Equal(diagnostic.Cutoffs, repeatedDiagnostic.Cutoffs);
+            Assert.Equal(JsonSerializer.Serialize(diagnostic.SourceDatabaseAudit), JsonSerializer.Serialize(repeatedDiagnostic.SourceDatabaseAudit));
         }
         RetainedMethodGraph? exhausted = null;
         await CombinedDependencyPathReporter.BuildReportAsync(new(combined, Path.Combine(temp.Path, "bounded"),
