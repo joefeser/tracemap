@@ -3,6 +3,15 @@
 # - deferred: documented future/planned rule that must not appear in emitted facts.
 # Existing rules without an explicit status are treated as active.
 rules:
+  - id: diagnostic.graph.source-database-terminal-audit.v1
+    name: Retained source database terminal audit
+    description: Compares admitted source operation facts with projected terminal nodes, exact caller attachments and bounded unfiltered graph reachability; joins reachable database-operation name observations to exact retained operation sites.
+    evidenceTier: Tier4Unknown
+    limitations:
+      - Diagnostic only; no new operation, call edge, assembly admission or evidence-tier promotion. Original fact rule, tier, source index, scan, commit, location and extractor identity are preserved in local rows.
+      - Names are spelling observations, not trusted API classification. Missing operation facts do not establish extraction defects or absent runtime behavior. Compiled IL provenance is independent of source terminal classification.
+      - Joins require exact source index, caller, target, file and line span. Different identities or spans are not reconciled speculatively. CallEdge and MethodInvoked rows count separately, not as unique call sites.
+      - Detail lists are capped at 128 rows or the smaller graph record limit. Counts cover admitted input, not whole-application coverage. The existing local-only method graph binds generator and bounded input SHA-256; private paths and identifiers must not be published.
   - id: workflow.vb-compilation-context-preparation.v1
     name: Local explicit VB compilation context preparation
     description: Inventories and hashes candidate VB source and reference files in explicitly selected directories, records proposed compiler settings, and emits an explicit context only in a separate operator-approved step.

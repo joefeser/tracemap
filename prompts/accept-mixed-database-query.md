@@ -26,19 +26,25 @@ unused traversal work. Its cutoff status is independent of path truncation.
 No diagnostic means the allowance was exhausted or no root was selected; stop
 and report that, without increasing limits or launching another query.
 
-Within the remaining time, inspect the selected handler, its Save callee and
-their retained outward connections toward App_Code/database candidates. Keep
-exact identities locally. Report one evidenced blocking boundary if available:
-caller/callee anonymized labels, source-index identity equal/different,
-edge direction/kind, rule/tier, and associated gap reason. Distinguish an absent
-retained edge from an edge present but not used by the grouped traversal. Do not
-infer a missing connection merely from Tier3 evidence. If a terminal is present
-in the unfiltered graph but no accepted path exists, report its witness edge
-kinds/tiers for a traversal reproduction; do not claim runtime reachability.
-If the graph cannot establish the boundary, say so rather than invent a cause.
+Read ONLY `graph.sourceDatabaseAudit` in that JSON for the next finding. The
+tool now performs the exact joins; do not reconstruct them through ad hoc
+source searches. Return its operationFactCount, projectedOperationCount,
+reachableOperationCallerCount, reachableOperationTerminalCount,
+reachableNamedCallFactCount and rowsTruncated. Summarize counts by Operations
+state and how many NamedCalls rows have zero operationFactIds. Named-call rows
+are fact counts, not unique call sites; call names alone are not API proof.
+
+If operation facts exist but callers are unreachable, report that identity/
+connectivity boundary. If reachable named calls have no exact operation fact,
+report the public API spelling, evidence tier, and sanitized target type/
+assembly category when already present in the report. Do not claim these names
+prove a supported API or an extractor defect. If facts lack projected terminals
+or caller edges, report that explicit state. Keep all private identities local.
+Do not attribute missing SOURCE operation terminals to external IL admission.
+No source-context expansion, second query, DLL search, or follow-up investigation.
 
 Return only HEAD, elapsed time, exit status, path count, terminal scope,
-diagnostic emitted yes/no, diagnostic work/cutoffs, and the bounded finding.
+diagnostic emitted yes/no, diagnostic work/cutoffs, and the audit summary above.
 Keep private paths, symbols, source, hashes and raw artifacts local; return
 sanitized structure only. A failure ends this run. No follow-on investigations.
 
