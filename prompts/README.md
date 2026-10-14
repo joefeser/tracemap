@@ -3,7 +3,10 @@
 For public-only validation of database evidence admission, use
 [Verify evidence-admission hardening](verify-evidence-admission-hardening.md).
 It pins the implementation revision and synthetic acceptance checks; no private
-application rescan is required.
+application rescan is required. Previously accepted results carry forward across
+prompt/CI-only edits. Do not rerun the full solution on the work machine; the
+Windows test-host baseline comparison workflow isolates the reported failures
+against the pinned base without claiming that unchanged files prove causality.
 
 For automatic projectless constructor evidence, use
 [Inspect projectless SQL parameter candidates](inspect-projectless-sql-parameter-candidates.md).

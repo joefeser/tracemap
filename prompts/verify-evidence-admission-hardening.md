@@ -30,11 +30,17 @@ changes; if checkout would overwrite them, stop and report the conflict.
 
 ## Run
 
-From the repository root:
+The work-machine acceptance is deliberately focused. Do not run the full solution
+suite here, repeat an aborted run, or start background diagnostic runs. Full-suite
+validation belongs in CI. Previously accepted focused checks and sample results
+can be carried forward across prompt/CI-only commits; do not rerun them merely
+because this prompt changed.
+
+If the implementation has not already been accepted, run once from the repository
+root (stop on failure):
 
 ```text
-dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter "FullyQualifiedName~SqlReviewRegressionTests|FullyQualifiedName~GroupedCompiledPathHandoffTests" --nologo
-dotnet test src/dotnet/TraceMap.sln --nologo
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter "FullyQualifiedName~SqlReviewRegressionTests|FullyQualifiedName~GroupedCompiledPathHandoffTests" --nologo --blame-hang-timeout 2m --blame-hang-dump-type none --logger "console;verbosity=normal"
 ```
 
 Choose two fresh local output directories outside the repository. Replace the
@@ -52,10 +58,19 @@ index.sqlite, report.md and logs/analyzer.log. Keep reduced-analysis labels inta
 
 ## Return
 
-Report the exact implementation and checkout commits, focused/full test totals,
+Report the exact implementation and checkout commits, focused test totals,
 skips and their reasons, deterministic comparison results, and any failed
 acceptance condition. Distinguish not-run or blocked checks from passing checks.
 Do not silently install missing tooling or waive failures.
+
+If a previous full suite crashed, retain that result as blocked. Do not call the
+crash pre-existing merely because a test file was unchanged. The repository's
+`Windows test-host baseline comparison` workflow runs the implicated classes in
+separate processes on the pinned base and candidate, with bounded timeouts and
+crash diagnostics. Both failing similarly supports a baseline failure; only the
+candidate failing supports a regression. Both passing leaves the full-suite crash
+unresolved (including possible test interaction). None of these outcomes waives
+the full-suite gate. Do not kill all `testhost` processes on the machine.
 
 Do not rescan the private application. This branch hardens evidence admission;
 it does not change extraction or call-graph coverage and does not claim to resolve
