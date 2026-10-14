@@ -14,6 +14,9 @@ public sealed class DatabaseCommandStateTests
         while (repo is not null && !File.Exists(Path.Combine(repo.FullName,"AGENTS.md"))) repo = repo.Parent;
         using var temp = new TempDirectory();
         var scan = ScanEngine.Scan(new ScanOptions(Path.Combine(repo!.FullName,"samples/sql-database-matrix/net10.0",language),Path.Combine(temp.Path,"scan")));
+        Assert.True(scan.Manifest.BuildStatus == "Succeeded",
+            JsonSerializer.Serialize(new { scan.Manifest.BuildStatus, scan.Manifest.KnownGaps,
+                Gaps = scan.Facts.Where(f => f.FactType == FactTypes.AnalysisGap).ToArray() }));
         CodeFact Call(string name) => Assert.Single(scan.Facts,f => f.FactType == FactTypes.DatabaseOperationCandidate && f.EvidenceTier == EvidenceTiers.Tier1Semantic && f.SourceSymbol?.Contains("."+name+"(",StringComparison.Ordinal) == true);
         Assert.Equal("hash-only-constant",Call("ControlLiteral").Properties["commandTextAvailability"]);
         Assert.Equal("hash-only-constant",Call("ControlConstant").Properties["commandTextAvailability"]);
