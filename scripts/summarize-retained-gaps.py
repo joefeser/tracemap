@@ -59,6 +59,9 @@ IlCommandTextBindingUnavailable IlCommandTextCallerBindingRequired IlCommandText
 IlCommandTypeBindingUnavailable IlCommandUnknownCallEffects IlCommandValueEvidenceUnavailable""".split())
 REASONS = REASONS | COMPILED_REASONS
 TIERS = frozenset(("Tier1Semantic", "Tier2Structural", "Tier3SyntaxOrTextual", "Tier4Unknown"))
+REGISTRATION_STATES = frozenset(("register-directive-unavailable",
+    "AmbiguousWebFormsAssemblyControlRegistration", "WebFormsAssemblyTypeUnavailable",
+    "WebFormsAssemblyProjectUnavailable", "UnresolvedWebFormsAssemblyControlRegistration"))
 
 
 class InventoryError(Exception):
@@ -117,6 +120,9 @@ def summarize(scan, catalog, *, max_seconds=30):
     if not rules:
         raise InventoryError("CATALOG_INVALID")
     groups = Counter()
+    registration_states = Counter()
+    semantic_files, http_files = set(), set()
+    missing_semantic_paths = missing_http_paths = 0
     total = 0
     for raw in bounded_lines(scan / "facts.ndjson", MAX_BYTES, MAX_LINE, deadline):
         total += 1
@@ -137,6 +143,21 @@ def summarize(scan, catalog, *, max_seconds=30):
             reason = props.get("classification")
         if not all(value is None or isinstance(value, str) for value in (rule, tier, reason)):
             raise InventoryError("GAP_INVALID")
+        if rule == "legacy.webforms.composition.v1":
+            state = props.get("registrationState")
+            registration_states[state if isinstance(state, str) and state in REGISTRATION_STATES
+                                else "other-or-unavailable"] += 1
+        semantic = rule == "vb.semantic.workspace.v1" and reason == "SemanticAnalysisUnavailable"
+        http = rule == "vb.syntax.http-coverage-gap.v1" and reason == "VisualBasicHttpAnalysisPartialWithoutSemantics"
+        if semantic or http:
+            evidence = fact.get("evidence")
+            path = evidence.get("filePath") if isinstance(evidence, dict) else None
+            if isinstance(path, str) and path not in ("", "."):
+                (semantic_files if semantic else http_files).add(path)
+            elif semantic:
+                missing_semantic_paths += 1
+            else:
+                missing_http_paths += 1
         groups[(rule if rule in rules else "other-rule",
                 reason if reason in REASONS else "other-or-missing-reason",
                 tier if tier in TIERS else "unknown-tier")] += 1
@@ -157,6 +178,18 @@ def summarize(scan, catalog, *, max_seconds=30):
     projection = {
         "factsRead": total,
         "analysisGapFacts": gap_count,
+        "retainedDiagnostics": {
+            "registrationStates": dict(sorted(registration_states.items())),
+            "semanticHttpFileOverlap": {
+                "comparison": "exact-retained-file-path-only-not-root-cause",
+                "semanticFiles": len(semantic_files), "httpFiles": len(http_files),
+                "sharedFiles": len(semantic_files & http_files),
+                "semanticOnlyFiles": len(semantic_files - http_files),
+                "httpOnlyFiles": len(http_files - semantic_files),
+                "semanticFactsWithoutFile": missing_semantic_paths,
+                "httpFactsWithoutFile": missing_http_paths,
+            },
+        },
         "gapDomainCounts": {
             "compiled": sum(n for (r, _, _), n in groups.items() if r.startswith("dotnet.compiled.")),
             "otherKnownRules": sum(n for (r, _, _), n in groups.items()

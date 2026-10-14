@@ -57,6 +57,33 @@ class InventoryTests(unittest.TestCase):
         self.write([self.gap()])
         self.assertIsNone(self.result()["inventory"]["unresolvedCalls"]["count"])
 
+    def test_retained_diagnostics_compare_files_without_exporting_private_identity(self):
+        with self.catalog.open("a") as stream:
+            stream.write("  - id: vb.syntax.http-coverage-gap.v1\n  - id: legacy.webforms.composition.v1\n")
+        results = []
+        for private_path in ("secret-one.vb", "secret-two.vb"):
+            semantic = self.gap()
+            semantic["evidence"] = {"filePath": private_path}
+            http = self.gap("VisualBasicHttpAnalysisPartialWithoutSemantics")
+            http.update(ruleId="vb.syntax.http-coverage-gap.v1", evidence={"filePath": private_path})
+            registration = self.gap("UnresolvedWebFormsControlRegistration")
+            registration["ruleId"] = "legacy.webforms.composition.v1"
+            registration["properties"]["registrationState"] = "register-directive-unavailable"
+            unknown = self.gap("private-reason")
+            unknown["ruleId"] = "legacy.webforms.composition.v1"
+            unknown["properties"]["registrationState"] = [private_path]
+            self.write([semantic, semantic, http, registration, unknown, self.gap()])
+            result = self.result()
+            self.assertNotIn(private_path, json.dumps(result))
+            diagnostics = result["inventory"]["retainedDiagnostics"]
+            overlap = diagnostics["semanticHttpFileOverlap"]
+            self.assertEqual(1, overlap["sharedFiles"])
+            self.assertEqual(1, overlap["semanticFiles"])
+            self.assertEqual(1, overlap["semanticFactsWithoutFile"])
+            self.assertEqual({"register-directive-unavailable": 1, "other-or-unavailable": 1}, diagnostics["registrationStates"])
+            results.append(result)
+        self.assertEqual(*results)
+
     def test_expanded_labels_are_checked_in_public_extractor_literals(self):
         core = SCRIPT.parents[1] / "src/dotnet/TraceMap.Core"
         source = "\n".join((core / name).read_text(encoding="utf-8") for name in (

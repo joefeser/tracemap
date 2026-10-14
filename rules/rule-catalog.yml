@@ -12,6 +12,7 @@ rules:
       - Unknown labels collapse to closed other buckets; no raw private input hashes or identities are exported.
       - The bounded input hash covers only the privacy-projected aggregate counts; generator and public catalog hashes identify the summarizer inputs.
       - Report count agreement is not scan identity verification; source-to-operation joins and unresolved-call reason breakdowns are unavailable.
+      - Semantic/HTTP file overlap uses exact retained paths internally and exports only counts; missing paths are counted separately. Overlap does not prove a shared root cause. Registration states use a fixed public allowlist; missing, malformed and unknown states are grouped as unavailable without exporting their values.
       - Facts, lines, bytes and processing time are bounded; failures emit no accepted summary.
   - id: workflow.webforms.wizard-state.v1
     name: Local resumable Web Forms wizard state
