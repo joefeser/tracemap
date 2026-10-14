@@ -36,6 +36,9 @@ a verified ASP.NET event, provider dispatch or whole-site completeness.
 
 Modern fixture compiler/reference pin: SDK 10.0.302, Microsoft.NETCore.App.Ref
 10.0.10. The native scan receipt retains exact generator and bounded input identity.
+The full adapter CI installs this pinned SDK alongside the current SDK and checks
+resolution from this directory before testing. A root-level build alone does not
+validate the nested `global.json` used by semantic workspace scans.
 
 ## Projectless source/report regression samples
 
