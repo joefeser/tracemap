@@ -4,6 +4,21 @@ namespace TraceMap.Tests;
 
 public sealed class GitMetadataOutputTests
 {
+    [Fact]
+    public void Delayed_pipe_completion_within_process_budget_preserves_identity()
+    {
+        var pending = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var thread = new Thread(() => { Thread.Sleep(1200); pending.SetResult("exact identity"); });
+        thread.Start();
+        try
+        {
+            var result = GitMetadataProvider.CompleteGitOutput(pending.Task, Task.FromResult(""), false, GitMetadataProvider.OutputDrainTimeout);
+            Assert.False(result.Failed);
+            Assert.Equal("exact identity", result.Output);
+        }
+        finally { thread.Join(); }
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]

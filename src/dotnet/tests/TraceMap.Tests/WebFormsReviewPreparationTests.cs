@@ -253,7 +253,8 @@ public sealed class WebFormsReviewPreparationTests
         Assert.Equal(manifest.BoundedInputSha256, preparedConfig.PreparationProvenance.BoundedInputSha256);
         var run = Path.Combine(fixture.Root, "run");
         Assert.Equal(0, await TraceMapCommand.RunAsync(["webforms-review", "preflight", "--config", fixture.PreparedConfig, "--out", run], fixture.Output, fixture.Error));
-        Assert.Equal(0, await TraceMapCommand.RunAsync(["webforms-review", "run", "--run", run], fixture.Output, fixture.Error));
+        Assert.True(await TraceMapCommand.RunAsync(["webforms-review", "run", "--run", run], fixture.Output, fixture.Error) == 0,
+            fixture.Error.ToString());
         var checkpoint = JsonSerializer.Deserialize<WebFormsReviewCheckpoint>(File.ReadAllText(Path.Combine(run, "checkpoints", "0002.json")), JsonOptions)!;
         Assert.Equal("scan-completed-reports-pending", checkpoint.State);
         Assert.DoesNotContain("PublishMapExecutionPending", checkpoint.Gaps);
@@ -493,7 +494,8 @@ public sealed class WebFormsReviewPreparationTests
         Assert.Equal(partitions.Length, plan.Inputs.Count(input => input.Role == "publish-receipt-partition"));
         foreach (var partition in partitions)
             Assert.Contains(plan.Inputs, input => input.Role == "publish-receipt-partition" && input.Sha256 == partition.Sha256);
-        Assert.Equal(0, await TraceMapCommand.RunAsync(["webforms-review", "run", "--run", run], fixture.Output, fixture.Error));
+        Assert.True(await TraceMapCommand.RunAsync(["webforms-review", "run", "--run", run], fixture.Output, fixture.Error) == 0,
+            fixture.Error.ToString());
         var completed = JsonSerializer.Deserialize<WebFormsReviewCheckpoint>(File.ReadAllText(Path.Combine(run, "checkpoints", "0004.json")), JsonOptions)!;
         Assert.Equal("reports-completed-review-only", completed.State);
         Assert.Equal(allPages ? 67 : 1, completed.Reports!.Surfaces);

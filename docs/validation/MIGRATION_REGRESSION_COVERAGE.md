@@ -1,0 +1,44 @@
+# SQL and migration repair regression coverage
+
+PR target: `dev`. This ledger maps implemented behavior to executable public
+synthetic tests. It is not a claim that every possible VB construct is supported,
+nor a substitute for passing exact-head PR checks. No private source or artifacts
+are required. Existing negative tests must remain in place when refactoring.
+
+| Implemented behavior / invariant | Executable acceptance | Negative or boundary control |
+| --- | --- | --- |
+| Database API families across C#, VB, source and IL | SqlDatabaseMatrixTests; sql-coverage-smoke.py; samples/sql-database-matrix | Independent named oracle, provider/type shadows, evidence-tier checks, command-state reset |
+| Existing C# and compiled traversal fixtures honor trusted API identities | CSharpSemanticExtractorTests; CompiledBaselinePrewalkTests; MessyWorkspaceRegressionTests | Source-declared provider lookalikes are rejected; positive command fixtures inherit signed framework DbCommand and throw if executed; compiled positives carry assembly identity |
+| Command state and dynamic values | DatabaseCommandStateTests | Reassignment/uncertain state never retains stale command evidence |
+| Projectless SQL visibility and reports | ProjectlessSqlReportingTests | Reduced coverage retained, no clean-absence claim |
+| Explicit Parameters.Add and parameter constructors | ProjectlessParameterCandidateTests | Dynamic/named arguments, unsupported types, ordinary object creations, alias cases |
+| Nested Try, command constructor arguments, intervening configuration | ProjectlessParameterCandidateTests; MigrationRegressionCorpusTests | Cross-block/reassignment/other receiver rejected; strong execution remains unknown with complex effects |
+| Relative SqlClient declaration resolution | Nested_relative_command_uses_same_resolver_for_add_and_declaration | Aliases/shadows and unsupported type spellings refused |
+| Value witnesses and later lexical execution | Value_observations_preserve_repeats_and_exclude_other_or_dynamic_indexes; Lexical_execution_does_not_cross_reassignment_branch_or_other_receiver | Dynamic indexes and other receiver assignments excluded |
+| String.Empty, replacement, literal concatenation | Empty_seed_and_replacement_have_distinct_trace_semantics; Command_text_trace_is_bounded_constant_syntax_not_raw_sql | Nonconstant state and expression bounds; no raw SQL in normal report |
+| Integrated SQL/HTTP/markup inventory | IntegratedMigrationReportTests; samples/migration-vertical-slice | Missing/ambiguous ownership, unconnected groups, parameter grouping, budgets and deterministic order |
+| Handles anchors independent of framework ancestry | Handles_helper_http_chain_preserves_syntax_tier_and_refuses_ambiguous_anchors; MigrationRegressionCorpusTests | External/desktop bases never become verified WebForms routes; duplicate owners/types rejected |
+| Operation-directed caller search and diagnostics | IntegratedMigrationReportTests | Unrelated fan-out, depth, cycles, rejected-call leads never promoted to edges |
+| Protected nested receiver lookup | MigrationRegressionCorpusTests; NestedReceiver.vb | Global/sibling decoys, duplicate declarations/overloads, alias/generic shadows, missing receiver type |
+| Inline New receiver and optional argument tail | InlineReceiverMigrationTests | Required/named omissions, ParamArray expansion, ambiguous overloads, old metadata |
+| Cross-file explicit property/field chain | PropertyChainMigrationTests | Shared/instance distinction, missing types, duplicate/indexed/array members, local shadows, factories; typed local and Me positives |
+| Complete stacked correction, four operations/five parameters | StackedMigrationRegressionTests; samples/stacked-migration-regression | Remove each critical layer: property, inline/nested call, optional metadata, event anchor; required paths disappear |
+| Source/compiled wrapper provenance and SQL handoff | SqlWrapperRouteTests; GroupedCompiledPathHandoffTests | No invented source/binary identity bridge; original signatures and context retained |
+| Retained SQL inventory and large input admission | test_sql_wrapper_report.py; sql-wrapper-large-index-smoke.py | Hash/identity changes, explicit size bounds, timeout/failure, truncation, deterministic output |
+| Opt-in local SQL literal and contract recovery | test_sql_command_text.py | Consent, wrong binary/hash, dynamic state, malformed catalog, ambiguous names, HTML inertness, no overwrite |
+| HTTP regressions | OutboundHttpLegacyCoverageTests; http-coverage-smoke.py | Independent HTTP oracle, legacy profiles, syntax fallback and coverage gaps |
+| Cached VB type lookup | VisualBasicSyntaxTypeLookupTests | Cached/uncached equivalence and bounded scaling |
+
+## CI enforcement
+
+`.github/workflows/sql-database-compatibility.yml` runs the matrix, parameter,
+report, wrapper, integrated, inline, property and stacked tests on Windows, plus
+the SQL/HTTP deterministic CLI matrices and Python diagnostic guards. Both push
+and PR path filters include every `samples/*migration*/` corpus, so a sample-only
+edit cannot silently skip this lane. The full .NET solution suite is a separate
+validation signal; filtered tests alone do not certify the whole repository.
+
+The accepted private baseline is four **observed** operation groups with candidate
+paths, not complete application coverage. Runtime routes, framework ancestry,
+execution effects, schema contracts and remaining analysis gaps stay outside that
+acceptance. Test-only changes do not require repeatedly rescanning private inputs.

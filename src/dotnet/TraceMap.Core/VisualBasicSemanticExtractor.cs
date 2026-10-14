@@ -2418,6 +2418,7 @@ public static class VisualBasicSemanticExtractor
                 receiver),
             enclosing?.ContainingAssembly,
             method.ContainingAssembly);
+        DatabaseOperationApi.AddProperties(properties, model.GetOperation(site) as IInvocationOperation);
         facts.Add(CreateSemanticFact(
             FactTypes.DatabaseOperationCandidate,
             RuleIds.DatabaseOperationCallPattern,
@@ -2926,92 +2927,12 @@ public static class VisualBasicSemanticExtractor
 
     private static bool TryClassifyAdoNetOperation(IMethodSymbol method, out string operationKind, out string resultKind)
     {
-        operationKind = string.Empty;
-        resultKind = "none";
-        if (IsAdoNetType(method.ContainingType, "System.Data.Common.DbCommand")
-            && HasCompatibleFrameworkMember(method, "System.Data.Common.DbCommand"))
-        {
-            operationKind = method.Name switch
-            {
-                "ExecuteReader" or "ExecuteReaderAsync" => "select-candidate",
-                "ExecuteScalar" or "ExecuteScalarAsync" => "scalar-candidate",
-                "ExecuteNonQuery" or "ExecuteNonQueryAsync" => "execute-candidate",
-                _ => string.Empty
-            };
-            resultKind = method.Name.StartsWith("ExecuteReader", StringComparison.Ordinal)
-                ? "data-reader"
-                : method.Name.StartsWith("ExecuteScalar", StringComparison.Ordinal)
-                    ? "scalar"
-                    : "row-count-or-none";
-        }
-        else if (IsAdoNetType(method.ContainingType, "System.Data.Common.DbDataAdapter")
-            && HasCompatibleFrameworkMember(method, "System.Data.Common.DbDataAdapter")
-            && method.Name == "Fill")
-        {
-            operationKind = "data-adapter-fill";
+        if (!DatabaseOperationApi.TryClassify(method, out operationKind, out resultKind)) return false;
+        if (operationKind == "data-adapter-fill")
             resultKind = method.Parameters.Any(parameter => IsAdoNetType(parameter.Type, "System.Data.DataTable")
-                    || parameter.Type is IArrayTypeSymbol array && IsAdoNetType(array.ElementType, "System.Data.DataTable"))
-                ? "data-table"
-                : method.Parameters.Any(parameter => IsAdoNetType(parameter.Type, "System.Data.DataSet"))
-                    ? "data-set"
-                    : "data-container-unknown";
-        }
-
-        return operationKind.Length > 0;
-    }
-
-    private static bool HasCompatibleFrameworkMember(IMethodSymbol method, string frameworkType)
-    {
-        for (var current = method.ContainingType; current is not null; current = current.BaseType)
-        {
-            if (GetMetadataName(current.OriginalDefinition) != frameworkType)
-            {
-                continue;
-            }
-            return current.GetMembers(method.Name)
-                .OfType<IMethodSymbol>()
-                .Any(candidate => candidate.Parameters.Length == method.Parameters.Length
-                    && ReturnTypesAlign(candidate.ReturnType, method.ReturnType)
-                    && candidate.Parameters.Zip(method.Parameters).All(pair =>
-                        pair.First.RefKind == pair.Second.RefKind
-                        && ParameterTypesAlign(pair.First.Type, pair.Second.Type)));
-        }
-        return false;
-    }
-
-    private static bool ParameterTypesAlign(ITypeSymbol expected, ITypeSymbol actual)
-    {
-        if (SymbolEqualityComparer.Default.Equals(expected, actual))
-        {
-            return true;
-        }
-        if (expected is not INamedTypeSymbol namedExpected || actual is not INamedTypeSymbol namedActual)
-        {
-            return false;
-        }
-        return GetMetadataName(namedExpected.OriginalDefinition) == GetMetadataName(namedActual.OriginalDefinition)
-            || IsAdoNetType(namedActual, GetMetadataName(namedExpected.OriginalDefinition));
-    }
-
-    private static bool ReturnTypesAlign(ITypeSymbol expected, ITypeSymbol actual)
-    {
-        if (SymbolEqualityComparer.Default.Equals(expected, actual))
-        {
-            return true;
-        }
-        if (expected is not INamedTypeSymbol namedExpected || actual is not INamedTypeSymbol namedActual)
-        {
-            return false;
-        }
-        if (IsAdoNetType(namedActual, GetMetadataName(namedExpected.OriginalDefinition)))
-        {
-            return true;
-        }
-        return GetMetadataName(namedExpected.OriginalDefinition) == "System.Threading.Tasks.Task`1"
-            && GetMetadataName(namedActual.OriginalDefinition) == "System.Threading.Tasks.Task`1"
-            && namedExpected.TypeArguments.Length == 1
-            && namedActual.TypeArguments.Length == 1
-            && ReturnTypesAlign(namedExpected.TypeArguments[0], namedActual.TypeArguments[0]);
+                    || parameter.Type is IArrayTypeSymbol array && IsAdoNetType(array.ElementType, "System.Data.DataTable")) ? "data-table"
+                : method.Parameters.Any(parameter => IsAdoNetType(parameter.Type, "System.Data.DataSet")) ? "data-set" : "data-container-unknown";
+        return true;
     }
 
     private static bool IsParameterCollectionMutation(IMethodSymbol method) =>
@@ -3073,8 +2994,7 @@ public static class VisualBasicSemanticExtractor
     }
 
     private static bool IsPotentialAdoNetOperationName(string name) =>
-        new[] { "Fill", "ExecuteReader", "ExecuteReaderAsync", "ExecuteScalar", "ExecuteScalarAsync", "ExecuteNonQuery", "ExecuteNonQueryAsync" }
-            .Contains(name, StringComparer.OrdinalIgnoreCase);
+        DatabaseOperationApi.Kind(name).Length > 0;
 
     private static bool IsAdoNetType(ITypeSymbol? type, string metadataName)
     {

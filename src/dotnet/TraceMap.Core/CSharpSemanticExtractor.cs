@@ -3967,6 +3967,7 @@ public static class CSharpSemanticExtractor
         {
             properties["sqlOperationName"] = sqlOperationName;
         }
+        if (frameworkFamily == "ado-net") DatabaseOperationApi.AddProperties(properties, model.GetOperation(invocation) as Microsoft.CodeAnalysis.Operations.IInvocationOperation);
         AddSymbolProperties(properties, "source", model.GetEnclosingSymbol(invocation.SpanStart));
         AddSymbolProperties(properties, "target", method);
 
@@ -4159,18 +4160,8 @@ public static class CSharpSemanticExtractor
         out string operationKind,
         out string? sql)
     {
-        operationKind = method.Name switch
-        {
-            "ExecuteReader" or "ExecuteReaderAsync" => "select-candidate",
-            "ExecuteScalar" or "ExecuteScalarAsync" => "scalar-candidate",
-            "ExecuteNonQuery" or "ExecuteNonQueryAsync" => "execute-candidate",
-            _ => string.Empty
-        };
         sql = null;
-        if (operationKind.Length == 0 || method.ContainingType is null || !DerivesFromDbCommand(method.ContainingType))
-        {
-            return false;
-        }
+        if (!DatabaseOperationApi.TryClassify(method, out operationKind, out _)) return false;
 
         var receiver = UnwrapExpression(GetInvocationReceiver(invocation.Expression));
         if (receiver is ObjectCreationExpressionSyntax creation
@@ -4192,21 +4183,6 @@ public static class CSharpSemanticExtractor
             expression = parenthesized.Expression;
         }
         return expression;
-    }
-
-    private static bool DerivesFromDbCommand(INamedTypeSymbol symbol)
-    {
-        for (INamedTypeSymbol? current = symbol; current is not null; current = current.BaseType)
-        {
-            if (IsKnownType(current, "System.Data.Common.DbCommand")
-                || IsKnownType(current, "System.Data.SqlClient.SqlCommand")
-                || IsKnownType(current, "Microsoft.Data.SqlClient.SqlCommand")
-                || IsKnownType(current, "Npgsql.NpgsqlCommand"))
-            {
-                return true;
-            }
-        }
-        return false;
     }
 
     private static string OperationKindFromSql(string? operationName, string fallback) =>
