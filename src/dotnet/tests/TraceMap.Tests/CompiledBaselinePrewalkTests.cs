@@ -36,17 +36,25 @@ public sealed class CompiledBaselinePrewalkTests
         Assert.Contains(report.Report.Gaps, gap => gap.Reason == "depth");
         Assert.DoesNotContain("calls", report.Report.RootTraversal!.TraversedEdgeKinds);
         Assert.DoesNotContain("surface-evidence", report.Report.RootTraversal.TraversedEdgeKinds);
+        // The scope-aware prewalk may run, but with no compiled-legal terminal it must
+        // recover nothing: no witness note anywhere in the report.
+        Assert.DoesNotContain(report.Report.Paths.SelectMany(path => path.Notes), note => note.Code == "TerminalReachabilityPrewalk");
     }
 
     [Fact]
-    public async Task Compiled_only_depth_limit_keeps_gap_even_when_deeper_il_terminal_exists()
+    public async Task Compiled_only_depth_limit_recovers_scope_legal_il_terminal_witness()
     {
         var report = await CompiledReport(maxDepth: 1, terminalOnIlChain: true, "database-api", "DbDataAdapter.Fill");
-        Assert.Empty(report.Report.Paths);
-        Assert.True(report.Report.Summary.Truncated);
-        Assert.Contains(report.Report.Gaps, gap => gap.GapKind == "CompiledBaselineNoPath");
-        Assert.Contains(report.Report.Gaps, gap => gap.Reason == "depth");
-        Assert.DoesNotContain("compiled-database-api-candidate", report.Report.RootTraversal!.TraversedEdgeKinds);
+        // Depth bounds ordinary enumeration, not discoverability: the compiled-only prewalk
+        // must recover the deeper IL terminal through compiled-legal edges only.
+        var path = Assert.Single(report.Report.Paths);
+        Assert.Contains(path.Notes, note => note.Code == "TerminalReachabilityPrewalk");
+        Assert.All(path.Edges, edge =>
+            Assert.True(CombinedDependencyPathReporter.CompiledBaselineAllowsEdge(edge.EdgeKind, true), edge.EdgeKind));
+        Assert.Contains(path.Edges, edge => edge.EdgeKind == "compiled-il-call");
+        Assert.Contains(path.Edges, edge => edge.EdgeKind == "compiled-database-api-candidate");
+        Assert.True(report.Report.Summary.Truncated, "other truncated branches must stay explicitly partial");
+        Assert.Equal("compiled-il-with-root-attachment", report.Report.Query.TraversalScope);
     }
 
     [Fact]
