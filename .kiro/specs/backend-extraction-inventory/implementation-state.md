@@ -1015,3 +1015,20 @@ lane. Full pinned SQL/HTTP native matrices and full solution suite are deferred 
 this bounded syntax/report change; fresh Windows results remain a separate gate.
 CLI build passed with zero warnings/errors. The independent inline-receiver sample
 scan produced 42 facts, validated artifacts and 3/3 candidate operation entry paths.
+# 2026-10-13: explicit property/field receiver chains
+
+vb-syntax/0.4.14 adds property declared-type/owner/context and safe receiver-chain
+metadata. Report-only type traversal uses unique explicit members across source
+files, retaining member references in candidate paths. Maximum eight segments;
+10000-member matching cap. No getters execute and no instance identity is inferred.
+Nonshared type roots, missing/ambiguous declarations, arrays/indexers, factory
+results, alias/generic shadows and inherited/partial member merging remain refused.
+The property-chain-migration sample and tests exercise both SQL and bulk groups.
+Private chain declarations and actual entry reachability remain unverified here.
+
+Validation: 40 property/inline/integrated/corpus/VB-boundary/Markdown tests passed
+with warnings as errors, including typed-local and Me-root paths. CLI build had
+zero warnings/errors. Public property-chain sample emitted 41 facts, validated
+artifacts and 2/2 candidate operation paths. New tests are in Windows CI. Full
+solution tests and pinned native SQL/HTTP matrices are deferred for this change;
+new-head Windows and private acceptance results are not claimed.

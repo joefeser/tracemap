@@ -83,3 +83,11 @@ joins to the explicit constructed type, not the caller class. Verify both suppli
 and omitted trailing Optional arguments against local declarations. Report all
 three previously unresolved groups together, retaining frontier diagnostics if
 another upstream gap remains. Do not assume these added hops reach event anchors.
+
+For the property-chain correction, use fresh vb-syntax/0.4.14 facts. Verify explicit
+property/field declaration types for each retained receiver hop and their fact
+references in the displayed path. Compare both database groups together; preserve
+the two HTTP chains as regressions. If unresolved, report whether a declaration is
+missing, inherited, ambiguous, untyped, indexed or outside the bounded chain rather
+than assuming the property returns a particular runtime instance. Keep source and
+identifiers local. Return all remaining frontier results together.
