@@ -7,6 +7,67 @@ namespace TraceMap.Tests;
 
 public sealed class ExplicitVisualBasicContextTests
 {
+    public static IEnumerable<object[]> RegistrationCases()
+    {
+        foreach (var partial in new[] { false, true })
+        foreach (var shape in new[] { "class", "root", "wrong-root", "nested", "interface", "duplicate" })
+            yield return new object[] { partial, shape };
+    }
+
+    [Theory]
+    [MemberData(nameof(RegistrationCases))]
+    public void Semantic_app_code_registration_preserves_candidate_boundary(bool partial, string shape)
+    {
+        using var temp = new TempDirectory(OperatingSystem.IsMacOS() ? "/private/tmp" : null);
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(Path.Combine(repo, "App_Code"));
+        var declaration = shape == "interface" ? "Public Interface Widget\nEnd Interface" : "Public Class Widget\nEnd Class";
+        if (shape == "nested") declaration = "Public Class Outer\n" + declaration + "\nEnd Class";
+        var source = "Namespace Controls\n" + declaration + "\nEnd Namespace";
+        if (partial) source += "\nPublic Class Broken\nInherits MissingBase\nEnd Class";
+        File.WriteAllText(Path.Combine(repo, "App_Code", "Widget.vb"), source);
+        if (shape == "duplicate") File.WriteAllText(Path.Combine(repo, "App_Code", "Duplicate.vb"), source);
+        var ns = shape == "root" ? "SyntheticRoot.Controls" : "Controls";
+        File.WriteAllText(Path.Combine(repo, "web.config"), $"<configuration><system.web><pages><controls><add tagPrefix=\"x\" namespace=\"{ns}\" /></controls></pages></system.web></configuration>");
+        File.WriteAllText(Path.Combine(repo, "Page.aspx"), $"<%@ Page Language=\"VB\" %><x:Widget ID=\"w\" runat=\"server\" /><%= {ns}.Widget.Value %>");
+        foreach (var args in new[] { new[] { "init" }, new[] { "add", "." }, new[] { "-c", "user.name=Synthetic", "-c", "user.email=test@example.invalid", "commit", "-m", "fixture" } })
+        {
+            using var process = Process.Start(new ProcessStartInfo("git", args) { WorkingDirectory = repo, RedirectStandardOutput = true, RedirectStandardError = true })!;
+            Assert.True(process.WaitForExit(30_000));
+            Assert.Equal(0, process.ExitCode);
+        }
+        static string Hash(string path) => Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(path)));
+        var reference = Path.Combine(temp.Path, "core.dll");
+        File.Copy(typeof(object).Assembly.Location, reference);
+        var context = Path.Combine(temp.Path, "context.json");
+        File.WriteAllText(context, JsonSerializer.Serialize(new
+        {
+            schemaVersion = "vb-compilation-context.v1", commitSha = GitMetadataProvider.Detect(repo).CommitSha,
+            rootNamespace = shape is "root" or "wrong-root" ? "SyntheticRoot" : "",
+            optionStrict = true, optionInfer = true, optionExplicit = true, imports = Array.Empty<string>(),
+            sources = Directory.GetFiles(Path.Combine(repo, "App_Code"), "*.vb").Order(StringComparer.Ordinal)
+                .Select(path => new { path = "App_Code/" + Path.GetFileName(path), sha256 = Hash(path) }).ToArray(),
+            references = new[] { new { path = reference, sha256 = Hash(reference) } }
+        }));
+        var scan = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out")) { VisualBasicCompilationContextPath = context });
+        var joins = scan.Facts.Where(f => f.ContractElement == "UsesRegisteredAppCodeControlCandidate").ToArray();
+        if (shape is "class" or "root")
+        {
+            var join = Assert.Single(joins);
+            Assert.Equal(EvidenceTiers.Tier3SyntaxOrTextual, join.EvidenceTier);
+            Assert.Equal(ns + ".Widget", join.TargetSymbol);
+            Assert.Contains(scan.Facts, f => f.FactType == FactTypes.TypeDeclared && f.EvidenceTier == EvidenceTiers.Tier1Semantic
+                && join.Properties["supportingFactIds"].Split(',').Contains(f.FactId));
+            var inline = Assert.Single(scan.Facts, f => f.FactType == FactTypes.WebFormsInlineServerExpressionReferenceCandidate);
+            Assert.Equal(EvidenceTiers.Tier3SyntaxOrTextual, inline.EvidenceTier);
+            Assert.Equal(ns + ".Widget", inline.Properties["referencedTypeName"]);
+        }
+        else Assert.Empty(joins);
+        if (partial) Assert.Contains(scan.Facts, f => f.Properties.GetValueOrDefault("gapKind") == "CompilationDiagnostic");
+        var repeated = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "repeat")) { VisualBasicCompilationContextPath = context });
+        Assert.Equal(scan.Facts.Select(f => f.FactId), repeated.Facts.Select(f => f.FactId));
+    }
+
     [Theory]
     [InlineData("valid")]
     [InlineData("root-namespace")]

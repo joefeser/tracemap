@@ -2765,6 +2765,13 @@ public static partial class LegacyWebFormsExtractor
     private static string? WebFormsDeclarationQualifiedName(CodeFact fact)
     {
         var qualifiedName = fact.Properties.GetValueOrDefault("qualifiedName") ?? fact.TargetSymbol;
+        if (fact.EvidenceTier == EvidenceTiers.Tier1Semantic)
+        {
+            // Compiler qualification is not part of a markup identifier. Preserve
+            // actual containing types (including repeated names) and root namespaces.
+            return qualifiedName?.StartsWith("Global.", StringComparison.Ordinal) == true ? qualifiedName[7..]
+                : qualifiedName?.StartsWith("global::", StringComparison.Ordinal) == true ? qualifiedName[8..] : qualifiedName;
+        }
         var name = fact.Properties.GetValueOrDefault("name");
         if (string.IsNullOrWhiteSpace(qualifiedName) || string.IsNullOrWhiteSpace(name))
         {
@@ -4951,7 +4958,8 @@ public static partial class LegacyWebFormsExtractor
                 projects.Select(item => item.AssemblyName).ToHashSet(StringComparer.OrdinalIgnoreCase),
                 declaredTypes.Where(fact => fact.EvidenceTier is EvidenceTiers.Tier1Semantic or EvidenceTiers.Tier3SyntaxOrTextual
                     && inventoriedSources.Contains(fact.Evidence.FilePath)
-                    && string.Equals(fact.Properties.GetValueOrDefault("kind"), "class", StringComparison.OrdinalIgnoreCase))
+                    && string.Equals(fact.Properties.GetValueOrDefault("kind")
+                        ?? fact.Properties.GetValueOrDefault("typeKind"), "class", StringComparison.OrdinalIgnoreCase))
                     .ToArray());
         }
 
@@ -4962,13 +4970,13 @@ public static partial class LegacyWebFormsExtractor
                 var prefix = webRoot == "." ? "App_Code/" : webRoot + "/App_Code/";
                 return appCodeTypes.Where(fact => fact.Evidence.FilePath.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)
                         && fact.Properties.GetValueOrDefault("namespace") == registration.NamespaceName
-                        && fact.Properties.GetValueOrDefault("qualifiedName") is { } name
+                        && AppCodeQualifiedName(fact) is { } name
                         && MatchesMarkupType(name, registration.NamespaceName!, controlType))
                     .GroupBy(fact => fact.FactId, StringComparer.Ordinal)
                     .Select(group => group.First())
                     .OrderBy(fact => fact.FactId, StringComparer.Ordinal)
                     .Select(fact => new WebFormsAssemblyControlResolution(registration,
-                        fact.Properties["qualifiedName"], fact.FactId)).ToArray();
+                        AppCodeQualifiedName(fact)!, fact.FactId)).ToArray();
             }
             if (registration.NamespaceName is null || registration.AssemblyName is null)
             {
@@ -5001,6 +5009,15 @@ public static partial class LegacyWebFormsExtractor
                 && MatchesMarkupType(item.QualifiedName, registration.NamespaceName, controlType))
                     ? "AmbiguousWebFormsAssemblyControlRegistration"
                     : "WebFormsAssemblyTypeUnavailable";
+        }
+
+        private static string? AppCodeQualifiedName(CodeFact fact)
+        {
+            if (fact.Properties.GetValueOrDefault("qualifiedName") is { } syntaxName) return syntaxName;
+            // Preserve the compiler's containing-type and root-namespace identity.
+            // Rebuilding namespace + short name would incorrectly admit nested types.
+            if (fact.EvidenceTier != EvidenceTiers.Tier1Semantic || fact.TargetSymbol is null) return null;
+            return WebFormsDeclarationQualifiedName(fact);
         }
 
         private static bool MatchesMarkupType(string qualifiedName, string namespaceName, string controlType)

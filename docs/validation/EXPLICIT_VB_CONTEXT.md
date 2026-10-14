@@ -100,3 +100,20 @@ Run forwards `--vb-compilation-context`; resume rechecks all those inputs and
 refuses mutation. Attach-mode use is rejected. Do not change an existing run's
 configuration or checkpoint. If the proposed roster exceeds budgets, request a
 specific budget change rather than silently increasing them.
+
+## Semantic declaration consumer regression gate
+
+`ExplicitVisualBasicContextTests.Semantic_app_code_registration_preserves_candidate_boundary`
+crosses clean/partial compilation with class, root namespace, wrong root namespace,
+nested type, interface and duplicate declaration cases (12 combinations). Positive
+cases retain Tier3 namespace-only registration and inline markup candidates backed
+by actual Tier1 declaration facts; negative registration cases remain unresolved.
+Repeated scans must preserve fact IDs. Compiler global qualifiers are normalized,
+not real namespace/type identity. Partial compilation diagnostics remain visible.
+
+Run this suite with `AppCodeRegistrationMatrixTests`, `LegacyWebFormsExtractorTests`
+and the compilation-context workflow gate. The valid-context CLI test produces
+and compares native scan artifacts. Full solution, pinned external language smoke
+checks and private Windows acceptance are separate validation, not implied by this
+focused gate. See `prompts/validate-semantic-webforms-coexistence.md` for the bounded
+work-machine comparison. Missing database terminals are not claimed fixed here.
