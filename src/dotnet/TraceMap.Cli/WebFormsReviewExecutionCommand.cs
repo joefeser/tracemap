@@ -255,6 +255,8 @@ public static partial class WebFormsReviewExecutionCommand
         var publishReceipt = plan.Inputs.SingleOrDefault(input => input.Role == "publish-receipt");
         var importContext = plan.Inputs.SingleOrDefault(input => input.Role == "vb-import-context");
         if (importContext is not null) Add("--webforms-vb-import-context", importContext.Path);
+        var compilationContext = plan.Inputs.SingleOrDefault(input => input.Role == "vb-compilation-context");
+        if (compilationContext is not null) Add("--vb-compilation-context", compilationContext.Path);
         if (publishReceipt is not null)
         { Add("--webforms-publish-receipt", publishReceipt.Path); Add("--webforms-published-root", config.PublishedRoot); }
         if (config.PublishSourceRelativeBase is not null) Add("--webforms-publish-source-base", config.PublishSourceRelativeBase);

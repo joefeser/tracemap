@@ -22,6 +22,8 @@ public sealed class ExplicitVisualBasicContextTests
     [InlineData("outside-source")]
     [InlineData("project-conflict")]
     [InlineData("duplicate-source")]
+    [InlineData("prepared")]
+    [InlineData("tampered-envelope")]
     public async Task Explicit_context_binds_only_verified_inputs(string scenario)
     {
         using var temp = new TempDirectory(OperatingSystem.IsMacOS() ? "/private/tmp" : null);
@@ -56,13 +58,20 @@ public sealed class ExplicitVisualBasicContextTests
         });
         if (scenario == "unknown-field") context = context.Insert(1, "\"extra\":true,");
         if (scenario == "duplicate-field") context = context.Insert(1, "\"rootNamespace\":\"\",");
+        if (scenario is "prepared" or "tampered-envelope") context = JsonSerializer.Serialize(new
+        {
+            schemaVersion = "prepared-vb-compilation-context.v1", generatorSha256 = new string('a', 64),
+            ruleId = "workflow.vb-compilation-context-preparation.v1", visibility = "local-only",
+            boundedInputSha256 = scenario == "tampered-envelope" ? new string('0', 64) : Convert.ToHexStringLower(SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(context))),
+            payloadJson = context
+        });
         var contextPath = Path.Combine(temp.Path, "context.json");
         File.WriteAllText(contextPath, context);
         if (scenario == "missing-reference") File.Delete(reference);
         var inventory = FileInventory.Collect(repo);
         var options = new ScanOptions(repo, Path.Combine(temp.Path, "out")) { VisualBasicCompilationContextPath = contextPath };
         var result = VisualBasicSemanticExtractor.Extract(repo, inventory, options);
-        var accepted = scenario is "valid" or "root-namespace" or "imports" or "partial";
+        var accepted = scenario is "valid" or "root-namespace" or "imports" or "partial" or "prepared";
         Assert.True(result.Attempted);
         if (!accepted)
         {

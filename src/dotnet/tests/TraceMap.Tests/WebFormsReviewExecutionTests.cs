@@ -1531,6 +1531,50 @@ public sealed class WebFormsReviewExecutionTests
         Assert.False(Directory.Exists(fixture.Root));
     }
 
+    [Theory]
+    [InlineData("context")]
+    [InlineData("reference")]
+    [InlineData("source")]
+    public async Task Explicit_vb_context_is_forwarded_and_all_inputs_are_rechecked(string mutation)
+    {
+        using var fixture = new Fixture();
+        var reference = Path.Combine(fixture.Published, "CoreReference.dll");
+        File.Copy(typeof(object).Assembly.Location, reference);
+        var source = Path.Combine(fixture.Source, "Pages", "Lookup.aspx.vb");
+        var context = Path.Combine(fixture.Published, "compilation-context.json");
+        File.WriteAllText(context, JsonSerializer.Serialize(new
+        {
+            schemaVersion = "vb-compilation-context.v1", commitSha = fixture.Config.SourceCommitSha,
+            rootNamespace = "", optionStrict = true, optionInfer = true, optionExplicit = true,
+            imports = Array.Empty<string>(),
+            sources = new[] { new { path = "Pages/Lookup.aspx.vb", sha256 = Hash(source) } },
+            references = new[] { new { path = reference, sha256 = Hash(reference) } }
+        }));
+        fixture.Config = fixture.Config with { VbCompilationContextRelativePath = "compilation-context.json" };
+        await fixture.Preflight();
+        Assert.Equal(0, await fixture.Execute("run", async (args, output, error, token) =>
+        {
+            Assert.Equal(context, args[Array.IndexOf(args, "--vb-compilation-context") + 1]);
+            return await Scan(args, output, error, token);
+        }));
+        File.AppendAllText(mutation == "context" ? context : mutation == "source" ? source : reference, " ");
+        Assert.Equal(1, await fixture.Execute("resume", (_, _, _, _) => throw new InvalidOperationException("must not rescan")));
+        Assert.ThrowsAny<Exception>(() => WebFormsReviewPreflightCommand.ValidateConfig(fixture.Config with { Operation = "attach", ParentScanRoot = fixture.Source }));
+    }
+
+    [Fact]
+    public async Task Explicit_vb_context_is_forwarded_only_after_valid_envelope_preflight()
+    {
+        using var fixture = new Fixture();
+        File.WriteAllText(Path.Combine(fixture.Published, "bad-context.json"),
+            "{\"schemaVersion\":\"prepared-vb-compilation-context.v1\"}");
+        fixture.Config = fixture.Config with { VbCompilationContextRelativePath = "bad-context.json" };
+        File.WriteAllText(fixture.ConfigPath, JsonSerializer.Serialize(fixture.Config, JsonOptions));
+        Assert.Equal(1, await TraceMapCommand.RunAsync(["webforms-review", "preflight", "--config", fixture.ConfigPath, "--out", fixture.Run], fixture.Output, fixture.Error));
+        Assert.DoesNotContain(fixture.Root, fixture.Error.ToString(), StringComparison.Ordinal);
+        Assert.False(File.Exists(fixture.Manifest));
+    }
+
     private sealed class Fixture : IDisposable
     {
         public string Root { get; }

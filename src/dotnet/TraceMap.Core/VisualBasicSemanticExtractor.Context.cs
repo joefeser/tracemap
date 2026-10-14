@@ -26,7 +26,7 @@ public static partial class VisualBasicSemanticExtractor
                 || options.Restore || options.TargetFramework is not null)
                 throw new InvalidDataException("context-scope-conflict");
             var bytes = ReadContextBytes(Path.GetFullPath(options.VisualBasicCompilationContextPath!), 1_048_576);
-            using var json = JsonDocument.Parse(bytes, new JsonDocumentOptions { MaxDepth = 8 });
+            using var json = JsonDocument.Parse(DecodeExplicitContext(bytes), new JsonDocumentOptions { MaxDepth = 8 });
             var root = json.RootElement;
             RequireFields(root, "schemaVersion", "commitSha", "rootNamespace", "optionStrict", "optionInfer", "optionExplicit", "imports", "sources", "references");
             var commit = root.GetProperty("commitSha").GetString();
@@ -121,6 +121,25 @@ public static partial class VisualBasicSemanticExtractor
             return new([], [CreateGap(".", "Explicit Visual Basic compilation context was refused.",
                 "ExplicitCompilationContextRefused")], true, true, new HashSet<string>(StringComparer.Ordinal));
         }
+    }
+
+    public static byte[] DecodeExplicitContext(byte[] bytes)
+    {
+        if (bytes.Length > 1_048_576) throw new InvalidDataException("context-file-limit");
+        using var document = JsonDocument.Parse(bytes, new JsonDocumentOptions { MaxDepth = 8 });
+        var root = document.RootElement;
+        if (root.ValueKind != JsonValueKind.Object || !root.TryGetProperty("schemaVersion", out var schema)
+            || schema.GetString() != "prepared-vb-compilation-context.v1") return bytes;
+        RequireFields(root, "schemaVersion", "generatorSha256", "boundedInputSha256", "payloadJson", "ruleId", "visibility");
+        if (root.GetProperty("ruleId").GetString() != "workflow.vb-compilation-context-preparation.v1"
+            || root.GetProperty("visibility").GetString() != "local-only") throw new InvalidDataException("context-envelope-invalid");
+        var generator = root.GetProperty("generatorSha256").GetString();
+        if (generator is null || generator.Length != 64 || !generator.All(Uri.IsHexDigit))
+            throw new InvalidDataException("context-generator-invalid");
+        var payload = System.Text.Encoding.UTF8.GetBytes(root.GetProperty("payloadJson").GetString()!);
+        if (root.GetProperty("boundedInputSha256").GetString() != Convert.ToHexStringLower(SHA256.HashData(payload)))
+            throw new InvalidDataException("context-payload-mismatch");
+        return payload;
     }
 
     private static void RequireFields(JsonElement value, params string[] fields)
