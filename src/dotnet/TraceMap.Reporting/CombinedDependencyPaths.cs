@@ -4960,16 +4960,23 @@ public static partial class CombinedDependencyPathReporter
             if (!graph.Outgoing.TryGetValue(current.NodeId, out var outgoing)) continue;
             foreach (var edge in outgoing)
             {
+                // The witness BFS mirrors the compiled-baseline scope of the main
+                // traversal: out-of-scope edges never join a witness path and never
+                // consume the work budget (a source-heavy frontier must not starve
+                // the compiled-legal search); the root-attachment entry edges stop
+                // being legal once the baseline is entered.
+                if (compiledOnly && !CompiledBaselineAllowsEdge(edge.EdgeKind, current.CompiledBaselineEntered)) continue;
                 if (work >= maxWork)
                     return new TerminalWitnessResult(null, work, true, false, current.NodeId);
                 work++;
-                // The witness BFS mirrors the compiled-baseline scope of the main
-                // traversal: out-of-scope edges never join a witness path, and the
-                // root-attachment entry edges stop being legal once the baseline is entered.
-                if (compiledOnly && !CompiledBaselineAllowsEdge(edge.EdgeKind, current.CompiledBaselineEntered)) continue;
                 if (!TryAdvanceDispatchMode(current.DispatchMode, edge.EdgeKind, out var nextMode)) continue;
-                var next = new TerminalWitnessKey(edge.ToNodeId, nextMode,
-                    current.CompiledBaselineEntered || edge.EdgeKind != "legacy-root-selection");
+                // The baseline bit is tracked only where it gates edges; mixed-mode
+                // key identity stays byte-identical to the scope-less prewalk.
+                var nextEntered = compiledOnly && (current.CompiledBaselineEntered || edge.EdgeKind != "legacy-root-selection");
+                // Compiled-only witnesses are node-simple: a baseline-state split must
+                // never turn a walk that revisits a node into the "shortest" witness.
+                if (compiledOnly && NodeAlreadyOnWitnessChain(predecessors, current, edge.ToNodeId)) continue;
+                var next = new TerminalWitnessKey(edge.ToNodeId, nextMode, nextEntered);
                 if (predecessors.ContainsKey(next)) continue;
                 if (queue.Count >= maxFrontier)
                     return new TerminalWitnessResult(null, work, false, true, edge.ToNodeId);
@@ -4979,6 +4986,23 @@ public static partial class CombinedDependencyPathReporter
         }
 
         return new TerminalWitnessResult(null, work, false, false, null);
+    }
+
+    /// Walks the predecessor chain of a BFS state; used to keep compiled-only
+    /// witnesses node-simple (no revisited node IDs on one witness path).
+    private static bool NodeAlreadyOnWitnessChain(
+        Dictionary<TerminalWitnessKey, TerminalWitnessPredecessor?> predecessors,
+        TerminalWitnessKey current,
+        string nodeId)
+    {
+        var cursor = current;
+        while (true)
+        {
+            if (string.Equals(cursor.NodeId, nodeId, StringComparison.Ordinal)) return true;
+            var predecessor = predecessors[cursor];
+            if (predecessor is null) return false;
+            cursor = predecessor.Previous;
+        }
     }
 
     private static bool TryAdvanceDispatchMode(
