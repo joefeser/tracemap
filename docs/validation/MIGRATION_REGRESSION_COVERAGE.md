@@ -32,6 +32,13 @@ are required. Existing negative tests must remain in place when refactoring.
 
 ## CI enforcement
 
+The Windows test-host baseline comparison separately runs `VaultExportTests` and
+`WebFormsReviewInputValidationTests` on the pinned pre-hardening base and candidate.
+Candidate regression guards cover canonical LF Markdown hashes (with CRLF readback),
+rejection of absolute-path redaction markers as navigation paths, and read-only
+Git fixture cleanup. The historical base is an intentionally failing control;
+its failure does not count as a candidate pass or waive full-suite validation.
+
 `.github/workflows/sql-database-compatibility.yml` runs the matrix, parameter,
 report, wrapper, integrated, inline, property and stacked tests on Windows, plus
 the SQL/HTTP deterministic CLI matrices and Python diagnostic guards. Both push

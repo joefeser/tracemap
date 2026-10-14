@@ -1920,7 +1920,8 @@ public static class VaultExporter
             ["claim_level"] = claimLevel,
             ["source_id"] = sourceId
         });
-        var withoutHash = $"{frontmatter}{body.TrimEnd()}\n";
+        // Hash and emit the same canonical bytes on Windows and Unix.
+        var withoutHash = $"{frontmatter}{body.TrimEnd()}\n".ReplaceLineEndings("\n");
         var hash = Hash(withoutHash, 64);
         return withoutHash.Replace("tracemap_content_sha256: \"\"", $"tracemap_content_sha256: \"{hash}\"", StringComparison.Ordinal);
     }
@@ -2332,7 +2333,8 @@ public static class VaultExporter
         }
 
         var text = value.Trim();
-        if (text.Contains("/Users/", StringComparison.Ordinal)
+        if (text.StartsWith("absolute-path-hash:", StringComparison.OrdinalIgnoreCase)
+            || text.Contains("/Users/", StringComparison.Ordinal)
             || text.Contains("\\Users\\", StringComparison.Ordinal)
             || text.Contains("/home/", StringComparison.Ordinal)
             || text.Contains("file://", StringComparison.OrdinalIgnoreCase)
@@ -2506,6 +2508,9 @@ public static class VaultExporter
 
         var text = NormalizeRepoRelativePath(value);
         if (text.Length > MaxRepoRelativePathLength
+            // The path reporter has already redacted an absolute location. This
+            // marker is not a repository-relative navigation target.
+            || text.StartsWith("absolute-path-hash:", StringComparison.OrdinalIgnoreCase)
             || text.StartsWith("/", StringComparison.Ordinal)
             || text.StartsWith("~/", StringComparison.Ordinal)
             || text.StartsWith("$HOME", StringComparison.OrdinalIgnoreCase)

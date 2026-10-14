@@ -12,6 +12,17 @@ public sealed class WebFormsReviewInputValidationTests
     private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
 
     [Fact]
+    public void Fixture_cleanup_removes_readonly_git_files()
+    {
+        using var fixture = new Fixture();
+        var file = Path.Combine(fixture.Source, ".git", "cleanup-probe");
+        File.WriteAllText(file, "public synthetic read-only file");
+        File.SetAttributes(file, File.GetAttributes(file) | FileAttributes.ReadOnly);
+        fixture.Dispose();
+        Assert.False(Directory.Exists(fixture.Root));
+    }
+
+    [Fact]
     public void Inspection_facade_preserves_the_exact_scanner_policy_and_global_gaps()
     {
         using var fixture = new Fixture();
@@ -465,6 +476,17 @@ public sealed class WebFormsReviewInputValidationTests
                     return directory.FullName;
             throw new InvalidOperationException("Public test repository unavailable");
         }
-        public void Dispose() { if (Directory.Exists(Root)) Directory.Delete(Root, recursive: true); }
+        public void Dispose()
+        {
+            if (!Directory.Exists(Root)) return;
+            // Git loose objects are read-only on Windows. Clear only attributes
+            // in this fixture's temporary Git directory; never traverse links.
+            var git = Path.Combine(Source, ".git");
+            if (Directory.Exists(git))
+                foreach (var file in Directory.EnumerateFiles(git, "*", new EnumerationOptions
+                { RecurseSubdirectories = true, AttributesToSkip = FileAttributes.ReparsePoint, IgnoreInaccessible = false }))
+                    File.SetAttributes(file, File.GetAttributes(file) & ~FileAttributes.ReadOnly);
+            Directory.Delete(Root, recursive: true);
+        }
     }
 }
