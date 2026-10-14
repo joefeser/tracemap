@@ -76,3 +76,10 @@ the graph, if one exists, and describe its generic syntax shape and rejection
 category. If none is established, report unknown rather than unused. Distinguish
 cycle/depth stops and incomplete search from missing incoming evidence. Keep all
 private paths, symbols, source and fact IDs local; return all groups together.
+
+For the inline-construction/optional-argument correction, rebuild and rescan with
+vb-syntax/0.4.13. Confirm that (New ExampleService()).Method(...) receiver evidence
+joins to the explicit constructed type, not the caller class. Verify both supplied
+and omitted trailing Optional arguments against local declarations. Report all
+three previously unresolved groups together, retaining frontier diagnostics if
+another upstream gap remains. Do not assume these added hops reach event anchors.

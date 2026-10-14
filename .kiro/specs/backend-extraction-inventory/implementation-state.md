@@ -996,3 +996,22 @@ Validation: all 15 integrated-report, migration-corpus and Markdown-report tests
 passed with warnings as errors. CLI build had zero warnings/errors; public corpus
 scan emitted 252 facts and passed adapter-artifact validation. Full adapter smoke
 matrices are deferred for this report-only change; extraction is unchanged.
+# 2026-10-13: inline constructed receivers and optional tails
+
+The private frontier check identified inline New receivers at all three remaining
+groups. Extraction already retained the explicit constructed type; report matching
+incorrectly preferred the empty receiver-name implicit-self branch. Inline metadata
+now takes precedence. vb-syntax/0.4.13 adds parameterOptionalFlags, hasParamArray and
+allArgumentsPositional for bounded trailing-optional matching. Exact and optional
+compatible overloads are considered together and ambiguity is refused. Named
+omissions, ParamArray expansion and old facts without metadata are not generalized.
+Synthetic tests combine event -> inline receiver -> HTTP/SQL/bulk for supplied and
+omitted optional arguments, with required/named/ParamArray/overload negatives.
+Private entry reachability remains unknown until a fresh consolidated scan.
+
+Validation: 24 focused inline/integrated/corpus/VB boundary tests passed with
+warnings as errors. Added InlineReceiverMigrationTests to the Windows compatibility
+lane. Full pinned SQL/HTTP native matrices and full solution suite are deferred for
+this bounded syntax/report change; fresh Windows results remain a separate gate.
+CLI build passed with zero warnings/errors. The independent inline-receiver sample
+scan produced 42 facts, validated artifacts and 3/3 candidate operation entry paths.

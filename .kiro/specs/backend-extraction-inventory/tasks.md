@@ -126,3 +126,9 @@
 - [x] Keep rejected same-name call leads separate from supported graph edges.
 - [x] Cover disconnected callers, rejected targets, cycles and deterministic ordering with synthetic tests.
 - [ ] Confirm remaining private caller gaps in one consolidated local acceptance pass.
+# Inline construction and optional arguments
+
+- [x] Honor retained inline-object-creation receiver types in source path matching.
+- [x] Extract optional-parameter and positional-call metadata with conservative arity matching.
+- [x] Add combined HTTP/SQL/bulk synthetic chains and ambiguity/unsupported-shape negatives.
+- [ ] Confirm newly retained hops and remaining upstream frontiers on the private scan.

@@ -113,6 +113,6 @@ public sealed class MigrationRegressionCorpusTests
         Assert.Equal("AliasStore", method.Properties["importAliasNames"]);
         Assert.Equal("OuterT", method.Properties["containingTypeParameters"]);
         Assert.Equal("MethodT", method.Properties["methodTypeParameters"]);
-        Assert.Equal("vb-syntax/0.4.12", method.Evidence.ExtractorVersion);
+        Assert.Equal("vb-syntax/0.4.13", method.Evidence.ExtractorVersion);
     }
 }

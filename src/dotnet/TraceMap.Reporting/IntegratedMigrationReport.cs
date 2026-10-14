@@ -78,13 +78,14 @@ public static class IntegratedMigrationReport
             if (selected.Length == 0 && call.EvidenceTier == EvidenceTiers.Tier3SyntaxOrTextual)
             {
                 var receiver = call.Properties.GetValueOrDefault("receiverName", "");
-                var type = receiver.Length == 0 || receiver.Equals("Me", StringComparison.OrdinalIgnoreCase)
+                var inlineReceiver = call.Properties.GetValueOrDefault("receiverTypeResolution") == "inline-object-creation-syntax";
+                var type = !inlineReceiver && (receiver.Length == 0 || receiver.Equals("Me", StringComparison.OrdinalIgnoreCase))
                     ? from.Type : ReceiverType(from, call.Properties.GetValueOrDefault("receiverType", ""));
                 var name = call.Properties.GetValueOrDefault("calleeName", "");
                 var arity = Number(call, "argumentCount", -1);
                 if (!string.IsNullOrEmpty(type) && arity >= 0)
                     selected = methods.Where(m => m.Type.Equals(type, StringComparison.OrdinalIgnoreCase)
-                        && m.Name.Equals(name, StringComparison.OrdinalIgnoreCase) && m.Arity == arity).Take(2).ToArray();
+                        && m.Name.Equals(name, StringComparison.OrdinalIgnoreCase) && AcceptsArity(m, call, arity)).Take(2).ToArray();
             }
             if (selected.Length == 1) hops.Add(new(from, selected[0], call));
             else
@@ -274,6 +275,15 @@ public static class IntegratedMigrationReport
         var unbound = bindings.Where(b => !bindingIds.Contains(b.FactId)).ToArray();
         lines.Add($"Bindings without retained handler resolution: {unbound.Length}; showing at most 100. Handler display cap: 100. Remaining facts stay in the index.");
         foreach (var binding in unbound.Take(100)) lines.Add("- Unresolved event binding: " + Reference(binding));
+    }
+
+    private static bool AcceptsArity(Method method, CodeFact call, int arity)
+    {
+        if (method.Arity == arity) return true;
+        if (arity < 0 || arity >= method.Arity || call.Properties.GetValueOrDefault("allArgumentsPositional") != "True"
+            || method.Fact.Properties.GetValueOrDefault("hasParamArray") != "False") return false;
+        var flags = method.Fact.Properties.GetValueOrDefault("parameterOptionalFlags", "").Split(';');
+        return flags.Length == method.Arity && flags.Skip(arity).All(flag => flag == "optional");
     }
 
     private static int Number(CodeFact fact, string key, int fallback) => int.TryParse(fact.Properties.GetValueOrDefault(key), out var value) ? value : fallback;
