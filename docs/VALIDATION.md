@@ -4742,3 +4742,10 @@ terminal beyond the depth bound is recovered as a scope-legal
 TerminalReachabilityPrewalk witness; mixed-query depth recovery is unchanged;
 and the twelve-layer deep-projectless chain recovers the identical
 scope-legal witness at depth 8 that ordinary enumeration finds at depth 24.
+
+## VB compilation-context regression gate
+
+See [the executable coverage matrix](validation/VB_COMPILATION_CONTEXT_MATRIX.md)
+and `.github/workflows/vb-compilation-context-matrix.yml` for the bounded,
+cross-platform projectless/semantic/import/registration/path gate. It does not
+enable projectless semantic compilation or replace private compatibility checks.
