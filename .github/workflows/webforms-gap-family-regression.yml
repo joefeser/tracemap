@@ -1,0 +1,23 @@
+name: WebForms gap family regression
+on:
+  push:
+    paths: ['src/dotnet/**', '.github/workflows/webforms-gap-family-regression.yml']
+  pull_request:
+    paths: ['src/dotnet/**', '.github/workflows/webforms-gap-family-regression.yml']
+permissions:
+  contents: read
+jobs:
+  synthetic:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
+        with:
+          dotnet-version: 10.0.302
+      - name: Build synthetic fixtures
+        timeout-minutes: 8
+        run: dotnet build src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --nologo
+      - name: Pin gap families and prior integrated paths
+        timeout-minutes: 5
+        run: dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-build --no-restore --nologo --filter "FullyQualifiedName~WebFormsGapFamilyRegressionTests|FullyQualifiedName~MigrationRegressionCorpusTests|FullyQualifiedName~IntegratedMigrationReportTests" --blame-hang-timeout 2m

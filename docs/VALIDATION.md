@@ -2,6 +2,14 @@
 
 Operator examples use generic site, page, and handler names. Historical receipts remain bound to their recorded input bytes; genericized examples do not establish a fresh platform validation result.
 
+For the bounded WebForms gap-family batch, run `WebFormsGapFamilyRegressionTests`,
+`VisualBasicWebFormsCompositionTests`, `LegacyWebFormsExtractorTests`,
+`LegacyWebFormsEventIdentityTests`, `MigrationRegressionCorpusTests` and
+`IntegratedMigrationReportTests`. The synthetic matrix pins escaped VB event
+receivers; Boolean literal lifecycle comparisons, negation, shadows and depth;
+config registration inheritance/clear; literal versus dynamic postbacks.
+No claimed reduction in private gap counts follows from synthetic coverage alone.
+
 For the first backend extraction report projection, run
 `BackendExtractionSampleTests`, `GroupedCompiledPathHandoffTests`,
 `ConstructedGenericSampleTests`, `FrameworkSignatureCandidateTests`,
