@@ -4615,10 +4615,11 @@ public static partial class CombinedDependencyPathReporter
         // reached the depth frontier without a terminal, perform one bounded,
         // cycle-safe reachability prewalk and retain a deterministic shortest
         // terminal witness. Other truncated branches remain explicitly partial.
-        // The prewalk has no compiled root-attachment state or edge scope.
-        // Compiled-only queries must retain the depth gap instead of admitting
-        // an unrestricted witness (and inflating their reachable-node diagnostics).
-        if (!compiledOnly && !inventoryDistinctTerminals && !workExhausted && paths.Count < maxPaths && terminalNodeIds.Count > 0)
+        // The prewalk enforces the same compiled-baseline edge scope as the
+        // main traversal, so compiled-only queries recover witnesses through
+        // compiled-legal edges only; a root with no compiled-legal terminal
+        // keeps its depth gap.
+        if (!inventoryDistinctTerminals && !workExhausted && paths.Count < maxPaths && terminalNodeIds.Count > 0)
         {
             foreach (var start in starts
                 .OrderBy(node => node.SourceLabel, StringComparer.Ordinal)
@@ -4643,7 +4644,8 @@ public static partial class CombinedDependencyPathReporter
                     start.NodeId,
                     terminalNodeIds,
                     maxFrontier,
-                    remainingWork);
+                    remainingWork,
+                    compiledOnly);
                 work += witness.Work;
                 if (witness.FrontierExceeded)
                 {
@@ -4910,7 +4912,8 @@ public static partial class CombinedDependencyPathReporter
         string rootNodeId,
         IReadOnlySet<string> terminalNodeIds,
         int maxFrontier,
-        int maxWork)
+        int maxWork,
+        bool compiledOnly)
     {
         var root = new TerminalWitnessKey(rootNodeId, DispatchTraversalMode.None);
         var queue = new Queue<TerminalWitnessKey>();
@@ -4960,8 +4963,13 @@ public static partial class CombinedDependencyPathReporter
                 if (work >= maxWork)
                     return new TerminalWitnessResult(null, work, true, false, current.NodeId);
                 work++;
+                // The witness BFS mirrors the compiled-baseline scope of the main
+                // traversal: out-of-scope edges never join a witness path, and the
+                // root-attachment entry edges stop being legal once the baseline is entered.
+                if (compiledOnly && !CompiledBaselineAllowsEdge(edge.EdgeKind, current.CompiledBaselineEntered)) continue;
                 if (!TryAdvanceDispatchMode(current.DispatchMode, edge.EdgeKind, out var nextMode)) continue;
-                var next = new TerminalWitnessKey(edge.ToNodeId, nextMode);
+                var next = new TerminalWitnessKey(edge.ToNodeId, nextMode,
+                    current.CompiledBaselineEntered || edge.EdgeKind != "legacy-root-selection");
                 if (predecessors.ContainsKey(next)) continue;
                 if (queue.Count >= maxFrontier)
                     return new TerminalWitnessResult(null, work, false, true, edge.ToNodeId);
@@ -7064,7 +7072,8 @@ public static partial class CombinedDependencyPathReporter
 
     private sealed record TerminalWitnessKey(
         string NodeId,
-        DispatchTraversalMode DispatchMode);
+        DispatchTraversalMode DispatchMode,
+        bool CompiledBaselineEntered = false);
 
     private sealed record TerminalWitnessPredecessor(
         TerminalWitnessKey Previous,
