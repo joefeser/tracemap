@@ -1,9 +1,9 @@
 name: WebForms gap family regression
 on:
   push:
-    paths: ['src/dotnet/**', '.github/workflows/webforms-gap-family-regression.yml']
+    paths: ['src/dotnet/**', 'samples/webforms-pattern-matrix/**', '.github/workflows/webforms-gap-family-regression.yml']
   pull_request:
-    paths: ['src/dotnet/**', '.github/workflows/webforms-gap-family-regression.yml']
+    paths: ['src/dotnet/**', 'samples/webforms-pattern-matrix/**', '.github/workflows/webforms-gap-family-regression.yml']
 permissions:
   contents: read
 jobs:
@@ -20,4 +20,4 @@ jobs:
         run: dotnet build src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --nologo
       - name: Pin gap families and prior integrated paths
         timeout-minutes: 5
-        run: dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-build --no-restore --nologo --filter "FullyQualifiedName~RuntimeInventoryBoundaryTests|FullyQualifiedName~WebFormsGapFamilyRegressionTests|FullyQualifiedName~MigrationRegressionCorpusTests|FullyQualifiedName~IntegratedMigrationReportTests" --blame-hang-timeout 2m
+        run: dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-build --no-restore --nologo --filter "FullyQualifiedName~AppCodeRegistrationMatrixTests|FullyQualifiedName~RuntimeInventoryBoundaryTests|FullyQualifiedName~WebFormsGapFamilyRegressionTests|FullyQualifiedName~MigrationRegressionCorpusTests|FullyQualifiedName~IntegratedMigrationReportTests" --blame-hang-timeout 2m

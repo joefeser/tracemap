@@ -60,6 +60,7 @@ IlCommandTypeBindingUnavailable IlCommandUnknownCallEffects IlCommandValueEviden
 REASONS = REASONS | COMPILED_REASONS
 TIERS = frozenset(("Tier1Semantic", "Tier2Structural", "Tier3SyntaxOrTextual", "Tier4Unknown"))
 REGISTRATION_STATES = frozenset(("register-directive-unavailable",
+    "app-code-type-not-unique-or-unavailable",
     "AmbiguousWebFormsAssemblyControlRegistration", "WebFormsAssemblyTypeUnavailable",
     "WebFormsAssemblyProjectUnavailable", "UnresolvedWebFormsAssemblyControlRegistration"))
 

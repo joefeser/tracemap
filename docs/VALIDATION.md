@@ -1,5 +1,14 @@
 # TraceMap Validation Guide
 
+For namespace-only App_Code registration candidates, run
+`AppCodeRegistrationMatrixTests` with `LegacyWebFormsExtractorTests`,
+`VisualBasicWebFormsCompositionTests`, `WebFormsGapFamilyRegressionTests`,
+`MigrationRegressionCorpusTests` and `IntegratedMigrationReportTests`.
+Scan `samples/webforms-pattern-matrix` and `samples/stacked-migration-regression`.
+The 89-case matrix and known exclusions are in
+`docs/validation/MIGRATION_REGRESSION_COVERAGE.md`. Full-solution and authentic
+Windows/private validation remain separate gates; focused passes do not imply them.
+
 Retained semantic/registration diagnostics: run
 `python3 scripts/validation/test_retained_gap_inventory.py`. The tests pin exact
 file-overlap counts without exporting private identifiers or their hashes,
