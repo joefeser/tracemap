@@ -24,5 +24,9 @@ try {
     } finally { $reader.Dispose() }
 } finally { $stream.Dispose() }
 # Presence in rendered text is a diagnostic, not native artifact validation.
+# Since the scope-aware prewalk (#867), marker presence on a compiled-only witness
+# marks a VALID scope-legal recovery; only pre-scope reports (b9223223 era) are
+# provisional. Presence alone cannot distinguish generations - validate the
+# witness edge kinds against the compiled-baseline scope before acting.
 Write-Output "baseline.prewalkPresent=$($present.ToString().ToLowerInvariant())"
-Write-Output 'baselineCheck=rendered-marker-presence-only;no-native-validation;no-scan;no-traversal;no-inputs-changed'
+Write-Output 'baselineCheck=rendered-marker-presence-only;no-native-validation;no-generation-distinction;no-scan;no-traversal;no-inputs-changed'

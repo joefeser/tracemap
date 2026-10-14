@@ -23,7 +23,11 @@ public sealed class IlCommandBindingExtractorTests
     [InlineData(true, 24, true, true)]
     [InlineData(true, 24, false, true)]
     [InlineData(false, 24, true, false)]
-    [InlineData(true, 8, true, false)]
+    // Depth 8 + compiled-only used to pin the containment-era gap: the prewalk had no
+    // compiled-baseline scope, so compiled-only queries kept the depth gap instead of
+    // admitting an unrestricted witness. The scope-aware prewalk now recovers the same
+    // scope-legal 12-layer witness the depth-24 case asserts.
+    [InlineData(true, 8, true, true)]
     public async Task Deep_projectless_handler_crosses_provider_dll_and_binds_command_through_twelve_layers(
         bool includeProvider, int depth, bool compiledOnly, bool expectedPath)
     {
@@ -32,7 +36,6 @@ public sealed class IlCommandBindingExtractorTests
         {
             Assert.Empty(report.Paths);
             Assert.NotEmpty(report.Gaps);
-            if (depth == 8) Assert.Contains(report.Gaps, gap => gap.GapKind == "TruncatedByLimit" && gap.Reason == "depth");
             return;
         }
         var path = Assert.Single(report.Paths);
