@@ -953,3 +953,31 @@ Local validation: 313 broad SQL/compiled-wrapper/WebForms/report/HTTP tests pass
 tests and all 16 SQL/HTTP oracle guards passed. Full static-only native matrices
 validated 96 deterministic outputs each. Final corpus scan and exact-head Windows
 run are reported in the delivery receipt, not assumed successful from prior heads.
+
+### 2026-10-13: protected nested receiver joins (vb-syntax/0.4.12)
+
+Private diagnostics identified the same missing outer-wrapper -> receiver-variable
+-> protected nested method join for two database operations. The independent
+NestedReceiver.vb corpus reproduces this with field receiver type DataStore and
+qualified declaration NestedService.DataStore, plus global and sibling decoys.
+The report now checks nearest enclosing retained type scopes before exact matching;
+the nearest declared type must have a unique method/arity target. It does not search
+all classes by short name. New MethodDeclared importAliasNames and
+containingTypeParameters fields prevent aliases/generic variables becoming guessed
+nested classes. Old facts without guards retain exact-only behavior; fresh extraction
+is required. Global-qualified names remain absolute. Namespace-import/alias target
+resolution, inherited nested types and generic substitution are not added here.
+
+Full-chain tests now retain both new SQL/bulk paths and reject alias/generic guards,
+duplicate nested types/overloads and missing receiver evidence. The source test
+checks actual guard extraction. No compiled/source identity bridge is invented.
+The second HTTP operation's lack of a retained entry anchor remains a separate gap.
+The ECMA-335/API/dataflow distinction is documented in SQL_DATABASE_MATRIX.md.
+Prior-head Windows run 38489954419 (31dffdc2) succeeded; not proof for this new head.
+
+Validation for this correction: 313 broad SQL/compiled-wrapper/WebForms/report/HTTP
+tests passed with warnings as errors; the final focused corpus/report suite passed
+all 6 tests, including guard extraction. SQL and HTTP native static-only smoke
+matrices each validated 96 deterministic outputs. Exact committed-head sample scan
+and remote CI status are recorded in the delivery receipt; private acceptance remains
+outstanding and must use freshly extracted 0.4.12 facts.

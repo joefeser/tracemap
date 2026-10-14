@@ -60,3 +60,10 @@ caller chain per remaining group using the complete-chain diagnostic prompt. If
 no source caller is established, say so; do not invent one from method names or
 assume the operation is unused. Preserve the already-verified event chain as a
 regression check. Return all remaining groups together, not one field at a time.
+
+For the nested-receiver correction, confirm vb-syntax/0.4.12 or later on the fresh
+scan: old method facts lack the new alias/generic shadow guards. Check the outer
+wrapper -> protected nested class receiver -> command/bulk operation hops against
+local source and report separately whether an event anchor is reached. Do not
+expect the unrelated HTTP group to become connected merely because these SQL
+receiver joins improve. No compiled dependency or schema truth is inferred.
