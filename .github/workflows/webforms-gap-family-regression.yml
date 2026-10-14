@@ -20,4 +20,4 @@ jobs:
         run: dotnet build src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --nologo
       - name: Pin gap families and prior integrated paths
         timeout-minutes: 5
-        run: dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-build --no-restore --nologo --filter "FullyQualifiedName~WebFormsGapFamilyRegressionTests|FullyQualifiedName~MigrationRegressionCorpusTests|FullyQualifiedName~IntegratedMigrationReportTests" --blame-hang-timeout 2m
+        run: dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-build --no-restore --nologo --filter "FullyQualifiedName~RuntimeInventoryBoundaryTests|FullyQualifiedName~WebFormsGapFamilyRegressionTests|FullyQualifiedName~MigrationRegressionCorpusTests|FullyQualifiedName~IntegratedMigrationReportTests" --blame-hang-timeout 2m

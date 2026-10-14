@@ -463,6 +463,11 @@ public static partial class WebFormsReviewExecutionCommand
         Digest(JsonSerializer.SerializeToUtf8Bytes(new
         { runtimeVersion = Environment.Version.ToString(), files }, JsonOptions));
 
+    // All runtime files (including satellites and nested build hosts) participate.
+    // The traversal cap bounds both candidates and ignored files/directories;
+    // a second smaller candidate cap rejected otherwise bounded distributions.
+    internal const int MaxRuntimeInventoryEntries = 4096;
+
     private static async Task<IReadOnlyList<WebFormsReviewArtifact>> RuntimeInventoryAsync(string directory, CancellationToken token)
     {
         var root = WebFormsReviewPreflightCommand.PhysicalPath(directory);
@@ -475,12 +480,11 @@ public static partial class WebFormsReviewExecutionCommand
             foreach (var entry in Directory.EnumerateFileSystemEntries(folder))
             {
                 token.ThrowIfCancellationRequested();
-                if (++entries > 4096 || (File.GetAttributes(entry) & FileAttributes.ReparsePoint) != 0) throw Fail("RUNTIME_INVENTORY_INVALID");
+                if (++entries > MaxRuntimeInventoryEntries || (File.GetAttributes(entry) & FileAttributes.ReparsePoint) != 0) throw Fail("RUNTIME_INVENTORY_INVALID");
                 if (Directory.Exists(entry)) { pending.Push(entry); continue; }
                 var extension = Path.GetExtension(entry).ToLowerInvariant();
                 if (extension is not (".dll" or ".exe" or ".so" or ".dylib") &&
                     !entry.EndsWith(".deps.json", StringComparison.OrdinalIgnoreCase) && !entry.EndsWith(".runtimeconfig.json", StringComparison.OrdinalIgnoreCase)) continue;
-                if (files.Count >= 512) throw Fail("RUNTIME_FILE_COUNT_LIMIT");
                 var input = await WebFormsReviewPreflightCommand.HashAsync("runtime", entry, 268_435_456, token);
                 total = checked(total + input.Bytes);
                 if (total > 2_147_483_648) throw Fail("RUNTIME_HASH_BYTES_LIMIT");

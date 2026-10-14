@@ -1,5 +1,16 @@
 # TraceMap Validation Guide
 
+Runtime distribution capacity: run `RuntimeInventoryBoundaryTests` plus
+`Runtime_digest_pins_dependency_bytes_without_paths_or_timestamp_discovery` and
+`Retained_tool_copy_matches_the_pinned_distribution_without_rewriting_run_or_copying_external_runtime`.
+All DLL/EXE/SO/dylib/deps/runtimeconfig files, including satellites and nested
+build hosts, remain hashed. The traversal has one 4,096-entry limit counting
+files and directories (including ignored files), not a separate 512-file limit.
+Per-file 256-MiB, aggregate 2-GiB, cancellation and reparse-point guards remain.
+This is bounded distribution provenance, not proof of a minimal dependency set.
+Use a fresh isolated build and new preflight/run after changing the tool; never
+trim runtime files or resume old tool identity to bypass inventory failure.
+
 For the bounded WebForms gap-family batch, run `WebFormsGapFamilyRegressionTests`,
 `VisualBasicWebFormsCompositionTests`, `LegacyWebFormsExtractorTests`,
 `LegacyWebFormsEventIdentityTests`, `MigrationRegressionCorpusTests` and
