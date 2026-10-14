@@ -23,6 +23,33 @@ UnsupportedWebFormsEventAttribute CompiledIlTargetUnavailable CompiledIlTargetAm
 CompiledIlFrameworkVersionAmbiguous CompiledIlVirtualDispatchUnproven
 UnboundManagedInput ManagedInputProvenanceMismatch StaleManagedInput
 AmbiguousManagedBindingReceipt""".split())
+# Reviewed public literals from LegacyDataMetadataExtractor, LegacyWebFormsExtractor,
+# LegacyAspNetExtractor and VisualBasicSyntaxExtractor. Never infer labels from
+# private messages or accept arbitrary identifier-shaped strings.
+EXPANDED_REASONS = frozenset("""ConfigTransformPresent EncryptedConfigSection ExternalConfigInclude
+MalformedLegacyDataMetadata LegacyDataMetadataTooLarge UnsupportedLegacyDataMetadataVersion
+UnsupportedLegacyOrmMappingShape AmbiguousLegacyDataModelIdentity
+MalformedWebFormsDirective UnreadableWebFormsMarkup UnresolvedWebFormsPageType
+MissingWebFormsCodeBehind UnsupportedWebFormsTitle UnsupportedWebFormsMasterPageReference
+MissingWebFormsMasterPage UnsupportedWebFormsMasterPageTarget UnsupportedWebFormsUserControlRegistration
+MissingWebFormsUserControl UnresolvedWebFormsContentPlaceholder UnresolvedWebFormsContentMaster
+UnresolvedWebFormsControlRegistration AmbiguousWebFormsUserControlRegistration
+UnresolvedWebFormsAssemblyControlRegistration AmbiguousWebFormsAssemblyControlRegistration
+WebFormsAssemblyTypeUnavailable WebFormsAssemblyProjectUnavailable
+ClientWebFormsEventAttribute NonIdentifierWebFormsEventValue DynamicWebFormsEventSubscription
+UnsupportedWebFormsEventSubscription UnknownWebFormsEventSubscriptionReceiver
+AmbiguousWebFormsEventSubscriptionReceiver AmbiguousVisualBasicWebFormsEventSubscriptionReceiver
+UnsupportedWebFormsIsPostBackCondition AmbiguousWebFormsIsPostBackReceiver
+DynamicWebFormsClientScriptRegistration AmbiguousWebFormsClientScriptRegistrationReceiver
+UnresolvedWebFormsPostBackTarget AmbiguousWebFormsPostBackTarget DynamicWebFormsPostBackTarget
+UnresolvedWebFormsDataSourceId AmbiguousWebFormsDataSourceId AmbiguousWebFormsDataBindingSource
+DynamicWebFormsDataSourceId DynamicWebFormsDataBindingExpression
+UnprovenCrossFileWebFormsHandler MissingWebFormsHandler AmbiguousWebFormsHandler AmbiguousAutoEventWireupHandler
+UnsupportedVisualBasicEventReceiver UnsupportedVisualBasicEventHandlerDelegate
+UnsupportedVisualBasicEventName InvalidVisualBasicHandlesBinding
+UnreadableAspNetApplicationFile MalformedAspNetApplicationDirective UnreadableAspNetCodeFile
+MalformedAspNetCodeFile""".split())
+REASONS = REASONS | EXPANDED_REASONS
 TIERS = frozenset(("Tier1Semantic", "Tier2Structural", "Tier3SyntaxOrTextual", "Tier4Unknown"))
 
 
@@ -97,7 +124,9 @@ def summarize(scan, catalog, *, max_seconds=30):
             raise InventoryError("GAP_INVALID")
         rule = fact.get("ruleId")
         tier = fact.get("evidenceTier")
-        reason = props.get("gapKind", props.get("classification"))
+        reason = props.get("gapKind")
+        if reason is None or reason == "":
+            reason = props.get("classification")
         if not all(value is None or isinstance(value, str) for value in (rule, tier, reason)):
             raise InventoryError("GAP_INVALID")
         groups[(rule if rule in rules else "other-rule",
@@ -122,6 +151,10 @@ def summarize(scan, catalog, *, max_seconds=30):
         "analysisGapFacts": gap_count,
         "gapGroups": [dict(ruleId=r, reason=k, evidenceTier=t, count=n)
                       for (r, k, t), n in sorted(groups.items())],
+        "reasonCoverage": {
+            "recognizedFacts": sum(n for (_, reason, _), n in groups.items() if reason in REASONS),
+            "otherOrMissingFacts": sum(n for (_, reason, _), n in groups.items() if reason not in REASONS),
+        },
         "unresolvedCalls": {"count": matches[0][0] if matches else None,
                             "status": "retained-report-total" if matches else "unavailable",
                             "reasonBreakdown": "unavailable-without-retained-resolver-diagnostics"},
