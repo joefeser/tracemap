@@ -4615,10 +4615,11 @@ public static partial class CombinedDependencyPathReporter
         // reached the depth frontier without a terminal, perform one bounded,
         // cycle-safe reachability prewalk and retain a deterministic shortest
         // terminal witness. Other truncated branches remain explicitly partial.
-        // The prewalk has no compiled root-attachment state or edge scope.
-        // Compiled-only queries must retain the depth gap instead of admitting
-        // an unrestricted witness (and inflating their reachable-node diagnostics).
-        if (!compiledOnly && !inventoryDistinctTerminals && !workExhausted && paths.Count < maxPaths && terminalNodeIds.Count > 0)
+        // The prewalk enforces the same compiled-baseline edge scope as the
+        // main traversal, so compiled-only queries recover witnesses through
+        // compiled-legal edges only; a root with no compiled-legal terminal
+        // keeps its depth gap.
+        if (!inventoryDistinctTerminals && !workExhausted && paths.Count < maxPaths && terminalNodeIds.Count > 0)
         {
             foreach (var start in starts
                 .OrderBy(node => node.SourceLabel, StringComparer.Ordinal)
@@ -4643,7 +4644,8 @@ public static partial class CombinedDependencyPathReporter
                     start.NodeId,
                     terminalNodeIds,
                     maxFrontier,
-                    remainingWork);
+                    remainingWork,
+                    compiledOnly);
                 work += witness.Work;
                 if (witness.FrontierExceeded)
                 {
@@ -4910,7 +4912,8 @@ public static partial class CombinedDependencyPathReporter
         string rootNodeId,
         IReadOnlySet<string> terminalNodeIds,
         int maxFrontier,
-        int maxWork)
+        int maxWork,
+        bool compiledOnly)
     {
         var root = new TerminalWitnessKey(rootNodeId, DispatchTraversalMode.None);
         var queue = new Queue<TerminalWitnessKey>();
@@ -4957,11 +4960,30 @@ public static partial class CombinedDependencyPathReporter
             if (!graph.Outgoing.TryGetValue(current.NodeId, out var outgoing)) continue;
             foreach (var edge in outgoing)
             {
+                // The witness BFS mirrors the compiled-baseline scope of the main
+                // traversal: out-of-scope edges never join a witness path and never
+                // consume the work budget (a source-heavy frontier must not starve
+                // the compiled-legal search); the root-attachment entry edges stop
+                // being legal once the baseline is entered.
+                if (compiledOnly && !CompiledBaselineAllowsEdge(edge.EdgeKind, current.CompiledBaselineEntered)) continue;
                 if (work >= maxWork)
                     return new TerminalWitnessResult(null, work, true, false, current.NodeId);
                 work++;
                 if (!TryAdvanceDispatchMode(current.DispatchMode, edge.EdgeKind, out var nextMode)) continue;
-                var next = new TerminalWitnessKey(edge.ToNodeId, nextMode);
+                // The baseline bit is tracked only where it gates edges; mixed-mode
+                // key identity stays byte-identical to the scope-less prewalk.
+                var nextEntered = compiledOnly && (current.CompiledBaselineEntered || edge.EdgeKind != "legacy-root-selection");
+                // Compiled-only witnesses are node-simple: a baseline-state split must
+                // never turn a walk that revisits a node into the "shortest" witness.
+                // The simplicity scan is charged to the same work bound as the BFS so
+                // a long forward chain cannot escape the budget with Θ(N²) scanning.
+                var chainExhausted = false;
+                if (compiledOnly
+                    && NodeAlreadyOnWitnessChain(predecessors, current, edge.ToNodeId, maxWork, ref work, out chainExhausted))
+                    continue;
+                if (chainExhausted)
+                    return new TerminalWitnessResult(null, work, true, false, current.NodeId);
+                var next = new TerminalWitnessKey(edge.ToNodeId, nextMode, nextEntered);
                 if (predecessors.ContainsKey(next)) continue;
                 if (queue.Count >= maxFrontier)
                     return new TerminalWitnessResult(null, work, false, true, edge.ToNodeId);
@@ -4971,6 +4993,33 @@ public static partial class CombinedDependencyPathReporter
         }
 
         return new TerminalWitnessResult(null, work, false, false, null);
+    }
+
+    /// Walks the predecessor chain of a BFS state; used to keep compiled-only
+    /// witnesses node-simple (no revisited node IDs on one witness path). Every
+    /// step is charged against the same work bound as the BFS itself.
+    private static bool NodeAlreadyOnWitnessChain(
+        Dictionary<TerminalWitnessKey, TerminalWitnessPredecessor?> predecessors,
+        TerminalWitnessKey current,
+        string nodeId,
+        int maxWork,
+        ref int work,
+        out bool exhausted)
+    {
+        exhausted = false;
+        var cursor = current;
+        while (true)
+        {
+            if (++work >= maxWork)
+            {
+                exhausted = true;
+                return false;
+            }
+            if (string.Equals(cursor.NodeId, nodeId, StringComparison.Ordinal)) return true;
+            var predecessor = predecessors[cursor];
+            if (predecessor is null) return false;
+            cursor = predecessor.Previous;
+        }
     }
 
     private static bool TryAdvanceDispatchMode(
@@ -7064,7 +7113,8 @@ public static partial class CombinedDependencyPathReporter
 
     private sealed record TerminalWitnessKey(
         string NodeId,
-        DispatchTraversalMode DispatchMode);
+        DispatchTraversalMode DispatchMode,
+        bool CompiledBaselineEntered = false);
 
     private sealed record TerminalWitnessPredecessor(
         TerminalWitnessKey Previous,
