@@ -1307,6 +1307,16 @@ public sealed class WebFormsReviewExecutionTests
             WebFormsReviewExecutionCommand.HandlerRequeryName)), JsonOptions)!;
         Assert.Equal(depth, receipt.Query.MaxDepth);
         Assert.Equal("database-operations", receipt.Query.ToSurface);
+        Assert.Equal(0, receipt.ExactChains);
+        Assert.Equal(TraceMap.Reporting.RetainedMethodGraphWriter.JsonName, receipt.ZeroPathDiagnosticReport);
+        Assert.Equal(4, receipt.Artifacts.Count);
+        foreach (var artifact in receipt.Artifacts)
+            Assert.Equal(artifact.Sha256, Hash(Path.Combine(destination, artifact.RelativePath)));
+        using var graphDocument = JsonDocument.Parse(File.ReadAllText(Path.Combine(destination, receipt.ZeroPathDiagnosticReport!)));
+        Assert.Equal(64, graphDocument.RootElement.GetProperty("generatorSha256").GetString()!.Length);
+        Assert.Equal(64, graphDocument.RootElement.GetProperty("boundedInputSha256").GetString()!.Length);
+        var graph = graphDocument.RootElement.GetProperty("graph");
+        Assert.True(graph.GetProperty("work").GetInt32() + receipt.TraversalWorkUnits <= fixture.Config.Budgets.GraphMaxWork);
         Assert.NotNull(receipt.CompletedReportSha256);
         Assert.True(receipt.PathEnumerationPerformed);
         Assert.Equal(WebFormsReviewExecutionCommand.HandlerRequeryHash(receipt), receipt.BoundedInputSha256);

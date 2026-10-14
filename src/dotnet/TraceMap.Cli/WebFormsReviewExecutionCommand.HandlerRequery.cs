@@ -22,6 +22,8 @@ public sealed record WebFormsHandlerRequeryReceipt(string SchemaVersion, string 
     public bool? PathEnumerationPerformed { get; init; }
     [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
     public string? RootSelectionKind { get; init; }
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public string? ZeroPathDiagnosticReport { get; init; }
 }
 
 public static partial class WebFormsReviewExecutionCommand
@@ -177,7 +179,8 @@ public static partial class WebFormsReviewExecutionCommand
             var options = new CombinedDependencyPathOptions(indexPath, destination, ToSurface: methodGraph ? null : terminalScope, SurfaceName: surfaceName, IncludeLegacyRoots: true,
                 MaxDepth: maxDepth ?? config.Budgets.GraphMaxDepth, MaxPaths: config.Budgets.GraphMaxPaths, MaxFrontier: budget.MaxFrontier)
             { ExactFromSymbol = true, CompiledOnly = compiledOnly, MaxTraversalWork = checked((int)config.Budgets.GraphMaxWork),
-                MethodGraphObserver = methodGraph ? graph => graphView = graph : null };
+                MethodGraphObserver = methodGraph ? graph => graphView = graph : null,
+                ZeroPathGraphObserver = methodGraph ? null : graph => graphView = graph };
             await output.WriteLineAsync($"handlerStage=graph-started;maxPaths={options.MaxPaths};maxWork={options.MaxTraversalWork};single-root=true");
             await output.WriteLineAsync($"handlerQuery.maxDepth={options.MaxDepth};originalMaxDepth={config.Budgets.GraphMaxDepth};depthOverride={(maxDepth is not null).ToString().ToLowerInvariant()};other-bounds-unchanged=true");
             await output.WriteLineAsync($"handlerQuery.terminalScope={(methodGraph ? "unfiltered-all-outgoing" : surfaceName is null ? terminalScope : "DbDataAdapter.Fill")};mixed-source-and-compiled={(compiledOnly ? "false" : "true")}");
@@ -204,11 +207,13 @@ public static partial class WebFormsReviewExecutionCommand
             // A graph-only query deliberately skips path enumeration. Never publish
             // its empty Paths collection as a normal-looking zero-chain report.
             if (!methodGraph) await GroupedCompiledPathReportWriter.WriteAsync(grouped, destination, limits, token);
-            if (methodGraph)
+            if (methodGraph || graphView is not null)
             {
                 if (graphView is null) throw Fail("HANDLER_REQUERY_GRAPH_UNAVAILABLE");
                 await RetainedMethodGraphWriter.WriteAsync(graphView, destination, index.Sha256, budget.MaxOutputBytes, token);
                 await output.WriteLineAsync($"methodGraph=unfiltered-retained;nodes={graphView.Nodes.Count};edges={graphView.Edges.Count};calls={graphView.Calls.Count};cutoffs={graphView.Cutoffs.Count};no-terminal-pruning");
+                if (!methodGraph)
+                    await output.WriteLineAsync($"handlerDiagnostic=zero-path-graph;workUnits={graphView.Work};maxWork={graphView.MaxWork};separate-from-path-result=true;no-graph-rebuild=true");
             }
             if (Digest(receiptBytes) != Digest(await WebFormsReviewPreflightCommand.ReadSmallAsync(receiptPath, 4_194_304, token)) ||
                 Digest(planBytes) != Digest(await WebFormsReviewPreflightCommand.ReadSmallAsync(OwnedPath(run, "run-manifest.json"), 4_194_304, token)) ||
@@ -222,7 +227,10 @@ public static partial class WebFormsReviewExecutionCommand
             var artifacts = new List<WebFormsReviewArtifact>();
             foreach (var name in methodGraph
                          ? new[] { RetainedMethodGraphWriter.HtmlName, RetainedMethodGraphWriter.JsonName }
-                         : new[] { GroupedCompiledPathReportWriter.HtmlName, GroupedCompiledPathReportWriter.HandoffName })
+                         : graphView is not null
+                             ? new[] { GroupedCompiledPathReportWriter.HtmlName, GroupedCompiledPathReportWriter.HandoffName,
+                                 RetainedMethodGraphWriter.HtmlName, RetainedMethodGraphWriter.JsonName }
+                             : new[] { GroupedCompiledPathReportWriter.HtmlName, GroupedCompiledPathReportWriter.HandoffName })
             {
                 var artifact = await WebFormsReviewPreflightCommand.HashAsync("report", Path.Combine(destination, name), budget.MaxOutputBytes, token);
                 artifacts.Add(new(name, artifact.Bytes, artifact.Sha256));
@@ -241,6 +249,7 @@ public static partial class WebFormsReviewExecutionCommand
                     GraphObservation = observation, CompletedReportSha256 = completedReportSha,
                     PrimaryReport = methodGraph ? RetainedMethodGraphWriter.HtmlName : GroupedCompiledPathReportWriter.HtmlName,
                     PathEnumerationPerformed = !methodGraph,
+                    ZeroPathDiagnosticReport = !methodGraph && graphView is not null ? RetainedMethodGraphWriter.JsonName : null,
                     RootSelectionKind = explicitRoot is null ? null : "exact-compiled-method" };
             receipt = receipt with { BoundedInputSha256 = HandlerRequeryHash(receipt) };
             failureStage = "receipt";
