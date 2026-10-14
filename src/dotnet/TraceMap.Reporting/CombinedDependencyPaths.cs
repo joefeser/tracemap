@@ -396,7 +396,7 @@ public static partial class CombinedDependencyPathReporter
     private const int MaxTraversalDiagnosticShapes = 32;
     private const string Version = "1.0";
     private const string Algorithm = "bounded-bfs";
-    private const string AlgorithmVersion = "1.3";
+    private const string AlgorithmVersion = "1.4";
     private const int MarkdownPathLimit = 100;
     private const int MarkdownInventoryLimit = 200;
     private const string EndpointMatchRuleId = "combined.paths.endpoint-match.v1";
@@ -6928,6 +6928,12 @@ public static partial class CombinedDependencyPathReporter
 
         public void RecordSourceFact(string nodeId, string factType)
         {
+            // Calls are body observations too, even when no outgoing graph edge
+            // can be constructed. Keep availability separate from connectivity.
+            if (factType is FactTypes.CallEdge or FactTypes.MethodInvoked || IsSourceBodyEvidenceFactType(factType))
+            {
+                SourceBodyEvidenceNodeIds.Add(nodeId);
+            }
             if (factType == FactTypes.CallEdge)
             {
                 CallFactSourceNodeIds.Add(nodeId);
@@ -6935,10 +6941,6 @@ public static partial class CombinedDependencyPathReporter
             else if (factType == FactTypes.MethodInvoked)
             {
                 MethodInvocationSourceNodeIds.Add(nodeId);
-            }
-            else if (IsSourceBodyEvidenceFactType(factType))
-            {
-                SourceBodyEvidenceNodeIds.Add(nodeId);
             }
         }
 

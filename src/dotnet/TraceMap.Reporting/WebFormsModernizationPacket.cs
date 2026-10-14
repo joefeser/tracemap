@@ -1531,6 +1531,14 @@ public static class WebFormsModernizationPacketReporter
         {
             return new("downstream-call-edge", [], ["call-edge-evidence-for-the-retained-leaf-invocation"]);
         }
+        if (traversal?.LeafSourceAvailabilityStates.Contains("exact-method-declaration-without-body-evidence", StringComparer.Ordinal) == true)
+        {
+            return new("method-body-evidence", [], ["inspect-retained-leaf-source-membership-body-facts-and-exact-symbol-identity"]);
+        }
+        if (traversal?.LeafCallEvidenceStates.Contains("call-fact-source-retained-without-graph-edge", StringComparer.Ordinal) == true)
+        {
+            return new("downstream-graph-edge", [], ["inspect-retained-call-target-and-exact-graph-node-identity"]);
+        }
         return new("terminal-classification", [], ["supported-terminal-evidence-or-a-specific-unresolved-frontier"]);
     }
 
@@ -1555,7 +1563,7 @@ public static class WebFormsModernizationPacketReporter
             null,
             null,
             "WebFormsModernizationPacketReporter",
-            "webforms-modernization-packet/1.2.1",
+            "webforms-modernization-packet/1.2.2",
             supporting,
             ["The packet failed closed because required evidence was unavailable or bounded by a deterministic limit."]);
     }

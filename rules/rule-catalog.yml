@@ -3479,6 +3479,7 @@ rules:
       - legacy static flow path
       - traversal truncation gap
     limitations:
+      - Retained CallEdge and MethodInvoked facts count as body observations independently of whether they produce outgoing graph edges. A declaration without retained body observations is not proof of compiler failure, missing source, or an empty body. Next-evidence labels request further evidence; semantic-call-resolution is not a completed resolution status.
       - Composed paths are static evidence, not runtime execution proof, reachability proof, production traffic, service deployment, branch feasibility, user behavior, or permission proof.
       - Call edges may miss reflection, dynamic dispatch, delegates, runtime DI, partial methods, generated code, serializer behavior, event bubbling, collection contents, and branch-dependent behavior.
       - WCF operation nodes are terminals in v1; traversal does not continue through service-side implementation or downstream service-side evidence.

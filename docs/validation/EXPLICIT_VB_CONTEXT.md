@@ -117,3 +117,17 @@ and compares native scan artifacts. Full solution, pinned external language smok
 checks and private Windows acceptance are separate validation, not implied by this
 focused gate. See `prompts/validate-semantic-webforms-coexistence.md` for the bounded
 work-machine comparison. Missing database terminals are not claimed fixed here.
+
+## Retained body availability is not connectivity
+
+The traversal matrix in `WebFormsModernizationPacketTests` distinguishes property
+body evidence, invocation-only evidence, call-only evidence without a target, and
+a declaration with no body observations. Calls count as body observations even
+without an eligible graph edge. The packet requests `downstream-call-edge`,
+`downstream-graph-edge`, or `method-body-evidence` accordingly; none proves a
+compiler error or a missing dependency. `semantic-call-resolution` is likewise a
+next-evidence request, not a successful binding count. Run that suite alongside
+`CombinedDependencyPathTests` and `ExplicitVisualBasicContextTests` (including its
+native CLI artifact repeat). Full solution and pinned external smoke runs remain
+deferred for this reporting-only correction. Use
+`prompts/diagnose-retained-vb-body-connectivity.md` for a no-scan Windows diagnosis.
