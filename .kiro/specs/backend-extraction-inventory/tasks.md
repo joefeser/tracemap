@@ -120,3 +120,9 @@
 - [x] Keep ambiguous overload/type declarations, aliases, generic substitutions and missing receiver identity unresolved; preserve exact-only behavior for old scans.
 - [x] Add source-extraction and full-chain positive/negative tests and update the integrated acceptance prompt.
 - [ ] Confirm the corrected private nested join and any upstream event chain; the separate HTTP entry gap remains unestablished.
+# Consolidated caller frontier diagnostics
+
+- [x] Report bounded terminal caller locations and retained suffix chains for unresolved operations.
+- [x] Keep rejected same-name call leads separate from supported graph edges.
+- [x] Cover disconnected callers, rejected targets, cycles and deterministic ordering with synthetic tests.
+- [ ] Confirm remaining private caller gaps in one consolidated local acceptance pass.
