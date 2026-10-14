@@ -84,6 +84,21 @@ class InventoryTests(unittest.TestCase):
             results.append(result)
         self.assertEqual(*results)
 
+    def test_registration_states_are_public_literals_and_preserved(self):
+        source = (SCRIPT.parents[1] / "src/dotnet/TraceMap.Core/LegacyWebFormsExtractor.cs").read_text(encoding="utf-8")
+        with self.catalog.open("a") as stream:
+            stream.write("  - id: legacy.webforms.composition.v1\n")
+        facts = []
+        for state in inventory.REGISTRATION_STATES:
+            self.assertIn('"' + state + '"', source)
+            fact = self.gap("UnresolvedWebFormsControlRegistration")
+            fact["ruleId"] = "legacy.webforms.composition.v1"
+            fact["properties"]["registrationState"] = state
+            facts.append(fact)
+        self.write(facts)
+        self.assertEqual({state: 1 for state in inventory.REGISTRATION_STATES},
+                         self.result()["inventory"]["retainedDiagnostics"]["registrationStates"])
+
     def test_expanded_labels_are_checked_in_public_extractor_literals(self):
         core = SCRIPT.parents[1] / "src/dotnet/TraceMap.Core"
         source = "\n".join((core / name).read_text(encoding="utf-8") for name in (

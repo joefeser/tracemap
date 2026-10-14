@@ -1,5 +1,30 @@
 # SQL and migration repair regression coverage
 
+## Combined WebForms pattern matrix
+
+`AppCodeRegistrationMatrixTests` contains 89 generated synthetic cases, not just
+one regression per screenshot. The checked-in `samples/webforms-pattern-matrix`
+combines namespace registration, a VB App_Code class, With event wiring, Handles,
+Page.IsPostBack, and literal/dynamic postback targets. No application code runs.
+
+| Matrix | Dimensions | Cases |
+| --- | --- | ---: |
+| Registration/type/scope | C#/VB x config/directive x root/child/foreign-root x unique/missing/duplicate/wrong-namespace/outside-App_Code/case-decoy | 72 |
+| Refusal boundaries | clear, remove, unrelated location, malformed assembly, malformed Src, missing facts, uninventoried source, interface | 8 |
+| Cross-feature sample | local/New/invocation With receiver x Page/Boolean/shadowed lifecycle condition, with registration and static/dynamic postbacks always present | 9 |
+
+Every registration matrix case checks deterministic evidence order. Positive
+joins require source type provenance and Tier3 evidence; refusal cases must not
+invent assembly joins. The existing source/assembly registration tests, event
+identity tests and stacked SQL/HTTP migration corpus remain separate gates.
+The Windows gap-family CI runs this matrix on both source and sample changes.
+
+Coverage is explicitly incomplete: arbitrary configuration inheritance,
+configSource, external App_Code roots, dynamic assembly loading, partial-type
+merging, generic/control ancestry and projectless compiler contexts are not proved.
+New supported shapes must add matrix dimensions or interaction cases, not only
+isolated happy-path tests. Private acceptance remains one separate scan.
+
 PR target: `dev`. This ledger maps implemented behavior to executable public
 synthetic tests. It is not a claim that every possible VB construct is supported,
 nor a substitute for passing exact-head PR checks. No private source or artifacts
