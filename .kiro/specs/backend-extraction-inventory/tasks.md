@@ -132,3 +132,9 @@
 - [x] Extract optional-parameter and positional-call metadata with conservative arity matching.
 - [x] Add combined HTTP/SQL/bulk synthetic chains and ambiguity/unsupported-shape negatives.
 - [ ] Confirm newly retained hops and remaining upstream frontiers on the private scan.
+# Explicit property/field receiver chains
+
+- [x] Retain declared property types and member identity/context without getter evaluation.
+- [x] Add bounded unique cross-file receiver chains with member evidence in paths.
+- [x] Add public fixture and negative tests for ambiguous, indexed, array and shadowed receivers.
+- [ ] Verify private property declarations and resulting database entry paths on fresh 0.4.14 facts.

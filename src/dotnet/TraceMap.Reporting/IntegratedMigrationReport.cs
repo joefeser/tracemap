@@ -40,6 +40,13 @@ public static class IntegratedMigrationReport
         var calls = facts.Where(f => f.FactType == FactTypes.CallEdge).ToArray();
         var typeDeclarations = types.GroupBy(t => t.Properties.GetValueOrDefault("qualifiedName", ""), StringComparer.OrdinalIgnoreCase)
             .ToDictionary(g => g.Key, g => g.Count(), StringComparer.OrdinalIgnoreCase);
+        var members = facts.Where(f => f.FactType is FactTypes.PropertyDeclared or FactTypes.FieldDeclared).ToArray();
+        var memberIndex = members.GroupBy(f => f.Properties.GetValueOrDefault("qualifiedContainingType", "") + "|"
+            + f.Properties.GetValueOrDefault("propertyName", f.Properties.GetValueOrDefault("fieldName", "")), StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.ToArray(), StringComparer.OrdinalIgnoreCase);
+        var chainEvidence = new Dictionary<string, List<CodeFact>>(StringComparer.Ordinal);
+        string HopReference(Hop hop) => Reference(hop.Call) + (chainEvidence.TryGetValue(hop.Call.FactId, out var declarations)
+            ? " ⇒ receiver declarations " + string.Join(" ⇒ ", declarations.Select(Reference)) : "");
         string? ReceiverType(Method from, string text)
         {
             if (text.StartsWith("Global.", StringComparison.OrdinalIgnoreCase)) return text[7..];
@@ -62,9 +69,48 @@ public static class IntegratedMigrationReport
             }
             return text;
         }
+        string? ChainReceiver(Method from, CodeFact call)
+        {
+            string? DeclaredType(Method context, string spelling)
+            {
+                var resolved = ReceiverType(context, spelling);
+                if (string.IsNullOrEmpty(resolved)) return null;
+                if (typeDeclarations.ContainsKey(resolved)) return typeDeclarations[resolved] == 1 ? resolved : null;
+                if (spelling.StartsWith("Global.", StringComparison.OrdinalIgnoreCase)) return null;
+                var scopes = context.Fact.Properties.GetValueOrDefault("importedNamespaces", "").Split(';')
+                    .Append(context.Fact.Properties.GetValueOrDefault("lexicalNamespace", ""));
+                var candidates = scopes.Where(s => s.Length > 0).Select(s => s + "." + spelling)
+                    .Where(typeDeclarations.ContainsKey).Distinct(StringComparer.OrdinalIgnoreCase).Take(2).ToArray();
+                return candidates.Length == 1 && typeDeclarations[candidates[0]] == 1 ? candidates[0] : null;
+            }
+            var parts = call.Properties.GetValueOrDefault("receiverChain", "").Split('.');
+            if (parts.Length < 2 || parts.Length > 8) return null;
+            var kind = call.Properties.GetValueOrDefault("receiverChainRootKind");
+            var type = kind == "self" ? from.Type : kind == "explicit-variable"
+                ? DeclaredType(from, call.Properties.GetValueOrDefault("receiverChainRootType", ""))
+                : kind == "type-name-candidate" ? DeclaredType(from, parts[0]) : null;
+            var evidence = new List<CodeFact>();
+            for (var i = 1; i < parts.Length; i++)
+            {
+                if (string.IsNullOrEmpty(type) || typeDeclarations.GetValueOrDefault(type) != 1) return null;
+                var matches = memberIndex.GetValueOrDefault(type + "|" + parts[i]) ?? [];
+                if (matches.Length != 1) return null;
+                var member = matches[0];
+                if (i == 1 && kind == "type-name-candidate" && member.Properties.GetValueOrDefault("isShared") != "True") return null;
+                if (member.FactType == FactTypes.PropertyDeclared && Number(member, "parameterCount", -1) != 0) return null;
+                if (member.FactType == FactTypes.FieldDeclared && member.Properties.GetValueOrDefault("isArray") != "False") return null;
+                var declaredType = member.Properties.GetValueOrDefault(member.FactType == FactTypes.PropertyDeclared ? "propertyType" : "fieldType", "");
+                if (declaredType.Length == 0 || !member.Properties.ContainsKey("importAliasNames")) return null;
+                type = DeclaredType(new Method(member, type, "", 0, 0, 0), declaredType);
+                evidence.Add(member);
+            }
+            if (string.IsNullOrEmpty(type) || typeDeclarations.GetValueOrDefault(type) != 1) return null;
+            chainEvidence[call.FactId] = evidence;
+            return type;
+        }
         // Bound the Cartesian source-only matching work; never silently call it complete.
         var matchingLimited = methods.Length > 2000 || calls.Length > 10000
-            || boundaries.Length + handles.Length > 10000 || types.Length > 2000;
+            || boundaries.Length + handles.Length > 10000 || types.Length > 2000 || members.Length > 10000;
         if (!matchingLimited)
         foreach (var call in calls)
         {
@@ -81,6 +127,7 @@ public static class IntegratedMigrationReport
                 var inlineReceiver = call.Properties.GetValueOrDefault("receiverTypeResolution") == "inline-object-creation-syntax";
                 var type = !inlineReceiver && (receiver.Length == 0 || receiver.Equals("Me", StringComparison.OrdinalIgnoreCase))
                     ? from.Type : ReceiverType(from, call.Properties.GetValueOrDefault("receiverType", ""));
+                if (string.IsNullOrEmpty(type)) type = ChainReceiver(from, call);
                 var name = call.Properties.GetValueOrDefault("calleeName", "");
                 var arity = Number(call, "argumentCount", -1);
                 if (!string.IsNullOrEmpty(type) && arity >= 0)
@@ -226,7 +273,7 @@ public static class IntegratedMigrationReport
                 foreach (var stop in stops.Values.OrderBy(s => s.Node.Fact.FactId, StringComparer.Ordinal).Take(20))
                 {
                     lines.Add($"- Caller frontier `{stop.Reason}`: {Reference(stop.Node.Fact)}; retained chain: "
-                        + string.Join(" → ", stop.Path.Select(h => Reference(h.Call) + " ⇒ " + Reference(h.To.Fact)).Append(Reference(operation))));
+                        + string.Join(" → ", stop.Path.Select(h => HopReference(h) + " ⇒ " + Reference(h.To.Fact)).Append(Reference(operation))));
                     var leads = rejectedByName.GetValueOrDefault(stop.Node.Name) ?? [];
                     lines.Add($"  Same-name rejected call leads: {leads.Length}; showing {Math.Min(5, leads.Length)} (receiver/arity may differ; not evidence of a call to this method).");
                     foreach (var lead in leads.Take(5))
@@ -240,7 +287,7 @@ public static class IntegratedMigrationReport
                     ? $"VB Handles observed-event syntax candidate (hosting/route unresolved); framework assessment `{frameworkReasons[path.Boundary.FactId]}`"
                     : $"WebForms source `{Safe(path.Boundary.Properties.GetValueOrDefault("markupFile", "unknown"))}`; binding `{Safe(path.Boundary.Properties.GetValueOrDefault("bindingFactId", "unavailable"))}`";
                 lines.Add($"- {label} → {Reference(path.Boundary)} → "
-                    + string.Join(" → ", path.Hops.Select(h => Reference(h.Call) + " ⇒ declaration " + Reference(h.To.Fact)).Append(Reference(operation))));
+                    + string.Join(" → ", path.Hops.Select(h => HopReference(h) + " ⇒ declaration " + Reference(h.To.Fact)).Append(Reference(operation))));
             }
             var uniqueOperationLine = rows.Count(r => r.Key.FilePath == group.Key.FilePath
                 && r.Key.StartLine == group.Key.StartLine && r.Key.SourceSymbol == group.Key.SourceSymbol) == 1;

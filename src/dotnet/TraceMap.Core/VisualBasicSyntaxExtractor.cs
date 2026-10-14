@@ -465,7 +465,15 @@ public static partial class VisualBasicSyntaxExtractor
                     {
                         ["containingType"] = containingType,
                         ["name"] = propertyName,
-                        ["propertyName"] = propertyName
+                        ["propertyName"] = propertyName,
+                        ["qualifiedContainingType"] = GetSyntacticContainingType(statement),
+                        ["lexicalNamespace"] = GetSyntacticNamespace(statement),
+                        ["importedNamespaces"] = string.Join(';', importedNamespaces),
+                        ["propertyType"] = statement.AsClause is SimpleAsClauseSyntax propertyAs ? propertyAs.Type.ToString().Trim() : string.Empty,
+                        ["parameterCount"] = (statement.ParameterList?.Parameters.Count ?? 0).ToString(),
+                        ["isShared"] = statement.Modifiers.Any(SyntaxKind.SharedKeyword).ToString(),
+                        ["importAliasNames"] = string.Join(';', importAliasNames),
+                        ["containingTypeParameters"] = string.Join(';', statement.Ancestors().OfType<TypeBlockSyntax>().SelectMany(block => block.BlockStatement.TypeParameterList?.Parameters.Select(parameter => parameter.Identifier.ValueText) ?? []))
                     },
                     budget,
                     sourceSymbol: containingType,
@@ -499,6 +507,12 @@ public static partial class VisualBasicSyntaxExtractor
                                 ["qualifiedContainingType"] = qualifiedContainingType,
                                 ["fieldName"] = fieldName,
                                 ["fieldType"] = fieldType,
+                                ["isArray"] = (name.ArrayBounds is not null || name.ArrayRankSpecifiers.Count > 0).ToString(),
+                                ["lexicalNamespace"] = GetSyntacticNamespace(field),
+                                ["importedNamespaces"] = string.Join(';', importedNamespaces),
+                                ["isShared"] = field.Modifiers.Any(SyntaxKind.SharedKeyword).ToString(),
+                                ["importAliasNames"] = string.Join(';', importAliasNames),
+                                ["containingTypeParameters"] = string.Join(';', field.Ancestors().OfType<TypeBlockSyntax>().SelectMany(block => block.BlockStatement.TypeParameterList?.Parameters.Select(parameter => parameter.Identifier.ValueText) ?? [])),
                                 ["isWithEvents"] = field.Modifiers.Any(SyntaxKind.WithEventsKeyword) ? "True" : "False"
                             },
                             budget,
@@ -1170,6 +1184,39 @@ public static partial class VisualBasicSyntaxExtractor
             // or the return type of an arbitrary factory/property call.
             properties["receiverType"] = inlineCreation.Type.ToString().Trim();
             properties["receiverTypeResolution"] = "inline-object-creation-syntax";
+        }
+        // Only pure identifier/member receivers qualify; invocation/indexer results
+        // must not be flattened into an apparent property chain.
+        bool PureReceiver(ExpressionSyntax expression) => expression is IdentifierNameSyntax or MeExpressionSyntax
+            || expression is MemberAccessExpressionSyntax member && PureReceiver(member.Expression);
+        if (receiverName.Contains('.') && invocation.Expression is MemberAccessExpressionSyntax chainAccess && PureReceiver(chainAccess.Expression))
+        {
+            var parts = receiverName.Split('.');
+            properties["receiverChain"] = receiverName;
+            if (parts[0].Equals("Me", StringComparison.OrdinalIgnoreCase))
+                properties["receiverChainRootKind"] = "self";
+            else if (TryResolveExplicitReceiverType(root, invocation, parts[0], _ => true, out var rootType))
+            {
+                properties["receiverChainRootKind"] = "explicit-variable";
+                properties["receiverChainRootType"] = rootType;
+                var scope = invocation.Ancestors().OfType<TypeBlockSyntax>().FirstOrDefault();
+                if (scope?.DescendantNodes().OfType<ModifiedIdentifierSyntax>().Any(identifier =>
+                    identifier.Identifier.ValueText.Equals(parts[0], StringComparison.OrdinalIgnoreCase)
+                    && (identifier.ArrayBounds is not null || identifier.ArrayRankSpecifiers.Count > 0)) == true)
+                    properties["receiverChainRootKind"] = "unresolved-array";
+            }
+            else
+            {
+                // Refuse a type-root interpretation if any lexical value could shadow it.
+                var owner = invocation.Ancestors().OfType<TypeBlockSyntax>().FirstOrDefault();
+                var shadowed = owner is not null && owner.DescendantNodes().Any(node => node switch
+                {
+                    ModifiedIdentifierSyntax identifier => identifier.Identifier.ValueText.Equals(parts[0], StringComparison.OrdinalIgnoreCase),
+                    PropertyStatementSyntax property => property.Identifier.ValueText.Equals(parts[0], StringComparison.OrdinalIgnoreCase),
+                    _ => false
+                });
+                properties["receiverChainRootKind"] = shadowed ? "unresolved-shadow" : "type-name-candidate";
+            }
         }
         if (argumentTypes is not null)
         {

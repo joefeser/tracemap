@@ -26,7 +26,7 @@ jobs:
       - name: Independent named oracle mutation guards
         run: python scripts/validation/test_sql_matrix_expectations.py
       - name: Integrated WebForms SQL and HTTP boundary acceptance
-        run: dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-build --filter "FullyQualifiedName~InlineReceiverMigrationTests|FullyQualifiedName~MigrationRegressionCorpusTests|FullyQualifiedName~IntegratedMigrationReportTests|FullyQualifiedName~VisualBasicWebFormsCompositionTests|FullyQualifiedName~LegacyWebFormsEventIdentityTests|FullyQualifiedName~OutboundHttpLegacyCoverageTests" -warnaserror
+        run: dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-build --filter "FullyQualifiedName~PropertyChainMigrationTests|FullyQualifiedName~InlineReceiverMigrationTests|FullyQualifiedName~MigrationRegressionCorpusTests|FullyQualifiedName~IntegratedMigrationReportTests|FullyQualifiedName~VisualBasicWebFormsCompositionTests|FullyQualifiedName~LegacyWebFormsEventIdentityTests|FullyQualifiedName~OutboundHttpLegacyCoverageTests" -warnaserror
       - name: Cached VB lookup equivalence and scaling guards
         run: dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-build --filter FullyQualifiedName~VisualBasicSyntaxTypeLookupTests --logger "console;verbosity=detailed"
       - name: Selected-root SQL report guards
