@@ -22,6 +22,8 @@ deterministic ordering. An observed event chain is not a deployed HTTP route.
 | Handles with unavailable external base | EventChains.vb / ExternalBaseWidget; complete helper/HTTP and wrapper/SQL candidate chains, ancestry unresolved |
 | Direct UserControl versus desktop events | DirectWidget / DesktopEvents; event connectivity separate from framework assessment |
 | Same-name, same-arity overload ambiguity | AmbiguousEvents.vb; both HTTP operation groups retained but neither guessed as the handler target |
+| Outer wrapper to protected nested instance | NestedReceiver.vb; event -> wrapper -> nested field receiver -> SQL and bulk copy, with global/sibling same-short-name decoys |
+| Nested receiver shadow/ambiguity controls | Corpus test mutations refuse alias names, generic parameters and duplicate overload targets |
 | Markup page and control boundaries | ../migration-vertical-slice; existing real markup fixture and integrated tests |
 | Ambiguous ownership, missing facts, unrelated names, caps | IntegratedMigrationReportTests fact mutations; refusal reasons preserved |
 | Unrelated handler fan-out starving search | IntegratedMigrationReportTests; reverse search retains the relevant chain within budget |

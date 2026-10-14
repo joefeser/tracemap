@@ -37,6 +37,30 @@ public static class IntegratedMigrationReport
         var hops = new List<Hop>();
         var unresolvedCalls = 0;
         var calls = facts.Where(f => f.FactType == FactTypes.CallEdge).ToArray();
+        var typeDeclarations = types.GroupBy(t => t.Properties.GetValueOrDefault("qualifiedName", ""), StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.Count(), StringComparer.OrdinalIgnoreCase);
+        string? ReceiverType(Method from, string text)
+        {
+            if (text.StartsWith("Global.", StringComparison.OrdinalIgnoreCase)) return text[7..];
+            var first = text.Split('.')[0];
+            // An alias or generic parameter must not be reinterpreted as a nested class.
+            if (new[] { "importAliasNames", "methodTypeParameters", "containingTypeParameters" }
+                .Any(key => from.Fact.Properties.GetValueOrDefault(key, "").Split(';').Contains(first, StringComparer.OrdinalIgnoreCase))) return null;
+            // Old scans do not carry alias/shadow guards: retain their old exact-only behavior.
+            if (!from.Fact.Properties.ContainsKey("importAliasNames")) return text;
+            var scope = from.Type;
+            while (scope.Length > 0)
+            {
+                if (typeDeclarations.ContainsKey(scope))
+                {
+                    var candidate = scope + "." + text;
+                    if (typeDeclarations.TryGetValue(candidate, out var count)) return count == 1 ? candidate : null;
+                }
+                var dot = scope.LastIndexOf('.');
+                scope = dot < 0 ? "" : scope[..dot];
+            }
+            return text;
+        }
         // Bound the Cartesian source-only matching work; never silently call it complete.
         var matchingLimited = methods.Length > 2000 || calls.Length > 10000
             || boundaries.Length + handles.Length > 10000 || types.Length > 2000;
@@ -53,10 +77,11 @@ public static class IntegratedMigrationReport
             if (selected.Length == 0 && call.EvidenceTier == EvidenceTiers.Tier3SyntaxOrTextual)
             {
                 var receiver = call.Properties.GetValueOrDefault("receiverName", "");
-                var type = receiver is "" or "Me" ? from.Type : call.Properties.GetValueOrDefault("receiverType", "");
+                var type = receiver.Length == 0 || receiver.Equals("Me", StringComparison.OrdinalIgnoreCase)
+                    ? from.Type : ReceiverType(from, call.Properties.GetValueOrDefault("receiverType", ""));
                 var name = call.Properties.GetValueOrDefault("calleeName", "");
                 var arity = Number(call, "argumentCount", -1);
-                if (type.Length > 0 && arity >= 0)
+                if (!string.IsNullOrEmpty(type) && arity >= 0)
                     selected = methods.Where(m => m.Type.Equals(type, StringComparison.OrdinalIgnoreCase)
                         && m.Name.Equals(name, StringComparison.OrdinalIgnoreCase) && m.Arity == arity).Take(2).ToArray();
             }

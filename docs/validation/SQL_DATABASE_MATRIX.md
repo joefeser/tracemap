@@ -6,6 +6,24 @@ extractor, not matrix acceptance. Public independently authored fixtures will
 replace provisional entries with per-case validation receipts. No database methods
 are executed. Framework assembly version never establishes application TFM.
 
+## ECMA-335 is not an API behavior coverage claim
+
+[ECMA-335](https://ecma-international.org/publications-and-standards/standards/ecma-335/)
+specifies CLI metadata, the type system and CIL instructions, with standard library
+profiles. Reading valid metadata/IL is a different layer from recognizing a
+particular provider's database or HTTP API and propagating command/receiver values
+through wrappers, branches and dispatch. A decoded call does not prove its runtime
+target, SQL schema contract or deployed entry route.
+
+TraceMap therefore validates separate layers: admitted original binary metadata/IL;
+versioned API signature families; bounded dataflow and call joins; and report
+projections with identity/coverage labels. Source-only projectless VB cannot use
+metadata from an unprovided dependency. Its nested-type receiver joins need source
+lexical scope handling even when the binary reader supports the corresponding IL.
+Shared resolution and whole-chain synthetic tests should replace repeated special
+cases, but neither that engineering goal nor opcode coverage means every provider,
+framework version or dynamic program is fully analyzed.
+
 | Language/mode | Existing support | Status and gaps |
 |---|---|---|
 | C# semantic | DbCommand/SqlClient reader/scalar/nonquery sync/async, ORM patterns | Partial: no XML/APM, adapter parity, IDbCommand or bulk matrix; provider identity checks differ from VB |

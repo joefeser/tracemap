@@ -269,6 +269,10 @@ public static partial class VisualBasicSyntaxExtractor
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .OrderBy(name => name, StringComparer.Ordinal)
             .ToArray();
+        var importAliasNames = root.Imports.SelectMany(statement => statement.ImportsClauses)
+            .OfType<SimpleImportsClauseSyntax>().Where(clause => clause.Alias is not null)
+            .Select(clause => clause.Alias!.Identifier.ValueText)
+            .Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(name => name, StringComparer.Ordinal).ToArray();
         foreach (var statement in root.DescendantNodes().OfType<TypeStatementSyntax>())
         {
             var declared = statement switch
@@ -420,6 +424,9 @@ public static partial class VisualBasicSyntaxExtractor
                         ["qualifiedContainingType"] = qualifiedContainingType,
                         ["lexicalNamespace"] = GetSyntacticNamespace(statement),
                         ["importedNamespaces"] = string.Join(';', importedNamespaces),
+                        ["importAliasNames"] = string.Join(';', importAliasNames),
+                        ["containingTypeParameters"] = string.Join(';', statement.Ancestors().OfType<TypeBlockSyntax>()
+                            .SelectMany(block => block.BlockStatement.TypeParameterList?.Parameters.Select(parameter => parameter.Identifier.ValueText) ?? [])),
                         ["name"] = methodName,
                         ["bodyStartLine"] = (methodBodyLines.StartLinePosition.Line + 1).ToString(),
                         ["bodyEndLine"] = (methodBodyLines.EndLinePosition.Line + 1).ToString(),

@@ -113,3 +113,10 @@
 - [x] Remove host-specific project-loading assumptions from the strict semantic WebForms composition oracle, keeping its semantic assertions.
 - [x] Wire corpus tests and sample changes into Windows compatibility CI.
 - [ ] Verify exact-head Windows CI and private remaining-operation chains; no source evidence currently identifies their first failed joins.
+
+### Nested source receiver correction
+- [x] Reproduce outer wrapper -> typed field receiver -> protected nested method -> SQL/bulk operations, including same-short-name global and sibling decoys.
+- [x] Retain alias/enclosing-generic shadow guards and qualify receiver candidates through nearest enclosing retained type scope without global short-name guessing.
+- [x] Keep ambiguous overload/type declarations, aliases, generic substitutions and missing receiver identity unresolved; preserve exact-only behavior for old scans.
+- [x] Add source-extraction and full-chain positive/negative tests and update the integrated acceptance prompt.
+- [ ] Confirm the corrected private nested join and any upstream event chain; the separate HTTP entry gap remains unestablished.
