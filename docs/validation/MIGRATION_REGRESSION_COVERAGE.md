@@ -40,6 +40,25 @@ byte/record/time limits, linked inputs, unsafe output locations and no-overwrite
 The dedicated retained-gap-inventory workflow runs these synthetic tests on
 Windows and Linux without building or scanning an application.
 
+`WebFormsGapFamilyRegressionTests` adds a 15-case synthetic matrix for escaped
+VB Handles/AddHandler/RemoveHandler receivers, Boolean-literal IsPostBack
+comparisons in both operand orders, negation, parentheses, shadowing, depth
+limits, scoped configuration registration/clear, and literal/dynamic postback
+targets. Dynamic/chained event receivers and non-Boolean/compound lifecycle
+conditions remain gaps. Registration and postback cases protect existing
+behavior; they are not new support claims. The Windows gap-family workflow also
+runs the stacked migration and integrated report regressions. Use the committed
+`prompts/validate-webforms-gap-family-batch.md` for one private scan; synthetic
+passes cannot establish that private gap shapes match these bounded additions.
+
+Local batch validation (2026-10-14): 102 tests passed, zero failed/skipped across
+the new matrix, VisualBasicWebFormsComposition, LegacyWebFormsExtractor,
+LegacyWebFormsEventIdentity, MigrationRegressionCorpus and IntegratedMigrationReport
+classes. A public stacked-migration-regression CLI smoke retained 156 facts,
+four of four candidate operation paths and zero ungrouped parameter facts.
+Full-solution, broader pinned language-adapter matrices, Windows execution and
+private acceptance are deferred/separate gates, not implied by this focused pass.
+
 The Windows test-host baseline comparison separately runs `VaultExportTests` and
 `WebFormsReviewInputValidationTests` on the pinned pre-hardening base and candidate.
 Candidate regression guards cover canonical LF Markdown hashes (with CRLF readback),

@@ -1,5 +1,14 @@
 # TraceMap Validation Guide
 
+For the bounded WebForms gap-family batch, run `WebFormsGapFamilyRegressionTests`,
+`VisualBasicWebFormsCompositionTests`, `LegacyWebFormsExtractorTests`,
+`LegacyWebFormsEventIdentityTests`, `MigrationRegressionCorpusTests` and
+`IntegratedMigrationReportTests`. The synthetic matrix pins escaped VB event
+receivers; Boolean literal lifecycle comparisons, negation, shadows and depth;
+config registration inheritance/clear; literal versus dynamic postbacks.
+Use `prompts/validate-webforms-gap-family-batch.md` for one private acceptance.
+No claimed reduction in private gap counts follows from synthetic coverage alone.
+
 For the first backend extraction report projection, run
 `BackendExtractionSampleTests`, `GroupedCompiledPathHandoffTests`,
 `ConstructedGenericSampleTests`, `FrameworkSignatureCandidateTests`,

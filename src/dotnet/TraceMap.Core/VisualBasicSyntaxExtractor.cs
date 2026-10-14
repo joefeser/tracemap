@@ -1020,6 +1020,17 @@ public static partial class VisualBasicSyntaxExtractor
         {
             return string.Empty;
         }
+        if (expression.ContainsDiagnostics) return string.Empty;
+        if (expression is WithEventsEventContainerSyntax container)
+        {
+            return container.Identifier.ValueText;
+        }
+        if (expression is IdentifierNameSyntax identifier)
+        {
+            // ValueText unescapes VB bracketed identifiers without accepting
+            // arbitrary expression text as a receiver identity.
+            return identifier.Identifier.ValueText;
+        }
         var text = expression.ToString();
         if (text.Equals("Me", StringComparison.OrdinalIgnoreCase)
             || text.Equals("MyBase", StringComparison.OrdinalIgnoreCase)

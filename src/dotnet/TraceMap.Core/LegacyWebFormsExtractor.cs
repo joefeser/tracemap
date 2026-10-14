@@ -1622,15 +1622,40 @@ public static partial class LegacyWebFormsExtractor
     {
         isNegative = false;
         isUnqualified = false;
-        expression = expression is VBSyntax.ParenthesizedExpressionSyntax parenthesized
-            ? parenthesized.Expression
-            : expression;
-        if (expression is VBSyntax.UnaryExpressionSyntax unary && unary.IsKind(VB.SyntaxKind.NotExpression))
+        if (expression.ContainsDiagnostics) return false;
+        // Only Boolean literal equality/inequality and Not are transparent.
+        // Do not infer a branch from compound conditions or arbitrary values.
+        for (var depth = 0; depth < 32; depth++)
         {
-            isNegative = true;
-            expression = unary.Operand is VBSyntax.ParenthesizedExpressionSyntax operandParenthesized
-                ? operandParenthesized.Expression
-                : unary.Operand;
+            if (expression is VBSyntax.ParenthesizedExpressionSyntax parenthesized)
+            {
+                expression = parenthesized.Expression;
+                continue;
+            }
+            if (expression is VBSyntax.UnaryExpressionSyntax unary && unary.IsKind(VB.SyntaxKind.NotExpression))
+            {
+                isNegative = !isNegative;
+                expression = unary.Operand;
+                continue;
+            }
+            if (expression is VBSyntax.BinaryExpressionSyntax binary
+                && (binary.IsKind(VB.SyntaxKind.EqualsExpression) || binary.IsKind(VB.SyntaxKind.NotEqualsExpression)))
+            {
+                var literal = binary.Right as VBSyntax.LiteralExpressionSyntax;
+                var operand = binary.Left;
+                if (literal is null)
+                {
+                    literal = binary.Left as VBSyntax.LiteralExpressionSyntax;
+                    operand = binary.Right;
+                }
+                if (literal is null || !(literal.IsKind(VB.SyntaxKind.TrueLiteralExpression)
+                    || literal.IsKind(VB.SyntaxKind.FalseLiteralExpression))) return false;
+                isNegative ^= literal.IsKind(VB.SyntaxKind.FalseLiteralExpression)
+                    ^ binary.IsKind(VB.SyntaxKind.NotEqualsExpression);
+                expression = operand;
+                continue;
+            }
+            break;
         }
 
         if (expression is VBSyntax.IdentifierNameSyntax identifier
