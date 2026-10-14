@@ -1306,6 +1306,7 @@ public sealed class WebFormsReviewExecutionTests
         var receipt = JsonSerializer.Deserialize<WebFormsHandlerRequeryReceipt>(File.ReadAllText(Path.Combine(destination,
             WebFormsReviewExecutionCommand.HandlerRequeryName)), JsonOptions)!;
         Assert.Equal(depth, receipt.Query.MaxDepth);
+        Assert.Equal("database-operations", receipt.Query.ToSurface);
         Assert.NotNull(receipt.CompletedReportSha256);
         Assert.True(receipt.PathEnumerationPerformed);
         Assert.Equal(WebFormsReviewExecutionCommand.HandlerRequeryHash(receipt), receipt.BoundedInputSha256);

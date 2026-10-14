@@ -396,7 +396,7 @@ public static partial class CombinedDependencyPathReporter
     private const int MaxTraversalDiagnosticShapes = 32;
     private const string Version = "1.0";
     private const string Algorithm = "bounded-bfs";
-    private const string AlgorithmVersion = "1.4";
+    private const string AlgorithmVersion = "1.5";
     private const int MarkdownPathLimit = 100;
     private const int MarkdownInventoryLimit = 200;
     private const string EndpointMatchRuleId = "combined.paths.endpoint-match.v1";
@@ -625,9 +625,9 @@ public static partial class CombinedDependencyPathReporter
                 throw new ArgumentException($"paths --to-surface '{surfaceKind}' is an edge kind, not a terminal surface.");
             }
 
-            if (!CombinedTerminalSurfaceKinds.AllSet.Contains(surfaceKind))
+            if (surfaceKind != "database-operations" && !CombinedTerminalSurfaceKinds.AllSet.Contains(surfaceKind))
             {
-                throw new ArgumentException($"paths --to-surface must be one of {CombinedTerminalSurfaceKinds.ValidationList}.");
+                throw new ArgumentException($"paths --to-surface must be database-operations or one of {CombinedTerminalSurfaceKinds.ValidationList}.");
             }
         }
 
@@ -5512,7 +5512,9 @@ public static partial class CombinedDependencyPathReporter
         return graph.Nodes.Values
             .Where(node => node.SurfaceKind is not null)
             .Where(node => explicitSurfaceKind || IsDefaultTerminalSurface(node, startFactIds))
-            .Where(node => surfaceKind is null || string.Equals(node.SurfaceKind, surfaceKind, StringComparison.Ordinal))
+            .Where(node => surfaceKind is null || (surfaceKind == "database-operations"
+                ? node.SurfaceKind is "database-api" or "sql-query" or "sql-persistence"
+                : string.Equals(node.SurfaceKind, surfaceKind, StringComparison.Ordinal)))
             .Where(node => surfaceName is null || SurfaceNameMatches(node, surfaceName))
             .Where(node => messageDirection is null || !IsMessageSurfaceKind(node.SurfaceKind) || string.Equals(node.OperationDirection, messageDirection, StringComparison.Ordinal))
             .Select(node => node.NodeId)
