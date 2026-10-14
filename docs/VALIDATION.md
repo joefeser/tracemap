@@ -4707,3 +4707,14 @@ Require an observed public Windows SQL database compatibility CI receipt at the 
 code head. Compile/scan only; never execute fixture methods or connect to databases.
 Other providers, full-index migration discovery, private contract capture and private
 application compatibility remain separate, explicitly partial/unavailable checks.
+
+## Compiled-baseline prewalk scope (#852)
+
+Run `dotnet test src/dotnet/TraceMap.sln --filter 'FullyQualifiedName~CompiledBaselinePrewalkTests|FullyQualifiedName~Deep_projectless_handler_crosses'`
+in standard Debug configuration, followed by the full Debug suite. The lanes
+pin: compiled-only depth truncation never emits source-bridge witnesses (all
+witness edges pass the compiled-baseline predicate); a compiled-legal IL
+terminal beyond the depth bound is recovered as a scope-legal
+TerminalReachabilityPrewalk witness; mixed-query depth recovery is unchanged;
+and the twelve-layer deep-projectless chain recovers the identical
+scope-legal witness at depth 8 that ordinary enumeration finds at depth 24.

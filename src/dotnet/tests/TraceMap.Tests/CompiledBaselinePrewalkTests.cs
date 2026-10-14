@@ -36,17 +36,25 @@ public sealed class CompiledBaselinePrewalkTests
         Assert.Contains(report.Report.Gaps, gap => gap.Reason == "depth");
         Assert.DoesNotContain("calls", report.Report.RootTraversal!.TraversedEdgeKinds);
         Assert.DoesNotContain("surface-evidence", report.Report.RootTraversal.TraversedEdgeKinds);
+        // The scope-aware prewalk may run, but with no compiled-legal terminal it must
+        // recover nothing: no witness note anywhere in the report.
+        Assert.DoesNotContain(report.Report.Paths.SelectMany(path => path.Notes), note => note.Code == "TerminalReachabilityPrewalk");
     }
 
     [Fact]
-    public async Task Compiled_only_depth_limit_keeps_gap_even_when_deeper_il_terminal_exists()
+    public async Task Compiled_only_depth_limit_recovers_scope_legal_il_terminal_witness()
     {
         var report = await CompiledReport(maxDepth: 1, terminalOnIlChain: true, "database-api", "DbDataAdapter.Fill");
-        Assert.Empty(report.Report.Paths);
-        Assert.True(report.Report.Summary.Truncated);
-        Assert.Contains(report.Report.Gaps, gap => gap.GapKind == "CompiledBaselineNoPath");
-        Assert.Contains(report.Report.Gaps, gap => gap.Reason == "depth");
-        Assert.DoesNotContain("compiled-database-api-candidate", report.Report.RootTraversal!.TraversedEdgeKinds);
+        // Depth bounds ordinary enumeration, not discoverability: the compiled-only prewalk
+        // must recover the deeper IL terminal through compiled-legal edges only.
+        var path = Assert.Single(report.Report.Paths);
+        Assert.Contains(path.Notes, note => note.Code == "TerminalReachabilityPrewalk");
+        Assert.All(path.Edges, edge =>
+            Assert.True(CombinedDependencyPathReporter.CompiledBaselineAllowsEdge(edge.EdgeKind, true), edge.EdgeKind));
+        Assert.Contains(path.Edges, edge => edge.EdgeKind == "compiled-il-call");
+        Assert.Contains(path.Edges, edge => edge.EdgeKind == "compiled-database-api-candidate");
+        Assert.True(report.Report.Summary.Truncated, "other truncated branches must stay explicitly partial");
+        Assert.Equal("compiled-il-with-root-attachment", report.Report.Query.TraversalScope);
     }
 
     [Fact]
@@ -91,8 +99,28 @@ public sealed class CompiledBaselinePrewalkTests
 
     private sealed record ReviewReport(CombinedDependencyPathReport Report, string[] InventoryEdgeKinds);
 
+    [Fact]
+    public async Task Compiled_only_prewalk_work_budget_ignores_out_of_scope_edges()
+    {
+        // A depth-frontier node bristling with source-only edges must not starve the
+        // compiled-legal search: scope-rejected edges never consume the work budget.
+        var report = await CompiledReport(maxDepth: 1, terminalOnIlChain: true, "database-api", "DbDataAdapter.Fill",
+            sourceFanOut: 60, maxTraversalWork: 40);
+        var path = Assert.Single(report.Report.Paths);
+        Assert.Contains(path.Notes, note => note.Code == "TerminalReachabilityPrewalk");
+        Assert.Contains(path.Edges, edge => edge.EdgeKind == "compiled-database-api-candidate");
+        // Node-simple: a baseline-state split must never revisit a node on one witness.
+        var nodeIds = path.Nodes.Select(node => node.NodeId).ToArray();
+        Assert.Equal(nodeIds.Length, nodeIds.Distinct(StringComparer.Ordinal).Count());
+        // Everything the prewalk does — including simplicity scans — stays inside the
+        // declared traversal work bound (no uncharged Θ(N²) predecessor walking).
+        Assert.True(report.Report.Summary.TraversalWorkUnits!.Value <= 40,
+            $"TraversalWorkUnits {report.Report.Summary.TraversalWorkUnits} escaped the declared bound");
+    }
+
     private static async Task<ReviewReport> CompiledReport(int maxDepth, bool terminalOnIlChain,
-        string toSurface, string? surfaceName, bool compiledOnly = true)
+        string toSurface, string? surfaceName, bool compiledOnly = true, int sourceFanOut = 0,
+        int maxTraversalWork = 10_000)
     {
         using var temp = new TempDirectory();
         var manifest = Manifest("server", "compiled-prewalk-review") with { CommitSha = new string('a', 40) };
@@ -103,6 +131,11 @@ public sealed class CompiledBaselinePrewalkTests
         // Source bridge the compiled baseline must never use.
         facts.Add(CallFact(manifest, "Chain.Handler()", "Chain.Helper()", "Graph.cs", 1));
         facts.Add(QueryPatternFact(manifest, "Chain.Helper()", "Graph.cs", 2));
+        for (var i = 0; i < sourceFanOut; i++)
+        {
+            facts.Add(CallFact(manifest, "Chain.M1()", $"Chain.Noise{i}()", "Graph.cs", 3 + i));
+            facts.Add(QueryPatternFact(manifest, $"Chain.Noise{i}()", "Graph.cs", 4 + i));
+        }
         var methods = (terminalOnIlChain
                 ? new[] { "Chain.Handler()", "Chain.M1()", "Chain.M2()" }
                 : new[] { "Chain.Handler()", "Chain.M1()", "Chain.M2()", "Chain.M3()", "Chain.M4()", "Chain.M5()" })
@@ -130,7 +163,7 @@ public sealed class CompiledBaselinePrewalkTests
         var root = new CombinedPathSymbolRoot(source.SourceIndexId, source.ScanId, source.CommitSha, "Chain.Handler()");
         var options = new CombinedDependencyPathOptions(combined, temp.Path, ToSurface: toSurface,
             SurfaceName: surfaceName, IncludeLegacyRoots: true, MaxDepth: maxDepth)
-        { CompiledOnly = compiledOnly, ExactFromSymbol = true, MaxTraversalWork = 10_000 };
+        { CompiledOnly = compiledOnly, ExactFromSymbol = true, MaxTraversalWork = maxTraversalWork };
         var report = await CombinedDependencyPathReporter.BuildSelectedSymbolsAsync(options, [root], combinedIndex: true);
         return new ReviewReport(report, inventoryEdgeKinds);
     }
