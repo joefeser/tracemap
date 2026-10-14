@@ -431,6 +431,9 @@ public static partial class VisualBasicSyntaxExtractor
                         ["bodyStartLine"] = (methodBodyLines.StartLinePosition.Line + 1).ToString(),
                         ["bodyEndLine"] = (methodBodyLines.EndLinePosition.Line + 1).ToString(),
                         ["parameterCount"] = parameterCount.ToString(),
+                        ["parameterOptionalFlags"] = string.Join(";", MethodParameters(statement).Select(parameter =>
+                            parameter.Modifiers.Any(SyntaxKind.OptionalKeyword) ? "optional" : "required")),
+                        ["hasParamArray"] = MethodParameters(statement).Any(parameter => parameter.Modifiers.Any(SyntaxKind.ParamArrayKeyword)).ToString(),
                         ["parameterTypes"] = string.Join(";", parameterTypes),
                         ["methodTypeParameters"] = statement is MethodStatementSyntax genericMethod
                             ? string.Join(";", genericMethod.TypeParameterList?.Parameters.Select(parameter => parameter.Identifier.ValueText) ?? [])
@@ -1146,6 +1149,8 @@ public static partial class VisualBasicSyntaxExtractor
         var properties = new SortedDictionary<string, string>(StringComparer.Ordinal)
         {
             ["argumentCount"] = (invocation.ArgumentList?.Arguments.Count ?? 0).ToString(),
+            ["allArgumentsPositional"] = (invocation.ArgumentList?.Arguments.All(argument =>
+                argument is SimpleArgumentSyntax simple && simple.NameColonEquals is null) ?? true).ToString(),
             ["callKind"] = "SyntaxInvocation",
             ["calleeName"] = invocationName,
             ["callerName"] = containingMember ?? string.Empty,
