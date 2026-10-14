@@ -58,6 +58,47 @@ public sealed class IntegratedMigrationReportTests
                 ? f with { Properties = new SortedDictionary<string, string>(f.Properties.ToDictionary(p => p.Key, p => p.Value), StringComparer.Ordinal)
                     { ["handlerName"] = "OtherHandler" } } : f)));
         var type = Assert.Single(scan.Facts, f => f.FactType == FactTypes.TypeDeclared);
+        var helperCall = Assert.Single(scan.Facts, f => f.FactType == FactTypes.CallEdge
+            && f.Properties.GetValueOrDefault("calleeName") == "ProcessAction");
+        var pathLine = Assert.Single(report.Split('\n'), line => line.StartsWith("- VB Handles observed-event", StringComparison.Ordinal));
+        Assert.True(pathLine.IndexOf(binding.FactId, StringComparison.Ordinal) < pathLine.IndexOf(helperCall.FactId, StringComparison.Ordinal));
+        Assert.True(pathLine.IndexOf(helperCall.FactId, StringComparison.Ordinal) < pathLine.IndexOf(operation.FactId, StringComparison.Ordinal));
+        var selfCall = helperCall with { FactId = "synthetic-recursive-helper", Evidence = operation.Evidence };
+        var cyclic = Report(scan.Facts.Append(selfCall));
+        Assert.Contains("Displayed groups with candidate entry paths: 1/1", cyclic);
+        Assert.Contains("search limited: False", cyclic);
+        // The old forward-per-anchor walk hit this unrelated depth cap first and
+        // stopped before reaching the real entry. Operation-directed search must
+        // neither inspect this component nor mislabel the real path as truncated.
+        var noise = new List<CodeFact>();
+        noise.Add(type with { FactId = "!noise-type", Evidence = type.Evidence with { FilePath = "Noise.vb" },
+            Properties = new Dictionary<string, string> { ["qualifiedName"] = "Noise", ["baseTypes"] = "UnavailableBase" } });
+        noise.Add(binding with { FactId = "!noise-anchor", Evidence = binding.Evidence with { FilePath = "Noise.vb", StartLine = 2, EndLine = 2 },
+            Properties = new Dictionary<string, string>(binding.Properties.ToDictionary(p => p.Key, p => p.Value)) { ["handlerName"] = "Noise0" } });
+        for (var i = 0; i < 20; i++)
+        {
+            noise.Add(handler with { FactId = "noise-method-" + i,
+                Evidence = handler.Evidence with { FilePath = "Noise.vb", StartLine = i * 10 + 1, EndLine = i * 10 + 1 },
+                Properties = new Dictionary<string, string> { ["qualifiedContainingType"] = "Noise", ["name"] = "Noise" + i,
+                    ["parameterCount"] = "0", ["bodyStartLine"] = (i * 10 + 1).ToString(), ["bodyEndLine"] = (i * 10 + 9).ToString() } });
+            if (i < 19) noise.Add(helperCall with { FactId = "noise-call-" + i,
+                Evidence = helperCall.Evidence with { FilePath = "Noise.vb", StartLine = i * 10 + 3, EndLine = i * 10 + 3 },
+                Properties = new Dictionary<string, string> { ["receiverName"] = "", ["calleeName"] = "Noise" + (i + 1), ["argumentCount"] = "0" } });
+        }
+        var withNoise = Report(scan.Facts.Concat(noise));
+        Assert.Contains("Displayed groups with candidate entry paths: 1/1", withNoise);
+        Assert.Contains("search limited: False", withNoise);
+        Assert.Contains("`candidate-path-retained`", withNoise);
+        Assert.Equal(withNoise, Report(scan.Facts.Concat(noise).Reverse()));
+        var deepCaller = helperCall with { FactId = "deep-source-caller",
+            Evidence = helperCall.Evidence with { FilePath = "Noise.vb", StartLine = 193, EndLine = 193 },
+            Properties = new Dictionary<string, string> { ["receiverName"] = "other", ["receiverType"] = handler.Properties["qualifiedContainingType"],
+                ["calleeName"] = "ProcessAction", ["argumentCount"] = "0" } };
+        var bounded = Report(scan.Facts.Concat(noise).Append(deepCaller));
+        Assert.Contains("Displayed groups with candidate entry paths: 1/1", bounded);
+        Assert.Contains("search limited: True", bounded);
+        var isolated = Report(scan.Facts.Where(f => f != helperCall));
+        Assert.Contains("`no-supported-source-callers-or-local-anchor`", isolated);
         void CheckProperty(CodeFact fact, string key, string value, string reason)
         {
             var changed = fact with { Properties = fact.Properties.ToDictionary(p => p.Key, p => p.Value) };
