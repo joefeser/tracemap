@@ -621,6 +621,15 @@ public sealed partial class IlBodyEvidenceExtractorTests
         Assert.All(provenance.Outcomes, outcome => Assert.Equal("unbound", outcome.ProvenanceState));
         Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.ManagedIlBodyDeclared
             && fact.Properties.GetValueOrDefault("provenanceState") == "unbound");
+        // Value/command uncertainty does not erase the separately observed IL
+        // calls. Compiled calls are not represented by the source CallEdge type.
+        var uncertainBodies = result.Facts.Where(fact => fact.FactType == FactTypes.AnalysisGap
+                && fact.RuleId is RuleIds.DotNetIlValues or RuleIds.DotNetIlCommandBinding)
+            .Select(fact => fact.Properties.GetValueOrDefault("ilBodyFactId"))
+            .Where(id => id is not null).ToHashSet(StringComparer.Ordinal);
+        Assert.NotEmpty(uncertainBodies);
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.ManagedIlCallObserved
+            && uncertainBodies.Contains(fact.Properties.GetValueOrDefault("ilBodyFactId")));
     }
 
     [Fact]

@@ -2,6 +2,17 @@
 
 Operator examples use generic site, page, and handler names. Historical receipts remain bound to their recorded input bytes; genericized examples do not establish a fresh platform validation result.
 
+Retained IL inspection: run `python3 -m unittest discover -s scripts/validation
+-p test_inspect_retained_il_body.py` (on one shell line). The read-only helper
+`scripts/inspect-retained-il-body.py` follows exact source-index-local
+`ilBodyFactId` links and counts `ManagedIlCallObserved`, not source `CallEdge`.
+It verifies call/body file hashes and refuses ambiguous selectors and bounded
+query overflow. Its console-only output is diagnostic, not a new admission
+artifact. Private identities require the explicit `--local-details` flag.
+`IlBodyEvidenceExtractorTests.Unbound_provenance_still_records_operand_aware_bodies`
+also pins that IL calls survive value/command gaps. Neither inspection nor
+analysis alone proves graph admission or database reachability.
+
 Nested projectless VB delegation: the
 `ExplicitVisualBasicContextTests.Syntax_page_reaches_semantic_database_body_only_through_unique_bridge`
 matrix includes a concrete field calling a same-named protected nested method,
