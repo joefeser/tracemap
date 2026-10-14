@@ -15,7 +15,7 @@ public sealed partial class ManagedMetadataExtractorTests
 {
     [Fact]
     public void Dispatch_flag_schema_has_a_distinct_extractor_version()
-        => Assert.Equal("managed-metadata/0.1.4+cecil-0.11.6", ScannerVersions.ManagedMetadataExtractor);
+        => Assert.Equal("managed-metadata/0.2.0+cecil-0.11.6", ScannerVersions.ManagedMetadataExtractor);
     [Fact]
     public void Cecil_declaring_type_cycle_has_a_bounded_failure()
     {
@@ -922,6 +922,48 @@ public sealed partial class ManagedMetadataExtractorTests
             directory = directory.Parent;
         }
         throw new DirectoryNotFoundException("Could not locate repository root.");
+    }
+
+    [Fact]
+    public void Runtime_floor_derivation_covers_the_pre_attribute_and_modern_families()
+    {
+        // Inputs are distinct version sets: the result cannot depend on reader row order.
+        static IReadOnlyCollection<string> Set(params string[] versions) => versions;
+        // 4.0+ tooling: the attribute is authoritative.
+        Assert.Equal(("target-framework-attribute", ".NETFramework,Version=v4.0", null),
+            ManagedMetadataExtractor.RuntimeFloor(".NETFramework,Version=v4.0", Set("4.0.0.0"), Set(), Set()));
+        // A present-but-empty attribute keeps the attribute basis and mints no CLR floor.
+        Assert.Equal(("target-framework-attribute", null, null),
+            ManagedMetadataExtractor.RuntimeFloor("", Set("2.0.0.0"), Set(), Set()));
+        // Pre-4.0 tooling (no attribute): the mscorlib reference decides the CLR family.
+        Assert.Equal(("mscorlib-assembly-reference", "clr-1.x", "1.0.5000.0"),
+            ManagedMetadataExtractor.RuntimeFloor(null, Set("1.0.5000.0"), Set(), Set()));
+        Assert.Equal(("mscorlib-assembly-reference", "clr-2.x", "2.0.0.0"),
+            ManagedMetadataExtractor.RuntimeFloor(null, Set("2.0.0.0"), Set(), Set()));
+        Assert.Equal(("mscorlib-assembly-reference", "clr-2.x", "2.0.50727.5420"),
+            ManagedMetadataExtractor.RuntimeFloor(null, Set("2.0.50727.5420"), Set(), Set())); // 3.5 still compiles against mscorlib 2.x
+        Assert.Equal(("mscorlib-assembly-reference", "clr-4.x", "4.0.0.0"),
+            ManagedMetadataExtractor.RuntimeFloor(null, Set("4.0.0.0"), Set(), Set())); // rare: 4.0 reference without the attribute
+        // Unknown mscorlib majors keep the reference basis with no floor, never guessed.
+        Assert.Equal(("mscorlib-assembly-reference", null, "5.0.0.0"),
+            ManagedMetadataExtractor.RuntimeFloor(null, Set("5.0.0.0"), Set(), Set()));
+        // Duplicate same-name references at different versions are a typed conflict.
+        Assert.Equal(("conflicting-assembly-references", null, "2.0.0.0|4.0.0.0"),
+            ManagedMetadataExtractor.RuntimeFloor(null, Set("4.0.0.0", "2.0.0.0"), Set(), Set()));
+        // netstandard is the contract family; a bare System.Runtime reference stays
+        // facade-ambiguous (the .NET 4.5+ facade shares the name) and keeps no floor.
+        Assert.Equal(("netstandard-assembly-reference", "netstandard", "2.1.0"),
+            ManagedMetadataExtractor.RuntimeFloor(null, Set(), Set("2.1.0"), Set()));
+        Assert.Equal(("system-runtime-assembly-reference", null, "4.0.0.0"),
+            ManagedMetadataExtractor.RuntimeFloor(null, Set(), Set(), Set("4.0.0.0")));
+        // mscorlib outranks the contract references when several are present.
+        Assert.Equal(("mscorlib-assembly-reference", "clr-4.x", "4.0.0.0"),
+            ManagedMetadataExtractor.RuntimeFloor(null, Set("4.0.0.0"), Set("2.0.0.0"), Set("4.0.10.0")));
+        // No recognizable signal: explicitly unresolved (admitted assemblies without
+        // the attribute or framework references; netmodules are rejected as inputs
+        // before this derivation and never reach it).
+        Assert.Equal(("unresolved", null, null),
+            ManagedMetadataExtractor.RuntimeFloor(null, Set(), Set(), Set()));
     }
 
     private static string Git(string repo, params string[] arguments)

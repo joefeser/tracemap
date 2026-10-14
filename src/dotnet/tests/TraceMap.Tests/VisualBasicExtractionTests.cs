@@ -355,6 +355,11 @@ public sealed class VisualBasicExtractionTests
         Assert.Contains(result.Facts, fact =>
             fact.FactType == FactTypes.AnalysisGap
             && fact.RuleId == RuleIds.VisualBasicSyntaxEventWiring
+            && fact.Properties.GetValueOrDefault("gapKind") == "UnsupportedVisualBasicEventHandlerDelegate");
+        // The With receiver is now supported; AddressOf .OnChanged remains
+        // outside the bounded delegate syntax (unqualified, Me or MyClass only).
+        Assert.DoesNotContain(result.Facts, fact =>
+            fact.RuleId == RuleIds.VisualBasicSyntaxEventWiring
             && fact.Properties.GetValueOrDefault("gapKind") == "UnsupportedVisualBasicEventReceiver");
     }
 
