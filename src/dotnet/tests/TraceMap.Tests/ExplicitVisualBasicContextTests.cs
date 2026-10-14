@@ -13,6 +13,10 @@ public sealed class ExplicitVisualBasicContextTests
     [Theory]
     [InlineData("valid")]
     [InlineData("partial")]
+    [InlineData("nested")]
+    [InlineData("nested-partial")]
+    [InlineData("nested-inherited")]
+    [InlineData("nested-wrapper")]
     [InlineData("missing")]
     [InlineData("ambiguous")]
     [InlineData("operation-absent")]
@@ -47,6 +51,40 @@ public sealed class ExplicitVisualBasicContextTests
         if (scenario == "missing") worker = worker.Replace("Sub Run(", "Sub Other(", StringComparison.Ordinal);
         if (scenario == "ambiguous") worker = worker.Replace("End Class", "Public Sub Run(command As String)\nEnd Sub\nEnd Class", StringComparison.Ordinal);
         if (scenario == "partial") worker += "\nPublic Class Broken\nInherits MissingBase\nEnd Class";
+        if (scenario.StartsWith("nested", StringComparison.Ordinal)) worker = """
+            Public Class Worker
+                Private DA As New InnerAccess
+                Public Function Run(command As System.Data.Common.DbCommand) As Integer
+                    Return DA.Run(command)
+                End Function
+                Protected Class InnerAccess
+                    Public Function Run(command As System.Data.Common.DbCommand) As Integer
+                        Return command.ExecuteNonQuery()
+                    End Function
+                    Public Function Unrelated(command As System.Data.Common.DbCommand) As Integer
+                        Return command.ExecuteScalar().GetHashCode()
+                    End Function
+                End Class
+            End Class
+            """;
+        if (scenario == "nested-partial") worker = worker.Replace("Protected Class InnerAccess", "Protected Class InnerAccess\nInherits MissingBase", StringComparison.Ordinal);
+        if (scenario is "nested-inherited" or "nested-wrapper")
+        {
+            worker = worker.Replace("Protected Class InnerAccess", "Protected Class InnerAccess\nInherits FrameworkBase", StringComparison.Ordinal)
+                .Replace("Return command.ExecuteNonQuery()", "Return SQLDA.ExecProc_Scalar(command)", StringComparison.Ordinal)
+                + """
+
+                Public Class FrameworkBase
+                    Protected SQLDA As New FrameworkWrapper
+                End Class
+                Public Class FrameworkWrapper
+                    Public Function ExecProc_Scalar(command As System.Data.Common.DbCommand) As Integer
+                        Return command.ExecuteNonQuery()
+                    End Function
+                End Class
+                """;
+            if (scenario == "nested-wrapper") worker = worker.Replace("Return command.ExecuteNonQuery()", "Return 0", StringComparison.Ordinal);
+        }
         File.WriteAllText(Path.Combine(repo, "App_Code", "Worker.vb"), worker);
         foreach (var args in new[] { new[] { "init" }, new[] { "add", "." }, new[] { "-c", "user.name=Synthetic", "-c", "user.email=test@example.invalid", "commit", "-m", "fixture" } })
         {
@@ -65,6 +103,19 @@ public sealed class ExplicitVisualBasicContextTests
                 .Distinct(StringComparer.Ordinal).Select(path => new { path, sha256 = Hash(path) }).ToArray()
         }));
         var scan = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "scan")) { VisualBasicCompilationContextPath = context });
+        if (scenario.StartsWith("nested", StringComparison.Ordinal))
+        {
+            var methods = scan.Facts.Where(f => f.FactType == FactTypes.MethodDeclared
+                && f.EvidenceTier == EvidenceTiers.Tier1Semantic && f.ContractElement == "Run").ToArray();
+            var inner = Assert.Single(methods, f => f.TargetSymbol!.Contains("InnerAccess", StringComparison.Ordinal));
+            var outer = Assert.Single(methods, f => !f.TargetSymbol!.Contains("InnerAccess", StringComparison.Ordinal));
+            Assert.Contains(scan.Facts, f => f.FactType == FactTypes.CallEdge
+                && f.EvidenceTier == EvidenceTiers.Tier1Semantic
+                && f.SourceSymbol == outer.TargetSymbol && f.TargetSymbol == inner.TargetSymbol);
+            // A custom wrapper name is never sufficient to classify a DB operation.
+            Assert.DoesNotContain(scan.Facts, f => f.FactType == FactTypes.DatabaseOperationCandidate
+                && f.TargetSymbol?.Contains("ExecProc_Scalar", StringComparison.Ordinal) == true);
+        }
         Assert.DoesNotContain(scan.Facts, f => f.Evidence.FilePath == "Page.aspx.vb" && f.EvidenceTier == EvidenceTiers.Tier1Semantic);
         if (scenario == "lookalike") Assert.DoesNotContain(scan.Facts, f => f.FactType == FactTypes.DatabaseOperationCandidate);
         else Assert.Contains(scan.Facts, f => f.FactType == FactTypes.DatabaseOperationCandidate && f.EvidenceTier == EvidenceTiers.Tier1Semantic);
@@ -93,14 +144,17 @@ public sealed class ExplicitVisualBasicContextTests
         Assert.Empty(narrow.Paths); // Existing compiled-API selector retains its original meaning.
         var audit = Assert.IsType<RetainedDatabaseTerminalAudit>(narrowDiagnostic!.SourceDatabaseAudit);
         Assert.False(audit.RowsTruncated);
-        Assert.Equal(scenario is "operation-absent" or "lookalike" ? 0 : 1, audit.OperationFactCount);
+        Assert.Equal(scenario is "operation-absent" or "lookalike" ? 0
+            : scenario.StartsWith("nested", StringComparison.Ordinal) && scenario != "nested-wrapper" ? 2 : 1, audit.OperationFactCount);
         Assert.Equal(audit.OperationFactCount, audit.ProjectedOperationCount);
-        if (scenario is "valid" or "partial")
+        if (scenario is "valid" or "partial" or "nested" or "nested-partial" or "nested-inherited")
         {
             Assert.Null(diagnostic);
             Assert.Equal(1, audit.ReachableOperationCallerCount);
             Assert.Equal(1, audit.ReachableOperationTerminalCount);
-            Assert.Equal("operation-terminal-reached", Assert.Single(audit.Operations).State);
+            Assert.Single(audit.Operations, operation => operation.State == "operation-terminal-reached");
+            if (scenario.StartsWith("nested", StringComparison.Ordinal))
+                Assert.Single(audit.Operations, operation => operation.State == "operation-caller-not-reached");
             Assert.NotEmpty(audit.NamedCalls);
             Assert.All(audit.NamedCalls, call => Assert.Single(call.OperationFactIds));
             var sourceReport = await CombinedDependencyPathReporter.BuildReportAsync(new(combined, Path.Combine(temp.Path, "source-paths"),
@@ -126,6 +180,11 @@ public sealed class ExplicitVisualBasicContextTests
             }
             if (scenario == "operation-other-caller")
                 Assert.Equal("operation-caller-not-reached", Assert.Single(audit.Operations).State);
+            if (scenario == "nested-wrapper")
+            {
+                Assert.Equal("operation-caller-not-reached", Assert.Single(audit.Operations).State);
+                Assert.Contains(diagnostic.Nodes, node => node.SymbolId?.Contains("ExecProc_Scalar", StringComparison.Ordinal) == true);
+            }
             if (scenario == "operation-no-caller")
                 Assert.Equal("projected-terminal-without-exact-caller-edge", Assert.Single(audit.Operations).State);
         }
