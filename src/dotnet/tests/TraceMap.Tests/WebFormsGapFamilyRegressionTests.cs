@@ -6,6 +6,8 @@ public sealed class WebFormsGapFamilyRegressionTests
 {
     [Theory]
     [InlineData("IsPostBack = False", "NotIsPostBackBranch")]
+    [InlineData("Not Page.IsPostBack", "NotIsPostBackBranch")]
+    [InlineData("Page.IsPostBack = False", "NotIsPostBackBranch")]
     [InlineData("False = Me.IsPostBack", "NotIsPostBackBranch")]
     [InlineData("MyBase.IsPostBack <> True", "NotIsPostBackBranch")]
     [InlineData("IsPostBack <> False", "IsPostBackBranch")]
@@ -100,6 +102,72 @@ public sealed class WebFormsGapFamilyRegressionTests
         Assert.Equal(clear, facts.Any(f => f.Properties.GetValueOrDefault("gapKind") == "UnresolvedWebFormsControlRegistration"));
         Assert.Single(facts, f => f.FactType == FactTypes.WebFormsPostBackTargetCandidate);
         Assert.Single(facts, f => f.Properties.GetValueOrDefault("gapKind") == "DynamicWebFormsPostBackTarget");
+    }
+
+    [Theory]
+    [InlineData("button", true)]
+    [InlineData("New Button()", true)]
+    [InlineData("GetButton()", false)]
+    [InlineData("holder.Button", false)]
+    public void With_event_receiver_uses_nearest_bounded_syntax_only(string receiver, bool supported)
+    {
+        using var temp = new TempDirectory();
+        File.WriteAllText(Path.Combine(temp.Path, "Events.vb"), $"""
+            Class Events
+                Sub Wire()
+                    With outerButton
+                        With {receiver}
+                            AddHandler .Click, AddressOf Clicked
+                            RemoveHandler .Click, AddressOf Clicked
+                        End With
+                    End With
+                End Sub
+                Sub Clicked()
+                End Sub
+            End Class
+            """);
+        var facts = VisualBasicSyntaxExtractor.Extract(temp.Path, Manifest(), FileInventory.Collect(temp.Path), null);
+        var bindings = facts.Where(f => f.FactType == FactTypes.VisualBasicEventBindingDeclared).ToArray();
+        Assert.Equal(supported ? 2 : 0, bindings.Length);
+        Assert.All(bindings, f =>
+        {
+            Assert.NotEqual("outerButton", f.Properties["receiverName"]);
+            Assert.Equal(EvidenceTiers.Tier3SyntaxOrTextual, f.EvidenceTier);
+        });
+        Assert.Equal(supported ? 0 : 2, facts.Count(f => f.Properties.GetValueOrDefault("gapKind") == "UnsupportedVisualBasicEventReceiver"));
+    }
+
+    [Fact]
+    public void Page_receiver_shadow_stays_unknown()
+    {
+        using var temp = new TempDirectory();
+        WritePage(temp.Path, "Not Page.IsPostBack", "Dim Page As Object");
+        var facts = Extract(temp.Path);
+        Assert.DoesNotContain(facts, f => f.FactType == FactTypes.WebFormsLifecycleBranchCandidate);
+        Assert.Contains(facts, f => f.Properties.GetValueOrDefault("gapKind") == "AmbiguousWebFormsIsPostBackReceiver");
+    }
+
+    [Fact]
+    public void Implicit_event_receiver_does_not_escape_with_or_cross_lambda()
+    {
+        using var temp = new TempDirectory();
+        File.WriteAllText(Path.Combine(temp.Path, "Events.vb"), """
+            Class Events
+                Sub Wire()
+                    AddHandler .Click, AddressOf Clicked
+                    With button
+                        Dim deferred = Sub()
+                                           AddHandler .Click, AddressOf Clicked
+                                       End Sub
+                    End With
+                End Sub
+                Sub Clicked()
+                End Sub
+            End Class
+            """);
+        var facts = VisualBasicSyntaxExtractor.Extract(temp.Path, Manifest(), FileInventory.Collect(temp.Path), null);
+        Assert.DoesNotContain(facts, f => f.FactType == FactTypes.VisualBasicEventBindingDeclared);
+        Assert.Equal(2, facts.Count(f => f.Properties.GetValueOrDefault("gapKind") == "UnsupportedVisualBasicEventReceiver"));
     }
 
     private static void WritePage(string root, string condition, string declaration = "")

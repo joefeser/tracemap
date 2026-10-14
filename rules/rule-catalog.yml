@@ -3092,6 +3092,7 @@ rules:
       - WebFormsLifecycleBranchCandidate
       - AnalysisGap
     limitations:
+      - VB Page.IsPostBack is a syntax candidate only when Page and IsPostBack are not shadowed by the inspected method or containing declaration. It does not prove framework identity or exclude hidden members in unavailable base types or separate partial declarations.
       - Bare IsPostBack and explicit C# this.IsPostBack or VB Me.IsPostBack/MyBase.IsPostBack conditions emit IsPostBackBranch with is-postback-syntax context; their logical negations retain NotIsPostBackBranch with not-is-postback-syntax context. One layer of parentheses is accepted at each existing expression boundary. These are syntax candidates, not proof of Page symbol identity, a branch running, lifecycle ordering, state initialization, runtime reachability, or correctness.
       - Local, parameter, or containing-type member shadowing prevents an unqualified IsPostBack condition from becoming lifecycle evidence. VB additionally accepts at most 32 parentheses, Not, and equality/inequality wrappers against Boolean literals on either side. C# Boolean comparisons, compound conditions, arbitrary receivers, non-Boolean comparisons, helper-based conditions, and other expressions outside the documented shape remain explicit gaps. Positive branch support does not widen client-script inside-not-is-postback-syntax attribution or claim anything about else-branch execution.
 
@@ -4888,6 +4889,7 @@ rules:
     limitations:
       - Names are local syntax text only and never compiler-resolved event or handler identities. Receivers may be late-bound, stale designer members, or unrelated same-named members.
       - Bracket-escaped identifier receivers are normalized using VB token ValueText; this does not authorize arbitrary dotted receiver chains or invocation receivers. Malformed receiver syntax remains a gap.
+      - An implicit member event inside With uses only the nearest With receiver and never crosses a lambda or method boundary. Local/self-qualified names and direct simple-type construction are supported; construction has hashed site identity, not a control or compiler identity. Invocation and arbitrary property chains remain gaps; unsupported inner With blocks never fall back to outer receivers.
       - Lambda, bare delegate-variable, arbitrarily qualified receiver, malformed, and unsupported shapes emit category-only gaps. AddHandler/RemoveHandler method names require an explicit AddressOf operand; unqualified and Me/MyClass-qualified local member shapes may be retained without gaining symbol identity. Raw delegate/event expressions are hashed or omitted.
       - The shared per-file 2,000-fact budget applies; missing evidence beyond that limit is not evidence of absence.
       - Syntax event evidence does not prove compilation, attachment, removal, firing, ordering, postback behavior, reachability, or execution.

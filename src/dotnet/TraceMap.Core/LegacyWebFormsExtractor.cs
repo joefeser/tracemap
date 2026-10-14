@@ -1584,7 +1584,10 @@ public static partial class LegacyWebFormsExtractor
 
             var span = condition.SyntaxTree.GetLineSpan(condition.Span);
             var lineNumber = span.StartLinePosition.Line + 1;
-            if (isUnqualified && HasVisualBasicIsPostBackShadow(method.Declaration))
+            if (isUnqualified && (HasVisualBasicIsPostBackShadow(method.Declaration)
+                || (condition.DescendantNodesAndSelf().OfType<VBSyntax.IdentifierNameSyntax>()
+                    .Any(identifier => identifier.Identifier.ValueText.Equals("Page", StringComparison.OrdinalIgnoreCase))
+                    && HasVisualBasicIsPostBackShadow(method.Declaration, "Page"))))
             {
                 facts.Add(CreateGap(manifest, method.FilePath, lineNumber, "AmbiguousWebFormsIsPostBackReceiver", "A VB local, parameter, or containing-type member shadows unqualified IsPostBack; TraceMap did not treat the condition as Page lifecycle evidence."));
                 continue;
@@ -1665,6 +1668,17 @@ public static partial class LegacyWebFormsExtractor
             return true;
         }
 
+        if (expression is VBSyntax.MemberAccessExpressionSyntax
+            {
+                Expression: VBSyntax.IdentifierNameSyntax receiver,
+                Name: VBSyntax.IdentifierNameSyntax pageMember
+            } && receiver.Identifier.ValueText.Equals("Page", StringComparison.OrdinalIgnoreCase)
+              && pageMember.Identifier.ValueText.Equals("IsPostBack", StringComparison.OrdinalIgnoreCase))
+        {
+            isUnqualified = true; // Require local/member shadow checks for Page.
+            return true;
+        }
+
         return expression is VBSyntax.MemberAccessExpressionSyntax
         {
             Expression: VBSyntax.MeExpressionSyntax or VBSyntax.MyBaseExpressionSyntax,
@@ -1672,9 +1686,9 @@ public static partial class LegacyWebFormsExtractor
         } && member.Identifier.ValueText.Equals("IsPostBack", StringComparison.OrdinalIgnoreCase);
     }
 
-    private static bool HasVisualBasicIsPostBackShadow(SyntaxNode methodDeclaration)
+    private static bool HasVisualBasicIsPostBackShadow(SyntaxNode methodDeclaration, string shadowName = "IsPostBack")
     {
-        static bool IsPostBack(string name) => name.Equals("IsPostBack", StringComparison.OrdinalIgnoreCase);
+        bool IsPostBack(string name) => name.Equals(shadowName, StringComparison.OrdinalIgnoreCase);
 
         if (methodDeclaration is VBSyntax.MethodBlockBaseSyntax method
             && method.BlockStatement is VBSyntax.MethodStatementSyntax statement

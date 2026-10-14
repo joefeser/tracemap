@@ -2,6 +2,13 @@
 
 Operator examples use generic site, page, and handler names. Historical receipts remain bound to their recorded input bytes; genericized examples do not establish a fresh platform validation result.
 
+The reported-shape follow-up extends `WebFormsGapFamilyRegressionTests` with
+implicit With event receivers and VB Page.IsPostBack candidates. Run the adjacent
+VB composition, legacy WebForms, stacked migration and integrated report suites.
+Also run `python3 scripts/validation/test_retained_gap_inventory.py` for the public
+compiled-reason catalog and separate compiled/other-known/unknown-rule totals.
+These counts are gap occurrences, not unique defects or runtime coverage.
+
 Runtime distribution capacity: run `RuntimeInventoryBoundaryTests` plus
 `Runtime_digest_pins_dependency_bytes_without_paths_or_timestamp_discovery` and
 `Retained_tool_copy_matches_the_pinned_distribution_without_rewriting_run_or_copying_external_runtime`.
