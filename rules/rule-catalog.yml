@@ -2801,7 +2801,7 @@ rules:
       - webforms-review-tool-copy.v1 local-only tool-copy manifest
     limitations:
       - Original distribution and .NET runtime version must be available and match the checkpoint. Missing historical locations, changed bytes, existing outputs and input/run/tool/runtime overlap are refused.
-      - Copies at most 512 selected files of at most 256 MiB each and 2 GiB total, with at most 4096 filesystem entries and no symlink traversal; the local manifest is capped at 1 MiB.
+      - Runtime inventory and copying share a 4096-filesystem-entry bound, counting directories and ignored files as well as selected runtime files. Every selected file, including satellites and nested build hosts, is hashed; each is bounded to 256 MiB and their aggregate to 2 GiB. No symlink traversal is allowed; the local manifest is capped at 1 MiB. The former independent 512-selected-file ceiling is removed without changing digest serialization or excluding dependencies.
       - Does not execute copied code or package source, compiled websites, receipts, parent scans, external .NET runtime, SDK or adapters. Not self-contained, portable, authenticated publisher or reproducible-build evidence.
       - Resume from copied bytes still performs original generator/runtime and authoritative external-input gates. The original run and distribution are preserved; failed staging remains inspectable and no cleanup is authorized.
       - Exact generator and bounded original/run/file commitments plus payload SHA-256 are local integrity evidence; private paths and hashes must not be published.
