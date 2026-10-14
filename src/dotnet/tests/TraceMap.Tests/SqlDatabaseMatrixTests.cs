@@ -35,7 +35,9 @@ public sealed class SqlDatabaseMatrixTests
         Assert.Equal(inventory.Order(), methods.Select(m => m.Name).Order());
         using var temp = new TempDirectory();
         var semantic = ScanEngine.Scan(new ScanOptions(sample,Path.Combine(temp.Path,"semantic")));
-        Assert.Equal("Succeeded", semantic.Manifest.BuildStatus);
+        Assert.True(semantic.Manifest.BuildStatus == "Succeeded",
+            JsonSerializer.Serialize(new { semantic.Manifest.BuildStatus, semantic.Manifest.KnownGaps,
+                Gaps = semantic.Facts.Where(f => f.FactType == FactTypes.AnalysisGap).ToArray() }));
         var calls = semantic.Facts.Where(f => f.FactType == FactTypes.DatabaseOperationCandidate && f.EvidenceTier == EvidenceTiers.Tier1Semantic).ToArray();
         var projectless = Path.Combine(temp.Path,"source");Directory.CreateDirectory(projectless);
         foreach (var file in Directory.GetFiles(sample, language == "vb" ? "*.vb" : "*.cs")) File.Copy(file,Path.Combine(projectless,Path.GetFileName(file)));

@@ -78,7 +78,7 @@ public sealed class WebFormsReviewExecutionTests
     public async Task Tool_copy_refuses_missing_changed_or_overlapping_dependencies_without_output(string scenario, string category)
     {
         using var fixture = new Fixture(); fixture.AddPublicEventFixture(); await fixture.Preflight();
-        Assert.Equal(0, await fixture.Execute("run", Scan));
+        Assert.True(await fixture.Execute("run", Scan) == 0, fixture.Error.ToString());
         Assert.Equal(0, await fixture.ExecuteReports("resume", WebFormsReviewReportExecution.WriteAsync));
         var checkpoint = fixture.LastCheckpoint(); var tool = checkpoint.ToolDistribution!;
         if (scenario == "missing-location") tool = null!;
@@ -825,7 +825,8 @@ public sealed class WebFormsReviewExecutionTests
         using var fixture = new Fixture(pathSuffix);
         fixture.AddPublicEventFixture(sourceFolder);
         await fixture.Preflight();
-        Assert.Equal(0, await TraceMapCommand.RunAsync(["webforms-review", "run", "--run", fixture.Run], fixture.Output, fixture.Error));
+        Assert.True(await TraceMapCommand.RunAsync(["webforms-review", "run", "--run", fixture.Run], fixture.Output, fixture.Error) == 0,
+            fixture.Error.ToString());
         Assert.Contains("reviewOnly=true;sourceRescanned=true", fixture.Output.ToString(), StringComparison.Ordinal);
         Assert.Contains("sourceExtractionScope=current-invocation;reportPhaseSourceRescanned=false;scanOperation=fresh;scanCheckpointSha256=", fixture.Output.ToString(), StringComparison.Ordinal);
         fixture.Output.GetStringBuilder().Clear();
