@@ -800,8 +800,12 @@ public sealed class WebFormsModernizationPacketTests
         Assert.Contains("source-span-unavailable", sanitizedText, StringComparison.Ordinal);
     }
 
-    [Fact]
-    public async Task Handler_traversal_observations_distinguish_no_edge_nonterminal_path_and_terminal_path()
+    [Theory]
+    [InlineData("property")]
+    [InlineData("invocation-only")]
+    [InlineData("call-only")]
+    [InlineData("declaration-only")]
+    public async Task Handler_traversal_observations_distinguish_no_edge_nonterminal_path_and_terminal_path(string leafEvidence)
     {
         using var temp = new TempDirectory();
         var manifest = Manifest("Succeeded") with { AnalysisLevel = "Level1SemanticAnalysis" };
@@ -854,6 +858,8 @@ public sealed class WebFormsModernizationPacketTests
             source: null, target: "method:leaf", contract: "Leaf", ("coverageLabel", "syntax-only"));
         var leafBodyEvidence = Fact(manifest, FactTypes.PropertyAccessed, RuleIds.CSharpSemanticPropertyAccess, "Pages/Traversal.aspx.cs", 33,
             source: "method:leaf", target: "property:state", contract: "State", ("coverageLabel", "bounded-static-property-access"));
+        var leafCallWithoutTarget = Fact(manifest, FactTypes.CallEdge, RuleIds.CSharpSemanticCallGraph, "Pages/Traversal.aspx.cs", 32,
+            source: "method:leaf", target: null, contract: "MissingTarget", ("coverageLabel", "reduced-static-call"));
         var terminalCall = Fact(manifest, FactTypes.CallEdge, RuleIds.CSharpSemanticCallGraph, "Pages/Traversal.aspx.cs", 31,
             source: "method:terminal", target: "method:query", contract: "Query", ("coverageLabel", "bounded-static-call"));
         var query = Fact(manifest, FactTypes.QueryPatternDetected, RuleIds.CSharpSyntaxQueryPattern, "Services/Query.cs", 40,
@@ -878,7 +884,11 @@ public sealed class WebFormsModernizationPacketTests
                 ["coverageLabel"] = "bounded-static-call"
             });
         var index = Path.Combine(temp.Path, "index.sqlite");
-        SqliteIndexWriter.Write(index, manifest, [page, .. bindings, .. handlers, unjoinedSyntaxCall, unrelatedSameNameCall, unjoinedFlow, downstreamCall, downstreamFlow, leafInvocationWithoutCall, leafDeclaration, leafBodyEvidence, terminalCall, query, fillCall, frameworkFill]);
+        var leafFacts = leafEvidence == "declaration-only" ? new[] { leafDeclaration }
+            : leafEvidence == "call-only" ? new[] { leafDeclaration, leafCallWithoutTarget }
+            : leafEvidence == "invocation-only" ? new[] { leafDeclaration, leafInvocationWithoutCall }
+            : new[] { leafDeclaration, leafInvocationWithoutCall, leafBodyEvidence };
+        SqliteIndexWriter.Write(index, manifest, [page, .. bindings, .. handlers, unjoinedSyntaxCall, unrelatedSameNameCall, unjoinedFlow, downstreamCall, downstreamFlow, .. leafFacts, terminalCall, query, fillCall, frameworkFill]);
 
         var packet = await WebFormsModernizationPacketReporter.BuildAsync(new(index, Path.Combine(temp.Path, "output")));
 
@@ -920,10 +930,14 @@ public sealed class WebFormsModernizationPacketTests
         Assert.False(string.IsNullOrWhiteSpace(downstreamCallEvidence.CallSiteId));
         Assert.Contains(EvidenceTiers.Tier2Structural, downstream.TraversalObservation?.LeafEvidenceTiers ?? []);
         Assert.Contains("canonical-symbol-no-reconciliation-needed", downstream.TraversalObservation?.LeafReconciliationStates ?? []);
-        Assert.Contains("method-invocation-source-retained-without-call-fact", downstream.TraversalObservation?.LeafCallEvidenceStates ?? []);
-        Assert.Contains("exact-method-declaration-and-body-evidence-retained", downstream.TraversalObservation?.LeafSourceAvailabilityStates ?? []);
+        Assert.Contains(leafEvidence == "declaration-only" ? "no-call-shaped-source-evidence-retained"
+            : leafEvidence == "call-only" ? "call-fact-source-retained-without-graph-edge"
+            : "method-invocation-source-retained-without-call-fact", downstream.TraversalObservation?.LeafCallEvidenceStates ?? []);
+        Assert.Contains(leafEvidence == "declaration-only" ? "exact-method-declaration-without-body-evidence"
+            : "exact-method-declaration-and-body-evidence-retained", downstream.TraversalObservation?.LeafSourceAvailabilityStates ?? []);
         Assert.False(downstream.TraversalObservation?.DiagnosticShapesTruncated);
-        Assert.Equal("downstream-call-edge", downstream.NextEvidenceKind);
+        Assert.Equal(leafEvidence == "declaration-only" ? "method-body-evidence"
+            : leafEvidence == "call-only" ? "downstream-graph-edge" : "downstream-call-edge", downstream.NextEvidenceKind);
         var terminal = packet.EventChains.Single(chain => chain.HandlerFactId == handlers[3].FactId);
         Assert.Equal("supported-terminal-reached", terminal.TraversalObservation?.StopState);
         Assert.True(terminal.TraversalObservation?.TerminalPathCount > 0);
