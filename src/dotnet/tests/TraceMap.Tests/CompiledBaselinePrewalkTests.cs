@@ -112,6 +112,10 @@ public sealed class CompiledBaselinePrewalkTests
         // Node-simple: a baseline-state split must never revisit a node on one witness.
         var nodeIds = path.Nodes.Select(node => node.NodeId).ToArray();
         Assert.Equal(nodeIds.Length, nodeIds.Distinct(StringComparer.Ordinal).Count());
+        // Everything the prewalk does — including simplicity scans — stays inside the
+        // declared traversal work bound (no uncharged Θ(N²) predecessor walking).
+        Assert.True(report.Report.Summary.TraversalWorkUnits!.Value <= 40,
+            $"TraversalWorkUnits {report.Report.Summary.TraversalWorkUnits} escaped the declared bound");
     }
 
     private static async Task<ReviewReport> CompiledReport(int maxDepth, bool terminalOnIlChain,
