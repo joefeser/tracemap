@@ -1,5 +1,11 @@
 # Inspect the exact Save framework boundary
 
+For the existing retained F1 investigation, use
+`prompts/inspect-save-retained-il-calls.md` first. Compiled outgoing observations
+are `ManagedIlCallObserved`, not `CallEdge`; searching only source call types
+cannot establish that compiled calls are absent. This older source/IL inspection
+prompt does not override the exact retained-body helper or its bounds.
+
 Five-minute TOTAL wall-clock limit. This is static inspection of one existing
 framework method, not another application scan or missing-nested-call diagnosis.
 
