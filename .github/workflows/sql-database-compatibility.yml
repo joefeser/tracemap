@@ -1,0 +1,52 @@
+name: SQL database public compatibility
+on:
+  push:
+    branches: [dev, main, codex/sql-database-matrix-864]
+    paths: ['src/dotnet/**', 'samples/sql-database-matrix/**', 'samples/*migration*/**', 'samples/projectless-sql-parameter-association/**', 'scripts/diagnostics/SqlReferenceMatrix/**', 'scripts/diagnostics/RecoverSqlCommandText/**', 'scripts/validation/*sql*', 'scripts/sql-wrapper-report.py', 'scripts/validate-adapter-artifacts.py', 'scripts/test_validate_adapter_artifacts.py', 'rules/**', 'prompts/*sql*', 'prompts/accept-integrated-migration-report.md', 'prompts/plan-backend-api-extraction.md', 'docs/validation/SQL_DATABASE_MATRIX.md', 'docs/validation/MIGRATION_REGRESSION_COVERAGE.md', '.github/workflows/sql-database-compatibility.yml']
+  pull_request:
+    paths: ['src/dotnet/**', 'samples/sql-database-matrix/**', 'samples/*migration*/**', 'samples/projectless-sql-parameter-association/**', 'scripts/diagnostics/SqlReferenceMatrix/**', 'scripts/diagnostics/RecoverSqlCommandText/**', 'scripts/validation/*sql*', 'scripts/sql-wrapper-report.py', 'scripts/validate-adapter-artifacts.py', 'scripts/test_validate_adapter_artifacts.py', 'rules/**', 'prompts/*sql*', 'prompts/accept-integrated-migration-report.md', 'prompts/plan-backend-api-extraction.md', 'docs/validation/SQL_DATABASE_MATRIX.md', 'docs/validation/MIGRATION_REGRESSION_COVERAGE.md', '.github/workflows/sql-database-compatibility.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  public-static-validation:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
+        with:
+          dotnet-version: 10.0.302
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.12'
+      - name: Compile public fixtures and validate each source, IL and report case
+        run: dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter "FullyQualifiedName~ProjectlessParameterCandidateTests|FullyQualifiedName~SqlDatabaseMatrixTests|FullyQualifiedName~SqlWrapperRouteTests|FullyQualifiedName~ProjectlessSqlReportingTests|FullyQualifiedName~DatabaseCommandStateTests|FullyQualifiedName~GroupedCompiledPathHandoffTests|FullyQualifiedName~BackendExtractionSampleTests|FullyQualifiedName~VisualBasicExternalBoundaryTests|FullyQualifiedName~VisualBasicDataBoundaryTests|FullyQualifiedName~FrameworkSignatureCandidateTests" -warnaserror
+      - name: Independent named oracle mutation guards
+        run: python scripts/validation/test_sql_matrix_expectations.py
+      - name: Report projection and review regression guards
+        run: dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-build --filter "FullyQualifiedName~MarkdownReportWriterTests|FullyQualifiedName~SqlReviewRegressionTests" -warnaserror
+      - name: Integrated WebForms SQL and HTTP boundary acceptance
+        run: dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-build --filter "FullyQualifiedName~StackedMigrationRegressionTests|FullyQualifiedName~PropertyChainMigrationTests|FullyQualifiedName~InlineReceiverMigrationTests|FullyQualifiedName~MigrationRegressionCorpusTests|FullyQualifiedName~IntegratedMigrationReportTests|FullyQualifiedName~VisualBasicWebFormsCompositionTests|FullyQualifiedName~LegacyWebFormsEventIdentityTests|FullyQualifiedName~OutboundHttpLegacyCoverageTests" -warnaserror
+      - name: Cached VB lookup equivalence and scaling guards
+        run: dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-build --filter FullyQualifiedName~VisualBasicSyntaxTypeLookupTests --logger "console;verbosity=detailed"
+      - name: Selected-root SQL report guards
+        run: python scripts/validation/test_sql_wrapper_report.py
+      - name: Large retained index admission (public padded SQLite, no graph-scale claim)
+        shell: pwsh
+        run: python scripts/validation/sql-wrapper-large-index-smoke.py --cli src/dotnet/TraceMap.Cli/bin/Debug/net10.0/tracemap.dll --out "$env:RUNNER_TEMP/sql-wrapper-large-index"
+      - name: Opt-in local SQL literal recovery guards
+        shell: pwsh
+        run: |
+          dotnet build scripts/diagnostics/RecoverSqlCommandText/RecoverSqlCommandText.csproj -warnaserror
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python scripts/validation/test_sql_command_text.py --tool scripts/diagnostics/RecoverSqlCommandText/bin/Debug/net10.0/RecoverSqlCommandText.dll --paths "$env:RUNNER_TEMP/sql-wrapper-large-index/accepted/root-001/paths-report.json" --assembly samples/sql-database-matrix/wrapper-build/bin/Debug/net472/SyntheticWebsite.dll
+      - name: Deterministic native CLI matrix (no fixture execution)
+        shell: pwsh
+        run: python scripts/validation/sql-coverage-smoke.py --output "$env:RUNNER_TEMP/sql-matrix"
+      - name: Independent HTTP oracle guards
+        run: python scripts/validation/test_http_matrix_expectations.py
+      - name: Deterministic HTTP matrix (no fixture execution)
+        shell: pwsh
+        run: python scripts/validation/http-coverage-smoke.py --output "$env:RUNNER_TEMP/integrated-http-matrix"

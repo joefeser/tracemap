@@ -315,12 +315,13 @@ public static partial class CombinedDependencyPathReporter
     private static bool TryFrameworkDatabaseApi(string targetIdentity, out string api)
     {
         api = string.Empty;
-        if (!targetIdentity.StartsWith("memberref|type:scope(assembly:name:11:System.Data|", StringComparison.Ordinal))
-            return false;
         var memberStart = targetIdentity.IndexOf("|member:", StringComparison.Ordinal);
-        if (memberStart < 0)
-            return false;
+        if (memberStart < 0) return false;
         var declaringType = targetIdentity[..memberStart];
+        var trusted = new[] { ("System.Data", "b77a5c561934e089"), ("System.Data.Common", "b03f5f7f11d50a3a"),
+            ("System.Data.SqlClient", "b03f5f7f11d50a3a"), ("Microsoft.Data.SqlClient", "23ec7fc2d6eaa4a5") };
+        if (!trusted.Any(identity => declaringType.StartsWith($"memberref|type:scope(assembly:name:{identity.Item1.Length}:{identity.Item1}|", StringComparison.Ordinal)
+            && declaringType.Contains($"|culture:7:neutral|publicKeyToken:16:{identity.Item2})", StringComparison.Ordinal))) return false;
         // Preserve the historical Fill-family selector used by -FillOnly.
         // Native compilers may encode the inherited member on DataAdapter;
         // the retained call fact still carries that exact declaring identity.
@@ -331,22 +332,22 @@ public static partial class CombinedDependencyPathReporter
             api = "DbDataAdapter.Fill";
             return true;
         }
-        var commandType = new[]
+        var type = new[] { ("System.Data.Common", "DbCommand"), ("System.Data", "IDbCommand"),
+            ("System.Data.SqlClient", "SqlCommand"), ("Microsoft.Data.SqlClient", "SqlCommand"),
+            ("System.Data.Common", "DbDataAdapter"), ("System.Data.Common", "DataAdapter"), ("System.Data", "IDataAdapter"),
+            ("System.Data.SqlClient", "SqlDataAdapter"), ("Microsoft.Data.SqlClient", "SqlDataAdapter"),
+            ("System.Data.SqlClient", "SqlBulkCopy"), ("Microsoft.Data.SqlClient", "SqlBulkCopy"),
+            ("System.Data.Odbc", "OdbcCommand"), ("System.Data.OleDb", "OleDbCommand") }.FirstOrDefault(t => HasType(t.Item1, t.Item2));
+        if (type.Item2 is null) return false;
+        var operations = new[] { "ExecuteReader", "ExecuteNonQuery", "ExecuteScalar", "ExecuteXmlReader" }
+            .SelectMany(name => new[] { name, name + "Async", "Begin" + name, "End" + name }).Concat(["Fill", "FillSchema", "Update", "WriteToServer", "WriteToServerAsync"]);
+        foreach (var method in operations)
         {
-            (Namespace: "System.Data.Common", Name: "DbCommand"),
-            (Namespace: "System.Data", Name: "IDbCommand"),
-            (Namespace: "System.Data.SqlClient", Name: "SqlCommand"),
-            (Namespace: "System.Data.Odbc", Name: "OdbcCommand"),
-            (Namespace: "System.Data.OleDb", Name: "OleDbCommand")
-        }.FirstOrDefault(type => HasType(type.Namespace, type.Name));
-        if (commandType.Name is null)
-            return false;
-        foreach (var method in new[] { "ExecuteReader", "ExecuteNonQuery", "ExecuteScalar" })
-        {
-            if (!HasMember(method))
-                continue;
-            api = $"{commandType.Name}.{method}";
-            return true;
+            var adapter = type.Item2.EndsWith("Adapter", StringComparison.Ordinal);
+            var bulk = type.Item2 == "SqlBulkCopy";
+            if (!HasMember(method) || (adapter ? method is not ("Fill" or "FillSchema" or "Update")
+                : bulk ? method is not ("WriteToServer" or "WriteToServerAsync") : !method.Contains("Execute", StringComparison.Ordinal))) continue;
+            api = $"{type.Item2}.{method}"; return true;
         }
         return false;
 
@@ -389,14 +390,21 @@ public static partial class CombinedDependencyPathReporter
             TextLength: null,
             PackageName: null,
             ConfigKey: null,
-            SurfaceSubtype: api == "DbDataAdapter.Fill"
-                ? "compiled-data-adapter-fill-candidate" : "compiled-command-execute-candidate",
+            SurfaceSubtype: api[(api.LastIndexOf('.') + 1)..] switch
+            {
+                "Fill" => "compiled-data-adapter-fill-candidate",
+                "FillSchema" => "compiled-data-adapter-schema-candidate",
+                "Update" => "compiled-data-adapter-update-candidate",
+                "WriteToServer" or "WriteToServerAsync" => "compiled-bulk-write-boundary",
+                _ => "compiled-command-execute-candidate"
+            },
             Limitations: api == "DbDataAdapter.Fill"
                 ? ["The historical DbDataAdapter.Fill surface groups encoded Fill calls declared on DbDataAdapter or DataAdapter. Original declaring identities remain in supporting IL call facts. This is a static API candidate, not provider dispatch, SQL execution, or a source-line identity claim."]
                 : binding is null
                 ? ["Static IL call to a framework database API; no SQL text, database provider dispatch, source line, or runtime execution is established."]
                 : ["Static straight-line command configuration candidate; command strings are hashed or unresolved operand origins, not a resolved SQL statement/procedure. No parameter propagation, runtime dispatch or SQL execution is established."],
-            CommandBinding: binding);
+            CommandBinding: binding,
+            CompiledDatabaseApiEvidence: CompiledDatabaseApiEvidence.Create(call,caller));
         graph.AddNode(terminal);
         graph.AddEdge(new GraphEdge(
             $"compiled-database-api:{call.CombinedFactId}", "compiled-database-api-candidate",

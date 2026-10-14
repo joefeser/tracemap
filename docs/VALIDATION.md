@@ -4618,3 +4618,72 @@ or full migration acceptance follows from this fixture.
 Legacy HTTP compatibility: use [the public reference matrix](../samples/outbound-http-coverage/LEGACY-COMPATIBILITY.md) and its per-TFM overload inventories. Record application project TFM, TargetFrameworkAttribute and exact referenced assembly/member identities separately. System 2.0.0.0 does not identify an application's TFM. Missing TFM stays unknown. Package-added/backported APIs, other profiles and private application parity remain unvalidated. Run the public static-only smoke with `python3 scripts/validation/http-coverage-smoke.py --output <public-temporary-output>`; Windows CI results must bind an actual run and commit. Never execute fixture methods.
 
 The legacy HTTP fixture TFMs are **representative test targets, not confirmed application targets**. Application-specific compatibility is **pending work-machine validation**, a deferred check that does not block this public branch. Use [InspectHttpFramework](../scripts/diagnostics/InspectHttpFramework/README.md) for read-only XML/metadata collection and its [sanitized return template](../scripts/diagnostics/InspectHttpFramework/SANITIZED-SUMMARY.md). Keep project/config declarations, binary attributes and encoded reference signatures separate; no value wins automatically. Keep the local report, private input hashes, paths and artifacts on the work machine. Public guards: `python3 scripts/validation/test_http_framework_inspection.py`.
+
+## SQL/database migration matrix (#864)
+
+The durable [migration regression corpus](../samples/migration-regression-corpus/README.md)
+maps the parameter, text, event-anchor and integrated-chain fixes to checked-in
+synthetic samples and positive/negative tests. Run `MigrationRegressionCorpusTests`
+alongside `ProjectlessParameterCandidateTests` and `IntegratedMigrationReportTests`.
+The latter includes an unrelated deep event graph that must not starve a known
+operation's reverse caller search. Native scans run in tests; no fixture method,
+SQL statement or HTTP request is executed. Windows compatibility CI runs the corpus.
+
+Integrated source migration acceptance: run `IntegratedMigrationReportTests`
+against `samples/migration-vertical-slice`. The public projectless VB page and
+user-control boundaries traverse an explicit backend wrapper to SQL and outbound
+HTTP; an unconnected SQL operation remains visible. Tests check ordered evidence,
+parameter grouping, broken-edge/binding negatives and deterministic fact ordering.
+Run alongside compiled `SqlWrapperRouteTests`, WebForms composition/event identity,
+and outbound HTTP tests. The report does not join historical compiled reports to
+source paths or infer deployed routes. Use
+`prompts/accept-integrated-migration-report.md` for one private focused acceptance,
+not repeated field-by-field scan requests.
+
+The same tests also scan a synthetic VB UserControl with a `Handles` button
+binding, an implicit same-class helper call and `WebClient.UploadString`. Its
+entry anchor must remain Tier3 syntax evidence, not a handler-resolution fact or
+deployed route. Missing type/call evidence, ambiguous method ownership and
+unrelated bindings must leave the operation unconnected. The full-chain test also
+runs with an unavailable external base and a Windows Forms base: the event chain
+remains visible but neither is classified as a WebForms boundary. Framework
+ancestry assessment is separate from event-chain connectivity, never inferred
+from a short base name, and no DLL or application method is executed.
+
+`VisualBasicSyntaxTypeLookupTests` compares the cached resolver against its prior
+algorithm, pins root isolation/concurrent reads and repeated immutable-result reuse,
+and prints a lookup-only synthetic timing (2000 creations, 20 imports, 500 lookups).
+No wall-clock assertion is used. This is not a private whole-scan speed claim.
+
+Run `ProjectlessParameterCandidateTests` for VB SqlParameter constructor
+syntax witnesses: qualification/import/alias positives, shadows and unrelated
+types, hashed names, dynamic/named argument unknowns and report references.
+These independent construction candidates do not establish command attachment
+or wrapper argument propagation. They are not procedure parameter contracts.
+
+The separate compiled-caller/wrapper acceptance suite is `SqlWrapperRouteTests`.
+Run `python3 scripts/validation/test_sql_wrapper_report.py` for local report
+failure/bounds/provenance guards. The helper consumes an existing closed index
+and exact caller selectors; it does not execute application methods or SQL.
+See `prompts/produce-sql-wrapper-inventory.md` for the SQL-only work-machine
+workflow and explicit missing-input/partial-coverage delivery requirements.
+
+Projectless correction: also run `ProjectlessSqlReportingTests` and
+`MarkdownReportWriterTests`. Independently authored fixtures cover imported
+relative qualification, unrelated same-named types, alias/shadow refusal,
+Open/Close negatives, empty and capped report output, and separate website /
+wrapper-source / admitted-wrapper-IL inputs. No fixture method executes. Source
+arguments are not propagated into a resolved procedure/SQL contract. macOS can
+compile the net472 reference fixture; an exact-head Windows run remains a
+separate platform validation gate, not implicit in a cross-platform build.
+
+Use [the SQL matrix](validation/SQL_DATABASE_MATRIX.md) and public samples under
+samples/sql-database-matrix. Run SqlDatabaseMatrixTests and DatabaseCommandStateTests,
+then adjacent VisualBasicExternalBoundary, IntegrationExtractor, BackendExtractionSample,
+GroupedCompiledPathHandoff and compiled-path regressions. Run the independent oracle
+mutation guards and sql-coverage-smoke.py for 96 native scan outputs across eight
+TFMs, both languages and three modes, with deterministic repeats and artifact validation.
+Require an observed public Windows SQL database compatibility CI receipt at the exact
+code head. Compile/scan only; never execute fixture methods or connect to databases.
+Other providers, full-index migration discovery, private contract capture and private
+application compatibility remain separate, explicitly partial/unavailable checks.

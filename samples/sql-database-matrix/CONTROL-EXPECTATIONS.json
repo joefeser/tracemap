@@ -1,0 +1,110 @@
+{
+  "ControlLiteral": {
+    "semantic": 1,
+    "projectless": 1
+  },
+  "ControlConstant": {
+    "semantic": 1,
+    "projectless": 1
+  },
+  "ControlDynamic": {
+    "semantic": 1,
+    "projectless": 1
+  },
+  "ControlStoredProcedure": {
+    "semantic": 1,
+    "projectless": 1
+  },
+  "ControlText": {
+    "semantic": 1,
+    "projectless": 1
+  },
+  "ControlParameters": {
+    "semantic": 1,
+    "projectless": 1
+  },
+  "ControlTransaction": {
+    "semantic": 1,
+    "projectless": 1
+  },
+  "ControlReassignment": {
+    "semantic": 1,
+    "projectless": 1
+  },
+  "ControlAlias": {
+    "semantic": 1,
+    "projectless": 1
+  },
+  "ControlField": {
+    "semantic": 1,
+    "projectless": 1
+  },
+  "ControlFactory": {
+    "semantic": 1,
+    "projectless": 1
+  },
+  "ControlInterface": {
+    "semantic": 1,
+    "projectless": 1
+  },
+  "ControlShared": {
+    "semantic": 1,
+    "projectless": 1
+  },
+  "ControlUnconnected": {
+    "semantic": 1,
+    "projectless": 1
+  },
+  "ControlReuse": {
+    "semantic": 2,
+    "projectless": 2
+  },
+  "ControlGeneric": {
+    "semantic": 1,
+    "projectless": 0
+  },
+  "ControlEntry": {
+    "semantic": 0,
+    "projectless": 0
+  },
+  "ControlWrapper": {
+    "semantic": 0,
+    "projectless": 0
+  },
+  "ControlOpenClose": {
+    "semantic": 0,
+    "projectless": 0
+  },
+  "ControlFake": {
+    "semantic": 0,
+    "projectless": 0
+  },
+  "ControlContent": {
+    "semantic": 0,
+    "projectless": 0
+  },
+  "ControlBranch": {
+    "semantic": 1,
+    "projectless": 1
+  },
+  "ControlUnknownCall": {
+    "semantic": 1,
+    "projectless": 1
+  },
+  "ControlNestedAssignment": {
+    "semantic": 1,
+    "projectless": 1
+  },
+  "ControlAliasEscape": {
+    "semantic": 1,
+    "projectless": 1
+  },
+  "ControlConnectionAssignment": {
+    "semantic": 1,
+    "projectless": 1
+  },
+  "ControlConnectionConstructor": {
+    "semantic": 1,
+    "projectless": 1
+  }
+}

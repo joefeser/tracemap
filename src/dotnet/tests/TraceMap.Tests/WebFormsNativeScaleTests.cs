@@ -397,7 +397,11 @@ public sealed class WebFormsNativeScaleTests(ITestOutputHelper output)
             using var site = AssemblyDefinition.CreateAssembly(new("Synthetic.WebSite", new Version(1, 0)), "Synthetic.WebSite", ModuleKind.Dll);
             var dm = data.MainModule; var sm = site.MainModule;
             dm.Mvid = new Guid("10000000-0000-0000-0000-000000000001"); sm.Mvid = new Guid("10000000-0000-0000-0000-000000000002");
-            var framework = new AssemblyNameReference("System.Data", new Version(4, 0, 0, 0)); dm.AssemblyReferences.Add(framework);
+            var framework = new AssemblyNameReference("System.Data", new Version(4, 0, 0, 0))
+            {
+                PublicKeyToken = Convert.FromHexString("b77a5c561934e089")
+            };
+            dm.AssemblyReferences.Add(framework);
             var adapter = new TypeReference("System.Data.Common", "DbDataAdapter", dm, framework);
             var dataset = new TypeReference("System.Data", "DataSet", dm, framework);
             var fill = new MethodReference("Fill", dm.TypeSystem.Int32, adapter) { HasThis = true }; fill.Parameters.Add(new(dataset));

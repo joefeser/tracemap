@@ -3925,6 +3925,7 @@ rules:
       - CompiledIlTargetAmbiguous gap
       - CompiledIlCommandBindingUnavailable gap
     limitations:
+      - SQL matrix terminals retain original signed System.Data/System.Data.Common/System.Data.SqlClient/Microsoft.Data.SqlClient MemberRefs as Tier3 compiled-only API candidates, including XML/APM/async/token, adapter schema/update and separate bulk boundaries. They are not source semantic operations; optional straight-line IL command binding remains limited to its documented forms. Original IL signatures and generator/bounded-input provenance remain in supporting facts.
       - The historical DbDataAdapter.Fill surface also groups Fill calls encoded on System.Data.Common.DataAdapter in neutral, b77a5c561934e089 System.Data. This preserves Fill-only selectors, not exact declaring-type equivalence; supporting IL call facts retain the original declaring identity. It does not prove provider dispatch or SQL execution.
       - Requires a validated bound source-to-metadata reconciliation for source entry, an exact source symbol ID on one uniquely displayed Tier1 call source, admitted dual-reader IL body/call facts, exact fact-ID joins, and one unique MethodDef or assembly-scoped MemberRef target; no binary discovery or guessed source-to-binary identity occurs in this graph layer. A source method without a retained Tier1 call source cannot enter through this first slice.
       - A call/newobj edge records a static encoded target, not execution or branch feasibility. A callvirt operand produces only a Tier3 review candidate because actual virtual dispatch may select an override; it does not prove runtime target, reflection, dependency-injection binding, or a database operation.
@@ -4917,7 +4918,10 @@ rules:
       - AnalysisGap
     limitations:
       - Method parameterPassingModes records explicit ByRef or the VB default ByVal in declaration order. This is syntax evidence only; existing member identity spelling is unchanged and no parameter value propagation is inferred.
+      - From vb-syntax/0.4.14, properties retain qualified owner, explicit return type, index-parameter count, Shared modifier and lexical import/shadow context. Fields additionally retain Shared/array syntax and context. These support bounded declaration-chain candidates, not getter execution, value flow or runtime identity.
+      - From vb-syntax/0.4.13, parameterOptionalFlags and hasParamArray record declaration syntax for bounded positional optional-tail matching; they do not establish default values or overload binding.
       - Method methodTypeParameters records method generic variable names in declaration order, not generic constraints or containing-type parameter bindings. This additive syntax evidence does not rewrite member identities or prove compiler binding.
+      - Method importAliasNames and containingTypeParameters retain alias names and enclosing generic parameter names as shadow guards for syntax projections. They do not resolve alias targets or generic substitutions. These additive fields require vb-syntax/0.4.12 or later extraction.
       - Explicit local webforms-vb-import-context.v1 input can supply effective imports for its exact inventoried App_Code source subset. The scanner checks commit/root identity, source/configuration/provider bytes, payload digest and generator digest presence. The receipt is observer evidence, not authenticated historical build provenance; signatures remain Tier3 candidates with ProjectlessPublishImportsNotBuildBound and an HTML warning. No provider or application assembly is loaded by the scanner. Invalid, stale, linked, escaped, malformed or oversized inputs produce a sanitized WebFormsVbImportContextRejected gap. Configured root imports are not added on top of an admitted effective set. Aliased source imports withhold enrichment.
       - App_Code method declarations may retain configuredImportedNamespaces from an inventoried scan-root Web.config explicitly selecting the framework VBCodeProvider in System. Explicit application pages/namespaces additions (with local clear/remove processing) and compilerOptions /imports are retained separately from source Imports, with configuration path, SHA-256, kind and limitation. No inherited machine defaults, aliases, external config, location scopes, nested App_Code config, custom providers, legacy compilation compiler overrides or project evaluation are inferred. Configuration reads are bounded to 256 KiB, compiler options to 16384 characters and imports to 128 names. Missing enrichment is not absence of effective compiler imports; re-extraction is required for old indexes.
       - Syntax-only names are text evidence; they are never compiler-resolved targets and never join to semantic symbols by identity.
@@ -4955,6 +4959,8 @@ rules:
       - CallEdge
     limitations:
       - Callees are invocation or creation text, never compiler-resolved targets; edges prove only that call-like syntax exists at a location.
+      - From vb-syntax/0.4.14, pure identifier/member receivers retain receiverChain plus root-kind/type evidence. Factory/indexer invocation receivers are excluded. Lexical shadows and array variables block type-root reinterpretation; absence of a shadow is not compiler binding.
+      - From vb-syntax/0.4.13, allArgumentsPositional is false for named or omitted argument syntax; it gates optional-tail matching without interpreting argument values.
       - The caller is the lexically containing member derived from syntax; no runtime reachability, dispatch, or execution is claimed.
       - Object-creation edges use `SyntaxObjectCreation` call kinds and are bounded by the same deterministic per-file budget as other fallback facts.
       - A direct inline `New Type().Method()` invocation retains the textual created receiver type with `inline-object-creation-syntax` provenance; this is not compiler type binding or proof that construction succeeds.
@@ -4972,17 +4978,39 @@ rules:
       - Creation candidates prove syntax presence only; constructor identity, executed constructor, and runtime allocation are not claimed.
       - In an otherwise semantically analyzed file, this rule is used only when the created type is known but its constructor is unresolved, and a `CallSiteSemanticResolutionUnavailable` Tier4 gap accompanies it.
 
+  - id: vb.syntax.database-parameter.v1
+    name: Projectless VB SQL parameter syntax candidate
+    description: Records explicit SqlParameter construction or typed command.Parameters.Add with source spans, argument hashes and bounded positional name/type syntax witnesses.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - DatabaseParameterCandidate
+    limitations:
+      - Empty seeds recognize the VB intrinsic String.Empty and explicit Global.System.String.Empty syntax only. Arbitrary Empty properties, aliases, escaped String identifiers and unqualified System.String are not evaluated. The latest supported simple assignment replaces the earlier seed; the trace does not require overwritten expressions to be constant. This remains syntax evidence, not framework identity proof.
+      - Command-text tracing is a syntax-only backward search from the constructor first argument within the same statement list. It accepts a direct string literal or a local identifier with contiguous literal assignments and literal concatenation updates (&= or +=), stopping at the most recent simple assignment/initializer. Parentheses and literal & expressions are supported. Limits are 64 statements, 128 visited expression nodes and 16384 characters. Unknown expressions, branches and intervening statements stop the trace; no identifier propagation or StringBuilder evaluation occurs. Only a hash and locations are emitted, not SQL text. Operator/overload semantics, runtime values and procedure contracts remain unverified.
+      - Value-expression observations within the same bounded later-call search match command receiver text and exact ordinal literal parameter index only. Each matching assignment retains an expression hash, syntax kind and source location; repeats are not collapsed or interpreted as a final value. Dynamic indexes and other receiver text are excluded. Unknown effects do not establish runtime object identity. Constructor first-argument origin similarly retains hash/kind/location only, without overload resolution, identifier propagation, SQL recovery or procedure identity.
+      - laterExecutionSyntax is an independent lexical observation after an established local receiver, bounded to 64 following statements in the same block. It records the first supported direct zero-argument execution call with the same receiver text, retaining an unknown-effects warning across complex expressions. Direct receiver reassignment or a non-expression/non-assignment statement stops the search. It never upgrades commandExecutionEvidence or establishes instance continuity, reachability, argument values or procedure identity.
+      - Add receiver and local constructor checks share the same SqlClient type resolver, including relative qualification through imports and aliases. The checks require one matching supported provider; this is still syntax evidence and cannot exclude cross-file shadows.
+      - Receiver and execution evidence are separate. Once the bounded backward search establishes a fresh local declaration at an Add site, commandReceiverAssociation retains a syntax-local-declaration-candidate even when later expressions or reassignment prevent execution association. This does not resolve values, property getter effects, execution reachability, compiler identity or procedure contracts. The legacy commandAssociation field still requires the bounded forward execution check.
+      - Collection Add support requires a simple command identifier with explicit SqlClient command type evidence. File-local imports, aliases and relative qualification are considered; competing supported providers are refused. With blocks, factories, collection aliases and AddWithValue are outside this rule.
+      - Optional local command association is a syntax candidate only. One method, Try, Catch, Finally or Using statement list of at most 256 statements must contain a fresh single local command creation, literal/enum Add calls and a direct zero-argument execution within a combined 64-statement window. Constructor arguments are limited to three positional literals or non-command identifiers. Simple assignments to command Transaction, Connection, CommandText, CommandTimeout or literal-indexed Parameters.Value permit only literal or non-command identifier right sides. Other intervening statements stop association; traversal never crosses block boundaries. Declaration and execution spans do not establish compiler identity, procedure binding or runtime behavior. Every candidate records an association reason.
+      - Only System.Data.SqlClient and Microsoft.Data.SqlClient SqlParameter type syntax is recognized. Unique file-local import/alias resolution or explicit qualification is required; same-file shadows and ambiguous imports are excluded. Other-file shadows cannot be excluded without semantics.
+      - At most 16 constructor arguments are inspected within the existing per-file fact budget. Names and expressions are hashed, never emitted as raw parameter values. Named/reordered arguments do not receive positional interpretation.
+      - Only explicit System.Data.SqlDbType enum syntax yields a type candidate. No overload/provider/compiler identity, direction default, command attachment, wrapper propagation, database declaration or runtime value is inferred.
+      - Candidate facts are independent construction or collection-call evidence, not database execution calls or unique procedure parameters. Reports retain source/fact references for human review; absent candidates do not prove no parameters.
+
   - id: vb.syntax.database-operation.v1
     name: Visual Basic syntax database operation
-    description: Bounded syntax-only database-operation candidates where a Visual Basic `Fill`, `ExecuteScalar[Async]`, `ExecuteReader[Async]`, or `ExecuteNonQuery[Async]` invocation has a receiver declared with an explicit supported ADO.NET adapter or command type.
+    description: Bounded explicit-receiver SQL command, adapter and bulk API syntax candidates, including projectless App_Code Web Sites.
     evidenceTier: Tier3SyntaxOrTextual
     emits:
       - DatabaseOperationCandidate
     limitations:
-      - The receiver type is explicit source syntax, not a compiler-resolved type; aliases, provider identity, and successful binding are not established. Lexical parameters and preceding locals shadow fields; inherited fields require one bounded, unique syntax-only base-type chain.
-      - Adapter recognition is limited to `DbDataAdapter`, `SqlDataAdapter`, `OleDbDataAdapter`, and `OdbcDataAdapter`. Command recognition is limited to the allowlisted `DbCommand`/`IDbCommand` and common SQL, OLE DB, ODBC, Oracle, SQLite, DB2, PostgreSQL, and MySQL command type names; name-only calls and custom receiver types are not classified.
-      - The fact does not retain or infer SQL text, connection identity, table identity, runtime reachability, branch feasibility, or successful execution.
-      - Emission is bounded by the Visual Basic syntax fallback per-file fact budget and remains reduced syntax coverage.
+      - Qualified relative type names are expanded only through file-local namespace imports; arbitrary namespace prefixes are never discarded. Alias ownership and same-file prefix shadows are preserved. Cross-file shadows and ambiguous namespace resolution remain unproven syntax evidence.
+      - Explicit parameters, locals, fields, inline construction and file-local type/namespace import aliases are candidates, not signed framework or overload proof. Same-file short-name type shadows are refused.
+      - Validated names cover DbCommand/IDbCommand, DataAdapter/DbDataAdapter/IDataAdapter, System.Data.SqlClient and Microsoft.Data.SqlClient public command, adapter and bulk APIs in the SQL matrix. Other provider syntax is not matrix-validated.
+      - XML, async/token and Begin/End command forms, Fill/FillSchema/Update and WriteToServer boundaries retain separate operation kinds. Open/Close is not SQL execution; bulk is a separately labeled boundary.
+      - No SQL, procedure name, connection string or credential is captured. Mutable command text/type/parameters/transactions, variable aliases, inferred factory return types, late binding, generic body specialization and cross-file imports remain unproven without additional witnesses.
+      - Emission uses the per-file VB fact budget and source evidence spans; partial syntax coverage never proves absence or unused code.
 
   - id: build.environment.target-framework.v1
     name: Build environment target framework diagnostics
@@ -5202,7 +5230,7 @@ rules:
   - id: database.operation.call-pattern.v1
     name: Application database operation call pattern
     description: Classifies compiler-resolved EF/EF Core, Dapper, ADO.NET, and Npgsql calls as bounded static database-operation candidates.
-    evidenceTier: Tier1Semantic or Tier4Unknown
+    evidenceTier: Tier1Semantic, Tier3SyntaxOrTextual, or Tier4Unknown
     emits:
       - DatabaseOperationCandidate
       - AnalysisGap
@@ -5213,11 +5241,14 @@ rules:
       - Dapper and command targets use the existing bounded constant SQL-shape projection. One- or two-part unquoted table identities are retained; unsafe, quoted, or multipart identities remain gaps rather than being matched after qualifier loss.
       - Raw SQL, command text, parameter values, and connection material are not retained on operation facts.
       - ADO.NET and Npgsql v0 table projection is limited to inline constant command construction; command variables, helper-returned commands, stored-procedure indirection, repository abstractions, DI dispatch, reflection, and branch feasibility remain reduced coverage.
-      - Visual Basic compiler-backed evidence recognizes DbCommand ExecuteReader/ExecuteScalar/ExecuteNonQuery families and DbDataAdapter Fill only when the matching base type resolves from the expected strong-named System.Data.Common or classic System.Data assembly. Boundary-only candidates do not identify tables, returned rows, command text, or runtime effects.
+      - Shared C#/VB SQL matrix classification requires signed public declaration identity in System.Data, System.Data.Common, System.Data.SqlClient or Microsoft.Data.SqlClient. The preexisting signed Microsoft.Data.Sqlite command subset is preserved outside matrix-wide acceptance. Overrides retain their resolved signature separately from original emitted IL slots. DbCommand/IDbCommand and factory/abstract dispatch remain explicit boundaries.
+      - The SQL matrix enumerates public metadata command sync/async/token/XML/APM forms, adapter Fill/FillSchema/Update and separate bulk-write boundaries. Original API signatures, provider assembly identities and availability metadata survive the bounded report projection. Open/Close never becomes SQL execution.
+      - Bounded local straight-line command text/type, parameter direction/type, transaction and connection witnesses do not establish runtime state. Reassignment, branches and unknown calls reset supported local state; fields, alias escape, cross-method flow and parameter propagation remain unresolved. Raw SQL/procedure names and parameter/connection values are excluded; only availability and command fingerprints are retained.
       - Visual Basic late-bound or unresolved Fill/Execute-like calls emit bounded gaps and never become database-operation candidates.
       - Save and transaction boundaries do not identify the tracked changes, affected tables, isolation, scope, commit, rollback, or atomicity.
       - Recognizable calls without semantic binding and candidates without one bounded target emit explicit Tier4 gaps rather than guessed operations.
-      - When a C# file has no semantic model, name-only syntax fallback emits Tier4 gaps and does not claim framework or target identity.
+      - Failed/projectless C# also emits Tier3 explicit-receiver API syntax candidates with file-local imports/aliases and same-file shadow refusals. Name-only fallback stays Tier4; neither proves signed provider identity or overload resolution.
+      - Representative framework and pinned provider availability, supported/partial/unavailable cells, independent named controls and exact validation receipts are documented in docs/validation/SQL_DATABASE_MATRIX.md. ODBC/OleDb, ORM and other providers have no universal coverage claim.
 
   - id: database.framework-migration.declaration.v1
     name: Framework migration declaration
@@ -7659,6 +7690,51 @@ rules:
       - Semantic files are excluded. Unreadable, generated or unparseable files retain their existing skip or failure behavior; this rule does not claim to inspect them.
       - No destination, request body, credentials or runtime use is inferred. Explicit-receiver syntax candidates are available under vb.syntax.http-candidate.v1; compiler-resolved classification and complete coverage remain unavailable.
 
+  - id: sql.local.contract-catalog-match.v1
+    name: Local supplied procedure contract candidate
+    description: Attaches supplied catalog metadata to an exact ordinal recovered StoredProcedure literal in private local Markdown.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - localMarkdownContractCandidate
+    limitations:
+      - Catalog contents are operator-supplied and not independently verified schema evidence. A match does not establish the connection, database identity, runtime parameter values or migration approval.
+      - Only unique exact literal matches qualify. Multiple entries remain ambiguous; no normalization, schema-prefix inference or database selection occurs. Text and dynamic commands are ineligible.
+      - Catalog input is bounded to 4 MiB, 1024 entries, 256 parameters per entry and 4096 characters per required field. Empty parameter lists mean not supplied, not zero parameters proven.
+      - Output remains opt-in private local Markdown with catalog input SHA-256 and diagnostic generator SHA-256. No database connections or code execution occur.
+
+  - id: sql.local.command-literal-match.v1
+    name: Explicit local SQL command literal content match
+    description: Opt-in diagnostic matches a retained constant command hash and UTF-16 length to a literal operand in an explicitly supplied hash-checked binary, without executing it.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - localMarkdownLiteralMatch
+    limitations:
+      - Retained databaseCallEvidence and commandBinding objects are copied with node references for application-side review. This is not new argument analysis; object presence does not prove complete contracts, and absent objects do not prove absent application behavior. Catalog availability is independent.
+      - Output is private local Markdown and may contain sensitive SQL or procedure-name candidates. It is not emitted by default scans or included in shareable artifacts.
+      - Expected binary digest is operator-supplied; this diagnostic does not independently bind the binary to the report, source commit or historical build. Content matching never upgrades original route evidence.
+      - Only constant command origins are matched. Symbolic expressions, missing or oversized literals remain unavailable. A match does not establish procedure existence, execution, parameter values, connections, transactions or whole-site completeness.
+      - Reads at most 32 native reports with 64 MiB aggregate bytes, 256 paths per report and 1024 total rows, and a 256 MiB binary, with two million method/instruction work units and 32768 UTF-16 units per literal. It performs no assembly execution or dependency resolution.
+      - Consolidation preserves input-scoped provenance, query, coverage, limitations and truncation. Duplicate inputs are refused; repeated paths or literals across roots are not deduplicated into unique operations. Schema contracts and migration decisions are not inferred.
+      - Local output records generator, Cecil, path-report input and binary hashes; these are local identities, not a privacy projection or publication approval.
+
+  - id: workflow.migration.scan-inventory.v1
+    name: Integrated source migration inventory and WebForms boundaries
+    description: Human-readable scan-wide supported operation evidence groups, ordered candidate entry paths and parameter witnesses in report.md.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - report.md integrated migration inventory
+    limitations:
+      - Property/field receiver chains use fresh 0.4.14 explicit declaration metadata, up to eight receiver segments and 10000 retained members. Every owner/type/member must be unique. Type-name roots require a Shared first member; self and explicitly typed variable roots are separate. Type matching uses retained lexical names or unique explicit namespace-import candidates; alias/generic shadows, missing types, duplicate declarations, indexed/array members and inherited/partial member merging are refused. Getter bodies, factory results and runtime dispatch are not evaluated. Paths retain each used member fact reference. No new machine artifact is added.
+      - Inline object-creation receiver evidence takes precedence over an empty receiver name; it is not an implicit same-class call. Positional calls may omit a trailing run of explicitly Optional parameters when 0.4.13 declaration/call metadata is present and exactly one type/name/compatible-arity target exists. Required omissions, ParamArray expansion, named omissions and ambiguous exact/optional overload sets are not joined by this extension. Old metadata retains exact-arity behavior; no compiler overload resolution or runtime execution is claimed.
+      - Caller frontier diagnostics show at most 20 distinct observed stop methods per unresolved or search-limited group, with one retained suffix chain each. Stops distinguish no retained incoming call/anchor, depth limits and cycle boundaries. Search limits can leave frontier discovery incomplete. Up to five rejected same-name call leads per stop are shown with total counts, original evidence and rejection category; these may have unrelated receivers or arities and never create graph edges. No retained lead cannot distinguish missing extraction, out-of-scope callers or unused code. Matching-budget failures leave diagnostics unassessed.
+      - Explicit receiver types can match a unique nested type in the nearest retained enclosing-type scope before exact spelling fallback. Matching uses the qualified declaration plus method name/arity, not a global short-name search. Duplicate type declarations or overload targets are refused; aliases and method/enclosing-type generic parameters are not reinterpreted as nested classes. Global-qualified spellings bypass lexical lookup. Old facts without alias guards keep exact-only behavior. Namespace-import expansion, alias target resolution, inherited nested types and generic substitution are not claimed. All joins remain syntax candidates, not compiler identity.
+      - Handles anchor assessments record the first failing guard, not every possible blocker. Aggregate counts cover all retained Handles syntax bindings, including non-UserControl events; per-binding unresolved details are capped at 100. Missing or differently spelled base evidence remains unresolved, not proof that a type is not a UserControl. A candidate anchor without a displayed path is distinct from an anchor rejection. Over-budget matching is unassessed, never reported as a successful zero-gap check.
+      - Enumerates DatabaseOperationCandidate, SqlCommandDetected, DapperCallDetected, DbChangeSaved and HttpCallDetected facts, grouped by family, file, line span, source and target. These are evidence groups, not unique business operations, procedures or a complete runtime denominator. Other families and compiled-only operations remain outside this source projection.
+      - Incoming WebForms boundaries use retained WebFormsHandlerResolved and binding references. Separately, VB Handles syntax facts anchor observed-event candidates when their unique method-body owner matches the handler name and a unique same-file containing type is retained. Unknown or external base ancestry does not hide this syntax chain. Framework assessment separately records explicit System.Web.UI.UserControl base spelling (optionally Global-qualified), missing base evidence or unestablished ancestry; none proves framework identity. These generic event anchors are not WebForms handler resolutions, verified incoming HTTP boundaries or deployed routes. AddHandler and ambiguous ownership remain unsupported. Unique method-body spans attach source evidence; exact canonical target IDs or unique explicit type/name/arity syntax can supply call hops. Every reported path remains a Tier3 candidate; no method-name-only cross-type join or runtime execution claim is made.
+      - Matching, including boundary/operation span attachment, is disabled above 2000 methods, 2000 type declarations, 10000 call facts or 10000 combined resolved boundaries and Handles bindings. Displays at most 200 groups, 50 parameters per group and 100 unresolved boundaries of each kind. Per-group reverse search starts at the operation owner and follows supported callers to retained anchors; unrelated forward graphs do not consume its budget. Search is bounded to 4096 work units (including anchor visits), 16 hops and eight paths, with limits reported. Cycles are not revisited within a path. Paths are displayed in entry-to-operation order. Operation assessments distinguish unassessed matching, missing/ambiguous ownership, search limits, no supported callers/local anchor and no retained anchor in the supported caller graph; none proves runtime unreachability. Unconnected groups remain visible, not classified unused.
+      - Parameter witnesses require identical source member/file and a unique observed execution line. Ambiguous operation lines are refused. This lexical attachment does not establish runtime instance identity, argument semantics or schema contracts.
+      - Compiled wrapper reports remain separate; historical/source/compiled evidence is not spliced without an admitted identity bridge. All migration review and retain/replace/retire decisions remain pending. This adds no machine-readable derived artifact or private source snippets.
+
   - id: workflow.backend-extraction.retained-report.v1
     name: Retained-query backend extraction inventory
     description: Projects database-api, sql-query and http-client evidence records and their ordered query-path references from an admitted grouped report for human migration planning.
@@ -7666,6 +7742,7 @@ rules:
     emits:
       - backendExtraction
     limitations:
+      - Human-readable reports expand each operation into pending verification tasks linked to its evidence references and path variants. Tasks are review obligations, not extracted facts or approval; reviewer decisions must be recorded separately. Catalog matches do not automatically complete checks.
       - This is retained-query evidence, not independent full-index discovery or a complete application inventory. Unsupported service families and operations outside the query may be absent.
       - Full node-record references preserve distinct evidence and command bindings; rows do not count unique business operations or stored procedures.
       - Query roots are not verified UI events. Review-needed classifications, candidate edges, ambiguous candidate counts and Tier3 or Tier4 evidence remain candidate variants. Mixed retained/candidate operations are labeled explicitly. No retained path does not mean unused.

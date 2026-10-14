@@ -564,8 +564,33 @@ public sealed class VisualBasicWebFormsCompositionTests
     public void Vb_webforms_fixture_composes_shared_page_control_handler_lifecycle_and_event_facts()
     {
         using var temp = new TempDirectory();
-        var repo = Path.Combine(FindRepoRoot(), "samples", "vb-webforms-sample");
-        var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out")));
+        // This oracle requires semantic event identity. The original classic Web
+        // Application project intentionally permits reduced coverage and depends
+        // on host-specific VS targets. Give these same public sources a portable,
+        // pinned reference-assembly project rather than relying on local caches.
+        var fixture = Path.Combine(FindRepoRoot(), "samples", "vb-webforms-sample");
+        var repo = Path.Combine(temp.Path, "semantic-fixture");
+        Directory.CreateDirectory(repo);
+        foreach (var file in Directory.GetFiles(fixture).Where(path => Path.GetExtension(path) is ".vb" or ".aspx" or ".config"))
+            File.Copy(file, Path.Combine(repo, Path.GetFileName(file)));
+        File.WriteAllText(Path.Combine(repo, "PortableWebForms.vbproj"), """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <TargetFramework>net48</TargetFramework>
+                <RootNamespace>VbWebFormsSample</RootNamespace>
+                <OptionStrict>On</OptionStrict>
+                <MyType>Empty</MyType>
+              </PropertyGroup>
+              <ItemGroup>
+                <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
+                <Reference Include="System.Web" />
+              </ItemGroup>
+            </Project>
+            """);
+        Commit(repo);
+        var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out"), Restore: true));
+        Assert.DoesNotContain(result.Facts, fact => fact.FactType == FactTypes.AnalysisGap
+            && fact.Properties.GetValueOrDefault("gapKind") == "RestoreFailed");
 
         Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.WebFormsPageDeclared && fact.ContractElement == "Default.aspx");
         Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.WebFormsDesignerControlDeclared && fact.ContractElement == "SaveButton");

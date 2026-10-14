@@ -35,32 +35,7 @@ public static partial class VisualBasicSyntaxExtractor
     }
 
     private static IEnumerable<string> ResolveHttpTypeNames(CompilationUnitSyntax root, string text)
-    {
-        text = text.Trim();
-        if (text.StartsWith("Global.", StringComparison.OrdinalIgnoreCase))
-        {
-            yield return text[7..];
-            yield break;
-        }
-        var first = text.Split('.')[0];
-        // A same-file declaration shadows an imported short name. Do not guess.
-        if (root.DescendantNodes().OfType<TypeBlockSyntax>().Any(type =>
-                type.BlockStatement.Identifier.ValueText.Equals(first, StringComparison.OrdinalIgnoreCase)))
-            yield break;
-        var imports = root.Imports.SelectMany(statement => statement.ImportsClauses)
-            .OfType<SimpleImportsClauseSyntax>().ToArray();
-        var aliases = imports.Where(clause => clause.Alias?.Identifier.ValueText.Equals(first,
-            StringComparison.OrdinalIgnoreCase) == true).ToArray();
-        if (aliases.Length > 0)
-        {
-            foreach (var alias in aliases)
-                yield return StripGlobal(alias.Name.ToString()) + text[first.Length..];
-            yield break;
-        }
-        if (text.Contains('.')) { yield return text; yield break; }
-        foreach (var import in imports.Where(clause => clause.Alias is null))
-            yield return StripGlobal(import.Name.ToString()) + "." + text;
-    }
+        => VisualBasicSyntaxTypeLookup.For(root).Resolve(text);
 
     private static string StripGlobal(string name) => name.StartsWith("Global.", StringComparison.OrdinalIgnoreCase)
         ? name[7..] : name;

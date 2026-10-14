@@ -292,3 +292,765 @@ Both confirmed validation weaknesses are patched without extractor changes:
   deterministic artifact validation with the stronger assertions. Private path
   and whitespace guards pass. New-head hosted CI/reviews remain pending push;
   earlier Windows receipts are historical, not a new-head result.
+
+## SQL/database issue #864 implementation lane (2026-10-12)
+
+Branch `codex/sql-database-matrix-864`, isolated from origin/dev
+`6cb7532528d687a2fc20ca1135db130b244549da` (HTTP #863 merge). Primary checkout
+and existing HTTP worktree preserved. Initial matrix published on #864 in comment
+6131964679, documentation commit `64b53620`. No ACK, merge or lane-policy change.
+
+Public metadata-only inventories: 46 declared overloads each net20/net35/net40,
+70 each net45/net452, 112 each net472/net48/net10.0, in both C# and VB. Pin classic
+references to Microsoft.NETFramework.ReferenceAssemblies 1.0.3; modern System SQL
+provider 4.9.0 and Microsoft provider 6.1.1; SDK 10.0.302/reference pack 10.0.10.
+Selected Microsoft provider is unavailable below net462; absent task/token forms
+on old targets are unavailable, not skipped positive cells. All inherited members
+are represented at declaring bases. VB GetObjectValue helpers and emitted base
+slots remain original IL, distinct from source API declaration identities.
+
+Implemented bounded SQL command/XML/APM/async/token, adapter Fill/FillSchema/Update,
+IDbCommand/DbCommand and separate bulk operation classification. Source, explicit
+syntax and compiled-only API terminals remain separate tiers/modes. Optional
+DatabaseCallEvidence carries privacy-bounded availability/API metadata through
+report projection; grouped handoffs have an optional validated SQL coverage marker.
+Older handoffs omit it and retain their historical inventory reconstruction.
+New handoffs include sql-persistence operation records, including bulk boundaries.
+
+Command state is a local straight-line witness, not runtime state: hashes or
+explicit dynamic/unavailable values, Text/StoredProcedure, parameter direction/type
+without values, transaction/connection assignments without credentials. Branches,
+unknown calls, conditional expressions, reassignment and alias escape reset state;
+fields/cross-method state and inferred concrete factory returns remain unavailable.
+The matrix/README and migration prompt record provider/ORM/late-binding/generic/
+full-index/private-contract limitations. No method/database connection is invoked.
+
+Per-cell tests independently cross-check compiler declarations/public inventories,
+Cecil original IL, named controls and every applicable source/syntax/compiled path,
+SQLite and grouped HTML/JSON/inventory. The public projectless VB App_Code proof is
+Entry -> Wrapper -> ExecuteScalar, a candidate query route, not a verified page event.
+Seven independent native-oracle/workflow mutation guards passed. Earlier exploratory
+runs found fixture warnings, language signature/base-slot differences and VB shared
+initializer state boundaries; these were corrected and are not acceptance receipts.
+Final local/native and public Windows acceptance is pending the code-head commit.
+Full-suite, other-provider, private application and whole-site acceptance is not claimed.
+
+First accepted implementation head `5efea3d33dc72da03d2f8f85130476d755ded04d`:
+warning-as-error build (zero warnings/errors), 406 scoped local tests (zero failures/
+skips, 3m22s), seven oracle guards, seven artifact-validator tests and all 96 native
+CLI outputs passed. facts.ndjson/report.md were byte-identical within every pair.
+Private Path Guard passed locally/remotely. Windows run 38306629860 is running.
+This is an exact-head scoped receipt, not a full-suite claim.
+
+Final retention supplement: compiled terminals now embed the original encoded API
+operand, raw-binary hash, IL generator/bounded-input hashes and bound/unbound state.
+An 8,192-character signature cap is explicit; the API path remains present when
+signature display is truncated. Source metadata now includes positive connection
+constructor/assignment witnesses and safe public enum parameter type names. Added
+named controls in every framework/language and per-case compiled-handoff identity/
+provenance assertions. Eleven focused command-state/privacy/failed-load tests pass.
+Final supplemented-head regression/native/Windows receipts remain pending.
+
+
+## Final SQL local acceptance receipt
+
+Frozen executable head: `6448790cba9c5d0b0681f90c69befab141a923a0`.
+This supersedes earlier SQL pending receipts. The final fixes retain original
+compiled operand/provenance, reject unexpected candidate tiers in the independent
+oracle, and classify XML reader/adapter schema paths as SQL query surfaces.
+
+- Warning-as-error .NET build: zero warnings/errors (12.39s).
+- Scoped .NET regressions: 406 passed, zero failures/skips (3m44s), covering SQL
+  matrix/state, VB extractors, integration extractors, grouped compiled handoffs,
+  backend inventory, compiled paths, framework signatures and generic boundaries.
+- Independent Python oracle/workflow mutation guards: eight passed.
+- Artifact-validator regressions: seven passed (existing unclosed-SQLite-resource
+  warning in the validator test; no failed assertion).
+- Native CLI: all 96 outputs (eight TFMs x two languages x three modes x two
+  repeats) validated, including individual cases/controls, byte-identical
+  facts.ndjson/report.md and scan artifact conformance. No fixture methods ran.
+- Separate native projectless VB App_Code scan/path/report retained
+  `PublicFeature.Entry(DbCommand) -> Wrapper(DbCommand) -> ExecuteScalar`,
+  NeedsReview/Tier3, reduced coverage and untruncated. This is a candidate query
+  connection, not verified ASP.NET event binding or runtime use.
+- Separately authored public config-only negative fixture produced zero database
+  operation candidates and zero SQL query paths; scan artifacts validated.
+- Private path and whitespace guards passed; public remote Private Path Guard
+  passed on this executable head.
+
+Scoped .NET command after the warning-as-error build:
+
+```sh
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-build --no-restore --filter 'FullyQualifiedName~SqlDatabaseMatrixTests|FullyQualifiedName~DatabaseCommandStateTests|FullyQualifiedName~VisualBasic|FullyQualifiedName~IntegrationExtractor|FullyQualifiedName~GroupedCompiledPathHandoff|FullyQualifiedName~BackendExtractionSample|FullyQualifiedName~CompiledTwoHop|FullyQualifiedName~FrameworkSignatureCandidate|FullyQualifiedName~ConstructedGeneric|FullyQualifiedName~LazyConstructor' --logger 'console;verbosity=normal'
+```
+
+Other acceptance commands:
+`python3 scripts/validation/test_sql_matrix_expectations.py`,
+`python3 scripts/test_validate_adapter_artifacts.py`,
+`python3 scripts/validation/sql-coverage-smoke.py --output <temporary-output>`,
+`bash scripts/check-private-paths.sh` and `git diff --check`.
+Public Windows [run 38308628487](https://github.com/joefeser/tracemap/actions/runs/38308628487)
+succeeded on the frozen executable head: 181 scoped .NET tests (zero failures/skips),
+eight oracle/workflow guards and all 96 deterministic native CLI outputs. Remote
+Private Path Guard run 38308628263 also succeeded. Windows CI provided public
+Windows acceptance; the personal Windows and private work machines were not used.
+Superseded Windows runs 38306629860, 38307346982 and 38308013821 were canceled;
+they are not acceptance evidence.
+
+Full-suite, other-provider/ORM parity, full-index/whole-site discovery, private
+application compatibility and readable private SQL/procedure capture remain
+unverified or deferred as documented. No database connection, SQL execution,
+private work-machine contribution, PR, merge, ACK or lane-policy change.
+
+
+Delivery: branch pushed and [issue #864 receipt](https://github.com/joefeser/tracemap/issues/864#issuecomment-6132878782)
+published with exact executable commits, matrix coverage, public Windows/local
+validation and remaining gaps. This final commit changes only task/state receipt
+documentation; executable acceptance remains bound to `6448790c`. Primary checkout
+and existing HTTP worktree preserved. No PR opened, merge performed, ACK used or
+lane policy changed. Parent #861 full-index/private-contract tasks stay open.
+
+
+Follow-up: added `prompts/assess-sql-migration-report-improvement.md` and prompt
+index entry for an application-neutral, authorized local baseline/new SQL report
+comparison. Public executable heads remain pinned to `6cb75325` / `6448790c`.
+No application identity or private evidence is included. This is a prose-only
+prompt update, checked with private-path and whitespace guards; executable tests
+were not rerun. No private trial or returned feedback is claimed.
+
+## Independently authored projectless SQL correction (2026-10-12)
+
+Continued the clean SQL worktree from `209fcd28`. No work-machine patch, code,
+binary or artifact was imported. Public synthetic requirements were reproduced
+locally. Baseline SqlDatabaseMatrixTests passed 17/17; the reported sixteen
+failures were not reproduced in this environment.
+
+VB syntax extractor 0.4.1 expands relative qualified types using file-local
+namespace imports without discarding arbitrary qualification. Alias ownership
+and same-file prefix shadows are refused. Unrelated namespaces, alias decoys,
+Global qualification and lifecycle-only operations have explicit controls.
+Report projection now includes DatabaseOperationCandidate facts, rule/tier and
+availability, empty-coverage qualifications and a deterministic 50-row display
+with total/omitted counts. This does not alter fact admission tiers.
+
+The existing projectless sample adds direct qualified and negative controls.
+A separate synthetic projectless website passes procedure/text arguments into a
+net472 wrapper library. Tests separate application-only source (no database
+operation candidates, explicit report limitation), application plus wrapper
+source (two Tier3 candidates and Search-to-wrapper migration inventory), and
+application plus admitted wrapper IL (separate IL calls, no automatic source
+binding). Cross-method procedure/SQL argument propagation, connection identity,
+parameter contracts and runtime use remain unavailable. The generic report
+warning is not per-call unresolved-wrapper classification or full-site inventory.
+
+Local validation: warning-as-error build and 79 scoped SQL/state/VB-boundary/
+grouped-report tests passed; 49 adjacent Markdown/VB/integration/backend tests
+passed. Eight independent oracle guards and seven artifact-validator tests passed
+(the latter retains its existing unclosed SQLite ResourceWarning). All 96 native
+SQL matrix outputs passed per-case checks, artifact validation and deterministic
+facts/report repeats. Two additional native projectless CLI scans validated direct
+candidate display and application-only missing-wrapper warnings. No fixture
+method, SQL statement or connection was executed.
+
+The final report-direction wording and cap-count assertion passed a final
+warning-as-error rebuild, 19 focused tests and a validated native CLI scan.
+Full solution, pinned external OSS smokes and a new
+Windows correction receipt are deferred; older Windows receipts above apply only
+to their frozen heads. This change does not claim private application compatibility,
+complete wrapper discovery, an extracted procedure contract, PR/merge or ACK action.
+
+### Windows event-wiring assertion correction
+
+Public personal-Windows validation reported at executable head `e1932ae0`:
+isolated SDK 10.0.302 / reference pack 10.0.10, clean CLI build, 127 focused tests
+passed and one failed, eight oracle guards passed, all 96 native SQL outputs
+passed, and the projectless candidate/negative controls passed. Overall acceptance
+was not green. The failure was the legacy event-edge exclusion assertion matching
+a legitimate VisualBasicEventBindingDeclared fact targeting a Click event.
+
+The correction is test-only: restrict the edge prohibition to CallEdge and
+SymbolRelationship facts and retain the existing event-target exclusions. A
+portable net10 synthetic Click event positively asserts its semantic declaration;
+mutating that fact into either prohibited edge kind must trigger the predicate.
+The existing Web Forms fixture can lack event-binding metadata on non-Windows
+hosts, so positive semantic coverage uses the independent fixture rather than
+assuming framework availability. No extractor or event-resolution policy changes. A new exact-head
+Windows focused-suite receipt is required; the previous failure is not waived.
+Private assessment attachments are not imported into the repository.
+
+Local warning-as-error validation passed 56 tests across
+VisualBasicExtractionTests and VisualBasicWebFormsCompositionTests, zero failures
+or skips. Whitespace and private-path guards passed. Windows rerun remains pending.
+
+### SQL external-wrapper delivery
+
+Personal Windows correction receipt at `9546796be294dd06735583c2b9e947728d3f541e`:
+SDK 10.0.302/reference pack 10.0.10, warning-as-error build, 151 tests passed,
+zero failures/skips. This closes the previous event-wiring assertion failure.
+The older 96-output SQL smoke is still bound to e1932ae0, not this later head.
+
+Independent net472 SyntheticWebsite compilation harness now admits compiled
+application callers alongside a separate SyntheticStore wrapper DLL. Five
+regression cases cover both procedure/text routes and caller-only, provider-only,
+source-only controls. Procedure forwarding spans two overloads; the preserved
+constant is hash-only, while the text case is a symbolic composition. These tests
+exercise existing compiled resolution, not a new resolver implementation. They do
+not prove private application coverage, ASP.NET publishing, event wiring, source
+binding or runtime execution. Fixture methods are never executed.
+
+`scripts/sql-wrapper-report.py` consumes a closed existing index and up to 32
+exact caller selections. It retains unmatched and failed selections separately,
+ordered routes, edge rules/tiers, command availability and native restrictions.
+It records script/component/index/selector hashes and links native path JSON;
+it introduces no new machine-readable schema and is local-only. It does not
+discover every caller or recover readable SQL/procedure contracts. The new
+`prompts/produce-sql-wrapper-inventory.md` is SQL-only and forbids private artifact
+or patch export. Missing compiled application evidence is a blocker to caller
+proof, not something a wrapper DLL alone can resolve.
+
+Local validation: eleven Python report guards, eight matrix oracle guards, and
+native CLI scan/report with procedure, dynamic-text and unmatched selections
+passed. The native report had three selections, two retained routes, one unmatched
+selection and zero failed queries. Warning-as-error focused .NET validation passed
+43 tests across SqlWrapperRouteTests, ProjectlessSqlReportingTests,
+SqlDatabaseMatrixTests and DatabaseCommandStateTests, zero failures/skips.
+Full-solution and new Windows fixture execution are not yet claimed. CI now runs
+the wrapper/projectless cases and helper guards on Windows and watches the helper
+and prompt paths. No scanner/resolver runtime code changed in this increment.
+
+Implementation/fixture delivery was pushed as `d00bc224`. Final report review
+identified graph-wide native gaps that must not be called caller-specific stopping
+gaps. The helper now labels retained-path node/fact association separately from
+unproven caller relevance; neither label claims blockage. A regression guard pins
+associated provenance warnings and unrelated gaps. Native replay of this change
+passed. The complete five-case route suite also passed after adding explicit
+ordered-edge adjacency assertions. No private application evidence was imported.
+
+Supplemental personal-Windows acceptance (SDK 10.0.302/reference pack 10.0.10):
+`d00bc224c45e515eef4c6800f70d23c9ba2f5f13` passed all five warning-as-error
+wrapper-route tests and ten helper guards. Native public scan/report retained two
+routes, one unmatched selection and zero failed queries, preserving hash-only
+procedure and symbolic dynamic-text states. Reporting follow-up
+`4ffb26cfe6c09a0420d233675c39f8cdce76df1d` passed eleven guards and a fresh
+report from that same unchanged index/CLI, with the same counts and both gap
+association labels verified. No private inputs, fixture methods or database
+connections were used. This receipt closes the bounded reporting delivery, not
+private-site acceptance, full caller discovery or readable SQL contract recovery.
+
+### Retained SQL index size admission correction
+
+The helper's fixed 512 MiB cap can reject an otherwise usable retained compiled
+index before any native query. Added explicit `--max-index-mib` (default 512,
+range 1..16384) and `--query-timeout-seconds` (default 120, range 1..3600).
+Report headers record both selected bounds and input byte size; size refusal is
+actionable and public-safe, and timeouts remain failed queries. Hashing remains
+streamed. Native graph depth/path/work limits and output-size guard are unchanged.
+The reconciliation prompt now directs reuse of the same retained index with
+explicit admission, never a reduced rescan or application rebuild to evade a cap.
+
+Fourteen Python guards passed, including an actual 768 MiB sparse file, default
+refusal before output/process creation, explicit admission, inclusive boundary,
+invalid options, timeout categorization and unchanged file size. Native CLI smoke
+also passed with a valid public SQLite fixture index padded to 768 MiB: default
+refusal, explicit 1024 MiB admission, two routes, one unmatched and zero failures.
+Padding tests file-size admission, not logical graph scale or private corpus
+compatibility. No scanner/extractor changes or database execution.
+
+Personal Windows validation passed at
+`f53129ad95ac07553b3636c021e03b3ed7f2ae9c`, SDK 10.0.302/reference pack 10.0.10:
+14 Python guards, zero-warning/error CLI and wrapper builds, and native 768 MiB
+SQLite smoke. Default admission refused; explicit 1024 MiB/600 seconds accepted
+with route counts 1/1/0 and zero failed queries. No private inputs or application,
+fixture-method or database execution. This closes platform validation of the size
+admission correction, not private historical-index compatibility or graph scale.
+
+### Explicit local literal recovery and truncation diagnostics
+
+Added standalone RecoverSqlCommandText diagnostic. It requires explicit local
+disclosure consent and an operator-supplied expected binary SHA, reads metadata
+without assembly execution/dependency resolution, and matches only retained
+constant database command origin hashes and exact UTF-16 lengths to ldstr operands.
+Output is private Markdown with generator/component and input hashes. It never
+changes default scanner disclosure or claims independent historical binary binding.
+Dynamic text is not evaluated, and missing/overlength/nonunique matches remain
+unknown. Rules and limits are documented under sql.local.command-literal-match.v1.
+The new work-machine prompt requires provenance reconciliation and prohibits
+private uploads, patches, application builds and SQL execution.
+
+The SQL wrapper report now displays native TruncatedByLimit reason categories
+beside each selection; a truncated flag without reasons stays explicitly unknown.
+This exposes diagnostics without silently raising graph limits. No core extractor
+or traversal semantics changed. Local validation includes warning-as-error utility
+build, native public fixture literal recovery/negative controls, and 15 helper
+guards.
+
+Final native guards also cover inert Markdown rendering and explicit UTF-16
+surrogate escapes. Personal Windows validation passed at
+`9d61f97a2d9ce0a01ea7223be43a15a6d17a9bea`: utility build zero warnings/errors
+with warnings-as-errors; ten command-text guards and fifteen wrapper-report
+guards passed using SDK 10.0.302/reference pack 10.0.10. Reused public native
+report and matching fixture DLL hashes remained unchanged. No private inputs or
+application/database execution. Local final ten/fifteen guards also passed.
+Private literal recovery and historical binary availability remain work-machine
+checks; this receipt is not private application acceptance.
+
+### Recovery report truncation preservation
+
+The literal-recovery Markdown now copies the original native query truncation
+flag and sorted TruncatedByLimit reasons. A true flag with no reasons stays
+truncated with reason unavailable; a missing flag stays unknown. False flags with
+reason entries preserve the conflict. Recovery success cannot clear enumeration
+limits. The work-machine prompt explicitly requires these fields in delivery and
+reuses the same retained JSON/binary, without rescanning. Warning-as-error utility
+build and all 14 native public guards passed locally, including four new truncation
+regressions. No extraction or route semantics changed; no private input used.
+
+### Consolidated local SQL evidence inventory
+
+RecoverSqlCommandText now accepts repeated native --paths inputs against one
+explicitly admitted binary. It preserves each input hash, query, native source
+provenance, coverage, limitations and truncation, plus row-level classification,
+confidence, notes and terminal limitations. Empty roots remain visible; identical
+input files/content are refused. Rows stay input/path scoped, never deduplicated
+into procedure counts or spliced into routes. Contract/schema decisions remain
+explicitly unsupplied; parameter/connection/transaction evidence is not recovered
+by this projection. No new extraction or completeness claims.
+
+Bounds are 32 reports, 64 MiB aggregate report bytes, 256 paths per report and
+1024 total rows. Existing binary/literal/work limits and disclosure consent remain.
+Local warning-as-error build passed with zero warnings/errors; 20 native recovery
+guards and 15 report-helper guards passed. A public three-root native smoke retained
+one constant match, one symbolic route and one empty root in the consolidated
+Markdown. No application methods or SQL executed. Windows revalidation of this
+increment is not yet recorded. The new consolidate-local-sql-inventory prompt
+reuses existing private inputs without another discovery/build/scan cycle.
+
+### Optional local procedure contract candidates
+
+The diagnostic accepts an explicit local sql-contract-catalog.v1 input and records
+its digest. Unique exact recovered StoredProcedure literals can display supplied
+procedure, database label, source reference and parameter name/type/direction.
+No normalization or database guessing occurs; duplicate entries stay ambiguous,
+and text/dynamic rows are ineligible. Metadata remains operator-supplied candidate
+evidence, not verified schema or runtime bindings. Empty parameter lists do not
+prove zero parameters. The public example is independently synthetic and does not
+claim the fixture actually executes that parameter contract. The work-machine
+prompt uses only an existing authorized catalog; otherwise it identifies the
+missing input without another scan. Windows validation remains pending.
+Local warning-as-error diagnostic build passed with zero warnings/errors;
+29 native public-fixture diagnostic tests and 15 wrapper-report guards passed.
+No private inputs, application execution or database connections were used.
+
+### Client verification handoff
+
+Inspection found existing database extraction metadata and broad contract-review
+obligations already present in the grouped handoff. The missing delivery was an
+actionable evidence-linked checklist, not proof that all SQL was absent. Grouped
+HTML now renders per-operation tasks for entry/identity bridges, candidate paths,
+command contracts, argument/results mapping, authorization, transactions and human
+decisions. Local literal inventories render per-path private checklists, selecting
+unresolved-expression review when no constant identity is retained. Checks never
+auto-complete from a catalog or static path. Client tracker decisions remain
+separate, with reviewer, evidence and API acceptance required per slice.
+No machine schema or extraction evidence is upgraded; historical handoff validation
+remains unchanged. Source-to-compiled wiring and dynamic SQL remain genuine gaps,
+not silently fixed by reporting. Platform revalidation on Windows remains pending.
+Local validation: 35 grouped-handoff tests, 39 SQL extraction/report/sample tests,
+29 native literal-inventory guards and 15 wrapper-report guards passed. Diagnostic
+and reporting/test builds passed with warnings-as-errors. No private inputs used.
+
+### Separate application inspection from schema availability
+
+The local inventory now preserves bounded native databaseCallEvidence and
+commandBinding objects with node references independently of optional catalogs.
+Missing objects mean targeted application inspection is pending, not absence of
+behavior. The one-slice prompt requires caller/wrapper source or retained IL review
+before application questions are escalated; schema-owner questions remain separate.
+This is a reporting/procedure correction, not a new argument-flow extractor.
+Warning-as-error diagnostic build passed; 31 native public-fixture guards passed,
+including missing-object handling and parameter evidence without a catalog.
+Windows revalidation remains pending. No private content or database access used.
+
+### Projectless VB parameter construction extraction
+
+vb-syntax/0.4.2 adds independent DatabaseParameterCandidate facts for explicit
+SqlParameter constructor syntax under vb.syntax.database-parameter.v1. Facts carry
+caller/source spans, hashed names/argument expressions and explicit SqlDbType
+syntax candidates. Unique import/alias resolution or qualification is required;
+ambiguous import sets are conservatively excluded. Named arguments and dynamic
+expressions do not receive guessed types. Direction and command attachment remain
+unknown; no wrapper/procedure parameter mapping or schema verification is claimed.
+Scan Markdown includes bounded candidate rows with fact references. Added public
+projectless fixture and nine focused positive/negative tests to Windows CI.
+
+Local warning-as-error tests passed: 73 across projectless parameter/SQL reporting,
+Markdown reporting, command state and VB extraction; eight independent SQL oracle
+tests passed. CLI warning-as-error build and native projectless sample scan passed,
+retaining two independent parameter candidates (one explicit type, one unknown).
+Full 96-output SQL smoke and exact-head Windows validation are deferred to CI;
+they have not been claimed for this increment. No fixture execution/database use.
+
+### Root-scoped VB type lookup performance correction
+
+Replaced per-resolution full-file declaration walks and import/alias rebuilding
+with a lazy immutable-root lookup and memoized immutable resolution arrays. Weak
+root keys prevent completed syntax trees from being retained by a global cache;
+changed import roots receive independent contexts. Concurrent reads are supported.
+No name prefilter or early return was added to ordinary object creation, so alias
+parameters and normal ObjectCreated/CallEdge evidence remain intact. Resolution
+ordering, case handling, shadowing and ambiguity semantics are unchanged.
+
+Added old/new resolver equivalence, root-isolation/concurrency, ordinary-fact
+preservation and large synthetic lookup tests. Local lookup-only measurement for
+500 repeated lookups on a 2000-creation/20-import file: original 1296.91 ms versus
+warm cached 0.02 ms (cache initialization excluded; not whole-scan performance).
+Initial 56 VB/SQL/parameter regressions passed and native CLI sample retained 67
+facts. Windows and full matrix validation remain separate pending gates.
+The second warning-as-error run passed 78 HTTP/external-boundary/configured-import/
+effective-import-context/lookup tests, including final concurrent cache guards.
+
+### Projectless collection Add parameter evidence
+
+vb-syntax/0.4.3 adds typed command.Parameters.Add candidates for a simple command
+identifier with explicit System.Data.SqlClient or Microsoft.Data.SqlClient command
+type evidence. Cached imports/aliases and relative qualification are supported;
+same-file shadows and competing supported providers are refused. Shared argument
+projection retains only hashes plus recognized enum syntax. Direction and command
+instance/procedure association remain unresolved. Existing CallEdge emission is
+preserved. With blocks, factories, collection aliases and AddWithValue remain
+outside this increment. Added public fixture and positive/negative tests; the
+existing Windows test filter includes them. No private source or SQL execution.
+Local surrounding suite passed 63 tests before the final relative-qualification
+case; final candidate suite and native CLI smoke are recorded below.
+Final warning-as-error build/candidate suite passed 18 tests. Native public sample
+scan retained three parameter candidates, including one collection Add candidate.
+Windows and full 96-output matrix validation remain pending for this increment.
+
+### 2026-10-13: bounded local parameter command association
+
+vb-syntax/0.4.4 adds optional syntax-local-straight-line-candidate association:
+fresh zero-argument local command creation, consecutive literal/enum parameter
+Add calls, then direct execution. Maximum 256 method statements and 64 inspected
+statements per candidate. Intervening statements, reassignment, aliases and
+control flow stop association. Constructor-only parameters remain unresolved.
+No compiler identity, procedure association, direction or runtime claim is added.
+Reports show association status and execution line. Independent public sample
+includes two associated candidates and one reassignment-negative candidate.
+Warning-as-error focused suite: 70 passed, zero failed/skipped. Native sample
+scan: 45 facts, exactly two association candidates and one unresolved candidate.
+Fixture methods and SQL were not executed. Full SQL matrix and Windows validation
+are deferred; the private caller has not been verified against this narrow shape.
+
+### 2026-10-13: nested same-block association coverage
+
+vb-syntax/0.4.5 supports a single Try/Catch/Finally/Using statement list in addition
+to a method list. Fresh local constructor arguments permit up to three positional
+literals/non-command identifiers. Simple parameter Value and command configuration
+assignments permit similarly bounded right sides. Unknown calls, reassignment,
+aliasing, branches and cross-block declarations remain unresolved. Every parameter
+candidate now has an association reason; reports display it and explicitly separate
+parameter extraction coverage from command association. No procedure/runtime proof.
+Combined synthetic Try/constructor/Value/Transaction fixture plus negative controls:
+78 focused tests passed. Final CLI warning-as-error build: zero warnings/errors.
+Final native sample: 66 facts, three association candidates, one unresolved negative;
+all four have reasons. No application/SQL execution. Windows and full matrix deferred.
+
+### 2026-10-13: separate receiver and execution evidence
+
+vb-syntax/0.4.6 retains commandReceiverAssociation and declaration spans once the
+backward local search succeeds, independently of commandExecutionEvidence. The
+existing commandAssociation property remains the combined forward-check result.
+Complex later value expressions do not erase the Add-site receiver witness and
+do not prove execution reachability. Pre-Add uncertainty still refuses association.
+Reporting and the local inspection prompt now distinguish these counts explicitly.
+Public property-chain/conversion/call controls added; no private source copied.
+Focused warning-as-error suite: 82 passed. Native synthetic sample: 93 facts,
+five receiver candidates, three following-execution candidates, two unresolved
+execution results (complex value and reassignment). No fixture or SQL execution.
+Windows and full SQL matrix validation remain deferred.
+
+### 2026-10-13: consistent relative SqlClient resolution
+
+vb-syntax/0.4.7 shares ResolveParameterCommandTypes between Add extraction and
+backward declaration matching. Relative SqlClient.SqlCommand now expands through
+Imports System.Data in both checks. No broad global resolver behavior changed.
+Combined nested/constructor-arguments/complex-value tests cover relative names,
+type and namespace aliases, Global qualification, unrelated types, same-file
+prefix shadows and competing providers. Warning-as-error focused suite: 89 passed.
+Native synthetic sample: 93 facts; all five receiver candidates retained, three
+following-execution candidates and two unresolved execution results. No SQL or
+fixture execution. Windows and full matrix checks remain deferred.
+
+### 2026-10-13: independent later execution syntax observation
+
+vb-syntax/0.4.8 adds laterExecutionSyntax with location/method/reason fields.
+The bounded same-block lexical search tolerates unknown expression effects with
+an explicit warning, stops at receiver reassignment or structural boundaries,
+and never upgrades commandExecutionEvidence or the combined association.
+Reporting and inspection guidance distinguish lexical observation from instance
+continuity, reachability, values and contracts. Public complex-value fixture reused.
+Warning-as-error surrounding suite: 89 passed; final parameter suite: 43 passed.
+Native sample: 93 facts, four later-call observations (one unknown-effects warning),
+one reassignment stop; stronger execution evidence remains unresolved for the
+complex-value and reassignment cases. No fixture/SQL execution. Windows/full matrix
+validation remains deferred.
+
+### 2026-10-13: value expression and constructor origin observations
+
+vb-syntax/0.4.9 adds bounded per-parameter value assignment observations using exact
+literal index and same receiver syntax. Hash/kind/location only; repeated assignments
+remain separate, dynamic indexes and other receiver text are excluded. Constructor
+first-argument hash/kind/location is origin syntax, not overload proof or recovered SQL.
+Reports include pending value/text/schema/transaction review checks; work prompt
+keeps raw expressions and private hashes local. No identity/reachability upgrade.
+Warning-as-error surrounding suite: 92 passed. Native synthetic sample: 93 facts,
+two value observations and two constructor-origin witnesses; remaining candidates
+retain zero observations/unavailable origin. No application or SQL execution.
+Windows and full matrix remain deferred.
+
+### 2026-10-13: bounded local command-text tracing
+
+vb-syntax/0.4.10 traces constructor first-argument identifiers backwards through
+contiguous local literal assignments and &=/+= updates, stopping at the latest
+assignment/initializer. Literal & expressions and parentheses are supported.
+Hard bounds: 64 statements, 128 expression nodes, 16384 reconstructed characters.
+Unknown expressions and intervening statements stop with a reason. Hash/location
+only; no raw SQL, runtime evaluation, StringBuilder/identifier propagation, overload
+proof or verified procedure claim. Reporting and the inspection prompt distinguish
+trace gaps from parameter extraction. Synthetic sample now exercises relative
+SqlClient naming, nested Try, local text construction and complex parameter values.
+Warning-as-error surrounding suite: 98 passed before the final parenthesized case.
+Native sample retained 93 facts with two constant syntax traces (one local variable,
+one direct literal). No application or SQL execution. Windows/full matrix deferred.
+Final warning-as-error parameter suite: 53 passed; final CLI sample rerun: 93 facts.
+
+### 2026-10-13: empty seed and replacement coverage
+
+vb-syntax/0.4.11 recognizes intrinsic String.Empty and explicit
+Global.System.String.Empty as empty syntax seeds. Arbitrary Empty members and
+escaped [String] identifiers remain unresolved. Tests cover append-only seeds,
+literal replacement after an unknown seed, and replacement after an empty seed.
+The combined nested/relative-type/complex-value public fixture now starts with
+String.Empty and appends SQL literals. Warning-as-error focused suite: 105 passed.
+Native synthetic scan: 94 facts; both expected text traces retained, including
+the empty-seed variable trace. No application/SQL execution or private inputs.
+Windows and full matrix acceptance remain pending; this is not completion of the
+broader entry-point-to-SQL migration handoff.
+
+### 2026-10-13: integrated source migration report and HTTP boundary delivery
+
+Branch codex/sql-database-matrix-864. IntegratedMigrationReport adds a human-readable
+section to the normal report.md; no new machine-readable artifact is introduced.
+It inventories supported source SQL and outbound HTTP facts independently of roots,
+keeps unconnected operations, reports boundary/binding and parameter denominators,
+and records ordered call/declaration fact references from WebForms source boundaries.
+Unique explicit receiver type/name/arity joins remain Tier3 candidates, never
+compiler identity or deployed URL proof. Missing/ambiguous spans and calls refuse
+association. Source reports never splice historical compiled wrapper paths; the
+existing admitted compiled handoff remains a distinct evidence layer.
+
+Public migration-vertical-slice combines a page button and user-control button,
+backend wrapper, direct SQL, outbound HTTP and an unconnected SQL operation.
+The SQL shape includes nested Try, relative SqlClient, String.Empty, concatenations,
+five parameter/value observations and transaction assignment. Expected report:
+three operation evidence groups, two with candidate entry paths, all five parameter
+witnesses grouped under one SQL call, and both entry boundaries visible.
+Tests remove call/binding evidence, introduce duplicate targets and exceed matching
+budgets to ensure explicit partial reporting without hiding the inventory.
+
+Local validation: 288 SQL/compiled-wrapper/WebForms/report regressions passed;
+22 integrated/event-identity/legacy-HTTP tests passed. Both full native matrices
+passed (96 SQL outputs and 96 HTTP outputs), with eight independent oracle guards
+for each family. No application, SQL or HTTP fixture methods were executed.
+Final focused test and exact-head Windows CI are recorded in the delivery response.
+Windows workflow now includes the integrated source acceptance and HTTP matrix.
+One private acceptance prompt: prompts/accept-integrated-migration-report.md.
+Private application-wide completeness, deployed routes, schema contracts, migration
+decisions and source/compiled identity bridges remain explicit separate gates.
+Final scale audit: over-budget scans skip boundary and operation method-span
+matching as well as call matching. Boundary attachment is additionally capped at
+10000 retained resolutions. Final integrated/report test run: 10 passed.
+
+### 2026-10-13: UserControl Handles entry-anchor gap
+
+The integrated source report now accepts retained VB Handles syntax bindings as
+candidate anchors only with a unique lexical method owner, matching handler name,
+and unique same-file type explicitly inheriting System.Web.UI.UserControl (or its
+Global-qualified spelling). Evidence is not promoted to handler-resolution facts;
+hosting, control identity and deployed routes remain unestablished. Aliased/short
+base types, indirect inheritance and AddHandler remain outside this fallback.
+The synthetic full-chain test covers Handles -> implicit same-class helper ->
+WebClient.UploadString, deterministic ordering, absent call/type evidence,
+ambiguous handler spans and unrelated binding locations/names. No private source
+was copied. Native scan/report generation runs inside the regression test without
+executing application or network methods. Broad SQL/HTTP smoke is deferred for
+this report-only change; extractor behavior and schemas are unchanged.
+Validation: 54 focused integrated/report/WebForms/legacy HTTP tests passed with
+warnings as errors; final integrated and compiled-wrapper run passed seven tests.
+Private rescan acceptance and exact-head Windows CI remain unverified here.
+
+### 2026-10-13: explicit Handles anchor rejection diagnostics
+
+Private acceptance returned no candidate anchors; the screenshots do not identify
+which guard failed. This change does not claim to fix that unknown identity gap.
+Report each unresolved binding's first failed guard and aggregate all assessment
+reasons, distinguishing candidate anchors with missing downstream paths and
+over-budget unassessed bindings. Correct the denominator label: all VB Handles
+facts are retained, not necessarily UserControls. Synthetic regression cases cover
+each guard, separate-file partial base evidence, short/relative/custom base names,
+and ambiguity/scale boundaries without weakening evidence requirements.
+The existing acceptance prompt now requires a verdict for the known chain and
+its exact rejection reason. No extractor/schema change; full language smoke is
+deferred for this report-only diagnostic change.
+Validation: 11 integrated/report tests passed with warnings as errors; 33 WebForms
+composition/event identity and compiled-wrapper regression tests passed. Exact-head
+Windows CI and private acceptance remain pending.
+
+### 2026-10-13: external-base Handles chain projection
+
+Separate observed VB Handles event-chain anchors from framework classification.
+Unique owner/name/receiver/event and same-file type identity guards remain; missing
+or unknown base ancestry now records a framework assessment without suppressing
+the source event chain. Direct UserControl spelling stays a syntax candidate,
+not verified ancestry. Retained WebForms handler coverage remains separate.
+Full native-scan tests cover direct UserControl, unavailable external base and
+Windows Forms base through the same helper-to-UploadString path, preserving
+ambiguity negatives and deterministic output. No private code or DLL was used.
+Report-only change: no extractor/schema changes; full adapter smoke deferred.
+Private chain acceptance and exact-head Windows CI still require verification.
+Local validation: 46 integrated/report/WebForms/compiled-wrapper tests passed with
+warnings as errors; synthetic scan/report paths exercised without network calls.
+
+### 2026-10-13: durable corpus and operation-directed caller traversal
+
+Private acceptance confirmed the external-base Handles-to-HTTP chain. Three other
+operations remained unconnected, but no sanitized first-failed-hop evidence for
+them was supplied. Do not claim these unknown private gaps fixed.
+
+Code inspection found a reproducible independent defect: forward search from
+unrelated roots can hit a depth/work limit and stop before a relevant root. Search
+now traverses supported callers backward from each operation, bounded by the same
+work/depth/path limits, preserving forward-ordered evidence references. Tests add
+an unrelated deep graph, a relevant over-depth graph, recursion and reordered
+facts. Per-operation assessments distinguish matching/ownership/search/anchor gaps.
+
+samples/migration-regression-corpus records the combined SQL parameter/text,
+external-base event, direct UserControl, desktop-event, ambiguous overload and
+unconnected-operation shapes as public source files. Its README maps the wider
+fix history to existing samples and negative matrices. Native scan tests pin
+grouping, evidence tiers, unknown contracts/effects, hashes and deterministic
+reporting. No private artifacts, generator JSON schema or runtime calls added.
+
+Windows run 38486418215 at fac82cfa failed the strict semantic WebForms composition
+oracle, not the integrated candidate-chain tests. That oracle loaded a classic
+host-dependent Web Application project. It now scans the same public sources in
+a temporary SDK net48 project with pinned reference assemblies, retaining its
+Tier1 assertions; the original legacy fixture remains unchanged. Exact-head
+Windows proof is still required. Corpus changes trigger the compatibility workflow.
+
+Local validation: 313 broad SQL/compiled-wrapper/WebForms/report/HTTP tests passed;
+47 focused final corpus/report/WebForms/wrapper tests passed; both cached-lookup
+tests and all 16 SQL/HTTP oracle guards passed. Full static-only native matrices
+validated 96 deterministic outputs each. Final corpus scan and exact-head Windows
+run are reported in the delivery receipt, not assumed successful from prior heads.
+
+### 2026-10-13: protected nested receiver joins (vb-syntax/0.4.12)
+
+Private diagnostics identified the same missing outer-wrapper -> receiver-variable
+-> protected nested method join for two database operations. The independent
+NestedReceiver.vb corpus reproduces this with field receiver type DataStore and
+qualified declaration NestedService.DataStore, plus global and sibling decoys.
+The report now checks nearest enclosing retained type scopes before exact matching;
+the nearest declared type must have a unique method/arity target. It does not search
+all classes by short name. New MethodDeclared importAliasNames and
+containingTypeParameters fields prevent aliases/generic variables becoming guessed
+nested classes. Old facts without guards retain exact-only behavior; fresh extraction
+is required. Global-qualified names remain absolute. Namespace-import/alias target
+resolution, inherited nested types and generic substitution are not added here.
+
+Full-chain tests now retain both new SQL/bulk paths and reject alias/generic guards,
+duplicate nested types/overloads and missing receiver evidence. The source test
+checks actual guard extraction. No compiled/source identity bridge is invented.
+The second HTTP operation's lack of a retained entry anchor remains a separate gap.
+The ECMA-335/API/dataflow distinction is documented in SQL_DATABASE_MATRIX.md.
+Prior-head Windows run 38489954419 (31dffdc2) succeeded; not proof for this new head.
+
+Validation for this correction: 313 broad SQL/compiled-wrapper/WebForms/report/HTTP
+tests passed with warnings as errors; the final focused corpus/report suite passed
+all 6 tests, including guard extraction. SQL and HTTP native static-only smoke
+matrices each validated 96 deterministic outputs. Exact committed-head sample scan
+and remote CI status are recorded in the delivery receipt; private acceptance remains
+outstanding and must use freshly extracted 0.4.12 facts.
+# 2026-10-13: consolidated caller frontier diagnostics
+
+Report-only correction after private acceptance confirmed the nested receiver join
+but not an upstream entry anchor. Unresolved/search-limited operation groups now
+show up to 20 distinct observed stop declarations and retained suffix chains, plus
+up to five rejected same-name call leads per stop with counts and evidence.
+Leads never become edges; unknown/out-of-scope/unextracted callers remain unknown.
+Cycle and depth stops are explicit; budget-limited discovery is labeled incomplete.
+No extractor version, machine artifact or private source is added. Acceptance prompt
+now requests all remaining caller gaps in one local pass, not successive screenshots.
+
+Validation: all 15 integrated-report, migration-corpus and Markdown-report tests
+passed with warnings as errors. CLI build had zero warnings/errors; public corpus
+scan emitted 252 facts and passed adapter-artifact validation. Full adapter smoke
+matrices are deferred for this report-only change; extraction is unchanged.
+# 2026-10-13: inline constructed receivers and optional tails
+
+The private frontier check identified inline New receivers at all three remaining
+groups. Extraction already retained the explicit constructed type; report matching
+incorrectly preferred the empty receiver-name implicit-self branch. Inline metadata
+now takes precedence. vb-syntax/0.4.13 adds parameterOptionalFlags, hasParamArray and
+allArgumentsPositional for bounded trailing-optional matching. Exact and optional
+compatible overloads are considered together and ambiguity is refused. Named
+omissions, ParamArray expansion and old facts without metadata are not generalized.
+Synthetic tests combine event -> inline receiver -> HTTP/SQL/bulk for supplied and
+omitted optional arguments, with required/named/ParamArray/overload negatives.
+Private entry reachability remains unknown until a fresh consolidated scan.
+
+Validation: 24 focused inline/integrated/corpus/VB boundary tests passed with
+warnings as errors. Added InlineReceiverMigrationTests to the Windows compatibility
+lane. Full pinned SQL/HTTP native matrices and full solution suite are deferred for
+this bounded syntax/report change; fresh Windows results remain a separate gate.
+CLI build passed with zero warnings/errors. The independent inline-receiver sample
+scan produced 42 facts, validated artifacts and 3/3 candidate operation entry paths.
+# 2026-10-13: explicit property/field receiver chains
+
+vb-syntax/0.4.14 adds property declared-type/owner/context and safe receiver-chain
+metadata. Report-only type traversal uses unique explicit members across source
+files, retaining member references in candidate paths. Maximum eight segments;
+10000-member matching cap. No getters execute and no instance identity is inferred.
+Nonshared type roots, missing/ambiguous declarations, arrays/indexers, factory
+results, alias/generic shadows and inherited/partial member merging remain refused.
+The property-chain-migration sample and tests exercise both SQL and bulk groups.
+Private chain declarations and actual entry reachability remain unverified here.
+
+Validation: 40 property/inline/integrated/corpus/VB-boundary/Markdown tests passed
+with warnings as errors, including typed-local and Me-root paths. CLI build had
+zero warnings/errors. Public property-chain sample emitted 41 facts, validated
+artifacts and 2/2 candidate operation paths. New tests are in Windows CI. Full
+solution tests and pinned native SQL/HTTP matrices are deferred for this change;
+new-head Windows and private acceptance results are not claimed.
+# 2026-10-13: stacked-chain stabilization
+
+Operator-reported private acceptance of b1dc0b88 / vb-syntax/0.4.14 confirms candidate
+entry paths for all four observed groups (two HTTP, command execution and bulk),
+with five parameters grouped under the command. This closes the diagnosed path
+joins for that bounded denominator, not application-wide coverage, runtime routes,
+framework ancestry, command execution effects or database contracts. No private
+source, paths, identifiers, binary data or artifacts are stored here.
+
+Independent stacked-migration-regression sample combines property, optional-arity,
+inline construction, nested receiver, Try scope, partially qualified SqlClient,
+String.Empty concatenation and complex value witnesses. Tests remove property,
+inline/nested calls, optional metadata and event anchors independently. A global
+short-name decoy is retained. Windows CI now includes the stacked regression.
+No production scanner/rule change or extractor-version bump is made in this step.
+
+Validation: all 20 focused stacked/property/inline/integrated/corpus tests passed
+with warnings as errors. CLI sample scan emitted 156 facts, validated artifacts,
+4/4 candidate paths and zero ungrouped parameters. Full solution/native matrices
+are deferred for this test-only stabilization. At inspection, b1dc0b88 Private Path
+Guard succeeded and SQL database public compatibility remained in progress; neither
+is substituted for exact stabilization-head CI proof.

@@ -92,7 +92,11 @@ public sealed record CombinedSurfaceProjectionRow(
     string? LegacyDataExtractorVersion = null,
     string? SurfaceSubtype = null,
     [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
-    OutboundHttpCallEvidence? HttpCallEvidence = null);
+    OutboundHttpCallEvidence? HttpCallEvidence = null)
+{
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public DatabaseCallEvidence? DatabaseCallEvidence { get; init; }
+}
 
 public static class CombinedSurfaceProjection
 {
@@ -257,7 +261,8 @@ public static class CombinedSurfaceProjection
             stableMessageSurfaceKey,
             SurfaceSubtype: isFrameworkDataAdapterFill ? "data-adapter-fill" : null,
             HttpCallEvidence: fact.FactType == FactTypes.HttpCallDetected && fact.RuleId is RuleIds.HttpClientInvocation or RuleIds.VisualBasicSyntaxHttpCandidate
-                ? OutboundHttpCallEvidence.FromProperties(fact.Properties) : null);
+                ? OutboundHttpCallEvidence.FromProperties(fact.Properties) : null)
+        { DatabaseCallEvidence = fact.FactType == FactTypes.DatabaseOperationCandidate ? DatabaseCallEvidence.FromProperties(fact.Properties) : null };
     }
 
     private static CombinedSurfaceProjectionRow ToLegacyDataSurface(LegacyDataModelDescriptorProjectionRow descriptor)
