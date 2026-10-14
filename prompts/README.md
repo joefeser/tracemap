@@ -1,5 +1,10 @@
 # Private exchange prompts
 
+For public-only validation of database evidence admission, use
+[Verify evidence-admission hardening](verify-evidence-admission-hardening.md).
+It pins the implementation revision and synthetic acceptance checks; no private
+application rescan is required.
+
 For automatic projectless constructor evidence, use
 [Inspect projectless SQL parameter candidates](inspect-projectless-sql-parameter-candidates.md).
 This does not replace schema verification or establish wrapper argument mapping.

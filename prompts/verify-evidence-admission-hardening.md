@@ -1,0 +1,62 @@
+# Verify database evidence-admission hardening
+
+Use this prompt in the public TraceMap checkout. No private application inputs,
+builds, database connections or rescans are needed. Do not modify code, commit,
+push or merge during this verification.
+
+## Revision
+
+Fetch `origin/codex/evidence-admission-hardening`. Verify that the selected branch
+contains implementation commit `af2d00ff01f41501f51e892ab1f41e9620350913`.
+Record the actual checked-out HEAD and compare the implementation with its base,
+`dbdd9241e48550dfdf779e7842d04c1912d659eb` (merged dev baseline).
+Later prompt-only commits do not change implementation acceptance. Preserve local
+changes; if checkout would overwrite them, stop and report the conflict.
+
+## Acceptance
+
+1. Persisted parameter direction and type-kind lists reject unknown, empty,
+   duplicate and noncanonical values. Null optional fields and the standalone
+   `unavailable` marker remain compatible. Valid canonical lists are admitted.
+2. All three raw metadata lists (directions, type kinds and type names) enforce
+   the 8,192-character and 128-item bounds before splitting/token allocation.
+   Invalid raw metadata becomes unavailable; it must not become positive evidence.
+3. Correctly rehashed handoffs still reject database nodes with missing or invalid
+   rule, tier, commit, source index, scan, file or line-span provenance. Exercise
+   both displayed paths and inventory-only evidence nodes.
+4. Valid source evidence and compiled evidence with paired `-1/-1` unavailable
+   line spans still round-trip. Shape validation is not proof of source/binary
+   correspondence, runtime execution or verified framework ancestry.
+
+## Run
+
+From the repository root:
+
+```text
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter "FullyQualifiedName~SqlReviewRegressionTests|FullyQualifiedName~GroupedCompiledPathHandoffTests" --nologo
+dotnet test src/dotnet/TraceMap.sln --nologo
+```
+
+Choose two fresh local output directories outside the repository. Replace the
+placeholders below with their actual paths; do not overwrite existing artifacts.
+
+```text
+dotnet run --project src/dotnet/TraceMap.Cli -- scan --repo samples/stacked-migration-regression --out <FIRST_OUTPUT_DIRECTORY>
+dotnet run --project src/dotnet/TraceMap.Cli -- scan --repo samples/stacked-migration-regression --out <SECOND_OUTPUT_DIRECTORY>
+```
+
+Compare `facts.ndjson` and `report.md` byte-for-byte between runs using available
+local tooling. Check that all four synthetic operation groups retain candidate
+paths and that the required scan outputs exist: scan-manifest.json, facts.ndjson,
+index.sqlite, report.md and logs/analyzer.log. Keep reduced-analysis labels intact.
+
+## Return
+
+Report the exact implementation and checkout commits, focused/full test totals,
+skips and their reasons, deterministic comparison results, and any failed
+acceptance condition. Distinguish not-run or blocked checks from passing checks.
+Do not silently install missing tooling or waive failures.
+
+Do not rescan the private application. This branch hardens evidence admission;
+it does not change extraction or call-graph coverage and does not claim to resolve
+the previously reported 266 private-application analysis-gap facts.
