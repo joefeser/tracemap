@@ -1,0 +1,57 @@
+name: Windows test-host baseline comparison
+
+on:
+  push:
+    branches: [codex/evidence-admission-hardening]
+    paths:
+      - '.github/workflows/windows-testhost-baseline.yml'
+      - 'src/dotnet/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  compare:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        revision: [base, candidate]
+        test-class: [WebFormsReviewInputValidationTests, VaultExportTests]
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+      - name: Select exact comparison revision
+        shell: pwsh
+        env:
+          REVISION: ${{ matrix.revision }}
+          CANDIDATE_SHA: ${{ github.sha }}
+        run: |
+          $revision = if ($env:REVISION -eq 'base') { 'dbdd9241e48550dfdf779e7842d04c1912d659eb' } else { $env:CANDIDATE_SHA }
+          git checkout --detach $revision
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git rev-parse HEAD
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
+        with:
+          dotnet-version: 10.0.302
+      - name: Build public test fixtures once
+        timeout-minutes: 8
+        run: dotnet build src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --nologo
+      - name: Run isolated class once with crash diagnostics
+        timeout-minutes: 5
+        shell: pwsh
+        env:
+          TEST_CLASS: ${{ matrix.test-class }}
+        run: |
+          dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-build --no-restore --filter "FullyQualifiedName~$env:TEST_CLASS" --nologo --logger "console;verbosity=detailed" --blame-crash --blame-crash-dump-type mini --blame-hang-timeout 2m --blame-hang-dump-type mini --results-directory "$env:RUNNER_TEMP/testhost-results"
+          exit $LASTEXITCODE
+      - name: Print test sequence on failure
+        if: failure()
+        shell: pwsh
+        run: |
+          # Public synthetic inputs only. Preserve the failure; never retry or mask it.
+          Get-ChildItem "$env:RUNNER_TEMP/testhost-results" -Filter '*Sequence.xml' -Recurse -ErrorAction SilentlyContinue | ForEach-Object { Get-Content -LiteralPath $_.FullName }
