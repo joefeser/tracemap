@@ -24,6 +24,7 @@ are required. Existing negative tests must remain in place when refactoring.
 | Cross-file explicit property/field chain | PropertyChainMigrationTests | Shared/instance distinction, missing types, duplicate/indexed/array members, local shadows, factories; typed local and Me positives |
 | Complete stacked correction, four operations/five parameters | StackedMigrationRegressionTests; samples/stacked-migration-regression | Remove each critical layer: property, inline/nested call, optional metadata, event anchor; required paths disappear |
 | Source/compiled wrapper provenance and SQL handoff | SqlWrapperRouteTests; GroupedCompiledPathHandoffTests | No invented source/binary identity bridge; original signatures and context retained |
+| Database evidence admission | SqlReviewRegressionTests; GroupedCompiledPathHandoffTests | Canonical allowlisted metadata; 8,192-character/128-item bounds before tokenization; rehashed path and inventory nodes still require rule, tier, commit, source and span provenance |
 | Retained SQL inventory and large input admission | test_sql_wrapper_report.py; sql-wrapper-large-index-smoke.py | Hash/identity changes, explicit size bounds, timeout/failure, truncation, deterministic output |
 | Opt-in local SQL literal and contract recovery | test_sql_command_text.py | Consent, wrong binary/hash, dynamic state, malformed catalog, ambiguous names, HTML inertness, no overwrite |
 | HTTP regressions | OutboundHttpLegacyCoverageTests; http-coverage-smoke.py | Independent HTTP oracle, legacy profiles, syntax fallback and coverage gaps |
@@ -42,3 +43,11 @@ The accepted private baseline is four **observed** operation groups with candida
 paths, not complete application coverage. Runtime routes, framework ancestry,
 execution effects, schema contracts and remaining analysis gaps stay outside that
 acceptance. Test-only changes do not require repeatedly rescanning private inputs.
+
+Database handoff admission accepts positive ordered source spans or the paired
+`-1/-1` unavailable-span sentinel used by compiled evidence. It requires a nonempty
+rule, source index, scan and file plus a known evidence tier and full hexadecimal
+Git commit identity. This validates evidence shape, not source/binary correspondence
+or runtime execution. Optional null metadata remains backward compatible; persisted
+direction/type-kind lists must be canonical, while raw producer lists are bounded
+before normalization. Invalid producer metadata becomes unavailable, never a claim.

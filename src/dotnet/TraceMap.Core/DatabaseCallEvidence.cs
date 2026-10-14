@@ -8,6 +8,9 @@ public sealed record DatabaseCallEvidence(string MethodName, string OperationKin
     string? OriginalSignature = null, string? ProviderAssemblyIdentity = null,
     string? ParameterDirectionKinds = null, string? ParameterTypeKinds = null, string CommandStateCoverage = "unavailable", string? ParameterTypeNames = null)
 {
+    private static readonly string[] Directions = ["Input", "Output", "InputOutput", "ReturnValue"];
+    private static readonly string[] TypeKinds = ["enum-argument-witness", "enum-assignment-witness"];
+
     public bool IsWellFormed() => new[] { MethodName, OperationKind, OperationForm, CommandTextAvailability,
             CommandTypeEvidence, ParameterEvidence, TransactionEvidence, ConnectionEvidence, DispatchBoundary,
             CoverageLabel, Limitations, CommandStateCoverage }.All(value => !string.IsNullOrEmpty(value))
@@ -27,16 +30,31 @@ public sealed record DatabaseCallEvidence(string MethodName, string OperationKin
         && (CommandTextHash is null || CommandTextHash.Length == 64 && CommandTextHash.All(c => c is >= '0' and <= '9' or >= 'a' and <= 'f'))
         && (ProviderAssemblyIdentity is null || Assembly(ProviderAssemblyIdentity) == ProviderAssemblyIdentity)
         && (OriginalSignature is null || Signature(OriginalSignature, MethodName) == OriginalSignature)
-        && (ParameterTypeNames is null || ParameterType(ParameterTypeNames) == ParameterTypeNames);
+        && (ParameterTypeNames is null || ParameterType(ParameterTypeNames) == ParameterTypeNames)
+        && ValidKinds(ParameterDirectionKinds, Directions)
+        && ValidKinds(ParameterTypeKinds, TypeKinds);
+
+    private static bool ValidKinds(string? value, string[] allowed) => value is null or "unavailable"
+        || NormalizeList(value, token => allowed.Contains(token, StringComparer.Ordinal)) == value;
+
+    // Bound both raw text and item count before Split allocates any token strings.
+    private static string? NormalizeList(string? value, Func<string, bool> valid)
+    {
+        if (string.IsNullOrEmpty(value) || value.Length > 8192) return null;
+        var count = 1;
+        foreach (var c in value)
+            if (c == ';' && ++count > 128) return null;
+        var values = value.Split(';');
+        return values.All(valid)
+            ? string.Join(";", values.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal)) : null;
+    }
 
     internal static DatabaseCallEvidence FromProperties(IReadOnlyDictionary<string,string> p)
     {
         string Value(string key, params string[] allowed) => p.TryGetValue(key, out var value) && allowed.Contains(value, StringComparer.Ordinal) ? value : "unavailable";
         string Values(string key, params string[] allowed)
         {
-            var values = p.GetValueOrDefault(key, "").Split(';', StringSplitOptions.RemoveEmptyEntries);
-            return values.Length is > 0 and <= 128 && values.All(v => allowed.Contains(v, StringComparer.Ordinal))
-                ? string.Join(";", values.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal)) : "unavailable";
+            return NormalizeList(p.GetValueOrDefault(key), v => allowed.Contains(v, StringComparer.Ordinal)) ?? "unavailable";
         }
         var method = p.GetValueOrDefault("methodName", "");
         var hash = p.GetValueOrDefault("commandTextHash");
@@ -56,16 +74,13 @@ public sealed record DatabaseCallEvidence(string MethodName, string OperationKin
     }
     private static string? ParameterType(string? value)
     {
-        if (value is null) return null;
-        if (value.Contains(';'))
-        {
-            var values = value.Split(';');
-            return values.Length <= 128 && values.All(v => ParameterType(v) is not null)
-                ? string.Join(";", values.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal)) : null;
-        }
+        return NormalizeList(value, ValidParameterType);
+    }
+    private static bool ValidParameterType(string value)
+    {
         var parts = value.Split('.');
         return parts.Length == 2 && (parts[0] == "SqlDbType" && Enum.GetNames<System.Data.SqlDbType>().Contains(parts[1],StringComparer.Ordinal)
-            || parts[0] == "DbType" && Enum.GetNames<System.Data.DbType>().Contains(parts[1],StringComparer.Ordinal)) ? value : null;
+            || parts[0] == "DbType" && Enum.GetNames<System.Data.DbType>().Contains(parts[1],StringComparer.Ordinal));
     }
     private static string? Signature(string? value, string method)
     {

@@ -10,6 +10,35 @@ public sealed class GroupedCompiledPathHandoffTests
     private static readonly string IndexHash = new('a', 64);
 
     [Fact]
+    public void Rehashed_database_nodes_require_provenance_in_paths_and_inventory()
+    {
+        var report = Report();
+        var node = report.Paths[0].Nodes[0] with { DatabaseCallEvidence =
+            TraceMap.Core.DatabaseCallEvidence.FromProperties(new Dictionary<string, string>()) };
+        foreach (var invalid in new[] { node with { RuleId = null }, node with { EvidenceTier = "invented" },
+            node with { CommitSha = null }, node with { CommitSha = "not-a-commit" },
+            node with { SourceIndexId = "" }, node with { ScanId = null }, node with { FilePath = null },
+            node with { StartLine = null }, node with { StartLine = 0 }, node with { EndLine = 3 },
+            node with { StartLine = -1 } })
+        {
+            foreach (var inventory in new[] { false, true })
+            {
+                var changed = inventory
+                    ? report with { Inventory = report.Inventory with { EvidenceNodes = [invalid] } }
+                    : report with { Paths = [report.Paths[0] with { Nodes = [invalid] }] };
+                var packet = GroupedCompiledPathHandoffBuilder.Create(changed, IndexHash);
+                Assert.Contains("DATABASE_NODE_PROVENANCE", Assert.Throws<InvalidDataException>(() =>
+                    GroupedCompiledPathHandoffBuilder.Restore(packet)).Message);
+            }
+        }
+        foreach (var valid in new[] { node, node with { StartLine = -1, EndLine = -1, FilePath = "bin/Public.dll" } })
+        {
+            var changed = report with { Paths = [report.Paths[0] with { Nodes = [valid] }] };
+            Assert.NotNull(GroupedCompiledPathHandoffBuilder.Restore(GroupedCompiledPathHandoffBuilder.Create(changed, IndexHash)));
+        }
+    }
+
+    [Fact]
     public void Correct_hash_does_not_admit_malformed_database_evidence()
     {
         var report = Report();
