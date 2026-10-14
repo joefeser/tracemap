@@ -981,3 +981,18 @@ all 6 tests, including guard extraction. SQL and HTTP native static-only smoke
 matrices each validated 96 deterministic outputs. Exact committed-head sample scan
 and remote CI status are recorded in the delivery receipt; private acceptance remains
 outstanding and must use freshly extracted 0.4.12 facts.
+# 2026-10-13: consolidated caller frontier diagnostics
+
+Report-only correction after private acceptance confirmed the nested receiver join
+but not an upstream entry anchor. Unresolved/search-limited operation groups now
+show up to 20 distinct observed stop declarations and retained suffix chains, plus
+up to five rejected same-name call leads per stop with counts and evidence.
+Leads never become edges; unknown/out-of-scope/unextracted callers remain unknown.
+Cycle and depth stops are explicit; budget-limited discovery is labeled incomplete.
+No extractor version, machine artifact or private source is added. Acceptance prompt
+now requests all remaining caller gaps in one local pass, not successive screenshots.
+
+Validation: all 15 integrated-report, migration-corpus and Markdown-report tests
+passed with warnings as errors. CLI build had zero warnings/errors; public corpus
+scan emitted 252 facts and passed adapter-artifact validation. Full adapter smoke
+matrices are deferred for this report-only change; extraction is unchanged.

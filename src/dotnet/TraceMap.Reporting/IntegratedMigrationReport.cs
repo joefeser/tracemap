@@ -36,6 +36,7 @@ public static class IntegratedMigrationReport
         }
         var hops = new List<Hop>();
         var unresolvedCalls = 0;
+        var rejectedCalls = new List<(CodeFact Call, string Reason)>();
         var calls = facts.Where(f => f.FactType == FactTypes.CallEdge).ToArray();
         var typeDeclarations = types.GroupBy(t => t.Properties.GetValueOrDefault("qualifiedName", ""), StringComparer.OrdinalIgnoreCase)
             .ToDictionary(g => g.Key, g => g.Count(), StringComparer.OrdinalIgnoreCase);
@@ -68,7 +69,7 @@ public static class IntegratedMigrationReport
         foreach (var call in calls)
         {
             var from = Owner(call);
-            if (from is null) { unresolvedCalls++; continue; }
+            if (from is null) { unresolvedCalls++; rejectedCalls.Add((call, "call-owner-missing-or-ambiguous")); continue; }
             var targetId = call.Properties.GetValueOrDefault("targetSymbolId");
             var candidates = !string.IsNullOrEmpty(targetId)
                 ? methods.Where(m => m.Fact.Properties.GetValueOrDefault("symbolId") == targetId)
@@ -86,7 +87,11 @@ public static class IntegratedMigrationReport
                         && m.Name.Equals(name, StringComparison.OrdinalIgnoreCase) && m.Arity == arity).Take(2).ToArray();
             }
             if (selected.Length == 1) hops.Add(new(from, selected[0], call));
-            else unresolvedCalls++;
+            else
+            {
+                unresolvedCalls++;
+                rejectedCalls.Add((call, selected.Length > 1 ? "target-ambiguous" : "no-supported-target"));
+            }
         }
         var roots = matchingLimited ? Array.Empty<(CodeFact Boundary, Method? Method)>()
             : boundaries.Select(b => (Boundary: b, Method: Owner(b))).Where(p => p.Method is not null).ToArray();
@@ -136,6 +141,8 @@ public static class IntegratedMigrationReport
         var incoming = hops.GroupBy(h => h.To.Fact.FactId).ToDictionary(g => g.Key, g => g.ToArray(), StringComparer.Ordinal);
         var anchorsByMethod = allRoots.GroupBy(r => r.Method!.Fact.FactId)
             .ToDictionary(g => g.Key, g => g.Select(r => r.Boundary).ToArray(), StringComparer.Ordinal);
+        var rejectedByName = rejectedCalls.GroupBy(r => r.Call.Properties.GetValueOrDefault("calleeName", ""), StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.ToArray(), StringComparer.OrdinalIgnoreCase);
         var rows = operations.GroupBy(f => (f.Evidence.FilePath, f.Evidence.StartLine, f.Evidence.EndLine,
             Family: f.FactType == FactTypes.HttpCallDetected ? "outbound-http" : "database", f.SourceSymbol, f.TargetSymbol))
             .OrderBy(g => g.Key.FilePath, StringComparer.Ordinal).ThenBy(g => g.Key.StartLine)
@@ -157,6 +164,7 @@ public static class IntegratedMigrationReport
             var paths = new List<(CodeFact Boundary, List<Hop> Hops)>();
             var work = 0;
             var limited = false;
+            var stops = new Dictionary<string, (Method Node, List<Hop> Path, string Reason)>(StringComparer.Ordinal);
             if (owner is not null && !matchingLimited)
             {
                 var queue = new Queue<(Method Node, List<Hop> Path, HashSet<string> Seen)>();
@@ -176,11 +184,20 @@ public static class IntegratedMigrationReport
                         break;
                     }
                     var callers = incoming.GetValueOrDefault(item.Node.Fact.FactId) ?? [];
+                    if (!anchorsByMethod.ContainsKey(item.Node.Fact.FactId) && callers.Length == 0)
+                        stops.TryAdd(item.Node.Fact.FactId, (item.Node, item.Path, "no-retained-incoming-call-or-anchor"));
                     if (item.Path.Count >= 16)
                     {
-                        if (callers.Any(h => !item.Seen.Contains(h.From.Fact.FactId))) limited = true;
+                        if (callers.Any(h => !item.Seen.Contains(h.From.Fact.FactId)))
+                        {
+                            limited = true;
+                            stops.TryAdd(item.Node.Fact.FactId, (item.Node, item.Path, "depth-limit"));
+                        }
                         continue;
                     }
+                    if (callers.Length > 0 && callers.All(h => item.Seen.Contains(h.From.Fact.FactId))
+                        && !anchorsByMethod.ContainsKey(item.Node.Fact.FactId))
+                        stops.TryAdd(item.Node.Fact.FactId, (item.Node, item.Path, "cycle-boundary"));
                     foreach (var hop in callers)
                     {
                         if (++work > 4096) { limited = true; break; }
@@ -202,6 +219,19 @@ public static class IntegratedMigrationReport
                 : !incoming.ContainsKey(owner.Fact.FactId) ? "no-supported-source-callers-or-local-anchor"
                 : "no-retained-anchor-in-supported-caller-graph";
             lines.Add($"Operation path assessment: `{associationReason}`; reverse-search work: {work}. Missing call edges are not proof of unreachable code.");
+            if (paths.Count == 0 || limited)
+            {
+                lines.Add($"Caller frontier diagnostics: {stops.Count} distinct observed stops; showing {Math.Min(20, stops.Count)}. Search incomplete: {limited || matchingLimited}. Same-name rejected calls below are investigation leads only, never joined edges; absence cannot distinguish unextracted calls from out-of-scope or unused code.");
+                foreach (var stop in stops.Values.OrderBy(s => s.Node.Fact.FactId, StringComparer.Ordinal).Take(20))
+                {
+                    lines.Add($"- Caller frontier `{stop.Reason}`: {Reference(stop.Node.Fact)}; retained chain: "
+                        + string.Join(" → ", stop.Path.Select(h => Reference(h.Call) + " ⇒ " + Reference(h.To.Fact)).Append(Reference(operation))));
+                    var leads = rejectedByName.GetValueOrDefault(stop.Node.Name) ?? [];
+                    lines.Add($"  Same-name rejected call leads: {leads.Length}; showing {Math.Min(5, leads.Length)} (receiver/arity may differ; not evidence of a call to this method).");
+                    foreach (var lead in leads.Take(5))
+                        lines.Add($"  - `{lead.Reason}`: {Reference(lead.Call)}; receiver type `{Safe(lead.Call.Properties.GetValueOrDefault("receiverType", "unavailable"))}`; argument count `{Number(lead.Call, "argumentCount", -1)}`.");
+                }
+            }
             foreach (var path in paths)
             {
                 connectedBoundaries.Add(path.Boundary.FactId);

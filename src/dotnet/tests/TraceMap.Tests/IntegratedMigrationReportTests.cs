@@ -97,8 +97,21 @@ public sealed class IntegratedMigrationReportTests
         var bounded = Report(scan.Facts.Concat(noise).Append(deepCaller));
         Assert.Contains("Displayed groups with candidate entry paths: 1/1", bounded);
         Assert.Contains("search limited: True", bounded);
+        Assert.Contains("Caller frontier `depth-limit`", bounded);
         var isolated = Report(scan.Facts.Where(f => f != helperCall));
         Assert.Contains("`no-supported-source-callers-or-local-anchor`", isolated);
+        Assert.Contains("Caller frontier `no-retained-incoming-call-or-anchor`", isolated);
+        Assert.Contains("Same-name rejected call leads: 0", isolated);
+        var rejectedHelper = helperCall with { Properties = new Dictionary<string, string>(helperCall.Properties)
+            { ["receiverName"] = "unknown", ["receiverType"] = "UnavailableType" } };
+        var rejectedReport = Report(scan.Facts.Select(f => f == helperCall ? rejectedHelper : f));
+        Assert.Contains("Displayed groups with candidate entry paths: 0/1", rejectedReport);
+        Assert.Contains("Same-name rejected call leads: 1", rejectedReport);
+        Assert.Contains("`no-supported-target`", rejectedReport);
+        Assert.Contains("receiver type `UnavailableType`", rejectedReport);
+        Assert.Equal(rejectedReport, Report(scan.Facts.Select(f => f == helperCall ? rejectedHelper : f).Reverse()));
+        var cycleOnly = Report(scan.Facts.Where(f => f != helperCall).Append(selfCall));
+        Assert.Contains("Caller frontier `cycle-boundary`", cycleOnly);
         void CheckProperty(CodeFact fact, string key, string value, string reason)
         {
             var changed = fact with { Properties = fact.Properties.ToDictionary(p => p.Key, p => p.Value) };
@@ -169,9 +182,11 @@ public sealed class IntegratedMigrationReportTests
         var ambiguous = save with { FactId = "synthetic-duplicate", Evidence = save.Evidence with { FilePath = "Other.vb" } };
         var ambiguousReport = MarkdownReportWriter.Build(scan with { Facts = [.. scan.Facts, ambiguous] });
         Assert.Contains("Displayed groups with candidate entry paths: 0/3", ambiguousReport);
+        Assert.Contains("`target-ambiguous`", ambiguousReport);
         var tooMany = Enumerable.Range(0, 2001).Select(i => save with { FactId = "synthetic-limit-" + i }).ToArray();
         var limited = MarkdownReportWriter.Build(scan with { Facts = [.. scan.Facts, .. tooMany] });
         Assert.Contains("limited: method/call budget exceeded", limited);
         Assert.Contains("3 callsite evidence groups", limited);
+        Assert.Contains("Caller frontier diagnostics: 0 distinct observed stops; showing 0. Search incomplete: True", limited);
     }
 }

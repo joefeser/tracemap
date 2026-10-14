@@ -67,3 +67,12 @@ wrapper -> protected nested class receiver -> command/bulk operation hops agains
 local source and report separately whether an event anchor is reached. Do not
 expect the unrelated HTTP group to become connected merely because these SQL
 receiver joins improve. No compiled dependency or schema truth is inferred.
+
+Use the Caller frontier diagnostics for every remaining unresolved operation in
+one pass. Inspect each reported stop declaration and retained suffix chain locally.
+Check the rejected same-name call leads against local source; these are not joined
+edges and can be unrelated. Identify the first actual incoming caller omitted from
+the graph, if one exists, and describe its generic syntax shape and rejection
+category. If none is established, report unknown rather than unused. Distinguish
+cycle/depth stops and incomplete search from missing incoming evidence. Keep all
+private paths, symbols, source and fact IDs local; return all groups together.
