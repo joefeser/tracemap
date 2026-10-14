@@ -1,5 +1,13 @@
 # TraceMap Validation Guide
 
+Retained semantic/registration diagnostics: run
+`python3 scripts/validation/test_retained_gap_inventory.py`. The tests pin exact
+file-overlap counts without exporting private identifiers or their hashes,
+missing file evidence, closed registration-state labels, deduplication and
+privacy-projected hashing. `prompts/diagnose-semantic-registration-families.md`
+uses the accepted scan without rebuilding or rescanning. Overlap is correlation,
+not a root-cause or deduplicated-defect claim; unknown state remains unavailable.
+
 The reported-shape follow-up extends `WebFormsGapFamilyRegressionTests` with
 implicit With event receivers and VB Page.IsPostBack candidates. Run the adjacent
 VB composition, legacy WebForms, stacked migration and integrated report suites.
