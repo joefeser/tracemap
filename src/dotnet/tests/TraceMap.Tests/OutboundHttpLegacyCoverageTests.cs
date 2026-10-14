@@ -97,6 +97,20 @@ public sealed class OutboundHttpLegacyCoverageTests
         Assert.DoesNotContain(compiled.Facts, fact => fact.Properties.GetValueOrDefault("gapKind") == "MetadataReaderDisagreement");
         var assemblyFact = Assert.Single(compiled.Facts, fact => fact.FactType == FactTypes.ManagedAssemblyDeclared);
         Assert.Equal(expectedFramework, assemblyFact.Properties.GetValueOrDefault("targetFramework"));
+        // Runtime floor (#853): pre-4.0 tooling emitted no TargetFrameworkAttribute, so the
+        // mscorlib reference carries the CLR family; 4.0+ assemblies carry the attribute.
+        if (tfm is "net20" or "net35")
+        {
+            Assert.Equal("mscorlib-assembly-reference", assemblyFact.Properties["runtimeFloorBasis"]);
+            Assert.Equal("clr-2.x", assemblyFact.Properties["runtimeFloor"]);
+            Assert.Equal("2.0.0.0", assemblyFact.Properties["runtimeFloorSourceVersion"]);
+        }
+        else
+        {
+            Assert.Equal("target-framework-attribute", assemblyFact.Properties["runtimeFloorBasis"]);
+            Assert.Equal(expectedFramework, assemblyFact.Properties["runtimeFloor"]);
+            Assert.False(assemblyFact.Properties.ContainsKey("runtimeFloorSourceVersion"));
+        }
         foreach (var method in module.Types.Single(type => type.Name == "LegacyMatrix").Methods.Where(method => method.Name.StartsWith("Case", StringComparison.Ordinal)))
         {
             var emitted = Assert.Single(method.Body.Instructions.Select(instruction => instruction.Operand).OfType<MethodReference>(),

@@ -4751,3 +4751,18 @@ cross-platform projectless/semantic/import/registration/path gate. It does not
 replace private compatibility checks. The opt-in explicit-input semantic path and
 its separate successful/refused binding tests are documented in
 [EXPLICIT_VB_CONTEXT.md](validation/EXPLICIT_VB_CONTEXT.md).
+
+## Runtime-floor evidence for pre-4.0 assemblies (#853)
+
+Run `dotnet test src/dotnet/TraceMap.sln --filter 'FullyQualifiedName~Runtime_floor_derivation|FullyQualifiedName~Legacy_reference_overloads_preserve_identity'`
+in standard Debug configuration, followed by the full Debug suite. The lanes
+pin: the derivation unit matrix (attribute basis including the
+present-but-empty case, clr-1.x/2.x/4.x mscorlib bases with 3.5-still-2.x
+and Silverlight-indistinguishable cases, duplicate-reference conflicts,
+netstandard contract family, facade-ambiguous bare System.Runtime,
+precedence, unresolved for unknown majors/reference-free assemblies) and the
+real-binary integration across the SQL-matrix net20–net48 fixtures, where
+net20/net35 assemblies carry no TargetFrameworkAttribute and resolve
+clr-2.x from their mscorlib 2.0.0.0 reference while net40+ resolve the
+attribute basis. Runtime-floor properties ride the existing
+ManagedAssemblyDeclared fact; no new fact type or schema change.
