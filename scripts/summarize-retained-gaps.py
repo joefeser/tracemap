@@ -50,6 +50,14 @@ UnsupportedVisualBasicEventName InvalidVisualBasicHandlesBinding
 UnreadableAspNetApplicationFile MalformedAspNetApplicationDirective UnreadableAspNetCodeFile
 MalformedAspNetCodeFile""".split())
 REASONS = REASONS | EXPANDED_REASONS
+COMPILED_REASONS = frozenset("""IlValueCallEffectsUnmodeled IlValueCallShapeUnavailable
+IlValueControlFlowBoundary IlValueControlFlowUnavailable IlValueExceptionFlowUnavailable
+IlValueInstructionUnavailable IlValueReturnBoundary IlValueStackLimit IlValueStackUnavailable
+IlCommandAdapterBindingUnavailable IlCommandAdapterConstructorUnsupported IlCommandBindingWorkLimit
+IlCommandControlFlowUnavailable IlCommandOperandsUnavailable IlCommandParameterFlowUnavailable
+IlCommandTextBindingUnavailable IlCommandTextCallerBindingRequired IlCommandTextReturnBindingUnavailable
+IlCommandTypeBindingUnavailable IlCommandUnknownCallEffects IlCommandValueEvidenceUnavailable""".split())
+REASONS = REASONS | COMPILED_REASONS
 TIERS = frozenset(("Tier1Semantic", "Tier2Structural", "Tier3SyntaxOrTextual", "Tier4Unknown"))
 
 
@@ -149,6 +157,12 @@ def summarize(scan, catalog, *, max_seconds=30):
     projection = {
         "factsRead": total,
         "analysisGapFacts": gap_count,
+        "gapDomainCounts": {
+            "compiled": sum(n for (r, _, _), n in groups.items() if r.startswith("dotnet.compiled.")),
+            "otherKnownRules": sum(n for (r, _, _), n in groups.items()
+                                   if r != "other-rule" and not r.startswith("dotnet.compiled.")),
+            "unknownRule": sum(n for (r, _, _), n in groups.items() if r == "other-rule"),
+        },
         "gapGroups": [dict(ruleId=r, reason=k, evidenceTier=t, count=n)
                       for (r, k, t), n in sorted(groups.items())],
         "reasonCoverage": {

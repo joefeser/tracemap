@@ -66,6 +66,23 @@ class InventoryTests(unittest.TestCase):
             with self.subTest(label=label):
                 self.assertIn('"' + label + '"', source)
 
+    def test_compiled_catalog_and_domain_counts_are_public_and_separate(self):
+        core = SCRIPT.parents[1] / "src/dotnet/TraceMap.Core"
+        source = "\n".join((core / name).read_text(encoding="utf-8") for name in (
+            "IlCallValueExtractor.cs", "IlCommandBindingExtractor.cs", "IlCommandBindingExtractor.ControlFlow.cs"))
+        for label in inventory.COMPILED_REASONS:
+            self.assertIn('"' + label + '"', source)
+        with self.catalog.open("a") as stream:
+            stream.write("  - id: dotnet.compiled.il-values.v1\n")
+        compiled = self.gap("IlValueCallEffectsUnmodeled")
+        compiled["ruleId"] = "dotnet.compiled.il-values.v1"
+        unknown = self.gap("private-reason")
+        unknown["ruleId"] = "private-rule"
+        self.write([self.gap(), compiled, unknown])
+        result = self.result()["inventory"]
+        self.assertEqual(dict(compiled=1, otherKnownRules=1, unknownRule=1), result["gapDomainCounts"])
+        self.assertEqual(result["analysisGapFacts"], sum(result["gapDomainCounts"].values()))
+
     def test_all_expanded_labels_survive_both_property_conventions(self):
         facts = []
         for label in sorted(inventory.EXPANDED_REASONS):

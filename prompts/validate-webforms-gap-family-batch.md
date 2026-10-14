@@ -4,8 +4,12 @@ Fetch `origin/codex/evidence-admission-hardening` and select the fetched revisio
 without overwriting local changes. This is production extractor work, not another
 summary-catalog update. Do not run the full test suite on the work machine.
 
-Scope: VB bracket-escaped event receiver identifiers and Boolean-literal
-IsPostBack comparisons (including Not and parentheses, bounded to 32 wrappers).
+Scope: the reported VB implicit `.Click` receiver inside a `With` block and
+`Not Page.IsPostBack`, plus the earlier escaped identifiers/Boolean comparisons.
+With receivers support local/self-qualified names and direct simple-type `New`
+expressions only. Construction receives a hashed site identity, not a markup ID
+or compiler-resolved receiver. Invocation/chained receivers and deferred lambdas
+stay unresolved. Page receiver shadowing must remain a gap.
 Scoped configuration registrations and dynamic postback refusal are regression
 coverage, not newly implemented resolution. Do not promise that any particular
 private gap matches these supported forms.
@@ -24,7 +28,7 @@ private gap matches these supported forms.
    Using the same saved source configuration, create a new run/preflight and run
    ONE fresh scan to a new output directory. Do not reuse stale preflight or tool
    identity receipts. Confirm the runtime-inventory phase completes and extractor
-   versions `vb-syntax/0.4.16` and `legacy-webforms/0.13.8`. Never execute application
+   versions `vb-syntax/0.4.17` and `legacy-webforms/0.13.9`. Never execute application
    methods, SQL, HTTP requests, or apply configuration transforms. If build or
    scan fails, report the failure without repeated retries or broad test runs.
    A runtime-inventory failure again means no gap comparison is available.
@@ -37,8 +41,14 @@ private gap matches these supported forms.
    five parameters remain grouped, and framework uncertainty remains separate.
    Do not equate observed event paths with verified WebForms boundaries/routes.
 5. Return all gap-family counts together, including unchanged/increased counts.
+   Return `gapDomainCounts` separately: compiled, other known rules and unknown
+   rules. Compare the legacy/VB rule groups independently from compiled groups;
+   do not describe newly emitted compiled diagnostics as new source defects.
+   The fixed public compiled-reason catalog now covers common IL value/command
+   gaps; unknown reasons stay redacted. Do not infer resolution from relabeling.
    Inspect locally at most one example per remaining family and describe only
-   its generic syntax category: escaped/simple/chained/invocation event receiver;
+   its generic syntax category: nearest With receiver (local/New/invocation/chain),
+   or escaped/simple/chained/invocation event receiver;
    Boolean literal/compound/shadowed lifecycle condition; absent/ambiguous/config
    registration; literal/dynamic postback. Do not expose private names, paths,
    source, configuration, payloads or raw fact IDs. Do not create an ad-hoc
