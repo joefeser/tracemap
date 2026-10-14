@@ -166,6 +166,12 @@ public sealed class ScanReceiptRecorder
                 baseScopeSha256 = scopeFingerprint,
                 webFormsVbImportContextPath = options.WebFormsVbImportContextPath.Trim()
             }));
+        if (!string.IsNullOrWhiteSpace(options.VisualBasicCompilationContextPath))
+            scopeFingerprint = Hash(JsonSerializer.Serialize(new
+            {
+                baseScopeSha256 = scopeFingerprint,
+                visualBasicCompilationContextPath = options.VisualBasicCompilationContextPath.Trim()
+            }));
     }
 
     public bool CanWriteAuthoritativeReceipt => repositoryIdentityHash is not null && commitSha is not null && runId is not null;
