@@ -104,3 +104,12 @@
 - [x] Retain bounded hashed parameter-value observations and constructor command-text-origin syntax with pending per-candidate migration review checks.
 - [x] Trace bounded same-block literal command-text assignments and concatenations to hash-only syntax candidates; report unsupported expressions, statements and limits explicitly.
 - [x] Cover intrinsic empty-string seeds, append-only construction, replacement assignments and escaped-name/other-member negative controls in the combined nested SQL fixture.
+
+### Integrated migration regression corpus and bounded caller search
+- [x] Preserve prior SQL/parameter/text and event-boundary fixes in checked-in synthetic samples with an executable coverage map.
+- [x] Add whole-chain external-base, direct UserControl, non-WebForms event and ambiguous-overload cases without private source or runtime execution.
+- [x] Search backward from operation owners so unrelated event graphs cannot consume the caller-path budget; retain forward display order, cycle guards and explicit limits.
+- [x] Add per-operation path assessments without inferring unreachability or inventing missing edges.
+- [x] Remove host-specific project-loading assumptions from the strict semantic WebForms composition oracle, keeping its semantic assertions.
+- [x] Wire corpus tests and sample changes into Windows compatibility CI.
+- [ ] Verify exact-head Windows CI and private remaining-operation chains; no source evidence currently identifies their first failed joins.

@@ -4621,6 +4621,14 @@ The legacy HTTP fixture TFMs are **representative test targets, not confirmed ap
 
 ## SQL/database migration matrix (#864)
 
+The durable [migration regression corpus](../samples/migration-regression-corpus/README.md)
+maps the parameter, text, event-anchor and integrated-chain fixes to checked-in
+synthetic samples and positive/negative tests. Run `MigrationRegressionCorpusTests`
+alongside `ProjectlessParameterCandidateTests` and `IntegratedMigrationReportTests`.
+The latter includes an unrelated deep event graph that must not starve a known
+operation's reverse caller search. Native scans run in tests; no fixture method,
+SQL statement or HTTP request is executed. Windows compatibility CI runs the corpus.
+
 Integrated source migration acceptance: run `IntegratedMigrationReportTests`
 against `samples/migration-vertical-slice`. The public projectless VB page and
 user-control boundaries traverse an explicit backend wrapper to SQL and outbound

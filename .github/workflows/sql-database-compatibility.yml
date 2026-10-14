@@ -2,9 +2,9 @@ name: SQL database public compatibility
 on:
   push:
     branches: [codex/sql-database-matrix-864]
-    paths: ['src/dotnet/**', 'samples/sql-database-matrix/**', 'samples/migration-vertical-slice/**', 'scripts/diagnostics/SqlReferenceMatrix/**', 'scripts/diagnostics/RecoverSqlCommandText/**', 'scripts/validation/*sql*', 'scripts/sql-wrapper-report.py', 'scripts/validate-adapter-artifacts.py', 'scripts/test_validate_adapter_artifacts.py', 'rules/**', 'prompts/*sql*', 'prompts/accept-integrated-migration-report.md', 'prompts/plan-backend-api-extraction.md', 'docs/validation/SQL_DATABASE_MATRIX.md', '.github/workflows/sql-database-compatibility.yml']
+    paths: ['src/dotnet/**', 'samples/sql-database-matrix/**', 'samples/migration-vertical-slice/**', 'samples/migration-regression-corpus/**', 'samples/projectless-sql-parameter-association/**', 'scripts/diagnostics/SqlReferenceMatrix/**', 'scripts/diagnostics/RecoverSqlCommandText/**', 'scripts/validation/*sql*', 'scripts/sql-wrapper-report.py', 'scripts/validate-adapter-artifacts.py', 'scripts/test_validate_adapter_artifacts.py', 'rules/**', 'prompts/*sql*', 'prompts/accept-integrated-migration-report.md', 'prompts/plan-backend-api-extraction.md', 'docs/validation/SQL_DATABASE_MATRIX.md', '.github/workflows/sql-database-compatibility.yml']
   pull_request:
-    paths: ['src/dotnet/**', 'samples/sql-database-matrix/**', 'samples/migration-vertical-slice/**', 'scripts/diagnostics/SqlReferenceMatrix/**', 'scripts/diagnostics/RecoverSqlCommandText/**', 'scripts/validation/*sql*', 'scripts/sql-wrapper-report.py', 'scripts/validate-adapter-artifacts.py', 'scripts/test_validate_adapter_artifacts.py', 'rules/**', 'prompts/*sql*', 'prompts/accept-integrated-migration-report.md', 'prompts/plan-backend-api-extraction.md', 'docs/validation/SQL_DATABASE_MATRIX.md', '.github/workflows/sql-database-compatibility.yml']
+    paths: ['src/dotnet/**', 'samples/sql-database-matrix/**', 'samples/migration-vertical-slice/**', 'samples/migration-regression-corpus/**', 'samples/projectless-sql-parameter-association/**', 'scripts/diagnostics/SqlReferenceMatrix/**', 'scripts/diagnostics/RecoverSqlCommandText/**', 'scripts/validation/*sql*', 'scripts/sql-wrapper-report.py', 'scripts/validate-adapter-artifacts.py', 'scripts/test_validate_adapter_artifacts.py', 'rules/**', 'prompts/*sql*', 'prompts/accept-integrated-migration-report.md', 'prompts/plan-backend-api-extraction.md', 'docs/validation/SQL_DATABASE_MATRIX.md', '.github/workflows/sql-database-compatibility.yml']
   workflow_dispatch:
 permissions:
   contents: read
@@ -26,7 +26,7 @@ jobs:
       - name: Independent named oracle mutation guards
         run: python scripts/validation/test_sql_matrix_expectations.py
       - name: Integrated WebForms SQL and HTTP boundary acceptance
-        run: dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-build --filter "FullyQualifiedName~IntegratedMigrationReportTests|FullyQualifiedName~VisualBasicWebFormsCompositionTests|FullyQualifiedName~LegacyWebFormsEventIdentityTests|FullyQualifiedName~OutboundHttpLegacyCoverageTests" -warnaserror
+        run: dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-build --filter "FullyQualifiedName~MigrationRegressionCorpusTests|FullyQualifiedName~IntegratedMigrationReportTests|FullyQualifiedName~VisualBasicWebFormsCompositionTests|FullyQualifiedName~LegacyWebFormsEventIdentityTests|FullyQualifiedName~OutboundHttpLegacyCoverageTests" -warnaserror
       - name: Cached VB lookup equivalence and scaling guards
         run: dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-build --filter FullyQualifiedName~VisualBasicSyntaxTypeLookupTests --logger "console;verbosity=detailed"
       - name: Selected-root SQL report guards

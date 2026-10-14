@@ -108,7 +108,9 @@ public static class IntegratedMigrationReport
             syntaxRoots.Add((binding, owner));
         }
         var allRoots = roots.Concat(syntaxRoots).ToArray();
-        var outgoing = hops.GroupBy(h => h.From.Fact.FactId).ToDictionary(g => g.Key, g => g.ToArray(), StringComparer.Ordinal);
+        var incoming = hops.GroupBy(h => h.To.Fact.FactId).ToDictionary(g => g.Key, g => g.ToArray(), StringComparer.Ordinal);
+        var anchorsByMethod = allRoots.GroupBy(r => r.Method!.Fact.FactId)
+            .ToDictionary(g => g.Key, g => g.Select(r => r.Boundary).ToArray(), StringComparer.Ordinal);
         var rows = operations.GroupBy(f => (f.Evidence.FilePath, f.Evidence.StartLine, f.Evidence.EndLine,
             Family: f.FactType == FactTypes.HttpCallDetected ? "outbound-http" : "database", f.SourceSymbol, f.TargetSymbol))
             .OrderBy(g => g.Key.FilePath, StringComparer.Ordinal).ThenBy(g => g.Key.StartLine)
@@ -131,30 +133,50 @@ public static class IntegratedMigrationReport
             var work = 0;
             var limited = false;
             if (owner is not null && !matchingLimited)
-            foreach (var root in allRoots)
             {
                 var queue = new Queue<(Method Node, List<Hop> Path, HashSet<string> Seen)>();
-                queue.Enqueue((root.Method!, [], new(StringComparer.Ordinal) { root.Method!.Fact.FactId }));
+                queue.Enqueue((owner, [], new(StringComparer.Ordinal) { owner.Fact.FactId }));
                 while (queue.Count > 0)
                 {
-                    if (++work > 4096 || paths.Count >= 8) { limited = true; break; }
+                    if (++work > 4096) { limited = true; break; }
                     var item = queue.Dequeue();
-                    if (item.Node == owner) { paths.Add((root.Boundary, item.Path)); continue; }
-                    if (item.Path.Count >= 16) { limited = true; continue; }
-                    foreach (var hop in outgoing.GetValueOrDefault(item.Node.Fact.FactId) ?? [])
+                    foreach (var anchor in anchorsByMethod.GetValueOrDefault(item.Node.Fact.FactId) ?? [])
+                    {
+                        if (++work > 4096 || paths.Count >= 8) { limited = true; break; }
+                        paths.Add((anchor, item.Path));
+                    }
+                    if (work > 4096 || paths.Count >= 8)
+                    {
+                        if (queue.Count > 0 || incoming.ContainsKey(item.Node.Fact.FactId)) limited = true;
+                        break;
+                    }
+                    var callers = incoming.GetValueOrDefault(item.Node.Fact.FactId) ?? [];
+                    if (item.Path.Count >= 16)
+                    {
+                        if (callers.Any(h => !item.Seen.Contains(h.From.Fact.FactId))) limited = true;
+                        continue;
+                    }
+                    foreach (var hop in callers)
                     {
                         if (++work > 4096) { limited = true; break; }
-                        if (item.Seen.Contains(hop.To.Fact.FactId)) continue;
-                        queue.Enqueue((hop.To, [.. item.Path, hop], new(item.Seen, StringComparer.Ordinal) { hop.To.Fact.FactId }));
+                        if (item.Seen.Contains(hop.From.Fact.FactId)) continue;
+                        queue.Enqueue((hop.From, [hop, .. item.Path], new(item.Seen, StringComparer.Ordinal) { hop.From.Fact.FactId }));
                         if (queue.Count >= 4096) { limited = true; break; }
                     }
+                    if (work > 4096) break;
                 }
-                if (limited) break;
             }
             if (paths.Count > 0) connected++;
             lines.AddRange(["", $"### {group.Key.Family}: `{Safe(group.Key.FilePath)}:{group.Key.StartLine}`",
                 $"Entry association: {(paths.Count == 0 ? "unresolved—not proof of unused code" : "candidate ordered source path")}; search limited: {limited || matchingLimited}.",
                 "Operation evidence: " + string.Join("; ", group.Select(Reference))]);
+            var associationReason = matchingLimited ? "matching-budget-exceeded-unassessed"
+                : owner is null ? "operation-owner-missing-or-ambiguous"
+                : paths.Count > 0 ? "candidate-path-retained"
+                : limited ? "reverse-search-limit-reached"
+                : !incoming.ContainsKey(owner.Fact.FactId) ? "no-supported-source-callers-or-local-anchor"
+                : "no-retained-anchor-in-supported-caller-graph";
+            lines.Add($"Operation path assessment: `{associationReason}`; reverse-search work: {work}. Missing call edges are not proof of unreachable code.");
             foreach (var path in paths)
             {
                 connectedBoundaries.Add(path.Boundary.FactId);

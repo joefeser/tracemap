@@ -920,3 +920,36 @@ Report-only change: no extractor/schema changes; full adapter smoke deferred.
 Private chain acceptance and exact-head Windows CI still require verification.
 Local validation: 46 integrated/report/WebForms/compiled-wrapper tests passed with
 warnings as errors; synthetic scan/report paths exercised without network calls.
+
+### 2026-10-13: durable corpus and operation-directed caller traversal
+
+Private acceptance confirmed the external-base Handles-to-HTTP chain. Three other
+operations remained unconnected, but no sanitized first-failed-hop evidence for
+them was supplied. Do not claim these unknown private gaps fixed.
+
+Code inspection found a reproducible independent defect: forward search from
+unrelated roots can hit a depth/work limit and stop before a relevant root. Search
+now traverses supported callers backward from each operation, bounded by the same
+work/depth/path limits, preserving forward-ordered evidence references. Tests add
+an unrelated deep graph, a relevant over-depth graph, recursion and reordered
+facts. Per-operation assessments distinguish matching/ownership/search/anchor gaps.
+
+samples/migration-regression-corpus records the combined SQL parameter/text,
+external-base event, direct UserControl, desktop-event, ambiguous overload and
+unconnected-operation shapes as public source files. Its README maps the wider
+fix history to existing samples and negative matrices. Native scan tests pin
+grouping, evidence tiers, unknown contracts/effects, hashes and deterministic
+reporting. No private artifacts, generator JSON schema or runtime calls added.
+
+Windows run 38486418215 at fac82cfa failed the strict semantic WebForms composition
+oracle, not the integrated candidate-chain tests. That oracle loaded a classic
+host-dependent Web Application project. It now scans the same public sources in
+a temporary SDK net48 project with pinned reference assemblies, retaining its
+Tier1 assertions; the original legacy fixture remains unchanged. Exact-head
+Windows proof is still required. Corpus changes trigger the compatibility workflow.
+
+Local validation: 313 broad SQL/compiled-wrapper/WebForms/report/HTTP tests passed;
+47 focused final corpus/report/WebForms/wrapper tests passed; both cached-lookup
+tests and all 16 SQL/HTTP oracle guards passed. Full static-only native matrices
+validated 96 deterministic outputs each. Final corpus scan and exact-head Windows
+run are reported in the delivery receipt, not assumed successful from prior heads.

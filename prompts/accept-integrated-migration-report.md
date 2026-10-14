@@ -53,3 +53,10 @@ base spelling). Do not treat accurate gap reporting as a passed connectivity fix
 If the anchor is established but no path appears, diagnose the downstream hop or
 search limit instead. Use the existing scan after this one acceptance run; no
 repeated rescans. Keep private type names, paths, source and fact IDs local.
+
+For each remaining unconnected operation group, return its generic `Operation path
+assessment` and whether reverse search was limited. Inspect one locally known
+caller chain per remaining group using the complete-chain diagnostic prompt. If
+no source caller is established, say so; do not invent one from method names or
+assume the operation is unused. Preserve the already-verified event chain as a
+regression check. Return all remaining groups together, not one field at a time.
