@@ -1,0 +1,27 @@
+name: VB compilation context matrix
+on:
+  push:
+    paths: ['src/dotnet/**', 'samples/**', '.github/workflows/vb-compilation-context-matrix.yml']
+  pull_request:
+    paths: ['src/dotnet/**', 'samples/**', '.github/workflows/vb-compilation-context-matrix.yml']
+permissions:
+  contents: read
+jobs:
+  context:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9
+        with:
+          dotnet-version: 10.0.302
+      - name: Build
+        timeout-minutes: 8
+        run: dotnet build src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --nologo
+      - name: Compilation context and interaction gate
+        timeout-minutes: 10
+        run: dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-build --no-restore --nologo --filter "FullyQualifiedName~ProjectlessCompilationContextMatrixTests|FullyQualifiedName~VisualBasicConfiguredImportsTests|FullyQualifiedName~AppCodeRegistrationMatrixTests|FullyQualifiedName~VisualBasicValidationMatrixTests|FullyQualifiedName~ProjectlessVisualBasicWebFormsDiagnosticsTests|FullyQualifiedName~StackedMigrationRegressionTests" --blame-hang-timeout 2m
