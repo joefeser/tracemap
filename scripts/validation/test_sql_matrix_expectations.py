@@ -1,4 +1,5 @@
 import copy
+import json
 import pathlib
 import tempfile
 import unittest
@@ -6,6 +7,15 @@ from sql_matrix_expectations import load_expectations, assert_calls, assert_comp
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 class SqlOracleGuards(unittest.TestCase):
+    def test_full_suite_ci_installs_and_checks_fixture_sdk(self):
+        sdk=json.loads((ROOT/'samples/sql-database-matrix/global.json').read_text())['sdk']
+        self.assertEqual('disable',sdk['rollForward'])
+        workflow=(ROOT/'.github/workflows/adapter-validation.yml').read_text()
+        dotnet_job=workflow.split('  dotnet:',1)[1].split('  typescript:',1)[0]
+        self.assertIn('            '+sdk['version']+'\n',dotnet_job)
+        self.assertIn('working-directory: samples/sql-database-matrix\n        run: dotnet --version',dotnet_job)
+        self.assertIn('dotnet test src/dotnet/TraceMap.sln --no-build',dotnet_job)
+
     def setUp(self):
         self.cases={'Case000':'System.Data.Common.DbCommand.ExecuteScalar()','Case001':'System.Data.IDbCommand.ExecuteNonQuery()'}
         self.controls={'ControlFake':{'semantic':0,'projectless':0}}
