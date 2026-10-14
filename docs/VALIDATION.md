@@ -1,5 +1,18 @@
 # TraceMap Validation Guide
 
+Nested projectless VB delegation: the
+`ExplicitVisualBasicContextTests.Syntax_page_reaches_semantic_database_body_only_through_unique_bridge`
+matrix includes a concrete field calling a same-named protected nested method,
+a missing base class, an inherited receiver with a source-visible wrapper,
+and a wrapper-name negative control. It asserts exact Tier1 declaration/call
+identities, real scan/index/combine/path behavior, and that unrelated sibling
+database operations remain unreachable. A custom wrapper name alone is not a
+database operation. These cases pass without an extractor change; they do not
+establish why a private retained call is absent. Use
+`prompts/check-save-nested-call-facts.md` to distinguish extraction, combination,
+identity and traversal evidence in an existing run. Full-suite, pinned OSS and
+authentic Windows/private acceptance remain separate validation gates.
+
 For namespace-only App_Code registration candidates, run
 `AppCodeRegistrationMatrixTests` with `LegacyWebFormsExtractorTests`,
 `VisualBasicWebFormsCompositionTests`, `WebFormsGapFamilyRegressionTests`,
