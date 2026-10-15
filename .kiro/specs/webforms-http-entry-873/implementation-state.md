@@ -28,13 +28,13 @@ Validation before final freeze: original HTTP 17/17; intermediate adjacent suite
 163/163; relevant Python diagnostics 60/60. Broad Python discovery was an invalid
 invocation of SQL command-text tests (32 setup errors, CONFIG unset); it is not a
 pass. Preliminary broad .NET filter was cancelled after final review edits and is
-not an acceptance receipt. Final focused/full/CLI results pending in validation-receipt.md.
+not an acceptance receipt. Final focused/full/CLI results are recorded in validation-receipt.md.
 
 No third-party app build/restore/hosting or endpoint/database execution. Corpora
 remain outside the checkout. No push, PR, external reviewer or workflow mutation
 authorized. Windows/private and other pinned adapter checks remain separate gates.
 
-## Paused checkpoint — 2026-10-15
+## Historical paused checkpoint — 2026-10-15
 
 Paused at the user's request to change locations. Implementation commit:
 38b6e33db2682b1fb24cc640d0b83ca645bb03ae. The following checkpoint adds
@@ -67,3 +67,20 @@ handoff. Do not push or open/merge a PR without approval.
 Supporting logs/scripts are under /tmp/tracemap-873-* and may be ephemeral. The
 worktree and committed fixtures are the durable resume source. No work is running
 on this task after this checkpoint.
+
+## Completed local handoff — 2026-10-15
+
+Resumed and reviewed the receiver-scope fix; updated matrix/rule/fixture docs.
+Frozen tested HEAD: 1266f4a3d5bcb0d29b286b975ac4077f46fda02e. Full .NET:
+4,367 passed, one authentic-Windows skip, zero failures. Focused 597/597;
+Python diagnostics 60/60 plus artifact-validator 7/7; zero-warning solution/tool
+builds; public CLI scan/combine/repeated-report/positive-negative selectors passed.
+All 593 runtime hashes matched before/after. Both pinned static corpora were clean
+and produced the documented bounded results. See validation-receipt.md for exact
+commands, hashes, retries, skipped/deferred checks and limitations.
+
+Only this receipt, state note and task checklist changed after the frozen run;
+no implementation or fixture changes. All issue #873 local implementation tasks
+are complete. Owner review/publication approval is the next step; no push, PR,
+reviewer request, merge or workflow mutation is authorized. No process is left
+running. The original checkout and unrelated work remain untouched.

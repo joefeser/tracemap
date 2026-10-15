@@ -6,5 +6,5 @@
 - [x] Preserve storage/combine/ordinary/bounded report parity and call exclusions.
 - [x] Record two independently selected pinned licensed public static checks.
 - [x] Publish coverage/rule/version updates and limitations.
-- [ ] Freeze code/binaries; run focused, Python, full .NET and CLI validation.
-- [ ] Review local diff and deliver commits plus exact-head handoff.
+- [x] Freeze code/binaries; run focused, Python, full .NET and CLI validation.
+- [x] Review local diff and deliver commits plus exact-head handoff.
