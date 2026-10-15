@@ -56,6 +56,13 @@ public static class GroupedCompiledPathReportWriter
                 W("<p class=\"notice\">Framework-version candidate routes are present (Tier3). Declaring assembly identity remains exact, but embedded desktop framework type versions differ. Runtime binding and compatibility are unproven; argument and return-value propagation stop at this boundary. ‘Exact chains’ describes identity-based grouping, not exact runtime binding.</p>");
             if (handoff.Chains.Count == 0)
                 W("<p class=\"notice\">No terminal routes were retained by this path query. This is not evidence that the handler has no database dependencies. Inspect selector, traversal and coverage gaps below; a method graph is a separate diagnostic view, not a path report.</p>");
+            else
+                W("<p class=\"notice\">Static terminal routes were retained by this query. Each route is supported only at its recorded node and edge evidence tiers; the terminal's tier does not upgrade the whole route. This is not runtime execution, original-build correspondence, or proof of a specific SQL statement or stored procedure.</p>");
+            if (report.Summary.Truncated)
+            {
+                W("<p class=\"notice\">Enumeration incomplete: retained routes remain evidence, but counts are not exhaustive and unlisted routes are not proven absent. Exact-chain grouping happens after bounded variant enumeration; many variants can belong to the same chain. Grouping does not remove variants or clear truncation. Inspect the retained traversal gaps for the actual stopping reason.</p>");
+                W($"<p>Query limits: retained path variants {report.Query.MaxPaths}; depth {report.Query.MaxDepth}; frontier {report.Query.MaxFrontier}. No limits were increased by this report.</p>");
+            }
             W("<nav aria-label=\"Method chains\"><ul>");
             for (var index = 0; index < handoff.Chains.Count; index++)
             {

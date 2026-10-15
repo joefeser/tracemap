@@ -1,5 +1,12 @@
 # TraceMap Validation Guide
 
+Grouped report positive/partial readback: `GroupedCompiledPathHandoffTests`
+checks route presence independently of truncation, including all four
+positive/empty and truncated/non-truncated combinations. HTML explicitly states
+that retained static routes survive incomplete enumeration and terminal tiers
+do not upgrade an entire route. Grouping is still lossless; traversal limits,
+path algorithm, machine-readable schemas and coverage flags are unchanged.
+
 Semantic extractor 0.10.3 fixes explicit-reference member identities when
 Roslyn retargets signature types to a loaded dependency version. The resolved
 metadata token is decoded from the same captured, hash-verified PE reference;

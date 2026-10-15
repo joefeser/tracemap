@@ -479,6 +479,28 @@ public sealed class GroupedCompiledPathHandoffTests
         finally { if (Directory.Exists(folder)) Directory.Delete(folder, true); }
     }
 
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task Route_presence_is_separate_from_enumeration_completeness(bool hasPaths, bool truncated)
+    {
+        using var temp = new TempDirectory();
+        var original = Report();
+        var report = original with { Paths = hasPaths ? original.Paths : [],
+            Summary = original.Summary with { PathCount = hasPaths ? original.Paths.Count : 0, Truncated = truncated } };
+        var handoff = GroupedCompiledPathHandoffBuilder.Create(report, IndexHash);
+        var output = await GroupedCompiledPathReportWriter.WriteAsync(handoff, temp.Path);
+        var html = await File.ReadAllTextAsync(output.HtmlPath);
+        Assert.Equal(hasPaths, html.Contains("Static terminal routes were retained by this query", StringComparison.Ordinal));
+        Assert.Equal(!hasPaths, html.Contains("No terminal routes were retained by this path query", StringComparison.Ordinal));
+        Assert.Equal(truncated, html.Contains("Enumeration incomplete:", StringComparison.Ordinal));
+        if (hasPaths) Assert.Contains("terminal's tier does not upgrade the whole route", html);
+        if (truncated) Assert.Contains("Exact-chain grouping happens after bounded variant enumeration", html);
+        Assert.Equal(JsonSerializer.Serialize(report), JsonSerializer.Serialize(GroupedCompiledPathHandoffBuilder.Restore(handoff)));
+    }
+
     private static CombinedPathNode Node(string id, string symbol) => new(
         NodeId: id, NodeKind: "Method", DisplayName: symbol, SourceIndexId: "source", SourceLabel: "retained",
         ScanId: "scan", CommitSha: new('c', 40), SymbolId: symbol, CombinedFactId: null,
