@@ -11,6 +11,86 @@ namespace TraceMap.Tests;
 public sealed class ExplicitVisualBasicContextTests
 {
     [Theory]
+    [InlineData("exact", true)]
+    [InlineData("hash-mismatch", false)]
+    [InlineData("identity-mismatch", false)]
+    [InlineData("virtual", false)]
+    [InlineData("duplicate", false)]
+    [InlineData("missing-proof", false)]
+    public async Task Explicit_reference_bytes_connect_external_wrapper_without_promoting_provenance(string mode, bool expected)
+    {
+        using var temp = new TempDirectory(OperatingSystem.IsMacOS() ? "/private/tmp" : null);
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(repo);
+        File.WriteAllText(Path.Combine(repo, "Caller.vb"), """
+            Public Class Caller
+                Public Sub Run(command As System.Data.Common.DbCommand)
+                    Dim service As New ExternalWrapper()
+                    service.Execute(command, "synthetic")
+                End Sub
+            End Class
+            """);
+        var referencePaths = new[] { typeof(object).Assembly.Location, typeof(System.Data.Common.DbCommand).Assembly.Location,
+            System.Reflection.Assembly.Load("System.Runtime").Location, typeof(System.ComponentModel.Component).Assembly.Location };
+        var library = Path.Combine(temp.Path, "ExternalWrapper.dll");
+        var syntax = Microsoft.CodeAnalysis.CSharp.CSharpSyntaxTree.ParseText("""
+            public class ExternalWrapper {
+                public int Execute(System.Data.Common.DbCommand command, string text) {
+                    command.CommandText = text;
+                    return command.ExecuteNonQuery();
+                }
+            }
+            """.Replace("public int", mode == "virtual" ? "public virtual int" : "public int", StringComparison.Ordinal));
+        var compiled = Microsoft.CodeAnalysis.CSharp.CSharpCompilation.Create("ExternalWrapper", [syntax],
+            referencePaths.Distinct().Select(path => Microsoft.CodeAnalysis.MetadataReference.CreateFromFile(path)),
+            new Microsoft.CodeAnalysis.CSharp.CSharpCompilationOptions(Microsoft.CodeAnalysis.OutputKind.DynamicallyLinkedLibrary));
+        using (var output = File.Create(library)) Assert.True(compiled.Emit(output).Success);
+        WebFormsWizardNativeTests.InitGit(repo);
+        static string Hash(string path) => Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(path)));
+        var context = Path.Combine(temp.Path, "context.json");
+        File.WriteAllText(context, JsonSerializer.Serialize(new {
+            schemaVersion = "vb-compilation-context.v1", commitSha = GitMetadataProvider.Detect(repo).CommitSha,
+            rootNamespace = "", optionStrict = true, optionInfer = true, optionExplicit = true, imports = Array.Empty<string>(),
+            sources = new[] { new { path = "Caller.vb", sha256 = Hash(Path.Combine(repo, "Caller.vb")) } },
+            references = referencePaths.Append(library).Distinct().Select(path => new { path, sha256 = Hash(path) }).ToArray()
+        }));
+        var scan = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "scan"), CompiledInputPaths: [library], IlBodyEvidence: true)
+            { VisualBasicCompilationContextPath = context });
+        var call = Assert.Single(scan.Facts, fact => fact.FactType == FactTypes.CallEdge
+            && fact.Properties.GetValueOrDefault("explicitReferenceSha256") == Hash(library));
+        Assert.Contains(scan.Facts, fact => fact.FactType == FactTypes.ManagedIlCallObserved);
+        Assert.DoesNotContain(scan.Facts, fact => fact.FactType == FactTypes.DatabaseOperationCandidate);
+        var retained = scan.Facts.Select(fact => {
+            if (fact.FactId != call.FactId || mode is not ("hash-mismatch" or "identity-mismatch" or "missing-proof")) return fact;
+            var properties = new Dictionary<string, string>(fact.Properties);
+            if (mode == "missing-proof") properties.Remove("explicitReferenceSha256");
+            else properties[mode == "hash-mismatch" ? "explicitReferenceSha256" : "targetMetadataIdentity"] = new string('0', 64);
+            return fact with { Properties = properties };
+        }).ToList();
+        if (mode == "duplicate") {
+            var method = Assert.Single(retained, fact => fact.FactType == FactTypes.ManagedMethodDeclared
+                && fact.TargetSymbol == call.Properties["targetMetadataIdentity"]);
+            retained.Add(method with { FactId = method.FactId + "-duplicate" });
+        }
+        var index = Path.Combine(temp.Path, "index.sqlite");
+        SqliteIndexWriter.Write(index, scan.Manifest, retained);
+        var combined = Path.Combine(temp.Path, "combined.sqlite");
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([index], combined, ["retained"]));
+        var root = Assert.Single(scan.Facts, fact => fact.FactType == FactTypes.MethodDeclared && fact.ContractElement == "Run");
+        var result = await CombinedDependencyPathReporter.BuildReportAsync(new(combined, Path.Combine(temp.Path, "paths"),
+            FromSymbol: root.TargetSymbol, ToSurface: "database-operations", MaxDepth: 16) { ExactFromSymbol = true });
+        Assert.Equal(expected, result.Paths.Count > 0);
+        var compiledOnly = await CombinedDependencyPathReporter.BuildReportAsync(new(combined, Path.Combine(temp.Path, "compiled-only"),
+            FromSymbol: root.TargetSymbol, ToSurface: "database-operations", MaxDepth: 16)
+            { ExactFromSymbol = true, CompiledOnly = true });
+        Assert.Empty(compiledOnly.Paths);
+        if (expected) Assert.Contains(result.Paths, path => path.Edges.Any(edge =>
+            edge.EdgeKind == "explicit-reference-member-candidate" && edge.EvidenceTier == EvidenceTiers.Tier3SyntaxOrTextual));
+        Assert.All(scan.Facts.Where(fact => fact.FactType == FactTypes.ManagedMethodDeclared), fact =>
+            Assert.Equal("unbound", fact.Properties["provenanceState"]));
+    }
+
+    [Theory]
     [InlineData("valid")]
     [InlineData("partial")]
     [InlineData("nested")]

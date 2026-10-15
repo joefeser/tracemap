@@ -1849,6 +1849,20 @@ public static partial class VisualBasicSemanticExtractor
             enclosing?.ContainingAssembly,
             method.ContainingAssembly);
 
+        // This is reference-byte identity, not source-build provenance. Keep it
+        // separate from declaration reconciliation and from runtime dispatch.
+        if (ExplicitReferenceHashes.TryGetValue(model.Compilation, out var referenceHashes)
+            && method.ContainingAssembly is { } targetAssembly
+            && model.Compilation.GetMetadataReference(targetAssembly) is { } reference
+            && referenceHashes.TryGetValue(reference, out var referenceHash)
+            && SourceMetadataIdentityProvider.TryCreate(method, out _, out _, allowUnknownTargetFramework: true) is { } metadataIdentity)
+        {
+            callProperties["explicitReferenceSha256"] = referenceHash;
+            callProperties["targetMetadataIdentity"] = metadataIdentity;
+            callProperties["referenceDispatch"] = method.IsStatic || (!method.IsVirtual && !method.IsAbstract
+                && !method.IsOverride && method.ContainingType is { TypeKind: not TypeKind.Interface }) ? "direct" : "unresolved";
+        }
+
         facts.Add(CreateSemanticFact(
             FactTypes.CallEdge,
             RuleIds.VisualBasicSemanticCallGraph,

@@ -2,6 +2,19 @@
 
 Operator examples use generic site, page, and handler names. Historical receipts remain bound to their recorded input bytes; genericized examples do not establish a fresh platform validation result.
 
+Explicit reference member bridge: run `ExplicitVisualBasicContextTests`,
+`SourceMetadataReconciliationTests`, and `CombinedDependencyPathTests`.
+The synthetic external DLL test compiles a wrapper with parameterized command
+text, scans a VB caller with hash-pinned references, persists and combines the
+facts, and checks mixed database paths. Wrong hashes/identities, absent proof,
+duplicate declarations and virtual dispatch must not bridge. Compiled-only
+queries must not use this source-reference candidate. Unbound provenance stays
+unbound. Semantic extractor 0.10.2 and path algorithm 1.6 are required; old facts
+need a fresh scan, not just a requery. The rule is
+`combined.paths.explicit-reference-member.v1`. No original-build equivalence,
+command-value propagation, or runtime database-use claim follows. Full-suite,
+pinned OSS and authentic Windows/private checks remain separate gates.
+
 Retained IL inspection: run `python3 -m unittest discover -s scripts/validation
 -p test_inspect_retained_il_body.py` (on one shell line). The read-only helper
 `scripts/inspect-retained-il-body.py` follows exact source-index-local

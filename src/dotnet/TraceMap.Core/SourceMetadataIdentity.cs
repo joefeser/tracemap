@@ -193,7 +193,7 @@ internal static class SourceMetadataIdentityProvider
             [SpecialType.System_TypedReference] = ("System", "TypedReference")
         };
 
-    public static string? TryCreate(ISymbol symbol, out string memberKind, out string? incompleteReason)
+    public static string? TryCreate(ISymbol symbol, out string memberKind, out string? incompleteReason, bool allowUnknownTargetFramework = false)
     {
         memberKind = MemberKind(symbol);
         incompleteReason = null;
@@ -202,6 +202,7 @@ internal static class SourceMetadataIdentityProvider
             if (symbol.ContainingAssembly is null || symbol.ContainingModule is null)
                 return Incomplete("SourceAssemblyIdentityUnavailable", out incompleteReason);
             var targetFramework = TargetFramework(symbol.ContainingAssembly);
+            if (targetFramework is null && allowUnknownTargetFramework) targetFramework = "unknown";
             if (targetFramework is null)
                 return Incomplete("SourceTargetFrameworkIdentityUnavailable", out incompleteReason);
             var assemblyIdentity = AssemblyArtifactIdentity(symbol.ContainingAssembly, symbol.ContainingModule.Name, targetFramework);

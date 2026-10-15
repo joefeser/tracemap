@@ -106,6 +106,7 @@ public static partial class CombinedDependencyPathReporter
         var methods = FactsOfTypes(facts, FactTypes.ManagedMethodDeclared)
             .Where(fact => !string.IsNullOrWhiteSpace(fact.TargetSymbol))
             .ToArray();
+        AddExplicitReferenceCandidates(graph, facts, methods);
         var methodsByIdentity = methods
             .GroupBy(fact => (fact.SourceIndexId, fact.TargetSymbol!))
             .ToDictionary(group => group.Key, group => group.ToArray());
@@ -309,6 +310,39 @@ public static partial class CombinedDependencyPathReporter
                     AddCompiledIlGap(graph, call, "CompiledIlVirtualDispatchUnproven",
                         "framework-version-candidate-virtual-dispatch-unproven", 1, FrameworkVersionCandidateRuleId, from.NodeId);
             }
+        }
+    }
+
+    private static void AddExplicitReferenceCandidates(EvidenceGraph graph, IReadOnlyList<CombinedFactRow> facts,
+        IReadOnlyList<CombinedFactRow> methods)
+    {
+        var targets = methods.GroupBy(method => (method.TargetSymbol,
+                Hash: method.Properties.GetValueOrDefault("rawFileSha256")))
+            .ToDictionary(group => group.Key, group => group.ToArray());
+        foreach (var call in FactsOfTypes(facts, FactTypes.CallEdge).Where(call =>
+                     call.EvidenceTier == EvidenceTiers.Tier1Semantic
+                     && call.Properties.GetValueOrDefault("compilationContextKind") == "explicit-projectless-inputs"
+                     && call.Properties.GetValueOrDefault("referenceDispatch") == "direct"
+                     && !string.IsNullOrWhiteSpace(call.TargetSymbol)))
+        {
+            var hash = call.Properties.GetValueOrDefault("explicitReferenceSha256");
+            var identity = call.Properties.GetValueOrDefault("targetMetadataIdentity");
+            if (hash is null || hash.Length != 64 || !hash.All(Uri.IsHexDigit) || identity is null
+                || !targets.TryGetValue((identity, hash), out var matches) || matches.Length != 1)
+                continue;
+            var target = matches[0];
+            if (target.Properties.GetValueOrDefault("provenanceState") is not ("bound" or "unbound")) continue;
+            var from = graph.GetOrAddSymbolNode(call.SourceIndexId, call.SourceLabel, call.TargetSymbol!,
+                call.FilePath, call.StartLine, call.EndLine, call.RuleId, call.EvidenceTier);
+            var to = graph.GetOrAddSymbolNode(target.SourceIndexId, target.SourceLabel, target.TargetSymbol!,
+                target.FilePath, target.StartLine, target.EndLine, target.RuleId, target.EvidenceTier);
+            graph.AddEdge(new GraphEdge($"explicit-reference:{call.CombinedFactId}:{target.CombinedFactId}",
+                "explicit-reference-member-candidate", from.NodeId, to.NodeId, "EvidenceEdge",
+                "combined.paths.explicit-reference-member.v1", EvidenceTiers.Tier3SyntaxOrTextual,
+                [call.CombinedFactId, target.CombinedFactId], [], SafePath(call.FilePath), call.StartLine, call.EndLine));
+            AddCompiledIlGap(graph, call, "CompiledIlArtifactContext",
+                "explicit-reference-bytes-match-original-build-not-established", 1,
+                ruleId: "combined.paths.explicit-reference-member.v1", nodeId: from.NodeId);
         }
     }
 
