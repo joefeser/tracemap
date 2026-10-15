@@ -43,6 +43,18 @@ remains available in the private staging repository for audit.
   storage-account connection string with an access key (caught by GitHub push
   protection on first import attempt; treat the `netperftest` account key as
   burned and rotate or confirm-dead)
+- `src/PostSharp.Custom.targets` — contained a plaintext PostSharp license key
+  (caught by review after both the import sweep and push protection missed it;
+  treat the PostSharp key as burned; the file only wired the already-excluded
+  vendored PostSharp binaries)
+
+## Pin deviations via this repository's ignore rules
+
+17 files present at the pinned commit are excluded by this repository's
+`.gitignore` rather than by the authorization scope: 15 Visual SourceSafe
+source-control binding files (`.vspscc` / `.vssscc`) and 2 test-assembly
+`.pdb` files. No source files are excluded by this mechanism; the pinned
+source tree is otherwise byte-complete.
 
 ## Authorization
 
