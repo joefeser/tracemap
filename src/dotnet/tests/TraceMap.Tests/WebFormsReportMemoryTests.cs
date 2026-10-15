@@ -439,7 +439,7 @@ public sealed class WebFormsReportMemoryTests(ITestOutputHelper output)
         using var temp = new TempDirectory();
         var combined = Path.Combine(temp.Path, "combined.sqlite");
         await CombinedIndexBuilder.CombineAsync(new CombineOptions([Write(temp.Path, Fixture())], combined, ["page"]));
-        await using (var connection = new SqliteConnection($"Data Source={combined}"))
+        await using (var connection = new SqliteConnection($"Data Source={combined};Pooling=False"))
         {
             await connection.OpenAsync();
             foreach (var column in new[] { missingId ? "extractor_id" : null, missingVersion ? "extractor_version" : null }.OfType<string>())
@@ -471,7 +471,7 @@ public sealed class WebFormsReportMemoryTests(ITestOutputHelper output)
         var combined = Path.Combine(temp.Path, "combined.sqlite");
         await CombinedIndexBuilder.CombineAsync(new CombineOptions([Write(temp.Path, facts)], combined, ["page"]));
         await using var connection = new SqliteConnection($"Data Source={combined};Mode=ReadOnly;Pooling=False");
-        await using (var writer = new SqliteConnection($"Data Source={combined}"))
+        await using (var writer = new SqliteConnection($"Data Source={combined};Pooling=False"))
         {
             await writer.OpenAsync();
             await using var update = writer.CreateCommand();
@@ -504,7 +504,7 @@ public sealed class WebFormsReportMemoryTests(ITestOutputHelper output)
     {
         using var temp = new TempDirectory();
         var index = Write(temp.Path, Fixture());
-        await using (var connection = new SqliteConnection($"Data Source={index}"))
+        await using (var connection = new SqliteConnection($"Data Source={index};Pooling=False"))
         {
             await connection.OpenAsync();
             await using var insert = connection.CreateCommand();
@@ -548,7 +548,7 @@ public sealed class WebFormsReportMemoryTests(ITestOutputHelper output)
         using var temp = new TempDirectory();
         var combined = Path.Combine(temp.Path, "combined.sqlite");
         await CombinedIndexBuilder.CombineAsync(new CombineOptions([Write(temp.Path, Fixture())], combined, ["page"]));
-        await using (var connection = new SqliteConnection($"Data Source={combined}"))
+        await using (var connection = new SqliteConnection($"Data Source={combined};Pooling=False"))
         {
             await connection.OpenAsync();
             await using var command = connection.CreateCommand();
@@ -568,7 +568,7 @@ public sealed class WebFormsReportMemoryTests(ITestOutputHelper output)
         using var temp = new TempDirectory();
         var combined = Path.Combine(temp.Path, "combined.sqlite");
         await CombinedIndexBuilder.CombineAsync(new CombineOptions([Write(temp.Path, Fixture())], combined, ["page"]));
-        await using (var connection = new SqliteConnection($"Data Source={combined}"))
+        await using (var connection = new SqliteConnection($"Data Source={combined};Pooling=False"))
         {
             await connection.OpenAsync();
             await using var command = connection.CreateCommand();
@@ -617,7 +617,7 @@ public sealed class WebFormsReportMemoryTests(ITestOutputHelper output)
         var index = Write(temp.Path, facts);
         // System.Text.Json retains the last duplicate key while SQLite's path
         // lookup sees the first. Any surfaceKind presence must prevent pruning.
-        await using (var connection = new SqliteConnection($"Data Source={index}"))
+        await using (var connection = new SqliteConnection($"Data Source={index};Pooling=False"))
         {
             await connection.OpenAsync();
             await using var update = connection.CreateCommand();
@@ -671,7 +671,7 @@ public sealed class WebFormsReportMemoryTests(ITestOutputHelper output)
         var before = await CombinedDependencyPathReporter.BuildBoundedSingleIndexReportAsync(options, Budget());
         var count = int.TryParse(Environment.GetEnvironmentVariable("TRACEMAP_MEMORY_TEST_ROWS"), out var configured)
             ? Math.Clamp(configured, 100_000, 2_000_000) : 100_000;
-        await using (var connection = new SqliteConnection($"Data Source={index}"))
+        await using (var connection = new SqliteConnection($"Data Source={index};Pooling=False"))
         {
             await connection.OpenAsync();
             await using var insert = connection.CreateCommand();
