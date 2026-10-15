@@ -614,12 +614,18 @@ public sealed class MessyWorkspaceRegressionTests
             && fact.Evidence.EndLine == CrossLanguageInvocationLine
             && fact.Properties.GetValueOrDefault("gapKind") == "CompilationDiagnostic"
             && fact.Properties.GetValueOrDefault("diagnosticId") == "CS0234").ToArray();
-        // The catalog's alternatives are exclusive: a semantic edge cannot
-        // coexist with fallback call evidence or its compilation gap.
+        // Resolution outcomes are exclusive. The C# syntax extractor also keeps
+        // a raw Tier3 observation at resolved callsites; it is not a second
+        // resolved target or permission to upgrade syntax evidence.
+        var syntaxObservationValid = csharpSyntaxCall.Length == 1
+            && csharpSyntaxCall[0].EvidenceTier == EvidenceTiers.Tier3SyntaxOrTextual
+            && csharpSyntaxCall[0].Evidence.FilePath == CrossLanguageSourcePath
+            && csharpSyntaxCall[0].Evidence.StartLine == CrossLanguageInvocationLine
+            && csharpSyntaxCall[0].Properties.GetValueOrDefault("coverageLabel") == "syntax-only";
         var semanticOutcome = csharpToVb.Length == 1
             && csharpToVb[0].RuleId == RuleIds.CSharpSemanticCallGraph
             && csharpToVb[0].EvidenceTier == EvidenceTiers.Tier1Semantic
-            && csharpSyntaxCall.Length == 0 && compilationGaps.Length == 0;
+            && syntaxObservationValid && compilationGaps.Length == 0;
         var syntaxFallbackOutcome = csharpToVb.Length == 0 && csharpSyntaxCall.Length == 1
             && csharpSyntaxCall[0].EvidenceTier == EvidenceTiers.Tier3SyntaxOrTextual
             && csharpSyntaxCall[0].Evidence.FilePath == CrossLanguageSourcePath
@@ -627,7 +633,7 @@ public sealed class MessyWorkspaceRegressionTests
             && compilationGaps.Length > 0;
         Require("MW-CROSSLANGUAGE-001", "extraction",
             semanticOutcome || syntaxFallbackOutcome,
-            $"C# to VB call must be exclusively semantic or explicitly downgraded to syntax plus compilation gap; semantic={csharpToVb.Length}, syntax={csharpSyntaxCall.Length}, gaps={compilationGaps.Length}");
+            $"C# to VB resolution must be semantic with its separate raw syntax observation or explicitly downgraded to syntax plus compilation gap; semantic={csharpToVb.Length}, syntax={csharpSyntaxCall.Length}, gaps={compilationGaps.Length}");
         var vbToFsharp = calls.Where(fact =>
             fact.SourceSymbol?.Contains("VbBridge.Run", StringComparison.Ordinal) == true
             && fact.TargetSymbol?.Contains("Functions.Terminal", StringComparison.Ordinal) == true).ToArray();
@@ -1554,7 +1560,9 @@ public sealed class MessyWorkspaceRegressionTests
             apiReport.Query.ExactFromSymbol && apiReport.Summary.SelectorCandidateCount == 1
             && apiReport.RootTraversal?.TraversedEdgeKinds.Contains("projectless-publish-method-candidate") == true
             && apiReport.RootTraversal.TraversedEdgeKinds.Contains("compiled-il-call")
-            && apiReport.RootTraversal.TerminalCallerCount == 1
+            // PublicLegacyCommandFlow adds a second, unrelated Fill caller.
+            // Exactly one of the two may be reachable from this selected root.
+            && apiReport.RootTraversal.TerminalCallerCount == 2
             && apiReport.RootTraversal.ReachableTerminalCallerCount == 1
             && apiReport.RootTraversal.ReachableFillMemberRefCount == 1
             && apiReport.RootTraversal.ReachableUnrecognizedFillMemberRefCount == 0
