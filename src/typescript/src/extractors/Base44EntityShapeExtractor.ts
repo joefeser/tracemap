@@ -112,6 +112,7 @@ const mutationPayloadIndex = new Map<string, number>([
   ["bulkCreate", 0]
 ]);
 const maxShapeCollectionItems = 512;
+const maxHelperReturns = 8;
 
 export function extractEntityShapeFacts(input: EntityShapeInput): CodeFact[] {
   const declarations = collectVariableDeclarations(input.source);
@@ -415,7 +416,92 @@ function analyzeExpression(expression: ts.Expression, context: ShapeContext, vis
     result.constructionKind = "conditional-logical-expression";
     return result;
   }
+  if (ts.isCallExpression(unwrapped)) {
+    const helper = analyzeBoundedHelperReturn(unwrapped, context, visitedBindings, presence);
+    if (helper) return helper;
+  }
   return unresolvedAnalysis(expressionType(unwrapped), `payload-expression-unresolved:${expressionType(unwrapped)}`, expressionOrigin(unwrapped));
+}
+
+// A call to a module-local function declaration is a bounded payload source
+// when every live return path resolves to a closed shape. Parameters stay
+// opaque (their field values record as terminal evidence), cross-file and
+// computed callees stay unresolved, and any unresolvable return path fails
+// closed to a typed gap instead of a silent absence.
+function analyzeBoundedHelperReturn(
+  call: ts.CallExpression,
+  context: ShapeContext,
+  visitedBindings: Set<string>,
+  presence: Presence
+): ShapeAnalysis | null {
+  const callee = unwrapExpression(call.expression);
+  if (!ts.isIdentifier(callee)) return null;
+  const helperName = callee.text;
+  if (resolveVisibleVariableDeclaration(helperName, callee, context)) return null;
+  for (let current: ts.Node | undefined = callee; current; current = current.parent) {
+    if (ts.isFunctionLike(current) && current.parameters.some((parameter) => bindingNames(parameter.name).includes(helperName))) return null;
+    if (current === context.source) break;
+  }
+  const visitKey = `helper-return:${helperName}`;
+  if (visitedBindings.has(visitKey)) {
+    return unresolvedAnalysis("helper-return", "helper-return-recursion-unresolved", `call:${helperName}`);
+  }
+  const declaration = findVisibleFunctionDeclaration(helperName, callee, context.source);
+  if (!declaration?.body) return null;
+  const returns = collectHelperReturnStatements(declaration);
+  if (returns.length === 0 || returns.length > maxHelperReturns) {
+    return unresolvedAnalysis("helper-return", returns.length === 0
+      ? "helper-return-missing"
+      : "helper-return-paths-unbounded", `call:${helperName}`);
+  }
+  const nextVisited = new Set(visitedBindings).add(visitKey);
+  const helperContext: ShapeContext = { ...context, callNode: call, callPosition: call.getStart(context.source) };
+  const result = emptyAnalysis("helper-return");
+  for (const statement of returns) {
+    if (!statement.expression) {
+      return unresolvedAnalysis("helper-return", "helper-return-path-unresolved", `call:${helperName}`);
+    }
+    const branchPresence: Presence = returns.length > 1
+      || isConditionallyExecuted(statement, context.source)
+      || presence === "conditional" ? "conditional" : presence;
+    mergeAnalysis(result, analyzeExpression(statement.expression, helperContext, nextVisited, branchPresence));
+  }
+  result.constructionKind = `helper-return:${unique(result.outerKinds).join("+") || "unknown"}`;
+  result.candidateBindings.push(`call:${helperName}`);
+  return result;
+}
+
+function findVisibleFunctionDeclaration(bindingName: string, useNode: ts.Node, source: ts.SourceFile): ts.FunctionDeclaration | null {
+  for (let current: ts.Node | undefined = useNode; current; current = current.parent) {
+    if (ts.isBlock(current) || ts.isSourceFile(current) || ts.isCaseBlock(current)) {
+      const statements = ts.isCaseBlock(current)
+        ? current.clauses.flatMap((clause) => [...clause.statements])
+        : current.statements;
+      for (const statement of statements) {
+        if (ts.isClassDeclaration(statement) && statement.name?.text === bindingName) return null;
+        if (ts.isFunctionDeclaration(statement) && statement.name?.text === bindingName) {
+          return statement.body ? statement : null;
+        }
+      }
+    }
+    if (current === source) break;
+  }
+  return null;
+}
+
+function collectHelperReturnStatements(declaration: ts.FunctionDeclaration): ts.ReturnStatement[] {
+  const returns: ts.ReturnStatement[] = [];
+  const visit = (node: ts.Node): void => {
+    if (returns.length > maxHelperReturns) return;
+    if (node !== declaration.body && ts.isFunctionLike(node)) return;
+    if (ts.isReturnStatement(node)) {
+      if (!isStaticallyUnreachable(node, declaration.body!)) returns.push(node);
+      return;
+    }
+    ts.forEachChild(node, visit);
+  };
+  ts.forEachChild(declaration.body!, visit);
+  return returns;
 }
 
 function analyzeObjectLiteral(node: ts.ObjectLiteralExpression, context: ShapeContext, visitedBindings: Set<string>, inheritedPresence: Presence): ShapeAnalysis {
