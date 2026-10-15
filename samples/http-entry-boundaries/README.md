@@ -23,3 +23,7 @@ instances reference the same exact property, while missing receivers/members,
 Eval and chained expressions remain gaps. The regression mutation matrix adds
 duplicate IDs, conflicting registrations, wrong assemblies and template scope.
 See `docs/validation/WEBFORMS_HTTP_ENTRY_RELATIONSHIPS.md` for the supported grammar.
+
+`MatchingHost` retains a reference with an explicit field of the registered type.
+`ShadowedHost` inherits an unrelated same-name field; that binding produces a
+conflicting-receiver gap instead of a property relationship.

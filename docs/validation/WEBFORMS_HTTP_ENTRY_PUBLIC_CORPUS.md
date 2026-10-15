@@ -33,8 +33,8 @@ CsrFence evidence at the pinned commit:
 - Lines 14–17 show explicit UI state updates and a SetActiveView call, not a new
   user-control containment or declarative property relationship.
 
-Initial static readback: Kaliko 107 inventoried files, 619 C# syntax facts,
-13 control-containment entries; CsrFence 21 inventoried files, 189 C# syntax facts,
+Static readback after ambiguity refusal: Kaliko 107 inventoried files, 619 C# syntax facts,
+7 control-containment entries; CsrFence 21 inventoried files, 189 C# syntax facts,
 zero new entry relationships. Neither yielded semantic property or framework entry
 proof. Final frozen-code readback and totals are in the validation receipt.
 
