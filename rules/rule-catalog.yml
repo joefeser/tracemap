@@ -7856,7 +7856,8 @@ rules:
     limitations:
       - Only data-binding marker hash with one ASCII identifier, dot, and one ASCII property identifier is supported, allowing whitespace. Render expressions, Eval, Bind, calls, chains, indexers, escaping and dynamic expressions are gaps.
       - Templates make instance scope unavailable. Duplicate IDs, missing or ambiguous types and members, inherited properties and same-name unrelated members do not join. No general expression or naming-container evaluator is implemented.
-      - The property reference is textual even when the declaration is compiler-resolved. It is not unconditional getter invocation, framework binding or HTTP reachability.
+      - A unique linked page type is required. Known conflicting page/base members refuse binding; base traversal is capped at 16 types and external metadata members are not inventoried.
+      - The property reference is textual even when the declaration is compiler-resolved. Runtime receiver identity is unproven; it is not unconditional getter invocation, framework binding or HTTP reachability.
 
   - id: legacy.webforms.entry-lifecycle.v1
     name: WebForms framework lifecycle entry candidate
