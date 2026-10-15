@@ -18,13 +18,13 @@ class InspectionTests(unittest.TestCase):
         self.addCleanup(self.temp.cleanup)
         self.path = Path(self.temp.name) / "combined.sqlite"
         with closing(sqlite3.connect(self.path)) as db, db:
-            db.execute("CREATE TABLE combined_facts(combined_fact_id TEXT, original_fact_id TEXT, source_index_id TEXT, fact_type TEXT, properties_json TEXT)")
+            db.execute("CREATE TABLE combined_facts(combined_fact_id TEXT, original_fact_id TEXT, source_index_id TEXT, fact_type TEXT, properties_json TEXT, target_symbol TEXT)")
         self.add("body", "ManagedIlBodyDeclared", {"rawFileSha256": "hash"})
         self.add("gap", "AnalysisGap", {"ilBodyFactId": "body"})
 
     def add(self, identity, kind, props, source="A"):
         with closing(sqlite3.connect(self.path)) as db, db:
-            db.execute("INSERT INTO combined_facts VALUES(?,?,?,?,?)", (source + identity, identity, source, kind, json.dumps(props)))
+            db.execute("INSERT INTO combined_facts VALUES(?,?,?,?,?,NULL)", (source + identity, identity, source, kind, json.dumps(props)))
 
     def call(self, source="A", digest="hash"):
         self.add("call", "ManagedIlCallObserved", dict(ilBodyFactId="body", rawFileSha256=digest,
@@ -61,7 +61,7 @@ class InspectionTests(unittest.TestCase):
 
     def test_row_overflow_is_not_partial_success(self):
         with closing(sqlite3.connect(self.path)) as db, db:
-            db.executemany("INSERT INTO combined_facts VALUES(?,?,?,?,?)",
+            db.executemany("INSERT INTO combined_facts VALUES(?,?,?,?,?,NULL)",
                 [(f"extra{i}", f"extra{i}", "A", "AnalysisGap", '{"ilBodyFactId":"body"}') for i in range(1024)])
         with self.assertRaises(ValueError): inspection.inspect(self.path, "Abody")
 
@@ -115,6 +115,28 @@ class InspectionTests(unittest.TestCase):
         counts, _ = inspection.inspect(self.path, "Abody", self.graph([]))
         self.assertEqual(1, counts["exact_body_owner_matches"])
         self.assertEqual(1, counts["owner_artifact_hash_matches"])
+
+    def test_symbol_node_without_declaration_fact_id_is_recognized(self):
+        with closing(sqlite3.connect(self.path)) as db, db:
+            db.execute("UPDATE combined_facts SET properties_json=? WHERE combined_fact_id='Abody'",
+                       (json.dumps(dict(rawFileSha256="hash", compiledFactId="owner")),))
+        self.add("owner", "ManagedMethodDeclared", dict(rawFileSha256="hash"))
+        with closing(sqlite3.connect(self.path)) as db, db:
+            db.execute("UPDATE combined_facts SET target_symbol='exact-member' WHERE combined_fact_id='Aowner'")
+        path = self.graph([])
+        document = json.loads(path.read_text())
+        document["graph"]["nodes"] = [dict(nodeId="node-owner", combinedFactId=None,
+            sourceIndexId="A", symbolId="exact-member"), dict(nodeId="other-overload", combinedFactId=None,
+            sourceIndexId="A", symbolId="other-member"), dict(nodeId="other-index", combinedFactId=None,
+            sourceIndexId="B", symbolId="exact-member")]
+        document["graph"]["edges"] = [dict(edgeKind="explicit-reference-member-candidate", toNodeId="node-owner"),
+            dict(edgeKind="explicit-reference-member-candidate", toNodeId="other-overload")]
+        path.write_text(json.dumps(document))
+        counts, _ = inspection.inspect(self.path, "Abody", path)
+        self.assertEqual(1, counts["exact_body_owner_symbol_nodes"])
+        self.assertEqual(1, counts["owner_symbol_nodes_in_other_indexes"])
+        self.assertEqual(1, counts["explicit_bridges_to_exact_owner"])
+        self.assertEqual(0, counts["exact_body_owner_nodes"])
 
 
 if __name__ == "__main__": unittest.main()

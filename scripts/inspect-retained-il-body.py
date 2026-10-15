@@ -78,17 +78,33 @@ def inspect(path, fact_id, graph_path=None):
             counts["exact_body_calls_in_graph"] = len(graph_ids)
             counts["exact_body_calls_outside_graph"] = len(call_ids - graph_ids)
             owner_id = body_props.get("compiledFactId")
-            owners = db.execute("""SELECT combined_fact_id, properties_json FROM combined_facts
+            owners = db.execute("""SELECT combined_fact_id, properties_json, target_symbol FROM combined_facts
                 WHERE source_index_id=? AND original_fact_id=?
                 AND fact_type='ManagedMethodDeclared' LIMIT 2""", (body["source_index_id"], owner_id)).fetchall()
             counts["exact_body_owner_matches"] = len(owners)
             counts["exact_body_owner_nodes"] = 0
+            counts["exact_body_owner_symbol_nodes"] = 0
+            counts["explicit_bridges_to_exact_owner"] = 0
+            counts["owner_symbol_nodes_in_other_indexes"] = 0
             if len(owners) == 1:
                 owner = owners[0]
                 owner_props = json.loads(owner["properties_json"])
                 counts["owner_artifact_hash_matches"] = int(bool(body_props.get("rawFileSha256")) and
                     owner_props.get("rawFileSha256") == body_props["rawFileSha256"])
                 counts["exact_body_owner_nodes"] = sum(owner["combined_fact_id"] == node["combinedFactId"] for node in graph["nodes"])
+                # Symbol nodes created by GetOrAddSymbolNode intentionally have
+                # no representative declaration fact. Match the graph's actual
+                # identity pair, never the display label or a method name.
+                owner_nodes = {node["nodeId"] for node in graph["nodes"]
+                    if owner["target_symbol"] and node["sourceIndexId"] == body["source_index_id"]
+                    and node["symbolId"] == owner["target_symbol"]}
+                counts["exact_body_owner_symbol_nodes"] = len(owner_nodes)
+                counts["owner_symbol_nodes_in_other_indexes"] = sum(
+                    bool(owner["target_symbol"]) and node["sourceIndexId"] != body["source_index_id"]
+                    and node["symbolId"] == owner["target_symbol"] for node in graph["nodes"])
+                counts["explicit_bridges_to_exact_owner"] = sum(
+                    edge["edgeKind"] == "explicit-reference-member-candidate" and edge["toNodeId"] in owner_nodes
+                    for edge in graph.get("edges", []))
         return counts, sorted(calls)
 
 
@@ -107,6 +123,10 @@ def main():
     for name, count in counts.items():
         print(f"{name}: {count}")
     print("Counts do not establish graph admission, database classification or runtime reachability.")
+    if args.graph:
+        print("exact_body_owner_matches counts index owner joins, NOT graph identity matches.")
+        print("exact_body_owner_nodes counts representative declaration IDs only; zero does NOT mean absent.")
+        print("exact_body_owner_symbol_nodes uses exact source-index and symbol identity; no name matching.")
     if args.local_details:
         print("PRIVATE LOCAL DETAILS — do not upload:")
         for offset, opcode, target in calls:
