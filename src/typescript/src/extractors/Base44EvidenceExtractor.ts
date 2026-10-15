@@ -78,7 +78,6 @@ export async function extractBase44Facts(manifest: ScanManifest, inventory: read
       }, EvidenceTiers.Tier2Structural));
     }
   }
-  ensureSelectorEvidenceAuthorityFacts(manifest, facts, aliasDiscovery.contexts);
   const hasBase44Signal = facts.some((candidate) => candidate.factType === FactTypes.Base44SdkImport
     || candidate.factType === FactTypes.Base44FunctionSurface
     || candidate.factType === FactTypes.Base44CustomerBoundary);
@@ -90,6 +89,7 @@ export async function extractBase44Facts(manifest: ScanManifest, inventory: read
       facts.push(...extractBase44UiInputFacts(manifest, context.source, item.relativePath, context.source.getFullText(), facts));
     }
   }
+  ensureSelectorEvidenceAuthorityFacts(manifest, facts, aliasDiscovery.contexts);
   return facts;
 }
 
@@ -3099,6 +3099,17 @@ function ensureSelectorEvidenceAuthorityFacts(
       continue;
     }
   }
+  // UI input semantics facts bind their exact source bytes the same way
+  // selector evidence does; without a matching authority fact a consumer
+  // cannot place the widening evidence inside packet source authority.
+  // Unlike selector evidence, a UI fact's own sourceFileSha256 does not
+  // self-authorize: only a Base44SourceAuthority fact vouches for it.
+  for (const candidate of facts) {
+    if (candidate.factType !== FactTypes.Base44UiInputSemantics
+      || typeof candidate.properties.sourceFileSha256 !== "string") continue;
+    required.set(`${candidate.evidence.filePath}\0${candidate.properties.sourceFileSha256}`,
+      { filePath: candidate.evidence.filePath, sourceFileSha256: candidate.properties.sourceFileSha256 });
+  }
   for (const authority of [...required.values()].sort((left, right) =>
     left.filePath.localeCompare(right.filePath) || left.sourceFileSha256.localeCompare(right.sourceFileSha256))) {
     const context = contexts.get(authority.filePath);
@@ -3380,7 +3391,7 @@ interface SdkIdentityEvidence {
 interface SdkIdentity {
   schemaVersion: "88mph.base44-sdk-callsite-identity.v1";
   packageName: "@base44/sdk";
-  version: "0.8.4" | "0.8.5";
+  version: string;
   scope: "function-runtime" | "frontend-package";
   rawSpecifier: string;
   evidence: SdkIdentityEvidence[];
@@ -3594,13 +3605,14 @@ function resolveSdkIdentity(roots: SdkAuthorityRoot[], frontend: FrontendPackage
       authoritySha256: root.authoritySha256,
       kind: "source-import"
     };
-    if (root.rawSpecifier === "npm:@base44/sdk@0.8.4") {
-      return { identity: sdkIdentity("0.8.4", "function-runtime", root.rawSpecifier, [sourceEvidence]) };
+    const functionRuntimeVersion = /^npm:@base44\/sdk@(\d+\.\d+\.\d+)$/u.exec(root.rawSpecifier)?.[1];
+    if (functionRuntimeVersion) {
+      return { identity: sdkIdentity(functionRuntimeVersion, "function-runtime", root.rawSpecifier, [sourceEvidence]) };
     }
     if (root.rawSpecifier === "@base44/sdk") {
       if (frontend.gap || !frontend.identityEvidence || !frontend.version) return { gap: frontend.gap ?? "sdk-identity-package-authority-invalid" };
-      if (frontend.version !== "0.8.5") return { gap: "sdk-identity-version-unsupported" };
-      return { identity: sdkIdentity("0.8.5", "frontend-package", root.rawSpecifier, [sourceEvidence, ...frontend.identityEvidence]) };
+      if (!/^\d+\.\d+\.\d+$/u.test(frontend.version)) return { gap: "sdk-identity-version-unsupported" };
+      return { identity: sdkIdentity(frontend.version, "frontend-package", root.rawSpecifier, [sourceEvidence, ...frontend.identityEvidence]) };
     }
     return { gap: "sdk-identity-specifier-unsupported" };
   });
@@ -3613,7 +3625,7 @@ function resolveSdkIdentity(roots: SdkAuthorityRoot[], frontend: FrontendPackage
 }
 
 function sdkIdentity(
-  version: "0.8.4" | "0.8.5",
+  version: string,
   scope: "function-runtime" | "frontend-package",
   rawSpecifier: string,
   evidence: SdkIdentityEvidence[]
@@ -3965,6 +3977,8 @@ function resolveRuntimeAlias(name: string, use: ts.Node, source: ts.SourceFile, 
       ? { prefix, kind: "callsite-proven-parameter" } : null;
   }
   if (binding.kind === "variable") {
+    const assigned = resolveSingleAssignedRuntimeAlias(binding.node, use, source, aliases, factoryAliases, injected, next);
+    if (assigned) return assigned;
     if (!isImmutableVariable(binding.node, use) || !binding.node.initializer) return null;
     if (!ts.isIdentifier(binding.node.name)) {
       const prefix = aliases.get(name);
@@ -3983,6 +3997,80 @@ function resolveRuntimeAlias(name: string, use: ts.Node, source: ts.SourceFile, 
     return prefix ? { prefix, kind: "source-import-or-derived" } : null;
   }
   return null;
+}
+
+function resolveSingleAssignedRuntimeAlias(
+  declaration: ts.VariableDeclaration,
+  use: ts.Node,
+  source: ts.SourceFile,
+  aliases: Map<string, string[]>,
+  factoryAliases: Set<string>,
+  injected: Map<number, string[]>,
+  visited: Set<ts.Node>
+): RuntimeAlias | null {
+  if (!ts.isIdentifier(declaration.name) || !declaration.initializer) return null;
+  const initializer = unwrapAliasExpression(declaration.initializer);
+  if (!initializerIsNullish(initializer)) return null;
+  const bindingName = declaration.name.getText(source);
+  const assignments: ts.BinaryExpression[] = [];
+  let destructuringOverwrite = false;
+  const patternBinds = (pattern: ts.Expression): boolean => {
+    if (!ts.isArrayLiteralExpression(pattern) && !ts.isObjectLiteralExpression(pattern)) return false;
+    let bound = false;
+    const visit = (node: ts.Node): void => {
+      if (bound || ts.isFunctionLike(node)) return;
+      if (ts.isIdentifier(node) && node.text === bindingName) bound = true;
+      ts.forEachChild(node, visit);
+    };
+    visit(pattern);
+    return bound;
+  };
+  const collectStatement = (statement: ts.Statement): void => {
+    // Only an assignment that IS the scanned statement dominates the use;
+    // an assignment wrapped in a conditional, try, loop, or call argument
+    // does not prove the alias value on every path.
+    if (!ts.isExpressionStatement(statement)) return;
+    const node = unwrapAliasExpression(statement.expression);
+    if (!ts.isBinaryExpression(node) || node.operatorToken.kind !== ts.SyntaxKind.EqualsToken) return;
+    const target = unwrapAliasExpression(node.left);
+    if (patternBinds(target)) {
+      // A destructuring write to the alias invalidates the sole-assignment
+      // proof; the alias value is not statically known after it.
+      destructuringOverwrite = true;
+      return;
+    }
+    if (ts.isIdentifier(target) && target.text === bindingName
+      && resolveLexicalBinding(target.text, target, source)?.node === declaration) {
+      assignments.push(node);
+    }
+  };
+  // An assignment dominates the use only when it precedes it at the same or an
+  // enclosing block level; walk the enclosing block chain so a nested use (for
+  // example inside a try body) still finds its dominating assignment.
+  let statement: ts.Statement | undefined = findAncestor(use, ts.isStatement) ?? undefined;
+  while (statement?.parent && ts.isBlock(statement.parent)) {
+    const block = statement.parent;
+    const useIndex = block.statements.indexOf(statement);
+    for (let index = 0; index < useIndex; index += 1) collectStatement(block.statements[index]);
+    let next: ts.Statement | undefined;
+    for (let current: ts.Node | undefined = block.parent; current; current = current.parent) {
+      if (ts.isFunctionLike(current)) break;
+      if (ts.isStatement(current)) { next = current; break; }
+    }
+    statement = next;
+  }
+  if (destructuringOverwrite || assignments.length !== 1) return null;
+  const assignedFactory = factoryAlias(assignments[0].right, source, aliases, factoryAliases);
+  if (assignedFactory) return { prefix: assignedFactory, kind: "source-import-or-derived" };
+  const chain = expressionChain(unwrapAliasExpression(assignments[0].right));
+  if (!chain) return null;
+  const parent = resolveRuntimeAlias(chain[0], assignments[0], source, aliases, factoryAliases, injected, visited);
+  return parent ? { prefix: [...parent.prefix, ...chain.slice(1)], kind: parent.kind } : null;
+}
+
+function initializerIsNullish(expression: ts.Expression): boolean {
+  return expression.kind === ts.SyntaxKind.NullKeyword
+    || (ts.isIdentifier(expression) && expression.text === "undefined");
 }
 
 function parameterSourceFromExpression(input: ts.Expression, use: ts.Node, context: SourceContext, visited: Set<ts.Node>): ParameterSource {

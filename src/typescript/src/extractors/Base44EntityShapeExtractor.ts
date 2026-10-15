@@ -112,6 +112,7 @@ const mutationPayloadIndex = new Map<string, number>([
   ["bulkCreate", 0]
 ]);
 const maxShapeCollectionItems = 512;
+const maxHelperReturns = 8;
 
 export function extractEntityShapeFacts(input: EntityShapeInput): CodeFact[] {
   const declarations = collectVariableDeclarations(input.source);
@@ -415,7 +416,147 @@ function analyzeExpression(expression: ts.Expression, context: ShapeContext, vis
     result.constructionKind = "conditional-logical-expression";
     return result;
   }
+  if (ts.isCallExpression(unwrapped)) {
+    const helper = analyzeBoundedHelperReturn(unwrapped, context, visitedBindings, presence);
+    if (helper) return helper;
+  }
   return unresolvedAnalysis(expressionType(unwrapped), `payload-expression-unresolved:${expressionType(unwrapped)}`, expressionOrigin(unwrapped));
+}
+
+// A call to a module-local function declaration is a bounded payload source
+// when every live return path resolves to a closed shape. Parameters stay
+// opaque (their field values record as terminal evidence), cross-file and
+// computed callees stay unresolved, and any unresolvable return path fails
+// closed to a typed gap instead of a silent absence.
+function analyzeBoundedHelperReturn(
+  call: ts.CallExpression,
+  context: ShapeContext,
+  visitedBindings: Set<string>,
+  presence: Presence
+): ShapeAnalysis | null {
+  const callee = unwrapExpression(call.expression);
+  if (!ts.isIdentifier(callee)) return null;
+  const helperName = callee.text;
+  if (resolveVisibleVariableDeclaration(helperName, callee, context)) return null;
+  for (let current: ts.Node | undefined = callee; current; current = current.parent) {
+    if (ts.isFunctionLike(current) && current.parameters.some((parameter) => bindingNames(parameter.name).includes(helperName))) return null;
+    if (ts.isCatchClause(current) && current.variableDeclaration
+      && bindingNames(current.variableDeclaration.name).includes(helperName)) return null;
+    if (current === context.source) break;
+  }
+  const visitKey = `helper-return:${helperName}`;
+  if (visitedBindings.has(visitKey)) {
+    return unresolvedAnalysis("helper-return", "helper-return-recursion-unresolved", `call:${helperName}`);
+  }
+  const declaration = findVisibleFunctionDeclaration(helperName, callee, context.source);
+  if (!declaration?.body) return null;
+  // An async or generator call yields a Promise or iterator, not the declared
+  // return shape; only a directly awaited async call resolves to it.
+  const asynchronous = Boolean(declaration.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.AsyncKeyword))
+    || Boolean(declaration.asteriskToken);
+  if (asynchronous && !directlyAwaitedCall(call, context)) {
+    return unresolvedAnalysis("helper-return", "helper-return-async-unresolved", `call:${helperName}`);
+  }
+  if (!statementTerminatesExecution(declaration.body)) {
+    return unresolvedAnalysis("helper-return", "helper-return-fallthrough-unresolved", `call:${helperName}`);
+  }
+  const returns = collectHelperReturnStatements(declaration);
+  if (returns.length === 0 || returns.length > maxHelperReturns) {
+    return unresolvedAnalysis("helper-return", returns.length === 0
+      ? "helper-return-missing"
+      : "helper-return-paths-unbounded", `call:${helperName}`);
+  }
+  const nextVisited = new Set(visitedBindings).add(visitKey);
+  const helperContext: ShapeContext = { ...context, callNode: call, callPosition: call.getStart(context.source) };
+  const result = emptyAnalysis("helper-return");
+  for (const statement of returns) {
+    if (!statement.expression) {
+      return unresolvedAnalysis("helper-return", "helper-return-path-unresolved", `call:${helperName}`);
+    }
+    const branchPresence: Presence = returns.length > 1
+      || isConditionallyExecuted(statement, context.source)
+      || presence === "conditional" ? "conditional" : presence;
+    mergeAnalysis(result, analyzeExpression(statement.expression, helperContext, nextVisited, branchPresence));
+  }
+  result.constructionKind = `helper-return:${unique(result.outerKinds).join("+") || "unknown"}`;
+  result.candidateBindings.push(`call:${helperName}`);
+  return result;
+}
+
+function findVisibleFunctionDeclaration(bindingName: string, useNode: ts.Node, source: ts.SourceFile): ts.FunctionDeclaration | null {
+  for (let current: ts.Node | undefined = useNode; current; current = current.parent) {
+    if (ts.isBlock(current) || ts.isSourceFile(current) || ts.isCaseBlock(current)) {
+      const statements = ts.isCaseBlock(current)
+        ? current.clauses.flatMap((clause) => [...clause.statements])
+        : current.statements;
+      for (const statement of statements) {
+        if (ts.isClassDeclaration(statement) && statement.name?.text === bindingName) return null;
+        if (ts.isFunctionDeclaration(statement) && statement.name?.text === bindingName) {
+          return statement.body ? statement : null;
+        }
+      }
+    }
+    if (current === source) break;
+  }
+  return null;
+}
+
+function directlyAwaitedCall(call: ts.CallExpression, context: ShapeContext): boolean {
+  for (let current: ts.Node | undefined = call.parent; current && current !== context.source; current = current.parent) {
+    if (ts.isAwaitExpression(current)) return true;
+    if (ts.isParenthesizedExpression(current) || ts.isAsExpression(current) || ts.isTypeAssertionExpression(current)
+      || ts.isNonNullExpression(current) || ts.isSatisfiesExpression(current)) continue;
+    return false;
+  }
+  return false;
+}
+
+function collectHelperReturnStatements(declaration: ts.FunctionDeclaration): ts.ReturnStatement[] {
+  // A return inside a finally block overrides every return the try or catch
+  // blocks could have taken; those inner returns can never become the value.
+  const overridingTries = new Set<ts.TryStatement>();
+  const scanOverriding = (node: ts.Node): void => {
+    if (node !== declaration.body && ts.isFunctionLike(node)) return;
+    if (ts.isTryStatement(node) && node.finallyBlock && containsFunctionExternalReturn(node.finallyBlock, declaration)) {
+      overridingTries.add(node);
+    }
+    ts.forEachChild(node, scanOverriding);
+  };
+  ts.forEachChild(declaration.body!, scanOverriding);
+  const returns: ts.ReturnStatement[] = [];
+  const visit = (node: ts.Node): void => {
+    if (returns.length > maxHelperReturns) return;
+    if (node !== declaration.body && ts.isFunctionLike(node)) return;
+    if (ts.isReturnStatement(node)) {
+      if (!isStaticallyUnreachable(node, declaration.body!)) returns.push(node);
+      return;
+    }
+    ts.forEachChild(node, visit);
+  };
+  ts.forEachChild(declaration.body!, visit);
+  return returns.filter((statement) => {
+    for (let current: ts.Node | undefined = statement.parent; current; current = current.parent) {
+      if (ts.isTryStatement(current) && overridingTries.has(current) && current.finallyBlock
+        && !isAncestor(current.finallyBlock, statement)) return false;
+      if (current === declaration.body) break;
+    }
+    return true;
+  });
+}
+
+function containsFunctionExternalReturn(root: ts.Node, declaration: ts.FunctionDeclaration): boolean {
+  let found = false;
+  const visit = (node: ts.Node): void => {
+    if (found) return;
+    if (node !== declaration.body && node !== root && ts.isFunctionLike(node)) return;
+    if (ts.isReturnStatement(node)) {
+      found = true;
+      return;
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(root);
+  return found;
 }
 
 function analyzeObjectLiteral(node: ts.ObjectLiteralExpression, context: ShapeContext, visitedBindings: Set<string>, inheritedPresence: Presence): ShapeAnalysis {
@@ -1599,15 +1740,26 @@ function payloadShapeContract(analysis: ShapeAnalysis): {
   const hasFiniteHookGraph = analysis.candidateBindings.some((binding) => binding.startsWith("mutation-hook:"));
   const hasFiniteCallerGraph = analysis.candidateBindings.includes("source-bounded-caller-graph");
   const deferredFieldSource = /^(?:spread:)+(?:binding-initializer-unresolved|destructured-binding-unresolved)$/u;
+  const conditionalSpreadExecutionSource = /^(?:spread:)+payload-expression-unresolved:(?:call-expression|binary-expression|property-access)$/u;
   const isDeferredFieldGap = (gap: string): boolean =>
     deferredFieldSource.test(gap) || gap === runtimeDeferredObjectGap;
+  const finiteConditionalSpreadExecution = analysis.fields.length > 0
+    && analysis.gaps.length > 0
+    && analysis.gaps.every((gap) => conditionalSpreadExecutionSource.test(gap))
+    // An unresolved spread can add arbitrary fields at runtime; only a payload
+    // whose every spread is itself field-bounded may claim deferred execution.
+    && analysis.spreads.every((spread) => spread.resolution !== "unresolved")
+    && analysis.spreads.some((spread) => spread.resolution === "partial"
+      && spread.fieldNames.length > 0
+      && ["call-expression", "binary-expression", "property-access"].includes(spread.expressionType));
   const executionGapSources = new Set(["mutation-hook-argument-unresolved", "mutation-hook-callsite-incomplete"]);
   const fieldGaps = analysis.gaps.filter(isDeferredFieldGap);
-  const executionGaps = analysis.gaps.filter((gap) => executionGapSources.has(gap));
+  const executionGaps = analysis.gaps.filter((gap) =>
+    executionGapSources.has(gap) || finiteConditionalSpreadExecution && conditionalSpreadExecutionSource.test(gap));
   const onlyRuntimeDeferredGaps = analysis.gaps.length > 0
     && fieldGaps.length + executionGaps.length === analysis.gaps.length;
   if (outerKind === "object" && onlyRuntimeDeferredGaps
-    && (hasFiniteHookGraph || hasFiniteCallerGraph)
+    && (hasFiniteHookGraph || hasFiniteCallerGraph || finiteConditionalSpreadExecution)
     && (fieldGaps.length > 0 || (executionGaps.length > 0 && analysis.fields.length > 0))) {
     const runtimeObligations = unique([
       ...(executionGaps.length > 0 ? [deferredSourceExecutionObligation] : []),
@@ -1752,6 +1904,26 @@ function resolveFiniteStringExpression(expression: ts.Expression, context: Shape
     const right = resolveFiniteStringExpression(unwrapped.whenFalse, context, new Set(visited));
     return left.length > 0 && right.length > 0 ? unique([...left, ...right]) : [];
   }
+  if (ts.isElementAccessExpression(unwrapped) && unwrapped.argumentExpression) {
+    const owner = resolveClosedStringPropertyMap(unwrapped.expression, context, new Set(visited));
+    if (!owner) return [];
+    const directKeys = resolveFiniteStringExpression(unwrapped.argumentExpression, context, new Set(visited));
+    const guardedKeys = directKeys.length > 0
+      ? directKeys
+      : ts.isIdentifier(unwrapExpression(unwrapped.argumentExpression))
+        ? finiteDominatingTruthyMapGuardKeys(unwrapExpression(unwrapped.argumentExpression) as ts.Identifier,
+          unwrapped.argumentExpression, context, new Set(visited))
+        : [];
+    if (guardedKeys.length === 0) return [];
+    const selected: string[] = [];
+    for (const key of guardedKeys) {
+      const values = owner.stringValues.get(key);
+      if (!values || values.length === 0) return [];
+      selected.push(...values);
+    }
+    const strings = unique(selected.filter(isSafeFieldName));
+    return strings.length === selected.length ? strings : [];
+  }
   if (!ts.isIdentifier(unwrapped)) return [];
   const declaration = resolveDeclarationAt(unwrapped.text, unwrapped, context);
   if (declaration?.initializer && ts.isIdentifier(declaration.name)) {
@@ -1764,6 +1936,147 @@ function resolveFiniteStringExpression(expression: ts.Expression, context: Shape
   const key = `string-parameter:${parameter.getStart(context.source)}`;
   if (visited.has(key)) return [];
   return finiteParameterArguments(parameter, context, new Set(visited).add(key));
+}
+
+interface ClosedStringPropertyMap {
+  stringValues: Map<string, string[]>;
+  truthyKeys: string[];
+}
+
+function resolveClosedStringPropertyMap(expression: ts.Expression, context: ShapeContext, visited: Set<string>): ClosedStringPropertyMap | null {
+  const unwrapped = unwrapExpression(expression);
+  if (ts.isIdentifier(unwrapped)) {
+    const declaration = resolveDeclarationAt(unwrapped.text, unwrapped, context);
+    if (!declaration?.initializer || !ts.isVariableDeclarationList(declaration.parent)
+      || !declaration.parent.flags || (declaration.parent.flags & ts.NodeFlags.Const) === 0
+      || !closedMapBindingIsReadOnly(unwrapped.text, declaration, context)) return null;
+    const key = `closed-string-map:${declaration.getStart(context.source)}`;
+    if (visited.has(key)) return null;
+    return resolveClosedStringPropertyMap(declaration.initializer, context, new Set(visited).add(key));
+  }
+  if (!ts.isObjectLiteralExpression(unwrapped)) return null;
+  const stringValues = new Map<string, string[]>();
+  const truthyKeys: string[] = [];
+  for (const property of unwrapped.properties) {
+    if (!ts.isPropertyAssignment(property)) return null;
+    const name = staticPropertyName(property.name);
+    // An object-literal `__proto__` property sets the prototype instead of
+    // defining an own enumerable string property; the map is not closed.
+    if (!name || name === "__proto__" || !isSafeFieldName(name) || stringValues.has(name)) return null;
+    const value = unwrapExpression(property.initializer);
+    if (!ts.isStringLiteralLike(value)) return null;
+    stringValues.set(name, [value.text]);
+    if (value.text.length > 0) truthyKeys.push(name);
+  }
+  return { stringValues, truthyKeys: unique(truthyKeys) };
+}
+
+function closedMapBindingIsReadOnly(bindingName: string, declaration: ts.VariableDeclaration, context: ShapeContext): boolean {
+  let safe = true;
+  const visit = (node: ts.Node): void => {
+    if (!safe || node === declaration) return;
+    if (ts.isIdentifier(node) && node.text === bindingName
+      && resolveDeclarationAt(bindingName, node, context) === declaration
+      && !isReadOnlyMapReference(node)) {
+      safe = false;
+      return;
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(context.source);
+  return safe;
+}
+
+function isReadOnlyMapReference(identifier: ts.Identifier): boolean {
+  const parent = identifier.parent;
+  if ((ts.isElementAccessExpression(parent) || ts.isPropertyAccessExpression(parent)) && parent.expression === identifier) {
+    return !isWriteTarget(parent);
+  }
+  return false;
+}
+
+function isWriteTarget(expression: ts.Expression): boolean {
+  const parent = expression.parent;
+  if (ts.isBinaryExpression(parent) && parent.left === expression && isAssignmentOperator(parent.operatorToken.kind)) return true;
+  if (ts.isDeleteExpression(parent) && parent.expression === expression) return true;
+  if (ts.isPrefixUnaryExpression(parent) && parent.operand === expression
+    && [ts.SyntaxKind.PlusPlusToken, ts.SyntaxKind.MinusMinusToken].includes(parent.operator)) return true;
+  if (ts.isPostfixUnaryExpression(parent) && parent.operand === expression) return true;
+  return false;
+}
+
+function finiteDominatingTruthyMapGuardKeys(identifier: ts.Identifier, useNode: ts.Node, context: ShapeContext, visited: Set<string>): string[] {
+  const binding = resolveDeclarationAt(identifier.text, identifier, context);
+  if (!binding || !ts.isVariableDeclarationList(binding.parent)
+    || (binding.parent.flags & ts.NodeFlags.Const) === 0) return [];
+  let domain: string[] | null = null;
+  for (const guard of precedingTerminatingIfStatements(useNode)) {
+    const keys = falseBranchTruthyMapKeys(guard.expression, identifier.text, binding, context, new Set(visited));
+    if (keys.length === 0) continue;
+    // Surviving every terminating guard requires the key to be truthy in each
+    // guard's own map; the live domain is the intersection, never the union.
+    domain = domain === null ? keys : domain.filter((key) => keys.includes(key));
+    if (domain.length === 0) return [];
+  }
+  return domain ?? [];
+}
+
+function precedingTerminatingIfStatements(useNode: ts.Node): ts.IfStatement[] {
+  const result: ts.IfStatement[] = [];
+  let child: ts.Node = useNode;
+  for (let current = useNode.parent; current; child = current, current = current.parent) {
+    if (ts.isBlock(current) || ts.isSourceFile(current)) {
+      const statement = current.statements.find((candidate) => candidate === child || isAncestor(candidate, child));
+      if (statement) {
+        const index = current.statements.indexOf(statement);
+        for (const prior of current.statements.slice(0, index)) {
+          if (ts.isIfStatement(prior) && statementTerminatesExecution(prior.thenStatement)) result.push(prior);
+        }
+      }
+    }
+    if (ts.isFunctionLike(current) || ts.isSourceFile(current)) break;
+  }
+  return result;
+}
+
+function falseBranchTruthyMapKeys(
+  expression: ts.Expression,
+  bindingName: string,
+  binding: ts.VariableDeclaration,
+  context: ShapeContext,
+  visited: Set<string>
+): string[] {
+  const terms = disjunctionTerms(unwrapExpression(expression));
+  const keySets = terms.map((term) => truthyMapKeysFromNegatedTerm(term, bindingName, binding, context, new Set(visited)))
+    .filter((keys): keys is string[] => Boolean(keys));
+  if (keySets.length === 0) return [];
+  return keySets.reduce((left, right) => left.filter((key) => right.includes(key)));
+}
+
+function disjunctionTerms(expression: ts.Expression): ts.Expression[] {
+  const unwrapped = unwrapExpression(expression);
+  if (ts.isBinaryExpression(unwrapped) && unwrapped.operatorToken.kind === ts.SyntaxKind.BarBarToken) {
+    return [...disjunctionTerms(unwrapped.left), ...disjunctionTerms(unwrapped.right)];
+  }
+  return [unwrapped];
+}
+
+function truthyMapKeysFromNegatedTerm(
+  expression: ts.Expression,
+  bindingName: string,
+  binding: ts.VariableDeclaration,
+  context: ShapeContext,
+  visited: Set<string>
+): string[] | null {
+  const unwrapped = unwrapExpression(expression);
+  if (!ts.isPrefixUnaryExpression(unwrapped) || unwrapped.operator !== ts.SyntaxKind.ExclamationToken) return null;
+  const operand = unwrapExpression(unwrapped.operand);
+  if (!ts.isElementAccessExpression(operand) || !operand.argumentExpression) return null;
+  const argument = unwrapExpression(operand.argumentExpression);
+  if (!ts.isIdentifier(argument) || argument.text !== bindingName
+    || resolveDeclarationAt(bindingName, argument, context) !== binding) return null;
+  const owner = resolveClosedStringPropertyMap(operand.expression, context, new Set(visited));
+  return owner && owner.truthyKeys.length > 0 ? owner.truthyKeys : null;
 }
 
 function resolvePlainIdentifierParameterAt(bindingName: string, useNode: ts.Node): ts.ParameterDeclaration | null {
@@ -1926,7 +2239,9 @@ function expressionChain(expression: ts.Expression): string[] | null {
 
 function unwrapExpression(expression: ts.Expression): ts.Expression {
   let current = expression;
-  while (ts.isParenthesizedExpression(current) || ts.isAsExpression(current) || ts.isTypeAssertionExpression(current) || ts.isNonNullExpression(current) || ts.isSatisfiesExpression(current)) current = current.expression;
+  // `await` resolves to the operand's value (identity for non-thenables);
+  // thenable-shaped operands stay gated by the async helper rules.
+  while (ts.isParenthesizedExpression(current) || ts.isAsExpression(current) || ts.isTypeAssertionExpression(current) || ts.isNonNullExpression(current) || ts.isSatisfiesExpression(current) || ts.isAwaitExpression(current)) current = current.expression;
   return current;
 }
 

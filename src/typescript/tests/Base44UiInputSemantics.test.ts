@@ -341,6 +341,24 @@ export async function save() {
     await expect(diffBase44Evidence(path.join(out, "base44-evidence.json"), readPath,
       path.join(out, "forged-read-operation-diff.json"))).rejects.toThrow(/unsupported entity operation|invalid exact operation identity/u);
   });
+
+  it("binds every UI input semantics fact inside selector-evidence source authority", async () => {
+    const repo = await fixtureRepo();
+    const out = await fs.mkdtemp(path.join(os.tmpdir(), "tracemap-ui-semantics-authority-out-"));
+    const { packet } = await buildBase44Evidence(options(repo, out));
+    const semantics = packet.facts.filter((fact) => fact.factType === FactTypes.Base44UiInputSemantics);
+    expect(semantics.length).toBeGreaterThan(0);
+    const authority = new Set(packet.facts
+      .filter((fact) => fact.factType === FactTypes.Base44SourceAuthority
+        && fact.properties.authorityKind === "selector-evidence-source")
+      .map((fact) => `${fact.evidence.filePath}\0${fact.properties.sourceFileSha256}`));
+    for (const fact of semantics) {
+      expect(authority.has(`${fact.evidence.filePath}\0${fact.properties.sourceFileSha256}`)).toBe(true);
+      for (const reason of JSON.parse(fact.properties.uiSemanticsJson).reasons) {
+        expect(authority.has(`${reason.filePath}\0${fact.properties.sourceFileSha256}`)).toBe(true);
+      }
+    }
+  });
 });
 
 async function fixtureRepo(): Promise<string> {
