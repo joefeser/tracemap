@@ -4864,8 +4864,12 @@ minus the documented exclusions (see its `PROVENANCE.md` for origin, authors,
 superseded EULA, exclusions, and the co-author's written Apache-2.0 release
 authorization). Import-time verification: no `.snk`/`.pfx` files and no secret
 patterns (license strings, invoice-URL passwords, storage-account keys —
-`Documentation/azure.txt` was caught by GitHub push protection and excluded)
-survive in the imported tree; the golden IL suites are intact (429 files, ~35 MB). The private git
+`Documentation/azure.txt` caught by GitHub push protection — or the
+PostSharp license key in `src/PostSharp.Custom.targets`, caught by review)
+survive in the committed tree; the golden IL suites are intact (412 committed
+files: 411 vendored plus `PROVENANCE.md`; 17 junk-class files at the pin —
+SourceSafe bindings and test `.pdb`s — are excluded by this repository's
+ignore rules, as documented in the provenance). The private git
 history stays in the private staging repo — a history scan recorded on the
 issue found keys and license material that make history unpublishable. Wiring
 the instrumenter/validator/goldens into `IlRewriteEvidenceExtractor` coverage
