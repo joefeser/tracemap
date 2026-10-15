@@ -201,7 +201,11 @@ public static class GroupedCompiledPathHandoffBuilder
         if (handoff.DatabaseCoverageLimitations is not null && handoff.DatabaseCoverageLimitations != DatabaseCoverageLimitations) throw Invalid("DATABASE_COVERAGE_LIMITATIONS");
         if (handoff.BackendExtraction is not null &&
             HashJson(handoff.BackendExtraction, handoff.Limits.MaxOutputBytes, cancellationToken) !=
-            HashJson(BackendExtractionInventoryBuilder.Create(handoff), handoff.Limits.MaxOutputBytes, cancellationToken))
+            HashJson(BackendExtractionInventoryBuilder.Create(handoff), handoff.Limits.MaxOutputBytes, cancellationToken)
+            // Earlier v1 producers used the narrower presentation strings. Accept
+            // only that complete canonical projection, never arbitrary metadata.
+            && HashJson(handoff.BackendExtraction, handoff.Limits.MaxOutputBytes, cancellationToken) !=
+            HashJson(BackendExtractionInventoryBuilder.Create(handoff, legacyPresentation: true), handoff.Limits.MaxOutputBytes, cancellationToken))
             throw Invalid("BACKEND_EXTRACTION");
         return report;
     }

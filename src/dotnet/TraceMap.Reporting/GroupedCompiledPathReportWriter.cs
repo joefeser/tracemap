@@ -71,7 +71,9 @@ public static class GroupedCompiledPathReportWriter
                 W($"<li><a href=\"#chain-{index + 1}\">Chain {index + 1}: {H(path.Nodes.FirstOrDefault() is { } first ? Compact(first) : path.StartNodeId)}</a> — {group.VariantIndexes.Count} variants</li>");
             }
             W("</ul></nav>");
-            var backend = handoff.BackendExtraction ?? BackendExtractionInventoryBuilder.Create(handoff);
+            // Restore already admitted the current or exact legacy projection.
+            // Render current coverage wording without rewriting the retained packet.
+            var backend = BackendExtractionInventoryBuilder.Create(handoff);
             W("<section><h2>Backend extraction inventory</h2><p>Retained query evidence — not a whole-site inventory. Human retain/retire decisions are undecided.</p>");
             W($"<p>Query surface: {H(backend.QuerySurface)}. This filter bounds inventory coverage.</p>");
             W($"<p>Rule {H(backend.RuleId)}; coverage {H(backend.Coverage)}; truncated {backend.Truncated}; retained gaps {backend.RetainedGapCount}. {backend.Operations.Count} evidence records (not distinct business operations).</p>");

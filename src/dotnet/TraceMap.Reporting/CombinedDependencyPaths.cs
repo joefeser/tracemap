@@ -398,7 +398,7 @@ public static partial class CombinedDependencyPathReporter
     private const int MaxTraversalDiagnosticShapes = 32;
     private const string Version = "1.0";
     private const string Algorithm = "bounded-bfs";
-    private const string AlgorithmVersion = "1.8";
+    private const string AlgorithmVersion = "1.9";
     private const int MarkdownPathLimit = 100;
     private const int MarkdownInventoryLimit = 200;
     private const string EndpointMatchRuleId = "combined.paths.endpoint-match.v1";

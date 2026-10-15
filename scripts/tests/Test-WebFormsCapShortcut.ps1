@@ -27,8 +27,11 @@ try {
     $receiptPath = Join-Path $root 'handler-requery/handler-requery.local.json'
     Save $receipt $receiptPath
     $hash = (Get-FileHash $old).Hash
-    $result = @(& $helper -VerificationRoot $root -NoOpen)
-    if ($result -notcontains 'compare.currentChains=2;currentVariants=2') { throw 'Scalar excluded' }
+    foreach ($surface in @('database-api', 'database-operations')) {
+        $receipt.query.toSurface = $surface; Save $receipt $receiptPath
+        $result = @(& $helper -VerificationRoot $root -NoOpen)
+        if ($result -notcontains 'compare.currentChains=2;currentVariants=2') { throw 'Scalar excluded' }
+    }
     if (!(Test-Path (Join-Path $root 'handler-requery/chain-comparison.local.html'))) { throw 'Report missing' }
     if ((Get-FileHash $old).Hash -ne $hash) { throw 'Original changed' }
     $scalar.surfaceKind = 'database-api'
@@ -40,6 +43,12 @@ try {
     $receipt.query.surfaceName = 'DbDataAdapter.Fill'; Save $receipt $receiptPath
     try { & $helper -VerificationRoot $root -NoOpen; throw 'Fill-only accepted' }
     catch { if ($_.Exception.Message -ne 'WEBFORMS_CAP_ALL_TERMINALS_REQUIRED') { throw } }
+    $receipt.query.surfaceName = $null
+    foreach ($surface in @('http-client', 'sql-query', 'unknown')) {
+        $receipt.query.toSurface = $surface; Save $receipt $receiptPath
+        try { & $helper -VerificationRoot $root -NoOpen; throw 'Unsupported scope accepted' }
+        catch { if ($_.Exception.Message -ne 'WEBFORMS_CAP_ALL_TERMINALS_REQUIRED') { throw } }
+    }
     $global:capStatus.retainedArtifactsVerified = $false
     try { & $helper -VerificationRoot $root -NoOpen; throw 'Unverified status accepted' }
     catch { if ($_.Exception.Message -ne 'WEBFORMS_CAP_RETAINED_STATE_NOT_ADMITTED') { throw } }

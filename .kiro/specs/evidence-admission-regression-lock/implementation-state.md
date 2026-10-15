@@ -166,3 +166,35 @@ Private application rescans and broader pinned OSS checks remain separate;
 no runtime execution or complete application coverage is inferred. Optional
 schema work under #870 remains deferred. Open the owner-authorized regular PR
 to dev and follow ACK for at most six Codex request rounds; do not merge.
+
+### PR #872 first review correction (2026-10-15)
+
+PR: https://github.com/joefeser/tracemap/pull/872, targeting dev.
+Reviewed head: `4788b3afbf17370efa78a7def7e9de2d1fe7e072`.
+ACK 0.5.6 released the settled nine-finding batch with PATCH_AUTHORIZED.
+One Codex request has been used; six is the owner ceiling, not a request target.
+
+The findings are mixed: source/metadata admission ordering, exact registration
+identity, retained artifact compatibility, consumer scope and stale acceptance
+instructions. Fixes keep metadata-only bridges Tier3, bind same-line registrations
+by their selected hash and prefix, and project canonical redacted location markers
+to Tier4 gaps without navigation. Raw unsafe artifact locations and malformed
+markers remain rejected. Exact legacy inventory wording remains readable while
+new output includes persistence. The saved-query helper accepts both complete
+database scopes and rejects narrow or unrelated scopes.
+
+The request to admit the non-Git `unknown` sentinel conflicts with the documented
+database provenance contract and AGENTS.md. It remains rejected; rehashed path and
+inventory regressions now pin that refusal alongside valid 40/64-hex commits.
+The old af2d00ff implementation commit exists; acceptance instructions now require
+the current branch tip containing the recorded pre-PR baseline 5b2a4d32 rather
+than attributing newer validation to that historical ancestor.
+
+Local pre-push validation of the correction tree: warnings-as-errors build;
+412 review/legacy/native/framework tests passed (3m36s), 151 adjacent compilation,
+HTTP and source-metadata tests passed (1m27s), 12 Python context-preparation tests
+passed, and Test-WebFormsCapShortcut.ps1 passed. The 26-case vault safety subset
+also passed separately. No failures or skips in these focused runs. Earlier
+red regressions and fixture-development runs are diagnostic, not acceptance.
+These focused results do not replace the earlier full-suite receipts above or
+claim that the updated PR head has completed hosted CI/review yet.
