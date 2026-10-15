@@ -84,18 +84,29 @@ four of four candidate operation paths and zero ungrouped parameter facts.
 Full-solution, broader pinned language-adapter matrices, Windows execution and
 private acceptance are deferred/separate gates, not implied by this focused pass.
 
-The Windows test-host baseline comparison separately runs `VaultExportTests` and
-`WebFormsReviewInputValidationTests` on the pinned pre-hardening base and candidate.
+The Windows test-host baseline comparison separately runs `VaultExportTests`,
+`WebFormsReviewInputValidationTests` and `EvidenceDocsExportTests` on the pinned
+pre-hardening base and candidate.
 Historical test failures remain visible in logs and job summaries as non-gating
 diagnostic controls; candidate failures still fail the workflow. The HTTP entry
 boundary regression class and its sample changes also trigger the focused Windows
-gap-family gate. VB syntax extractor 0.4.18 adds the missing hash of the fixed,
+and Ubuntu gap-family gate. VB syntax extractor 0.4.18 adds the missing hash of the fixed,
 sanitized SemanticAnalysisUnavailable message; a projectless fixture pins it
 without relying on the host's framework/reference availability.
 Candidate regression guards cover canonical LF Markdown hashes (with CRLF readback),
 rejection of absolute-path redaction markers as navigation paths, and read-only
 Git fixture cleanup. The historical base is an intentionally failing control;
 its failure does not count as a candidate pass or waive full-suite validation.
+
+`LegacyBaselineArtifactsTests` pins native separator handling at allowed storage
+roots. Backslashes remain separators on Windows and literal filename characters
+on Unix; Unix backslash-named neighbors must be rejected. The two new Linux
+negative cases failed before the native-separator correction. The complete
+28-test baseline class passed afterward on both Windows and Linux, including the
+allowed-root and near-neighbor controls. Cleanup regressions separately require
+read-only Git objects to be removed, external link targets to survive, linked or
+out-of-temp cleanup roots to be refused, and canonical OS temp roots to work on
+macOS. These fixture guards do not change production evidence admission.
 
 `.github/workflows/sql-database-compatibility.yml` runs the matrix, parameter,
 report, wrapper, integrated, inline, property and stacked tests on Windows, plus
