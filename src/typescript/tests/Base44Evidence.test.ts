@@ -1563,9 +1563,19 @@ export async function run(runtimeFlags) {
       const operations = packet.facts.filter((fact) => fact.factType === FactTypes.Base44EntityOperation);
       const frontend = operations.find((fact) => fact.targetSymbol === "FrontendItem")!;
       const functionRuntime = operations.find((fact) => fact.targetSymbol === "FunctionItem")!;
+      const mutableFunctionRuntime = operations.find((fact) => fact.targetSymbol === "Story"
+        && fact.evidence.filePath === "base44/functions/serveSharedStoryOG/entry.ts")!;
       const ambiguous = operations.find((fact) => fact.targetSymbol === "AmbiguousItem")!;
-      expect(JSON.parse(frontend.properties.sdkIdentityJson)).toMatchObject({version: "0.8.5", scope: "frontend-package"});
-      expect(JSON.parse(functionRuntime.properties.sdkIdentityJson)).toMatchObject({version: "0.8.4", scope: "function-runtime"});
+      expect(JSON.parse(frontend.properties.sdkIdentityJson)).toMatchObject({version: "0.8.43", scope: "frontend-package"});
+      expect(JSON.parse(functionRuntime.properties.sdkIdentityJson)).toMatchObject({version: "0.8.23", scope: "function-runtime"});
+      expect(JSON.parse(mutableFunctionRuntime.properties.sdkIdentityJson)).toMatchObject({version: "0.8.25", scope: "function-runtime"});
+      expect(mutableFunctionRuntime).toMatchObject({
+        evidenceTier: "Tier3SyntaxOrTextual",
+        properties: expect.objectContaining({
+          operationName: "filter",
+          sdkIdentityGap: ""
+        })
+      });
       expect(ambiguous.properties).toMatchObject({
         sdkIdentityGap: "sdk-identity-source-root-ambiguous",
         sdkIdentityJson: ""
@@ -2094,6 +2104,168 @@ export function Screen() {
     await fs.writeFile(tamperedPath, `${JSON.stringify(tampered)}\n`);
     await expect(diffBase44Evidence(baselinePath, tamperedPath, path.join(out, "diff.json")))
       .rejects.toThrow("orphaned runtime obligation");
+  });
+
+  it("classifies finite conditional payload spreads as runtime-deferred proof obligations", async () => {
+    const { packet } = await mutationHookFixture(`
+export async function submit(message, specialContext, getPayload) {
+  await base44.entities.Feedback.create({
+    owner_email: "user@example.invalid",
+    feedback_type: "story_rating",
+    rating: 5,
+    ...(message.trim() && { message: message.trim() })
+  });
+  await base44.entities.StoryRequest.create({
+    request_type: "special",
+    ...(specialContext.special_story_type && { special_story_type: specialContext.special_story_type }),
+    ...(specialContext.event && { event: specialContext.event }),
+    ...(specialContext.memory_focus && { memory_focus: specialContext.memory_focus }),
+    ...(specialContext.dog_moment_states && Object.keys(specialContext.dog_moment_states).length > 0 && {
+      dog_moment_states: JSON.stringify(specialContext.dog_moment_states)
+    }),
+    ...(specialContext.special_note && { special_note: specialContext.special_note })
+  });
+  await base44.entities.UnsafeSpread.create({
+    known: true,
+    ...getPayload()
+  });
+  await base44.entities.ConditionalUnsafeSpread.create({
+    known: true,
+    ...(specialContext.enabled && getPayload())
+  });
+}
+`);
+    const feedback = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityPayload
+      && fact.targetSymbol === "Feedback")!;
+    expect(feedback).toMatchObject({
+      evidenceTier: "Tier4Unknown",
+      properties: {
+        ...feedback.properties,
+        completeness: "partial",
+        outerKind: "object",
+        referenceAccounting: "source-bounded",
+        runtimeObligationsJson: '["entity-execution:docker-workflow-readback-cleanup"]',
+        shapeVersion: "3"
+      }
+    });
+    expect(JSON.parse(feedback.properties.analysisGapsJson)).toEqual([
+      "runtime-deferred-callsite-execution"
+    ]);
+    expect(JSON.parse(feedback.properties.fieldsJson)).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: "owner_email", presence: "unconditional" }),
+      expect.objectContaining({ name: "feedback_type", presence: "unconditional" }),
+      expect.objectContaining({ name: "rating", presence: "unconditional" }),
+      expect.objectContaining({ name: "message", presence: "conditional" })
+    ]));
+
+    const storyRequest = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityPayload
+      && fact.targetSymbol === "StoryRequest")!;
+    expect(storyRequest).toMatchObject({
+      evidenceTier: "Tier4Unknown",
+      properties: {
+        ...storyRequest.properties,
+        completeness: "partial",
+        outerKind: "object",
+        referenceAccounting: "source-bounded",
+        runtimeObligationsJson: '["entity-execution:docker-workflow-readback-cleanup"]',
+        shapeVersion: "3"
+      }
+    });
+    expect(JSON.parse(storyRequest.properties.analysisGapsJson)).toEqual([
+      "runtime-deferred-callsite-execution"
+    ]);
+    expect(JSON.parse(storyRequest.properties.fieldsJson)).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: "request_type", presence: "unconditional" }),
+      expect.objectContaining({ name: "special_story_type", presence: "conditional" }),
+      expect.objectContaining({ name: "event", presence: "conditional" }),
+      expect.objectContaining({ name: "memory_focus", presence: "conditional" }),
+      expect.objectContaining({ name: "dog_moment_states", presence: "conditional" }),
+      expect.objectContaining({ name: "special_note", presence: "conditional" })
+    ]));
+
+    for (const targetSymbol of ["UnsafeSpread", "ConditionalUnsafeSpread"]) {
+      const unsafePayload = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityPayload
+        && fact.targetSymbol === targetSymbol)!;
+      expect(unsafePayload).toMatchObject({
+        evidenceTier: "Tier4Unknown",
+        properties: expect.objectContaining({
+          completeness: "partial",
+          outerKind: "object",
+          referenceAccounting: "unresolved"
+        })
+      });
+      expect(JSON.parse(unsafePayload.properties.analysisGapsJson)).not.toEqual([
+        "runtime-deferred-callsite-execution"
+      ]);
+      expect(JSON.parse(unsafePayload.properties.runtimeObligationsJson)).toEqual([]);
+    }
+  });
+
+  it("resolves guarded finite computed payload fields from closed source maps", async () => {
+    const { packet } = await mutationHookFixture(`
+export async function submit(req, runtimeKey, value) {
+  const { voice_choice } = await req.json();
+  const VOICE_MAP = {
+    male: "onyx",
+    female: "nova"
+  };
+  const FIELD_MAP = {
+    male: "narration_url_male",
+    female: "narration_url_female"
+  };
+  if (!voice_choice || !VOICE_MAP[voice_choice]) return;
+  const field = FIELD_MAP[voice_choice];
+  await base44.entities.Story.update("story-id", { [field]: value });
+
+  const UNGUARDED_FIELD_MAP = {
+    known: "safe_field"
+  };
+  const unguarded = UNGUARDED_FIELD_MAP[runtimeKey];
+  await base44.entities.UnguardedStory.update("story-id", { [unguarded]: value });
+
+  const MUTATED_FIELD_MAP = {
+    known: "safe_field"
+  };
+  mutate(MUTATED_FIELD_MAP);
+  if (!runtimeKey || !MUTATED_FIELD_MAP[runtimeKey]) return;
+  const mutated = MUTATED_FIELD_MAP[runtimeKey];
+  await base44.entities.MutatedStory.update("story-id", { [mutated]: value });
+}
+`);
+    const story = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityPayload
+      && fact.targetSymbol === "Story")!;
+    expect(story).toMatchObject({
+      evidenceTier: "Tier3SyntaxOrTextual",
+      properties: expect.objectContaining({
+        completeness: "complete",
+        outerKind: "object",
+        referenceAccounting: "source-bounded",
+        runtimeObligationsJson: "[]",
+        analysisGapsJson: "[]",
+        shapeVersion: "3"
+      })
+    });
+    expect(JSON.parse(story.properties.fieldsJson)).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: "narration_url_female", presence: "conditional", origin: "computed:binding:field" }),
+      expect.objectContaining({ name: "narration_url_male", presence: "conditional", origin: "computed:binding:field" })
+    ]));
+
+    for (const targetSymbol of ["UnguardedStory", "MutatedStory"]) {
+      const unsafePayload = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityPayload
+        && fact.targetSymbol === targetSymbol)!;
+      expect(unsafePayload).toMatchObject({
+        evidenceTier: "Tier4Unknown",
+        properties: expect.objectContaining({
+          completeness: "partial",
+          referenceAccounting: "unresolved"
+        })
+      });
+      expect(JSON.parse(unsafePayload.properties.fieldsJson)).toContainEqual(expect.objectContaining({
+        name: "<dynamic>",
+        presence: "dynamic-computed"
+      }));
+      expect(JSON.parse(unsafePayload.properties.analysisGapsJson)).toContain("dynamic-computed-property");
+    }
   });
 
   it("follows a finite mutation-array push and map-element path", async () => {
@@ -3024,7 +3196,8 @@ async function mixedSdkIdentityFixtureRepo(): Promise<string> {
   const repo = await fs.mkdtemp(path.join(os.tmpdir(), "tracemap-base44-mixed-sdk-identity-fixture-"));
   await fs.mkdir(path.join(repo, "src"), {recursive: true});
   await fs.mkdir(path.join(repo, "functions/task"), {recursive: true});
-  await writeFrontendSdkAuthority(repo);
+  await fs.mkdir(path.join(repo, "base44/functions/serveSharedStoryOG"), {recursive: true});
+  await writeFrontendSdkAuthority(repo, "0.8.43", "^0.8.43");
   await fs.writeFile(path.join(repo, "src/helper.ts"), `
 export function writeAmbiguous(client, payload) {
   return client.entities.AmbiguousItem.create(payload);
@@ -3037,12 +3210,27 @@ export function run(payload) {
   return writeAmbiguous(base44, payload);
 }
 `);
-  await fs.writeFile(path.join(repo, "functions/task/index.ts"), `import {createClientFromRequest} from "npm:@base44/sdk@0.8.4";
+  await fs.writeFile(path.join(repo, "functions/task/index.ts"), `import {createClientFromRequest} from "npm:@base44/sdk@0.8.23";
 import {writeAmbiguous} from "../../src/helper";
 const base44 = createClientFromRequest(new Request("https://example.invalid"));
 export function run(payload) {
   base44.entities.FunctionItem.create(payload);
   return writeAmbiguous(base44, payload);
+}
+`);
+  await fs.writeFile(path.join(repo, "base44/functions/serveSharedStoryOG/entry.ts"), `import {createClientFromRequest} from "npm:@base44/sdk@0.8.25";
+export default async function handler(req: Request) {
+  let base44 = null;
+  try {
+    base44 = createClientFromRequest(req);
+    const stories = await base44.asServiceRole.entities.Story.filter({
+      share_token: "token",
+      is_shared: true
+    });
+    return Response.json(stories);
+  } catch (error) {
+    return Response.json({error: "not-found"}, {status: 404});
+  }
 }
 `);
   execFileSync("git", ["init", "-q"], {cwd: repo});
@@ -3261,8 +3449,7 @@ ${body}
   }
 }
 
-async function writeFrontendSdkAuthority(repo: string): Promise<void> {
-  const requested = "^0.8.3";
+async function writeFrontendSdkAuthority(repo: string, version = "0.8.5", requested = "^0.8.3"): Promise<void> {
   await fs.writeFile(path.join(repo, "package.json"), `${JSON.stringify({ dependencies: { "@base44/sdk": requested } }, null, 2)}\n`);
   await fs.writeFile(path.join(repo, "package-lock.json"), `${JSON.stringify({
     name: "base44-fixture",
@@ -3270,7 +3457,7 @@ async function writeFrontendSdkAuthority(repo: string): Promise<void> {
     requires: true,
     packages: {
       "": { dependencies: { "@base44/sdk": requested } },
-      "node_modules/@base44/sdk": { version: "0.8.5" }
+      "node_modules/@base44/sdk": { version }
     }
   }, null, 2)}\n`);
 }
