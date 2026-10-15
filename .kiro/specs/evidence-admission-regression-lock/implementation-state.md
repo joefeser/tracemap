@@ -47,3 +47,21 @@ were produced. Receipt root: `/tmp/tracemap-http-entry-smoke-committed-20261015`
 Pinned OSS, Windows/private scans and non-.NET adapter suites are deferred;
 the local fixtures do not establish those results. Optional schema work remains
 deferred under #870. No PR has been created or merged.
+
+## Windows pre-PR green gate (2026-10-15)
+
+Worktree branch: `codex/evidence-admission-green-windows`, based on `b931be91`.
+The Windows context CI failure was reproduced with a portable projectless test:
+SemanticAnalysisUnavailable omitted messageHash. Syntax extractor 0.4.18 now hashes
+only the fixed sanitized message. The original legacy-sample assertion remains.
+The newly gated real net48 HTTP fixture also reproduced a reduced compilation on
+Windows. Its runtime-free project now explicitly disables the compiler My template
+in both regular and design-time compiler inputs; the scan-success assertion and
+all eight path-root expectations remain unchanged. The combined 28-test targeted
+run passed after these fixes, including all 17 HTTP boundary cases.
+
+CI now runs the HTTP entry class/sample through the Windows gap-family gate and
+the SQL/HTTP compatibility workflow on the hardening branch before a PR. Historical
+baseline test failures are visible non-gating diagnostics; candidate failures are
+still fatal. Frozen full-suite and final-head CI validation are pending. No PR or
+draft should be opened until those results have been reviewed.

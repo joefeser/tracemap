@@ -42,6 +42,10 @@ jobs:
         timeout-minutes: 8
         run: dotnet build src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --nologo
       - name: Run isolated class once with crash diagnostics
+        id: isolated-tests
+        # Historical failures are diagnostic controls, never candidate acceptance.
+        # Keep their logs/outcome visible without making the fixed candidate red.
+        continue-on-error: ${{ matrix.revision == 'base' }}
         timeout-minutes: 5
         shell: pwsh
         env:
@@ -50,8 +54,20 @@ jobs:
           dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-build --no-restore --filter "FullyQualifiedName~$env:TEST_CLASS" --nologo --logger "console;verbosity=detailed" --blame-crash --blame-crash-dump-type mini --blame-hang-timeout 2m --blame-hang-dump-type mini --results-directory "$env:RUNNER_TEMP/testhost-results"
           exit $LASTEXITCODE
       - name: Print test sequence on failure
-        if: failure()
+        if: always() && steps.isolated-tests.outcome == 'failure'
         shell: pwsh
         run: |
           # Public synthetic inputs only. Preserve the failure; never retry or mask it.
           Get-ChildItem "$env:RUNNER_TEMP/testhost-results" -Filter '*Sequence.xml' -Recurse -ErrorAction SilentlyContinue | ForEach-Object { Get-Content -LiteralPath $_.FullName }
+      - name: Record comparison outcome
+        if: always()
+        shell: pwsh
+        env:
+          REVISION: ${{ matrix.revision }}
+          TEST_CLASS: ${{ matrix.test-class }}
+          TEST_OUTCOME: ${{ steps.isolated-tests.outcome }}
+        run: |
+          "$env:REVISION / $env:TEST_CLASS : $env:TEST_OUTCOME" >> $env:GITHUB_STEP_SUMMARY
+          if ($env:REVISION -eq 'base') {
+            'Historical baseline is diagnostic only. Its outcome is not a candidate pass.' >> $env:GITHUB_STEP_SUMMARY
+          }

@@ -1523,6 +1523,7 @@ public static partial class VisualBasicSyntaxExtractor
 
     private static CodeFact CreateSemanticUnavailableGap(ScanManifest manifest, string filePath)
     {
+        const string message = "Compiler-resolved Visual Basic analysis was unavailable for this file; only syntax-or-textual evidence was emitted for it.";
         return FactFactory.Create(
             manifest,
             FactTypes.AnalysisGap,
@@ -1533,7 +1534,8 @@ public static partial class VisualBasicSyntaxExtractor
             {
                 ["coverageEffect"] = "reduces-semantic-coverage",
                 ["gapKind"] = "SemanticAnalysisUnavailable",
-                ["message"] = "Compiler-resolved Visual Basic analysis was unavailable for this file; only syntax-or-textual evidence was emitted for it.",
+                ["message"] = message,
+                ["messageHash"] = FactFactory.Hash(message, 32),
                 ["sanitization"] = "category-only"
             });
     }
