@@ -12,6 +12,37 @@ namespace TraceMap.Core;
 public static partial class VisualBasicSemanticExtractor
 {
     private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Compilation, Dictionary<MetadataReference, string>> ExplicitReferenceHashes = new();
+
+    private static string? ExplicitReferenceMethodIdentity(MetadataReference reference, IMethodSymbol method)
+    {
+        try { return ReadExplicitReferenceMethodIdentity(reference, method); }
+        catch (Exception exception) when (exception is BadImageFormatException or ArgumentException
+            or ManagedMetadataExtractor.ManagedInputException or NotSupportedException)
+        {
+            // Keep the semantic call, but never invent an exact-reference witness
+            // when its metadata signature cannot be decoded within the limits.
+            return null;
+        }
+    }
+
+    private static string? ReadExplicitReferenceMethodIdentity(MetadataReference reference, IMethodSymbol method)
+    {
+        // The compiler can retarget parameter type assembly versions. Its
+        // resolved token still identifies the declaration in the captured PE;
+        // never reconstruct that declaration from retargeted symbol types.
+        var token = method.OriginalDefinition.MetadataToken;
+        if ((token & unchecked((int)0xff000000)) != 0x06000000
+            || reference is not PortableExecutableReference portable
+            || portable.GetMetadata() is not AssemblyMetadata metadata) return null;
+        var modules = metadata.GetModules();
+        if (modules.Length != 1) return null; // No unverified companion-module bytes.
+        var reader = modules[0].GetMetadataReader();
+        if (reader.GetString(reader.GetModuleDefinition().Name) != method.ContainingModule.Name) return null;
+        var handle = System.Reflection.Metadata.Ecma335.MetadataTokens.MethodDefinitionHandle(token & 0x00ffffff);
+        if (handle.IsNil || (token & 0x00ffffff) > reader.MethodDefinitions.Count) return null;
+        if (reader.GetString(reader.GetMethodDefinition(handle).Name) != method.MetadataName) return null;
+        return ManagedMetadataExtractor.MethodDefinitionIdentity(reader, handle);
+    }
     // Opt-in compiler context, never a reconstruction of the original build.
     private static SemanticExtractionResult ExtractExplicitContext(string repoPath,
         IReadOnlyList<FileInventoryItem> inventory, ScanOptions options, CancellationToken cancellationToken)

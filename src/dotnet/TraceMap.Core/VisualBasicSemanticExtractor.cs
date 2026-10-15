@@ -1855,7 +1855,7 @@ public static partial class VisualBasicSemanticExtractor
             && method.ContainingAssembly is { } targetAssembly
             && model.Compilation.GetMetadataReference(targetAssembly) is { } reference
             && referenceHashes.TryGetValue(reference, out var referenceHash)
-            && SourceMetadataIdentityProvider.TryCreate(method, out _, out _, allowUnknownTargetFramework: true) is { } metadataIdentity)
+            && ExplicitReferenceMethodIdentity(reference, method) is { } metadataIdentity)
         {
             callProperties["explicitReferenceSha256"] = referenceHash;
             callProperties["targetMetadataIdentity"] = metadataIdentity;
