@@ -123,7 +123,10 @@ public sealed class ReverseImpactArtifactQueryTests
         var index = Path.Combine(temp.Path, "index.sqlite");
         var alias = Path.Combine(temp.Path, "output.json");
         SqliteIndexWriter.Write(index, Manifest(), [Relationship("fact-call", Caller, "Caller", Seed, "Target", 1)]);
-        File.CreateSymbolicLink(alias, index);
+        using var directoryAlias = OperatingSystem.IsWindows()
+            ? DirectoryLinkFixture.Create(Path.Combine(temp.Path, "linked-index-folder"), temp.Path) : null;
+        if (OperatingSystem.IsWindows()) alias = Path.Combine(temp.Path, "linked-index-folder", "index.sqlite");
+        else File.CreateSymbolicLink(alias, index);
         var originalHash = Hash(index);
         using var stdout = new StringWriter();
         using var stderr = new StringWriter();

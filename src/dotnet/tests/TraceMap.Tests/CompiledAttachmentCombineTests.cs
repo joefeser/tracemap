@@ -174,7 +174,14 @@ public sealed class CompiledAttachmentCombineTests
     private sealed class Fixture : IDisposable
     {
         public string Path { get; }
-        private Fixture(string suffix) => Path = System.IO.Path.Combine(WebFormsReviewPreflightCommand.PhysicalPath(System.IO.Path.GetTempPath()), "tracemap-public-combine-attachment-" + Guid.NewGuid().ToString("N") + suffix);
+        private Fixture(string suffix)
+        {
+            // Windows forbids '?' in filenames. Keep URI-reserved '#', '%'
+            // and spaces there; Unix also exercises the literal question mark.
+            if (OperatingSystem.IsWindows()) suffix = suffix.Replace('?', '+');
+            Path = System.IO.Path.Combine(WebFormsReviewPreflightCommand.PhysicalPath(System.IO.Path.GetTempPath()),
+                "tracemap-public-combine-attachment-" + Guid.NewGuid().ToString("N") + suffix);
+        }
         public string ParentIndex => System.IO.Path.Combine(Path, "parent", "index.sqlite");
         public string ParentManifest => System.IO.Path.Combine(Path, "parent", "scan-manifest.json");
         public string ChildIndex => System.IO.Path.Combine(Path, "child", "index.sqlite");
