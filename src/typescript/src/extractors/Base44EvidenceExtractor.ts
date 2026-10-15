@@ -78,7 +78,6 @@ export async function extractBase44Facts(manifest: ScanManifest, inventory: read
       }, EvidenceTiers.Tier2Structural));
     }
   }
-  ensureSelectorEvidenceAuthorityFacts(manifest, facts, aliasDiscovery.contexts);
   const hasBase44Signal = facts.some((candidate) => candidate.factType === FactTypes.Base44SdkImport
     || candidate.factType === FactTypes.Base44FunctionSurface
     || candidate.factType === FactTypes.Base44CustomerBoundary);
@@ -90,6 +89,7 @@ export async function extractBase44Facts(manifest: ScanManifest, inventory: read
       facts.push(...extractBase44UiInputFacts(manifest, context.source, item.relativePath, context.source.getFullText(), facts));
     }
   }
+  ensureSelectorEvidenceAuthorityFacts(manifest, facts, aliasDiscovery.contexts);
   return facts;
 }
 
@@ -3098,6 +3098,17 @@ function ensureSelectorEvidenceAuthorityFacts(
     } catch {
       continue;
     }
+  }
+  // UI input semantics facts bind their exact source bytes the same way
+  // selector evidence does; without a matching authority fact a consumer
+  // cannot place the widening evidence inside packet source authority.
+  // Unlike selector evidence, a UI fact's own sourceFileSha256 does not
+  // self-authorize: only a Base44SourceAuthority fact vouches for it.
+  for (const candidate of facts) {
+    if (candidate.factType !== FactTypes.Base44UiInputSemantics
+      || typeof candidate.properties.sourceFileSha256 !== "string") continue;
+    required.set(`${candidate.evidence.filePath}\0${candidate.properties.sourceFileSha256}`,
+      { filePath: candidate.evidence.filePath, sourceFileSha256: candidate.properties.sourceFileSha256 });
   }
   for (const authority of [...required.values()].sort((left, right) =>
     left.filePath.localeCompare(right.filePath) || left.sourceFileSha256.localeCompare(right.sourceFileSha256))) {
