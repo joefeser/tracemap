@@ -11,6 +11,7 @@ namespace TraceMap.Core;
 
 public static partial class VisualBasicSemanticExtractor
 {
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Compilation, Dictionary<MetadataReference, string>> ExplicitReferenceHashes = new();
     // Opt-in compiler context, never a reconstruction of the original build.
     private static SemanticExtractionResult ExtractExplicitContext(string repoPath,
         IReadOnlyList<FileInventoryItem> inventory, ScanOptions options, CancellationToken cancellationToken)
@@ -68,6 +69,7 @@ public static partial class VisualBasicSemanticExtractor
                 sourceData.Add((path, SourceText.From(new MemoryStream(data), encoding: null)));
             }
             var metadata = new List<MetadataReference>();
+            var referenceHashes = new Dictionary<MetadataReference, string>();
             var identities = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             total = 0;
             foreach (var reference in references)
@@ -84,7 +86,9 @@ public static partial class VisualBasicSemanticExtractor
                 var reader = pe.GetMetadataReader();
                 if (!reader.IsAssembly || !identities.Add(reader.GetString(reader.GetAssemblyDefinition().Name)))
                     throw new InvalidDataException("context-reference-identity-conflict");
-                metadata.Add(MetadataReference.CreateFromImage(ImmutableArray.CreateRange(data)));
+                var admittedReference = MetadataReference.CreateFromImage(ImmutableArray.CreateRange(data));
+                metadata.Add(admittedReference);
+                referenceHashes.Add(admittedReference, Convert.ToHexStringLower(SHA256.HashData(data)));
             }
             using var workspace = new AdhocWorkspace();
             var project = workspace.AddProject("ExplicitVbContext", LanguageNames.VisualBasic)
@@ -93,6 +97,7 @@ public static partial class VisualBasicSemanticExtractor
             foreach (var source in sourceData.OrderBy(x => x.Path, StringComparer.Ordinal))
                 project = project.AddDocument(source.Path, source.Text, filePath: Path.Combine(repoPath, source.Path)).Project;
             var compilation = (VisualBasicCompilation)WaitOnWorkspace(project.GetCompilationAsync(cancellationToken), cancellationToken)!;
+            ExplicitReferenceHashes.Add(compilation, referenceHashes);
             AddCompilationDiagnostics(repoPath, ".", compilation, gaps, out _, out _);
             foreach (var document in project.Documents)
             {

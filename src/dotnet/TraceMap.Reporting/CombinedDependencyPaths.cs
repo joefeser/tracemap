@@ -398,7 +398,7 @@ public static partial class CombinedDependencyPathReporter
     private const int MaxTraversalDiagnosticShapes = 32;
     private const string Version = "1.0";
     private const string Algorithm = "bounded-bfs";
-    private const string AlgorithmVersion = "1.5";
+    private const string AlgorithmVersion = "1.6";
     private const int MarkdownPathLimit = 100;
     private const int MarkdownInventoryLimit = 200;
     private const string EndpointMatchRuleId = "combined.paths.endpoint-match.v1";
@@ -423,6 +423,7 @@ public static partial class CombinedDependencyPathReporter
         "surface-evidence",
         "symbol-reconciliation",
         "compiled-source-identity",
+        "explicit-reference-member-candidate",
         "projectless-source-pdb-identity",
         "projectless-publish-method-candidate",
         "projectless-publish-member-candidate",
@@ -5337,6 +5338,8 @@ public static partial class CombinedDependencyPathReporter
             notes.Add(new CombinedPathNote("FrameworkSignatureCandidate", "This route includes a unique embedded desktop framework-version signature candidate. Declaring assembly identity remains exact, but runtime binding and compatibility are unproven; argument and return-value propagation cannot cross this candidate."));
         }
 
+        if (edges.Any(edge => edge.EdgeKind == "explicit-reference-member-candidate"))
+            notes.Add(new CombinedPathNote("ExplicitReferenceMemberCandidate", "The compiler reference bytes and complete member identity match one retained compiled method. Original-build correspondence and runtime loading remain unproven; provenance is unchanged and command values are not propagated across this candidate."));
         if (edges.Any(edge => edge.EdgeKind is "compiled-source-identity" or "projectless-source-pdb-identity" or "compiled-il-call" or "compiled-il-callvirt-candidate"))
         {
             notes.Add(new CombinedPathNote("BoundCompiledIlEvidence", "Exact bound source identity or uniquely owned checksum-matched PDB sequence points and admitted IL call operands are static evidence only. They do not prove execution, branch feasibility, virtual dispatch, or external assembly resolution."));
