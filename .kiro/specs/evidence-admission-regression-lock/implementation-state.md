@@ -198,3 +198,17 @@ also passed separately. No failures or skips in these focused runs. Earlier
 red regressions and fixture-development runs are diagnostic, not acceptance.
 These focused results do not replace the earlier full-suite receipts above or
 claim that the updated PR head has completed hosted CI/review yet.
+
+### Redacted-gap provenance follow-up
+
+The next settled ACK batch on bdac073c authorized one Baz finding: canonical
+redacted-location gaps lacked originating supporting fact IDs. Strengthened all
+12 combined/path/reverse, hidden/public-safe and native/canonical marker rows to
+compare the exact supporting-fact union with the retained inputs. All 12 failed
+before the correction. The collector now merges IDs per marker and claim with
+one deterministic final sort, retaining node/edge/surface provenance while
+continuing to omit navigation. Full VaultExportTests: 62 passed, zero failed or
+skipped, 37s; warnings-as-errors build clean. This is a narrow export repair,
+not a claim that current-head hosted CI or fresh Codex review has completed.
+Round-one dispositions are confirmed. The original Codex request remains the
+only request so far; the second patch batch was returned by exact-head Baz.

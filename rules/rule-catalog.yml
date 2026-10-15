@@ -1646,7 +1646,7 @@ rules:
 
   - id: vault-export.gap.redacted-evidence-location.v1
     name: Retained redacted evidence location
-    description: Omits canonical absolute-path hash markers from vault navigation and records a partial-coverage gap.
+    description: Omits canonical absolute-path hash markers from vault navigation and records a partial-coverage gap retaining the union of originating supporting fact IDs for each marker and claim.
     evidenceTier: Tier4Unknown
     emits:
       - redacted evidence location gap

@@ -27,4 +27,9 @@ rounds. Merge is not authorized.
 - [x] Repair retained export compatibility without admitting unsafe locations or unknown commit provenance.
 - [x] Align saved-query consumers and acceptance instructions with current contracts.
 - [x] Run the focused review matrix and adjacent compilation/HTTP/reconciliation gates.
-- [ ] Push the consolidated correction, settle each finding through ACK, and obtain current-head review/check readback.
+- [x] Push the consolidated correction, settle each finding through ACK, and obtain the next review batch readback.
+
+## PR #872 redacted-gap provenance follow-up
+
+- [x] Reproduce missing supporting facts across combined, path and reverse artifacts.
+- [x] Merge supporting fact IDs deterministically for a shared marker and claim without restoring navigation.
