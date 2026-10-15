@@ -11,6 +11,56 @@ namespace TraceMap.Tests;
 public sealed class FrameworkSignatureCandidateTests
 {
     [Theory]
+    [InlineData("2.0.0.0", "b77a5c561934e089", true)]
+    [InlineData("4.0.0.0", "b77a5c561934e089", true)]
+    [InlineData("2.0.0.0", "0000000000000000", false)]
+    public async Task Bounded_legacy_scalar_terminal_needs_no_admitted_framework_dll(string version, string token, bool expected)
+    {
+        using var temp = new TempDirectory();
+        var source = Path.Combine(temp.Path, "source");
+        Directory.CreateDirectory(source);
+        File.WriteAllText(Path.Combine(source, "README.txt"), "Public synthetic IL fixture.");
+        WebFormsWizardNativeTests.InitGit(source);
+        var dll = Path.Combine(temp.Path, "Wrapper.dll");
+        using (var assembly = AssemblyDefinition.CreateAssembly(new AssemblyNameDefinition("Wrapper", new Version(1, 0)), "Wrapper.dll", ModuleKind.Dll))
+        {
+            var module = assembly.MainModule;
+            var data = new AssemblyNameReference("System.Data", Version.Parse(version)) { PublicKeyToken = Convert.FromHexString(token) };
+            module.AssemblyReferences.Add(data);
+            var type = new TypeDefinition("Synthetic", "Wrapper", TypeAttributes.Public, module.TypeSystem.Object);
+            module.Types.Add(type);
+            var method = new MethodDefinition("Query", MethodAttributes.Public | MethodAttributes.Static, module.TypeSystem.Object);
+            method.Parameters.Add(new ParameterDefinition("text", ParameterAttributes.None, module.TypeSystem.String));
+            type.Methods.Add(method);
+            var command = new TypeReference("System.Data.SqlClient", "SqlCommand", module, data);
+            var ctor = new MethodReference(".ctor", module.TypeSystem.Void, command) { HasThis = true };
+            ctor.Parameters.Add(new ParameterDefinition(module.TypeSystem.String));
+            var il = method.Body.GetILProcessor();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Newobj, ctor);
+            il.Emit(OpCodes.Callvirt, new MethodReference("ExecuteScalar", module.TypeSystem.Object, command) { HasThis = true });
+            il.Emit(OpCodes.Ret);
+            assembly.Write(dll);
+        }
+        var scan = ScanEngine.Scan(new ScanOptions(source, Path.Combine(temp.Path, "scan"), CompiledInputPaths: [dll], IlBodyEvidence: true));
+        var methodFact = Assert.Single(scan.Facts, fact => fact.FactType == FactTypes.ManagedMethodDeclared);
+        Assert.Contains(scan.Facts, fact => fact.FactType == FactTypes.ManagedIlCallObserved
+            && fact.Properties["targetIdentity"].Contains("ExecuteScalar", StringComparison.Ordinal));
+        var index = Path.Combine(temp.Path, "index.sqlite");
+        SqliteIndexWriter.Write(index, scan.Manifest, scan.Facts);
+        var combined = Path.Combine(temp.Path, "combined.sqlite");
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([index], combined, ["wrapper"]));
+        var options = new CombinedDependencyPathOptions(combined, temp.Path, FromSymbol: methodFact.TargetSymbol,
+            ToSurface: "database-operations", MaxDepth: 8) { ExactFromSymbol = true };
+        var ordinary = await CombinedDependencyPathReporter.BuildReportAsync(options);
+        var bounded = await CombinedDependencyPathReporter.BuildBoundedCombinedIndexReportWithTraversalAsync(options,
+            new ReportInputBudget(250_000, 250_000, 128 * 1024 * 1024));
+        Assert.Equal(expected, ordinary.Paths.Count > 0);
+        Assert.Equal(expected, bounded.Report.Paths.Count > 0);
+        if (expected) Assert.Contains(bounded.Report.Paths, path => path.Nodes.Last().SurfaceName == "SqlCommand.ExecuteScalar");
+    }
+
+    [Theory]
     [InlineData("")]
     [InlineData("System")]
     [InlineData("System;Other")]

@@ -1,4 +1,5 @@
 import importlib.util
+import hashlib
 from contextlib import closing
 import json
 from pathlib import Path
@@ -68,6 +69,52 @@ class InspectionTests(unittest.TestCase):
         missing = self.path.parent / "missing.sqlite"
         with self.assertRaises(sqlite3.Error): inspection.inspect(missing, "body")
         self.assertFalse(missing.exists())
+
+    def graph(self, calls, digest=None):
+        path = self.path.parent / "method-graph.local.json"
+        path.write_text(json.dumps(dict(schemaVersion="retained-method-graph.v1",
+            indexSha256=digest or hashlib.sha256(self.path.read_bytes()).hexdigest(),
+            graph=dict(calls=calls, nodes=[]))), encoding="utf-8")
+        return path
+
+    def test_graph_comparison_uses_exact_body_not_overload_name(self):
+        self.call()
+        graph = self.graph([dict(bodyFactId="OtherBody", factId="OtherCall")])
+        counts, _ = inspection.inspect(self.path, "Abody", graph)
+        self.assertEqual(0, counts["exact_body_calls_in_graph"])
+        self.assertEqual(1, counts["exact_body_calls_outside_graph"])
+        self.assertEqual(0, counts["exact_body_owner_matches"])
+
+    def test_exact_body_graph_call_is_counted(self):
+        self.call()
+        graph = self.graph([dict(bodyFactId="Abody", factId="Acall")])
+        counts, _ = inspection.inspect(self.path, "Abody", graph)
+        self.assertEqual(1, counts["exact_body_calls_in_graph"])
+        self.assertEqual(0, counts["exact_body_calls_outside_graph"])
+
+    def test_stale_graph_refused(self):
+        with self.assertRaises(ValueError):
+            inspection.inspect(self.path, "Abody", self.graph([], "wrong"))
+
+    def test_unknown_graph_call_refused(self):
+        with self.assertRaises(ValueError):
+            inspection.inspect(self.path, "Abody", self.graph([dict(bodyFactId="Abody", factId="missing")]))
+
+    def test_duplicate_graph_call_refused(self):
+        self.call()
+        call = dict(bodyFactId="Abody", factId="Acall")
+        with self.assertRaises(ValueError):
+            inspection.inspect(self.path, "Abody", self.graph([call, call]))
+
+    def test_owner_join_is_source_index_local_and_hash_checked(self):
+        with closing(sqlite3.connect(self.path)) as db, db:
+            db.execute("UPDATE combined_facts SET properties_json=? WHERE combined_fact_id='Abody'",
+                       (json.dumps(dict(rawFileSha256="hash", compiledFactId="owner")),))
+        self.add("owner", "ManagedMethodDeclared", dict(rawFileSha256="hash"))
+        self.add("owner", "ManagedMethodDeclared", dict(rawFileSha256="different"), "B")
+        counts, _ = inspection.inspect(self.path, "Abody", self.graph([]))
+        self.assertEqual(1, counts["exact_body_owner_matches"])
+        self.assertEqual(1, counts["owner_artifact_hash_matches"])
 
 
 if __name__ == "__main__": unittest.main()
