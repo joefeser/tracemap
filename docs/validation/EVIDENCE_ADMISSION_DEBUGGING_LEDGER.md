@@ -113,3 +113,21 @@ failures and distinguish environmental failures from passes. Follow
 `docs/VALIDATION.md`; pinned OSS/Windows/private runs are separate gates and must
 be explicitly deferred when unavailable. No PR should drop a negative control
 or widen evidence admission merely to make an expected path appear.
+
+### Implementation validation receipt (2026-10-15)
+
+- Production/regression commit `10b65897`: 17 new tests passed; 43 Python
+  diagnostic tests passed; public net48 sample build had zero warnings/errors.
+- Frozen full .NET run: 4,333 passed, one Windows-only test skipped, one stale
+  algorithm-version assertion failed (expected 1.3, actual 1.8), 27m12s.
+- Test-only correction `39e38e2d`: affected native workflow and new HTTP matrix
+  passed 18/18 in 46s. No production code or path assertions changed after the
+  full run. This is not represented as a second clean full-suite run.
+- CLI scan at clean `39e38e2d` succeeded: 107 facts, Level1SemanticAnalysis,
+  BuildStatus Succeeded, all required outputs present.
+- Private-path guard and diff whitespace checks passed. Private application
+  inputs are not part of this corpus. Pinned OSS, Windows/private scans and
+  non-.NET adapter suites remain explicitly deferred, not inferred passes.
+- Before a PR, preserve this ledger and all negative controls, check version
+  changes, and rerun CI on the final review head. Do not convert the deferred
+  modeling questions above into asserted semantic paths.
