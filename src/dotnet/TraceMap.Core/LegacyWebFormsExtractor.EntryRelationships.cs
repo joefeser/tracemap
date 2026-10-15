@@ -8,7 +8,7 @@ namespace TraceMap.Core;
 public static partial class LegacyWebFormsExtractor
 {
     private static readonly Lazy<string> EntryGeneratorSha256 = new(() => Convert.ToHexStringLower(
-        SHA256.HashData(File.ReadAllBytes(typeof(LegacyWebFormsExtractor).Assembly.Location))));
+        SHA256.HashData(GeneratorBinaryIdentity.ReadBytes(typeof(LegacyWebFormsExtractor).Assembly))));
     private sealed class EntryEvidenceIndex(IReadOnlyList<CodeFact> facts)
     {
         internal ILookup<string, CodeFact> ById { get; } = facts.ToLookup(f => f.FactId, StringComparer.Ordinal);
@@ -77,7 +77,7 @@ public static partial class LegacyWebFormsExtractor
                     supports.Add(CreatePageFact(manifest, targetPage));
                     var types = existing.TypesByPath[targetPage.LinkedCodePath ?? ""].Where(f => f.FactType == FactTypes.TypeDeclared
                         && f.EvidenceTier == EvidenceTiers.Tier1Semantic
-                        && string.Equals(WebFormsDeclarationQualifiedName(f), targetPage.PageTypeName, comparison)
+                        && string.Equals(WebFormsDeclarationQualifiedName(f), targetPage.PageTypeName, IsVisualBasicPage(targetPage) ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal)
                         && f.Evidence.FilePath == targetPage.LinkedCodePath).ToArray();
                     if (types.Length == 1) type = types[0];
                 }
@@ -95,9 +95,8 @@ public static partial class LegacyWebFormsExtractor
             candidates[id] = (relation, type);
         }
 
-        string markup;
-        try { markup = File.ReadAllText(Path.Combine(repoPath, page.FilePath)); }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        var markup = page.MarkupSnapshot;
+        if (markup is null)
         {
             EntryGap(manifest, pageFact.Evidence, RuleIds.WebFormsEntryProperty, "MarkupUnavailable", [pageFact], facts);
             return;
@@ -137,7 +136,10 @@ public static partial class LegacyWebFormsExtractor
             if (receiverMembers.Length > 1 || receiverMembers.Any(f => f.FactType != FactTypes.FieldDeclared
                     || f.Properties.GetValueOrDefault("fieldType") != candidate.Type.TargetSymbol
                     || f.Properties.GetValueOrDefault("calleeAssemblyName") != candidate.Type.Properties.GetValueOrDefault("targetSymbolAssemblyName")
-                    || f.Properties.GetValueOrDefault("calleeAssemblyVersion") != candidate.Type.Properties.GetValueOrDefault("targetSymbolAssemblyVersion")))
+                    || f.Properties.GetValueOrDefault("calleeAssemblyVersion") != candidate.Type.Properties.GetValueOrDefault("targetSymbolAssemblyVersion")
+                    || !f.Properties.ContainsKey("calleeAssemblyPublicKeyToken")
+                    || !candidate.Type.Properties.ContainsKey("targetSymbolAssemblyPublicKeyToken")
+                    || f.Properties["calleeAssemblyPublicKeyToken"] != candidate.Type.Properties["targetSymbolAssemblyPublicKeyToken"]))
             {
                 EntryGap(manifest, evidence, RuleIds.WebFormsEntryProperty, "ConflictingControlReceiver",
                     new[] { pageFact, candidate.Relation, candidate.Type }.Concat(scope.Value.Support).Concat(receiverMembers).ToArray(), facts);
@@ -155,6 +157,15 @@ public static partial class LegacyWebFormsExtractor
                 continue;
             }
             var member = members[0];
+            if (member.Properties.GetValueOrDefault("getterAccessibility") != "Public"
+                || member.Properties.GetValueOrDefault("getterPubliclyAccessible") != "True"
+                || member.Properties.GetValueOrDefault("parameterCount") != "0"
+                || member.Properties.GetValueOrDefault("isDefault") != "False")
+            {
+                EntryGap(manifest, evidence, RuleIds.WebFormsEntryProperty, "UnavailablePublicGetter",
+                    [pageFact, candidate.Relation, candidate.Type, member], facts);
+                continue;
+            }
             facts.Add(EntryFact(manifest, RuleIds.WebFormsEntryProperty, EvidenceTiers.Tier3SyntaxOrTextual,
                 evidence, "declarative-property-reference", candidate.Relation.TargetSymbol!, member.TargetSymbol!,
                 "Binding evaluation, receiver instance and getter invocation are unproven.",

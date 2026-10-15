@@ -84,3 +84,16 @@ no implementation or fixture changes. All issue #873 local implementation tasks
 are complete. Owner review/publication approval is the next step; no push, PR,
 reviewer request, merge or workflow mutation is authorized. No process is left
 running. The original checkout and unrelated work remain untouched.
+
+## PR #876 owner-authorized review repair
+
+Owner authorized fixing current-head issues after ACK held the batch due to its
+Baz exact-head evidence mismatch. Ten verified findings are repaired together;
+the projectless array-index finding is non-actionable because the predicate is
+not evaluated on empty input, now pinned by a regression. Lane policy unchanged.
+HTTP-entry tests: 19/19 with warnings as errors after the final getter tightening.
+Broader focused regression suite: 598/598 before that final narrow tightening.
+Full-suite evidence above belongs to the prior implementation head; new-head
+hosted validation and ACK readback will be recorded on PR #876.
+All 11 original findings have code/test evidence prepared for exact-thread
+disposition after push. No lane policy, ACK source or call traversal was changed.

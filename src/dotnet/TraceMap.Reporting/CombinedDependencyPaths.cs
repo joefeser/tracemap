@@ -896,7 +896,7 @@ public static partial class CombinedDependencyPathReporter
                 .Concat(read.CompiledAttachmentLinks.Count == 0 ? [] : new[]
                 { "Compiled attachment joins use an explicitly validated local parent/index link and preserve original fact namespaces. They remain static review evidence, not runtime execution, source-line identity, build authenticity or full-site coverage." }).ToArray())
         {
-            WebFormsEntries = legacyMode ? null : BuildWebFormsEntryInventory(read),
+            WebFormsEntries = legacyMode ? null : BuildWebFormsEntryInventory(read, options.StartingFactIds is not null),
             CompiledAttachmentLinks = read.CompiledAttachmentLinks.Count == 0 ? null : read.CompiledAttachmentLinks,
             RootTraversal = rootTraversal is null ? null : new CombinedPathRootTraversal(
                 rootTraversal.ReachedNodeCount,
