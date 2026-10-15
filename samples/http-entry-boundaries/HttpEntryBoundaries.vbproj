@@ -4,7 +4,7 @@
     <RootNamespace>HttpEntrySamples</RootNamespace>
     <OptionStrict>On</OptionStrict>
     <Deterministic>true</Deterministic>
-    <VBRuntime>None</VBRuntime>
+    <!-- Keep the standard VB reference closure for WithEvents on every OS. -->
     <!-- This compile-only fixture does not use the VB My application template.
          Pin the symbol before design-time compiler arguments are captured too. -->
     <MyType>Empty</MyType>

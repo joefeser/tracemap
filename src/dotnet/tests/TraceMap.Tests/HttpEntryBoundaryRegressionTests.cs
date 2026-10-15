@@ -21,7 +21,9 @@ public sealed class HttpEntryBoundaryRegressionTests
         Assert.NotNull(root);
         using var temp = new TempDirectory();
         var scan = ScanEngine.Scan(new ScanOptions(Path.Combine(root.FullName, "samples/http-entry-boundaries"), Path.Combine(temp.Path, "scan")));
-        Assert.Equal("Succeeded", scan.Manifest.BuildStatus);
+        Assert.True(scan.Manifest.BuildStatus == "Succeeded", "Public fixture compilation gaps: " + string.Join("; ",
+            scan.Facts.Where(f => f.FactType == FactTypes.AnalysisGap).Select(f =>
+                f.RuleId + ":" + f.Properties.GetValueOrDefault("gapKind") + ":" + f.Properties.GetValueOrDefault("diagnosticId"))));
         Assert.Contains(scan.Facts, f => f.SourceSymbol?.Contains("LifecycleWidget.CreateChildControls", StringComparison.Ordinal) == true
             && f.TargetSymbol?.Contains("System.Web.UI.Control.CreateChildControls", StringComparison.Ordinal) == true
             && f.ContractElement == "Overrides" && f.EvidenceTier == EvidenceTiers.Tier1Semantic);
