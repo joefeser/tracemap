@@ -3,6 +3,9 @@
 Independent public synthetic VB/.NET Framework 4.8 fixture using real System.Web
 reference assemblies. Compile and statically scan only; never host it or execute
 HTTP requests. Addresses are reserved example.invalid placeholders.
+The test project references this compile-only harness, so a clean test build
+restores its framework reference assets on Linux as well as Windows. A warmed
+developer checkout or installed Windows targeting pack is not a prerequisite.
 
 Expected source routes: button Handles binding → constructor → HTTP;
 explicit property read → read-only getter → constructor → HTTP; lifecycle override
