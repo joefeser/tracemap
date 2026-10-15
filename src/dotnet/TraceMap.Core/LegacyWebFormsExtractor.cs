@@ -318,7 +318,7 @@ public static partial class LegacyWebFormsExtractor
                 [],
                 [],
                 [],
-                initialGaps);
+                initialGaps) { MarkupSnapshot = text };
 
             var controls = new List<WebFormsControl>();
             var bindings = new List<WebFormsBinding>();
@@ -4858,7 +4858,10 @@ public static partial class LegacyWebFormsExtractor
         IReadOnlyList<WebFormsBinding> Bindings,
         IReadOnlyList<WebFormsDataBinding> DataBindings,
         IReadOnlyList<WebFormsPostBackTarget> PostBackTargets,
-        IReadOnlyList<WebFormsGap> Gaps);
+        IReadOnlyList<WebFormsGap> Gaps)
+    {
+        internal string? MarkupSnapshot { get; init; }
+    }
 
     private sealed record WebFormsControl(
         string ControlPrefix,

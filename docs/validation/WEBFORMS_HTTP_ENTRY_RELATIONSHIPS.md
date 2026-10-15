@@ -8,7 +8,7 @@ origin/dev. This is a bounded static entry inventory, not runtime reachability.
 | Family | Supported | Partial / unavailable | Evidence and first unresolved boundary |
 | --- | --- | --- | --- |
 | Containment | One static Src registration to an inventoried .ascx; one namespace/assembly registration to a scoped C# or VB source type; existing App_Code namespace candidate | Multiple competing registrations, duplicate control IDs, missing targets or ambiguous ownership refuse links. DLL-only controls, dynamic registration and runtime naming containers unavailable. | Tier2 structural, or existing Tier3 App_Code candidate. Page surface → exact markup control identity; construction/execution unproven. |
-| Declarative property | `<%# controlId.Property %>` with optional whitespace; each identifier matches `[A-Za-z_][A-Za-z0-9_]*`; unique registered control and one directly declared semantic property in its exact containing type | VB names case-insensitive, C# case-sensitive. No inherited property resolution, chains, calls, indexers, Eval/Bind, render expressions, escaping or general expression evaluation. Any Template markup refuses instance binding; duplicate IDs, missing types and members produce gaps. A unique linked page type is required; known conflicting page/base members refuse receiver binding. Source base traversal is capped at 16 types; external metadata members are not inventoried. | Tier3 even with Tier1 declaration support. Control instance → exact property identity; binding evaluation/runtime receiver identity/getter invocation unproven. |
+| Declarative property | `<%# controlId.Property %>` with optional whitespace; each identifier matches `[A-Za-z_][A-Za-z0-9_]*`; unique registered control and one directly declared semantic property with a public parameterless getter on a public containing-type chain in its exact containing type | VB names case-insensitive, C# case-sensitive. No inherited property resolution, chains, calls, indexers, Eval/Bind, render expressions, escaping or general expression evaluation. Any Template markup refuses instance binding; duplicate IDs, missing types and members produce gaps. A unique linked page type is required; known conflicting page/base members refuse receiver binding. Explicit receiver assembly tokens must match. Source base traversal is capped at 16 types; external metadata members are not inventoried. | Tier3 even with Tier1 declaration support. Control instance → exact property identity; binding evaluation/runtime receiver identity/getter invocation unproven. |
 | Framework lifecycle | Direct compiler override of metadata-backed `System.Web.UI.Control`/`TemplateControl`/`UserControl`/`Page` member `CreateChildControls()`, or `OnInit`, `OnLoad`, `OnPreRender` with one by-value `System.EventArgs`; void instance methods; System.Web token `b03f5f7f11d50a3a` | Source intermediary overrides, other lifecycle members, same-name ordinary methods and unsigned lookalikes are excluded. Syntax-only scans cannot establish this family. Signed identity is not an authenticity claim. | Tier2 framework-entry candidate supported by Tier1 override and exact declaration. Framework member → source override; dispatch/construction/execution unproven. |
 
 The initial ordinary-property positive fixture is VB. C# properties without a retained
@@ -39,8 +39,9 @@ original supporting fact IDs scoped by that source index, commit, rule, tier,
 span and first unresolved boundary. Report projection hashes its exact serialized
 rows and the Reporting assembly. Ordinary and bounded combined readers retain the
 same inventory; existing fact/index schemas and call-path algorithm are unchanged.
-The inventory covers retained input, independently of call-path selectors, and is
-always labeled partial. Input-budget overflow still fails closed. Depth/work/path
+The inventory covers retained input and is always labeled partial. Ordinary call-path
+selectors do not filter it; bounded single-index StartingFactIds closures explicitly
+label it selector-limited, including an empty retained inventory. Input-budget overflow still fails closed. Depth/work/path
 truncation remains visible on call paths; terminal evidence never upgrades entries.
 
 These relationships are deliberately absent from graph edge construction, root
@@ -52,8 +53,8 @@ The privacy-projected `legacy-flows` report omits this local inventory and its i
 hashes. No new shareable artifact hashes private source input. Grouped handoff
 continues to describe the existing call paths and does not admit these candidates.
 
-Versions: legacy-webforms **0.14.0**, vb-semantic **0.10.5**, csharp-semantic
-**0.22.2**. A fresh scan is required. Requery alone cannot reconstruct missing
+Versions: legacy-webforms **0.14.1**, vb-semantic **0.10.6**, csharp-semantic
+**0.22.3**. A fresh scan is required. Requery alone cannot reconstruct missing
 instance/property/framework witnesses from earlier scans. Historical version
 receipts remain historical; existing path classifications and algorithm are unchanged.
 
@@ -73,3 +74,11 @@ Python diagnostics; full Debug .NET suite and public CLI scan on frozen binaries
 See the spec-local validation receipt for actual commands/outcomes and explicit
 platform/corpus deferrals. Public realism checks are documented separately in
 [the pinned corpus readback](WEBFORMS_HTTP_ENTRY_PUBLIC_CORPUS.md).
+
+Review corrections: target .ascx directive names use the target language's case rules.
+Entry expressions consume the same in-memory markup snapshot as registration parsing.
+Scan Markdown includes entry gaps, encodes repository text and states its 50-row cap.
+Containment report TargetSymbolId preserves the resolved target type identity.
+New generator hashes use exact assembly bytes, or exact containing application bundle
+bytes for a single-file entry assembly; they never substitute the dotnet host.
+This does not certify other scanner components for single-file deployment.

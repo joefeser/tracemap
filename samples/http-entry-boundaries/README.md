@@ -27,3 +27,8 @@ See `docs/validation/WEBFORMS_HTTP_ENTRY_RELATIONSHIPS.md` for the supported gra
 `MatchingHost` retains a reference with an explicit field of the registered type.
 `ShadowedHost` inherits an unrelated same-name field; that binding produces a
 conflicting-receiver gap instead of a property relationship.
+
+Write-only, private and private-getter properties in EntryVariants remain gaps.
+Review regressions also cover mixed target-language casing, explicit receiver
+assembly tokens, retained markup snapshots, bounded selected-input labels and
+Markdown gap/encoding/truncation behavior.

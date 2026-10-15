@@ -8,3 +8,7 @@
 <%# first.Missing %>
 <%# Eval("Profile") %>
 <%# first.Profile.Name %>
+
+<%# first.WriteOnlyValue %>
+<%# first.HiddenValue %>
+<%# first.RestrictedValue %>

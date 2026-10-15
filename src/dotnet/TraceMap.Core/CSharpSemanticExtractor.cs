@@ -4412,6 +4412,8 @@ public static class CSharpSemanticExtractor
         properties[$"{prefix}SymbolDisplayName"] = identity.DisplayName;
         properties[$"{prefix}SymbolAssemblyName"] = identity.AssemblyName ?? string.Empty;
         properties[$"{prefix}SymbolAssemblyVersion"] = identity.AssemblyVersion ?? string.Empty;
+        properties[$"{prefix}SymbolAssemblyPublicKeyToken"] = symbol?.ContainingAssembly is { } assembly
+            ? Convert.ToHexStringLower(assembly.Identity.PublicKeyToken.ToArray()) : string.Empty;
         properties[$"{prefix}ContainingSymbolId"] = identity.ContainingSymbolId ?? string.Empty;
         return properties;
     }
