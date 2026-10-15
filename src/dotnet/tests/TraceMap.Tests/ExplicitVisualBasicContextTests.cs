@@ -19,8 +19,14 @@ public sealed class ExplicitVisualBasicContextTests
     [InlineData("virtual", false)]
     [InlineData("duplicate", false)]
     [InlineData("missing-proof", false)]
+    [InlineData("metadata-only-exact", false)]
+    [InlineData("metadata-only-hash-mismatch", false)]
+    [InlineData("metadata-only-missing-proof", false)]
+    [InlineData("metadata-only-duplicate", false)]
     public async Task Explicit_reference_bytes_connect_external_wrapper_without_promoting_provenance(string mode, bool expected)
     {
+        var metadataOnly = mode.StartsWith("metadata-only-", StringComparison.Ordinal);
+        if (metadataOnly) mode = mode["metadata-only-".Length..];
         using var temp = new TempDirectory(OperatingSystem.IsMacOS() ? "/private/tmp" : null);
         var repo = Path.Combine(temp.Path, "repo");
         Directory.CreateDirectory(repo);
@@ -99,7 +105,7 @@ public sealed class ExplicitVisualBasicContextTests
             sources = new[] { new { path = callerPath, sha256 = Hash(Path.Combine(repo, callerPath)) } },
             references = referencePaths.Append(library).Distinct().Select(path => new { path, sha256 = Hash(path) }).ToArray()
         }));
-        var scan = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "scan"), CompiledInputPaths: [library], IlBodyEvidence: true)
+        var scan = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "scan"), CompiledInputPaths: [library], IlBodyEvidence: !metadataOnly)
             { VisualBasicCompilationContextPath = context });
         var call = Assert.Single(scan.Facts, fact => fact.FactType == FactTypes.CallEdge
             && fact.Properties.GetValueOrDefault("explicitReferenceSha256") == Hash(library));
@@ -110,7 +116,7 @@ public sealed class ExplicitVisualBasicContextTests
             Assert.Contains("version:7:2.0.0.0", target.TargetSymbol);
             Assert.Contains("&", target.TargetSymbol);
         }
-        Assert.Contains(scan.Facts, fact => fact.FactType == FactTypes.ManagedIlCallObserved);
+        Assert.Equal(!metadataOnly, scan.Facts.Any(fact => fact.FactType == FactTypes.ManagedIlCallObserved));
         Assert.DoesNotContain(scan.Facts, fact => fact.FactType == FactTypes.DatabaseOperationCandidate);
         var retained = scan.Facts.Select(fact => {
             if (fact.FactId != call.FactId || mode is not ("hash-mismatch" or "identity-mismatch" or "missing-proof")) return fact;
@@ -130,14 +136,30 @@ public sealed class ExplicitVisualBasicContextTests
         await CombinedIndexBuilder.CombineAsync(new CombineOptions([index], combined, ["retained"]));
         var root = Assert.Single(scan.Facts, fact => fact.FactType == FactTypes.MethodDeclared
             && (mode == "page-chain" ? fact.Properties.GetValueOrDefault("name") == "Click" : fact.ContractElement == "Run"));
+        RetainedMethodGraph? observed = null;
         var result = await CombinedDependencyPathReporter.BuildReportAsync(new(combined, Path.Combine(temp.Path, "paths"),
-            FromSymbol: root.TargetSymbol, ToSurface: "database-operations", MaxDepth: 16) { ExactFromSymbol = true });
+            FromSymbol: root.TargetSymbol, ToSurface: "database-operations", MaxDepth: 16)
+            { ExactFromSymbol = true, MethodGraphObserver = metadataOnly ? graph => observed = graph : null });
         Assert.Equal(expected, result.Paths.Count > 0);
+        if (metadataOnly)
+        {
+            Assert.NotNull(observed);
+            Assert.Equal(mode == "exact", observed.Edges.Any(edge => edge.EdgeKind == "explicit-reference-member-candidate"));
+            Assert.All(observed.Edges.Where(edge => edge.EdgeKind == "explicit-reference-member-candidate"),
+                edge => Assert.Equal(EvidenceTiers.Tier3SyntaxOrTextual, edge.EvidenceTier));
+        }
+        observed = null;
         var bounded = await CombinedDependencyPathReporter.BuildBoundedCombinedIndexReportWithTraversalAsync(
             new(combined, Path.Combine(temp.Path, "bounded-paths"), FromSymbol: root.TargetSymbol,
-                ToSurface: "database-operations", MaxDepth: 16) { ExactFromSymbol = true },
+                ToSurface: "database-operations", MaxDepth: 16)
+                { ExactFromSymbol = true, MethodGraphObserver = metadataOnly ? graph => observed = graph : null },
             new ReportInputBudget(250_000, 250_000, 128 * 1024 * 1024));
         Assert.Equal(expected, bounded.Report.Paths.Count > 0);
+        if (metadataOnly)
+        {
+            Assert.NotNull(observed);
+            Assert.Equal(mode == "exact", observed.Edges.Any(edge => edge.EdgeKind == "explicit-reference-member-candidate"));
+        }
         if (mode == "page-chain")
         {
             Assert.Contains(bounded.Report.Paths, path => path.Nodes.Last().SurfaceName == "DbCommand.ExecuteScalar"

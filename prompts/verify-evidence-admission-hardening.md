@@ -7,10 +7,14 @@ push or merge during this verification.
 ## Revision
 
 Fetch `origin/codex/evidence-admission-hardening`. Verify that the selected branch
-contains implementation commit `af2d00ff01f41501f51e892ab1f41e9620350913`.
+contains the accepted pre-PR code commit `5b2a4d32a8e6538cd5169fc6e4abfa404250d0f3`.
+Select the fetched branch tip, including subsequent review fixes, rather than
+checking out that ancestor. The original database-admission implementation was
+`af2d00ff01f41501f51e892ab1f41e9620350913`; it remains part of the history.
 Record the actual checked-out HEAD and compare the implementation with its base,
 `dbdd9241e48550dfdf779e7842d04c1912d659eb` (merged dev baseline).
-Later prompt-only commits do not change implementation acceptance. Preserve local
+Read the final receipts in `.kiro/specs/evidence-admission-regression-lock/implementation-state.md`;
+do not attribute an earlier full-suite result to a later code fix. Preserve local
 changes; if checkout would overwrite them, stop and report the conflict.
 
 The Windows follow-up fixes canonical LF Markdown hashing, refusal of redacted
@@ -78,6 +82,8 @@ candidate failing supports a regression. Both passing leaves the full-suite cras
 unresolved (including possible test interaction). None of these outcomes waives
 the full-suite gate. Do not kill all `testhost` processes on the machine.
 
-Do not rescan the private application. This branch hardens evidence admission;
-it does not change extraction or call-graph coverage and does not claim to resolve
-the previously reported 266 private-application analysis-gap facts.
+Do not rescan the private application during this public verification. The branch
+also contains separately tested extraction and call-graph fixes; verify their
+current versions from Models.cs and the path reporter when checking their scope.
+None of this establishes resolution of the previously reported 266 private
+application analysis-gap facts.

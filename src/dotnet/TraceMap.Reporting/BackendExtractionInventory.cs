@@ -36,7 +36,7 @@ public static class BackendExtractionInventoryBuilder
 
     // References retain full node evidence, including differing callsite/command-binding variants.
     // Do not collapse records by display name or procedure hash.
-    internal static BackendExtractionInventory Create(GroupedCompiledPathHandoff handoff)
+    internal static BackendExtractionInventory Create(GroupedCompiledPathHandoff handoff, bool legacyPresentation = false)
     {
         var connections = new Dictionary<string, List<int>>(StringComparer.Ordinal);
         var candidateVariants = handoff.Variants.Select(variant =>
@@ -77,10 +77,12 @@ public static class BackendExtractionInventoryBuilder
         var surface = handoff.Header.Query.ToSurface ?? "unspecified";
         return new(Rule, "retained-query-report-not-full-index", handoff.Header.ReportCoverage,
             handoff.Header.Summary.Truncated, handoff.Header.Gaps.Count, operations,
-            [surface is "database-api" or "sql-query"
+            [(surface is "database-api" or "sql-query") || (!legacyPresentation && surface is "database-operations" or "sql-persistence")
                 ? "Database-filtered query: HTTP coverage is not assessed. HTTP-only handlers may be excluded upstream; incidental retained HTTP records do not establish HTTP inventory coverage."
                 : "Query surface: " + surface + ". Only supplied retained evidence is assessed; other surface families may be excluded upstream.",
-             "Only database-api, sql-query and http-client surfaces retained by the supplied report are listed. Other provider/service families and operations outside this query may be absent.",
+             !legacyPresentation && handoff.DatabaseCoverageLimitations is not null
+                ? "Only database-api, sql-query, sql-persistence and http-client surfaces retained by the supplied report are listed. Other provider/service families and operations outside this query may be absent."
+                : "Only database-api, sql-query and http-client surfaces retained by the supplied report are listed. Other provider/service families and operations outside this query may be absent.",
              "Rows are distinct evidence records, not a count of unique business operations or procedures. Query roots are not verified UI entry points; inspect each ordered variant and its tiers.",
              "Found without a retained path does not mean unused. Connection evidence does not decide retain, retire or replace; human decisions remain undecided.",
              "Readable SQL, procedure definitions, secrets and HTTP payloads are not reconstructed. Missing-input categories are review obligations, not claims that such data is absent from the application.",

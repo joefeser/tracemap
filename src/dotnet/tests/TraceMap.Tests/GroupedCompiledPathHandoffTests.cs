@@ -10,13 +10,40 @@ public sealed class GroupedCompiledPathHandoffTests
     private static readonly string IndexHash = new('a', 64);
 
     [Fact]
+    public async Task Persistence_coverage_wording_is_correct_and_legacy_projection_remains_readable()
+    {
+        var report = Report();
+        var node = report.Paths[0].Nodes[0] with { SurfaceKind = "sql-persistence", SurfaceName = "persist" };
+        report = report with { Query = report.Query with { ToSurface = "database-operations" },
+            Paths = [report.Paths[0] with { Nodes = [node] }] };
+        var packet = GroupedCompiledPathHandoffBuilder.Create(report, IndexHash);
+        var backend = Assert.IsType<BackendExtractionInventory>(packet.BackendExtraction);
+        Assert.Single(backend.Operations, operation => operation.Family == "database");
+        Assert.Contains(backend.Limitations, text => text.Contains("sql-persistence", StringComparison.Ordinal));
+        Assert.Contains(backend.Limitations, text => text.StartsWith("Database-filtered query:", StringComparison.Ordinal));
+        var oldText = backend.Limitations.ToArray();
+        oldText[0] = "Query surface: database-operations. Only supplied retained evidence is assessed; other surface families may be excluded upstream.";
+        oldText[1] = "Only database-api, sql-query and http-client surfaces retained by the supplied report are listed. Other provider/service families and operations outside this query may be absent.";
+        var oldPacket = packet with { BackendExtraction = backend with { Limitations = oldText } };
+        Assert.NotNull(GroupedCompiledPathHandoffBuilder.Restore(oldPacket));
+        using var temp = new TempDirectory();
+        var output = await GroupedCompiledPathReportWriter.WriteAsync(oldPacket, temp.Path);
+        var html = await File.ReadAllTextAsync(output.HtmlPath);
+        Assert.Contains("Only database-api, sql-query, sql-persistence and http-client", html);
+        Assert.DoesNotContain(oldText[1], html);
+        oldText[1] = "Invented complete application coverage.";
+        Assert.Contains("BACKEND_EXTRACTION", Assert.Throws<InvalidDataException>(() =>
+            GroupedCompiledPathHandoffBuilder.Restore(oldPacket)).Message);
+    }
+
+    [Fact]
     public void Rehashed_database_nodes_require_provenance_in_paths_and_inventory()
     {
         var report = Report();
         var node = report.Paths[0].Nodes[0] with { DatabaseCallEvidence =
             TraceMap.Core.DatabaseCallEvidence.FromProperties(new Dictionary<string, string>()) };
         foreach (var invalid in new[] { node with { RuleId = null }, node with { EvidenceTier = "invented" },
-            node with { CommitSha = null }, node with { CommitSha = "not-a-commit" },
+            node with { CommitSha = null }, node with { CommitSha = "unknown" }, node with { CommitSha = "not-a-commit" },
             node with { SourceIndexId = "" }, node with { ScanId = null }, node with { FilePath = null },
             node with { StartLine = null }, node with { StartLine = 0 }, node with { EndLine = 3 },
             node with { StartLine = -1 } })
@@ -31,7 +58,8 @@ public sealed class GroupedCompiledPathHandoffTests
                     GroupedCompiledPathHandoffBuilder.Restore(packet)).Message);
             }
         }
-        foreach (var valid in new[] { node, node with { StartLine = -1, EndLine = -1, FilePath = "bin/Public.dll" } })
+        foreach (var valid in new[] { node, node with { CommitSha = new string('a', 64) },
+            node with { StartLine = -1, EndLine = -1, FilePath = "bin/Public.dll" } })
         {
             var changed = report with { Paths = [report.Paths[0] with { Nodes = [valid] }] };
             Assert.NotNull(GroupedCompiledPathHandoffBuilder.Restore(GroupedCompiledPathHandoffBuilder.Create(changed, IndexHash)));

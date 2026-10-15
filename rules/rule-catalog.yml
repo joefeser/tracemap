@@ -1644,6 +1644,17 @@ rules:
       - Redaction validation is conservative and may require category labels or reviewed claim metadata.
       - Rejection diagnostics include category and location only; they must not echo the unsafe value.
 
+  - id: vault-export.gap.redacted-evidence-location.v1
+    name: Retained redacted evidence location
+    description: Omits canonical absolute-path hash markers from vault navigation and records a partial-coverage gap.
+    evidenceTier: Tier4Unknown
+    emits:
+      - redacted evidence location gap
+    limitations:
+      - Only the exact lowercase sixteen-hex marker emitted by retained report writers is recognized.
+      - A marker supplies neither a repository-relative navigation target nor source-location proof.
+      - Malformed markers and genuine unprojected unsafe values remain rejected; gap identities hash only projected input.
+
   - id: vault-export.gap.hidden-safe-context-omitted.v1
     name: Vault export hidden safe-context limitation
     description: Records when hidden/local vault output keeps a bounded safe-context value that contains a sensitive word only for local navigation.
@@ -3040,6 +3051,7 @@ rules:
       - Semantic class declarations use typeKind and compiler-qualified target symbols rather than syntax kind and qualifiedName. The join accepts both shapes, stripping only the compiler global qualifier and preserving containing types and root namespaces. A usable declaration from a partial compilation does not erase diagnostics or promote the registration candidate beyond Tier3.
       - Registered user-control and master-page targets are repository-relative declarations; registered assembly controls require source-project assembly evidence and an exact namespace. Only the markup type-name segment uses ordinal case-insensitive matching, while preserving the canonical source type name. Multiple candidates, including case-only collisions, remain ambiguous even if one matches the tag exactly. Missing, dynamic, unsafe, malformed, conflicting, or out-of-scope targets remain explicit analysis gaps; DLL-only controls are not resolved by this rule.
       - ContentPlaceHolderID is a declared target candidate and is not proof that the referenced master page contains a compatible runtime placeholder.
+      - Registration composition uses the selected declaration's file, line, snippet hash and prefix; sharing a physical line cannot substitute a different registration or upgrade an App_Code candidate's tier.
       - Raw markup, page titles, source snippets, local absolute paths, URLs, configuration values, and unsafe expressions are omitted or hashed.
 
   - id: legacy.webforms.event-binding.v1
@@ -3958,6 +3970,7 @@ rules:
       - CompiledIlArtifactContext gap
     limitations:
       - Only explicit projectless VB contexts emit this reference-byte witness. Old scans without the witness cannot be joined by name, version, or inferred file identity.
+      - The source-call to metadata-declaration candidate does not require IL-body extraction. Without retained IL calls it supplies no downstream IL traversal or database-terminal claim.
       - From vb-semantic/0.10.3, the resolved metadata MethodDef token is decoded from the captured reference image rather than reconstructed from retargeted Roslyn parameter types. Only a single captured module with a matching module name and valid method token is supported; no companion module or installed assembly is substituted. This preserves encoded dependency versions, not runtime binding claims.
       - Requires exact full metadata identity and raw-file hash and exactly one matching method across retained inputs. Missing or ambiguous evidence produces no connection. Virtual, abstract, override and interface dispatch are excluded; no runtime receiver target is inferred.
       - Assemblies without TargetFrameworkAttribute retain the unknown target-framework identity. Exact byte equality is still required; this does not infer a framework version or relax source declaration reconciliation.

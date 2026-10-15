@@ -11,7 +11,7 @@ Build the test project and run the exact Compilation context and interaction
 gate command in `.github/workflows/vb-compilation-context-matrix.yml`, with its
 two-minute hang timeout. Run `LegacyWebFormsExtractorTests` as well. Report
 passed/failed/skipped counts. This change adds twelve semantic registration
-matrix cases. Confirm `legacy-webforms/0.13.11` in the new scan.
+matrix cases. Confirm `legacy-webforms/0.13.12` in the new scan.
 
 Reuse the already approved compilation context and inputs. If their hashes or
 application commit changed, stop and report the mismatch; do not silently

@@ -4,6 +4,51 @@ namespace TraceMap.Tests;
 
 public sealed class AppCodeRegistrationMatrixTests
 {
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public void Same_line_registrations_retain_the_exact_selected_registration(bool config, bool reverse)
+    {
+        using var temp = new TempDirectory();
+        void Write(string path, string source)
+        {
+            var full = Path.Combine(temp.Path, path);
+            Directory.CreateDirectory(Path.GetDirectoryName(full)!);
+            File.WriteAllText(full, source);
+        }
+        var app = config ? "<add tagPrefix=\"app\" namespace=\"AppControls\" />"
+            : "<%@ Register TagPrefix=\"app\" Namespace=\"AppControls\" %>";
+        var library = config ? "<add tagPrefix=\"lib\" namespace=\"LibraryControls\" assembly=\"PublicLibrary\" />"
+            : "<%@ Register TagPrefix=\"lib\" Namespace=\"LibraryControls\" Assembly=\"PublicLibrary\" %>";
+        var registrations = reverse ? library + app : app + library;
+        Write("web.config", config ? "<configuration><system.web><pages><controls>" + registrations
+            + "</controls></pages></system.web></configuration>" : "<configuration />");
+        Write("Page.aspx", "<%@ Page Language=\"VB\" Inherits=\"SamplePage\" %>" + (config ? "" : registrations)
+            + "\n<app:Widget ID=\"One\" runat=\"server\" />\n<lib:Widget ID=\"Two\" runat=\"server\" />");
+        Write("App_Code/Widget.vb", "Namespace AppControls\nPublic Class Widget\nEnd Class\nEnd Namespace");
+        Write("Library/Widget.cs", "namespace LibraryControls { public class Widget { } }");
+        Write("Library/Library.csproj", "<Project Sdk=\"Microsoft.NET.Sdk\"><PropertyGroup><TargetFramework>net10.0</TargetFramework>"
+            + "<AssemblyName>PublicLibrary</AssemblyName><RootNamespace></RootNamespace></PropertyGroup></Project>");
+        var manifest = new ScanManifest("same-line", "synthetic", null, "main", "abc123", "test/1.0",
+            DateTimeOffset.UnixEpoch, "Level3SyntaxAnalysis", "NotRun", [], [], [], []);
+        var inventory = FileInventory.Collect(temp.Path);
+        var types = VisualBasicSyntaxExtractor.Extract(temp.Path, manifest, inventory, null)
+            .Concat(CSharpSyntaxExtractor.Extract(temp.Path, manifest, inventory)).ToArray();
+        var facts = LegacyWebFormsExtractor.Extract(temp.Path, manifest, inventory, types);
+        foreach (var (prefix, kind, tier) in new[] {
+            ("app", "UsesRegisteredAppCodeControlCandidate", EvidenceTiers.Tier3SyntaxOrTextual),
+            ("lib", "UsesRegisteredAssemblyControl", EvidenceTiers.Tier2Structural) })
+        {
+            var relation = Assert.Single(facts, f => f.ContractElement == kind);
+            Assert.Equal(tier, relation.EvidenceTier);
+            var registration = Assert.Single(facts, f => f.FactType == FactTypes.WebFormsUserControlRegistered
+                && f.Properties.GetValueOrDefault("tagPrefix") == prefix);
+            Assert.Contains(registration.FactId, relation.Properties["supportingFactIds"].Split(','));
+        }
+    }
+
     public static IEnumerable<object[]> InteractionCases()
     {
         foreach (var receiver in new[] { "Widget", "New Widget()", "GetWidget()" })

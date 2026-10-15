@@ -1,5 +1,17 @@
 # TraceMap Validation Guide
 
+PR #872 review correction: legacy-webforms/0.13.12 retains the exact selected
+registration hash when declarations share one line; App_Code candidates remain
+Tier3 and assembly registrations remain structurally scoped. This extractor fix
+requires a fresh scan. Path algorithm 1.9 constructs explicit-reference candidates
+from source-call and metadata declarations even without IL rows; existing retained
+witnesses can be requeried, but no IL observations or database terminal are invented.
+Run AppCodeRegistrationMatrixTests, ExplicitVisualBasicContextTests and their
+adjacent legacy/source-metadata suites. VaultExportTests pins canonical projected
+path markers as Tier4 gaps, never navigation; genuinely unsafe artifact paths and
+malformed markers remain rejected. GroupedCompiledPathHandoffTests pins corrected
+persistence wording, exact legacy projection readback and unknown-commit refusal.
+
 The evidence-admission debugging ledger is
 `docs/validation/EVIDENCE_ADMISSION_DEBUGGING_LEDGER.md`. Run
 `HttpEntryBoundaryRegressionTests` before reviewing this branch: it exercises

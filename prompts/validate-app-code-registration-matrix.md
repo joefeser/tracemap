@@ -8,7 +8,7 @@ four candidate operation groups, five parameter facts). Ask only if ambiguous.
 Build once into a NEW isolated tool directory outside the source/scan/checkout
 roots; preserve old outputs. Use the new binary explicitly and create a new
 preflight/run with the same source configuration. Never resume old tool receipts.
-Confirm `legacy-webforms/0.13.10`; VB syntax remains `vb-syntax/0.4.17`.
+Confirm `legacy-webforms/0.13.12`; VB syntax remains `vb-syntax/0.4.18`.
 Do not run the full test suite, execute application methods, connect to SQL/HTTP,
 apply transforms, manufacture a project file, or load unapproved assemblies.
 

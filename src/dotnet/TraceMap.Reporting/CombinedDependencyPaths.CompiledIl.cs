@@ -95,6 +95,12 @@ public static partial class CombinedDependencyPathReporter
         graphStorage?.MarkObservationStage("compiled-publish-members");
         AddProjectlessPublishMemberCandidates(graph, facts, parents);
         graphStorage?.MarkObservationStage("compiled-method-index-and-il-edges");
+        var methods = FactsOfTypes(facts, FactTypes.ManagedMethodDeclared)
+            .Where(fact => !string.IsNullOrWhiteSpace(fact.TargetSymbol))
+            .ToArray();
+        // Explicit reference witnesses join source calls to metadata declarations;
+        // they remain useful when IL body extraction was not requested.
+        AddExplicitReferenceCandidates(graph, facts, methods);
         var ilCalls = FactsOfTypes(facts, FactTypes.ManagedIlCallObserved).ToArray();
         if (ilCalls.Length == 0)
             return;
@@ -103,10 +109,6 @@ public static partial class CombinedDependencyPathReporter
         var commandsByCall = FactsOfTypes(facts, FactTypes.ManagedIlDatabaseCommandCandidate)
             .GroupBy(fact => (fact.SourceIndexId, CallId: fact.Properties.GetValueOrDefault("ilCallFactId")))
             .ToDictionary(group => group.Key, group => group.ToArray());
-        var methods = FactsOfTypes(facts, FactTypes.ManagedMethodDeclared)
-            .Where(fact => !string.IsNullOrWhiteSpace(fact.TargetSymbol))
-            .ToArray();
-        AddExplicitReferenceCandidates(graph, facts, methods);
         var methodsByIdentity = methods
             .GroupBy(fact => (fact.SourceIndexId, fact.TargetSymbol!))
             .ToDictionary(group => group.Key, group => group.ToArray());

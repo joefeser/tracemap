@@ -28,7 +28,7 @@ private gap matches these supported forms.
    Using the same saved source configuration, create a new run/preflight and run
    ONE fresh scan to a new output directory. Do not reuse stale preflight or tool
    identity receipts. Confirm the runtime-inventory phase completes and extractor
-   versions `vb-syntax/0.4.17` and `legacy-webforms/0.13.9`. Never execute application
+   versions `vb-syntax/0.4.18` and `legacy-webforms/0.13.12`. Never execute application
    methods, SQL, HTTP requests, or apply configuration transforms. If build or
    scan fails, report the failure without repeated retries or broad test runs.
    A runtime-inventory failure again means no gap comparison is available.

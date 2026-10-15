@@ -19,3 +19,12 @@ No private artifacts or application code are committed. Framework dispatch is no
 a fabricated semantic call. The owner subsequently authorized a regular PR to dev
 after green validation, followed by the ACK review loop for up to six request
 rounds. Merge is not authorized.
+
+## PR #872 first review batch
+
+- [x] Reproduce metadata-only reference and same-line registration failures.
+- [x] Preserve Tier3 candidates and exact registration evidence across report readers.
+- [x] Repair retained export compatibility without admitting unsafe locations or unknown commit provenance.
+- [x] Align saved-query consumers and acceptance instructions with current contracts.
+- [x] Run the focused review matrix and adjacent compilation/HTTP/reconciliation gates.
+- [ ] Push the consolidated correction, settle each finding through ACK, and obtain current-head review/check readback.

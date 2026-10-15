@@ -383,6 +383,7 @@ public static partial class LegacyWebFormsExtractor
                     assemblyResolution?.TypeFactId,
                     assemblyResolution?.Registration.DeclarationFilePath,
                     assemblyResolution?.Registration.Line,
+                    assemblyResolution?.Registration.SnippetHash,
                     SafeIdentifier(attrs.GetValueOrDefault("CommandName")),
                     SafeIdentifier(attrs.GetValueOrDefault("ContentPlaceHolderID")),
                     dataSourceId,
@@ -1195,6 +1196,7 @@ public static partial class LegacyWebFormsExtractor
         AddOptional(properties, "registeredTargetSymbol", control.RegisteredTargetSymbol);
         AddOptional(properties, "registrationTypeFactId", control.RegistrationTypeFactId);
         AddOptional(properties, "registrationDeclarationFilePath", control.RegistrationDeclarationFilePath);
+        AddOptional(properties, "registrationSnippetHash", control.RegistrationSnippetHash);
         if (control.RegistrationDeclarationLine is not null)
         {
             properties["registrationDeclarationLine"] = control.RegistrationDeclarationLine.Value.ToString();
@@ -1300,7 +1302,21 @@ public static partial class LegacyWebFormsExtractor
             {
                 var matchingRegistration = registrationFacts.FirstOrDefault(fact =>
                     fact.Evidence.FilePath == controlFact.Properties.GetValueOrDefault("registrationDeclarationFilePath")
-                    && fact.Evidence.StartLine.ToString() == controlFact.Properties.GetValueOrDefault("registrationDeclarationLine"));
+                    && fact.Evidence.StartLine.ToString() == controlFact.Properties.GetValueOrDefault("registrationDeclarationLine")
+                    && fact.Evidence.SnippetHash == controlFact.Properties.GetValueOrDefault("registrationSnippetHash")
+                    && string.Equals(fact.Properties.GetValueOrDefault("tagPrefix"),
+                        controlFact.Properties.GetValueOrDefault("controlPrefix"), StringComparison.OrdinalIgnoreCase));
+                if (matchingRegistration is null)
+                {
+                    facts.Add(FactFactory.Create(manifest, FactTypes.AnalysisGap, RuleIds.LegacyWebFormsComposition,
+                        EvidenceTiers.Tier4Unknown, controlFact.Evidence, properties: new Dictionary<string, string>
+                        {
+                            ["gapKind"] = "UnresolvedWebFormsControlRegistration",
+                            ["coverageLabel"] = "reduced-static-webforms-composition",
+                            ["message"] = "Exact selected registration evidence was unavailable; no composition relationship was emitted."
+                        }));
+                    continue;
+                }
                 facts.Add(CreateCompositionFact(
                     manifest,
                     controlFact.Evidence.FilePath,
@@ -4847,6 +4863,7 @@ public static partial class LegacyWebFormsExtractor
         string? RegistrationTypeFactId,
         string? RegistrationDeclarationFilePath,
         int? RegistrationDeclarationLine,
+        string? RegistrationSnippetHash,
         string? CommandName,
         string? ContentPlaceHolderId,
         string? DataSourceId,
