@@ -234,6 +234,7 @@ public static partial class CombinedDependencyPathReporter
                                'argumentTypeResolution', coalesce(cast(json_extract(properties_json, '$.argumentTypeResolution') as text), ''),
                                'assignedTo', coalesce(cast(json_extract(properties_json, '$.assignedTo') as text), ''),
                                'callKind', coalesce(cast(json_extract(properties_json, '$.callKind') as text), ''),
+                               'dispatchKind', coalesce(cast(json_extract(properties_json, '$.dispatchKind') as text), ''),
                                'calleeContainingType', coalesce(cast(json_extract(properties_json, '$.calleeContainingType') as text), ''),
                                'calleeAssemblyName', coalesce(cast(json_extract(properties_json, '$.calleeAssemblyName') as text), ''),
                                'calleeName', coalesce(cast(json_extract(properties_json, '$.calleeName') as text), ''),

@@ -398,7 +398,7 @@ public static partial class CombinedDependencyPathReporter
     private const int MaxTraversalDiagnosticShapes = 32;
     private const string Version = "1.0";
     private const string Algorithm = "bounded-bfs";
-    private const string AlgorithmVersion = "1.7";
+    private const string AlgorithmVersion = "1.8";
     private const int MarkdownPathLimit = 100;
     private const int MarkdownInventoryLimit = 200;
     private const string EndpointMatchRuleId = "combined.paths.endpoint-match.v1";
@@ -1181,7 +1181,7 @@ public static partial class CombinedDependencyPathReporter
                 SafePath(edge.FilePath),
                 edge.StartLine,
                 edge.EndLine,
-                edge.EdgeKind));
+                edge.EdgeKind) { SuppressTargetDispatch = factsById.GetValueOrDefault(edge.EdgeId)?.Properties.GetValueOrDefault("dispatchKind") == "explicit-nonvirtual" });
         }
 
         // A resumable or externally assembled index can retain the authoritative
@@ -1212,7 +1212,7 @@ public static partial class CombinedDependencyPathReporter
                 SafePath(fact.FilePath),
                 fact.StartLine,
                 fact.EndLine,
-                "calls"));
+                "calls") { SuppressTargetDispatch = fact.Properties.GetValueOrDefault("dispatchKind") == "explicit-nonvirtual" });
         }
 
         graphStorage?.MarkObservationStage("surface-projection");
@@ -4841,7 +4841,7 @@ public static partial class CombinedDependencyPathReporter
                         break;
                     }
                     work++;
-                    if (!TryAdvanceDispatchMode(current.DispatchMode, edge.EdgeKind, out var nextMode)) continue;
+                    if (!TryAdvanceDispatchMode(current.DispatchMode, edge, out var nextMode)) continue;
                     var next = new TerminalInventoryKey(current.RootNodeId, edge.ToNodeId, nextMode);
                     if (predecessors.ContainsKey(next)) continue;
                     if (queue.Count >= maxFrontier)
@@ -4982,7 +4982,7 @@ public static partial class CombinedDependencyPathReporter
                 if (work >= maxWork)
                     return new TerminalWitnessResult(null, work, true, false, current.NodeId);
                 work++;
-                if (!TryAdvanceDispatchMode(current.DispatchMode, edge.EdgeKind, out var nextMode)) continue;
+                if (!TryAdvanceDispatchMode(current.DispatchMode, edge, out var nextMode)) continue;
                 // The baseline bit is tracked only where it gates edges; mixed-mode
                 // key identity stays byte-identical to the scope-less prewalk.
                 var nextEntered = compiledOnly && (current.CompiledBaselineEntered || edge.EdgeKind != "legacy-root-selection");
@@ -5037,9 +5037,12 @@ public static partial class CombinedDependencyPathReporter
 
     private static bool TryAdvanceDispatchMode(
         DispatchTraversalMode current,
-        string edgeKind,
+        GraphEdge edge,
         out DispatchTraversalMode next)
     {
+        var edgeKind = edge.EdgeKind;
+        var nonvirtualTarget = (current & DispatchTraversalMode.NonvirtualTarget) != 0;
+        current &= ~DispatchTraversalMode.NonvirtualTarget;
         next = current;
         if (edgeKind is "implements" or "overrides")
         {
@@ -5048,9 +5051,11 @@ public static partial class CombinedDependencyPathReporter
         }
         else if (edgeKind is "interface-candidate" or "override-candidate")
         {
+            if (nonvirtualTarget) return false;
             if (current == DispatchTraversalMode.Relationship) return false;
             next = DispatchTraversalMode.Candidate;
         }
+        if (edge.SuppressTargetDispatch) next |= DispatchTraversalMode.NonvirtualTarget;
         return true;
     }
 
@@ -5063,6 +5068,8 @@ public static partial class CombinedDependencyPathReporter
 
         var isRelationshipEdge = edge.EdgeKind is "implements" or "overrides";
         var isCandidateEdge = edge.EdgeKind is "interface-candidate" or "override-candidate";
+        if (isCandidateEdge && graph.EdgesById[state.EdgeIds[^1]].SuppressTargetDispatch)
+            return true;
         if (!isRelationshipEdge && !isCandidateEdge)
         {
             return false;
@@ -7127,7 +7134,8 @@ public static partial class CombinedDependencyPathReporter
     {
         None,
         Relationship,
-        Candidate
+        Candidate,
+        NonvirtualTarget = 4
     }
 
     private sealed record TerminalWitnessKey(
@@ -7322,6 +7330,8 @@ public static partial class CombinedDependencyPathReporter
         string? CandidateBridgeKind = null,
         IReadOnlyList<string>? SupportingRelationshipIds = null)
     {
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public bool SuppressTargetDispatch { get; init; }
         public string? CompiledAttachmentLinkSha256 { get; init; }
         public CombinedPathEdge ToReportEdge()
         {
