@@ -240,7 +240,7 @@ public sealed class WebFormsNativeScaleTests(ITestOutputHelper output)
         {
             // Only the unretained synthetic CI fixture is disposable. An explicit
             // benchmark directory is retained, including failures, for inspection.
-            if (retained is null && Directory.Exists(root)) Directory.Delete(root, recursive: true);
+            if (retained is null) TempDirectory.DeleteTree(root);
         }
     }
 

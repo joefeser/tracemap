@@ -170,6 +170,7 @@ public static class GroupedCompiledPathHandoffBuilder
         {
             var node = Resolve(reference, handoff.Nodes, usedNodes, "node");
             if (node.DatabaseCallEvidence is { } evidence && !evidence.IsWellFormed()) throw Invalid("DATABASE_CALL_EVIDENCE");
+            if (node.DatabaseCallEvidence is not null && !HasDatabaseProvenance(node)) throw Invalid("DATABASE_NODE_PROVENANCE");
             return node;
         }
         CombinedPathEdge Edge(string reference) => Resolve(reference, handoff.Edges, usedEdges, "edge");
@@ -200,7 +201,11 @@ public static class GroupedCompiledPathHandoffBuilder
         if (handoff.DatabaseCoverageLimitations is not null && handoff.DatabaseCoverageLimitations != DatabaseCoverageLimitations) throw Invalid("DATABASE_COVERAGE_LIMITATIONS");
         if (handoff.BackendExtraction is not null &&
             HashJson(handoff.BackendExtraction, handoff.Limits.MaxOutputBytes, cancellationToken) !=
-            HashJson(BackendExtractionInventoryBuilder.Create(handoff), handoff.Limits.MaxOutputBytes, cancellationToken))
+            HashJson(BackendExtractionInventoryBuilder.Create(handoff), handoff.Limits.MaxOutputBytes, cancellationToken)
+            // Earlier v1 producers used the narrower presentation strings. Accept
+            // only that complete canonical projection, never arbitrary metadata.
+            && HashJson(handoff.BackendExtraction, handoff.Limits.MaxOutputBytes, cancellationToken) !=
+            HashJson(BackendExtractionInventoryBuilder.Create(handoff, legacyPresentation: true), handoff.Limits.MaxOutputBytes, cancellationToken))
             throw Invalid("BACKEND_EXTRACTION");
         return report;
     }
@@ -231,6 +236,16 @@ public static class GroupedCompiledPathHandoffBuilder
             limits.MaxRecords <= 0 || limits.MaxReferences <= 0) throw Invalid("LIMITS");
     }
     private static InvalidDataException Invalid(string category) => new("WEBFORMS_GROUPED_HANDOFF_" + category);
+
+    private static bool HasDatabaseProvenance(CombinedPathNode node) =>
+        !string.IsNullOrWhiteSpace(node.RuleId)
+        && !string.IsNullOrWhiteSpace(node.SourceIndexId)
+        && !string.IsNullOrWhiteSpace(node.ScanId)
+        && !string.IsNullOrWhiteSpace(node.FilePath)
+        && node.EvidenceTier is "Tier1Semantic" or "Tier2Structural" or "Tier3SyntaxOrTextual" or "Tier4Unknown"
+        && node.CommitSha is { Length: 40 or 64 } sha && sha.All(char.IsAsciiHexDigit)
+        && (node.StartLine is > 0 && node.EndLine >= node.StartLine
+            || node.StartLine == -1 && node.EndLine == -1);
 
     private sealed class HashLimitStream(long maximumBytes, CancellationToken cancellationToken) : Stream
     {

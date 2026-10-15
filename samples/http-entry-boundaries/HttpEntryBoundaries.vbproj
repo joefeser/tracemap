@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net48</TargetFramework>
+    <RootNamespace>HttpEntrySamples</RootNamespace>
+    <OptionStrict>On</OptionStrict>
+    <Deterministic>true</Deterministic>
+    <!-- Keep the standard VB reference closure for WithEvents on every OS. -->
+    <!-- This compile-only fixture does not use the VB My application template.
+         Pin the symbol before design-time compiler arguments are captured too. -->
+    <MyType>Empty</MyType>
+    <DefineConstants>$(DefineConstants),_MyType="Empty"</DefineConstants>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
+    <Reference Include="System.Web" />
+  </ItemGroup>
+</Project>

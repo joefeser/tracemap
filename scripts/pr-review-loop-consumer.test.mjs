@@ -7,11 +7,11 @@ import { execFileSync } from 'node:child_process'
 import test from 'node:test'
 
 // Explicit pinned installation; this test never installs software or calls GitHub.
-assert.ok(process.env.ACK_ROOT, 'Set ACK_ROOT to the verified ACK v0.5.5 release directory')
+assert.ok(process.env.ACK_ROOT, 'Set ACK_ROOT to the verified ACK v0.5.6 release directory')
 const cli = join(process.env.ACK_ROOT, 'dist/cli.js')
 const version = JSON.parse(execFileSync(process.execPath, [cli, 'version', '--json'], { encoding: 'utf8' }))
-assert.equal(version.version, '0.5.5')
-assert.equal(version.gitSha, 'ab39833')
+assert.equal(version.version, '0.5.6')
+assert.equal(version.gitSha, 'd8a78c7')
 assert.equal(version.distFresh, true)
 const { loadPacket } = await import(pathToFileURL(join(process.env.ACK_ROOT, 'dist/commands/pr-review-loop.js')))
 const repoRoot = fileURLToPath(new URL('../', import.meta.url))

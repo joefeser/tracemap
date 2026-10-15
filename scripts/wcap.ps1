@@ -27,7 +27,7 @@ try {
 } finally { $stream.Dispose() }
 # Receipt supplies a selector only; wcompare remains unadmitted saved readback.
 if ($receipt.schemaVersion -ne 'webforms-handler-requery.v1' -or
-    $receipt.query.toSurface -ne 'database-api' -or $receipt.query.surfaceName) {
+    $receipt.query.toSurface -notin @('database-api', 'database-operations') -or $receipt.query.surfaceName) {
     throw 'WEBFORMS_CAP_ALL_TERMINALS_REQUIRED'
 }
 $symbol = [string]$receipt.root.symbolId
@@ -38,5 +38,5 @@ if ($Unresolved) {
     return
 }
 $old = Join-Path ([IO.Path]::GetDirectoryName([string]$status.workbenchPath)) 'compiled/compiled-paths.handoff.local.json'
-Write-Output 'capCompare=original-vs-single-handler;all-database-api;no-scan;no-traversal'
+Write-Output "capCompare=original-vs-single-handler;surface=$($receipt.query.toSurface);no-scan;no-traversal"
 & (Join-Path $PSScriptRoot 'wcompare.ps1') -Historical $old -Current $current -Mixed $current -Handler $handler -Open:(!$NoOpen)

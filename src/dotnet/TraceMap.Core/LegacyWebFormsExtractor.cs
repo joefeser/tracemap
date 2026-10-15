@@ -354,9 +354,9 @@ public static partial class LegacyWebFormsExtractor
                     && item.TagName.Equals(controlType, StringComparison.OrdinalIgnoreCase)
                     && item.SourcePath is not null);
                 var assemblyResolutions = registrations
-                    .Where(item => item.RegistrationShape == "assembly-namespace"
+                    .Where(item => item.RegistrationShape is "assembly-namespace" or "app-code-namespace"
                         && item.TagPrefix.Equals(controlPrefix, StringComparison.OrdinalIgnoreCase))
-                    .SelectMany(item => assemblyRegistrationResolver.ResolveAll(item, controlType))
+                    .SelectMany(item => assemblyRegistrationResolver.ResolveAll(item, controlType, webApplicationRoot))
                     .GroupBy(item => $"{item.TargetSymbol}|{item.TypeFactId}", StringComparer.Ordinal)
                     .Select(group => group.First())
                     .ToArray();
@@ -383,6 +383,7 @@ public static partial class LegacyWebFormsExtractor
                     assemblyResolution?.TypeFactId,
                     assemblyResolution?.Registration.DeclarationFilePath,
                     assemblyResolution?.Registration.Line,
+                    assemblyResolution?.Registration.SnippetHash,
                     SafeIdentifier(attrs.GetValueOrDefault("CommandName")),
                     SafeIdentifier(attrs.GetValueOrDefault("ContentPlaceHolderID")),
                     dataSourceId,
@@ -406,10 +407,12 @@ public static partial class LegacyWebFormsExtractor
                     && !controlPrefix.Equals("html", StringComparison.OrdinalIgnoreCase))
                 {
                     var assemblyRegistrations = registrations
-                        .Where(item => item.RegistrationShape == "assembly-namespace"
+                        .Where(item => item.RegistrationShape is "assembly-namespace" or "app-code-namespace"
                             && item.TagPrefix.Equals(controlPrefix, StringComparison.OrdinalIgnoreCase))
                         .ToArray();
                     var assemblyRegistrationPresent = assemblyRegistrations.Length > 0;
+                    var appCodeRegistrationOnly = assemblyRegistrationPresent
+                        && assemblyRegistrations.All(item => item.RegistrationShape == "app-code-namespace");
                     var assemblyGapKind = assemblyResolutions.Length > 1
                         ? "AmbiguousWebFormsAssemblyControlRegistration"
                         : assemblyRegistrations
@@ -418,10 +421,12 @@ public static partial class LegacyWebFormsExtractor
                             .ThenBy(item => item, StringComparer.Ordinal)
                             .FirstOrDefault() ?? "UnresolvedWebFormsAssemblyControlRegistration";
                     gaps.Add(new WebFormsGap(
-                        assemblyRegistrationPresent
+                        appCodeRegistrationOnly ? "UnresolvedWebFormsControlRegistration" : assemblyRegistrationPresent
                             ? assemblyGapKind
                             : "UnresolvedWebFormsControlRegistration",
-                        assemblyRegistrationPresent
+                        appCodeRegistrationOnly
+                            ? "A namespace-only registration has no unique inventoried App_Code class in the selected web root; no source candidate or assembly identity was inferred."
+                            : assemblyRegistrationPresent
                             ? "A namespace/assembly registration could not be matched to one scoped syntax-visible type and project assembly; the categorical gap identifies the failed evidence boundary."
                             : "A prefixed server control has no supported static Register directive in this markup file.",
                         line,
@@ -435,7 +440,8 @@ public static partial class LegacyWebFormsExtractor
                             ["registrationNamespace"] = assemblyRegistrations.Select(item => item.NamespaceName).Where(value => value is not null).Distinct(StringComparer.Ordinal).Count() == 1
                                 ? assemblyRegistrations.Select(item => item.NamespaceName).First(value => value is not null)!
                                 : string.Empty,
-                            ["registrationState"] = assemblyRegistrationPresent ? assemblyGapKind : "register-directive-unavailable"
+                            ["registrationState"] = appCodeRegistrationOnly ? "app-code-type-not-unique-or-unavailable"
+                                : assemblyRegistrationPresent ? assemblyGapKind : "register-directive-unavailable"
                         }));
                 }
                 foreach (var (name, value) in attrs.OrderBy(pair => pair.Key, StringComparer.Ordinal))
@@ -1190,6 +1196,7 @@ public static partial class LegacyWebFormsExtractor
         AddOptional(properties, "registeredTargetSymbol", control.RegisteredTargetSymbol);
         AddOptional(properties, "registrationTypeFactId", control.RegistrationTypeFactId);
         AddOptional(properties, "registrationDeclarationFilePath", control.RegistrationDeclarationFilePath);
+        AddOptional(properties, "registrationSnippetHash", control.RegistrationSnippetHash);
         if (control.RegistrationDeclarationLine is not null)
         {
             properties["registrationDeclarationLine"] = control.RegistrationDeclarationLine.Value.ToString();
@@ -1212,7 +1219,7 @@ public static partial class LegacyWebFormsExtractor
     {
         var surfaceIdentity = SurfaceIdentity(page.FilePath);
         var registrationIdentity = $"webforms-registration:{FactFactory.Hash($"{surfaceIdentity}|{registration.DeclarationFilePath}|{registration.TagPrefix}|{registration.TagName}|{registration.NamespaceName}|{registration.AssemblyName}|{registration.Line}", 24)}";
-        var supportedShape = registration.SourcePath is not null || registration.RegistrationShape == "assembly-namespace";
+        var supportedShape = registration.SourcePath is not null || registration.RegistrationShape is "assembly-namespace" or "app-code-namespace";
         var properties = new SortedDictionary<string, string>(StringComparer.Ordinal)
         {
             ["coverageLabel"] = supportedShape ? "bounded-static-webforms-composition" : "reduced-static-webforms-composition",
@@ -1295,12 +1302,27 @@ public static partial class LegacyWebFormsExtractor
             {
                 var matchingRegistration = registrationFacts.FirstOrDefault(fact =>
                     fact.Evidence.FilePath == controlFact.Properties.GetValueOrDefault("registrationDeclarationFilePath")
-                    && fact.Evidence.StartLine.ToString() == controlFact.Properties.GetValueOrDefault("registrationDeclarationLine"));
+                    && fact.Evidence.StartLine.ToString() == controlFact.Properties.GetValueOrDefault("registrationDeclarationLine")
+                    && fact.Evidence.SnippetHash == controlFact.Properties.GetValueOrDefault("registrationSnippetHash")
+                    && string.Equals(fact.Properties.GetValueOrDefault("tagPrefix"),
+                        controlFact.Properties.GetValueOrDefault("controlPrefix"), StringComparison.OrdinalIgnoreCase));
+                if (matchingRegistration is null)
+                {
+                    facts.Add(FactFactory.Create(manifest, FactTypes.AnalysisGap, RuleIds.LegacyWebFormsComposition,
+                        EvidenceTiers.Tier4Unknown, controlFact.Evidence, properties: new Dictionary<string, string>
+                        {
+                            ["gapKind"] = "UnresolvedWebFormsControlRegistration",
+                            ["coverageLabel"] = "reduced-static-webforms-composition",
+                            ["message"] = "Exact selected registration evidence was unavailable; no composition relationship was emitted."
+                        }));
+                    continue;
+                }
                 facts.Add(CreateCompositionFact(
                     manifest,
                     controlFact.Evidence.FilePath,
                     controlFact.Evidence.StartLine,
-                    "UsesRegisteredAssemblyControl",
+                    matchingRegistration?.Properties.GetValueOrDefault("registrationShape") == "app-code-namespace"
+                        ? "UsesRegisteredAppCodeControlCandidate" : "UsesRegisteredAssemblyControl",
                     controlFact.TargetSymbol ?? sourceSurfaceIdentity,
                     registeredTargetSymbol,
                     null,
@@ -1352,7 +1374,7 @@ public static partial class LegacyWebFormsExtractor
             manifest,
             FactTypes.WebFormsCompositionDeclared,
             RuleIds.LegacyWebFormsComposition,
-            EvidenceTiers.Tier2Structural,
+            relationshipKind == "UsesRegisteredAppCodeControlCandidate" ? EvidenceTiers.Tier3SyntaxOrTextual : EvidenceTiers.Tier2Structural,
             new EvidenceSpan(filePath, line, line, null, "LegacyWebFormsExtractor", ScannerVersions.LegacyWebFormsExtractor),
             sourceSymbol: sourceIdentity,
             targetSymbol: targetIdentity,
@@ -1584,7 +1606,10 @@ public static partial class LegacyWebFormsExtractor
 
             var span = condition.SyntaxTree.GetLineSpan(condition.Span);
             var lineNumber = span.StartLinePosition.Line + 1;
-            if (isUnqualified && HasVisualBasicIsPostBackShadow(method.Declaration))
+            if (isUnqualified && (HasVisualBasicIsPostBackShadow(method.Declaration)
+                || (condition.DescendantNodesAndSelf().OfType<VBSyntax.IdentifierNameSyntax>()
+                    .Any(identifier => identifier.Identifier.ValueText.Equals("Page", StringComparison.OrdinalIgnoreCase))
+                    && HasVisualBasicIsPostBackShadow(method.Declaration, "Page"))))
             {
                 facts.Add(CreateGap(manifest, method.FilePath, lineNumber, "AmbiguousWebFormsIsPostBackReceiver", "A VB local, parameter, or containing-type member shadows unqualified IsPostBack; TraceMap did not treat the condition as Page lifecycle evidence."));
                 continue;
@@ -1622,21 +1647,57 @@ public static partial class LegacyWebFormsExtractor
     {
         isNegative = false;
         isUnqualified = false;
-        expression = expression is VBSyntax.ParenthesizedExpressionSyntax parenthesized
-            ? parenthesized.Expression
-            : expression;
-        if (expression is VBSyntax.UnaryExpressionSyntax unary && unary.IsKind(VB.SyntaxKind.NotExpression))
+        if (expression.ContainsDiagnostics) return false;
+        // Only Boolean literal equality/inequality and Not are transparent.
+        // Do not infer a branch from compound conditions or arbitrary values.
+        for (var depth = 0; depth < 32; depth++)
         {
-            isNegative = true;
-            expression = unary.Operand is VBSyntax.ParenthesizedExpressionSyntax operandParenthesized
-                ? operandParenthesized.Expression
-                : unary.Operand;
+            if (expression is VBSyntax.ParenthesizedExpressionSyntax parenthesized)
+            {
+                expression = parenthesized.Expression;
+                continue;
+            }
+            if (expression is VBSyntax.UnaryExpressionSyntax unary && unary.IsKind(VB.SyntaxKind.NotExpression))
+            {
+                isNegative = !isNegative;
+                expression = unary.Operand;
+                continue;
+            }
+            if (expression is VBSyntax.BinaryExpressionSyntax binary
+                && (binary.IsKind(VB.SyntaxKind.EqualsExpression) || binary.IsKind(VB.SyntaxKind.NotEqualsExpression)))
+            {
+                var literal = binary.Right as VBSyntax.LiteralExpressionSyntax;
+                var operand = binary.Left;
+                if (literal is null)
+                {
+                    literal = binary.Left as VBSyntax.LiteralExpressionSyntax;
+                    operand = binary.Right;
+                }
+                if (literal is null || !(literal.IsKind(VB.SyntaxKind.TrueLiteralExpression)
+                    || literal.IsKind(VB.SyntaxKind.FalseLiteralExpression))) return false;
+                isNegative ^= literal.IsKind(VB.SyntaxKind.FalseLiteralExpression)
+                    ^ binary.IsKind(VB.SyntaxKind.NotEqualsExpression);
+                expression = operand;
+                continue;
+            }
+            break;
         }
 
         if (expression is VBSyntax.IdentifierNameSyntax identifier
             && identifier.Identifier.ValueText.Equals("IsPostBack", StringComparison.OrdinalIgnoreCase))
         {
             isUnqualified = true;
+            return true;
+        }
+
+        if (expression is VBSyntax.MemberAccessExpressionSyntax
+            {
+                Expression: VBSyntax.IdentifierNameSyntax receiver,
+                Name: VBSyntax.IdentifierNameSyntax pageMember
+            } && receiver.Identifier.ValueText.Equals("Page", StringComparison.OrdinalIgnoreCase)
+              && pageMember.Identifier.ValueText.Equals("IsPostBack", StringComparison.OrdinalIgnoreCase))
+        {
+            isUnqualified = true; // Require local/member shadow checks for Page.
             return true;
         }
 
@@ -1647,9 +1708,9 @@ public static partial class LegacyWebFormsExtractor
         } && member.Identifier.ValueText.Equals("IsPostBack", StringComparison.OrdinalIgnoreCase);
     }
 
-    private static bool HasVisualBasicIsPostBackShadow(SyntaxNode methodDeclaration)
+    private static bool HasVisualBasicIsPostBackShadow(SyntaxNode methodDeclaration, string shadowName = "IsPostBack")
     {
-        static bool IsPostBack(string name) => name.Equals("IsPostBack", StringComparison.OrdinalIgnoreCase);
+        bool IsPostBack(string name) => name.Equals(shadowName, StringComparison.OrdinalIgnoreCase);
 
         if (methodDeclaration is VBSyntax.MethodBlockBaseSyntax method
             && method.BlockStatement is VBSyntax.MethodStatementSyntax statement
@@ -2720,6 +2781,13 @@ public static partial class LegacyWebFormsExtractor
     private static string? WebFormsDeclarationQualifiedName(CodeFact fact)
     {
         var qualifiedName = fact.Properties.GetValueOrDefault("qualifiedName") ?? fact.TargetSymbol;
+        if (fact.EvidenceTier == EvidenceTiers.Tier1Semantic)
+        {
+            // Compiler qualification is not part of a markup identifier. Preserve
+            // actual containing types (including repeated names) and root namespaces.
+            return qualifiedName?.StartsWith("Global.", StringComparison.Ordinal) == true ? qualifiedName[7..]
+                : qualifiedName?.StartsWith("global::", StringComparison.Ordinal) == true ? qualifiedName[8..] : qualifiedName;
+        }
         var name = fact.Properties.GetValueOrDefault("name");
         if (string.IsNullOrWhiteSpace(qualifiedName) || string.IsNullOrWhiteSpace(name))
         {
@@ -4225,7 +4293,8 @@ public static partial class LegacyWebFormsExtractor
                     markupFilePath,
                     "markup-directive",
                     LineAt(source, match.Index),
-                    FactFactory.Hash(match.Value, 32));
+                    FactFactory.Hash(match.Value, 32),
+                    !attributes.ContainsKey("Src") && !attributes.ContainsKey("Assembly"));
             })
             .OrderBy(item => item.Line)
             .ThenBy(item => item.TagPrefix, StringComparer.Ordinal)
@@ -4303,7 +4372,8 @@ public static partial class LegacyWebFormsExtractor
                         config.RelativePath,
                         "configuration",
                         line,
-                        FactFactory.Hash(element.ToString(SaveOptions.DisableFormatting), 32)));
+                        FactFactory.Hash(element.ToString(SaveOptions.DisableFormatting), 32),
+                        ConfigAttribute(element, "src") is null && ConfigAttribute(element, "assembly") is null));
                 }
             }
             catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or XmlException)
@@ -4793,6 +4863,7 @@ public static partial class LegacyWebFormsExtractor
         string? RegistrationTypeFactId,
         string? RegistrationDeclarationFilePath,
         int? RegistrationDeclarationLine,
+        string? RegistrationSnippetHash,
         string? CommandName,
         string? ContentPlaceHolderId,
         string? DataSourceId,
@@ -4832,13 +4903,15 @@ public static partial class LegacyWebFormsExtractor
         string DeclarationFilePath,
         string DeclarationKind,
         int Line,
-        string? SnippetHash)
+        string? SnippetHash,
+        bool NamespaceOnly = false)
     {
         public string RegistrationShape => SourceReference is not null
             ? "src"
             : NamespaceName is not null && AssemblyName is not null
                 ? "assembly-namespace"
-                : "unsupported";
+                : NamespaceOnly && NamespaceName is not null && TagPrefix != "unknown"
+                    ? "app-code-namespace" : "unsupported";
     }
 
     private sealed record InventoryPathIndex(
@@ -4852,7 +4925,8 @@ public static partial class LegacyWebFormsExtractor
 
     private sealed class WebFormsAssemblyRegistrationResolver(
         IReadOnlyList<WebFormsAssemblyTypeCandidate> candidates,
-        IReadOnlySet<string> projectAssemblyNames)
+        IReadOnlySet<string> projectAssemblyNames,
+        IReadOnlyList<CodeFact> appCodeTypes)
     {
         public static WebFormsAssemblyRegistrationResolver Create(
             string repoPath,
@@ -4865,8 +4939,11 @@ public static partial class LegacyWebFormsExtractor
                 .Where(item => item is not null)
                 .Select(item => item!)
                 .ToArray();
-            var candidates = existingFacts
-                .Where(fact => fact.FactType == FactTypes.TypeDeclared)
+            var inventoriedSources = inventory.Where(file => file.RelativePath.EndsWith(".vb", StringComparison.OrdinalIgnoreCase)
+                    || file.RelativePath.EndsWith(".cs", StringComparison.OrdinalIgnoreCase))
+                .Select(file => file.RelativePath).ToHashSet(StringComparer.Ordinal);
+            var declaredTypes = existingFacts.Where(fact => fact.FactType == FactTypes.TypeDeclared).ToArray();
+            var candidates = declaredTypes
                 .Select(fact =>
                 {
                     var qualifiedName = fact.Properties.GetValueOrDefault("qualifiedName");
@@ -4895,11 +4972,29 @@ public static partial class LegacyWebFormsExtractor
                 .ToArray();
             return new WebFormsAssemblyRegistrationResolver(
                 candidates,
-                projects.Select(item => item.AssemblyName).ToHashSet(StringComparer.OrdinalIgnoreCase));
+                projects.Select(item => item.AssemblyName).ToHashSet(StringComparer.OrdinalIgnoreCase),
+                declaredTypes.Where(fact => fact.EvidenceTier is EvidenceTiers.Tier1Semantic or EvidenceTiers.Tier3SyntaxOrTextual
+                    && inventoriedSources.Contains(fact.Evidence.FilePath)
+                    && string.Equals(fact.Properties.GetValueOrDefault("kind")
+                        ?? fact.Properties.GetValueOrDefault("typeKind"), "class", StringComparison.OrdinalIgnoreCase))
+                    .ToArray());
         }
 
-        public IReadOnlyList<WebFormsAssemblyControlResolution> ResolveAll(WebFormsUserControlRegistration registration, string controlType)
+        public IReadOnlyList<WebFormsAssemblyControlResolution> ResolveAll(WebFormsUserControlRegistration registration, string controlType, string webRoot)
         {
+            if (registration.RegistrationShape == "app-code-namespace")
+            {
+                var prefix = webRoot == "." ? "App_Code/" : webRoot + "/App_Code/";
+                return appCodeTypes.Where(fact => fact.Evidence.FilePath.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)
+                        && fact.Properties.GetValueOrDefault("namespace") == registration.NamespaceName
+                        && AppCodeQualifiedName(fact) is { } name
+                        && MatchesMarkupType(name, registration.NamespaceName!, controlType))
+                    .GroupBy(fact => fact.FactId, StringComparer.Ordinal)
+                    .Select(group => group.First())
+                    .OrderBy(fact => fact.FactId, StringComparer.Ordinal)
+                    .Select(fact => new WebFormsAssemblyControlResolution(registration,
+                        AppCodeQualifiedName(fact)!, fact.FactId)).ToArray();
+            }
             if (registration.NamespaceName is null || registration.AssemblyName is null)
             {
                 return [];
@@ -4931,6 +5026,15 @@ public static partial class LegacyWebFormsExtractor
                 && MatchesMarkupType(item.QualifiedName, registration.NamespaceName, controlType))
                     ? "AmbiguousWebFormsAssemblyControlRegistration"
                     : "WebFormsAssemblyTypeUnavailable";
+        }
+
+        private static string? AppCodeQualifiedName(CodeFact fact)
+        {
+            if (fact.Properties.GetValueOrDefault("qualifiedName") is { } syntaxName) return syntaxName;
+            // Preserve the compiler's containing-type and root-namespace identity.
+            // Rebuilding namespace + short name would incorrectly admit nested types.
+            if (fact.EvidenceTier != EvidenceTiers.Tier1Semantic || fact.TargetSymbol is null) return null;
+            return WebFormsDeclarationQualifiedName(fact);
         }
 
         private static bool MatchesMarkupType(string qualifiedName, string namespaceName, string controlType)

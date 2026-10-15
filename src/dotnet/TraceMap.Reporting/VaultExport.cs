@@ -169,6 +169,7 @@ public static class VaultExporter
     private const string HiddenOmittedRuleId = "vault-export.gap.hidden-evidence-omitted.v1";
     private const string UnsafeSymbolRuleId = "vault-export.gap.unsafe-symbol-omitted.v1";
     private const string HiddenSafeContextRuleId = "vault-export.gap.hidden-safe-context-omitted.v1";
+    private const string RedactedLocationRuleId = "vault-export.gap.redacted-evidence-location.v1";
     private const string UnsafeIdComponentRuleId = "vault-export.gap.unsafe-id-component-omitted.v1";
     private const string PropertyFlowTerminalContextRuleId = "vault-export.graph.property-flow-terminal-context.v1";
     private const string TerminalContextOmittedRuleId = "vault-export.gap.terminal-context-omitted.v1";
@@ -223,6 +224,7 @@ public static class VaultExporter
             HiddenOmittedRuleId,
             UnsafeSymbolRuleId,
             HiddenSafeContextRuleId,
+            RedactedLocationRuleId,
             UnsafeIdComponentRuleId,
             PropertyFlowTerminalContextRuleId,
             TerminalContextOmittedRuleId,
@@ -697,6 +699,7 @@ public static class VaultExporter
             throw new InvalidOperationException("InputClaimLevelHidden: requested claim-level filter cannot be satisfied by the supplied source claim catalog.");
         }
 
+        ApplyRedactedLocationSafety(nodes, edges, gaps);
         if (minimumClaimLevel == "hidden")
         {
             ApplyHiddenLocalSafety(nodes, edges, gaps);
@@ -826,6 +829,7 @@ public static class VaultExporter
         CancellationToken cancellationToken)
     {
         var compatibleCount = 0;
+        var redactedGaps = new RedactedLocationGapAccumulator(gaps);
         foreach (var path in paths.OrderBy(value => value, StringComparer.Ordinal))
         {
             byte[]? bytes = null;
@@ -851,6 +855,16 @@ public static class VaultExporter
                     "compatible",
                     report.Limitations ?? [],
                     SourceProvenance(report.Snapshot.Sources)));
+                var claim = InputClaimLevel(report.Snapshot.Sources, sourceClaims);
+                foreach (var surface in report.SelectedSurfaces.Where(surface => surface.FilePath is { } file && IsRedactedLocation(file)))
+                    redactedGaps.Add(surface.FilePath!, claim, surface.SupportingFactIds);
+                foreach (var row in report.Paths)
+                {
+                    foreach (var node in row.Nodes.Where(node => node.FilePath is { } file && IsRedactedLocation(file)))
+                        redactedGaps.Add(node.FilePath!, claim, [node.CombinedFactId]);
+                    foreach (var edge in row.Edges.Where(edge => edge.FilePath is { } file && IsRedactedLocation(file)))
+                        redactedGaps.Add(edge.FilePath!, claim, edge.SupportingFactIds);
+                }
                 foreach (var root in report.ReverseRoots)
                 {
                     var reportNodeId = StableNodeId("report", $"node/report/reverse/v1\u001f{root.RootId}");
@@ -900,6 +914,7 @@ public static class VaultExporter
             }
         }
 
+        redactedGaps.Complete();
         return compatibleCount;
     }
 
@@ -1920,7 +1935,8 @@ public static class VaultExporter
             ["claim_level"] = claimLevel,
             ["source_id"] = sourceId
         });
-        var withoutHash = $"{frontmatter}{body.TrimEnd()}\n";
+        // Hash and emit the same canonical bytes on Windows and Unix.
+        var withoutHash = $"{frontmatter}{body.TrimEnd()}\n".ReplaceLineEndings("\n");
         var hash = Hash(withoutHash, 64);
         return withoutHash.Replace("tracemap_content_sha256: \"\"", $"tracemap_content_sha256: \"{hash}\"", StringComparison.Ordinal);
     }
@@ -2142,6 +2158,9 @@ public static class VaultExporter
         }
 
         var normalized = NormalizeSafetyValue(context, value);
+        if (context is VaultValueContext.RepoRelativePath or VaultValueContext.EvidenceLocation
+            && IsRedactedLocation(normalized))
+            return new VaultSafetyDecision(VaultSafetyOutcome.OmitWithGap, "redacted-evidence-location");
         var category = UnsafeCategory(normalized);
         if (category is not null && category != SensitiveWordCategory)
         {
@@ -2332,7 +2351,9 @@ public static class VaultExporter
         }
 
         var text = value.Trim();
-        if (text.Contains("/Users/", StringComparison.Ordinal)
+        if (IsRedactedLocation(text)) return null;
+        if (text.StartsWith("absolute-path-hash:", StringComparison.OrdinalIgnoreCase)
+            || text.Contains("/Users/", StringComparison.Ordinal)
             || text.Contains("\\Users\\", StringComparison.Ordinal)
             || text.Contains("/home/", StringComparison.Ordinal)
             || text.Contains("file://", StringComparison.OrdinalIgnoreCase)
@@ -2403,6 +2424,79 @@ public static class VaultExporter
                 throw new InvalidOperationException($"VaultExportClosedVocabularyUnsafe: {category}.");
             }
         }
+    }
+
+    private static bool IsRedactedLocation(string value)
+    {
+        const string prefix = "absolute-path-hash:";
+        return value.Length == prefix.Length + 16 && value.StartsWith(prefix, StringComparison.Ordinal)
+            && value.Skip(prefix.Length).All(c => c is >= '0' and <= '9' or >= 'a' and <= 'f');
+    }
+
+    private static void ApplyRedactedLocationSafety(List<VaultGraphNode> nodes, List<VaultGraphEdge> edges, List<VaultGraphGap> gaps)
+    {
+        var redactedGaps = new RedactedLocationGapAccumulator(gaps);
+        IReadOnlyList<VaultEvidenceLocation>? Project(IReadOnlyList<VaultEvidenceLocation>? locations, string claim, IReadOnlyList<string> supportingFactIds)
+        {
+            if (locations is null) return null;
+            var redacted = locations.Where(location => IsRedactedLocation(location.FilePath.Trim())).ToArray();
+            if (redacted.Length == 0) return locations;
+            // Hash only the already projected input. Never recover or link the
+            // original absolute location, and never treat the marker as a path.
+            foreach (var location in redacted)
+            {
+                redactedGaps.Add(location.FilePath.Trim(), claim, supportingFactIds);
+            }
+            return locations.Except(redacted).ToArray();
+        }
+        for (var i = 0; i < nodes.Count; i++) nodes[i] = nodes[i] with
+            { EvidenceLocations = Project(nodes[i].EvidenceLocations, nodes[i].ClaimLevel, nodes[i].SupportingFactIds) };
+        for (var i = 0; i < edges.Count; i++) edges[i] = edges[i] with
+            { EvidenceLocations = Project(edges[i].EvidenceLocations, edges[i].ClaimLevel, edges[i].SupportingFactIds) };
+        redactedGaps.Complete();
+    }
+
+    private sealed class RedactedLocationGapAccumulator
+    {
+        private readonly List<VaultGraphGap> gaps;
+        private readonly Dictionary<string, (int Index, HashSet<string> Facts)> entries = new(StringComparer.Ordinal);
+
+        public RedactedLocationGapAccumulator(List<VaultGraphGap> gaps)
+        {
+            this.gaps = gaps;
+            for (var i = 0; i < gaps.Count; i++)
+                if (gaps[i].RuleId == RedactedLocationRuleId)
+                    entries[gaps[i].Id] = (i, (gaps[i].SupportingFactIds ?? []).ToHashSet(StringComparer.Ordinal));
+        }
+
+        public void Add(string marker, string claim, IEnumerable<string?> supportingFactIds)
+        {
+            var gap = RedactedLocationGap(marker, claim);
+            if (!entries.TryGetValue(gap.Id, out var entry))
+            {
+                entry = (gaps.Count, new HashSet<string>(StringComparer.Ordinal));
+                entries.Add(gap.Id, entry);
+                gaps.Add(gap);
+            }
+            foreach (var factId in supportingFactIds)
+                if (!string.IsNullOrWhiteSpace(factId)) entry.Facts.Add(factId);
+        }
+
+        public void Complete()
+        {
+            // One deterministic sort per gap, not per contributing record.
+            foreach (var entry in entries.Values)
+                gaps[entry.Index] = gaps[entry.Index] with { SupportingFactIds = DistinctSorted(entry.Facts) };
+        }
+    }
+
+    private static VaultGraphGap RedactedLocationGap(string marker, string claim)
+    {
+        var scope = "redacted-location:" + Hash(marker, EvidenceLocationHashLength);
+        var id = "gap:" + Hash(string.Join('\u001f', [RedactedLocationRuleId, claim, scope]), IdHashLength);
+        return new(id, claim, "RedactedEvidenceLocation", RedactedLocationRuleId, EvidenceTiers.Tier4Unknown,
+            "A retained report redacted an absolute evidence location; repository navigation is unavailable.",
+            scope, ["The opaque marker supplies no repository-relative path or source-location proof."]);
     }
 
     private static void ApplyHiddenLocalSafety(List<VaultGraphNode> nodes, List<VaultGraphEdge> edges, List<VaultGraphGap> gaps)
@@ -2506,6 +2600,9 @@ public static class VaultExporter
 
         var text = NormalizeRepoRelativePath(value);
         if (text.Length > MaxRepoRelativePathLength
+            // The path reporter has already redacted an absolute location. This
+            // marker is not a repository-relative navigation target.
+            || text.StartsWith("absolute-path-hash:", StringComparison.OrdinalIgnoreCase)
             || text.StartsWith("/", StringComparison.Ordinal)
             || text.StartsWith("~/", StringComparison.Ordinal)
             || text.StartsWith("$HOME", StringComparison.OrdinalIgnoreCase)

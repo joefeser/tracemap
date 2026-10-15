@@ -990,10 +990,30 @@ public static partial class VisualBasicSyntaxExtractor
 
     private static (string ReceiverName, string EventName) SyntaxEventName(ExpressionSyntax? expression) => expression switch
     {
-        MemberAccessExpressionSyntax member => (SafeEventReceiverName(member.Expression), member.Name?.Identifier.ValueText ?? string.Empty),
+        MemberAccessExpressionSyntax member => (member.Expression is null ? WithEventReceiverName(member) : SafeEventReceiverName(member.Expression), member.Name?.Identifier.ValueText ?? string.Empty),
         IdentifierNameSyntax identifier => ("implicit", identifier.Identifier.ValueText),
         _ => ("unsupported", string.Empty)
     };
+
+    private static string WithEventReceiverName(SyntaxNode site)
+    {
+        foreach (var ancestor in site.Ancestors())
+        {
+            // A deferred lambda must not borrow an enclosing With receiver.
+            if (ancestor is LambdaExpressionSyntax or MethodBlockBaseSyntax) break;
+            if (ancestor is not WithBlockSyntax block) continue;
+            var expression = block.WithStatement.Expression;
+            if (expression.ContainsDiagnostics) return string.Empty;
+            var name = SafeEventReceiverName(expression);
+            if (name.Length > 0) return name;
+            // A constructed receiver has site identity only, never a resolved
+            // control ID, type identity, or deployed WebForms boundary.
+            return expression is ObjectCreationExpressionSyntax { Type: IdentifierNameSyntax }
+                ? "with-construction-" + FactFactory.Hash($"{block.SpanStart}|{expression}", 24)
+                : string.Empty;
+        }
+        return string.Empty;
+    }
 
     private static string SyntaxHandlerName(ExpressionSyntax? expression)
     {
@@ -1019,6 +1039,17 @@ public static partial class VisualBasicSyntaxExtractor
         if (expression is null)
         {
             return string.Empty;
+        }
+        if (expression.ContainsDiagnostics) return string.Empty;
+        if (expression is WithEventsEventContainerSyntax container)
+        {
+            return container.Identifier.ValueText;
+        }
+        if (expression is IdentifierNameSyntax identifier)
+        {
+            // ValueText unescapes VB bracketed identifiers without accepting
+            // arbitrary expression text as a receiver identity.
+            return identifier.Identifier.ValueText;
         }
         var text = expression.ToString();
         if (text.Equals("Me", StringComparison.OrdinalIgnoreCase)
@@ -1492,6 +1523,7 @@ public static partial class VisualBasicSyntaxExtractor
 
     private static CodeFact CreateSemanticUnavailableGap(ScanManifest manifest, string filePath)
     {
+        const string message = "Compiler-resolved Visual Basic analysis was unavailable for this file; only syntax-or-textual evidence was emitted for it.";
         return FactFactory.Create(
             manifest,
             FactTypes.AnalysisGap,
@@ -1502,7 +1534,8 @@ public static partial class VisualBasicSyntaxExtractor
             {
                 ["coverageEffect"] = "reduces-semantic-coverage",
                 ["gapKind"] = "SemanticAnalysisUnavailable",
-                ["message"] = "Compiler-resolved Visual Basic analysis was unavailable for this file; only syntax-or-textual evidence was emitted for it.",
+                ["message"] = message,
+                ["messageHash"] = FactFactory.Hash(message, 32),
                 ["sanitization"] = "category-only"
             });
     }
