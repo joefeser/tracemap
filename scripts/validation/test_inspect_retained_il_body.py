@@ -138,5 +138,53 @@ class InspectionTests(unittest.TestCase):
         self.assertEqual(1, counts["explicit_bridges_to_exact_owner"])
         self.assertEqual(0, counts["exact_body_owner_nodes"])
 
+    def source_comparison(self, identity="owner-member", digest="hash", extra_target=False):
+        self.add("owner", "ManagedMethodDeclared", dict(rawFileSha256="hash"))
+        self.add("source", "CallEdge", dict(targetMetadataIdentity=identity, explicitReferenceSha256=digest,
+            referenceDispatch="direct", compilationContextKind="explicit-projectless-inputs"))
+        with closing(sqlite3.connect(self.path)) as db, db:
+            db.execute("UPDATE combined_facts SET target_symbol='owner-member' WHERE combined_fact_id='Aowner'")
+            db.execute("UPDATE combined_facts SET properties_json=? WHERE combined_fact_id='Abody'",
+                (json.dumps(dict(rawFileSha256="hash", compiledFactId="owner")),))
+        if extra_target:
+            self.add("other", "ManagedMethodDeclared", dict(rawFileSha256="hash"))
+            with closing(sqlite3.connect(self.path)) as db, db:
+                db.execute("UPDATE combined_facts SET target_symbol=? WHERE combined_fact_id='Aother'", (identity,))
+        graph = self.graph([])
+        document = json.loads(graph.read_text())
+        document["graph"]["nodes"] = [dict(nodeId="destination", sourceIndexId="A", symbolId=identity, combinedFactId=None)]
+        document["graph"]["edges"] = [dict(edgeKind="explicit-reference-member-candidate", toNodeId="destination",
+            supportingFactIds=["Asource"])]
+        graph.write_text(json.dumps(document))
+        return inspection.inspect(self.path, "Abody", graph, "Asource")[0]
+
+    def test_source_exact_target_and_body_are_correlated(self):
+        counts = self.source_comparison()
+        self.assertEqual(1, counts["source_unique_target_is_inspected_owner"])
+        self.assertEqual(1, counts["source_unique_target_body_is_inspected_body"])
+        self.assertEqual(1, counts["source_bridge_destinations_matching_inspected_owner"])
+
+    def test_different_overload_bridge_does_not_reach_inspected_owner(self):
+        counts = self.source_comparison("other-overload", extra_target=True)
+        self.assertEqual(0, counts["source_identity_matches_inspected_owner"])
+        self.assertEqual(1, counts["source_hash_matches_inspected_owner"])
+        self.assertEqual(1, counts["source_call_explicit_graph_bridges"])
+        self.assertEqual(0, counts["source_unique_target_is_inspected_owner"])
+        self.assertEqual(0, counts["source_bridge_destinations_matching_inspected_owner"])
+
+    def test_source_hash_mismatch_is_separate_from_identity(self):
+        counts = self.source_comparison(digest="different")
+        self.assertEqual(1, counts["source_identity_matches_inspected_owner"])
+        self.assertEqual(0, counts["source_hash_matches_inspected_owner"])
+        self.assertEqual(0, counts["source_exact_target_matches_capped_at_two"])
+
+    def test_duplicate_source_target_does_not_claim_uniqueness(self):
+        counts = self.source_comparison(extra_target=True)
+        self.assertEqual(2, counts["source_exact_target_matches_capped_at_two"])
+        self.assertNotIn("source_unique_target_is_inspected_owner", counts)
+
+    def test_source_comparison_requires_graph(self):
+        with self.assertRaises(ValueError): inspection.inspect(self.path, "Abody", source_call_id="source")
+
 
 if __name__ == "__main__": unittest.main()
