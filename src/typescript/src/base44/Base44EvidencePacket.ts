@@ -1027,7 +1027,8 @@ function validateUiInputSemanticsContracts(packet: Base44EvidencePacket): void {
   const operations = new Map(packet.facts.filter((fact) => fact.factType === FactTypes.Base44EntityOperation)
     .map((fact) => [fact.properties.operationEvidenceId, fact]));
   for (const fact of packet.facts.filter((candidate) => candidate.factType === FactTypes.Base44UiInputSemantics)) {
-    if (fact.ruleId !== RuleIds.Base44UiInputSemantics || fact.evidence.extractorVersion !== "base44-evidence/0.15.0"
+    if (fact.ruleId !== RuleIds.Base44UiInputSemantics
+      || !["base44-evidence/0.15.0", "base44-evidence/0.18.0"].includes(fact.evidence.extractorVersion)
       || fact.evidenceTier !== EvidenceTiers.Tier3SyntaxOrTextual) {
       throw new Error(`Base44 UI semantics ${fact.factId} has invalid producer identity`);
     }

@@ -2492,6 +2492,133 @@ export function Screen(runtimeField) {
     }
   });
 
+  it("resolves a module-local helper return into a complete source-bounded payload shape", async () => {
+    const {packet} = await mutationHookFixture(`
+function subscriptionData(subscription, household) {
+  const price = subscription.items?.data?.[0]?.price;
+  return {
+    household_id: household.id,
+    status: subscription.status,
+    plan: price?.recurring?.interval === "year" ? "annual" : "monthly",
+    stripe_price_id: price?.id || "",
+    canceled_at: subscription.canceled_at ?? null
+  };
+}
+export function Screen(subscription, household) {
+  const data = subscriptionData(subscription, household);
+  return base44.entities.Subscription.update(subscription.id, data);
+}
+`);
+    const payload = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityPayload
+      && fact.targetSymbol === "Subscription")!;
+    expect(payload.properties).toMatchObject({
+      completeness: "complete",
+      outerKind: "object",
+      referenceAccounting: "source-bounded",
+      constructionKind: "identifier:helper-return:object"
+    });
+    expect(JSON.parse(payload.properties.analysisGapsJson)).toEqual([]);
+    expect(JSON.parse(payload.properties.fieldsJson).map((field: {name: string}) => field.name).sort()).toEqual([
+      "canceled_at", "household_id", "plan", "status", "stripe_price_id"
+    ]);
+    expect(JSON.parse(payload.properties.fieldsJson).every((field: {presence: string}) => field.presence === "unconditional")).toBe(true);
+  });
+
+  it("keeps helper-return field presence conditional across multiple return paths", async () => {
+    const {packet} = await mutationHookFixture(`
+function tierData(active) {
+  if (active) return { tier: "gold", note: "vip" };
+  return { tier: "basic" };
+}
+export function Screen(active) {
+  return base44.entities.TierItem.create(tierData(active));
+}
+`);
+    const payload = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityPayload
+      && fact.targetSymbol === "TierItem")!;
+    expect(payload.properties).toMatchObject({ completeness: "complete", outerKind: "object" });
+    const fields = JSON.parse(payload.properties.fieldsJson);
+    expect(fields.map((field: {name: string}) => field.name).sort()).toEqual(["note", "tier", "tier"]);
+    expect(fields.every((field: {presence: string}) => field.presence === "conditional")).toBe(true);
+  });
+
+  it("fails closed when a helper return path cannot be statically resolved", async () => {
+    const {packet} = await mutationHookFixture(`
+function buildData(options) {
+  if (options.skip) return options.fallback;
+  return { known: 1 };
+}
+export function Screen(options) {
+  return base44.entities.ClosedFailItem.create(buildData(options));
+}
+`);
+    const payload = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityPayload
+      && fact.targetSymbol === "ClosedFailItem")!;
+    expect(payload.properties.completeness).toBe("partial");
+    expect(payload.properties.referenceAccounting).toBe("unresolved");
+    expect(JSON.parse(payload.properties.analysisGapsJson)).toContain("payload-expression-unresolved:property-access");
+    expect(JSON.parse(payload.properties.fieldsJson).map((field: {name: string}) => field.name)).toEqual(["known"]);
+  });
+
+  it("rejects helper-return recursion and shadowed helper names with typed gaps", async () => {
+    const {packet} = await mutationHookFixture(`
+function recursiveData(depth) {
+  if (depth > 0) return recursiveData(depth - 1);
+  return { deep: true };
+}
+function shadowedHelper() {
+  return { fromHelper: 1 };
+}
+export function Screen(depth) {
+  const first = base44.entities.RecursionItem.create(recursiveData(depth));
+  const shadow = () => ({ fromLambda: 1 });
+  const shadowedHelper = shadow;
+  const second = base44.entities.ShadowItem.create(shadowedHelper());
+  return [first, second];
+}
+`);
+    const recursion = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityPayload
+      && fact.targetSymbol === "RecursionItem")!;
+    expect(JSON.parse(recursion.properties.analysisGapsJson)).toContain("helper-return-recursion-unresolved");
+    expect(recursion.properties.completeness).not.toBe("complete");
+    const shadow = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityPayload
+      && fact.targetSymbol === "ShadowItem")!;
+    expect(JSON.parse(shadow.properties.analysisGapsJson)).toContain("payload-expression-unresolved:call-expression");
+    expect(shadow.properties.completeness).not.toBe("complete");
+  });
+
+  it("does not claim a single outer kind when helper returns disagree", async () => {
+    const {packet} = await mutationHookFixture(`
+function mixedData(asArray) {
+  if (asArray) return [{ item: 1 }];
+  return { item: 1 };
+}
+export function Screen(asArray) {
+  return base44.entities.MixedKindItem.create(mixedData(asArray));
+}
+`);
+    const payload = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityPayload
+      && fact.targetSymbol === "MixedKindItem")!;
+    expect(payload.properties.outerKind).toBe("unknown");
+    expect(JSON.parse(payload.properties.analysisGapsJson)).toContain("payload-outer-kind-unresolved");
+  });
+
+  it("projects helper-built filter fields with filter-prefixed origins", async () => {
+    const {packet} = await mutationHookFixture(`
+function ownerFilter(user) {
+  return { owner_email: user.email, archived: false };
+}
+export function Screen(user) {
+  return base44.entities.HelperFilterItem.filter(ownerFilter(user));
+}
+`);
+    const query = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityQuery
+      && fact.targetSymbol === "HelperFilterItem")!;
+    const fields = JSON.parse(query.properties.fieldsJson);
+    expect(fields.map((field: {name: string}) => field.name).sort()).toEqual(["archived", "owner_email"]);
+    expect(fields.every((field: {origin: string}) => field.origin.startsWith("filter:"))).toBe(true);
+  });
+
   it("models closed React object state and mutually exclusive mutation branches without erasing unsafe state flow", async () => {
     const {packet} = await mutationHookFixture(`
 import { useState } from "react";

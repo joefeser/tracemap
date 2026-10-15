@@ -223,7 +223,13 @@ string-normalization chains such as `code.trim().toUpperCase()` as redacted
 runtime-deferred query operands plus reference-typed `limit`/`skip` pagination
 controls. Conditional object spreads classify as runtime proof with typed
 execution gaps, and guarded computed payload fields resolve through closed
-const string-property maps. Arbitrary helper calls remain unresolved.
+const string-property maps. A payload identifier whose initializer calls a
+module-local named function declaration resolves through that helper's live
+return statements: every return path must analyze to a closed shape, helper
+parameters stay opaque (field values record as terminal evidence), and any
+unresolvable path, cross-kind disagreement, recursion, or shadowed callee name
+fails closed to a typed `helper-return-*` gap. Arbitrary helper calls,
+cross-file callees, and computed callees remain unresolved.
 
 Extractor `base44-evidence/0.4.1` also follows an SDK client through a local
 helper parameter when executable callsites prove the binding. The proof is
