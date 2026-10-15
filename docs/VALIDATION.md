@@ -1,5 +1,12 @@
 # TraceMap Validation Guide
 
+Path algorithm 1.7 preserves explicit-reference witnesses in compact bounded
+CallEdge projection. The external-wrapper matrix must pass through BOTH ordinary
+and bounded combined-index readers; all six positive/negative cases assert the
+same reachability outcome. Algorithm 1.6 dropped these properties during bounded
+reading even though the source facts retained them. A requery of an existing
+0.10.2 scan suffices for this reader fix; no new source scan is needed.
+
 Explicit reference member bridge: run `ExplicitVisualBasicContextTests`,
 `SourceMetadataReconciliationTests`, and `CombinedDependencyPathTests`.
 The synthetic external DLL test compiles a wrapper with parameterized command

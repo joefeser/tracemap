@@ -80,6 +80,11 @@ public sealed class ExplicitVisualBasicContextTests
         var result = await CombinedDependencyPathReporter.BuildReportAsync(new(combined, Path.Combine(temp.Path, "paths"),
             FromSymbol: root.TargetSymbol, ToSurface: "database-operations", MaxDepth: 16) { ExactFromSymbol = true });
         Assert.Equal(expected, result.Paths.Count > 0);
+        var bounded = await CombinedDependencyPathReporter.BuildBoundedCombinedIndexReportWithTraversalAsync(
+            new(combined, Path.Combine(temp.Path, "bounded-paths"), FromSymbol: root.TargetSymbol,
+                ToSurface: "database-operations", MaxDepth: 16) { ExactFromSymbol = true },
+            new ReportInputBudget(250_000, 250_000, 128 * 1024 * 1024));
+        Assert.Equal(expected, bounded.Report.Paths.Count > 0);
         var compiledOnly = await CombinedDependencyPathReporter.BuildReportAsync(new(combined, Path.Combine(temp.Path, "compiled-only"),
             FromSymbol: root.TargetSymbol, ToSurface: "database-operations", MaxDepth: 16)
             { ExactFromSymbol = true, CompiledOnly = true });
