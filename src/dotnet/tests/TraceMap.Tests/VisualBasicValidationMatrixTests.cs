@@ -337,9 +337,8 @@ public sealed class VisualBasicValidationMatrixTests
             .Select(fact => fact.Evidence.FilePath)
             .Distinct(StringComparer.Ordinal)
             .ToHashSet(StringComparer.Ordinal);
-        Assert.Superset(
-            tier1Files,
-            new HashSet<string>(StringComparer.Ordinal) { "CatalogModels.vb", "CatalogService.vb", "LegacyQueueBridge.vb" });
+        Assert.All(new[] { "CatalogModels.vb", "CatalogService.vb", "LegacyQueueBridge.vb" },
+            file => Assert.Contains(file, tier1Files));
         Assert.DoesNotContain(result.Facts, fact =>
             fact.RuleId == RuleIds.VisualBasicSyntaxDeclarations
             || fact.RuleId == RuleIds.VisualBasicSyntaxMemberAccess

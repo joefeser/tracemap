@@ -24,10 +24,28 @@ internal sealed class TempDirectory : IDisposable
                 throw new InvalidOperationException("Fixture cleanup root must not traverse a link.");
         // Git loose objects are read-only on Windows. Never traverse links while
         // changing attributes, and never clear attributes outside the fixture.
-        foreach (var file in Directory.EnumerateFiles(fullPath, "*", new EnumerationOptions
-        { RecurseSubdirectories = true, AttributesToSkip = FileAttributes.ReparsePoint, IgnoreInaccessible = false }))
-            File.SetAttributes(file, File.GetAttributes(file) & ~FileAttributes.ReadOnly);
-        Directory.Delete(fullPath, recursive: true);
+        DeleteOwnedDirectory(fullPath);
+
+        static void DeleteOwnedDirectory(string directory)
+        {
+            foreach (var entry in Directory.EnumerateFileSystemEntries(directory))
+            {
+                var attributes = File.GetAttributes(entry);
+                if ((attributes & FileAttributes.ReparsePoint) != 0)
+                {
+                    // Remove the link itself before recursive directory removal.
+                    if ((attributes & FileAttributes.Directory) != 0) Directory.Delete(entry, recursive: false);
+                    else File.Delete(entry);
+                }
+                else if ((attributes & FileAttributes.Directory) != 0) DeleteOwnedDirectory(entry);
+                else
+                {
+                    File.SetAttributes(entry, attributes & ~FileAttributes.ReadOnly);
+                    File.Delete(entry);
+                }
+            }
+            Directory.Delete(directory, recursive: false);
+        }
     }
 
     public void Dispose()
