@@ -1,6 +1,6 @@
 # Base44 entity callsite disposition v2
 
-Extractor `base44-evidence/0.14.0` may replace an entity operation row with a
+Extractors `base44-evidence/0.14.0` and `base44-evidence/0.15.0` may replace an entity operation row with a
 `Base44EntityCallsiteDisposition` fact only when executable source proves the
 SDK call cannot be reached from the rooted application module graph or from a
 real React Query mutation handle. The v1 shape is revoked because it discarded

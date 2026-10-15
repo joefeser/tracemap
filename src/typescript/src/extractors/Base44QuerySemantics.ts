@@ -57,6 +57,16 @@ export function extractQuerySemantics(
     }
     return false;
   }
+  const redactedStringTransforms = new Set(["trim", "trimStart", "trimEnd", "toUpperCase", "toLowerCase"]);
+  function admittedRedactedStringTransform(input: ts.Expression, depth: number): boolean {
+    const node = unwrap(input);
+    if (!admit(node, depth)) return false;
+    if (!ts.isCallExpression(node) || node.arguments.length !== 0) return false;
+    const callee = unwrap(node.expression);
+    if (!ts.isPropertyAccessExpression(callee) || !redactedStringTransforms.has(callee.name.text)) return false;
+    const receiver = unwrap(callee.expression);
+    return admittedReference(receiver, depth + 1) || admittedRedactedStringTransform(receiver, depth + 1);
+  }
   function operand(input: ts.Expression, depth = 0): Record<string, unknown> {
     const node = unwrap(input);
     if (!admit(node, depth)) return { kind: "unknown" };
@@ -71,6 +81,9 @@ export function extractQuerySemantics(
     if ((ts.isIdentifier(node) || node.kind === ts.SyntaxKind.ThisKeyword
       || ts.isPropertyAccessExpression(node) || ts.isElementAccessExpression(node))
       && admittedReference(node, depth + 1)) {
+      return { kind: "reference", span: span(node) };
+    }
+    if (admittedRedactedStringTransform(node, depth + 1)) {
       return { kind: "reference", span: span(node) };
     }
     if (ts.isArrayLiteralExpression(node)) {
@@ -252,6 +265,18 @@ export function extractQuerySemantics(
     }
     return { kind: role === "sort" ? "sort" : "selection", encoding: array ? "array" : "string", fields };
   }
+  function numericControl(input: ts.Expression, role: string): Record<string, unknown> {
+    const node = unwrap(input);
+    if (ts.isNumericLiteral(node) && Number.isSafeInteger(Number(node.text)) && Number(node.text) >= 0) {
+      return { kind: "integer", value: Number(node.text) };
+    }
+    if ((ts.isIdentifier(node) || node.kind === ts.SyntaxKind.ThisKeyword
+      || ts.isPropertyAccessExpression(node) || ts.isElementAccessExpression(node))
+      && admittedReference(node, 0)) {
+      return { kind: "reference", span: span(node) };
+    }
+    return gap(`query:${role}_unresolved`, node);
+  }
   let descriptorVersion = "88mph.entity-query.v2";
   const args = roles.map((role, index) => {
     const input = call.arguments[index];
@@ -276,7 +301,7 @@ export function extractQuerySemantics(
     }
     else if (node.kind === ts.SyntaxKind.NullKeyword) value = { kind: "null" };
     else if (role === "sort" || role === "fields") value = namedFields(node, role);
-    else if (ts.isNumericLiteral(node) && Number.isSafeInteger(Number(node.text)) && Number(node.text) >= 0) value = { kind: "integer", value: Number(node.text) };
+    else if (role === "limit" || role === "skip") value = numericControl(node, role);
     else value = gap(`query:${role}_unresolved`, node);
     return { index, role, presence: "supplied", span: span(node), value };
   });
