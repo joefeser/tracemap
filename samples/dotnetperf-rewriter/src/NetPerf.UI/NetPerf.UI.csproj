@@ -1,0 +1,439 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
+    <ExpressionBlendVersion>3.0.1927.0</ExpressionBlendVersion>
+    <ProjectGuid>{294D908B-D61F-42C6-971B-EBA4D33CD41A}</ProjectGuid>
+    <OutputType>WinExe</OutputType>
+    <AppDesignerFolder>Properties</AppDesignerFolder>
+    <DefaultClrNameSpace>Netperf_UI</DefaultClrNameSpace>
+    <RootNamespace>MetadataDashboard.NetperfUI</RootNamespace>
+    <AssemblyName>Netperf.UI</AssemblyName>
+    <TargetFrameworkVersion>v3.5</TargetFrameworkVersion>
+    <AlwaysCompileMarkupFilesInSeparateDomain>false</AlwaysCompileMarkupFilesInSeparateDomain>
+    <ApplicationIcon>netperf.ico</ApplicationIcon>
+    <FileAlignment>512</FileAlignment>
+    <ProjectTypeGuids>{60dc8134-eba5-43b8-bcc9-bb4bc16c2548};{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}</ProjectTypeGuids>
+    <WarningLevel>4</WarningLevel>
+    <FileUpgradeFlags>
+    </FileUpgradeFlags>
+    <OldToolsVersion>3.5</OldToolsVersion>
+    <UpgradeBackupLocation />
+    <IsWebBootstrapper>false</IsWebBootstrapper>
+    <SccProjectName>
+    </SccProjectName>
+    <SccLocalPath>
+    </SccLocalPath>
+    <SccAuxPath>
+    </SccAuxPath>
+    <SccProvider>
+    </SccProvider>
+    <CodeContractsAssemblyMode>1</CodeContractsAssemblyMode>
+    <PublishUrl>publish\</PublishUrl>
+    <Install>true</Install>
+    <InstallFrom>Disk</InstallFrom>
+    <UpdateEnabled>false</UpdateEnabled>
+    <UpdateMode>Foreground</UpdateMode>
+    <UpdateInterval>7</UpdateInterval>
+    <UpdateIntervalUnits>Days</UpdateIntervalUnits>
+    <UpdatePeriodically>false</UpdatePeriodically>
+    <UpdateRequired>false</UpdateRequired>
+    <MapFileExtensions>true</MapFileExtensions>
+    <ApplicationRevision>0</ApplicationRevision>
+    <ApplicationVersion>1.0.0.%2a</ApplicationVersion>
+    <UseApplicationTrust>false</UseApplicationTrust>
+    <BootstrapperEnabled>true</BootstrapperEnabled>
+    <DontImportPostSharp>True</DontImportPostSharp>
+    <SolutionDir Condition="$(SolutionDir) == '' Or $(SolutionDir) == '*Undefined*'">..\</SolutionDir>
+    <RestorePackages>true</RestorePackages>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>full</DebugType>
+    <Optimize>false</Optimize>
+    <OutputPath>..\bin\Debug\</OutputPath>
+    <DefineConstants>TRACE;DEBUG;SKIP_POSTSHARP</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+    <CodeAnalysisRuleSet>AllRules.ruleset</CodeAnalysisRuleSet>
+    <CodeContractsEnableRuntimeChecking>True</CodeContractsEnableRuntimeChecking>
+    <CodeContractsRuntimeOnlyPublicSurface>False</CodeContractsRuntimeOnlyPublicSurface>
+    <CodeContractsRuntimeThrowOnFailure>True</CodeContractsRuntimeThrowOnFailure>
+    <CodeContractsRuntimeCallSiteRequires>False</CodeContractsRuntimeCallSiteRequires>
+    <CodeContractsRunCodeAnalysis>False</CodeContractsRunCodeAnalysis>
+    <CodeContractsNonNullObligations>False</CodeContractsNonNullObligations>
+    <CodeContractsBoundsObligations>False</CodeContractsBoundsObligations>
+    <CodeContractsArithmeticObligations>False</CodeContractsArithmeticObligations>
+    <CodeContractsRedundantAssumptions>False</CodeContractsRedundantAssumptions>
+    <CodeContractsRunInBackground>True</CodeContractsRunInBackground>
+    <CodeContractsShowSquigglies>False</CodeContractsShowSquigglies>
+    <CodeContractsUseBaseLine>False</CodeContractsUseBaseLine>
+    <CodeContractsEmitXMLDocs>True</CodeContractsEmitXMLDocs>
+    <CodeContractsCustomRewriterAssembly />
+    <CodeContractsCustomRewriterClass />
+    <CodeContractsLibPaths />
+    <CodeContractsPlatformPath />
+    <CodeContractsExtraAnalysisOptions />
+    <CodeContractsBaseLineFile />
+    <CodeContractsRuntimeCheckingLevel>Full</CodeContractsRuntimeCheckingLevel>
+    <CodeContractsReferenceAssembly>Build</CodeContractsReferenceAssembly>
+    <CodeContractsContainerAnalysis>False</CodeContractsContainerAnalysis>
+    <CodeContractsExtraRewriteOptions />
+    <CodeContractsCacheAnalysisResults>False</CodeContractsCacheAnalysisResults>
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <CodeContractsRuntimeSkipQuantifiers>False</CodeContractsRuntimeSkipQuantifiers>
+    <CodeContractsEnumObligations>False</CodeContractsEnumObligations>
+    <CodeContractsMissingPublicRequiresAsWarnings>True</CodeContractsMissingPublicRequiresAsWarnings>
+    <CodeContractsInferRequires>True</CodeContractsInferRequires>
+    <CodeContractsInferEnsures>False</CodeContractsInferEnsures>
+    <CodeContractsInferObjectInvariants>False</CodeContractsInferObjectInvariants>
+    <CodeContractsSuggestAssumptions>False</CodeContractsSuggestAssumptions>
+    <CodeContractsSuggestRequires>True</CodeContractsSuggestRequires>
+    <CodeContractsSuggestObjectInvariants>False</CodeContractsSuggestObjectInvariants>
+    <CodeContractsSQLServerOption />
+    <CodeContractsFailBuildOnWarnings>False</CodeContractsFailBuildOnWarnings>
+    <CodeContractsAnalysisWarningLevel>0</CodeContractsAnalysisWarningLevel>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+    <DebugType>pdbonly</DebugType>
+    <Optimize>true</Optimize>
+    <OutputPath>..\bin\Release\</OutputPath>
+    <DefineConstants>TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+    <CodeAnalysisRuleSet>AllRules.ruleset</CodeAnalysisRuleSet>
+    <CodeContractsEnableRuntimeChecking>True</CodeContractsEnableRuntimeChecking>
+    <CodeContractsRuntimeOnlyPublicSurface>False</CodeContractsRuntimeOnlyPublicSurface>
+    <CodeContractsRuntimeThrowOnFailure>True</CodeContractsRuntimeThrowOnFailure>
+    <CodeContractsRuntimeCallSiteRequires>False</CodeContractsRuntimeCallSiteRequires>
+    <CodeContractsRunCodeAnalysis>False</CodeContractsRunCodeAnalysis>
+    <CodeContractsNonNullObligations>False</CodeContractsNonNullObligations>
+    <CodeContractsBoundsObligations>False</CodeContractsBoundsObligations>
+    <CodeContractsArithmeticObligations>False</CodeContractsArithmeticObligations>
+    <CodeContractsContainerAnalysis>False</CodeContractsContainerAnalysis>
+    <CodeContractsRedundantAssumptions>False</CodeContractsRedundantAssumptions>
+    <CodeContractsRunInBackground>True</CodeContractsRunInBackground>
+    <CodeContractsShowSquigglies>False</CodeContractsShowSquigglies>
+    <CodeContractsUseBaseLine>False</CodeContractsUseBaseLine>
+    <CodeContractsCustomRewriterAssembly />
+    <CodeContractsCustomRewriterClass />
+    <CodeContractsLibPaths />
+    <CodeContractsExtraRewriteOptions />
+    <CodeContractsExtraAnalysisOptions />
+    <CodeContractsBaseLineFile />
+    <CodeContractsCacheAnalysisResults>False</CodeContractsCacheAnalysisResults>
+    <CodeContractsRuntimeCheckingLevel>Full</CodeContractsRuntimeCheckingLevel>
+    <CodeContractsReferenceAssembly>Build</CodeContractsReferenceAssembly>
+    <CodeContractsEmitXMLDocs>True</CodeContractsEmitXMLDocs>
+  </PropertyGroup>
+  <PropertyGroup>
+    <SignAssembly>true</SignAssembly>
+  </PropertyGroup>
+  <PropertyGroup>
+    <AssemblyOriginatorKeyFile>..\NetPerfKey.snk</AssemblyOriginatorKeyFile>
+  </PropertyGroup>
+  <PropertyGroup>
+    <StartupObject>MetadataDashboard.NetperfUI.App</StartupObject>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="Autofac">
+      <HintPath>..\..\Libraries\Autofac.dll</HintPath>
+    </Reference>
+    <Reference Include="AutomaticUpdaterWPF">
+      <HintPath>..\..\Libraries\AutomaticUpdaterWPF.dll</HintPath>
+    </Reference>
+    <Reference Include="Caliburn.Micro">
+      <HintPath>..\..\Libraries\Caliburn.Micro.dll</HintPath>
+    </Reference>
+    <Reference Include="FluentValidation, Version=2.0.0.0, Culture=neutral, PublicKeyToken=a82054b837897c66, processorArchitecture=MSIL">
+      <HintPath>..\..\Libraries\FluentValidation.dll</HintPath>
+    </Reference>
+    <Reference Include="Microsoft.Contracts, Version=1.0.0.0, Culture=neutral, PublicKeyToken=736440c9b414ea16, processorArchitecture=MSIL">
+      <HintPath>..\..\Libraries\Microsoft.Contracts.dll</HintPath>
+    </Reference>
+    <Reference Include="PostSharp, Version=3.0.37.9, Culture=neutral, PublicKeyToken=b13fd38b8f9c99d7, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\packages\PostSharp.3.0.37\lib\net20\PostSharp.dll</HintPath>
+    </Reference>
+    <Reference Include="SqLiteNet.Driver">
+      <HintPath>..\..\Libraries\SqLiteNet.Driver.dll</HintPath>
+    </Reference>
+    <Reference Include="System" />
+    <Reference Include="System.Core">
+      <RequiredTargetFramework>3.5</RequiredTargetFramework>
+    </Reference>
+    <Reference Include="System.Windows.Forms" />
+    <Reference Include="System.Windows.Interactivity, Version=3.5.0.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35, processorArchitecture=MSIL">
+      <HintPath>..\..\Libraries\System.Windows.Interactivity.dll</HintPath>
+    </Reference>
+    <Reference Include="System.Data" />
+    <Reference Include="System.Xml" />
+    <Reference Include="WindowsBase" />
+    <Reference Include="PresentationCore" />
+    <Reference Include="PresentationFramework" />
+  </ItemGroup>
+  <ItemGroup>
+    <ApplicationDefinition Include="App.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </ApplicationDefinition>
+    <Compile Include="..\NetPerf.Common\Properties\CommonAssemblyInfo.cs">
+      <Link>Properties\CommonAssemblyInfo.cs</Link>
+    </Compile>
+    <Compile Include="App.xaml.cs">
+      <DependentUpon>App.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Areas\Profiling\ViewModels\InstrumentWizardStep3VM.cs" />
+    <Compile Include="Areas\Profiling\ViewModels\InstrumentWizardStep1VM.cs" />
+    <Compile Include="Areas\Profiling\ViewModels\InstrumentWizardStep2VM.cs" />
+    <Compile Include="Areas\Profiling\ViewModels\InstrumentWizardVM.cs" />
+    <Compile Include="Areas\Profiling\Views\InstrumentWizard.xaml.cs">
+      <DependentUpon>InstrumentWizard.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Areas\Profiling\Views\InstrumentWizardStep1.xaml.cs">
+      <DependentUpon>InstrumentWizardStep1.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Areas\Profiling\Views\InstrumentWizardStep2.xaml.cs">
+      <DependentUpon>InstrumentWizardStep2.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Areas\Profiling\Views\InstrumentWizardStep3.xaml.cs">
+      <DependentUpon>InstrumentWizardStep3.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Areas\UISettings\ViewModels\ApplicationInfoVM.cs" />
+    <Compile Include="Areas\UISettings\ViewModels\CreditsVM.cs" />
+    <Compile Include="Areas\UISettings\ViewModels\EULAVM.cs" />
+    <Compile Include="Areas\UISettings\ViewModels\StartupEULAVM.cs" />
+    <Compile Include="Areas\UISettings\ViewModels\StartupHandleNewerUIConfigVM.cs" />
+    <Compile Include="Areas\UISettings\Views\ApplicationInfo.xaml.cs">
+      <DependentUpon>ApplicationInfo.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Areas\UISettings\Views\Credits.xaml.cs">
+      <DependentUpon>Credits.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Areas\UISettings\Views\EULA.xaml.cs">
+      <DependentUpon>EULA.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Areas\UISettings\Views\StartupEULA.xaml.cs">
+      <DependentUpon>StartupEULA.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Areas\UISettings\Views\StartupHandleNewerUIConfig.xaml.cs">
+      <DependentUpon>StartupHandleNewerUIConfig.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Areas\Views\Wizard.xaml.cs">
+      <DependentUpon>Wizard.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Infrastructure\AppBootstrapper.cs" />
+    <Compile Include="Infrastructure\AppController.cs" />
+    <Compile Include="Infrastructure\Aspects\CaliburnPropertyChangedAspect.cs" />
+    <Compile Include="Infrastructure\Aspects\IgnorePropertyChanged.cs" />
+    <Compile Include="Infrastructure\Converters\BooleanToCollapsedConverter.cs" />
+    <Compile Include="Infrastructure\Converters\InvertBooleanConverter.cs" />
+    <Compile Include="Infrastructure\Converters\StringNotEmptyConverter.cs" />
+    <Compile Include="Infrastructure\Converters\ValueEqualsParameterConverter.cs" />
+    <Compile Include="Infrastructure\DowngradeUIConfigMessage.cs" />
+    <Compile Include="Infrastructure\IHandleFileDrop.cs" />
+    <Compile Include="Infrastructure\Reflector.cs" />
+    <Compile Include="Areas\ViewModels\WizardVM.cs" />
+    <Compile Include="Infrastructure\UserMessages.cs" />
+    <Compile Include="RequiresPostSharp.cs" />
+    <Compile Include="Areas\UISettings\ViewModels\AutoUpdateOptionsVM.cs" />
+    <Compile Include="Areas\ViewModels\IAutoUpdateAdaptor.cs" />
+    <Compile Include="Areas\UISettings\ViewModels\CEIPVM.cs" />
+    <Compile Include="Areas\Profiling\ViewModels\InstrumentationConfigVM.cs" />
+    <Compile Include="Infrastructure\NPScreen.cs" />
+    <Compile Include="Areas\ViewModels\StartInstructionsVM.cs" />
+    <Compile Include="Areas\ViewModels\StatusBarVM.cs" />
+    <Compile Include="Areas\ViewModels\AutoUpdateAdaptor.cs" />
+    <Compile Include="Areas\UISettings\Views\AutoUpdateOptions.xaml.cs">
+      <DependentUpon>AutoUpdateOptions.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Areas\UISettings\Views\CEIP.xaml.cs">
+      <DependentUpon>CEIP.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Areas\Profiling\Views\InstrumentationConfig.xaml.cs">
+      <DependentUpon>InstrumentationConfig.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Infrastructure\NPUserControl.cs" />
+    <Compile Include="Areas\Views\StartInstructions.xaml.cs">
+      <DependentUpon>StartInstructions.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Infrastructure\Webpage.cs" />
+    <Compile Include="Infrastructure\Utilities\BackgroundResult.cs" />
+    <Compile Include="Infrastructure\Converters\IntToWindowStateConverter.cs" />
+    <Compile Include="Infrastructure\Utilities\DelegateCommand.cs" />
+    <Compile Include="Infrastructure\IWindowManagerEx.cs" />
+    <Compile Include="Infrastructure\Utilities\ProgrammableResult.cs" />
+    <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="Utility.cs" />
+    <Compile Include="Areas\UISettings\ViewModels\AboutVM.cs" />
+    <Compile Include="Areas\ViewModels\MenuItemVM.cs" />
+    <Compile Include="Areas\ViewModels\MessageWindowVM.cs" />
+    <Compile Include="Areas\UISettings\ViewModels\ProblemReportingOptionsVM.cs" />
+    <Compile Include="Areas\ViewModels\ShellVM.cs" />
+    <Compile Include="Areas\UISettings\ViewModels\StartupShellVM.cs" />
+    <Compile Include="Areas\UISettings\ViewModels\ApplicationOptionsVM.cs" />
+    <Compile Include="Areas\UISettings\Views\About.xaml.cs">
+      <DependentUpon>About.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Areas\Views\MessageWindow.xaml.cs">
+      <DependentUpon>MessageWindow.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Areas\UISettings\Views\ProblemReportingOptions.xaml.cs">
+      <DependentUpon>ProblemReportingOptions.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Areas\Views\Shell.xaml.cs">
+      <DependentUpon>Shell.xaml</DependentUpon>
+    </Compile>
+    <AppDesigner Include="Properties\" />
+    <Compile Include="Areas\UISettings\Views\StartupShell.xaml.cs">
+      <DependentUpon>StartupShell.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Areas\UISettings\Views\ApplicationOptions.xaml.cs">
+      <DependentUpon>ApplicationOptions.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Infrastructure\WindowManagerEx.cs" />
+    <EmbeddedResource Include="..\..\Documentation\DotNetPerfEULA.rtf">
+      <Link>Areas\UISettings\ViewModels\DotNetPerfEULA.rtf</Link>
+    </EmbeddedResource>
+    <None Include="..\NetPerfKey.snk">
+      <Link>NetPerfKey.snk</Link>
+    </None>
+    <None Include="Application.ico">
+      <Visible>false</Visible>
+    </None>
+    <None Include="packages.config" />
+    <Page Include="Areas\Profiling\Views\InstrumentWizard.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="Areas\Profiling\Views\InstrumentWizardStep1.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="Areas\Profiling\Views\InstrumentWizardStep2.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="Areas\Profiling\Views\InstrumentWizardStep3.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="Areas\UISettings\Views\ApplicationInfo.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="Areas\UISettings\Views\Credits.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="Areas\UISettings\Views\EULA.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="Areas\UISettings\Views\StartupEULA.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="Areas\UISettings\Views\StartupHandleNewerUIConfig.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="Areas\UISettings\Views\About.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="Areas\UISettings\Views\AutoUpdateOptions.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="Areas\UISettings\Views\CEIP.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="Areas\Profiling\Views\InstrumentationConfig.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="Areas\Views\MessageWindow.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="Areas\UISettings\Views\ProblemReportingOptions.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="Areas\Views\Shell.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="Areas\Views\StartInstructions.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="Areas\UISettings\Views\StartupShell.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="Areas\UISettings\Views\ApplicationOptions.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="Areas\Views\Wizard.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+  </ItemGroup>
+  <ItemGroup>
+    <BootstrapperPackage Include="Microsoft.Net.Client.3.5">
+      <Visible>False</Visible>
+      <ProductName>.NET Framework 3.5 SP1 Client Profile</ProductName>
+      <Install>false</Install>
+    </BootstrapperPackage>
+    <BootstrapperPackage Include="Microsoft.Net.Framework.3.5.SP1">
+      <Visible>False</Visible>
+      <ProductName>.NET Framework 3.5 SP1</ProductName>
+      <Install>true</Install>
+    </BootstrapperPackage>
+    <BootstrapperPackage Include="Microsoft.Windows.Installer.3.1">
+      <Visible>False</Visible>
+      <ProductName>Windows Installer 3.1</ProductName>
+      <Install>true</Install>
+    </BootstrapperPackage>
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\NetPerf.Common\NetPerf.Common.csproj">
+      <Project>{F9E2B03A-C51D-4BFC-9278-6E61677115E2}</Project>
+      <Name>NetPerf.Common %28NetPerf.Common\NetPerf.Common%29</Name>
+    </ProjectReference>
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Application.ico" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="netperf_old.ico" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="netperf.ico" />
+  </ItemGroup>
+  <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+  <PropertyGroup>
+    <PreBuildEvent>
+    </PreBuildEvent>
+  </PropertyGroup>
+  <PropertyGroup>
+    <PostBuildEvent>attrib -r $(TargetDir)*.*
+copy /y $(SolutionDir)..\Libraries\SqLite*.dll  $(TargetDir)SqLite*.dll</PostBuildEvent>
+  </PropertyGroup>
+  <Import Project="..\packages\PostSharp.3.0.37\tools\PostSharp.targets" Condition="Exists('..\packages\PostSharp.3.0.37\tools\PostSharp.targets')" />
+  <Import Project="$(SolutionDir)\.nuget\NuGet.targets" Condition="Exists('$(SolutionDir)\.nuget\NuGet.targets')" />
+  <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
+		 Other similar extension points exist, see Microsoft.Common.targets.
+	<Target Name="BeforeBuild">
+	</Target>
+	<Target Name="AfterBuild">
+  </Target>
+	-->
+</Project>

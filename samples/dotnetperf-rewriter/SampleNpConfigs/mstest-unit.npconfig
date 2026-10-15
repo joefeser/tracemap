@@ -1,0 +1,12 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<netperfsettings version="1">
+ <application>C:\Program Files (x86)\Microsoft Visual Studio 10.0\Common7\IDE\MSTest.exe</application>
+ <applicationparameters>/testcontainer:C:\dev\NetPerf\Netperf.Tests.Bootstrapper\bin\Debug\NetPerf.Tests.dll</applicationparameters>
+ <assembliesToInstrument>
+  <assembly>C:\dev\NetPerf\Netperf.Tests.Bootstrapper\bin\Debug\NetPerf.Tests.dll</assembly>
+ </assembliesToInstrument>
+ <extractReport active="True" outputFile="C:\dev\NetPerf\Netperf.Tests.Bootstrapper\bin\Debug\mstest.xml" />
+ <keyfile>C:\dev\NetPerf\NetPerfKey.snk</keyfile>
+ <summaryReport active="False" />
+ <workingFolder>C:\dev\NetPerf\Netperf.Tests.Bootstrapper\bin\Debug</workingFolder>
+</netperfsettings>

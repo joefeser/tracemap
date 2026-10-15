@@ -1,0 +1,39 @@
+﻿<infra:NPUserControl
+	x:Class="MetadataDashboard.NetperfUI.Areas.UISettings.Views.StartupEULA"
+	xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+	xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+	xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+	xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+	xmlns:infra="clr-namespace:MetadataDashboard.NetperfUI.Infrastructure"
+	mc:Ignorable="d"
+	d:DesignHeight="300"
+	d:DesignWidth="300">
+	<AdornerDecorator>
+		<Grid>
+			<Grid.RowDefinitions>
+				<RowDefinition
+					Height="*" />
+				<RowDefinition
+					Height="10" />
+				<RowDefinition
+					Height="Auto" />
+			</Grid.RowDefinitions>
+			<RichTextBox
+				Grid.Row="0"
+				Name="rtfEULA"
+				IsReadOnly="true"
+				IsDocumentEnabled="false"
+				HorizontalAlignment="Left"
+				VerticalAlignment="Top"
+				HorizontalScrollBarVisibility="Auto"
+				VerticalScrollBarVisibility="Auto" />
+
+			<CheckBox
+				Grid.Row="2"
+				IsChecked="{Binding HasAcceptedEULA}">
+				I accept this End User License Agreement.
+			</CheckBox>
+
+		</Grid>
+	</AdornerDecorator>
+</infra:NPUserControl>

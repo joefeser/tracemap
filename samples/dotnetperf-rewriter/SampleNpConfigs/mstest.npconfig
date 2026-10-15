@@ -1,0 +1,16 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<netperfsettings version="1">
+ <!--/testcontainer:C:\dev\NetPerf\NetPerf.Tests.Integration\bin\Debug\NetPerf.Tests.Integration.dll-->
+ <application>C:\Program Files (x86)\Microsoft Visual Studio 10.0\Common7\IDE\MSTest.exe</application>
+ <applicationparameters>/testsettings:C:\dev\NetPerf\Local.testsettings /testcontainer:C:\dev\NetPerf\bin\Debug\NetPerf.Tests.dll</applicationparameters>
+ <assembliesToInstrument>
+  <assembly>C:\dev\NetPerf\bin\Debug\NetPerf.Tests.dll</assembly>
+  <!--
+  <assembly>C:\dev\NetPerf\NetPerf.Tests.Integration\bin\Debug\NetPerf.Tests.Integration.dll</assembly>
+  -->
+ </assembliesToInstrument>
+ <extractReport active="True" outputFile="C:\dev\NetPerf\bin\Debug\mstest.xml" />
+ <keyfile>C:\dev\NetPerf\NetPerfKey.snk</keyfile>
+ <summaryReport active="False" />
+ <workingFolder>C:\dev\NetPerf\bin\Debug</workingFolder>
+</netperfsettings>

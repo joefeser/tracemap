@@ -1,0 +1,1126 @@
+﻿
+// Metadata version: v2.0.50727
+.assembly extern mscorlib
+{
+  .publickeytoken = (B7 7A 5C 56 19 34 E0 89 )                         // .z\V.4..
+  .ver 2:0:0:0
+}
+
+.assembly generictypesandmethods
+{
+  .hash algorithm 0x00008004
+  .ver 1:0:0:0
+}
+
+.module generictypesandmethods.exe
+// MVID: {389E998C-F48B-4691-8396-69FE2F766A3E}
+.imagebase 0x00400000
+.file alignment 0x00000200
+.stackreserve 0x00100000
+.subsystem 0x0003       // WINDOWS_CUI
+.corflags 0x00000001    //  ILONLY
+// Image base: 0x00400000
+
+
+// =============== CLASS MEMBERS DECLARATION ===================
+
+.class private auto ansi beforefieldinit generictypesandmethods.Program
+       extends [mscorlib]System.Object
+{
+  .field private static class [mscorlib]System.Func`2<int64,int32> 'CS$<>9__CachedAnonymousMethodDelegate12'
+  .custom instance void [mscorlib]System.Runtime.CompilerServices.CompilerGeneratedAttribute::.ctor() = ( 01 00 00 00 ) 
+  .field private static class [mscorlib]System.Func`3<int64,int32,string> 'CS$<>9__CachedAnonymousMethodDelegate13'
+  .custom instance void [mscorlib]System.Runtime.CompilerServices.CompilerGeneratedAttribute::.ctor() = ( 01 00 00 00 ) 
+  .field private static class [mscorlib]System.Func`2<valuetype [mscorlib]System.Decimal,float64> 'CS$<>9__CachedAnonymousMethodDelegate14'
+  .custom instance void [mscorlib]System.Runtime.CompilerServices.CompilerGeneratedAttribute::.ctor() = ( 01 00 00 00 ) 
+  .field private static class [mscorlib]System.Func`3<valuetype [mscorlib]System.Decimal,float64,string> 'CS$<>9__CachedAnonymousMethodDelegate15'
+  .custom instance void [mscorlib]System.Runtime.CompilerServices.CompilerGeneratedAttribute::.ctor() = ( 01 00 00 00 ) 
+  .field private static class [mscorlib]System.Func`2<int32,string> 'CS$<>9__CachedAnonymousMethodDelegate16'
+  .custom instance void [mscorlib]System.Runtime.CompilerServices.CompilerGeneratedAttribute::.ctor() = ( 01 00 00 00 ) 
+  .field private static class [mscorlib]System.Func`3<int64,int32,string> 'CS$<>9__CachedAnonymousMethodDelegate17'
+  .custom instance void [mscorlib]System.Runtime.CompilerServices.CompilerGeneratedAttribute::.ctor() = ( 01 00 00 00 ) 
+  .field private static class [mscorlib]System.Func`2<int32,string> 'CS$<>9__CachedAnonymousMethodDelegate18'
+  .custom instance void [mscorlib]System.Runtime.CompilerServices.CompilerGeneratedAttribute::.ctor() = ( 01 00 00 00 ) 
+  .field private static class [mscorlib]System.Func`2<int64,string> 'CS$<>9__CachedAnonymousMethodDelegate19'
+  .custom instance void [mscorlib]System.Runtime.CompilerServices.CompilerGeneratedAttribute::.ctor() = ( 01 00 00 00 ) 
+  .field private static class [mscorlib]System.Func`3<int32,int64,string> 'CS$<>9__CachedAnonymousMethodDelegate1a'
+  .custom instance void [mscorlib]System.Runtime.CompilerServices.CompilerGeneratedAttribute::.ctor() = ( 01 00 00 00 ) 
+  .field private static class [mscorlib]System.Func`3<valuetype [mscorlib]System.Decimal,float64,string> 'CS$<>9__CachedAnonymousMethodDelegate1b'
+  .custom instance void [mscorlib]System.Runtime.CompilerServices.CompilerGeneratedAttribute::.ctor() = ( 01 00 00 00 ) 
+  .field private static class [mscorlib]System.Func`2<int32,string> 'CS$<>9__CachedAnonymousMethodDelegate1c'
+  .custom instance void [mscorlib]System.Runtime.CompilerServices.CompilerGeneratedAttribute::.ctor() = ( 01 00 00 00 ) 
+  .field private static class [mscorlib]System.Func`2<int64,string> 'CS$<>9__CachedAnonymousMethodDelegate1d'
+  .custom instance void [mscorlib]System.Runtime.CompilerServices.CompilerGeneratedAttribute::.ctor() = ( 01 00 00 00 ) 
+  .field private static class [mscorlib]System.Func`3<int64,int32,string> 'CS$<>9__CachedAnonymousMethodDelegate1e'
+  .custom instance void [mscorlib]System.Runtime.CompilerServices.CompilerGeneratedAttribute::.ctor() = ( 01 00 00 00 ) 
+  .field private static class [mscorlib]System.Func`3<valuetype [mscorlib]System.Decimal,float64,string> 'CS$<>9__CachedAnonymousMethodDelegate1f'
+  .custom instance void [mscorlib]System.Runtime.CompilerServices.CompilerGeneratedAttribute::.ctor() = ( 01 00 00 00 ) 
+  .field private static class [mscorlib]System.Func`2<int32,string> 'CS$<>9__CachedAnonymousMethodDelegate20'
+  .custom instance void [mscorlib]System.Runtime.CompilerServices.CompilerGeneratedAttribute::.ctor() = ( 01 00 00 00 ) 
+  .field private static class [mscorlib]System.Func`2<int64,string> 'CS$<>9__CachedAnonymousMethodDelegate21'
+  .custom instance void [mscorlib]System.Runtime.CompilerServices.CompilerGeneratedAttribute::.ctor() = ( 01 00 00 00 ) 
+  .field private static class [mscorlib]System.Func`3<int64,int32,string> 'CS$<>9__CachedAnonymousMethodDelegate22'
+  .custom instance void [mscorlib]System.Runtime.CompilerServices.CompilerGeneratedAttribute::.ctor() = ( 01 00 00 00 ) 
+  .field private static class [mscorlib]System.Func`3<valuetype [mscorlib]System.Decimal,float64,string> 'CS$<>9__CachedAnonymousMethodDelegate23'
+  .custom instance void [mscorlib]System.Runtime.CompilerServices.CompilerGeneratedAttribute::.ctor() = ( 01 00 00 00 ) 
+  .method private hidebysig static void  Main(string[] args) cil managed
+  {
+    .entrypoint
+    // Code size       819 (0x333)
+    .maxstack  7
+    .locals init ([0] class generictypesandmethods.GenericClass`2<int32,int64> x,
+             [1] class generictypesandmethods.InstanceClass y)
+    IL_0000:  nop
+    IL_0001:  newobj     instance void class generictypesandmethods.GenericClass`2<int32,int64>::.ctor()
+    IL_0006:  stloc.0
+    IL_0007:  ldloc.0
+    IL_0008:  ldc.i4.8
+    IL_0009:  conv.i8
+    IL_000a:  ldsfld     class [mscorlib]System.Func`2<int64,int32> generictypesandmethods.Program::'CS$<>9__CachedAnonymousMethodDelegate12'
+    IL_000f:  brtrue.s   IL_0024
+
+    IL_0011:  ldnull
+    IL_0012:  ldftn      int32 generictypesandmethods.Program::'<Main>b__0'(int64)
+    IL_0018:  newobj     instance void class [mscorlib]System.Func`2<int64,int32>::.ctor(object,
+                                                                                         native int)
+    IL_001d:  stsfld     class [mscorlib]System.Func`2<int64,int32> generictypesandmethods.Program::'CS$<>9__CachedAnonymousMethodDelegate12'
+    IL_0022:  br.s       IL_0024
+
+    IL_0024:  ldsfld     class [mscorlib]System.Func`2<int64,int32> generictypesandmethods.Program::'CS$<>9__CachedAnonymousMethodDelegate12'
+    IL_0029:  callvirt   instance !0 class generictypesandmethods.GenericClass`2<int32,int64>::Method1(!1,
+                                                                                          class [mscorlib]System.Func`2<!1,!0>)
+    IL_002e:  pop
+    IL_002f:  ldloc.0
+    IL_0030:  ldc.i4.6
+    IL_0031:  conv.i8
+    IL_0032:  ldc.i4.5
+    IL_0033:  ldsfld     class [mscorlib]System.Func`3<int64,int32,string> generictypesandmethods.Program::'CS$<>9__CachedAnonymousMethodDelegate13'
+    IL_0038:  brtrue.s   IL_004d
+
+    IL_003a:  ldnull
+    IL_003b:  ldftn      string generictypesandmethods.Program::'<Main>b__1'(int64,
+                                                                int32)
+    IL_0041:  newobj     instance void class [mscorlib]System.Func`3<int64,int32,string>::.ctor(object,
+                                                                                                native int)
+    IL_0046:  stsfld     class [mscorlib]System.Func`3<int64,int32,string> generictypesandmethods.Program::'CS$<>9__CachedAnonymousMethodDelegate13'
+    IL_004b:  br.s       IL_004d
+
+    IL_004d:  ldsfld     class [mscorlib]System.Func`3<int64,int32,string> generictypesandmethods.Program::'CS$<>9__CachedAnonymousMethodDelegate13'
+    IL_0052:  callvirt   instance !!0 class generictypesandmethods.GenericClass`2<int32,int64>::Method3<string>(!1,
+                                                                                                   !0,
+                                                                                                   class [mscorlib]System.Func`3<!1,!0,!!0>)
+    IL_0057:  pop
+    IL_0058:  ldc.i4     0x156
+    IL_005d:  ldc.i4.0
+    IL_005e:  ldc.i4.0
+    IL_005f:  ldc.i4.0
+    IL_0060:  ldc.i4.1
+    IL_0061:  newobj     instance void [mscorlib]System.Decimal::.ctor(int32,
+                                                                       int32,
+                                                                       int32,
+                                                                       bool,
+                                                                       uint8)
+    IL_0066:  ldsfld     class [mscorlib]System.Func`2<valuetype [mscorlib]System.Decimal,float64> generictypesandmethods.Program::'CS$<>9__CachedAnonymousMethodDelegate14'
+    IL_006b:  brtrue.s   IL_0080
+
+    IL_006d:  ldnull
+    IL_006e:  ldftn      float64 generictypesandmethods.Program::'<Main>b__2'(valuetype [mscorlib]System.Decimal)
+    IL_0074:  newobj     instance void class [mscorlib]System.Func`2<valuetype [mscorlib]System.Decimal,float64>::.ctor(object,
+                                                                                                                        native int)
+    IL_0079:  stsfld     class [mscorlib]System.Func`2<valuetype [mscorlib]System.Decimal,float64> generictypesandmethods.Program::'CS$<>9__CachedAnonymousMethodDelegate14'
+    IL_007e:  br.s       IL_0080
+
+    IL_0080:  ldsfld     class [mscorlib]System.Func`2<valuetype [mscorlib]System.Decimal,float64> generictypesandmethods.Program::'CS$<>9__CachedAnonymousMethodDelegate14'
+    IL_0085:  call       !0 class generictypesandmethods.GenericClass`2<float64,valuetype [mscorlib]System.Decimal>::Method2(!1,
+                                                                                                                class [mscorlib]System.Func`2<!1,!0>)
+    IL_008a:  pop
+    IL_008b:  ldc.i4     0x156
+    IL_0090:  ldc.i4.0
+    IL_0091:  ldc.i4.0
+    IL_0092:  ldc.i4.0
+    IL_0093:  ldc.i4.1
+    IL_0094:  newobj     instance void [mscorlib]System.Decimal::.ctor(int32,
+                                                                       int32,
+                                                                       int32,
+                                                                       bool,
+                                                                       uint8)
+    IL_0099:  ldc.r8     21.399999999999999
+    IL_00a2:  ldsfld     class [mscorlib]System.Func`3<valuetype [mscorlib]System.Decimal,float64,string> generictypesandmethods.Program::'CS$<>9__CachedAnonymousMethodDelegate15'
+    IL_00a7:  brtrue.s   IL_00bc
+
+    IL_00a9:  ldnull
+    IL_00aa:  ldftn      string generictypesandmethods.Program::'<Main>b__3'(valuetype [mscorlib]System.Decimal,
+                                                                float64)
+    IL_00b0:  newobj     instance void class [mscorlib]System.Func`3<valuetype [mscorlib]System.Decimal,float64,string>::.ctor(object,
+                                                                                                                               native int)
+    IL_00b5:  stsfld     class [mscorlib]System.Func`3<valuetype [mscorlib]System.Decimal,float64,string> generictypesandmethods.Program::'CS$<>9__CachedAnonymousMethodDelegate15'
+    IL_00ba:  br.s       IL_00bc
+
+    IL_00bc:  ldsfld     class [mscorlib]System.Func`3<valuetype [mscorlib]System.Decimal,float64,string> generictypesandmethods.Program::'CS$<>9__CachedAnonymousMethodDelegate15'
+    IL_00c1:  call       !!0 class generictypesandmethods.GenericClass`2<float64,valuetype [mscorlib]System.Decimal>::Method4<string>(!1,
+                                                                                                                         !0,
+                                                                                                                         class [mscorlib]System.Func`3<!1,!0,!!0>)
+    IL_00c6:  pop
+    IL_00c7:  ldc.i4.5
+    IL_00c8:  ldsfld     class [mscorlib]System.Func`2<int32,string> generictypesandmethods.Program::'CS$<>9__CachedAnonymousMethodDelegate16'
+    IL_00cd:  brtrue.s   IL_00e2
+
+    IL_00cf:  ldnull
+    IL_00d0:  ldftn      string generictypesandmethods.Program::'<Main>b__4'(int32)
+    IL_00d6:  newobj     instance void class [mscorlib]System.Func`2<int32,string>::.ctor(object,
+                                                                                          native int)
+    IL_00db:  stsfld     class [mscorlib]System.Func`2<int32,string> generictypesandmethods.Program::'CS$<>9__CachedAnonymousMethodDelegate16'
+    IL_00e0:  br.s       IL_00e2
+
+    IL_00e2:  ldsfld     class [mscorlib]System.Func`2<int32,string> generictypesandmethods.Program::'CS$<>9__CachedAnonymousMethodDelegate16'
+    IL_00e7:  call       !0 class generictypesandmethods.StaticGenericClass`2<string,int32>::Method2(!1,
+                                                                                        class [mscorlib]System.Func`2<!1,!0>)
+    IL_00ec:  pop
+    IL_00ed:  ldc.i4.5
+    IL_00ee:  conv.i8
+    IL_00ef:  ldc.i4.4
+    IL_00f0:  ldsfld     class [mscorlib]System.Func`3<int64,int32,string> generictypesandmethods.Program::'CS$<>9__CachedAnonymousMethodDelegate17'
+    IL_00f5:  brtrue.s   IL_010a
+
+    IL_00f7:  ldnull
+    IL_00f8:  ldftn      string generictypesandmethods.Program::'<Main>b__5'(int64,
+                                                                int32)
+    IL_00fe:  newobj     instance void class [mscorlib]System.Func`3<int64,int32,string>::.ctor(object,
+                                                                                                native int)
+    IL_0103:  stsfld     class [mscorlib]System.Func`3<int64,int32,string> generictypesandmethods.Program::'CS$<>9__CachedAnonymousMethodDelegate17'
+    IL_0108:  br.s       IL_010a
+
+    IL_010a:  ldsfld     class [mscorlib]System.Func`3<int64,int32,string> generictypesandmethods.Program::'CS$<>9__CachedAnonymousMethodDelegate17'
+    IL_010f:  call       !!0 class generictypesandmethods.StaticGenericClass`2<int32,int64>::Method4<string>(!1,
+                                                                                                !0,
+                                                                                                class [mscorlib]System.Func`3<!1,!0,!!0>)
+    IL_0114:  pop
+    IL_0115:  newobj     instance void generictypesandmethods.InstanceClass::.ctor()
+    IL_011a:  stloc.1
+    IL_011b:  ldloc.1
+    IL_011c:  ldc.i4.5
+    IL_011d:  ldsfld     class [mscorlib]System.Func`2<int32,string> generictypesandmethods.Program::'CS$<>9__CachedAnonymousMethodDelegate18'
+    IL_0122:  brtrue.s   IL_0137
+
+    IL_0124:  ldnull
+    IL_0125:  ldftn      string generictypesandmethods.Program::'<Main>b__6'(int32)
+    IL_012b:  newobj     instance void class [mscorlib]System.Func`2<int32,string>::.ctor(object,
+                                                                                          native int)
+    IL_0130:  stsfld     class [mscorlib]System.Func`2<int32,string> generictypesandmethods.Program::'CS$<>9__CachedAnonymousMethodDelegate18'
+    IL_0135:  br.s       IL_0137
+
+    IL_0137:  ldsfld     class [mscorlib]System.Func`2<int32,string> generictypesandmethods.Program::'CS$<>9__CachedAnonymousMethodDelegate18'
+    IL_013c:  callvirt   instance !!0 generictypesandmethods.InstanceClass::Method1<string,int32>(!!1,
+                                                                                     class [mscorlib]System.Func`2<!!1,!!0>)
+    IL_0141:  pop
+    IL_0142:  ldloc.1
+    IL_0143:  ldc.i4.5
+    IL_0144:  conv.i8
+    IL_0145:  ldsfld     class [mscorlib]System.Func`2<int64,string> generictypesandmethods.Program::'CS$<>9__CachedAnonymousMethodDelegate19'
+    IL_014a:  brtrue.s   IL_015f
+
+    IL_014c:  ldnull
+    IL_014d:  ldftn      string generictypesandmethods.Program::'<Main>b__7'(int64)
+    IL_0153:  newobj     instance void class [mscorlib]System.Func`2<int64,string>::.ctor(object,
+                                                                                          native int)
+    IL_0158:  stsfld     class [mscorlib]System.Func`2<int64,string> generictypesandmethods.Program::'CS$<>9__CachedAnonymousMethodDelegate19'
+    IL_015d:  br.s       IL_015f
+
+    IL_015f:  ldsfld     class [mscorlib]System.Func`2<int64,string> generictypesandmethods.Program::'CS$<>9__CachedAnonymousMethodDelegate19'
+    IL_0164:  callvirt   instance !!0 generictypesandmethods.InstanceClass::Method1<string,int64>(!!1,
+                                                                                     class [mscorlib]System.Func`2<!!1,!!0>)
+    IL_0169:  pop
+    IL_016a:  ldloc.1
+    IL_016b:  ldc.i4.5
+    IL_016c:  ldc.i4.6
+    IL_016d:  conv.i8
+    IL_016e:  ldsfld     class [mscorlib]System.Func`3<int32,int64,string> generictypesandmethods.Program::'CS$<>9__CachedAnonymousMethodDelegate1a'
+    IL_0173:  brtrue.s   IL_0188
+
+    IL_0175:  ldnull
+    IL_0176:  ldftn      string generictypesandmethods.Program::'<Main>b__8'(int32,
+                                                                int64)
+    IL_017c:  newobj     instance void class [mscorlib]System.Func`3<int32,int64,string>::.ctor(object,
+                                                                                                native int)
+    IL_0181:  stsfld     class [mscorlib]System.Func`3<int32,int64,string> generictypesandmethods.Program::'CS$<>9__CachedAnonymousMethodDelegate1a'
+    IL_0186:  br.s       IL_0188
+
+    IL_0188:  ldsfld     class [mscorlib]System.Func`3<int32,int64,string> generictypesandmethods.Program::'CS$<>9__CachedAnonymousMethodDelegate1a'
+    IL_018d:  callvirt   instance !!2 generictypesandmethods.InstanceClass::Method3<int64,int32,string>(!!1,
+                                                                                           !!0,
+                                                                                           class [mscorlib]System.Func`3<!!1,!!0,!!2>)
+    IL_0192:  pop
+    IL_0193:  ldloc.1
+    IL_0194:  ldc.i4     0x156
+    IL_0199:  ldc.i4.0
+    IL_019a:  ldc.i4.0
+    IL_019b:  ldc.i4.0
+    IL_019c:  ldc.i4.1
+    IL_019d:  newobj     instance void [mscorlib]System.Decimal::.ctor(int32,
+                                                                       int32,
+                                                                       int32,
+                                                                       bool,
+                                                                       uint8)
+    IL_01a2:  ldc.r8     21.199999999999999
+    IL_01ab:  ldsfld     class [mscorlib]System.Func`3<valuetype [mscorlib]System.Decimal,float64,string> generictypesandmethods.Program::'CS$<>9__CachedAnonymousMethodDelegate1b'
+    IL_01b0:  brtrue.s   IL_01c5
+
+    IL_01b2:  ldnull
+    IL_01b3:  ldftn      string generictypesandmethods.Program::'<Main>b__9'(valuetype [mscorlib]System.Decimal,
+                                                                float64)
+    IL_01b9:  newobj     instance void class [mscorlib]System.Func`3<valuetype [mscorlib]System.Decimal,float64,string>::.ctor(object,
+                                                                                                                               native int)
+    IL_01be:  stsfld     class [mscorlib]System.Func`3<valuetype [mscorlib]System.Decimal,float64,string> generictypesandmethods.Program::'CS$<>9__CachedAnonymousMethodDelegate1b'
+    IL_01c3:  br.s       IL_01c5
+
+    IL_01c5:  ldsfld     class [mscorlib]System.Func`3<valuetype [mscorlib]System.Decimal,float64,string> generictypesandmethods.Program::'CS$<>9__CachedAnonymousMethodDelegate1b'
+    IL_01ca:  callvirt   instance !!2 generictypesandmethods.InstanceClass::Method3<float64,valuetype [mscorlib]System.Decimal,string>(!!1,
+                                                                                                                          !!0,
+                                                                                                                          class [mscorlib]System.Func`3<!!1,!!0,!!2>)
+    IL_01cf:  pop
+    IL_01d0:  ldc.i4.5
+    IL_01d1:  ldsfld     class [mscorlib]System.Func`2<int32,string> generictypesandmethods.Program::'CS$<>9__CachedAnonymousMethodDelegate1c'
+    IL_01d6:  brtrue.s   IL_01eb
+
+    IL_01d8:  ldnull
+    IL_01d9:  ldftn      string generictypesandmethods.Program::'<Main>b__a'(int32)
+    IL_01df:  newobj     instance void class [mscorlib]System.Func`2<int32,string>::.ctor(object,
+                                                                                          native int)
+    IL_01e4:  stsfld     class [mscorlib]System.Func`2<int32,string> generictypesandmethods.Program::'CS$<>9__CachedAnonymousMethodDelegate1c'
+    IL_01e9:  br.s       IL_01eb
+
+    IL_01eb:  ldsfld     class [mscorlib]System.Func`2<int32,string> generictypesandmethods.Program::'CS$<>9__CachedAnonymousMethodDelegate1c'
+    IL_01f0:  call       !!0 generictypesandmethods.InstanceClass::Method2<string,int32>(!!1,
+                                                                            class [mscorlib]System.Func`2<!!1,!!0>)
+    IL_01f5:  pop
+    IL_01f6:  ldc.i4.5
+    IL_01f7:  conv.i8
+    IL_01f8:  ldsfld     class [mscorlib]System.Func`2<int64,string> generictypesandmethods.Program::'CS$<>9__CachedAnonymousMethodDelegate1d'
+    IL_01fd:  brtrue.s   IL_0212
+
+    IL_01ff:  ldnull
+    IL_0200:  ldftn      string generictypesandmethods.Program::'<Main>b__b'(int64)
+    IL_0206:  newobj     instance void class [mscorlib]System.Func`2<int64,string>::.ctor(object,
+                                                                                          native int)
+    IL_020b:  stsfld     class [mscorlib]System.Func`2<int64,string> generictypesandmethods.Program::'CS$<>9__CachedAnonymousMethodDelegate1d'
+    IL_0210:  br.s       IL_0212
+
+    IL_0212:  ldsfld     class [mscorlib]System.Func`2<int64,string> generictypesandmethods.Program::'CS$<>9__CachedAnonymousMethodDelegate1d'
+    IL_0217:  call       !!0 generictypesandmethods.InstanceClass::Method2<string,int64>(!!1,
+                                                                            class [mscorlib]System.Func`2<!!1,!!0>)
+    IL_021c:  pop
+    IL_021d:  ldc.i4.5
+    IL_021e:  conv.i8
+    IL_021f:  ldc.i4.4
+    IL_0220:  ldsfld     class [mscorlib]System.Func`3<int64,int32,string> generictypesandmethods.Program::'CS$<>9__CachedAnonymousMethodDelegate1e'
+    IL_0225:  brtrue.s   IL_023a
+
+    IL_0227:  ldnull
+    IL_0228:  ldftn      string generictypesandmethods.Program::'<Main>b__c'(int64,
+                                                                int32)
+    IL_022e:  newobj     instance void class [mscorlib]System.Func`3<int64,int32,string>::.ctor(object,
+                                                                                                native int)
+    IL_0233:  stsfld     class [mscorlib]System.Func`3<int64,int32,string> generictypesandmethods.Program::'CS$<>9__CachedAnonymousMethodDelegate1e'
+    IL_0238:  br.s       IL_023a
+
+    IL_023a:  ldsfld     class [mscorlib]System.Func`3<int64,int32,string> generictypesandmethods.Program::'CS$<>9__CachedAnonymousMethodDelegate1e'
+    IL_023f:  call       !!2 generictypesandmethods.InstanceClass::Method4<int32,int64,string>(!!1,
+                                                                                  !!0,
+                                                                                  class [mscorlib]System.Func`3<!!1,!!0,!!2>)
+    IL_0244:  pop
+    IL_0245:  ldc.i4     0x83f
+    IL_024a:  ldc.i4.0
+    IL_024b:  ldc.i4.0
+    IL_024c:  ldc.i4.0
+    IL_024d:  ldc.i4.2
+    IL_024e:  newobj     instance void [mscorlib]System.Decimal::.ctor(int32,
+                                                                       int32,
+                                                                       int32,
+                                                                       bool,
+                                                                       uint8)
+    IL_0253:  ldc.r8     4.
+    IL_025c:  ldsfld     class [mscorlib]System.Func`3<valuetype [mscorlib]System.Decimal,float64,string> generictypesandmethods.Program::'CS$<>9__CachedAnonymousMethodDelegate1f'
+    IL_0261:  brtrue.s   IL_0276
+
+    IL_0263:  ldnull
+    IL_0264:  ldftn      string generictypesandmethods.Program::'<Main>b__d'(valuetype [mscorlib]System.Decimal,
+                                                                float64)
+    IL_026a:  newobj     instance void class [mscorlib]System.Func`3<valuetype [mscorlib]System.Decimal,float64,string>::.ctor(object,
+                                                                                                                               native int)
+    IL_026f:  stsfld     class [mscorlib]System.Func`3<valuetype [mscorlib]System.Decimal,float64,string> generictypesandmethods.Program::'CS$<>9__CachedAnonymousMethodDelegate1f'
+    IL_0274:  br.s       IL_0276
+
+    IL_0276:  ldsfld     class [mscorlib]System.Func`3<valuetype [mscorlib]System.Decimal,float64,string> generictypesandmethods.Program::'CS$<>9__CachedAnonymousMethodDelegate1f'
+    IL_027b:  call       !!2 generictypesandmethods.InstanceClass::Method4<float64,valuetype [mscorlib]System.Decimal,string>(!!1,
+                                                                                                                 !!0,
+                                                                                                                 class [mscorlib]System.Func`3<!!1,!!0,!!2>)
+    IL_0280:  pop
+    IL_0281:  ldc.i4.5
+    IL_0282:  ldsfld     class [mscorlib]System.Func`2<int32,string> generictypesandmethods.Program::'CS$<>9__CachedAnonymousMethodDelegate20'
+    IL_0287:  brtrue.s   IL_029c
+
+    IL_0289:  ldnull
+    IL_028a:  ldftn      string generictypesandmethods.Program::'<Main>b__e'(int32)
+    IL_0290:  newobj     instance void class [mscorlib]System.Func`2<int32,string>::.ctor(object,
+                                                                                          native int)
+    IL_0295:  stsfld     class [mscorlib]System.Func`2<int32,string> generictypesandmethods.Program::'CS$<>9__CachedAnonymousMethodDelegate20'
+    IL_029a:  br.s       IL_029c
+
+    IL_029c:  ldsfld     class [mscorlib]System.Func`2<int32,string> generictypesandmethods.Program::'CS$<>9__CachedAnonymousMethodDelegate20'
+    IL_02a1:  call       !!0 generictypesandmethods.StaticClass::Method2<string,int32>(!!1,
+                                                                          class [mscorlib]System.Func`2<!!1,!!0>)
+    IL_02a6:  pop
+    IL_02a7:  ldc.i4.5
+    IL_02a8:  conv.i8
+    IL_02a9:  ldsfld     class [mscorlib]System.Func`2<int64,string> generictypesandmethods.Program::'CS$<>9__CachedAnonymousMethodDelegate21'
+    IL_02ae:  brtrue.s   IL_02c3
+
+    IL_02b0:  ldnull
+    IL_02b1:  ldftn      string generictypesandmethods.Program::'<Main>b__f'(int64)
+    IL_02b7:  newobj     instance void class [mscorlib]System.Func`2<int64,string>::.ctor(object,
+                                                                                          native int)
+    IL_02bc:  stsfld     class [mscorlib]System.Func`2<int64,string> generictypesandmethods.Program::'CS$<>9__CachedAnonymousMethodDelegate21'
+    IL_02c1:  br.s       IL_02c3
+
+    IL_02c3:  ldsfld     class [mscorlib]System.Func`2<int64,string> generictypesandmethods.Program::'CS$<>9__CachedAnonymousMethodDelegate21'
+    IL_02c8:  call       !!0 generictypesandmethods.StaticClass::Method2<string,int64>(!!1,
+                                                                          class [mscorlib]System.Func`2<!!1,!!0>)
+    IL_02cd:  pop
+    IL_02ce:  ldc.i4.5
+    IL_02cf:  conv.i8
+    IL_02d0:  ldc.i4.4
+    IL_02d1:  ldsfld     class [mscorlib]System.Func`3<int64,int32,string> generictypesandmethods.Program::'CS$<>9__CachedAnonymousMethodDelegate22'
+    IL_02d6:  brtrue.s   IL_02eb
+
+    IL_02d8:  ldnull
+    IL_02d9:  ldftn      string generictypesandmethods.Program::'<Main>b__10'(int64,
+                                                                 int32)
+    IL_02df:  newobj     instance void class [mscorlib]System.Func`3<int64,int32,string>::.ctor(object,
+                                                                                                native int)
+    IL_02e4:  stsfld     class [mscorlib]System.Func`3<int64,int32,string> generictypesandmethods.Program::'CS$<>9__CachedAnonymousMethodDelegate22'
+    IL_02e9:  br.s       IL_02eb
+
+    IL_02eb:  ldsfld     class [mscorlib]System.Func`3<int64,int32,string> generictypesandmethods.Program::'CS$<>9__CachedAnonymousMethodDelegate22'
+    IL_02f0:  call       !!2 generictypesandmethods.StaticClass::Method4<int32,int64,string>(!!1,
+                                                                                !!0,
+                                                                                class [mscorlib]System.Func`3<!!1,!!0,!!2>)
+    IL_02f5:  pop
+    IL_02f6:  ldc.i4     0x83f
+    IL_02fb:  ldc.i4.0
+    IL_02fc:  ldc.i4.0
+    IL_02fd:  ldc.i4.0
+    IL_02fe:  ldc.i4.2
+    IL_02ff:  newobj     instance void [mscorlib]System.Decimal::.ctor(int32,
+                                                                       int32,
+                                                                       int32,
+                                                                       bool,
+                                                                       uint8)
+    IL_0304:  ldc.r8     4.
+    IL_030d:  ldsfld     class [mscorlib]System.Func`3<valuetype [mscorlib]System.Decimal,float64,string> generictypesandmethods.Program::'CS$<>9__CachedAnonymousMethodDelegate23'
+    IL_0312:  brtrue.s   IL_0327
+
+    IL_0314:  ldnull
+    IL_0315:  ldftn      string generictypesandmethods.Program::'<Main>b__11'(valuetype [mscorlib]System.Decimal,
+                                                                 float64)
+    IL_031b:  newobj     instance void class [mscorlib]System.Func`3<valuetype [mscorlib]System.Decimal,float64,string>::.ctor(object,
+                                                                                                                               native int)
+    IL_0320:  stsfld     class [mscorlib]System.Func`3<valuetype [mscorlib]System.Decimal,float64,string> generictypesandmethods.Program::'CS$<>9__CachedAnonymousMethodDelegate23'
+    IL_0325:  br.s       IL_0327
+
+    IL_0327:  ldsfld     class [mscorlib]System.Func`3<valuetype [mscorlib]System.Decimal,float64,string> generictypesandmethods.Program::'CS$<>9__CachedAnonymousMethodDelegate23'
+    IL_032c:  call       !!2 generictypesandmethods.StaticClass::Method4<float64,valuetype [mscorlib]System.Decimal,string>(!!1,
+                                                                                                               !!0,
+                                                                                                               class [mscorlib]System.Func`3<!!1,!!0,!!2>)
+    IL_0331:  pop
+    IL_0332:  ret
+  } // end of method Program::Main
+
+  .method public hidebysig specialname rtspecialname 
+          instance void  .ctor() cil managed
+  {
+    // Code size       7 (0x7)
+    .maxstack  8
+    IL_0000:  ldarg.0
+    IL_0001:  call       instance void [mscorlib]System.Object::.ctor()
+    IL_0006:  ret
+  } // end of method Program::.ctor
+
+  .method private hidebysig static int32 
+          '<Main>b__0'(int64 t) cil managed
+  {
+    .custom instance void [mscorlib]System.Runtime.CompilerServices.CompilerGeneratedAttribute::.ctor() = ( 01 00 00 00 ) 
+    // Code size       7 (0x7)
+    .maxstack  1
+    .locals init ([0] int32 CS$1$0000)
+    IL_0000:  ldarg.0
+    IL_0001:  conv.i4
+    IL_0002:  stloc.0
+    IL_0003:  br.s       IL_0005
+
+    IL_0005:  ldloc.0
+    IL_0006:  ret
+  } // end of method Program::'<Main>b__0'
+
+  .method private hidebysig static string 
+          '<Main>b__1'(int64 i,
+                       int32 ii) cil managed
+  {
+    .custom instance void [mscorlib]System.Runtime.CompilerServices.CompilerGeneratedAttribute::.ctor() = ( 01 00 00 00 ) 
+    // Code size       29 (0x1d)
+    .maxstack  3
+    .locals init ([0] string CS$1$0000)
+    IL_0000:  ldarga.s   i
+    IL_0002:  call       instance string [mscorlib]System.Int64::ToString()
+    IL_0007:  ldstr      " "
+    IL_000c:  ldarga.s   ii
+    IL_000e:  call       instance string [mscorlib]System.Int32::ToString()
+    IL_0013:  call       string [mscorlib]System.String::Concat(string,
+                                                                string,
+                                                                string)
+    IL_0018:  stloc.0
+    IL_0019:  br.s       IL_001b
+
+    IL_001b:  ldloc.0
+    IL_001c:  ret
+  } // end of method Program::'<Main>b__1'
+
+  .method private hidebysig static float64 
+          '<Main>b__2'(valuetype [mscorlib]System.Decimal i) cil managed
+  {
+    .custom instance void [mscorlib]System.Runtime.CompilerServices.CompilerGeneratedAttribute::.ctor() = ( 01 00 00 00 ) 
+    // Code size       12 (0xc)
+    .maxstack  1
+    .locals init ([0] float64 CS$1$0000)
+    IL_0000:  ldarg.0
+    IL_0001:  call       float64 [mscorlib]System.Decimal::op_Explicit(valuetype [mscorlib]System.Decimal)
+    IL_0006:  conv.r8
+    IL_0007:  stloc.0
+    IL_0008:  br.s       IL_000a
+
+    IL_000a:  ldloc.0
+    IL_000b:  ret
+  } // end of method Program::'<Main>b__2'
+
+  .method private hidebysig static string 
+          '<Main>b__3'(valuetype [mscorlib]System.Decimal i,
+                       float64 ii) cil managed
+  {
+    .custom instance void [mscorlib]System.Runtime.CompilerServices.CompilerGeneratedAttribute::.ctor() = ( 01 00 00 00 ) 
+    // Code size       29 (0x1d)
+    .maxstack  3
+    .locals init ([0] string CS$1$0000)
+    IL_0000:  ldarga.s   i
+    IL_0002:  call       instance string [mscorlib]System.Decimal::ToString()
+    IL_0007:  ldstr      " "
+    IL_000c:  ldarga.s   ii
+    IL_000e:  call       instance string [mscorlib]System.Double::ToString()
+    IL_0013:  call       string [mscorlib]System.String::Concat(string,
+                                                                string,
+                                                                string)
+    IL_0018:  stloc.0
+    IL_0019:  br.s       IL_001b
+
+    IL_001b:  ldloc.0
+    IL_001c:  ret
+  } // end of method Program::'<Main>b__3'
+
+  .method private hidebysig static string 
+          '<Main>b__4'(int32 i) cil managed
+  {
+    .custom instance void [mscorlib]System.Runtime.CompilerServices.CompilerGeneratedAttribute::.ctor() = ( 01 00 00 00 ) 
+    // Code size       12 (0xc)
+    .maxstack  1
+    .locals init ([0] string CS$1$0000)
+    IL_0000:  ldarga.s   i
+    IL_0002:  call       instance string [mscorlib]System.Int32::ToString()
+    IL_0007:  stloc.0
+    IL_0008:  br.s       IL_000a
+
+    IL_000a:  ldloc.0
+    IL_000b:  ret
+  } // end of method Program::'<Main>b__4'
+
+  .method private hidebysig static string 
+          '<Main>b__5'(int64 i,
+                       int32 ii) cil managed
+  {
+    .custom instance void [mscorlib]System.Runtime.CompilerServices.CompilerGeneratedAttribute::.ctor() = ( 01 00 00 00 ) 
+    // Code size       29 (0x1d)
+    .maxstack  3
+    .locals init ([0] string CS$1$0000)
+    IL_0000:  ldarga.s   i
+    IL_0002:  call       instance string [mscorlib]System.Int64::ToString()
+    IL_0007:  ldstr      " "
+    IL_000c:  ldarga.s   ii
+    IL_000e:  call       instance string [mscorlib]System.Int32::ToString()
+    IL_0013:  call       string [mscorlib]System.String::Concat(string,
+                                                                string,
+                                                                string)
+    IL_0018:  stloc.0
+    IL_0019:  br.s       IL_001b
+
+    IL_001b:  ldloc.0
+    IL_001c:  ret
+  } // end of method Program::'<Main>b__5'
+
+  .method private hidebysig static string 
+          '<Main>b__6'(int32 i) cil managed
+  {
+    .custom instance void [mscorlib]System.Runtime.CompilerServices.CompilerGeneratedAttribute::.ctor() = ( 01 00 00 00 ) 
+    // Code size       12 (0xc)
+    .maxstack  1
+    .locals init ([0] string CS$1$0000)
+    IL_0000:  ldarga.s   i
+    IL_0002:  call       instance string [mscorlib]System.Int32::ToString()
+    IL_0007:  stloc.0
+    IL_0008:  br.s       IL_000a
+
+    IL_000a:  ldloc.0
+    IL_000b:  ret
+  } // end of method Program::'<Main>b__6'
+
+  .method private hidebysig static string 
+          '<Main>b__7'(int64 i) cil managed
+  {
+    .custom instance void [mscorlib]System.Runtime.CompilerServices.CompilerGeneratedAttribute::.ctor() = ( 01 00 00 00 ) 
+    // Code size       12 (0xc)
+    .maxstack  1
+    .locals init ([0] string CS$1$0000)
+    IL_0000:  ldarga.s   i
+    IL_0002:  call       instance string [mscorlib]System.Int64::ToString()
+    IL_0007:  stloc.0
+    IL_0008:  br.s       IL_000a
+
+    IL_000a:  ldloc.0
+    IL_000b:  ret
+  } // end of method Program::'<Main>b__7'
+
+  .method private hidebysig static string 
+          '<Main>b__8'(int32 i,
+                       int64 ii) cil managed
+  {
+    .custom instance void [mscorlib]System.Runtime.CompilerServices.CompilerGeneratedAttribute::.ctor() = ( 01 00 00 00 ) 
+    // Code size       29 (0x1d)
+    .maxstack  3
+    .locals init ([0] string CS$1$0000)
+    IL_0000:  ldarga.s   i
+    IL_0002:  call       instance string [mscorlib]System.Int32::ToString()
+    IL_0007:  ldstr      " "
+    IL_000c:  ldarga.s   ii
+    IL_000e:  call       instance string [mscorlib]System.Int64::ToString()
+    IL_0013:  call       string [mscorlib]System.String::Concat(string,
+                                                                string,
+                                                                string)
+    IL_0018:  stloc.0
+    IL_0019:  br.s       IL_001b
+
+    IL_001b:  ldloc.0
+    IL_001c:  ret
+  } // end of method Program::'<Main>b__8'
+
+  .method private hidebysig static string 
+          '<Main>b__9'(valuetype [mscorlib]System.Decimal i,
+                       float64 ii) cil managed
+  {
+    .custom instance void [mscorlib]System.Runtime.CompilerServices.CompilerGeneratedAttribute::.ctor() = ( 01 00 00 00 ) 
+    // Code size       29 (0x1d)
+    .maxstack  3
+    .locals init ([0] string CS$1$0000)
+    IL_0000:  ldarga.s   i
+    IL_0002:  call       instance string [mscorlib]System.Decimal::ToString()
+    IL_0007:  ldstr      " "
+    IL_000c:  ldarga.s   ii
+    IL_000e:  call       instance string [mscorlib]System.Double::ToString()
+    IL_0013:  call       string [mscorlib]System.String::Concat(string,
+                                                                string,
+                                                                string)
+    IL_0018:  stloc.0
+    IL_0019:  br.s       IL_001b
+
+    IL_001b:  ldloc.0
+    IL_001c:  ret
+  } // end of method Program::'<Main>b__9'
+
+  .method private hidebysig static string 
+          '<Main>b__a'(int32 i) cil managed
+  {
+    .custom instance void [mscorlib]System.Runtime.CompilerServices.CompilerGeneratedAttribute::.ctor() = ( 01 00 00 00 ) 
+    // Code size       12 (0xc)
+    .maxstack  1
+    .locals init ([0] string CS$1$0000)
+    IL_0000:  ldarga.s   i
+    IL_0002:  call       instance string [mscorlib]System.Int32::ToString()
+    IL_0007:  stloc.0
+    IL_0008:  br.s       IL_000a
+
+    IL_000a:  ldloc.0
+    IL_000b:  ret
+  } // end of method Program::'<Main>b__a'
+
+  .method private hidebysig static string 
+          '<Main>b__b'(int64 i) cil managed
+  {
+    .custom instance void [mscorlib]System.Runtime.CompilerServices.CompilerGeneratedAttribute::.ctor() = ( 01 00 00 00 ) 
+    // Code size       12 (0xc)
+    .maxstack  1
+    .locals init ([0] string CS$1$0000)
+    IL_0000:  ldarga.s   i
+    IL_0002:  call       instance string [mscorlib]System.Int64::ToString()
+    IL_0007:  stloc.0
+    IL_0008:  br.s       IL_000a
+
+    IL_000a:  ldloc.0
+    IL_000b:  ret
+  } // end of method Program::'<Main>b__b'
+
+  .method private hidebysig static string 
+          '<Main>b__c'(int64 i,
+                       int32 ii) cil managed
+  {
+    .custom instance void [mscorlib]System.Runtime.CompilerServices.CompilerGeneratedAttribute::.ctor() = ( 01 00 00 00 ) 
+    // Code size       29 (0x1d)
+    .maxstack  3
+    .locals init ([0] string CS$1$0000)
+    IL_0000:  ldarga.s   i
+    IL_0002:  call       instance string [mscorlib]System.Int64::ToString()
+    IL_0007:  ldstr      " "
+    IL_000c:  ldarga.s   ii
+    IL_000e:  call       instance string [mscorlib]System.Int32::ToString()
+    IL_0013:  call       string [mscorlib]System.String::Concat(string,
+                                                                string,
+                                                                string)
+    IL_0018:  stloc.0
+    IL_0019:  br.s       IL_001b
+
+    IL_001b:  ldloc.0
+    IL_001c:  ret
+  } // end of method Program::'<Main>b__c'
+
+  .method private hidebysig static string 
+          '<Main>b__d'(valuetype [mscorlib]System.Decimal i,
+                       float64 ii) cil managed
+  {
+    .custom instance void [mscorlib]System.Runtime.CompilerServices.CompilerGeneratedAttribute::.ctor() = ( 01 00 00 00 ) 
+    // Code size       29 (0x1d)
+    .maxstack  3
+    .locals init ([0] string CS$1$0000)
+    IL_0000:  ldarga.s   i
+    IL_0002:  call       instance string [mscorlib]System.Decimal::ToString()
+    IL_0007:  ldstr      " "
+    IL_000c:  ldarga.s   ii
+    IL_000e:  call       instance string [mscorlib]System.Double::ToString()
+    IL_0013:  call       string [mscorlib]System.String::Concat(string,
+                                                                string,
+                                                                string)
+    IL_0018:  stloc.0
+    IL_0019:  br.s       IL_001b
+
+    IL_001b:  ldloc.0
+    IL_001c:  ret
+  } // end of method Program::'<Main>b__d'
+
+  .method private hidebysig static string 
+          '<Main>b__e'(int32 i) cil managed
+  {
+    .custom instance void [mscorlib]System.Runtime.CompilerServices.CompilerGeneratedAttribute::.ctor() = ( 01 00 00 00 ) 
+    // Code size       12 (0xc)
+    .maxstack  1
+    .locals init ([0] string CS$1$0000)
+    IL_0000:  ldarga.s   i
+    IL_0002:  call       instance string [mscorlib]System.Int32::ToString()
+    IL_0007:  stloc.0
+    IL_0008:  br.s       IL_000a
+
+    IL_000a:  ldloc.0
+    IL_000b:  ret
+  } // end of method Program::'<Main>b__e'
+
+  .method private hidebysig static string 
+          '<Main>b__f'(int64 i) cil managed
+  {
+    .custom instance void [mscorlib]System.Runtime.CompilerServices.CompilerGeneratedAttribute::.ctor() = ( 01 00 00 00 ) 
+    // Code size       12 (0xc)
+    .maxstack  1
+    .locals init ([0] string CS$1$0000)
+    IL_0000:  ldarga.s   i
+    IL_0002:  call       instance string [mscorlib]System.Int64::ToString()
+    IL_0007:  stloc.0
+    IL_0008:  br.s       IL_000a
+
+    IL_000a:  ldloc.0
+    IL_000b:  ret
+  } // end of method Program::'<Main>b__f'
+
+  .method private hidebysig static string 
+          '<Main>b__10'(int64 i,
+                        int32 ii) cil managed
+  {
+    .custom instance void [mscorlib]System.Runtime.CompilerServices.CompilerGeneratedAttribute::.ctor() = ( 01 00 00 00 ) 
+    // Code size       29 (0x1d)
+    .maxstack  3
+    .locals init ([0] string CS$1$0000)
+    IL_0000:  ldarga.s   i
+    IL_0002:  call       instance string [mscorlib]System.Int64::ToString()
+    IL_0007:  ldstr      " "
+    IL_000c:  ldarga.s   ii
+    IL_000e:  call       instance string [mscorlib]System.Int32::ToString()
+    IL_0013:  call       string [mscorlib]System.String::Concat(string,
+                                                                string,
+                                                                string)
+    IL_0018:  stloc.0
+    IL_0019:  br.s       IL_001b
+
+    IL_001b:  ldloc.0
+    IL_001c:  ret
+  } // end of method Program::'<Main>b__10'
+
+  .method private hidebysig static string 
+          '<Main>b__11'(valuetype [mscorlib]System.Decimal i,
+                        float64 ii) cil managed
+  {
+    .custom instance void [mscorlib]System.Runtime.CompilerServices.CompilerGeneratedAttribute::.ctor() = ( 01 00 00 00 ) 
+    // Code size       29 (0x1d)
+    .maxstack  3
+    .locals init ([0] string CS$1$0000)
+    IL_0000:  ldarga.s   i
+    IL_0002:  call       instance string [mscorlib]System.Decimal::ToString()
+    IL_0007:  ldstr      " "
+    IL_000c:  ldarga.s   ii
+    IL_000e:  call       instance string [mscorlib]System.Double::ToString()
+    IL_0013:  call       string [mscorlib]System.String::Concat(string,
+                                                                string,
+                                                                string)
+    IL_0018:  stloc.0
+    IL_0019:  br.s       IL_001b
+
+    IL_001b:  ldloc.0
+    IL_001c:  ret
+  } // end of method Program::'<Main>b__11'
+
+} // end of class generictypesandmethods.Program
+
+.class private auto ansi beforefieldinit generictypesandmethods.GenericClass`2<T,K>
+       extends [mscorlib]System.Object
+{
+  .method public hidebysig instance !T  Method1(!K item,
+                                                class [mscorlib]System.Func`2<!K,!T> transform) cil managed
+  {
+    // Code size       13 (0xd)
+    .maxstack  2
+    .locals init ([0] !T CS$1$0000)
+    IL_0000:  nop
+    IL_0001:  ldarg.2
+    IL_0002:  ldarg.1
+    IL_0003:  callvirt   instance !1 class [mscorlib]System.Func`2<!K,!T>::Invoke(!0)
+    IL_0008:  stloc.0
+    IL_0009:  br.s       IL_000b
+
+    IL_000b:  ldloc.0
+    IL_000c:  ret
+  } // end of method GenericClass`2::Method1
+
+  .method public hidebysig static !T  Method2(!K item,
+                                              class [mscorlib]System.Func`2<!K,!T> transform) cil managed
+  {
+    // Code size       13 (0xd)
+    .maxstack  2
+    .locals init ([0] !T CS$1$0000)
+    IL_0000:  nop
+    IL_0001:  ldarg.1
+    IL_0002:  ldarg.0
+    IL_0003:  callvirt   instance !1 class [mscorlib]System.Func`2<!K,!T>::Invoke(!0)
+    IL_0008:  stloc.0
+    IL_0009:  br.s       IL_000b
+
+    IL_000b:  ldloc.0
+    IL_000c:  ret
+  } // end of method GenericClass`2::Method2
+
+  .method public hidebysig instance !!R  Method3<R>(!K item,
+                                                    !T item2,
+                                                    class [mscorlib]System.Func`3<!K,!T,!!R> transform) cil managed
+  {
+    // Code size       14 (0xe)
+    .maxstack  3
+    .locals init ([0] !!R CS$1$0000)
+    IL_0000:  nop
+    IL_0001:  ldarg.3
+    IL_0002:  ldarg.1
+    IL_0003:  ldarg.2
+    IL_0004:  callvirt   instance !2 class [mscorlib]System.Func`3<!K,!T,!!R>::Invoke(!0,
+                                                                                      !1)
+    IL_0009:  stloc.0
+    IL_000a:  br.s       IL_000c
+
+    IL_000c:  ldloc.0
+    IL_000d:  ret
+  } // end of method GenericClass`2::Method3
+
+  .method public hidebysig static !!R  Method4<R>(!K item,
+                                                  !T item2,
+                                                  class [mscorlib]System.Func`3<!K,!T,!!R> transform) cil managed
+  {
+    // Code size       14 (0xe)
+    .maxstack  3
+    .locals init ([0] !!R CS$1$0000)
+    IL_0000:  nop
+    IL_0001:  ldarg.2
+    IL_0002:  ldarg.0
+    IL_0003:  ldarg.1
+    IL_0004:  callvirt   instance !2 class [mscorlib]System.Func`3<!K,!T,!!R>::Invoke(!0,
+                                                                                      !1)
+    IL_0009:  stloc.0
+    IL_000a:  br.s       IL_000c
+
+    IL_000c:  ldloc.0
+    IL_000d:  ret
+  } // end of method GenericClass`2::Method4
+
+  .method public hidebysig specialname rtspecialname 
+          instance void  .ctor() cil managed
+  {
+    // Code size       7 (0x7)
+    .maxstack  8
+    IL_0000:  ldarg.0
+    IL_0001:  call       instance void [mscorlib]System.Object::.ctor()
+    IL_0006:  ret
+  } // end of method GenericClass`2::.ctor
+
+} // end of class generictypesandmethods.GenericClass`2
+
+.class private auto ansi beforefieldinit generictypesandmethods.StaticGenericClass`2<T,K>
+       extends [mscorlib]System.Object
+{
+  .method public hidebysig static !T  Method2(!K item,
+                                              class [mscorlib]System.Func`2<!K,!T> transform) cil managed
+  {
+    // Code size       13 (0xd)
+    .maxstack  2
+    .locals init ([0] !T CS$1$0000)
+    IL_0000:  nop
+    IL_0001:  ldarg.1
+    IL_0002:  ldarg.0
+    IL_0003:  callvirt   instance !1 class [mscorlib]System.Func`2<!K,!T>::Invoke(!0)
+    IL_0008:  stloc.0
+    IL_0009:  br.s       IL_000b
+
+    IL_000b:  ldloc.0
+    IL_000c:  ret
+  } // end of method StaticGenericClass`2::Method2
+
+  .method public hidebysig static !!R  Method4<R>(!K item,
+                                                  !T item2,
+                                                  class [mscorlib]System.Func`3<!K,!T,!!R> transform) cil managed
+  {
+    // Code size       14 (0xe)
+    .maxstack  3
+    .locals init ([0] !!R CS$1$0000)
+    IL_0000:  nop
+    IL_0001:  ldarg.2
+    IL_0002:  ldarg.0
+    IL_0003:  ldarg.1
+    IL_0004:  callvirt   instance !2 class [mscorlib]System.Func`3<!K,!T,!!R>::Invoke(!0,
+                                                                                      !1)
+    IL_0009:  stloc.0
+    IL_000a:  br.s       IL_000c
+
+    IL_000c:  ldloc.0
+    IL_000d:  ret
+  } // end of method StaticGenericClass`2::Method4
+
+  .method public hidebysig specialname rtspecialname 
+          instance void  .ctor() cil managed
+  {
+    // Code size       7 (0x7)
+    .maxstack  8
+    IL_0000:  ldarg.0
+    IL_0001:  call       instance void [mscorlib]System.Object::.ctor()
+    IL_0006:  ret
+  } // end of method StaticGenericClass`2::.ctor
+
+} // end of class generictypesandmethods.StaticGenericClass`2
+
+.class private auto ansi beforefieldinit generictypesandmethods.InstanceClass
+       extends [mscorlib]System.Object
+{
+  .method public hidebysig static int32  Method1(int32 item) cil managed
+  {
+    // Code size       7 (0x7)
+    .maxstack  1
+    .locals init ([0] int32 CS$1$0000)
+    IL_0000:  nop
+    IL_0001:  ldarg.0
+    IL_0002:  stloc.0
+    IL_0003:  br.s       IL_0005
+
+    IL_0005:  ldloc.0
+    IL_0006:  ret
+  } // end of method InstanceClass::Method1
+
+  .method public hidebysig static int32  Method2(int32 item) cil managed
+  {
+    // Code size       7 (0x7)
+    .maxstack  1
+    .locals init ([0] int32 CS$1$0000)
+    IL_0000:  nop
+    IL_0001:  ldarg.0
+    IL_0002:  stloc.0
+    IL_0003:  br.s       IL_0005
+
+    IL_0005:  ldloc.0
+    IL_0006:  ret
+  } // end of method InstanceClass::Method2
+
+  .method public hidebysig instance !!T  Method1<T,K>(!!K item,
+                                                      class [mscorlib]System.Func`2<!!K,!!T> transform) cil managed
+  {
+    // Code size       13 (0xd)
+    .maxstack  2
+    .locals init ([0] !!T CS$1$0000)
+    IL_0000:  nop
+    IL_0001:  ldarg.2
+    IL_0002:  ldarg.1
+    IL_0003:  callvirt   instance !1 class [mscorlib]System.Func`2<!!K,!!T>::Invoke(!0)
+    IL_0008:  stloc.0
+    IL_0009:  br.s       IL_000b
+
+    IL_000b:  ldloc.0
+    IL_000c:  ret
+  } // end of method InstanceClass::Method1
+
+  .method public hidebysig static !!T  Method2<T,K>(!!K item,
+                                                    class [mscorlib]System.Func`2<!!K,!!T> transform) cil managed
+  {
+    // Code size       13 (0xd)
+    .maxstack  2
+    .locals init ([0] !!T CS$1$0000)
+    IL_0000:  nop
+    IL_0001:  ldarg.1
+    IL_0002:  ldarg.0
+    IL_0003:  callvirt   instance !1 class [mscorlib]System.Func`2<!!K,!!T>::Invoke(!0)
+    IL_0008:  stloc.0
+    IL_0009:  br.s       IL_000b
+
+    IL_000b:  ldloc.0
+    IL_000c:  ret
+  } // end of method InstanceClass::Method2
+
+  .method public hidebysig instance !!R  Method3<T,K,R>(!!K item,
+                                                        !!T item2,
+                                                        class [mscorlib]System.Func`3<!!K,!!T,!!R> transform) cil managed
+  {
+    // Code size       14 (0xe)
+    .maxstack  3
+    .locals init ([0] !!R CS$1$0000)
+    IL_0000:  nop
+    IL_0001:  ldarg.3
+    IL_0002:  ldarg.1
+    IL_0003:  ldarg.2
+    IL_0004:  callvirt   instance !2 class [mscorlib]System.Func`3<!!K,!!T,!!R>::Invoke(!0,
+                                                                                        !1)
+    IL_0009:  stloc.0
+    IL_000a:  br.s       IL_000c
+
+    IL_000c:  ldloc.0
+    IL_000d:  ret
+  } // end of method InstanceClass::Method3
+
+  .method public hidebysig static !!R  Method4<T,K,R>(!!K item,
+                                                      !!T item2,
+                                                      class [mscorlib]System.Func`3<!!K,!!T,!!R> transform) cil managed
+  {
+    // Code size       14 (0xe)
+    .maxstack  3
+    .locals init ([0] !!R CS$1$0000)
+    IL_0000:  nop
+    IL_0001:  ldarg.2
+    IL_0002:  ldarg.0
+    IL_0003:  ldarg.1
+    IL_0004:  callvirt   instance !2 class [mscorlib]System.Func`3<!!K,!!T,!!R>::Invoke(!0,
+                                                                                        !1)
+    IL_0009:  stloc.0
+    IL_000a:  br.s       IL_000c
+
+    IL_000c:  ldloc.0
+    IL_000d:  ret
+  } // end of method InstanceClass::Method4
+
+  .method public hidebysig specialname rtspecialname 
+          instance void  .ctor() cil managed
+  {
+    // Code size       7 (0x7)
+    .maxstack  8
+    IL_0000:  ldarg.0
+    IL_0001:  call       instance void [mscorlib]System.Object::.ctor()
+    IL_0006:  ret
+  } // end of method InstanceClass::.ctor
+
+} // end of class generictypesandmethods.InstanceClass
+
+.class private auto ansi beforefieldinit generictypesandmethods.StaticClass
+       extends [mscorlib]System.Object
+{
+  .method public hidebysig static int32  Method2(int32 item) cil managed
+  {
+    // Code size       7 (0x7)
+    .maxstack  1
+    .locals init ([0] int32 CS$1$0000)
+    IL_0000:  nop
+    IL_0001:  ldarg.0
+    IL_0002:  stloc.0
+    IL_0003:  br.s       IL_0005
+
+    IL_0005:  ldloc.0
+    IL_0006:  ret
+  } // end of method StaticClass::Method2
+
+  .method public hidebysig static !!T  Method2<T,K>(!!K item,
+                                                    class [mscorlib]System.Func`2<!!K,!!T> transform) cil managed
+  {
+    // Code size       13 (0xd)
+    .maxstack  2
+    .locals init ([0] !!T CS$1$0000)
+    IL_0000:  nop
+    IL_0001:  ldarg.1
+    IL_0002:  ldarg.0
+    IL_0003:  callvirt   instance !1 class [mscorlib]System.Func`2<!!K,!!T>::Invoke(!0)
+    IL_0008:  stloc.0
+    IL_0009:  br.s       IL_000b
+
+    IL_000b:  ldloc.0
+    IL_000c:  ret
+  } // end of method StaticClass::Method2
+
+  .method public hidebysig static !!R  Method4<T,K,R>(!!K item,
+                                                      !!T item2,
+                                                      class [mscorlib]System.Func`3<!!K,!!T,!!R> transform) cil managed
+  {
+    // Code size       14 (0xe)
+    .maxstack  3
+    .locals init ([0] !!R CS$1$0000)
+    IL_0000:  nop
+    IL_0001:  ldarg.2
+    IL_0002:  ldarg.0
+    IL_0003:  ldarg.1
+    IL_0004:  callvirt   instance !2 class [mscorlib]System.Func`3<!!K,!!T,!!R>::Invoke(!0,
+                                                                                        !1)
+    IL_0009:  stloc.0
+    IL_000a:  br.s       IL_000c
+
+    IL_000c:  ldloc.0
+    IL_000d:  ret
+  } // end of method StaticClass::Method4
+
+  .method public hidebysig specialname rtspecialname 
+          instance void  .ctor() cil managed
+  {
+    // Code size       7 (0x7)
+    .maxstack  8
+    IL_0000:  ldarg.0
+    IL_0001:  call       instance void [mscorlib]System.Object::.ctor()
+    IL_0006:  ret
+  } // end of method StaticClass::.ctor
+
+} // end of class generictypesandmethods.StaticClass
+
+

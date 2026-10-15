@@ -1,0 +1,125 @@
+﻿.assembly extern mscorlib 
+{
+    .publickeytoken = (B7 7A 5C 56 19 34 E0 89)
+    .ver 2:0:0:0
+}
+.assembly ret_instr
+{
+    .hash algorithm 0x00008004
+    .ver 1:0:0:0
+}
+
+.module ret_instr.exe
+.imagebase 0x00400000
+.file alignment 0x00000200
+.stackreserve 0x00100000
+.subsystem 0x0003       // WINDOWS_CUI
+.corflags 0x00000001    //  ILONLY
+
+.class private auto ansi beforefieldinit ret_instr.main
+    extends [mscorlib]System.Object
+{
+    .method private hidebysig static void Main(string[] args) cil managed
+    {
+        .entrypoint
+        .maxstack 8
+
+        ret
+    }
+
+    .method public hidebysig static void NotInProtectedRegionFilterOrHandler() cil managed
+    {
+        .maxstack 8
+        ldc.i4.5
+        ret
+    }
+
+    .method public hidebysig static void WithinProtectedRegion() cil managed
+    {
+        .maxstack 8
+        .try {
+            ret
+        } finally {
+            leave end_method
+            endfinally
+        }
+
+        end_method: ret
+    }
+
+    .method public hidebysig static void WithinFilterCodeForFilter() cil managed
+    {
+        .maxstack 8
+        .try {
+            nop
+        } filter {
+            ret
+            ldc.i4.1
+            endfilter
+        } {
+            pop
+            leave end_method
+        }
+
+        end_method: ret
+    }
+
+    .method public hidebysig static void WithinFilterHandler() cil managed
+    {
+        .maxstack 8
+        .try {
+            nop
+        } filter {
+            pop
+            ldc.i4.1
+            endfilter
+        } {
+            pop
+            ret
+            leave end_method
+        }
+
+        end_method: ret
+    }
+
+    .method public hidebysig static void WithinFaultHandler() cil managed
+    {
+        .maxstack 8
+        .try {
+            nop
+        } fault {
+            ret
+            leave end_method
+        }
+
+        end_method: ret
+    }
+
+    .method public hidebysig static void WithinFinallyHandler() cil managed
+    {
+        .maxstack 8
+        .try {
+            nop
+        } finally {
+            ret
+            endfinally
+        }
+
+        end_method: ret
+    }
+
+    .method public hidebysig static void WithinCatchhandler() cil managed
+    {
+        .maxstack 8
+        .try {
+            nop
+        } catch [mscorlib]System.Object {
+            ret
+            leave end_method
+        }
+
+
+        end_method: ret
+    }
+
+}

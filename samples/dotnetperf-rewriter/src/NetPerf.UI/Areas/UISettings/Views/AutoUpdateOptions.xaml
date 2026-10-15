@@ -1,0 +1,37 @@
+﻿<infra:NPUserControl
+	x:Class="MetadataDashboard.NetperfUI.Areas.UISettings.Views.AutoUpdateOptions"
+	xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+	xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+	xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+	xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+	xmlns:infra="clr-namespace:MetadataDashboard.NetperfUI.Infrastructure"
+	mc:Ignorable="d"
+	d:DesignHeight="300"
+	d:DesignWidth="300">
+	<AdornerDecorator>
+		<StackPanel>
+			<GroupBox
+				Header="Netperf should check for updates..."
+				Margin="0,10,0,0">
+				<StackPanel>
+					<RadioButton
+						IsChecked="{Binding AutoUpdate, ConverterParameter='CheckAndDownload', Converter={StaticResource valEqParam}}">
+						Check for updates, and tell me when they are ready to be installed (recommended).
+					</RadioButton>
+					<RadioButton
+						IsChecked="{Binding AutoUpdate, ConverterParameter='AutomaticInstall', Converter={StaticResource valEqParam}}">
+						Check for and install updates without telling me.
+					</RadioButton>
+					<RadioButton
+						IsChecked="{Binding AutoUpdate, ConverterParameter='CheckOnly', Converter={StaticResource valEqParam}}">
+						Check for updates, and tell me if any are available.
+					</RadioButton>
+					<RadioButton
+						IsChecked="{Binding AutoUpdate, ConverterParameter='Never', Converter={StaticResource valEqParam}}">
+						Never check for updates (not recommended).
+					</RadioButton>
+				</StackPanel>
+			</GroupBox>
+		</StackPanel>
+	</AdornerDecorator>
+</infra:NPUserControl>

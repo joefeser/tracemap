@@ -1,0 +1,117 @@
+﻿<infra:NPUserControl
+	x:Class="MetadataDashboard.NetperfUI.Areas.Profiling.Views.InstrumentWizardStep3"
+	xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+	xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+	xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+	xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+	xmlns:i="clr-namespace:System.Windows.Interactivity;assembly=System.Windows.Interactivity"
+	xmlns:cal="http://www.caliburnproject.org"
+	xmlns:infra="clr-namespace:MetadataDashboard.NetperfUI.Infrastructure"
+	mc:Ignorable="d"
+	d:DesignHeight="300"
+	d:DesignWidth="300">
+	<ScrollViewer
+		HorizontalScrollBarVisibility="Disabled"
+		VerticalScrollBarVisibility="Auto">
+		<AdornerDecorator>
+			<Grid
+				Margin="10">
+				<Grid.ColumnDefinitions>
+					<ColumnDefinition
+						Width="Auto" />
+					<ColumnDefinition
+						Width="*" />
+					<ColumnDefinition
+						Width="*" />
+					<ColumnDefinition
+						Width="Auto" />
+				</Grid.ColumnDefinitions>
+				<Grid.RowDefinitions>
+					<RowDefinition
+						Height="Auto" />
+					<RowDefinition
+						Height="Auto" />
+					<RowDefinition
+						Height="Auto" />
+					<RowDefinition
+						Height="10" />
+					<RowDefinition
+						Height="Auto" />
+					<RowDefinition
+						Height="Auto" />
+					<RowDefinition
+						Height="Auto" />
+				</Grid.RowDefinitions>
+
+				<TextBlock
+					Grid.Row="0"
+					Grid.Column="0"
+					Grid.ColumnSpan="4"
+					TextWrapping="Wrap"
+					Text="{Binding HelpForStrongNameKeyFile, Mode=OneTime}" />
+
+				<Label
+					Grid.Row="1"
+					Grid.Column="0"
+					Grid.ColumnSpan="4">Strong Name Public Key File</Label>
+				<TextBox
+					Grid.Row="2"
+					Grid.Column="0"
+					Grid.ColumnSpan="3"
+					Name="StrongNameKeyFile" />
+				<Button
+					Grid.Row="2"
+					Grid.Column="3"
+					Content=" . . . "
+					cal:Message.Attach="PickStrongNameKey"
+					Margin="4,0,0,0"
+					VerticalAlignment="Stretch" />
+
+				<TextBlock
+					Grid.Row="4"
+					Grid.Column="0"
+					Grid.ColumnSpan="4"
+					TextWrapping="Wrap"
+					Text="{Binding HelpForAssembliesToInstrument, Mode=OneTime}" />
+
+				<Label
+					Grid.Row="5"
+					Grid.Column="0"
+					Grid.ColumnSpan="2">Assemblies to Instrument</Label>
+
+				<Button
+					Grid.Row="5"
+					Grid.Column="2"
+					Grid.ColumnSpan="2"
+					Content=" Pick more Assemblies "
+					cal:Message.Attach="PickAssemblies"
+					VerticalAlignment="Center"
+					HorizontalAlignment="Right" />
+
+				<ListView
+					x:Name="IncludedAssemblies"
+					Grid.Row="6"
+					Grid.Column="0"
+					Grid.ColumnSpan="4"
+					AllowDrop="True"
+					Drop="IncludedAssemblies_Drop"
+					DragEnter="IncludedAssemblies_DragEnter"
+					MinHeight="100">
+					<i:Interaction.Triggers>
+						<i:EventTrigger
+							EventName="KeyDown">
+							<cal:ActionMessage
+								MethodName="KeyPressed">
+								<cal:Parameter
+									Value="$eventArgs"></cal:Parameter>
+								<cal:Parameter
+									Value="{Binding ElementName=IncludedAssemblies}"></cal:Parameter>
+							</cal:ActionMessage>
+						</i:EventTrigger>
+					</i:Interaction.Triggers>
+				</ListView>
+
+			</Grid>
+		</AdornerDecorator>
+	</ScrollViewer>
+</infra:NPUserControl>

@@ -1,0 +1,18 @@
+--Select * from timingpoint where pointid >= 657 and pointid <= 660;
+--Select * from timingmethod where methodid = 193;
+
+
+--Select * from timingpoint where pointid >= 649 and pointid <= 652;
+Select timingmethod.*, typerecord.signature, methodrecord.signature from timingmethod inner join methodrecord on methodrecord.id = timingmethod.methodid inner join typerecord on methodrecord.parentid = typerecord.id where methodid = 191;
+--Select timingmethod.*, typerecord.signature, methodrecord.signature from timingmethod inner join methodrecord on methodrecord.id = timingmethod.methodid inner join typerecord on methodrecord.parentid = typerecord.id order by timestamp;
+--Select min(timestamp) as low, max(timestamp) as high, max(timestamp)-min(timestamp) as diff from timingmethod
+--Select timingmethod.*, typerecord.id, typerecord.parentid, typerecord.signature, methodrecord.signature from timingmethod inner join methodrecord on methodrecord.id = timingmethod.methodid inner join typerecord on methodrecord.parentid = typerecord.id order by timestamp;
+--select timingpoint.*,pointrecord.* from timingpoint inner join pointrecord on timingpoint.pointid = pointrecord.id where pointrecord.parentid = 191 order by timestamp
+
+--select timingpoint.*,pointrecord.* from timingpoint inner join pointrecord on timingpoint.pointid = pointrecord.id where pointid = 637 order by timestamp
+
+--Select timingmethod.*, methodrecord.signature from timingmethod inner join methodrecord on methodrecord.id = timingmethod.methodid where threadid = 62 and signature like '%VerifyLeave_SourceWithinFaultHandler_TargetInSameFaultHandler_IsValid%' order by timestamp;
+--select * from methodrecord
+--select * from timingmethod where threadid = 62 order by timestamp
+
+
