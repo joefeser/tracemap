@@ -11,7 +11,9 @@ from pathlib import Path
 import sqlite3
 
 
-def inspect(path, fact_id, graph_path=None):
+def inspect(path, fact_id, graph_path=None, source_call_id=None):
+    if source_call_id and graph_path is None:
+        raise ValueError("Source comparison requires the index-matched graph")
     graph = None
     if graph_path is not None:
         with Path(graph_path).open("rb") as stream:
@@ -105,7 +107,60 @@ def inspect(path, fact_id, graph_path=None):
                 counts["explicit_bridges_to_exact_owner"] = sum(
                     edge["edgeKind"] == "explicit-reference-member-candidate" and edge["toNodeId"] in owner_nodes
                     for edge in graph.get("edges", []))
+            if source_call_id:
+                if len(owners) != 1:
+                    raise ValueError("Source comparison requires unique body owner")
+                counts.update(compare_source_call(db, source_call_id, owner, body, graph))
         return counts, sorted(calls)
+
+
+def compare_source_call(db, source_call_id, owner, body, graph):
+    rows = db.execute("""SELECT * FROM combined_facts WHERE combined_fact_id=?
+        AND fact_type='CallEdge' LIMIT 2""", (source_call_id,)).fetchall()
+    if len(rows) != 1:
+        raise ValueError("Exact source CallEdge absent or ambiguous")
+    source = rows[0]
+    props = json.loads(source["properties_json"])
+    identity = props.get("targetMetadataIdentity")
+    digest = props.get("explicitReferenceSha256")
+    if not identity or not digest:
+        raise ValueError("Source call lacks explicit reference witness")
+    owner_props = json.loads(owner["properties_json"])
+    targets = db.execute("""SELECT * FROM combined_facts
+        WHERE fact_type='ManagedMethodDeclared' AND target_symbol=?
+        AND json_extract(properties_json,'$.rawFileSha256')=? LIMIT 2""", (identity, digest)).fetchall()
+    edges = graph.get("edges", [])
+    supporting = [edge for edge in edges if source_call_id in edge.get("supportingFactIds", [])]
+    bridges = [edge for edge in supporting if edge["edgeKind"] == "explicit-reference-member-candidate"]
+    nodes = {node["nodeId"]: node for node in graph["nodes"]}
+    owner_symbol = owner["target_symbol"]
+    result = dict(
+        source_identity_matches_inspected_owner=int(identity == owner_symbol),
+        source_hash_matches_inspected_owner=int(digest == owner_props.get("rawFileSha256")),
+        source_dispatch_is_direct=int(props.get("referenceDispatch") == "direct"),
+        source_context_is_explicit=int(props.get("compilationContextKind") == "explicit-projectless-inputs"),
+        source_exact_target_matches_capped_at_two=len(targets),
+        source_call_supporting_graph_edges=len(supporting),
+        source_call_explicit_graph_bridges=len(bridges),
+        source_bridge_destinations_matching_inspected_owner=sum(
+            nodes[edge["toNodeId"]]["sourceIndexId"] == body["source_index_id"]
+            and nodes[edge["toNodeId"]]["symbolId"] == owner_symbol for edge in bridges))
+    if len(targets) == 1:
+        target = targets[0]
+        result["source_unique_target_is_inspected_owner"] = int(target["combined_fact_id"] == owner["combined_fact_id"])
+        result["source_unique_target_symbol_nodes"] = sum(
+            node["sourceIndexId"] == target["source_index_id"] and node["symbolId"] == target["target_symbol"]
+            for node in nodes.values())
+        bodies = db.execute("""SELECT combined_fact_id FROM combined_facts
+            WHERE source_index_id=? AND fact_type='ManagedIlBodyDeclared'
+            AND json_extract(properties_json,'$.compiledFactId')=? LIMIT 2""",
+            (target["source_index_id"], target["original_fact_id"])).fetchall()
+        result["source_unique_target_body_matches_capped_at_two"] = len(bodies)
+        if len(bodies) == 1:
+            result["source_unique_target_body_is_inspected_body"] = int(bodies[0]["combined_fact_id"] == body["combined_fact_id"])
+            result["source_unique_target_body_graph_calls"] = sum(
+                call["bodyFactId"] == bodies[0]["combined_fact_id"] for call in graph["calls"])
+    return result
 
 
 def main():
@@ -113,10 +168,11 @@ def main():
     parser.add_argument("--index", required=True)
     parser.add_argument("--fact-id", required=True)
     parser.add_argument("--graph", help="Existing method-graph.local.json; must hash-match this index")
+    parser.add_argument("--source-call-id", help="Exact combined ID of the source CallEdge to compare")
     parser.add_argument("--local-details", action="store_true")
     args = parser.parse_args()
     try:
-        counts, calls = inspect(args.index, args.fact_id, args.graph)
+        counts, calls = inspect(args.index, args.fact_id, args.graph, args.source_call_id)
     except (OSError, sqlite3.Error, ValueError, KeyError, TypeError):
         parser.exit(2, "Inspection unavailable: invalid/ambiguous evidence, schema, hash, or work bound. No zero-count conclusion.\n")
     print("Exact body found; compiled calls use ManagedIlCallObserved, not CallEdge.")
