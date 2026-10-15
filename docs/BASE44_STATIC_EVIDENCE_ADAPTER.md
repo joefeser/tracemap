@@ -225,11 +225,18 @@ controls. Conditional object spreads classify as runtime proof with typed
 execution gaps, and guarded computed payload fields resolve through closed
 const string-property maps. A payload identifier whose initializer calls a
 module-local named function declaration resolves through that helper's live
-return statements: every return path must analyze to a closed shape, helper
-parameters stay opaque (field values record as terminal evidence), and any
-unresolvable path, cross-kind disagreement, recursion, or shadowed callee name
-fails closed to a typed `helper-return-*` gap. Arbitrary helper calls,
-cross-file callees, and computed callees remain unresolved.
+return statements: every return path must analyze to a closed shape, the body
+must provably terminate, `try`/`finally` interactions and async or generator
+callees fail closed, helper parameters stay opaque (field values record as
+terminal evidence), and any unresolvable return path, cross-kind disagreement,
+recursion, or shadowed callee name fails closed to a typed `helper-return-*`
+gap. Guarded computed-field map lookups intersect the truthy-key domains of
+every dominating guard and reject `__proto__` properties; truthiness guards
+over plain object literals still inherit `Object.prototype` keys, so a runtime
+key equal to an inherited property name remains outside the emitted finite
+domain (a reviewed residual of the guarded-field dialect both producers share).
+Arbitrary helper calls, cross-file callees, and computed callees remain
+unresolved.
 
 Extractor `base44-evidence/0.4.1` also follows an SDK client through a local
 helper parameter when executable callsites prove the binding. The proof is
